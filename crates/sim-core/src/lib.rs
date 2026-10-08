@@ -4,6 +4,7 @@ mod ac;
 mod circuit;
 mod dc;
 mod from_schematic;
+mod noise;
 mod spectrum;
 mod spice_in;
 mod tran;
@@ -13,6 +14,7 @@ mod waveform;
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
+pub use noise::{integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseResult, NoiseSettings};
 pub use from_schematic::{from_schematic, ConvertError};
 pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};
 pub use tran::{transient, Signal, TranResult, TranSettings};
@@ -28,6 +30,8 @@ mod tests_ac;
 mod tests_mos;
 #[cfg(test)]
 mod tests_parts;
+#[cfg(test)]
+mod tests_thermal;
 #[cfg(test)]
 mod tests_noise;
 #[cfg(test)]

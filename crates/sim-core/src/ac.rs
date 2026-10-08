@@ -63,7 +63,7 @@ impl Neg for C64 {
 }
 
 /// Solve A x = b (dense, partial pivoting). `None` when singular.
-fn solve_complex(n: usize, a: &mut [C64], b: &mut [C64]) -> Option<()> {
+pub(crate) fn solve_complex(n: usize, a: &mut [C64], b: &mut [C64]) -> Option<()> {
     for col in 0..n {
         let (mut piv, mut best) = (col, a[col * n + col].abs());
         for r in col + 1..n {
@@ -171,7 +171,7 @@ impl AcResult {
     }
 }
 
-fn frequencies(s: &AcSettings) -> Vec<f64> {
+pub(crate) fn frequencies(s: &AcSettings) -> Vec<f64> {
     match s.sweep {
         AcSweep::Decade(ppd) => {
             let mut v = vec![];
@@ -194,7 +194,7 @@ fn frequencies(s: &AcSettings) -> Vec<f64> {
     }
 }
 
-pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimError> {
+pub(crate) fn check_sweep(s: &AcSettings) -> Result<(), SimError> {
     if !(s.fstart.is_finite() && s.fstart > 0.0) {
         return Err(SimError::Invalid("開始周波数は正の値にしてください".into()));
     }
@@ -209,6 +209,11 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
     if (s.fstop / s.fstart).log10() * match s.sweep { AcSweep::Decade(p) => p as f64, _ => 1.0 } > 100_000.0 {
         return Err(SimError::Invalid("周波数の点数が多すぎます".into()));
     }
+    Ok(())
+}
+
+pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimError> {
+    check_sweep(s)?;
     let has_source = circuit.elements.iter().any(|e| match e {
         Element::VSource { ac, .. } | Element::ISource { ac, .. } => ac.is_some_and(|(m, _)| m != 0.0),
         _ => false,

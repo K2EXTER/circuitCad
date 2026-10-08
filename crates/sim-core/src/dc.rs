@@ -164,7 +164,7 @@ pub(crate) fn v(x: &[f64], node: usize) -> f64 {
 
 // ------------------------------------------------------------------ device equations
 
-fn exp_safe(x: f64) -> f64 {
+pub(crate) fn exp_safe(x: f64) -> f64 {
     x.min(80.0).exp()
 }
 
@@ -188,16 +188,16 @@ fn pnjlim(vnew: f64, vold: f64, vt: f64, vcrit: f64) -> f64 {
 
 /// Transistor in "NPN space": currents into C, B, E and the partial derivatives
 /// with respect to (vbe, vbc).
-struct BjtEval {
-    ic: f64,
-    ib: f64,
+pub(crate) struct BjtEval {
+    pub(crate) ic: f64,
+    pub(crate) ib: f64,
     ie: f64,
     dic: (f64, f64),
     dib: (f64, f64),
     die: (f64, f64),
 }
 
-fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
+pub(crate) fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
     let (nfvt, nrvt) = (m.nf * VT, m.nr * VT);
     let ef = exp_safe(vbe / nfvt);
     let er = exp_safe(vbc / nrvt);
@@ -217,7 +217,7 @@ fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
 
 /// Level-1 MOSFET in NMOS orientation: `(id, gm, gds)` with `id` flowing drain to source.
 /// The device is symmetric, so for `vds < 0` source and drain swap roles.
-fn mos_eval(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
+pub(crate) fn mos_eval(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
     fn forward(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
         let vov = vgs - m.vto.abs();
         if vov <= 0.0 {

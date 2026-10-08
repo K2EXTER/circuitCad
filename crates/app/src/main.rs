@@ -98,7 +98,7 @@ fn install_crash_log() {
     }));
 }
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--noise out in|- tempC] [--tran stop step [--spectrum]]
 /// [--drc] [--export dir]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
@@ -110,6 +110,14 @@ fn apply_args(app: &mut App, args: &[String]) {
             if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
                 app.sch.set_ac_settings(f0, f1, p);
                 app.sch.analyze_ac();
+            }
+        }
+        if let Some(i) = args.iter().position(|a| a == "--noise") {
+            // --noise <out node> <input source or -> <temp C> (uses the --ac frequency range)
+            if let (Some(out), Some(inp), Some(t)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
+                let inp = if inp == "-" { "" } else { inp.as_str() };
+                app.sch.set_noise_settings(out, inp, t);
+                app.sch.analyze_noise();
             }
         }
         if let Some(i) = args.iter().position(|a| a == "--tran") {

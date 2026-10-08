@@ -5,7 +5,7 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, noise_analysis, NoiseResult, NoiseSettings, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
@@ -58,6 +58,10 @@ pub struct SchEditor {
     ac_fstart: String,
     ac_fstop: String,
     ac_ppd: String,
+    noise: Option<NoiseView>,
+    noise_out: String,
+    noise_in: String,
+    noise_temp: String,
     wave_mode: WaveMode,
     fit_pending: bool,
 }
@@ -66,6 +70,14 @@ pub struct SchEditor {
 enum WaveMode {
     Tran,
     Ac,
+    Noise,
+}
+
+/// A finished noise analysis: output density plot plus the per-element breakdown.
+struct NoiseView {
+    outcome: Result<NoiseResult, Vec<String>>,
+    selected: BTreeSet<String>,
+    plot: PlotState,
 }
 
 /// A finished AC sweep (Bode plot).
@@ -144,6 +156,10 @@ impl Default for SchEditor {
             ac_fstart: "10".into(),
             ac_fstop: "1Meg".into(),
             ac_ppd: "20".into(),
+            noise: None,
+            noise_out: String::new(),
+            noise_in: String::new(),
+            noise_temp: "27".into(),
             wave_mode: WaveMode::Tran,
             fit_pending: false,
             sch: Schematic::default(),
@@ -401,6 +417,7 @@ impl SchEditor {
         match self.wave_mode {
             WaveMode::Tran => self.tran.is_some(),
             WaveMode::Ac => self.ac.is_some(),
+            WaveMode::Noise => self.noise.is_some(),
         }
     }
 
@@ -438,11 +455,144 @@ impl SchEditor {
         self.wave_mode = WaveMode::Ac;
     }
 
+    pub fn analyze_noise(&mut self) {
+        self.run_noise();
+    }
+
+    pub fn set_noise_settings(&mut self, out: &str, input: &str, temp: &str) {
+        self.noise_out = out.into();
+        self.noise_in = input.into();
+        self.noise_temp = temp.into();
+    }
+
+    fn run_noise(&mut self) {
+        let (Some(f0), Some(f1), Some(ppd), Some(temp)) =
+            (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd), self.noise_temp.trim().parse::<f64>().ok())
+        else {
+            self.status = "開始・終了周波数、点数/デケード、温度[℃]を数値で入力してください".into();
+            return;
+        };
+        let (out, inp) = (self.noise_out.trim().to_string(), self.noise_in.trim().to_string());
+        let outcome = if out.is_empty() {
+            Err(vec!["出力ノードの名前を入力してください (ネットラベル名など。差動は A,B)".to_string()])
+        } else {
+            match from_schematic(&self.sch) {
+                Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+                Ok(c) => {
+                    let (out_p, out_n) = match out.split_once(',') {
+                        Some((a, b)) => (a.trim().to_string(), Some(b.trim().to_string())),
+                        None => (out.clone(), None),
+                    };
+                    let st = NoiseSettings {
+                        sweep: AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) },
+                        output: out_p,
+                        output_ref: out_n,
+                        input: if inp.is_empty() { None } else { Some(inp) },
+                        temp_c: temp,
+                    };
+                    noise_analysis(&c, &st).map_err(|e| vec![e.to_string()])
+                }
+            }
+        };
+        let mut selected = BTreeSet::new();
+        selected.insert("合計".to_string());
+        self.status = match &outcome {
+            Ok(r) => format!("ノイズ解析: 出力 {} rms ({} Hz〜{} Hz)", eng(r.out_rms, "V"), f0, f1),
+            Err(e) => format!("ノイズ解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
+        self.noise = Some(NoiseView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi) });
+        self.wave_mode = WaveMode::Noise;
+    }
+
+    fn noise_wave_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(view) = self.noise.as_mut() else { return };
+        let mut close = false;
+        ui.horizontal(|ui| {
+            ui.strong("ノイズ解析 (熱雑音・ショット雑音)");
+            if ui.button("閉じる").clicked() {
+                close = true;
+            }
+            ui.small("縦軸: 電圧ノイズ密度 [dB re 1 nV/√Hz]。60 dB = 1 µV/√Hz");
+        });
+        let NoiseView { outcome, selected, plot: st } = view;
+        match outcome {
+            Err(msgs) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Ok(res) => {
+                for w in &res.warnings {
+                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                }
+                let to_db = |psd: &[f64]| -> Vec<f64> { psd.iter().map(|p| 10.0 * (p.max(1e-60) / 1e-18).log10()).collect() };
+                let mut order: Vec<(String, f64)> = vec![("合計".to_string(), res.out_rms)];
+                if let Some(r) = res.in_rms {
+                    order.push(("入力換算".to_string(), r));
+                }
+                order.extend(res.contributions.iter().map(|c| (c.name.clone(), c.rms)));
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(230.0);
+                        ui.label(format!("出力合計: {}", eng(res.out_rms, "V rms")));
+                        if let Some(r) = res.in_rms {
+                            ui.label(format!("入力換算: {}", eng(r, "rms")));
+                        }
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            for (name, rms) in &order {
+                                let mut on = selected.contains(name);
+                                let color = order.iter().filter(|(n, _)| selected.contains(n)).position(|(n, _)| n == name).map(|i| PALETTE[i % PALETTE.len()]);
+                                let label = format!("{name}  {}", eng(*rms, "V"));
+                                let text = match color {
+                                    Some(c) if on => egui::RichText::new(label).color(c),
+                                    _ => egui::RichText::new(label),
+                                };
+                                if ui.checkbox(&mut on, text).changed() {
+                                    if on {
+                                        selected.insert(name.clone());
+                                    } else {
+                                        selected.remove(name);
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    let chosen: Vec<(&str, Vec<f64>)> = order
+                        .iter()
+                        .filter(|(n, _)| selected.contains(n))
+                        .map(|(n, _)| {
+                            let v = match n.as_str() {
+                                "合計" => to_db(&res.out_psd),
+                                "入力換算" => to_db(res.in_psd.as_deref().unwrap_or(&[])),
+                                _ => res.contribution(n).map(|c| to_db(&c.psd)).unwrap_or_default(),
+                            };
+                            (n.as_str(), v)
+                        })
+                        .collect();
+                    if chosen.is_empty() {
+                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から項目を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        return;
+                    }
+                    let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v }).collect();
+                    let sty = Style { unit: " dBnV/√Hz", x_unit: "Hz", x_name: "f", plain_y: true };
+                    plot::draw_group(ui, rect, egui::Id::new("noise_density"), &traces, st, 0, &sty, true);
+                });
+            }
+        }
+        if close {
+            self.noise = None;
+        }
+    }
+
     /// Bottom panel: the waveform viewer for the most recent analysis.
     pub fn wave_panel(&mut self, ui: &mut egui::Ui) {
         match self.wave_mode {
             WaveMode::Tran => self.tran_wave_panel(ui),
             WaveMode::Ac => self.ac_wave_panel(ui),
+            WaveMode::Noise => self.noise_wave_panel(ui),
         }
     }
 
@@ -1215,6 +1365,20 @@ impl SchEditor {
             self.run_ac();
         }
         ui.small("入力にする電源の値を「AC 1」にしてください");
+        ui.separator();
+        ui.label("ノイズ解析 (熱雑音・ショット雑音)");
+        ui.horizontal(|ui| {
+            ui.label("出力");
+            ui.add(egui::TextEdit::singleline(&mut self.noise_out).desired_width(56.0).hint_text("OUT / A,B"));
+            ui.label("入力電源");
+            ui.add(egui::TextEdit::singleline(&mut self.noise_in).desired_width(36.0).hint_text("V1"));
+            ui.label("℃");
+            ui.add(egui::TextEdit::singleline(&mut self.noise_temp).desired_width(30.0));
+        });
+        if ui.button("ノイズ解析を実行").clicked() {
+            self.run_noise();
+        }
+        ui.small("周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示");
         ui.separator();
         let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());
         if let Some(dc) = &self.dc {
