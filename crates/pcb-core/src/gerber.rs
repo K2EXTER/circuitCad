@@ -1,6 +1,9 @@
 //! Gerber RS-274X writer (format 4.6, millimetres).
 
+use crate::drc::{connectivity, Connectivity};
+use crate::geom::inside_polygon;
 use crate::model::*;
+use crate::strokefont::text_strokes;
 use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -64,6 +67,25 @@ impl GerberLayer {
         let _ = writeln!(self.body, "{}D01*", Self::xy(b));
     }
 
+    /// Switch between dark (copper) and clear polarity for what follows.
+    pub fn polarity(&mut self, clear: bool) {
+        let _ = writeln!(self.body, "%LP{}*%", if clear { 'C' } else { 'D' });
+    }
+
+    /// Filled polygon (G36/G37 region).
+    pub fn region(&mut self, pts: &[Point]) {
+        if pts.len() < 3 {
+            return;
+        }
+        self.body.push_str("G36*\n");
+        let _ = writeln!(self.body, "{}D02*", Self::xy(pts[0]));
+        for p in &pts[1..] {
+            let _ = writeln!(self.body, "{}D01*", Self::xy(*p));
+        }
+        let _ = writeln!(self.body, "{}D01*", Self::xy(pts[0]));
+        self.body.push_str("G37*\n");
+    }
+
     /// Flash a pad shape, optionally grown by `expand` on every side.
     pub fn flash(&mut self, p: Point, shape: PadShape, expand: f64) {
         let ap = match shape {
@@ -111,12 +133,65 @@ fn pad_on_copper(p: &Pad, side: Side) -> bool {
     p.drill.is_some() || p.side == side
 }
 
+/// Copper pours: a filled region, then clear-polarity cut-outs around everything that is not
+/// of the zone's net (plus the board edge and mounting holes), then thermal spokes. The normal
+/// copper is drawn afterwards, on top of the cut-outs.
+fn zones(g: &mut GerberLayer, board: &Board, side: Side, conn: &Connectivity) {
+    for z in board.zones.iter().filter(|z| z.side == side && z.polygon.len() >= 3) {
+        let c = z.clearance;
+        let same = |net: Option<&str>| !z.net.is_empty() && net == Some(z.net.as_str());
+        g.polarity(false);
+        g.region(&z.polygon);
+        g.polarity(true);
+        for (i, t) in board.tracks.iter().enumerate().filter(|(_, t)| t.side == side) {
+            if !same(conn.track_net(i)) {
+                g.line(t.a, t.b, t.width + 2.0 * c);
+            }
+        }
+        let mut spokes: Vec<(Point, f64)> = vec![];
+        for (j, p) in board.pads.iter().enumerate().filter(|(_, p)| pad_on_copper(p, side)) {
+            if !same(conn.pad_net(j)) {
+                g.flash(p.pos, p.shape, c);
+            } else if z.thermal && p.drill.is_some() && inside_polygon(&z.polygon, p.pos) {
+                let (w, h) = p.shape.size();
+                let ring = w.max(h) + 2.0 * z.thermal_gap;
+                g.flash(p.pos, PadShape::Circle { d: ring }, 0.0);
+                spokes.push((p.pos, ring / 2.0));
+            }
+        }
+        for (k, v) in board.vias.iter().enumerate() {
+            if !same(conn.via_net(k)) {
+                g.flash(v.pos, PadShape::Circle { d: v.diameter }, c);
+            }
+        }
+        for h in &board.holes {
+            g.flash(h.pos, PadShape::Circle { d: h.drill }, c);
+        }
+        let n = board.outline.len();
+        let edge = c.max(board.rules.edge_clearance);
+        for i in 0..n {
+            g.line(board.outline[i], board.outline[(i + 1) % n], 2.0 * edge);
+        }
+        g.polarity(false);
+        for (pos, r) in spokes {
+            for (dx, dy) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+                // from inside the pad to just past the ring so the spoke bridges the gap
+                g.line(pos, Point::new(pos.x + dx * (r + 0.05), pos.y + dy * (r + 0.05)), z.spoke_width);
+            }
+        }
+    }
+}
+
 pub fn copper(board: &Board, side: Side) -> String {
-    let (func, _) = match side {
-        Side::Top => ("Copper,L1,Top", ()),
-        Side::Bottom => ("Copper,L2,Bot", ()),
+    let func = match side {
+        Side::Top => "Copper,L1,Top",
+        Side::Bottom => "Copper,L2,Bot",
     };
     let mut g = GerberLayer::new(func);
+    if !board.zones.is_empty() {
+        let conn = connectivity(board);
+        zones(&mut g, board, side, &conn);
+    }
     for t in board.tracks.iter().filter(|t| t.side == side) {
         g.line(t.a, t.b, t.width);
     }
@@ -151,6 +226,12 @@ pub fn silk(board: &Board, side: Side) -> String {
     let mut g = GerberLayer::new(func);
     for l in board.silk.iter().filter(|l| l.side == side) {
         g.line(l.a, l.b, l.width);
+    }
+    for t in board.texts.iter().filter(|t| t.side == side) {
+        let w = (t.height * 0.15).max(0.12);
+        for [a, b] in text_strokes(&t.text, t.height, side == Side::Bottom) {
+            g.line(Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y), w);
+        }
     }
     g.finish("pcb-core")
 }

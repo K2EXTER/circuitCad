@@ -115,6 +115,66 @@ pub struct SilkLine {
     pub refdes: String,
 }
 
+/// Silkscreen text. Texts with a `refdes` belong to a part (generated, moves with it).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SilkText {
+    pub side: Side,
+    /// Centre of the text.
+    pub pos: Point,
+    pub height: f64,
+    pub text: String,
+    #[serde(default)]
+    pub refdes: String,
+}
+
+fn default_zone_clearance() -> f64 {
+    0.3
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_thermal_gap() -> f64 {
+    0.3
+}
+
+fn default_spoke() -> f64 {
+    0.3
+}
+
+/// A copper pour. It is output as a filled region with clear-polarity cut-outs around every
+/// item of another net, so it follows the routing automatically.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Zone {
+    pub net: String,
+    pub side: Side,
+    pub polygon: Vec<Point>,
+    #[serde(default = "default_zone_clearance")]
+    pub clearance: f64,
+    /// Connect through-hole pads of the zone's net with four spokes instead of solid copper.
+    #[serde(default = "default_true")]
+    pub thermal: bool,
+    #[serde(default = "default_thermal_gap")]
+    pub thermal_gap: f64,
+    #[serde(default = "default_spoke")]
+    pub spoke_width: f64,
+}
+
+impl Zone {
+    pub fn new(net: &str, side: Side, polygon: Vec<Point>) -> Self {
+        Self {
+            net: net.to_string(),
+            side,
+            polygon,
+            clearance: default_zone_clearance(),
+            thermal: true,
+            thermal_gap: default_thermal_gap(),
+            spoke_width: default_spoke(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Rules {
@@ -155,6 +215,10 @@ pub struct Board {
     pub silk: Vec<SilkLine>,
     #[serde(default)]
     pub parts: Vec<Part>,
+    #[serde(default)]
+    pub texts: Vec<SilkText>,
+    #[serde(default)]
+    pub zones: Vec<Zone>,
     /// User-defined footprints used by this board (embedded so the file is self-contained).
     #[serde(default)]
     pub footprints: Vec<crate::footprints::Footprint>,
@@ -177,9 +241,16 @@ impl Board {
             holes: vec![],
             silk: vec![],
             parts: vec![],
+            texts: vec![],
+            zones: vec![],
             footprints: vec![],
             rules: Rules::default(),
         }
+    }
+
+    /// Replace the outline by an axis-aligned rectangle.
+    pub fn set_rect_outline(&mut self, x0: f64, y0: f64, x1: f64, y1: f64) {
+        self.outline = vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)];
     }
 
     pub fn bounds(&self) -> Option<(Point, Point)> {

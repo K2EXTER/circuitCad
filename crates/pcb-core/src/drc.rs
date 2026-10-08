@@ -4,7 +4,9 @@
 //! (directly, or through a via / through-hole pad) form one electrical group,
 //! and only items in *different* groups must keep `min_clearance` apart.
 
+use crate::geom::inside_polygon;
 use crate::model::*;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Violation {
@@ -190,20 +192,6 @@ fn groups(items: &[Cu]) -> Vec<usize> {
 
 // ---------------------------------------------------------------- checks
 
-fn inside_polygon(poly: &[Point], p: Point) -> bool {
-    let mut inside = false;
-    let n = poly.len();
-    let mut j = n - 1;
-    for i in 0..n {
-        let (a, b) = (poly[i], poly[j]);
-        if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
-            inside = !inside;
-        }
-        j = i;
-    }
-    inside
-}
-
 fn side_name(s: Side) -> &'static str {
     match s {
         Side::Top => "表面",
@@ -258,6 +246,19 @@ pub fn check(board: &Board) -> Vec<Violation> {
         }
     }
 
+    for z in &board.zones {
+        if z.polygon.len() < 3 {
+            out.push(v(format!("ゾーン({})の頂点が3点未満です", z.net), Point::default()));
+            continue;
+        }
+        for p in &z.polygon {
+            if !inside_polygon(&board.outline, *p) {
+                out.push(v(format!("ゾーン({})が基板外形の外にあります", z.net), *p));
+                break;
+            }
+        }
+    }
+
     out.extend(clearance(board));
     out.extend(shorts(board));
     out
@@ -267,7 +268,7 @@ pub fn check(board: &Board) -> Vec<Violation> {
 pub fn clearance(board: &Board) -> Vec<Violation> {
     let r = &board.rules;
     let items = copper_items(board);
-    let grp = groups(&items);
+    let grp = connectivity(board).items;
     let mut out = vec![];
 
     for side in [Side::Top, Side::Bottom] {
@@ -379,10 +380,89 @@ mod tests {
     }
 }
 
+/// Electrical grouping of all copper: touching items and zone-connected items share a group.
+pub struct Connectivity {
+    /// Group id of every copper item in the order tracks, pads, vias.
+    pub items: Vec<usize>,
+    pub n_tracks: usize,
+    pub n_pads: usize,
+    /// Net name of a group, taken from the pads it contains.
+    net_of_group: HashMap<usize, String>,
+}
+
+impl Connectivity {
+    pub fn track_group(&self, i: usize) -> usize {
+        self.items[i]
+    }
+    pub fn pad_group(&self, i: usize) -> usize {
+        self.items[self.n_tracks + i]
+    }
+    pub fn via_group(&self, i: usize) -> usize {
+        self.items[self.n_tracks + self.n_pads + i]
+    }
+    pub fn group_net(&self, g: usize) -> Option<&str> {
+        self.net_of_group.get(&g).map(|s| s.as_str())
+    }
+    pub fn track_net(&self, i: usize) -> Option<&str> {
+        self.group_net(self.track_group(i))
+    }
+    pub fn pad_net(&self, i: usize) -> Option<&str> {
+        self.group_net(self.pad_group(i))
+    }
+    pub fn via_net(&self, i: usize) -> Option<&str> {
+        self.group_net(self.via_group(i))
+    }
+}
+
+fn anchors_inside(g: &Geo, poly: &[Point]) -> bool {
+    match g {
+        Geo::Cap { a, b, .. } => inside_polygon(poly, *a) || inside_polygon(poly, *b),
+        Geo::Rect { c, .. } => inside_polygon(poly, *c),
+    }
+}
+
+fn pad_nets(board: &Board, parent: &mut Vec<usize>, n_tracks: usize) -> HashMap<usize, String> {
+    let mut m = HashMap::new();
+    for (j, p) in board.pads.iter().enumerate() {
+        if !p.net.is_empty() {
+            let r = find(parent, n_tracks + j);
+            m.entry(r).or_insert_with(|| p.net.clone());
+        }
+    }
+    m
+}
+
+pub fn connectivity(board: &Board) -> Connectivity {
+    let items = copper_items(board);
+    let (n_tracks, n_pads) = (board.tracks.len(), board.pads.len());
+    let mut parent = groups(&items);
+    // a zone joins every item of its net that has an anchor point inside it
+    for z in board.zones.iter().filter(|z| !z.net.is_empty() && z.polygon.len() >= 3) {
+        let nets = pad_nets(board, &mut parent, n_tracks);
+        let mut members = vec![];
+        for (i, it) in items.iter().enumerate() {
+            if it.on(z.side) && anchors_inside(&it.geo, &z.polygon) {
+                let r = find(&mut parent, i);
+                if nets.get(&r) == Some(&z.net) {
+                    members.push(i);
+                }
+            }
+        }
+        for w in members.windows(2) {
+            let (a, b) = (find(&mut parent, w[0]), find(&mut parent, w[1]));
+            parent[a] = b;
+        }
+    }
+    let net_of_group = pad_nets(board, &mut parent, n_tracks);
+    let all: Vec<usize> = (0..items.len()).map(|i| find(&mut parent, i)).collect();
+    let net_of_group = net_of_group.into_iter().map(|(k, v)| (find(&mut parent, k), v)).collect();
+    Connectivity { items: all, n_tracks, n_pads, net_of_group }
+}
+
 /// Group id for every entry of `board.pads`, from copper connectivity.
 pub(crate) fn pad_groups(board: &Board) -> Vec<usize> {
-    let grp = groups(&copper_items(board));
-    grp[board.tracks.len()..board.tracks.len() + board.pads.len()].to_vec()
+    let c = connectivity(board);
+    (0..board.pads.len()).map(|i| c.pad_group(i)).collect()
 }
 
 /// Pads of different nets that end up in one copper group.

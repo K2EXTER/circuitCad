@@ -37,6 +37,7 @@ impl Board {
             .collect();
         self.pads.retain(|p| p.refdes != part.refdes);
         self.silk.retain(|s| s.refdes != part.refdes);
+        self.texts.retain(|t| t.refdes != part.refdes);
 
         let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
         for fpad in &fp.pads {
@@ -64,6 +65,15 @@ impl Board {
             self.silk.push(SilkLine { side: Side::Top, a: c[i], b: c[(i + 1) % 4], width: 0.15, refdes: part.refdes.clone() });
         }
 
+        // designator above the part, centred
+        self.texts.push(SilkText {
+            side: Side::Top,
+            pos: Point::new((x0 + x1) / 2.0, y1 + m + 0.2 + 0.5),
+            height: 1.0,
+            text: part.refdes.clone(),
+            refdes: part.refdes.clone(),
+        });
+
         match self.parts.iter_mut().find(|p| p.refdes == part.refdes) {
             Some(slot) => *slot = part,
             None => self.parts.push(part),
@@ -75,6 +85,7 @@ impl Board {
         self.parts.retain(|p| p.refdes != refdes);
         self.pads.retain(|p| p.refdes != refdes);
         self.silk.retain(|s| s.refdes != refdes);
+        self.texts.retain(|t| t.refdes != refdes);
     }
 
     /// Move / rotate an existing part.
