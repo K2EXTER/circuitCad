@@ -1,0 +1,555 @@
+//! Schematic editor: place parts, wire them together, run ERC, export netlist.
+
+use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use sch_core::{erc, extract, on_segment, to_spice, Kind, Label, Problem, Pt, Schematic, Wire};
+use std::path::PathBuf;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Tool {
+    Select,
+    Place,
+    Wire,
+    Label,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Sel {
+    Comp(usize),
+    Wire(usize),
+    Label(usize),
+}
+
+pub struct SchEditor {
+    pub sch: Schematic,
+    path: Option<PathBuf>,
+    tool: Tool,
+    place: Kind,
+    rot: u8,
+    label_text: String,
+    pending: Option<Pt>,
+    selected: Option<Sel>,
+    drag: Option<(usize, Pt)>,
+    zoom: f32, // pixels per grid step
+    pan: Vec2, // grid position at the screen centre
+    problems: Vec<Problem>,
+    pub status: String,
+}
+
+impl Default for SchEditor {
+    fn default() -> Self {
+        Self {
+            sch: Schematic::default(),
+            path: None,
+            tool: Tool::Place,
+            place: Kind::Resistor,
+            rot: 0,
+            label_text: "SIG".into(),
+            pending: None,
+            selected: None,
+            drag: None,
+            zoom: 22.0,
+            pan: Vec2::new(10.0, 6.0),
+            problems: vec![],
+            status: "回路図: 部品を選んで配置し、配線ツールで線をつなぎます".into(),
+        }
+    }
+}
+
+// ------------------------------------------------------------- symbol drawing
+
+enum Sh {
+    L(f32, f32, f32, f32),
+    C(f32, f32, f32),
+}
+
+fn symbol(kind: Kind) -> Vec<Sh> {
+    use Sh::*;
+    match kind {
+        Kind::Resistor => vec![
+            L(-2., 0., -1., 0.),
+            L(1., 0., 2., 0.),
+            L(-1., -0.4, 1., -0.4),
+            L(-1., 0.4, 1., 0.4),
+            L(-1., -0.4, -1., 0.4),
+            L(1., -0.4, 1., 0.4),
+        ],
+        Kind::Capacitor => vec![
+            L(-2., 0., -0.25, 0.),
+            L(0.25, 0., 2., 0.),
+            L(-0.25, -0.8, -0.25, 0.8),
+            L(0.25, -0.8, 0.25, 0.8),
+        ],
+        Kind::Inductor => {
+            let mut v = vec![L(-2., 0., -1.2, 0.), L(1.2, 0., 2., 0.)];
+            let n = 48;
+            let pt = |i: i32| {
+                let x = -1.2 + 2.4 * i as f32 / n as f32;
+                (x, -0.5 * (std::f32::consts::PI * (x + 1.2) / 0.6).sin().abs())
+            };
+            for i in 0..n {
+                let (a, b) = (pt(i), pt(i + 1));
+                v.push(L(a.0, a.1, b.0, b.1));
+            }
+            v
+        }
+        Kind::Diode | Kind::Led => {
+            let mut v = vec![
+                L(-2., 0., -0.6, 0.),
+                L(0.6, 0., 2., 0.),
+                L(-0.6, -0.6, -0.6, 0.6),
+                L(-0.6, -0.6, 0.6, 0.),
+                L(-0.6, 0.6, 0.6, 0.),
+                L(0.6, -0.6, 0.6, 0.6),
+            ];
+            if kind == Kind::Led {
+                v.extend([L(0., -0.9, 0.6, -1.5), L(0.6, -0.9, 1.2, -1.5)]);
+            }
+            v
+        }
+        Kind::VSource => vec![
+            L(0., -2., 0., -1.2),
+            L(0., 1.2, 0., 2.),
+            C(0., 0., 1.2),
+            L(-0.25, -0.6, 0.25, -0.6),
+            L(0., -0.85, 0., -0.35),
+            L(-0.25, 0.6, 0.25, 0.6),
+        ],
+        Kind::Npn => vec![
+            C(0.5, 0., 1.7),
+            L(-2., 0., -0.5, 0.),
+            L(-0.5, -1., -0.5, 1.),
+            L(-0.5, -0.4, 2., -2.),
+            L(-0.5, 0.4, 2., 2.),
+            L(1.2, 1.5, 2., 2.),
+            L(1.5, 1.1, 2., 2.),
+        ],
+        Kind::Header(n) => {
+            let mut v = vec![
+                L(0., -1., 1.2, -1.),
+                L(0., -1., 0., 2. * n as f32 - 1.),
+                L(1.2, -1., 1.2, 2. * n as f32 - 1.),
+                L(0., 2. * n as f32 - 1., 1.2, 2. * n as f32 - 1.),
+            ];
+            for i in 0..n as i32 {
+                v.push(L(1.2, 2. * i as f32, 2., 2. * i as f32));
+                v.push(C(0.6, 2. * i as f32, 0.25));
+            }
+            v
+        }
+        Kind::Ground => vec![
+            L(0., 0., 0., 0.5),
+            L(-0.8, 0.5, 0.8, 0.5),
+            L(-0.5, 0.8, 0.5, 0.8),
+            L(-0.2, 1.1, 0.2, 1.1),
+        ],
+        Kind::Power => vec![L(0., 0., 0., -0.6), L(-0.6, -0.6, 0.6, -0.6)],
+    }
+}
+
+/// Local bounding box (xmin, xmax, ymin, ymax).
+fn extents(kind: Kind) -> (f32, f32, f32, f32) {
+    match kind {
+        Kind::VSource => (-1.4, 1.4, -2., 2.),
+        Kind::Npn => (-2., 2., -2., 2.),
+        Kind::Header(n) => (0., 2., -1., 2. * n as f32 - 1.),
+        Kind::Ground => (-1., 1., 0., 1.2),
+        Kind::Power => (-1., 1., -1., 0.),
+        _ => (-2., 2., -1., 1.),
+    }
+}
+
+fn rot_f(p: (f32, f32), rot: u8) -> (f32, f32) {
+    let mut q = p;
+    for _ in 0..(rot % 4) {
+        q = (-q.1, q.0);
+    }
+    q
+}
+
+const SCH_BG: Color32 = Color32::from_rgb(250, 248, 235);
+const SYM: Color32 = Color32::from_rgb(120, 20, 20);
+const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
+
+impl SchEditor {
+    fn to_screen(&self, rect: Rect, p: (f32, f32)) -> Pos2 {
+        let c = rect.center();
+        Pos2::new(c.x + (p.0 - self.pan.x) * self.zoom, c.y + (p.1 - self.pan.y) * self.zoom)
+    }
+
+    fn to_grid(&self, rect: Rect, s: Pos2) -> (f32, f32) {
+        let c = rect.center();
+        ((s.x - c.x) / self.zoom + self.pan.x, (s.y - c.y) / self.zoom + self.pan.y)
+    }
+
+    fn draw_symbol(&self, painter: &egui::Painter, rect: Rect, kind: Kind, pos: Pt, rot: u8, color: Color32) {
+        let tr = |x: f32, y: f32| {
+            let r = rot_f((x, y), rot);
+            self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
+        };
+        let stroke = Stroke::new(1.6, color);
+        for s in symbol(kind) {
+            match s {
+                Sh::L(a, b, c, d) => {
+                    painter.line_segment([tr(a, b), tr(c, d)], stroke);
+                }
+                Sh::C(x, y, r) => {
+                    painter.circle_stroke(tr(x, y), r * self.zoom, stroke);
+                }
+            }
+        }
+    }
+
+    fn comp_at(&self, g: (f32, f32)) -> Option<usize> {
+        self.sch.components.iter().enumerate().rev().find_map(|(i, c)| {
+            let rel = (g.0 - c.pos.0 as f32, g.1 - c.pos.1 as f32);
+            let l = rot_f(rel, (4 - c.rot % 4) % 4);
+            let (x0, x1, y0, y1) = extents(c.kind);
+            (l.0 >= x0 && l.0 <= x1 && l.1 >= y0 && l.1 <= y1).then_some(i)
+        })
+    }
+
+    fn pick(&self, g: (f32, f32)) -> Option<Sel> {
+        if let Some(i) = self.comp_at(g) {
+            return Some(Sel::Comp(i));
+        }
+        if let Some(i) = self.sch.labels.iter().position(|l| (l.pos.0 as f32 - g.0).abs() < 0.8 && (l.pos.1 as f32 - g.1).abs() < 0.6) {
+            return Some(Sel::Label(i));
+        }
+        let d = |w: &Wire| {
+            let (a, b) = ((w.a.0 as f32, w.a.1 as f32), (w.b.0 as f32, w.b.1 as f32));
+            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+            let l2 = dx * dx + dy * dy;
+            let t = if l2 == 0.0 { 0.0 } else { (((g.0 - a.0) * dx + (g.1 - a.1) * dy) / l2).clamp(0.0, 1.0) };
+            ((g.0 - a.0 - t * dx).powi(2) + (g.1 - a.1 - t * dy).powi(2)).sqrt()
+        };
+        self.sch.wires.iter().position(|w| d(w) < 0.3).map(Sel::Wire)
+    }
+
+    fn delete_selected(&mut self) {
+        match self.selected.take() {
+            Some(Sel::Comp(i)) => drop(self.sch.components.remove(i)),
+            Some(Sel::Wire(i)) => drop(self.sch.wires.remove(i)),
+            Some(Sel::Label(i)) => drop(self.sch.labels.remove(i)),
+            None => {}
+        }
+    }
+
+    fn add_wire(&mut self, a: Pt, b: Pt) {
+        if a == b {
+            return;
+        }
+        if a.0 == b.0 || a.1 == b.1 {
+            self.sch.wires.push(Wire { a, b });
+        } else {
+            let m = (b.0, a.1);
+            self.sch.wires.push(Wire { a, b: m });
+            self.sch.wires.push(Wire { a: m, b });
+        }
+    }
+
+    // ------------------------------------------------------------- canvas
+
+    pub fn canvas(&mut self, ui: &mut egui::Ui) {
+        let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
+        let rect = resp.rect;
+        painter.rect_filled(rect, 0.0, SCH_BG);
+
+        if resp.dragged_by(egui::PointerButton::Middle) || resp.dragged_by(egui::PointerButton::Secondary) {
+            let d = resp.drag_delta();
+            self.pan.x -= d.x / self.zoom;
+            self.pan.y -= d.y / self.zoom;
+        }
+        let hover = resp.hover_pos();
+        if resp.hovered() {
+            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+            if scroll != 0.0 {
+                let cur = hover.unwrap_or(rect.center());
+                let before = self.to_grid(rect, cur);
+                self.zoom = (self.zoom * (1.0 + scroll * 0.002)).clamp(6.0, 120.0);
+                let after = self.to_grid(rect, cur);
+                self.pan.x += before.0 - after.0;
+                self.pan.y += before.1 - after.1;
+            }
+        }
+
+        let typing = ui.ctx().egui_wants_keyboard_input();
+        if !typing {
+            if ui.input(|i| i.key_pressed(egui::Key::R)) {
+                match self.selected {
+                    Some(Sel::Comp(i)) => self.sch.components[i].rot = (self.sch.components[i].rot + 1) % 4,
+                    _ => self.rot = (self.rot + 1) % 4,
+                }
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
+                self.delete_selected();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.pending = None;
+                self.selected = None;
+                self.tool = Tool::Select;
+            }
+        }
+
+        // grid dots
+        let tl = self.to_grid(rect, rect.left_top());
+        let br = self.to_grid(rect, rect.right_bottom());
+        if self.zoom >= 10.0 {
+            for x in (tl.0.floor() as i32)..=(br.0.ceil() as i32) {
+                for y in (tl.1.floor() as i32)..=(br.1.ceil() as i32) {
+                    painter.circle_filled(self.to_screen(rect, (x as f32, y as f32)), 0.9, Color32::from_gray(190));
+                }
+            }
+        }
+
+        // wires
+        for (i, w) in self.sch.wires.iter().enumerate() {
+            let sel = self.selected == Some(Sel::Wire(i));
+            painter.line_segment(
+                [self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32))],
+                Stroke::new(if sel { 3.0 } else { 1.8 }, if sel { Color32::from_rgb(0, 80, 220) } else { WIRE }),
+            );
+        }
+        // junction dots
+        let pins: Vec<Pt> = self.sch.components.iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).collect();
+        for w in &self.sch.wires {
+            for p in [w.a, w.b] {
+                let ends = self.sch.wires.iter().map(|x| (x.a == p) as u32 + (x.b == p) as u32).sum::<u32>()
+                    + pins.iter().filter(|&&q| q == p).count() as u32;
+                let on_other = self.sch.wires.iter().any(|x| x.a != p && x.b != p && on_segment(p, x.a, x.b));
+                if ends >= 3 || on_other {
+                    painter.circle_filled(self.to_screen(rect, (p.0 as f32, p.1 as f32)), 3.5, WIRE);
+                }
+            }
+        }
+
+        // components
+        for (i, c) in self.sch.components.iter().enumerate() {
+            let sel = self.selected == Some(Sel::Comp(i));
+            let col = if sel { Color32::from_rgb(0, 80, 220) } else { SYM };
+            self.draw_symbol(&painter, rect, c.kind, c.pos, c.rot, col);
+            for (_, p) in c.pins() {
+                painter.rect_filled(
+                    Rect::from_center_size(self.to_screen(rect, (p.0 as f32, p.1 as f32)), Vec2::splat(4.0)),
+                    0.0,
+                    Color32::from_rgb(190, 40, 40),
+                );
+            }
+            let f = FontId::proportional((self.zoom * 0.55).clamp(8.0, 18.0));
+            let (x0, x1, y0, y1) = extents(c.kind);
+            let ctr = (c.pos.0 as f32 + (x0 + x1) / 2.0, c.pos.1 as f32);
+            if c.kind.is_power_symbol() {
+                if c.kind == Kind::Power {
+                    painter.text(self.to_screen(rect, (c.pos.0 as f32, c.pos.1 as f32 - 0.8)), Align2::CENTER_BOTTOM, &c.value, f.clone(), SYM);
+                }
+            } else {
+                let top = c.pos.1 as f32 + if c.rot % 2 == 0 { y0.min(-1.0) - 0.3 } else { -x1.max(2.0) - 0.3 };
+                painter.text(self.to_screen(rect, (ctr.0, top)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), Color32::from_rgb(20, 60, 140));
+                let bot = c.pos.1 as f32 + if c.rot % 2 == 0 { y1.max(1.0) + 0.3 } else { x1.max(2.0) + 0.3 };
+                painter.text(self.to_screen(rect, (ctr.0, bot)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+            }
+        }
+        for (i, l) in self.sch.labels.iter().enumerate() {
+            let sel = self.selected == Some(Sel::Label(i));
+            let p = self.to_screen(rect, (l.pos.0 as f32, l.pos.1 as f32));
+            painter.circle_filled(p, 3.0, WIRE);
+            painter.text(
+                p + Vec2::new(5.0, -3.0),
+                Align2::LEFT_BOTTOM,
+                &l.text,
+                FontId::proportional(13.0),
+                if sel { Color32::from_rgb(0, 80, 220) } else { Color32::from_rgb(0, 100, 100) },
+            );
+        }
+        for pr in &self.problems {
+            if let Some(a) = pr.at {
+                painter.circle_stroke(self.to_screen(rect, (a.0 as f32, a.1 as f32)), 11.0, Stroke::new(2.0, Color32::from_rgb(230, 0, 200)));
+            }
+        }
+
+        // interaction
+        let Some(pos) = hover else { return };
+        let g = self.to_grid(rect, pos);
+        let snapped: Pt = (g.0.round() as i32, g.1.round() as i32);
+        let sp = self.to_screen(rect, (snapped.0 as f32, snapped.1 as f32));
+
+        match self.tool {
+            Tool::Place => {
+                let ghost = Color32::from_rgba_unmultiplied(120, 20, 20, 120);
+                self.draw_symbol(&painter, rect, self.place, snapped, self.rot, ghost);
+            }
+            Tool::Wire => {
+                painter.circle_stroke(sp, 4.0, Stroke::new(1.5, WIRE));
+                if let Some(a) = self.pending {
+                    let a_s = self.to_screen(rect, (a.0 as f32, a.1 as f32));
+                    let m = self.to_screen(rect, (snapped.0 as f32, a.1 as f32));
+                    let st = Stroke::new(1.5, Color32::from_rgba_unmultiplied(0, 110, 30, 150));
+                    painter.line_segment([a_s, m], st);
+                    painter.line_segment([m, sp], st);
+                }
+            }
+            Tool::Label => {
+                painter.circle_stroke(sp, 4.0, Stroke::new(1.5, Color32::from_rgb(0, 100, 100)));
+            }
+            Tool::Select => {}
+        }
+        self.status = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
+
+        if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select {
+            if let Some(i) = self.comp_at(g) {
+                let c = &self.sch.components[i];
+                self.drag = Some((i, (snapped.0 - c.pos.0, snapped.1 - c.pos.1)));
+                self.selected = Some(Sel::Comp(i));
+            }
+        }
+        if let Some((i, off)) = self.drag {
+            if resp.dragged_by(egui::PointerButton::Primary) {
+                self.sch.components[i].pos = (snapped.0 - off.0, snapped.1 - off.1);
+            } else {
+                self.drag = None;
+            }
+        }
+        if resp.drag_stopped() {
+            self.drag = None;
+        }
+
+        if resp.clicked_by(egui::PointerButton::Primary) {
+            match self.tool {
+                Tool::Select => self.selected = self.pick(g),
+                Tool::Place => {
+                    let i = self.sch.add(self.place, snapped, self.rot);
+                    let _ = i;
+                }
+                Tool::Wire => match self.pending.take() {
+                    None => self.pending = Some(snapped),
+                    Some(a) => {
+                        self.add_wire(a, snapped);
+                        self.pending = Some(snapped);
+                    }
+                },
+                Tool::Label => {
+                    if !self.label_text.is_empty() {
+                        self.sch.labels.push(Label { pos: snapped, text: self.label_text.clone() });
+                    }
+                }
+            }
+        }
+        if resp.double_clicked() && self.tool == Tool::Wire {
+            self.pending = None;
+        }
+        if resp.clicked_by(egui::PointerButton::Secondary) {
+            self.pending = None;
+        }
+    }
+
+    // ------------------------------------------------------------- side panel
+
+    pub fn side_panel(&mut self, ui: &mut egui::Ui) {
+        ui.heading("回路図");
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.tool, Tool::Select, "選択");
+            ui.selectable_value(&mut self.tool, Tool::Wire, "配線");
+            ui.selectable_value(&mut self.tool, Tool::Label, "ラベル");
+        });
+        if self.tool == Tool::Label {
+            ui.text_edit_singleline(&mut self.label_text);
+        }
+        ui.separator();
+        ui.label("部品 (クリックして配置 / Rキーで回転)");
+        for k in Kind::PALETTE {
+            if ui.selectable_label(self.tool == Tool::Place && self.place == *k, k.label()).clicked() {
+                self.tool = Tool::Place;
+                self.place = *k;
+                self.pending = None;
+            }
+        }
+        ui.separator();
+        if let Some(Sel::Comp(i)) = self.selected {
+            if i < self.sch.components.len() {
+                let c = &mut self.sch.components[i];
+                ui.label("選択中の部品");
+                if !c.kind.is_power_symbol() {
+                    ui.horizontal(|ui| {
+                        ui.label("番号");
+                        ui.text_edit_singleline(&mut c.refdes);
+                    });
+                }
+                if c.kind != Kind::Ground {
+                    ui.horizontal(|ui| {
+                        ui.label("値");
+                        ui.text_edit_singleline(&mut c.value);
+                    });
+                }
+                if ui.button("回転 (R)").clicked() {
+                    c.rot = (c.rot + 1) % 4;
+                }
+            }
+        }
+        if self.selected.is_some() && ui.button("削除 (Delete)").clicked() {
+            self.delete_selected();
+        }
+        ui.separator();
+        if ui.button("ERC (電気ルールチェック)").clicked() {
+            self.problems = erc(&self.sch);
+            self.status = format!("ERC: 問題 {} 件", self.problems.len());
+        }
+        for p in &self.problems {
+            ui.colored_label(Color32::from_rgb(230, 0, 200), &p.message);
+        }
+        ui.collapsing("ネットリスト", |ui| {
+            for n in extract(&self.sch) {
+                let pins: Vec<String> = n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
+                ui.label(format!("{}: {}", n.name, pins.join(", ")));
+            }
+        });
+        if ui.button("SPICEネットリストを書き出し…").clicked() {
+            if let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
+                self.status = match std::fs::write(&p, to_spice(&self.sch, "circuitCad")) {
+                    Ok(()) => format!("書き出しました: {}", p.display()),
+                    Err(e) => format!("書き出し失敗: {e}"),
+                };
+            }
+        }
+        ui.separator();
+        ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\n右クリック・ダブルクリック: 配線を終了\n中・右ドラッグ: 移動 / ホイール: 拡大縮小");
+    }
+
+    // ------------------------------------------------------------- files
+
+    pub fn new_file(&mut self) {
+        *self = SchEditor::default();
+    }
+
+    pub fn save(&mut self, as_new: bool) {
+        let path = if as_new || self.path.is_none() {
+            rfd::FileDialog::new().add_filter("circuitCad 回路図", &["schjson"]).set_file_name("circuit.schjson").save_file()
+        } else {
+            self.path.clone()
+        };
+        if let Some(p) = path {
+            self.status = match serde_json::to_string_pretty(&self.sch).map(|s| std::fs::write(&p, s)) {
+                Ok(Ok(())) => {
+                    self.path = Some(p.clone());
+                    format!("保存しました: {}", p.display())
+                }
+                Ok(Err(e)) => format!("保存失敗: {e}"),
+                Err(e) => format!("保存失敗: {e}"),
+            };
+        }
+    }
+
+    pub fn open(&mut self) {
+        if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad 回路図", &["schjson"]).pick_file() {
+            match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string())) {
+                Ok(s) => {
+                    self.sch = s;
+                    self.path = Some(p.clone());
+                    self.selected = None;
+                    self.pending = None;
+                    self.problems.clear();
+                    self.status = format!("開きました: {}", p.display());
+                }
+                Err(e) => self.status = format!("読み込み失敗: {e}"),
+            }
+        }
+    }
+}
