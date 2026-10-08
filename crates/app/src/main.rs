@@ -1,3 +1,6 @@
+// No console window on Windows (panics are written to %APPDATA%\circuitCad\crash.log instead).
+#![windows_subsystem = "windows"]
+
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
 use pcb_core::netlist::{self, NetlistNet, NetlistPart};
 use pcb_core::ratsnest::ratsnest;
@@ -608,7 +611,20 @@ impl eframe::App for App {
     }
 }
 
+/// Without a console a panic would vanish silently: keep it in a log file.
+fn install_crash_log() {
+    let dir = part_lib::default_dir().parent().map(|p| p.to_path_buf());
+    std::panic::set_hook(Box::new(move |info| {
+        if let Some(d) = &dir {
+            let _ = std::fs::create_dir_all(d);
+            let _ = std::fs::write(d.join("crash.log"), format!("{info}
+"));
+        }
+    }));
+}
+
 fn main() -> eframe::Result {
+    install_crash_log();
     eframe::run_native(
         "circuitCad",
         eframe::NativeOptions {
