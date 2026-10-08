@@ -26,7 +26,7 @@ pub enum Tool {
 
 fn tool_tip(t: Tool) -> &'static str {
     match t {
-        Tool::Select => "部品や配線をクリックで選択、部品はドラッグで移動します",
+        Tool::Select => "クリックで選択、部品はドラッグで移動。空いた所を左ドラッグ = 完全に囲んだものを選択、右ドラッグ = 触れたものも選択 (Shiftで追加)",
         Tool::Track => "銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます",
         Tool::Via => "表面と裏面をつなぐ穴 (ビア) を置きます",
         Tool::Zone => "広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります",
@@ -59,7 +59,7 @@ enum RouteMode {
     Orthogonal,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Item {
     Track(usize),
     Pad(usize),
@@ -69,6 +69,52 @@ enum Item {
     /// Index into `Board::parts`.
     Part(usize),
     Zone(usize),
+}
+
+/// Rubber-band selection in progress.
+struct BoxSel {
+    start: Point,
+    /// Right button: anything the box touches is selected. Left button: only what it fully contains.
+    crossing: bool,
+}
+
+/// Several selected objects being moved together; `orig` is the board when the drag began.
+struct GroupDrag {
+    anchor: Point,
+    orig: Board,
+    items: Vec<Item>,
+}
+
+fn rect_contains(lo: Point, hi: Point, p: Point) -> bool {
+    p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y
+}
+
+fn rects_overlap(alo: Point, ahi: Point, blo: Point, bhi: Point) -> bool {
+    alo.x <= bhi.x && ahi.x >= blo.x && alo.y <= bhi.y && ahi.y >= blo.y
+}
+
+/// Does the segment a-b touch the rectangle? (Liang-Barsky clipping.)
+fn segment_hits_rect(a: Point, b: Point, lo: Point, hi: Point) -> bool {
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    for (p, q) in [(-dx, a.x - lo.x), (dx, hi.x - a.x), (-dy, a.y - lo.y), (dy, hi.y - a.y)] {
+        if p == 0.0 {
+            if q < 0.0 {
+                return false;
+            }
+        } else {
+            let r = q / p;
+            if p < 0.0 {
+                t0 = t0.max(r);
+            } else {
+                t1 = t1.min(r);
+            }
+            if t0 > t1 {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[derive(Clone, Copy)]
@@ -101,6 +147,10 @@ pub struct BoardEditor {
     /// Polygon being drawn (board outline or zone).
     poly: Vec<Point>,
     selected: Option<Item>,
+    /// Two or more objects selected by a rubber band (then `selected` is empty).
+    multi: Vec<Item>,
+    boxsel: Option<BoxSel>,
+    gdrag: Option<GroupDrag>,
     drag_part: Option<(String, Point)>,
     pub status: String,
     violations: Vec<drc::Violation>,
@@ -137,6 +187,9 @@ impl Default for BoardEditor {
             pending: None,
             poly: vec![],
             selected: None,
+            multi: vec![],
+            boxsel: None,
+            gdrag: None,
             drag_part: None,
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             violations: vec![],
@@ -200,6 +253,7 @@ impl BoardEditor {
 
     fn after_history(&mut self, msg: &str) {
         self.selected = None;
+        self.multi.clear();
         self.pending = None;
         self.poly.clear();
         self.violations.clear();
@@ -287,6 +341,186 @@ impl BoardEditor {
             }
         }
         None
+    }
+
+    fn set_selection(&mut self, items: Vec<Item>) {
+        if items.len() == 1 {
+            self.selected = Some(items[0]);
+            self.multi.clear();
+        } else {
+            self.selected = None;
+            self.multi = items;
+        }
+    }
+
+    /// Objects touched by the box. `crossing`: any overlap counts, otherwise the object must lie
+    /// completely inside. Hidden layers are skipped, and zones count only by their outline so that
+    /// a big copper pour is not grabbed by every box drawn over it.
+    fn items_in_box(&self, a: Point, b: Point, crossing: bool) -> Vec<Item> {
+        let (lo, hi) = (Point::new(a.x.min(b.x), a.y.min(b.y)), Point::new(a.x.max(b.x), a.y.max(b.y)));
+        let rect_hit = |c: Point, w: f64, h: f64| {
+            let (rl, rh) = (Point::new(c.x - w / 2.0, c.y - h / 2.0), Point::new(c.x + w / 2.0, c.y + h / 2.0));
+            if crossing { rects_overlap(lo, hi, rl, rh) } else { rect_contains(lo, hi, rl) && rect_contains(lo, hi, rh) }
+        };
+        let seg_hit = |p: Point, q: Point, width: f64| {
+            if crossing {
+                let m = width / 2.0;
+                segment_hits_rect(p, q, Point::new(lo.x - m, lo.y - m), Point::new(hi.x + m, hi.y + m))
+            } else {
+                rect_contains(lo, hi, p) && rect_contains(lo, hi, q)
+            }
+        };
+        let mut out = vec![];
+        for (i, part) in self.board.parts.iter().enumerate() {
+            let pads: Vec<&Pad> = self.board.pads.iter().filter(|p| p.refdes == part.refdes).collect();
+            if pads.is_empty() || !(self.side_visible(part.side) || pads.iter().any(|p| p.drill.is_some())) {
+                continue;
+            }
+            let hits = |p: &&Pad| {
+                let (w, h) = p.shape.size();
+                rect_hit(p.pos, w, h)
+            };
+            let hit = if crossing { pads.iter().any(hits) } else { pads.iter().all(hits) };
+            if hit {
+                out.push(Item::Part(i));
+            }
+        }
+        for (i, pd) in self.board.pads.iter().enumerate().filter(|(_, p)| p.refdes.is_empty() && (p.drill.is_some() || self.side_visible(p.side))) {
+            let (w, h) = pd.shape.size();
+            if rect_hit(pd.pos, w, h) {
+                out.push(Item::Pad(i));
+            }
+        }
+        for (i, v) in self.board.vias.iter().enumerate() {
+            if rect_hit(v.pos, v.diameter, v.diameter) {
+                out.push(Item::Via(i));
+            }
+        }
+        for (i, h) in self.board.holes.iter().enumerate() {
+            if rect_hit(h.pos, h.drill, h.drill) {
+                out.push(Item::Hole(i));
+            }
+        }
+        for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
+            if seg_hit(t.a, t.b, t.width) {
+                out.push(Item::Track(i));
+            }
+        }
+        for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty() && self.side_visible(l.side)) {
+            if seg_hit(l.a, l.b, l.width) {
+                out.push(Item::Silk(i));
+            }
+        }
+        for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
+            let n = z.polygon.len();
+            let hit = if crossing {
+                (0..n).any(|k| segment_hits_rect(z.polygon[k], z.polygon[(k + 1) % n], lo, hi))
+            } else {
+                z.polygon.iter().all(|p| rect_contains(lo, hi, *p))
+            };
+            if n >= 3 && hit {
+                out.push(Item::Zone(i));
+            }
+        }
+        out
+    }
+
+    /// Points to ring when an object is selected.
+    fn item_points(&self, it: Item) -> Vec<Point> {
+        match it {
+            Item::Part(i) if i < self.board.parts.len() => {
+                let r = &self.board.parts[i].refdes;
+                self.board.pads.iter().filter(|p| &p.refdes == r).map(|p| p.pos).collect()
+            }
+            Item::Track(i) if i < self.board.tracks.len() => vec![self.board.tracks[i].a, self.board.tracks[i].b],
+            Item::Silk(i) if i < self.board.silk.len() => vec![self.board.silk[i].a, self.board.silk[i].b],
+            Item::Pad(i) if i < self.board.pads.len() => vec![self.board.pads[i].pos],
+            Item::Via(i) if i < self.board.vias.len() => vec![self.board.vias[i].pos],
+            Item::Hole(i) if i < self.board.holes.len() => vec![self.board.holes[i].pos],
+            Item::Zone(i) if i < self.board.zones.len() => self.board.zones[i].polygon.clone(),
+            _ => vec![],
+        }
+    }
+
+    /// Move the grouped objects to `orig` shifted by (dx, dy).
+    fn move_group(&mut self, g: &GroupDrag, dx: f64, dy: f64) {
+        let mv = |p: Point| Point::new(p.x + dx, p.y + dy);
+        for it in &g.items {
+            match *it {
+                Item::Part(i) => {
+                    if let Some(p) = g.orig.parts.get(i) {
+                        self.board.place_part(&p.refdes, mv(p.pos), p.rot);
+                    }
+                }
+                Item::Track(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.tracks.get(i), self.board.tracks.get_mut(i)) {
+                        (t.a, t.b) = (mv(o.a), mv(o.b));
+                    }
+                }
+                Item::Silk(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.silk.get(i), self.board.silk.get_mut(i)) {
+                        (t.a, t.b) = (mv(o.a), mv(o.b));
+                    }
+                }
+                Item::Pad(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.pads.get(i), self.board.pads.get_mut(i)) {
+                        t.pos = mv(o.pos);
+                    }
+                }
+                Item::Via(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.vias.get(i), self.board.vias.get_mut(i)) {
+                        t.pos = mv(o.pos);
+                    }
+                }
+                Item::Hole(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.holes.get(i), self.board.holes.get_mut(i)) {
+                        t.pos = mv(o.pos);
+                    }
+                }
+                Item::Zone(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.zones.get(i), self.board.zones.get_mut(i)) {
+                        t.polygon = o.polygon.iter().map(|p| mv(*p)).collect();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Delete everything in the multi-selection except parts (those belong to the schematic).
+    fn delete_multi(&mut self) {
+        let items = std::mem::take(&mut self.multi);
+        let had_parts = items.iter().any(|i| matches!(i, Item::Part(_)));
+        let mut idx: [Vec<usize>; 6] = Default::default();
+        for it in &items {
+            match *it {
+                Item::Track(i) => idx[0].push(i),
+                Item::Pad(i) => idx[1].push(i),
+                Item::Via(i) => idx[2].push(i),
+                Item::Hole(i) => idx[3].push(i),
+                Item::Silk(i) => idx[4].push(i),
+                Item::Zone(i) => idx[5].push(i),
+                Item::Part(_) => {}
+            }
+        }
+        let n: usize = idx.iter().map(Vec::len).sum();
+        if n > 0 {
+            self.checkpoint();
+            for v in idx.iter_mut() {
+                v.sort_unstable_by(|a, b| b.cmp(a));
+            }
+            for &i in &idx[0] { if i < self.board.tracks.len() { self.board.tracks.remove(i); } }
+            for &i in &idx[1] { if i < self.board.pads.len() { self.board.pads.remove(i); } }
+            for &i in &idx[2] { if i < self.board.vias.len() { self.board.vias.remove(i); } }
+            for &i in &idx[3] { if i < self.board.holes.len() { self.board.holes.remove(i); } }
+            for &i in &idx[4] { if i < self.board.silk.len() { self.board.silk.remove(i); } }
+            for &i in &idx[5] { if i < self.board.zones.len() { self.board.zones.remove(i); } }
+        }
+        self.selected = None;
+        self.status = match (n, had_parts) {
+            (0, true) => "部品は回路図側で削除してから「回路図から取り込み」を実行してください".into(),
+            (_, true) => format!("{n} 個を削除しました (部品は回路図側で削除します)"),
+            _ => format!("{n} 個を削除しました"),
+        };
     }
 
     fn delete(&mut self, it: Item) {
@@ -398,7 +632,10 @@ impl BoardEditor {
 
     fn click(&mut self, p: Point) {
         match self.tool {
-            Tool::Select => self.selected = self.hit_test(p),
+            Tool::Select => {
+                self.multi.clear();
+                self.selected = self.hit_test(p);
+            }
             Tool::Track => match self.pending.take() {
                 None => self.pending = Some(p),
                 Some(a) => {
@@ -493,6 +730,7 @@ impl BoardEditor {
                 self.board = b;
                 self.path = Some(p.clone());
                 self.selected = None;
+                self.multi.clear();
                 self.pending = None;
                 self.poly.clear();
                 self.violations.clear();
@@ -558,6 +796,7 @@ impl BoardEditor {
         }
         let rep = netlist::import(&mut self.board, &parts, &nets);
         self.selected = None;
+        self.multi.clear();
         self.import_notes = rep.warnings.clone();
         self.status = format!("取り込み完了: 追加 {} / 更新 {} / 削除 {} / 警告 {}", rep.added.len(), rep.updated, rep.removed.len(), rep.warnings.len());
     }
@@ -574,7 +813,9 @@ impl BoardEditor {
         }
 
         // pan (middle/right drag) and zoom (wheel, around the cursor)
-        if resp.dragged_by(egui::PointerButton::Middle) || resp.dragged_by(egui::PointerButton::Secondary) {
+        // in the Select tool the right button draws a crossing selection box instead of panning
+        let rmb_selects = self.tool == Tool::Select;
+        if resp.dragged_by(egui::PointerButton::Middle) || (resp.dragged_by(egui::PointerButton::Secondary) && !rmb_selects) {
             let d = resp.drag_delta();
             self.pan.x -= d.x / self.zoom;
             self.pan.y += d.y / self.zoom;
@@ -597,6 +838,53 @@ impl BoardEditor {
         self.draw_copper(&painter, rect);
         self.draw_highlight(&painter, rect, conn.as_ref());
         self.draw_overlays(&painter, rect);
+
+        // rubber-band selection: left drag = fully enclosed, right drag = anything touched
+        if self.tool == Tool::Select {
+            let origin = ui.input(|i| i.pointer.press_origin());
+            for (btn, crossing) in [(egui::PointerButton::Primary, false), (egui::PointerButton::Secondary, true)] {
+                if resp.drag_started_by(btn) && self.drag_part.is_none() && self.gdrag.is_none() {
+                    if let Some(o) = origin {
+                        let w0 = self.to_world(rect, o);
+                        // a left drag that starts on a part or wire moves it instead (below); the inside
+                        // of a copper pour does not count, or a box could not be drawn over one
+                        if crossing || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_))) {
+                            self.boxsel = Some(BoxSel { start: w0, crossing });
+                        }
+                    }
+                }
+            }
+            if let Some(b) = &self.boxsel {
+                let cur = ui.input(|i| i.pointer.latest_pos()).map(|p| self.to_world(rect, p)).unwrap_or(b.start);
+                let r = Rect::from_two_pos(self.to_screen(rect, b.start), self.to_screen(rect, cur));
+                let (fill, line) = if b.crossing {
+                    (Color32::from_rgba_unmultiplied(60, 200, 90, 40), Color32::from_rgb(80, 220, 110))
+                } else {
+                    (Color32::from_rgba_unmultiplied(80, 140, 255, 40), Color32::from_rgb(110, 160, 255))
+                };
+                painter.rect_filled(r, 0.0, fill);
+                painter.rect_stroke(r, 0.0, Stroke::new(1.2, line), egui::StrokeKind::Inside);
+                if resp.drag_stopped() {
+                    let (start, crossing) = (b.start, b.crossing);
+                    let mut items = self.items_in_box(start, cur, crossing);
+                    if ui.input(|i| i.modifiers.shift) {
+                        let mut all = self.multi.clone();
+                        all.extend(self.selected);
+                        for it in items {
+                            if !all.contains(&it) {
+                                all.push(it);
+                            }
+                        }
+                        items = all;
+                    }
+                    self.status = format!("{} 個を選択 ({}範囲)", items.len(), if crossing { "接触した物を含む" } else { "完全に囲んだ" });
+                    self.set_selection(items);
+                    self.boxsel = None;
+                }
+            }
+        } else {
+            self.boxsel = None;
+        }
 
         // cursor handling
         let typing = ui.ctx().egui_wants_keyboard_input();
@@ -622,12 +910,25 @@ impl BoardEditor {
             sp = Some(p);
             self.draw_cursor(&painter, rect, p);
 
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select {
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none() {
+                if self.hit_test(w).is_some_and(|h| self.multi.contains(&h)) {
+                    self.checkpoint();
+                    self.gdrag = Some(GroupDrag { anchor: p, orig: self.board.clone(), items: self.multi.clone() });
+                }
+            }
+            if let Some(g) = self.gdrag.take() {
+                if resp.dragged_by(egui::PointerButton::Primary) {
+                    self.move_group(&g, p.x - g.anchor.x, p.y - g.anchor.y);
+                    self.gdrag = Some(g);
+                }
+            }
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 {
                 if let Some(Item::Part(i)) = self.hit_test(w) {
                     self.checkpoint();
                     let part = &self.board.parts[i];
                     self.drag_part = Some((part.refdes.clone(), Point::new(p.x - part.pos.x, p.y - part.pos.y)));
                     self.selected = Some(Item::Part(i));
+                    self.multi.clear();
                 }
             }
             if let Some((r, off)) = self.drag_part.clone() {
@@ -648,6 +949,7 @@ impl BoardEditor {
         }
         if resp.drag_stopped() {
             self.drag_part = None;
+            self.gdrag = None;
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
             self.pending = None;
@@ -672,13 +974,17 @@ impl BoardEditor {
             return;
         }
         if pressed(Key::Delete) || pressed(Key::Backspace) {
-            if let Some(it) = self.selected {
+            if !self.multi.is_empty() {
+                self.delete_multi();
+            } else if let Some(it) = self.selected {
                 self.delete(it);
             }
         }
         if pressed(Key::Escape) {
             self.pending = None;
             self.poly.clear();
+            self.multi.clear();
+            self.boxsel = None;
         }
         if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
             self.finish_polygon();
@@ -692,14 +998,29 @@ impl BoardEditor {
         if pressed(Key::Space) {
             self.bend_flip = !self.bend_flip;
         }
+        let grouped_parts: Vec<String> = self.multi.iter().filter_map(|it| if let Item::Part(i) = it { self.board.parts.get(*i).map(|p| p.refdes.clone()) } else { None }).collect();
         if pressed(Key::B) {
-            self.flip_selected_part();
+            if grouped_parts.is_empty() {
+                self.flip_selected_part();
+            } else {
+                self.checkpoint();
+                for r in &grouped_parts {
+                    self.board.flip_part(r);
+                }
+            }
         }
         if pressed(Key::R) {
             if let Some(Item::Part(i)) = self.selected {
                 self.checkpoint();
                 let p = self.board.parts[i].clone();
                 self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
+            } else if !grouped_parts.is_empty() {
+                self.checkpoint();
+                for r in &grouped_parts {
+                    if let Some(p) = self.board.parts.iter().find(|p| &p.refdes == r).cloned() {
+                        self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
+                    }
+                }
             }
         }
         // V while routing: run to the cursor, drop a via and continue on the other layer
@@ -897,21 +1218,8 @@ impl BoardEditor {
         for v in &self.violations {
             painter.circle_stroke(self.to_screen(rect, v.at), 10.0, Stroke::new(2.0, Color32::from_rgb(255, 0, 255)));
         }
-        if let Some(sel) = self.selected {
-            let pts: Vec<Point> = match sel {
-                Item::Part(i) if i < self.board.parts.len() => {
-                    let r = &self.board.parts[i].refdes;
-                    self.board.pads.iter().filter(|p| &p.refdes == r).map(|p| p.pos).collect()
-                }
-                Item::Track(i) if i < self.board.tracks.len() => vec![self.board.tracks[i].a, self.board.tracks[i].b],
-                Item::Silk(i) if i < self.board.silk.len() => vec![self.board.silk[i].a, self.board.silk[i].b],
-                Item::Pad(i) if i < self.board.pads.len() => vec![self.board.pads[i].pos],
-                Item::Via(i) if i < self.board.vias.len() => vec![self.board.vias[i].pos],
-                Item::Hole(i) if i < self.board.holes.len() => vec![self.board.holes[i].pos],
-                Item::Zone(i) if i < self.board.zones.len() => self.board.zones[i].polygon.clone(),
-                _ => vec![],
-            };
-            for p in pts {
+        for sel in self.selected.iter().chain(self.multi.iter()) {
+            for p in self.item_points(*sel) {
                 painter.circle_stroke(self.to_screen(rect, p), 8.0, Stroke::new(2.0, Color32::WHITE));
             }
         }
@@ -1092,12 +1400,21 @@ impl BoardEditor {
             }
             ui.separator();
             ui.small(
-                "左クリック: 配置・選択 / 右クリック: 中断\n中・右ドラッグ: 移動 / ホイール: 拡大縮小\nCtrl+Z: 元に戻す / Ctrl+Y: やり直し / Delete: 削除\nR: 部品を回転 / B: 部品の表裏反転 / L: 層切替 / F: 全体表示",
+                "左クリック: 配置・選択 / 右クリック: 中断\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (他のツールでは右ドラッグも可) / ホイール: 拡大縮小\nCtrl+Z: 元に戻す / Ctrl+Y: やり直し / Delete: 削除\nR: 部品を回転 / B: 部品の表裏反転 / L: 層切替 / F: 全体表示",
             );
         });
     }
 
     fn selection_panel(&mut self, ui: &mut egui::Ui) {
+        if self.multi.len() > 1 {
+            ui.separator();
+            ui.label(format!("{} 個を選択中", self.multi.len()));
+            ui.small("ドラッグでまとめて移動 / R: 部品を回転 / B: 部品の表裏反転 / Delete: 削除 (部品を除く)");
+            if ui.button("選択を解除 (Esc)").clicked() {
+                self.multi.clear();
+            }
+            return;
+        }
         let Some(sel) = self.selected else { return };
         ui.separator();
         ui.label("選択中");
@@ -1289,6 +1606,51 @@ mod tests {
         e.click(p(2.0, 2.0));
         assert_eq!(e.board.zones.len(), 1);
         assert!(e.poly.is_empty());
+    }
+
+    #[test]
+    fn window_and_crossing_boxes_select_differently() {
+        let mut e = BoardEditor::default();
+        e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 5.0), b: p(10.0, 5.0), width: 0.25 }); // inside
+        e.board.tracks.push(Track { side: Side::Top, a: p(8.0, 5.0), b: p(25.0, 5.0), width: 0.25 }); // leaves the box
+        e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3 });
+        e.board.zones.push(Zone::new("GND", Side::Top, vec![p(0.0, 0.0), p(40.0, 0.0), p(40.0, 40.0), p(0.0, 40.0)]));
+        let (a, b) = (p(3.0, 3.0), p(12.0, 10.0));
+        let window = e.items_in_box(a, b, false);
+        assert!(window.contains(&Item::Track(0)) && window.contains(&Item::Via(0)));
+        assert!(!window.contains(&Item::Track(1)), "only partly inside");
+        let crossing = e.items_in_box(a, b, true);
+        assert!(crossing.contains(&Item::Track(1)));
+        // a box inside the big pour does not grab it; one crossing its edge does
+        assert!(!crossing.contains(&Item::Zone(0)));
+        assert!(e.items_in_box(p(-2.0, 10.0), p(2.0, 12.0), true).contains(&Item::Zone(0)));
+        // objects on a hidden layer are skipped (vias belong to both layers)
+        e.vis.top = false;
+        assert_eq!(e.items_in_box(a, b, true), vec![Item::Via(0)]);
+    }
+
+    #[test]
+    fn group_move_and_delete() {
+        let mut e = BoardEditor::default();
+        e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 5.0), b: p(10.0, 5.0), width: 0.25 });
+        e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3 });
+        e.board.holes.push(Hole { pos: p(30.0, 30.0), drill: 3.2 });
+        let items = e.items_in_box(p(3.0, 3.0), p(12.0, 10.0), false);
+        assert_eq!(items.len(), 2);
+        e.set_selection(items.clone());
+        assert!(e.selected.is_none() && e.multi.len() == 2);
+        let g = GroupDrag { anchor: p(5.0, 5.0), orig: e.board.clone(), items };
+        e.move_group(&g, 2.0, -1.0);
+        assert_eq!((e.board.tracks[0].a.x, e.board.tracks[0].a.y), (7.0, 4.0));
+        assert_eq!((e.board.vias[0].pos.x, e.board.vias[0].pos.y), (8.0, 7.0));
+        assert_eq!(e.board.holes[0].pos.x, 30.0, "unselected objects stay");
+        // moving again from the same snapshot does not accumulate
+        e.move_group(&g, 1.0, 0.0);
+        assert_eq!(e.board.tracks[0].a.x, 6.0);
+        e.delete_multi();
+        assert!(e.board.tracks.is_empty() && e.board.vias.is_empty() && e.board.holes.len() == 1);
+        e.undo();
+        assert_eq!(e.board.tracks.len(), 1);
     }
 
     #[test]
