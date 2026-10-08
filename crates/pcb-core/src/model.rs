@@ -155,6 +155,9 @@ pub struct Board {
     pub silk: Vec<SilkLine>,
     #[serde(default)]
     pub parts: Vec<Part>,
+    /// User-defined footprints used by this board (embedded so the file is self-contained).
+    #[serde(default)]
+    pub footprints: Vec<crate::footprints::Footprint>,
     pub rules: Rules,
 }
 
@@ -174,6 +177,7 @@ impl Board {
             holes: vec![],
             silk: vec![],
             parts: vec![],
+            footprints: vec![],
             rules: Rules::default(),
         }
     }

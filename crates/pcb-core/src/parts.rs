@@ -14,10 +14,21 @@ pub fn rotate(p: Point, rot: u8) -> Point {
 }
 
 impl Board {
+    /// Board-embedded footprints take precedence over the built-in library.
+    pub fn footprint(&self, name: &str) -> Option<footprints::Footprint> {
+        self.footprints.iter().find(|f| f.name == name).cloned().or_else(|| footprints::get(name))
+    }
+
+    /// Register (or replace) a user footprint.
+    pub fn add_footprint(&mut self, fp: footprints::Footprint) {
+        self.footprints.retain(|f| f.name != fp.name);
+        self.footprints.push(fp);
+    }
+
     /// Insert or replace a part, regenerating its pads and silkscreen outline.
     /// Pad nets are kept for pins that still exist.
     pub fn set_part(&mut self, part: Part) -> Result<(), String> {
-        let fp = footprints::get(&part.footprint).ok_or_else(|| format!("フットプリント {} が見つかりません", part.footprint))?;
+        let fp = self.footprint(&part.footprint).ok_or_else(|| format!("フットプリント {} が見つかりません", part.footprint))?;
         let old_nets: HashMap<String, String> = self
             .pads
             .iter()

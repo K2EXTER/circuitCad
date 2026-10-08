@@ -1,0 +1,237 @@
+//! Library part definitions: one JSON file describes a part's schematic symbol, PCB package
+//! and simulation model, typically transcribed from the datasheet.
+
+use pcb_core::footprints::Footprint;
+use pcb_core::package::PackageSpec;
+use sch_core::{CustomSymbol, PinSide, SimKind, SimModel, SymPin};
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+pub const FILE_SUFFIX: &str = ".part.json";
+
+fn default_prefix() -> String {
+    "U".into()
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PinDef {
+    /// Datasheet pin number (or letter): must match a pad of the package.
+    pub number: String,
+    pub name: String,
+    /// Omitted: the first half goes left, the rest right.
+    #[serde(default)]
+    pub side: Option<PinSide>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PartDef {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub datasheet: String,
+    #[serde(default = "default_prefix")]
+    pub prefix: String,
+    /// Value shown in the schematic; defaults to `name`.
+    #[serde(default)]
+    pub value: Option<String>,
+    pub pins: Vec<PinDef>,
+    pub package: PackageSpec,
+    /// Footprint name on the PCB; defaults to `name`.
+    #[serde(default)]
+    pub footprint_name: Option<String>,
+    #[serde(default)]
+    pub sim: Option<SimModel>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Issue {
+    pub error: bool,
+    pub message: String,
+}
+
+impl PartDef {
+    pub fn footprint_name(&self) -> String {
+        self.footprint_name.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| self.name.clone())
+    }
+
+    pub fn default_value(&self) -> String {
+        self.value.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| self.name.clone())
+    }
+
+    pub fn symbol(&self) -> CustomSymbol {
+        let half = self.pins.len().div_ceil(2);
+        CustomSymbol {
+            name: self.name.clone(),
+            prefix: self.prefix.clone(),
+            pins: self
+                .pins
+                .iter()
+                .enumerate()
+                .map(|(i, p)| SymPin {
+                    number: p.number.clone(),
+                    name: p.name.clone(),
+                    side: p.side.unwrap_or(if i < half { PinSide::Left } else { PinSide::Right }),
+                })
+                .collect(),
+            sim: self.sim.clone(),
+        }
+    }
+
+    pub fn footprint(&self) -> Result<Footprint, String> {
+        self.package.build(&self.footprint_name())
+    }
+
+    /// Everything that can be checked without a simulator.
+    pub fn validate(&self) -> Vec<Issue> {
+        let mut v = vec![];
+        let mut err = |m: String| v.push(Issue { error: true, message: m });
+        let mut warns = vec![];
+
+        if self.name.trim().is_empty() {
+            err("name が空です".into());
+        }
+        if self.prefix.trim().is_empty() {
+            err("prefix が空です".into());
+        }
+        if self.pins.is_empty() {
+            err("ピンがありません".into());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for p in &self.pins {
+            if p.number.trim().is_empty() {
+                err("番号が空のピンがあります".into());
+            } else if !seen.insert(p.number.as_str()) {
+                err(format!("ピン番号 {} が重複しています", p.number));
+            }
+        }
+
+        match self.footprint() {
+            Err(e) => err(format!("package: {e}")),
+            Ok(fp) => {
+                for p in &self.pins {
+                    if !fp.pads.iter().any(|pad| pad.pin == p.number) {
+                        err(format!("ピン {} ({}) に対応するパッドがパッケージにありません", p.number, p.name));
+                    }
+                }
+                for pad in &fp.pads {
+                    if !self.pins.iter().any(|p| p.number == pad.pin) {
+                        warns.push(format!("パッド {} は記号のピンに対応していません (サーマルパッド等なら問題ありません)", pad.pin));
+                    }
+                }
+            }
+        }
+
+        if let Some(sim) = &self.sim {
+            for p in &sim.pins {
+                if !self.pins.iter().any(|d| &d.number == p) {
+                    err(format!("sim.pins の {p} が記号のピンにありません"));
+                }
+            }
+            let lower = sim.text.to_ascii_lowercase();
+            match sim.kind {
+                SimKind::Model => {
+                    if sim.element.trim().is_empty() {
+                        err("sim.element (D, Q, M, J など) が必要です".into());
+                    }
+                    let ok = lower.lines().any(|l| {
+                        let mut t = l.split_whitespace();
+                        t.next() == Some(".model") && t.next().is_some_and(|n| n.eq_ignore_ascii_case(&sim.name))
+                    });
+                    if !ok {
+                        err(format!("sim.text に .model {} がありません", sim.name));
+                    }
+                }
+                SimKind::Subckt => match subckt_ports(&sim.text) {
+                    None => err("sim.text に .subckt 行がありません".into()),
+                    Some((name, ports)) => {
+                        if !name.eq_ignore_ascii_case(&sim.name) {
+                            err(format!("sim.name {} と .subckt 名 {name} が違います", sim.name));
+                        }
+                        if ports != sim.pins.len() {
+                            err(format!("サブサーキットのポート数 {ports} と sim.pins の数 {} が違います", sim.pins.len()));
+                        }
+                    }
+                },
+            }
+        }
+        v.extend(warns.into_iter().map(|m| Issue { error: false, message: m }));
+        v
+    }
+
+    pub fn has_errors(&self) -> bool {
+        self.validate().iter().any(|i| i.error)
+    }
+}
+
+/// `(name, port count)` of the first `.subckt` line.
+fn subckt_ports(text: &str) -> Option<(String, usize)> {
+    let line = text.lines().find(|l| l.trim_start().to_ascii_lowercase().starts_with(".subckt"))?;
+    let mut t = line.split_whitespace().skip(1);
+    let name = t.next()?.to_string();
+    let ports = t.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).count();
+    Some((name, ports))
+}
+
+// ---------------------------------------------------------------- files
+
+/// `%APPDATA%\circuitCad\library` (or `~/.circuitcad/library`).
+pub fn default_dir() -> PathBuf {
+    if let Some(a) = std::env::var_os("APPDATA") {
+        return PathBuf::from(a).join("circuitCad").join("library");
+    }
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).unwrap_or_default();
+    PathBuf::from(home).join(".circuitcad").join("library")
+}
+
+pub fn file_name(name: &str) -> String {
+    let safe: String = name.chars().map(|c| if c.is_alphanumeric() || "-_.+".contains(c) { c } else { '_' }).collect();
+    format!("{safe}{FILE_SUFFIX}")
+}
+
+/// Parts found in `dir` plus one message per unreadable file.
+pub fn load_dir(dir: &Path) -> (Vec<PartDef>, Vec<String>) {
+    let mut parts = vec![];
+    let mut errors = vec![];
+    let Ok(rd) = std::fs::read_dir(dir) else { return (parts, errors) };
+    let mut files: Vec<PathBuf> =
+        rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.to_string_lossy().ends_with(FILE_SUFFIX)).collect();
+    files.sort();
+    for f in files {
+        let label = f.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        match std::fs::read_to_string(&f).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str::<PartDef>(&s).map_err(|e| e.to_string())) {
+            Ok(p) => parts.push(p),
+            Err(e) => errors.push(format!("{label}: {e}")),
+        }
+    }
+    (parts, errors)
+}
+
+pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(file_name(&part.name));
+    std::fs::write(&path, serde_json::to_string_pretty(part).map_err(std::io::Error::other)?)?;
+    Ok(path)
+}
+
+pub const EXAMPLES: &[(&str, &str)] = &[
+    ("NE555_DIP-8", include_str!("../examples/NE555_DIP-8.part.json")),
+    ("1N4148", include_str!("../examples/1N4148.part.json")),
+    ("LM358_SOIC-8", include_str!("../examples/LM358_SOIC-8.part.json")),
+];
+
+/// Copy the bundled examples into an empty library folder (first run).
+pub fn install_examples(dir: &Path) -> std::io::Result<()> {
+    let has_any = std::fs::read_dir(dir).map(|rd| rd.filter_map(|e| e.ok()).any(|e| e.path().to_string_lossy().ends_with(FILE_SUFFIX))).unwrap_or(false);
+    if has_any {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dir)?;
+    for (n, text) in EXAMPLES {
+        std::fs::write(dir.join(format!("{n}{FILE_SUFFIX}")), text)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;

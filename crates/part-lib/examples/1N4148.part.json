@@ -1,0 +1,25 @@
+{
+  "name": "1N4148",
+  "description": "小信号スイッチングダイオード (DO-35)。SPICEの.modelカードを持つ例。パラメータは一般的な公開値なので、設計に使う前にデータシートで確認してください",
+  "prefix": "D",
+  "footprint_name": "D_DO-35_P7.62",
+  "pins": [
+    { "number": "K", "name": "K", "side": "right" },
+    { "number": "A", "name": "A", "side": "left" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "K", "x": -3.81, "y": 0, "shape": "rect", "w": 1.8, "h": 1.8, "drill": 0.9 },
+      { "pin": "A", "x": 3.81, "y": 0, "shape": "circle", "w": 1.8, "drill": 0.9 }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "1N4148",
+    "text": ".model 1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=100 IBV=100u)",
+    "pins": ["A", "K"],
+    "params": { "vf_typ": 0.72, "vr_max": 100, "if_max": 0.2 }
+  }
+}

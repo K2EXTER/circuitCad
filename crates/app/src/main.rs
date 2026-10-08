@@ -5,6 +5,7 @@ use pcb_core::{drc, export, Board, Hole, Pad, PadShape, Point, Side, SilkLine, T
 use schematic::SchEditor;
 use std::path::PathBuf;
 
+mod part_form;
 mod schematic;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -295,6 +296,14 @@ impl App {
             .into_iter()
             .map(|n| NetlistNet { name: n.name, pins: n.pins.into_iter().map(|p| (p.refdes, p.pin)).collect() })
             .collect();
+        // library parts bring their own footprint
+        for c in sch.components.iter().filter(|c| c.custom.is_some()) {
+            if let Some(def) = self.sch.library.iter().find(|d| d.footprint_name() == c.footprint) {
+                if let Ok(fp) = def.footprint() {
+                    self.board.add_footprint(fp);
+                }
+            }
+        }
         let rep = netlist::import(&mut self.board, &parts, &nets);
         self.selected = None;
         self.import_notes = rep.warnings.clone();
@@ -662,5 +671,34 @@ mod tests {
         let b = app.board.pads.iter().find(|p| p.refdes == "R2" && p.pin == "1").unwrap().pos;
         app.board.tracks.push(Track { side: Side::Top, a, b, width: 0.25 });
         assert_eq!(ratsnest(&app.board).len(), 2);
+    }
+    /// A library part (custom symbol + its own package) travels schematic -> netlist -> board.
+    #[test]
+    fn library_part_reaches_the_board() {
+        let mut app = App::default();
+        let def = part_lib::EXAMPLES
+            .iter()
+            .map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap())
+            .find(|d| d.name == "LM358")
+            .unwrap();
+        app.sch.library = vec![def.clone()];
+        let u = app.sch.sch.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 10), 0);
+        let r = app.sch.sch.add(Kind::Resistor, (34, 10), 0);
+        let _ = r;
+        let out = app.sch.sch.components[u].pins().iter().find(|p| p.0 == "1").unwrap().1;
+        app.sch.sch.wires.push(Wire { a: out, b: (32, 10) });
+
+        app.import_from_schematic();
+        assert!(app.import_notes.is_empty(), "{:?}", app.import_notes);
+        assert!(app.board.footprints.iter().any(|f| f.name == "SOIC-8_P1.27"));
+        assert_eq!(app.board.pads.iter().filter(|p| p.refdes == "U1").count(), 8);
+        let u1_out = app.board.pads.iter().find(|p| p.refdes == "U1" && p.pin == "1").unwrap().clone();
+        let r1_in = app.board.pads.iter().find(|p| p.refdes == "R1" && p.pin == "1").unwrap();
+        assert!(!u1_out.net.is_empty() && u1_out.net == r1_in.net);
+        // moving the part keeps its nets
+        app.board.place_part("U1", Point::new(10.0, 10.0), 0);
+        let again = app.board.pads.iter().find(|p| p.refdes == "U1" && p.pin == "1").unwrap();
+        assert_eq!(again.net, u1_out.net);
+        assert_eq!(ratsnest(&app.board).len(), 1);
     }
 }

@@ -1,8 +1,9 @@
 //! Built-in footprint library. Pad positions are relative to the part origin (y up).
 
 use crate::model::{PadShape, Point};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FpPad {
     pub pin: String,
     pub pos: Point,
@@ -10,7 +11,7 @@ pub struct FpPad {
     pub drill: Option<f64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Footprint {
     pub name: String,
     pub pads: Vec<FpPad>,

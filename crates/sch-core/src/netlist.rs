@@ -173,6 +173,14 @@ pub fn erc(s: &Schematic) -> Vec<Problem> {
             continue;
         }
         for (pin, at) in c.pins() {
+            let nc = c
+                .custom
+                .as_ref()
+                .and_then(|s| s.pins.iter().find(|p| p.number == pin))
+                .is_some_and(|p| p.name.eq_ignore_ascii_case("NC"));
+            if nc {
+                continue;
+            }
             let alone = connected.get(&(c.refdes.clone(), pin.clone())).is_none_or(|&n| n < 2);
             if alone {
                 // a pin alone on a net is only fine when it is explicitly named (e.g. a header pin on a labelled net)

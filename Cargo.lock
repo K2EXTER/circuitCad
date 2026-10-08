@@ -206,6 +206,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "part-lib",
  "pcb-core",
  "rfd",
  "sch-core",
@@ -2431,6 +2432,16 @@ dependencies = [
  "redox_syscall 0.5.18",
  "smallvec",
  "windows-link",
+]
+
+[[package]]
+name = "part-lib"
+version = "0.1.0"
+dependencies = [
+ "pcb-core",
+ "sch-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

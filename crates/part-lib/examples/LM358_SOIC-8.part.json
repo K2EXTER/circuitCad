@@ -1,0 +1,22 @@
+{
+  "name": "LM358",
+  "description": "デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化し、簡易マクロモデル(電源クリップなし)で動かす例",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/lm358.pdf",
+  "prefix": "U",
+  "footprint_name": "SOIC-8_P1.27",
+  "pins": [
+    { "number": "3", "name": "IN+", "side": "left" },
+    { "number": "2", "name": "IN-", "side": "left" },
+    { "number": "1", "name": "OUT", "side": "right" },
+    { "number": "8", "name": "V+", "side": "top" },
+    { "number": "4", "name": "V-", "side": "bottom" }
+  ],
+  "package": { "type": "dual", "pins": 8, "pitch": 1.27, "row_spacing": 5.4, "pad_len": 1.55, "pad_width": 0.6 },
+  "sim": {
+    "kind": "subckt",
+    "name": "LM358",
+    "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 1Meg\nEop m 0 inp inn 100k\nRp m n 1k\nCp n 0 16u\nEo o 0 n 0 1\nRo o out 50\n.ends LM358",
+    "pins": ["3", "2", "1", "8", "4"],
+    "params": { "gbw": 1e6, "gain_dc": 1e5 }
+  }
+}

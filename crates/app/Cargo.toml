@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 eframe = "0.36.2"
+part-lib = { version = "0.1.0", path = "../part-lib" }
 pcb-core = { version = "0.1.0", path = "../pcb-core" }
 rfd = "0.17.2"
 sch-core = { version = "0.1.0", path = "../sch-core" }

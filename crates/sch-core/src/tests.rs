@@ -24,7 +24,7 @@ fn refdes_are_numbered_per_prefix() {
 
 #[test]
 fn rotation_moves_pins() {
-    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new() };
+    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None };
     let pins = c.pins();
     assert_eq!(pins[0].1, (10, 8));
     assert_eq!(pins[1].1, (10, 12));
@@ -118,4 +118,84 @@ fn spice_deck() {
     let d = to_spice(&s, "divider");
     assert!(d.contains("V1 N$1 0 DC 9") || d.contains("V1 N_1 0 DC 9"), "{d}");
     assert!(d.contains("R2 ") && d.trim_end().ends_with(".end"));
+}
+
+fn opamp() -> CustomSymbol {
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side };
+    CustomSymbol {
+        name: "LM358".into(),
+        prefix: "U".into(),
+        pins: vec![
+            pin("3", "IN+", PinSide::Left),
+            pin("2", "IN-", PinSide::Left),
+            pin("1", "OUT", PinSide::Right),
+            pin("8", "V+", PinSide::Top),
+            pin("4", "V-", PinSide::Bottom),
+            pin("5", "NC", PinSide::Bottom),
+        ],
+        sim: Some(SimModel {
+            kind: SimKind::Subckt,
+            element: String::new(),
+            name: "LM358".into(),
+            text: ".subckt LM358 1 2 3 4 5\n* body\n.ends LM358".into(),
+            pins: vec!["3".into(), "2".into(), "1".into(), "8".into(), "4".into()],
+            params: Default::default(),
+        }),
+    }
+}
+
+#[test]
+fn custom_symbol_layout_is_on_grid() {
+    let l = opamp().layout();
+    let tip = |n: &str| l.pins.iter().find(|p| p.number == n).unwrap().tip;
+    assert_eq!((l.hw, l.hh), (2, 2));
+    assert_eq!(tip("3"), (-4, -1)); // two left pins: y = -1, +1
+    assert_eq!(tip("2"), (-4, 1));
+    assert_eq!(tip("1"), (4, 0));
+    assert_eq!(tip("8"), (0, -4));
+    assert_eq!(tip("4"), (-1, 4)); // two bottom pins
+    assert_eq!(tip("5"), (1, 4));
+}
+
+#[test]
+fn custom_part_pins_follow_rotation_and_nets() {
+    let mut s = Schematic::default();
+    let u = s.add_custom(opamp(), "LM358", "SOIC-8", (10, 10), 0);
+    assert_eq!(s.components[u].refdes, "U1");
+    assert_eq!(s.components[u].pins().iter().find(|p| p.0 == "1").unwrap().1, (14, 10));
+    s.components[u].rot = 1;
+    assert_eq!(s.components[u].pins().iter().find(|p| p.0 == "1").unwrap().1, (10, 14));
+    s.components[u].rot = 0;
+    let r = s.add(Kind::Resistor, (20, 10), 0); // pin 1 at (18,10)
+    let _ = r;
+    wire(&mut s, (14, 10), (18, 10));
+    let nets = extract(&s);
+    assert!(nets.iter().any(|n| n.pins.contains(&PinRef { refdes: "U1".into(), pin: "1".into() })
+        && n.pins.contains(&PinRef { refdes: "R1".into(), pin: "1".into() })));
+    // NC pin is not reported, other floating pins are
+    let msgs: Vec<_> = erc(&s).into_iter().map(|p| p.message).collect();
+    assert!(!msgs.iter().any(|m| m.contains("U1 ピン5")), "{msgs:?}");
+    assert!(msgs.iter().any(|m| m.contains("U1 ピン3")));
+}
+
+#[test]
+fn spice_uses_part_model_once() {
+    let mut s = Schematic::default();
+    s.add_custom(opamp(), "LM358", "SOIC-8", (10, 10), 0);
+    s.add_custom(opamp(), "LM358", "SOIC-8", (30, 10), 0);
+    let d = to_spice(&s, "t");
+    assert_eq!(d.matches(".subckt LM358").count(), 1);
+    assert!(d.contains("XU1 ") && d.contains("XU2 "));
+    // node order follows sim.pins: 3 2 1 8 4
+    let line = d.lines().find(|l| l.starts_with("XU1 ")).unwrap();
+    assert!(line.ends_with(" LM358") && line.split_whitespace().count() == 7, "{line}");
+}
+
+#[test]
+fn spice_without_model_leaves_a_comment() {
+    let mut s = Schematic::default();
+    let mut sym = opamp();
+    sym.sim = None;
+    s.add_custom(sym, "LM358", "SOIC-8", (10, 10), 0);
+    assert!(to_spice(&s, "t").contains("シミュレーションモデルなし"));
 }

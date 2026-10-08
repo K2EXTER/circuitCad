@@ -1,7 +1,9 @@
 //! Schematic editor: place parts, wire them together, run ERC, export netlist.
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
-use sch_core::{erc, extract, on_segment, to_spice, Kind, Label, Problem, Pt, Schematic, Wire};
+use crate::part_form::PartForm;
+use part_lib::PartDef;
+use sch_core::{erc, extract, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -33,11 +35,26 @@ pub struct SchEditor {
     pan: Vec2, // grid position at the screen centre
     problems: Vec<Problem>,
     pub status: String,
+    pub library: Vec<PartDef>,
+    lib_errors: Vec<String>,
+    lib_dir: PathBuf,
+    lib_filter: String,
+    place_lib: Option<usize>,
+    form: Option<PartForm>,
 }
 
 impl Default for SchEditor {
     fn default() -> Self {
+        let lib_dir = part_lib::default_dir();
+        let _ = part_lib::install_examples(&lib_dir);
+        let (library, lib_errors) = part_lib::load_dir(&lib_dir);
         Self {
+            library,
+            lib_errors,
+            lib_dir,
+            lib_filter: String::new(),
+            place_lib: None,
+            form: None,
             sch: Schematic::default(),
             path: None,
             tool: Tool::Place,
@@ -143,6 +160,7 @@ fn symbol(kind: Kind) -> Vec<Sh> {
             L(-0.2, 1.1, 0.2, 1.1),
         ],
         Kind::Power => vec![L(0., 0., 0., -0.6), L(-0.6, -0.6, 0.6, -0.6)],
+        Kind::Custom => vec![],
     }
 }
 
@@ -152,9 +170,21 @@ fn extents(kind: Kind) -> (f32, f32, f32, f32) {
         Kind::VSource => (-1.4, 1.4, -2., 2.),
         Kind::Npn => (-2., 2., -2., 2.),
         Kind::Header(n) => (0., 2., -1., 2. * n as f32 - 1.),
+        Kind::Custom => (-2., 2., -2., 2.),
         Kind::Ground => (-1., 1., 0., 1.2),
         Kind::Power => (-1., 1., -1., 0.),
         _ => (-2., 2., -1., 1.),
+    }
+}
+
+fn comp_extents(c: &Component) -> (f32, f32, f32, f32) {
+    match &c.custom {
+        Some(sym) => {
+            let l = sym.layout();
+            let (w, h) = ((l.hw + 2) as f32, (l.hh + 2) as f32);
+            (-w, w, -h, h)
+        }
+        None => extents(c.kind),
     }
 }
 
@@ -199,11 +229,87 @@ impl SchEditor {
         }
     }
 
+    fn draw_component(&self, painter: &egui::Painter, rect: Rect, c: &Component, color: Color32) {
+        match &c.custom {
+            Some(sym) => self.draw_custom(painter, rect, sym, c.pos, c.rot, color),
+            None => self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color),
+        }
+    }
+
+    fn draw_custom(&self, painter: &egui::Painter, rect: Rect, sym: &CustomSymbol, pos: Pt, rot: u8, color: Color32) {
+        let l = sym.layout();
+        let tr = |x: f32, y: f32| {
+            let r = rot_f((x, y), rot);
+            self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
+        };
+        let stroke = Stroke::new(1.6, color);
+        let (hw, hh) = (l.hw as f32, l.hh as f32);
+        let corners = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)];
+        for i in 0..4 {
+            let (a, b) = (corners[i], corners[(i + 1) % 4]);
+            painter.line_segment([tr(a.0, a.1), tr(b.0, b.1)], stroke);
+        }
+        let name_font = FontId::proportional((self.zoom * 0.42).clamp(7.0, 14.0));
+        let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
+        for p in &l.pins {
+            let (tx, ty, ex, ey) = (p.tip.0 as f32, p.tip.1 as f32, p.edge.0 as f32, p.edge.1 as f32);
+            painter.line_segment([tr(tx, ty), tr(ex, ey)], stroke);
+            // name inside the body, anchored so it stays upright after rotation
+            let inward = match p.side {
+                PinSide::Left => (1.0, 0.0),
+                PinSide::Right => (-1.0, 0.0),
+                PinSide::Top => (0.0, 1.0),
+                PinSide::Bottom => (0.0, -1.0),
+            };
+            let r = rot_f(inward, rot);
+            let anchor = if r.0 > 0.5 {
+                Align2::LEFT_CENTER
+            } else if r.0 < -0.5 {
+                Align2::RIGHT_CENTER
+            } else if r.1 > 0.5 {
+                Align2::CENTER_TOP
+            } else {
+                Align2::CENTER_BOTTOM
+            };
+            painter.text(tr(ex + inward.0 * 0.3, ey + inward.1 * 0.3), anchor, &p.name, name_font.clone(), color);
+            // pin number beside the lead
+            let (mx, my) = ((tx + ex) / 2.0, (ty + ey) / 2.0);
+            let off = if matches!(p.side, PinSide::Left | PinSide::Right) { (0.0, -0.45) } else { (0.45, 0.0) };
+            painter.text(tr(mx + off.0, my + off.1), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
+        }
+    }
+
+    fn reload_library(&mut self) {
+        let (lib, errs) = part_lib::load_dir(&self.lib_dir);
+        self.library = lib;
+        self.lib_errors = errs;
+        self.place_lib = None;
+    }
+
+    fn import_part_json(&mut self) {
+        let Some(p) = rfd::FileDialog::new().add_filter("部品定義 JSON", &["json"]).pick_file() else { return };
+        let def: Result<PartDef, String> =
+            std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()));
+        self.status = match def {
+            Err(e) => format!("読み込み失敗: {e}"),
+            Ok(d) => match d.validate().into_iter().find(|i| i.error) {
+                Some(i) => format!("{} に問題があります: {}", d.name, i.message),
+                None => match part_lib::save(&self.lib_dir, &d) {
+                    Ok(_) => {
+                        self.reload_library();
+                        format!("ライブラリに追加しました: {}", d.name)
+                    }
+                    Err(e) => format!("保存失敗: {e}"),
+                },
+            },
+        };
+    }
+
     fn comp_at(&self, g: (f32, f32)) -> Option<usize> {
         self.sch.components.iter().enumerate().rev().find_map(|(i, c)| {
             let rel = (g.0 - c.pos.0 as f32, g.1 - c.pos.1 as f32);
             let l = rot_f(rel, (4 - c.rot % 4) % 4);
-            let (x0, x1, y0, y1) = extents(c.kind);
+            let (x0, x1, y0, y1) = comp_extents(c);
             (l.0 >= x0 && l.0 <= x1 && l.1 >= y0 && l.1 <= y1).then_some(i)
         })
     }
@@ -326,7 +432,7 @@ impl SchEditor {
         for (i, c) in self.sch.components.iter().enumerate() {
             let sel = self.selected == Some(Sel::Comp(i));
             let col = if sel { Color32::from_rgb(0, 80, 220) } else { SYM };
-            self.draw_symbol(&painter, rect, c.kind, c.pos, c.rot, col);
+            self.draw_component(&painter, rect, c, col);
             for (_, p) in c.pins() {
                 painter.rect_filled(
                     Rect::from_center_size(self.to_screen(rect, (p.0 as f32, p.1 as f32)), Vec2::splat(4.0)),
@@ -335,7 +441,7 @@ impl SchEditor {
                 );
             }
             let f = FontId::proportional((self.zoom * 0.55).clamp(8.0, 18.0));
-            let (x0, x1, y0, y1) = extents(c.kind);
+            let (x0, x1, y0, y1) = comp_extents(c);
             let ctr = (c.pos.0 as f32 + (x0 + x1) / 2.0, c.pos.1 as f32);
             if c.kind.is_power_symbol() {
                 if c.kind == Kind::Power {
@@ -375,7 +481,10 @@ impl SchEditor {
         match self.tool {
             Tool::Place => {
                 let ghost = Color32::from_rgba_unmultiplied(120, 20, 20, 120);
-                self.draw_symbol(&painter, rect, self.place, snapped, self.rot, ghost);
+                match self.place_lib.and_then(|k| self.library.get(k)) {
+                    Some(d) => self.draw_custom(&painter, rect, &d.symbol(), snapped, self.rot, ghost),
+                    None => self.draw_symbol(&painter, rect, self.place, snapped, self.rot, ghost),
+                }
             }
             Tool::Wire => {
                 painter.circle_stroke(sp, 4.0, Stroke::new(1.5, WIRE));
@@ -416,8 +525,14 @@ impl SchEditor {
             match self.tool {
                 Tool::Select => self.selected = self.pick(g),
                 Tool::Place => {
-                    let i = self.sch.add(self.place, snapped, self.rot);
-                    let _ = i;
+                    match self.place_lib.and_then(|k| self.library.get(k)).cloned() {
+                        Some(d) => {
+                            self.sch.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), snapped, self.rot);
+                        }
+                        None => {
+                            self.sch.add(self.place, snapped, self.rot);
+                        }
+                    }
                 }
                 Tool::Wire => match self.pending.take() {
                     None => self.pending = Some(snapped),
@@ -456,11 +571,51 @@ impl SchEditor {
         ui.separator();
         ui.label("部品 (クリックして配置 / Rキーで回転)");
         for k in Kind::PALETTE {
-            if ui.selectable_label(self.tool == Tool::Place && self.place == *k, k.label()).clicked() {
+            if ui.selectable_label(self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k, k.label()).clicked() {
                 self.tool = Tool::Place;
+                self.place_lib = None;
                 self.place = *k;
                 self.pending = None;
             }
+        }
+        ui.separator();
+        let mut chosen = None;
+        ui.collapsing(format!("ライブラリ部品 ({})", self.library.len()), |ui| {
+            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索"));
+            let f = self.lib_filter.to_lowercase();
+            egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
+                for (i, d) in self.library.iter().enumerate() {
+                    if !f.is_empty() && !d.name.to_lowercase().contains(&f) && !d.description.to_lowercase().contains(&f) {
+                        continue;
+                    }
+                    let mark = if d.sim.is_some() { " ◎" } else { "" };
+                    let selected = self.tool == Tool::Place && self.place_lib == Some(i);
+                    if ui.selectable_label(selected, format!("{}{mark}", d.name)).on_hover_text(&d.description).clicked() {
+                        chosen = Some(i);
+                    }
+                }
+            });
+            ui.small("◎ = シミュレーションモデルあり");
+            ui.horizontal(|ui| {
+                if ui.button("新規作成…").clicked() {
+                    self.form = Some(PartForm::default());
+                }
+                if ui.button("JSONから追加…").clicked() {
+                    self.import_part_json();
+                }
+                if ui.button("再読み込み").clicked() {
+                    self.reload_library();
+                }
+            });
+            ui.small(format!("保存先: {}", self.lib_dir.display()));
+            for e in &self.lib_errors {
+                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+            }
+        });
+        if let Some(i) = chosen {
+            self.tool = Tool::Place;
+            self.place_lib = Some(i);
+            self.pending = None;
         }
         ui.separator();
         if let Some(Sel::Comp(i)) = self.selected {
@@ -479,7 +634,13 @@ impl SchEditor {
                         ui.text_edit_singleline(&mut c.value);
                     });
                 }
-                if !c.kind.is_power_symbol() {
+                if let Some(sym) = &c.custom {
+                    ui.label(format!("フットプリント: {}", c.footprint));
+                    match &sym.sim {
+                        Some(m) => ui.label(format!("モデル: {}", m.name)),
+                        None => ui.colored_label(Color32::from_rgb(220, 160, 40), "シミュレーションモデルなし"),
+                    };
+                } else if !c.kind.is_power_symbol() {
                     let current = c.footprint_name();
                     egui::ComboBox::from_label("フットプリント").selected_text(current).show_ui(ui, |ui| {
                         for n in pcb_core::footprints::names() {
@@ -518,6 +679,27 @@ impl SchEditor {
             }
         }
         ui.separator();
+        if let Some(mut form) = self.form.take() {
+            let mut open = true;
+            let mut saved = None;
+            egui::Window::new("部品を作成").open(&mut open).default_width(560.0).vscroll(true).show(ui.ctx(), |ui| {
+                saved = form.ui(ui);
+            });
+            match saved {
+                Some(def) => match part_lib::save(&self.lib_dir, &def) {
+                    Ok(p) => {
+                        self.reload_library();
+                        self.status = format!("ライブラリに保存しました: {}", p.display());
+                    }
+                    Err(e) => {
+                        self.status = format!("保存失敗: {e}");
+                        self.form = Some(form);
+                    }
+                },
+                None if open => self.form = Some(form),
+                None => {}
+            }
+        }
         ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\n右クリック・ダブルクリック: 配線を終了\n中・右ドラッグ: 移動 / ホイール: 拡大縮小");
     }
 
