@@ -134,3 +134,14 @@ fn base_resistance_adds_thermal_noise_and_keeps_dc() {
     let r = noise_analysis(&low, &s).unwrap();
     assert!(r.contribution("Q1.rb").unwrap().rms > r.contribution("RB").unwrap().rms * 10.0);
 }
+
+#[test]
+fn bjt_noise_example_runs() {
+    let sch: sch_core::Schematic = serde_json::from_str(include_str!("../../../docs/examples/bjt_noise.schjson")).unwrap();
+    let c = from_schematic(&sch).unwrap();
+    let r = noise_analysis(&c, &settings(10.0, 1e5, "C", Some("V2"))).unwrap();
+    // base shot noise dominates; rb is present but small
+    assert_eq!(r.contributions[0].name, "Q1.ib");
+    assert!(r.contribution("Q1.rb").unwrap().rms > 0.0);
+    assert!(r.in_rms.unwrap() > 0.0);
+}

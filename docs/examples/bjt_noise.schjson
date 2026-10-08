@@ -1,0 +1,201 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "10",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "DC 1.7 AC 1",
+      "pos": [
+        0,
+        10
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        8,
+        0
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "4.7k",
+      "pos": [
+        16,
+        0
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N3904",
+      "pos": [
+        32,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "2N3904",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "C",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "E",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "Q",
+          "name": "2N3904",
+          "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        8
+      ],
+      "text": "VB"
+    },
+    {
+      "pos": [
+        0,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        6,
+        0
+      ],
+      "text": "VB"
+    },
+    {
+      "pos": [
+        10,
+        0
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        16,
+        -2
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        16,
+        2
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        24,
+        -2
+      ],
+      "text": "E"
+    },
+    {
+      "pos": [
+        24,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        28,
+        0
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        32,
+        -4
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        32,
+        4
+      ],
+      "text": "E"
+    }
+  ]
+}
