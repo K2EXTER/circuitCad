@@ -3,6 +3,7 @@
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use crate::part_form::PartForm;
 use part_lib::PartDef;
+use sim_core::{dc_op, from_schematic, DcResult};
 use sch_core::{erc, extract, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
 
@@ -41,6 +42,42 @@ pub struct SchEditor {
     lib_filter: String,
     place_lib: Option<usize>,
     form: Option<PartForm>,
+    dc: Option<DcView>,
+    show_v: bool,
+    sig_cache: String,
+}
+
+/// A finished DC analysis, remembered with the schematic it was computed from.
+struct DcView {
+    outcome: Result<DcResult, Vec<String>>,
+    signature: String,
+    /// Voltage at every pin position.
+    pin_v: Vec<(Pt, f64)>,
+}
+
+/// Engineering notation: 4.700 mA, 12.00 V, 250.0 nA.
+fn eng(v: f64, unit: &str) -> String {
+    let a = v.abs();
+    let (scale, prefix) = if a == 0.0 {
+        (1.0, "")
+    } else if a >= 1e9 {
+        (1e-9, "G")
+    } else if a >= 1e6 {
+        (1e-6, "M")
+    } else if a >= 1e3 {
+        (1e-3, "k")
+    } else if a >= 1.0 {
+        (1.0, "")
+    } else if a >= 1e-3 {
+        (1e3, "m")
+    } else if a >= 1e-6 {
+        (1e6, "µ")
+    } else if a >= 1e-9 {
+        (1e9, "n")
+    } else {
+        (1e12, "p")
+    };
+    format!("{:.3} {prefix}{unit}", v * scale)
 }
 
 impl Default for SchEditor {
@@ -55,6 +92,9 @@ impl Default for SchEditor {
             lib_filter: String::new(),
             place_lib: None,
             form: None,
+            dc: None,
+            show_v: true,
+            sig_cache: String::new(),
             sch: Schematic::default(),
             path: None,
             tool: Tool::Place,
@@ -279,6 +319,46 @@ impl SchEditor {
         }
     }
 
+    fn signature_cached(&self) -> &str {
+        &self.sig_cache
+    }
+
+    fn signature(&self) -> String {
+        serde_json::to_string(&self.sch).unwrap_or_default()
+    }
+
+    fn run_dc(&mut self) {
+        let outcome = match from_schematic(&self.sch) {
+            Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+            Ok(c) => dc_op(&c).map_err(|e| vec![e.to_string()]),
+        };
+        let mut pin_v = vec![];
+        if let Ok(res) = &outcome {
+            for net in extract(&self.sch) {
+                let Some(v) = res.voltage(&net.name) else { continue };
+                for p in &net.pins {
+                    if let Some(c) = self.sch.components.iter().find(|c| c.refdes == p.refdes) {
+                        if let Some((_, pt)) = c.pins().into_iter().find(|(n, _)| *n == p.pin) {
+                            pin_v.push((pt, v));
+                        }
+                    }
+                }
+            }
+            // ground symbols and named power symbols show their net voltage too
+            for c in self.sch.components.iter().filter(|c| c.kind.is_power_symbol()) {
+                let name = if c.kind == Kind::Ground { "GND".to_string() } else { c.value.clone() };
+                if let Some(v) = res.voltage(&name) {
+                    pin_v.push((c.pins()[0].1, v));
+                }
+            }
+        }
+        self.status = match &outcome {
+            Ok(r) => format!("DC動作点: 収束 ({} 回, {})", r.iterations, r.strategy),
+            Err(e) => format!("DC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        self.dc = Some(DcView { outcome, signature: self.signature(), pin_v });
+    }
+
     fn reload_library(&mut self) {
         let (lib, errs) = part_lib::load_dir(&self.lib_dir);
         self.library = lib;
@@ -359,6 +439,9 @@ impl SchEditor {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;
         painter.rect_filled(rect, 0.0, SCH_BG);
+        if self.dc.is_some() {
+            self.sig_cache = self.signature();
+        }
 
         if resp.dragged_by(egui::PointerButton::Middle) || resp.dragged_by(egui::PointerButton::Secondary) {
             let d = resp.drag_delta();
@@ -465,6 +548,22 @@ impl SchEditor {
                 FontId::proportional(13.0),
                 if sel { Color32::from_rgb(0, 80, 220) } else { Color32::from_rgb(0, 100, 100) },
             );
+        }
+        if self.show_v {
+            if let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached()) {
+                let f = FontId::proportional((self.zoom * 0.5).clamp(9.0, 14.0));
+                let mut seen: Vec<Pt> = vec![];
+                for (pt, v) in &dc.pin_v {
+                    if seen.contains(pt) {
+                        continue;
+                    }
+                    seen.push(*pt);
+                    let p = self.to_screen(rect, (pt.0 as f32, pt.1 as f32)) + Vec2::new(5.0, -4.0);
+                    let galley = painter.layout_no_wrap(eng(*v, "V"), f.clone(), Color32::from_rgb(10, 60, 200));
+                    painter.rect_filled(Rect::from_min_size(p - Vec2::new(0.0, galley.size().y), galley.size()).expand(1.0), 2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 190));
+                    painter.galley(p - Vec2::new(0.0, galley.size().y), galley, Color32::from_rgb(10, 60, 200));
+                }
+            }
         }
         for pr in &self.problems {
             if let Some(a) = pr.at {
@@ -664,6 +763,56 @@ impl SchEditor {
         for p in &self.problems {
             ui.colored_label(Color32::from_rgb(230, 0, 200), &p.message);
         }
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui.button("DC動作点を解析").clicked() {
+                self.run_dc();
+            }
+            ui.checkbox(&mut self.show_v, "電圧表示");
+        });
+        let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());
+        if let Some(dc) = &self.dc {
+            if stale {
+                ui.colored_label(Color32::from_rgb(220, 160, 40), "回路が変更されました。再度解析してください");
+            }
+            match &dc.outcome {
+                Err(msgs) => {
+                    for m in msgs {
+                        ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    }
+                }
+                Ok(res) => {
+                    for w in &res.warnings {
+                        ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    }
+                    egui::CollapsingHeader::new("解析結果").default_open(true).show(ui, |ui| {
+                        egui::Grid::new("dc_nodes").striped(true).show(ui, |ui| {
+                            for (n, v) in res.voltages.iter().filter(|(n, _)| !n.contains('.')) {
+                                ui.label(n);
+                                ui.label(eng(*v, "V"));
+                                ui.end_row();
+                            }
+                        });
+                        ui.separator();
+                        egui::Grid::new("dc_elems").striped(true).show(ui, |ui| {
+                            ui.strong("素子");
+                            ui.strong("電流");
+                            ui.strong("電圧");
+                            ui.strong("電力");
+                            ui.end_row();
+                            for e in res.elements.iter().filter(|e| !e.name.contains('.')) {
+                                ui.label(&e.name);
+                                ui.label(eng(e.current, "A"));
+                                ui.label(eng(e.voltage, "V"));
+                                ui.label(eng(e.power, "W"));
+                                ui.end_row();
+                            }
+                        });
+                        ui.small("電流は素子の第1端子→第2端子の向き。電源は電力を供給すると負");
+                    });
+                }
+            }
+        }
         ui.collapsing("ネットリスト", |ui| {
             for n in extract(&self.sch) {
                 let pins: Vec<String> = n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
@@ -729,17 +878,33 @@ impl SchEditor {
 
     pub fn open(&mut self) {
         if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad 回路図", &["schjson"]).pick_file() {
-            match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string())) {
-                Ok(s) => {
-                    self.sch = s;
-                    self.path = Some(p.clone());
-                    self.selected = None;
-                    self.pending = None;
-                    self.problems.clear();
-                    self.status = format!("開きました: {}", p.display());
-                }
-                Err(e) => self.status = format!("読み込み失敗: {e}"),
-            }
+            self.load_path(p);
         }
+    }
+
+    pub fn load_path(&mut self, p: PathBuf) {
+        match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string())) {
+            Ok(s) => {
+                self.sch = s;
+                self.path = Some(p.clone());
+                self.selected = None;
+                self.pending = None;
+                self.problems.clear();
+                self.dc = None;
+                self.status = format!("開きました: {}", p.display());
+            }
+            Err(e) => self.status = format!("読み込み失敗: {e}"),
+        }
+    }
+
+    pub fn analyze_dc(&mut self) {
+        self.run_dc();
+    }
+
+    #[cfg(test)]
+    pub fn pin_voltage(&self, refdes: &str, pin: &str) -> Option<f64> {
+        let c = self.sch.components.iter().find(|c| c.refdes == refdes)?;
+        let (_, pt) = c.pins().into_iter().find(|(n, _)| n == pin)?;
+        self.dc.as_ref()?.pin_v.iter().find(|(p, _)| *p == pt).map(|(_, v)| *v)
     }
 }

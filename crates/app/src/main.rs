@@ -610,7 +610,16 @@ fn main() -> eframe::Result {
         eframe::NativeOptions::default(),
         Box::new(|cc| {
             install_japanese_font(&cc.egui_ctx);
-            Ok(Box::new(App::default()))
+            let mut app = App::default();
+            // usage: app [circuit.schjson] [--dc]
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
+                app.sch.load_path(p.into());
+                if args.iter().any(|a| a == "--dc") {
+                    app.sch.analyze_dc();
+                }
+            }
+            Ok(Box::new(app))
         }),
     )
 }
@@ -700,5 +709,30 @@ mod tests {
         let again = app.board.pads.iter().find(|p| p.refdes == "U1" && p.pin == "1").unwrap();
         assert_eq!(again.net, u1_out.net);
         assert_eq!(ratsnest(&app.board).len(), 1);
+    }
+
+    #[test]
+    fn dc_analysis_from_the_editor() {
+        let mut app = App::default();
+        let s = &mut app.sch.sch;
+        s.add(Kind::VSource, (0, 0), 0);
+        s.components[0].value = "10".into();
+        s.add(Kind::Resistor, (6, -6), 0);
+        s.add(Kind::Resistor, (12, 0), 1);
+        s.add(Kind::Ground, (0, 6), 0);
+        let r2 = s.components[2].pins();
+        for (a, b) in [((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), (12, -6)), ((12, -6), r2[0].1), (r2[1].1, (12, 6)), ((12, 6), (0, 6)), ((0, 2), (0, 6))] {
+            s.wires.push(Wire { a, b });
+        }
+        app.sch.analyze_dc();
+        assert!(app.sch.status.contains("収束"), "{}", app.sch.status);
+        // R1 = R2 = 10k default: the midpoint is at half the supply
+        assert!((app.sch.pin_voltage("R2", "1").unwrap() - 5.0).abs() < 1e-6);
+        assert!(app.sch.pin_voltage("V1", "-").unwrap().abs() < 1e-9);
+
+        // a broken value is reported instead of a result
+        app.sch.sch.components[1].value = "oops".into();
+        app.sch.analyze_dc();
+        assert!(app.sch.status.contains("失敗"));
     }
 }

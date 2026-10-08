@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["crates/pcb-core", "crates/sch-core", "crates/part-lib", "crates/app"]
+members = ["crates/pcb-core", "crates/sch-core", "crates/part-lib", "crates/sim-core", "crates/app"]

@@ -1,0 +1,11 @@
+[package]
+name = "sim-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sch-core = { version = "0.1.0", path = "../sch-core" }
+
+[dev-dependencies]
+part-lib = { path = "../part-lib" }
+serde_json = "1.0.151"

@@ -1,0 +1,583 @@
+//! DC operating point: modified nodal analysis + damped Newton-Raphson, with gmin and
+//! source stepping as convergence aids.
+
+use crate::circuit::{BjtModel, Circuit, Element};
+use std::fmt;
+
+const VT: f64 = 0.025852; // kT/q at 300.15 K
+const GMIN: f64 = 1e-12;
+const RELTOL: f64 = 1e-6;
+const VNTOL: f64 = 1e-8;
+const ABSTOL: f64 = 1e-12;
+const MAX_ITER: usize = 150;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SimError {
+    NoGround,
+    /// The matrix cannot be solved: usually voltage sources in a loop / in parallel.
+    Singular,
+    NoConvergence,
+}
+
+impl fmt::Display for SimError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SimError::NoGround => write!(f, "GNDにつながる部品がありません"),
+            SimError::Singular => write!(f, "回路方程式が解けません (電圧源のループや並列接続、コイルと電圧源のループなど)"),
+            SimError::NoConvergence => write!(f, "収束しませんでした"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ElementResult {
+    pub name: String,
+    /// Main current, flowing through the element from its first to its second terminal
+    /// (resistor a->b, source p->n, diode a->k, transistor: collector current into C).
+    pub current: f64,
+    /// Voltage across the element, first minus second terminal (transistor: Vce).
+    pub voltage: f64,
+    /// Power absorbed (negative = delivered).
+    pub power: f64,
+    /// Further currents, e.g. transistor `Ib`, `Ie`.
+    pub extra: Vec<(String, f64)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DcResult {
+    /// Voltage of every circuit node (ground included, 0 V).
+    pub voltages: Vec<(String, f64)>,
+    pub elements: Vec<ElementResult>,
+    pub iterations: usize,
+    pub strategy: &'static str,
+    pub warnings: Vec<String>,
+}
+
+impl DcResult {
+    pub fn voltage(&self, node: &str) -> Option<f64> {
+        self.voltages.iter().find(|(n, _)| n == node).map(|(_, v)| *v)
+    }
+    pub fn element(&self, name: &str) -> Option<&ElementResult> {
+        self.elements.iter().find(|e| e.name == name)
+    }
+}
+
+// ------------------------------------------------------------------ compiled form
+
+enum Ce {
+    R { name: String, a: usize, b: usize, g: f64 },
+    C { name: String, a: usize, b: usize },
+    V { name: String, p: usize, n: usize, v: f64, br: usize },
+    L { name: String, p: usize, n: usize, br: usize },
+    I { name: String, from: usize, to: usize, i: f64 },
+    E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
+    G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
+    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, slot: usize },
+    Q { name: String, c: usize, b: usize, e: usize, m: BjtModel, slot: usize },
+}
+
+struct Compiled {
+    node_names: Vec<String>, // circuit nodes only
+    n_nodes: usize,          // including ground and internal diode nodes
+    n_unknowns: usize,
+    n_slots: usize,
+    ce: Vec<Ce>,
+}
+
+fn vcrit(nvt: f64, is: f64) -> f64 {
+    nvt * (nvt / (std::f64::consts::SQRT_2 * is)).ln()
+}
+
+fn compile(c: &Circuit) -> Compiled {
+    let mut n_nodes = c.names.len();
+    let mut n_br = 0;
+    let mut n_slots = 0;
+    let mut ce = vec![];
+    // branch unknowns are numbered after all node unknowns; node count is fixed after the loop,
+    // so keep branch ordinals and offset them afterwards
+    let mut internal_diodes = 0;
+    for e in &c.elements {
+        if let Element::Diode { model, .. } = e {
+            if model.rs > 0.0 {
+                internal_diodes += 1;
+            }
+        }
+    }
+    let total_nodes = n_nodes + internal_diodes;
+    let br_base = total_nodes - 1;
+    for e in &c.elements {
+        match e {
+            Element::Resistor { name, a, b, r } => ce.push(Ce::R { name: name.clone(), a: *a, b: *b, g: 1.0 / r }),
+            Element::Capacitor { name, a, b, .. } => ce.push(Ce::C { name: name.clone(), a: *a, b: *b }),
+            Element::Inductor { name, a, b, .. } => {
+                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, br: br_base + n_br });
+                n_br += 1;
+            }
+            Element::VSource { name, p, n, dc } => {
+                ce.push(Ce::V { name: name.clone(), p: *p, n: *n, v: *dc, br: br_base + n_br });
+                n_br += 1;
+            }
+            Element::ISource { name, from, to, dc } => ce.push(Ce::I { name: name.clone(), from: *from, to: *to, i: *dc }),
+            Element::Vcvs { name, p, n, cp, cn, gain } => {
+                ce.push(Ce::E { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gain: *gain, br: br_base + n_br });
+                n_br += 1;
+            }
+            Element::Vccs { name, p, n, cp, cn, gm } => {
+                ce.push(Ce::G { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gm: *gm })
+            }
+            Element::Diode { name, a, k, model } => {
+                let ai = if model.rs > 0.0 {
+                    n_nodes += 1;
+                    n_nodes - 1
+                } else {
+                    *a
+                };
+                let nvt = model.n * VT;
+                ce.push(Ce::D { name: name.clone(), a: *a, ai, k: *k, rs: model.rs, is: model.is, nvt, vcrit: vcrit(nvt, model.is), slot: n_slots });
+                n_slots += 1;
+            }
+            Element::Bjt { name, c, b, e, model } => {
+                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, e: *e, m: model.clone(), slot: n_slots });
+                n_slots += 2;
+            }
+        }
+    }
+    Compiled { node_names: c.names.clone(), n_nodes, n_unknowns: br_base + n_br, n_slots, ce }
+}
+
+fn v(x: &[f64], node: usize) -> f64 {
+    if node == 0 { 0.0 } else { x[node - 1] }
+}
+
+// ------------------------------------------------------------------ device equations
+
+fn exp_safe(x: f64) -> f64 {
+    x.min(80.0).exp()
+}
+
+/// SPICE3 junction voltage limiting. Returns the limited voltage.
+fn pnjlim(vnew: f64, vold: f64, vt: f64, vcrit: f64) -> f64 {
+    if vnew > vcrit && (vnew - vold).abs() > 2.0 * vt {
+        if vold > 0.0 {
+            let arg = (vnew - vold) / vt;
+            if arg > 0.0 {
+                vold + vt * (2.0 + (arg - 2.0).ln())
+            } else {
+                vold - vt * (2.0 + (2.0 - arg).ln())
+            }
+        } else {
+            vt * (vnew / vt).ln()
+        }
+    } else {
+        vnew
+    }
+}
+
+/// Transistor in "NPN space": currents into C, B, E and the partial derivatives
+/// with respect to (vbe, vbc).
+struct BjtEval {
+    ic: f64,
+    ib: f64,
+    ie: f64,
+    dic: (f64, f64),
+    dib: (f64, f64),
+    die: (f64, f64),
+}
+
+fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
+    let (nfvt, nrvt) = (m.nf * VT, m.nr * VT);
+    let ef = exp_safe(vbe / nfvt);
+    let er = exp_safe(vbc / nrvt);
+    let (iff, ir) = (m.is * (ef - 1.0), m.is * (er - 1.0));
+    let (gf, gr) = (m.is / nfvt * ef, m.is / nrvt * er);
+    let ic = iff - ir * (1.0 + 1.0 / m.br);
+    let ib = iff / m.bf + ir / m.br;
+    BjtEval {
+        ic,
+        ib,
+        ie: -(ic + ib),
+        dic: (gf, -gr * (1.0 + 1.0 / m.br)),
+        dib: (gf / m.bf, gr / m.br),
+        die: (-(gf + gf / m.bf), gr * (1.0 + 1.0 / m.br) - gr / m.br),
+    }
+}
+
+// ------------------------------------------------------------------ linear algebra
+
+/// Solve A x = b in place (dense, partial pivoting).
+fn lu_solve(n: usize, a: &mut [f64], b: &mut [f64]) -> Result<(), SimError> {
+    for col in 0..n {
+        let (mut piv, mut best) = (col, a[col * n + col].abs());
+        for r in col + 1..n {
+            if a[r * n + col].abs() > best {
+                best = a[r * n + col].abs();
+                piv = r;
+            }
+        }
+        if best < 1e-20 || !best.is_finite() {
+            return Err(SimError::Singular);
+        }
+        if piv != col {
+            for c in 0..n {
+                a.swap(col * n + c, piv * n + c);
+            }
+            b.swap(col, piv);
+        }
+        let d = a[col * n + col];
+        for r in col + 1..n {
+            let f = a[r * n + col] / d;
+            if f != 0.0 {
+                for c in col..n {
+                    a[r * n + c] -= f * a[col * n + c];
+                }
+                b[r] -= f * b[col];
+            }
+        }
+    }
+    for r in (0..n).rev() {
+        let mut s = b[r];
+        for c in r + 1..n {
+            s -= a[r * n + c] * b[c];
+        }
+        b[r] = s / a[r * n + r];
+    }
+    Ok(())
+}
+
+// ------------------------------------------------------------------ Newton
+
+struct Mna {
+    n: usize,
+    a: Vec<f64>,
+    b: Vec<f64>,
+}
+
+impl Mna {
+    fn new(n: usize) -> Self {
+        Self { n, a: vec![0.0; n * n], b: vec![0.0; n] }
+    }
+    /// A[row node][col node] += val (ground rows/cols are dropped).
+    fn gn(&mut self, r: usize, c: usize, val: f64) {
+        if r != 0 && c != 0 {
+            self.a[(r - 1) * self.n + (c - 1)] += val;
+        }
+    }
+    fn at(&mut self, r: usize, c: usize, val: f64) {
+        self.a[r * self.n + c] += val;
+    }
+    fn g(&mut self, p: usize, q: usize, g: f64) {
+        self.gn(p, p, g);
+        self.gn(q, q, g);
+        self.gn(p, q, -g);
+        self.gn(q, p, -g);
+    }
+    /// A current `i` flows from node `p` through an element to node `q`.
+    fn current(&mut self, p: usize, q: usize, i: f64) {
+        if p != 0 {
+            self.b[p - 1] -= i;
+        }
+        if q != 0 {
+            self.b[q - 1] += i;
+        }
+    }
+    /// Branch row for a voltage-defined element between p and n.
+    fn branch(&mut self, p: usize, n: usize, br: usize) {
+        if p != 0 {
+            self.at(p - 1, br, 1.0);
+            self.at(br, p - 1, 1.0);
+        }
+        if n != 0 {
+            self.at(n - 1, br, -1.0);
+            self.at(br, n - 1, -1.0);
+        }
+    }
+}
+
+impl Compiled {
+    /// Build the linearised system around `x` (with junction limiting through `vj`).
+    /// Returns the matrix and whether any junction voltage had to be limited.
+    fn assemble(&self, vj: &mut [f64], x: &[f64], gmin: f64, scale: f64) -> (Mna, bool) {
+        let mut m = Mna::new(self.n_unknowns);
+        let mut limited = false;
+        for node in 1..self.n_nodes {
+            m.at(node - 1, node - 1, gmin);
+        }
+        for e in &self.ce {
+            match e {
+                Ce::R { a, b, g, .. } => m.g(*a, *b, *g),
+                Ce::C { .. } => {}
+                Ce::V { p, n, v: val, br, .. } => {
+                    m.branch(*p, *n, *br);
+                    m.b[*br] += val * scale;
+                }
+                Ce::L { p, n, br, .. } => m.branch(*p, *n, *br),
+                Ce::I { from, to, i, .. } => m.current(*from, *to, i * scale),
+                Ce::E { p, n, cp, cn, gain, br, .. } => {
+                    m.branch(*p, *n, *br);
+                    if *cp != 0 {
+                        m.at(*br, cp - 1, -gain);
+                    }
+                    if *cn != 0 {
+                        m.at(*br, cn - 1, *gain);
+                    }
+                }
+                Ce::G { p, n, cp, cn, gm, .. } => {
+                    m.gn(*p, *cp, *gm);
+                    m.gn(*p, *cn, -gm);
+                    m.gn(*n, *cp, -gm);
+                    m.gn(*n, *cn, *gm);
+                }
+                Ce::D { a, ai, k, rs, is, nvt, vcrit, slot, .. } => {
+                    if *rs > 0.0 {
+                        m.g(*a, *ai, 1.0 / rs);
+                    }
+                    let raw = v(x, *ai) - v(x, *k);
+                    let lim = pnjlim(raw, vj[*slot], *nvt, *vcrit);
+                    if (lim - raw).abs() > 1e-12 {
+                        limited = true;
+                    }
+                    vj[*slot] = lim;
+                    let ex = exp_safe(lim / nvt);
+                    let (id, gd) = (is * (ex - 1.0), is / nvt * ex + gmin);
+                    m.g(*ai, *k, gd);
+                    m.current(*ai, *k, id - gd * lim);
+                }
+                Ce::Q { c, b, e, m: bm, slot, .. } => {
+                    let pol = if bm.pnp { -1.0 } else { 1.0 };
+                    let crit_be = vcrit(bm.nf * VT, bm.is);
+                    let crit_bc = vcrit(bm.nr * VT, bm.is);
+                    let raw_be = pol * (v(x, *b) - v(x, *e));
+                    let raw_bc = pol * (v(x, *b) - v(x, *c));
+                    let lim_be = pnjlim(raw_be, vj[*slot], bm.nf * VT, crit_be);
+                    let lim_bc = pnjlim(raw_bc, vj[*slot + 1], bm.nr * VT, crit_bc);
+                    if (lim_be - raw_be).abs() > 1e-12 || (lim_bc - raw_bc).abs() > 1e-12 {
+                        limited = true;
+                    }
+                    vj[*slot] = lim_be;
+                    vj[*slot + 1] = lim_bc;
+                    let q = bjt_eval(bm, lim_be, lim_bc);
+                    for (node, i0, (dbe, dbc)) in [(*c, q.ic, q.dic), (*b, q.ib, q.dib), (*e, q.ie, q.die)] {
+                        // currents into the terminal; d/dV_b = dbe+dbc, d/dV_e = -dbe, d/dV_c = -dbc
+                        m.gn(node, *b, dbe + dbc);
+                        m.gn(node, *e, -dbe);
+                        m.gn(node, *c, -dbc);
+                        if node != 0 {
+                            m.b[node - 1] -= pol * i0 - dbe * pol * lim_be - dbc * pol * lim_bc;
+                        }
+                    }
+                    // gmin across both junctions keeps the matrix well conditioned
+                    m.g(*b, *e, gmin);
+                    m.g(*b, *c, gmin);
+                }
+            }
+        }
+        (m, limited)
+    }
+}
+
+fn converged(x: &[f64], xn: &[f64], n_node_unknowns: usize) -> bool {
+    x.iter().zip(xn).enumerate().all(|(i, (a, b))| {
+        let tol = if i < n_node_unknowns { VNTOL } else { ABSTOL };
+        (a - b).abs() <= RELTOL * a.abs().max(b.abs()) + tol
+    })
+}
+
+enum Fail {
+    Singular,
+    NoConv,
+}
+
+struct Attempt {
+    x: Vec<f64>,
+    vj: Vec<f64>,
+    iterations: usize,
+}
+
+impl Compiled {
+    fn newton(&self, x0: Vec<f64>, vj0: Vec<f64>, gmin: f64, scale: f64) -> Result<Attempt, Fail> {
+        let (mut x, mut vj) = (x0, vj0);
+        let n_node_unknowns = self.n_nodes - 1;
+        for it in 1..=MAX_ITER {
+            let (mut m, limited) = self.assemble(&mut vj, &x, gmin, scale);
+            lu_solve(m.n, &mut m.a, &mut m.b).map_err(|_| Fail::Singular)?;
+            let xn = m.b;
+            if xn.iter().any(|v| !v.is_finite()) {
+                return Err(Fail::NoConv);
+            }
+            let done = !limited && it > 1 && converged(&x, &xn, n_node_unknowns);
+            x = xn;
+            if done {
+                return Ok(Attempt { x, vj, iterations: it });
+            }
+        }
+        Err(Fail::NoConv)
+    }
+}
+
+// ------------------------------------------------------------------ public entry
+
+/// Nodes without a DC path to ground (capacitors are open; ideal current sources and
+/// controlled-source inputs do not provide one).
+fn floating_nodes(c: &Circuit) -> Vec<usize> {
+    let n = c.names.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    fn find(p: &mut Vec<usize>, i: usize) -> usize {
+        let mut r = i;
+        while p[r] != r {
+            r = p[r];
+        }
+        let mut c = i;
+        while p[c] != r {
+            let nx = p[c];
+            p[c] = r;
+            c = nx;
+        }
+        r
+    }
+    let mut union = |a: usize, b: usize| {
+        let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
+        parent[ra] = rb;
+    };
+    for e in &c.elements {
+        match e {
+            Element::Resistor { a, b, .. } | Element::Inductor { a, b, .. } => union(*a, *b),
+            Element::VSource { p, n, .. } | Element::Vcvs { p, n, .. } => union(*p, *n),
+            Element::Diode { a, k, .. } => union(*a, *k),
+            Element::Bjt { c, b, e, .. } => {
+                union(*c, *e);
+                union(*b, *e);
+            }
+            Element::Capacitor { .. } | Element::ISource { .. } | Element::Vccs { .. } => {}
+        }
+    }
+    let g = find(&mut parent, 0);
+    (1..n).filter(|&i| find(&mut parent, i) != g).collect()
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum Strategy {
+    Direct,
+    Gmin,
+    Source,
+}
+
+impl Compiled {
+    fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
+        let zero_x = vec![0.0; self.n_unknowns];
+        let zero_vj = vec![0.0; self.n_slots];
+        match which {
+            Strategy::Direct => self.newton(zero_x, zero_vj, GMIN, 1.0),
+            Strategy::Gmin => {
+                // gmin from 1e-2 down to 1e-12, each step starting from the previous solution
+                let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
+                for g in (2..=12).map(|e| 10f64.powi(-e)) {
+                    let a = self.newton(x, vj, g, 1.0)?;
+                    iters += a.iterations;
+                    x = a.x;
+                    vj = a.vj;
+                }
+                Ok(Attempt { x, vj, iterations: iters })
+            }
+            Strategy::Source => {
+                // ramp every independent source from 0 to full value
+                let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
+                for step in 1..=25 {
+                    let a = self.newton(x, vj, GMIN, step as f64 / 25.0)?;
+                    iters += a.iterations;
+                    x = a.x;
+                    vj = a.vj;
+                }
+                Ok(Attempt { x, vj, iterations: iters })
+            }
+        }
+    }
+}
+
+pub fn dc_op(circuit: &Circuit) -> Result<DcResult, SimError> {
+    dc_op_with(circuit, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])
+}
+
+/// Try the strategies in order; the first that converges wins.
+pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResult, SimError> {
+    let touches_ground = circuit.elements.iter().any(|e| match e {
+        Element::Resistor { a, b, .. } | Element::Capacitor { a, b, .. } | Element::Inductor { a, b, .. } => *a == 0 || *b == 0,
+        Element::VSource { p, n, .. } => *p == 0 || *n == 0,
+        Element::ISource { from, to, .. } => *from == 0 || *to == 0,
+        Element::Diode { a, k, .. } => *a == 0 || *k == 0,
+        Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
+        Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } => *p == 0 || *n == 0,
+    });
+    if !touches_ground {
+        return Err(SimError::NoGround);
+    }
+
+    let mut warnings = circuit.warnings.clone();
+    for i in floating_nodes(circuit) {
+        warnings.push(format!("ノード {} にGNDへのDC経路がありません (0Vとして扱います)", circuit.names[i]));
+    }
+
+    let cm = compile(circuit);
+    let mut last = SimError::NoConvergence;
+    for &which in order {
+        match cm.run(which) {
+            Ok(att) => {
+                let name = match which {
+                    Strategy::Direct => "direct",
+                    Strategy::Gmin => "gmin stepping",
+                    Strategy::Source => "source stepping",
+                };
+                return Ok(report(&cm, &att, name, warnings));
+            }
+            // a structurally singular matrix will not be cured by stepping
+            Err(Fail::Singular) => return Err(SimError::Singular),
+            Err(Fail::NoConv) => last = SimError::NoConvergence,
+        }
+    }
+    Err(last)
+}
+
+fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, warnings: Vec<String>) -> DcResult {
+    let x = &att.x;
+    let mut els = vec![];
+    let mut push = |name: &str, current: f64, voltage: f64, extra: Vec<(String, f64)>, power: f64| {
+        els.push(ElementResult { name: name.to_string(), current, voltage, power, extra });
+    };
+    for e in &cm.ce {
+        match e {
+            Ce::R { name, a, b, g } => {
+                let vv = v(x, *a) - v(x, *b);
+                push(name, vv * g, vv, vec![], vv * vv * g);
+            }
+            Ce::C { name, a, b } => push(name, 0.0, v(x, *a) - v(x, *b), vec![], 0.0),
+            Ce::V { name, p, n, br, .. } | Ce::L { name, p, n, br } | Ce::E { name, p, n, br, .. } => {
+                let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
+                push(name, i, vv, vec![], vv * i);
+            }
+            Ce::I { name, from, to, i } => {
+                // reported at full scale: the final solution is always at scale 1
+                let vv = v(x, *from) - v(x, *to);
+                push(name, *i, vv, vec![], vv * i);
+            }
+            Ce::G { name, p, n, cp, cn, gm } => {
+                let (i, vv) = (gm * (v(x, *cp) - v(x, *cn)), v(x, *p) - v(x, *n));
+                push(name, i, vv, vec![], vv * i);
+            }
+            Ce::D { name, a, ai, k, rs, is, nvt, .. } => {
+                let vd = v(x, *ai) - v(x, *k);
+                let id = is * (exp_safe(vd / nvt) - 1.0);
+                let i = if *rs > 0.0 { (v(x, *a) - v(x, *ai)) / rs } else { id };
+                let vv = v(x, *a) - v(x, *k);
+                push(name, i, vv, vec![], vv * i);
+            }
+            Ce::Q { name, c, b, e, m, .. } => {
+                let pol = if m.pnp { -1.0 } else { 1.0 };
+                let q = bjt_eval(m, pol * (v(x, *b) - v(x, *e)), pol * (v(x, *b) - v(x, *c)));
+                let (ic, ib, ie) = (pol * q.ic, pol * q.ib, pol * q.ie);
+                let p = v(x, *c) * ic + v(x, *b) * ib + v(x, *e) * ie;
+                push(name, ic, v(x, *c) - v(x, *e), vec![("Ib".into(), ib), ("Ie".into(), ie)], p);
+            }
+        }
+    }
+    let voltages = cm.node_names.iter().enumerate().map(|(i, n)| (n.clone(), v(x, i))).collect();
+    DcResult { voltages, elements: els, iterations: att.iterations, strategy, warnings }
+}

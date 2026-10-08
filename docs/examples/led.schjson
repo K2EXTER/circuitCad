@@ -1,0 +1,115 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        8,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        16,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        0,
+        6
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -6
+      ]
+    },
+    {
+      "a": [
+        0,
+        -6
+      ],
+      "b": [
+        6,
+        -6
+      ]
+    },
+    {
+      "a": [
+        10,
+        -6
+      ],
+      "b": [
+        14,
+        -6
+      ]
+    },
+    {
+      "a": [
+        18,
+        -6
+      ],
+      "b": [
+        18,
+        6
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        6
+      ]
+    },
+    {
+      "a": [
+        0,
+        6
+      ],
+      "b": [
+        18,
+        6
+      ]
+    }
+  ],
+  "labels": []
+}
