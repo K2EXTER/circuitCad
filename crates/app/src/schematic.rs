@@ -5,7 +5,7 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, describe_source, noise_analysis, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
@@ -110,6 +110,11 @@ pub struct SchEditor {
     noise_in: String,
     noise_temp: String,
     /// Waiting for a click on the canvas to choose the noise output node.
+    sweep: Option<SweepView>,
+    sweep_src: String,
+    sweep_start: String,
+    sweep_stop: String,
+    sweep_step: String,
     noise_pick: bool,
     /// Net name under the cursor while picking, with the grid point it was computed for.
     pick_hover: Option<(Pt, Option<String>)>,
@@ -124,6 +129,16 @@ enum WaveMode {
     Tran,
     Ac,
     Noise,
+    Sweep,
+}
+
+/// A finished DC sweep: transfer curves with the signals to draw.
+struct SweepView {
+    outcome: Result<DcSweepResult, Vec<String>>,
+    selected: BTreeSet<String>,
+    /// Draw the line output = input (its crossing with the curve is the switching threshold).
+    show_diag: bool,
+    plot: PlotState,
 }
 
 /// A finished noise analysis: output density plot plus the per-element breakdown.
@@ -229,6 +244,11 @@ impl Default for SchEditor {
             noise_out: String::new(),
             noise_in: String::new(),
             noise_temp: "27".into(),
+            sweep: None,
+            sweep_src: String::new(),
+            sweep_start: "0".into(),
+            sweep_stop: "5".into(),
+            sweep_step: "0.05".into(),
             noise_pick: false,
             pick_hover: None,
             noise_marks: vec![],
@@ -493,6 +513,7 @@ impl SchEditor {
             WaveMode::Tran => self.tran.is_some(),
             WaveMode::Ac => self.ac.is_some(),
             WaveMode::Noise => self.noise.is_some(),
+            WaveMode::Sweep => self.sweep.is_some(),
         }
     }
 
@@ -530,6 +551,166 @@ impl SchEditor {
         self.wave_mode = WaveMode::Ac;
     }
 
+    pub fn analyze_sweep(&mut self) {
+        self.run_sweep();
+    }
+
+    pub fn set_sweep_settings(&mut self, src: &str, start: &str, stop: &str, step: &str) {
+        self.sweep_src = src.into();
+        self.sweep_start = start.into();
+        self.sweep_stop = stop.into();
+        self.sweep_step = step.into();
+    }
+
+    fn run_sweep(&mut self) {
+        let (Some(a), Some(b), Some(st)) = (parse_value(&self.sweep_start), parse_value(&self.sweep_stop), parse_value(&self.sweep_step)) else {
+            self.status = "開始・終了・刻みを数値で入力してください (例: 0, 5, 0.05)".into();
+            return;
+        };
+        let src = self.sweep_src.trim().to_string();
+        let outcome = if src.is_empty() {
+            Err(vec!["スイープする電源の番号を入力してください (例: V2)。入力にあたる電源です".to_string()])
+        } else {
+            match from_schematic(&self.sch) {
+                Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+                Ok(c) => dc_sweep(&c, &DcSweepSettings { source: src.clone(), start: a, stop: b, step: st }).map_err(|e| vec![e.to_string()]),
+            }
+        };
+        let mut selected = BTreeSet::new();
+        if let Ok(r) = &outcome {
+            // the output of an inverter is the most interesting signal: prefer a falling curve
+            let falling = r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).find(|s| inverter_metrics(&r.x, &s.values).is_some());
+            match falling {
+                Some(s) => {
+                    selected.insert(s.name.clone());
+                }
+                None => {
+                    for s in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(3) {
+                        selected.insert(s.name.clone());
+                    }
+                }
+            }
+        }
+        self.status = match &outcome {
+            Ok(r) => format!("DCスイープ: 完了 ({} 点, {} = {} 〜 {})", r.x.len(), src, a, b),
+            Err(e) => format!("DCスイープに失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        let (lo, hi) = if (b - a).abs() > 1e-12 { (a.min(b), a.max(b)) } else { (a - 1.0, a + 1.0) };
+        self.sweep = Some(SweepView { outcome, selected, show_diag: true, plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2] } });
+        self.wave_mode = WaveMode::Sweep;
+    }
+
+    fn sweep_wave_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(view) = self.sweep.as_mut() else { return };
+        let mut close = false;
+        ui.horizontal(|ui| {
+            ui.strong("DCスイープ (入力を変えたときの出力)");
+            if ui.button("閉じる").clicked() {
+                close = true;
+            }
+            ui.small("横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)");
+        });
+        let SweepView { outcome, selected, show_diag, plot: st } = view;
+        match outcome {
+            Err(msgs) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Ok(res) => {
+                for w in &res.warnings {
+                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                }
+                let names: Vec<&DcSweepSignal> = res.signals.iter().filter(|s| !s.name.contains('.')).collect();
+                // key numbers of the first selected voltage that is an inverting curve
+                let metrics = names.iter().filter(|s| s.unit == "V" && selected.contains(&s.name)).find_map(|s| inverter_metrics(&res.x, &s.values).map(|m| (s.name.clone(), m)));
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(260.0);
+                        if let Some((name, m)) = &metrics {
+                            ui.colored_label(Color32::from_rgb(220, 150, 40), format!("{name} は反転する特性です"));
+                            egui::Grid::new("inv_metrics").num_columns(2).show(ui, |ui| {
+                                let row = |ui: &mut egui::Ui, label: &str, val: String, tip: &str| {
+                                    ui.label(label).on_hover_text(tip);
+                                    ui.label(val).on_hover_text(tip);
+                                    ui.end_row();
+                                };
+                                row(ui, "VOH (出力 High)", eng(m.voh, "V"), "入力が Low のときの出力電圧。電源電圧に近いほど良い High です");
+                                row(ui, "VOL (出力 Low)", eng(m.vol, "V"), "入力が High のときの出力電圧。0 V に近いほど良い Low です");
+                                row(ui, "Vth (切替電圧)", eng(m.vth, "V"), "入力と出力が等しくなる電圧。ここを境に出力の High/Low が入れ替わります。電源の半分が理想です");
+                                row(ui, "VIL", eng(m.vil, "V"), "これより低い入力は確実に Low と見なされます (利得が -1 になる点)");
+                                row(ui, "VIH", eng(m.vih, "V"), "これより高い入力は確実に High と見なされます (利得が -1 になる点)");
+                                row(ui, "NML (Lowの余裕)", eng(m.nml(), "V"), "ノイズマージン = VIL − VOL。Low の信号に、これだけノイズが乗っても誤動作しません");
+                                row(ui, "NMH (Highの余裕)", eng(m.nmh(), "V"), "ノイズマージン = VOH − VIH。High の信号に、これだけノイズが落ち込んでも誤動作しません");
+                                row(ui, "最大利得", format!("{:.1}", m.max_gain), "切り替わり部分の傾き。大きい (絶対値) ほどスパッと切り替わります");
+                            });
+                            let ratio = (m.nml().min(m.nmh())) / (m.voh - m.vol).max(1e-12);
+                            ui.small(if ratio > 0.35 {
+                                "ノイズマージンは十分です。ロジックとして安心して使えます。"
+                            } else if ratio > 0.15 {
+                                "ノイズマージンは小さめです。ノイズの多い所では誤動作に注意しましょう。"
+                            } else {
+                                "ノイズマージンがほとんどありません。回路や部品の組み合わせを見直しましょう。"
+                            });
+                        } else {
+                            ui.small("電圧の信号を選ぶと、反転する (インバーターの) 特性なら VOH / VOL / 切替電圧 / ノイズマージンを計算します");
+                        }
+                        ui.checkbox(show_diag, "「出力 = 入力」の線").on_hover_text("この線と曲線が交わる所が切替電圧 Vth です");
+                        if ui.button("選択をクリア").clicked() {
+                            selected.clear();
+                        }
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            let sel_order: Vec<&str> = names.iter().filter(|s| selected.contains(&s.name)).map(|s| s.name.as_str()).collect();
+                            for sg in &names {
+                                let mut on = selected.contains(&sg.name);
+                                let color = sel_order.iter().position(|n| *n == sg.name).map(|i| PALETTE[i % PALETTE.len()]);
+                                let text = match color {
+                                    Some(c) if on => egui::RichText::new(&sg.name).color(c),
+                                    _ => egui::RichText::new(&sg.name),
+                                };
+                                if ui.checkbox(&mut on, text).changed() {
+                                    if on {
+                                        selected.insert(sg.name.clone());
+                                    } else {
+                                        selected.remove(&sg.name);
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    let chosen: Vec<(usize, &DcSweepSignal)> = names.iter().filter(|s| selected.contains(&s.name)).enumerate().map(|(k, s)| (k, *s)).collect();
+                    if chosen.is_empty() {
+                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        return;
+                    }
+                    let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();
+                    if *show_diag && !volts.is_empty() {
+                        volts.push(Trace { name: "出力=入力", color: Color32::from_gray(120), t: &res.x, v: &res.x });
+                    }
+                    let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();
+                    let vs = Style { unit: "V", x_unit: "V", x_name: &res.source, plain_y: false };
+                    let is = Style { unit: "A", x_unit: "V", x_name: &res.source, plain_y: false };
+                    match (volts.is_empty(), amps.is_empty()) {
+                        (false, false) => {
+                            let h = rect.height() / 2.0;
+                            let top = Rect::from_min_size(rect.min, Vec2::new(rect.width(), h - 2.0));
+                            let bottom = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h), Vec2::new(rect.width(), h - 2.0));
+                            plot::draw_group(ui, top, egui::Id::new("sweep_v"), &volts, st, 0, &vs, false);
+                            plot::draw_group(ui, bottom, egui::Id::new("sweep_i"), &amps, st, 1, &is, true);
+                        }
+                        (false, true) => plot::draw_group(ui, rect, egui::Id::new("sweep_v"), &volts, st, 0, &vs, true),
+                        _ => plot::draw_group(ui, rect, egui::Id::new("sweep_i"), &amps, st, 1, &is, true),
+                    }
+                });
+            }
+        }
+        if close {
+            self.sweep = None;
+        }
+    }
+
     /// A tip for what to try next, based on what is on screen.
     pub fn hint(&self) -> String {
         if self.noise_pick {
@@ -557,6 +738,9 @@ impl SchEditor {
                     _ => "選んだ部品の値は左の欄で変えられます。R キーで回転、Delete で削除".into(),
                 };
             }
+        }
+        if self.sweep.is_some() && self.wave_mode == WaveMode::Sweep {
+            return "出力 = 入力の線と曲線が交わる所が切替電圧です。VIL・VIH の間が「どちらとも言えない」領域で、狭いほどスパッと切り替わります。電源電圧や部品を変えて再実行してみましょう".into();
         }
         if self.noise.is_some() && self.wave_mode == WaveMode::Noise {
             return "ノイズ一覧の素子名にカーソルを合わせると原因と対策が出ます。抵抗値を変えて再実行すると、雑音が √(抵抗値) に比例して変わるのが分かります".into();
@@ -760,6 +944,7 @@ impl SchEditor {
             WaveMode::Tran => self.tran_wave_panel(ui),
             WaveMode::Ac => self.ac_wave_panel(ui),
             WaveMode::Noise => self.noise_wave_panel(ui),
+            WaveMode::Sweep => self.sweep_wave_panel(ui),
         }
     }
 
@@ -1756,6 +1941,22 @@ impl SchEditor {
             self.run_ac();
         }
         ui.small("入力にする電源の値を「AC 1」にしてください");
+        ui.separator();
+        ui.label("DCスイープ (入力→出力の特性)");
+        ui.horizontal(|ui| {
+            ui.label("電源");
+            ui.add(egui::TextEdit::singleline(&mut self.sweep_src).desired_width(36.0).hint_text("V2"))
+                .on_hover_text("電圧を変える電源の番号 (例 V2)。インバーターなら入力にあたる電源です。値を少しずつ変えながら、そのつど動作点を求めます");
+            ui.label("開始");
+            ui.add(egui::TextEdit::singleline(&mut self.sweep_start).desired_width(34.0)).on_hover_text("スイープの開始電圧 (V)");
+            ui.label("終了");
+            ui.add(egui::TextEdit::singleline(&mut self.sweep_stop).desired_width(34.0)).on_hover_text("スイープの終了電圧 (V)。ロジックなら電源電圧まで");
+            ui.label("刻み");
+            ui.add(egui::TextEdit::singleline(&mut self.sweep_step).desired_width(40.0)).on_hover_text("電圧を変える間隔 (V)。切り替わりをなめらかに見るには、電源電圧の 1/100 くらい");
+        });
+        if ui.button("DCスイープを実行").on_hover_text("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します").clicked() {
+            self.run_sweep();
+        }
         ui.separator();
         ui.label("ノイズ解析 (熱雑音・ショット雑音)");
         ui.horizontal(|ui| {

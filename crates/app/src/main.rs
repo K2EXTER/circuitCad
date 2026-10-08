@@ -23,6 +23,7 @@ const TIPS: &[&str] = &[
     "選択ツールで空いた所を左ドラッグすると、完全に囲んだ部品や配線だけを選べます。右ドラッグだと少しでも触れたものも選べます",
     "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
     "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
+    "DCスイープでインバーターの入出力特性を描くと、切替電圧やノイズマージンが分かります",
     "ERC で配線ミスを点検してから解析や基板に進むと、原因探しが楽です",
     "docs/examples にサンプル回路があります。「ファイル → 開く」から読み込めます",
     "基板に進む前に、回路図の部品にフットプリント (形) が合っているか確認しましょう",
@@ -123,7 +124,7 @@ fn install_crash_log() {
     }));
 }
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--noise out in|- tempC] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--noise out in|- tempC] [--tran stop step [--spectrum]]
 /// [--drc] [--export dir]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
@@ -135,6 +136,13 @@ fn apply_args(app: &mut App, args: &[String]) {
             if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
                 app.sch.set_ac_settings(f0, f1, p);
                 app.sch.analyze_ac();
+            }
+        }
+        if let Some(i) = args.iter().position(|a| a == "--sweep") {
+            // --sweep <source> <start> <stop> <step>
+            if let (Some(src), Some(a), Some(b), Some(st)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3), args.get(i + 4)) {
+                app.sch.set_sweep_settings(src, a, b, st);
+                app.sch.analyze_sweep();
             }
         }
         if let Some(i) = args.iter().position(|a| a == "--noise") {

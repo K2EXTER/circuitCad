@@ -1,0 +1,213 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "3.3",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 3.3 100n 5n 5n 400n 1u)",
+      "pos": [
+        0,
+        14
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "AO3401A",
+      "pos": [
+        20,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3401A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "bottom"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "M",
+          "name": "AO3401A",
+          "text": ".model AO3401A PMOS(VTO=-1.0 KP=1.0 LAMBDA=0.03 CGS=500p CGD=60p)",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "Q2",
+      "kind": "Custom",
+      "value": "AO3400A",
+      "pos": [
+        20,
+        8
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "AO3400A",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "M",
+          "name": "AO3400A",
+          "text": ".model AO3400A NMOS(VTO=1.05 KP=1.2 LAMBDA=0.02 CGS=250p CGD=30p)",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "100p",
+      "pos": [
+        28,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        12
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        16
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -12
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        20,
+        -4
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        16,
+        -8
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        20,
+        4
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        20,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        8
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        28,
+        -2
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        28,
+        2
+      ],
+      "text": "GND"
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 mod ac;
 mod circuit;
 mod dc;
+mod dcsweep;
 mod from_schematic;
 mod noise;
 mod spectrum;
@@ -13,6 +14,7 @@ mod waveform;
 
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel};
+pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
 pub use from_schematic::{from_schematic, ConvertError};
@@ -26,6 +28,8 @@ pub use waveform::{parse_source, parse_source_full, Source, Waveform};
 mod tests;
 #[cfg(test)]
 mod tests_ac;
+#[cfg(test)]
+mod tests_dcsweep;
 #[cfg(test)]
 mod tests_mos;
 #[cfg(test)]
