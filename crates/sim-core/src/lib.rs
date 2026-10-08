@@ -14,7 +14,7 @@ mod waveform;
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
-pub use noise::{integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseResult, NoiseSettings};
+pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
 pub use from_schematic::{from_schematic, ConvertError};
 pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};
 pub use tran::{transient, Signal, TranResult, TranSettings};

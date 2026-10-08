@@ -1,4 +1,4 @@
-use crate::{on_segment, Kind, Pt, Schematic};
+use crate::{on_segment, Kind, Label, Pt, Schematic};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,6 +83,23 @@ fn connectivity(s: &Schematic) -> Conn {
 /// Extract the netlist. Power symbols and labels name nets; same names merge.
 /// Unnamed nets are called `N$1`, `N$2`, ... Nets without any component pin are omitted.
 pub fn extract(s: &Schematic) -> Vec<Net> {
+    extract_groups(s, None).1.into_iter().map(|(_, n)| n).collect()
+}
+
+/// Name of the net that passes through grid point `p` (a pin, a wire, a label), as `extract`
+/// would call it. `None` when nothing is connected there or the net has no component pin.
+pub fn net_at(s: &Schematic, p: Pt) -> Option<String> {
+    let mut probe = s.clone();
+    probe.labels.push(Label { pos: p, text: String::new() });
+    let skip = probe.labels.len() - 1;
+    let (mut cn, groups) = extract_groups(&probe, Some(skip));
+    let g = cn.dsu.find(cn.ids[&p]);
+    groups.into_iter().find(|(root, _)| *root == g).map(|(_, n)| n.name)
+}
+
+/// Nets together with the connectivity group each one belongs to. A label index in `skip` is
+/// ignored when naming (it is only a probe).
+fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)>) {
     let mut cn = connectivity(s);
 
     // names attached to a connectivity group
@@ -95,7 +112,10 @@ pub fn extract(s: &Schematic) -> Vec<Net> {
             names.entry(g).or_default().push(name);
         }
     }
-    for l in &s.labels {
+    for (i, l) in s.labels.iter().enumerate() {
+        if Some(i) == skip {
+            continue;
+        }
         let g = cn.dsu.find(cn.ids[&l.pos]);
         names.entry(g).or_default().push(l.text.clone());
     }
@@ -141,9 +161,9 @@ pub fn extract(s: &Schematic) -> Vec<Net> {
             auto += 1;
             format!("N${auto}")
         });
-        nets.push(Net { name, pins });
+        nets.push((g, Net { name, pins }));
     }
-    nets
+    (cn, nets)
 }
 
 /// Electrical rule check.

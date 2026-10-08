@@ -24,6 +24,21 @@ pub enum Tool {
     Zone,
 }
 
+fn tool_tip(t: Tool) -> &'static str {
+    match t {
+        Tool::Select => "部品や配線をクリックで選択、部品はドラッグで移動します",
+        Tool::Track => "銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます",
+        Tool::Via => "表面と裏面をつなぐ穴 (ビア) を置きます",
+        Tool::Zone => "広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります",
+        Tool::OutlineRect => "基板の外形を矩形でドラッグして決めます",
+        Tool::OutlinePoly => "基板の外形を多角形で決めます。クリックで頂点、ダブルクリックで確定",
+        Tool::PadTh => "穴付き (スルーホール) の単独パッドを置きます",
+        Tool::PadSmd => "表面実装の単独パッドを置きます",
+        Tool::Hole => "ネジ止め用の取付穴を置きます",
+        Tool::Silk => "部品名や目印などの白い印刷 (シルク) の線を引きます",
+    }
+}
+
 const TOOLS: &[(Tool, &str)] = &[
     (Tool::Select, "選択 / 部品の移動"),
     (Tool::Track, "配線"),
@@ -943,11 +958,29 @@ impl BoardEditor {
 
     // ------------------------------------------------------------- side panel
 
+    /// A tip for what to do next on the board.
+    pub fn hint(&self) -> String {
+        if self.board.parts.is_empty() {
+            return "まず回路図タブで回路を作り、ここで「回路図から取り込み」を押すと、部品が基板に読み込まれます".into();
+        }
+        if self.board.bounds().is_none() || self.board.outline.is_empty() {
+            return "基板の外形を決めましょう。左の「矩形に設定」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です".into();
+        }
+        let unrouted = ratsnest(&self.board).len();
+        if unrouted > 0 {
+            return format!("黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールでつなぎましょう。広い GND は「銅箔ゾーン」にすると簡単です");
+        }
+        if self.violations.is_empty() {
+            return "配線が終わりました。「DRC を実行」でルール違反がないか確認し、問題なければ「ファイル → 製造ファイルを書き出し」で発注用データ (ガーバー) を作れます".into();
+        }
+        "DRC の指摘は、クリックするとその場所に飛びます。直したらもう一度 DRC を実行しましょう。0 件になれば発注データを書き出せます".into()
+    }
+
     pub fn side_panel(&mut self, ui: &mut egui::Ui, sch: &SchEditor) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             ui.heading("基板パターン");
             for (t, name) in TOOLS {
-                if ui.selectable_label(self.tool == *t, *name).clicked() {
+                if ui.selectable_label(self.tool == *t, *name).on_hover_text(tool_tip(*t)).clicked() {
                     self.tool = *t;
                     self.pending = None;
                     self.poly.clear();
@@ -955,7 +988,7 @@ impl BoardEditor {
             }
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label("作業層 (L)");
+                ui.label("作業層 (L)").on_hover_text("いま配線や部品を置く面。基板は表と裏の2層に銅を張れます");
                 ui.selectable_value(&mut self.side, Side::Top, "表面");
                 ui.selectable_value(&mut self.side, Side::Bottom, "裏面");
             });
@@ -967,9 +1000,11 @@ impl BoardEditor {
             });
             ui.small("配線中: V = ビアで層を切替 / Space = 曲がり方を反転");
             ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm"));
-            ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"));
+            ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
+                .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
             ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm"));
-            ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"));
+            ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
+                .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
             if matches!(self.tool, Tool::PadTh | Tool::PadSmd) {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm"));
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm"));
@@ -994,7 +1029,7 @@ impl BoardEditor {
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 "));
                 ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ "));
-                if ui.button("矩形に設定").clicked() {
+                if ui.button("矩形に設定").on_hover_text("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります").clicked() {
                     self.checkpoint();
                     let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
                     self.board.set_rect_outline(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
@@ -1023,7 +1058,7 @@ impl BoardEditor {
             self.selection_panel(ui);
 
             ui.separator();
-            if ui.button("回路図から取り込み").clicked() {
+            if ui.button("回路図から取り込み").on_hover_text("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します").clicked() {
                 self.import_from_schematic(sch);
             }
             for n in &self.import_notes {
@@ -1042,7 +1077,7 @@ impl BoardEditor {
             ui.text_edit_singleline(&mut self.board.name);
 
             ui.separator();
-            if ui.button("DRC を実行").clicked() {
+            if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                 self.run_drc();
             }
             let mut jump = None;

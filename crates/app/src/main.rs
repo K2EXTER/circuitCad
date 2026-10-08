@@ -16,7 +16,21 @@ enum Mode {
     Board,
 }
 
+/// Short general tips, shown one at a time under the context hint.
+const TIPS: &[&str] = &[
+    "部品やボタンにカーソルを合わせると、使い方の説明が出ます",
+    "回路図はホイールで拡大縮小、中ボタンか右ドラッグで移動できます",
+    "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
+    "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
+    "ERC で配線ミスを点検してから解析や基板に進むと、原因探しが楽です",
+    "docs/examples にサンプル回路があります。「ファイル → 開く」から読み込めます",
+    "基板に進む前に、回路図の部品にフットプリント (形) が合っているか確認しましょう",
+    "基板は DRC が 0 件になってから、製造ファイルを書き出して発注します",
+    "このヒント欄は、メニューの「ヒント」チェックで消せます",
+];
+
 struct App {
+    show_hints: bool,
     mode: Mode,
     sch: SchEditor,
     board_ed: BoardEditor,
@@ -24,7 +38,7 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default() }
+        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default() }
     }
 }
 
@@ -34,6 +48,8 @@ impl eframe::App for App {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図");
                 ui.selectable_value(&mut self.mode, Mode::Board, "基板パターン");
+                ui.separator();
+                ui.checkbox(&mut self.show_hints, "ヒント").on_hover_text("画面下に、いま何をするとよいかのヒントを表示します");
                 ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
                 ui.menu_button("ファイル", |ui| {
@@ -73,6 +89,14 @@ impl eframe::App for App {
         });
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.label(if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status });
+            if self.show_hints {
+                let hint = if self.mode == Mode::Schematic { self.sch.hint() } else { self.board_ed.hint() };
+                ui.colored_label(egui::Color32::from_rgb(90, 170, 110), format!("ヒント: {hint}"));
+                // rotate the general tips every 12 seconds
+                let t = ui.input(|i| i.time);
+                ui.small(format!("豆知識: {}", TIPS[(t / 12.0) as usize % TIPS.len()]));
+                ui.request_repaint_after(std::time::Duration::from_secs(2));
+            }
         });
         if self.mode == Mode::Schematic {
             egui::Panel::left("sch_tools").min_size(220.0).show(ui, |ui| self.sch.side_panel(ui));

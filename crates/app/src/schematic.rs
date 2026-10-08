@@ -5,11 +5,11 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, noise_analysis, NoiseResult, NoiseSettings, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, describe_source, noise_analysis, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
-use sch_core::{erc, extract, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
+use sch_core::{erc, extract, net_at, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,6 +62,12 @@ pub struct SchEditor {
     noise_out: String,
     noise_in: String,
     noise_temp: String,
+    /// Waiting for a click on the canvas to choose the noise output node.
+    noise_pick: bool,
+    /// Net name under the cursor while picking, with the grid point it was computed for.
+    pick_hover: Option<(Pt, Option<String>)>,
+    /// Grid points of the picked output / reference nodes, drawn as rings.
+    noise_marks: Vec<(Pt, bool)>,
     wave_mode: WaveMode,
     fit_pending: bool,
 }
@@ -133,6 +139,22 @@ fn eng(v: f64, unit: &str) -> String {
     format!("{:.3} {prefix}{unit}", v * scale)
 }
 
+/// One-line explanation of a basic part, shown when hovering the palette.
+fn kind_tip(k: Kind) -> &'static str {
+    match k {
+        Kind::Resistor => "抵抗: 電流を制限したり、電圧を分けたりします (V = I × R)",
+        Kind::Capacitor => "コンデンサ: 電気をためます。直流は通さず交流は通すので、ノイズ除去や電源の安定化に使います",
+        Kind::Inductor => "コイル: 電流の変化に逆らいます。直流は通し、速い変化は通しにくい性質があります",
+        Kind::Diode => "ダイオード: 電流を一方向 (A→K) にだけ流します。約 0.6〜0.7 V の壁があります",
+        Kind::Led => "LED: 光るダイオード。必ず抵抗を直列に入れて電流を制限します",
+        Kind::VSource => "電源: 直流・正弦波・パルスなど。値の書き方は、置いて選択すると下に出ます",
+        Kind::Npn => "NPN トランジスタ: ベースに小さい電流を流すと、コレクタ→エミッタに大きな電流が流れます",
+        Kind::Ground => "GND: 電圧の基準 (0 V)。回路には必ず 1 つ以上必要です",
+        Kind::Power => "電源ラベル: 同じ名前 (VCC など) の場所を線なしでつなぎます",
+        _ => "",
+    }
+}
+
 impl Default for SchEditor {
     fn default() -> Self {
         let lib_dir = part_lib::default_dir();
@@ -160,6 +182,9 @@ impl Default for SchEditor {
             noise_out: String::new(),
             noise_in: String::new(),
             noise_temp: "27".into(),
+            noise_pick: false,
+            pick_hover: None,
+            noise_marks: vec![],
             wave_mode: WaveMode::Tran,
             fit_pending: false,
             sch: Schematic::default(),
@@ -455,6 +480,49 @@ impl SchEditor {
         self.wave_mode = WaveMode::Ac;
     }
 
+    /// A tip for what to try next, based on what is on screen.
+    pub fn hint(&self) -> String {
+        if self.noise_pick {
+            return "ノイズを測りたいノードをクリックします。Shift+クリックで基準ノード、Esc で中止".into();
+        }
+        if self.sch.components.is_empty() {
+            return "まず部品を置きましょう。左の一覧から選んで画面をクリック。「ファイル → 開く」で docs/examples のサンプル回路も試せます".into();
+        }
+        if self.pending.is_some() {
+            return "配線中: 次の点をクリックして線を延長、ダブルクリックか右クリックで終了します".into();
+        }
+        match self.tool {
+            Tool::Place if !self.has_wave() => return "クリックで部品を置きます。R キーで回転、右クリックで中断。置いた後は「選択」で値を変えられます".into(),
+            Tool::Wire => return "部品のピン (赤い点) から点へクリックしてつなぎます。T字に分岐する場合は、線の途中に別の線の端を置きます".into(),
+            Tool::Label => return "ラベル名を決めて回路図の点をクリック。同じ名前の場所は線なしでつながります (電源 VCC や GND に便利)".into(),
+            Tool::Select | Tool::Place => {}
+        }
+        if let Some(Sel::Comp(i)) = self.selected {
+            if let Some(c) = self.sch.components.get(i) {
+                return match c.kind {
+                    Kind::Resistor => "値を書き換えてみましょう (例: 1k, 4.7k, 100)。DC解析をやり直すと電圧がどう変わるか分かります".into(),
+                    Kind::Capacitor => "コンデンサは直流では電流を通さず、周波数が高いほど通しやすくなります。AC解析で効き方を見てみましょう".into(),
+                    Kind::VSource => "電源の値: 5 は直流、SIN(0 1 1k) は 1kHz の正弦波、AC 1 は周波数特性の入力。ノイズ解析の入力電源にも使います".into(),
+                    Kind::Npn => "トランジスタはベース電流で大きなコレクタ電流を制御します。ベースに抵抗を付けて電圧を見てみましょう".into(),
+                    _ => "選んだ部品の値は左の欄で変えられます。R キーで回転、Delete で削除".into(),
+                };
+            }
+        }
+        if self.noise.is_some() && self.wave_mode == WaveMode::Noise {
+            return "ノイズ一覧の素子名にカーソルを合わせると原因と対策が出ます。抵抗値を変えて再実行すると、雑音が √(抵抗値) に比例して変わるのが分かります".into();
+        }
+        if self.ac.is_some() && self.wave_mode == WaveMode::Ac {
+            return "ボード線図: 上が大きさ(dB)、下が位相。-3 dB になる周波数がカットオフ周波数です。グラフはドラッグで移動、ホイールで拡大縮小".into();
+        }
+        if self.tran.is_some() && self.wave_mode == WaveMode::Tran {
+            return "波形はドラッグで移動、ホイールで拡大縮小、ダブルクリックで全体表示。左の一覧で表示する信号を選べます".into();
+        }
+        if self.dc.is_none() {
+            return "回路が描けたら「DC動作点を解析」で各点の電圧を見てみましょう。ERC で配線ミスの点検もできます".into();
+        }
+        "電圧が想定と違う所から疑ってみましょう。次は過渡解析 (波形)・AC解析 (周波数特性)・ノイズ解析を試せます。回路が完成したら「基板パターン」タブへ".into()
+    }
+
     pub fn analyze_noise(&mut self) {
         self.run_noise();
     }
@@ -463,6 +531,31 @@ impl SchEditor {
         self.noise_out = out.into();
         self.noise_in = input.into();
         self.noise_temp = temp.into();
+    }
+
+    /// A click at `pt` while choosing the noise output: plain click = output node,
+    /// Shift+click = reference node (differential output).
+    fn pick_noise_node(&mut self, pt: Pt, shift: bool) {
+        let Some(name) = net_at(&self.sch, pt) else {
+            self.status = "そこには接続された配線・ピンがありません。部品のピンか配線の上をクリックしてください".into();
+            return;
+        };
+        if name == "GND" && !shift {
+            self.status = "GND は電圧の基準なので出力にできません。測りたいノードをクリックしてください (Shift+クリックで基準に使えます)".into();
+            return;
+        }
+        if shift {
+            let first = self.noise_out.split(',').next().unwrap_or("").trim().to_string();
+            self.noise_out = if first.is_empty() { name } else { format!("{first},{name}") };
+            self.noise_marks.retain(|(_, r)| !*r);
+            self.noise_marks.push((pt, true));
+        } else {
+            self.noise_out = name;
+            self.noise_marks.clear();
+            self.noise_marks.push((pt, false));
+        }
+        self.noise_pick = false;
+        self.run_noise();
     }
 
     fn run_noise(&mut self) {
@@ -534,21 +627,45 @@ impl SchEditor {
                 order.extend(res.contributions.iter().map(|c| (c.name.clone(), c.rms)));
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
-                        ui.set_width(230.0);
+                        ui.set_width(270.0);
                         ui.label(format!("出力合計: {}", eng(res.out_rms, "V rms")));
                         if let Some(r) = res.in_rms {
-                            ui.label(format!("入力換算: {}", eng(r, "rms")));
+                            ui.label(format!("入力換算: {}", eng(r, "rms"))).on_hover_text("出力のノイズを回路の利得で割って入力側に直した値。入力信号がこれより小さいと、ノイズに埋もれます");
                         }
+                        if let Some((top, share)) = res.dominant() {
+                            let info = describe_source(&top.name);
+                            ui.colored_label(Color32::from_rgb(220, 150, 40), format!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
+                            if !info.remedy.is_empty() {
+                                ui.small(format!("対策: {}", info.remedy));
+                            }
+                        }
+                        egui::CollapsingHeader::new("グラフの読み方").show(ui, |ui| {
+                            ui.small("縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。");
+                            ui.small("rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。");
+                            ui.small("雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。");
+                            ui.small("素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。");
+                        });
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for (name, rms) in &order {
                                 let mut on = selected.contains(name);
                                 let color = order.iter().filter(|(n, _)| selected.contains(n)).position(|(n, _)| n == name).map(|i| PALETTE[i % PALETTE.len()]);
-                                let label = format!("{name}  {}", eng(*rms, "V"));
+                                let share = if name == "合計" || name == "入力換算" { None } else { Some(res.share(name)) };
+                                let label = match share {
+                                    Some(sh) => format!("{name}  {} ({:.0}%)", eng(*rms, "V"), sh * 100.0),
+                                    None => format!("{name}  {}", eng(*rms, "V")),
+                                };
                                 let text = match color {
                                     Some(c) if on => egui::RichText::new(label).color(c),
                                     _ => egui::RichText::new(label),
                                 };
-                                if ui.checkbox(&mut on, text).changed() {
+                                let resp = ui.checkbox(&mut on, text);
+                                if share.is_some() {
+                                    let info = describe_source(name);
+                                    let kind = if info.kind == NoiseKind::Shot { "ショット雑音" } else { "熱雑音" };
+                                    let msg = format!("{} [{kind}]\n{}\n対策: {}", info.title, info.why, info.remedy);
+                                    resp.clone().on_hover_text(msg);
+                                }
+                                if resp.changed() {
                                     if on {
                                         selected.insert(name.clone());
                                     } else {
@@ -1005,6 +1122,10 @@ impl SchEditor {
         }
 
         let typing = ui.ctx().egui_wants_keyboard_input();
+        if self.noise_pick && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.noise_pick = false;
+            self.status = "ノードの選択を中止しました".into();
+        }
         if !typing {
             if ui.input(|i| i.key_pressed(egui::Key::R)) {
                 match self.selected {
@@ -1117,13 +1238,48 @@ impl SchEditor {
             }
         }
 
+        for (pt, is_ref) in &self.noise_marks {
+            let c = self.to_screen(rect, (pt.0 as f32, pt.1 as f32));
+            let col = if *is_ref { Color32::from_rgb(40, 140, 40) } else { Color32::from_rgb(220, 90, 0) };
+            painter.circle_stroke(c, 10.0, Stroke::new(2.5, col));
+            painter.text(c + Vec2::new(12.0, -12.0), Align2::LEFT_BOTTOM, if *is_ref { "基準" } else { "出力" }, FontId::proportional(12.0), col);
+        }
+        if self.noise_pick {
+            let banner = Rect::from_min_size(rect.min, Vec2::new(rect.width(), 26.0));
+            painter.rect_filled(banner, 0.0, Color32::from_rgba_unmultiplied(220, 90, 0, 230));
+            painter.text(
+                banner.left_center() + Vec2::new(10.0, 0.0),
+                Align2::LEFT_CENTER,
+                "ノイズを測りたいノードをクリック (Shift+クリック: 基準ノード / Esc: 中止)",
+                FontId::proportional(14.0),
+                Color32::WHITE,
+            );
+        }
+
         // interaction
         let Some(pos) = hover else { return };
         let g = self.to_grid(rect, pos);
         let snapped: Pt = (g.0.round() as i32, g.1.round() as i32);
         let sp = self.to_screen(rect, (snapped.0 as f32, snapped.1 as f32));
+        if self.noise_pick {
+            if self.pick_hover.as_ref().map(|(p, _)| *p) != Some(snapped) {
+                self.pick_hover = Some((snapped, net_at(&self.sch, snapped)));
+            }
+            if let Some((_, name)) = &self.pick_hover {
+                let (txt, col) = match name {
+                    Some(n) => (format!("ノード {n}"), Color32::from_rgb(220, 90, 0)),
+                    None => ("(接続なし)".to_string(), Color32::from_gray(130)),
+                };
+                painter.circle_stroke(sp, 7.0, Stroke::new(2.0, col));
+                let g = painter.layout_no_wrap(txt, FontId::proportional(13.0), Color32::WHITE);
+                let r = Rect::from_min_size(sp + Vec2::new(12.0, 10.0), g.size()).expand(3.0);
+                painter.rect_filled(r, 3.0, Color32::from_rgba_unmultiplied(40, 40, 40, 220));
+                painter.galley(r.min + Vec2::new(3.0, 3.0), g, col);
+            }
+        }
 
         match self.tool {
+            _ if self.noise_pick => {}
             Tool::Place => {
                 let ghost = Color32::from_rgba_unmultiplied(120, 20, 20, 120);
                 match self.place_lib.and_then(|k| self.library.get(k)) {
@@ -1146,9 +1302,11 @@ impl SchEditor {
             }
             Tool::Select => {}
         }
-        self.status = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
+        if !self.noise_pick {
+            self.status = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
+        }
 
-        if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select {
+        if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !self.noise_pick {
             if let Some(i) = self.comp_at(g) {
                 let c = &self.sch.components[i];
                 self.drag = Some((i, (snapped.0 - c.pos.0, snapped.1 - c.pos.1)));
@@ -1166,7 +1324,12 @@ impl SchEditor {
             self.drag = None;
         }
 
-        if resp.clicked_by(egui::PointerButton::Primary) {
+        if self.noise_pick {
+            if resp.clicked_by(egui::PointerButton::Primary) {
+                let shift = ui.input(|i| i.modifiers.shift);
+                self.pick_noise_node(snapped, shift);
+            }
+        } else if resp.clicked_by(egui::PointerButton::Primary) {
             match self.tool {
                 Tool::Select => self.selected = self.pick(g),
                 Tool::Place => {
@@ -1211,9 +1374,9 @@ impl SchEditor {
     fn side_panel_body(&mut self, ui: &mut egui::Ui) {
         ui.heading("回路図");
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.tool, Tool::Select, "選択");
-            ui.selectable_value(&mut self.tool, Tool::Wire, "配線");
-            ui.selectable_value(&mut self.tool, Tool::Label, "ラベル");
+            ui.selectable_value(&mut self.tool, Tool::Select, "選択").on_hover_text("部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます");
+            ui.selectable_value(&mut self.tool, Tool::Wire, "配線").on_hover_text("端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックか右クリックで終わります");
+            ui.selectable_value(&mut self.tool, Tool::Label, "ラベル").on_hover_text("同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします");
         });
         if self.tool == Tool::Label {
             ui.text_edit_singleline(&mut self.label_text);
@@ -1221,7 +1384,7 @@ impl SchEditor {
         ui.separator();
         ui.label("部品 (クリックして配置 / Rキーで回転)");
         for k in Kind::PALETTE {
-            if ui.selectable_label(self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k, k.label()).clicked() {
+            if ui.selectable_label(self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k, k.label()).on_hover_text(kind_tip(*k)).clicked() {
                 self.tool = Tool::Place;
                 self.place_lib = None;
                 self.place = *k;
@@ -1328,7 +1491,7 @@ impl SchEditor {
             self.delete_selected();
         }
         ui.separator();
-        if ui.button("ERC (電気ルールチェック)").clicked() {
+        if ui.button("ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンがどこにもつながっていない、部品番号がダブっている、などを探して赤紫の丸で示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
             self.problems = erc(&self.sch);
             self.status = format!("ERC: 問題 {} 件", self.problems.len());
         }
@@ -1337,36 +1500,36 @@ impl SchEditor {
         }
         ui.separator();
         ui.horizontal(|ui| {
-            if ui.button("DC動作点を解析").clicked() {
+            if ui.button("DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
                 self.run_dc();
             }
-            ui.checkbox(&mut self.show_v, "電圧表示");
+            ui.checkbox(&mut self.show_v, "電圧表示").on_hover_text("DC解析の結果を回路図に重ねて表示します");
         });
         ui.separator();
         ui.label("過渡解析");
         ui.horizontal(|ui| {
             ui.label("終了");
-            ui.add(egui::TextEdit::singleline(&mut self.tran_tstop).desired_width(56.0));
+            ui.add(egui::TextEdit::singleline(&mut self.tran_tstop).desired_width(56.0)).on_hover_text("どこまで時間を進めるか。例: 10m = 10ミリ秒。見たい波形が数周期入る長さにします");
             ui.label("刻み");
-            ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).desired_width(56.0));
+            ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).desired_width(56.0)).on_hover_text("計算の最大の時間刻み。波形が角ばって見えるときは小さくします (終了時間の 1/1000 くらいが目安)");
         });
         ui.horizontal(|ui| {
-            if ui.button("過渡解析を実行").clicked() {
+            if ui.button("過渡解析を実行").on_hover_text("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います").clicked() {
                 self.run_tran();
             }
-            ui.checkbox(&mut self.tran_uic, "ゼロ状態から");
+            ui.checkbox(&mut self.tran_uic, "ゼロ状態から").on_hover_text("コンデンサの電圧などを 0 の状態から始めます。電源を入れた直後の立ち上がりを見たいときに使います");
         });
         ui.separator();
         ui.label("AC解析 (周波数特性)");
         ui.horizontal(|ui| {
             ui.label("開始");
-            ui.add(egui::TextEdit::singleline(&mut self.ac_fstart).desired_width(48.0));
+            ui.add(egui::TextEdit::singleline(&mut self.ac_fstart).desired_width(48.0)).on_hover_text("測り始める周波数 (Hz)。例: 10");
             ui.label("終了");
-            ui.add(egui::TextEdit::singleline(&mut self.ac_fstop).desired_width(48.0));
+            ui.add(egui::TextEdit::singleline(&mut self.ac_fstop).desired_width(48.0)).on_hover_text("測り終わる周波数 (Hz)。例: 1Meg = 1MHz");
             ui.label("点/dec");
-            ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0));
+            ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0)).on_hover_text("周波数が10倍になる間に何点測るか。多いほど滑らかですが、20 もあれば十分です");
         });
-        if ui.button("AC解析を実行").clicked() {
+        if ui.button("AC解析を実行").on_hover_text("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます").clicked() {
             self.run_ac();
         }
         ui.small("入力にする電源の値を「AC 1」にしてください");
@@ -1374,15 +1537,27 @@ impl SchEditor {
         ui.label("ノイズ解析 (熱雑音・ショット雑音)");
         ui.horizontal(|ui| {
             ui.label("出力");
-            ui.add(egui::TextEdit::singleline(&mut self.noise_out).desired_width(56.0).hint_text("OUT / A,B"));
+            ui.add(egui::TextEdit::singleline(&mut self.noise_out).desired_width(56.0).hint_text("OUT / A,B"))
+                .on_hover_text("ノイズを測るノードの名前。「A,B」と書くと A と B の電位差を測ります。\n名前が分からないときは右の「回路図で選ぶ」を使うと、クリックするだけで入力できます");
             ui.label("入力電源");
-            ui.add(egui::TextEdit::singleline(&mut self.noise_in).desired_width(36.0).hint_text("V1"));
+            ui.add(egui::TextEdit::singleline(&mut self.noise_in).desired_width(36.0).hint_text("V1"))
+                .on_hover_text("回路の入力にあたる電源の番号 (例 V1)。入れると、ノイズを入力側に換算した値も出ます。\n「このアンプは入力で何 µV のノイズがあるのと同じか」が分かります。空欄でも構いません");
             ui.label("℃");
-            ui.add(egui::TextEdit::singleline(&mut self.noise_temp).desired_width(30.0));
+            ui.add(egui::TextEdit::singleline(&mut self.noise_temp).desired_width(30.0)).on_hover_text("回路の温度 (摂氏)。熱雑音は絶対温度に比例するので、温度を上げると増えます");
         });
-        if ui.button("ノイズ解析を実行").clicked() {
-            self.run_noise();
-        }
+        ui.horizontal(|ui| {
+            let label = if self.noise_pick { "選択中… (Esc で中止)" } else { "回路図で選ぶ" };
+            if ui.selectable_label(self.noise_pick, label).on_hover_text("押してから回路図のピンや配線をクリックすると、そのノードが出力になり、すぐ解析します。\nShift+クリックで基準ノード (差動出力)").clicked() {
+                self.noise_pick = !self.noise_pick;
+                self.pick_hover = None;
+                if self.noise_pick {
+                    self.status = "回路図の測りたいノードをクリックしてください".into();
+                }
+            }
+            if ui.button("ノイズ解析を実行").on_hover_text("抵抗の熱雑音や、ダイオード・トランジスタのショット雑音が出力にどれだけ現れるかを周波数ごとに計算します。").clicked() {
+                self.run_noise();
+            }
+        });
         ui.small("周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示");
         ui.separator();
         let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());

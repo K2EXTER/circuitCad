@@ -265,3 +265,100 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
 pub fn source_element(name: &str) -> &str {
     name.split('.').next().unwrap_or(name)
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoiseKind {
+    Thermal,
+    Shot,
+}
+
+/// What a noise source is, in words a beginner can use.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SourceInfo {
+    pub kind: NoiseKind,
+    pub title: &'static str,
+    /// Where the noise comes from and the formula.
+    pub why: &'static str,
+    /// What to change to reduce it.
+    pub remedy: &'static str,
+}
+
+/// Explain a contribution name as produced by `noise_analysis` ("R1", "Q1.ic", "D1.rs", ...).
+pub fn describe_source(name: &str) -> SourceInfo {
+    let last = name.rsplit('.').next().unwrap_or(name);
+    let suffix = if name.contains('.') { last.to_ascii_lowercase() } else { String::new() };
+    match suffix.as_str() {
+        "ic" => {
+            return SourceInfo {
+                kind: NoiseKind::Shot,
+                title: "コレクタ電流のショット雑音",
+                why: "電流は電子の粒の流れなので、粒が不規則に届くぶんだけ揺らぎます。大きさは 2q·Ic (q: 電子の電荷)。",
+                remedy: "コレクタ電流を小さくすると減ります。ただし電流を減らすと利得も下がるので、バランスを見ます。",
+            }
+        }
+        "ib" => {
+            return SourceInfo {
+                kind: NoiseKind::Shot,
+                title: "ベース電流のショット雑音",
+                why: "ベースに流れ込む電流の粒状性による揺らぎ。大きさは 2q·Ib。ベース側の抵抗が大きいと、この電流雑音が電圧に変わって目立ちます。",
+                remedy: "ベースを駆動する抵抗を小さくするか、hFE の大きいトランジスタを使うと減ります。",
+            }
+        }
+        "rb" => {
+            return SourceInfo {
+                kind: NoiseKind::Thermal,
+                title: "ベース抵抗の熱雑音",
+                why: "トランジスタ内部のベース抵抗 rb の熱雑音 (4kT·rb)。信号源の抵抗が小さい低雑音アンプで効いてきます。",
+                remedy: "rb の小さい品種を選びます。信号源抵抗が大きい回路では、ほとんど影響しません。",
+            }
+        }
+        "rs" => {
+            return SourceInfo {
+                kind: NoiseKind::Thermal,
+                title: "ダイオードの直列抵抗の熱雑音",
+                why: "ダイオード内部の直列抵抗 rs の熱雑音 (4kT·rs)。",
+                remedy: "rs の小さいダイオードを選びます。",
+            }
+        }
+        _ => {}
+    }
+    match last.chars().next().map(|c| c.to_ascii_uppercase()) {
+        Some('R') => SourceInfo {
+            kind: NoiseKind::Thermal,
+            title: "抵抗の熱雑音 (ジョンソン雑音)",
+            why: "抵抗の中の電子は熱で絶えず動き回り、電圧が揺らぎます。電流が流れていなくても出ます。電圧の密度は √(4kT·R) で、周波数によらず一定 (白色雑音)。",
+            remedy: "抵抗値を小さくすると減ります (4倍の抵抗値で雑音は2倍)。温度を下げても減ります。",
+        },
+        Some('D') => SourceInfo {
+            kind: NoiseKind::Shot,
+            title: "ダイオードのショット雑音",
+            why: "接合を通る電流の粒状性による揺らぎ。大きさは 2q·Id で、電流が大きいほど増えます。",
+            remedy: "順方向電流を小さくすると減ります。",
+        },
+        Some('M') => SourceInfo {
+            kind: NoiseKind::Thermal,
+            title: "MOSFET チャネルの熱雑音",
+            why: "チャネルを流れる電子の熱運動による揺らぎ。飽和領域では 4kT·(2/3)·gm、線形領域では 4kT·gds。",
+            remedy: "gm を小さくすれば雑音は減りますが、利得も下がります。",
+        },
+        _ => SourceInfo { kind: NoiseKind::Thermal, title: "雑音源", why: "この素子のノイズ源です。", remedy: "" },
+    }
+}
+
+impl NoiseResult {
+    /// Largest contributor and its share of the total output noise power (0..1).
+    pub fn dominant(&self) -> Option<(&NoiseContribution, f64)> {
+        let total: f64 = self.contributions.iter().map(|c| c.rms * c.rms).sum();
+        let top = self.contributions.first()?;
+        (total > 0.0).then(|| (top, top.rms * top.rms / total))
+    }
+
+    /// Share (0..1) of the total output noise power that comes from `name`.
+    pub fn share(&self, name: &str) -> f64 {
+        let total: f64 = self.contributions.iter().map(|c| c.rms * c.rms).sum();
+        match self.contribution(name) {
+            Some(c) if total > 0.0 => c.rms * c.rms / total,
+            _ => 0.0,
+        }
+    }
+}

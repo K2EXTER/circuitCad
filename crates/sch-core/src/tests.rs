@@ -236,3 +236,32 @@ fn spice_expands_capacitor_and_inductor_parasitics() {
     // a plain value is untouched
     assert!(d.lines().any(|l| l.starts_with("R1 ") && l.ends_with(" 10k")), "{d}");
 }
+
+#[test]
+fn net_at_finds_the_net_under_a_point() {
+    let mut s = divider();
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (r2[0].1 .0, r2[0].1 .1));
+    wire(&mut s, (r2[1].1 .0, r2[1].1 .1), (8, 4));
+    wire(&mut s, (8, 4), (0, 4));
+    wire(&mut s, (0, 2), (0, 6));
+    let nets = extract(&s);
+    let name_of = |r: &str, p: &str| nets.iter().find(|n| n.pins.iter().any(|x| x.refdes == r && x.pin == p)).unwrap().name.clone();
+    // a pin, a point in the middle of a wire, and a ground symbol all resolve to their net
+    assert_eq!(net_at(&s, (4, -6)).unwrap(), name_of("R1", "1"));
+    assert_eq!(net_at(&s, (0, -4)).unwrap(), name_of("V1", "+"));
+    assert_eq!(net_at(&s, (4, 4)).unwrap(), "GND");
+    // an empty spot, and probing must not change the schematic or the other nets
+    assert_eq!(net_at(&s, (20, 20)), None);
+    assert_eq!(extract(&s).len(), nets.len());
+}
+
+#[test]
+fn net_at_keeps_label_names() {
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0);
+    s.labels.push(Label { pos: (-2, 0), text: "SIG".into() });
+    assert_eq!(net_at(&s, (-2, 0)).unwrap(), "SIG");
+}

@@ -145,3 +145,22 @@ fn bjt_noise_example_runs() {
     assert!(r.contribution("Q1.rb").unwrap().rms > 0.0);
     assert!(r.in_rms.unwrap() > 0.0);
 }
+
+#[test]
+fn sources_are_described_and_ranked() {
+    assert_eq!(describe_source("R1").kind, NoiseKind::Thermal);
+    assert_eq!(describe_source("Q1.ic").kind, NoiseKind::Shot);
+    assert_eq!(describe_source("Q1.rb").kind, NoiseKind::Thermal);
+    assert_eq!(describe_source("D3").kind, NoiseKind::Shot);
+    assert_eq!(describe_source("U1.R2").kind, NoiseKind::Thermal);
+    let mut c = Circuit::new();
+    vsrc(&mut c, "V1", "in", 5.0);
+    res(&mut c, "R1", "in", "out", 1e3);
+    res(&mut c, "R2", "out", "0", 9e3);
+    let r = noise_analysis(&c, &settings(1.0, 1e3, "out", None)).unwrap();
+    let (top, share) = r.dominant().unwrap();
+    // R1 (1k) drives the output through the 9k/10k divider: 810 vs 90 in units of 4kT -> 90 %
+    let sum: f64 = r.contributions.iter().map(|x| r.share(&x.name)).sum();
+    assert!((sum - 1.0).abs() < 1e-12);
+    assert!(top.name == "R1" && (share - 0.9).abs() < 1e-9, "{} {share}", top.name);
+}
