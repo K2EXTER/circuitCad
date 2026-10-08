@@ -16,7 +16,7 @@ fn max_err(res: &TranResult, name: &str, f: impl Fn(f64) -> f64) -> f64 {
 
 fn src(c: &mut Circuit, name: &str, p: &str, n: &str, spec: &str) {
     let (p, n) = (c.node(p), c.node(n));
-    c.add(Element::VSource { name: name.into(), p, n, wave: parse_source(spec).unwrap() });
+    c.add(Element::VSource { name: name.into(), p, n, wave: parse_source(spec).unwrap(), ac: None });
 }
 
 fn res(c: &mut Circuit, name: &str, a: &str, b: &str, ohms: f64) {

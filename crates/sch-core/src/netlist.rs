@@ -211,6 +211,20 @@ pub fn erc(s: &Schematic) -> Vec<Problem> {
         }
     }
 
+    // a power symbol only names a net; something must actually drive it
+    for c in s.components.iter().filter(|c| c.kind == Kind::Power) {
+        let Some(net) = nets.iter().find(|n| n.name == c.value) else { continue };
+        let driven = net.pins.iter().any(|p| {
+            s.components.iter().find(|x| x.refdes == p.refdes).is_some_and(|x| matches!(x.kind, Kind::VSource | Kind::Header(_) | Kind::Custom))
+        });
+        if !driven {
+            out.push(Problem {
+                message: format!("電源ネット {} に電圧源(または電源コネクタ)がつながっていません。電源記号は名前を付けるだけで、電圧は出しません", c.value),
+                at: Some(c.pins()[0].1),
+            });
+        }
+    }
+
     if !s.components.iter().any(|c| c.kind == Kind::Ground) && !s.components.is_empty() {
         out.push(Problem { message: "GNDシンボルがありません".into(), at: None });
     }

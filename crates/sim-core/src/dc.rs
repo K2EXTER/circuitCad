@@ -71,9 +71,9 @@ impl DcResult {
 pub(crate) enum Ce {
     R { name: String, a: usize, b: usize, g: f64 },
     C { name: String, a: usize, b: usize, c: f64, idx: usize },
-    V { name: String, p: usize, n: usize, wave: Waveform, br: usize },
+    V { name: String, p: usize, n: usize, wave: Waveform, ac: Option<(f64, f64)>, br: usize },
     L { name: String, p: usize, n: usize, l: f64, br: usize, idx: usize },
-    I { name: String, from: usize, to: usize, wave: Waveform },
+    I { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, slot: usize },
@@ -124,11 +124,11 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 n_br += 1;
                 n_inds += 1;
             }
-            Element::VSource { name, p, n, wave } => {
-                ce.push(Ce::V { name: name.clone(), p: *p, n: *n, wave: wave.clone(), br: br_base + n_br });
+            Element::VSource { name, p, n, wave, ac } => {
+                ce.push(Ce::V { name: name.clone(), p: *p, n: *n, wave: wave.clone(), ac: *ac, br: br_base + n_br });
                 n_br += 1;
             }
-            Element::ISource { name, from, to, wave } => ce.push(Ce::I { name: name.clone(), from: *from, to: *to, wave: wave.clone() }),
+            Element::ISource { name, from, to, wave, ac } => ce.push(Ce::I { name: name.clone(), from: *from, to: *to, wave: wave.clone(), ac: *ac }),
             Element::Vcvs { name, p, n, cp, cn, gain } => {
                 ce.push(Ce::E { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gain: *gain, br: br_base + n_br });
                 n_br += 1;
@@ -257,10 +257,10 @@ fn lu_solve(n: usize, a: &mut [f64], b: &mut [f64]) -> Result<(), SimError> {
 
 // ------------------------------------------------------------------ Newton
 
-struct Mna {
-    n: usize,
-    a: Vec<f64>,
-    b: Vec<f64>,
+pub(crate) struct Mna {
+    pub(crate) n: usize,
+    pub(crate) a: Vec<f64>,
+    pub(crate) b: Vec<f64>,
 }
 
 impl Mna {
@@ -338,7 +338,7 @@ impl Ctx<'_> {
 impl Compiled {
     /// Build the linearised system around `x` (with junction limiting through `vj`).
     /// Returns the matrix and whether any junction voltage had to be limited.
-    fn assemble(&self, vj: &mut [f64], x: &[f64], ctx: &Ctx) -> (Mna, bool) {
+    pub(crate) fn assemble(&self, vj: &mut [f64], x: &[f64], ctx: &Ctx) -> (Mna, bool) {
         let (gmin, scale) = (ctx.gmin, ctx.scale);
         let mut m = Mna::new(self.n_unknowns);
         let mut limited = false;
@@ -644,7 +644,7 @@ impl Compiled {
                     let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::I { name, from, to, wave } => {
+                Ce::I { name, from, to, wave, .. } => {
                     let (i, vv) = (src(wave), v(x, *from) - v(x, *to));
                     push(name, i, vv, vec![], vv * i);
                 }

@@ -1,0 +1,125 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "AC 1",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        6,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "159n",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        0,
+        6
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -6
+      ]
+    },
+    {
+      "a": [
+        0,
+        -6
+      ],
+      "b": [
+        4,
+        -6
+      ]
+    },
+    {
+      "a": [
+        8,
+        -6
+      ],
+      "b": [
+        12,
+        -6
+      ]
+    },
+    {
+      "a": [
+        12,
+        -6
+      ],
+      "b": [
+        12,
+        -2
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        6
+      ]
+    },
+    {
+      "a": [
+        12,
+        6
+      ],
+      "b": [
+        0,
+        6
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        6
+      ]
+    }
+  ],
+  "labels": []
+}

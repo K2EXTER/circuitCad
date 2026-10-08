@@ -199,3 +199,22 @@ fn spice_without_model_leaves_a_comment() {
     s.add_custom(sym, "LM358", "SOIC-8", (10, 10), 0);
     assert!(to_spice(&s, "t").contains("シミュレーションモデルなし"));
 }
+
+#[test]
+fn erc_warns_when_a_power_net_has_no_source() {
+    // VCC symbol on a resistor only: nothing drives the net
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0); // pins (-2,0) (2,0)
+    s.add(Kind::Power, (-2, 0), 0);
+    s.add(Kind::Ground, (2, 0), 0);
+    let msgs: Vec<_> = erc(&s).into_iter().map(|p| p.message).collect();
+    assert!(msgs.iter().any(|m| m.contains("VCC") && m.contains("電圧源")), "{msgs:?}");
+
+    // add a voltage source whose + terminal reaches the VCC net: the warning goes away
+    let v = s.add(Kind::VSource, (-10, 4), 0); // + at (-10,2), - at (-10,6)
+    let _ = v;
+    wire(&mut s, (-10, 2), (-10, 0));
+    wire(&mut s, (-10, 0), (-2, 0));
+    let msgs: Vec<_> = erc(&s).into_iter().map(|p| p.message).collect();
+    assert!(!msgs.iter().any(|m| m.contains("電圧源")), "{msgs:?}");
+}

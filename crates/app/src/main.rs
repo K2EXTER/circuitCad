@@ -555,7 +555,7 @@ impl eframe::App for App {
         });
         if self.mode == Mode::Schematic {
             egui::Panel::left("sch_tools").min_size(220.0).show(ui, |ui| self.sch.side_panel(ui));
-            if self.sch.has_tran() {
+            if self.sch.has_wave() {
                 egui::Panel::bottom("wave").resizable(true).default_size(320.0).show(ui, |ui| self.sch.wave_panel(ui));
             }
             egui::CentralPanel::default().show(ui, |ui| self.sch.canvas(ui));
@@ -640,6 +640,13 @@ fn main() -> eframe::Result {
                 app.sch.load_path(p.into());
                 if args.iter().any(|a| a == "--dc") {
                     app.sch.analyze_dc();
+                }
+                // --ac <fstart> <fstop> <points/decade>   e.g. --ac 10 1Meg 20
+                if let Some(i) = args.iter().position(|a| a == "--ac") {
+                    if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
+                        app.sch.set_ac_settings(f0, f1, p);
+                        app.sch.analyze_ac();
+                    }
                 }
                 // --tran <stop> <step>   e.g. --tran 20m 20u
                 if let Some(i) = args.iter().position(|a| a == "--tran") {

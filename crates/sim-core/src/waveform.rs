@@ -107,6 +107,59 @@ impl Waveform {
     }
 }
 
+/// A source value as typed: the time-domain waveform plus an optional AC small-signal
+/// phasor (magnitude, phase in degrees) for AC analysis.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Source {
+    pub wave: Waveform,
+    pub ac: Option<(f64, f64)>,
+}
+
+/// Position of a standalone `ac` word outside parentheses.
+fn find_ac(t: &str) -> Option<usize> {
+    let b = t.as_bytes();
+    let mut depth = 0;
+    for i in 0..b.len() {
+        match b[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            c if depth == 0 && (c == b'a' || c == b'A') && i + 1 < b.len() && (b[i + 1] == b'c' || b[i + 1] == b'C') => {
+                let before_ok = i == 0 || b[i - 1].is_ascii_whitespace() || b[i - 1] == b')';
+                let after_ok = i + 2 == b.len() || b[i + 2].is_ascii_whitespace();
+                if before_ok && after_ok {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parse `5`, `5 AC 1`, `AC 1 90`, `SIN(0 1 1k) AC 1`, ... (AC magnitude defaults to 1).
+pub fn parse_source_full(s: &str) -> Result<Source, String> {
+    let t = s.trim();
+    match find_ac(t) {
+        None => Ok(Source { wave: parse_source(t)?, ac: None }),
+        Some(i) => {
+            let left = t[..i].trim();
+            let wave = if left.is_empty() { Waveform::Dc(0.0) } else { parse_source(left)? };
+            let nums: Result<Vec<f64>, String> = t[i + 2..]
+                .split_whitespace()
+                .map(|w| parse_value(w).ok_or_else(|| format!("AC の値「{w}」を数値にできません")))
+                .collect();
+            let nums = nums?;
+            let ac = match nums.as_slice() {
+                [] => (1.0, 0.0),
+                [m] => (*m, 0.0),
+                [m, p] => (*m, *p),
+                _ => return Err("AC は「AC 大きさ [位相(度)]」の形式で指定してください".into()),
+            };
+            Ok(Source { wave, ac: Some(ac) })
+        }
+    }
+}
+
 /// Parse a source value: `5`, `DC 5`, `SIN(0 1 1k [td theta phase])`,
 /// `PULSE(v1 v2 [td tr tf pw per])`, `PWL(t1 v1 t2 v2 ...)`.
 pub fn parse_source(s: &str) -> Result<Waveform, String> {
@@ -234,5 +287,20 @@ mod tests {
         }
         assert!(b.iter().all(|&t| t <= 8e-3));
         assert!(Waveform::Dc(1.0).breakpoints(1.0).is_empty());
+    }
+
+    #[test]
+    fn ac_specification() {
+        let f = |t: &str| parse_source_full(t).unwrap();
+        assert_eq!(f("5"), Source { wave: Waveform::Dc(5.0), ac: None });
+        assert_eq!(f("5 AC 1"), Source { wave: Waveform::Dc(5.0), ac: Some((1.0, 0.0)) });
+        assert_eq!(f("ac 2 90"), Source { wave: Waveform::Dc(0.0), ac: Some((2.0, 90.0)) });
+        assert_eq!(f("AC"), Source { wave: Waveform::Dc(0.0), ac: Some((1.0, 0.0)) });
+        let s = f("SIN(0 1 1k) AC 0.5");
+        assert!(matches!(s.wave, Waveform::Sin { .. }) && s.ac == Some((0.5, 0.0)));
+        assert!(parse_source_full("5 AC x").is_err());
+        assert!(parse_source_full("5 AC 1 2 3").is_err());
+        // a bare number or a name that merely contains "ac" is not an AC spec
+        assert!(parse_source_full("pulse(0 5) ").is_ok());
     }
 }

@@ -3,7 +3,7 @@
 use crate::circuit::{BjtModel, Circuit, DiodeModel, Element};
 use crate::spice_in::{add_model_instance, add_subckt_instance};
 use crate::value::parse_value;
-use crate::waveform::parse_source;
+use crate::waveform::parse_source_full;
 use sch_core::{extract, Kind, Schematic, SimKind};
 use std::collections::HashMap;
 use std::fmt;
@@ -72,7 +72,7 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
                 });
             }
             Kind::VSource => {
-                let wave = match parse_source(&comp.value) {
+                let src = match parse_source_full(&comp.value) {
                     Ok(w) => w,
                     Err(m) => {
                         errors.push(err(r, format!("電源の値「{}」: {m}", comp.value)));
@@ -80,7 +80,7 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
                     }
                 };
                 let (p, n) = (node_of(&mut c, r, "+"), node_of(&mut c, r, "-"));
-                c.add(Element::VSource { name: r.into(), p, n, wave });
+                c.add(Element::VSource { name: r.into(), p, n, wave: src.wave, ac: src.ac });
             }
             Kind::Diode | Kind::Led => {
                 let (a, k) = (node_of(&mut c, r, "A"), node_of(&mut c, r, "K"));

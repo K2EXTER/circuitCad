@@ -40,9 +40,9 @@ pub enum Element {
     /// Short circuit at DC.
     Inductor { name: String, a: usize, b: usize, l: f64 },
     /// Positive terminal `p`.
-    VSource { name: String, p: usize, n: usize, wave: Waveform },
+    VSource { name: String, p: usize, n: usize, wave: Waveform, ac: Option<(f64, f64)> },
     /// Current `dc` flows from `from`, through the source, to `to`.
-    ISource { name: String, from: usize, to: usize, wave: Waveform },
+    ISource { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     Diode { name: String, a: usize, k: usize, model: DiodeModel },
     Bjt { name: String, c: usize, b: usize, e: usize, model: BjtModel },
     /// v(p,n) = gain * v(cp,cn)
@@ -53,7 +53,7 @@ pub enum Element {
 
 impl Element {
     pub fn vdc(name: &str, p: usize, n: usize, v: f64) -> Element {
-        Element::VSource { name: name.into(), p, n, wave: Waveform::Dc(v) }
+        Element::VSource { name: name.into(), p, n, wave: Waveform::Dc(v), ac: None }
     }
 
     pub fn name(&self) -> &str {

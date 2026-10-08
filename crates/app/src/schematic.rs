@@ -3,8 +3,8 @@
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use crate::part_form::PartForm;
 use part_lib::PartDef;
-use crate::plot::{self, PlotState, Trace, PALETTE};
-use sim_core::{dc_op, from_schematic, parse_value, transient, DcResult, TranResult, TranSettings};
+use crate::plot::{self, PlotState, Style, Trace, PALETTE};
+use sim_core::{ac_analysis, dc_op, from_schematic, parse_value, transient, AcResult, AcSettings, AcSweep, DcResult, TranResult, TranSettings};
 use std::collections::BTreeSet;
 use sch_core::{erc, extract, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
@@ -51,7 +51,25 @@ pub struct SchEditor {
     tran_tstop: String,
     tran_tstep: String,
     tran_uic: bool,
+    ac: Option<AcView>,
+    ac_fstart: String,
+    ac_fstop: String,
+    ac_ppd: String,
+    wave_mode: WaveMode,
     fit_pending: bool,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum WaveMode {
+    Tran,
+    Ac,
+}
+
+/// A finished AC sweep (Bode plot).
+struct AcView {
+    outcome: Result<AcResult, Vec<String>>,
+    selected: BTreeSet<String>,
+    plot: PlotState,
 }
 
 /// A finished transient run with the waveform viewer state.
@@ -113,6 +131,11 @@ impl Default for SchEditor {
             tran_tstop: "10m".into(),
             tran_tstep: "10u".into(),
             tran_uic: false,
+            ac: None,
+            ac_fstart: "10".into(),
+            ac_fstop: "1Meg".into(),
+            ac_ppd: "20".into(),
+            wave_mode: WaveMode::Tran,
             fit_pending: false,
             sch: Schematic::default(),
             path: None,
@@ -365,9 +388,129 @@ impl SchEditor {
         self.pan = Vec2::new((x0 + x1) / 2.0, (y0 + y1) / 2.0);
     }
 
-    pub fn has_tran(&self) -> bool {
-        self.tran.is_some()
+    pub fn has_wave(&self) -> bool {
+        match self.wave_mode {
+            WaveMode::Tran => self.tran.is_some(),
+            WaveMode::Ac => self.ac.is_some(),
+        }
     }
+
+    pub fn analyze_ac(&mut self) {
+        self.run_ac();
+    }
+
+    pub fn set_ac_settings(&mut self, f0: &str, f1: &str, ppd: &str) {
+        self.ac_fstart = f0.into();
+        self.ac_fstop = f1.into();
+        self.ac_ppd = ppd.into();
+    }
+
+    fn run_ac(&mut self) {
+        let (Some(f0), Some(f1), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
+            self.status = "開始・終了周波数と点数/デケードを数値で入力してください (例: 10, 1Meg, 20)".into();
+            return;
+        };
+        let outcome = match from_schematic(&self.sch) {
+            Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+            Ok(c) => ac_analysis(&c, &AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) }).map_err(|e| vec![e.to_string()]),
+        };
+        let mut selected = BTreeSet::new();
+        if let Ok(r) = &outcome {
+            for sg in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(3) {
+                selected.insert(sg.name.clone());
+            }
+        }
+        self.status = match &outcome {
+            Ok(r) => format!("AC解析: 完了 ({} 点)", r.freq.len()),
+            Err(e) => format!("AC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi) });
+        self.wave_mode = WaveMode::Ac;
+    }
+
+    /// Bottom panel: the waveform viewer for the most recent analysis.
+    pub fn wave_panel(&mut self, ui: &mut egui::Ui) {
+        match self.wave_mode {
+            WaveMode::Tran => self.tran_wave_panel(ui),
+            WaveMode::Ac => self.ac_wave_panel(ui),
+        }
+    }
+
+    fn ac_wave_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(view) = self.ac.as_mut() else { return };
+        let mut close = false;
+        ui.horizontal(|ui| {
+            ui.strong("AC解析 (ボード線図)");
+            if ui.button("閉じる").clicked() {
+                close = true;
+            }
+            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります");
+        });
+        let AcView { outcome, selected, plot: st } = view;
+        match outcome {
+            Err(msgs) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Ok(res) => {
+                for w in &res.warnings {
+                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                }
+                ui.horizontal_top(|ui| {
+                    let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
+                    ui.vertical(|ui| {
+                        ui.set_width(170.0);
+                        if ui.button("選択をクリア").clicked() {
+                            selected.clear();
+                        }
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            for name in &order {
+                                let mut on = selected.contains(*name);
+                                let color = order.iter().filter(|n| selected.contains(**n)).position(|n| n == name).map(|i| PALETTE[i % PALETTE.len()]);
+                                let text = match color {
+                                    Some(c) if on => egui::RichText::new(*name).color(c),
+                                    _ => egui::RichText::new(*name),
+                                };
+                                if ui.checkbox(&mut on, text).changed() {
+                                    if on {
+                                        selected.insert(name.to_string());
+                                    } else {
+                                        selected.remove(*name);
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    let chosen: Vec<(&str, Vec<f64>, Vec<f64>)> = order
+                        .iter()
+                        .filter(|n| selected.contains(**n))
+                        .filter_map(|n| res.signal(n).map(|sg| (*n, sg.db(), sg.phase_deg())))
+                        .collect();
+                    if chosen.is_empty() {
+                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                        return;
+                    }
+                    let mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db }).collect();
+                    let phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: ph }).collect();
+                    let h = rect.height() / 2.0;
+                    let top = Rect::from_min_size(rect.min, Vec2::new(rect.width(), h - 2.0));
+                    let bottom = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h), Vec2::new(rect.width(), h - 2.0));
+                    let ms = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
+                    let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true };
+                    plot::draw_group(ui, top, egui::Id::new("bode_mag"), &mag, st, 0, &ms, false);
+                    plot::draw_group(ui, bottom, egui::Id::new("bode_phase"), &phase, st, 1, &ps, true);
+                });
+            }
+        }
+        if close {
+            self.ac = None;
+        }
+    }
+
 
     pub fn analyze_tran(&mut self) {
         self.run_tran();
@@ -398,10 +541,11 @@ impl SchEditor {
             Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         self.tran = Some(TranView { outcome, selected, plot: PlotState::new(tstop) });
+        self.wave_mode = WaveMode::Tran;
     }
 
-    /// Bottom panel with the waveform viewer.
-    pub fn wave_panel(&mut self, ui: &mut egui::Ui) {
+    /// Transient waveforms.
+    fn tran_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.tran.as_mut() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
@@ -473,7 +617,8 @@ impl SchEditor {
                     let h = rect.height() / used.len().max(1) as f32;
                     for (n, g) in used.iter().enumerate() {
                         let sub = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h * n as f32), Vec2::new(rect.width(), h - 2.0));
-                        plot::draw_group(ui, sub, egui::Id::new(("wave", *g)), &groups[*g], st, *g, if *g == 0 { "V" } else { "A" }, n + 1 == used.len());
+                        let style = Style { unit: if *g == 0 { "V" } else { "A" }, x_unit: "s", x_name: "t", plain_y: false };
+                        plot::draw_group(ui, sub, egui::Id::new(("wave", *g)), &groups[*g], st, *g, &style, n + 1 == used.len());
                     }
                 });
             }
@@ -905,7 +1050,7 @@ impl SchEditor {
                     });
                 }
                 if c.kind == Kind::VSource {
-                    ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 1m 1u 1u 2m 5m) / PWL(0 0 1m 5)");
+                    ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 1m 1u 1u 2m 5m) / PWL(0 0 1m 5) / AC 1 (AC解析の入力) / 5 AC 1");
                 }
                 if let Some(sym) = &c.custom {
                     ui.label(format!("フットプリント: {}", c.footprint));
@@ -958,6 +1103,20 @@ impl SchEditor {
             }
             ui.checkbox(&mut self.tran_uic, "ゼロ状態から");
         });
+        ui.separator();
+        ui.label("AC解析 (周波数特性)");
+        ui.horizontal(|ui| {
+            ui.label("開始");
+            ui.add(egui::TextEdit::singleline(&mut self.ac_fstart).desired_width(48.0));
+            ui.label("終了");
+            ui.add(egui::TextEdit::singleline(&mut self.ac_fstop).desired_width(48.0));
+            ui.label("点/dec");
+            ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0));
+        });
+        if ui.button("AC解析を実行").clicked() {
+            self.run_ac();
+        }
+        ui.small("入力にする電源の値を「AC 1」にしてください");
         ui.separator();
         let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());
         if let Some(dc) = &self.dc {
