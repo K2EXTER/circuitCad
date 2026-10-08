@@ -1,4 +1,6 @@
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use pcb_core::netlist::{self, NetlistNet, NetlistPart};
+use pcb_core::ratsnest::ratsnest;
 use pcb_core::{drc, export, Board, Hole, Pad, PadShape, Point, Side, SilkLine, Track, Via};
 use schematic::SchEditor;
 use std::path::PathBuf;
@@ -41,6 +43,8 @@ enum Item {
     Via(usize),
     Hole(usize),
     Silk(usize),
+    /// Index into `Board::parts`.
+    Part(usize),
 }
 
 struct App {
@@ -63,6 +67,8 @@ struct App {
     selected: Option<Item>,
     status: String,
     violations: Vec<drc::Violation>,
+    drag_part: Option<(String, Point)>,
+    import_notes: Vec<String>,
 }
 
 impl Default for App {
@@ -88,6 +94,8 @@ impl Default for App {
             selected: None,
             status: "準備完了".into(),
             violations: vec![],
+            drag_part: None,
+            import_notes: vec![],
         }
     }
 }
@@ -137,6 +145,11 @@ impl App {
         for (i, pd) in self.board.pads.iter().enumerate() {
             let (w, h) = pd.shape.size();
             if (p.x - pd.pos.x).abs() <= w / 2.0 + tol && (p.y - pd.pos.y).abs() <= h / 2.0 + tol {
+                if !pd.refdes.is_empty() {
+                    if let Some(k) = self.board.parts.iter().position(|b| b.refdes == pd.refdes) {
+                        return Some(Item::Part(k));
+                    }
+                }
                 return Some(Item::Pad(i));
             }
         }
@@ -150,7 +163,7 @@ impl App {
                 return Some(Item::Track(i));
             }
         }
-        for (i, l) in self.board.silk.iter().enumerate() {
+        for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty()) {
             if seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
                 return Some(Item::Silk(i));
             }
@@ -165,6 +178,10 @@ impl App {
             Item::Via(i) => drop(self.board.vias.remove(i)),
             Item::Hole(i) => drop(self.board.holes.remove(i)),
             Item::Silk(i) => drop(self.board.silk.remove(i)),
+            Item::Part(_) => {
+                self.status = "部品は回路図側で削除してから「回路図から取り込み」を実行してください".into();
+                return;
+            }
         }
         self.selected = None;
     }
@@ -180,7 +197,7 @@ impl App {
                         self.pending = Some(p); // continue the route
                     }
                     Tool::Silk => {
-                        self.board.silk.push(SilkLine { side: self.side, a, b: p, width: 0.15 });
+                        self.board.silk.push(SilkLine { side: self.side, a, b: p, width: 0.15, refdes: String::new() });
                         self.pending = Some(p);
                     }
                     _ => {
@@ -197,18 +214,12 @@ impl App {
                     }
                 },
             },
-            Tool::PadTh => self.board.pads.push(Pad {
-                pos: p,
-                shape: PadShape::Circle { d: self.pad_size },
-                drill: Some(self.pad_drill),
-                side: self.side,
-            }),
-            Tool::PadSmd => self.board.pads.push(Pad {
-                pos: p,
-                shape: PadShape::Rect { w: self.pad_size, h: self.pad_size * 0.7 },
-                drill: None,
-                side: self.side,
-            }),
+            Tool::PadTh => {
+                self.board.pads.push(Pad::new(p, PadShape::Circle { d: self.pad_size }, Some(self.pad_drill), self.side))
+            }
+            Tool::PadSmd => {
+                self.board.pads.push(Pad::new(p, PadShape::Rect { w: self.pad_size, h: self.pad_size * 0.7 }, None, self.side))
+            }
             Tool::Via => self.board.vias.push(Via { pos: p, diameter: self.via_dia, drill: self.via_drill }),
             Tool::Hole => self.board.holes.push(Hole { pos: p, drill: self.hole_drill }),
         }
@@ -270,6 +281,30 @@ impl App {
             Ok(()) => format!("書き出し完了: {} (Gerber + ドリル + zip)", dir.display()),
             Err(e) => format!("書き出し失敗: {e}"),
         };
+    }
+
+    fn import_from_schematic(&mut self) {
+        let sch = &self.sch.sch;
+        let parts: Vec<NetlistPart> = sch
+            .components
+            .iter()
+            .filter(|c| !c.kind.is_power_symbol())
+            .map(|c| NetlistPart { refdes: c.refdes.clone(), value: c.value.clone(), footprint: c.footprint_name() })
+            .collect();
+        let nets: Vec<NetlistNet> = sch_core::extract(sch)
+            .into_iter()
+            .map(|n| NetlistNet { name: n.name, pins: n.pins.into_iter().map(|p| (p.refdes, p.pin)).collect() })
+            .collect();
+        let rep = netlist::import(&mut self.board, &parts, &nets);
+        self.selected = None;
+        self.import_notes = rep.warnings.clone();
+        self.status = format!(
+            "取り込み完了: 追加 {} / 更新 {} / 削除 {} / 警告 {}",
+            rep.added.len(),
+            rep.updated,
+            rep.removed.len(),
+            rep.warnings.len()
+        );
     }
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
@@ -361,11 +396,39 @@ impl App {
         for h in &self.board.holes {
             painter.circle_stroke(self.to_screen(rect, h.pos), h.drill as f32 * z / 2.0, Stroke::new(1.5, Color32::LIGHT_GRAY));
         }
+        for w in ratsnest(&self.board) {
+            painter.line_segment(
+                [self.to_screen(rect, w.a), self.to_screen(rect, w.b)],
+                Stroke::new(1.0, Color32::from_rgb(240, 220, 90)),
+            );
+        }
+        if z >= 14.0 {
+            let f = egui::FontId::proportional(10.0);
+            for p in self.board.pads.iter().filter(|p| !p.net.is_empty()) {
+                painter.text(self.to_screen(rect, p.pos), egui::Align2::CENTER_CENTER, &p.net, f.clone(), Color32::WHITE);
+            }
+        }
+        for part in &self.board.parts {
+            let top = self.board.silk.iter().filter(|l| l.refdes == part.refdes).map(|l| l.a.y.max(l.b.y)).fold(f64::MIN, f64::max);
+            if top > f64::MIN {
+                painter.text(
+                    self.to_screen(rect, Point::new(part.pos.x, top)) - Vec2::new(0.0, 2.0),
+                    egui::Align2::CENTER_BOTTOM,
+                    format!("{} {}", part.refdes, part.value),
+                    egui::FontId::proportional(11.0),
+                    Color32::from_rgb(230, 230, 230),
+                );
+            }
+        }
         for v in &self.violations {
             painter.circle_stroke(self.to_screen(rect, v.at), 10.0, Stroke::new(2.0, Color32::from_rgb(255, 0, 255)));
         }
         if let Some(sel) = self.selected {
             let pts: Vec<Point> = match sel {
+                Item::Part(i) => {
+                    let r = &self.board.parts[i].refdes;
+                    self.board.pads.iter().filter(|p| &p.refdes == r).map(|p| p.pos).collect()
+                }
                 Item::Track(i) => vec![self.board.tracks[i].a, self.board.tracks[i].b],
                 Item::Silk(i) => vec![self.board.silk[i].a, self.board.silk[i].b],
                 Item::Pad(i) => vec![self.board.pads[i].pos],
@@ -380,15 +443,53 @@ impl App {
         // cursor / rubber band
         if let Some(pos) = resp.hover_pos() {
             let w = self.to_world(rect, pos);
-            let sp = Point::new(snap(w.x, self.grid), snap(w.y, self.grid));
+            let mut sp = Point::new(snap(w.x, self.grid), snap(w.y, self.grid));
+            if self.tool == Tool::Track {
+                // snap routing to pad / via centres so footprints off the grid can be connected
+                let tol = 10.0 / self.zoom as f64;
+                let near = self
+                    .board
+                    .pads
+                    .iter()
+                    .map(|p| p.pos)
+                    .chain(self.board.vias.iter().map(|v| v.pos))
+                    .filter(|c| c.dist(w) <= tol)
+                    .min_by(|a, b| a.dist(w).total_cmp(&b.dist(w)));
+                if let Some(c) = near {
+                    sp = c;
+                }
+            }
             let scr = self.to_screen(rect, sp);
             painter.circle_stroke(scr, 4.0, Stroke::new(1.0, Color32::WHITE));
             if let Some(a) = self.pending {
                 painter.line_segment([self.to_screen(rect, a), scr], Stroke::new(1.0, Color32::WHITE));
             }
             self.status = format!("X {:.2}  Y {:.2} mm   [{}]", sp.x, sp.y, if self.side == Side::Top { "表面" } else { "裏面" });
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select {
+                if let Some(Item::Part(i)) = self.hit_test(w) {
+                    let part = &self.board.parts[i];
+                    self.drag_part = Some((part.refdes.clone(), Point::new(sp.x - part.pos.x, sp.y - part.pos.y)));
+                    self.selected = Some(Item::Part(i));
+                }
+            }
+            if let Some((r, off)) = self.drag_part.clone() {
+                if resp.dragged_by(egui::PointerButton::Primary) {
+                    if let Some(rot) = self.board.parts.iter().find(|p| p.refdes == r).map(|p| p.rot) {
+                        self.board.place_part(&r, Point::new(sp.x - off.x, sp.y - off.y), rot);
+                    }
+                }
+            }
             if resp.clicked_by(egui::PointerButton::Primary) {
                 self.click(sp);
+            }
+        }
+        if resp.drag_stopped() {
+            self.drag_part = None;
+        }
+        if let Some(Item::Part(i)) = self.selected {
+            if !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::R)) {
+                let p = self.board.parts[i].clone();
+                self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
             }
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
@@ -465,6 +566,14 @@ impl eframe::App for App {
             ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"));
             ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm"));
             ui.separator();
+            if ui.button("回路図から取り込み").clicked() {
+                self.import_from_schematic();
+            }
+            for n in &self.import_notes {
+                ui.colored_label(Color32::from_rgb(255, 180, 60), n);
+            }
+            let unrouted = ratsnest(&self.board).len();
+            ui.label(format!("未配線: {unrouted} 本 (黄色の線)"));
             ui.label("基板名 (出力ファイル名)");
             ui.text_edit_singleline(&mut self.board.name);
             if let Some(it) = self.selected {
@@ -509,5 +618,49 @@ fn install_japanese_font(ctx: &egui::Context) {
             ctx.set_fonts(fonts);
             return;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sch_core::{Kind, Wire};
+
+    /// V1 -> R1 -> R2 -> GND drawn as a schematic, imported into the board.
+    #[test]
+    fn schematic_to_board_flow() {
+        let mut app = App::default();
+        let s = &mut app.sch.sch;
+        s.add(Kind::VSource, (0, 0), 0);
+        s.add(Kind::Resistor, (6, -6), 0);
+        s.add(Kind::Resistor, (8, 0), 1);
+        s.add(Kind::Ground, (0, 6), 0);
+        let r2 = s.components[2].pins();
+        for (a, b) in [
+            ((0, -2), (0, -6)),
+            ((0, -6), (4, -6)),
+            ((8, -6), r2[0].1),
+            (r2[1].1, (8, 4)),
+            ((8, 4), (0, 4)),
+            ((0, 2), (0, 6)),
+        ] {
+            s.wires.push(Wire { a, b });
+        }
+
+        app.import_from_schematic();
+        assert!(app.import_notes.is_empty(), "{:?}", app.import_notes);
+        assert_eq!(app.board.parts.len(), 3); // V1, R1, R2 (GND symbol is not a part)
+        let net = |r: &str, p: &str| app.board.pads.iter().find(|x| x.refdes == r && x.pin == p).unwrap().net.clone();
+        assert_eq!(net("V1", "-"), "GND");
+        assert_eq!(net("R2", "2"), "GND");
+        assert_eq!(net("R1", "2"), net("R2", "1"));
+        // GND: V1.- and R2.2 ; nets +V/R1.1 and R1.2/R2.1 : three 2-pad nets => 3 airwires
+        assert_eq!(ratsnest(&app.board).len(), 3);
+
+        // route one net by hand and the airwire disappears
+        let a = app.board.pads.iter().find(|p| p.refdes == "R1" && p.pin == "2").unwrap().pos;
+        let b = app.board.pads.iter().find(|p| p.refdes == "R2" && p.pin == "1").unwrap().pos;
+        app.board.tracks.push(Track { side: Side::Top, a, b, width: 0.25 });
+        assert_eq!(ratsnest(&app.board).len(), 2);
     }
 }

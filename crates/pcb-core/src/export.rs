@@ -38,18 +38,8 @@ mod tests {
 
     fn sample() -> Board {
         let mut b = Board::new("demo", 30.0, 20.0);
-        b.pads.push(Pad {
-            pos: Point::new(5.0, 5.0),
-            shape: PadShape::Circle { d: 1.6 },
-            drill: Some(0.8),
-            side: Side::Top,
-        });
-        b.pads.push(Pad {
-            pos: Point::new(15.0, 5.0),
-            shape: PadShape::Rect { w: 1.0, h: 1.5 },
-            drill: None,
-            side: Side::Top,
-        });
+        b.pads.push(Pad::new(Point::new(5.0, 5.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top));
+        b.pads.push(Pad::new(Point::new(15.0, 5.0), PadShape::Rect { w: 1.0, h: 1.5 }, None, Side::Top));
         b.tracks.push(Track {
             side: Side::Top,
             a: Point::new(5.0, 5.0),

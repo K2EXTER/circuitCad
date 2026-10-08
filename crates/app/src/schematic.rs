@@ -479,6 +479,14 @@ impl SchEditor {
                         ui.text_edit_singleline(&mut c.value);
                     });
                 }
+                if !c.kind.is_power_symbol() {
+                    let current = c.footprint_name();
+                    egui::ComboBox::from_label("フットプリント").selected_text(current).show_ui(ui, |ui| {
+                        for n in pcb_core::footprints::names() {
+                            ui.selectable_value(&mut c.footprint, n.clone(), n);
+                        }
+                    });
+                }
                 if ui.button("回転 (R)").clicked() {
                     c.rot = (c.rot + 1) % 4;
                 }

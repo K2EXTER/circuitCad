@@ -63,6 +63,32 @@ pub struct Pad {
     pub shape: PadShape,
     pub drill: Option<f64>,
     pub side: Side,
+    /// Owning part (empty for a loose pad) and its pin name.
+    #[serde(default)]
+    pub refdes: String,
+    #[serde(default)]
+    pub pin: String,
+    /// Net name from the schematic (empty = unassigned).
+    #[serde(default)]
+    pub net: String,
+}
+
+impl Pad {
+    pub fn new(pos: Point, shape: PadShape, drill: Option<f64>, side: Side) -> Self {
+        Self { pos, shape, drill, side, refdes: String::new(), pin: String::new(), net: String::new() }
+    }
+}
+
+/// A placed footprint instance; its pads and silkscreen live in `Board::pads` / `Board::silk`
+/// tagged with the same `refdes`.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Part {
+    pub refdes: String,
+    pub value: String,
+    pub footprint: String,
+    pub pos: Point,
+    /// Quarter turns counter-clockwise (0..=3).
+    pub rot: u8,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,6 +111,8 @@ pub struct SilkLine {
     pub a: Point,
     pub b: Point,
     pub width: f64,
+    #[serde(default)]
+    pub refdes: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -125,6 +153,8 @@ pub struct Board {
     pub vias: Vec<Via>,
     pub holes: Vec<Hole>,
     pub silk: Vec<SilkLine>,
+    #[serde(default)]
+    pub parts: Vec<Part>,
     pub rules: Rules,
 }
 
@@ -143,6 +173,7 @@ impl Board {
             vias: vec![],
             holes: vec![],
             silk: vec![],
+            parts: vec![],
             rules: Rules::default(),
         }
     }

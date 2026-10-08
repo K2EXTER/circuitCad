@@ -1,0 +1,77 @@
+//! Placing footprint instances on a board.
+
+use crate::footprints;
+use crate::model::*;
+use std::collections::HashMap;
+
+/// Rotate `p` by `rot` quarter turns counter-clockwise (y up).
+pub fn rotate(p: Point, rot: u8) -> Point {
+    let mut q = p;
+    for _ in 0..(rot % 4) {
+        q = Point::new(-q.y, q.x);
+    }
+    q
+}
+
+impl Board {
+    /// Insert or replace a part, regenerating its pads and silkscreen outline.
+    /// Pad nets are kept for pins that still exist.
+    pub fn set_part(&mut self, part: Part) -> Result<(), String> {
+        let fp = footprints::get(&part.footprint).ok_or_else(|| format!("フットプリント {} が見つかりません", part.footprint))?;
+        let old_nets: HashMap<String, String> = self
+            .pads
+            .iter()
+            .filter(|p| p.refdes == part.refdes)
+            .map(|p| (p.pin.clone(), p.net.clone()))
+            .collect();
+        self.pads.retain(|p| p.refdes != part.refdes);
+        self.silk.retain(|s| s.refdes != part.refdes);
+
+        let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+        for fpad in &fp.pads {
+            let r = rotate(fpad.pos, part.rot);
+            let pos = Point::new(part.pos.x + r.x, part.pos.y + r.y);
+            let shape = match (fpad.shape, part.rot % 2) {
+                (PadShape::Rect { w, h }, 1) => PadShape::Rect { w: h, h: w },
+                (PadShape::Oval { w, h }, 1) => PadShape::Oval { w: h, h: w },
+                (s, _) => s,
+            };
+            let (w, h) = shape.size();
+            x0 = x0.min(pos.x - w / 2.0);
+            x1 = x1.max(pos.x + w / 2.0);
+            y0 = y0.min(pos.y - h / 2.0);
+            y1 = y1.max(pos.y + h / 2.0);
+            let mut pad = Pad::new(pos, shape, fpad.drill, Side::Top);
+            pad.refdes = part.refdes.clone();
+            pad.net = old_nets.get(&fpad.pin).cloned().unwrap_or_default();
+            pad.pin = fpad.pin.clone();
+            self.pads.push(pad);
+        }
+        let m = 0.3;
+        let c = [Point::new(x0 - m, y0 - m), Point::new(x1 + m, y0 - m), Point::new(x1 + m, y1 + m), Point::new(x0 - m, y1 + m)];
+        for i in 0..4 {
+            self.silk.push(SilkLine { side: Side::Top, a: c[i], b: c[(i + 1) % 4], width: 0.15, refdes: part.refdes.clone() });
+        }
+
+        match self.parts.iter_mut().find(|p| p.refdes == part.refdes) {
+            Some(slot) => *slot = part,
+            None => self.parts.push(part),
+        }
+        Ok(())
+    }
+
+    pub fn remove_part(&mut self, refdes: &str) {
+        self.parts.retain(|p| p.refdes != refdes);
+        self.pads.retain(|p| p.refdes != refdes);
+        self.silk.retain(|s| s.refdes != refdes);
+    }
+
+    /// Move / rotate an existing part.
+    pub fn place_part(&mut self, refdes: &str, pos: Point, rot: u8) {
+        if let Some(mut part) = self.parts.iter().find(|p| p.refdes == refdes).cloned() {
+            part.pos = pos;
+            part.rot = rot % 4;
+            let _ = self.set_part(part);
+        }
+    }
+}

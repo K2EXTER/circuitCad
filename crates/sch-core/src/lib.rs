@@ -88,6 +88,21 @@ impl Kind {
         }
     }
 
+    /// Default PCB footprint name ("" for symbols that are not real parts).
+    pub fn default_footprint(self) -> String {
+        match self {
+            Kind::Resistor => "R_0805".into(),
+            Kind::Capacitor => "C_0805".into(),
+            Kind::Inductor => "L_0805".into(),
+            Kind::Diode => "D_SOD-123".into(),
+            Kind::Led => "LED_0805".into(),
+            Kind::VSource => "PinHeader_1x2_PM".into(),
+            Kind::Npn => "SOT-23".into(),
+            Kind::Header(n) => format!("PinHeader_1x{n}"),
+            Kind::Ground | Kind::Power => String::new(),
+        }
+    }
+
     pub fn is_power_symbol(self) -> bool {
         matches!(self, Kind::Ground | Kind::Power)
     }
@@ -114,6 +129,9 @@ pub struct Component {
     pub pos: Pt,
     /// Quarter turns clockwise on screen (0..=3).
     pub rot: u8,
+    /// PCB footprint; empty means the kind's default.
+    #[serde(default)]
+    pub footprint: String,
 }
 
 pub fn rotate(p: Pt, rot: u8) -> Pt {
@@ -125,6 +143,10 @@ pub fn rotate(p: Pt, rot: u8) -> Pt {
 }
 
 impl Component {
+    pub fn footprint_name(&self) -> String {
+        if self.footprint.is_empty() { self.kind.default_footprint() } else { self.footprint.clone() }
+    }
+
     /// Pins as (name, absolute grid position).
     pub fn pins(&self) -> Vec<(String, Pt)> {
         self.kind
@@ -173,7 +195,7 @@ impl Schematic {
                 .unwrap_or(0);
             format!("{}{}", kind.prefix(), used + 1)
         };
-        self.components.push(Component { refdes, kind, value: kind.default_value().to_string(), pos, rot: rot % 4 });
+        self.components.push(Component { refdes, kind, value: kind.default_value().to_string(), pos, rot: rot % 4, footprint: kind.default_footprint() });
         self.components.len() - 1
     }
 }

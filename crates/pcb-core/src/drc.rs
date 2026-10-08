@@ -259,6 +259,7 @@ pub fn check(board: &Board) -> Vec<Violation> {
     }
 
     out.extend(clearance(board));
+    out.extend(shorts(board));
     out
 }
 
@@ -362,12 +363,7 @@ mod tests {
     #[test]
     fn rect_pad_to_track() {
         let mut b = board();
-        b.pads.push(Pad {
-            pos: Point::new(10.0, 10.0),
-            shape: PadShape::Rect { w: 1.0, h: 1.0 },
-            drill: None,
-            side: Side::Top,
-        });
+        b.pads.push(Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
         // pad edge x=10.5, track edge x=10.6 -> 0.1
         b.tracks.push(track(Side::Top, (10.725, 5.0), (10.725, 15.0), 0.25));
         assert_eq!(clearance(&b).len(), 1);
@@ -381,4 +377,29 @@ mod tests {
         b.tracks.push(track(Side::Top, (0.3, 10.0), (0.3, 20.0), 0.25)); // edge gap ~0.175 < 0.3
         assert_eq!(clearance(&b).len(), 1);
     }
+}
+
+/// Group id for every entry of `board.pads`, from copper connectivity.
+pub(crate) fn pad_groups(board: &Board) -> Vec<usize> {
+    let grp = groups(&copper_items(board));
+    grp[board.tracks.len()..board.tracks.len() + board.pads.len()].to_vec()
+}
+
+/// Pads of different nets that end up in one copper group.
+pub fn shorts(board: &Board) -> Vec<Violation> {
+    let grp = pad_groups(board);
+    let mut seen: std::collections::BTreeMap<usize, (Vec<String>, Point)> = Default::default();
+    for (p, g) in board.pads.iter().zip(grp) {
+        if p.net.is_empty() {
+            continue;
+        }
+        let e = seen.entry(g).or_insert_with(|| (vec![], p.pos));
+        if !e.0.contains(&p.net) {
+            e.0.push(p.net.clone());
+        }
+    }
+    seen.into_values()
+        .filter(|(nets, _)| nets.len() > 1)
+        .map(|(nets, at)| v(format!("ネット短絡: {}", nets.join(" と ")), at))
+        .collect()
 }
