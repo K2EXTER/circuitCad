@@ -20,11 +20,54 @@ enum Tool {
     Label,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Sel {
     Comp(usize),
     Wire(usize),
     Label(usize),
+}
+
+/// Rubber-band selection in progress (grid coordinates).
+struct BoxSel {
+    start: (f32, f32),
+    /// Right button: anything the box touches is selected. Left button: only what it fully contains.
+    crossing: bool,
+}
+
+/// Several selected objects being moved together: their positions when the drag began.
+struct GroupDrag {
+    anchor: Pt,
+    comps: Vec<(usize, Pt)>,
+    wires: Vec<(usize, Pt, Pt)>,
+    labels: Vec<(usize, Pt)>,
+}
+
+fn rect_contains(lo: (f32, f32), hi: (f32, f32), p: (f32, f32)) -> bool {
+    p.0 >= lo.0 && p.0 <= hi.0 && p.1 >= lo.1 && p.1 <= hi.1
+}
+
+/// Does the segment a-b touch the rectangle? (Liang-Barsky clipping.)
+fn segment_hits_rect(a: (f32, f32), b: (f32, f32), lo: (f32, f32), hi: (f32, f32)) -> bool {
+    let (mut t0, mut t1) = (0.0f32, 1.0f32);
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    for (p, q) in [(-dx, a.0 - lo.0), (dx, hi.0 - a.0), (-dy, a.1 - lo.1), (dy, hi.1 - a.1)] {
+        if p == 0.0 {
+            if q < 0.0 {
+                return false;
+            }
+        } else {
+            let r = q / p;
+            if p < 0.0 {
+                t0 = t0.max(r);
+            } else {
+                t1 = t1.min(r);
+            }
+            if t0 > t1 {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 pub struct SchEditor {
@@ -36,6 +79,10 @@ pub struct SchEditor {
     label_text: String,
     pending: Option<Pt>,
     selected: Option<Sel>,
+    /// Extra objects selected by a rubber band (when two or more are selected `selected` is empty).
+    multi: Vec<Sel>,
+    boxsel: Option<BoxSel>,
+    gdrag: Option<GroupDrag>,
     drag: Option<(usize, Pt)>,
     zoom: f32, // pixels per grid step
     pan: Vec2, // grid position at the screen centre
@@ -195,6 +242,9 @@ impl Default for SchEditor {
             label_text: "SIG".into(),
             pending: None,
             selected: None,
+            multi: vec![],
+            boxsel: None,
+            gdrag: None,
             drag: None,
             zoom: 22.0,
             pan: Vec2::new(10.0, 6.0),
@@ -1067,7 +1117,95 @@ impl SchEditor {
         self.sch.wires.iter().position(|w| d(w) < 0.3).map(Sel::Wire)
     }
 
+    fn is_sel(&self, s: Sel) -> bool {
+        self.selected == Some(s) || self.multi.contains(&s)
+    }
+
+    fn set_selection(&mut self, items: Vec<Sel>) {
+        if items.len() == 1 {
+            self.selected = Some(items[0]);
+            self.multi.clear();
+        } else {
+            self.selected = None;
+            self.multi = items;
+        }
+    }
+
+    /// Objects touched by the box (grid coordinates). `crossing`: any overlap counts, otherwise
+    /// the object must lie completely inside.
+    fn objects_in_box(&self, a: (f32, f32), b: (f32, f32), crossing: bool) -> Vec<Sel> {
+        let (lo, hi) = ((a.0.min(b.0), a.1.min(b.1)), (a.0.max(b.0), a.1.max(b.1)));
+        let mut out = vec![];
+        for (i, c) in self.sch.components.iter().enumerate() {
+            let (x0, x1, y0, y1) = comp_extents(c);
+            let pts: Vec<(f32, f32)> = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+                .iter()
+                .map(|&p| {
+                    let w = rot_f(p, c.rot % 4);
+                    (w.0 + c.pos.0 as f32, w.1 + c.pos.1 as f32)
+                })
+                .collect();
+            let (bl, bh) = (
+                (pts.iter().map(|p| p.0).fold(f32::MAX, f32::min), pts.iter().map(|p| p.1).fold(f32::MAX, f32::min)),
+                (pts.iter().map(|p| p.0).fold(f32::MIN, f32::max), pts.iter().map(|p| p.1).fold(f32::MIN, f32::max)),
+            );
+            let hit = if crossing { bl.0 <= hi.0 && bh.0 >= lo.0 && bl.1 <= hi.1 && bh.1 >= lo.1 } else { rect_contains(lo, hi, bl) && rect_contains(lo, hi, bh) };
+            if hit {
+                out.push(Sel::Comp(i));
+            }
+        }
+        for (i, w) in self.sch.wires.iter().enumerate() {
+            let (pa, pb) = ((w.a.0 as f32, w.a.1 as f32), (w.b.0 as f32, w.b.1 as f32));
+            let hit = if crossing { segment_hits_rect(pa, pb, lo, hi) } else { rect_contains(lo, hi, pa) && rect_contains(lo, hi, pb) };
+            if hit {
+                out.push(Sel::Wire(i));
+            }
+        }
+        for (i, l) in self.sch.labels.iter().enumerate() {
+            if rect_contains(lo, hi, (l.pos.0 as f32, l.pos.1 as f32)) {
+                out.push(Sel::Label(i));
+            }
+        }
+        out
+    }
+
+    fn start_group_drag(&mut self, anchor: Pt) {
+        let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![] };
+        for s in &self.multi {
+            match *s {
+                Sel::Comp(i) => g.comps.push((i, self.sch.components[i].pos)),
+                Sel::Wire(i) => g.wires.push((i, self.sch.wires[i].a, self.sch.wires[i].b)),
+                Sel::Label(i) => g.labels.push((i, self.sch.labels[i].pos)),
+            }
+        }
+        self.gdrag = Some(g);
+    }
+
     fn delete_selected(&mut self) {
+        if !self.multi.is_empty() {
+            let mut comps: Vec<usize> = vec![];
+            let (mut wires, mut labels) = (vec![], vec![]);
+            for s in self.multi.drain(..) {
+                match s {
+                    Sel::Comp(i) => comps.push(i),
+                    Sel::Wire(i) => wires.push(i),
+                    Sel::Label(i) => labels.push(i),
+                }
+            }
+            for (v, n) in [(&mut comps, 0), (&mut wires, 1), (&mut labels, 2)] {
+                v.sort_unstable_by(|a, b| b.cmp(a));
+                for &i in v.iter() {
+                    match n {
+                        0 if i < self.sch.components.len() => drop(self.sch.components.remove(i)),
+                        1 if i < self.sch.wires.len() => drop(self.sch.wires.remove(i)),
+                        2 if i < self.sch.labels.len() => drop(self.sch.labels.remove(i)),
+                        _ => {}
+                    }
+                }
+            }
+            self.selected = None;
+            return;
+        }
         match self.selected.take() {
             Some(Sel::Comp(i)) => drop(self.sch.components.remove(i)),
             Some(Sel::Wire(i)) => drop(self.sch.wires.remove(i)),
@@ -1103,7 +1241,9 @@ impl SchEditor {
             self.fit_view(rect);
         }
 
-        if resp.dragged_by(egui::PointerButton::Middle) || resp.dragged_by(egui::PointerButton::Secondary) {
+        // in the Select tool the right button draws a crossing selection box instead of panning
+        let rmb_selects = self.tool == Tool::Select && !self.noise_pick;
+        if resp.dragged_by(egui::PointerButton::Middle) || (resp.dragged_by(egui::PointerButton::Secondary) && !rmb_selects) {
             let d = resp.drag_delta();
             self.pan.x -= d.x / self.zoom;
             self.pan.y -= d.y / self.zoom;
@@ -1130,6 +1270,13 @@ impl SchEditor {
             if ui.input(|i| i.key_pressed(egui::Key::R)) {
                 match self.selected {
                     Some(Sel::Comp(i)) => self.sch.components[i].rot = (self.sch.components[i].rot + 1) % 4,
+                    _ if self.multi.iter().any(|s| matches!(s, Sel::Comp(_))) => {
+                        for s in self.multi.clone() {
+                            if let Sel::Comp(i) = s {
+                                self.sch.components[i].rot = (self.sch.components[i].rot + 1) % 4;
+                            }
+                        }
+                    }
                     _ => self.rot = (self.rot + 1) % 4,
                 }
             }
@@ -1142,6 +1289,8 @@ impl SchEditor {
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.pending = None;
                 self.selected = None;
+                self.multi.clear();
+                self.boxsel = None;
                 self.tool = Tool::Select;
             }
         }
@@ -1159,7 +1308,7 @@ impl SchEditor {
 
         // wires
         for (i, w) in self.sch.wires.iter().enumerate() {
-            let sel = self.selected == Some(Sel::Wire(i));
+            let sel = self.is_sel(Sel::Wire(i));
             painter.line_segment(
                 [self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32))],
                 Stroke::new(if sel { 3.0 } else { 1.8 }, if sel { Color32::from_rgb(0, 80, 220) } else { WIRE }),
@@ -1180,7 +1329,7 @@ impl SchEditor {
 
         // components
         for (i, c) in self.sch.components.iter().enumerate() {
-            let sel = self.selected == Some(Sel::Comp(i));
+            let sel = self.is_sel(Sel::Comp(i));
             let col = if sel { Color32::from_rgb(0, 80, 220) } else { SYM };
             self.draw_component(&painter, rect, c, col);
             for (_, p) in c.pins() {
@@ -1205,7 +1354,7 @@ impl SchEditor {
             }
         }
         for (i, l) in self.sch.labels.iter().enumerate() {
-            let sel = self.selected == Some(Sel::Label(i));
+            let sel = self.is_sel(Sel::Label(i));
             let p = self.to_screen(rect, (l.pos.0 as f32, l.pos.1 as f32));
             painter.circle_filled(p, 3.0, WIRE);
             painter.text(
@@ -1254,6 +1403,53 @@ impl SchEditor {
                 FontId::proportional(14.0),
                 Color32::WHITE,
             );
+        }
+
+        // rubber-band selection: left drag = fully enclosed, right drag = anything touched
+        if self.tool == Tool::Select && !self.noise_pick {
+            let origin = ui.input(|i| i.pointer.press_origin());
+            for (btn, crossing) in [(egui::PointerButton::Primary, false), (egui::PointerButton::Secondary, true)] {
+                if resp.drag_started_by(btn) && self.drag.is_none() && self.gdrag.is_none() {
+                    if let Some(o) = origin {
+                        let g0 = self.to_grid(rect, o);
+                        // a left drag that starts on a part moves it instead (below)
+                        if crossing || self.comp_at(g0).is_none() {
+                            self.boxsel = Some(BoxSel { start: g0, crossing });
+                        }
+                    }
+                }
+            }
+            if let Some(b) = &self.boxsel {
+                let cur = ui.input(|i| i.pointer.latest_pos()).map(|p| self.to_grid(rect, p)).unwrap_or(b.start);
+                let (p0, p1) = (self.to_screen(rect, b.start), self.to_screen(rect, cur));
+                let r = Rect::from_two_pos(p0, p1);
+                let (fill, line) = if b.crossing {
+                    (Color32::from_rgba_unmultiplied(40, 160, 60, 40), Color32::from_rgb(30, 140, 50))
+                } else {
+                    (Color32::from_rgba_unmultiplied(40, 100, 230, 40), Color32::from_rgb(30, 80, 210))
+                };
+                painter.rect_filled(r, 0.0, fill);
+                painter.rect_stroke(r, 0.0, Stroke::new(1.2, line), egui::StrokeKind::Inside);
+                if resp.drag_stopped() {
+                    let (start, crossing) = (b.start, b.crossing);
+                    let mut items = self.objects_in_box(start, cur, crossing);
+                    if ui.input(|i| i.modifiers.shift) {
+                        let mut cur_sel = self.multi.clone();
+                        cur_sel.extend(self.selected);
+                        for s in items {
+                            if !cur_sel.contains(&s) {
+                                cur_sel.push(s);
+                            }
+                        }
+                        items = cur_sel;
+                    }
+                    self.status = format!("{} 個を選択 ({}範囲)", items.len(), if crossing { "接触した物を含む" } else { "完全に囲んだ" });
+                    self.set_selection(items);
+                    self.boxsel = None;
+                }
+            }
+        } else {
+            self.boxsel = None;
         }
 
         // interaction
@@ -1308,9 +1504,32 @@ impl SchEditor {
 
         if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !self.noise_pick {
             if let Some(i) = self.comp_at(g) {
-                let c = &self.sch.components[i];
-                self.drag = Some((i, (snapped.0 - c.pos.0, snapped.1 - c.pos.1)));
-                self.selected = Some(Sel::Comp(i));
+                if self.multi.len() > 1 && self.multi.contains(&Sel::Comp(i)) {
+                    self.start_group_drag(snapped);
+                } else {
+                    let c = &self.sch.components[i];
+                    self.drag = Some((i, (snapped.0 - c.pos.0, snapped.1 - c.pos.1)));
+                    self.selected = Some(Sel::Comp(i));
+                    self.multi.clear();
+                }
+            }
+        }
+        if let Some(gd) = &self.gdrag {
+            if resp.dragged_by(egui::PointerButton::Primary) {
+                let (dx, dy) = (snapped.0 - gd.anchor.0, snapped.1 - gd.anchor.1);
+                let mv = |p: Pt| (p.0 + dx, p.1 + dy);
+                for &(i, p) in &gd.comps {
+                    self.sch.components[i].pos = mv(p);
+                }
+                for &(i, a, b) in &gd.wires {
+                    self.sch.wires[i].a = mv(a);
+                    self.sch.wires[i].b = mv(b);
+                }
+                for &(i, p) in &gd.labels {
+                    self.sch.labels[i].pos = mv(p);
+                }
+            } else {
+                self.gdrag = None;
             }
         }
         if let Some((i, off)) = self.drag {
@@ -1322,6 +1541,7 @@ impl SchEditor {
         }
         if resp.drag_stopped() {
             self.drag = None;
+            self.gdrag = None;
         }
 
         if self.noise_pick {
@@ -1331,7 +1551,10 @@ impl SchEditor {
             }
         } else if resp.clicked_by(egui::PointerButton::Primary) {
             match self.tool {
-                Tool::Select => self.selected = self.pick(g),
+                Tool::Select => {
+                    self.multi.clear();
+                    self.selected = self.pick(g);
+                }
                 Tool::Place => {
                     match self.place_lib.and_then(|k| self.library.get(k)).cloned() {
                         Some(d) => {
@@ -1639,7 +1862,7 @@ impl SchEditor {
                 None => {}
             }
         }
-        ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\n右クリック・ダブルクリック: 配線を終了\n中・右ドラッグ: 移動 / ホイール: 拡大縮小");
+        ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\n右クリック・ダブルクリック: 配線を終了\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (配線中などは右ドラッグも可) / ホイール: 拡大縮小");
     }
 
     // ------------------------------------------------------------- files
@@ -1697,5 +1920,55 @@ impl SchEditor {
         let c = self.sch.components.iter().find(|c| c.refdes == refdes)?;
         let (_, pt) = c.pins().into_iter().find(|(n, _)| n == pin)?;
         self.dc.as_ref()?.pin_v.iter().find(|(p, _)| *p == pt).map(|(_, v)| *v)
+    }
+}
+
+#[cfg(test)]
+mod select_tests {
+    use super::*;
+
+    /// R1 at (0,0) and R2 at (10,0), a wire between them and a label near R2.
+    fn editor() -> SchEditor {
+        let mut e = SchEditor::default();
+        e.sch = Schematic::default();
+        e.sch.add(Kind::Resistor, (0, 0), 0);
+        e.sch.add(Kind::Resistor, (10, 0), 0);
+        e.sch.wires.push(Wire { a: (2, 0), b: (8, 0) });
+        e.sch.labels.push(Label { pos: (10, -4), text: "X".into() });
+        e
+    }
+
+    #[test]
+    fn window_box_needs_full_enclosure_and_crossing_box_accepts_a_touch() {
+        let e = editor();
+        // covers R1 completely and only the left part of R2 and of the wire's far end
+        let (a, b) = ((-4.0, -3.0), (9.0, 3.0));
+        let window = e.objects_in_box(a, b, false);
+        assert!(window.contains(&Sel::Comp(0)));
+        assert!(!window.contains(&Sel::Comp(1)), "R2 is only partly inside");
+        assert!(window.contains(&Sel::Wire(0)), "the wire (2..8) is fully inside");
+        assert!(!window.contains(&Sel::Label(0)));
+        let crossing = e.objects_in_box(a, b, true);
+        assert!(crossing.contains(&Sel::Comp(0)) && crossing.contains(&Sel::Comp(1)));
+        // a box that only grazes the wire in the middle
+        let graze = e.objects_in_box((4.0, -1.0), (5.0, 1.0), true);
+        assert_eq!(graze, vec![Sel::Wire(0)]);
+        assert!(e.objects_in_box((4.0, -1.0), (5.0, 1.0), false).is_empty());
+    }
+
+    #[test]
+    fn selecting_many_then_deleting_removes_exactly_those() {
+        let mut e = editor();
+        let items = e.objects_in_box((-4.0, -3.0), (9.0, 3.0), true);
+        e.set_selection(items);
+        assert!(e.selected.is_none() && e.multi.len() >= 3);
+        e.delete_selected();
+        assert!(e.sch.components.is_empty() && e.sch.wires.is_empty());
+        assert_eq!(e.sch.labels.len(), 1, "the label was outside the box");
+        // a single hit goes to the normal selection
+        let mut e = editor();
+        e.set_selection(vec![Sel::Label(0)]);
+        assert_eq!(e.selected, Some(Sel::Label(0)));
+        assert!(e.multi.is_empty());
     }
 }

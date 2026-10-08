@@ -19,7 +19,8 @@ enum Mode {
 /// Short general tips, shown one at a time under the context hint.
 const TIPS: &[&str] = &[
     "部品やボタンにカーソルを合わせると、使い方の説明が出ます",
-    "回路図はホイールで拡大縮小、中ボタンか右ドラッグで移動できます",
+    "回路図はホイールで拡大縮小、中ボタンのドラッグで移動できます",
+    "選択ツールで空いた所を左ドラッグすると、完全に囲んだ部品や配線だけを選べます。右ドラッグだと少しでも触れたものも選べます",
     "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
     "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
     "ERC で配線ミスを点検してから解析や基板に進むと、原因探しが楽です",
@@ -189,14 +190,22 @@ fn main() -> eframe::Result {
     )
 }
 
-/// egui's built-in fonts lack Japanese glyphs; borrow one from Windows.
+/// egui's built-in fonts lack Japanese glyphs, and mixing them with a Windows font puts Latin
+/// letters and kana on slightly different baselines. So use one Windows font that covers both
+/// Japanese and half-width alphanumerics for everything; egui's own fonts stay as a fallback.
 fn install_japanese_font(ctx: &egui::Context) {
-    for path in [r"C:\Windows\Fonts\YuGothM.ttc", r"C:\Windows\Fonts\meiryo.ttc", r"C:\Windows\Fonts\msgothic.ttc"] {
+    const CANDIDATES: &[&str] = &[
+        r"C:\Windows\Fonts\BIZ-UDGothicR.ttc",
+        r"C:\Windows\Fonts\meiryo.ttc",
+        r"C:\Windows\Fonts\YuGothM.ttc",
+        r"C:\Windows\Fonts\msgothic.ttc",
+    ];
+    for path in CANDIDATES {
         if let Ok(bytes) = std::fs::read(path) {
             let mut fonts = egui::FontDefinitions::default();
             fonts.font_data.insert("jp".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
             for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                fonts.families.entry(fam).or_default().push("jp".into());
+                fonts.families.entry(fam).or_default().insert(0, "jp".into());
             }
             ctx.set_fonts(fonts);
             return;
