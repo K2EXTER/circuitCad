@@ -1,0 +1,27 @@
+{
+  "name": "AO3401A",
+  "category": "MOSFET",
+  "description": "Pチャネル MOSFET -30V (SOT-23)。ハイサイドスイッチ用。簡易レベル1モデル(パラメータは概算)",
+  "prefix": "Q",
+  "footprint_name": "SOT-23_MOS",
+  "pins": [
+    { "number": "1", "name": "G", "side": "left" },
+    { "number": "3", "name": "D", "side": "bottom" },
+    { "number": "2", "name": "S", "side": "top" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "1", "x": -0.95, "y": 0.95, "shape": "rect", "w": 0.9, "h": 0.8 },
+      { "pin": "2", "x": 0.95, "y": 0.95, "shape": "rect", "w": 0.9, "h": 0.8 },
+      { "pin": "3", "x": 0.0, "y": -0.95, "shape": "rect", "w": 0.9, "h": 0.8 }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "M",
+    "name": "AO3401A",
+    "text": ".model AO3401A PMOS(VTO=-1.0 KP=1.0 LAMBDA=0.03 CGS=500p CGD=60p)",
+    "pins": ["3", "1", "2"]
+  }
+}

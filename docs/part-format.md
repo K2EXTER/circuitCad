@@ -14,6 +14,7 @@
 | フィールド | 必須 | 内容 |
 |---|---|---|
 | `name` | ○ | 部品名 |
+| `category` | | ライブラリ一覧でのグループ名(例: `MOSFET`、`オペアンプ`)。省略すると「その他」 |
 | `description`, `datasheet` | | 説明、データシートURL |
 | `prefix` | | 部品番号の頭文字(既定 `U`) |
 | `value` | | 回路図に出す値(既定 `name`) |
@@ -28,7 +29,8 @@
 - `{"type":"dual","pins":8,"pitch":1.27,"row_spacing":5.4,"pad_len":1.55,"pad_width":0.6}` — SOIC/SSOP/TSSOP。`drill` を付けるとスルーホール(DIP)。ピン1は左上、反時計回り。`row_spacing` は2列の中心間距離、`pad_len` は列間方向、`pad_width` は列に沿う方向
 - `{"type":"quad","pins":32,"pitch":0.8,"span":8.4,"pad_len":1.6,"pad_width":0.5}` — QFP 等。`span` は向かい合うパッド中心間
 - `{"type":"single_row","pins":4,"pitch":2.54,"pad_d":1.7,"drill":1.0}` — 1列ヘッダ。ピン1は角パッド
-- `{"type":"explicit","pads":[{"pin":"1","x":0,"y":0,"shape":"rect|circle|oval","w":1,"h":1,"drill":0.8}]}` — 座標を直接指定(サーマルパッド等)
+- `{"type":"explicit","pads":[{"pin":"1","x":0,"y":0,"shape":"rect|circle|oval","w":1,"h":1,"drill":0.8}]}` — 座標を直接指定(サーマルパッド等)。
+  同じ `pin` のパッドを複数書くと(SOT-223 のタブなど)、1つの接続として扱われ、すべてのパッドにネットが付きます
 
 ## sim (部品の特性)
 
@@ -42,6 +44,11 @@
   "params": { "vf_typ": 0.72 } // 任意。自作シミュレータ用の特性値
 }
 ```
+
+使える SPICE の記述:
+- `.model` カード: ダイオード `D(IS N RS BV IBV)`、バイポーラ `NPN` / `PNP`(`IS BF BR NF NR`)、
+  MOSFET `NMOS` / `PMOS`(`VTO KP LAMBDA CGS CGD`。`element` は `M`、ノード順は ドレイン・ゲート・ソース)
+- `.subckt` の本体: `R C L V I E G D Q M`。それ以外の素子を含むと、黙って無視せずエラーになります
 
 SPICE ネットリストの書き出し時に、使われているモデルが1回だけ出力されます。`sim` が無い部品は
 コメント行になり、シミュレーションには含まれません。

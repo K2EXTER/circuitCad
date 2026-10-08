@@ -1,0 +1,27 @@
+{
+  "name": "2N7000",
+  "category": "MOSFET",
+  "description": "Nチャネル MOSFET (TO-92)。簡易レベル1モデル(パラメータは概算)。データシートで確認してください",
+  "prefix": "Q",
+  "footprint_name": "TO-92_2N7000",
+  "pins": [
+    { "number": "2", "name": "G", "side": "left" },
+    { "number": "3", "name": "D", "side": "top" },
+    { "number": "1", "name": "S", "side": "bottom" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "1", "x": -2.54, "y": 0, "shape": "rect", "w": 1.6, "h": 1.6, "drill": 0.8 },
+      { "pin": "2", "x": 0, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 },
+      { "pin": "3", "x": 2.54, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "M",
+    "name": "2N7000",
+    "text": ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)",
+    "pins": ["3", "2", "1"]
+  }
+}

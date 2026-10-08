@@ -1,0 +1,25 @@
+{
+  "name": "1N4001",
+  "category": "整流ダイオード",
+  "description": "1N4001 汎用整流ダイオード 50V 1A (DO-41)。簡易モデル(パラメータは概算、帯の側がカソード K)",
+  "prefix": "D",
+  "footprint_name": "D_DO-41_P10.16",
+  "pins": [
+    { "number": "K", "name": "K", "side": "right" },
+    { "number": "A", "name": "A", "side": "left" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "K", "x": -5.08, "y": 0, "shape": "rect", "w": 2.0, "h": 2.0, "drill": 1.0 },
+      { "pin": "A", "x": 5.08, "y": 0, "shape": "circle", "w": 2.0, "drill": 1.0 }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "1N4001",
+    "text": ".model 1N4001 D(IS=14.1n N=1.984 RS=0.0339 BV=50 IBV=5u)",
+    "pins": ["A", "K"]
+  }
+}

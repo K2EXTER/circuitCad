@@ -22,6 +22,7 @@ pub enum SimChoice {
 
 pub struct PartForm {
     pub name: String,
+    pub category: String,
     pub prefix: String,
     pub value: String,
     pub description: String,
@@ -47,6 +48,7 @@ impl Default for PartForm {
     fn default() -> Self {
         Self {
             name: String::new(),
+            category: "ユーザー".into(),
             prefix: "U".into(),
             value: String::new(),
             description: String::new(),
@@ -126,6 +128,7 @@ impl PartForm {
         };
         Ok(PartDef {
             name: self.name.trim().to_string(),
+            category: self.category.trim().to_string(),
             description: self.description.clone(),
             datasheet: self.datasheet.clone(),
             prefix: self.prefix.trim().to_string(),
@@ -142,6 +145,9 @@ impl PartForm {
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
             ui.text_edit_singleline(&mut self.name);
+            ui.end_row();
+            ui.label("カテゴリ");
+            ui.text_edit_singleline(&mut self.category);
             ui.end_row();
             ui.label("部品番号の頭文字");
             ui.text_edit_singleline(&mut self.prefix);

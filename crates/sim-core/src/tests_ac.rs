@@ -207,7 +207,12 @@ fn op_amp_macro_model_open_loop_response() {
     wire(&mut s, (16, 1), (16, 6)); // IN- to ground
     wire(&mut s, (0, 2), (0, 6));
     let out_net = extract(&s).into_iter().find(|n| n.pins.iter().any(|p| p.refdes == "U1" && p.pin == "1")).unwrap().name;
-    let c = from_schematic(&s).unwrap();
+    let mut c = from_schematic(&s).unwrap();
+    // +-5 V supplies so the output sits mid-range at zero input
+    let net_of = |pin: &str| extract(&s).into_iter().find(|n| n.pins.iter().any(|p| p.refdes == "U1" && p.pin == pin)).unwrap().name;
+    let (vp, vn) = (c.node(&net_of("8")), c.node(&net_of("4")));
+    c.add(Element::vdc("Vp", vp, 0, 5.0));
+    c.add(Element::vdc("Vn", vn, 0, -5.0));
     let r = ac_analysis(&c, &sweep(0.1, 10e6, 10)).unwrap();
     let out = r.signal(&format!("V({out_net})")).unwrap();
     let pole = 1.0 / (2.0 * PI * 1000.0 * 16e-6);

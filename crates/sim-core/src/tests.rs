@@ -108,7 +108,7 @@ fn diode_matches_scalar_solution() {
 
 #[test]
 fn diode_with_series_resistance_and_emission_coefficient() {
-    let m = DiodeModel { is: 1e-14, n: 2.0, rs: 5.0 };
+    let m = DiodeModel { is: 1e-14, n: 2.0, rs: 5.0, ..DiodeModel::default() };
     let mut c = Circuit::new();
     vs(&mut c, "V1", "in", "0", 5.0);
     r(&mut c, "R1", "in", "a", 100.0);
@@ -340,27 +340,34 @@ fn library_opamp_subckt_follower() {
     s.components[0].value = "1".into();
     s.add_custom(u.symbol(), &u.default_value(), &u.footprint_name(), (20, 0), 0);
     s.add(Kind::Ground, (0, 6), 0);
+    // 5 V single supply for the op-amp
+    s.add(Kind::VSource, (28, 0), 0);
+    s.add(Kind::Ground, (20, 6), 0);
     wire(&mut s, (0, -2), (0, -4));
     wire(&mut s, (0, -4), (16, -4));
     wire(&mut s, (16, -4), (16, -1)); // IN+
-    wire(&mut s, (24, 0), (24, 6)); // OUT -> IN-
-    wire(&mut s, (24, 6), (16, 6));
-    wire(&mut s, (16, 6), (16, 1));
+    wire(&mut s, (24, 0), (24, 8)); // OUT -> IN- (the route crosses the supply wire without touching it)
+    wire(&mut s, (24, 8), (16, 8));
+    wire(&mut s, (16, 8), (16, 1));
     wire(&mut s, (0, 2), (0, 6));
+    wire(&mut s, (28, -2), (28, -4)); // supply +  -> V+
+    wire(&mut s, (28, -4), (20, -4));
+    wire(&mut s, (20, 4), (20, 6)); // V- -> ground
+    wire(&mut s, (28, 2), (28, 6)); // supply - -> ground
+    wire(&mut s, (28, 6), (20, 6));
     let c = from_schematic(&s).unwrap();
     let res = dc_op(&c).unwrap();
     // closed loop gain A/(1+A) with A = 1e5
     let follower = res.element("U1.Eo").expect("subcircuit elements are prefixed with the instance name");
     close(follower.voltage, 1e5 / (1.0 + 1e5), 1e-7);
-    // the unconnected supply pins are reported, not fatal
-    assert!(!res.warnings.is_empty());
+    assert!(res.warnings.is_empty(), "{:?}", res.warnings);
 }
 
 #[test]
 fn unsupported_subckt_element_is_an_error_not_silence() {
     let mut c = Circuit::new();
     let (a, b) = (c.node("a"), c.node("b"));
-    let text = ".subckt X 1 2\nM1 1 2 0 0 NMOS\n.ends X";
+    let text = ".subckt X 1 2\nJ1 1 2 0 JMOD\n.ends X";
     let e = add_subckt_instance(&mut c, "U1", "X", text, &[a, b]).unwrap_err();
     assert!(e.contains("未対応"), "{e}");
 }
@@ -384,7 +391,7 @@ fn fallback_strategies_reach_the_same_solution() {
     r(&mut c, "R1", "in", "n0", 100.0);
     for i in 0..6 {
         let (a, k) = (format!("n{i}"), if i == 5 { "0".to_string() } else { format!("n{}", i + 1) });
-        diode(&mut c, &format!("D{i}"), &a, &k, DiodeModel { is: 1e-14, n: 1.0, rs: 1.0 });
+        diode(&mut c, &format!("D{i}"), &a, &k, DiodeModel { is: 1e-14, n: 1.0, rs: 1.0, ..DiodeModel::default() });
     }
     let q = c.node("n0");
     let b = c.node("base");

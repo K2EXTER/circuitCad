@@ -1,0 +1,25 @@
+{
+  "name": "1N5819",
+  "category": "ショットキー",
+  "description": "1N5819 ショットキーバリアダイオード 40V 1A (DO-41)。簡易モデル(パラメータは概算、帯の側がカソード K)",
+  "prefix": "D",
+  "footprint_name": "D_DO-41_P10.16",
+  "pins": [
+    { "number": "K", "name": "K", "side": "right" },
+    { "number": "A", "name": "A", "side": "left" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "K", "x": -5.08, "y": 0, "shape": "rect", "w": 2.0, "h": 2.0, "drill": 1.0 },
+      { "pin": "A", "x": 5.08, "y": 0, "shape": "circle", "w": 2.0, "drill": 1.0 }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "1N5819",
+    "text": ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m)",
+    "pins": ["A", "K"]
+  }
+}

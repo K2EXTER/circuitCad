@@ -436,6 +436,19 @@ pub fn connectivity(board: &Board) -> Connectivity {
     let items = copper_items(board);
     let (n_tracks, n_pads) = (board.tracks.len(), board.pads.len());
     let mut parent = groups(&items);
+    // pads of the same part and pin (a package tab, an exposed pad) are one connection
+    let mut seen: HashMap<(&str, &str), usize> = HashMap::new();
+    for (j, p) in board.pads.iter().enumerate().filter(|(_, p)| !p.refdes.is_empty() && !p.pin.is_empty()) {
+        match seen.get(&(p.refdes.as_str(), p.pin.as_str())) {
+            Some(&first) => {
+                let (a, b) = (find(&mut parent, first), find(&mut parent, n_tracks + j));
+                parent[a] = b;
+            }
+            None => {
+                seen.insert((p.refdes.as_str(), p.pin.as_str()), n_tracks + j);
+            }
+        }
+    }
     // a zone joins every item of its net that has an anchor point inside it
     for z in board.zones.iter().filter(|z| !z.net.is_empty() && z.polygon.len() >= 3) {
         let nets = pad_nets(board, &mut parent, n_tracks);

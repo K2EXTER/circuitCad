@@ -64,13 +64,14 @@ pub fn import(board: &mut Board, parts: &[NetlistPart], nets: &[NetlistNet]) -> 
     }
     for net in nets {
         for (r, pin) in &net.pins {
-            match board.pads.iter_mut().find(|p| &p.refdes == r && &p.pin == pin) {
-                Some(p) => p.net = net.name.clone(),
-                None => {
-                    if board.parts.iter().any(|b| &b.refdes == r) {
-                        rep.warnings.push(format!("{r} のピン {pin} がフットプリントにありません"));
-                    }
-                }
+            // every pad of the pin gets the net (a tab or exposed pad may share the pin number)
+            let mut found = false;
+            for p in board.pads.iter_mut().filter(|p| &p.refdes == r && &p.pin == pin) {
+                p.net = net.name.clone();
+                found = true;
+            }
+            if !found && board.parts.iter().any(|b| &b.refdes == r) {
+                rep.warnings.push(format!("{r} のピン {pin} がフットプリントにありません"));
             }
         }
     }

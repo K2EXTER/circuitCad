@@ -117,7 +117,7 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
             Kind::Diode | Kind::Led => {
                 let (a, k) = (node_of(&mut c, r, "A"), node_of(&mut c, r, "K"));
                 // same parameters as the generic models written by the SPICE export
-                let model = if comp.kind == Kind::Led { DiodeModel { is: 1e-18, n: 2.0, rs: 5.0 } } else { DiodeModel::default() };
+                let model = if comp.kind == Kind::Led { DiodeModel { is: 1e-18, n: 2.0, rs: 5.0, ..DiodeModel::default() } } else { DiodeModel::default() };
                 c.add(Element::Diode { name: r.into(), a, k, model });
             }
             Kind::Npn => {

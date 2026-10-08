@@ -1075,17 +1075,28 @@ impl SchEditor {
         }
         ui.separator();
         let mut chosen = None;
-        ui.collapsing(format!("ライブラリ部品 ({})", self.library.len()), |ui| {
+        egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(true).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索"));
             let f = self.lib_filter.to_lowercase();
-            egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
-                for (i, d) in self.library.iter().enumerate() {
-                    if !f.is_empty() && !d.name.to_lowercase().contains(&f) && !d.description.to_lowercase().contains(&f) {
+            egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
+                // grouped by category, then by name
+                let cat = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
+                let mut order: Vec<usize> = (0..self.library.len()).collect();
+                order.sort_by_key(|&i| (cat(&self.library[i]), self.library[i].name.to_lowercase()));
+                let mut last = String::new();
+                for i in order {
+                    let d = &self.library[i];
+                    let c = cat(d);
+                    if !f.is_empty() && ![&d.name, &d.description, &c].iter().any(|t| t.to_lowercase().contains(&f)) {
                         continue;
+                    }
+                    if c != last {
+                        ui.label(egui::RichText::new(&c).small().weak());
+                        last = c;
                     }
                     let mark = if d.sim.is_some() { " ◎" } else { "" };
                     let selected = self.tool == Tool::Place && self.place_lib == Some(i);
-                    if ui.selectable_label(selected, format!("{}{mark}", d.name)).on_hover_text(&d.description).clicked() {
+                    if ui.selectable_label(selected, format!("  {}{mark}", d.name)).on_hover_text(&d.description).clicked() {
                         chosen = Some(i);
                     }
                 }

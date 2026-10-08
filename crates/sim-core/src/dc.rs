@@ -1,7 +1,7 @@
 //! DC operating point: modified nodal analysis + damped Newton-Raphson, with gmin and
 //! source stepping as convergence aids.
 
-use crate::circuit::{BjtModel, Circuit, Element};
+use crate::circuit::{BjtModel, Circuit, Element, MosModel};
 use crate::waveform::Waveform;
 use std::fmt;
 
@@ -76,8 +76,9 @@ pub(crate) enum Ce {
     I { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
-    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, slot: usize },
+    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize },
     Q { name: String, c: usize, b: usize, e: usize, m: BjtModel, slot: usize },
+    M { name: String, d: usize, g: usize, s: usize, m: MosModel },
 }
 
 pub(crate) struct Compiled {
@@ -144,9 +145,10 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                     *a
                 };
                 let nvt = model.n * VT;
-                ce.push(Ce::D { name: name.clone(), a: *a, ai, k: *k, rs: model.rs, is: model.is, nvt, vcrit: vcrit(nvt, model.is), slot: n_slots });
+                ce.push(Ce::D { name: name.clone(), a: *a, ai, k: *k, rs: model.rs, is: model.is, nvt, vcrit: vcrit(nvt, model.is), bv: model.bv, ibv: model.ibv, slot: n_slots });
                 n_slots += 1;
             }
+            Element::Mosfet { name, d, g, s, model } => ce.push(Ce::M { name: name.clone(), d: *d, g: *g, s: *s, m: model.clone() }),
             Element::Bjt { name, c, b, e, model } => {
                 ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, e: *e, m: model.clone(), slot: n_slots });
                 n_slots += 2;
@@ -210,6 +212,31 @@ fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
         dic: (gf, -gr * (1.0 + 1.0 / m.br)),
         dib: (gf / m.bf, gr / m.br),
         die: (-(gf + gf / m.bf), gr * (1.0 + 1.0 / m.br) - gr / m.br),
+    }
+}
+
+/// Level-1 MOSFET in NMOS orientation: `(id, gm, gds)` with `id` flowing drain to source.
+/// The device is symmetric, so for `vds < 0` source and drain swap roles.
+fn mos_eval(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
+    fn forward(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
+        let vov = vgs - m.vto.abs();
+        if vov <= 0.0 {
+            return (0.0, 0.0, 0.0);
+        }
+        let clm = 1.0 + m.lambda * vds;
+        if vds < vov {
+            let id0 = m.kp * (vov * vds - 0.5 * vds * vds);
+            (id0 * clm, m.kp * vds * clm, m.kp * (vov - vds) * clm + id0 * m.lambda)
+        } else {
+            let id0 = 0.5 * m.kp * vov * vov;
+            (id0 * clm, m.kp * vov * clm, id0 * m.lambda)
+        }
+    }
+    if vds >= 0.0 {
+        forward(m, vgs, vds)
+    } else {
+        let (id, gm, gds) = forward(m, vgs - vds, -vds);
+        (-id, -gm, gm + gds)
     }
 }
 
@@ -386,20 +413,53 @@ impl Compiled {
                     m.gn(*n, *cp, -gm);
                     m.gn(*n, *cn, *gm);
                 }
-                Ce::D { a, ai, k, rs, is, nvt, vcrit, slot, .. } => {
+                Ce::D { a, ai, k, rs, is, nvt, vcrit, bv, ibv, slot, .. } => {
                     if *rs > 0.0 {
                         m.g(*a, *ai, 1.0 / rs);
                     }
                     let raw = v(x, *ai) - v(x, *k);
-                    let lim = pnjlim(raw, vj[*slot], *nvt, *vcrit);
+                    // in breakdown the junction is limited in the mirrored (-v - bv) variable, like SPICE
+                    let lim = if bv.is_finite() && raw < (-bv + 10.0 * nvt).min(0.0) {
+                        let (rn, ro) = (-(raw + bv), -(vj[*slot] + bv));
+                        -(pnjlim(rn, ro, *nvt, *vcrit) + bv)
+                    } else {
+                        pnjlim(raw, vj[*slot], *nvt, *vcrit)
+                    };
                     if (lim - raw).abs() > 1e-12 {
                         limited = true;
                     }
                     vj[*slot] = lim;
                     let ex = exp_safe(lim / nvt);
-                    let (id, gd) = (is * (ex - 1.0), is / nvt * ex + gmin);
+                    let (mut id, mut gd) = (is * (ex - 1.0), is / nvt * ex + gmin);
+                    if bv.is_finite() {
+                        let eb = exp_safe(-(lim + bv) / nvt);
+                        id -= ibv * eb;
+                        gd += ibv / nvt * eb;
+                    }
                     m.g(*ai, *k, gd);
                     m.current(*ai, *k, id - gd * lim);
+                }
+                Ce::M { d, g, s, m: mm, .. } => {
+                    let pol = if mm.pmos { -1.0 } else { 1.0 };
+                    let (vgs, vds) = (v(x, *g) - v(x, *s), v(x, *d) - v(x, *s));
+                    let (idn, gm, gds) = mos_eval(mm, pol * vgs, pol * vds);
+                    // derivatives with respect to the real terminal voltages equal the normalised ones
+                    let id0 = pol * idn;
+                    m.gn(*d, *g, gm);
+                    m.gn(*d, *d, gds);
+                    m.gn(*d, *s, -(gm + gds));
+                    m.gn(*s, *g, -gm);
+                    m.gn(*s, *d, -gds);
+                    m.gn(*s, *s, gm + gds);
+                    let ieq = id0 - gm * vgs - gds * vds;
+                    if *d != 0 {
+                        m.b[*d - 1] -= ieq;
+                    }
+                    if *s != 0 {
+                        m.b[*s - 1] += ieq;
+                    }
+                    m.g(*d, *s, gmin);
+                    m.g(*g, *s, gmin);
                 }
                 Ce::Q { c, b, e, m: bm, slot, .. } => {
                     let pol = if bm.pnp { -1.0 } else { 1.0 };
@@ -502,6 +562,7 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
             Element::Resistor { a, b, .. } | Element::Inductor { a, b, .. } => union(*a, *b),
             Element::VSource { p, n, .. } | Element::Vcvs { p, n, .. } => union(*p, *n),
             Element::Diode { a, k, .. } => union(*a, *k),
+            Element::Mosfet { d, s, .. } => union(*d, *s),
             Element::Bjt { c, b, e, .. } => {
                 union(*c, *e);
                 union(*b, *e);
@@ -563,6 +624,7 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::VSource { p, n, .. } => *p == 0 || *n == 0,
         Element::ISource { from, to, .. } => *from == 0 || *to == 0,
         Element::Diode { a, k, .. } => *a == 0 || *k == 0,
+        Element::Mosfet { d, g, s, .. } => *d == 0 || *g == 0 || *s == 0,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } => *p == 0 || *n == 0,
     })
@@ -652,12 +714,21 @@ impl Compiled {
                     let (i, vv) = (gm * (v(x, *cp) - v(x, *cn)), v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::D { name, a, ai, k, rs, is, nvt, .. } => {
+                Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, .. } => {
                     let vd = v(x, *ai) - v(x, *k);
-                    let id = is * (exp_safe(vd / nvt) - 1.0);
+                    let mut id = is * (exp_safe(vd / nvt) - 1.0);
+                    if bv.is_finite() {
+                        id -= ibv * exp_safe(-(vd + bv) / nvt);
+                    }
                     let i = if *rs > 0.0 { (v(x, *a) - v(x, *ai)) / rs } else { id };
                     let vv = v(x, *a) - v(x, *k);
                     push(name, i, vv, vec![], vv * i);
+                }
+                Ce::M { name, d, g, s, m } => {
+                    let pol = if m.pmos { -1.0 } else { 1.0 };
+                    let (vgs, vds) = (v(x, *g) - v(x, *s), v(x, *d) - v(x, *s));
+                    let id = pol * mos_eval(m, pol * vgs, pol * vds).0;
+                    push(name, id, vds, vec![("Vgs".into(), vgs)], vds * id);
                 }
                 Ce::Q { name, c, b, e, m, .. } => {
                     let pol = if m.pnp { -1.0 } else { 1.0 };

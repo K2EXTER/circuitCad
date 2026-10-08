@@ -1,18 +1,59 @@
 {
   "name": "NE555",
+  "category": "タイマ",
   "description": "シングルタイマ (DIP-8)。シミュレーションモデルなしの例",
   "datasheet": "https://www.ti.com/lit/ds/symlink/ne555.pdf",
   "prefix": "U",
   "footprint_name": "DIP-8_W7.62",
   "pins": [
-    { "number": "2", "name": "TRIG", "side": "left" },
-    { "number": "6", "name": "THRES", "side": "left" },
-    { "number": "5", "name": "CONT", "side": "left" },
-    { "number": "4", "name": "RESET", "side": "left" },
-    { "number": "3", "name": "OUT", "side": "right" },
-    { "number": "7", "name": "DISCH", "side": "right" },
-    { "number": "8", "name": "VCC", "side": "top" },
-    { "number": "1", "name": "GND", "side": "bottom" }
+    {
+      "number": "2",
+      "name": "TRIG",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "THRES",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "CONT",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "RESET",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "OUT",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "DISCH",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "VCC",
+      "side": "top"
+    },
+    {
+      "number": "1",
+      "name": "GND",
+      "side": "bottom"
+    }
   ],
-  "package": { "type": "dual", "pins": 8, "pitch": 2.54, "row_spacing": 7.62, "pad_len": 1.6, "pad_width": 1.6, "drill": 0.8 }
+  "package": {
+    "type": "dual",
+    "pins": 8,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  }
 }

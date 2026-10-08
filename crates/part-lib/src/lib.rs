@@ -26,6 +26,9 @@ pub struct PinDef {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PartDef {
     pub name: String,
+    /// Group shown in the library list ("MOSFET", "オペアンプ", ...).
+    #[serde(default)]
+    pub category: String,
     #[serde(default)]
     pub description: String,
     #[serde(default)]
@@ -214,21 +217,72 @@ pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+/// Parts that ship with the program. They are copied into the user's library once.
 pub const EXAMPLES: &[(&str, &str)] = &[
     ("NE555_DIP-8", include_str!("../examples/NE555_DIP-8.part.json")),
     ("1N4148", include_str!("../examples/1N4148.part.json")),
     ("LM358_SOIC-8", include_str!("../examples/LM358_SOIC-8.part.json")),
+    ("TL072_SOIC-8", include_str!("../examples/TL072_SOIC-8.part.json")),
+    ("MCP6002_SOIC-8", include_str!("../examples/MCP6002_SOIC-8.part.json")),
+    ("MCP6001_SOT-23-5", include_str!("../examples/MCP6001_SOT-23-5.part.json")),
+    ("2N7000_TO-92", include_str!("../examples/2N7000_TO-92.part.json")),
+    ("AO3400A_SOT-23", include_str!("../examples/AO3400A_SOT-23.part.json")),
+    ("AO3401A_SOT-23", include_str!("../examples/AO3401A_SOT-23.part.json")),
+    ("2N3904_TO-92", include_str!("../examples/2N3904_TO-92.part.json")),
+    ("2N3906_TO-92", include_str!("../examples/2N3906_TO-92.part.json")),
+    ("BC547_TO-92", include_str!("../examples/BC547_TO-92.part.json")),
+    ("1N4001_DO-41", include_str!("../examples/1N4001_DO-41.part.json")),
+    ("1N5819_DO-41", include_str!("../examples/1N5819_DO-41.part.json")),
+    ("1N4733A_DO-41", include_str!("../examples/1N4733A_DO-41.part.json")),
+    ("LM7805_TO-220", include_str!("../examples/LM7805_TO-220.part.json")),
+    ("L78L05_TO-92", include_str!("../examples/L78L05_TO-92.part.json")),
+    ("AMS1117-3.3_SOT-223", include_str!("../examples/AMS1117-3.3_SOT-223.part.json")),
+    ("ATmega328P-AU_TQFP-32", include_str!("../examples/ATmega328P-AU_TQFP-32.part.json")),
 ];
 
-/// Copy the bundled examples into an empty library folder (first run).
-pub fn install_examples(dir: &Path) -> std::io::Result<()> {
-    let has_any = std::fs::read_dir(dir).map(|rd| rd.filter_map(|e| e.ok()).any(|e| e.path().to_string_lossy().ends_with(FILE_SUFFIX))).unwrap_or(false);
-    if has_any {
-        return Ok(());
+/// Older bundled versions that are replaced when the user's copy is still unmodified:
+/// (example name, the `sim.text` of the old version).
+const LEGACY: &[(&str, &str)] = &[(
+    "LM358_SOIC-8",
+    ".subckt LM358 inp inn out vp vn\nRin inp inn 1Meg\nEop m 0 inp inn 100k\nRp m n 1k\nCp n 0 16u\nEo o 0 n 0 1\nRo o out 50\n.ends LM358",
+)];
+
+/// Is the file on disk an unmodified copy of an older bundled version? That is the case when it
+/// carries the known old model text, or when it equals the bundled part except for the category.
+fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    if let Some((_, text)) = LEGACY.iter().find(|(n, _)| *n == example) {
+        if old.sim.as_ref().is_some_and(|m| m.text == *text) {
+            return true;
+        }
     }
+    match serde_json::from_str::<PartDef>(bundled) {
+        Ok(new) => old.category.is_empty() && old == PartDef { category: String::new(), ..new },
+        Err(_) => false,
+    }
+}
+
+/// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
+/// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
+/// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
+pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    for (n, text) in EXAMPLES {
-        std::fs::write(dir.join(format!("{n}{FILE_SUFFIX}")), text)?;
+    let marker = dir.join(".bundled");
+    let mut done: std::collections::BTreeSet<String> =
+        std::fs::read_to_string(&marker).unwrap_or_default().lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect();
+    let before = done.len();
+    for (name, text) in EXAMPLES {
+        if done.contains(*name) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if !file.exists() || is_unmodified_legacy(&file, name, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(name.to_string());
+    }
+    if done.len() != before || !marker.exists() {
+        std::fs::write(&marker, done.into_iter().collect::<Vec<_>>().join("\n"))?;
     }
     Ok(())
 }

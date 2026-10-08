@@ -348,4 +348,61 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("bottom_demo.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
     }
+
+    /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):
+    /// `cargo test -p app write_library_demo -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_library_demo() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = part_lib::EXAMPLES
+            .iter()
+            .map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap())
+            .find(|d| d.name == "LM7805")
+            .unwrap();
+        let mut sch = sch_core::Schematic::default();
+        sch.add(Kind::VSource, (0, 0), 0);
+        sch.components[0].value = "12".into();
+        sch.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (14, 0), 0);
+        sch.add(Kind::Resistor, (22, 0), 0);
+        sch.components[2].value = "330".into();
+        sch.add(Kind::Led, (28, 0), 0);
+        sch.add(Kind::Ground, (0, 8), 0);
+        for (a, b) in [
+            ((0, -2), (0, -6)), ((0, -6), (10, -6)), ((10, -6), (10, 0)), // V1+ -> IN
+            ((18, 0), (20, 0)), ((24, 0), (26, 0)),                       // OUT -> R1 -> LED
+            ((30, 0), (30, 8)), ((14, 4), (14, 8)), ((0, 2), (0, 8)), ((0, 8), (30, 8)),
+        ] {
+            sch.wires.push(Wire { a, b });
+        }
+        std::fs::write(root.join("regulator_led.schjson"), serde_json::to_string_pretty(&sch).unwrap()).unwrap();
+    }
+
+    /// Scratch board with one of every bundled footprint (not part of the repository):
+    /// `cargo test -p app write_footprint_sheet -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_footprint_sheet() {
+        let mut b = pcb_core::Board::new("sheet", 90.0, 50.0);
+        let mut seen = std::collections::HashSet::new();
+        let (mut x, mut y, mut n) = (8.0, 42.0, 0);
+        for (_, text) in part_lib::EXAMPLES {
+            let def: part_lib::PartDef = serde_json::from_str(text).unwrap();
+            if !seen.insert(def.footprint_name()) {
+                continue;
+            }
+            b.add_footprint(def.footprint().unwrap());
+            n += 1;
+            let refdes = format!("U{n}");
+            b.set_part(pcb_core::Part { refdes, value: def.name.clone(), footprint: def.footprint_name(), pos: Point::new(x, y), rot: 0, side: Side::Top }).unwrap();
+            x += if def.footprint_name().contains("TQFP") { 16.0 } else { 11.0 };
+            if x > 80.0 {
+                x = 8.0;
+                y -= 14.0;
+            }
+        }
+        let dir = std::env::temp_dir().join("claude");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("sheet.pcbjson"), serde_json::to_string_pretty(&b).unwrap()).unwrap();
+    }
 }

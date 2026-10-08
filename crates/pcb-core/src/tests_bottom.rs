@@ -160,3 +160,28 @@ fn old_files_without_a_side_load_as_top_parts() {
     let b: Part = serde_json::from_str(&serde_json::to_string(&Part { side: Side::Bottom, ..p }).unwrap()).unwrap();
     assert_eq!(b.side, Side::Bottom);
 }
+
+#[test]
+fn pads_sharing_a_pin_are_one_connection_and_all_get_the_net() {
+    use crate::footprints::{Footprint, FpPad};
+    // a SOT-223-like package: pin 2 is both a normal pad and the large tab
+    let pad = |pin: &str, x: f64, y: f64, w: f64, h: f64| FpPad { pin: pin.into(), pos: Point::new(x, y), shape: PadShape::Rect { w, h }, drill: None };
+    let fp = Footprint {
+        name: "TAB3".into(),
+        pads: vec![pad("1", -3.0, 2.3, 2.0, 1.5), pad("2", -3.0, 0.0, 2.0, 1.5), pad("3", -3.0, -2.3, 2.0, 1.5), pad("2", 3.0, 0.0, 2.0, 3.8)],
+    };
+    let mut b = board();
+    b.add_footprint(fp);
+    let parts = vec![NetlistPart { refdes: "U1".into(), value: "x".into(), footprint: "TAB3".into() }];
+    let nets = vec![NetlistNet { name: "OUT".into(), pins: vec![("U1".into(), "2".into()), ("C1".into(), "1".into())] }];
+    import(&mut b, &parts, &nets);
+    assert_eq!(b.pads.iter().filter(|p| p.net == "OUT").count(), 2, "both pad 2 and the tab carry the net");
+    // a second OUT pad elsewhere: the two U1 pads count as one connection, so one airwire is enough
+    let mut other = Pad::new(Point::new(30.0, 20.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+    other.net = "OUT".into();
+    b.pads.push(other);
+    let wires = ratsnest(&b);
+    assert_eq!(wires.len(), 1, "{wires:?}");
+    // the pads of one pin never cause a short or a clearance error against each other
+    assert!(drc::shorts(&b).is_empty());
+}
