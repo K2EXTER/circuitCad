@@ -101,3 +101,36 @@ fn diode_shot_noise_and_unknown_nodes() {
     assert!(noise_analysis(&c, &settings(1.0, 100.0, "nope", None)).is_err());
     assert!(noise_analysis(&c, &settings(1.0, 100.0, "a", Some("nope"))).is_err());
 }
+
+fn bjt_amp(rb: f64) -> Circuit {
+    // common-emitter stage with the base driven through a source resistor
+    let mut c = Circuit::new();
+    vsrc(&mut c, "VCC", "vcc", 10.0);
+    vsrc(&mut c, "VB", "vb", 1.7);
+    res(&mut c, "RB", "vb", "b", 100e3);
+    res(&mut c, "RC", "vcc", "c", 4.7e3);
+    res(&mut c, "RE", "e", "0", 1e3);
+    let (cc, b, e) = (c.node("c"), c.node("b"), c.node("e"));
+    c.add(Element::Bjt { name: "Q1".into(), c: cc, b, e, model: BjtModel { rb, ..BjtModel::default() } });
+    c
+}
+
+#[test]
+fn base_resistance_adds_thermal_noise_and_keeps_dc() {
+    let (c0, c1) = (bjt_amp(0.0), bjt_amp(200.0));
+    // 200 ohm in series with a 100k base drive barely moves the operating point
+    let (i0, i1) = (dc_op(&c0).unwrap().element("Q1").unwrap().current, dc_op(&c1).unwrap().element("Q1").unwrap().current);
+    assert!(i0 > 1e-4 && (i0 / i1 - 1.0).abs() < 1e-2, "{i0} {i1}");
+    let s = settings(10.0, 1e3, "c", None);
+    let (n0, n1) = (noise_analysis(&c0, &s).unwrap(), noise_analysis(&c1, &s).unwrap());
+    assert!(n0.contribution("Q1.rb").is_none());
+    let rb = n1.contribution("Q1.rb").unwrap();
+    assert!(rb.rms > 0.0 && n1.out_psd[0] > n0.out_psd[0] * (1.0 - 1e-2));
+    // with a low-impedance base drive rb dominates the base-side noise
+    let mut low = bjt_amp(500.0);
+    low.elements.retain(|e| e.name() != "RB");
+    let (vb, b) = (low.node("vb"), low.node("b"));
+    low.add(Element::Resistor { name: "RB".into(), a: vb, b, r: 1.0 });
+    let r = noise_analysis(&low, &s).unwrap();
+    assert!(r.contribution("Q1.rb").unwrap().rms > r.contribution("RB").unwrap().rms * 10.0);
+}

@@ -46,12 +46,14 @@ pub struct BjtModel {
     pub br: f64,
     pub nf: f64,
     pub nr: f64,
+    /// Base series resistance in ohms (0 = none); adds an internal base node.
+    pub rb: f64,
     pub pnp: bool,
 }
 
 impl Default for BjtModel {
     fn default() -> Self {
-        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, pnp: false }
+        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, pnp: false }
     }
 }
 

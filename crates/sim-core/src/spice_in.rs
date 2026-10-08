@@ -85,6 +85,7 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 br: get("BR", 1.0),
                 nf: get("NF", 1.0),
                 nr: get("NR", 1.0),
+                rb: get("RB", 0.0),
                 pnp: t == "PNP",
             }),
         )),

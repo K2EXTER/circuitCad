@@ -21,7 +21,7 @@
     "kind": "model",
     "element": "Q",
     "name": "2N3904",
-    "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5)",
+    "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
     "pins": ["3", "2", "1"]
   }
 }

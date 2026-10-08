@@ -77,7 +77,8 @@ pub(crate) enum Ce {
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize },
-    Q { name: String, c: usize, b: usize, e: usize, m: BjtModel, slot: usize },
+    /// `bi` is the internal base node (equal to `b` when the model has no `rb`).
+    Q { name: String, c: usize, b: usize, bi: usize, e: usize, m: BjtModel, slot: usize },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
 }
 
@@ -85,7 +86,7 @@ pub(crate) struct Compiled {
     pub(crate) node_names: Vec<String>, // circuit nodes only
     pub(crate) n_caps: usize,
     pub(crate) n_inds: usize,
-    n_nodes: usize,          // including ground and internal diode nodes
+    n_nodes: usize,          // including ground and internal diode/base nodes
     pub(crate) n_unknowns: usize,
     n_slots: usize,
     pub(crate) ce: Vec<Ce>,
@@ -103,15 +104,15 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     let mut ce = vec![];
     // branch unknowns are numbered after all node unknowns; node count is fixed after the loop,
     // so keep branch ordinals and offset them afterwards
-    let mut internal_diodes = 0;
+    let mut internal = 0;
     for e in &c.elements {
-        if let Element::Diode { model, .. } = e {
-            if model.rs > 0.0 {
-                internal_diodes += 1;
-            }
+        match e {
+            Element::Diode { model, .. } if model.rs > 0.0 => internal += 1,
+            Element::Bjt { model, .. } if model.rb > 0.0 => internal += 1,
+            _ => {}
         }
     }
-    let total_nodes = n_nodes + internal_diodes;
+    let total_nodes = n_nodes + internal;
     let br_base = total_nodes - 1;
     for e in &c.elements {
         match e {
@@ -150,7 +151,13 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
             Element::Mosfet { name, d, g, s, model } => ce.push(Ce::M { name: name.clone(), d: *d, g: *g, s: *s, m: model.clone() }),
             Element::Bjt { name, c, b, e, model } => {
-                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, e: *e, m: model.clone(), slot: n_slots });
+                let bi = if model.rb > 0.0 {
+                    n_nodes += 1;
+                    n_nodes - 1
+                } else {
+                    *b
+                };
+                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, bi, e: *e, m: model.clone(), slot: n_slots });
                 n_slots += 2;
             }
         }
@@ -461,7 +468,11 @@ impl Compiled {
                     m.g(*d, *s, gmin);
                     m.g(*g, *s, gmin);
                 }
-                Ce::Q { c, b, e, m: bm, slot, .. } => {
+                Ce::Q { c, b, bi, e, m: bm, slot, .. } => {
+                    if bm.rb > 0.0 {
+                        m.g(*b, *bi, 1.0 / bm.rb);
+                    }
+                    let b = bi; // the junctions sit on the internal base
                     let pol = if bm.pnp { -1.0 } else { 1.0 };
                     let crit_be = vcrit(bm.nf * VT, bm.is);
                     let crit_bc = vcrit(bm.nr * VT, bm.is);
@@ -730,9 +741,9 @@ impl Compiled {
                     let id = pol * mos_eval(m, pol * vgs, pol * vds).0;
                     push(name, id, vds, vec![("Vgs".into(), vgs)], vds * id);
                 }
-                Ce::Q { name, c, b, e, m, .. } => {
+                Ce::Q { name, c, b, bi, e, m, .. } => {
                     let pol = if m.pnp { -1.0 } else { 1.0 };
-                    let q = bjt_eval(m, pol * (v(x, *b) - v(x, *e)), pol * (v(x, *b) - v(x, *c)));
+                    let q = bjt_eval(m, pol * (v(x, *bi) - v(x, *e)), pol * (v(x, *bi) - v(x, *c)));
                     let (ic, ib, ie) = (pol * q.ic, pol * q.ib, pol * q.ie);
                     let p = v(x, *c) * ic + v(x, *b) * ib + v(x, *e) * ie;
                     push(name, ic, v(x, *c) - v(x, *e), vec![("Ib".into(), ib), ("Ie".into(), ie)], p);

@@ -21,7 +21,7 @@
     "kind": "model",
     "element": "Q",
     "name": "2N3906",
-    "text": ".model 2N3906 PNP(IS=1.4e-14 BF=180 BR=4)",
+    "text": ".model 2N3906 PNP(IS=1.4e-14 BF=180 BR=4 RB=10)",
     "pins": ["3", "2", "1"]
   }
 }

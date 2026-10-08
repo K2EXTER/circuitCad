@@ -46,7 +46,7 @@
 ```
 
 使える SPICE の記述:
-- `.model` カード: ダイオード `D(IS N RS BV IBV)`、バイポーラ `NPN` / `PNP`(`IS BF BR NF NR`)、
+- `.model` カード: ダイオード `D(IS N RS BV IBV)`、バイポーラ `NPN` / `PNP`(`IS BF BR NF NR RB`。RB はベース抵抗で、ノイズ解析にも効きます)、
   MOSFET `NMOS` / `PMOS`(`VTO KP LAMBDA CGS CGD`。`element` は `M`、ノード順は ドレイン・ゲート・ソース)
 - `.subckt` の本体: `R C L V I E G D Q M`。それ以外の素子を含むと、黙って無視せずエラーになります
 

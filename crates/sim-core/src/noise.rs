@@ -163,10 +163,13 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                     srcs.push(Src { name: format!("{name}.rs"), p: *a, n: *ai, s: kt4 / rs });
                 }
             }
-            Ce::Q { name, c, b, e, m, slot } => {
+            Ce::Q { name, c, b, bi, e, m, slot } => {
                 let q = bjt_eval(m, op.vj[*slot], op.vj[*slot + 1]);
                 srcs.push(Src { name: format!("{name}.ic"), p: *c, n: *e, s: 2.0 * Q_E * q.ic.abs() });
-                srcs.push(Src { name: format!("{name}.ib"), p: *b, n: *e, s: 2.0 * Q_E * q.ib.abs() });
+                srcs.push(Src { name: format!("{name}.ib"), p: *bi, n: *e, s: 2.0 * Q_E * q.ib.abs() });
+                if m.rb > 0.0 {
+                    srcs.push(Src { name: format!("{name}.rb"), p: *b, n: *bi, s: kt4 / m.rb });
+                }
             }
             Ce::M { name, d, g, s, m } => {
                 let pol = if m.pmos { -1.0 } else { 1.0 };
