@@ -6,6 +6,7 @@ use schematic::SchEditor;
 use std::path::PathBuf;
 
 mod part_form;
+mod plot;
 mod schematic;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -551,6 +552,9 @@ impl eframe::App for App {
         });
         if self.mode == Mode::Schematic {
             egui::Panel::left("sch_tools").min_size(220.0).show(ui, |ui| self.sch.side_panel(ui));
+            if self.sch.has_tran() {
+                egui::Panel::bottom("wave").resizable(true).default_size(320.0).show(ui, |ui| self.sch.wave_panel(ui));
+            }
             egui::CentralPanel::default().show(ui, |ui| self.sch.canvas(ui));
             return;
         }
@@ -607,7 +611,10 @@ impl eframe::App for App {
 fn main() -> eframe::Result {
     eframe::run_native(
         "circuitCad",
-        eframe::NativeOptions::default(),
+        eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default().with_maximized(true).with_title("circuitCad"),
+            ..Default::default()
+        },
         Box::new(|cc| {
             install_japanese_font(&cc.egui_ctx);
             let mut app = App::default();
@@ -617,6 +624,13 @@ fn main() -> eframe::Result {
                 app.sch.load_path(p.into());
                 if args.iter().any(|a| a == "--dc") {
                     app.sch.analyze_dc();
+                }
+                // --tran <stop> <step>   e.g. --tran 20m 20u
+                if let Some(i) = args.iter().position(|a| a == "--tran") {
+                    if let (Some(stop), Some(step)) = (args.get(i + 1), args.get(i + 2)) {
+                        app.sch.set_tran_settings(stop, step);
+                        app.sch.analyze_tran();
+                    }
                 }
             }
             Ok(Box::new(app))

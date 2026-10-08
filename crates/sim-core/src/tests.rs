@@ -10,7 +10,7 @@ fn r(c: &mut Circuit, name: &str, a: &str, b: &str, ohms: f64) {
 
 fn vs(c: &mut Circuit, name: &str, p: &str, n: &str, dc: f64) {
     let (p, n) = (c.node(p), c.node(n));
-    c.add(Element::VSource { name: name.into(), p, n, dc });
+    c.add(Element::vdc(name, p, n, dc));
 }
 
 fn diode(c: &mut Circuit, name: &str, a: &str, k: &str, m: DiodeModel) {
@@ -86,7 +86,7 @@ fn capacitor_is_open_inductor_is_short() {
 fn current_source_into_resistor() {
     let mut c = Circuit::new();
     let a = c.node("a");
-    c.add(Element::ISource { name: "I1".into(), from: 0, to: a, dc: 2e-3 });
+    c.add(Element::ISource { name: "I1".into(), from: 0, to: a, wave: Waveform::Dc(2e-3) });
     r(&mut c, "R1", "a", "0", 1500.0);
     let res = dc_op(&c).unwrap();
     close(res.voltage("a").unwrap(), 3.0, 1e-9);

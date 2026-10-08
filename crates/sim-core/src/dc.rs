@@ -2,10 +2,11 @@
 //! source stepping as convergence aids.
 
 use crate::circuit::{BjtModel, Circuit, Element};
+use crate::waveform::Waveform;
 use std::fmt;
 
 const VT: f64 = 0.025852; // kT/q at 300.15 K
-const GMIN: f64 = 1e-12;
+pub(crate) const GMIN: f64 = 1e-12;
 const RELTOL: f64 = 1e-6;
 const VNTOL: f64 = 1e-8;
 const ABSTOL: f64 = 1e-12;
@@ -17,6 +18,8 @@ pub enum SimError {
     /// The matrix cannot be solved: usually voltage sources in a loop / in parallel.
     Singular,
     NoConvergence,
+    /// Bad analysis settings.
+    Invalid(String),
 }
 
 impl fmt::Display for SimError {
@@ -25,6 +28,7 @@ impl fmt::Display for SimError {
             SimError::NoGround => write!(f, "GNDにつながる部品がありません"),
             SimError::Singular => write!(f, "回路方程式が解けません (電圧源のループや並列接続、コイルと電圧源のループなど)"),
             SimError::NoConvergence => write!(f, "収束しませんでした"),
+            SimError::Invalid(m) => write!(f, "{m}"),
         }
     }
 }
@@ -64,34 +68,37 @@ impl DcResult {
 
 // ------------------------------------------------------------------ compiled form
 
-enum Ce {
+pub(crate) enum Ce {
     R { name: String, a: usize, b: usize, g: f64 },
-    C { name: String, a: usize, b: usize },
-    V { name: String, p: usize, n: usize, v: f64, br: usize },
-    L { name: String, p: usize, n: usize, br: usize },
-    I { name: String, from: usize, to: usize, i: f64 },
+    C { name: String, a: usize, b: usize, c: f64, idx: usize },
+    V { name: String, p: usize, n: usize, wave: Waveform, br: usize },
+    L { name: String, p: usize, n: usize, l: f64, br: usize, idx: usize },
+    I { name: String, from: usize, to: usize, wave: Waveform },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, slot: usize },
     Q { name: String, c: usize, b: usize, e: usize, m: BjtModel, slot: usize },
 }
 
-struct Compiled {
-    node_names: Vec<String>, // circuit nodes only
+pub(crate) struct Compiled {
+    pub(crate) node_names: Vec<String>, // circuit nodes only
+    pub(crate) n_caps: usize,
+    pub(crate) n_inds: usize,
     n_nodes: usize,          // including ground and internal diode nodes
-    n_unknowns: usize,
+    pub(crate) n_unknowns: usize,
     n_slots: usize,
-    ce: Vec<Ce>,
+    pub(crate) ce: Vec<Ce>,
 }
 
 fn vcrit(nvt: f64, is: f64) -> f64 {
     nvt * (nvt / (std::f64::consts::SQRT_2 * is)).ln()
 }
 
-fn compile(c: &Circuit) -> Compiled {
+pub(crate) fn compile(c: &Circuit) -> Compiled {
     let mut n_nodes = c.names.len();
     let mut n_br = 0;
     let mut n_slots = 0;
+    let (mut n_caps, mut n_inds) = (0, 0);
     let mut ce = vec![];
     // branch unknowns are numbered after all node unknowns; node count is fixed after the loop,
     // so keep branch ordinals and offset them afterwards
@@ -108,16 +115,20 @@ fn compile(c: &Circuit) -> Compiled {
     for e in &c.elements {
         match e {
             Element::Resistor { name, a, b, r } => ce.push(Ce::R { name: name.clone(), a: *a, b: *b, g: 1.0 / r }),
-            Element::Capacitor { name, a, b, .. } => ce.push(Ce::C { name: name.clone(), a: *a, b: *b }),
-            Element::Inductor { name, a, b, .. } => {
-                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, br: br_base + n_br });
+            Element::Capacitor { name, a, b, c } => {
+                ce.push(Ce::C { name: name.clone(), a: *a, b: *b, c: *c, idx: n_caps });
+                n_caps += 1;
+            }
+            Element::Inductor { name, a, b, l } => {
+                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, l: *l, br: br_base + n_br, idx: n_inds });
+                n_br += 1;
+                n_inds += 1;
+            }
+            Element::VSource { name, p, n, wave } => {
+                ce.push(Ce::V { name: name.clone(), p: *p, n: *n, wave: wave.clone(), br: br_base + n_br });
                 n_br += 1;
             }
-            Element::VSource { name, p, n, dc } => {
-                ce.push(Ce::V { name: name.clone(), p: *p, n: *n, v: *dc, br: br_base + n_br });
-                n_br += 1;
-            }
-            Element::ISource { name, from, to, dc } => ce.push(Ce::I { name: name.clone(), from: *from, to: *to, i: *dc }),
+            Element::ISource { name, from, to, wave } => ce.push(Ce::I { name: name.clone(), from: *from, to: *to, wave: wave.clone() }),
             Element::Vcvs { name, p, n, cp, cn, gain } => {
                 ce.push(Ce::E { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gain: *gain, br: br_base + n_br });
                 n_br += 1;
@@ -142,10 +153,10 @@ fn compile(c: &Circuit) -> Compiled {
             }
         }
     }
-    Compiled { node_names: c.names.clone(), n_nodes, n_unknowns: br_base + n_br, n_slots, ce }
+    Compiled { node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, ce }
 }
 
-fn v(x: &[f64], node: usize) -> f64 {
+pub(crate) fn v(x: &[f64], node: usize) -> f64 {
     if node == 0 { 0.0 } else { x[node - 1] }
 }
 
@@ -293,10 +304,42 @@ impl Mna {
     }
 }
 
+/// Integration state for one transient step: values at the previous time point.
+pub(crate) struct Dyn<'a> {
+    pub h: f64,
+    /// Trapezoidal rule when true, backward Euler otherwise.
+    pub trap: bool,
+    pub cap_v: &'a [f64],
+    pub cap_i: &'a [f64],
+    pub ind_i: &'a [f64],
+    pub ind_v: &'a [f64],
+}
+
+/// Everything that varies between Newton solves.
+pub(crate) struct Ctx<'a> {
+    pub gmin: f64,
+    /// Scale for independent sources (source stepping).
+    pub scale: f64,
+    /// Time of the solution being computed (transient only).
+    pub t: f64,
+    pub dynamic: Option<Dyn<'a>>,
+}
+
+impl Ctx<'_> {
+    fn source(&self, w: &Waveform) -> f64 {
+        if self.dynamic.is_some() { w.eval(self.t) } else { w.dc_value() }
+    }
+
+    pub fn dc(gmin: f64, scale: f64) -> Ctx<'static> {
+        Ctx { gmin, scale, t: 0.0, dynamic: None }
+    }
+}
+
 impl Compiled {
     /// Build the linearised system around `x` (with junction limiting through `vj`).
     /// Returns the matrix and whether any junction voltage had to be limited.
-    fn assemble(&self, vj: &mut [f64], x: &[f64], gmin: f64, scale: f64) -> (Mna, bool) {
+    fn assemble(&self, vj: &mut [f64], x: &[f64], ctx: &Ctx) -> (Mna, bool) {
+        let (gmin, scale) = (ctx.gmin, ctx.scale);
         let mut m = Mna::new(self.n_unknowns);
         let mut limited = false;
         for node in 1..self.n_nodes {
@@ -305,13 +348,29 @@ impl Compiled {
         for e in &self.ce {
             match e {
                 Ce::R { a, b, g, .. } => m.g(*a, *b, *g),
-                Ce::C { .. } => {}
-                Ce::V { p, n, v: val, br, .. } => {
-                    m.branch(*p, *n, *br);
-                    m.b[*br] += val * scale;
+                Ce::C { a, b, c, idx, .. } => {
+                    // open circuit at DC; companion model (conductance + history current) in transient
+                    if let Some(d) = &ctx.dynamic {
+                        let geq = if d.trap { 2.0 * c / d.h } else { c / d.h };
+                        let hist = geq * d.cap_v[*idx] + if d.trap { d.cap_i[*idx] } else { 0.0 };
+                        m.g(*a, *b, geq);
+                        m.current(*a, *b, -hist);
+                    }
                 }
-                Ce::L { p, n, br, .. } => m.branch(*p, *n, *br),
-                Ce::I { from, to, i, .. } => m.current(*from, *to, i * scale),
+                Ce::V { p, n, wave, br, .. } => {
+                    m.branch(*p, *n, *br);
+                    m.b[*br] += ctx.source(wave) * scale;
+                }
+                Ce::L { p, n, l, br, idx, .. } => {
+                    // short circuit at DC; v = req*(i - i_old) [- v_old] in transient
+                    m.branch(*p, *n, *br);
+                    if let Some(d) = &ctx.dynamic {
+                        let req = if d.trap { 2.0 * l / d.h } else { l / d.h };
+                        m.at(*br, *br, -req);
+                        m.b[*br] += -req * d.ind_i[*idx] - if d.trap { d.ind_v[*idx] } else { 0.0 };
+                    }
+                }
+                Ce::I { from, to, wave, .. } => m.current(*from, *to, ctx.source(wave) * scale),
                 Ce::E { p, n, cp, cn, gain, br, .. } => {
                     m.branch(*p, *n, *br);
                     if *cp != 0 {
@@ -382,23 +441,23 @@ fn converged(x: &[f64], xn: &[f64], n_node_unknowns: usize) -> bool {
     })
 }
 
-enum Fail {
+pub(crate) enum Fail {
     Singular,
     NoConv,
 }
 
-struct Attempt {
-    x: Vec<f64>,
-    vj: Vec<f64>,
-    iterations: usize,
+pub(crate) struct Attempt {
+    pub x: Vec<f64>,
+    pub vj: Vec<f64>,
+    pub iterations: usize,
 }
 
 impl Compiled {
-    fn newton(&self, x0: Vec<f64>, vj0: Vec<f64>, gmin: f64, scale: f64) -> Result<Attempt, Fail> {
+    pub(crate) fn newton(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
         let (mut x, mut vj) = (x0, vj0);
         let n_node_unknowns = self.n_nodes - 1;
         for it in 1..=MAX_ITER {
-            let (mut m, limited) = self.assemble(&mut vj, &x, gmin, scale);
+            let (mut m, limited) = self.assemble(&mut vj, &x, ctx);
             lu_solve(m.n, &mut m.a, &mut m.b).map_err(|_| Fail::Singular)?;
             let xn = m.b;
             if xn.iter().any(|v| !v.is_finite()) {
@@ -466,12 +525,12 @@ impl Compiled {
         let zero_x = vec![0.0; self.n_unknowns];
         let zero_vj = vec![0.0; self.n_slots];
         match which {
-            Strategy::Direct => self.newton(zero_x, zero_vj, GMIN, 1.0),
+            Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(GMIN, 1.0)),
             Strategy::Gmin => {
                 // gmin from 1e-2 down to 1e-12, each step starting from the previous solution
                 let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
                 for g in (2..=12).map(|e| 10f64.powi(-e)) {
-                    let a = self.newton(x, vj, g, 1.0)?;
+                    let a = self.newton(x, vj, &Ctx::dc(g, 1.0))?;
                     iters += a.iterations;
                     x = a.x;
                     vj = a.vj;
@@ -482,7 +541,7 @@ impl Compiled {
                 // ramp every independent source from 0 to full value
                 let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
                 for step in 1..=25 {
-                    let a = self.newton(x, vj, GMIN, step as f64 / 25.0)?;
+                    let a = self.newton(x, vj, &Ctx::dc(GMIN, step as f64 / 25.0))?;
                     iters += a.iterations;
                     x = a.x;
                     vj = a.vj;
@@ -497,26 +556,28 @@ pub fn dc_op(circuit: &Circuit) -> Result<DcResult, SimError> {
     dc_op_with(circuit, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])
 }
 
-/// Try the strategies in order; the first that converges wins.
-pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResult, SimError> {
-    let touches_ground = circuit.elements.iter().any(|e| match e {
+/// Floating-node warnings are produced by the caller; this only needs a ground reference.
+pub(crate) fn has_ground(circuit: &Circuit) -> bool {
+    circuit.elements.iter().any(|e| match e {
         Element::Resistor { a, b, .. } | Element::Capacitor { a, b, .. } | Element::Inductor { a, b, .. } => *a == 0 || *b == 0,
         Element::VSource { p, n, .. } => *p == 0 || *n == 0,
         Element::ISource { from, to, .. } => *from == 0 || *to == 0,
         Element::Diode { a, k, .. } => *a == 0 || *k == 0,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } => *p == 0 || *n == 0,
-    });
-    if !touches_ground {
-        return Err(SimError::NoGround);
-    }
+    })
+}
 
-    let mut warnings = circuit.warnings.clone();
+pub(crate) fn floating_warnings(circuit: &Circuit) -> Vec<String> {
+    let mut w = circuit.warnings.clone();
     for i in floating_nodes(circuit) {
-        warnings.push(format!("ノード {} にGNDへのDC経路がありません (0Vとして扱います)", circuit.names[i]));
+        w.push(format!("ノード {} にGNDへのDC経路がありません (0Vとして扱います)", circuit.names[i]));
     }
+    w
+}
 
-    let cm = compile(circuit);
+/// Try the strategies in order; the first that converges wins.
+pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'static str), SimError> {
     let mut last = SimError::NoConvergence;
     for &which in order {
         match cm.run(which) {
@@ -526,7 +587,7 @@ pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResu
                     Strategy::Gmin => "gmin stepping",
                     Strategy::Source => "source stepping",
                 };
-                return Ok(report(&cm, &att, name, warnings));
+                return Ok((att, name));
             }
             // a structurally singular matrix will not be cured by stepping
             Err(Fail::Singular) => return Err(SimError::Singular),
@@ -536,48 +597,77 @@ pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResu
     Err(last)
 }
 
+pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResult, SimError> {
+    if !has_ground(circuit) {
+        return Err(SimError::NoGround);
+    }
+    let warnings = floating_warnings(circuit);
+    let cm = compile(circuit);
+    let (att, name) = solve_op(&cm, order)?;
+    Ok(report(&cm, &att, name, warnings))
+}
+
 fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, warnings: Vec<String>) -> DcResult {
     let x = &att.x;
-    let mut els = vec![];
-    let mut push = |name: &str, current: f64, voltage: f64, extra: Vec<(String, f64)>, power: f64| {
-        els.push(ElementResult { name: name.to_string(), current, voltage, power, extra });
-    };
-    for e in &cm.ce {
-        match e {
-            Ce::R { name, a, b, g } => {
-                let vv = v(x, *a) - v(x, *b);
-                push(name, vv * g, vv, vec![], vv * vv * g);
-            }
-            Ce::C { name, a, b } => push(name, 0.0, v(x, *a) - v(x, *b), vec![], 0.0),
-            Ce::V { name, p, n, br, .. } | Ce::L { name, p, n, br } | Ce::E { name, p, n, br, .. } => {
-                let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
-                push(name, i, vv, vec![], vv * i);
-            }
-            Ce::I { name, from, to, i } => {
-                // reported at full scale: the final solution is always at scale 1
-                let vv = v(x, *from) - v(x, *to);
-                push(name, *i, vv, vec![], vv * i);
-            }
-            Ce::G { name, p, n, cp, cn, gm } => {
-                let (i, vv) = (gm * (v(x, *cp) - v(x, *cn)), v(x, *p) - v(x, *n));
-                push(name, i, vv, vec![], vv * i);
-            }
-            Ce::D { name, a, ai, k, rs, is, nvt, .. } => {
-                let vd = v(x, *ai) - v(x, *k);
-                let id = is * (exp_safe(vd / nvt) - 1.0);
-                let i = if *rs > 0.0 { (v(x, *a) - v(x, *ai)) / rs } else { id };
-                let vv = v(x, *a) - v(x, *k);
-                push(name, i, vv, vec![], vv * i);
-            }
-            Ce::Q { name, c, b, e, m, .. } => {
-                let pol = if m.pnp { -1.0 } else { 1.0 };
-                let q = bjt_eval(m, pol * (v(x, *b) - v(x, *e)), pol * (v(x, *b) - v(x, *c)));
-                let (ic, ib, ie) = (pol * q.ic, pol * q.ib, pol * q.ie);
-                let p = v(x, *c) * ic + v(x, *b) * ib + v(x, *e) * ie;
-                push(name, ic, v(x, *c) - v(x, *e), vec![("Ib".into(), ib), ("Ie".into(), ie)], p);
-            }
-        }
-    }
+    let els = cm.element_results(x, None, &vec![0.0; cm.n_caps]);
     let voltages = cm.node_names.iter().enumerate().map(|(i, n)| (n.clone(), v(x, i))).collect();
     DcResult { voltages, elements: els, iterations: att.iterations, strategy, warnings }
+}
+
+impl Compiled {
+    pub(crate) fn zero_junction_state(&self) -> Vec<f64> {
+        vec![0.0; self.n_slots]
+    }
+
+    /// Currents, voltages and powers at solution `x`. `t` selects the source values
+    /// (`None` = DC); `cap_i` are the capacitor currents (zero at DC).
+    pub(crate) fn element_results(&self, x: &[f64], t: Option<f64>, cap_i: &[f64]) -> Vec<ElementResult> {
+        let mut els = vec![];
+        let mut push = |name: &str, current: f64, voltage: f64, extra: Vec<(String, f64)>, power: f64| {
+            els.push(ElementResult { name: name.to_string(), current, voltage, power, extra });
+        };
+        let src = |w: &Waveform| match t {
+            Some(t) => w.eval(t),
+            None => w.dc_value(),
+        };
+        for e in &self.ce {
+            match e {
+                Ce::R { name, a, b, g } => {
+                    let vv = v(x, *a) - v(x, *b);
+                    push(name, vv * g, vv, vec![], vv * vv * g);
+                }
+                Ce::C { name, a, b, idx, .. } => {
+                    let (vv, i) = (v(x, *a) - v(x, *b), cap_i[*idx]);
+                    push(name, i, vv, vec![], vv * i);
+                }
+                Ce::V { name, p, n, br, .. } | Ce::L { name, p, n, br, .. } | Ce::E { name, p, n, br, .. } => {
+                    let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
+                    push(name, i, vv, vec![], vv * i);
+                }
+                Ce::I { name, from, to, wave } => {
+                    let (i, vv) = (src(wave), v(x, *from) - v(x, *to));
+                    push(name, i, vv, vec![], vv * i);
+                }
+                Ce::G { name, p, n, cp, cn, gm } => {
+                    let (i, vv) = (gm * (v(x, *cp) - v(x, *cn)), v(x, *p) - v(x, *n));
+                    push(name, i, vv, vec![], vv * i);
+                }
+                Ce::D { name, a, ai, k, rs, is, nvt, .. } => {
+                    let vd = v(x, *ai) - v(x, *k);
+                    let id = is * (exp_safe(vd / nvt) - 1.0);
+                    let i = if *rs > 0.0 { (v(x, *a) - v(x, *ai)) / rs } else { id };
+                    let vv = v(x, *a) - v(x, *k);
+                    push(name, i, vv, vec![], vv * i);
+                }
+                Ce::Q { name, c, b, e, m, .. } => {
+                    let pol = if m.pnp { -1.0 } else { 1.0 };
+                    let q = bjt_eval(m, pol * (v(x, *b) - v(x, *e)), pol * (v(x, *b) - v(x, *c)));
+                    let (ic, ib, ie) = (pol * q.ic, pol * q.ib, pol * q.ie);
+                    let p = v(x, *c) * ic + v(x, *b) * ib + v(x, *e) * ie;
+                    push(name, ic, v(x, *c) - v(x, *e), vec![("Ib".into(), ib), ("Ie".into(), ie)], p);
+                }
+            }
+        }
+        els
+    }
 }

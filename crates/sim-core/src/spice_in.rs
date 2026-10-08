@@ -3,6 +3,7 @@
 
 use crate::circuit::{BjtModel, Circuit, DiodeModel, Element};
 use crate::value::parse_value;
+use crate::waveform::parse_source;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -169,15 +170,11 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
             'V' | 'I' => {
                 need(4)?;
                 let (p, n) = (local(c, t[1]), local(c, t[2]));
-                let mut rest = &t[3..];
-                if rest.first().is_some_and(|w| w.eq_ignore_ascii_case("dc")) {
-                    rest = &rest[1..];
-                }
-                let dc = rest.first().map(|s| val(s)).transpose()?.unwrap_or(0.0);
+                let wave = parse_source(&t[3..].join(" ")).map_err(|e| format!("{name}: {e}"))?;
                 c.add(if head.to_ascii_uppercase().starts_with('V') {
-                    Element::VSource { name, p, n, dc }
+                    Element::VSource { name, p, n, wave }
                 } else {
-                    Element::ISource { name, from: p, to: n, dc }
+                    Element::ISource { name, from: p, to: n, wave }
                 });
             }
             'E' | 'G' => {

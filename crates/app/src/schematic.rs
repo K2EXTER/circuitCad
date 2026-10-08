@@ -3,7 +3,9 @@
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use crate::part_form::PartForm;
 use part_lib::PartDef;
-use sim_core::{dc_op, from_schematic, DcResult};
+use crate::plot::{self, PlotState, Trace, PALETTE};
+use sim_core::{dc_op, from_schematic, parse_value, transient, DcResult, TranResult, TranSettings};
+use std::collections::BTreeSet;
 use sch_core::{erc, extract, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
 
@@ -45,6 +47,18 @@ pub struct SchEditor {
     dc: Option<DcView>,
     show_v: bool,
     sig_cache: String,
+    tran: Option<TranView>,
+    tran_tstop: String,
+    tran_tstep: String,
+    tran_uic: bool,
+    fit_pending: bool,
+}
+
+/// A finished transient run with the waveform viewer state.
+struct TranView {
+    outcome: Result<TranResult, Vec<String>>,
+    selected: BTreeSet<String>,
+    plot: PlotState,
 }
 
 /// A finished DC analysis, remembered with the schematic it was computed from.
@@ -95,6 +109,11 @@ impl Default for SchEditor {
             dc: None,
             show_v: true,
             sig_cache: String::new(),
+            tran: None,
+            tran_tstop: "10m".into(),
+            tran_tstep: "10u".into(),
+            tran_uic: false,
+            fit_pending: false,
             sch: Schematic::default(),
             path: None,
             tool: Tool::Place,
@@ -319,6 +338,151 @@ impl SchEditor {
         }
     }
 
+    /// Zoom and pan so that the whole drawing is visible.
+    fn fit_view(&mut self, rect: Rect) {
+        let mut pts: Vec<Pt> = vec![];
+        for c in &self.sch.components {
+            let (x0, x1, y0, y1) = comp_extents(c);
+            for (x, y) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)] {
+                let r = rot_f((x, y), c.rot);
+                pts.push((c.pos.0 + r.0.round() as i32, c.pos.1 + r.1.round() as i32));
+            }
+        }
+        for w in &self.sch.wires {
+            pts.push(w.a);
+            pts.push(w.b);
+        }
+        for l in &self.sch.labels {
+            pts.push(l.pos);
+        }
+        if pts.is_empty() {
+            return;
+        }
+        let (x0, x1) = (pts.iter().map(|p| p.0).min().unwrap() as f32, pts.iter().map(|p| p.0).max().unwrap() as f32);
+        let (y0, y1) = (pts.iter().map(|p| p.1).min().unwrap() as f32, pts.iter().map(|p| p.1).max().unwrap() as f32);
+        let (w, h) = ((x1 - x0).max(4.0) + 6.0, (y1 - y0).max(4.0) + 6.0);
+        self.zoom = (rect.width() / w).min(rect.height() / h).clamp(6.0, 40.0);
+        self.pan = Vec2::new((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+    }
+
+    pub fn has_tran(&self) -> bool {
+        self.tran.is_some()
+    }
+
+    pub fn analyze_tran(&mut self) {
+        self.run_tran();
+    }
+
+    pub fn set_tran_settings(&mut self, tstop: &str, tstep: &str) {
+        self.tran_tstop = tstop.into();
+        self.tran_tstep = tstep.into();
+    }
+
+    fn run_tran(&mut self) {
+        let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+            self.status = "終了時間と時間刻みを数値で入力してください (例: 10m, 10u)".into();
+            return;
+        };
+        let outcome = match from_schematic(&self.sch) {
+            Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+            Ok(c) => transient(&c, &TranSettings { tstop, tstep, uic: self.tran_uic }).map_err(|e| vec![e.to_string()]),
+        };
+        let mut selected = BTreeSet::new();
+        if let Ok(r) = &outcome {
+            for sg in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(4) {
+                selected.insert(sg.name.clone());
+            }
+        }
+        self.status = match &outcome {
+            Ok(r) => format!("過渡解析: 完了 ({} 点, 再試行 {} 回)", r.time.len(), r.retries),
+            Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        self.tran = Some(TranView { outcome, selected, plot: PlotState::new(tstop) });
+    }
+
+    /// Bottom panel with the waveform viewer.
+    pub fn wave_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(view) = self.tran.as_mut() else { return };
+        let mut close = false;
+        ui.horizontal(|ui| {
+            ui.strong("過渡解析の波形");
+            if ui.button("閉じる").clicked() {
+                close = true;
+            }
+            ui.small("ドラッグ: 移動 / ホイール: 時間軸ズーム (Ctrl: 縦軸) / ダブルクリック: 全体表示");
+        });
+        let TranView { outcome, selected, plot: st } = view;
+        match outcome {
+            Err(msgs) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Ok(res) => {
+                for w in &res.warnings {
+                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                }
+                ui.horizontal_top(|ui| {
+                    let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
+                    ui.vertical(|ui| {
+                        ui.set_width(170.0);
+                        if ui.button("選択をクリア").clicked() {
+                            selected.clear();
+                        }
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            for name in &order {
+                                let mut on = selected.contains(*name);
+                                let color = order
+                                    .iter()
+                                    .filter(|n| selected.contains(**n))
+                                    .position(|n| n == name)
+                                    .map(|i| PALETTE[i % PALETTE.len()]);
+                                let text = match color {
+                                    Some(c) if on => egui::RichText::new(*name).color(c),
+                                    _ => egui::RichText::new(*name),
+                                };
+                                if ui.checkbox(&mut on, text).changed() {
+                                    if on {
+                                        selected.insert(name.to_string());
+                                    } else {
+                                        selected.remove(*name);
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    // traces per unit group, colours assigned in list order
+                    let mut groups: [Vec<Trace>; 2] = [vec![], vec![]];
+                    let mut k = 0;
+                    for name in &order {
+                        if !selected.contains(*name) {
+                            continue;
+                        }
+                        if let Some(sg) = res.signal(name) {
+                            let g = if sg.unit == "V" { 0 } else { 1 };
+                            groups[g].push(Trace { name: &sg.name, color: PALETTE[k % PALETTE.len()], t: &res.time, v: &sg.values });
+                            k += 1;
+                        }
+                    }
+                    let used: Vec<usize> = (0..2).filter(|g| !groups[*g].is_empty()).collect();
+                    if used.is_empty() {
+                        ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+                        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から波形を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
+                    }
+                    let h = rect.height() / used.len().max(1) as f32;
+                    for (n, g) in used.iter().enumerate() {
+                        let sub = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h * n as f32), Vec2::new(rect.width(), h - 2.0));
+                        plot::draw_group(ui, sub, egui::Id::new(("wave", *g)), &groups[*g], st, *g, if *g == 0 { "V" } else { "A" }, n + 1 == used.len());
+                    }
+                });
+            }
+        }
+        if close {
+            self.tran = None;
+        }
+    }
+
     fn signature_cached(&self) -> &str {
         &self.sig_cache
     }
@@ -442,6 +606,10 @@ impl SchEditor {
         if self.dc.is_some() {
             self.sig_cache = self.signature();
         }
+        if self.fit_pending {
+            self.fit_pending = false;
+            self.fit_view(rect);
+        }
 
         if resp.dragged_by(egui::PointerButton::Middle) || resp.dragged_by(egui::PointerButton::Secondary) {
             let d = resp.drag_delta();
@@ -471,6 +639,9 @@ impl SchEditor {
             }
             if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
                 self.delete_selected();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::F)) {
+                self.fit_pending = true;
             }
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.pending = None;
@@ -733,6 +904,9 @@ impl SchEditor {
                         ui.text_edit_singleline(&mut c.value);
                     });
                 }
+                if c.kind == Kind::VSource {
+                    ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 1m 1u 1u 2m 5m) / PWL(0 0 1m 5)");
+                }
                 if let Some(sym) = &c.custom {
                     ui.label(format!("フットプリント: {}", c.footprint));
                     match &sym.sim {
@@ -770,6 +944,21 @@ impl SchEditor {
             }
             ui.checkbox(&mut self.show_v, "電圧表示");
         });
+        ui.separator();
+        ui.label("過渡解析");
+        ui.horizontal(|ui| {
+            ui.label("終了");
+            ui.add(egui::TextEdit::singleline(&mut self.tran_tstop).desired_width(56.0));
+            ui.label("刻み");
+            ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).desired_width(56.0));
+        });
+        ui.horizontal(|ui| {
+            if ui.button("過渡解析を実行").clicked() {
+                self.run_tran();
+            }
+            ui.checkbox(&mut self.tran_uic, "ゼロ状態から");
+        });
+        ui.separator();
         let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());
         if let Some(dc) = &self.dc {
             if stale {
@@ -891,6 +1080,7 @@ impl SchEditor {
                 self.pending = None;
                 self.problems.clear();
                 self.dc = None;
+                self.fit_pending = true;
                 self.status = format!("開きました: {}", p.display());
             }
             Err(e) => self.status = format!("読み込み失敗: {e}"),

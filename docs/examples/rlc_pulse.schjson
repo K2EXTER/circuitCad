@@ -1,0 +1,147 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 5 1m 1u 1u 5m 10m)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "20",
+      "pos": [
+        6,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "1m",
+      "pos": [
+        12,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "1u",
+      "pos": [
+        18,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        0,
+        6
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -6
+      ]
+    },
+    {
+      "a": [
+        0,
+        -6
+      ],
+      "b": [
+        4,
+        -6
+      ]
+    },
+    {
+      "a": [
+        8,
+        -6
+      ],
+      "b": [
+        10,
+        -6
+      ]
+    },
+    {
+      "a": [
+        14,
+        -6
+      ],
+      "b": [
+        18,
+        -6
+      ]
+    },
+    {
+      "a": [
+        18,
+        -6
+      ],
+      "b": [
+        18,
+        -2
+      ]
+    },
+    {
+      "a": [
+        18,
+        2
+      ],
+      "b": [
+        18,
+        6
+      ]
+    },
+    {
+      "a": [
+        18,
+        6
+      ],
+      "b": [
+        0,
+        6
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        6
+      ]
+    }
+  ],
+  "labels": []
+}

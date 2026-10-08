@@ -1,5 +1,6 @@
 //! Simulator-side circuit: nodes and elements, independent of the schematic.
 
+use crate::waveform::Waveform;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,9 +40,9 @@ pub enum Element {
     /// Short circuit at DC.
     Inductor { name: String, a: usize, b: usize, l: f64 },
     /// Positive terminal `p`.
-    VSource { name: String, p: usize, n: usize, dc: f64 },
+    VSource { name: String, p: usize, n: usize, wave: Waveform },
     /// Current `dc` flows from `from`, through the source, to `to`.
-    ISource { name: String, from: usize, to: usize, dc: f64 },
+    ISource { name: String, from: usize, to: usize, wave: Waveform },
     Diode { name: String, a: usize, k: usize, model: DiodeModel },
     Bjt { name: String, c: usize, b: usize, e: usize, model: BjtModel },
     /// v(p,n) = gain * v(cp,cn)
@@ -51,6 +52,10 @@ pub enum Element {
 }
 
 impl Element {
+    pub fn vdc(name: &str, p: usize, n: usize, v: f64) -> Element {
+        Element::VSource { name: name.into(), p, n, wave: Waveform::Dc(v) }
+    }
+
     pub fn name(&self) -> &str {
         match self {
             Element::Resistor { name, .. }
