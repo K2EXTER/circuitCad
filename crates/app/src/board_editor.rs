@@ -240,7 +240,7 @@ impl BoardEditor {
                 return Some(Item::Via(i));
             }
         }
-        for (i, pd) in self.board.pads.iter().enumerate() {
+        for (i, pd) in self.board.pads.iter().enumerate().filter(|(_, pd)| pd.drill.is_some() || self.side_visible(pd.side)) {
             let (w, h) = pd.shape.size();
             if (p.x - pd.pos.x).abs() <= w / 2.0 + tol && (p.y - pd.pos.y).abs() <= h / 2.0 + tol {
                 if !pd.refdes.is_empty() {
@@ -336,6 +336,19 @@ impl BoardEditor {
                 self.board.tracks.push(Track { side: self.side, a: from, b: q, width: self.track_width });
             }
             from = q;
+        }
+    }
+
+    /// Move the selected part to the other side of the board.
+    fn flip_selected_part(&mut self) {
+        if let Some(Item::Part(i)) = self.selected {
+            if i < self.board.parts.len() {
+                self.checkpoint();
+                let r = self.board.parts[i].refdes.clone();
+                self.board.flip_part(&r);
+                let side = if self.board.parts[i].side == Side::Bottom { "裏面" } else { "表面" };
+                self.status = format!("{r} を{side}に移しました");
+            }
         }
     }
 
@@ -663,6 +676,9 @@ impl BoardEditor {
         }
         if pressed(Key::Space) {
             self.bend_flip = !self.bend_flip;
+        }
+        if pressed(Key::B) {
+            self.flip_selected_part();
         }
         if pressed(Key::R) {
             if let Some(Item::Part(i)) = self.selected {
@@ -1041,7 +1057,7 @@ impl BoardEditor {
             }
             ui.separator();
             ui.small(
-                "左クリック: 配置・選択 / 右クリック: 中断\n中・右ドラッグ: 移動 / ホイール: 拡大縮小\nCtrl+Z: 元に戻す / Ctrl+Y: やり直し / Delete: 削除\nR: 部品を回転 / L: 層切替 / F: 全体表示",
+                "左クリック: 配置・選択 / 右クリック: 中断\n中・右ドラッグ: 移動 / ホイール: 拡大縮小\nCtrl+Z: 元に戻す / Ctrl+Y: やり直し / Delete: 削除\nR: 部品を回転 / B: 部品の表裏反転 / L: 層切替 / F: 全体表示",
             );
         });
     }
@@ -1107,8 +1123,13 @@ impl BoardEditor {
             }
             Item::Part(i) if i < self.board.parts.len() => {
                 let p = &self.board.parts[i];
-                ui.label(format!("{}  {}  [{}]", p.refdes, p.value, p.footprint));
-                ui.small("ドラッグで移動 / R で回転");
+                let (r, side) = (p.refdes.clone(), p.side);
+                ui.label(format!("{}  {}  [{}]  {}", p.refdes, p.value, p.footprint, if side == Side::Bottom { "裏面実装" } else { "表面実装" }));
+                ui.small("ドラッグで移動 / R で回転 / B で表裏を反転");
+                let _ = r;
+                if ui.button(if side == Side::Bottom { "表面に移す (B)" } else { "裏面に移す (B)" }).clicked() {
+                    self.flip_selected_part();
+                }
             }
             Item::Hole(i) if i < self.board.holes.len() => {
                 ui.label(format!("取付穴 φ{:.2} mm", self.board.holes[i].drill));
@@ -1260,7 +1281,7 @@ mod tests {
     #[test]
     fn parts_cannot_be_deleted_from_the_board() {
         let mut e = BoardEditor::default();
-        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0 }).unwrap();
+        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
         e.delete(Item::Part(0));
         assert_eq!(e.board.parts.len(), 1);
         assert!(e.status.contains("回路図"));
@@ -1271,7 +1292,7 @@ mod tests {
     fn fab_files_include_assembly_csv() {
         let mut e = BoardEditor::default();
         e.board.name = "unit".into();
-        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0 }).unwrap();
+        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
         let dir = std::env::temp_dir().join(format!("circuitcad_fab_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let n = e.write_fab_files(&dir).unwrap();
@@ -1280,5 +1301,34 @@ mod tests {
         assert!(std::fs::read_to_string(dir.join("unit-CPL.csv")).unwrap().contains("R1,10.0000mm"));
         assert!(dir.join("unit_gerber.zip").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn flipping_the_selected_part_is_undoable() {
+        let mut e = BoardEditor::default();
+        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+        e.flip_selected_part(); // nothing selected: no-op
+        assert!(e.undo.is_empty());
+        e.selected = Some(Item::Part(0));
+        e.flip_selected_part();
+        assert_eq!(e.board.parts[0].side, Side::Bottom);
+        assert!(e.board.pads.iter().all(|q| q.side == Side::Bottom));
+        assert!(e.status.contains("裏面"), "{}", e.status);
+        e.flip_selected_part();
+        assert_eq!(e.board.parts[0].side, Side::Top);
+        e.undo();
+        assert_eq!(e.board.parts[0].side, Side::Bottom);
+        e.undo();
+        assert_eq!(e.board.parts[0].side, Side::Top);
+    }
+
+    #[test]
+    fn pads_on_a_hidden_side_cannot_be_picked() {
+        let mut e = BoardEditor::default();
+        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Bottom }).unwrap();
+        let on_pad = e.board.pads[0].pos;
+        assert!(matches!(e.hit_test(on_pad), Some(Item::Part(0))));
+        e.vis.bottom = false;
+        assert!(e.hit_test(on_pad).is_none());
     }
 }

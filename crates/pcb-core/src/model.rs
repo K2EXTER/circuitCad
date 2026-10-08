@@ -87,8 +87,16 @@ pub struct Part {
     pub value: String,
     pub footprint: String,
     pub pos: Point,
-    /// Quarter turns counter-clockwise (0..=3).
+    /// Quarter turns counter-clockwise (0..=3), as seen from the top.
     pub rot: u8,
+    /// Mounted on the top or the bottom of the board. A bottom part is mirrored left-to-right
+    /// (the board is turned over about its vertical axis).
+    #[serde(default = "default_top")]
+    pub side: Side,
+}
+
+fn default_top() -> Side {
+    Side::Top
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

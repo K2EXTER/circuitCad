@@ -131,7 +131,7 @@ fn zones_round_trip_through_json_with_defaults() {
 #[test]
 fn designator_text_follows_the_part() {
     let mut b = board();
-    b.set_part(Part { refdes: "R1".into(), value: "10k".into(), footprint: "R_0805".into(), pos: Point::new(10.0, 10.0), rot: 0 }).unwrap();
+    b.set_part(Part { refdes: "R1".into(), value: "10k".into(), footprint: "R_0805".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
     assert_eq!(b.texts.len(), 1);
     let t = b.texts[0].clone();
     assert_eq!((t.text.as_str(), t.refdes.as_str(), t.side), ("R1", "R1", Side::Top));

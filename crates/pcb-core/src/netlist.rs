@@ -50,7 +50,7 @@ pub fn import(board: &mut Board, parts: &[NetlistPart], nets: &[NetlistNet]) -> 
             None => {
                 let k = rep.added.len();
                 let pos = Point::new(hi.x + 8.0 + (k / 6) as f64 * 14.0, lo.y + 4.0 + (k % 6) as f64 * 9.0);
-                let part = Part { refdes: np.refdes.clone(), value: np.value.clone(), footprint: np.footprint.clone(), pos, rot: 0 };
+                let part = Part { refdes: np.refdes.clone(), value: np.value.clone(), footprint: np.footprint.clone(), pos, rot: 0, side: Side::Top };
                 match board.set_part(part) {
                     Ok(()) => rep.added.push(np.refdes.clone()),
                     Err(e) => rep.warnings.push(format!("{}: {e}", np.refdes)),

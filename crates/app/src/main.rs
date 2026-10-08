@@ -327,4 +327,25 @@ mod tests {
         println!("DRC: {v:?}");
         std::fs::write(root.join("rlc_board.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
     }
+
+    /// Writes a scratch board with parts on both sides (not part of the repository):
+    /// `cargo test -p app write_bottom_demo -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_bottom_demo() {
+        let mut app = App::default();
+        app.sch.load_path(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rlc_pulse.schjson"));
+        app.board_ed.import_from_schematic(&app.sch);
+        let b = &mut app.board_ed.board;
+        b.name = "bottom".into();
+        b.set_rect_outline(0.0, 0.0, 40.0, 25.0);
+        for (r, x, y, rot) in [("V1", 6.0, 14.0, 0), ("R1", 16.0, 18.0, 0), ("L1", 25.0, 18.0, 0), ("C1", 33.0, 12.0, 3)] {
+            b.place_part(r, Point::new(x, y), rot);
+        }
+        b.flip_part("L1");
+        b.flip_part("C1");
+        let dir = std::env::temp_dir().join("claude");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("bottom_demo.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
+    }
 }

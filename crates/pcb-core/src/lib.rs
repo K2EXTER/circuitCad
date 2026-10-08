@@ -16,6 +16,8 @@ pub mod ratsnest;
 pub mod strokefont;
 
 #[cfg(test)]
+mod tests_bottom;
+#[cfg(test)]
 mod tests_zone;
 
 pub use model::*;

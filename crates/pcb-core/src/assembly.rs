@@ -33,7 +33,8 @@ pub fn bom_csv(board: &Board) -> String {
     out
 }
 
-/// Surface-mount parts only (parts with a through-hole pad are hand-soldered).
+/// Surface-mount parts only (parts with a through-hole pad are hand-soldered). The rotation is
+/// the part's rotation as seen from the top of the board, for both sides.
 pub fn cpl_csv(board: &Board) -> String {
     let mut parts: Vec<&Part> = board
         .parts
@@ -43,7 +44,8 @@ pub fn cpl_csv(board: &Board) -> String {
     parts.sort_by_key(|p| natural_key(&p.refdes));
     let mut out = String::from("Designator,Mid X,Mid Y,Layer,Rotation\n");
     for p in parts {
-        out.push_str(&format!("{},{:.4}mm,{:.4}mm,Top,{}\n", csv(&p.refdes), p.pos.x, p.pos.y, (p.rot as u32 % 4) * 90));
+        let layer = if p.side == Side::Bottom { "Bottom" } else { "Top" };
+        out.push_str(&format!("{},{:.4}mm,{:.4}mm,{layer},{}\n", csv(&p.refdes), p.pos.x, p.pos.y, (p.rot as u32 % 4) * 90));
     }
     out
 }
@@ -60,7 +62,7 @@ mod tests {
     fn board() -> Board {
         let mut b = Board::new("demo", 40.0, 30.0);
         for (r, v, f, x) in [("R10", "10k", "R_0805", 5.0), ("R2", "10k", "R_0805", 10.0), ("C1", "100n", "C_0805", 15.0), ("J1", "Conn", "PinHeader_1x2", 25.0)] {
-            b.set_part(Part { refdes: r.into(), value: v.into(), footprint: f.into(), pos: Point::new(x, 10.0), rot: 1 }).unwrap();
+            b.set_part(Part { refdes: r.into(), value: v.into(), footprint: f.into(), pos: Point::new(x, 10.0), rot: 1, side: Side::Top }).unwrap();
         }
         b
     }

@@ -40,8 +40,11 @@ impl Board {
         self.texts.retain(|t| t.refdes != part.refdes);
 
         let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+        let bottom = part.side == Side::Bottom;
         for fpad in &fp.pads {
-            let r = rotate(fpad.pos, part.rot);
+            // a part on the bottom is mirrored left-to-right before it is rotated
+            let local = if bottom { Point::new(-fpad.pos.x, fpad.pos.y) } else { fpad.pos };
+            let r = rotate(local, part.rot);
             let pos = Point::new(part.pos.x + r.x, part.pos.y + r.y);
             let shape = match (fpad.shape, part.rot % 2) {
                 (PadShape::Rect { w, h }, 1) => PadShape::Rect { w: h, h: w },
@@ -53,7 +56,7 @@ impl Board {
             x1 = x1.max(pos.x + w / 2.0);
             y0 = y0.min(pos.y - h / 2.0);
             y1 = y1.max(pos.y + h / 2.0);
-            let mut pad = Pad::new(pos, shape, fpad.drill, Side::Top);
+            let mut pad = Pad::new(pos, shape, fpad.drill, part.side);
             pad.refdes = part.refdes.clone();
             pad.net = old_nets.get(&fpad.pin).cloned().unwrap_or_default();
             pad.pin = fpad.pin.clone();
@@ -62,12 +65,12 @@ impl Board {
         let m = 0.3;
         let c = [Point::new(x0 - m, y0 - m), Point::new(x1 + m, y0 - m), Point::new(x1 + m, y1 + m), Point::new(x0 - m, y1 + m)];
         for i in 0..4 {
-            self.silk.push(SilkLine { side: Side::Top, a: c[i], b: c[(i + 1) % 4], width: 0.15, refdes: part.refdes.clone() });
+            self.silk.push(SilkLine { side: part.side, a: c[i], b: c[(i + 1) % 4], width: 0.15, refdes: part.refdes.clone() });
         }
 
         // designator above the part, centred
         self.texts.push(SilkText {
-            side: Side::Top,
+            side: part.side,
             pos: Point::new((x0 + x1) / 2.0, y1 + m + 0.2 + 0.5),
             height: 1.0,
             text: part.refdes.clone(),
@@ -86,6 +89,14 @@ impl Board {
         self.pads.retain(|p| p.refdes != refdes);
         self.silk.retain(|s| s.refdes != refdes);
         self.texts.retain(|t| t.refdes != refdes);
+    }
+
+    /// Turn a part over to the other side of the board (position and rotation are kept;
+    /// the pad nets are kept per pin). Returns false for an unknown part.
+    pub fn flip_part(&mut self, refdes: &str) -> bool {
+        let Some(mut part) = self.parts.iter().find(|p| p.refdes == refdes).cloned() else { return false };
+        part.side = part.side.flip();
+        self.set_part(part).is_ok()
     }
 
     /// Move / rotate an existing part.
