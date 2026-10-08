@@ -10,6 +10,29 @@ pub enum Waveform {
     /// `pw` and `per` are infinite when omitted.
     Pulse { v1: f64, v2: f64, td: f64, tr: f64, tf: f64, pw: f64, per: f64 },
     Pwl(Vec<(f64, f64)>),
+    /// Band-limited pseudo-random Gaussian noise: independent samples every `1/(2*fmax)`,
+    /// linearly interpolated, scaled so that the RMS value is `vrms`. Deterministic for a
+    /// given `seed`, so runs are reproducible.
+    Noise { vrms: f64, fmax: f64, seed: u64, offset: f64 },
+    /// Sum of waveforms, e.g. a DC level plus ripple plus noise.
+    Sum(Vec<Waveform>),
+}
+
+fn splitmix64(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
+}
+
+/// Standard normal value number `k` of stream `seed` (stateless, so any time can be evaluated).
+fn gauss(seed: u64, k: i64) -> f64 {
+    let h = splitmix64(seed ^ (k as u64).wrapping_mul(0xD6E8_FEB8_6659_FD93));
+    let h2 = splitmix64(h);
+    // (0, 1] and [0, 1)
+    let u1 = ((h >> 11) as f64 + 1.0) / (1u64 << 53) as f64;
+    let u2 = (h2 >> 11) as f64 / (1u64 << 53) as f64;
+    (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
 }
 
 impl Waveform {
@@ -20,6 +43,17 @@ impl Waveform {
             Waveform::Sin { vo, .. } => *vo,
             Waveform::Pulse { v1, .. } => *v1,
             Waveform::Pwl(p) => p.first().map_or(0.0, |x| x.1),
+            Waveform::Noise { offset, .. } => *offset,
+            Waveform::Sum(parts) => parts.iter().map(|w| w.dc_value()).sum(),
+        }
+    }
+
+    /// Spacing of the independent noise samples, if this waveform contains noise.
+    pub fn noise_period(&self) -> Option<f64> {
+        match self {
+            Waveform::Noise { fmax, .. } => Some(0.5 / fmax),
+            Waveform::Sum(parts) => parts.iter().filter_map(|w| w.noise_period()).reduce(f64::min),
+            _ => None,
         }
     }
 
@@ -68,6 +102,15 @@ impl Waveform {
                 let ((t0, v0), (t1, v1)) = (p[i - 1], p[i]);
                 v0 + (v1 - v0) * (t - t0) / (t1 - t0)
             }
+            Waveform::Noise { vrms, fmax, seed, offset } => {
+                let x = t * 2.0 * fmax;
+                let k = x.floor();
+                let f = x - k;
+                let (n0, n1) = (gauss(*seed, k as i64), gauss(*seed, k as i64 + 1));
+                // linear interpolation of unit white samples has mean-square 2/3: rescale to vrms
+                offset + vrms * 1.5f64.sqrt() * (n0 + (n1 - n0) * f)
+            }
+            Waveform::Sum(parts) => parts.iter().map(|w| w.eval(t)).sum(),
         }
     }
 
@@ -102,6 +145,12 @@ impl Waveform {
                 }
             }
             Waveform::Pwl(p) => v.extend(p.iter().map(|x| x.0).filter(|t| *t <= tstop)),
+            Waveform::Noise { .. } => {}
+            Waveform::Sum(parts) => {
+                for w in parts {
+                    v.extend(w.breakpoints(tstop));
+                }
+            }
         }
         v
     }
@@ -164,6 +213,35 @@ pub fn parse_source_full(s: &str) -> Result<Source, String> {
 /// `PULSE(v1 v2 [td tr tf pw per])`, `PWL(t1 v1 t2 v2 ...)`.
 pub fn parse_source(s: &str) -> Result<Waveform, String> {
     let t = s.trim();
+    let parts = split_sum(t);
+    if parts.len() > 1 {
+        return Ok(Waveform::Sum(parts.iter().map(|p| parse_single(p)).collect::<Result<_, _>>()?));
+    }
+    parse_single(t)
+}
+
+/// Split `a + b + c` at top-level `+` that follows whitespace or `)` (so `1e+3` and `+5` stay whole).
+fn split_sum(t: &str) -> Vec<&str> {
+    let b = t.as_bytes();
+    let (mut depth, mut start) = (0i32, 0usize);
+    let mut out = vec![];
+    for i in 0..b.len() {
+        match b[i] {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b'+' if depth == 0 && i > 0 && (b[i - 1].is_ascii_whitespace() || b[i - 1] == b')') && !t[start..i].trim().is_empty() => {
+                out.push(t[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(t[start..].trim());
+    out
+}
+
+fn parse_single(s: &str) -> Result<Waveform, String> {
+    let t = s.trim();
     let lower = t.to_ascii_lowercase();
     let (kind, rest) = match lower.find(|c: char| c == '(' || c.is_whitespace()) {
         Some(i) if !lower[..i].chars().next().is_some_and(|c| c.is_ascii_digit() || c == '-' || c == '+' || c == '.') => {
@@ -213,6 +291,16 @@ pub fn parse_source(s: &str) -> Result<Waveform, String> {
                 per: n.get(6).copied().unwrap_or(f64::INFINITY),
             })
         }
+        "noise" => {
+            let n = nums(rest)?;
+            if n.len() < 2 || n.len() > 4 {
+                return Err("NOISE(実効値 最高周波数 [シード] [オフセット]) の形式で指定してください".into());
+            }
+            if n[0] < 0.0 || n[1] <= 0.0 {
+                return Err("NOISE の実効値は0以上、最高周波数は正の値にしてください".into());
+            }
+            Ok(Waveform::Noise { vrms: n[0], fmax: n[1], seed: n.get(2).map_or(1, |s| *s as u64), offset: n.get(3).copied().unwrap_or(0.0) })
+        }
         "pwl" => {
             let n = nums(rest)?;
             if n.len() < 2 || n.len() % 2 != 0 {
@@ -224,7 +312,7 @@ pub fn parse_source(s: &str) -> Result<Waveform, String> {
             }
             Ok(Waveform::Pwl(pts))
         }
-        other => Err(format!("未対応の電源波形 {other} (SIN / PULSE / PWL / DC)")),
+        other => Err(format!("未対応の電源波形 {other} (SIN / PULSE / PWL / NOISE / DC)")),
     }
 }
 
@@ -302,5 +390,42 @@ mod tests {
         assert!(parse_source_full("5 AC 1 2 3").is_err());
         // a bare number or a name that merely contains "ac" is not an AC spec
         assert!(parse_source_full("pulse(0 5) ").is_ok());
+    }
+
+    #[test]
+    fn noise_is_reproducible_gaussian_with_the_requested_rms() {
+        let w = parse_source("NOISE(0.1 1k 7)").unwrap();
+        assert_eq!(w.eval(0.0123), w.eval(0.0123));
+        let other = parse_source("NOISE(0.1 1k 8)").unwrap();
+        assert_ne!(w.eval(0.0123), other.eval(0.0123));
+        // statistics over many independent sample times
+        let n = 20000;
+        let vals: Vec<f64> = (0..n).map(|k| w.eval(k as f64 * 0.5e-3 + 0.2e-3)).collect();
+        let mean = vals.iter().sum::<f64>() / n as f64;
+        let rms = (vals.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n as f64).sqrt();
+        assert!(mean.abs() < 0.005, "mean {mean}");
+        // sampling at a fixed phase inside the interval gives variance (1-x)^2+x^2 times 1.5
+        let x = 0.4f64;
+        let want = 0.1 * (1.5 * ((1.0 - x).powi(2) + x * x)).sqrt();
+        assert!((rms - want).abs() / want < 0.04, "rms {rms} vs {want}");
+        // continuous: neighbouring evaluations differ little
+        assert!((w.eval(1e-3) - w.eval(1.000001e-3)).abs() < 1e-3);
+        assert_eq!(w.dc_value(), 0.0);
+        assert_eq!(w.noise_period(), Some(0.5e-3));
+    }
+
+    #[test]
+    fn sums_combine_levels() {
+        let w = parse_source("5 + SIN(0 1 1k) + NOISE(0.01 1Meg)").unwrap();
+        assert!(matches!(&w, Waveform::Sum(p) if p.len() == 3));
+        assert_eq!(w.dc_value(), 5.0);
+        assert!((w.eval(0.25e-3) - 6.0).abs() < 0.1);
+        // exponents and a leading sign are not sums
+        assert_eq!(parse_source("1e+3").unwrap(), Waveform::Dc(1000.0));
+        assert_eq!(parse_source("+5").unwrap(), Waveform::Dc(5.0));
+        assert!(parse_source("NOISE(1)").is_err());
+        assert!(parse_source("NOISE(-1 1k)").is_err());
+        let w = parse_source_full("5 + NOISE(0.1 1Meg) AC 1").unwrap();
+        assert!(w.ac == Some((1.0, 0.0)) && matches!(w.wave, Waveform::Sum(_)));
     }
 }

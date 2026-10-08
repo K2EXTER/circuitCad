@@ -653,6 +653,9 @@ fn main() -> eframe::Result {
                     if let (Some(stop), Some(step)) = (args.get(i + 1), args.get(i + 2)) {
                         app.sch.set_tran_settings(stop, step);
                         app.sch.analyze_tran();
+                        if args.iter().any(|a| a == "--spectrum") {
+                            app.sch.show_spectrum();
+                        }
                     }
                 }
             }

@@ -246,20 +246,35 @@ pub fn draw_group(
             let pts: Vec<Pos2> = (a..b).map(|i| Pos2::new(sx(tr.t[i]), sy(tr.v[i]))).collect();
             clip.add(egui::Shape::line(pts, stroke));
         } else {
+            // too many points: keep first / min / max / last of every pixel column
+            // (grouped by screen position, so this is also right on a logarithmic axis)
             let mut pts: Vec<Pos2> = vec![];
-            let cols = pa.width().ceil() as usize;
-            let per = n.div_ceil(cols).max(1);
-            let mut i = a;
-            while i < b {
-                let j = (i + per).min(b);
-                let seg = &tr.v[i..j];
-                let (mn, mx) = seg.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
-                let x = sx(tr.t[i]);
-                let (first, last) = (seg[0], seg[seg.len() - 1]);
-                for v in [first, mn, mx, last] {
-                    pts.push(Pos2::new(x, sy(v)));
+            let mut cur: Option<(i64, f32, f64, f64, f64, f64)> = None; // column, x, first, min, max, last
+            let flush = |pts: &mut Vec<Pos2>, c: (i64, f32, f64, f64, f64, f64)| {
+                for v in [c.2, c.3, c.4, c.5] {
+                    pts.push(Pos2::new(c.1, sy(v)));
                 }
-                i = j;
+            };
+            for i in a..b {
+                let px = sx(tr.t[i]);
+                let col = px.floor() as i64;
+                let y = tr.v[i];
+                match &mut cur {
+                    Some((c, _, _, mn, mx, last)) if *c == col => {
+                        *mn = mn.min(y);
+                        *mx = mx.max(y);
+                        *last = y;
+                    }
+                    _ => {
+                        if let Some(done) = cur.take() {
+                            flush(&mut pts, done);
+                        }
+                        cur = Some((col, px, y, y, y, y));
+                    }
+                }
+            }
+            if let Some(done) = cur {
+                flush(&mut pts, done);
             }
             clip.add(egui::Shape::line(pts, stroke));
         }

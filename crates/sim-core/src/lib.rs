@@ -4,6 +4,7 @@ mod ac;
 mod circuit;
 mod dc;
 mod from_schematic;
+mod spectrum;
 mod spice_in;
 mod tran;
 mod value;
@@ -15,12 +16,15 @@ pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use from_schematic::{from_schematic, ConvertError};
 pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};
 pub use tran::{transient, Signal, TranResult, TranSettings};
-pub use value::parse_value;
+pub use spectrum::{spectrum, stats, Spectrum, Stats};
+pub use value::{parse_part_value, parse_value};
 pub use waveform::{parse_source, parse_source_full, Source, Waveform};
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_ac;
+#[cfg(test)]
+mod tests_noise;
 #[cfg(test)]
 mod tests_tran;

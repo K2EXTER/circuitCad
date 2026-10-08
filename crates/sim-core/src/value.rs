@@ -54,6 +54,24 @@ pub fn parse_value(s: &str) -> Option<f64> {
     Some(num * mult)
 }
 
+/// A part value with optional parasitics: `100n`, `100n ESR=20m ESL=5n`, `10u DCR=0.1`.
+/// Returns the main value and the (upper-case key, value) pairs.
+pub fn parse_part_value(s: &str) -> Result<(f64, Vec<(String, f64)>), String> {
+    let mut it = s.split_whitespace();
+    let first = it.next().ok_or("値が空です")?;
+    let main = parse_value(first).ok_or_else(|| format!("値「{first}」を数値にできません"))?;
+    let mut extra = vec![];
+    for tok in it {
+        let (k, v) = tok.split_once('=').ok_or_else(|| format!("「{tok}」は 名前=値 の形式ではありません (例: ESR=20m)"))?;
+        let val = parse_value(v).ok_or_else(|| format!("{k} の値「{v}」を数値にできません"))?;
+        if val < 0.0 {
+            return Err(format!("{k} は0以上にしてください"));
+        }
+        extra.push((k.to_ascii_uppercase(), val));
+    }
+    Ok((main, extra))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +98,19 @@ mod tests {
         assert!(parse_value("abc").is_none());
         assert!(parse_value("12 3").is_none());
         assert!(parse_value("1k2").is_none());
+    }
+
+    #[test]
+    fn part_values_with_parasitics() {
+        let (c0, p0) = parse_part_value("100n").unwrap();
+        assert!((c0 - 100e-9).abs() < 1e-21 && p0.is_empty());
+        let (c, p) = parse_part_value("10u ESR=20m ESL=5n").unwrap();
+        assert!((c - 10e-6).abs() < 1e-18);
+        assert_eq!(p.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(), ["ESR", "ESL"]);
+        assert!((p[0].1 - 0.02).abs() < 1e-15 && (p[1].1 - 5e-9).abs() < 1e-21);
+        assert!(parse_part_value("10u ESR").is_err());
+        assert!(parse_part_value("10u ESR=x").is_err());
+        assert!(parse_part_value("10u ESR=-1").is_err());
+        assert!(parse_part_value("").is_err());
     }
 }

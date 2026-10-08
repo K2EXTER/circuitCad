@@ -30,7 +30,32 @@ pub fn to_spice(s: &Schematic, title: &str) -> String {
         let r = &c.refdes;
         match c.kind {
             Kind::Resistor | Kind::Capacitor | Kind::Inductor => {
-                let _ = writeln!(out, "{r} {} {} {}", nd(r, "1"), nd(r, "2"), c.value);
+                // "100n ESR=20m ESL=5n" / "10u DCR=0.1": expand the parasitics into series elements
+                let mut tok = c.value.split_whitespace();
+                let main = tok.next().unwrap_or("0");
+                let get = |key: &str| c.value.split_whitespace().find_map(|t| t.to_ascii_uppercase().strip_prefix(&format!("{key}=")).map(|v| v.to_string()));
+                let (n1, n2) = (nd(r, "1"), nd(r, "2"));
+                match c.kind {
+                    Kind::Capacitor if get("ESR").is_some() || get("ESL").is_some() => {
+                        let mut from = n1;
+                        if let Some(esr) = get("ESR") {
+                            let _ = writeln!(out, "R{r}_ESR {from} {r}_esr {esr}");
+                            from = format!("{r}_esr");
+                        }
+                        if let Some(esl) = get("ESL") {
+                            let _ = writeln!(out, "L{r}_ESL {from} {r}_esl {esl}");
+                            from = format!("{r}_esl");
+                        }
+                        let _ = writeln!(out, "{r} {from} {n2} {main}");
+                    }
+                    Kind::Inductor if get("DCR").is_some() => {
+                        let _ = writeln!(out, "{r} {n1} {r}_dcr {main}");
+                        let _ = writeln!(out, "R{r}_DCR {r}_dcr {n2} {}", get("DCR").unwrap());
+                    }
+                    _ => {
+                        let _ = writeln!(out, "{r} {n1} {n2} {main}");
+                    }
+                }
             }
             Kind::Diode | Kind::Led => {
                 diode_models = true;

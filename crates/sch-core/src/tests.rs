@@ -218,3 +218,21 @@ fn erc_warns_when_a_power_net_has_no_source() {
     let msgs: Vec<_> = erc(&s).into_iter().map(|p| p.message).collect();
     assert!(!msgs.iter().any(|m| m.contains("電圧源")), "{msgs:?}");
 }
+
+#[test]
+fn spice_expands_capacitor_and_inductor_parasitics() {
+    let mut s = Schematic::default();
+    s.add(Kind::Capacitor, (0, 0), 0);
+    s.components[0].value = "100n ESR=20m ESL=5n".into();
+    s.add(Kind::Inductor, (10, 0), 0);
+    s.components[1].value = "10u DCR=0.1".into();
+    s.add(Kind::Resistor, (20, 0), 0);
+    let d = to_spice(&s, "t");
+    assert!(d.contains("RC1_ESR "), "{d}");
+    assert!(d.contains("LC1_ESL "), "{d}");
+    assert!(d.lines().any(|l| l.starts_with("C1 C1_esl ") && l.ends_with(" 100n")), "{d}");
+    assert!(d.lines().any(|l| l.starts_with("L1 ") && l.contains(" L1_dcr 10u")), "{d}");
+    assert!(d.contains("RL1_DCR L1_dcr "), "{d}");
+    // a plain value is untouched
+    assert!(d.lines().any(|l| l.starts_with("R1 ") && l.ends_with(" 10k")), "{d}");
+}

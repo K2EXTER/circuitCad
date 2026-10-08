@@ -2,7 +2,7 @@
 
 use crate::circuit::{BjtModel, Circuit, DiodeModel, Element};
 use crate::spice_in::{add_model_instance, add_subckt_instance};
-use crate::value::parse_value;
+use crate::value::parse_part_value;
 use crate::waveform::parse_source_full;
 use sch_core::{extract, Kind, Schematic, SimKind};
 use std::collections::HashMap;
@@ -50,26 +50,58 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
     let mut errors = vec![];
     for comp in &s.components {
         let r = comp.refdes.as_str();
-        let value = |errors: &mut Vec<ConvertError>| match parse_value(&comp.value) {
-            Some(x) => Some(x),
-            None => {
-                errors.push(err(r, format!("値「{}」を数値にできません", comp.value)));
-                None
-            }
-        };
         match comp.kind {
             Kind::Resistor | Kind::Capacitor | Kind::Inductor => {
-                let Some(x) = value(&mut errors) else { continue };
+                let (x, extra) = match parse_part_value(&comp.value) {
+                    Ok(v) => v,
+                    Err(m) => {
+                        errors.push(err(r, m));
+                        continue;
+                    }
+                };
                 let (a, b) = (node_of(&mut c, r, "1"), node_of(&mut c, r, "2"));
                 if comp.kind == Kind::Resistor && x <= 0.0 {
                     errors.push(err(r, "抵抗値は正の値にしてください"));
                     continue;
                 }
-                c.add(match comp.kind {
-                    Kind::Resistor => Element::Resistor { name: r.into(), a, b, r: x },
-                    Kind::Capacitor => Element::Capacitor { name: r.into(), a, b, c: x },
-                    _ => Element::Inductor { name: r.into(), a, b, l: x },
-                });
+                let get = |k: &str| extra.iter().find(|(n, _)| n == k).map(|(_, v)| *v).filter(|v| *v > 0.0);
+                let allowed: &[&str] = match comp.kind {
+                    Kind::Capacitor => &["ESR", "ESL"],
+                    Kind::Inductor => &["DCR"],
+                    _ => &[],
+                };
+                if let Some((k, _)) = extra.iter().find(|(k, _)| !allowed.contains(&k.as_str())) {
+                    errors.push(err(r, format!("{k} はこの部品では使えません (使えるもの: {})", if allowed.is_empty() { "なし".to_string() } else { allowed.join(", ") })));
+                    continue;
+                }
+                match comp.kind {
+                    Kind::Resistor => c.add(Element::Resistor { name: r.into(), a, b, r: x }),
+                    Kind::Capacitor => {
+                        // a --ESR-- --ESL-- C -- b
+                        let mut from = a;
+                        if let Some(esr) = get("ESR") {
+                            let m = c.node(&format!("{r}.esr"));
+                            c.add(Element::Resistor { name: format!("{r}.ESR"), a: from, b: m, r: esr });
+                            from = m;
+                        }
+                        if let Some(esl) = get("ESL") {
+                            let m = c.node(&format!("{r}.esl"));
+                            c.add(Element::Inductor { name: format!("{r}.ESL"), a: from, b: m, l: esl });
+                            from = m;
+                        }
+                        c.add(Element::Capacitor { name: r.into(), a: from, b, c: x });
+                    }
+                    _ => {
+                        // a -- L -- DCR -- b
+                        let mut to = b;
+                        if let Some(dcr) = get("DCR") {
+                            let m = c.node(&format!("{r}.dcr"));
+                            c.add(Element::Resistor { name: format!("{r}.DCR"), a: m, b: to, r: dcr });
+                            to = m;
+                        }
+                        c.add(Element::Inductor { name: r.into(), a, b: to, l: x });
+                    }
+                }
             }
             Kind::VSource => {
                 let src = match parse_source_full(&comp.value) {

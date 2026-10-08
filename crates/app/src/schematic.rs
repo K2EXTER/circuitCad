@@ -4,7 +4,10 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec
 use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
-use sim_core::{ac_analysis, dc_op, from_schematic, parse_value, transient, AcResult, AcSettings, AcSweep, DcResult, TranResult, TranSettings};
+use sim_core::{
+    ac_analysis, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    TranResult, TranSettings,
+};
 use std::collections::BTreeSet;
 use sch_core::{erc, extract, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
@@ -77,6 +80,12 @@ struct TranView {
     outcome: Result<TranResult, Vec<String>>,
     selected: BTreeSet<String>,
     plot: PlotState,
+    /// Show the amplitude spectrum instead of the waveform.
+    spectrum: bool,
+    spec_t0: String,
+    spec_t1: String,
+    spec_plot: Option<PlotState>,
+    spec_cache: Option<(String, Vec<(String, Spectrum)>)>,
 }
 
 /// A finished DC analysis, remembered with the schematic it was computed from.
@@ -512,6 +521,13 @@ impl SchEditor {
     }
 
 
+    /// Switch the waveform viewer to the amplitude spectrum (command line `--spectrum`).
+    pub fn show_spectrum(&mut self) {
+        if let Some(v) = self.tran.as_mut() {
+            v.spectrum = true;
+        }
+    }
+
     pub fn analyze_tran(&mut self) {
         self.run_tran();
     }
@@ -540,7 +556,16 @@ impl SchEditor {
             Ok(r) => format!("過渡解析: 完了 ({} 点, 再試行 {} 回)", r.time.len(), r.retries),
             Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        self.tran = Some(TranView { outcome, selected, plot: PlotState::new(tstop) });
+        self.tran = Some(TranView {
+            outcome,
+            selected,
+            plot: PlotState::new(tstop),
+            spectrum: false,
+            spec_t0: format!("{:.6e}", tstop * 0.1),
+            spec_t1: format!("{:.6e}", tstop),
+            spec_plot: None,
+            spec_cache: None,
+        });
         self.wave_mode = WaveMode::Tran;
     }
 
@@ -548,14 +573,23 @@ impl SchEditor {
     fn tran_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.tran.as_mut() else { return };
         let mut close = false;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("ドラッグ: 移動 / ホイール: 時間軸ズーム (Ctrl: 縦軸) / ダブルクリック: 全体表示");
+            ui.checkbox(spectrum, "スペクトル表示");
+            if *spectrum {
+                ui.label("解析範囲");
+                ui.add(egui::TextEdit::singleline(spec_t0).desired_width(70.0));
+                ui.label("〜");
+                ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0));
+                ui.small("秒 / 0 dB = 1 V(ピーク値)。立ち上がり直後を除いた範囲を指定してください");
+            } else {
+                ui.small("ドラッグ: 移動 / ホイール: 時間軸ズーム (Ctrl: 縦軸) / ダブルクリック: 全体表示 / 統計値は表示中の範囲");
+            }
         });
-        let TranView { outcome, selected, plot: st } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
@@ -572,6 +606,20 @@ impl SchEditor {
                         ui.set_width(170.0);
                         if ui.button("選択をクリア").clicked() {
                             selected.clear();
+                        }
+                        // mean and AC RMS (= noise / ripple amplitude) over the visible window
+                        let (w0, w1) = if *spectrum {
+                            (parse_value(spec_t0).unwrap_or(0.0), parse_value(spec_t1).unwrap_or(f64::MAX))
+                        } else {
+                            st.x
+                        };
+                        for name in order.iter().filter(|n| selected.contains(**n)).take(6) {
+                            if let Some(sg) = res.signal(name) {
+                                if let Some(sx) = signal_stats(&res.time, &sg.values, w0, w1) {
+                                    let u = sg.unit;
+                                    ui.small(format!("{name}\n  平均 {}{u}  AC実効値 {}{u}", plot::axis_label(sx.mean, sx.mean.abs() / 1000.0), plot::axis_label(sx.rms_ac, sx.rms_ac.abs() / 1000.0)));
+                                }
+                            }
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {
@@ -596,6 +644,38 @@ impl SchEditor {
                         });
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    if *spectrum {
+                        let (Some(t0), Some(t1)) = (parse_value(spec_t0), parse_value(spec_t1)) else {
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "解析範囲を数値で入力してください", FontId::proportional(14.0), Color32::from_rgb(230, 60, 60));
+                            return;
+                        };
+                        let key = format!("{t0:e}|{t1:e}|{selected:?}");
+                        if spec_cache.as_ref().map(|c| &c.0) != Some(&key) {
+                            let list: Vec<(String, Spectrum)> = order
+                                .iter()
+                                .filter(|n| selected.contains(**n))
+                                .filter_map(|n| res.signal(n).and_then(|sg| fft_spectrum(&res.time, &sg.values, t0, t1)).map(|sp| (n.to_string(), sp)))
+                                .collect();
+                            *spec_plot = list.first().map(|(_, sp)| PlotState::log(sp.freq[0], *sp.freq.last().unwrap()));
+                            *spec_cache = Some((key, list));
+                        }
+                        let list = &spec_cache.as_ref().unwrap().1;
+                        let (Some(sp_state), false) = (spec_plot.as_mut(), list.is_empty()) else {
+                            ui.painter().rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください (範囲が不正な場合も表示されません)", FontId::proportional(14.0), Color32::from_gray(150));
+                            return;
+                        };
+                        let dbs: Vec<Vec<f64>> = list.iter().map(|(_, sp)| sp.amp.iter().map(|a| 20.0 * a.max(1e-12).log10()).collect()).collect();
+                        let traces: Vec<Trace> = list
+                            .iter()
+                            .zip(&dbs)
+                            .enumerate()
+                            .map(|(k, ((n, sp), db))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &sp.freq, v: db })
+                            .collect();
+                        let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
+                        plot::draw_group(ui, rect, egui::Id::new("spectrum"), &traces, sp_state, 0, &style, true);
+                        return;
+                    }
                     // traces per unit group, colours assigned in list order
                     let mut groups: [Vec<Trace>; 2] = [vec![], vec![]];
                     let mut k = 0;
@@ -1051,6 +1131,13 @@ impl SchEditor {
                 }
                 if c.kind == Kind::VSource {
                     ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 1m 1u 1u 2m 5m) / PWL(0 0 1m 5) / AC 1 (AC解析の入力) / 5 AC 1");
+                    ui.small("ノイズ: NOISE(実効値 最高周波数 [シード]) 例: 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) (+ の前後は空白)");
+                }
+                if c.kind == Kind::Capacitor {
+                    ui.small("例: 100n / 100n ESR=20m ESL=5n (等価直列抵抗・インダクタンス)");
+                }
+                if c.kind == Kind::Inductor {
+                    ui.small("例: 10u / 10u DCR=0.1 (巻線抵抗)");
                 }
                 if let Some(sym) = &c.custom {
                     ui.label(format!("フットプリント: {}", c.footprint));
