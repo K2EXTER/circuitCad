@@ -513,7 +513,7 @@ impl SchEditor {
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("縦軸: 電圧ノイズ密度 [dB re 1 nV/√Hz]。60 dB = 1 µV/√Hz");
+            ui.small("縦軸: 電圧ノイズ密度 [dB, 0 dB = 1 nV/√Hz]。60 dB = 1 µV/√Hz");
         });
         let NoiseView { outcome, selected, plot: st } = view;
         match outcome {
@@ -577,7 +577,7 @@ impl SchEditor {
                         return;
                     }
                     let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v }).collect();
-                    let sty = Style { unit: " dBnV/√Hz", x_unit: "Hz", x_name: "f", plain_y: true };
+                    let sty = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
                     plot::draw_group(ui, rect, egui::Id::new("noise_density"), &traces, st, 0, &sty, true);
                 });
             }
@@ -1204,6 +1204,11 @@ impl SchEditor {
     // ------------------------------------------------------------- side panel
 
     pub fn side_panel(&mut self, ui: &mut egui::Ui) {
+        // the panel is taller than a small window: let it scroll instead of hiding the bottom controls
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| self.side_panel_body(ui));
+    }
+
+    fn side_panel_body(&mut self, ui: &mut egui::Ui) {
         ui.heading("回路図");
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.tool, Tool::Select, "選択");
