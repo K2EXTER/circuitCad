@@ -155,6 +155,12 @@ pub struct SchEditor {
     lesson: Option<ActiveLesson>,
     /// A left drag with Alt held pans the view (until the button is released).
     alt_pan: bool,
+    /// Floating settings window opened by right-clicking a part: (component index, where, serial for a fresh window position).
+    /// Solver accuracy settings and whether their window is open.
+    sim_opts: sim_core::SimOptions,
+    pub show_sim_opts: bool,
+    part_popup: Option<(usize, egui::Pos2, u32)>,
+    popup_serial: u32,
     lesson_base: Schematic,
     sweep_src: String,
     sweep_start: String,
@@ -356,6 +362,10 @@ impl Default for SchEditor {
             mc_metric: TranMetric::RiseTime,
             lesson: None,
             alt_pan: false,
+            part_popup: None,
+            sim_opts: sim_core::SimOptions::default(),
+            show_sim_opts: false,
+            popup_serial: 0,
             lesson_base: Schematic::default(),
             sweep_src: String::new(),
             sweep_start: "0".into(),
@@ -422,6 +432,7 @@ mod canvas;
 mod draw;
 mod interact;
 mod panel;
+mod settings;
 mod file;
 #[cfg(test)]
 mod select_tests;

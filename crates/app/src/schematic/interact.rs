@@ -160,7 +160,19 @@ impl SchEditor {
             self.pending = None;
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
-            self.pending = None;
+            let was_drawing = self.pending.take().is_some();
+            // right-clicking a part (when not in the middle of a wire) opens its settings window
+            if !was_drawing
+                && matches!(self.tool, Tool::Select)
+                && !self.noise_pick
+                && let Some(i) = self.comp_at(g)
+                && let Some(pos) = resp.interact_pointer_pos()
+            {
+                self.multi.clear();
+                self.selected = Some(Sel::Comp(i));
+                self.popup_serial += 1;
+                self.part_popup = Some((i, pos, self.popup_serial));
+            }
         }
     }
 }

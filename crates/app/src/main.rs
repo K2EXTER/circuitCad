@@ -104,6 +104,12 @@ impl eframe::App for App {
                         if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
                     }
                 });
+                ui.menu_button("設定", |ui| {
+                    if ui.button("シミュレーション設定…").on_hover_text("計算の精度や収束のしやすさを調整します").clicked() {
+                        self.sch.show_sim_opts = true;
+                        ui.close();
+                    }
+                });
                 if !sch_mode {
                     if ui.button("DRC").clicked() {
                         self.board_ed.run_drc();
@@ -111,6 +117,7 @@ impl eframe::App for App {
                 }
             });
         });
+        self.sch.settings_window(ui.ctx());
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.label(if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status });
             if self.show_hints {
@@ -129,6 +136,7 @@ impl eframe::App for App {
             }
             egui::CentralPanel::default().show(ui, |ui| self.sch.canvas(ui));
             self.sch.lesson_window(ui.ctx());
+            self.sch.part_popup_window(ui.ctx());
             return;
         }
         self.board_ed.order_window(ui.ctx());

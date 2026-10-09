@@ -6,11 +6,6 @@ use crate::waveform::Waveform;
 use std::fmt;
 
 const VT: f64 = 0.025852; // kT/q at 300.15 K
-pub(crate) const GMIN: f64 = 1e-12;
-const RELTOL: f64 = 1e-6;
-const VNTOL: f64 = 1e-8;
-const ABSTOL: f64 = 1e-12;
-const MAX_ITER: usize = 150;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SimError {
@@ -178,7 +173,7 @@ impl Compiled {
         let zero_x = vec![0.0; self.n_unknowns];
         let zero_vj = vec![0.0; self.n_slots];
         match which {
-            Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(GMIN, 1.0)),
+            Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(crate::options::options().gmin, 1.0)),
             Strategy::Gmin => {
                 // gmin from 1e-2 down to 1e-12, each step starting from the previous solution
                 let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
@@ -194,7 +189,7 @@ impl Compiled {
                 // ramp every independent source from 0 to full value
                 let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
                 for step in 1..=25 {
-                    let a = self.newton(x, vj, &Ctx::dc(GMIN, step as f64 / 25.0))?;
+                    let a = self.newton(x, vj, &Ctx::dc(crate::options::options().gmin, step as f64 / 25.0))?;
                     iters += a.iterations;
                     x = a.x;
                     vj = a.vj;

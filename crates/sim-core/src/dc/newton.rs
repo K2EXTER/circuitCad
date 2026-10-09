@@ -3,9 +3,10 @@
 use super::*;
 
 pub(super) fn converged(x: &[f64], xn: &[f64], n_node_unknowns: usize) -> bool {
+    let o = crate::options::options();
     x.iter().zip(xn).enumerate().all(|(i, (a, b))| {
-        let tol = if i < n_node_unknowns { VNTOL } else { ABSTOL };
-        (a - b).abs() <= RELTOL * a.abs().max(b.abs()) + tol
+        let tol = if i < n_node_unknowns { o.vntol } else { o.abstol };
+        (a - b).abs() <= o.reltol * a.abs().max(b.abs()) + tol
     })
 }
 
@@ -80,7 +81,7 @@ impl Compiled {
         let n_node_unknowns = self.n_nodes - 1;
         // the previous point, its Newton step, its residual, its junction state and the fraction taken
         let mut prev: Option<(Vec<f64>, Vec<f64>, f64, Vec<f64>, f64)> = None;
-        for it in 1..=MAX_ITER {
+        for it in 1..=crate::options::options().max_iter {
             let (m, limited) = self.assemble(&mut vj, &x, ctx);
             let n = m.n;
             let mut r2 = f64::NAN;

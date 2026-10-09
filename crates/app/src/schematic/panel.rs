@@ -260,6 +260,31 @@ impl SchEditor {
         }
     }
 
+    /// The settings window opened by right-clicking a part: the same editor as the left panel's
+    /// "選択中の部品" section, next to the part. Closes when another thing gets selected.
+    pub fn part_popup_window(&mut self, ctx: &egui::Context) {
+        let Some((i, pos, serial)) = self.part_popup else { return };
+        if self.selected != Some(Sel::Comp(i)) || i >= self.sch.components.len() {
+            self.part_popup = None;
+            return;
+        }
+        let c = &self.sch.components[i];
+        let title = if c.kind.is_power_symbol() { "部品の設定".to_string() } else { format!("部品の設定: {}", c.refdes) };
+        let mut open = true;
+        egui::Window::new(title)
+            .id(egui::Id::new(("part_popup", serial)))
+            .open(&mut open)
+            .default_pos(pos + egui::vec2(12.0, 12.0))
+            .default_width(260.0)
+            .show(ctx, |ui| {
+                ui.small("値や番号を直すと回路に反映されます。Esc または × で閉じます");
+                self.panel_properties(ui);
+            });
+        if !open || ctx.input(|i| i.key_pressed(egui::Key::Escape)) || self.selected != Some(Sel::Comp(i)) {
+            self.part_popup = None;
+        }
+    }
+
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         if ui.button("ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {

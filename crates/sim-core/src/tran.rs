@@ -2,7 +2,7 @@
 //! corner, to avoid numerical ringing), Newton-Raphson per step, step halving on failure.
 
 use crate::circuit::Circuit;
-use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Strategy, Ce, GMIN};
+use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Strategy, Ce};
 
 const MAX_POINTS: f64 = 1_000_000.0;
 
@@ -178,7 +178,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         let att: Attempt = loop {
             let trap = !(force_be || retried);
             let ctx = Ctx {
-                gmin: GMIN,
+                gmin: crate::options::options().gmin,
                 scale: 1.0,
                 t: t + h,
                 dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v }),
