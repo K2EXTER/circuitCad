@@ -48,3 +48,5 @@ mod tests_thermal;
 mod tests_noise;
 #[cfg(test)]
 mod tests_tran;
+#[cfg(test)]
+mod tests_perf;

@@ -254,7 +254,7 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
     let jw_c = |w: f64| C64::new(0.0, w);
     for &f in &freqs {
         let w = 2.0 * PI * f;
-        let mut a: Vec<C64> = jac.a.iter().map(|&x| C64::new(x, 0.0)).collect();
+        let mut a: Vec<C64> = jac.dense().iter().map(|&x| C64::new(x, 0.0)).collect();
         let mut b = vec![C64::ZERO; n];
         let add = |a: &mut Vec<C64>, r: usize, c: usize, val: C64| {
             if r != 0 && c != 0 {

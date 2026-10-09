@@ -118,9 +118,12 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         for (k, &i) in node_ids.iter().enumerate() {
             res.signals[k].values.push(v(x, i));
         }
-        for (k, e) in cm.element_results(x, Some(t), cap_i).iter().enumerate() {
-            res.signals[node_ids.len() + k].values.push(e.current);
-        }
+        let base = node_ids.len();
+        let mut k = 0;
+        cm.visit_elements(x, Some(t), cap_i, |_, current, _, _, _| {
+            res.signals[base + k].values.push(current);
+            k += 1;
+        });
     };
     record(&mut result, 0.0, &x, &cap_i, &cm);
 

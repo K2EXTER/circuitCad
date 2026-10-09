@@ -189,6 +189,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
     // ---- sweep
     let freqs = frequencies(&st.sweep);
     let mut contributions: Vec<NoiseContribution> = srcs.iter().map(|s| NoiseContribution { name: s.name.clone(), psd: Vec::with_capacity(freqs.len()), rms: 0.0 }).collect();
+    let jd = jac.dense();
     let mut out_psd = Vec::with_capacity(freqs.len());
     let mut gain: Vec<f64> = vec![];
     for &f in &freqs {
@@ -197,7 +198,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
         let mut a = vec![C64::ZERO; n * n];
         for r in 0..n {
             for c in 0..n {
-                a[c * n + r] = C64::new(jac.a[r * n + c], 0.0);
+                a[c * n + r] = C64::new(jd[r * n + c], 0.0);
             }
         }
         // transposed stamp: A^T[col][row]
