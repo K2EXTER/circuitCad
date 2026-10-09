@@ -375,6 +375,32 @@ mod tests {
         std::fs::write(root.join("rlc_board.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
     }
 
+    /// The router on a real circuit: the NE555 blinker laid out on a grid of parts.
+    #[test]
+    fn autoroute_handles_the_ne555_blinker() {
+        use pcb_core::ratsnest::ratsnest;
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut app = App::default();
+        app.sch.load_path(root.join("ne555_blinker.schjson"));
+        app.board_ed.import_from_schematic(&app.sch);
+        let b = &mut app.board_ed.board;
+        b.set_rect_outline(0.0, 0.0, 60.0, 40.0);
+        let refs: Vec<String> = b.parts.iter().map(|p| p.refdes.clone()).collect();
+        for (k, r) in refs.iter().enumerate() {
+            b.place_part(r, Point::new(8.0 + 10.0 * (k % 5) as f64, 10.0 + 14.0 * (k / 5) as f64), 0);
+        }
+        let before = ratsnest(b).len();
+        assert!(before > 0);
+        app.board_ed.autoroute(None);
+        let left = ratsnest(&app.board_ed.board);
+        println!("{} -> {} unrouted; {}", before, left.len(), app.board_ed.status);
+        assert!(left.len() < before, "{}", app.board_ed.status);
+        // whatever it routed keeps the rules
+        assert!(pcb_core::drc::check(&app.board_ed.board).is_empty(), "{:?}", pcb_core::drc::check(&app.board_ed.board));
+        app.board_ed.undo();
+        assert_eq!(ratsnest(&app.board_ed.board).len(), before, "one undo takes the whole run back");
+    }
+
     /// Writes a scratch board with parts on both sides (not part of the repository):
     /// `cargo test -p app write_bottom_demo -- --ignored`
     #[test]

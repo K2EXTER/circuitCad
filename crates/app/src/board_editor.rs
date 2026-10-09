@@ -2,6 +2,7 @@
 
 use crate::schematic::SchEditor;
 use eframe::egui::{self, Color32, Pos2, Rect, Sense, Stroke, Vec2};
+use pcb_core::autoroute::{self, RouteOptions};
 use pcb_core::drc::{self, connectivity};
 use pcb_core::geom::{inside_polygon, triangulate};
 use pcb_core::netlist::{self, NetlistNet, NetlistPart};
@@ -741,6 +742,34 @@ impl BoardEditor {
         }
     }
 
+    /// Route the airwires of every net, or only of `net`. One undo step.
+    pub fn autoroute(&mut self, net: Option<&str>) {
+        if self.board.outline.len() < 3 {
+            self.status = "先に基板の外形を決めてください".into();
+            return;
+        }
+        if !ratsnest(&self.board).iter().any(|w| net.is_none_or(|n| w.net == n)) {
+            self.status = "自動配線: 未配線はありません".into();
+            return;
+        }
+        self.checkpoint();
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: 0.2 };
+        let report = autoroute::autoroute(&mut self.board, &opt, net);
+        self.violations.clear();
+        if report.routed == 0 {
+            self.undo.pop(); // nothing changed: no undo step
+        }
+        self.status = if report.failed.is_empty() {
+            format!("自動配線: {} 本を配線しました。DRC で確認しましょう", report.routed)
+        } else {
+            format!(
+                "自動配線: {} 本を配線、{} 本は通せませんでした (黄色の線のまま)。部品の位置を動かすか、手動で配線してください",
+                report.routed,
+                report.failed.len()
+            )
+        };
+    }
+
     pub fn run_drc(&mut self) {
         self.violations = drc::check(&self.board);
         self.status = format!("DRC: 違反 {} 件", self.violations.len());
@@ -1266,7 +1295,7 @@ impl BoardEditor {
         }
         let unrouted = ratsnest(&self.board).len();
         if unrouted > 0 {
-            return format!("黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールでつなぎましょう。広い GND は「銅箔ゾーン」にすると簡単です");
+            return format!("黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールで手でつなぐか、左の「自動配線」に任せましょう。広い GND は「銅箔ゾーン」にすると簡単です");
         }
         if self.violations.is_empty() {
             return "配線が終わりました。「DRC を実行」でルール違反がないか確認し、問題なければ「ファイル → 製造ファイルを書き出し」で発注用データ (ガーバー) を作れます".into();
@@ -1374,6 +1403,24 @@ impl BoardEditor {
             ui.label("基板名 (出力ファイル名)");
             ui.text_edit_singleline(&mut self.board.name);
 
+            ui.separator();
+            ui.label("自動配線");
+            ui.horizontal(|ui| {
+                if ui.button("全部").on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
+線幅・ビア径は下の設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます").clicked() {
+                    self.autoroute(None);
+                }
+                let sel_net = match self.selected {
+                    Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
+                    _ => None,
+                };
+                let label = sel_net.as_ref().map_or("選択したネットだけ".to_string(), |n| format!("{n} だけ"));
+                if ui.add_enabled(sel_net.is_some(), egui::Button::new(label)).on_hover_text("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます").clicked()
+                    && let Some(n) = sel_net {
+                        self.autoroute(Some(&n));
+                    }
+            });
+            ui.small("2層・45°配線。ルール違反になる配線は自動的にやめます");
             ui.separator();
             if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                 self.run_drc();

@@ -21,7 +21,7 @@ fn v(message: String, at: Point) -> Violation {
 // ---------------------------------------------------------------- geometry
 
 #[derive(Clone, Copy, Debug)]
-enum Geo {
+pub(crate) enum Geo {
     /// Segment `a`-`b` swept by a disc of radius `r` (r > 0: track, round pad, oval pad, via).
     Cap { a: Point, b: Point, r: f64 },
     /// Axis-aligned rectangle.
@@ -32,7 +32,7 @@ fn cross(o: Point, a: Point, b: Point) -> f64 {
     (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 }
 
-fn point_seg(p: Point, a: Point, b: Point) -> f64 {
+pub(crate) fn point_seg(p: Point, a: Point, b: Point) -> f64 {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     let l2 = dx * dx + dy * dy;
     let t = if l2 == 0.0 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / l2).clamp(0.0, 1.0) };
@@ -56,7 +56,7 @@ fn seg_seg(a: Point, b: Point, c: Point, d: Point) -> f64 {
     point_seg(a, c, d).min(point_seg(b, c, d)).min(point_seg(c, a, b)).min(point_seg(d, a, b))
 }
 
-fn point_rect(p: Point, c: Point, hw: f64, hh: f64) -> f64 {
+pub(crate) fn point_rect(p: Point, c: Point, hw: f64, hh: f64) -> f64 {
     let dx = ((p.x - c.x).abs() - hw).max(0.0);
     let dy = ((p.y - c.y).abs() - hh).max(0.0);
     dx.hypot(dy)
@@ -97,7 +97,7 @@ fn dist(x: &Geo, y: &Geo) -> f64 {
     }
 }
 
-fn shape_geo(pos: Point, shape: PadShape) -> Geo {
+pub(crate) fn shape_geo(pos: Point, shape: PadShape) -> Geo {
     match shape {
         PadShape::Circle { d } => Geo::Cap { a: pos, b: pos, r: d / 2.0 },
         PadShape::Rect { w, h } => Geo::Rect { c: pos, hw: w / 2.0, hh: h / 2.0 },
