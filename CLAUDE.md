@@ -22,7 +22,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 
 ## sim-core (`crates/sim-core/src`)
-- `dc.rs` 動作点 (MNA + ニュートン法、`dc_op`、`DcResult`/`ElementResult`)。素子の定義 `Ce` もここ (最大のファイル)
+- `dc/` 動作点 (`dc_op`、`DcResult`/`ElementResult`、収束戦略 `Strategy` は `mod.rs`)。`build.rs` 回路→コンパイル済み形(`Ce`,`Compiled`) / `devices.rs` トランジスタ等の式 / `mna.rs` 行列の組み立てと各素子のスタンプ(`Ctx`,`Dyn`) / `newton.rs` ニュートン反復 / `linalg.rs` 疎LU分解
 - `tran.rs` 過渡 / `ac.rs` AC / `noise.rs` ノイズ / `dcsweep.rs` DCスイープ / `spectrum.rs` FFT・統計
 - `waveform.rs` 電源波形 (SIN/PULSE/PWL) / `value.rs` `parse_value`・`format_value`(SPICE数値) / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `from_schematic.rs` 部品→素子の変換 (素子名 = 部品番号 refdes)。新しい部品種別はここ
