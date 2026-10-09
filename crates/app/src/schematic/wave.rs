@@ -11,6 +11,7 @@ impl SchEditor {
             WaveMode::Sweep => self.sweep.is_some(),
             WaveMode::Mc => self.mc.is_some(),
             WaveMode::Param => self.param.is_some(),
+            WaveMode::Fault => self.fault_wave.is_some(),
         }
     }
 
@@ -23,6 +24,7 @@ impl SchEditor {
             WaveMode::Sweep => self.sweep_wave_panel(ui),
             WaveMode::Mc => self.mc_wave_panel(ui),
             WaveMode::Param => self.param_wave_panel(ui),
+            WaveMode::Fault => self.fault_wave_panel(ui),
         }
     }
 

@@ -3,6 +3,9 @@
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::{dc_op, DcResult, SimError};
+use crate::measure::{wave_measure, WaveMeasure};
+use crate::spectrum::stats;
+use crate::tran::{transient, TranSettings};
 use crate::value::format_value;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -187,6 +190,95 @@ impl FaultReport {
     }
 }
 
+/// A fault compared in the time domain: the same node, healthy and broken.
+#[derive(Clone, Debug)]
+pub struct TranFaultReport {
+    pub element: String,
+    pub fault: Fault,
+    pub node: String,
+    pub healthy_time: Vec<f64>,
+    pub healthy: Vec<f64>,
+    /// `Err` when the broken circuit cannot be simulated.
+    pub faulted: Result<(Vec<f64>, Vec<f64>), SimError>,
+    /// Window used for the figures below (the second half of the run, after start-up).
+    pub window: (f64, f64),
+    pub healthy_measure: Option<WaveMeasure>,
+    pub faulted_measure: Option<WaveMeasure>,
+    pub healthy_mean: Option<f64>,
+    pub faulted_mean: Option<f64>,
+}
+
+/// Runs the transient analysis on the healthy circuit and with `element` broken as `fault`,
+/// and measures `node` in both.
+pub fn simulate_fault_tran(c: &Circuit, element: &str, fault: Fault, s: &TranSettings, node: &str) -> Result<TranFaultReport, SimError> {
+    let broken = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
+    let signal = format!("V({node})");
+    let pick = |r: &crate::TranResult| r.signal(&signal).map(|g| (r.time.clone(), g.values.clone()));
+    let h = transient(c, s)?;
+    let (healthy_time, healthy) = pick(&h).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
+    let faulted = transient(&broken, s).and_then(|r| pick(&r).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
+    let window = (s.tstop * 0.5, s.tstop);
+    let measure = |t: &[f64], v: &[f64]| (wave_measure(t, v, window.0, window.1), stats(t, v, window.0, window.1).map(|x| x.mean));
+    let (healthy_measure, healthy_mean) = measure(&healthy_time, &healthy);
+    let (faulted_measure, faulted_mean) = match &faulted {
+        Ok((t, v)) => measure(t, v),
+        Err(_) => (None, None),
+    };
+    Ok(TranFaultReport { element: element.into(), fault, node: node.into(), healthy_time, healthy, faulted, window, healthy_measure, faulted_measure, healthy_mean, faulted_mean })
+}
+
+impl TranFaultReport {
+    /// What changed at the node, in plain Japanese.
+    pub fn summary(&self) -> Vec<String> {
+        let head = format!("{} を「{}」にしたときの V({})", self.element, self.fault.label(), self.node);
+        if let Err(e) = &self.faulted {
+            return vec![format!("{head}: 過渡解析が計算できませんでした ({e})。大電流が流れるか、動作が定まらない状態です")];
+        }
+        let (Some(h), Some(f)) = (self.healthy_measure, self.faulted_measure) else {
+            return vec![format!("{head}: 範囲内の波形が短くて測れませんでした。終了時間を長くしてください")];
+        };
+        let mut out = vec![format!("{head} (終了時間の後半での値)")];
+        let mut changed = false;
+        if let (Some(a), Some(b)) = (self.healthy_mean, self.faulted_mean) {
+            let tol = 0.02 * a.abs().max(b.abs()) + 0.01;
+            if (a - b).abs() > tol {
+                out.push(format!("平均電圧: {} → {}", format_value((a * 1e3).round() / 1e3), format_value((b * 1e3).round() / 1e3)));
+                changed = true;
+            }
+        }
+        if (f.pp - h.pp).abs() > 0.2 * h.pp.max(f.pp) + 1e-3 {
+            let ratio = if h.pp > 1e-9 { format!(" ({:.1} 倍)", f.pp / h.pp) } else { String::new() };
+            out.push(format!("振幅 (p-p): {}V → {}V{ratio}", format_value((h.pp * 1e3).round() / 1e3), format_value((f.pp * 1e3).round() / 1e3)));
+            changed = true;
+        }
+        match (h.freq, f.freq) {
+            (Some(a), Some(b)) if (a - b).abs() > 0.1 * a => {
+                out.push(format!("周波数: {}Hz → {}Hz", format_value((a * 10.0).round() / 10.0), format_value((b * 10.0).round() / 10.0)));
+                changed = true;
+            }
+            (Some(a), None) => {
+                out.push(format!("周期的な波形 ({}Hz) が見られなくなりました", format_value((a * 10.0).round() / 10.0)));
+                changed = true;
+            }
+            (None, Some(b)) => {
+                out.push(format!("周期的な波形 ({}Hz) が現れました", format_value((b * 10.0).round() / 10.0)));
+                changed = true;
+            }
+            _ => {}
+        }
+        if let (Some(a), Some(b)) = (h.duty, f.duty)
+            && (a - b).abs() > 0.1
+        {
+            out.push(format!("デューティ比: {:.0} % → {:.0} %", a * 100.0, b * 100.0));
+            changed = true;
+        }
+        if !changed {
+            out.push("この点の波形はほとんど変わりませんでした。別の点を見るか、解析の範囲を変えてみましょう".into());
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,5 +347,26 @@ mod tests {
         let r = simulate_fault(&c, "R2", Fault::Short).unwrap();
         let s = r.summary().join("\n");
         assert!(s.contains("R1") && s.contains("1W 超"), "{s}");
+    }
+
+    #[test]
+    fn transient_fault_compares_the_waveform_at_a_node() {
+        use crate::waveform::parse_source;
+        // 1 kHz sine through R1 into C1 (corner at 1 kHz): opening C1 lets the full amplitude through
+        let mut c = Circuit::new();
+        let (vin, out) = (c.node("IN"), c.node("OUT"));
+        let wave = parse_source("SIN(0 2 1k)").unwrap();
+        c.add(Element::VSource { name: "V1".into(), p: vin, n: 0, wave, ac: None });
+        c.add(Element::Resistor { name: "R1".into(), a: vin, b: out, r: 1e3 });
+        c.add(Element::Capacitor { name: "C1".into(), a: out, b: 0, c: 159e-9 });
+        let set = TranSettings { tstop: 20e-3, tstep: 10e-6, uic: false };
+        let r = simulate_fault_tran(&c, "C1", Fault::Open, &set, "OUT").unwrap();
+        let (h, f) = (r.healthy_measure.unwrap(), r.faulted_measure.unwrap());
+        assert!(f.pp > 1.3 * h.pp, "{} vs {}", f.pp, h.pp);
+        assert!(r.summary().iter().any(|l| l.contains("振幅 (p-p)")), "{:?}", r.summary());
+        // a short at C1 pins the node to 0 V: the periodic wave disappears
+        let s = simulate_fault_tran(&c, "C1", Fault::Short, &set, "OUT").unwrap();
+        assert!(s.summary().iter().any(|l| l.contains("見られなくなりました") || l.contains("振幅")), "{:?}", s.summary());
+        assert!(simulate_fault_tran(&c, "C1", Fault::Open, &set, "NOPE").is_err());
     }
 }

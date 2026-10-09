@@ -31,7 +31,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `options.rs` 計算精度の設定 `SimOptions`(reltol/vntol/abstol/gmin/反復上限、スレッドごと。GUIの「設定」メニューが毎フレーム `set_options`) / `diagnose.rs` 解析失敗時の原因と直し方(日本語ヒント)
 - `measure.rs` 波形の自動測定 `wave_measure`(最小/最大/p-p/周波数/デューティ)。`stability_margins`(位相余裕・ゲイン余裕。反転なら180°ずらす)。ACの-3dB点は `montecarlo.rs` の `minus_3db`
 - `designcalc.rs` 初学者向けの値の計算(LED抵抗・分圧・RCフィルタ・78xx・トランジスタスイッチ。結果+手順+注意点+故障パターンの `CalcOut`、E24丸め)。足すときは `schematic/wizard.rs` の `CALCS` にも追加(平滑コンデンサ `smoothing_cap` あり)
-- `fault.rs` 故障シミュレーション(部品を断線/ショート/値10倍・1/10にしてDCを解き、元と比較。`simulate_fault`、`FaultReport::summary` が日本語の説明)
+- `fault.rs` 故障シミュレーション(部品を断線/ショート/値10倍・1/10にしてDCを解き、元と比較。`simulate_fault`、`FaultReport::summary` が日本語の説明。`simulate_fault_tran` は過渡波形の正常/故障比較)
 - `paramsweep.rs` パラメータスイープ(部品1つの値を振って過渡/ACを繰り返す、`param_sweep`) 
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
@@ -54,7 +54,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | `mod.rs` | 型定義(`Tool`,`Sel`,`DcView`,`TranView`...)、`SchEditor`のフィールド、`volt_color`,`eng`,`kind_tip` |
 | `canvas.rs` | 描画エリアの流れ(`canvas`: パン・ズーム、キー、描画→操作の順) / `draw.rs` シートの描画(配線・部品・電圧/電流オーバーレイ・ERCの丸) / `interact.rs` マウス操作(範囲選択・ドラッグ・ツールのクリック) / `symbols.rs` 記号の図形・座標変換・重なり判定 |
 | `panel.rs` | 左パネル。「作図」タブ(ツール・部品一覧・選択部品のプロパティと値スライダー・ERC・部品作成フォーム)と「解析」タブの切替(`PanelTab`、レッスンの手順に合わせて自動で切り替わる) / `analysis_panel.rs` 「解析」タブの中身(DC・過渡・AC・スイープ・ノイズ・温度とばらつき・結果一覧) / `hint.rs` 画面下のヒント文 |
-| `fault.rs` 「故障シミュレーション」パネル(1部品を壊す/全部品を順に壊して影響順に並べる。`--fault` で起動引数からも) / `wizard.rs` 「学ぶ → 値の決め方」窓(`CALCS`、選択中の部品へ値を反映) / `param.rs` パラメータスイープのパネルと重ね描き(`--param` で起動引数からも実行可) / `settings.rs` 「設定 → シミュレーション設定」ウィンドウ / `panel.rs` の `part_popup_window` は部品の右クリックで出る設定小窓(選択部品プロパティと同じ中身) |
+| `fault.rs` 「故障シミュレーション」パネル(1部品を壊す/全部品を順に壊して影響順に並べる。`--fault` で起動引数からも。「比べる」でDC/過渡を切替、過渡は `WaveMode::Fault` の波形パネルに重ね描き) / `wizard.rs` 「学ぶ → 値の決め方」窓(`CALCS`、選択中の部品へ値を反映) / `param.rs` パラメータスイープのパネルと重ね描き(`--param` で起動引数からも実行可) / `settings.rs` 「設定 → シミュレーション設定」ウィンドウ / `panel.rs` の `part_popup_window` は部品の右クリックで出る設定小窓(選択部品プロパティと同じ中身) |
 | `edit.rs` 選択・当たり判定・削除・配線追加 / `history.rs` Undo・Redo / `file.rs` 保存・読込 / `library.rs` ライブラリ |
 | `lessons.rs` 「学ぶ」メニューのレッスン(サンプル回路埋め込み+手順、各手順は状態で自動チェック。足すときは `LESSONS` に追加) / `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
 

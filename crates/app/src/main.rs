@@ -167,7 +167,7 @@ fn install_crash_log() {
     }));
 }
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
 /// [--drc] [--export dir]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
@@ -193,6 +193,10 @@ fn apply_args(app: &mut App, args: &[String]) {
                 Some("scan") => app.sch.analyze_fault_scan(),
                 Some(part) => {
                     app.sch.set_fault(part, args.get(i + 2).and_then(|k| k.parse().ok()).unwrap_or(0));
+                    // ... <kind> tran <node>: compare the waveform at <node> instead of the DC voltages
+                    if args.get(i + 3).is_some_and(|m| m == "tran") {
+                        app.sch.set_fault_tran(args.get(i + 4).map_or("", |n| n.as_str()));
+                    }
                     app.sch.analyze_fault();
                 }
                 None => {}

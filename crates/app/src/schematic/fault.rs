@@ -1,11 +1,17 @@
 //! Fault simulation panel: break one part and see what changes at DC.
 
 use super::*;
-use sim_core::{breakable, simulate_fault, with_fault, Fault, FaultReport};
+use sim_core::{breakable, simulate_fault, simulate_fault_tran, with_fault, Fault, FaultReport, TranFaultReport};
 
 /// The last fault run.
 pub(super) struct FaultView {
     pub(super) report: Result<FaultReport, Vec<String>>,
+}
+
+/// The last time-domain fault run: the node's waveform healthy and broken, drawn on top of each other.
+pub(super) struct FaultTranView {
+    pub(super) report: Result<TranFaultReport, Vec<String>>,
+    plot: PlotState,
 }
 
 /// One line of the "break every part" table.
@@ -33,7 +39,90 @@ impl SchEditor {
         self.run_fault_scan();
     }
 
+    /// The node to watch: the one chosen, else a likely output (OUT / VOUT / VDC ...), else the first net.
+    pub(super) fn fault_watch_node(&self) -> Option<String> {
+        if !self.fault_node.trim().is_empty() {
+            return Some(self.fault_node.trim().to_string());
+        }
+        let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.') && !n.eq_ignore_ascii_case("GND")).collect();
+        ["OUT", "VOUT", "VDC", "OUTPUT"].iter().find_map(|w| nets.iter().find(|n| n.eq_ignore_ascii_case(w)).cloned()).or_else(|| nets.first().cloned())
+    }
+
+    pub fn set_fault_tran(&mut self, node: &str) {
+        self.fault_tran = true;
+        self.fault_node = node.into();
+    }
+
+    pub(super) fn run_fault_tran(&mut self) {
+        let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
+        let report = (|| {
+            let node = self.fault_watch_node().ok_or_else(|| vec!["見る点 (ノード) がありません。回路に名前のついた点 (ラベルなど) を付けてください".to_string()])?;
+            let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+                return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
+            };
+            let c = self.sim_circuit()?;
+            simulate_fault_tran(&c, self.fault_part.trim(), fault, &TranSettings { tstop, tstep, uic: self.tran_uic }, &node).map_err(|e| vec![e.to_string()])
+        })();
+        self.status = match &report {
+            Ok(r) => format!("故障シミュレーション (過渡): {} を{}、V({}) を比較", r.element, fault.label(), r.node),
+            Err(e) => format!("故障シミュレーションに失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        let tstop = parse_value(&self.tran_tstop).unwrap_or(1.0);
+        self.fault_wave = Some(FaultTranView { report, plot: PlotState::new(tstop) });
+        self.wave_mode = WaveMode::Fault;
+    }
+
+    pub(super) fn fault_wave_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(view) = self.fault_wave.as_mut() else { return };
+        let mut close = false;
+        let FaultTranView { report, plot: st } = view;
+        ui.horizontal(|ui| {
+            ui.strong("故障シミュレーション (過渡): 正常と故障の比較");
+            if ui.button("閉じる").clicked() {
+                close = true;
+            }
+            ui.small("白い線 = 正常な回路 / 色つきの線 = 部品を壊した回路。クリックで測定カーソル");
+        });
+        match report {
+            Err(msgs) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Ok(r) => {
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(300.0);
+                        for (k, l) in r.summary().iter().enumerate() {
+                            if k == 0 {
+                                ui.strong(l);
+                            } else {
+                                ui.label(l);
+                            }
+                        }
+                        ui.small(format!("測った範囲: {} 〜 {}", eng(r.window.0, "s"), eng(r.window.1, "s")));
+                    });
+                    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    let (h_name, f_name) = (format!("V({}) 正常", r.node), format!("V({}) {}", r.node, r.fault.label()));
+                    let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.healthy_time, v: &r.healthy }];
+                    if let Ok((t, v)) = &r.faulted {
+                        traces.push(Trace { name: &f_name, color: PALETTE[0], t, v });
+                    }
+                    let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
+                    plot::draw_group(ui, rect, egui::Id::new("fault_plot"), &traces, st, 0, &style, true);
+                });
+            }
+        }
+        if close {
+            self.fault_wave = None;
+        }
+    }
+
     pub(super) fn run_fault(&mut self) {
+        if self.fault_tran {
+            self.run_fault_tran();
+            return;
+        }
         let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
         let report = match self.sim_circuit() {
             Err(errs) => Err(errs),
@@ -119,6 +208,28 @@ impl SchEditor {
                 ui.selectable_value(&mut self.fault_kind, k, f.label()).on_hover_text(tip);
             }
         });
+        ui.horizontal(|ui| {
+            ui.label("比べる");
+            ui.selectable_value(&mut self.fault_tran, false, "DC (電圧)").on_hover_text("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります");
+            ui.selectable_value(&mut self.fault_tran, true, "過渡 (波形)").on_hover_text("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います");
+        });
+        if self.fault_tran {
+            ui.horizontal(|ui| {
+                ui.label("見る点");
+                let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
+                let shown = self.fault_watch_node().unwrap_or_else(|| "選ぶ".to_string());
+                egui::ComboBox::from_id_salt("fault_node")
+                    .width(80.0)
+                    .selected_text(shown)
+                    .show_ui(ui, |ui| {
+                        for n in &nets {
+                            ui.selectable_value(&mut self.fault_node, n.clone(), n);
+                        }
+                    })
+                    .response
+                    .on_hover_text("波形を比べるノード (ネット) の名前。出力にあたる点を選びます。選ばないときは OUT などを自動で探します");
+            });
+        }
         ui.horizontal(|ui| {
             if ui.button("故障を試す").on_hover_text("選んだ部品を壊して DC 解析し、変わった電圧と電流を日本語で説明します。回路そのものは変わりません").clicked() {
                 self.run_fault();

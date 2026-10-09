@@ -174,3 +174,25 @@ fn a_broken_bridge_diode_doubles_the_ripple() {
     // half-wave: the ripple is at the mains frequency
     assert!((broken.freq.unwrap() - 50.0).abs() < 3.0, "{:?}", broken.freq);
 }
+
+#[test]
+fn transient_fault_on_the_rectifier_is_explained_in_the_panel_flow() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "bridge_rectifier.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.set_tran_settings("0.3", "100u");
+    e.set_fault("D1", 0);
+    e.set_fault_tran("VDC");
+    e.analyze_fault();
+    assert!(e.status.contains("過渡"), "{}", e.status);
+    assert!(e.has_wave());
+    let r = e.fault_wave.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let text = r.summary().join("\n");
+    assert!(text.contains("振幅 (p-p)") && text.contains("周波数: 100Hz → 50Hz"), "{text}");
+    // with no node chosen, the likely output net is found; a wrong node is explained
+    e.fault_node.clear();
+    assert_eq!(e.fault_watch_node().as_deref(), Some("VDC"));
+    e.set_fault_tran("NOPE");
+    e.analyze_fault();
+    assert!(e.status.contains("失敗"), "{}", e.status);
+}
