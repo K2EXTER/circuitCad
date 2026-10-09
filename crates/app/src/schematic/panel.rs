@@ -30,6 +30,7 @@ impl SchEditor {
                 self.panel_tran(ui);
                 self.panel_ac(ui);
                 self.panel_sweep(ui);
+                self.panel_param(ui);
                 self.panel_noise(ui);
                 self.panel_variation(ui);
                 self.panel_results(ui);

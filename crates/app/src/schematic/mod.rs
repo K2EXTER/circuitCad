@@ -163,6 +163,14 @@ pub struct SchEditor {
     popup_serial: u32,
     lesson_base: Schematic,
     sweep_src: String,
+    param: Option<param::ParamView>,
+    param_part: String,
+    param_from: String,
+    param_to: String,
+    param_n: String,
+    param_node: String,
+    param_log: bool,
+    param_ac: bool,
     sweep_start: String,
     sweep_stop: String,
     sweep_step: String,
@@ -182,6 +190,7 @@ enum WaveMode {
     Noise,
     Sweep,
     Mc,
+    Param,
 }
 
 /// A finished DC sweep: transfer curves with the signals to draw.
@@ -368,6 +377,14 @@ impl Default for SchEditor {
             popup_serial: 0,
             lesson_base: Schematic::default(),
             sweep_src: String::new(),
+            param: None,
+            param_part: String::new(),
+            param_from: "1k".into(),
+            param_to: "100k".into(),
+            param_n: "5".into(),
+            param_node: String::new(),
+            param_log: true,
+            param_ac: true,
             sweep_start: "0".into(),
             sweep_stop: "5".into(),
             sweep_step: "0.05".into(),
@@ -432,6 +449,7 @@ mod canvas;
 mod draw;
 mod interact;
 mod panel;
+mod param;
 mod settings;
 mod file;
 #[cfg(test)]

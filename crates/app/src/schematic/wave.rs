@@ -10,6 +10,7 @@ impl SchEditor {
             WaveMode::Noise => self.noise.is_some(),
             WaveMode::Sweep => self.sweep.is_some(),
             WaveMode::Mc => self.mc.is_some(),
+            WaveMode::Param => self.param.is_some(),
         }
     }
 
@@ -21,6 +22,7 @@ impl SchEditor {
             WaveMode::Noise => self.noise_wave_panel(ui),
             WaveMode::Sweep => self.sweep_wave_panel(ui),
             WaveMode::Mc => self.mc_wave_panel(ui),
+            WaveMode::Param => self.param_wave_panel(ui),
         }
     }
 

@@ -40,3 +40,23 @@ fn shipped_examples_simulate() {
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }
+
+#[test]
+fn parameter_sweep_runs_from_the_editor_in_both_modes() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "rc_lowpass.schjson").unwrap().1;
+    let node = extract(&sch).into_iter().find(|n| n.pins.iter().any(|p| p.refdes == "C1") && n.name != "GND").unwrap().name;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.set_ac_settings("10", "1Meg", "10");
+    e.set_tran_settings("2m", "10u");
+    for ac in [true, false] {
+        e.set_param_settings("R1", "100", "10k", "3", &node, ac);
+        e.analyze_param();
+        assert!(e.status.contains("完了") && e.status.contains("3 本"), "ac={ac}: {}", e.status);
+        assert!(e.has_wave());
+    }
+    // a part that does not exist is explained, not a panic
+    e.set_param_settings("R99", "100", "10k", "3", &node, true);
+    e.analyze_param();
+    assert!(e.status.contains("失敗"), "{}", e.status);
+}
