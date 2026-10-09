@@ -431,3 +431,6 @@ mod variation_tests;
 mod lessons_tests;
 #[cfg(test)]
 mod example_overlap_tests;
+
+#[cfg(test)]
+mod example_sim_tests;
