@@ -27,6 +27,7 @@ impl BoardEditor {
         if !typing {
             self.handle_keys(ui, sp);
         }
+        self.draw_rulers(&painter, rect, ui.input(|i| i.pointer.hover_pos()));
     }
 
     pub(super) fn pan_and_zoom(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: Rect) {

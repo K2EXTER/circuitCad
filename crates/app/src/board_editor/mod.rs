@@ -126,6 +126,7 @@ struct Visible {
     airwires: bool,
     nets: bool,
     zones: bool,
+    ruler: bool,
 }
 
 pub struct BoardEditor {
@@ -204,7 +205,7 @@ impl Default for BoardEditor {
             import_notes: vec![],
             undo: vec![],
             redo: vec![],
-            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true },
+            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true },
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
@@ -250,6 +251,7 @@ mod canvas;
 mod interact;
 mod draw;
 mod order;
+mod ruler;
 pub mod lesson;
 mod panel;
 #[cfg(test)]

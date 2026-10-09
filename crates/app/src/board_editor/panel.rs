@@ -70,6 +70,7 @@ impl BoardEditor {
                 ui.checkbox(&mut self.vis.zones, "ゾーン");
                 ui.checkbox(&mut self.vis.airwires, "未配線");
                 ui.checkbox(&mut self.vis.nets, "ネット名");
+                ui.checkbox(&mut self.vis.ruler, "定規 (mm)").on_hover_text("画面の上と左に、実際の寸法 (mm) の目盛りを出します。拡大すると目盛りが細かくなります。オレンジの印がカーソルの位置です");
             });
 
             ui.separator();
