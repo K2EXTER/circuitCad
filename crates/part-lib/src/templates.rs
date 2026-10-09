@@ -78,6 +78,8 @@ pub struct Generated {
     /// Pin numbers in the order of the `.subckt` ports.
     pub sim_pins: Vec<String>,
     pub description: String,
+    /// What the generated model leaves out (shown next to the part).
+    pub limits: Vec<String>,
 }
 
 /// A number written so that the SPICE reader takes it back unchanged.
@@ -250,7 +252,19 @@ impl ChargerTemplate {
             if has("CHRG") { "CHRG/STDBY は充電中/満充電で Low。" } else { "" }
         );
         let sim_pins: Vec<String> = (1..=pins.len()).map(|i| i.to_string()).collect();
-        Ok(Generated { pins: pin_defs, sim_name: sub, sim_text: t.join("\n"), sim_pins, description })
+        let mut limits = vec![
+            "データシートの数字から作ったテンプレートのモデルです。外から見た動きだけを再現します。充電の3段階 (プリチャージ・定電流・定電圧) と状態表示が動きます。".to_string(),
+            "扱わないもの: 損失、リップル、熱による制限、充電タイマ、再充電のしきい値。電流が終了電流を下回ると状態表示が「満充電」になりますが、充電そのものは止まらず、電圧が下がれば自然に電流が増えます。".to_string(),
+            "電池は、小さなコンデンサで代用してください (値に IC=3.2 と書くと、その電圧から始まります)。".to_string(),
+        ];
+        limits.push(match self.topology {
+            Topology::Linear => "入力電流は出力電流と同じです (リニア式は、電圧差が熱になります)。熱による電流の低下は扱いません。".to_string(),
+            Topology::Buck => "降圧のスイッチングは「LX の平均の電圧」に置き換えてあります。入力電流は、出力の電力 ÷ 効率 (90%) ÷ 入力電圧です。".to_string(),
+        });
+        if self.ntc.is_some() {
+            limits.push("温度入力は、100µA を流した電圧が決めた範囲の外のとき、充電を止めるだけです (低温で電流を減らすような段階的な動きはしません)。".to_string());
+        }
+        Ok(Generated { pins: pin_defs, sim_name: sub, sim_text: t.join("\n"), sim_pins, description, limits })
     }
 }
 

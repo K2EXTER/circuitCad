@@ -43,6 +43,8 @@ pub struct PartForm {
     pub sim_name: String,
     pub sim_text: String,
     pub sim_pins: String,
+    /// What the model leaves out, one note per line.
+    pub sim_limits: String,
     /// The charger template section and what it said last.
     pub tpl: ChargerTemplate,
     pub tpl_message: String,
@@ -72,6 +74,7 @@ impl Default for PartForm {
             sim_name: String::new(),
             sim_text: String::new(),
             sim_pins: String::new(),
+            sim_limits: String::new(),
             tpl: ChargerTemplate::default(),
             tpl_message: String::new(),
         }
@@ -130,6 +133,7 @@ impl PartForm {
                 text: self.sim_text.clone(),
                 pins: self.sim_pins.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).map(String::from).collect(),
                 params: Default::default(),
+                limits: self.sim_limits.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect(),
             }),
         };
         Ok(PartDef {
@@ -162,6 +166,7 @@ impl PartForm {
                 self.sim_text = g.sim_text;
                 self.sim_pins = g.sim_pins.join(" ");
                 self.description = g.description;
+                self.sim_limits = g.limits.join("\n");
                 if self.category.trim().is_empty() || self.category == "ユーザー" {
                     self.category = "電源管理".into();
                 }
@@ -386,6 +391,13 @@ impl PartForm {
                     .font(egui::TextStyle::Monospace)
                     .hint_text(".model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
             );
+            ui.label("このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
+            ui.add(
+                egui::TextEdit::multiline(&mut self.sim_limits)
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("例: 温度による変化は扱いません。\n接合容量は扱いません。"),
+            );
         }
 
         ui.separator();
@@ -571,6 +583,10 @@ mod tests {
         f.pkg = PkgKind::Dual;
         let def = f.to_def().unwrap();
         assert!(!def.has_errors(), "{:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+        // the notes about what the model leaves out go into the saved part
+        assert!(f.sim_limits.lines().count() >= 4, "{}", f.sim_limits);
+        assert_eq!(def.sim.as_ref().unwrap().limits.len(), f.sim_limits.lines().count());
+        assert!(def.sim.unwrap().limits.iter().any(|l| l.contains("リニア") || l.contains("LX")));
         // a missing name is explained
         let mut g = PartForm::default();
         g.apply_template();

@@ -140,6 +140,7 @@ fn opamp() -> CustomSymbol {
             text: ".subckt LM358 1 2 3 4 5\n* body\n.ends LM358".into(),
             pins: vec!["3".into(), "2".into(), "1".into(), "8".into(), "4".into()],
             params: Default::default(),
+            limits: vec![],
         }),
     }
 }

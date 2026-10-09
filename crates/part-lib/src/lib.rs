@@ -308,6 +308,24 @@ fn is_modelless_original(file: &Path, bundled: &str) -> bool {
     }
 }
 
+/// Key recorded in `.bundled` once a part has been offered the model notes (`sim.limits`).
+fn limits_key(name: &str) -> String {
+    format!("{name}+limits")
+}
+
+/// Is the file an unmodified copy of the bundled part from before it carried model notes?
+/// (Equal to the bundled part in every field except the notes.)
+fn is_original_without_limits(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(sim) = new.sim.as_mut() else { return false };
+    if sim.limits.is_empty() || old.sim.as_ref().is_none_or(|m| !m.limits.is_empty()) {
+        return false;
+    }
+    sim.limits.clear();
+    old == new
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -337,6 +355,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             if file.exists() && is_modelless_original(&file, text) {
                 std::fs::write(&file, text)?;
             }
+        }
+        done.insert(key);
+    }
+    // parts that gained their model notes after the first release: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = limits_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_without_limits(&file, text) {
+            std::fs::write(&file, text)?;
         }
         done.insert(key);
     }

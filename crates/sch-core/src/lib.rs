@@ -283,6 +283,10 @@ pub struct SimModel {
     /// Characteristics for built-in simulators (gain, Vf, ... ); free form.
     #[serde(default)]
     pub params: BTreeMap<String, f64>,
+    /// What the model leaves out or only approximates, one sentence each. Shown next to the part
+    /// so that a result is not mistaken for the real part's behaviour.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limits: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -100,7 +100,7 @@ impl SchEditor {
                     }
                     let mark = if d.sim.is_some() { " ◎" } else { "" };
                     let selected = self.tool == Tool::Place && self.place_lib == Some(i);
-                    if ui.selectable_label(selected, format!("  {}{mark}", d.name)).on_hover_text(&d.description).clicked() {
+                    if ui.selectable_label(selected, format!("  {}{mark}", d.name)).on_hover_text(lib_hover(d)).clicked() {
                         chosen = Some(i);
                     }
                 }
@@ -110,6 +110,9 @@ impl SchEditor {
                     ui.strong(&d.name);
                     ui.small(format!("パッケージ: {}", d.footprint_name()));
                     ui.small(&d.description);
+                    if let Some(m) = &d.sim {
+                        limits_ui(ui, &m.limits, "lib_limits");
+                    }
                     egui::CollapsingHeader::new("ピン表").id_salt("lib_pins").show(ui, |ui| {
                         egui::Grid::new("lib_pin_grid").num_columns(2).show(ui, |ui| {
                             for p in &d.pins {
@@ -229,9 +232,17 @@ impl SchEditor {
                 if let Some(sym) = &c.custom {
                     ui.label(format!("フットプリント: {}", c.footprint));
                     match &sym.sim {
-                        Some(m) => ui.label(format!("モデル: {}", m.name)),
-                        None => ui.colored_label(Color32::from_rgb(220, 160, 40), "シミュレーションモデルなし"),
-                    };
+                        Some(m) => {
+                            ui.label(format!("モデル: {}", m.name));
+                            // a circuit saved before the notes existed carries the model without them:
+                            // take the notes of the same library model (same name, same text)
+                            let from_library = self.library.iter().find(|d| d.name == sym.name && d.sim.as_ref().is_some_and(|x| x.text == m.text)).and_then(|d| d.sim.as_ref()).map(|x| &x.limits);
+                            limits_ui(ui, if m.limits.is_empty() { from_library.map_or(&[][..], |l| l.as_slice()) } else { &m.limits }, "placed_limits");
+                        }
+                        None => {
+                            ui.colored_label(Color32::from_rgb(220, 160, 40), "シミュレーションモデルなし");
+                        }
+                    }
                 } else if !c.kind.is_power_symbol() {
                     let current = c.footprint_name();
                     egui::ComboBox::from_label("フットプリント").selected_text(current).show_ui(ui, |ui| {
@@ -310,4 +321,39 @@ impl SchEditor {
         }
         ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\n右クリック・ダブルクリック: 配線を終了\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (配線中などは右ドラッグも可) / ホイール: 拡大縮小");
     }
+}
+
+/// Tooltip of a library part: its description, then what its model leaves out.
+fn lib_hover(d: &part_lib::PartDef) -> String {
+    let mut t = d.description.clone();
+    if let Some(m) = &d.sim
+        && !m.limits.is_empty() {
+            t.push_str("\n\nこのモデルの限界 (実物との違い):");
+            for l in &m.limits {
+                t.push_str("\n・");
+                t.push_str(l);
+            }
+        }
+    t
+}
+
+#[cfg(test)]
+pub(super) fn lib_hover_for_test(d: &part_lib::PartDef) -> String {
+    lib_hover(d)
+}
+
+/// "このモデルの限界": a collapsed list of what the model leaves out, so that a result is not
+/// mistaken for the real part's behaviour.
+pub(super) fn limits_ui(ui: &mut egui::Ui, limits: &[String], id: &str) {
+    if limits.is_empty() {
+        return;
+    }
+    egui::CollapsingHeader::new("このモデルの限界 (実物との違い)").id_salt(id).show(ui, |ui| {
+        for l in limits {
+            ui.horizontal_wrapped(|ui| {
+                ui.label("・");
+                ui.small(l);
+            });
+        }
+    });
 }

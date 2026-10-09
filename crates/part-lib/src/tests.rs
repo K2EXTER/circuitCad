@@ -236,3 +236,51 @@ fn model_less_original_is_upgraded_once() {
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&dir2);
 }
+
+#[test]
+fn every_bundled_model_carries_notes_about_what_it_leaves_out() {
+    for (name, text) in EXAMPLES {
+        let d: PartDef = serde_json::from_str(text).unwrap();
+        if let Some(sim) = &d.sim {
+            assert!(sim.limits.len() >= 2, "{name}: only {} notes", sim.limits.len());
+            for l in &sim.limits {
+                assert!(l.chars().count() > 15 && l.ends_with('。'), "{name}: {l}");
+            }
+        }
+    }
+}
+
+#[test]
+fn an_installed_copy_from_before_the_notes_gets_them_once() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_limits_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    install_examples(&dir).unwrap();
+    let path = |n: &str| dir.join(format!("{n}{FILE_SUFFIX}"));
+    let read = |n: &str| -> PartDef { serde_json::from_str(&std::fs::read_to_string(path(n)).unwrap()).unwrap() };
+    assert!(!read("TP4056_ESOP-8").sim.unwrap().limits.is_empty(), "a fresh install has the notes");
+
+    // an old library: the notes are missing from two parts, and the user edited one of them
+    for n in ["TP4056_ESOP-8", "LM358_SOIC-8"] {
+        let mut d = read(n);
+        d.sim.as_mut().unwrap().limits.clear();
+        if n == "LM358_SOIC-8" {
+            d.description = "mein LM358".into();
+        }
+        std::fs::write(path(n), serde_json::to_string_pretty(&d).unwrap()).unwrap();
+    }
+    let kept: Vec<String> = std::fs::read_to_string(dir.join(".bundled")).unwrap().lines().filter(|l| !l.ends_with("+limits")).map(String::from).collect();
+    std::fs::write(dir.join(".bundled"), kept.join("
+")).unwrap();
+    install_examples(&dir).unwrap();
+    assert!(!read("TP4056_ESOP-8").sim.unwrap().limits.is_empty(), "the unmodified copy gains the notes");
+    let mine = read("LM358_SOIC-8");
+    assert!(mine.sim.unwrap().limits.is_empty() && mine.description == "mein LM358", "an edited copy is left alone");
+
+    // once offered, a user who removes the notes is not given them again
+    let mut d = read("TP4056_ESOP-8");
+    d.sim.as_mut().unwrap().limits.clear();
+    std::fs::write(path("TP4056_ESOP-8"), serde_json::to_string_pretty(&d).unwrap()).unwrap();
+    install_examples(&dir).unwrap();
+    assert!(read("TP4056_ESOP-8").sim.unwrap().limits.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}

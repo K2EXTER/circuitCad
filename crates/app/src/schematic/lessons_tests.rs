@@ -269,3 +269,14 @@ fn the_notes_match_what_the_models_really_assume() {
     assert_eq!(q.unwrap().bf, 300.0);
     assert!(!c.elements.iter().any(|x| matches!(x, sim_core::Element::Capacitor { .. })), "no capacitor appears next to the transistor");
 }
+
+#[test]
+fn a_library_part_shows_its_model_notes_in_the_tooltip_and_old_circuits_borrow_them() {
+    let e = SchEditor::default();
+    let tp = e.library.iter().find(|d| d.name == "TP4056").expect("TP4056 is bundled");
+    let tip = super::panel::lib_hover_for_test(tp);
+    assert!(tip.contains("このモデルの限界") && tip.contains("再充電のしきい値"), "{tip}");
+    // a part without a model has nothing to add to its description
+    let mcu = e.library.iter().find(|d| d.sim.is_none()).unwrap();
+    assert_eq!(super::panel::lib_hover_for_test(mcu), mcu.description);
+}
