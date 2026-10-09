@@ -236,3 +236,36 @@ fn assert_settled(r: &sim_core::TranResult, name: &str) {
     let (mn, mx) = v[i0..].iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)));
     assert!(mx - mn < 0.05, "{name} rings by {} V", mx - mn);
 }
+
+#[test]
+fn every_lesson_says_where_the_model_differs_from_the_real_part() {
+    for (i, title) in lesson_titles().iter().enumerate() {
+        let notes = super::lessons::lesson_limits(i);
+        assert!(notes.len() >= 3, "{title}: only {} notes", notes.len());
+        for n in notes {
+            assert!(n.chars().count() > 20 && n.chars().count() < 400, "{title}: {n}");
+            assert!(n.ends_with('。'), "{title}: a note ends with 。: {n}");
+        }
+    }
+}
+
+#[test]
+fn the_notes_match_what_the_models_really_assume() {
+    // lesson 2: the LED model has a forward voltage of about 2 V at 20 mA
+    let mut e = SchEditor::default();
+    e.start_lesson(1);
+    e.run_dc();
+    let d = e.dc.as_ref().unwrap().outcome.as_ref().unwrap();
+    let led = d.elements.iter().find(|x| x.name == "D1").unwrap();
+    assert!((1.8..2.2).contains(&led.voltage), "LED forward voltage {}", led.voltage);
+    // lesson 4: the 2N3904 has a fixed gain of 300, and its model has no capacitance at all
+    let mut e = SchEditor::default();
+    e.start_lesson(3);
+    let c = sim_core::from_schematic(&e.sch).unwrap_or_else(|_| panic!("lesson 4 converts"));
+    let q = c.elements.iter().find_map(|x| match x {
+        sim_core::Element::Bjt { model, .. } => Some(model.clone()),
+        _ => None,
+    });
+    assert_eq!(q.unwrap().bf, 300.0);
+    assert!(!c.elements.iter().any(|x| matches!(x, sim_core::Element::Capacitor { .. })), "no capacitor appears next to the transistor");
+}

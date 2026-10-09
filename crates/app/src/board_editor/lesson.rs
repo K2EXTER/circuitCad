@@ -36,6 +36,14 @@ fn order_opened(e: &BoardEditor) -> bool {
     drc_clean(e) && e.order.open
 }
 
+/// Where the board tools stop: shown as "実物との違い".
+const BOARD_LIMITS: &[&str] = &[
+    "自動配置は「叩き台」です。つながりの強い部品を近くに並べるだけで、部品の高さ、コネクタを基板の端に置くこと、放熱、ノイズを出す部品と弱い部品の距離は考えません。",
+    "自動配線は、2層・45°の格子の上で、設計ルール (線の間隔) を守る配線だけを採用します。電流が大きい線の太さ (線幅は一律です)、電源とグランドの引き方、ノイズ対策、信号の速さ (インピーダンス) は考えません。大電流や高速の回路は、手で引き直してください。",
+    "DRC は、設計ルールを守っているかの機械的な検査です。回路が正しく動くか、ノイズや熱が大丈夫かは調べません。それは回路図のシミュレーションと、実際に作っての確認で調べます。",
+    "発注先ごとの最小の線幅・穴径などは目安です。発注の前に、必ず発注先のページで最新の条件を確かめてください。",
+];
+
 const STEPS: &[Step] = &[
     Step {
         title: "回路図から取り込む",
@@ -120,6 +128,19 @@ impl BoardEditor {
                     });
                 }
             }
+            ui.separator();
+            egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
+                .id_salt(("board_limits", cur.is_none()))
+                .default_open(cur.is_none())
+                .show(ui, |ui| {
+                    ui.small("自動の機能は便利ですが、万能ではありません。次の点は、人が確かめます");
+                    for l in BOARD_LIMITS {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label("・");
+                            ui.label(*l);
+                        });
+                    }
+                });
             if cur.is_none() {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
