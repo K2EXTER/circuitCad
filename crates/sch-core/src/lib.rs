@@ -128,7 +128,7 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Component {
     pub refdes: String,
     pub kind: Kind,
@@ -173,20 +173,20 @@ impl Component {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Wire {
     pub a: Pt,
     pub b: Pt,
 }
 
 /// Net label: names the net it sits on; equal names are the same net.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Label {
     pub pos: Pt,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Schematic {
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,

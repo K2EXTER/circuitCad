@@ -75,15 +75,15 @@ impl eframe::App for App {
                         }
                     }
                 });
+                ui.menu_button("編集", |ui| {
+                    if ui.button("元に戻す (Ctrl+Z)").clicked() {
+                        if sch_mode { self.sch.undo() } else { self.board_ed.undo() }
+                    }
+                    if ui.button("やり直し (Ctrl+Y)").clicked() {
+                        if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
+                    }
+                });
                 if !sch_mode {
-                    ui.menu_button("編集", |ui| {
-                        if ui.button("元に戻す (Ctrl+Z)").clicked() {
-                            self.board_ed.undo();
-                        }
-                        if ui.button("やり直し (Ctrl+Y)").clicked() {
-                            self.board_ed.redo();
-                        }
-                    });
                     if ui.button("DRC").clicked() {
                         self.board_ed.run_drc();
                     }

@@ -54,6 +54,23 @@ pub fn parse_value(s: &str) -> Option<f64> {
     Some(num * mult)
 }
 
+/// The inverse of [`parse_value`]: `4700.0` → `4.7k`, `1e-7` → `100n`. Three significant digits.
+pub fn format_value(v: f64) -> String {
+    if v == 0.0 || !v.is_finite() {
+        return "0".into();
+    }
+    let a = v.abs();
+    let (scale, suffix) = [(1e12, "T"), (1e9, "G"), (1e6, "Meg"), (1e3, "k"), (1.0, ""), (1e-3, "m"), (1e-6, "u"), (1e-9, "n"), (1e-12, "p"), (1e-15, "f")]
+        .into_iter()
+        .find(|(sc, _)| a >= sc * 0.9995)
+        .unwrap_or((1e-15, "f"));
+    let mut t = format!("{:.2}", v / scale);
+    if t.contains('.') {
+        t = t.trim_end_matches('0').trim_end_matches('.').to_string();
+    }
+    format!("{t}{suffix}")
+}
+
 /// A part value with optional parasitics: `100n`, `100n ESR=20m ESL=5n`, `10u DCR=0.1`.
 /// Returns the main value and the (upper-case key, value) pairs.
 pub fn parse_part_value(s: &str) -> Result<(f64, Vec<(String, f64)>), String> {
@@ -90,6 +107,19 @@ mod tests {
         assert!(close(parse_value("3.3kohm").unwrap(), 3300.0));
         assert!(close(parse_value("  9 ").unwrap(), 9.0));
         assert!(close(parse_value("1.5e3k").unwrap(), 1.5e6));
+    }
+
+    #[test]
+    fn format_value_round_trips() {
+        assert_eq!(format_value(4700.0), "4.7k");
+        assert_eq!(format_value(1e-7), "100n");
+        assert_eq!(format_value(1e6), "1Meg");
+        assert_eq!(format_value(0.0022), "2.2m");
+        assert_eq!(format_value(999.9), "1k");
+        for v in [1.0, 47.0, 330.0, 4.7e3, 2.2e-6, 1e-12, 8.2e7] {
+            let back = parse_value(&format_value(v)).unwrap();
+            assert!((back - v).abs() <= 0.005 * v, "{v} -> {back}");
+        }
     }
 
     #[test]

@@ -21,7 +21,7 @@ pub use from_schematic::{from_schematic, ConvertError};
 pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};
 pub use tran::{transient, Signal, TranResult, TranSettings};
 pub use spectrum::{spectrum, stats, Spectrum, Stats};
-pub use value::{parse_part_value, parse_value};
+pub use value::{format_value, parse_part_value, parse_value};
 pub use waveform::{parse_source, parse_source_full, Source, Waveform};
 
 #[cfg(test)]

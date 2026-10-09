@@ -5,7 +5,7 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
@@ -73,6 +73,15 @@ fn segment_hits_rect(a: (f32, f32), b: (f32, f32), lo: (f32, f32), hi: (f32, f32
 
 pub struct SchEditor {
     pub sch: Schematic,
+    /// Undo / redo stacks and the last committed state (changes are detected by comparing against it).
+    undo: Vec<Schematic>,
+    redo: Vec<Schematic>,
+    committed: Schematic,
+    /// Value slider: (component, the value the slider is centred on, the text it last wrote).
+    slider: Option<(usize, f64, String)>,
+    /// Re-run the open analysis whenever the circuit changes.
+    live: bool,
+    live_snap: Schematic,
     path: Option<PathBuf>,
     tool: Tool,
     place: Kind,
@@ -99,6 +108,7 @@ pub struct SchEditor {
     form: Option<PartForm>,
     dc: Option<DcView>,
     show_v: bool,
+    show_i: bool,
     sig_cache: String,
     tran: Option<TranView>,
     tran_tstop: String,
@@ -180,6 +190,21 @@ struct DcView {
     signature: String,
     /// Voltage at every pin position.
     pin_v: Vec<(Pt, f64)>,
+    /// Voltage of each wire's net (same order as `Schematic::wires`).
+    wire_v: Vec<Option<f64>>,
+    /// Range of the node voltages, for colouring.
+    v_range: (f64, f64),
+}
+
+/// Wire colour for a net voltage: blue at the lowest voltage of the circuit, red at the highest.
+fn volt_color(v: f64, (lo, hi): (f64, f64)) -> Color32 {
+    if hi - lo < 1e-9 {
+        return WIRE;
+    }
+    let t = ((v - lo) / (hi - lo)).clamp(0.0, 1.0) as f32;
+    let (a, b) = ([40.0, 90.0, 220.0], [225.0, 50.0, 40.0]);
+    let m = |k: usize| (a[k] + (b[k] - a[k]) * t) as u8;
+    Color32::from_rgb(m(0), m(1), m(2))
 }
 
 /// Engineering notation: 4.700 mA, 12.00 V, 250.0 nA.
@@ -236,6 +261,7 @@ impl Default for SchEditor {
             place_lib: None,
             form: None,
             dc: None,
+            show_i: true,
             show_v: true,
             sig_cache: String::new(),
             tran: None,
@@ -262,6 +288,12 @@ impl Default for SchEditor {
             wave_mode: WaveMode::Tran,
             fit_pending: false,
             sch: Schematic::default(),
+            undo: vec![],
+            redo: vec![],
+            committed: Schematic::default(),
+            slider: None,
+            live: false,
+            live_snap: Schematic::default(),
             path: None,
             tool: Tool::Place,
             place: Kind::Resistor,
@@ -763,7 +795,7 @@ impl SchEditor {
         if let Some(Sel::Comp(i)) = self.selected
             && let Some(c) = self.sch.components.get(i) {
                 return match c.kind {
-                    Kind::Resistor => "値を書き換えてみましょう (例: 1k, 4.7k, 100)。DC解析をやり直すと電圧がどう変わるか分かります".into(),
+                    Kind::Resistor => "値を書き換えるか「スライダー」を動かしてみましょう。「自動で再計算」をオンにすると、電圧や波形が動きに合わせて変わります".into(),
                     Kind::Capacitor => "コンデンサは直流では電流を通さず、周波数が高いほど通しやすくなります。AC解析で効き方を見てみましょう".into(),
                     Kind::VSource => "電源の種類は「直流 / 交流 / パルス」のボタンで切り替えられます。「AC解析の入力にする」をオンにすると周波数特性の測定に使えます (ノイズ解析・DCスイープの入力にも指定できます)".into(),
                     Kind::Npn => "トランジスタはベース電流で大きなコレクタ電流を制御します。ベースに抵抗を付けて電圧を見てみましょう".into(),
@@ -783,7 +815,7 @@ impl SchEditor {
             return "波形はドラッグで移動、ホイールで拡大縮小、ダブルクリックで全体表示。左の一覧で表示する信号を選べます".into();
         }
         if self.dc.is_none() {
-            return "回路が描けたら「DC動作点を解析」で各点の電圧を見てみましょう。ERC で配線ミスの点検もできます".into();
+            return "回路が描けたら「DC動作点を解析」で各点の電圧と部品の電流 (配線は低電圧が青、高電圧が赤) を見てみましょう。ERC で配線ミスの点検もできます".into();
         }
         "電圧が想定と違う所から疑ってみましょう。次は過渡解析 (波形)・AC解析 (周波数特性)・ノイズ解析を試せます。回路が完成したら「基板パターン」タブへ".into()
     }
@@ -1276,7 +1308,16 @@ impl SchEditor {
             Ok(r) => format!("DC動作点: 収束 ({} 回, {})", r.iterations, r.strategy),
             Err(e) => format!("DC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        self.dc = Some(DcView { outcome, signature: self.signature(), pin_v });
+        let mut wire_v = vec![None; self.sch.wires.len()];
+        let mut v_range = (0.0f64, 0.0f64);
+        if let Ok(res) = &outcome {
+            for (k, w) in self.sch.wires.iter().enumerate() {
+                wire_v[k] = net_at(&self.sch, w.a).and_then(|n| res.voltage(&n));
+            }
+            let vs = res.voltages.iter().map(|(_, v)| *v);
+            v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
+        }
+        self.dc = Some(DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range });
     }
 
     fn reload_library(&mut self) {
@@ -1463,7 +1504,108 @@ impl SchEditor {
 
     // ------------------------------------------------------------- canvas
 
+    // ------------------------------------------------------------- history
+
+    /// Record edits made since the last frame as one undo step. Waits while the mouse button is held
+    /// (a drag is one step) or a text box has focus (typing a value is one step).
+    fn track_history(&mut self, ui: &egui::Ui) {
+        if self.sch == self.committed {
+            return;
+        }
+        if ui.input(|i| i.pointer.any_down()) || ui.ctx().egui_wants_keyboard_input() {
+            return;
+        }
+        self.commit_history();
+    }
+
+    fn commit_history(&mut self) {
+        if self.sch == self.committed {
+            return;
+        }
+        self.undo.push(std::mem::replace(&mut self.committed, self.sch.clone()));
+        if self.undo.len() > 200 {
+            self.undo.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    fn reset_history(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+        self.committed = self.sch.clone();
+    }
+
+    pub fn undo(&mut self) {
+        self.commit_history();
+        if let Some(prev) = self.undo.pop() {
+            self.redo.push(std::mem::replace(&mut self.sch, prev));
+            self.after_history("元に戻しました");
+        }
+    }
+
+    pub fn redo(&mut self) {
+        self.commit_history();
+        if let Some(next) = self.redo.pop() {
+            self.undo.push(std::mem::replace(&mut self.sch, next));
+            self.after_history("やり直しました");
+        }
+    }
+
+    fn after_history(&mut self, msg: &str) {
+        self.committed = self.sch.clone();
+        self.selected = None;
+        self.multi.clear();
+        self.boxsel = None;
+        self.gdrag = None;
+        self.drag = None;
+        self.pending = None;
+        self.problems.clear();
+        self.status = msg.into();
+    }
+
+    /// With "自動で再計算" on, redo the analysis that is on screen after the circuit changed,
+    /// keeping the signals and zoom the user had chosen.
+    fn live_update(&mut self) {
+        if !self.live {
+            return;
+        }
+        if self.sch == self.live_snap {
+            return;
+        }
+        self.live_snap = self.sch.clone();
+        if self.dc.is_some() {
+            self.run_dc();
+        }
+        match self.wave_mode {
+            WaveMode::Tran if self.tran.is_some() => {
+                let old = self.tran.take();
+                self.run_tran();
+                if let (Some(o), Some(n)) = (old, self.tran.as_mut())
+                    && n.outcome.is_ok() && o.outcome.is_ok() {
+                        n.selected = o.selected;
+                        n.plot = o.plot;
+                        n.spectrum = o.spectrum;
+                        n.spec_t0 = o.spec_t0;
+                        n.spec_t1 = o.spec_t1;
+                        n.spec_plot = o.spec_plot;
+                    }
+            }
+            WaveMode::Ac if self.ac.is_some() => {
+                let old = self.ac.take();
+                self.run_ac();
+                if let (Some(o), Some(n)) = (old, self.ac.as_mut())
+                    && n.outcome.is_ok() && o.outcome.is_ok() {
+                        n.selected = o.selected;
+                        n.plot = o.plot;
+                    }
+            }
+            _ => {}
+        }
+    }
+
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
+        self.track_history(ui);
+        self.live_update();
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;
         painter.rect_filled(rect, 0.0, SCH_BG);
@@ -1504,6 +1646,12 @@ impl SchEditor {
             self.rotate_comp(i);
         }
         if !typing {
+            let (cmd, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+            if cmd && ui.input(|i| i.key_pressed(egui::Key::Z)) {
+                if shift { self.redo() } else { self.undo() }
+            } else if cmd && ui.input(|i| i.key_pressed(egui::Key::Y)) {
+                self.redo();
+            }
             if ui.input(|i| i.key_pressed(egui::Key::R)) {
                 match self.selected {
                     Some(Sel::Comp(i)) => self.rotate_comp(i),
@@ -1543,12 +1691,14 @@ impl SchEditor {
             }
         }
 
-        // wires
+        // wires (tinted by the net voltage when a DC result is showing)
+        let live_dc = self.dc.as_ref().filter(|d| d.signature == self.signature_cached() && d.outcome.is_ok());
         for (i, w) in self.sch.wires.iter().enumerate() {
             let sel = self.is_sel(Sel::Wire(i));
+            let tint = live_dc.filter(|_| self.show_v).and_then(|d| d.wire_v.get(i).copied().flatten().map(|v| volt_color(v, d.v_range)));
             painter.line_segment(
                 [self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32))],
-                Stroke::new(if sel { 3.0 } else { 1.8 }, if sel { Color32::from_rgb(0, 80, 220) } else { WIRE }),
+                Stroke::new(if sel { 3.0 } else { 2.2 }, if sel { Color32::from_rgb(0, 80, 220) } else { tint.unwrap_or(WIRE) }),
             );
         }
         // junction dots
@@ -1615,6 +1765,33 @@ impl SchEditor {
                     let galley = painter.layout_no_wrap(eng(*v, "V"), f.clone(), Color32::from_rgb(10, 60, 200));
                     painter.rect_filled(Rect::from_min_size(p - Vec2::new(0.0, galley.size().y), galley.size()).expand(1.0), 2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 190));
                     painter.galley(p - Vec2::new(0.0, galley.size().y), galley, Color32::from_rgb(10, 60, 200));
+                }
+            }
+        if self.show_i
+            && let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached())
+            && let Ok(res) = &dc.outcome {
+                let f = FontId::proportional((self.zoom * 0.5).clamp(9.0, 14.0));
+                let col = Color32::from_rgb(200, 90, 0);
+                for c in self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()) {
+                    let Some(el) = res.element(&c.refdes) else { continue };
+                    let ext = comp_extents(c);
+                    let Some((x0, x1, _, y1)) = sheet_box(c.kind, ext, c.pos, c.rot) else { continue };
+                    // below the part's value text
+                    let at = self.to_screen(rect, ((x0 + x1) / 2.0, y1 + 1.3));
+                    let galley = painter.layout_no_wrap(eng(el.current, "A"), f.clone(), col);
+                    let pos = at - Vec2::new(galley.size().x / 2.0, 0.0);
+                    painter.rect_filled(Rect::from_min_size(pos, galley.size()).expand(1.0), 2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 190));
+                    painter.galley(pos, galley, col);
+                    // arrow along the part: the direction the (conventional) current flows
+                    let pins = c.pins();
+                    if pins.len() == 2 && el.current.abs() > 1e-12 {
+                        let (p1, p2) = (self.to_screen(rect, (pins[0].1.0 as f32, pins[0].1.1 as f32)), self.to_screen(rect, (pins[1].1.0 as f32, pins[1].1.1 as f32)));
+                        let (from, to) = if el.current >= 0.0 { (p1, p2) } else { (p2, p1) };
+                        let dir = (to - from).normalized();
+                        let tip = from + (to - from) * 0.5 + dir * 6.0;
+                        let side = Vec2::new(-dir.y, dir.x) * 4.0;
+                        painter.add(egui::Shape::convex_polygon(vec![tip, tip - dir * 9.0 + side, tip - dir * 9.0 - side], col, Stroke::NONE));
+                    }
                 }
             }
         for pr in &self.problems {
@@ -1941,6 +2118,34 @@ impl SchEditor {
                         ui.text_edit_singleline(&mut c.value);
                     });
                 }
+                if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) {
+                    let (first, rest) = match c.value.trim().split_once(char::is_whitespace) {
+                        Some((f, r)) => (f.to_string(), format!(" {}", r.trim())),
+                        None => (c.value.trim().to_string(), String::new()),
+                    };
+                    if let Some(cur) = parse_value(&first).filter(|v| *v > 0.0) {
+                        // re-centre on the typed value unless the slider itself wrote it
+                        if self.slider.as_ref().is_none_or(|(k, _, t)| *k != i || *t != c.value) {
+                            self.slider = Some((i, cur, c.value.clone()));
+                        }
+                        let base = self.slider.as_ref().map_or(cur, |s| s.1);
+                        let mut x = (cur / base).log10().clamp(-2.0, 2.0);
+                        let changed = ui
+                            .horizontal(|ui| {
+                                ui.label("スライダー");
+                                ui.add(egui::Slider::new(&mut x, -2.0..=2.0).show_value(false)).on_hover_text(
+                                    "ドラッグして値を動かします (中央 = 今の値、左右に 1/100 〜 100 倍)。
+下の「自動で再計算」をオンにすると、動かしながら波形や電圧が変わるのを見られます",
+                                ).changed()
+                            })
+                            .inner;
+                        if changed {
+                            let v = format_value(base * 10f64.powf(x));
+                            c.value = format!("{v}{rest}");
+                            self.slider = Some((i, base, c.value.clone()));
+                        }
+                    }
+                }
                 if c.kind == Kind::VSource {
                     // read the form again when the text changed or another source was selected
                     let stale = self.src_form.as_ref().is_none_or(|(k, t, _)| *k != i || *t != c.value);
@@ -2008,8 +2213,14 @@ impl SchEditor {
             if ui.button("DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
                 self.run_dc();
             }
-            ui.checkbox(&mut self.show_v, "電圧表示").on_hover_text("DC解析の結果を回路図に重ねて表示します");
+            ui.checkbox(&mut self.show_v, "電圧表示").on_hover_text("DC解析の結果を回路図に重ねて表示します。配線は電圧が低いほど青、高いほど赤に色分けされます");
+            ui.checkbox(&mut self.show_i, "電流表示").on_hover_text("各部品を流れる電流を数値と矢印 (電流の向き) で表示します。「どこに電流が流れているか」の理解に役立ちます");
         });
+        ui.checkbox(&mut self.live, "自動で再計算").on_hover_text(
+            "回路を変えるたびに、開いている解析 (DC / 過渡 / AC) をやり直します。
+部品の「スライダー」と組み合わせると、値を動かしながら結果がどう変わるかを実験できます。
+重い回路では動きがもたつくのでオフにしてください",
+        );
         ui.separator();
         ui.label("過渡解析");
         ui.horizontal(|ui| {
@@ -2196,6 +2407,7 @@ impl SchEditor {
         match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string())) {
             Ok(s) => {
                 self.sch = s;
+                self.reset_history();
                 self.path = Some(p.clone());
                 self.selected = None;
                 self.pending = None;
@@ -2233,6 +2445,78 @@ mod select_tests {
         e.sch.wires.push(Wire { a: (2, 0), b: (8, 0) });
         e.sch.labels.push(Label { pos: (10, -4), text: "X".into() });
         e
+    }
+
+    #[test]
+    fn undo_and_redo_step_through_committed_edits() {
+        let mut e = editor();
+        e.reset_history();
+        e.sch.wires.push(Wire { a: (0, 5), b: (4, 5) });
+        e.commit_history();
+        e.sch.labels.clear();
+        e.commit_history();
+        assert_eq!((e.sch.wires.len(), e.sch.labels.len()), (2, 0));
+        e.undo();
+        assert_eq!((e.sch.wires.len(), e.sch.labels.len()), (2, 1));
+        e.undo();
+        assert_eq!(e.sch.wires.len(), 1);
+        e.undo(); // nothing left
+        assert_eq!(e.sch.wires.len(), 1);
+        e.redo();
+        e.redo();
+        assert_eq!((e.sch.wires.len(), e.sch.labels.len()), (2, 0));
+        // a new edit discards the redo history
+        e.undo();
+        e.sch.wires.clear();
+        e.commit_history();
+        e.redo();
+        assert_eq!(e.sch.wires.len(), 0);
+    }
+
+    #[test]
+    fn uncommitted_edit_is_undone_in_one_step() {
+        let mut e = editor();
+        e.reset_history();
+        e.sch.components[0].value = "47k".into();
+        e.undo(); // commits the pending edit first, then reverts it
+        assert_ne!(e.sch.components[0].value, "47k");
+        e.redo();
+        assert_eq!(e.sch.components[0].value, "47k");
+    }
+
+    #[test]
+    fn live_update_reruns_the_open_analysis_after_an_edit() {
+        let mut e = editor();
+        e.run_dc();
+        e.live = true;
+        e.live_update(); // first call syncs the snapshot
+        let before = e.dc.as_ref().unwrap().signature.clone();
+        e.sch.components[0].value = "2.2k".into();
+        assert_ne!(e.dc.as_ref().unwrap().signature, e.signature(), "stale before the live update");
+        e.live_update();
+        assert_eq!(e.dc.as_ref().unwrap().signature, e.signature());
+        assert_ne!(e.dc.as_ref().unwrap().signature, before);
+        e.live = false;
+        e.sch.components[0].value = "3.3k".into();
+        e.live_update();
+        assert_ne!(e.dc.as_ref().unwrap().signature, e.signature(), "off: nothing is recomputed");
+    }
+
+    #[test]
+    fn dc_result_colours_every_wire_and_reports_part_currents() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/led.schjson");
+        let mut e = editor();
+        e.sch = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        e.run_dc();
+        let dc = e.dc.as_ref().unwrap();
+        let res = dc.outcome.as_ref().expect("the LED example converges");
+        assert_eq!(dc.wire_v.len(), e.sch.wires.len());
+        assert!(dc.wire_v.iter().all(|v| v.is_some()), "every wire belongs to a net with a voltage");
+        assert!(dc.v_range.1 > dc.v_range.0);
+        assert!(e.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).all(|c| res.element(&c.refdes).is_some()));
+        // blue at the bottom of the range, red at the top
+        let (lo, hi) = (volt_color(0.0, (0.0, 5.0)), volt_color(5.0, (0.0, 5.0)));
+        assert!(lo.b() > lo.r() && hi.r() > hi.b());
     }
 
     #[test]
