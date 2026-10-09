@@ -33,7 +33,7 @@ impl SchEditor {
             Err(e) => format!("AC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi) });
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), signature: self.signature() });
         self.wave_mode = WaveMode::Ac;
     }
 
@@ -47,7 +47,7 @@ impl SchEditor {
             }
             ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります");
         });
-        let AcView { outcome, selected, plot: st } = view;
+        let AcView { outcome, selected, plot: st, .. } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {

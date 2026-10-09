@@ -6,6 +6,17 @@
 use crate::ac::{ac_analysis, AcSettings, AcSweep};
 use crate::circuit::{Circuit, Element};
 use crate::dc::{dc_op, SimError};
+use crate::stepmetrics::step_metrics;
+use crate::tran::{transient, TranSettings};
+
+/// A figure of the step response of a transient run.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TranMetric {
+    RiseTime,
+    Overshoot,
+    SettlingTime,
+    FinalValue,
+}
 
 /// What is measured on every random circuit.
 #[derive(Clone, Debug, PartialEq)]
@@ -15,6 +26,9 @@ pub enum McMeasure {
     /// The -3 dB frequency of the output node's gain (needs a source with `AC`). The gain is
     /// compared with its peak over the sweep; for a band-pass the lower edge is reported.
     Cutoff { fstart: f64, fstop: f64, points_per_decade: usize },
+    /// A step-response figure of the output node in a transient run (the circuit must be driven by
+    /// a step or pulse and the run long enough to settle).
+    Tran { tstop: f64, tstep: f64, uic: bool, metric: TranMetric },
 }
 
 #[derive(Clone, Debug)]
@@ -34,7 +48,7 @@ pub struct McSettings {
 #[derive(Clone, Debug)]
 pub struct McResult {
     pub output: String,
-    /// "V" or "Hz".
+    /// "V", "Hz", "s" or "%".
     pub unit: &'static str,
     /// The value with every part at its printed value.
     pub nominal: f64,
@@ -151,6 +165,18 @@ fn measure(c: &Circuit, node: &str, how: &McMeasure) -> Result<f64, SimError> {
             let sig = r.signal(&format!("V({node})")).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
             minus_3db(&r.freq, &sig.mag()).ok_or_else(|| SimError::Invalid("利得が -3dB に下がる周波数が、掃引の範囲内にありません。周波数の範囲を広げてください".into()))
         }
+        McMeasure::Tran { tstop, tstep, uic, metric } => {
+            let r = transient(c, &TranSettings { tstop: *tstop, tstep: *tstep, uic: *uic })?;
+            let sig = r.signal(&format!("V({node})")).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
+            let m = step_metrics(&r.time, &sig.values).map_err(SimError::Invalid)?;
+            let missing = || SimError::Invalid("波形が 10% 〜 90% を通過していません".into());
+            match metric {
+                TranMetric::RiseTime => m.rise_time.ok_or_else(missing),
+                TranMetric::Overshoot => Ok(m.overshoot_pct),
+                TranMetric::SettlingTime => m.settling_time.ok_or_else(missing),
+                TranMetric::FinalValue => Ok(m.final_value),
+            }
+        }
     }
 }
 
@@ -191,6 +217,12 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
         }
     }
     sensitivity.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));
-    let unit = if s.measure == McMeasure::DcVoltage { "V" } else { "Hz" };
+    let unit = match &s.measure {
+        McMeasure::DcVoltage => "V",
+        McMeasure::Cutoff { .. } => "Hz",
+        McMeasure::Tran { metric: TranMetric::RiseTime | TranMetric::SettlingTime, .. } => "s",
+        McMeasure::Tran { metric: TranMetric::Overshoot, .. } => "%",
+        McMeasure::Tran { metric: TranMetric::FinalValue, .. } => "V",
+    };
     Ok(McResult { output, unit, nominal, values, failed, sensitivity })
 }

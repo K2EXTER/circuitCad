@@ -68,12 +68,20 @@ fn ac_done(e: &SchEditor) -> bool {
     e.ac.as_ref().is_some_and(|a| a.outcome.is_ok())
 }
 
+fn ac_fresh(e: &SchEditor) -> bool {
+    e.ac.as_ref().is_some_and(|a| a.outcome.is_ok() && a.signature == e.signature())
+}
+
+fn tran_fresh(e: &SchEditor) -> bool {
+    e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
+}
+
 fn c1_changed_and_ac(e: &SchEditor) -> bool {
-    changed(e, "C1") && ac_done(e) && e.wave_mode == WaveMode::Ac
+    changed(e, "C1") && ac_fresh(e) && e.wave_mode == WaveMode::Ac
 }
 
 fn mc_cutoff_done(e: &SchEditor) -> bool {
-    e.mc_ac && mc_done(e)
+    e.mc_kind == McKind::Ac && mc_done(e)
 }
 
 fn tran_done(e: &SchEditor) -> bool {
@@ -81,7 +89,15 @@ fn tran_done(e: &SchEditor) -> bool {
 }
 
 fn c1_changed_and_tran(e: &SchEditor) -> bool {
-    changed(e, "C1") && tran_done(e)
+    changed(e, "C1") && tran_fresh(e)
+}
+
+fn r1_changed_and_tran(e: &SchEditor) -> bool {
+    changed(e, "R1") && tran_fresh(e)
+}
+
+fn mc_overshoot_done(e: &SchEditor) -> bool {
+    e.mc_kind == McKind::Tran && e.mc_metric == TranMetric::Overshoot && mc_done(e)
 }
 
 fn sweep_done(e: &SchEditor) -> bool {
@@ -212,6 +228,30 @@ const LESSONS: &[Lesson] = &[
                 title: "C1 を 1u にして、もう一度解析する",
                 detail: "C1 を 1u にして「過渡解析を実行」。周期が 1/10 になり、波形が 10 倍の速さで繰り返します。",
                 done: c1_changed_and_tran,
+            },
+        ],
+    },
+    Lesson {
+        title: "6. 行き過ぎとリンギング (RLC回路)",
+        goal: "コイルとコンデンサの回路が、ステップに対して「行き過ぎて揺れる」様子と、抵抗でそれを抑える方法を見ます",
+        summary: "コイルとコンデンサは、エネルギーをやり取りして振動します。抵抗が小さいと最終値を行き過ぎて何度も揺れ (リンギング)、大きいと揺れずにゆっくり近づきます。電源回路やデジタル信号の配線でも、行き過ぎ (オーバーシュート) は誤動作や部品破損の原因になります。",
+        circuit: include_str!("../../../../docs/examples/rlc_pulse.schjson"),
+        setup: |e| e.set_tran_settings("5.5m", "5u"),
+        steps: &[
+            Step {
+                title: "過渡解析を実行して、行き過ぎを見る",
+                detail: "「過渡解析を実行」を押し、C1 の電圧 (C1 のつなぎ目の信号) を選びます。電源が 0V→5V になった直後、5V を超えて揺れながら落ち着きます。左の「ステップ応答の指標」を開くと、行き過ぎが約 35% と出ます。",
+                done: tran_done,
+            },
+            Step {
+                title: "R1 を 100 にして、もう一度解析する",
+                detail: "R1 を 20 から 100 にして「過渡解析を実行」。揺れがなくなり、行き過ぎが 0% になります。抵抗が振動のエネルギーを熱にして逃がす (ダンピング) ためです。代わりに立ち上がりは遅くなります。",
+                done: r1_changed_and_tran,
+            },
+            Step {
+                title: "部品の誤差で行き過ぎがどれだけずれるか見る",
+                detail: "R1 を 20 に戻し、「実験: 温度とばらつき」で「測るもの」を「ステップ応答」、「指標」を「オーバーシュート」、「測る点」を C1 の電圧にして「ばらつき解析を実行」。部品の誤差で、行き過ぎの大きさが何 % ずれるかが分かります。",
+                done: mc_overshoot_done,
             },
         ],
     },

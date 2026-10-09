@@ -71,7 +71,7 @@ fn monte_carlo_can_measure_the_cutoff_of_the_rc_filter() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rc_lowpass.schjson");
     let mut e = SchEditor::default();
     e.load_path(path);
-    e.mc_ac = true;
+    e.mc_kind = McKind::Ac;
     e.mc_runs = "30".into();
     let mut found = None;
     for n in e.node_names() {

@@ -1,4 +1,5 @@
 use super::lessons::value_of;
+use sch_core::extract;
 use super::*;
 
 fn progress(e: &SchEditor) -> usize {
@@ -90,4 +91,37 @@ fn restarting_restores_the_original_circuit() {
     e.start_lesson(1);
     assert_eq!(value_of(&e.sch, "R1"), Some("330"));
     assert!(e.undo.is_empty());
+}
+
+fn net_of(e: &SchEditor, refdes: &str, pin: &str) -> String {
+    extract(&e.sch).into_iter().find(|n| n.pins.iter().any(|p| p.refdes == refdes && p.pin == pin)).unwrap().name
+}
+
+#[test]
+fn the_ringing_lesson_needs_a_fresh_run_after_the_change() {
+    let mut e = SchEditor::default();
+    let idx = lesson_titles().iter().position(|t| t.contains("リンギング")).unwrap();
+    e.start_lesson(idx);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // changing R1 alone does not tick the step: the waveform on screen is stale
+    set_value(&mut e, "R1", "100");
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    set_value(&mut e, "R1", "20");
+    e.mc_out = net_of(&e, "C1", "1");
+    e.mc_kind = McKind::Tran;
+    e.mc_metric = TranMetric::Overshoot;
+    e.mc_runs = "20".into();
+    e.run_mc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let r = e.mc.as_ref().unwrap().outcome.as_ref().unwrap();
+    // zeta = 0.316 => exp(-pi zeta / sqrt(1 - zeta^2)) = 35 %
+    assert!((r.nominal - 35.0).abs() < 3.0, "{}", r.nominal);
+    assert_eq!(r.unit, "%");
 }

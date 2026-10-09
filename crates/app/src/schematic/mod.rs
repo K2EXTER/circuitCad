@@ -5,7 +5,7 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, McMeasure, McResult, McSettings, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, step_metrics, McMeasure, McResult, McSettings, TranMetric, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
@@ -143,8 +143,9 @@ pub struct SchEditor {
     mc_tol_c: String,
     mc_tol_l: String,
     mc_seed: u64,
-    /// Measure the -3 dB frequency (AC) instead of a DC voltage.
-    mc_ac: bool,
+    /// What the Monte Carlo run measures.
+    mc_kind: McKind,
+    mc_metric: TranMetric,
     /// The running lesson and the circuit it started from.
     lesson: Option<ActiveLesson>,
     lesson_base: Schematic,
@@ -181,6 +182,17 @@ struct SweepView {
     temp: bool,
 }
 
+/// Quantity a Monte Carlo run measures.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum McKind {
+    /// DC voltage of a node.
+    Dc,
+    /// -3 dB frequency (AC).
+    Ac,
+    /// Step-response figure (transient).
+    Tran,
+}
+
 /// A finished Monte Carlo run.
 struct McView {
     outcome: Result<McResult, Vec<String>>,
@@ -198,6 +210,8 @@ struct AcView {
     outcome: Result<AcResult, Vec<String>>,
     selected: BTreeSet<String>,
     plot: PlotState,
+    /// The schematic this result was computed from.
+    signature: String,
 }
 
 /// A finished transient run with the waveform viewer state.
@@ -211,6 +225,8 @@ struct TranView {
     spec_t1: String,
     spec_plot: Option<PlotState>,
     spec_cache: Option<(String, Vec<(String, Spectrum)>)>,
+    /// The schematic this result was computed from.
+    signature: String,
 }
 
 /// A finished DC analysis, remembered with the schematic it was computed from.
@@ -318,7 +334,8 @@ impl Default for SchEditor {
             mc_tol_c: "10".into(),
             mc_tol_l: "10".into(),
             mc_seed: 1,
-            mc_ac: false,
+            mc_kind: McKind::Dc,
+            mc_metric: TranMetric::RiseTime,
             lesson: None,
             lesson_base: Schematic::default(),
             sweep_src: String::new(),

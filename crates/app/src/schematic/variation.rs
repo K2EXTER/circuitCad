@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// A measured value with its unit; percentages are not given SI prefixes.
+fn fmt_unit(v: f64, unit: &str) -> String {
+    if unit == "%" { format!("{v:.1} %") } else { eng(v, unit) }
+}
+
 /// Tolerance text ("5" = ±5 %) -> fraction.
 fn percent(s: &str) -> Option<f64> {
     s.trim().trim_end_matches('%').parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0)
@@ -55,14 +60,22 @@ impl SchEditor {
             return;
         };
         self.mc_seed += 1;
-        let measure = if self.mc_ac {
-            let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
-                self.status = "AC解析の欄の周波数と点数を数値で入力してください (例: 10, 1Meg, 20)".into();
-                return;
-            };
-            McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
-        } else {
-            McMeasure::DcVoltage
+        let measure = match self.mc_kind {
+            McKind::Dc => McMeasure::DcVoltage,
+            McKind::Ac => {
+                let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
+                    self.status = "AC解析の欄の周波数と点数を数値で入力してください (例: 10, 1Meg, 20)".into();
+                    return;
+                };
+                McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
+            }
+            McKind::Tran => {
+                let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+                    self.status = "過渡解析の欄の終了時間と刻みを数値で入力してください (例: 10m, 10u)".into();
+                    return;
+                };
+                McMeasure::Tran { tstop, tstep, uic: self.tran_uic, metric: self.mc_metric }
+            }
         };
         let settings = McSettings { runs, seed: self.mc_seed, tol_r, tol_c, tol_l, output: self.mc_out.trim().to_string(), measure };
         let outcome = if settings.output.is_empty() {
@@ -90,7 +103,11 @@ impl SchEditor {
         let Some(view) = self.mc.as_ref() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
-            ui.strong(if view.outcome.as_ref().is_ok_and(|r| r.unit == "Hz") { "ばらつき解析 (部品の誤差でカットオフ周波数がどれだけずれるか)" } else { "ばらつき解析 (部品の誤差で出力がどれだけずれるか)" });
+            ui.strong(match view.outcome.as_ref().map(|r| r.unit) {
+                Ok("Hz") => "ばらつき解析 (部品の誤差でカットオフ周波数がどれだけずれるか)",
+                Ok("s") | Ok("%") => "ばらつき解析 (部品の誤差でステップ応答がどれだけずれるか)",
+                _ => "ばらつき解析 (部品の誤差で出力がどれだけずれるか)",
+            });
             if ui.button("閉じる").clicked() {
                 close = true;
             }
@@ -116,11 +133,11 @@ impl SchEditor {
                                 ui.label(val).on_hover_text(tip);
                                 ui.end_row();
                             };
-                            row(ui, &format!("{} の設計値", res.output), eng(res.nominal, res.unit), "部品がすべて表示どおりの値のときの値");
-                            row(ui, "平均", eng(st.mean, res.unit), "ランダムに作った回路の値の平均");
-                            row(ui, "最小", eng(st.min, res.unit), "一番小さかった値");
-                            row(ui, "最大", eng(st.max, res.unit), "一番大きかった値");
-                            row(ui, "標準偏差 σ", eng(st.std, res.unit), "ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります");
+                            row(ui, &format!("{} の設計値", res.output), fmt_unit(res.nominal, res.unit), "部品がすべて表示どおりの値のときの値");
+                            row(ui, "平均", fmt_unit(st.mean, res.unit), "ランダムに作った回路の値の平均");
+                            row(ui, "最小", fmt_unit(st.min, res.unit), "一番小さかった値");
+                            row(ui, "最大", fmt_unit(st.max, res.unit), "一番大きかった値");
+                            row(ui, "標準偏差 σ", fmt_unit(st.std, res.unit), "ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります");
                         });
                         if res.nominal.abs() > 1e-12 {
                             let lo = (st.min - res.nominal) / res.nominal.abs() * 100.0;
@@ -135,7 +152,7 @@ impl SchEditor {
                         egui::Grid::new("mc_sens").num_columns(2).show(ui, |ui| {
                             for (name, dv) in res.sensitivity.iter().take(8) {
                                 ui.label(name);
-                                ui.label(format!("{}{}", if *dv >= 0.0 { "+" } else { "−" }, eng(dv.abs(), res.unit)));
+                                ui.label(format!("{}{}", if *dv >= 0.0 { "+" } else { "−" }, fmt_unit(dv.abs(), res.unit)));
                                 ui.end_row();
                             }
                         });
@@ -182,8 +199,8 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
     let f = FontId::proportional(11.0);
-    p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, eng(a, res.unit), f.clone(), Color32::from_gray(190));
-    p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, eng(b, res.unit), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, fmt_unit(a, res.unit), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, fmt_unit(b, res.unit), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, format!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.bottom()), Align2::LEFT_BOTTOM, "0", f, Color32::from_gray(190));
 }

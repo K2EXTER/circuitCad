@@ -47,6 +47,7 @@ impl SchEditor {
             spec_t1: format!("{:.6e}", tstop),
             spec_plot: None,
             spec_cache: None,
+            signature: self.signature(),
         });
         self.wave_mode = WaveMode::Tran;
     }
@@ -55,7 +56,7 @@ impl SchEditor {
     pub(super) fn tran_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.tran.as_mut() else { return };
         let mut close = false;
-        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache } = view;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
             if ui.button("閉じる").clicked() {
@@ -102,6 +103,27 @@ impl SchEditor {
                                     ui.small(format!("{name}\n  平均 {}{u}  AC実効値 {}{u}", plot::axis_label(sx.mean, sx.mean.abs() / 1000.0), plot::axis_label(sx.rms_ac, sx.rms_ac.abs() / 1000.0)));
                                 }
                         }
+                        egui::CollapsingHeader::new("ステップ応答の指標").show(ui, |ui| {
+                            ui.small("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)");
+                            for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
+                                let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
+                                match step_metrics(&res.time, &sg.values) {
+                                    Ok(m) => {
+                                        ui.small(format!("{name} (最終値 {})", eng(m.final_value, "V")));
+                                        let dash = "—".to_string();
+                                        ui.small(format!("  立ち上がり {}", m.rise_time.map_or(dash.clone(), |t| eng(t, "s")))).on_hover_text("10% から 90% まで変わる時間");
+                                        ui.small(format!("  行き過ぎ {:.1} %", m.overshoot_pct)).on_hover_text("最終値を超えた量。0% なら滑らかに近づいています");
+                                        ui.small(format!("  整定 {}", m.settling_time.map_or(dash, |t| eng(t, "s")))).on_hover_text("10% に達してから ±2% に収まるまでの時間");
+                                    }
+                                    Err(why) => {
+                                        ui.small(format!("{name}: {why}"));
+                                    }
+                                }
+                            }
+                            if !order.iter().any(|n| selected.contains(*n)) {
+                                ui.small("下の一覧で信号を選んでください");
+                            }
+                        });
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {
                                 let mut on = selected.contains(*name);

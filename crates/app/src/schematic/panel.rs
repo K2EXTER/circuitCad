@@ -327,10 +327,30 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         });
         ui.horizontal(|ui| {
             ui.label("測るもの");
-            ui.selectable_value(&mut self.mc_ac, false, "電圧 (DC)").on_hover_text("選んだ点の直流電圧が、部品の誤差でどれだけずれるか");
-            ui.selectable_value(&mut self.mc_ac, true, "カットオフ周波数 (AC)")
+            ui.selectable_value(&mut self.mc_kind, McKind::Dc, "電圧 (DC)").on_hover_text("選んだ点の直流電圧が、部品の誤差でどれだけずれるか");
+            ui.selectable_value(&mut self.mc_kind, McKind::Ac, "カットオフ (AC)")
                 .on_hover_text("フィルタが -3dB になる周波数が、部品の誤差でどれだけずれるか。入力電源の値を「AC 1」にし、周波数の範囲は AC解析の欄を使います");
+            ui.selectable_value(&mut self.mc_kind, McKind::Tran, "ステップ応答")
+                .on_hover_text("電源が 0V→5V に切り替わったときの応答の速さや行き過ぎが、部品の誤差でどれだけずれるか。入力電源は PULSE(0 5 0 1u 1u 1 2) のようにし、時間は過渡解析の欄を使います。落ち着くまで十分長い終了時間が必要です");
         });
+        if self.mc_kind == McKind::Tran {
+            ui.horizontal(|ui| {
+                ui.label("指標");
+                egui::ComboBox::from_id_salt("mc_metric")
+                    .selected_text(match self.mc_metric {
+                        TranMetric::RiseTime => "立ち上がり時間",
+                        TranMetric::Overshoot => "オーバーシュート",
+                        TranMetric::SettlingTime => "整定時間",
+                        TranMetric::FinalValue => "最終値",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.mc_metric, TranMetric::RiseTime, "立ち上がり時間").on_hover_text("出力が最終値の 10% から 90% まで変わるのにかかる時間。小さいほど速い");
+                        ui.selectable_value(&mut self.mc_metric, TranMetric::Overshoot, "オーバーシュート").on_hover_text("最終値を行き過ぎる量 (ステップの大きさに対する %)");
+                        ui.selectable_value(&mut self.mc_metric, TranMetric::SettlingTime, "整定時間").on_hover_text("10% に達してから、最終値の ±2% に収まるまでの時間");
+                        ui.selectable_value(&mut self.mc_metric, TranMetric::FinalValue, "最終値").on_hover_text("落ち着いたあとの電圧");
+                    });
+            });
+        }
         ui.horizontal(|ui| {
             ui.label("許容差 %  R");
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_r).desired_width(26.0)).on_hover_text("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です");
