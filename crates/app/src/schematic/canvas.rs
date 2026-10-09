@@ -30,6 +30,9 @@ impl SchEditor {
         self.draw_currents(&painter, rect);
         self.draw_problems(&painter, rect);
         self.draw_noise_overlay(&painter, rect);
+        if self.alt_pan {
+            return; // the drag moves the view: no selection box, no moving of parts
+        }
         self.box_selection(ui, &resp, rect, &painter);
 
         // interaction
@@ -49,7 +52,14 @@ impl SchEditor {
     pub(super) fn pan_and_zoom(&mut self, ui: &egui::Ui, resp: &egui::Response, rect: Rect, hover: Option<Pos2>) {
         // in the Select tool the right button draws a crossing selection box instead of panning
         let rmb_selects = self.tool == Tool::Select && !self.noise_pick;
-        if resp.dragged_by(egui::PointerButton::Middle) || (resp.dragged_by(egui::PointerButton::Secondary) && !rmb_selects) {
+        // Alt + left drag pans as well (for mice without a usable wheel button)
+        if resp.drag_started_by(egui::PointerButton::Primary) {
+            self.alt_pan = ui.input(|i| i.modifiers.alt);
+        }
+        if !resp.dragged_by(egui::PointerButton::Primary) {
+            self.alt_pan = false;
+        }
+        if resp.dragged_by(egui::PointerButton::Middle) || (resp.dragged_by(egui::PointerButton::Secondary) && !rmb_selects) || self.alt_pan {
             let d = resp.drag_delta();
             self.pan.x -= d.x / self.zoom;
             self.pan.y -= d.y / self.zoom;

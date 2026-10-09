@@ -166,6 +166,8 @@ pub struct BoardEditor {
     size_w: f64,
     size_h: f64,
     fit_pending: bool,
+    /// A left drag with Alt held pans the view (until the button is released).
+    alt_pan: bool,
     /// The "発注の準備" window.
     order: order::OrderState,
     order_preview_src: Option<pcb_core::gerber_view::Preview>,
@@ -212,6 +214,7 @@ impl Default for BoardEditor {
             size_w: 50.0,
             size_h: 40.0,
             fit_pending: true,
+            alt_pan: false,
             order: order::OrderState::default(),
             order_preview_src: None,
             last_export_dir: None,

@@ -153,6 +153,8 @@ pub struct SchEditor {
     mc_metric: TranMetric,
     /// The running lesson and the circuit it started from.
     lesson: Option<ActiveLesson>,
+    /// A left drag with Alt held pans the view (until the button is released).
+    alt_pan: bool,
     lesson_base: Schematic,
     sweep_src: String,
     sweep_start: String,
@@ -353,6 +355,7 @@ impl Default for SchEditor {
             panel_tab: PanelTab::Draw,
             mc_metric: TranMetric::RiseTime,
             lesson: None,
+            alt_pan: false,
             lesson_base: Schematic::default(),
             sweep_src: String::new(),
             sweep_start: "0".into(),

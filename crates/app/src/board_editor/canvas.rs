@@ -21,9 +21,12 @@ impl BoardEditor {
         self.draw_highlight(&painter, rect, conn.as_ref());
         self.draw_overlays(&painter, rect);
 
-        self.box_selection(ui, &resp, rect, &painter);
+        if !self.alt_pan {
+            self.box_selection(ui, &resp, rect, &painter);
+        }
         let typing = ui.ctx().egui_wants_keyboard_input();
-        let sp = self.pointer(&resp, rect, &painter);
+        // while the view is dragged with Alt, nothing under the pointer is picked up or moved
+        let sp = if self.alt_pan { None } else { self.pointer(&resp, rect, &painter) };
         if !typing {
             self.handle_keys(ui, sp);
         }
@@ -34,7 +37,14 @@ impl BoardEditor {
         // pan (middle/right drag) and zoom (wheel, around the cursor)
         // in the Select tool the right button draws a crossing selection box instead of panning
         let rmb_selects = self.tool == Tool::Select;
-        if resp.dragged_by(egui::PointerButton::Middle) || (resp.dragged_by(egui::PointerButton::Secondary) && !rmb_selects) {
+        // Alt + left drag pans as well (for mice without a usable wheel button)
+        if resp.drag_started_by(egui::PointerButton::Primary) {
+            self.alt_pan = ui.input(|i| i.modifiers.alt);
+        }
+        if !resp.dragged_by(egui::PointerButton::Primary) {
+            self.alt_pan = false;
+        }
+        if resp.dragged_by(egui::PointerButton::Middle) || (resp.dragged_by(egui::PointerButton::Secondary) && !rmb_selects) || self.alt_pan {
             let d = resp.drag_delta();
             self.pan.x -= d.x / self.zoom;
             self.pan.y += d.y / self.zoom;
