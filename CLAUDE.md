@@ -46,8 +46,8 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 型定義(`Tool`,`Sel`,`DcView`,`TranView`...)、`SchEditor`のフィールド、`volt_color`,`eng`,`kind_tip` |
-| `canvas.rs` | 描画エリア(入力処理・描画・電圧/電流オーバーレイ) / `symbols.rs` 記号の図形・座標変換・重なり判定 |
-| `panel.rs` | 左パネル(ツール、部品一覧、プロパティ、値スライダー、解析ボタン) / `hint.rs` 画面下のヒント文 |
+| `canvas.rs` | 描画エリアの流れ(`canvas`: パン・ズーム、キー、描画→操作の順) / `draw.rs` シートの描画(配線・部品・電圧/電流オーバーレイ・ERCの丸) / `interact.rs` マウス操作(範囲選択・ドラッグ・ツールのクリック) / `symbols.rs` 記号の図形・座標変換・重なり判定 |
+| `panel.rs` | 左パネル上部(ツール・部品一覧・選択部品のプロパティと値スライダー・ERC・部品作成フォーム) / `analysis_panel.rs` 左パネルの解析欄(DC・過渡・AC・スイープ・ノイズ・温度とばらつき・結果一覧) / `hint.rs` 画面下のヒント文 |
 | `edit.rs` 選択・当たり判定・削除・配線追加 / `history.rs` Undo・Redo / `file.rs` 保存・読込 / `library.rs` ライブラリ |
 | `lessons.rs` 「学ぶ」メニューのレッスン(サンプル回路埋め込み+手順、各手順は状態で自動チェック。足すときは `LESSONS` に追加) / `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
 
@@ -55,7 +55,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | ファイル | 内容 |
 |---|---|
 | `mod.rs` | 型定義(`Tool`,`Item`,`RouteMode`)、`BoardEditor`のフィールド、`snap`等の補助 |
-| `canvas.rs` 入力・キー操作 / `draw.rs` 描画(銅、ゾーン、ハイライト) / `panel.rs` 左パネル・選択パネル・ヒント |
+| `canvas.rs` 描画エリアの流れ・キー操作 / `interact.rs` 範囲選択とポインタ操作 / `draw.rs` 描画(銅、ゾーン、ハイライト) / `panel.rs` 左パネル・選択パネル・ヒント |
 | `select.rs` 当たり判定・範囲選択・移動・削除 / `route.rs` 配線の折れ方 / `tools.rs` クリック時のツール動作 |
 | `file.rs` 保存・読込・製造出力・回路図取込 / `actions.rs` 自動配線・DRC実行 / `history.rs` / `view.rs` |
 

@@ -388,6 +388,7 @@ use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extent
 mod symbols;
 mod wave;
 mod ac;
+mod analysis_panel;
 mod sweep;
 mod lessons;
 mod noise;
@@ -399,6 +400,8 @@ mod edit;
 mod history;
 mod hint;
 mod canvas;
+mod draw;
+mod interact;
 mod panel;
 mod file;
 #[cfg(test)]

@@ -235,6 +235,7 @@ mod tools;
 mod file;
 mod actions;
 mod canvas;
+mod interact;
 mod draw;
 mod panel;
 #[cfg(test)]
