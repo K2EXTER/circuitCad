@@ -1,7 +1,7 @@
 {
   "name": "NE555",
   "category": "タイマ",
-  "description": "シングルタイマ (DIP-8)。シミュレーションモデルなしの例",
+  "description": "シングルタイマー (DIP-8)。簡易モデル: 分圧抵抗 + コンパレータ2個 + ラッチ + 出力段 (出力 High は Vcc−1.7 V)。非安定・単安定の動作をシミュレーションできます",
   "datasheet": "https://www.ti.com/lit/ds/symlink/ne555.pdf",
   "prefix": "U",
   "footprint_name": "DIP-8_W7.62",
@@ -55,5 +55,21 @@
     "pad_len": 1.6,
     "pad_width": 1.6,
     "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "NE555",
+    "text": "* NE555 behavioural model: resistor divider, two comparators, an SR latch and an output stage,\n* all built from voltage-controlled switches (S) so that it works at any supply voltage.\n.subckt NE555 trig thres ctl rst out disch vcc gnd\n* three 5k resistors: ctl = 2/3 Vcc, low = 1/3 Vcc\nRd1 vcc ctl 5k\nRd2 ctl low 5k\nRd3 low gnd 5k\n* half supply: the logic threshold\nRh1 vcc hv 100k\nRh2 hv gnd 100k\n* threshold comparator (high when THRES > CONT) and trigger comparator (high when TRIG < 1/3 Vcc)\nRcp rcmp gnd 10k\nScr vcc rcmp thres ctl SWC\nRsp scmp gnd 10k\nScs vcc scmp low trig SWC\n* NOR latch: Q = NOR(reset, Qb), Qb = NOR(set, Q); RESET (active low) forces Q low\nRq vcc q 10k\nSq1 q gnd rcmp hv SWL\nSq2 q gnd qb hv SWL\nSq3 q gnd hv rst SWL\nRqb vcc qb 10k\nSb1 qb gnd scmp hv SWL\nSb2 qb gnd q hv SWL\n* output: high = Vcc - 1.7 V (bipolar totem pole), low sinks through a few ohms\nVdrop vcc oh DC 1.7\nSoh oh out q hv SWH\nSol out gnd hv q SWS\n* discharge transistor: on while Q is low\nSd disch gnd hv q SWD\n* quiescent supply current\nRiq vcc gnd 2k\n.model SWC SW(RON=100 ROFF=1G VT=0 VW=0.005)\n.model SWL SW(RON=100 ROFF=1G VT=0 VW=0.1)\n.model SWH SW(RON=15 ROFF=1G VT=0 VW=0.1)\n.model SWS SW(RON=12 ROFF=1G VT=0 VW=0.1)\n.model SWD SW(RON=10 ROFF=1G VT=0 VW=0.1)\n.ends NE555",
+    "pins": [
+      "2",
+      "6",
+      "5",
+      "4",
+      "3",
+      "7",
+      "8",
+      "1"
+    ],
+    "params": {}
   }
 }

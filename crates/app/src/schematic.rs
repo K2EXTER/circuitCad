@@ -9,6 +9,7 @@ use sim_core::{
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
+use crate::source_form::SourceForm;
 use sch_core::{erc, extract, net_at, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
 use std::path::PathBuf;
 
@@ -110,6 +111,9 @@ pub struct SchEditor {
     noise_in: String,
     noise_temp: String,
     /// Waiting for a click on the canvas to choose the noise output node.
+    /// The voltage-source form for the selected source: (component index, the value text it was
+    /// read from, the form). Read again whenever the text changes from elsewhere.
+    src_form: Option<(usize, String, SourceForm)>,
     sweep: Option<SweepView>,
     sweep_src: String,
     sweep_start: String,
@@ -244,6 +248,7 @@ impl Default for SchEditor {
             noise_out: String::new(),
             noise_in: String::new(),
             noise_temp: "27".into(),
+            src_form: None,
             sweep: None,
             sweep_src: String::new(),
             sweep_start: "0".into(),
@@ -733,7 +738,7 @@ impl SchEditor {
                 return match c.kind {
                     Kind::Resistor => "値を書き換えてみましょう (例: 1k, 4.7k, 100)。DC解析をやり直すと電圧がどう変わるか分かります".into(),
                     Kind::Capacitor => "コンデンサは直流では電流を通さず、周波数が高いほど通しやすくなります。AC解析で効き方を見てみましょう".into(),
-                    Kind::VSource => "電源の値: 5 は直流、SIN(0 1 1k) は 1kHz の正弦波、AC 1 は周波数特性の入力。ノイズ解析の入力電源にも使います".into(),
+                    Kind::VSource => "電源の種類は「直流 / 交流 / パルス」のボタンで切り替えられます。「AC解析の入力にする」をオンにすると周波数特性の測定に使えます (ノイズ解析・DCスイープの入力にも指定できます)".into(),
                     Kind::Npn => "トランジスタはベース電流で大きなコレクタ電流を制御します。ベースに抵抗を付けて電圧を見てみましょう".into(),
                     _ => "選んだ部品の値は左の欄で変えられます。R キーで回転、Delete で削除".into(),
                 };
@@ -1867,8 +1872,31 @@ impl SchEditor {
                     });
                 }
                 if c.kind == Kind::VSource {
-                    ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 1m 1u 1u 2m 5m) / PWL(0 0 1m 5) / AC 1 (AC解析の入力) / 5 AC 1");
-                    ui.small("ノイズ: NOISE(実効値 最高周波数 [シード]) 例: 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) (+ の前後は空白)");
+                    // read the form again when the text changed or another source was selected
+                    let stale = self.src_form.as_ref().is_none_or(|(k, t, _)| *k != i || *t != c.value);
+                    if stale {
+                        self.src_form = Some((i, c.value.clone(), SourceForm::parse(&c.value)));
+                    }
+                    if let Some((_, text, form)) = self.src_form.as_mut() {
+                        ui.separator();
+                        if crate::source_form::show(ui, form) {
+                            match form.to_text() {
+                                Ok(t) => {
+                                    c.value = t.clone();
+                                    *text = t;
+                                }
+                                Err(msg) => {
+                                    ui.colored_label(Color32::from_rgb(230, 60, 60), msg);
+                                }
+                            }
+                        } else if let Err(msg) = form.to_text() {
+                            ui.colored_label(Color32::from_rgb(230, 60, 60), msg);
+                        }
+                    }
+                    ui.collapsing("値の書き方 (テキストで直接入力する場合)", |ui| {
+                        ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 100u 1u 1u 400u 1m) / PWL(0 0 1m 5) / 5 AC 1");
+                        ui.small("ノイズ: NOISE(実効値 最高周波数 [シード]) 例: 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) (+ の前後は空白)");
+                    });
                 }
                 if c.kind == Kind::Capacitor {
                     ui.small("例: 100n / 100n ESR=20m ESL=5n (等価直列抵抗・インダクタンス)");

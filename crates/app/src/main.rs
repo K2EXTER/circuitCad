@@ -9,6 +9,7 @@ mod board_editor;
 mod part_form;
 mod plot;
 mod schematic;
+mod source_form;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {

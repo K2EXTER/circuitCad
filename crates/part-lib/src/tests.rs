@@ -199,3 +199,40 @@ fn placed_part_exports_spice_with_its_model() {
     assert!(deck.contains(".model 1N4148 D("), "{deck}");
     assert!(deck.lines().any(|l| l.starts_with("D1 ") && l.ends_with(" 1N4148")), "{deck}");
 }
+
+#[test]
+fn model_less_original_is_upgraded_once() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_upgrade_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // an installed library from before the 555 had a model: the part, marked as installed
+    let mut old = example("NE555_DIP-8");
+    old.sim = None;
+    old.description = "old text".into();
+    std::fs::write(dir.join(format!("NE555_DIP-8{FILE_SUFFIX}")), serde_json::to_string_pretty(&old).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "NE555_DIP-8
+").unwrap();
+    install_examples(&dir).unwrap();
+    let (parts, _) = load_dir(&dir);
+    assert!(parts.iter().find(|p| p.name == "NE555").unwrap().sim.is_some(), "the model-less original gains its model");
+    // the user then deletes the model on purpose: it is not put back
+    let mut again = example("NE555_DIP-8");
+    again.sim = None;
+    std::fs::write(dir.join(format!("NE555_DIP-8{FILE_SUFFIX}")), serde_json::to_string_pretty(&again).unwrap()).unwrap();
+    install_examples(&dir).unwrap();
+    assert!(load_dir(&dir).0.iter().find(|p| p.name == "NE555").unwrap().sim.is_none());
+    // a modified copy (different pins) is never overwritten
+    let dir2 = std::env::temp_dir().join(format!("circuitcad_upgrade2_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir2);
+    std::fs::create_dir_all(&dir2).unwrap();
+    let mut mine = example("NE555_DIP-8");
+    mine.sim = None;
+    mine.pins.pop();
+    std::fs::write(dir2.join(format!("NE555_DIP-8{FILE_SUFFIX}")), serde_json::to_string_pretty(&mine).unwrap()).unwrap();
+    std::fs::write(dir2.join(".bundled"), "NE555_DIP-8
+").unwrap();
+    install_examples(&dir2).unwrap();
+    assert!(load_dir(&dir2).0.iter().find(|p| p.name == "NE555").unwrap().sim.is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&dir2);
+}

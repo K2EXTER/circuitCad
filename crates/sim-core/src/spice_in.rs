@@ -1,7 +1,7 @@
 //! Reading the SPICE text that library parts carry: `.model` cards and flat `.subckt` bodies.
-//! Supported elements: R C L V I E G D Q. Anything else is reported, never silently ignored.
+//! Supported elements: R C L V I E G D Q M S. Anything else is reported, never silently ignored.
 
-use crate::circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel};
+use crate::circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
 use crate::value::parse_value;
 use crate::waveform::parse_source_full;
 use std::collections::HashMap;
@@ -11,6 +11,7 @@ pub enum Model {
     Diode(DiodeModel),
     Bjt(BjtModel),
     Mos(MosModel),
+    Switch(SwitchModel),
 }
 
 /// Join continuation lines (`+`), drop comments and blank lines.
@@ -89,7 +90,11 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 pnp: t == "PNP",
             }),
         )),
-        other => Err(format!("未対応のモデル種別 {other} (D / NPN / PNP / NMOS / PMOS のみ)")),
+        "SW" => {
+            let d = SwitchModel::default();
+            Ok((name, Model::Switch(SwitchModel { ron: get("RON", d.ron), roff: get("ROFF", d.roff), vt: get("VT", d.vt), vw: get("VW", d.vw) })))
+        }
+        other => Err(format!("未対応のモデル種別 {other} (D / NPN / PNP / NMOS / PMOS / SW のみ)")),
     }
 }
 
@@ -128,6 +133,11 @@ pub fn add_model_instance(
         ("M", Model::Mos(mm)) if nodes.len() >= 3 => {
             // drain, gate, source (a fourth bulk node, if any, is ignored: bulk is tied to the source)
             c.add_mosfet(inst, nodes[0], nodes[1], nodes[2], mm.clone());
+            Ok(())
+        }
+        ("S", Model::Switch(sm)) if nodes.len() == 4 => {
+            // switch terminals a, b, then the control pair (+, -)
+            c.add(Element::Switch { name: inst.into(), a: nodes[0], b: nodes[1], cp: nodes[2], cn: nodes[3], model: sm.clone() });
             Ok(())
         }
         (e, _) => Err(format!("{inst}: 素子記号 {e} とモデル {model_name} の組み合わせ/ピン数が未対応です")),
@@ -231,7 +241,15 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
                     _ => return Err(format!("{name}: MOSFETモデル {} が見つかりません", t[5])),
                 }
             }
-            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G D Q M のみ)")),
+            'S' => {
+                need(6)?;
+                let (a, b, cp, cn) = (local(c, t[1]), local(c, t[2]), local(c, t[3]), local(c, t[4]));
+                match models.get(&t[5].to_ascii_lowercase()) {
+                    Some(Model::Switch(m)) => c.add(Element::Switch { name, a, b, cp, cn, model: m.clone() }),
+                    _ => return Err(format!("{name}: スイッチモデル {} が見つかりません", t[5])),
+                }
+            }
+            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G D Q M S のみ)")),
         }
     }
     Err(format!(".subckt {sub_name} に .ends がありません"))

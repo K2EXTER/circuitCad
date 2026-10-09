@@ -57,6 +57,39 @@ impl Default for BjtModel {
     }
 }
 
+/// Voltage-controlled switch. The conductance moves smoothly (log-interpolated, so that both
+/// ends are reached without a kink) from `1/roff` to `1/ron` while the control voltage rises
+/// from `vt - vw` to `vt + vw`. Smoothness keeps Newton's method well behaved at the threshold.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SwitchModel {
+    pub ron: f64,
+    pub roff: f64,
+    /// Control voltage at which the switch is half way.
+    pub vt: f64,
+    /// Half the width of the transition.
+    pub vw: f64,
+}
+
+impl Default for SwitchModel {
+    fn default() -> Self {
+        Self { ron: 1.0, roff: 1e9, vt: 0.0, vw: 0.01 }
+    }
+}
+
+impl SwitchModel {
+    /// Conductance and its derivative with respect to the control voltage.
+    pub fn eval(&self, vc: f64) -> (f64, f64) {
+        let (gon, goff) = (1.0 / self.ron.max(1e-9), 1.0 / self.roff.max(1e-9));
+        let w = self.vw.abs().max(1e-6);
+        let s = ((vc - (self.vt - w)) / (2.0 * w)).clamp(0.0, 1.0);
+        let smooth = s * s * (3.0 - 2.0 * s);
+        let dsmooth = if s > 0.0 && s < 1.0 { 6.0 * s * (1.0 - s) / (2.0 * w) } else { 0.0 };
+        let span = gon.ln() - goff.ln();
+        let g = (goff.ln() + span * smooth).exp();
+        (g, g * span * dsmooth)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Element {
     Resistor { name: String, a: usize, b: usize, r: f64 },
@@ -76,6 +109,8 @@ pub enum Element {
     Vcvs { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64 },
     /// current gm * v(cp,cn) flows from p through the source to n
     Vccs { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
+    /// Conducts between `a` and `b` when v(cp,cn) is above the model's threshold.
+    Switch { name: String, a: usize, b: usize, cp: usize, cn: usize, model: SwitchModel },
 }
 
 impl Element {
@@ -94,7 +129,8 @@ impl Element {
             | Element::Bjt { name, .. }
             | Element::Mosfet { name, .. }
             | Element::Vcvs { name, .. }
-            | Element::Vccs { name, .. } => name,
+            | Element::Vccs { name, .. }
+            | Element::Switch { name, .. } => name,
         }
     }
 }

@@ -48,7 +48,9 @@
 使える SPICE の記述:
 - `.model` カード: ダイオード `D(IS N RS BV IBV)`、バイポーラ `NPN` / `PNP`(`IS BF BR NF NR RB`。RB はベース抵抗で、ノイズ解析にも効きます)、
   MOSFET `NMOS` / `PMOS`(`VTO KP LAMBDA CGS CGD`。`element` は `M`、ノード順は ドレイン・ゲート・ソース)
-- `.subckt` の本体: `R C L V I E G D Q M`。それ以外の素子を含むと、黙って無視せずエラーになります
+  電圧制御スイッチ `SW`(`RON ROFF VT VW`。`element` は `S`、ノード順は スイッチの2端子・制御の+・制御の−。制御電圧が `VT ± VW` の間でなめらかにオフ→オンします)
+- `.subckt` の本体: `R C L V I E G D Q M S`。それ以外の素子を含むと、黙って無視せずエラーになります
+  (スイッチの行: `S1 a b cp cn モデル名`)
 
 SPICE ネットリストの書き出し時に、使われているモデルが1回だけ出力されます。`sim` が無い部品は
 コメント行になり、シミュレーションには含まれません。

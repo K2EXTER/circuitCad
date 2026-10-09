@@ -178,6 +178,10 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 let g_n = (2.0 / 3.0 * gm.abs()).max(gds.abs());
                 srcs.push(Src { name: name.clone(), p: *d, n: *s, s: kt4 * g_n });
             }
+            Ce::S { name, a, b, cp, cn, m } => {
+                let g = m.eval(v(&op.x, *cp) - v(&op.x, *cn)).0;
+                srcs.push(Src { name: name.clone(), p: *a, n: *b, s: kt4 * g });
+            }
             Ce::C { .. } | Ce::L { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } => {}
         }
     }
@@ -334,6 +338,12 @@ pub fn describe_source(name: &str) -> SourceInfo {
             title: "ダイオードのショット雑音",
             why: "接合を通る電流の粒状性による揺らぎ。大きさは 2q·Id で、電流が大きいほど増えます。",
             remedy: "順方向電流を小さくすると減ります。",
+        },
+        Some('S') => SourceInfo {
+            kind: NoiseKind::Thermal,
+            title: "スイッチの抵抗の熱雑音",
+            why: "オン抵抗(オフのときは大きな抵抗)の熱雑音。導通しているスイッチは抵抗と同じく 4kT·R の雑音を出します。",
+            remedy: "オン抵抗を小さくすると減ります。",
         },
         Some('M') => SourceInfo {
             kind: NoiseKind::Thermal,

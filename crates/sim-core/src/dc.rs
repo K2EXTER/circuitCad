@@ -1,7 +1,7 @@
 //! DC operating point: modified nodal analysis + damped Newton-Raphson, with gmin and
 //! source stepping as convergence aids.
 
-use crate::circuit::{BjtModel, Circuit, Element, MosModel};
+use crate::circuit::{BjtModel, Circuit, Element, MosModel, SwitchModel};
 use crate::waveform::Waveform;
 use std::fmt;
 
@@ -80,6 +80,7 @@ pub(crate) enum Ce {
     /// `bi` is the internal base node (equal to `b` when the model has no `rb`).
     Q { name: String, c: usize, b: usize, bi: usize, e: usize, m: BjtModel, slot: usize },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
+    S { name: String, a: usize, b: usize, cp: usize, cn: usize, m: SwitchModel },
 }
 
 pub(crate) struct Compiled {
@@ -150,6 +151,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 n_slots += 1;
             }
             Element::Mosfet { name, d, g, s, model } => ce.push(Ce::M { name: name.clone(), d: *d, g: *g, s: *s, m: model.clone() }),
+            Element::Switch { name, a, b, cp, cn, model } => ce.push(Ce::S { name: name.clone(), a: *a, b: *b, cp: *cp, cn: *cn, m: model.clone() }),
             Element::Bjt { name, c, b, e, model } => {
                 let bi = if model.rb > 0.0 {
                     n_nodes += 1;
@@ -446,6 +448,24 @@ impl Compiled {
                     m.g(*ai, *k, gd);
                     m.current(*ai, *k, id - gd * lim);
                 }
+                Ce::S { a, b, cp, cn, m: sw, .. } => {
+                    // i = g(vc) * vab; linearised with the control derivative as a transconductance
+                    let (vab, vc) = (v(x, *a) - v(x, *b), v(x, *cp) - v(x, *cn));
+                    let (g, dg) = sw.eval(vc);
+                    let k = dg * vab;
+                    m.g(*a, *b, g);
+                    m.gn(*a, *cp, k);
+                    m.gn(*a, *cn, -k);
+                    m.gn(*b, *cp, -k);
+                    m.gn(*b, *cn, k);
+                    // the constant part of the linearisation is -k*vc at both ends
+                    if *a != 0 {
+                        m.b[*a - 1] += k * vc;
+                    }
+                    if *b != 0 {
+                        m.b[*b - 1] -= k * vc;
+                    }
+                }
                 Ce::M { d, g, s, m: mm, .. } => {
                     let pol = if mm.pmos { -1.0 } else { 1.0 };
                     let (vgs, vds) = (v(x, *g) - v(x, *s), v(x, *d) - v(x, *s));
@@ -627,6 +647,7 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
             Element::VSource { p, n, .. } | Element::Vcvs { p, n, .. } => union(*p, *n),
             Element::Diode { a, k, .. } => union(*a, *k),
             Element::Mosfet { d, s, .. } => union(*d, *s),
+            Element::Switch { a, b, .. } => union(*a, *b),
             Element::Bjt { c, b, e, .. } => {
                 union(*c, *e);
                 union(*b, *e);
@@ -689,6 +710,7 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::ISource { from, to, .. } => *from == 0 || *to == 0,
         Element::Diode { a, k, .. } => *a == 0 || *k == 0,
         Element::Mosfet { d, g, s, .. } => *d == 0 || *g == 0 || *s == 0,
+        Element::Switch { a, b, cp, cn, .. } => *a == 0 || *b == 0 || *cp == 0 || *cn == 0,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } => *p == 0 || *n == 0,
     })
@@ -793,6 +815,11 @@ impl Compiled {
                     let (vgs, vds) = (v(x, *g) - v(x, *s), v(x, *d) - v(x, *s));
                     let id = pol * mos_eval(m, pol * vgs, pol * vds).0;
                     push(name, id, vds, vec![("Vgs".into(), vgs)], vds * id);
+                }
+                Ce::S { name, a, b, cp, cn, m, .. } => {
+                    let (vab, vc) = (v(x, *a) - v(x, *b), v(x, *cp) - v(x, *cn));
+                    let i = m.eval(vc).0 * vab;
+                    push(name, i, vab, vec![("Vc".into(), vc)], vab * i);
                 }
                 Ce::Q { name, c, b, bi, e, m, .. } => {
                     let pol = if m.pnp { -1.0 } else { 1.0 };

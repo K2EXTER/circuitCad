@@ -70,8 +70,16 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     let (mut x, mut vj) = if s.uic {
         (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
     } else {
-        let (att, _) = solve_op(&cm, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])?;
-        (att.x, att.vj)
+        match solve_op(&cm, &[Strategy::Direct, Strategy::Gmin, Strategy::Source]) {
+            Ok((att, _)) => (att.x, att.vj),
+            // an oscillator has no stable operating point (with the capacitors open it sits on
+            // the unstable balance point): start from zero charge instead, like SPICE's UIC
+            Err(SimError::NoConvergence) => {
+                warnings.push("DC動作点が求まらなかったため、すべてゼロの状態から始めました (発振回路では普通のことです)".into());
+                (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
+            }
+            Err(e) => return Err(e),
+        }
     };
 
     let mut cap_v = vec![0.0; cm.n_caps];

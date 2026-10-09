@@ -262,6 +262,23 @@ fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
     }
 }
 
+/// Bundled parts that gained a simulation model after their first release. An installed copy
+/// that is still the model-less original (same pins and package, no `sim`) is replaced once;
+/// the key is recorded in `.bundled` so that a later edit or deletion is respected.
+const MODEL_UPGRADES: &[&str] = &["NE555_DIP-8"];
+
+fn upgrade_key(name: &str) -> String {
+    format!("{name}+model")
+}
+
+fn is_modelless_original(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    match serde_json::from_str::<PartDef>(bundled) {
+        Ok(new) => old.sim.is_none() && old == PartDef { description: old.description.clone(), sim: None, ..new },
+        Err(_) => false,
+    }
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -280,6 +297,19 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
             std::fs::write(&file, text)?;
         }
         done.insert(name.to_string());
+    }
+    for name in MODEL_UPGRADES {
+        let key = upgrade_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        if let Some((_, text)) = EXAMPLES.iter().find(|(n, _)| n == name) {
+            let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+            if file.exists() && is_modelless_original(&file, text) {
+                std::fs::write(&file, text)?;
+            }
+        }
+        done.insert(key);
     }
     if done.len() != before || !marker.exists() {
         std::fs::write(&marker, done.into_iter().collect::<Vec<_>>().join("\n"))?;

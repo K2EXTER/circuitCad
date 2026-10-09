@@ -13,7 +13,7 @@ mod value;
 mod waveform;
 
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
-pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel};
+pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
@@ -27,6 +27,8 @@ pub use waveform::{parse_source, parse_source_full, Source, Waveform};
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_555;
+#[cfg(test)]
 mod tests_ac;
 #[cfg(test)]
 mod tests_blinker;
@@ -36,6 +38,8 @@ mod tests_dcsweep;
 mod tests_mos;
 #[cfg(test)]
 mod tests_parts;
+#[cfg(test)]
+mod tests_switch;
 #[cfg(test)]
 mod tests_thermal;
 #[cfg(test)]
