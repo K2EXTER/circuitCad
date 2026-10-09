@@ -48,6 +48,10 @@ fn closeness(board: &Board, a: &str, b: &str) -> f64 {
 /// Lay every part out in rows starting at the origin and replace the outline by a rectangle
 /// around them. Refuses when tracks or vias exist, since moving parts would break them.
 pub fn autoplace(board: &mut Board) -> Result<PlaceReport, String> {
+    place(board, true)
+}
+
+fn place(board: &mut Board, turn: bool) -> Result<PlaceReport, String> {
     if !board.tracks.is_empty() || !board.vias.is_empty() {
         return Err("配線済みの基板では自動配置できません。先に配線を削除してください (配線は部品の位置に合わせて引かれているため)".into());
     }
@@ -105,9 +109,41 @@ pub fn autoplace(board: &mut Board) -> Result<PlaceReport, String> {
         // the pad box starts GAP/2 inside its cell
         board.place_part(refdes, Point::new(MARGIN + GAP / 2.0 + sx - lo.x, MARGIN + GAP / 2.0 + LABEL + sy - lo.y), rot);
     }
+    if turn {
+        turn_to_shorten(board);
+    }
     let (w, h) = (used_w + 2.0 * MARGIN, used_h + 2.0 * MARGIN);
     board.set_rect_outline(0.0, 0.0, w.ceil(), h.ceil());
     Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil() })
+}
+
+fn airwire_length(board: &Board) -> f64 {
+    crate::ratsnest::ratsnest(board).iter().map(|w| w.a.dist(w.b)).sum()
+}
+
+/// Try turning each part by half a turn (same footprint box, so nothing starts to overlap) and
+/// keep the turn when the airwires get shorter. Two passes let neighbours settle.
+fn turn_to_shorten(board: &mut Board) {
+    let center = |board: &Board, r: &str| extent(board, r).map(|(lo, hi)| Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0));
+    for _ in 0..2 {
+        let mut better = false;
+        for part in board.parts.clone() {
+            let before = airwire_length(board);
+            let Some(c0) = center(board, &part.refdes) else { continue };
+            board.place_part(&part.refdes, part.pos, part.rot + 2);
+            if let Some(c1) = center(board, &part.refdes) {
+                board.place_part(&part.refdes, Point::new(part.pos.x + c0.x - c1.x, part.pos.y + c0.y - c1.y), part.rot + 2);
+            }
+            if airwire_length(board) < before - 1e-6 {
+                better = true;
+            } else {
+                board.place_part(&part.refdes, part.pos, part.rot);
+            }
+        }
+        if !better {
+            break;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -156,6 +192,17 @@ mod tests {
         let near = at("R4").dist(at("R5"));
         let far = at("R1").dist(at("R6")).max(at("R2").dist(at("R6")));
         assert!(near <= far, "{near} {far}");
+    }
+
+    #[test]
+    fn turning_parts_shortens_the_airwires_and_keeps_the_board_clean() {
+        let (mut plain, mut turned) = (divider(), divider());
+        place(&mut plain, false).unwrap();
+        place(&mut turned, true).unwrap();
+        let (l0, l1) = (airwire_length(&plain), airwire_length(&turned));
+        assert!(l1 < l0, "{l1} vs {l0}");
+        assert!(drc::check(&turned).is_empty());
+        assert!(turned.parts.iter().any(|p| p.rot == 2));
     }
 
     #[test]
