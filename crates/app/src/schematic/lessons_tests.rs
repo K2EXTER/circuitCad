@@ -125,3 +125,22 @@ fn the_ringing_lesson_needs_a_fresh_run_after_the_change() {
     assert!((r.nominal - 35.0).abs() < 3.0, "{}", r.nominal);
     assert_eq!(r.unit, "%");
 }
+
+#[test]
+fn the_charger_lesson_runs_and_ticks_its_steps() {
+    let mut e = SchEditor::default();
+    let idx = lesson_titles().iter().position(|t| t.contains("TP4056")).unwrap();
+    e.start_lesson(idx);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    set_value(&mut e, "R1", "12k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    set_value(&mut e, "R1", "6k");
+    set_value(&mut e, "C1", "470u IC=3.6 ESR=0.5");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+}

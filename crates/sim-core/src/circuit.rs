@@ -142,6 +142,9 @@ pub struct Circuit {
     index: HashMap<String, usize>,
     pub elements: Vec<Element>,
     pub warnings: Vec<String>,
+    /// Starting voltage of capacitors (by element name): used by the transient analysis unless it
+    /// starts from zero.
+    pub initial: Vec<(String, f64)>,
 }
 
 impl Default for Circuit {
@@ -152,7 +155,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![] }
     }
 
     /// Node index for a name; `0` and `GND` (any case) are ground.
@@ -166,6 +169,12 @@ impl Circuit {
         self.names.push(name.to_string());
         self.index.insert(name.to_string(), self.names.len() - 1);
         self.names.len() - 1
+    }
+
+    /// Start capacitor `cap` at `volts` in the transient analysis (SPICE `IC=`).
+    pub fn set_initial_voltage(&mut self, cap: &str, volts: f64) {
+        self.initial.retain(|(n, _)| n != cap);
+        self.initial.push((cap.to_string(), volts));
     }
 
     pub fn add(&mut self, e: Element) {

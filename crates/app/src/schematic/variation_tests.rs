@@ -100,3 +100,20 @@ fn a_bad_value_shows_up_among_the_erc_findings_on_the_part() {
 fn set_value(e: &mut SchEditor, refdes: &str, v: &str) {
     e.sch.components.iter_mut().find(|c| c.refdes == refdes).unwrap().value = v.into();
 }
+
+#[test]
+fn the_li_ion_charger_example_charges_through_all_phases() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/li_ion_charger.schjson");
+    let mut e = SchEditor::default();
+    e.load_path(path);
+    e.set_tran_settings("12m", "20u");
+    e.run_tran();
+    let res = e.tran.as_ref().unwrap().outcome.as_ref().expect(&e.status);
+    let vb = &res.signal("V(BAT)").unwrap().values;
+    assert!(vb[0] > 2.6 && vb[0] < 2.9, "starts near 2.6 V (plus the drop across the cell resistance): {}", vb[0]);
+    assert!((vb.last().unwrap() - 4.2).abs() < 0.05, "{}", vb.last().unwrap());
+    let ch = &res.signal("V(CHRG)").unwrap().values;
+    let sb = &res.signal("V(STDBY)").unwrap().values;
+    assert!(ch[1] < 1.0 && sb[1] > 3.0, "charging at the start: the LED on /CHRG is lit, the other is dark");
+    assert!(sb.last().unwrap() < &1.0 && ch.last().unwrap() > &3.0, "done at the end: {} {}", sb.last().unwrap(), ch.last().unwrap());
+}

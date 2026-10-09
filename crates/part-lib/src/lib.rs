@@ -246,6 +246,8 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("74HC86_DIP-14", include_str!("../examples/74HC86_DIP-14.part.json")),
     ("74HC02_DIP-14", include_str!("../examples/74HC02_DIP-14.part.json")),
     ("74HC74_DIP-14", include_str!("../examples/74HC74_DIP-14.part.json")),
+    ("TP4056_ESOP-8", include_str!("../examples/TP4056_ESOP-8.part.json")),
+    ("MCP73831_SOT-23-5", include_str!("../examples/MCP73831_SOT-23-5.part.json")),
 ];
 
 /// Older bundled versions that are replaced when the user's copy is still unmodified:

@@ -407,6 +407,50 @@ mod tests {
         std::fs::write(root.join("divider_tolerance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Writes docs/examples/li_ion_charger.schjson: `cargo test -p app write_charger_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_charger_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let app = App::default();
+        let lib = &app.sch.library;
+        let tp = lib.iter().find(|d| d.name == "TP4056").expect("TP4056 is bundled");
+        let mut s = sch_core::Schematic::default();
+        let label = |s: &mut sch_core::Schematic, comp: usize, pin: &str, text: &str| {
+            let at = s.components[comp].pins().into_iter().find(|p| p.0 == pin).unwrap().1;
+            s.labels.push(sch_core::Label { pos: at, text: text.into() });
+        };
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "5".into();
+        label(&mut s, v, "+", "VIN");
+        label(&mut s, v, "-", "GND");
+        let u = s.add_custom(tp.symbol(), &tp.default_value(), &tp.footprint_name(), (30, 0), 0);
+        for (pin, net) in [("1", "GND"), ("2", "PROG"), ("3", "GND"), ("4", "VIN"), ("5", "BAT"), ("6", "STDBY"), ("7", "CHRG"), ("8", "VIN")] {
+            label(&mut s, u, pin, net);
+        }
+        let rp = s.add(Kind::Resistor, (30, 22), 0);
+        s.components[rp].value = "6k".into();
+        label(&mut s, rp, "1", "PROG");
+        label(&mut s, rp, "2", "GND");
+        let cell = s.add(Kind::Capacitor, (56, 0), 1);
+        s.components[cell].value = "470u IC=2.6 ESR=0.5".into();
+        label(&mut s, cell, "1", "BAT");
+        label(&mut s, cell, "2", "GND");
+        for (k, (net, name)) in [("CHRG", "充電中"), ("STDBY", "充電完了")].iter().enumerate() {
+            let y = 14 + 12 * k as i32;
+            let r = s.add(Kind::Resistor, (70, y), 0);
+            let d = s.add(Kind::Led, (84, y), 0);
+            s.components[r].value = "1k".into();
+            label(&mut s, r, "1", "VIN");
+            let tag = format!("A{k}");
+            label(&mut s, r, "2", &tag);
+            label(&mut s, d, "A", &tag);
+            label(&mut s, d, "K", net);
+            let _ = name;
+        }
+        std::fs::write(root.join("li_ion_charger.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// The router on a real circuit: the NE555 blinker laid out on a grid of parts.
     #[test]
     fn autoroute_handles_the_ne555_blinker() {

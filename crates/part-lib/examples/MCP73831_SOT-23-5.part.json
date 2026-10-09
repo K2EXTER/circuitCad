@@ -1,0 +1,95 @@
+{
+  "name": "MCP73831",
+  "category": "電源管理",
+  "description": "MCP73831 リチウムイオン電池 1セル リニア充電IC (SOT-23-5, ピン1=STAT 2=VSS 3=VBAT 4=VDD 5=PROG)。充電電流 = 1000 ÷ R_PROG[Ω] [A] (2kΩで500mA)。プリチャージ→定電流→4.2Vの定電圧の動作を再現する動作モデル(出力電圧 4.2V 品)。STAT は充電中だけ Low になるオープンドレインとして扱います(実物の High/Hi-Z の区別は無し)。熱制限・タイマは扱いません。数値は概算",
+  "prefix": "U",
+  "footprint_name": "SOT-23-5_P0.95",
+  "pins": [
+    {
+      "number": "4",
+      "name": "VDD",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "PROG",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "VBAT",
+      "side": "right"
+    },
+    {
+      "number": "1",
+      "name": "STAT",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "VSS",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": -1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "2",
+        "x": 0.0,
+        "y": -1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "3",
+        "x": 0.95,
+        "y": -1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "4",
+        "x": 0.95,
+        "y": 1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "5",
+        "x": -0.95,
+        "y": 1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "MCP73831",
+    "text": ".subckt MCP73831 stat vss vbat vdd prog\n* MCP73831 behavioural model\n* Linear Li-ion charger as a behavioural model: pre-charge, constant current, constant voltage.\n* Control signals are scaled so that 1 V = 1 A. Amplifiers and \"the smaller one wins\" selectors are\n* made of controlled sources and switches, as in the NE555 model.\nVref1 r1 vss DC 1.0\nVref0 r0 vss DC 0.1\nV29 v29 vss DC 2.8\nV37 v37 vss DC 3.75\nV40 v40 vss DC 4.0\nV15 v15 vss DC 1.5\nV01 v01 vss DC 0.1\nVreg vreg vss DC 4.2\n* PROG reference: 1 V for constant current, 0.1 V while the cell is deeply discharged\nRrf rf vss 1k\nSr1 r1 rf vbat v29 SWC\nSr0 r0 rf v29 vbat SWC\n* error amplifiers: current loop (PROG held at the reference) and voltage loop (cell voltage)\nEa ea vss rf prog 1000\nEb eb vss vreg vbat 20\n* the smaller one wins\nRm m vss 1k\nSma ea m eb ea SWC\nSmb eb m ea eb SWC\n* only positive, only when VCC is high enough, above the cell and enabled\nSx m n1 m vss SWC\nSg1 n1 n2 vdd bo SWC\nSg2 n2 n3 vdd v37 SWC\nRg3 n3 u 1m\nRl u vss 1k\nRn1 n1 vss 1Meg\nRn2 n2 vss 1Meg\nRn3 n3 vss 1Meg\nVbo bo vbat DC 0.3\n* pass element: the charge current, and its image (1000x smaller) out of PROG\nGb vdd vbat u vss 1\nGp vss prog u vss 0.001\n* status (open drain): low while charging (PROG above 0.1 V or the cell not yet full)\nSc1 stat c1 prog v01 SWO\nSc2 c1 vss vdd v37 SWO\nSc3 stat c2 v40 vbat SWO\nSc4 c2 vss vdd v37 SWO\nRc1 c1 vss 100Meg\nRc2 c2 vss 100Meg\nRiq vdd vss 20k\n\n.model SWC SW(RON=1 ROFF=1G VT=0 VW=0.005)\n.model SWO SW(RON=60 ROFF=1G VT=0 VW=0.005)\n\n.ends MCP73831",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "params": {
+      "vreg": 4.2,
+      "iprog_ratio": 1000
+    }
+  }
+}

@@ -168,7 +168,7 @@ impl SchEditor {
                     });
                 }
                 if c.kind == Kind::Capacitor {
-                    ui.small("例: 100n / 100n ESR=20m ESL=5n (等価直列抵抗・インダクタンス)");
+                    ui.small("例: 100n / 100n ESR=20m ESL=5n (等価直列抵抗・インダクタンス) / 100u IC=3.2 (過渡解析を始めるときの電圧。電池の代わりに使えます)");
                 }
                 if c.kind == Kind::Inductor {
                     ui.small("例: 10u / 10u DCR=0.1 (巻線抵抗)");

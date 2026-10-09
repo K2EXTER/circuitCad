@@ -191,6 +191,12 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
             'R' | 'C' | 'L' => {
                 need(4)?;
                 let (a, b, x) = (local(c, t[1]), local(c, t[2]), val(t[3])?);
+                if head.starts_with(['C', 'c']) {
+                    // initial voltage: C1 a b 100u IC=3.2
+                    if let Some(ic) = t[4..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix("IC=").map(str::to_string)) {
+                        c.set_initial_voltage(&name, val(&ic)?);
+                    }
+                }
                 c.add(match head.chars().next().unwrap().to_ascii_uppercase() {
                     'R' => Element::Resistor { name, a, b, r: x },
                     'C' => Element::Capacitor { name, a, b, c: x },

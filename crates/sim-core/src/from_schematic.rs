@@ -66,7 +66,7 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
                 }
                 let get = |k: &str| extra.iter().find(|(n, _)| n == k).map(|(_, v)| *v).filter(|v| *v > 0.0);
                 let allowed: &[&str] = match comp.kind {
-                    Kind::Capacitor => &["ESR", "ESL"],
+                    Kind::Capacitor => &["ESR", "ESL", "IC"],
                     Kind::Inductor => &["DCR"],
                     _ => &[],
                 };
@@ -90,6 +90,9 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
                             from = m;
                         }
                         c.add(Element::Capacitor { name: r.into(), a: from, b, c: x });
+                        if let Some((_, ic)) = extra.iter().find(|(k, _)| k == "IC") {
+                            c.set_initial_voltage(r, *ic);
+                        }
                     }
                     _ => {
                         // a -- L -- DCR -- b

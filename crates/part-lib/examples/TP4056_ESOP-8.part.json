@@ -1,0 +1,145 @@
+{
+  "name": "TP4056",
+  "category": "電源管理",
+  "description": "TP4056 リチウムイオン電池 1セル リニア充電IC (ESOP-8, ピン1=TEMP 2=PROG 3=GND 4=VCC 5=BAT 6=/STDBY 7=/CHRG 8=CE、裏のパッドはGND)。充電電流 = 1200 ÷ R_PROG[Ω] [A] (1.2kΩで1A)。プリチャージ(2.9V未満は1/10の電流)→定電流→4.2Vの定電圧の動作を再現する動作モデル。TEMP(温度検出)・熱制限・再充電は扱いません。数値は概算",
+  "prefix": "U",
+  "footprint_name": "ESOP-8_EP",
+  "pins": [
+    {
+      "number": "8",
+      "name": "CE",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "PROG",
+      "side": "left"
+    },
+    {
+      "number": "1",
+      "name": "TEMP",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "VCC",
+      "side": "top"
+    },
+    {
+      "number": "5",
+      "name": "BAT",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "CHRG",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "STDBY",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.7,
+        "y": 1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "2",
+        "x": -2.7,
+        "y": 0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "3",
+        "x": -2.7,
+        "y": -0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "4",
+        "x": -2.7,
+        "y": -1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "5",
+        "x": 2.7,
+        "y": -1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "6",
+        "x": 2.7,
+        "y": -0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "7",
+        "x": 2.7,
+        "y": 0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "8",
+        "x": 2.7,
+        "y": 1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.4,
+        "h": 3.0
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "TP4056",
+    "text": ".subckt TP4056 temp prog gnd vcc bat stdby chrg ce\n* TP4056 behavioural model\n* Linear Li-ion charger as a behavioural model: pre-charge, constant current, constant voltage.\n* Control signals are scaled so that 1 V = 1 A. Amplifiers and \"the smaller one wins\" selectors are\n* made of controlled sources and switches, as in the NE555 model.\nVref1 r1 gnd DC 1.0\nVref0 r0 gnd DC 0.1\nV29 v29 gnd DC 2.9\nV37 v37 gnd DC 3.7\nV40 v40 gnd DC 4.0\nV15 v15 gnd DC 1.5\nV01 v01 gnd DC 0.1\nVreg vreg gnd DC 4.2\n* PROG reference: 1 V for constant current, 0.1 V while the cell is deeply discharged\nRrf rf gnd 1k\nSr1 r1 rf bat v29 SWC\nSr0 r0 rf v29 bat SWC\n* error amplifiers: current loop (PROG held at the reference) and voltage loop (cell voltage)\nEa ea gnd rf prog 1000\nEb eb gnd vreg bat 20\n* the smaller one wins\nRm m gnd 1k\nSma ea m eb ea SWC\nSmb eb m ea eb SWC\n* only positive, only when VCC is high enough, above the cell and enabled\nSx m n1 m gnd SWC\nSg1 n1 n2 vcc bo SWC\nSg2 n2 n3 vcc v37 SWC\nSg3 n3 u ce v15 SWC\nRl u gnd 1k\nRn1 n1 gnd 1Meg\nRn2 n2 gnd 1Meg\nRn3 n3 gnd 1Meg\nVbo bo bat DC 0.3\n* pass element: the charge current, and its image (1200x smaller) out of PROG\nGb vcc bat u gnd 1\nGp gnd prog u gnd 0.000833333333\n* status (open drain): low while charging (PROG above 0.1 V or the cell not yet full)\nSc1 chrg c1 prog v01 SWO\nSc2 c1 gnd vcc v37 SWO\nSc3 chrg c2 v40 bat SWO\nSc4 c2 gnd vcc v37 SWO\nSs1 stdby s1 bat v40 SWO\nSs2 s1 s2 v01 prog SWO\nSs3 s2 gnd vcc v37 SWO\nRc1 c1 gnd 100Meg\nRc2 c2 gnd 100Meg\nRs1 s1 gnd 100Meg\nRs2 s2 gnd 100Meg\nRiq vcc gnd 20k\nRt temp gnd 100Meg\n.model SWC SW(RON=1 ROFF=1G VT=0 VW=0.005)\n.model SWO SW(RON=60 ROFF=1G VT=0 VW=0.005)\n.ends TP4056",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "params": {
+      "vreg": 4.2,
+      "iprog_ratio": 1200
+    }
+  }
+}
