@@ -3,6 +3,20 @@
 use super::*;
 
 impl SchEditor {
+    /// Problems that would stop the simulation (a value that is not a number, an unsupported part),
+    /// as ERC findings placed on the offending part.
+    pub(super) fn conversion_problems(&self) -> Vec<Problem> {
+        let Err(errs) = from_schematic(&self.sch) else { return vec![] };
+        errs.into_iter()
+            .map(|e| Problem {
+                at: self.sch.components.iter().find(|c| c.refdes == e.refdes).map(|c| c.pos),
+                message: format!("シミュレーションできません: {e}"),
+                hint: "部品の値は 10k、4.7u、100n のように、数字のあとに k (キロ)・m (ミリ)・u (マイクロ)・n (ナノ) などを付けて書きます。部品を選んで、左の「値」を直しましょう".into(),
+                severity: Severity::Error,
+            })
+            .collect()
+    }
+
     /// The circuit to simulate: the schematic converted, at the temperature set in the panel.
     pub(super) fn sim_circuit(&self) -> Result<Circuit, Vec<String>> {
         let temp = match self.temp_c.trim() {

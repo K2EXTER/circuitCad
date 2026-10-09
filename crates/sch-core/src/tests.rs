@@ -329,3 +329,80 @@ fn a_label_named_gnd_counts_as_the_reference() {
     s.labels.push(Label { pos: (-2, 0), text: "GND".into() });
     assert!(!erc(&s).iter().any(|p| p.message.contains("GNDシンボル")));
 }
+
+fn wire_all(s: &mut Schematic, pairs: &[(Pt, Pt)]) {
+    for &(a, b) in pairs {
+        wire(s, a, b);
+    }
+}
+
+fn has(found: &[Problem], needle: &str) -> bool {
+    found.iter().any(|p| p.message.contains(needle))
+}
+
+#[test]
+fn an_led_straight_across_the_supply_is_flagged_until_a_resistor_is_added() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0); // + (0,-2), - (0,2)
+    let d = s.add(Kind::Led, (8, 0), 1); // vertical: A at top, K at bottom
+    s.add(Kind::Ground, (0, 6), 0);
+    let dp = s.components[d].pins();
+    wire_all(&mut s, &[((0, -2), (0, -6)), ((0, -6), (8, -6)), ((8, -6), dp[0].1), (dp[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 4)), ((0, 4), (0, 6))]);
+    assert!(has(&erc(&s), "電流を制限する抵抗"), "{:?}", erc(&s));
+
+    // with a series resistor in the top wire the warning goes away
+    s.wires.retain(|w| !(w.a == (0, -6) && w.b == (8, -6)));
+    let r = s.add(Kind::Resistor, (4, -6), 0); // pins at (2,-6) and (6,-6)
+    let rp = s.components[r].pins();
+    wire_all(&mut s, &[((0, -6), rp[0].1), (rp[1].1, (8, -6))]);
+    assert!(!has(&erc(&s), "電流を制限する抵抗"), "{:?}", erc(&s));
+}
+
+#[test]
+fn a_part_with_no_path_to_ground_is_reported_once() {
+    let mut s = divider();
+    let r2 = s.components[2].pins();
+    wire_all(&mut s, &[((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), r2[0].1), (r2[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 6))]);
+    assert!(!has(&erc(&s), "GND とつながっていません"));
+    // an island: two resistors wired to each other only
+    let a = s.add(Kind::Resistor, (20, 0), 0);
+    let b = s.add(Kind::Resistor, (30, 0), 0);
+    let (pa, pb) = (s.components[a].pins(), s.components[b].pins());
+    wire_all(&mut s, &[(pa[1].1, pb[0].1), (pa[0].1, (16, 0)), (pb[1].1, (34, 0))]);
+    s.labels.push(Label { pos: (16, 0), text: "X".into() });
+    s.labels.push(Label { pos: (34, 0), text: "X".into() });
+    let found = erc(&s);
+    assert_eq!(found.iter().filter(|p| p.message.contains("GND とつながっていません")).count(), 1, "{found:?}");
+}
+
+#[test]
+fn labels_that_differ_only_in_case_are_a_warning() {
+    let mut s = divider();
+    s.labels.push(Label { pos: (0, -2), text: "VCC".into() });
+    s.labels.push(Label { pos: (0, -6), text: "Vcc".into() });
+    let found = erc(&s);
+    let p = found.iter().find(|p| p.message.contains("大文字・小文字")).expect("case warning");
+    assert_eq!(p.severity, Severity::Warning);
+    s.labels[1].text = "VCC".into();
+    assert!(!has(&erc(&s), "大文字・小文字"));
+}
+
+#[test]
+fn ic_power_pins_must_reach_a_supply_but_a_regulator_output_counts() {
+    let mut s = Schematic::default();
+    let u = s.add_custom(opamp(), "LM358", "SOIC-8", (20, 0), 0);
+    let r = s.add(Kind::Resistor, (20, -14), 1);
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.add(Kind::Ground, (0, 8), 0);
+    let pin = |s: &Schematic, i: usize, name: &str| s.components[i].pins().into_iter().find(|p| p.0 == name).unwrap().1;
+    let (vplus, rpin) = (pin(&s, u, "8"), pin(&s, r, "2"));
+    // V+ only goes to a resistor: nothing powers it
+    wire(&mut s, vplus, rpin);
+    assert!(has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
+    // wiring V+ to the source's + pin fixes it
+    s.wires.clear();
+    let src = pin(&s, v, "+");
+    wire(&mut s, vplus, (vplus.0, src.1));
+    wire(&mut s, (vplus.0, src.1), src);
+    assert!(!has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
+}

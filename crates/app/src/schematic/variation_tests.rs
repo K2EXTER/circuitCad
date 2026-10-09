@@ -85,3 +85,18 @@ fn monte_carlo_can_measure_the_cutoff_of_the_rc_filter() {
     assert_eq!(unit, "Hz");
     assert!((nominal / 1000.0 - 1.0).abs() < 0.02, "{nominal}");
 }
+
+#[test]
+fn a_bad_value_shows_up_among_the_erc_findings_on_the_part() {
+    let mut e = led_example();
+    assert!(e.conversion_problems().is_empty());
+    set_value(&mut e, "R1", "oops");
+    let found = e.conversion_problems();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].severity, Severity::Error);
+    assert!(found[0].at.is_some() && found[0].hint.contains("10k"));
+}
+
+fn set_value(e: &mut SchEditor, refdes: &str, v: &str) {
+    e.sch.components.iter_mut().find(|c| c.refdes == refdes).unwrap().value = v.into();
+}

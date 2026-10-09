@@ -317,6 +317,121 @@ pub fn erc(s: &Schematic) -> Vec<Problem> {
         }
     }
 
+    // ---- checks that need the whole netlist
+    let comp = |r: &str| s.components.iter().find(|c| c.refdes == r);
+    let net_index = |r: &str, pin: &str| nets.iter().position(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin));
+    let driven_by_source = |ni: usize| nets[ni].pins.iter().any(|p| comp(&p.refdes).is_some_and(|c| matches!(c.kind, Kind::VSource | Kind::Header(_))));
+    // a supply net may also be fed by the output pin of another library part (a regulator)
+    let fed_by_output = |ni: usize, me: &str| {
+        nets[ni].pins.iter().any(|p| {
+            p.refdes != me
+                && comp(&p.refdes).and_then(|c| c.custom.as_ref()).and_then(|sym| sym.pins.iter().find(|q| q.number == p.pin)).is_some_and(|q| {
+                    let n = q.name.to_ascii_uppercase();
+                    n.starts_with("OUT") || n.starts_with("VOUT") || n == "VO"
+                })
+        })
+    };
+
+    // an LED straight across a supply burns out: it needs a resistor in series
+    for c in s.components.iter().filter(|c| c.kind == Kind::Led) {
+        let (Some(a), Some(k)) = (net_index(&c.refdes, "A"), net_index(&c.refdes, "K")) else { continue };
+        let k_is_return = nets[k].name == "GND" || driven_by_source(k);
+        if driven_by_source(a) && k_is_return && a != k {
+            out.push(Problem::new(
+                Warning,
+                format!("{} に電流を制限する抵抗がありません", c.refdes),
+                Some(c.pos),
+                "LED は電圧がわずかに上がるだけで電流が急に増え、壊れてしまいます。電源と LED の間に抵抗 (330Ω〜1kΩ くらい) を直列に入れて、電流を決めましょう",
+            ));
+        }
+    }
+
+    // library parts: supply and ground pins must reach a supply
+    for c in s.components.iter().filter(|c| c.kind == Kind::Custom) {
+        let Some(sym) = &c.custom else { continue };
+        for (pin, at) in c.pins() {
+            let Some(name) = sym.pins.iter().find(|p| p.number == pin).map(|p| p.name.to_ascii_uppercase()) else { continue };
+            let is_vcc = ["VCC", "VDD", "V+", "VIN"].iter().any(|n| name.starts_with(n));
+            let is_gnd = ["GND", "VSS", "V-", "VEE"].iter().any(|n| name == *n);
+            let Some(ni) = net_index(&c.refdes, &pin) else { continue };
+            if nets[ni].pins.len() < 2 {
+                continue; // already reported as an unconnected pin
+            }
+            if is_vcc && !driven_by_source(ni) && !fed_by_output(ni, &c.refdes) {
+                out.push(Problem::new(
+                    Warning,
+                    format!("{} の電源ピン {} ({}) が電源につながっていません", c.refdes, pin, name),
+                    Some(at),
+                    "IC は電源ピンに電圧がかからないと動きません。電源の+側 (または VCC などの名前を付けた線) につなぎましょう",
+                ));
+            }
+            if is_gnd && nets[ni].name != "GND" && !driven_by_source(ni) {
+                out.push(Problem::new(
+                    Warning,
+                    format!("{} のグランドピン {} ({}) が GND につながっていません", c.refdes, pin, name),
+                    Some(at),
+                    "IC のグランドピンは、回路の基準 (GND) につなぎます。つながっていないと電流の戻り道がなく、IC が動きません",
+                ));
+            }
+        }
+    }
+
+    // parts that are not connected to GND through any chain of parts
+    let mut parent: Vec<usize> = (0..nets.len()).collect();
+    fn find(p: &mut Vec<usize>, i: usize) -> usize {
+        let mut r = i;
+        while p[r] != r {
+            r = p[r];
+        }
+        r
+    }
+    for c in s.components.iter().filter(|c| !c.kind.is_power_symbol()) {
+        let idx: Vec<usize> = c.pins().iter().filter_map(|(pin, _)| net_index(&c.refdes, pin)).collect();
+        for w in idx.windows(2) {
+            let (a, b) = (find(&mut parent, w[0]), find(&mut parent, w[1]));
+            parent[a] = b;
+        }
+    }
+    if let Some(gnd) = nets.iter().position(|n| n.name == "GND") {
+        let gnd_root = find(&mut parent, gnd);
+        let mut reported: Vec<usize> = vec![];
+        for c in s.components.iter().filter(|c| !c.kind.is_power_symbol()) {
+            let Some(ni) = c.pins().iter().find_map(|(pin, _)| net_index(&c.refdes, pin)) else { continue };
+            let root = find(&mut parent, ni);
+            if root != gnd_root && !reported.contains(&root) {
+                reported.push(root);
+                out.push(Problem::new(
+                    Warning,
+                    format!("{} を含む部分が GND とつながっていません", c.refdes),
+                    Some(c.pos),
+                    "この部分は、どの部品をたどっても GND に届きません。電圧は GND を基準に決まるので、シミュレーションで値が定まらず、失敗することがあります。どこか1か所を GND につなぎましょう",
+                ));
+            }
+        }
+    }
+
+    // labels that differ only in upper / lower case are different nets
+    let mut first_seen: HashMap<String, &str> = HashMap::new();
+    let mut warned: Vec<String> = vec![];
+    for l in &s.labels {
+        let key = l.text.to_ascii_lowercase();
+        match first_seen.get(&key) {
+            Some(prev) if *prev != l.text && !warned.contains(&key) => {
+                warned.push(key);
+                out.push(Problem::new(
+                    Warning,
+                    format!("ラベル「{}」と「{}」は大文字・小文字が違うので、別の配線になります", prev, l.text),
+                    Some(l.pos),
+                    "ラベルの名前は大文字・小文字も区別されます。同じ配線にしたいなら、同じ綴りにそろえましょう (別の配線のつもりなら、このままで構いません)",
+                ));
+            }
+            Some(_) => {}
+            None => {
+                first_seen.insert(key, &l.text);
+            }
+        }
+    }
+
     // a label named GND is the reference too (the simulator treats a net of that name as 0 V)
     let has_ground = s.components.iter().any(|c| c.kind == Kind::Ground) || s.labels.iter().any(|l| l.text.eq_ignore_ascii_case("GND"));
     if !has_ground && !s.components.is_empty() {

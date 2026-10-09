@@ -180,6 +180,7 @@ impl SchEditor {
         ui.separator();
         if ui.button("ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
             self.problems = erc(&self.sch);
+            self.problems.extend(self.conversion_problems());
             self.erc_focus = None;
             self.erc_ran = true;
             let errors = self.problems.iter().filter(|p| p.severity == Severity::Error).count();
