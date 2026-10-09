@@ -30,7 +30,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `stepmetrics.rs` ステップ応答の指標 `step_metrics` (立ち上がり・行き過ぎ・整定、波形ビューアと `McMeasure::Tran` が使う)
 - `options.rs` 計算精度の設定 `SimOptions`(reltol/vntol/abstol/gmin/反復上限、スレッドごと。GUIの「設定」メニューが毎フレーム `set_options`) / `diagnose.rs` 解析失敗時の原因と直し方(日本語ヒント)
 - `measure.rs` 波形の自動測定 `wave_measure`(最小/最大/p-p/周波数/デューティ)。`stability_margins`(位相余裕・ゲイン余裕。反転なら180°ずらす)。ACの-3dB点は `montecarlo.rs` の `minus_3db`
-- `designcalc.rs` 初学者向けの値の計算(LED抵抗・分圧・RCフィルタ・78xx・トランジスタスイッチ。結果+手順+注意点+故障パターンの `CalcOut`、E24丸め)。足すときは `schematic/wizard.rs` の `CALCS` にも追加
+- `designcalc.rs` 初学者向けの値の計算(LED抵抗・分圧・RCフィルタ・78xx・トランジスタスイッチ。結果+手順+注意点+故障パターンの `CalcOut`、E24丸め)。足すときは `schematic/wizard.rs` の `CALCS` にも追加(平滑コンデンサ `smoothing_cap` あり)
 - `fault.rs` 故障シミュレーション(部品を断線/ショート/値10倍・1/10にしてDCを解き、元と比較。`simulate_fault`、`FaultReport::summary` が日本語の説明)
 - `paramsweep.rs` パラメータスイープ(部品1つの値を振って過渡/ACを繰り返す、`param_sweep`) 
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
@@ -72,6 +72,8 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - ライブラリ部品を足す → `part-lib/examples/*.part.json` (形式は `docs/part-format.md`)
 - DRCルール → `pcb-core/drc.rs` / 設計ルール既定値 → `model.rs` の `Rules`
 - ヒント文 → `schematic/hint.rs`, `board_editor/panel.rs` の `hint` / 豆知識 → `main.rs` の `TIPS`
+
+トランス部品は `part-lib/examples/TRANS_*.part.json`(理想変圧器をBソースで作った`.subckt`: `Bs`=電圧源、`Bp`=`-n*I(Bs)`の電流源、巻線抵抗と励磁L)。サンプルは `docs/examples/bridge_rectifier.schjson`(生成は `write_rectifier_example`)、レッスン9がこれを使う。
 
 ## ドキュメント・サンプル
 `docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式 / `docs/examples/*.schjson` サンプル回路。

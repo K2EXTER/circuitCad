@@ -268,6 +268,9 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("S8050_SOT-23", include_str!("../examples/S8050_SOT-23.part.json")),
     ("S8550_SOT-23", include_str!("../examples/S8550_SOT-23.part.json")),
     ("SS14_SMA", include_str!("../examples/SS14_SMA.part.json")),
+    ("TRANS_100V-12V_5VA", include_str!("../examples/TRANS_100V-12V_5VA.part.json")),
+    ("TRANS_100V-9V_3VA", include_str!("../examples/TRANS_100V-9V_3VA.part.json")),
+    ("TRANS_230V-12V_5VA", include_str!("../examples/TRANS_230V-12V_5VA.part.json")),
 ];
 
 /// Older bundled versions that are replaced when the user's copy is still unmodified:

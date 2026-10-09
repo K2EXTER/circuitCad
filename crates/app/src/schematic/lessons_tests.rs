@@ -20,7 +20,7 @@ fn every_lesson_loads_and_its_circuit_simulates() {
         assert!(e.lesson.is_some(), "{}", titles[i]);
         assert!(!e.sch.components.is_empty(), "{}", titles[i]);
         // the 555 is a circuit that changes state by itself: it only makes sense in the time domain
-        if titles[i].contains("555") {
+        if titles[i].contains("555") || titles[i].contains("整流") {
             e.run_tran();
             assert!(e.tran.as_ref().unwrap().outcome.is_ok(), "{}", e.status);
         } else {

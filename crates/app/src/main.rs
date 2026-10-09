@@ -24,6 +24,7 @@ const TIPS: &[&str] = &[
     "選択ツールで空いた所を左ドラッグすると、完全に囲んだ部品や配線だけを選べます。右ドラッグだと少しでも触れたものも選べます",
     "「パラメータスイープ」で部品の値を何通りか振ると、カットオフや波形のなまり方の違いを重ねて比べられます",
     "AC解析の「安定性の余裕」で位相余裕・ゲイン余裕が見られます。サンプル opamp_loop_gain で、出力に付けたコンデンサを大きくすると余裕が減る様子を試せます",
+    "レッスン「交流を直流にする」では、トランス (ライブラリの「トランス」) とブリッジ整流でできるリップルを測れます。平滑コンデンサの容量は「値の決め方」で計算できます",
     "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
     "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
     "DCスイープでインバーターの入出力特性を描くと、切替電圧やノイズマージンが分かります",
@@ -709,6 +710,54 @@ mod tests {
         let dir = std::env::temp_dir().join("claude");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("bottom_demo.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/bridge_rectifier.schjson (100 V AC -> transformer -> bridge -> smoothing):
+    /// `cargo test -p app write_rectifier_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_rectifier_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = part_lib::EXAMPLES
+            .iter()
+            .map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap())
+            .find(|d| d.name == "TR100_12V_5VA")
+            .unwrap();
+        let mut s = sch_core::Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "SIN(0 141.4 50) AC 1".into();
+        let t = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (16, 0), 0);
+        let mut diodes = vec![];
+        for (k, x) in [(0, 40), (1, 52), (2, 64), (3, 76)] {
+            diodes.push(s.add(Kind::Diode, (x, 0), 0));
+            s.components[diodes[k]].value = "1N4007".into();
+        }
+        let c = s.add(Kind::Capacitor, (92, 0), 1);
+        s.components[c].value = "1000u".into();
+        let r = s.add(Kind::Resistor, (104, 0), 1);
+        s.components[r].value = "100".into();
+        let label = |s: &mut sch_core::Schematic, idx: usize, pin: usize, text: &str| {
+            let pt = s.components[idx].pins()[pin].1;
+            s.labels.push(sch_core::Label { pos: pt, text: text.into() });
+        };
+        for (i, p) in s.components[t].pins().iter().enumerate() { println!("T pin {i} {:?} {:?}", p.0, p.1); }
+        for (i, p) in s.components[diodes[0]].pins().iter().enumerate() { println!("D pin {i} {:?} {:?}", p.0, p.1); }
+        label(&mut s, v, 0, "MAINS");
+        label(&mut s, v, 1, "GND");
+        label(&mut s, t, 0, "MAINS");
+        label(&mut s, t, 1, "GND");
+        label(&mut s, t, 2, "AC1");
+        label(&mut s, t, 3, "AC2");
+        // pins of a diode: 0 = anode, 1 = cathode
+        for (k, (a, kk)) in [("AC1", "VDC"), ("AC2", "VDC"), ("GND", "AC1"), ("GND", "AC2")].iter().enumerate() {
+            label(&mut s, diodes[k], 0, a);
+            label(&mut s, diodes[k], 1, kk);
+        }
+        label(&mut s, c, 0, "VDC");
+        label(&mut s, c, 1, "GND");
+        label(&mut s, r, 0, "VDC");
+        label(&mut s, r, 1, "GND");
+        std::fs::write(root.join("bridge_rectifier.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
     /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):

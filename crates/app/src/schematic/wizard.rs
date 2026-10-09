@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{divider, led_resistor, rc_filter, regulator, transistor_switch, CalcOut};
+use sim_core::{divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -61,6 +61,17 @@ pub(super) const CALCS: &[Calc] = &[
             ("hFE (電流増幅率)", "100", "トランジスタの増幅率。データシートの最小値に近い値を使うと安全"),
         ],
         run: |v| transistor_switch(v[0], v[1], v[2]),
+    },
+    Calc {
+        title: "整流の平滑コンデンサ",
+        about: "トランス + ブリッジ整流のあとに入れる平滑コンデンサの容量と耐圧を、許容できるリップルから決めます",
+        inputs: &[
+            ("トランスの出力 (V, 実効値)", "12", "トランスの2次側の電圧 (実効値)。12V と書いてあるトランスなら 12"),
+            ("負荷電流 (mA)", "150", "つなぐ回路が使う電流の最大値"),
+            ("電源周波数 (Hz)", "50", "東日本 50 Hz・西日本 60 Hz"),
+            ("許容リップル (V, p-p)", "1.5", "直流に残る波の大きさ。後ろにレギュレータを入れるなら 1〜2 V、そのままマイコンなどにつなぐなら小さく"),
+        ],
+        run: |v| smoothing_cap(v[0], v[1], v[2], v[3]),
     },
 ];
 

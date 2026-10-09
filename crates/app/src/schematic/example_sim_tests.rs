@@ -116,3 +116,61 @@ fn loop_gain_sample_shows_the_phase_margin_falling_with_a_capacitive_load() {
     let (heavy, light) = (loaded.phase_margin.unwrap(), pm("1p").phase_margin.unwrap());
     assert!(heavy < 45.0 && light > 70.0 && heavy < light - 30.0, "10n: {heavy}, 1p: {light}");
 }
+
+#[test]
+fn bridge_rectifier_sample_gives_a_smoothed_dc_with_ripple() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "bridge_rectifier.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let r = transient(&c, &TranSettings { tstop: 0.3, tstep: 100e-6, uic: false }).unwrap();
+    let v = r.signal("V(VDC)").unwrap();
+    let m = wave_measure(&r.time, &v.values, 0.2, 0.3).unwrap();
+    // 12 V rated transformer: about 17-20 V peak minus two diode drops, smoothed by 1000 uF into 100 ohm
+    assert!(m.min > 10.0 && m.max > 14.0 && m.max < 20.0, "{m:?}");
+    assert!(m.pp > 0.5 && m.pp < 6.0, "ripple {:?}", m.pp);
+    // the ripple of a full-wave rectifier is at twice the mains frequency
+    let ac = wave_measure(&r.time, &r.signal("V(AC1)").unwrap().values, 0.2, 0.3).unwrap();
+    assert!((ac.freq.unwrap() - 50.0).abs() < 2.0, "{ac:?}");
+}
+
+#[test]
+fn rectifier_lesson_numbers_hold() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "bridge_rectifier.schjson").unwrap().1;
+    let run = |c: &str, r: &str| {
+        let mut s = sch.clone();
+        s.components.iter_mut().find(|x| x.refdes == "C1").unwrap().value = c.into();
+        s.components.iter_mut().find(|x| x.refdes == "R1").unwrap().value = r.into();
+        let circ = from_schematic(&s).unwrap();
+        let t = transient(&circ, &TranSettings { tstop: 0.3, tstep: 100e-6, uic: false }).unwrap();
+        let vdc = wave_measure(&t.time, &t.signal("V(VDC)").unwrap().values, 0.2, 0.3).unwrap();
+        let ac = wave_measure(&t.time, &t.signal("V(AC1)").unwrap().values, 0.2, 0.3).unwrap();
+        (vdc, ac)
+    };
+    let (base, ac) = run("1000u", "100");
+    println!("base: {base:?} ac max {}", ac.max);
+    let (small, _) = run("220u", "100");
+    let (heavy, _) = run("1000u", "33");
+    println!("220u: {small:?}\n33R: {heavy:?}");
+    assert!(ac.max > 15.0 && ac.max < 18.0, "AC1 peak {}", ac.max);
+    assert!((14.5..16.0).contains(&((base.max + base.min) / 2.0)), "mean {base:?}");
+    let k = small.pp / base.pp;
+    assert!((3.5..5.0).contains(&k), "220u ripple ratio {k}");
+    let k2 = heavy.pp / base.pp;
+    assert!((1.6..2.5).contains(&k2), "33R ripple ratio {k2}");
+    assert!(heavy.max < base.max && (11.5..13.0).contains(&((heavy.max + heavy.min) / 2.0)));
+}
+
+#[test]
+fn a_broken_bridge_diode_doubles_the_ripple() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "bridge_rectifier.schjson").unwrap().1;
+    let ripple = |c: &sim_core::Circuit| {
+        let t = transient(c, &TranSettings { tstop: 0.3, tstep: 100e-6, uic: false }).unwrap();
+        wave_measure(&t.time, &t.signal("V(VDC)").unwrap().values, 0.2, 0.3).unwrap()
+    };
+    let good = from_schematic(&sch).unwrap();
+    let healthy = ripple(&good);
+    let broken = ripple(&sim_core::with_fault(&good, "D1", sim_core::Fault::Open).unwrap());
+    println!("{healthy:?}\n{broken:?}");
+    assert!(broken.pp > 1.6 * healthy.pp, "{} vs {}", broken.pp, healthy.pp);
+    // half-wave: the ripple is at the mains frequency
+    assert!((broken.freq.unwrap() - 50.0).abs() < 3.0, "{:?}", broken.freq);
+}

@@ -28,7 +28,7 @@ pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel}
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
-pub use designcalc::{divider, e24, led_resistor, rc_filter, regulator, transistor_switch, CalcOut};
+pub use designcalc::{divider, e24, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 pub use fault::{applicable as fault_applicable, breakable, simulate_fault, with_fault, Fault, FaultReport, PartChange};
 pub use diagnose::diagnose;
 pub use dc::{dc_op, DcResult, ElementResult, SimError};

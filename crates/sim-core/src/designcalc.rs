@@ -237,6 +237,48 @@ pub fn transistor_switch(vin: f64, ic_ma: f64, hfe: f64) -> Result<CalcOut, Stri
     Ok(o)
 }
 
+/// Smoothing capacitor after a full-wave bridge rectifier.
+pub fn smoothing_cap(vrms: f64, i_ma: f64, freq: f64, ripple: f64) -> Result<CalcOut, String> {
+    let (vrms, i, f, dv) = (pos("トランスの出力 (実効値)", vrms)?, pos("負荷電流", i_ma)? / 1000.0, pos("電源周波数", freq)?, pos("許容リップル", ripple)?);
+    let vpk = vrms * std::f64::consts::SQRT_2;
+    let vmax = vpk - 1.4; // two diodes of the bridge conduct at a time
+    if dv >= vmax / 2.0 {
+        return Err(format!("許容リップル ({dv} V) が大きすぎます。直流の電圧 (約 {vmax:.1} V) の半分より小さくしてください"));
+    }
+    let cx = i / (2.0 * f * dv);
+    let c = e24(cx, true);
+    let vmean = vmax - dv / 2.0;
+    let rating = [6.3, 10.0, 16.0, 25.0, 35.0, 50.0, 63.0, 100.0, 160.0, 250.0].into_iter().find(|v| *v >= vpk * 1.25).unwrap_or(400.0);
+    let mut o = CalcOut { primary: Some(format_value(c)), ..Default::default() };
+    o.rows = vec![
+        ("計算上の容量".into(), format!("{}F", format_value(cx))),
+        ("使う容量 (E24, 切り上げ)".into(), format!("{}F", format_value(c))),
+        ("直流電圧の目安 (平均)".into(), format!("{vmean:.1} V")),
+        ("コンデンサの耐圧".into(), format!("{rating:.0} V 以上 (ピーク {vpk:.1} V の 1.25 倍以上)")),
+        ("ダイオードの逆耐圧".into(), format!("{:.0} V 以上 (余裕を見て ピークの 2 倍以上)", vpk * 2.0)),
+    ];
+    o.steps = vec![
+        format!("交流のピーク電圧 = 実効値 × √2 = {vrms} × 1.414 = {vpk:.1} V。ブリッジはダイオード2個ぶん (約 1.4 V) 下がるので、直流の最大は約 {vmax:.1} V"),
+        "ブリッジ整流 (全波) のリップルの周波数は電源の 2 倍。山と山の間の時間は 1 ÷ (2 × f)".into(),
+        format!("その間、コンデンサだけが電流 I を出します: ΔV = I × 時間 ÷ C から C = I ÷ (2 × f × ΔV) = {i} ÷ (2 × {f} × {dv}) = {}F", format_value(cx)),
+        "式は少し大きめに出ます (ダイオードが電流を流す時間があるため)。そのぶん安全側です".into(),
+    ];
+    if c * vpk * 2.0 * f > 5.0 {
+        o.cautions.push("容量が大きいので、電源を入れた瞬間に大きな突入電流が流れます。ヒューズが切れたりダイオードが傷んだりしないよう、ダイオードの定格 (サージ電流) とヒューズ (スローブロー) を確認しましょう".into());
+    }
+    o.cautions.push(format!("リップル電流で電解コンデンサが発熱します。負荷電流 {i_ma} mA の 1.5〜2 倍のリップル電流を流せる品 (データシートの許容リップル電流) を選びます"));
+    o.cautions.push("電解コンデンサには極性があります。+ を電圧の高いほうにつなぎます。逆につなぐと発熱・破裂のおそれがあります".into());
+    o.cautions.push("負荷がかかると、トランスの巻線抵抗の分だけ電圧は下がります (レッスン「交流を直流にする」で確認できます)。安定した電圧が必要なら、このあとにレギュレータを入れます".into());
+    o.faults = vec![
+        "ダイオード1個が断線: 半波整流になり、リップルが約 2 倍になります (周波数は電源と同じ)。".into(),
+        "ダイオード1個がショート: 交流の半周期ごとにトランスの出力が短絡され、大電流・発熱・ヒューズ断になります。".into(),
+        "コンデンサの容量抜け/ESR の増加 (電解コンデンサの劣化): リップルが増え、後ろの回路が誤動作します。古い機器で最初に壊れやすい部品です。".into(),
+        "コンデンサが断線: 平滑されず、脈流 (全波整流の山の連なり) のままになります。".into(),
+        "コンデンサのショート: 出力が 0 V になり、ダイオードとトランスに過電流が流れます。".into(),
+    ];
+    Ok(o)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,5 +336,16 @@ mod tests {
         let ib = (5.0 - 0.7) / rb;
         assert!(ib * 100.0 > 20e-3 * 2.0, "base current {ib} too small to saturate");
         assert!(transistor_switch(0.5, 20.0, 100.0).is_err());
+    }
+
+    #[test]
+    fn smoothing_cap_matches_the_ripple_formula() {
+        let o = smoothing_cap(12.0, 150.0, 50.0, 1.5).unwrap();
+        let c = parse_value(o.primary.as_deref().unwrap()).unwrap();
+        // I / (2 f dV) = 1 mF
+        assert!((c / 1e-3 - 1.0).abs() < 0.1, "{c}");
+        assert!(o.rows.iter().any(|(k, v)| k.contains("耐圧") && v.contains("25 V")), "{:?}", o.rows);
+        assert!(smoothing_cap(12.0, 150.0, 50.0, 20.0).is_err());
+        assert!(!o.faults.is_empty() && !o.cautions.is_empty());
     }
 }
