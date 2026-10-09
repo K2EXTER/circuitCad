@@ -55,7 +55,16 @@ impl SchEditor {
             return;
         };
         self.mc_seed += 1;
-        let settings = McSettings { runs, seed: self.mc_seed, tol_r, tol_c, tol_l, output: self.mc_out.trim().to_string() };
+        let measure = if self.mc_ac {
+            let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
+                self.status = "AC解析の欄の周波数と点数を数値で入力してください (例: 10, 1Meg, 20)".into();
+                return;
+            };
+            McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
+        } else {
+            McMeasure::DcVoltage
+        };
+        let settings = McSettings { runs, seed: self.mc_seed, tol_r, tol_c, tol_l, output: self.mc_out.trim().to_string(), measure };
         let outcome = if settings.output.is_empty() {
             Err(vec!["測るノードを選んでください".to_string()])
         } else {
@@ -81,7 +90,7 @@ impl SchEditor {
         let Some(view) = self.mc.as_ref() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
-            ui.strong("ばらつき解析 (部品の誤差で出力がどれだけずれるか)");
+            ui.strong(if view.outcome.as_ref().is_ok_and(|r| r.unit == "Hz") { "ばらつき解析 (部品の誤差でカットオフ周波数がどれだけずれるか)" } else { "ばらつき解析 (部品の誤差で出力がどれだけずれるか)" });
             if ui.button("閉じる").clicked() {
                 close = true;
             }
@@ -97,7 +106,7 @@ impl SchEditor {
                     ui.colored_label(Color32::from_rgb(230, 60, 60), "どの回も収束しませんでした");
                     return;
                 };
-                ui.small("部品の値を、許容差の範囲でランダムに変えて何度も計算しました。縦棒が高いところほど、よく出る電圧です");
+                ui.small("部品の値を、許容差の範囲でランダムに変えて何度も計算しました。縦棒が高いところほど、よく出る値です");
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(300.0);
@@ -107,11 +116,11 @@ impl SchEditor {
                                 ui.label(val).on_hover_text(tip);
                                 ui.end_row();
                             };
-                            row(ui, &format!("{} の設計値", res.output), eng(res.nominal, "V"), "部品がすべて表示どおりの値のときの電圧");
-                            row(ui, "平均", eng(st.mean, "V"), "ランダムに作った回路の電圧の平均");
-                            row(ui, "最小", eng(st.min, "V"), "一番低かった電圧");
-                            row(ui, "最大", eng(st.max, "V"), "一番高かった電圧");
-                            row(ui, "標準偏差 σ", eng(st.std, "V"), "ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります");
+                            row(ui, &format!("{} の設計値", res.output), eng(res.nominal, res.unit), "部品がすべて表示どおりの値のときの値");
+                            row(ui, "平均", eng(st.mean, res.unit), "ランダムに作った回路の値の平均");
+                            row(ui, "最小", eng(st.min, res.unit), "一番小さかった値");
+                            row(ui, "最大", eng(st.max, res.unit), "一番大きかった値");
+                            row(ui, "標準偏差 σ", eng(st.std, res.unit), "ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります");
                         });
                         if res.nominal.abs() > 1e-12 {
                             let lo = (st.min - res.nominal) / res.nominal.abs() * 100.0;
@@ -122,11 +131,11 @@ impl SchEditor {
                             ui.colored_label(Color32::from_rgb(220, 160, 40), format!("{} 回は計算が収束しませんでした", res.failed));
                         }
                         ui.separator();
-                        ui.label("効いている部品").on_hover_text("その部品だけが許容差ぶん大きくなったとき、出力が何 V 変わるか。上にある部品ほど出力に効きます");
+                        ui.label("効いている部品").on_hover_text("その部品だけが許容差ぶん大きくなったとき、結果がどれだけ変わるか。上にある部品ほど効きます");
                         egui::Grid::new("mc_sens").num_columns(2).show(ui, |ui| {
                             for (name, dv) in res.sensitivity.iter().take(8) {
                                 ui.label(name);
-                                ui.label(format!("{}{}", if *dv >= 0.0 { "+" } else { "−" }, eng(dv.abs(), "V")));
+                                ui.label(format!("{}{}", if *dv >= 0.0 { "+" } else { "−" }, eng(dv.abs(), res.unit)));
                                 ui.end_row();
                             }
                         });
@@ -173,8 +182,8 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
     let f = FontId::proportional(11.0);
-    p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, eng(a, "V"), f.clone(), Color32::from_gray(190));
-    p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, eng(b, "V"), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, eng(a, res.unit), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, eng(b, res.unit), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, format!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(rect.left() + 4.0, plot.bottom()), Align2::LEFT_BOTTOM, "0", f, Color32::from_gray(190));
 }

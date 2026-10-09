@@ -18,7 +18,7 @@ pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
-pub use montecarlo::{monte_carlo, McResult, McSettings, McStats};
+pub use montecarlo::{monte_carlo, McMeasure, McResult, McSettings, McStats};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
 pub use from_schematic::{from_schematic, ConvertError};
 pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};

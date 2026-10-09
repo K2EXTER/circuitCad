@@ -20,7 +20,7 @@ fn led_circuit() -> Circuit {
 }
 
 fn settings(runs: usize, tol: f64) -> McSettings {
-    McSettings { runs, seed: 7, tol_r: tol, tol_c: tol, tol_l: tol, output: "mid".into() }
+    McSettings { runs, seed: 7, tol_r: tol, tol_c: tol, tol_l: tol, output: "mid".into(), measure: McMeasure::DcVoltage }
 }
 
 #[test]
@@ -93,4 +93,60 @@ fn bad_monte_carlo_settings_are_errors() {
     assert!(monte_carlo(&divider(), &settings(10, 0.0)).is_err(), "nothing to vary");
     assert!(monte_carlo(&divider(), &settings(0, 0.05)).is_err());
     assert!(monte_carlo(&divider(), &settings(10, 1.5)).is_err());
+}
+
+fn rc_filter() -> Circuit {
+    let mut c = Circuit::new();
+    let (inp, out) = (c.node("in"), c.node("out"));
+    c.add(Element::VSource { name: "V1".into(), p: inp, n: 0, wave: Waveform::Dc(0.0), ac: Some((1.0, 0.0)) });
+    c.add(Element::Resistor { name: "R1".into(), a: inp, b: out, r: 1e3 });
+    c.add(Element::Capacitor { name: "C1".into(), a: out, b: 0, c: 159.15e-9 });
+    c
+}
+
+fn cutoff_settings(runs: usize, tol: f64) -> McSettings {
+    McSettings {
+        output: "out".into(),
+        measure: McMeasure::Cutoff { fstart: 10.0, fstop: 1e6, points_per_decade: 40 },
+        ..settings(runs, tol)
+    }
+}
+
+#[test]
+fn the_cutoff_of_an_rc_filter_is_one_over_two_pi_rc() {
+    let r = monte_carlo(&rc_filter(), &cutoff_settings(5, 0.05)).unwrap();
+    assert_eq!(r.unit, "Hz");
+    assert!((r.nominal / 1000.0 - 1.0).abs() < 0.01, "{}", r.nominal);
+}
+
+#[test]
+fn filter_tolerances_spread_the_cutoff_by_about_the_sum_of_them() {
+    let r = monte_carlo(&rc_filter(), &cutoff_settings(200, 0.05)).unwrap();
+    let s = r.stats().unwrap();
+    // f = 1/(2 pi R C): R and C each within +-5 % => about 905 .. 1105 Hz
+    assert!(s.min > 890.0 && s.max < 1120.0, "{s:?}");
+    assert!(s.max - s.min > 100.0, "the spread is used: {s:?}");
+    // a larger R or C lowers the cutoff
+    assert!(r.sensitivity.iter().all(|(_, d)| *d < 0.0), "{:?}", r.sensitivity);
+    assert_eq!(r.sensitivity.len(), 2);
+}
+
+#[test]
+fn a_cutoff_outside_the_sweep_is_explained() {
+    let s = McSettings { measure: McMeasure::Cutoff { fstart: 10.0, fstop: 100.0, points_per_decade: 10 }, ..cutoff_settings(5, 0.05) };
+    match monte_carlo(&rc_filter(), &s) {
+        Err(SimError::Invalid(m)) => assert!(m.contains("範囲"), "{m}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_high_pass_reports_its_rising_edge() {
+    let mut c = Circuit::new();
+    let (inp, out) = (c.node("in"), c.node("out"));
+    c.add(Element::VSource { name: "V1".into(), p: inp, n: 0, wave: Waveform::Dc(0.0), ac: Some((1.0, 0.0)) });
+    c.add(Element::Capacitor { name: "C1".into(), a: inp, b: out, c: 159.15e-9 });
+    c.add(Element::Resistor { name: "R1".into(), a: out, b: 0, r: 1e3 });
+    let r = monte_carlo(&c, &cutoff_settings(5, 0.05)).unwrap();
+    assert!((r.nominal / 1000.0 - 1.0).abs() < 0.01, "{}", r.nominal);
 }

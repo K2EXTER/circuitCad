@@ -26,7 +26,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `tran.rs` 過渡 / `ac.rs` AC / `noise.rs` ノイズ / `dcsweep.rs` DCスイープ / `spectrum.rs` FFT・統計
 - `waveform.rs` 電源波形 (SIN/PULSE/PWL) / `value.rs` `parse_value`・`format_value`(SPICE数値) / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `from_schematic.rs` 部品→素子の変換 (素子名 = 部品番号 refdes)。新しい部品種別はここ
-- `temperature.rs` 温度 (`Circuit::at_temperature` がモデルを書き換える、`temp_sweep`) / `montecarlo.rs` 許容差ばらつき解析 (`monte_carlo`、感度つき)
+- `temperature.rs` 温度 (`Circuit::at_temperature` がモデルを書き換える、`temp_sweep`) / `montecarlo.rs` 許容差ばらつき解析 (`monte_carlo`、感度つき。測る量は `McMeasure`: DC電圧 / ACの-3dBカットオフ)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
 ## pcb-core (`crates/pcb-core/src`)

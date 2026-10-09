@@ -5,7 +5,7 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, McResult, McSettings, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, McMeasure, McResult, McSettings, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
@@ -143,6 +143,8 @@ pub struct SchEditor {
     mc_tol_c: String,
     mc_tol_l: String,
     mc_seed: u64,
+    /// Measure the -3 dB frequency (AC) instead of a DC voltage.
+    mc_ac: bool,
     /// The running lesson and the circuit it started from.
     lesson: Option<ActiveLesson>,
     lesson_base: Schematic,
@@ -316,6 +318,7 @@ impl Default for SchEditor {
             mc_tol_c: "10".into(),
             mc_tol_l: "10".into(),
             mc_seed: 1,
+            mc_ac: false,
             lesson: None,
             lesson_base: Schematic::default(),
             sweep_src: String::new(),

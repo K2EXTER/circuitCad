@@ -326,6 +326,12 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             ui.add(egui::TextEdit::singleline(&mut self.mc_runs).desired_width(34.0)).on_hover_text("ランダムな回路を何個作って計算するか。多いほど分布が滑らかです (300 もあれば十分)");
         });
         ui.horizontal(|ui| {
+            ui.label("測るもの");
+            ui.selectable_value(&mut self.mc_ac, false, "電圧 (DC)").on_hover_text("選んだ点の直流電圧が、部品の誤差でどれだけずれるか");
+            ui.selectable_value(&mut self.mc_ac, true, "カットオフ周波数 (AC)")
+                .on_hover_text("フィルタが -3dB になる周波数が、部品の誤差でどれだけずれるか。入力電源の値を「AC 1」にし、周波数の範囲は AC解析の欄を使います");
+        });
+        ui.horizontal(|ui| {
             ui.label("許容差 %  R");
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_r).desired_width(26.0)).on_hover_text("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です");
             ui.label("C");

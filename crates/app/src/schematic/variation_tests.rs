@@ -65,3 +65,23 @@ fn the_divider_example_shows_a_spread_around_half_the_supply() {
     let st = r.stats().unwrap();
     assert!(st.min < 2.5 && st.max > 2.5 && st.max - st.min < 0.3, "{st:?}");
 }
+
+#[test]
+fn monte_carlo_can_measure_the_cutoff_of_the_rc_filter() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/rc_lowpass.schjson");
+    let mut e = SchEditor::default();
+    e.load_path(path);
+    e.mc_ac = true;
+    e.mc_runs = "30".into();
+    let mut found = None;
+    for n in e.node_names() {
+        e.mc_out = n.clone();
+        e.run_mc();
+        if let Some(Ok(r)) = e.mc.as_ref().map(|m| &m.outcome) {
+            found = Some((n, r.unit, r.nominal));
+        }
+    }
+    let (_, unit, nominal) = found.expect("the filter output has a -3 dB point");
+    assert_eq!(unit, "Hz");
+    assert!((nominal / 1000.0 - 1.0).abs() < 0.02, "{nominal}");
+}

@@ -72,6 +72,10 @@ fn c1_changed_and_ac(e: &SchEditor) -> bool {
     changed(e, "C1") && ac_done(e) && e.wave_mode == WaveMode::Ac
 }
 
+fn mc_cutoff_done(e: &SchEditor) -> bool {
+    e.mc_ac && mc_done(e)
+}
+
 fn tran_done(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok())
 }
@@ -160,6 +164,11 @@ const LESSONS: &[Lesson] = &[
                 title: "C1 を 1.59u にして、もう一度解析する",
                 detail: "C1 の値を 1.59u (10倍) にして「AC解析を実行」。カットオフが 1/10 の約 100Hz に動きます。コンデンサが大きいほど低い周波数から信号を弱めます。",
                 done: c1_changed_and_ac,
+            },
+            Step {
+                title: "部品の誤差でカットオフがどれだけずれるか見る",
+                detail: "C1 を 159n に戻し、「実験: 温度とばらつき」で「測るもの」を「カットオフ周波数 (AC)」、「測る点」をフィルタの出力 (R1 と C1 の間) にして「ばらつき解析を実行」。許容差 5%/10% の部品だと、カットオフは 1kHz ぴったりにならず 1 割ほど広がります。フィルタを正確に作るには、許容差の小さい部品が必要です。",
+                done: mc_cutoff_done,
             },
         ],
     },
