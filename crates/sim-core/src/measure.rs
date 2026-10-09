@@ -79,6 +79,51 @@ pub fn wave_measure(t: &[f64], v: &[f64], t0: f64, t1: f64) -> Option<WaveMeasur
     Some(m)
 }
 
+/// Stability margins read off a loop-gain frequency response.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Margins {
+    /// Frequency where the gain falls through 0 dB, and the phase margin there (degrees).
+    pub gain_crossover: Option<f64>,
+    pub phase_margin: Option<f64>,
+    /// Frequency where the phase falls through -180 degrees, and the gain margin there (dB, positive = safe).
+    pub phase_crossover: Option<f64>,
+    pub gain_margin: Option<f64>,
+    /// The response started near +-180 degrees (an inverting path): the phase was shifted by 180 so it starts near 0.
+    pub inverted: bool,
+}
+
+/// Interpolates `y` at the point where `v` crosses `level` between samples `i` and `i+1`
+/// (`f` in log frequency). Returns (frequency, y).
+fn cross_at(freq: &[f64], v: &[f64], y: &[f64], i: usize, level: f64) -> (f64, f64) {
+    let t = (level - v[i]) / (v[i + 1] - v[i]);
+    let f = (freq[i].ln() + t * (freq[i + 1].ln() - freq[i].ln())).exp();
+    (f, y[i] + t * (y[i + 1] - y[i]))
+}
+
+/// Gain margin and phase margin of a loop gain T(jw): `db` is |T| in dB and `phase_deg` its
+/// unwrapped phase. The response is taken as the gain once around the (broken) feedback loop,
+/// so stability needs the phase to stay above -180 degrees where the gain reaches 0 dB.
+pub fn stability_margins(freq: &[f64], db: &[f64], phase_deg: &[f64]) -> Option<Margins> {
+    let n = freq.len();
+    if n < 2 || db.len() != n || phase_deg.len() != n || freq.iter().any(|f| *f <= 0.0) {
+        return None;
+    }
+    let k = (phase_deg[0] / 180.0).round();
+    let ph: Vec<f64> = phase_deg.iter().map(|p| p - 180.0 * k).collect();
+    let mut m = Margins { gain_crossover: None, phase_margin: None, phase_crossover: None, gain_margin: None, inverted: k as i64 % 2 != 0 };
+    if let Some(i) = (0..n - 1).find(|&i| db[i] >= 0.0 && db[i + 1] < 0.0) {
+        let (f, p) = cross_at(freq, db, &ph, i, 0.0);
+        m.gain_crossover = Some(f);
+        m.phase_margin = Some(180.0 + p);
+    }
+    if let Some(i) = (0..n - 1).find(|&i| ph[i] >= -180.0 && ph[i + 1] < -180.0) {
+        let (f, g) = cross_at(freq, &ph, db, i, -180.0);
+        m.phase_crossover = Some(f);
+        m.gain_margin = Some(-g);
+    }
+    Some(m)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +160,45 @@ mod tests {
         let v: Vec<f64> = t.iter().map(|x| if *x < 50.0 { 0.0 } else { 1.0 }).collect();
         let m = wave_measure(&t, &v, 0.0, 99.0).unwrap();
         assert_eq!(m.freq, None);
+    }
+
+    fn three_pole(k: f64) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+        // T(s) = k / (1 + s/w)^3 with the pole at 1 kHz
+        let f: Vec<f64> = (0..400).map(|i| 10f64.powf(0.0 + i as f64 * 0.0125)).collect();
+        let (mut db, mut ph) = (vec![], vec![]);
+        for x in &f {
+            let r = x / 1000.0;
+            db.push(20.0 * (k / (1.0 + r * r).powf(1.5)).log10());
+            ph.push(-3.0 * r.atan().to_degrees());
+        }
+        (f, db, ph)
+    }
+
+    #[test]
+    fn margins_of_a_three_pole_loop() {
+        // phase crosses -180 at tan = sqrt(3) -> f = 1.732 kHz, |T| there = k / 8
+        let (f, db, ph) = three_pole(4.0);
+        let m = stability_margins(&f, &db, &ph).unwrap();
+        assert!((m.phase_crossover.unwrap() / 1732.0 - 1.0).abs() < 0.02, "{m:?}");
+        assert!((m.gain_margin.unwrap() - 20.0 * (8.0f64 / 4.0).log10()).abs() < 0.2, "{m:?}");
+        assert!(m.phase_margin.unwrap() > 0.0 && m.gain_margin.unwrap() > 0.0);
+        // a higher gain makes the same loop unstable: both margins go negative
+        let (f, db, ph) = three_pole(20.0);
+        let m = stability_margins(&f, &db, &ph).unwrap();
+        assert!(m.phase_margin.unwrap() < 0.0 && m.gain_margin.unwrap() < 0.0, "{m:?}");
+    }
+
+    #[test]
+    fn an_inverted_response_is_shifted_and_a_weak_loop_has_no_crossover() {
+        let (f, db, ph) = three_pole(4.0);
+        let inv: Vec<f64> = ph.iter().map(|p| p + 180.0).collect();
+        let m = stability_margins(&f, &db, &inv).unwrap();
+        assert!(m.inverted);
+        let straight = stability_margins(&f, &db, &ph).unwrap();
+        assert!((m.phase_margin.unwrap() - straight.phase_margin.unwrap()).abs() < 1e-6);
+        // gain always below 0 dB: nothing to report
+        let low: Vec<f64> = db.iter().map(|d| d - 40.0).collect();
+        let w = stability_margins(&f, &low, &ph).unwrap();
+        assert_eq!((w.gain_crossover, w.phase_margin), (None, None));
     }
 }

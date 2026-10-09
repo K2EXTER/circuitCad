@@ -32,7 +32,7 @@ pub use designcalc::{divider, e24, led_resistor, rc_filter, regulator, transisto
 pub use fault::{applicable as fault_applicable, breakable, simulate_fault, with_fault, Fault, FaultReport, PartChange};
 pub use diagnose::diagnose;
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
-pub use measure::{wave_measure, WaveMeasure};
+pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
 pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, McStats, TranMetric};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
 pub use from_schematic::{from_schematic, ConvertError};

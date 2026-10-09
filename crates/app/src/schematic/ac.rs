@@ -75,6 +75,38 @@ impl SchEditor {
   -3dB点 {txt}")).on_hover_text("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります");
                             }
                         }
+                        egui::CollapsingHeader::new("安定性の余裕 (位相余裕・ゲイン余裕)").show(ui, |ui| {
+                            ui.small("帰還ループを1か所で切って、1周したときのゲイン (一巡伝達関数) を測った波形に使います。選んだ信号を、そのゲインとして扱います");
+                            for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
+                                let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
+                                let Some(m) = stability_margins(&res.freq, &sg.db(), &sg.phase_deg()) else { continue };
+                                ui.small(egui::RichText::new(*name).strong());
+                                if m.inverted {
+                                    ui.small("  位相が 180° から始まるので、反転増幅として 180° ずらして計算しました").on_hover_text("反転入力に信号を入れて出力を測ると、位相は 180° から始まります。負帰還では反転は織り込み済みなので、ずらして評価します");
+                                }
+                                match (m.gain_crossover, m.phase_margin) {
+                                    (Some(f), Some(pm)) => {
+                                        let (word, col) = if pm >= 45.0 { ("十分", Color32::from_rgb(90, 190, 110)) } else if pm >= 30.0 { ("やや不足", Color32::from_rgb(220, 160, 40)) } else if pm > 0.0 { ("不足: 振動しやすい", Color32::from_rgb(230, 90, 70)) } else { ("不安定", Color32::from_rgb(230, 60, 60)) };
+                                        ui.small(egui::RichText::new(format!("  位相余裕 {pm:.1}° ({word})  @ {}", eng(f, "Hz"))).color(col)).on_hover_text("ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます");
+                                    }
+                                    _ => {
+                                        ui.small("  ゲイン 0dB の交点がありません (ゲインが最初から 1 未満、または範囲内で下がりきらない)");
+                                    }
+                                }
+                                match (m.phase_crossover, m.gain_margin) {
+                                    (Some(f), Some(gm)) => {
+                                        let col = if gm >= 6.0 { Color32::from_rgb(90, 190, 110) } else if gm > 0.0 { Color32::from_rgb(230, 90, 70) } else { Color32::from_rgb(230, 60, 60) };
+                                        ui.small(egui::RichText::new(format!("  ゲイン余裕 {gm:.1} dB  @ {}", eng(f, "Hz"))).color(col)).on_hover_text("位相が -180° になる周波数で、ゲインが 0dB まであと何 dB 残っているか。6dB 以上が目安で、負だと発振します");
+                                    }
+                                    _ => {
+                                        ui.small("  位相が -180° に達しません (ゲイン余裕は無限大)");
+                                    }
+                                }
+                                if ui.small_button("交点にカーソルを置く").on_hover_text("波形上のカーソル A をゲイン交点 (0dB)、B を位相交点 (-180°) に置きます").clicked() {
+                                    st.cursors = [m.gain_crossover, m.phase_crossover];
+                                }
+                            }
+                        });
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {
                                 let mut on = selected.contains(*name);

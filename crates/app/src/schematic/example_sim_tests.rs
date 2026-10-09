@@ -98,3 +98,21 @@ fn fault_simulation_on_the_regulator_example() {
     assert!(e.fault_scan.len() >= 4);
     assert!(e.fault_scan.windows(2).all(|w| w[0].severity >= w[1].severity));
 }
+
+/// The op-amp loop-gain sample: a capacitive load adds a pole near the crossover and eats the phase margin.
+#[test]
+fn loop_gain_sample_shows_the_phase_margin_falling_with_a_capacitive_load() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "opamp_loop_gain.schjson").unwrap().1;
+    let pm = |cap: &str| {
+        let mut s = sch.clone();
+        s.components.iter_mut().find(|c| c.refdes == "C1").unwrap().value = cap.into();
+        let c = from_schematic(&s).unwrap();
+        let r = ac_analysis(&c, &AcSettings { fstart: 1.0, fstop: 100e6, sweep: AcSweep::Decade(40) }).unwrap();
+        let sg = r.signal("V(OUT)").unwrap();
+        stability_margins(&r.freq, &sg.db(), &sg.phase_deg()).unwrap()
+    };
+    let loaded = pm("10n");
+    assert!(loaded.inverted);
+    let (heavy, light) = (loaded.phase_margin.unwrap(), pm("1p").phase_margin.unwrap());
+    assert!(heavy < 45.0 && light > 70.0 && heavy < light - 30.0, "10n: {heavy}, 1p: {light}");
+}
