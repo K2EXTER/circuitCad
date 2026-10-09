@@ -48,7 +48,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | `canvas.rs` | 描画エリア(入力処理・描画・電圧/電流オーバーレイ) / `symbols.rs` 記号の図形・座標変換・重なり判定 |
 | `panel.rs` | 左パネル(ツール、部品一覧、プロパティ、値スライダー、解析ボタン) / `hint.rs` 画面下のヒント文 |
 | `edit.rs` 選択・当たり判定・削除・配線追加 / `history.rs` Undo・Redo / `file.rs` 保存・読込 / `library.rs` ライブラリ |
-| `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
+| `lessons.rs` 「学ぶ」メニューのレッスン(サンプル回路埋め込み+手順、各手順は状態で自動チェック。足すときは `LESSONS` に追加) / `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
 
 ### `board_editor/` (`BoardEditor`)
 | ファイル | 内容 |

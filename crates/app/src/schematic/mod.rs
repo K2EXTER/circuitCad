@@ -139,6 +139,9 @@ pub struct SchEditor {
     mc_tol_c: String,
     mc_tol_l: String,
     mc_seed: u64,
+    /// The running lesson and the circuit it started from.
+    lesson: Option<ActiveLesson>,
+    lesson_base: Schematic,
     sweep_src: String,
     sweep_start: String,
     sweep_stop: String,
@@ -309,6 +312,8 @@ impl Default for SchEditor {
             mc_tol_c: "10".into(),
             mc_tol_l: "10".into(),
             mc_seed: 1,
+            lesson: None,
+            lesson_base: Schematic::default(),
             sweep_src: String::new(),
             sweep_start: "0".into(),
             sweep_stop: "5".into(),
@@ -351,11 +356,14 @@ const SYM: Color32 = Color32::from_rgb(120, 20, 20);
 const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 
 // The editor is one type spread over several files; the child modules see its private fields.
+use lessons::ActiveLesson;
+pub use lessons::lesson_titles;
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
 mod symbols;
 mod wave;
 mod ac;
 mod sweep;
+mod lessons;
 mod noise;
 mod variation;
 mod tran;
@@ -371,5 +379,7 @@ mod file;
 mod select_tests;
 #[cfg(test)]
 mod variation_tests;
+#[cfg(test)]
+mod lessons_tests;
 #[cfg(test)]
 mod example_overlap_tests;

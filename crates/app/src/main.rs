@@ -75,6 +75,16 @@ impl eframe::App for App {
                         }
                     }
                 });
+                ui.menu_button("学ぶ", |ui| {
+                    ui.label("サンプル回路を動かしながら学べます");
+                    for (i, t) in schematic::lesson_titles().into_iter().enumerate() {
+                        if ui.button(t).clicked() {
+                            self.mode = Mode::Schematic;
+                            self.sch.start_lesson(i);
+                            ui.close();
+                        }
+                    }
+                });
                 ui.menu_button("編集", |ui| {
                     if ui.button("元に戻す (Ctrl+Z)").clicked() {
                         if sch_mode { self.sch.undo() } else { self.board_ed.undo() }
@@ -107,6 +117,7 @@ impl eframe::App for App {
                 egui::Panel::bottom("wave").resizable(true).default_size(320.0).show(ui, |ui| self.sch.wave_panel(ui));
             }
             egui::CentralPanel::default().show(ui, |ui| self.sch.canvas(ui));
+            self.sch.lesson_window(ui.ctx());
             return;
         }
         egui::Panel::left("board_tools").min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
