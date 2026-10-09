@@ -108,6 +108,10 @@ fn sweep_done(e: &SchEditor) -> bool {
     e.sweep.as_ref().is_some_and(|s| !s.temp && s.outcome.is_ok())
 }
 
+fn gain_restored_and_ac(e: &SchEditor) -> bool {
+    value_of(&e.sch, "R1") == value_of(&e.lesson_base, "R1") && ac_fresh(e) && e.wave_mode == WaveMode::Ac
+}
+
 fn currents_shown(e: &SchEditor) -> bool {
     e.show_i && dc_fresh(e)
 }
@@ -300,6 +304,36 @@ const LESSONS: &[Lesson] = &[
                 title: "電池の初期電圧を 3.6V にして、もう一度解析する",
                 detail: "R1 を 6k に戻し、C1 の値の IC=2.6 を IC=3.6 に変えて「過渡解析を実行」。最初から 2.9V を超えているので、プリチャージを飛ばして最初から定電流で充電が始まります。",
                 done: c1_changed_and_tran,
+            },
+        ],
+    },
+    Lesson {
+        title: "8. オペアンプで信号を大きくする (非反転増幅)",
+        goal: "オペアンプと2本の抵抗で、小さな信号を決まった倍率に大きくします。倍率の限界も見ます",
+        summary: "非反転増幅回路の倍率は 1 + R1 ÷ R2 です (ここでは 1 + 10k ÷ 1k = 11 倍)。倍率は抵抗の比だけで決まり、オペアンプ自体の細かい性能に左右されません。ただし出力は電源電圧の範囲までしか出せず (振れ幅の限界)、周波数が高いと倍率が下がります (GBW = 倍率 × 帯域 がほぼ一定)。倍率を上げるほど、使える帯域は狭くなります。",
+        circuit: include_str!("../../../../docs/examples/opamp_amp.schjson"),
+        setup: |e| {
+            e.set_tran_settings("3m", "5u");
+            e.set_ac_settings("100", "10Meg", "20");
+        },
+        steps: &[
+            Step {
+                tab: PanelTab::Analyze,
+                title: "過渡解析で、入力と出力の波形を見る",
+                detail: "「過渡解析を実行」を押し、IN (入力、0.1V の正弦波) と OUT (出力) を選びます。OUT は IN と同じ形で、振れ幅が 11 倍 (約 1.1V) になっています。倍率 = 1 + R1 ÷ R2 です。",
+                done: tran_done,
+            },
+            Step {
+                tab: PanelTab::Draw,
+                title: "R1 を 100k にして、もう一度解析する",
+                detail: "R1 を 10k から 100k にして「過渡解析を実行」。倍率は 101 倍になり、出力は 10V 近くを目指しますが、電源は ±5V です。LM358 は電源の少し手前までしか出せないので、波形の頭が平らに削られます (クリッピング)。",
+                done: r1_changed_and_tran,
+            },
+            Step {
+                tab: PanelTab::Draw,
+                title: "R1 を 10k に戻して、AC解析で周波数特性を見る",
+                detail: "R1 を 10k に戻し、「解析」タブで「AC解析を実行」。倍率 (約 21dB = 11 倍) は低い周波数では平らですが、100kHz 付近から下がります。LM358 の GBW は約 1MHz なので、11 倍なら約 90kHz まで使えます。",
+                done: gain_restored_and_ac,
             },
         ],
     },

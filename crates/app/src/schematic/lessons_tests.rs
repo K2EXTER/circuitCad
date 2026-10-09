@@ -164,3 +164,30 @@ fn the_left_panel_follows_the_lesson_between_drawing_and_analysis() {
     e.update_lesson();
     assert!(e.panel_tab == PanelTab::Draw, "step 3 is the slider");
 }
+
+#[test]
+fn the_opamp_lesson_shows_gain_clipping_and_bandwidth() {
+    let mut e = SchEditor::default();
+    let idx = lesson_titles().iter().position(|t| t.contains("非反転増幅")).unwrap();
+    e.start_lesson(idx);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let peak = |e: &SchEditor, name: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let s = r.signals.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{:?}", r.signals.iter().map(|s| s.name.clone()).collect::<Vec<_>>()));
+        s.values.iter().fold(0.0f64, |m, v| m.max(v.abs()))
+    };
+    let gain = peak(&e, "V(OUT)") / peak(&e, "V(IN)");
+    assert!((gain - 11.0).abs() < 0.5, "gain {gain}");
+    set_value(&mut e, "R1", "100k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    // the output cannot reach 101 x 0.1 V: the supply limits it
+    assert!(peak(&e, "V(OUT)") < 5.0, "{}", peak(&e, "V(OUT)"));
+    set_value(&mut e, "R1", "10k");
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+}

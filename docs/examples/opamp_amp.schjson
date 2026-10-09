@@ -1,0 +1,418 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "SIN(0 0.1 1k) AC 1",
+      "pos": [
+        2,
+        -3
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        8,
+        1
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        12,
+        5
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        28,
+        4
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        34,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        34,
+        6
+      ],
+      "rot": 2,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM358",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SOIC-8_P1.27",
+      "custom": {
+        "name": "LM358",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "IN+",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "IN-",
+            "side": "left"
+          },
+          {
+            "number": "1",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "V+",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "V-",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM358",
+          "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+          "pins": [
+            "3",
+            "2",
+            "1",
+            "8",
+            "4"
+          ],
+          "params": {
+            "gain_dc": 100000.0,
+            "gbw": 1000000.0
+          }
+        }
+      }
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        2,
+        2
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR02",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        12,
+        9
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR03",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        28,
+        8
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR04",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        34,
+        0
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR05",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        34,
+        10
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        2,
+        -5
+      ],
+      "b": [
+        14,
+        -5
+      ]
+    },
+    {
+      "a": [
+        14,
+        -5
+      ],
+      "b": [
+        14,
+        -1
+      ]
+    },
+    {
+      "a": [
+        14,
+        -1
+      ],
+      "b": [
+        16,
+        -1
+      ]
+    },
+    {
+      "a": [
+        2,
+        -1
+      ],
+      "b": [
+        2,
+        2
+      ]
+    },
+    {
+      "a": [
+        16,
+        1
+      ],
+      "b": [
+        12,
+        1
+      ]
+    },
+    {
+      "a": [
+        12,
+        1
+      ],
+      "b": [
+        12,
+        3
+      ]
+    },
+    {
+      "a": [
+        12,
+        7
+      ],
+      "b": [
+        12,
+        9
+      ]
+    },
+    {
+      "a": [
+        10,
+        1
+      ],
+      "b": [
+        12,
+        1
+      ]
+    },
+    {
+      "a": [
+        24,
+        0
+      ],
+      "b": [
+        28,
+        0
+      ]
+    },
+    {
+      "a": [
+        28,
+        0
+      ],
+      "b": [
+        28,
+        2
+      ]
+    },
+    {
+      "a": [
+        28,
+        6
+      ],
+      "b": [
+        28,
+        8
+      ]
+    },
+    {
+      "a": [
+        20,
+        -4
+      ],
+      "b": [
+        20,
+        -6
+      ]
+    },
+    {
+      "a": [
+        20,
+        4
+      ],
+      "b": [
+        20,
+        6
+      ]
+    },
+    {
+      "a": [
+        34,
+        -6
+      ],
+      "b": [
+        36,
+        -6
+      ]
+    },
+    {
+      "a": [
+        34,
+        -2
+      ],
+      "b": [
+        34,
+        0
+      ]
+    },
+    {
+      "a": [
+        34,
+        4
+      ],
+      "b": [
+        36,
+        4
+      ]
+    },
+    {
+      "a": [
+        34,
+        8
+      ],
+      "b": [
+        34,
+        10
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        6,
+        1
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        28,
+        0
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        14,
+        -1
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        20,
+        -6
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        36,
+        -6
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        20,
+        6
+      ],
+      "text": "VEE"
+    },
+    {
+      "pos": [
+        36,
+        4
+      ],
+      "text": "VEE"
+    }
+  ]
+}
