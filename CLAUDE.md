@@ -26,6 +26,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `tran.rs` 過渡 / `ac.rs` AC / `noise.rs` ノイズ / `dcsweep.rs` DCスイープ / `spectrum.rs` FFT・統計
 - `waveform.rs` 電源波形 (SIN/PULSE/PWL) / `value.rs` `parse_value`・`format_value`(SPICE数値) / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `from_schematic.rs` 部品→素子の変換 (素子名 = 部品番号 refdes)。新しい部品種別はここ
+- `temperature.rs` 温度 (`Circuit::at_temperature` がモデルを書き換える、`temp_sweep`) / `montecarlo.rs` 許容差ばらつき解析 (`monte_carlo`、感度つき)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
 ## pcb-core (`crates/pcb-core/src`)
@@ -47,7 +48,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | `canvas.rs` | 描画エリア(入力処理・描画・電圧/電流オーバーレイ) / `symbols.rs` 記号の図形・座標変換・重なり判定 |
 | `panel.rs` | 左パネル(ツール、部品一覧、プロパティ、値スライダー、解析ボタン) / `hint.rs` 画面下のヒント文 |
 | `edit.rs` 選択・当たり判定・削除・配線追加 / `history.rs` Undo・Redo / `file.rs` 保存・読込 / `library.rs` ライブラリ |
-| `dc.rs` `run_dc` / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
+| `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
 
 ### `board_editor/` (`BoardEditor`)
 | ファイル | 内容 |

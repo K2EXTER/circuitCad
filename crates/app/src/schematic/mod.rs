@@ -5,7 +5,7 @@ use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
 use sim_core::{
-    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
+    ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, McResult, McSettings, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
 use std::collections::BTreeSet;
@@ -127,6 +127,18 @@ pub struct SchEditor {
     /// read from, the form). Read again whenever the text changes from elsewhere.
     src_form: Option<(usize, String, SourceForm)>,
     sweep: Option<SweepView>,
+    /// Circuit temperature (℃) used by the DC / transient / AC / sweep analyses.
+    temp_c: String,
+    temp_from: String,
+    temp_to: String,
+    temp_step: String,
+    mc: Option<McView>,
+    mc_out: String,
+    mc_runs: String,
+    mc_tol_r: String,
+    mc_tol_c: String,
+    mc_tol_l: String,
+    mc_seed: u64,
     sweep_src: String,
     sweep_start: String,
     sweep_stop: String,
@@ -146,6 +158,7 @@ enum WaveMode {
     Ac,
     Noise,
     Sweep,
+    Mc,
 }
 
 /// A finished DC sweep: transfer curves with the signals to draw.
@@ -155,6 +168,13 @@ struct SweepView {
     /// Draw the line output = input (its crossing with the curve is the switching threshold).
     show_diag: bool,
     plot: PlotState,
+    /// The x axis is the circuit temperature (℃) instead of a source voltage.
+    temp: bool,
+}
+
+/// A finished Monte Carlo run.
+struct McView {
+    outcome: Result<McResult, Vec<String>>,
 }
 
 /// A finished noise analysis: output density plot plus the per-element breakdown.
@@ -278,6 +298,17 @@ impl Default for SchEditor {
             noise_temp: "27".into(),
             src_form: None,
             sweep: None,
+            temp_c: "27".into(),
+            temp_from: "-20".into(),
+            temp_to: "80".into(),
+            temp_step: "5".into(),
+            mc: None,
+            mc_out: String::new(),
+            mc_runs: "300".into(),
+            mc_tol_r: "5".into(),
+            mc_tol_c: "10".into(),
+            mc_tol_l: "10".into(),
+            mc_seed: 1,
             sweep_src: String::new(),
             sweep_start: "0".into(),
             sweep_stop: "5".into(),
@@ -326,6 +357,7 @@ mod wave;
 mod ac;
 mod sweep;
 mod noise;
+mod variation;
 mod tran;
 mod dc;
 mod library;
@@ -337,5 +369,7 @@ mod panel;
 mod file;
 #[cfg(test)]
 mod select_tests;
+#[cfg(test)]
+mod variation_tests;
 #[cfg(test)]
 mod example_overlap_tests;

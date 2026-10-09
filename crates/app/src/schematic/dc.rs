@@ -3,6 +3,19 @@
 use super::*;
 
 impl SchEditor {
+    /// The circuit to simulate: the schematic converted, at the temperature set in the panel.
+    pub(super) fn sim_circuit(&self) -> Result<Circuit, Vec<String>> {
+        let temp = match self.temp_c.trim() {
+            "" => T_NOM_C,
+            t => match t.parse::<f64>() {
+                Ok(v) if v > -273.0 && v < 1000.0 => v,
+                _ => return Err(vec![format!("温度「{t}」を数値(℃)で入力してください (例: 27)")]),
+            },
+        };
+        let c = from_schematic(&self.sch).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+        Ok(c.at_temperature(temp))
+    }
+
     pub(super) fn signature_cached(&self) -> &str {
         &self.sig_cache
     }
@@ -12,8 +25,8 @@ impl SchEditor {
     }
 
     pub(super) fn run_dc(&mut self) {
-        let outcome = match from_schematic(&self.sch) {
-            Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+        let outcome = match self.sim_circuit() {
+            Err(errs) => Err(errs),
             Ok(c) => dc_op(&c).map_err(|e| vec![e.to_string()]),
         };
         let mut pin_v = vec![];

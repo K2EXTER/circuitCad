@@ -1,0 +1,180 @@
+//! Experiments on how a real circuit differs from the drawing: temperature and part tolerances.
+
+use super::*;
+
+/// Tolerance text ("5" = ±5 %) -> fraction.
+fn percent(s: &str) -> Option<f64> {
+    s.trim().trim_end_matches('%').parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0)
+}
+
+impl SchEditor {
+    /// DC operating point at a range of temperatures, shown in the sweep viewer.
+    pub(super) fn run_temp_sweep(&mut self) {
+        let nums: Vec<Option<f64>> = [&self.temp_from, &self.temp_to, &self.temp_step].iter().map(|s| s.trim().parse::<f64>().ok()).collect();
+        let (Some(a), Some(b), Some(st)) = (nums[0], nums[1], nums[2]) else {
+            self.status = "開始・終了・刻みを数値で入力してください (例: -20, 80, 5)".into();
+            return;
+        };
+        let outcome = match self.sim_circuit() {
+            Err(errs) => Err(errs),
+            // the sweep sets the temperature itself: start from the 27 °C circuit
+            Ok(_) => match from_schematic(&self.sch) {
+                Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+                Ok(c) => temp_sweep(&c, a, b, st).map_err(|e| vec![e.to_string()]),
+            },
+        };
+        let mut selected = BTreeSet::new();
+        if let Ok(r) = &outcome {
+            for sg in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(3) {
+                selected.insert(sg.name.clone());
+            }
+        }
+        self.status = match &outcome {
+            Ok(r) => format!("温度スイープ: 完了 ({} 点, {} 〜 {} ℃)", r.x.len(), a, b),
+            Err(e) => format!("温度スイープに失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        let (lo, hi) = if b > a { (a, b) } else { (a - 1.0, a + 1.0) };
+        self.sweep = Some(SweepView {
+            outcome,
+            selected,
+            show_diag: false,
+            plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2] },
+            temp: true,
+        });
+        self.wave_mode = WaveMode::Sweep;
+    }
+
+    /// Random part values inside their tolerances; the spread of one node voltage.
+    pub(super) fn run_mc(&mut self) {
+        let (Some(tol_r), Some(tol_c), Some(tol_l)) = (percent(&self.mc_tol_r), percent(&self.mc_tol_c), percent(&self.mc_tol_l)) else {
+            self.status = "許容差は % の数値で入力してください (例: 5)".into();
+            return;
+        };
+        let Ok(runs) = self.mc_runs.trim().parse::<usize>() else {
+            self.status = "回数を整数で入力してください (例: 300)".into();
+            return;
+        };
+        self.mc_seed += 1;
+        let settings = McSettings { runs, seed: self.mc_seed, tol_r, tol_c, tol_l, output: self.mc_out.trim().to_string() };
+        let outcome = if settings.output.is_empty() {
+            Err(vec!["測るノードを選んでください".to_string()])
+        } else {
+            match self.sim_circuit() {
+                Err(errs) => Err(errs),
+                Ok(c) => monte_carlo(&c, &settings).map_err(|e| vec![e.to_string()]),
+            }
+        };
+        self.status = match &outcome {
+            Ok(r) => format!("ばらつき解析: {} 回完了{}", r.values.len(), if r.failed > 0 { format!(" ({} 回は収束せず)", r.failed) } else { String::new() }),
+            Err(e) => format!("ばらつき解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        self.mc = Some(McView { outcome });
+        self.wave_mode = WaveMode::Mc;
+    }
+
+    /// Names of the nodes that can be measured.
+    pub(super) fn node_names(&self) -> Vec<String> {
+        self.sim_circuit().map(|c| c.names.iter().skip(1).filter(|n| !n.contains('.')).cloned().collect()).unwrap_or_default()
+    }
+
+    pub(super) fn mc_wave_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(view) = self.mc.as_ref() else { return };
+        let mut close = false;
+        ui.horizontal(|ui| {
+            ui.strong("ばらつき解析 (部品の誤差で出力がどれだけずれるか)");
+            if ui.button("閉じる").clicked() {
+                close = true;
+            }
+        });
+        match &view.outcome {
+            Err(msgs) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Ok(res) => {
+                let Some(st) = res.stats() else {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), "どの回も収束しませんでした");
+                    return;
+                };
+                ui.small("部品の値を、許容差の範囲でランダムに変えて何度も計算しました。縦棒が高いところほど、よく出る電圧です");
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(300.0);
+                        egui::Grid::new("mc_stats").num_columns(2).show(ui, |ui| {
+                            let row = |ui: &mut egui::Ui, label: &str, val: String, tip: &str| {
+                                ui.label(label).on_hover_text(tip);
+                                ui.label(val).on_hover_text(tip);
+                                ui.end_row();
+                            };
+                            row(ui, &format!("{} の設計値", res.output), eng(res.nominal, "V"), "部品がすべて表示どおりの値のときの電圧");
+                            row(ui, "平均", eng(st.mean, "V"), "ランダムに作った回路の電圧の平均");
+                            row(ui, "最小", eng(st.min, "V"), "一番低かった電圧");
+                            row(ui, "最大", eng(st.max, "V"), "一番高かった電圧");
+                            row(ui, "標準偏差 σ", eng(st.std, "V"), "ばらつきの大きさ。約 68% の回路は 平均 ± σ に入ります");
+                        });
+                        if res.nominal.abs() > 1e-12 {
+                            let lo = (st.min - res.nominal) / res.nominal.abs() * 100.0;
+                            let hi = (st.max - res.nominal) / res.nominal.abs() * 100.0;
+                            ui.label(format!("設計値からのずれ: {lo:+.1}% 〜 {hi:+.1}%"));
+                        }
+                        if res.failed > 0 {
+                            ui.colored_label(Color32::from_rgb(220, 160, 40), format!("{} 回は計算が収束しませんでした", res.failed));
+                        }
+                        ui.separator();
+                        ui.label("効いている部品").on_hover_text("その部品だけが許容差ぶん大きくなったとき、出力が何 V 変わるか。上にある部品ほど出力に効きます");
+                        egui::Grid::new("mc_sens").num_columns(2).show(ui, |ui| {
+                            for (name, dv) in res.sensitivity.iter().take(8) {
+                                ui.label(name);
+                                ui.label(format!("{}{}", if *dv >= 0.0 { "+" } else { "−" }, eng(dv.abs(), "V")));
+                                ui.end_row();
+                            }
+                        });
+                        if let Some((top, _)) = res.sensitivity.first() {
+                            ui.small(format!("{top} の誤差が一番効いています。精度が必要なら、{top} を許容差の小さい部品 (1% など) にしましょう"));
+                        }
+                    });
+                    let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
+                    draw_histogram(ui, rect, res, &st);
+                });
+            }
+        }
+        if close {
+            self.mc = None;
+        }
+    }
+}
+
+fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McStats) {
+    let p = ui.painter_at(rect);
+    p.rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
+    let (lo, hi, bins) = res.histogram(24);
+    let peak = bins.iter().copied().max().unwrap_or(1).max(1) as f32;
+    let plot = Rect::from_min_max(rect.min + Vec2::new(40.0, 14.0), rect.max - Vec2::new(14.0, 30.0));
+    let x_of = |v: f64| {
+        // the axis also has to hold the design value
+        let (a, b) = (lo.min(res.nominal), hi.max(res.nominal));
+        plot.left() + ((v - a) / (b - a).max(1e-15)) as f32 * plot.width()
+    };
+    let (a, b) = (lo.min(res.nominal), hi.max(res.nominal));
+    let bin_w = (hi - lo) / bins.len() as f64;
+    for (k, n) in bins.iter().enumerate() {
+        let (x0, x1) = (x_of(lo + bin_w * k as f64), x_of(lo + bin_w * (k + 1) as f64));
+        let h = *n as f32 / peak * plot.height();
+        p.rect_filled(Rect::from_min_max(Pos2::new(x0 + 1.0, plot.bottom() - h), Pos2::new(x1 - 1.0, plot.bottom())), 0.0, Color32::from_rgb(70, 140, 230));
+    }
+    p.line_segment([plot.left_bottom(), plot.right_bottom()], Stroke::new(1.0, Color32::from_gray(140)));
+    let mark = |v: f64, color: Color32, label: &str, above: bool| {
+        let x = x_of(v);
+        p.line_segment([Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())], Stroke::new(1.5, color));
+        let y = if above { plot.top() - 1.0 } else { plot.top() + 11.0 };
+        p.text(Pos2::new(x + 3.0, y), Align2::LEFT_BOTTOM, label, FontId::proportional(11.0), color);
+    };
+    mark(res.nominal, Color32::WHITE, "設計値", true);
+    mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
+    let f = FontId::proportional(11.0);
+    p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, eng(a, "V"), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, eng(b, "V"), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(rect.left() + 4.0, plot.top()), Align2::LEFT_TOP, format!("{peak:.0}回"), f.clone(), Color32::from_gray(190));
+    p.text(Pos2::new(rect.left() + 4.0, plot.bottom()), Align2::LEFT_BOTTOM, "0", f, Color32::from_gray(190));
+}

@@ -375,6 +375,27 @@ mod tests {
         std::fs::write(root.join("rlc_board.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
     }
 
+    /// Writes docs/examples/divider_tolerance.schjson: `cargo test -p app write_divider_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_divider_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut s = sch_core::Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        let r1 = s.add(Kind::Resistor, (6, -6), 0);
+        let r2 = s.add(Kind::Resistor, (12, 0), 1);
+        s.add(Kind::Ground, (0, 8), 0);
+        s.components[v].value = "5".into();
+        s.components[r1].value = "10k".into();
+        s.components[r2].value = "10k".into();
+        let rp = s.components[r2].pins();
+        for (a, b) in [((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), (12, -6)), ((12, -6), rp[0].1), (rp[1].1, (12, 6)), ((12, 6), (0, 6)), ((0, 2), (0, 6)), ((0, 6), (0, 8))] {
+            s.wires.push(Wire { a, b });
+        }
+        s.labels.push(sch_core::Label { pos: (12, -6), text: "MID".into() });
+        std::fs::write(root.join("divider_tolerance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// The router on a real circuit: the NE555 blinker laid out on a grid of parts.
     #[test]
     fn autoroute_handles_the_ne555_blinker() {

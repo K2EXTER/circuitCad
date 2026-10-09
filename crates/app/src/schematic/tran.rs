@@ -24,8 +24,8 @@ impl SchEditor {
             self.status = "終了時間と時間刻みを数値で入力してください (例: 10m, 10u)".into();
             return;
         };
-        let outcome = match from_schematic(&self.sch) {
-            Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+        let outcome = match self.sim_circuit() {
+            Err(errs) => Err(errs),
             Ok(c) => transient(&c, &TranSettings { tstop, tstep, uic: self.tran_uic }).map_err(|e| vec![e.to_string()]),
         };
         let mut selected = BTreeSet::new();

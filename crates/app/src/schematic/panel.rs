@@ -198,6 +198,14 @@ impl SchEditor {
 部品の「スライダー」と組み合わせると、値を動かしながら結果がどう変わるかを実験できます。
 重い回路では動きがもたつくのでオフにしてください",
         );
+        ui.horizontal(|ui| {
+            ui.label("回路の温度");
+            ui.add(egui::TextEdit::singleline(&mut self.temp_c).desired_width(36.0))
+                .on_hover_text("DC・過渡・AC・DCスイープで使う温度 (摂氏、標準は 27)。
+温度が上がるとダイオードやトランジスタの順方向電圧が約 2 mV/℃ ずつ下がります。
+抵抗とコンデンサは温度で変わらないものとして扱います");
+            ui.label("℃");
+        });
         ui.separator();
         ui.label("過渡解析");
         ui.horizontal(|ui| {
@@ -268,6 +276,43 @@ impl SchEditor {
             }
         });
         ui.small("周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示");
+        ui.separator();
+        ui.label("実験: 温度とばらつき");
+        ui.horizontal(|ui| {
+            ui.label("温度");
+            ui.add(egui::TextEdit::singleline(&mut self.temp_from).desired_width(34.0)).on_hover_text("温度スイープの開始温度 (℃)");
+            ui.label("〜");
+            ui.add(egui::TextEdit::singleline(&mut self.temp_to).desired_width(34.0)).on_hover_text("終了温度 (℃)。屋外機器なら -20〜60、車載なら -40〜105 くらいを見ます");
+            ui.label("刻み");
+            ui.add(egui::TextEdit::singleline(&mut self.temp_step).desired_width(30.0)).on_hover_text("温度の間隔 (℃)");
+        });
+        if ui.button("温度スイープを実行").on_hover_text("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
+LED の電流や、トランジスタ回路のバイアスが温度でずれる様子が分かります").clicked() {
+            self.run_temp_sweep();
+        }
+        ui.horizontal(|ui| {
+            ui.label("測る点");
+            let shown = if self.mc_out.is_empty() { "選ぶ…".to_string() } else { self.mc_out.clone() };
+            egui::ComboBox::from_id_salt("mc_node").selected_text(shown).show_ui(ui, |ui| {
+                for n in self.node_names() {
+                    ui.selectable_value(&mut self.mc_out, n.clone(), n);
+                }
+            }).response.on_hover_text("電圧のずれを調べるノード (回路図のラベル名か自動で付いた名前)");
+            ui.label("回数");
+            ui.add(egui::TextEdit::singleline(&mut self.mc_runs).desired_width(34.0)).on_hover_text("ランダムな回路を何個作って計算するか。多いほど分布が滑らかです (300 もあれば十分)");
+        });
+        ui.horizontal(|ui| {
+            ui.label("許容差 %  R");
+            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_r).desired_width(26.0)).on_hover_text("抵抗の誤差。炭素皮膜抵抗は 5%、金属皮膜は 1% が一般的です");
+            ui.label("C");
+            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_c).desired_width(26.0)).on_hover_text("コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです");
+            ui.label("L");
+            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_l).desired_width(26.0)).on_hover_text("コイルの誤差。10〜20% が一般的です");
+        });
+        if ui.button("ばらつき解析を実行").on_hover_text("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
+「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります").clicked() {
+            self.run_mc();
+        }
         ui.separator();
         let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());
         if let Some(dc) = &self.dc {

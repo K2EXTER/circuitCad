@@ -42,6 +42,12 @@ impl SchEditor {
         if self.tran.is_some() && self.wave_mode == WaveMode::Tran {
             return "波形はドラッグで移動、ホイールで拡大縮小、ダブルクリックで全体表示。左の一覧で表示する信号を選べます".into();
         }
+        if self.mc.is_some() && self.wave_mode == WaveMode::Mc {
+            return "同じ回路でも、部品の誤差で実物ごとに電圧が変わります。「効いている部品」の上位を許容差の小さい部品にすると、ばらつきが小さくなります".into();
+        }
+        if self.sweep.as_ref().is_some_and(|s| s.temp) && self.wave_mode == WaveMode::Sweep {
+            return "温度が上がるとダイオードやトランジスタの電圧が下がります (約 -2 mV/℃)。この変化で回路の動作点がどれだけずれるかを見ましょう".into();
+        }
         if self.dc.is_none() {
             return "回路が描けたら「DC動作点を解析」で各点の電圧と部品の電流 (配線は低電圧が青、高電圧が赤) を見てみましょう。ERC で配線ミスの点検もできます".into();
         }

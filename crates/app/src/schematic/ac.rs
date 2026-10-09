@@ -18,8 +18,8 @@ impl SchEditor {
             self.status = "開始・終了周波数と点数/デケードを数値で入力してください (例: 10, 1Meg, 20)".into();
             return;
         };
-        let outcome = match from_schematic(&self.sch) {
-            Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+        let outcome = match self.sim_circuit() {
+            Err(errs) => Err(errs),
             Ok(c) => ac_analysis(&c, &AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) }).map_err(|e| vec![e.to_string()]),
         };
         let mut selected = BTreeSet::new();

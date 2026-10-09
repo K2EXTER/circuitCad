@@ -23,8 +23,8 @@ impl SchEditor {
         let outcome = if src.is_empty() {
             Err(vec!["スイープする電源の番号を入力してください (例: V2)。入力にあたる電源です".to_string()])
         } else {
-            match from_schematic(&self.sch) {
-                Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
+            match self.sim_circuit() {
+                Err(errs) => Err(errs),
                 Ok(c) => dc_sweep(&c, &DcSweepSettings { source: src.clone(), start: a, stop: b, step: st }).map_err(|e| vec![e.to_string()]),
             }
         };
@@ -48,7 +48,7 @@ impl SchEditor {
             Err(e) => format!("DCスイープに失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         let (lo, hi) = if (b - a).abs() > 1e-12 { (a.min(b), a.max(b)) } else { (a - 1.0, a + 1.0) };
-        self.sweep = Some(SweepView { outcome, selected, show_diag: true, plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2] } });
+        self.sweep = Some(SweepView { outcome, selected, show_diag: true, plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2] }, temp: false });
         self.wave_mode = WaveMode::Sweep;
     }
 
@@ -56,13 +56,14 @@ impl SchEditor {
         let Some(view) = self.sweep.as_mut() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
-            ui.strong("DCスイープ (入力を変えたときの出力)");
+            ui.strong(if view.temp { "温度スイープ (温度を変えたときの動作点)" } else { "DCスイープ (入力を変えたときの出力)" });
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)");
+            ui.small(if view.temp { "横軸: 回路の温度 (℃)。縦軸: 各ノードの電圧 (上) と電流 (下)" } else { "横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)" });
         });
-        let SweepView { outcome, selected, show_diag, plot: st } = view;
+        let SweepView { outcome, selected, show_diag, plot: st, temp } = view;
+        let temp = *temp;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
@@ -107,7 +108,9 @@ impl SchEditor {
                         } else {
                             ui.small("電圧の信号を選ぶと、反転する (インバーターの) 特性なら VOH / VOL / 切替電圧 / ノイズマージンを計算します");
                         }
-                        ui.checkbox(show_diag, "「出力 = 入力」の線").on_hover_text("この線と曲線が交わる所が切替電圧 Vth です");
+                        if !temp {
+                            ui.checkbox(show_diag, "「出力 = 入力」の線").on_hover_text("この線と曲線が交わる所が切替電圧 Vth です");
+                        }
                         if ui.button("選択をクリア").clicked() {
                             selected.clear();
                         }
@@ -138,12 +141,13 @@ impl SchEditor {
                         return;
                     }
                     let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();
-                    if *show_diag && !volts.is_empty() {
+                    if *show_diag && !temp && !volts.is_empty() {
                         volts.push(Trace { name: "出力=入力", color: Color32::from_gray(120), t: &res.x, v: &res.x });
                     }
                     let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();
-                    let vs = Style { unit: "V", x_unit: "V", x_name: &res.source, plain_y: false };
-                    let is = Style { unit: "A", x_unit: "V", x_name: &res.source, plain_y: false };
+                    let x_unit = if temp { "℃" } else { "V" };
+                    let vs = Style { unit: "V", x_unit, x_name: &res.source, plain_y: false };
+                    let is = Style { unit: "A", x_unit, x_name: &res.source, plain_y: false };
                     match (volts.is_empty(), amps.is_empty()) {
                         (false, false) => {
                             let h = rect.height() / 2.0;
