@@ -75,3 +75,26 @@ fn every_wizard_calculator_works_with_its_defaults_and_explains_failures() {
     e.wiz_in[0] = "abc".into();
     assert!(e.wizard_result().unwrap_err().contains("電源電圧"));
 }
+
+#[test]
+fn fault_simulation_on_the_regulator_example() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "regulator_led.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    // find the LED-side resistor and open it: the LED current must stop
+    let r = e.sch.components.iter().find(|c| c.kind == sch_core::Kind::Resistor).unwrap().refdes.clone();
+    e.set_fault(&r, 0);
+    e.analyze_fault();
+    let v = e.fault_view.as_ref().unwrap();
+    let report = v.report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    assert!(report.summary().iter().any(|l| l.contains("電流が止まります") || l.contains("→")), "{:?}", report.summary());
+    // showing it on the sheet marks the overlay as a what-if and restoring clears the mark
+    e.show_fault_on_sheet();
+    assert!(e.dc.as_ref().unwrap().fault.is_some());
+    e.run_dc();
+    assert!(e.dc.as_ref().unwrap().fault.is_none());
+    // the scan covers every breakable part and puts the worst case first
+    e.analyze_fault_scan();
+    assert!(e.fault_scan.len() >= 4);
+    assert!(e.fault_scan.windows(2).all(|w| w[0].severity >= w[1].severity));
+}

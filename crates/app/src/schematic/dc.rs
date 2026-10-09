@@ -47,6 +47,15 @@ impl SchEditor {
                 msgs
             }),
         };
+        self.status = match &outcome {
+            Ok(r) => format!("DC動作点: 収束 ({} 回, {})", r.iterations, r.strategy),
+            Err(e) => format!("DC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        self.dc = Some(self.dc_view(outcome, None));
+    }
+
+    /// The overlay data (pin voltages, wire colours) for a DC result; `fault` names the broken part when the result is a what-if.
+    pub(super) fn dc_view(&self, outcome: Result<DcResult, Vec<String>>, fault: Option<String>) -> DcView {
         let mut pin_v = vec![];
         if let Ok(res) = &outcome {
             for net in extract(&self.sch) {
@@ -66,10 +75,6 @@ impl SchEditor {
                 }
             }
         }
-        self.status = match &outcome {
-            Ok(r) => format!("DC動作点: 収束 ({} 回, {})", r.iterations, r.strategy),
-            Err(e) => format!("DC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
-        };
         let mut wire_v = vec![None; self.sch.wires.len()];
         let mut v_range = (0.0f64, 0.0f64);
         if let Ok(res) = &outcome {
@@ -79,7 +84,7 @@ impl SchEditor {
             let vs = res.voltages.iter().map(|(_, v)| *v);
             v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
         }
-        self.dc = Some(DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range });
+        DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range, fault }
     }
 
     pub fn analyze_dc(&mut self) {

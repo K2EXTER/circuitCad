@@ -165,7 +165,7 @@ fn install_crash_log() {
     }));
 }
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--noise out in|- tempC] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
 /// [--drc] [--export dir]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
@@ -183,6 +183,17 @@ fn apply_args(app: &mut App, args: &[String]) {
             if let (Some(src), Some(a), Some(b), Some(st)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3), args.get(i + 4)) {
                 app.sch.set_sweep_settings(src, a, b, st);
                 app.sch.analyze_sweep();
+            }
+        }
+        if let Some(i) = args.iter().position(|a| a == "--fault") {
+            // --fault <part> <0 open | 1 short | 2 x10 | 3 /10>   or   --fault scan
+            match args.get(i + 1).map(|s| s.as_str()) {
+                Some("scan") => app.sch.analyze_fault_scan(),
+                Some(part) => {
+                    app.sch.set_fault(part, args.get(i + 2).and_then(|k| k.parse().ok()).unwrap_or(0));
+                    app.sch.analyze_fault();
+                }
+                None => {}
             }
         }
         if let Some(i) = args.iter().position(|a| a == "--param") {

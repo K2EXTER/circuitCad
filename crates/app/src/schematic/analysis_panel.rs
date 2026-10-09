@@ -182,6 +182,9 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             if stale {
                 ui.colored_label(Color32::from_rgb(220, 160, 40), "回路が変更されました。再度解析してください");
             }
+            if let Some(f) = &dc.fault {
+                ui.colored_label(Color32::from_rgb(230, 90, 70), format!("⚠ これは「{f}」と仮定した結果です (実際の回路ではありません)"));
+            }
             match &dc.outcome {
                 Err(msgs) => {
                     for m in msgs {

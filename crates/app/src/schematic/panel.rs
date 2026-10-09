@@ -33,6 +33,7 @@ impl SchEditor {
                 self.panel_param(ui);
                 self.panel_noise(ui);
                 self.panel_variation(ui);
+                self.panel_fault(ui);
                 self.panel_results(ui);
             }
         }

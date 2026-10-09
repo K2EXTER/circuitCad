@@ -166,6 +166,10 @@ pub struct SchEditor {
     wiz_open: bool,
     wiz_kind: usize,
     wiz_in: Vec<String>,
+    fault_part: String,
+    fault_kind: usize,
+    fault_view: Option<fault::FaultView>,
+    fault_scan: Vec<fault::ScanRow>,
     sweep_src: String,
     param: Option<param::ParamView>,
     param_part: String,
@@ -273,6 +277,8 @@ struct DcView {
     wire_v: Vec<Option<f64>>,
     /// Range of the node voltages, for colouring.
     v_range: (f64, f64),
+    /// Set when this is a what-if result with a broken part ("R1 を断線"), not the real circuit.
+    fault: Option<String>,
 }
 
 /// Wire colour for a net voltage: blue at the lowest voltage of the circuit, red at the highest.
@@ -383,6 +389,10 @@ impl Default for SchEditor {
             wiz_open: false,
             wiz_kind: 0,
             wiz_in: vec![],
+            fault_part: String::new(),
+            fault_kind: 0,
+            fault_view: None,
+            fault_scan: vec![],
             sweep_src: String::new(),
             param: None,
             param_part: String::new(),
@@ -456,6 +466,7 @@ mod canvas;
 mod draw;
 mod interact;
 mod panel;
+mod fault;
 mod wizard;
 mod param;
 mod settings;
