@@ -114,7 +114,7 @@ fn lowpass_filter_steady_state_amplitude() {
     let r = transient(&c, &settings(10e-3, 10e-6, false)).unwrap();
     let s = r.signal("V(out)").unwrap();
     let peak = r.time.iter().zip(&s.values).filter(|(t, _)| **t > 9e-3).map(|(_, v)| *v).fold(f64::MIN, f64::max);
-    assert!((peak - 0.7071).abs() < 0.01, "{peak}");
+    assert!((peak - std::f64::consts::FRAC_1_SQRT_2).abs() < 0.01, "{peak}");
     // the source itself is reproduced exactly
     assert!(max_err(&r, "V(in)", |t| (2.0 * std::f64::consts::PI * 1e3 * t).sin()) < 1e-6);
 }

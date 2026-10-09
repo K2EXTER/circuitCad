@@ -19,5 +19,7 @@ pub mod strokefont;
 mod tests_bottom;
 #[cfg(test)]
 mod tests_zone;
+#[cfg(test)]
+mod tests_fab;
 
 pub use model::*;

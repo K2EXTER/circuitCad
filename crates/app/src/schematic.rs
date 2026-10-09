@@ -733,8 +733,8 @@ impl SchEditor {
             Tool::Label => return "ラベル名を決めて回路図の点をクリック。同じ名前の場所は線なしでつながります (電源 VCC や GND に便利)".into(),
             Tool::Select | Tool::Place => {}
         }
-        if let Some(Sel::Comp(i)) = self.selected {
-            if let Some(c) = self.sch.components.get(i) {
+        if let Some(Sel::Comp(i)) = self.selected
+            && let Some(c) = self.sch.components.get(i) {
                 return match c.kind {
                     Kind::Resistor => "値を書き換えてみましょう (例: 1k, 4.7k, 100)。DC解析をやり直すと電圧がどう変わるか分かります".into(),
                     Kind::Capacitor => "コンデンサは直流では電流を通さず、周波数が高いほど通しやすくなります。AC解析で効き方を見てみましょう".into(),
@@ -743,7 +743,6 @@ impl SchEditor {
                     _ => "選んだ部品の値は左の欄で変えられます。R キーで回転、Delete で削除".into(),
                 };
             }
-        }
         if self.sweep.is_some() && self.wave_mode == WaveMode::Sweep {
             return "出力 = 入力の線と曲線が交わる所が切替電圧です。VIL・VIH の間が「どちらとも言えない」領域で、狭いほどスパッと切り替わります。電源電圧や部品を変えて再実行してみましょう".into();
         }
@@ -1121,12 +1120,11 @@ impl SchEditor {
                             st.x
                         };
                         for name in order.iter().filter(|n| selected.contains(**n)).take(6) {
-                            if let Some(sg) = res.signal(name) {
-                                if let Some(sx) = signal_stats(&res.time, &sg.values, w0, w1) {
+                            if let Some(sg) = res.signal(name)
+                                && let Some(sx) = signal_stats(&res.time, &sg.values, w0, w1) {
                                     let u = sg.unit;
                                     ui.small(format!("{name}\n  平均 {}{u}  AC実効値 {}{u}", plot::axis_label(sx.mean, sx.mean.abs() / 1000.0), plot::axis_label(sx.rms_ac, sx.rms_ac.abs() / 1000.0)));
                                 }
-                            }
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {
@@ -1233,11 +1231,10 @@ impl SchEditor {
             for net in extract(&self.sch) {
                 let Some(v) = res.voltage(&net.name) else { continue };
                 for p in &net.pins {
-                    if let Some(c) = self.sch.components.iter().find(|c| c.refdes == p.refdes) {
-                        if let Some((_, pt)) = c.pins().into_iter().find(|(n, _)| *n == p.pin) {
+                    if let Some(c) = self.sch.components.iter().find(|c| c.refdes == p.refdes)
+                        && let Some((_, pt)) = c.pins().into_iter().find(|(n, _)| *n == p.pin) {
                             pin_v.push((pt, v));
                         }
-                    }
                 }
             }
             // ground symbols and named power symbols show their net voltage too
@@ -1555,8 +1552,8 @@ impl SchEditor {
                 if sel { Color32::from_rgb(0, 80, 220) } else { Color32::from_rgb(0, 100, 100) },
             );
         }
-        if self.show_v {
-            if let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached()) {
+        if self.show_v
+            && let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached()) {
                 let f = FontId::proportional((self.zoom * 0.5).clamp(9.0, 14.0));
                 let mut seen: Vec<Pt> = vec![];
                 for (pt, v) in &dc.pin_v {
@@ -1570,7 +1567,6 @@ impl SchEditor {
                     painter.galley(p - Vec2::new(0.0, galley.size().y), galley, Color32::from_rgb(10, 60, 200));
                 }
             }
-        }
         for pr in &self.problems {
             if let Some(a) = pr.at {
                 painter.circle_stroke(self.to_screen(rect, (a.0 as f32, a.1 as f32)), 11.0, Stroke::new(2.0, Color32::from_rgb(230, 0, 200)));
@@ -1599,15 +1595,14 @@ impl SchEditor {
         if self.tool == Tool::Select && !self.noise_pick {
             let origin = ui.input(|i| i.pointer.press_origin());
             for (btn, crossing) in [(egui::PointerButton::Primary, false), (egui::PointerButton::Secondary, true)] {
-                if resp.drag_started_by(btn) && self.drag.is_none() && self.gdrag.is_none() {
-                    if let Some(o) = origin {
+                if resp.drag_started_by(btn) && self.drag.is_none() && self.gdrag.is_none()
+                    && let Some(o) = origin {
                         let g0 = self.to_grid(rect, o);
                         // a left drag that starts on a part moves it instead (below)
                         if crossing || self.comp_at(g0).is_none() {
                             self.boxsel = Some(BoxSel { start: g0, crossing });
                         }
                     }
-                }
             }
             if let Some(b) = &self.boxsel {
                 let cur = ui.input(|i| i.pointer.latest_pos()).map(|p| self.to_grid(rect, p)).unwrap_or(b.start);
@@ -1692,8 +1687,8 @@ impl SchEditor {
             self.status = format!("({}, {})  部品 {}  配線 {}", snapped.0, snapped.1, self.sch.components.len(), self.sch.wires.len());
         }
 
-        if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !self.noise_pick {
-            if let Some(i) = self.comp_at(g) {
+        if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !self.noise_pick
+            && let Some(i) = self.comp_at(g) {
                 if self.multi.len() > 1 && self.multi.contains(&Sel::Comp(i)) {
                     self.start_group_drag(snapped);
                 } else {
@@ -1703,7 +1698,6 @@ impl SchEditor {
                     self.multi.clear();
                 }
             }
-        }
         if let Some(gd) = &self.gdrag {
             if resp.dragged_by(egui::PointerButton::Primary) {
                 let (dx, dy) = (snapped.0 - gd.anchor.0, snapped.1 - gd.anchor.1);
@@ -1855,8 +1849,8 @@ impl SchEditor {
             self.pending = None;
         }
         ui.separator();
-        if let Some(Sel::Comp(i)) = self.selected {
-            if i < self.sch.components.len() {
+        if let Some(Sel::Comp(i)) = self.selected
+            && i < self.sch.components.len() {
                 let c = &mut self.sch.components[i];
                 ui.label("選択中の部品");
                 if !c.kind.is_power_symbol() {
@@ -1922,7 +1916,6 @@ impl SchEditor {
                     c.rot = (c.rot + 1) % 4;
                 }
             }
-        }
         if self.selected.is_some() && ui.button("削除 (Delete)").clicked() {
             self.delete_selected();
         }
@@ -2061,14 +2054,13 @@ impl SchEditor {
                 ui.label(format!("{}: {}", n.name, pins.join(", ")));
             }
         });
-        if ui.button("SPICEネットリストを書き出し…").clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
+        if ui.button("SPICEネットリストを書き出し…").clicked()
+            && let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
                 self.status = match std::fs::write(&p, to_spice(&self.sch, "circuitCad")) {
                     Ok(()) => format!("書き出しました: {}", p.display()),
                     Err(e) => format!("書き出し失敗: {e}"),
                 };
             }
-        }
         ui.separator();
         if let Some(mut form) = self.form.take() {
             let mut open = true;

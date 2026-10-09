@@ -86,11 +86,10 @@ fn cmos_inverter_curve_and_noise_margins() {
 fn weaker_pmos_moves_the_threshold_down() {
     let mut c = cmos_inverter(5.0);
     for e in c.elements.iter_mut() {
-        if let Element::Mosfet { name, model, .. } = e {
-            if name == "Mp" {
+        if let Element::Mosfet { name, model, .. } = e
+            && name == "Mp" {
                 model.kp = 2.5e-4;
             }
-        }
     }
     let r = dc_sweep(&c, &sweep("Vin", 0.0, 5.0, 0.05)).unwrap();
     let m = inverter_metrics(&r.x, &r.signal("V(out)").unwrap().values).unwrap();

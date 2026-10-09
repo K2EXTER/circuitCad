@@ -584,14 +584,13 @@ impl Compiled {
                 }
                 r2 = sum2;
                 // junction limiting changes the equations, so compare only unlimited iterations
-                if let (false, Some((xp, dx, rp, vjp, lam))) = (limited, prev.as_mut()) {
-                    if r2 > *rp * 1.0001 && r2 > 1e-20 && *lam > 1e-3 {
+                if let (false, Some((xp, dx, rp, vjp, lam))) = (limited, prev.as_mut())
+                    && r2 > *rp * 1.0001 && r2 > 1e-20 && *lam > 1e-3 {
                         *lam *= 0.5;
                         x = xp.iter().zip(dx.iter()).map(|(a, d)| a + *lam * d).collect();
                         vj = vjp.clone();
                         continue;
                     }
-                }
             }
             let (x_old, vj_old) = if backtrack { (x.clone(), vj.clone()) } else { (vec![], vec![]) };
             lu_solve(m.n, &mut m.a, &mut m.b).map_err(|_| Fail::Singular)?;

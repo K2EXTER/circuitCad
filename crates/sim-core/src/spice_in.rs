@@ -22,13 +22,12 @@ fn logical_lines(text: &str) -> Vec<String> {
         if line.is_empty() || line.starts_with('*') {
             continue;
         }
-        if let Some(rest) = line.strip_prefix('+') {
-            if let Some(last) = out.last_mut() {
+        if let Some(rest) = line.strip_prefix('+')
+            && let Some(last) = out.last_mut() {
                 last.push(' ');
                 last.push_str(rest.trim());
                 continue;
             }
-        }
         out.push(line.to_string());
     }
     out

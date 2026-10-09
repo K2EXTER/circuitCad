@@ -298,7 +298,7 @@ fn the_op_amp_models_have_their_stated_bandwidth() {
         let out = r.signal("V(out)").unwrap();
         let mag = out.mag();
         assert!((mag[0] - 1.0).abs() < 1e-3, "{name}: unity at low frequency");
-        let k = mag.iter().position(|m| *m < 0.7071).unwrap();
+        let k = mag.iter().position(|m| *m < std::f64::consts::FRAC_1_SQRT_2).unwrap();
         assert!(r.freq[k] > gbw * 0.8 && r.freq[k] < gbw * 1.3, "{name}: -3 dB at {} Hz, expected ~{gbw}", r.freq[k]);
     }
 }

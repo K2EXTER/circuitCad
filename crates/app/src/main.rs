@@ -133,12 +133,11 @@ fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--dc") {
             app.sch.analyze_dc();
         }
-        if let Some(i) = args.iter().position(|a| a == "--ac") {
-            if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
+        if let Some(i) = args.iter().position(|a| a == "--ac")
+            && let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
                 app.sch.set_ac_settings(f0, f1, p);
                 app.sch.analyze_ac();
             }
-        }
         if let Some(i) = args.iter().position(|a| a == "--sweep") {
             // --sweep <source> <start> <stop> <step>
             if let (Some(src), Some(a), Some(b), Some(st)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3), args.get(i + 4)) {
@@ -154,15 +153,14 @@ fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.analyze_noise();
             }
         }
-        if let Some(i) = args.iter().position(|a| a == "--tran") {
-            if let (Some(stop), Some(step)) = (args.get(i + 1), args.get(i + 2)) {
+        if let Some(i) = args.iter().position(|a| a == "--tran")
+            && let (Some(stop), Some(step)) = (args.get(i + 1), args.get(i + 2)) {
                 app.sch.set_tran_settings(stop, step);
                 app.sch.analyze_tran();
                 if args.iter().any(|a| a == "--spectrum") {
                     app.sch.show_spectrum();
                 }
             }
-        }
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".pcbjson")) {
         app.mode = Mode::Board;
@@ -170,14 +168,13 @@ fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--drc") {
             app.board_ed.run_drc();
         }
-        if let Some(i) = args.iter().position(|a| a == "--export") {
-            if let Some(dir) = args.get(i + 1) {
+        if let Some(i) = args.iter().position(|a| a == "--export")
+            && let Some(dir) = args.get(i + 1) {
                 app.board_ed.status = match app.board_ed.write_fab_files(std::path::Path::new(dir)) {
                     Ok(n) => format!("書き出し完了: {dir} ({n} ファイル + zip)"),
                     Err(e) => format!("書き出し失敗: {e}"),
                 };
             }
-        }
     }
 }
 

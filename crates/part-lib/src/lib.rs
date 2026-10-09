@@ -259,11 +259,10 @@ const LEGACY: &[(&str, &str)] = &[(
 /// carries the known old model text, or when it equals the bundled part except for the category.
 fn is_unmodified_legacy(file: &Path, example: &str, bundled: &str) -> bool {
     let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
-    if let Some((_, text)) = LEGACY.iter().find(|(n, _)| *n == example) {
-        if old.sim.as_ref().is_some_and(|m| m.text == *text) {
+    if let Some((_, text)) = LEGACY.iter().find(|(n, _)| *n == example)
+        && old.sim.as_ref().is_some_and(|m| m.text == *text) {
             return true;
         }
-    }
     match serde_json::from_str::<PartDef>(bundled) {
         Ok(new) => old.category.is_empty() && old == PartDef { category: String::new(), ..new },
         Err(_) => false,

@@ -197,7 +197,7 @@ fn gate_capacitance_makes_a_pole() {
     let r = ac_analysis(&c, &AcSettings { fstart: 159_155.0, fstop: 159_155.0, sweep: AcSweep::Decade(1) }).unwrap();
     let s = r.signal("V(g)").unwrap();
     let mag = s.re[0].hypot(s.im[0]);
-    assert!((mag - 0.7071).abs() < 0.002, "-3 dB at 1/(2 pi R Cgs): {mag}");
+    assert!((mag - std::f64::consts::FRAC_1_SQRT_2).abs() < 0.002, "-3 dB at 1/(2 pi R Cgs): {mag}");
 }
 
 // ---------------------------------------------------------------- model cards and library parts

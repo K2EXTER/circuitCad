@@ -102,8 +102,8 @@ fn bottom_pads_connect_through_bottom_tracks_and_vias() {
     assert_eq!(ratsnest(&b).len(), 0);
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
     // a top-side track cannot reach a bottom SMD pad by itself
-    b.tracks.truncate(0);
-    b.vias.truncate(0);
+    b.tracks.clear();
+    b.vias.clear();
     b.tracks.push(Track { side: Side::Top, a, b: c, width: 0.25 });
     assert_eq!(ratsnest(&b).len(), 1);
 }

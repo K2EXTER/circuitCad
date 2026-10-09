@@ -77,10 +77,10 @@ fn astable_timing_follows_the_datasheet_formulas() {
     assert!(up.len() >= 5 && down.len() >= 5, "{} rising / {} falling edges", up.len(), down.len());
     // period 0.693 (R1 + 2 R2) C, high time 0.693 (R1 + R2) C
     let period = (up[up.len() - 1] - up[1]) / (up.len() - 2) as f64;
-    let want = 0.6931 * (r1 + 2.0 * r2) * cf;
+    let want = std::f64::consts::LN_2 * (r1 + 2.0 * r2) * cf;
     assert!((period / want - 1.0).abs() < 0.03, "period {period} vs {want}");
     let high = down.iter().find(|d| **d > up[1]).unwrap() - up[1];
-    let want_high = 0.6931 * (r1 + r2) * cf;
+    let want_high = std::f64::consts::LN_2 * (r1 + r2) * cf;
     assert!((high / want_high - 1.0).abs() < 0.04, "high {high} vs {want_high}");
     // the timing capacitor swings between 1/3 and 2/3 of the supply
     let v = r.signal("V(thres)").unwrap();

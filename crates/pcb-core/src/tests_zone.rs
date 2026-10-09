@@ -112,7 +112,7 @@ fn drc_checks_zone_geometry() {
     let msgs: Vec<_> = drc::check(&b).into_iter().map(|v| v.message).collect();
     assert!(msgs.iter().any(|m| m.contains("外")), "{msgs:?}");
     assert!(msgs.iter().any(|m| m.contains("3点未満")), "{msgs:?}");
-    b.zones.truncate(0);
+    b.zones.clear();
     b.zones.push(Zone::new("GND", Side::Top, rect(2.0, 2.0, 38.0, 28.0)));
     assert!(drc::check(&b).is_empty());
 }

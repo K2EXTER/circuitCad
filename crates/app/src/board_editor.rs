@@ -312,11 +312,10 @@ impl BoardEditor {
         for (i, pd) in self.board.pads.iter().enumerate().filter(|(_, pd)| pd.drill.is_some() || self.side_visible(pd.side)) {
             let (w, h) = pd.shape.size();
             if (p.x - pd.pos.x).abs() <= w / 2.0 + tol && (p.y - pd.pos.y).abs() <= h / 2.0 + tol {
-                if !pd.refdes.is_empty() {
-                    if let Some(k) = self.board.parts.iter().position(|b| b.refdes == pd.refdes) {
+                if !pd.refdes.is_empty()
+                    && let Some(k) = self.board.parts.iter().position(|b| b.refdes == pd.refdes) {
                         return Some(Item::Part(k));
                     }
-                }
                 return Some(Item::Pad(i));
             }
         }
@@ -590,15 +589,14 @@ impl BoardEditor {
 
     /// Move the selected part to the other side of the board.
     fn flip_selected_part(&mut self) {
-        if let Some(Item::Part(i)) = self.selected {
-            if i < self.board.parts.len() {
+        if let Some(Item::Part(i)) = self.selected
+            && i < self.board.parts.len() {
                 self.checkpoint();
                 let r = self.board.parts[i].refdes.clone();
                 self.board.flip_part(&r);
                 let side = if self.board.parts[i].side == Side::Bottom { "裏面" } else { "表面" };
                 self.status = format!("{r} を{side}に移しました");
             }
-        }
     }
 
     // ------------------------------------------------------------- tools
@@ -788,11 +786,10 @@ impl BoardEditor {
         // library parts bring their own footprint
         self.checkpoint();
         for c in sch.components.iter().filter(|c| c.custom.is_some()) {
-            if let Some(def) = sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint) {
-                if let Ok(fp) = def.footprint() {
+            if let Some(def) = sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint)
+                && let Ok(fp) = def.footprint() {
                     self.board.add_footprint(fp);
                 }
-            }
         }
         let rep = netlist::import(&mut self.board, &parts, &nets);
         self.selected = None;
@@ -843,8 +840,8 @@ impl BoardEditor {
         if self.tool == Tool::Select {
             let origin = ui.input(|i| i.pointer.press_origin());
             for (btn, crossing) in [(egui::PointerButton::Primary, false), (egui::PointerButton::Secondary, true)] {
-                if resp.drag_started_by(btn) && self.drag_part.is_none() && self.gdrag.is_none() {
-                    if let Some(o) = origin {
+                if resp.drag_started_by(btn) && self.drag_part.is_none() && self.gdrag.is_none()
+                    && let Some(o) = origin {
                         let w0 = self.to_world(rect, o);
                         // a left drag that starts on a part or wire moves it instead (below); the inside
                         // of a copper pour does not count, or a box could not be drawn over one
@@ -852,7 +849,6 @@ impl BoardEditor {
                             self.boxsel = Some(BoxSel { start: w0, crossing });
                         }
                     }
-                }
             }
             if let Some(b) = &self.boxsel {
                 let cur = ui.input(|i| i.pointer.latest_pos()).map(|p| self.to_world(rect, p)).unwrap_or(b.start);
@@ -910,34 +906,29 @@ impl BoardEditor {
             sp = Some(p);
             self.draw_cursor(&painter, rect, p);
 
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none() {
-                if self.hit_test(w).is_some_and(|h| self.multi.contains(&h)) {
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none()
+                && self.hit_test(w).is_some_and(|h| self.multi.contains(&h)) {
                     self.checkpoint();
                     self.gdrag = Some(GroupDrag { anchor: p, orig: self.board.clone(), items: self.multi.clone() });
                 }
-            }
-            if let Some(g) = self.gdrag.take() {
-                if resp.dragged_by(egui::PointerButton::Primary) {
+            if let Some(g) = self.gdrag.take()
+                && resp.dragged_by(egui::PointerButton::Primary) {
                     self.move_group(&g, p.x - g.anchor.x, p.y - g.anchor.y);
                     self.gdrag = Some(g);
                 }
-            }
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 {
-                if let Some(Item::Part(i)) = self.hit_test(w) {
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1
+                && let Some(Item::Part(i)) = self.hit_test(w) {
                     self.checkpoint();
                     let part = &self.board.parts[i];
                     self.drag_part = Some((part.refdes.clone(), Point::new(p.x - part.pos.x, p.y - part.pos.y)));
                     self.selected = Some(Item::Part(i));
                     self.multi.clear();
                 }
-            }
-            if let Some((r, off)) = self.drag_part.clone() {
-                if resp.dragged_by(egui::PointerButton::Primary) {
-                    if let Some(rot) = self.board.parts.iter().find(|q| q.refdes == r).map(|q| q.rot) {
+            if let Some((r, off)) = self.drag_part.clone()
+                && resp.dragged_by(egui::PointerButton::Primary)
+                    && let Some(rot) = self.board.parts.iter().find(|q| q.refdes == r).map(|q| q.rot) {
                         self.board.place_part(&r, Point::new(p.x - off.x, p.y - off.y), rot);
                     }
-                }
-            }
             if resp.clicked_by(egui::PointerButton::Primary) {
                 self.click(p);
             }
@@ -1024,11 +1015,10 @@ impl BoardEditor {
             }
         }
         // V while routing: run to the cursor, drop a via and continue on the other layer
-        if pressed(Key::V) && self.tool == Tool::Track {
-            if let (Some(a), Some(p)) = (self.pending, cursor) {
+        if pressed(Key::V) && self.tool == Tool::Track
+            && let (Some(a), Some(p)) = (self.pending, cursor) {
                 self.route_via(a, p);
             }
-        }
     }
 
     fn draw_grid(&self, painter: &egui::Painter, rect: Rect) {

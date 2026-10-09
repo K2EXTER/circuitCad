@@ -53,16 +53,14 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     }
     let mut warnings = floating_warnings(circuit);
     for e in &circuit.elements {
-        if let crate::Element::VSource { name, wave, .. } | crate::Element::ISource { name, wave, .. } = e {
-            if let Some(ts) = wave.noise_period() {
-                if s.tstep > ts / 3.0 {
+        if let crate::Element::VSource { name, wave, .. } | crate::Element::ISource { name, wave, .. } = e
+            && let Some(ts) = wave.noise_period()
+                && s.tstep > ts / 3.0 {
                     warnings.push(format!(
                         "{name}: ノイズの最高周波数に対して時間刻みが粗すぎます (刻みは {:.3e} 秒以下を推奨)",
                         ts / 3.0
                     ));
                 }
-            }
-        }
     }
     let cm = compile(circuit);
 

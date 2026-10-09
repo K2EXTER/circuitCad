@@ -304,82 +304,6 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn track(side: Side, a: (f64, f64), b: (f64, f64), w: f64) -> Track {
-        Track { side, a: Point::new(a.0, a.1), b: Point::new(b.0, b.1), width: w }
-    }
-
-    fn board() -> Board {
-        Board::new("t", 40.0, 40.0)
-    }
-
-    #[test]
-    fn parallel_tracks_too_close() {
-        let mut b = board();
-        // gap = 0.35 - 0.25 = 0.10 < 0.15
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Top, (10.0, 10.35), (20.0, 10.35), 0.25));
-        assert_eq!(clearance(&b).len(), 1);
-    }
-
-    #[test]
-    fn parallel_tracks_far_enough() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Top, (10.0, 10.5), (20.0, 10.5), 0.25)); // gap 0.25
-        assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn different_layers_do_not_interact() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Bottom, (10.0, 10.1), (20.0, 10.1), 0.25));
-        assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn touching_items_are_one_net() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
-        b.tracks.push(track(Side::Top, (20.0, 10.0), (20.0, 20.0), 0.25));
-        assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn via_joins_layers_so_crossing_other_net_is_flagged() {
-        let mut b = board();
-        // top track A -> via -> bottom track A'; bottom track B passes 0.05 from the via ring
-        b.tracks.push(track(Side::Top, (10.0, 10.0), (15.0, 10.0), 0.25));
-        b.vias.push(Via { pos: Point::new(15.0, 10.0), diameter: 0.6, drill: 0.3 });
-        b.tracks.push(track(Side::Bottom, (15.0, 10.0), (15.0, 20.0), 0.25));
-        b.tracks.push(track(Side::Bottom, (15.45, 5.0), (15.45, 12.0), 0.2));
-        // gap between via edge (x=15.3) and B edge (x=15.35) is 0.05
-        assert_eq!(clearance(&b).len(), 1);
-    }
-
-    #[test]
-    fn rect_pad_to_track() {
-        let mut b = board();
-        b.pads.push(Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
-        // pad edge x=10.5, track edge x=10.6 -> 0.1
-        b.tracks.push(track(Side::Top, (10.725, 5.0), (10.725, 15.0), 0.25));
-        assert_eq!(clearance(&b).len(), 1);
-        b.tracks[0] = track(Side::Top, (10.85, 5.0), (10.85, 15.0), 0.25); // gap 0.225
-        assert!(clearance(&b).is_empty());
-    }
-
-    #[test]
-    fn copper_near_board_edge() {
-        let mut b = board();
-        b.tracks.push(track(Side::Top, (0.3, 10.0), (0.3, 20.0), 0.25)); // edge gap ~0.175 < 0.3
-        assert_eq!(clearance(&b).len(), 1);
-    }
-}
-
 /// Electrical grouping of all copper: touching items and zone-connected items share a group.
 pub struct Connectivity {
     /// Group id of every copper item in the order tracks, pads, vias.
@@ -495,4 +419,80 @@ pub fn shorts(board: &Board) -> Vec<Violation> {
         .filter(|(nets, _)| nets.len() > 1)
         .map(|(nets, at)| v(format!("ネット短絡: {}", nets.join(" と ")), at))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track(side: Side, a: (f64, f64), b: (f64, f64), w: f64) -> Track {
+        Track { side, a: Point::new(a.0, a.1), b: Point::new(b.0, b.1), width: w }
+    }
+
+    fn board() -> Board {
+        Board::new("t", 40.0, 40.0)
+    }
+
+    #[test]
+    fn parallel_tracks_too_close() {
+        let mut b = board();
+        // gap = 0.35 - 0.25 = 0.10 < 0.15
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (10.0, 10.35), (20.0, 10.35), 0.25));
+        assert_eq!(clearance(&b).len(), 1);
+    }
+
+    #[test]
+    fn parallel_tracks_far_enough() {
+        let mut b = board();
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (10.0, 10.5), (20.0, 10.5), 0.25)); // gap 0.25
+        assert!(clearance(&b).is_empty());
+    }
+
+    #[test]
+    fn different_layers_do_not_interact() {
+        let mut b = board();
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Bottom, (10.0, 10.1), (20.0, 10.1), 0.25));
+        assert!(clearance(&b).is_empty());
+    }
+
+    #[test]
+    fn touching_items_are_one_net() {
+        let mut b = board();
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (20.0, 10.0), (20.0, 20.0), 0.25));
+        assert!(clearance(&b).is_empty());
+    }
+
+    #[test]
+    fn via_joins_layers_so_crossing_other_net_is_flagged() {
+        let mut b = board();
+        // top track A -> via -> bottom track A'; bottom track B passes 0.05 from the via ring
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (15.0, 10.0), 0.25));
+        b.vias.push(Via { pos: Point::new(15.0, 10.0), diameter: 0.6, drill: 0.3 });
+        b.tracks.push(track(Side::Bottom, (15.0, 10.0), (15.0, 20.0), 0.25));
+        b.tracks.push(track(Side::Bottom, (15.45, 5.0), (15.45, 12.0), 0.2));
+        // gap between via edge (x=15.3) and B edge (x=15.35) is 0.05
+        assert_eq!(clearance(&b).len(), 1);
+    }
+
+    #[test]
+    fn rect_pad_to_track() {
+        let mut b = board();
+        b.pads.push(Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
+        // pad edge x=10.5, track edge x=10.6 -> 0.1
+        b.tracks.push(track(Side::Top, (10.725, 5.0), (10.725, 15.0), 0.25));
+        assert_eq!(clearance(&b).len(), 1);
+        b.tracks[0] = track(Side::Top, (10.85, 5.0), (10.85, 15.0), 0.25); // gap 0.225
+        assert!(clearance(&b).is_empty());
+    }
+
+    #[test]
+    fn copper_near_board_edge() {
+        let mut b = board();
+        b.tracks.push(track(Side::Top, (0.3, 10.0), (0.3, 20.0), 0.25)); // edge gap ~0.175 < 0.3
+        assert_eq!(clearance(&b).len(), 1);
+    }
 }
