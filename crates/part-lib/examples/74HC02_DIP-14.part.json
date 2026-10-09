@@ -1,0 +1,111 @@
+{
+  "name": "74HC02",
+  "category": "ロジックIC",
+  "description": "クワッド 2入力 NOR (DIP-14)。スイッチで作った簡易モデル (遅延なし)。入力のしきい値は電源の半分、2〜6V で動作",
+  "datasheet": "",
+  "prefix": "U",
+  "footprint_name": "DIP-14_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1Y",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "1A",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "1B",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "2Y",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "2A",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "2B",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "8",
+      "name": "3A",
+      "side": "left"
+    },
+    {
+      "number": "9",
+      "name": "3B",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "3Y",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "4A",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "4B",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "4Y",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 14,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC02",
+    "text": "* 74HC02 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC02 y1 a1 b1 y2 a2 b2 gnd a3 b3 y3 a4 b4 y4 vcc\nRh1 vcc hv 100k\nRh2 hv gnd 100k\nS1 vcc p1 hv a1 SWPS\nS2 p1 y1 hv b1 SWPS\nS3 y1 gnd a1 hv SWNA\nS4 y1 gnd b1 hv SWNA\nS5 vcc p2 hv a2 SWPS\nS6 p2 y2 hv b2 SWPS\nS7 y2 gnd a2 hv SWNA\nS8 y2 gnd b2 hv SWNA\nS9 vcc p3 hv a3 SWPS\nS10 p3 y3 hv b3 SWPS\nS11 y3 gnd a3 hv SWNA\nS12 y3 gnd b3 hv SWNA\nS13 vcc p4 hv a4 SWPS\nS14 p4 y4 hv b4 SWPS\nS15 y4 gnd a4 hv SWNA\nS16 y4 gnd b4 hv SWNA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC02",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14"
+    ],
+    "params": {}
+  }
+}

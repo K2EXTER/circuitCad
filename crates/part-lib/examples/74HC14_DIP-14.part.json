@@ -1,0 +1,111 @@
+{
+  "name": "74HC14",
+  "category": "ロジックIC",
+  "description": "ヘックス・シュミットトリガ・インバータ (DIP-14)。入力にヒステリシスがあり、立上り 0.6Vcc・立下り 0.4Vcc で切り替わります。ゆっくり変わる信号やノイズの整形に",
+  "datasheet": "",
+  "prefix": "U",
+  "footprint_name": "DIP-14_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1A",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "1Y",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "2A",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "2Y",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "3A",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "3Y",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "8",
+      "name": "4Y",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "4A",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "5Y",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "5A",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "6Y",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "6A",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 14,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC14",
+    "text": "* 74HC14 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC14 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nR1 vcc r1 200k\nR2 r1 gnd 200k\nR3 r1 y1 400k\nS4 vcc y1 r1 a1 SWPA\nS5 y1 gnd a1 r1 SWNA\nR6 vcc r2 200k\nR7 r2 gnd 200k\nR8 r2 y2 400k\nS9 vcc y2 r2 a2 SWPA\nS10 y2 gnd a2 r2 SWNA\nR11 vcc r3 200k\nR12 r3 gnd 200k\nR13 r3 y3 400k\nS14 vcc y3 r3 a3 SWPA\nS15 y3 gnd a3 r3 SWNA\nR16 vcc r4 200k\nR17 r4 gnd 200k\nR18 r4 y4 400k\nS19 vcc y4 r4 a4 SWPA\nS20 y4 gnd a4 r4 SWNA\nR21 vcc r5 200k\nR22 r5 gnd 200k\nR23 r5 y5 400k\nS24 vcc y5 r5 a5 SWPA\nS25 y5 gnd a5 r5 SWNA\nR26 vcc r6 200k\nR27 r6 gnd 200k\nR28 r6 y6 400k\nS29 vcc y6 r6 a6 SWPA\nS30 y6 gnd a6 r6 SWNA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC14",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14"
+    ],
+    "params": {}
+  }
+}

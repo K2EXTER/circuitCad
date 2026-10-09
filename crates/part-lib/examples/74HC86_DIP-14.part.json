@@ -1,0 +1,111 @@
+{
+  "name": "74HC86",
+  "category": "ロジックIC",
+  "description": "クワッド 2入力 XOR (排他的論理和) (DIP-14)。スイッチで作った簡易モデル (遅延なし)。入力のしきい値は電源の半分、2〜6V で動作",
+  "datasheet": "",
+  "prefix": "U",
+  "footprint_name": "DIP-14_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1A",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "1B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "1Y",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "2A",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "2B",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "2Y",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "8",
+      "name": "3Y",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "3A",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "3B",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "4Y",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "4A",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "4B",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 14,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC86",
+    "text": "* 74HC86 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC86 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nRh1 vcc hv 100k\nRh2 hv gnd 100k\nS1 vcc g1 hv a1 SWPA\nS2 vcc g1 hv b1 SWPA\nS3 g1 q4 a1 hv SWNS\nS4 q4 gnd b1 hv SWNS\nS5 vcc g2 hv a1 SWPA\nS6 vcc g2 hv g1 SWPA\nS7 g2 q5 a1 hv SWNS\nS8 q5 gnd g1 hv SWNS\nS9 vcc g3 hv b1 SWPA\nS10 vcc g3 hv g1 SWPA\nS11 g3 q6 b1 hv SWNS\nS12 q6 gnd g1 hv SWNS\nS13 vcc y1 hv g2 SWPA\nS14 vcc y1 hv g3 SWPA\nS15 y1 q7 g2 hv SWNS\nS16 q7 gnd g3 hv SWNS\nS17 vcc g8 hv a2 SWPA\nS18 vcc g8 hv b2 SWPA\nS19 g8 q11 a2 hv SWNS\nS20 q11 gnd b2 hv SWNS\nS21 vcc g9 hv a2 SWPA\nS22 vcc g9 hv g8 SWPA\nS23 g9 q12 a2 hv SWNS\nS24 q12 gnd g8 hv SWNS\nS25 vcc g10 hv b2 SWPA\nS26 vcc g10 hv g8 SWPA\nS27 g10 q13 b2 hv SWNS\nS28 q13 gnd g8 hv SWNS\nS29 vcc y2 hv g9 SWPA\nS30 vcc y2 hv g10 SWPA\nS31 y2 q14 g9 hv SWNS\nS32 q14 gnd g10 hv SWNS\nS33 vcc g15 hv a3 SWPA\nS34 vcc g15 hv b3 SWPA\nS35 g15 q18 a3 hv SWNS\nS36 q18 gnd b3 hv SWNS\nS37 vcc g16 hv a3 SWPA\nS38 vcc g16 hv g15 SWPA\nS39 g16 q19 a3 hv SWNS\nS40 q19 gnd g15 hv SWNS\nS41 vcc g17 hv b3 SWPA\nS42 vcc g17 hv g15 SWPA\nS43 g17 q20 b3 hv SWNS\nS44 q20 gnd g15 hv SWNS\nS45 vcc y3 hv g16 SWPA\nS46 vcc y3 hv g17 SWPA\nS47 y3 q21 g16 hv SWNS\nS48 q21 gnd g17 hv SWNS\nS49 vcc g22 hv a4 SWPA\nS50 vcc g22 hv b4 SWPA\nS51 g22 q25 a4 hv SWNS\nS52 q25 gnd b4 hv SWNS\nS53 vcc g23 hv a4 SWPA\nS54 vcc g23 hv g22 SWPA\nS55 g23 q26 a4 hv SWNS\nS56 q26 gnd g22 hv SWNS\nS57 vcc g24 hv b4 SWPA\nS58 vcc g24 hv g22 SWPA\nS59 g24 q27 b4 hv SWNS\nS60 q27 gnd g22 hv SWNS\nS61 vcc y4 hv g23 SWPA\nS62 vcc y4 hv g24 SWPA\nS63 y4 q28 g23 hv SWNS\nS64 q28 gnd g24 hv SWNS\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC86",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14"
+    ],
+    "params": {}
+  }
+}

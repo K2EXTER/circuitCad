@@ -35,6 +35,8 @@ mod tests_blinker;
 #[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]
+mod tests_logic;
+#[cfg(test)]
 mod tests_mos;
 #[cfg(test)]
 mod tests_parts;
