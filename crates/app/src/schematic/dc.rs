@@ -41,7 +41,11 @@ impl SchEditor {
     pub(super) fn run_dc(&mut self) {
         let outcome = match self.sim_circuit() {
             Err(errs) => Err(errs),
-            Ok(c) => dc_op(&c).map_err(|e| vec![e.to_string()]),
+            Ok(c) => dc_op(&c).map_err(|e| {
+                let mut msgs = vec![e.to_string()];
+                msgs.extend(diagnose(&c, &e).into_iter().map(|h| format!("ヒント: {h}")));
+                msgs
+            }),
         };
         let mut pin_v = vec![];
         if let Ok(res) = &outcome {
