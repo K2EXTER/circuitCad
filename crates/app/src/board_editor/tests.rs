@@ -230,3 +230,74 @@ fn pads_on_a_hidden_side_cannot_be_picked() {
     e.vis.bottom = false;
     assert!(e.hit_test(on_pad).is_none());
 }
+
+mod order_flow {
+    use super::*;
+    use pcb_core::fab::{self, Level};
+
+    fn routed_editor() -> BoardEditor {
+        let mut e = BoardEditor::default();
+        e.board = Board::new("demo", 30.0, 20.0);
+        for (x, name) in [(5.0, "A"), (25.0, "A")] {
+            let mut p = Pad::new(Point::new(x, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+            p.net = name.into();
+            e.board.pads.push(p);
+        }
+        e.board.tracks.push(Track { side: Side::Top, a: Point::new(5.0, 10.0), b: Point::new(25.0, 10.0), width: 0.25 });
+        e
+    }
+
+    #[test]
+    fn opening_the_window_runs_the_checks_and_a_finished_board_is_ready() {
+        let mut e = routed_editor();
+        e.open_order();
+        assert!(e.order.open && e.order.ran);
+        assert!(fab::ready(&e.order.checks), "{:?}", e.order.checks.iter().map(|c| &c.title).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn choosing_a_fab_and_applying_it_changes_the_rules_and_drawing_defaults() {
+        let mut e = routed_editor();
+        e.order.fab_id = "oshpark".into();
+        let f = e.selected_fab().unwrap();
+        e.apply_fab(f);
+        assert!((e.board.rules.min_drill - 0.254).abs() < 1e-9);
+        assert!((e.board.rules.edge_clearance - 0.381).abs() < 1e-9);
+        assert!((e.via_drill - f.via_drill).abs() < 1e-9);
+        e.undo();
+        assert!((e.board.rules.min_drill - 0.3).abs() < 1e-9, "one undo restores the rules");
+        // an unrouted board blocks the order
+        e.board.tracks.clear();
+        e.run_checks();
+        assert!(e.order.checks.iter().any(|c| c.level == Level::Error && c.title.contains("未配線")));
+    }
+
+    #[test]
+    fn the_preview_is_built_from_the_exported_files() {
+        let mut e = routed_editor();
+        let ctx = egui::Context::default();
+        e.build_preview(&ctx).expect("preview");
+        let pv = e.order.preview.as_ref().unwrap();
+        assert_eq!(pv.drills.len(), 0, "no holes on this board");
+        assert!((pv.size_mm.0 - 30.0).abs() < 1e-6);
+        e.order.preview.as_mut().unwrap().bottom = true;
+        e.repaint_preview(&ctx);
+    }
+}
+
+#[test]
+fn shipped_example_boards_can_be_previewed() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut n = 0;
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        if entry.path().extension().is_some_and(|x| x == "pcbjson") {
+            let board: Board = serde_json::from_str(&std::fs::read_to_string(entry.path()).unwrap()).unwrap();
+            let pv = pcb_core::gerber_view::Preview::from_files(&export::fab_files(&board), 800).unwrap_or_else(|e| panic!("{}: {e}", entry.path().display()));
+            assert!(pv.size_mm.0 > 5.0, "{}", entry.path().display());
+            let checks = pcb_core::fab::preflight(&board, pcb_core::fab::preset("jlcpcb"));
+            assert!(!checks.is_empty());
+            n += 1;
+        }
+    }
+    assert!(n >= 1, "no example boards found");
+}

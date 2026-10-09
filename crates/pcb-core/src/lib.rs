@@ -6,9 +6,11 @@ pub mod autoroute;
 pub mod drc;
 pub mod excellon;
 pub mod export;
+pub mod fab;
 pub mod footprints;
 pub mod geom;
 pub mod gerber;
+pub mod gerber_view;
 pub mod model;
 pub mod netlist;
 pub mod package;
@@ -18,6 +20,10 @@ pub mod strokefont;
 
 #[cfg(test)]
 mod tests_autoroute;
+#[cfg(test)]
+mod tests_order;
+#[cfg(test)]
+mod tests_preview;
 #[cfg(test)]
 mod tests_bottom;
 #[cfg(test)]

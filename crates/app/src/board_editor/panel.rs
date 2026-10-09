@@ -16,7 +16,7 @@ impl BoardEditor {
             return format!("黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールで手でつなぐか、左の「自動配線」に任せましょう。広い GND は「銅箔ゾーン」にすると簡単です");
         }
         if self.violations.is_empty() {
-            return "配線が終わりました。「DRC を実行」でルール違反がないか確認し、問題なければ「ファイル → 製造ファイルを書き出し」で発注用データ (ガーバー) を作れます".into();
+            return "配線が終わりました。「DRC を実行」でルール違反がないか確認し、問題なければ「発注の準備」で最終チェックをして、発注用データ (ガーバー) を作れます".into();
         }
         "DRC の指摘は、クリックするとその場所に飛びます。直したらもう一度 DRC を実行しましょう。0 件になれば発注データを書き出せます".into()
     }
@@ -121,6 +121,10 @@ impl BoardEditor {
             ui.label("基板名 (出力ファイル名)");
             ui.text_edit_singleline(&mut self.board.name);
 
+            ui.separator();
+            if ui.button("発注の準備…").on_hover_text("発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します").clicked() {
+                self.open_order();
+            }
             ui.separator();
             ui.label("自動配線");
             ui.horizontal(|ui| {

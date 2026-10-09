@@ -61,7 +61,10 @@ impl BoardEditor {
         }
         let Some(dir) = rfd::FileDialog::new().set_title("製造ファイルの出力先フォルダ").pick_folder() else { return };
         self.status = match self.write_fab_files(&dir) {
-            Ok(n) => format!("書き出し完了: {} ({} ファイル + zip)", dir.display(), n),
+            Ok(n) => {
+                self.last_export_dir = Some(dir.clone());
+                format!("書き出し完了: {} ({} ファイル + zip)", dir.display(), n)
+            }
             Err(e) => format!("書き出し失敗: {e}"),
         };
     }

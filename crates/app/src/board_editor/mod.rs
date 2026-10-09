@@ -165,6 +165,10 @@ pub struct BoardEditor {
     size_w: f64,
     size_h: f64,
     fit_pending: bool,
+    /// The "発注の準備" window.
+    order: order::OrderState,
+    order_preview_src: Option<pcb_core::gerber_view::Preview>,
+    last_export_dir: Option<PathBuf>,
 }
 
 impl Default for BoardEditor {
@@ -204,6 +208,9 @@ impl Default for BoardEditor {
             size_w: 50.0,
             size_h: 40.0,
             fit_pending: true,
+            order: order::OrderState::default(),
+            order_preview_src: None,
+            last_export_dir: None,
         }
     }
 }
@@ -237,6 +244,7 @@ mod actions;
 mod canvas;
 mod interact;
 mod draw;
+mod order;
 mod panel;
 #[cfg(test)]
 mod tests;

@@ -70,8 +70,9 @@ impl eframe::App for App {
                     }
                     if !sch_mode {
                         ui.separator();
-                        if ui.button("製造ファイルを書き出し (Gerber / ドリル / BOM / 部品配置)…").clicked() {
-                            self.board_ed.export();
+                        if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").clicked() {
+                            self.board_ed.open_order();
+                            ui.close();
                         }
                     }
                 });
@@ -120,6 +121,7 @@ impl eframe::App for App {
             self.sch.lesson_window(ui.ctx());
             return;
         }
+        self.board_ed.order_window(ui.ctx());
         egui::Panel::left("board_tools").min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
         egui::CentralPanel::default().show(ui, |ui| self.board_ed.canvas(ui));
     }
