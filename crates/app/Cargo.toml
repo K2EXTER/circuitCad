@@ -2,6 +2,9 @@
 name = "app"
 version = "0.1.0"
 edition = "2024"
+description = "circuitCad: 回路図・SPICEシミュレーション・基板設計・製造データ出力を1本で行う、学習向けの回路CAD"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tetoranatti/circuitCad"
 
 [[bin]]
 name = "circuitCad"

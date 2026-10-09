@@ -2,6 +2,9 @@
 name = "pcb-core"
 version = "0.1.0"
 edition = "2024"
+description = "circuitCad: 基板データ、DRC、自動配線、Gerber/Excellon出力"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/tetoranatti/circuitCad"
 
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
