@@ -45,7 +45,7 @@ impl SchEditor {
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります");
+            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります / クリック: 測定カーソル A→B / ダブルクリック: 全体表示・カーソル解除");
         });
         let AcView { outcome, selected, plot: st, .. } = view;
         match outcome {
@@ -64,6 +64,16 @@ impl SchEditor {
                         ui.set_width(170.0);
                         if ui.button("選択をクリア").clicked() {
                             selected.clear();
+                        }
+                        for name in order.iter().filter(|n| selected.contains(**n)).take(4) {
+                            if let Some(sg) = res.signal(name).filter(|s| s.unit == "V") {
+                                let txt = match minus_3db(&res.freq, &sg.mag()) {
+                                    Some(f) => eng(f, "Hz"),
+                                    None => "範囲内にありません".into(),
+                                };
+                                ui.small(format!("{name}
+  -3dB点 {txt}")).on_hover_text("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります");
+                            }
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {

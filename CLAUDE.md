@@ -29,6 +29,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `temperature.rs` 温度 (`Circuit::at_temperature` がモデルを書き換える、`temp_sweep`) / `montecarlo.rs` 許容差ばらつき解析 (`monte_carlo`、感度つき。測る量は `McMeasure`: DC電圧 / ACの-3dBカットオフ / 過渡のステップ応答指標)
 - `stepmetrics.rs` ステップ応答の指標 `step_metrics` (立ち上がり・行き過ぎ・整定、波形ビューアと `McMeasure::Tran` が使う)
 - `options.rs` 計算精度の設定 `SimOptions`(reltol/vntol/abstol/gmin/反復上限、スレッドごと。GUIの「設定」メニューが毎フレーム `set_options`) / `diagnose.rs` 解析失敗時の原因と直し方(日本語ヒント)
+- `measure.rs` 波形の自動測定 `wave_measure`(最小/最大/p-p/周波数/デューティ)。ACの-3dB点は `montecarlo.rs` の `minus_3db`
 - `paramsweep.rs` パラメータスイープ(部品1つの値を振って過渡/ACを繰り返す、`param_sweep`) 
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
@@ -41,7 +42,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `export.rs` 製造一式 (zip) / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・部品配置CSV / `strokefont.rs` シルク文字
 
 ## app (`crates/app/src`)
-`main.rs` ウィンドウ・メニュー・`TIPS`(豆知識)・引数処理・統合テスト。`plot.rs` 波形描画、`part_form.rs` 部品作成フォーム、`source_form.rs` 電源値フォーム。
+`plot.rs` の `PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。`main.rs` ウィンドウ・メニュー・`TIPS`(豆知識)・引数処理・統合テスト。`plot.rs` 波形描画、`part_form.rs` 部品作成フォーム、`source_form.rs` 電源値フォーム。
 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
 

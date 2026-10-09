@@ -43,7 +43,7 @@ impl SchEditor {
             outcome,
             selected,
             show_diag: false,
-            plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2] },
+            plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2] },
             temp: true,
         });
         self.wave_mode = WaveMode::Sweep;

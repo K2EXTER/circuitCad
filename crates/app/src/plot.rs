@@ -19,15 +19,17 @@ pub struct PlotState {
     /// One y range per group (voltage, current / magnitude, phase).
     pub y: [(f64, f64); 2],
     pub auto_y: [bool; 2],
+    /// Measurement cursors A and B (x positions, shared by every group of the viewer).
+    pub cursors: [Option<f64>; 2],
 }
 
 impl PlotState {
     pub fn new(tstop: f64) -> Self {
-        Self { x: (0.0, tstop), full_x: (0.0, tstop), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2] }
+        Self { x: (0.0, tstop), full_x: (0.0, tstop), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2] }
     }
 
     pub fn log(f0: f64, f1: f64) -> Self {
-        Self { x: (f0, f1), full_x: (f0, f1), log_x: true, y: [(-1.0, 1.0); 2], auto_y: [true; 2] }
+        Self { x: (f0, f1), full_x: (f0, f1), log_x: true, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2] }
     }
 }
 
@@ -94,6 +96,72 @@ pub fn nice_ticks(lo: f64, hi: f64, target: usize) -> (Vec<f64>, f64) {
         t += step;
     }
     (v, step)
+}
+
+pub const CURSOR_COLORS: [Color32; 2] = [Color32::from_rgb(255, 235, 120), Color32::from_rgb(120, 235, 255)];
+
+/// A click puts cursor A, then B; after that it moves whichever cursor is nearer (on the axis the plot uses).
+fn place_cursor(c: &mut [Option<f64>; 2], t: f64, log: bool) {
+    let ax = |x: f64| if log { x.max(1e-300).log10() } else { x };
+    match (c[0], c[1]) {
+        (None, _) => c[0] = Some(t),
+        (_, None) => c[1] = Some(t),
+        (Some(a), Some(b)) => {
+            if (ax(t) - ax(a)).abs() <= (ax(t) - ax(b)).abs() {
+                c[0] = Some(t)
+            } else {
+                c[1] = Some(t)
+            }
+        }
+    }
+}
+
+/// Text lines for the cursor box: positions, their difference, and every trace at both cursors.
+/// The first element says which trace (by index) a line belongs to, for its colour.
+pub fn cursor_report(traces: &[Trace], c: &[Option<f64>; 2], style: &Style, log: bool) -> Vec<(Option<usize>, String)> {
+    let mut out = vec![];
+    if c[0].is_none() && c[1].is_none() {
+        return out;
+    }
+    let xs = |t: f64| format!("{}{}", axis_label(t, t.abs() / 100.0), style.x_unit);
+    let ys = |v: f64, step: f64| format!("{}{}", if style.plain_y { plain_label(v, step) } else { axis_label(v, step) }, style.unit);
+    for (k, name) in ["A", "B"].iter().enumerate() {
+        if let Some(t) = c[k] {
+            out.push((None, format!("{name}: {} = {}", style.x_name, xs(t))));
+        }
+    }
+    if let (Some(a), Some(b)) = (c[0], c[1]) {
+        if log {
+            if a > 0.0 && b > 0.0 {
+                out.push((None, format!("B/A = {:.3} 倍 ({:.2} オクターブ)", b / a, (b / a).log2())));
+            }
+        } else {
+            let d = b - a;
+            let mut l = format!("Δ{} = {}", style.x_name, xs(d));
+            if d != 0.0 && style.x_unit == "s" {
+                l += &format!("  (1/Δ{} = {})", style.x_name, format!("{}Hz", axis_label(1.0 / d.abs(), 1.0 / d.abs() / 100.0)));
+            }
+            out.push((None, l));
+        }
+    }
+    for (i, tr) in traces.iter().enumerate() {
+        let (va, vb) = (c[0].and_then(|t| interp(tr.t, tr.v, t)), c[1].and_then(|t| interp(tr.t, tr.v, t)));
+        let step = |v: f64| v.abs() / 100.0;
+        let mut l = tr.name.to_string();
+        if let Some(v) = va {
+            l += &format!("  A={}", ys(v, step(v)));
+        }
+        if let Some(v) = vb {
+            l += &format!("  B={}", ys(v, step(v)));
+        }
+        if let (Some(a), Some(b)) = (va, vb) {
+            l += &format!("  Δ={}", ys(b - a, step(b - a)));
+        }
+        if va.is_some() || vb.is_some() {
+            out.push((Some(i), l));
+        }
+    }
+    out
 }
 
 fn interp(t: &[f64], v: &[f64], x: f64) -> Option<f64> {
@@ -184,6 +252,13 @@ pub fn draw_group(
     if resp.double_clicked() {
         st.x = st.full_x;
         st.auto_y[group] = true;
+        st.cursors = [None; 2];
+    } else if resp.clicked()
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let (a0, a1) = (to_ax(st.x.0), to_ax(st.x.1));
+        let t = from_ax(a0 + (p.x - pa.left()) as f64 / w * (a1 - a0));
+        place_cursor(&mut st.cursors, t, log);
     }
 
     let (x0, x1) = st.x;
@@ -280,6 +355,35 @@ pub fn draw_group(
         }
     }
 
+    // measurement cursors
+    for (k, c) in st.cursors.iter().enumerate() {
+        let Some(t) = *c else { continue };
+        if t < x0 || t > x1 {
+            continue;
+        }
+        let col = CURSOR_COLORS[k];
+        let x = sx(t);
+        clip.line_segment([Pos2::new(x, pa.top()), Pos2::new(x, pa.bottom())], Stroke::new(1.5, col));
+        clip.text(Pos2::new(x + 3.0, pa.bottom() - 3.0), Align2::LEFT_BOTTOM, if k == 0 { "A" } else { "B" }, FontId::proportional(12.0), col);
+        for tr in traces {
+            if let Some(v) = interp(tr.t, tr.v, t) {
+                clip.circle_stroke(Pos2::new(x, sy(v)), 4.0, Stroke::new(1.5, tr.color));
+            }
+        }
+    }
+    let report = cursor_report(traces, &st.cursors, style, log);
+    if !report.is_empty() {
+        let mut y = pa.top() + 4.0;
+        let width = report.iter().map(|(_, l)| l.chars().count()).max().unwrap_or(0) as f32 * 6.4 + 12.0;
+        let boxr = Rect::from_min_size(Pos2::new(pa.right() - width - 4.0, y - 2.0), egui::vec2(width, report.len() as f32 * 14.0 + 4.0));
+        clip.rect_filled(boxr, 3.0, Color32::from_rgba_unmultiplied(10, 12, 10, 215));
+        for (who, line) in &report {
+            let col = who.map_or(Color32::from_gray(225), |i| traces[i].color);
+            clip.text(Pos2::new(pa.right() - 10.0, y), Align2::RIGHT_TOP, line, label.clone(), col);
+            y += 14.0;
+        }
+    }
+
     // readout
     if let Some(p) = resp.hover_pos() {
         let t = from_ax(a0 + (p.x - pa.left()) as f64 / w * (a1 - a0));
@@ -331,6 +435,36 @@ mod tests {
         assert_eq!(plain_label(2.5, 0.5), "2.5");
         assert_eq!(plain_label(-135.0, 45.0), "-135");
         assert_eq!(plain_label(0.0, 10.0), "0");
+    }
+
+    #[test]
+    fn cursors_fill_a_then_b_then_move_the_nearer() {
+        let mut c = [None; 2];
+        place_cursor(&mut c, 1.0, false);
+        place_cursor(&mut c, 5.0, false);
+        assert_eq!(c, [Some(1.0), Some(5.0)]);
+        place_cursor(&mut c, 4.0, false);
+        assert_eq!(c, [Some(1.0), Some(4.0)]);
+        place_cursor(&mut c, 0.0, false);
+        assert_eq!(c, [Some(0.0), Some(4.0)]);
+        // on a log axis 100 is nearer to 10 than to 10000 in decades
+        let mut l = [Some(10.0), Some(10000.0)];
+        place_cursor(&mut l, 100.0, true);
+        assert_eq!(l, [Some(100.0), Some(10000.0)]);
+    }
+
+    #[test]
+    fn cursor_report_gives_differences_and_period() {
+        let (t, v) = ([0.0, 1e-3, 2e-3], [0.0, 1.0, 3.0]);
+        let tr = [Trace { name: "V(out)", color: Color32::WHITE, t: &t, v: &v }];
+        let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
+        assert!(cursor_report(&tr, &[None, None], &style, false).is_empty());
+        let r = cursor_report(&tr, &[Some(0.0), Some(2e-3)], &style, false);
+        let text: Vec<&str> = r.iter().map(|(_, l)| l.as_str()).collect();
+        assert!(text.iter().any(|l| l.starts_with("Δt = 2.0") && l.contains("500Hz")), "{text:?}");
+        assert!(text.iter().any(|l| l.contains("A=0") && l.contains("B=3") && l.contains("Δ=3")), "{text:?}");
+        let f = cursor_report(&tr, &[Some(100.0), Some(200.0)], &Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true }, true);
+        assert!(f.iter().any(|(_, l)| l.contains("2.000 倍") && l.contains("1.00 オクターブ")));
     }
 
     #[test]

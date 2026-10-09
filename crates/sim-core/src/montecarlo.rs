@@ -137,7 +137,7 @@ fn scale(e: &mut Element, f: f64) {
 
 /// The frequency where the gain has dropped 3 dB from its peak, found by log-frequency
 /// interpolation. `None` when the gain never crosses that level inside the sweep.
-fn minus_3db(freq: &[f64], mag: &[f64]) -> Option<f64> {
+pub fn minus_3db(freq: &[f64], mag: &[f64]) -> Option<f64> {
     let peak = (0..mag.len()).max_by(|&a, &b| mag[a].total_cmp(&mag[b]))?;
     if mag[peak] <= 0.0 {
         return None;

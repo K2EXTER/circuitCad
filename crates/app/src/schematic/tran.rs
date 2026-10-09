@@ -70,7 +70,7 @@ impl SchEditor {
                 ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0));
                 ui.small("秒 / 0 dB = 1 V(ピーク値)。立ち上がり直後を除いた範囲を指定してください");
             } else {
-                ui.small("ドラッグ: 移動 / ホイール: 時間軸ズーム (Ctrl: 縦軸) / ダブルクリック: 全体表示 / 統計値は表示中の範囲");
+                ui.small("ドラッグ: 移動 / ホイール: 時間軸ズーム (Ctrl: 縦軸) / クリック: 測定カーソル A→B (2点の差と周期が出ます) / ダブルクリック: 全体表示・カーソル解除 / 統計値は表示中の範囲");
             }
         });
         match outcome {
@@ -101,6 +101,15 @@ impl SchEditor {
                                 && let Some(sx) = signal_stats(&res.time, &sg.values, w0, w1) {
                                     let u = sg.unit;
                                     ui.small(format!("{name}\n  平均 {}{u}  AC実効値 {}{u}", plot::axis_label(sx.mean, sx.mean.abs() / 1000.0), plot::axis_label(sx.rms_ac, sx.rms_ac.abs() / 1000.0)));
+                                    if let Some(m) = wave_measure(&res.time, &sg.values, w0, w1) {
+                                        ui.small(format!("  最小 {} / 最大 {} / 振幅(p-p) {}", eng(m.min, u), eng(m.max, u), eng(m.pp, u))).on_hover_text("表示中の範囲での値です。ズームすると、見ている部分だけの値になります");
+                                        if let Some(f) = m.freq {
+                                            ui.small(format!("  周波数 {}  周期 {}", eng(f, "Hz"), eng(1.0 / f, "s"))).on_hover_text("中間の高さを下から上へ横切る間隔から求めています。2周期以上が範囲に入っているときだけ表示されます");
+                                        }
+                                        if let Some(d) = m.duty {
+                                            ui.small(format!("  デューティ比 {:.1} %", d * 100.0)).on_hover_text("1周期のうち、中間の高さより上にいる時間の割合です");
+                                        }
+                                    }
                                 }
                         }
                         egui::CollapsingHeader::new("ステップ応答の指標").show(ui, |ui| {

@@ -4,7 +4,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec
 use crate::part_form::PartForm;
 use part_lib::PartDef;
 use crate::plot::{self, PlotState, Style, Trace, PALETTE};
-use sim_core::{diagnose, 
+use sim_core::{diagnose, minus_3db, wave_measure, 
     ac_analysis, dc_sweep, describe_source, inverter_metrics, noise_analysis, DcSweepResult, DcSweepSettings, DcSweepSignal, NoiseKind, NoiseResult, NoiseSettings, dc_op, from_schematic, format_value, monte_carlo, temp_sweep, Circuit, step_metrics, McMeasure, McResult, McSettings, TranMetric, T_NOM_C, parse_value, spectrum as fft_spectrum, stats as signal_stats, transient, AcResult, AcSettings, AcSweep, DcResult, Spectrum,
     TranResult, TranSettings,
 };
