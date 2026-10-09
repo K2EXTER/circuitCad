@@ -98,7 +98,7 @@ impl BoardEditor {
         let done = l.done.clone();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {TITLE}")).default_width(360.0).anchor(egui::Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
+        egui::Window::new(format!("レッスン: {TITLE}")).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
             ui.label("回路図で描いた回路を、基板のパターンにして、発注用のデータを作るところまでを一通り体験します");
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();

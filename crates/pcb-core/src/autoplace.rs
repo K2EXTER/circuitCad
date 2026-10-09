@@ -4,7 +4,9 @@
 use crate::*;
 
 /// Clear space kept around every part's pads (mm), on top of the DRC clearance.
-const GAP: f64 = 1.2;
+const GAP: f64 = 1.6;
+/// Extra room above every part for its reference text (silkscreen), so labels do not run into the neighbours.
+const LABEL: f64 = 2.4;
 /// Space between the parts and the board edge (mm).
 const MARGIN: f64 = 3.0;
 
@@ -57,7 +59,7 @@ pub fn autoplace(board: &mut Board) -> Result<PlaceReport, String> {
     for part in board.parts.clone() {
         board.place_part(&part.refdes, Point::new(0.0, 0.0), part.rot);
         let Some((lo, hi)) = extent(board, &part.refdes) else { continue };
-        items.push((part.refdes, lo, hi.x - lo.x + GAP, hi.y - lo.y + GAP));
+        items.push((part.refdes, lo, hi.x - lo.x + GAP, hi.y - lo.y + GAP + LABEL));
     }
     // order: begin with the part that has the most pads, then always the one closest to those placed
     let degree = |r: &str| board.pads.iter().filter(|p| p.refdes == r && !p.net.is_empty()).count();
@@ -101,7 +103,7 @@ pub fn autoplace(board: &mut Board) -> Result<PlaceReport, String> {
         let (refdes, lo, ..) = &items[*i];
         let rot = board.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
         // the pad box starts GAP/2 inside its cell
-        board.place_part(refdes, Point::new(MARGIN + GAP / 2.0 + sx - lo.x, MARGIN + GAP / 2.0 + sy - lo.y), rot);
+        board.place_part(refdes, Point::new(MARGIN + GAP / 2.0 + sx - lo.x, MARGIN + GAP / 2.0 + LABEL + sy - lo.y), rot);
     }
     let (w, h) = (used_w + 2.0 * MARGIN, used_h + 2.0 * MARGIN);
     board.set_rect_outline(0.0, 0.0, w.ceil(), h.ceil());
