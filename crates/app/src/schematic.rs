@@ -84,6 +84,8 @@ pub struct SchEditor {
     multi: Vec<Sel>,
     boxsel: Option<BoxSel>,
     gdrag: Option<GroupDrag>,
+    /// A rotation asked for by the property panel, applied once the panel's borrow has ended.
+    rotate_req: Option<usize>,
     drag: Option<(usize, Pt)>,
     zoom: f32, // pixels per grid step
     pan: Vec2, // grid position at the screen centre
@@ -270,6 +272,7 @@ impl Default for SchEditor {
             multi: vec![],
             boxsel: None,
             gdrag: None,
+            rotate_req: None,
             drag: None,
             zoom: 22.0,
             pan: Vec2::new(10.0, 6.0),
@@ -384,15 +387,39 @@ fn extents(kind: Kind) -> (f32, f32, f32, f32) {
     }
 }
 
+fn sym_extents(sym: &CustomSymbol) -> (f32, f32, f32, f32) {
+    let l = sym.layout();
+    let (w, h) = ((l.hw + 2) as f32, (l.hh + 2) as f32);
+    (-w, w, -h, h)
+}
+
 fn comp_extents(c: &Component) -> (f32, f32, f32, f32) {
     match &c.custom {
-        Some(sym) => {
-            let l = sym.layout();
-            let (w, h) = ((l.hw + 2) as f32, (l.hh + 2) as f32);
-            (-w, w, -h, h)
-        }
+        Some(sym) => sym_extents(sym),
         None => extents(c.kind),
     }
+}
+
+const OVERLAP_MSG: &str = "部品が重なるので、そこには置けません";
+
+/// The area a part occupies on the sheet (xmin, xmax, ymin, ymax) after rotation. Ground and
+/// power symbols have none: they are meant to sit on a pin or wire next to a part.
+fn sheet_box(kind: Kind, ext: (f32, f32, f32, f32), pos: Pt, rot: u8) -> Option<(f32, f32, f32, f32)> {
+    if kind.is_power_symbol() {
+        return None;
+    }
+    let mut b = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for corner in [(ext.0, ext.2), (ext.1, ext.2), (ext.0, ext.3), (ext.1, ext.3)] {
+        let (x, y) = rot_f(corner, rot);
+        b = (b.0.min(x), b.1.max(x), b.2.min(y), b.3.max(y));
+    }
+    Some((b.0 + pos.0 as f32, b.1 + pos.0 as f32, b.2 + pos.1 as f32, b.3 + pos.1 as f32))
+}
+
+/// Parts that merely touch (a pin on a neighbour's edge) do not overlap.
+fn boxes_overlap(a: (f32, f32, f32, f32), b: (f32, f32, f32, f32)) -> bool {
+    const EPS: f32 = 1e-3;
+    a.0 < b.1 - EPS && b.0 < a.1 - EPS && a.2 < b.3 - EPS && b.2 < a.3 - EPS
 }
 
 fn rot_f(p: (f32, f32), rot: u8) -> (f32, f32) {
@@ -1356,6 +1383,26 @@ impl SchEditor {
         out
     }
 
+    /// Would a part of this kind, placed at `pos` with `rot`, overlap another part? `ignore` lists
+    /// parts that are being moved themselves.
+    fn would_overlap(&self, kind: Kind, ext: (f32, f32, f32, f32), pos: Pt, rot: u8, ignore: &[usize]) -> bool {
+        let Some(b) = sheet_box(kind, ext, pos, rot) else { return false };
+        self.sch.components.iter().enumerate().any(|(j, o)| {
+            !ignore.contains(&j) && sheet_box(o.kind, comp_extents(o), o.pos, o.rot).is_some_and(|ob| boxes_overlap(b, ob))
+        })
+    }
+
+    /// Rotate a part a quarter turn unless that would put it on top of another part.
+    fn rotate_comp(&mut self, i: usize) {
+        let c = &self.sch.components[i];
+        let next = (c.rot + 1) % 4;
+        if self.would_overlap(c.kind, comp_extents(c), c.pos, next, &[i]) {
+            self.status = "回すと他の部品と重なるので、回せません".into();
+        } else {
+            self.sch.components[i].rot = next;
+        }
+    }
+
     fn start_group_drag(&mut self, anchor: Pt) {
         let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![] };
         for s in &self.multi {
@@ -1453,14 +1500,17 @@ impl SchEditor {
             self.noise_pick = false;
             self.status = "ノードの選択を中止しました".into();
         }
+        if let Some(i) = self.rotate_req.take() {
+            self.rotate_comp(i);
+        }
         if !typing {
             if ui.input(|i| i.key_pressed(egui::Key::R)) {
                 match self.selected {
-                    Some(Sel::Comp(i)) => self.sch.components[i].rot = (self.sch.components[i].rot + 1) % 4,
+                    Some(Sel::Comp(i)) => self.rotate_comp(i),
                     _ if self.multi.iter().any(|s| matches!(s, Sel::Comp(_))) => {
                         for s in self.multi.clone() {
                             if let Sel::Comp(i) = s {
-                                self.sch.components[i].rot = (self.sch.components[i].rot + 1) % 4;
+                                self.rotate_comp(i);
                             }
                         }
                     }
@@ -1702,15 +1752,26 @@ impl SchEditor {
             if resp.dragged_by(egui::PointerButton::Primary) {
                 let (dx, dy) = (snapped.0 - gd.anchor.0, snapped.1 - gd.anchor.1);
                 let mv = |p: Pt| (p.0 + dx, p.1 + dy);
-                for &(i, p) in &gd.comps {
-                    self.sch.components[i].pos = mv(p);
-                }
-                for &(i, a, b) in &gd.wires {
-                    self.sch.wires[i].a = mv(a);
-                    self.sch.wires[i].b = mv(b);
-                }
-                for &(i, p) in &gd.labels {
-                    self.sch.labels[i].pos = mv(p);
+                // the selection moves as one piece: if any part would land on a part that is
+                // not being moved, nothing moves this frame
+                let moved: Vec<usize> = gd.comps.iter().map(|c| c.0).collect();
+                let blocked = gd.comps.iter().any(|&(i, p)| {
+                    let c = &self.sch.components[i];
+                    self.would_overlap(c.kind, comp_extents(c), mv(p), c.rot, &moved)
+                });
+                if blocked {
+                    self.status = OVERLAP_MSG.into();
+                } else {
+                    for &(i, p) in &gd.comps {
+                        self.sch.components[i].pos = mv(p);
+                    }
+                    for &(i, a, b) in &gd.wires {
+                        self.sch.wires[i].a = mv(a);
+                        self.sch.wires[i].b = mv(b);
+                    }
+                    for &(i, p) in &gd.labels {
+                        self.sch.labels[i].pos = mv(p);
+                    }
                 }
             } else {
                 self.gdrag = None;
@@ -1718,7 +1779,13 @@ impl SchEditor {
         }
         if let Some((i, off)) = self.drag {
             if resp.dragged_by(egui::PointerButton::Primary) {
-                self.sch.components[i].pos = (snapped.0 - off.0, snapped.1 - off.1);
+                let np = (snapped.0 - off.0, snapped.1 - off.1);
+                let c = &self.sch.components[i];
+                if self.would_overlap(c.kind, comp_extents(c), np, c.rot, &[i]) {
+                    self.status = OVERLAP_MSG.into();
+                } else {
+                    self.sch.components[i].pos = np;
+                }
             } else {
                 self.drag = None;
             }
@@ -1740,12 +1807,21 @@ impl SchEditor {
                     self.selected = self.pick(g);
                 }
                 Tool::Place => {
-                    match self.place_lib.and_then(|k| self.library.get(k)).cloned() {
-                        Some(d) => {
-                            self.sch.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), snapped, self.rot);
-                        }
-                        None => {
-                            self.sch.add(self.place, snapped, self.rot);
+                    let lib = self.place_lib.and_then(|k| self.library.get(k)).cloned();
+                    let (kind, ext) = match &lib {
+                        Some(d) => (Kind::Custom, sym_extents(&d.symbol())),
+                        None => (self.place, extents(self.place)),
+                    };
+                    if self.would_overlap(kind, ext, snapped, self.rot, &[]) {
+                        self.status = OVERLAP_MSG.into();
+                    } else {
+                        match lib {
+                            Some(d) => {
+                                self.sch.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), snapped, self.rot);
+                            }
+                            None => {
+                                self.sch.add(self.place, snapped, self.rot);
+                            }
                         }
                     }
                 }
@@ -1913,7 +1989,7 @@ impl SchEditor {
                     });
                 }
                 if ui.button("回転 (R)").clicked() {
-                    c.rot = (c.rot + 1) % 4;
+                    self.rotate_req = Some(i);
                 }
             }
         if self.selected.is_some() && ui.button("削除 (Delete)").clicked() {
@@ -2160,6 +2236,35 @@ mod select_tests {
     }
 
     #[test]
+    fn parts_may_touch_but_not_overlap_and_ground_symbols_are_exempt() {
+        let e = editor(); // R1 at (0,0), R2 at (10,0); a resistor is 4 wide and 2 tall
+        let r = |pos, rot| e.would_overlap(Kind::Resistor, extents(Kind::Resistor), pos, rot, &[]);
+        assert!(r((0, 0), 0), "exactly on top of R1");
+        assert!(r((3, 0), 0), "half on R1");
+        assert!(r((0, 1), 0), "shifted one row");
+        assert!(!r((4, 0), 0), "pins meeting end to end is the normal way to join parts");
+        assert!(!r((0, 2), 0), "stacked with the edges touching");
+        assert!(r((4, 0), 1) == false && r((3, 0), 1) == false, "a vertical resistor beside R1 fits");
+        assert!(r((1, 0), 1), "a vertical resistor across R1 does not");
+        // moving a part does not collide with itself
+        assert!(!e.would_overlap(Kind::Resistor, extents(Kind::Resistor), (0, 0), 0, &[0]));
+        // a ground symbol sits right on R1's pin
+        assert!(!e.would_overlap(Kind::Ground, extents(Kind::Ground), (2, 0), 0, &[]));
+        assert!(!e.would_overlap(Kind::Ground, extents(Kind::Ground), (0, 0), 0, &[]));
+    }
+
+    #[test]
+    fn rotating_into_a_neighbour_is_refused() {
+        let mut e = editor(); // R1 at (0,0) fills x -2..2, y -1..1
+        e.sch.add(Kind::Resistor, (0, 2), 0); // R3 right above it, edges touching
+        e.rotate_comp(2); // upright it would span y 0..4 and cut into R1
+        assert_eq!(e.sch.components[2].rot, 0);
+        e.sch.components[2].pos = (0, 5); // clear of everything
+        e.rotate_comp(2);
+        assert_eq!(e.sch.components[2].rot, 1);
+    }
+
+    #[test]
     fn window_box_needs_full_enclosure_and_crossing_box_accepts_a_touch() {
         let e = editor();
         // covers R1 completely and only the left part of R2 and of the wire's far end
@@ -2191,5 +2296,32 @@ mod select_tests {
         e.set_selection(vec![Sel::Label(0)]);
         assert_eq!(e.selected, Some(Sel::Label(0)));
         assert!(e.multi.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod example_overlap_tests {
+    use super::*;
+
+    #[test]
+    fn shipped_example_circuits_have_no_overlapping_parts() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut found = vec![];
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            if e.path().extension().is_some_and(|x| x == "schjson") {
+                let sch: Schematic = serde_json::from_str(&std::fs::read_to_string(e.path()).unwrap()).unwrap();
+                let boxes: Vec<_> = sch.components.iter().map(|c| (c, sheet_box(c.kind, comp_extents(c), c.pos, c.rot))).collect();
+                for (i, (a, ab)) in boxes.iter().enumerate() {
+                    for (b, bb) in &boxes[i + 1..] {
+                        if let (Some(x), Some(y)) = (ab, bb)
+                            && boxes_overlap(*x, *y)
+                        {
+                            found.push(format!("{}: {} / {}", e.file_name().to_string_lossy(), a.refdes, b.refdes));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(found.is_empty(), "overlapping parts in the examples: {found:?}");
     }
 }

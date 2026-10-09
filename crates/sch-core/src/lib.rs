@@ -55,12 +55,12 @@ impl Kind {
             Kind::Inductor => "コイル".into(),
             Kind::Diode => "ダイオード".into(),
             Kind::Led => "LED".into(),
-            Kind::VSource => "直流電源".into(),
+            Kind::VSource => "電源".into(),
             Kind::Npn => "NPNトランジスタ".into(),
             Kind::Header(n) => format!("ヘッダ {n}P"),
             Kind::Custom => "ライブラリ部品".into(),
             Kind::Ground => "GND".into(),
-            Kind::Power => "電源(VCC等)".into(),
+            Kind::Power => "電源ネット(VCC等)".into(),
         }
     }
 
