@@ -104,7 +104,7 @@ impl SchEditor {
             _ => None,
         };
         let mut apply = None;
-        egui::Window::new("値の決め方").open(&mut open).default_width(460.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("値の決め方").open(&mut open).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
             ui.small("部品の値は、勘ではなく計算で決められます。入力を変えると、結果・計算のしかた・注意点・壊れ方がすぐ下に出ます");
             ui.horizontal_wrapped(|ui| {
                 for (k, c) in CALCS.iter().enumerate() {

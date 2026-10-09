@@ -280,6 +280,13 @@ fn install_japanese_font(ctx: &egui::Context) {
                 fonts.families.entry(fam).or_default().insert(0, "jp".into());
             }
             ctx.set_fonts(fonts);
+            // the default body / button size (12.5 px) is not a whole pixel count (13 px fails the same way), and with this font the
+            // thin hyphen / minus stroke then vanishes ("1e-6" reads "1e 6", "-3dB" reads "3dB")
+            ctx.all_styles_mut(|style| {
+                for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
+                    style.text_styles.insert(ts, egui::FontId::proportional(14.0));
+                }
+            });
             return;
         }
     }
@@ -742,9 +749,14 @@ mod tests {
         s.components[c].value = "1000u".into();
         let r = s.add(Kind::Resistor, (104, 0), 1);
         s.components[r].value = "100".into();
+        // a short wire out of the pin, with the net name at its end (so the name does not sit on the symbol)
         let label = |s: &mut sch_core::Schematic, idx: usize, pin: usize, text: &str| {
             let pt = s.components[idx].pins()[pin].1;
-            s.labels.push(sch_core::Label { pos: pt, text: text.into() });
+            let c = s.components[idx].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: text.into() });
         };
         for (i, p) in s.components[t].pins().iter().enumerate() { println!("T pin {i} {:?} {:?}", p.0, p.1); }
         for (i, p) in s.components[diodes[0]].pins().iter().enumerate() { println!("D pin {i} {:?} {:?}", p.0, p.1); }

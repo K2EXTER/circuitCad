@@ -102,7 +102,8 @@ impl SchEditor {
                                     let u = sg.unit;
                                     ui.small(format!("{name}\n  平均 {}{u}  AC実効値 {}{u}", plot::axis_label(sx.mean, sx.mean.abs() / 1000.0), plot::axis_label(sx.rms_ac, sx.rms_ac.abs() / 1000.0)));
                                     if let Some(m) = wave_measure(&res.time, &sg.values, w0, w1) {
-                                        ui.small(format!("  最小 {} / 最大 {} / 振幅(p-p) {}", eng(m.min, u), eng(m.max, u), eng(m.pp, u))).on_hover_text("表示中の範囲での値です。ズームすると、見ている部分だけの値になります");
+                                        ui.small(format!("  最小 {}  最大 {}
+  振幅(p-p) {}", eng(m.min, u), eng(m.max, u), eng(m.pp, u))).on_hover_text("表示中の範囲での値です。ズームすると、見ている部分だけの値になります");
                                         if let Some(f) = m.freq {
                                             ui.small(format!("  周波数 {}  周期 {}", eng(f, "Hz"), eng(1.0 / f, "s"))).on_hover_text("中間の高さを下から上へ横切る間隔から求めています。2周期以上が範囲に入っているときだけ表示されます");
                                         }

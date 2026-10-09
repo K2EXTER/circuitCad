@@ -111,7 +111,10 @@ pub fn stability_margins(freq: &[f64], db: &[f64], phase_deg: &[f64]) -> Option<
     let k = (phase_deg[0] / 180.0).round();
     let ph: Vec<f64> = phase_deg.iter().map(|p| p - 180.0 * k).collect();
     let mut m = Margins { gain_crossover: None, phase_margin: None, phase_crossover: None, gain_margin: None, inverted: k as i64 % 2 != 0 };
-    if let Some(i) = (0..n - 1).find(|&i| db[i] >= 0.0 && db[i + 1] < 0.0) {
+    // a loop gain starts clearly above 0 dB; a flat 0 dB trace (an input source, say) is noise around the line, not a crossover
+    if db[0] >= 1.0
+        && let Some(i) = (0..n - 1).find(|&i| db[i] >= 0.0 && db[i + 1] < 0.0)
+    {
         let (f, p) = cross_at(freq, db, &ph, i, 0.0);
         m.gain_crossover = Some(f);
         m.phase_margin = Some(180.0 + p);
@@ -200,5 +203,13 @@ mod tests {
         let low: Vec<f64> = db.iter().map(|d| d - 40.0).collect();
         let w = stability_margins(&f, &low, &ph).unwrap();
         assert_eq!((w.gain_crossover, w.phase_margin), (None, None));
+    }
+
+    #[test]
+    fn a_flat_zero_db_trace_has_no_crossover() {
+        let f: Vec<f64> = (0..50).map(|i| 10f64.powf(i as f64 * 0.1)).collect();
+        let db: Vec<f64> = f.iter().enumerate().map(|(i, _)| if i % 2 == 0 { 1e-9 } else { -1e-9 }).collect();
+        let m = stability_margins(&f, &db, &vec![0.0; f.len()]).unwrap();
+        assert_eq!((m.gain_crossover, m.phase_margin), (None, None));
     }
 }
