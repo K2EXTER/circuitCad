@@ -202,6 +202,7 @@ fn the_tp5100_sample_charges_the_cell_to_4v2() {
     let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap_or_else(|err| panic!("{err:?}"));
     let last = |name: &str| *r.signals.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}")).values.last().unwrap();
     assert!((last("V(BAT)") - 4.2).abs() < 0.1, "BAT ends at {}", last("V(BAT)"));
+    assert_settled(r, "V(LX)");
     assert!(last("V(STDBY)") < 1.0 && last("V(CHRG)") > 7.0, "full: STDBY low, CHRG high");
     let bat = r.signals.iter().find(|s| s.name == "V(BAT)").unwrap();
     assert!(bat.values.iter().cloned().fold(0.0, f64::max) < 4.3, "no overshoot");
@@ -212,16 +213,26 @@ fn the_tp5100_sample_charges_the_cell_to_4v2() {
 fn the_ip2332_sample_charges_the_cell_and_lights_the_leds() {
     let mut e = SchEditor::default();
     assert!(e.load_sample(include_str!("../../../../docs/examples/ip2332_charger.schjson")));
-    e.set_tran_settings("4m", "5u");
+    e.set_tran_settings("4m", "10u");
     e.run_tran();
     let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap_or_else(|err| panic!("{err:?}"));
     let sig = |name: &str| &r.signals.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}")).values;
     let at = |name: &str, t: f64| sig(name)[r.time.iter().position(|x| *x >= t).unwrap()];
     assert!((sig("V(BAT)").last().unwrap() - 4.2).abs() < 0.1);
+    assert_settled(r, "V(LX)");
     assert!(sig("V(BAT)").iter().cloned().fold(0.0, f64::max) < 4.3, "no overshoot");
     // charging at 0.5 ms: LED1 lit (a 5 mA source, about the LED's forward voltage), LED2 off
     assert!(at("V(LED1)", 0.5e-3) > 1.5 && at("V(LED2)", 0.5e-3) < 0.5, "{} {}", at("V(LED1)", 0.5e-3), at("V(LED2)", 0.5e-3));
     // full at the end: LED2 lit, LED1 off (only a nanoamp of leakage, far below the LED's forward voltage)
     let (l1, l2) = (*sig("V(LED1)").last().unwrap(), *sig("V(LED2)").last().unwrap());
     assert!(l2 > 2.0 && l1 < 1.2, "LED1 {l1} LED2 {l2} BAT {}", sig("V(BAT)").last().unwrap());
+}
+
+/// After the charge has settled (2 ms on) a node must not ring from step to step: a numerical
+/// oscillation of the averaged buck model would show up as a thick band in the waveform viewer.
+fn assert_settled(r: &sim_core::TranResult, name: &str) {
+    let v = &r.signals.iter().find(|s| s.name == name).unwrap().values;
+    let i0 = r.time.iter().position(|t| *t >= 2e-3).unwrap();
+    let (mn, mx) = v[i0..].iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)));
+    assert!(mx - mn < 0.05, "{name} rings by {} V", mx - mn);
 }
