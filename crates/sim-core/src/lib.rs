@@ -4,6 +4,7 @@ mod ac;
 mod circuit;
 mod dc;
 mod dcsweep;
+mod designcalc;
 mod diagnose;
 mod expr;
 mod from_schematic;
@@ -26,6 +27,7 @@ pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel}
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
+pub use designcalc::{divider, e24, led_resistor, rc_filter, regulator, transistor_switch, CalcOut};
 pub use diagnose::diagnose;
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use measure::{wave_measure, WaveMeasure};

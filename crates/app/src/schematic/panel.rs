@@ -224,6 +224,11 @@ impl SchEditor {
                         ui.small("ノイズ: NOISE(実効値 最高周波数 [シード]) 例: 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) (+ の前後は空白)");
                     });
                 }
+                if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
+                    && ui.small_button("値の決め方…").on_hover_text("この部品の値を計算で決める窓を開きます (LEDの抵抗・分圧・フィルタなど)").clicked()
+                {
+                    self.wiz_open = true;
+                }
                 if c.kind == Kind::Capacitor {
                     ui.small("例: 100n / 100n ESR=20m ESL=5n (等価直列抵抗・インダクタンス) / 100u IC=3.2 (過渡解析を始めるときの電圧。電池の代わりに使えます)");
                 }

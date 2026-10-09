@@ -162,6 +162,10 @@ pub struct SchEditor {
     part_popup: Option<(usize, egui::Pos2, u32)>,
     popup_serial: u32,
     lesson_base: Schematic,
+    /// "値の決め方" window: open flag, which calculator, its input texts.
+    wiz_open: bool,
+    wiz_kind: usize,
+    wiz_in: Vec<String>,
     sweep_src: String,
     param: Option<param::ParamView>,
     param_part: String,
@@ -376,6 +380,9 @@ impl Default for SchEditor {
             show_sim_opts: false,
             popup_serial: 0,
             lesson_base: Schematic::default(),
+            wiz_open: false,
+            wiz_kind: 0,
+            wiz_in: vec![],
             sweep_src: String::new(),
             param: None,
             param_part: String::new(),
@@ -449,6 +456,7 @@ mod canvas;
 mod draw;
 mod interact;
 mod panel;
+mod wizard;
 mod param;
 mod settings;
 mod file;

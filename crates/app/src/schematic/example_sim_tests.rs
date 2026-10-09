@@ -60,3 +60,18 @@ fn parameter_sweep_runs_from_the_editor_in_both_modes() {
     e.analyze_param();
     assert!(e.status.contains("失敗"), "{}", e.status);
 }
+
+#[test]
+fn every_wizard_calculator_works_with_its_defaults_and_explains_failures() {
+    let mut e = SchEditor::default();
+    for k in 0..wizard::CALCS.len() {
+        e.open_wizard(k);
+        let out = e.wizard_result().unwrap_or_else(|m| panic!("{}: {m}", wizard::CALCS[k].title));
+        assert!(!out.steps.is_empty() && !out.cautions.is_empty() && !out.faults.is_empty(), "{}", wizard::CALCS[k].title);
+        assert!(out.primary.is_some(), "{}", wizard::CALCS[k].title);
+    }
+    // a typo is explained instead of panicking
+    e.open_wizard(0);
+    e.wiz_in[0] = "abc".into();
+    assert!(e.wizard_result().unwrap_err().contains("電源電圧"));
+}

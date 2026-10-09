@@ -87,6 +87,12 @@ impl eframe::App for App {
                         }
                     }
                     ui.separator();
+                    if ui.button("値の決め方 (計算ツール)…").on_hover_text("LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます").clicked() {
+                        self.mode = Mode::Schematic;
+                        self.sch.open_wizard(0);
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button(board_editor::lesson::TITLE).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
                         self.mode = Mode::Board;
                         if !self.sch.load_sample(board_editor::BoardEditor::lesson_circuit()) {
@@ -119,6 +125,7 @@ impl eframe::App for App {
             });
         });
         self.sch.settings_window(ui.ctx());
+        self.sch.wizard_window(ui.ctx());
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.label(if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status });
             if self.show_hints {
