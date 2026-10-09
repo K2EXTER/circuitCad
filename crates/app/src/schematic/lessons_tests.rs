@@ -191,3 +191,18 @@ fn the_opamp_lesson_shows_gain_clipping_and_bandwidth() {
     e.update_lesson();
     assert_eq!(progress(&e), 3, "{}", e.status);
 }
+
+/// The TP5100 sample charges its 470 uF "cell" through pre-charge, constant current and the taper.
+#[test]
+fn the_tp5100_sample_charges_the_cell_to_4v2() {
+    let mut e = SchEditor::default();
+    assert!(e.load_sample(include_str!("../../../../docs/examples/tp5100_charger.schjson")));
+    e.set_tran_settings("8m", "10u");
+    e.run_tran();
+    let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap_or_else(|err| panic!("{err:?}"));
+    let last = |name: &str| *r.signals.iter().find(|s| s.name == name).unwrap_or_else(|| panic!("{name}")).values.last().unwrap();
+    assert!((last("V(BAT)") - 4.2).abs() < 0.1, "BAT ends at {}", last("V(BAT)"));
+    assert!(last("V(STDBY)") < 1.0 && last("V(CHRG)") > 7.0, "full: STDBY low, CHRG high");
+    let bat = r.signals.iter().find(|s| s.name == "V(BAT)").unwrap();
+    assert!(bat.values.iter().cloned().fold(0.0, f64::max) < 4.3, "no overshoot");
+}

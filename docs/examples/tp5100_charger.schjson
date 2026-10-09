@@ -1,0 +1,491 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "9",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        10,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "TP5100",
+      "pos": [
+        34,
+        0
+      ],
+      "rot": 0,
+      "footprint": "QFN-16_4x4_EP",
+      "custom": {
+        "name": "TP5100",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VIN",
+            "side": "top"
+          },
+          {
+            "number": "10",
+            "name": "VREG",
+            "side": "left"
+          },
+          {
+            "number": "13",
+            "name": "CS",
+            "side": "left"
+          },
+          {
+            "number": "12",
+            "name": "RTRICK",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "TS",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "PWR_ON",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "LX",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "VS",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "BAT",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "STDBY",
+            "side": "right"
+          },
+          {
+            "number": "15",
+            "name": "CHRG",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TP5100",
+          "text": ".subckt TP5100 vin lx pwr gnd vs bat vreg ts rtrick cs stdby chrg\n* TP5100 behavioural model (averaged buck charger): the switching is replaced by a voltage source on LX\n* whose level is the duty ratio times VIN. Control signals are in \"sense volts\": 0.1 V across Rs = full current.\nVone one gnd DC 1\nV36 v36 gnd DC 3.6\nV4 v4 gnd DC 4\nV1c v1c gnd DC 1\nV01 v01 gnd DC 0.1\nV225 v225 gnd DC 2.25\nV40 v40 gnd DC 4.0\nV5 v5 gnd DC 5\nV42 v42 gnd DC 4.2\nV84 v84 gnd DC 8.4\nV29 v29 gnd DC 2.9\nV58 v58 gnd DC 5.8\nVr1 r1 gnd DC 0.1\nVbo bo bat DC 0.1\n* internal 5 V supply (VREG) once VIN is above the under-voltage lockout\nSvr v5 vreg vin v36 SWC\nRvr vreg gnd 1Meg\n* CS: left open = single cell (4.2 V), high = two cells (8.4 V), low = shut down\nRcs1 vreg cs 1Meg\nRcs2 cs gnd 1Meg\nSa1 v42 vfl v4 cs SWC\nSb1 v84 vfl cs v4 SWC\nRvfl vfl gnd 100k\nSa2 v29 vtk v4 cs SWC\nSb2 v58 vtk cs v4 SWC\nRvtk vtk gnd 100k\n* trickle current as a fraction of the full current: 0.1 + 0.9 x V(RTRICK); 50k gives 20 %, open gives 100 %\nRtr1 one rtrick 400k\nRtr2 rtrick gnd 1G\nVf0 f1 gnd DC 0.1\nEf f2 f1 rtrick gnd 0.9\nEr0 r0 gnd f2 gnd 0.1\n* current reference: full below the trickle threshold -> reduced\nSr1 r1 rf bat vtk SWC\nSr0 r0 rf vtk bat SWC\nRrf rf gnd 100k\n* what the sense resistor shows now, and the voltage loop (the current is reduced within 50 mV of the float voltage)\nEs s gnd vs bat 1\nEb cb gnd vfl bat 2\nSma rf m cb rf SWC\nSmb cb m rf cb SWC\nRm m gnd 100k\n* the charger runs when VIN is above the cell by 0.1 V and above 3.6 V, CS is not low and the cell temperature is fine\n* (TS tied to GND or left open = no temperature check; otherwise 45 % to 80 % of VREG)\nSg1 one n1 vin bo SWC\nSg2 n1 n2 vin v36 SWC\nSg3 n2 n3 cs v1c SWC\nSts1 n3 on v01 ts SWC\nSts2 n3 t1 ts v225 SWC\nSts3 t1 on v40 ts SWC\nRon on gnd 1k\nRn1 n1 gnd 100Meg\nRn2 n2 gnd 100Meg\nRn3 n3 gnd 100Meg\nRt1 t1 gnd 100Meg\nRtsl ts gnd 10Meg\nSu m u on gnd SWG\nRu u gnd 100k\n* LX level: the cell voltage plus a push proportional to (reference - sense), limited to 0 .. VIN\nEcm cm gnd u s 500\nEd d cm bat gnd 1\nSc1 d c1 vin d SWC\nSc2 vin c1 d vin SWC\nRc1 c1 gnd 100k\nSc3 c1 c2 c1 gnd SWC\nSc4 gnd c2 gnd c1 SWC\nRc2 c2 gnd 100k\nElx ls gnd c2 gnd 1\nRsn ls ls2 0.001\nSd ls2 lx ls2 lx SWD\n* the input current is taken equal to the output current (a real buck draws less)\nGin vin gnd ls ls2 1000\nRiq vin gnd 75k\nRlx lx gnd 100Meg\n* status (open drain): CHRG low while charging, STDBY low when the cell is full\nSch1 chrg k1 vs bat SWT\nSch2 chrg k1 vfl bat SWV\nSch3 k1 gnd on gnd SWG\nSsb1 stdby q1 bat vs SWN\nSsb2 q1 q2 bat vfl SWM\nSsb3 q2 gnd on gnd SWG\nRk1 k1 gnd 100Meg\nRq1 q1 gnd 100Meg\nRq2 q2 gnd 100Meg\nRch chrg gnd 100Meg\nRsb stdby gnd 100Meg\n* PWR_ON- is low while VIN is present, otherwise it follows the cell\nSpo pwr gnd vin v36 SWO\nSph pwr bat v36 vin SWO\nRpw pwr gnd 100Meg\n.model SWC SW(RON=1 ROFF=1G VT=0 VW=0.001)\n.model SWG SW(RON=1 ROFF=1G VT=0.5 VW=0.1)\n.model SWD SW(RON=0.17 ROFF=1G VT=0 VW=0.002)\n.model SWO SW(RON=60 ROFF=1G VT=0 VW=0.005)\n.model SWT SW(RON=60 ROFF=1G VT=0.01 VW=0.002)\n.model SWV SW(RON=60 ROFF=1G VT=0.15 VW=0.01)\n.model SWN SW(RON=60 ROFF=1G VT=-0.01 VW=0.002)\n.model SWM SW(RON=1 ROFF=1G VT=-0.15 VW=0.01)\n.ends TP5100",
+          "pins": [
+            "1",
+            "2",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15"
+          ],
+          "params": {
+            "isense_volt": 0.1,
+            "vfloat_double": 8.4,
+            "vfloat_single": 4.2
+          }
+        }
+      }
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "10u",
+      "pos": [
+        52,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Diode",
+      "value": "1N5817",
+      "pos": [
+        52,
+        6
+      ],
+      "rot": 1,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "0.1",
+      "pos": [
+        66,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "470u IC=2.6 ESR=0.5",
+      "pos": [
+        80,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        10,
+        16
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "50k",
+      "pos": [
+        22,
+        16
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        44,
+        22
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        58,
+        22
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        44,
+        34
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        58,
+        34
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        10,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        34,
+        -7
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        38,
+        -4
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        34,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        38,
+        -2
+      ],
+      "text": "VS"
+    },
+    {
+      "pos": [
+        38,
+        0
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        30,
+        -4
+      ],
+      "text": "VREG"
+    },
+    {
+      "pos": [
+        30,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        0
+      ],
+      "text": "RTRICK"
+    },
+    {
+      "pos": [
+        38,
+        2
+      ],
+      "text": "STDBY"
+    },
+    {
+      "pos": [
+        38,
+        4
+      ],
+      "text": "CHRG"
+    },
+    {
+      "pos": [
+        50,
+        -8
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        54,
+        -8
+      ],
+      "text": "VS"
+    },
+    {
+      "pos": [
+        52,
+        4
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        52,
+        8
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        64,
+        -8
+      ],
+      "text": "VS"
+    },
+    {
+      "pos": [
+        68,
+        -8
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        80,
+        -2
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        80,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        14
+      ],
+      "text": "VREG"
+    },
+    {
+      "pos": [
+        10,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        22,
+        14
+      ],
+      "text": "RTRICK"
+    },
+    {
+      "pos": [
+        22,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        42,
+        22
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        46,
+        22
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        56,
+        22
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        60,
+        22
+      ],
+      "text": "CHRG"
+    },
+    {
+      "pos": [
+        42,
+        34
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        46,
+        34
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        56,
+        34
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        60,
+        34
+      ],
+      "text": "STDBY"
+    }
+  ]
+}

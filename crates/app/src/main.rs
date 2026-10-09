@@ -464,6 +464,69 @@ mod tests {
         std::fs::write(root.join("li_ion_charger.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Writes docs/examples/tp5100_charger.schjson: `cargo test -p app write_tp5100_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_tp5100_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let app = App::default();
+        let tp = app.sch.library.iter().find(|d| d.name == "TP5100").expect("TP5100 is bundled");
+        let mut s = sch_core::Schematic::default();
+        let label = |s: &mut sch_core::Schematic, comp: usize, pin: &str, text: &str| {
+            let at = s.components[comp].pins().into_iter().find(|p| p.0 == pin).unwrap().1;
+            s.labels.push(sch_core::Label { pos: at, text: text.into() });
+        };
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "9".into();
+        label(&mut s, v, "+", "VIN");
+        label(&mut s, v, "-", "GND");
+        let cin = s.add(Kind::Capacitor, (10, 0), 1);
+        s.components[cin].value = "10u".into();
+        label(&mut s, cin, "1", "VIN");
+        label(&mut s, cin, "2", "GND");
+        let u = s.add_custom(tp.symbol(), &tp.default_value(), &tp.footprint_name(), (34, 0), 0);
+        for (pin, net) in [("1", "VIN"), ("2", "LX"), ("7", "GND"), ("8", "VS"), ("9", "BAT"), ("10", "VREG"), ("11", "GND"), ("12", "RTRICK"), ("14", "STDBY"), ("15", "CHRG")] {
+            label(&mut s, u, pin, net);
+        }
+        // the inductor and the catch diode of the buck stage, and the current sense resistor
+        let l = s.add(Kind::Inductor, (52, -8), 0);
+        s.components[l].value = "10u".into();
+        label(&mut s, l, "1", "LX");
+        label(&mut s, l, "2", "VS");
+        let d = s.add(Kind::Diode, (52, 6), 1);
+        s.components[d].value = "1N5817".into();
+        label(&mut s, d, "A", "GND");
+        label(&mut s, d, "K", "LX");
+        let rs = s.add(Kind::Resistor, (66, -8), 0);
+        s.components[rs].value = "0.1".into();
+        label(&mut s, rs, "1", "VS");
+        label(&mut s, rs, "2", "BAT");
+        let cell = s.add(Kind::Capacitor, (80, 0), 1);
+        s.components[cell].value = "470u IC=2.6 ESR=0.5".into();
+        label(&mut s, cell, "1", "BAT");
+        label(&mut s, cell, "2", "GND");
+        let creg = s.add(Kind::Capacitor, (10, 16), 1);
+        s.components[creg].value = "100n".into();
+        label(&mut s, creg, "1", "VREG");
+        label(&mut s, creg, "2", "GND");
+        let rt = s.add(Kind::Resistor, (22, 16), 1);
+        s.components[rt].value = "50k".into();
+        label(&mut s, rt, "1", "RTRICK");
+        label(&mut s, rt, "2", "GND");
+        for (k, net) in ["CHRG", "STDBY"].iter().enumerate() {
+            let y = 22 + 12 * k as i32;
+            let r = s.add(Kind::Resistor, (44, y), 0);
+            let d = s.add(Kind::Led, (58, y), 0);
+            s.components[r].value = "1k".into();
+            label(&mut s, r, "1", "VIN");
+            let tag = format!("A{k}");
+            label(&mut s, r, "2", &tag);
+            label(&mut s, d, "A", &tag);
+            label(&mut s, d, "K", net);
+        }
+        std::fs::write(root.join("tp5100_charger.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// The router on a real circuit: the NE555 blinker laid out on a grid of parts.
     #[test]
     fn autoroute_handles_the_ne555_blinker() {
