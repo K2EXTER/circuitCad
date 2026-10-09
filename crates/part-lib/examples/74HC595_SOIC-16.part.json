@@ -1,0 +1,97 @@
+{
+  "name": "74HC595",
+  "category": "ロジックIC",
+  "description": "8ビット シリアルイン・パラレルアウト シフトレジスタ (ラッチ・3ステート出力つき、SOIC-16)。SER=データ SRCLK=シフトクロック RCLK=ラッチ OE=出力許可(負論理) SRCLR=クリア(負論理)。ピン表は必ずデータシートで確認してください。シミュレーションモデルなし",
+  "prefix": "U",
+  "footprint_name": "SOIC-16_P1.27",
+  "pins": [
+    {
+      "number": "14",
+      "name": "SER",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "SRCLK",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "RCLK",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "OE",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "SRCLR",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "QA",
+      "side": "right"
+    },
+    {
+      "number": "1",
+      "name": "QB",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "QC",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "QD",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "QE",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "QF",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "QG",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "QH",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "QH'",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6
+  }
+}

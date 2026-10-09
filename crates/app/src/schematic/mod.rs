@@ -108,6 +108,10 @@ pub struct SchEditor {
     lib_errors: Vec<String>,
     lib_dir: PathBuf,
     lib_filter: String,
+    /// Library category shown (empty = all).
+    lib_cat: String,
+    /// Only parts that have a simulation model.
+    lib_sim_only: bool,
     place_lib: Option<usize>,
     form: Option<PartForm>,
     dc: Option<DcView>,
@@ -303,6 +307,8 @@ impl Default for SchEditor {
             lib_errors,
             lib_dir,
             lib_filter: String::new(),
+            lib_cat: String::new(),
+            lib_sim_only: false,
             place_lib: None,
             form: None,
             dc: None,

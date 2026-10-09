@@ -1,0 +1,58 @@
+{
+  "name": "NE5532",
+  "category": "オペアンプ",
+  "description": "低雑音デュアルオペアンプ (SOIC-8)。チャネル1のみ記号化。DC利得100dB、GBW約10MHz、出力は電源から約2V内側まで。オーディオ用。簡易マクロモデル(概算)",
+  "prefix": "U",
+  "footprint_name": "SOIC-8_P1.27",
+  "pins": [
+    {
+      "number": "3",
+      "name": "IN+",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "IN-",
+      "side": "left"
+    },
+    {
+      "number": "1",
+      "name": "OUT",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "V+",
+      "side": "top"
+    },
+    {
+      "number": "4",
+      "name": "V-",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 8,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "NE5532",
+    "text": ".subckt NE5532 inp inn out vp vn\nRin inp inn 300k\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 1.59u\nEu u 0 vp 0 1\nVhu u uh DC 2\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 2\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends NE5532",
+    "pins": [
+      "3",
+      "2",
+      "1",
+      "8",
+      "4"
+    ],
+    "params": {
+      "gbw": 10000000.0,
+      "gain_dc": 100000.0
+    }
+  }
+}

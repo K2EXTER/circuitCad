@@ -1,0 +1,65 @@
+{
+  "name": "PN2222A",
+  "category": "トランジスタ",
+  "description": "NPN 汎用トランジスタ 40V 600mA (TO-92, ピン1=E 2=B 3=C)。簡易モデル(パラメータは概算)",
+  "prefix": "Q",
+  "footprint_name": "TO-92_inline",
+  "pins": [
+    {
+      "number": "2",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "C",
+      "side": "top"
+    },
+    {
+      "number": "1",
+      "name": "E",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "Q",
+    "name": "PN2222A",
+    "text": ".model PN2222A NPN(IS=14.34f BF=255 BR=6 RB=10)",
+    "pins": [
+      "3",
+      "2",
+      "1"
+    ]
+  }
+}

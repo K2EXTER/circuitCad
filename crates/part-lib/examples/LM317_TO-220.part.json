@@ -1,0 +1,45 @@
+{
+  "name": "LM317",
+  "category": "レギュレータ",
+  "description": "LM317 可変三端子レギュレータ 1.25〜37V 1.5A (TO-220, ピン1=ADJ 2=OUT 3=IN)。出力 = 1.25V × (1 + R2/R1) + 50µA × R2 (R1: OUT-ADJ間、R2: ADJ-GND間)。ドロップアウト約2V。簡易マクロモデル(安定度・過電流保護は無し、数値は概算)",
+  "prefix": "U",
+  "footprint_name": "TO-220-3",
+  "pins": [
+    {
+      "number": "3",
+      "name": "IN",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "OUT",
+      "side": "right"
+    },
+    {
+      "number": "1",
+      "name": "ADJ",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 3,
+    "pitch": 2.54,
+    "pad_d": 2.0,
+    "drill": 1.1
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "LM317",
+    "text": ".subckt LM317 in adj out\nVdo in ind DC 2\nE1 c0 adj ind adj 1\nVr vr adj DC 1.25\nEx xh adj c0 vr 1000\nD1 xh yh DREG\nRy yh adj 1k\nEy y adj yh adj 0.001\nEc c adj c0 y 1\nE2 o adj c adj 1\nRo o out 0.05\nG1 in adj o out 20.0\nIadj in adj DC 50u\n.model DREG D(IS=1e-12 N=1)\n.ends LM317",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "params": {
+      "vref": 1.25,
+      "dropout": 2
+    }
+  }
+}

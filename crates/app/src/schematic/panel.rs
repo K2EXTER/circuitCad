@@ -45,19 +45,40 @@ impl SchEditor {
         ui.separator();
         let mut chosen = None;
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(true).show(ui, |ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索"));
+            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
+                .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
+            let cat_of = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
+            let mut cats: Vec<String> = self.library.iter().map(cat_of).collect();
+            cats.sort();
+            cats.dedup();
+            ui.horizontal(|ui| {
+                egui::ComboBox::from_id_salt("lib_cat")
+                    .selected_text(if self.lib_cat.is_empty() { "すべてのカテゴリ".to_string() } else { self.lib_cat.clone() })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.lib_cat, String::new(), "すべてのカテゴリ");
+                        for c in &cats {
+                            ui.selectable_value(&mut self.lib_cat, c.clone(), c);
+                        }
+                    });
+                ui.checkbox(&mut self.lib_sim_only, "◎のみ").on_hover_text("シミュレーションモデルのある部品だけを表示します");
+            });
             let f = self.lib_filter.to_lowercase();
             egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
                 // grouped by category, then by name
-                let cat = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
                 let mut order: Vec<usize> = (0..self.library.len()).collect();
-                order.sort_by_key(|&i| (cat(&self.library[i]), self.library[i].name.to_lowercase()));
+                order.sort_by_key(|&i| (cat_of(&self.library[i]), self.library[i].name.to_lowercase()));
                 let mut last = String::new();
                 for i in order {
                     let d = &self.library[i];
-                    let c = cat(d);
-                    if !f.is_empty() && ![&d.name, &d.description, &c].iter().any(|t| t.to_lowercase().contains(&f)) {
+                    let c = cat_of(d);
+                    if (!self.lib_cat.is_empty() && self.lib_cat != c) || (self.lib_sim_only && d.sim.is_none()) {
                         continue;
+                    }
+                    if !f.is_empty() {
+                        let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
+                        if ![d.name.as_str(), d.description.as_str(), c.as_str(), pins.as_str(), d.footprint_name().as_str()].iter().any(|t| t.to_lowercase().contains(&f)) {
+                            continue;
+                        }
                     }
                     if c != last {
                         ui.label(egui::RichText::new(&c).small().weak());
@@ -70,6 +91,23 @@ impl SchEditor {
                     }
                 }
             });
+            if let Some(d) = self.place_lib.and_then(|k| self.library.get(k)) {
+                ui.group(|ui| {
+                    ui.strong(&d.name);
+                    ui.small(format!("パッケージ: {}", d.footprint_name()));
+                    ui.small(&d.description);
+                    egui::CollapsingHeader::new("ピン表").id_salt("lib_pins").show(ui, |ui| {
+                        egui::Grid::new("lib_pin_grid").num_columns(2).show(ui, |ui| {
+                            for p in &d.pins {
+                                ui.small(&p.number);
+                                ui.small(&p.name);
+                                ui.end_row();
+                            }
+                        });
+                    });
+                    ui.small(if d.sim.is_some() { "シミュレーションモデルあり ◎" } else { "シミュレーションモデルなし (基板設計用)" });
+                });
+            }
             ui.small("◎ = シミュレーションモデルあり");
             ui.horizontal(|ui| {
                 if ui.button("新規作成…").clicked() {

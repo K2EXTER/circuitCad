@@ -1,0 +1,64 @@
+{
+  "name": "S8550",
+  "category": "トランジスタ",
+  "description": "PNP 汎用トランジスタ 25V 500mA (SOT-23, ピン1=B 2=E 3=C。S8050 の相補)。簡易モデル(パラメータは概算)",
+  "prefix": "Q",
+  "footprint_name": "SOT-23",
+  "pins": [
+    {
+      "number": "1",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "C",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "E",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "Q",
+    "name": "S8550",
+    "text": ".model S8550 PNP(IS=10f BF=250 BR=5 RB=20)",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ]
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "name": "AMS1117-5.0",
+  "category": "レギュレータ",
+  "description": "AMS1117-5.0 LDO 5V 1A (SOT-223, ピン1=GND 2=OUT 3=IN、タブはOUT)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)",
+  "prefix": "U",
+  "footprint_name": "SOT-223",
+  "pins": [
+    {
+      "number": "3",
+      "name": "IN",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "OUT",
+      "side": "right"
+    },
+    {
+      "number": "1",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -3.15,
+        "y": 2.3,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 1.5
+      },
+      {
+        "pin": "2",
+        "x": -3.15,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 1.5
+      },
+      {
+        "pin": "3",
+        "x": -3.15,
+        "y": -2.3,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 1.5
+      },
+      {
+        "pin": "2",
+        "x": 3.15,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 3.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "AMS1117-5.0",
+    "text": ".subckt AMS1117-5.0 in gnd out\nVdo in ind DC 1.1\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends AMS1117-5.0",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "params": {
+      "vout": 5.0,
+      "dropout": 1.1
+    }
+  }
+}

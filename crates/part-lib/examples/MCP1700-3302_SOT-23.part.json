@@ -1,0 +1,67 @@
+{
+  "name": "MCP1700-3302",
+  "category": "レギュレータ",
+  "description": "MCP1700-3302 低消費電流LDO 3.3V 250mA (SOT-23, ピン1=GND 2=VOUT 3=VIN)。ドロップアウト約0.2V。簡易マクロモデル(静止電流・過電流保護は無し、数値は概算)",
+  "prefix": "U",
+  "footprint_name": "SOT-23",
+  "pins": [
+    {
+      "number": "3",
+      "name": "VIN",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "VOUT",
+      "side": "right"
+    },
+    {
+      "number": "1",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "MCP1700-3302",
+    "text": ".subckt MCP1700-3302 in gnd out\nVdo in ind DC 0.2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 3.3\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.3\nG1 in gnd o out 3.0\n.model DREG D(IS=1e-12 N=1)\n.ends MCP1700-3302",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "params": {
+      "vout": 3.3,
+      "dropout": 0.2
+    }
+  }
+}

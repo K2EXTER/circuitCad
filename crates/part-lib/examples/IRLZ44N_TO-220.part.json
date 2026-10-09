@@ -1,0 +1,42 @@
+{
+  "name": "IRLZ44N",
+  "category": "MOSFET",
+  "description": "N チャネル パワーMOSFET 55V 47A (TO-220, ピン1=G 2=D 3=S)。ロジックレベル駆動 (5V で十分オン、Rds(on) 約 22mΩ)。簡易モデル(パラメータは概算)",
+  "prefix": "Q",
+  "footprint_name": "TO-220-3",
+  "pins": [
+    {
+      "number": "1",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "D",
+      "side": "top"
+    },
+    {
+      "number": "3",
+      "name": "S",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 3,
+    "pitch": 2.54,
+    "pad_d": 2.0,
+    "drill": 1.1
+  },
+  "sim": {
+    "kind": "model",
+    "element": "M",
+    "name": "IRLZ44N",
+    "text": ".model IRLZ44N NMOS(VTO=1.7 KP=13 LAMBDA=0.01 CGS=1.4n CGD=0.2n)",
+    "pins": [
+      "2",
+      "1",
+      "3"
+    ]
+  }
+}

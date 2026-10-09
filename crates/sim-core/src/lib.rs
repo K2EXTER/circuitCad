@@ -49,6 +49,8 @@ mod tests_mos;
 #[cfg(test)]
 mod tests_parts;
 #[cfg(test)]
+mod tests_parts_more;
+#[cfg(test)]
 mod tests_switch;
 #[cfg(test)]
 mod tests_thermal;
