@@ -479,6 +479,30 @@ mod tests {
         assert_eq!(ratsnest(&app.board_ed.board).len(), before, "one undo takes the whole run back");
     }
 
+    /// Schematic -> import -> autoplace -> autoroute on every shipped example: the placement is
+    /// always rule-clean and the router finishes most of the work.
+    #[test]
+    fn autoplace_then_autoroute_on_the_shipped_examples() {
+        use pcb_core::ratsnest::ratsnest;
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        for name in ["rc_lowpass", "led_blinker", "ne555_blinker", "opamp_amp", "regulator_led"] {
+            let mut app = App::default();
+            app.sch.load_path(root.join(format!("{name}.schjson")));
+            app.board_ed.import_from_schematic(&app.sch);
+            app.board_ed.autoplace();
+            assert!(app.board_ed.status.starts_with("自動配置"), "{name}: {}", app.board_ed.status);
+            assert!(pcb_core::drc::check(&app.board_ed.board).is_empty(), "{name}: {:?}", pcb_core::drc::check(&app.board_ed.board));
+            let before = ratsnest(&app.board_ed.board).len();
+            app.board_ed.autoroute(None);
+            let left = ratsnest(&app.board_ed.board).len();
+            println!("{name}: {before} -> {left} unrouted");
+            assert!(left * 2 <= before, "{name}: {before} -> {left}");
+            app.board_ed.undo();
+            app.board_ed.undo();
+            assert!(app.board_ed.board.parts.iter().all(|p| p.pos.x > 0.0 || p.pos.y > 0.0));
+        }
+    }
+
     /// Writes a scratch board with parts on both sides (not part of the repository):
     /// `cargo test -p app write_bottom_demo -- --ignored`
     #[test]

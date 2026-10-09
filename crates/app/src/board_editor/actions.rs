@@ -31,6 +31,24 @@ impl BoardEditor {
         };
     }
 
+    /// Pack the parts into rows (connected ones together) and fit the outline. One undo step.
+    pub fn autoplace(&mut self) {
+        self.checkpoint();
+        match pcb_core::autoplace::autoplace(&mut self.board) {
+            Ok(r) => {
+                self.violations.clear();
+                self.selected = None;
+                self.multi.clear();
+                self.fit_pending = true;
+                self.status = format!("自動配置: {} 個を並べ、外形を {} × {} mm にしました。位置は手で動かして調整できます", r.placed, r.width, r.height);
+            }
+            Err(e) => {
+                self.undo.pop();
+                self.status = e;
+            }
+        }
+    }
+
     pub fn run_drc(&mut self) {
         self.violations = drc::check(&self.board);
         self.status = format!("DRC: 違反 {} 件", self.violations.len());
