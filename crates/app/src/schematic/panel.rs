@@ -77,7 +77,7 @@ impl SchEditor {
                 ui.checkbox(&mut self.lib_sim_only, "◎のみ").on_hover_text("シミュレーションモデルのある部品だけを表示します");
             });
             let f = self.lib_filter.to_lowercase();
-            egui::ScrollArea::vertical().max_height(280.0).show(ui, |ui| {
+            egui::ScrollArea::vertical().max_height(280.0).auto_shrink([false, true]).show(ui, |ui| {
                 // grouped by category, then by name
                 let mut order: Vec<usize> = (0..self.library.len()).collect();
                 order.sort_by_key(|&i| (cat_of(&self.library[i]), self.library[i].name.to_lowercase()));
