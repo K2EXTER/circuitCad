@@ -346,5 +346,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+pub mod templates;
+
 #[cfg(test)]
 mod tests;
