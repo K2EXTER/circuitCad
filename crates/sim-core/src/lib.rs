@@ -29,6 +29,8 @@ mod tests;
 #[cfg(test)]
 mod tests_ac;
 #[cfg(test)]
+mod tests_blinker;
+#[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]
 mod tests_mos;

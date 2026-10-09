@@ -524,21 +524,74 @@ pub(crate) struct Attempt {
 }
 
 impl Compiled {
+    /// Newton-Raphson. Plain steps first; if that does not converge, again with backtracking.
     pub(crate) fn newton(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
+        match self.newton_with(x0.clone(), vj0.clone(), ctx, false) {
+            Err(Fail::NoConv) => self.newton_with(x0, vj0, ctx, true),
+            other => other,
+        }
+    }
+
+    /// With `backtrack`, a full step that makes the residual of the circuit equations larger is
+    /// halved until it helps. A regenerative loop (flip-flop, multivibrator) close to its
+    /// switching point has a nearly singular Jacobian, and the full step then overshoots wildly.
+    fn newton_with(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx, backtrack: bool) -> Result<Attempt, Fail> {
         let (mut x, mut vj) = (x0, vj0);
         let n_node_unknowns = self.n_nodes - 1;
+        // the previous point, its Newton step, its residual, its junction state and the fraction taken
+        let mut prev: Option<(Vec<f64>, Vec<f64>, f64, Vec<f64>, f64)> = None;
         for it in 1..=MAX_ITER {
             let (mut m, limited) = self.assemble(&mut vj, &x, ctx);
+            let n = m.n;
+            let mut r2 = f64::NAN;
+            // every equation balances to rounding level (relative to its largest term)
+            let mut balanced = false;
+            if backtrack {
+                let mut sum2 = 0.0;
+                balanced = true;
+                for i in 0..n {
+                    let (mut s, mut mag) = (0.0, m.b[i].abs());
+                    for k in 0..n {
+                        let t = m.a[i * n + k] * x[k];
+                        s += t;
+                        mag += t.abs();
+                    }
+                    let f = s - m.b[i];
+                    sum2 += f * f;
+                    if f.abs() > 1e-9 * mag + 1e-12 {
+                        balanced = false;
+                    }
+                }
+                r2 = sum2;
+                // junction limiting changes the equations, so compare only unlimited iterations
+                if let (false, Some((xp, dx, rp, vjp, lam))) = (limited, prev.as_mut()) {
+                    if r2 > *rp * 1.0001 && r2 > 1e-20 && *lam > 1e-3 {
+                        *lam *= 0.5;
+                        x = xp.iter().zip(dx.iter()).map(|(a, d)| a + *lam * d).collect();
+                        vj = vjp.clone();
+                        continue;
+                    }
+                }
+            }
+            let (x_old, vj_old) = if backtrack { (x.clone(), vj.clone()) } else { (vec![], vec![]) };
             lu_solve(m.n, &mut m.a, &mut m.b).map_err(|_| Fail::Singular)?;
             let xn = m.b;
             if xn.iter().any(|v| !v.is_finite()) {
                 return Err(Fail::NoConv);
             }
             let done = !limited && it > 1 && converged(&x, &xn, n_node_unknowns);
-            x = xn;
-            if done {
-                return Ok(Attempt { x, vj, iterations: it });
+            // Close to a regenerative switching point the Jacobian is nearly singular: the
+            // residual is already at rounding level while a poorly determined direction of x
+            // still moves a little. That is as good as the arithmetic can do, so accept it.
+            let stalled = backtrack && balanced && !limited && it > 1 && x.iter().zip(&xn).all(|(a, b)| (a - b).abs() < 1e-2);
+            if done || stalled {
+                return Ok(Attempt { x: xn, vj, iterations: it });
             }
+            if backtrack {
+                let dx: Vec<f64> = xn.iter().zip(&x_old).map(|(a, b)| a - b).collect();
+                prev = Some((x_old, dx, if limited { f64::INFINITY } else { r2 }, vj_old, 1.0));
+            }
+            x = xn;
         }
         Err(Fail::NoConv)
     }

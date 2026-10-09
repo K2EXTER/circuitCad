@@ -1,0 +1,369 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        -6,
+        0
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        10,
+        -8
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        30,
+        -8
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        10,
+        -2
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        30,
+        -2
+      ],
+      "rot": 1,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "47k",
+      "pos": [
+        6,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "56k",
+      "pos": [
+        26,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N3904",
+      "pos": [
+        10,
+        6
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "2N3904",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "C",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "E",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "Q",
+          "name": "2N3904",
+          "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "Q2",
+      "kind": "Custom",
+      "value": "2N3904",
+      "pos": [
+        30,
+        6
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "2N3904",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "C",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "E",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "Q",
+          "name": "2N3904",
+          "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        18,
+        14
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        18,
+        18
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        -6,
+        -2
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        -6,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        -10
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        10,
+        -6
+      ],
+      "text": "LED1"
+    },
+    {
+      "pos": [
+        10,
+        -4
+      ],
+      "text": "LED1"
+    },
+    {
+      "pos": [
+        10,
+        0
+      ],
+      "text": "COL1"
+    },
+    {
+      "pos": [
+        10,
+        2
+      ],
+      "text": "COL1"
+    },
+    {
+      "pos": [
+        30,
+        -10
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        30,
+        -6
+      ],
+      "text": "LED2"
+    },
+    {
+      "pos": [
+        30,
+        -4
+      ],
+      "text": "LED2"
+    },
+    {
+      "pos": [
+        30,
+        0
+      ],
+      "text": "COL2"
+    },
+    {
+      "pos": [
+        30,
+        2
+      ],
+      "text": "COL2"
+    },
+    {
+      "pos": [
+        6,
+        -2
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        6,
+        2
+      ],
+      "text": "BASE1"
+    },
+    {
+      "pos": [
+        6,
+        6
+      ],
+      "text": "BASE1"
+    },
+    {
+      "pos": [
+        26,
+        -2
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        26,
+        2
+      ],
+      "text": "BASE2"
+    },
+    {
+      "pos": [
+        26,
+        6
+      ],
+      "text": "BASE2"
+    },
+    {
+      "pos": [
+        10,
+        10
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        10
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        14
+      ],
+      "text": "COL1"
+    },
+    {
+      "pos": [
+        20,
+        14
+      ],
+      "text": "BASE2"
+    },
+    {
+      "pos": [
+        16,
+        18
+      ],
+      "text": "COL2"
+    },
+    {
+      "pos": [
+        20,
+        18
+      ],
+      "text": "BASE1"
+    }
+  ]
+}

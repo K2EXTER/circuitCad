@@ -136,8 +136,9 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         }
 
         let mut tries = 0;
+        let mut retried = false;
         let att: Attempt = loop {
-            let trap = !force_be;
+            let trap = !(force_be || retried);
             let ctx = Ctx {
                 gmin: GMIN,
                 scale: 1.0,
@@ -151,6 +152,9 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                     tries += 1;
                     result.retries += 1;
                     lands_on_bp = false;
+                    // the trapezoidal rule keeps the old capacitor current, which for a fast
+                    // switching event no step size can fix: retry with backward Euler
+                    retried = true;
                     h /= 4.0;
                     if tries > 12 || h < 1e-18 {
                         return Err(SimError::NoConvergence);
@@ -160,7 +164,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         };
 
         // accept the step: update the integration state from the new solution
-        let trap = !force_be;
+        let trap = !(force_be || retried);
         for e in &cm.ce {
             match e {
                 Ce::C { a, b, c, idx, .. } => {
@@ -179,7 +183,8 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         t = if lands_on_bp { bps[bp_idx] } else { t + h };
         x = att.x;
         vj = att.vj;
-        force_be = lands_on_bp;
+        // the step after a retry has no reliable current history either
+        force_be = lands_on_bp || retried;
         record(&mut result, t, &x, &cap_i, &cm);
     }
 
