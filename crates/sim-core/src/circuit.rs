@@ -1,5 +1,6 @@
 //! Simulator-side circuit: nodes and elements, independent of the schematic.
 
+use crate::expr::Expr;
 use crate::waveform::Waveform;
 use std::collections::HashMap;
 
@@ -111,6 +112,9 @@ pub enum Element {
     Vccs { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     /// Conducts between `a` and `b` when v(cp,cn) is above the model's threshold.
     Switch { name: String, a: usize, b: usize, cp: usize, cn: usize, model: SwitchModel },
+    /// Behavioural source. `voltage`: v(p) - v(n) = expr; otherwise the current expr flows from `p`
+    /// through the source to `n`.
+    BSource { name: String, p: usize, n: usize, voltage: bool, expr: Expr },
 }
 
 impl Element {
@@ -130,7 +134,8 @@ impl Element {
             | Element::Mosfet { name, .. }
             | Element::Vcvs { name, .. }
             | Element::Vccs { name, .. }
-            | Element::Switch { name, .. } => name,
+            | Element::Switch { name, .. }
+            | Element::BSource { name, .. } => name,
         }
     }
 }

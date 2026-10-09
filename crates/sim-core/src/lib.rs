@@ -4,6 +4,7 @@ mod ac;
 mod circuit;
 mod dc;
 mod dcsweep;
+mod expr;
 mod from_schematic;
 mod montecarlo;
 mod noise;
@@ -16,6 +17,7 @@ mod value;
 mod waveform;
 
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
+pub use expr::Expr;
 pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
@@ -44,6 +46,8 @@ mod tests_charger;
 mod tests_tp5100;
 #[cfg(test)]
 mod tests_ip2332;
+#[cfg(test)]
+mod tests_bsource;
 #[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]

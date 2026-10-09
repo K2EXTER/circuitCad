@@ -81,6 +81,8 @@ pub(crate) enum Ce {
     Q { name: String, c: usize, b: usize, bi: usize, e: usize, m: BjtModel, slot: usize },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
     S { name: String, a: usize, b: usize, cp: usize, cn: usize, m: SwitchModel },
+    /// `br` is only meaningful for a voltage-type source.
+    B { name: String, p: usize, n: usize, voltage: bool, br: usize, c: crate::expr::CExpr },
 }
 
 /// (gmin, (step, trapezoidal) when dynamic)
@@ -95,6 +97,9 @@ pub(crate) struct Compiled {
     n_slots: usize,
     /// No diode, transistor or switch: the equations are linear, so one solve is exact.
     linear: bool,
+    /// Behavioural sources can make Newton cycle between two points (a clipped feedback loop),
+    /// so the backtracking line search also rejects steps that do not reduce the residual.
+    has_b: bool,
     /// Factorisations of the linear system keyed by (gmin, dynamic step); a few are kept because
     /// the step shrinks to land on source corners and then returns to the nominal value.
     cache: std::cell::RefCell<Vec<(FactorKey, std::rc::Rc<Factor>)>>,
@@ -153,7 +158,8 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
                 union(*c, *e);
                 union(*b, *e);
             }
-            Element::Capacitor { .. } | Element::ISource { .. } | Element::Vccs { .. } => {}
+            Element::BSource { p, n, voltage: true, .. } => union(*p, *n),
+            Element::Capacitor { .. } | Element::ISource { .. } | Element::Vccs { .. } | Element::BSource { .. } => {}
         }
     }
     let g = find(&mut parent, 0);
@@ -213,7 +219,7 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::Mosfet { d, g, s, .. } => *d == 0 || *g == 0 || *s == 0,
         Element::Switch { a, b, cp, cn, .. } => *a == 0 || *b == 0 || *cp == 0 || *cn == 0,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
-        Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } => *p == 0 || *n == 0,
+        Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } | Element::BSource { p, n, .. } => *p == 0 || *n == 0,
     })
 }
 
@@ -326,6 +332,11 @@ impl Compiled {
                     let (vab, vc) = (v(x, *a) - v(x, *b), v(x, *cp) - v(x, *cn));
                     let i = m.eval(vc).0 * vab;
                     push(name, i, vab, vec![("Vc".into(), vc)], vab * i);
+                }
+                Ce::B { name, p, n, voltage, br, c } => {
+                    let vv = v(x, *p) - v(x, *n);
+                    let i = if *voltage { x[*br] } else { c.eval(x, t.unwrap_or(0.0)).0 };
+                    push(name, i, vv, vec![], vv * i);
                 }
                 Ce::Q { name, c, b, bi, e, m, .. } => {
                     let pol = if m.pnp { -1.0 } else { 1.0 };

@@ -91,7 +91,7 @@ impl Compiled {
                 r2 = sum2;
                 // junction limiting changes the equations, so compare only unlimited iterations
                 if let (false, Some((xp, dx, rp, vjp, lam))) = (limited, prev.as_mut())
-                    && r2 > *rp * 1.0001 && r2 > 1e-20 && *lam > 1e-3 {
+                    && r2 > *rp * (if self.has_b { 0.9999 } else { 1.0001 }) && r2 > 1e-20 && *lam > 1e-3 {
                         *lam *= 0.5;
                         x = xp.iter().zip(dx.iter()).map(|(a, d)| a + *lam * d).collect();
                         vj = vjp.clone();

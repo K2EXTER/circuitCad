@@ -12,6 +12,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     let mut n_slots = 0;
     let (mut n_caps, mut n_inds) = (0, 0);
     let mut ce = vec![];
+    let mut b_exprs: Vec<(usize, &crate::expr::Expr)> = vec![];
     // branch unknowns are numbered after all node unknowns; node count is fixed after the loop,
     // so keep branch ordinals and offset them afterwards
     let mut internal = 0;
@@ -61,6 +62,16 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
             Element::Mosfet { name, d, g, s, model } => ce.push(Ce::M { name: name.clone(), d: *d, g: *g, s: *s, m: model.clone() }),
             Element::Switch { name, a, b, cp, cn, model } => ce.push(Ce::S { name: name.clone(), a: *a, b: *b, cp: *cp, cn: *cn, m: model.clone() }),
+            Element::BSource { name, p, n, voltage, expr } => {
+                let br = if *voltage {
+                    n_br += 1;
+                    br_base + n_br - 1
+                } else {
+                    0
+                };
+                ce.push(Ce::B { name: name.clone(), p: *p, n: *n, voltage: *voltage, br, c: crate::expr::CExpr::empty() });
+                b_exprs.push((ce.len() - 1, expr));
+            }
             Element::Bjt { name, c, b, e, model } => {
                 let bi = if model.rb > 0.0 {
                     n_nodes += 1;
@@ -73,8 +84,24 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
         }
     }
-    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. }));
-    Compiled { node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, cache: Default::default(), ce }
+    // currents of V sources, inductors, E sources and voltage-type B sources can be read by an expression
+    let branch_of: Vec<(String, usize)> = ce
+        .iter()
+        .filter_map(|e| match e {
+            Ce::V { name, br, .. } | Ce::L { name, br, .. } | Ce::E { name, br, .. } => Some((name.clone(), *br)),
+            Ce::B { name, voltage: true, br, .. } => Some((name.clone(), *br)),
+            _ => None,
+        })
+        .collect();
+    for (at, expr) in b_exprs {
+        let compiled = expr.compile(&|nm| branch_of.iter().find(|(n, _)| n.eq_ignore_ascii_case(nm)).map(|(_, b)| *b));
+        if let Ce::B { c, .. } = &mut ce[at] {
+            *c = compiled;
+        }
+    }
+    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. }));
+    let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
+    Compiled { node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

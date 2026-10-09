@@ -234,6 +234,36 @@ impl Compiled {
                     m.g(*d, *s, gmin);
                     m.g(*g, *s, gmin);
                 }
+                Ce::B { p, n, voltage, br, c, .. } => {
+                    // linearise f(x) around the present solution: f0 + sum g_k (x_k - x0_k)
+                    let (f0, grads) = c.eval(x, if ctx.dynamic.is_some() { ctx.t } else { 0.0 });
+                    let col = |var: &crate::expr::Var| match var {
+                        crate::expr::Var::Node(k) => *k - 1,
+                        crate::expr::Var::Unknown(i) => *i,
+                    };
+                    let value = |var: &crate::expr::Var| match var {
+                        crate::expr::Var::Node(k) => v(x, *k),
+                        crate::expr::Var::Unknown(i) => x[*i],
+                    };
+                    let rest: f64 = f0 - c.vars.iter().zip(&grads).map(|(var, g)| g * value(var)).sum::<f64>();
+                    if *voltage {
+                        m.branch(*p, *n, *br);
+                        for (var, g) in c.vars.iter().zip(&grads) {
+                            m.at(*br, col(var), -g);
+                        }
+                        m.b[*br] += rest;
+                    } else {
+                        for (var, g) in c.vars.iter().zip(&grads) {
+                            if *p != 0 {
+                                m.at(*p - 1, col(var), *g);
+                            }
+                            if *n != 0 {
+                                m.at(*n - 1, col(var), -g);
+                            }
+                        }
+                        m.current(*p, *n, rest);
+                    }
+                }
                 Ce::Q { c, b, bi, e, m: bm, slot, .. } => {
                     if bm.rb > 0.0 {
                         m.g(*b, *bi, 1.0 / bm.rb);
