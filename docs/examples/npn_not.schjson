@@ -1,0 +1,175 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 100u 1u 1u 400u 1m)",
+      "pos": [
+        0,
+        14
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        10,
+        8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        20,
+        -4
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N3904",
+      "pos": [
+        20,
+        8
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "2N3904",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "C",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "E",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "Q",
+          "name": "2N3904",
+          "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        12
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        16
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        12,
+        8
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        16,
+        8
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        20,
+        -6
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        20,
+        -2
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        20,
+        4
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        20,
+        12
+      ],
+      "text": "GND"
+    }
+  ]
+}

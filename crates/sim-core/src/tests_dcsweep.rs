@@ -132,3 +132,21 @@ fn cmos_inverter_example_sweeps() {
     assert!(m.vth > 1.2 && m.vth < 2.1, "{m:?}");
     assert!(m.nml() > 1.0 && m.nmh() > 1.0, "{m:?}");
 }
+
+#[test]
+fn npn_not_example_sweeps_and_switches() {
+    let sch: sch_core::Schematic = serde_json::from_str(include_str!("../../../docs/examples/npn_not.schjson")).unwrap();
+    let c = from_schematic(&sch).unwrap();
+    let r = dc_sweep(&c, &sweep("V2", 0.0, 5.0, 0.05)).unwrap();
+    let out = &r.signal("V(OUT)").unwrap().values;
+    let m = inverter_metrics(&r.x, out).expect("an inverting curve");
+    assert!((m.voh - 5.0).abs() < 1e-3 && m.vol < 0.3, "{m:?}");
+    assert!(m.vil < m.vth && m.vth < m.vih && m.vth > 0.6 && m.vth < 2.5, "{m:?}");
+    // the same circuit driven by its pulse: high in -> low out, then back
+    let t = transient(&c, &TranSettings { tstop: 1e-3, tstep: 5e-6, uic: false }).unwrap();
+    let o = t.signals.iter().find(|s| s.name == "V(OUT)").unwrap();
+    let at = |tt: f64| o.values[t.time.iter().position(|x| *x >= tt).unwrap()];
+    assert!(at(50e-6) > 4.9, "input low: output high");
+    assert!(at(300e-6) < 0.3, "input high: output low");
+    assert!(at(800e-6) > 4.9, "input low again");
+}
