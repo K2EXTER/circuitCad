@@ -169,6 +169,9 @@ pub struct BoardEditor {
     order: order::OrderState,
     order_preview_src: Option<pcb_core::gerber_view::Preview>,
     last_export_dir: Option<PathBuf>,
+    /// The running guided lesson, and whether the DRC has been run since the last edit.
+    lesson: Option<lesson::BoardLesson>,
+    drc_ran: bool,
 }
 
 impl Default for BoardEditor {
@@ -211,6 +214,8 @@ impl Default for BoardEditor {
             order: order::OrderState::default(),
             order_preview_src: None,
             last_export_dir: None,
+            lesson: None,
+            drc_ran: false,
         }
     }
 }
@@ -245,6 +250,7 @@ mod canvas;
 mod interact;
 mod draw;
 mod order;
+pub mod lesson;
 mod panel;
 #[cfg(test)]
 mod tests;

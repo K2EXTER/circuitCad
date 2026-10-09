@@ -5,6 +5,7 @@ use super::*;
 impl BoardEditor {
     /// Remember the current board before a change.
     pub(super) fn checkpoint(&mut self) {
+        self.drc_ran = false;
         self.undo.push(self.board.clone());
         if self.undo.len() > 200 {
             self.undo.remove(0);

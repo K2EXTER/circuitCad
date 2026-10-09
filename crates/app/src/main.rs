@@ -85,6 +85,16 @@ impl eframe::App for App {
                             ui.close();
                         }
                     }
+                    ui.separator();
+                    if ui.button(board_editor::lesson::TITLE).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
+                        self.mode = Mode::Board;
+                        if !self.sch.load_sample(board_editor::BoardEditor::lesson_circuit()) {
+                            self.board_ed.status = "レッスンの回路を読み込めませんでした".into();
+                        } else {
+                            self.board_ed.start_lesson();
+                        }
+                        ui.close();
+                    }
                 });
                 ui.menu_button("編集", |ui| {
                     if ui.button("元に戻す (Ctrl+Z)").clicked() {
@@ -122,6 +132,7 @@ impl eframe::App for App {
             return;
         }
         self.board_ed.order_window(ui.ctx());
+        self.board_ed.lesson_window(ui.ctx());
         egui::Panel::left("board_tools").min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
         egui::CentralPanel::default().show(ui, |ui| self.board_ed.canvas(ui));
     }
@@ -501,6 +512,26 @@ mod tests {
             app.board_ed.undo();
             assert!(app.board_ed.board.parts.iter().all(|p| p.pos.x > 0.0 || p.pos.y > 0.0));
         }
+    }
+
+    /// The board lesson ticks all its steps when the learner does what it asks.
+    #[test]
+    fn the_board_lesson_walks_from_schematic_to_the_order_window() {
+        let mut app = App::default();
+        assert!(app.sch.load_sample(BoardEditor::lesson_circuit()));
+        app.board_ed.start_lesson();
+        let progress = |a: &mut App| a.board_ed.lesson_progress();
+        assert_eq!(progress(&mut app), 0);
+        app.board_ed.import_from_schematic(&app.sch);
+        assert_eq!(progress(&mut app), 1);
+        app.board_ed.autoplace();
+        assert_eq!(progress(&mut app), 2);
+        app.board_ed.autoroute(None);
+        assert_eq!(progress(&mut app), 3, "{}", app.board_ed.status);
+        app.board_ed.run_drc();
+        assert_eq!(progress(&mut app), 4, "{}", app.board_ed.status);
+        app.board_ed.open_order();
+        assert_eq!(progress(&mut app), 5);
     }
 
     /// Writes a scratch board with parts on both sides (not part of the repository):

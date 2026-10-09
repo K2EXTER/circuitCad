@@ -344,6 +344,16 @@ pub fn lesson_titles() -> Vec<&'static str> {
 }
 
 impl SchEditor {
+    /// Replace the sheet by a sample circuit (used by the board lesson). False if it cannot be read.
+    pub fn load_sample(&mut self, json: &str) -> bool {
+        let Ok(sch) = serde_json::from_str::<Schematic>(json) else { return false };
+        self.new_file();
+        self.sch = sch;
+        self.reset_history();
+        self.fit_pending = true;
+        true
+    }
+
     /// Load a lesson's circuit and start tracking its steps.
     pub fn start_lesson(&mut self, idx: usize) {
         let Some(lesson) = LESSONS.get(idx) else { return };
