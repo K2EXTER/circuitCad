@@ -149,6 +149,7 @@ pub struct SchEditor {
     mc_seed: u64,
     /// What the Monte Carlo run measures.
     mc_kind: McKind,
+    panel_tab: PanelTab,
     mc_metric: TranMetric,
     /// The running lesson and the circuit it started from.
     lesson: Option<ActiveLesson>,
@@ -184,6 +185,14 @@ struct SweepView {
     plot: PlotState,
     /// The x axis is the circuit temperature (℃) instead of a source voltage.
     temp: bool,
+}
+
+/// The two pages of the left panel: drawing (tools, parts, settings of the selected part, ERC)
+/// and analysis (running simulations and reading the numbers).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PanelTab {
+    Draw,
+    Analyze,
 }
 
 /// Quantity a Monte Carlo run measures.
@@ -341,6 +350,7 @@ impl Default for SchEditor {
             mc_tol_l: "10".into(),
             mc_seed: 1,
             mc_kind: McKind::Dc,
+            panel_tab: PanelTab::Draw,
             mc_metric: TranMetric::RiseTime,
             lesson: None,
             lesson_base: Schematic::default(),

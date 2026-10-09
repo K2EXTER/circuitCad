@@ -144,3 +144,23 @@ fn the_charger_lesson_runs_and_ticks_its_steps() {
     e.update_lesson();
     assert_eq!(progress(&e), 3, "{}", e.status);
 }
+
+#[test]
+fn the_left_panel_follows_the_lesson_between_drawing_and_analysis() {
+    let mut e = SchEditor::default();
+    assert!(e.panel_tab == PanelTab::Draw, "a fresh editor starts on the drawing page");
+    e.start_lesson(0);
+    e.update_lesson();
+    assert!(e.panel_tab == PanelTab::Analyze, "step 1 runs an analysis");
+    e.run_dc();
+    e.update_lesson();
+    assert!(e.panel_tab == PanelTab::Draw, "step 2 changes a value");
+    // the learner may look around; the page changes again only when the step does
+    e.panel_tab = PanelTab::Analyze;
+    e.update_lesson();
+    assert!(e.panel_tab == PanelTab::Analyze);
+    set_value(&mut e, "R2", "30k");
+    e.run_dc();
+    e.update_lesson();
+    assert!(e.panel_tab == PanelTab::Draw, "step 3 is the slider");
+}

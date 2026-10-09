@@ -6,11 +6,15 @@ use super::*;
 
 pub(super) struct ActiveLesson {
     pub(super) idx: usize,
+    /// The step whose left-panel page has been shown already.
+    pub(super) shown: Option<usize>,
     /// Steps that have been completed (once done, a step stays done).
     pub(super) done: Vec<bool>,
 }
 
 struct Step {
+    /// Which page of the left panel this step works on.
+    tab: PanelTab,
     title: &'static str,
     detail: &'static str,
     done: fn(&SchEditor) -> bool,
@@ -119,21 +123,25 @@ const LESSONS: &[Lesson] = &[
         setup: |e| e.mc_out = "MID".into(),
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "DC動作点を解析する",
-                detail: "左のパネルの「DC動作点を解析」を押します。回路図の各点に電圧が出ます。真ん中の点 (MID) は電源 5V のちょうど半分、2.5V のはずです。配線の色は、低い電圧が青、高い電圧が赤です。",
+                detail: "左パネルの「DC動作点を解析」を押します。回路図の各点に電圧が出ます。真ん中の点 (MID) は電源 5V のちょうど半分、2.5V のはずです。配線の色は、低い電圧が青、高い電圧が赤です。",
                 done: dc_ok,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "R2 を 30k にして、もう一度解析する",
-                detail: "R2 をクリックで選び、左の「値」を 30k にして、もう一度「DC動作点を解析」。MID は 5 × 30k ÷ (10k+30k) = 3.75V に変わります。",
+                detail: "R2 をクリックで選び、左の「値」を 30k にします。そのあと「解析」タブで、もう一度「DC動作点を解析」を押します。MID は 5 × 30k ÷ (10k+30k) = 3.75V に変わります。",
                 done: r2_changed_and_measured,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "「自動で再計算」をオンにして、スライダーを動かす",
                 detail: "「自動で再計算」にチェックを入れ、R2 を選んで「スライダー」を左右に動かしてみましょう。動かすたびに MID の電圧が変わります。式どおりに変わっているか確かめてください。",
                 done: live_on,
             },
             Step {
+                tab: PanelTab::Analyze,
                 title: "部品の誤差で電圧がどれだけずれるか見る",
                 detail: "「実験: 温度とばらつき」の「ばらつき解析を実行」を押します。実際の抵抗は 5% くらいの誤差があるので、MID は 2.5V ぴったりにはなりません。どの抵抗が効いているかも出ます。",
                 done: mc_done,
@@ -148,16 +156,19 @@ const LESSONS: &[Lesson] = &[
         setup: |_| {},
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "DC動作点を解析して、電流を見る",
                 detail: "「DC動作点を解析」を押し、「電流表示」をオンにします。R1 と LED の下に電流が出ます。LED の電圧は 2V くらい、電流は (5−2)÷330 で約 9mA です。",
                 done: currents_shown,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "R1 を 100 にして、電流の変化を見る",
                 detail: "R1 を選んで値を 100 にし、もう一度解析します。電流が約 3 倍になります。抵抗を小さくしすぎると LED が壊れる理由です (一般的な LED は 20mA 程度まで)。",
                 done: r1_changed_and_measured,
             },
             Step {
+                tab: PanelTab::Analyze,
                 title: "温度を変えて動作点がどう動くか見る",
                 detail: "「実験: 温度とばらつき」の「温度スイープを実行」を押します。温度が上がると LED の電圧が下がり、電流がわずかに増えるのがグラフで分かります。",
                 done: temp_sweep_done,
@@ -172,16 +183,19 @@ const LESSONS: &[Lesson] = &[
         setup: |_| {},
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "AC解析を実行する",
                 detail: "「AC解析を実行」を押します。下にボード線図 (上が大きさ dB、下が位相) が出ます。この回路は R=1k、C=159n なので fc = 1 ÷ (2π×1k×159n) ≒ 1kHz。1kHz のあたりで 0dB から −3dB に下がり始めます。",
                 done: ac_done,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "C1 を 1.59u にして、もう一度解析する",
                 detail: "C1 の値を 1.59u (10倍) にして「AC解析を実行」。カットオフが 1/10 の約 100Hz に動きます。コンデンサが大きいほど低い周波数から信号を弱めます。",
                 done: c1_changed_and_ac,
             },
             Step {
+                tab: PanelTab::Analyze,
                 title: "部品の誤差でカットオフがどれだけずれるか見る",
                 detail: "C1 を 159n に戻し、「実験: 温度とばらつき」で「測るもの」を「カットオフ周波数 (AC)」、「測る点」をフィルタの出力 (R1 と C1 の間) にして「ばらつき解析を実行」。許容差 5%/10% の部品だと、カットオフは 1kHz ぴったりにならず 1 割ほど広がります。フィルタを正確に作るには、許容差の小さい部品が必要です。",
                 done: mc_cutoff_done,
@@ -201,11 +215,13 @@ const LESSONS: &[Lesson] = &[
         },
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "過渡解析で入力と出力の波形を見る",
                 detail: "「過渡解析を実行」を押します。入力 (IN) が 0V→5V になると、出力 (OUT) は 5V→0V に反転します。信号の High/Low が逆になる、これが NOT です。",
                 done: tran_done,
             },
             Step {
+                tab: PanelTab::Analyze,
                 title: "DCスイープで切り替わる電圧を見る",
                 detail: "「DCスイープを実行」(電源 V2 を 0〜5V) を押し、OUT を選びます。入力が約 0.7V を超えると出力が急に下がります。そこがスイッチが切り替わる点です。",
                 done: sweep_done,
@@ -220,11 +236,13 @@ const LESSONS: &[Lesson] = &[
         setup: |e| e.set_tran_settings("3", "2m"),
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "過渡解析を実行する",
                 detail: "555 は時間とともに状態が変わる回路なので、DC動作点ではなく過渡解析で見ます。終了 3 秒、刻み 2m のまま「過渡解析を実行」。OUT の波形が High/Low を繰り返します。TH (コンデンサ C1 の電圧) が三角っぽく上下するのも見てみましょう。R1=1k、R2=68k、C1=10u だと約 1Hz です。",
                 done: tran_done,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "C1 を 1u にして、もう一度解析する",
                 detail: "C1 を 1u にして「過渡解析を実行」。周期が 1/10 になり、波形が 10 倍の速さで繰り返します。",
                 done: c1_changed_and_tran,
@@ -239,16 +257,19 @@ const LESSONS: &[Lesson] = &[
         setup: |e| e.set_tran_settings("5.5m", "5u"),
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "過渡解析を実行して、行き過ぎを見る",
                 detail: "「過渡解析を実行」を押し、C1 の電圧 (C1 のつなぎ目の信号) を選びます。電源が 0V→5V になった直後、5V を超えて揺れながら落ち着きます。左の「ステップ応答の指標」を開くと、行き過ぎが約 35% と出ます。",
                 done: tran_done,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "R1 を 100 にして、もう一度解析する",
                 detail: "R1 を 20 から 100 にして「過渡解析を実行」。揺れがなくなり、行き過ぎが 0% になります。抵抗が振動のエネルギーを熱にして逃がす (ダンピング) ためです。代わりに立ち上がりは遅くなります。",
                 done: r1_changed_and_tran,
             },
             Step {
+                tab: PanelTab::Analyze,
                 title: "部品の誤差で行き過ぎがどれだけずれるか見る",
                 detail: "R1 を 20 に戻し、「実験: 温度とばらつき」で「測るもの」を「ステップ応答」、「指標」を「オーバーシュート」、「測る点」を C1 の電圧にして「ばらつき解析を実行」。部品の誤差で、行き過ぎの大きさが何 % ずれるかが分かります。",
                 done: mc_overshoot_done,
@@ -263,16 +284,19 @@ const LESSONS: &[Lesson] = &[
         setup: |e| e.set_tran_settings("12m", "20u"),
         steps: &[
             Step {
+                tab: PanelTab::Analyze,
                 title: "過渡解析で、充電の3段階を見る",
                 detail: "「過渡解析を実行」を押し、BAT (電池の端子) と CHRG、STDBY の信号を選びます。BAT は 2.6V から、①ゆっくり上がる (プリチャージ、2.9V まで)、②まっすぐ上がる (定電流)、③4.2V で頭打ち (定電圧) の順に変わります。CHRG は充電中 Low (LED が点く)、満タンで High になり、代わりに STDBY が Low になります。",
                 done: tran_done,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "PROG の抵抗 R1 を 12k にして、もう一度解析する",
                 detail: "R1 を 6k から 12k にして「過渡解析を実行」。充電電流が半分になるので、BAT の上がり方が緩やかになり、満タンまでに時間がかかります。電流は左の「電流表示」でも確認できます (DC動作点を解析)。",
                 done: r1_changed_and_tran,
             },
             Step {
+                tab: PanelTab::Draw,
                 title: "電池の初期電圧を 3.6V にして、もう一度解析する",
                 detail: "R1 を 6k に戻し、C1 の値の IC=2.6 を IC=3.6 に変えて「過渡解析を実行」。最初から 2.9V を超えているので、プリチャージを飛ばして最初から定電流で充電が始まります。",
                 done: c1_changed_and_tran,
@@ -299,7 +323,7 @@ impl SchEditor {
         self.lesson_base = self.sch.clone();
         self.fit_pending = true;
         (lesson.setup)(self);
-        self.lesson = Some(ActiveLesson { idx, done: vec![false; lesson.steps.len()] });
+        self.lesson = Some(ActiveLesson { idx, shown: None, done: vec![false; lesson.steps.len()] });
         self.status = format!("レッスン「{}」を始めました。右の案内に沿って操作してみましょう", lesson.title);
     }
 
@@ -308,11 +332,17 @@ impl SchEditor {
         let Some(active) = self.lesson.as_ref() else { return };
         let Some(lesson) = LESSONS.get(active.idx) else { return };
         let Some(cur) = active.done.iter().position(|d| !d) else { return };
-        if (lesson.steps[cur].done)(self) {
-            if let Some(a) = self.lesson.as_mut() {
+        if (lesson.steps[cur].done)(self)
+            && let Some(a) = self.lesson.as_mut() {
                 a.done[cur] = true;
             }
-        }
+        // open the page of the left panel that the step on hand works on
+        let Some(active) = self.lesson.as_mut() else { return };
+        if let Some(next) = active.done.iter().position(|d| !d)
+            && active.shown != Some(next) {
+                active.shown = Some(next);
+                self.panel_tab = lesson.steps[next].tab;
+            }
     }
 
     /// Floating guide window for the running lesson.
@@ -328,6 +358,7 @@ impl SchEditor {
         let mut next = None;
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(360.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
+            ui.small("操作は左パネルで行います。部品の値の変更は「作図」タブ、解析の実行は「解析」タブです (手順に合わせて自動で切り替わります)");
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();
             for (k, step) in lesson.steps.iter().enumerate() {

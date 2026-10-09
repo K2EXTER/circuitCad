@@ -9,21 +9,35 @@ impl SchEditor {
     }
 
     pub(super) fn side_panel_body(&mut self, ui: &mut egui::Ui) {
-        self.panel_parts(ui);
-        self.panel_properties(ui);
-        self.panel_erc(ui);
-        self.panel_dc(ui);
-        self.panel_tran(ui);
-        self.panel_ac(ui);
-        self.panel_sweep(ui);
-        self.panel_noise(ui);
-        self.panel_variation(ui);
-        self.panel_results(ui);
-        self.panel_forms(ui);
+        ui.heading("回路図");
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.panel_tab, PanelTab::Draw, "作図")
+                .on_hover_text("部品を置く、配線する、部品の値を変える、配線ミスを点検する (ERC)");
+            ui.selectable_value(&mut self.panel_tab, PanelTab::Analyze, "解析")
+                .on_hover_text("シミュレーションを実行して、電圧・波形・周波数特性・ノイズ・温度やばらつきの影響を見る");
+        });
+        ui.separator();
+        match self.panel_tab {
+            PanelTab::Draw => {
+                self.panel_parts(ui);
+                self.panel_properties(ui);
+                self.panel_erc(ui);
+                self.panel_forms(ui);
+            }
+            PanelTab::Analyze => {
+                ui.small("知りたいことに合わせて選びます: 各点の電圧 → DC動作点 / 時間とともに → 過渡解析 / 周波数ごとの強さ → AC解析 / 入力と出力の関係 → DCスイープ / 雑音 → ノイズ解析 / 実物とのずれ → 温度とばらつき");
+                self.panel_dc(ui);
+                self.panel_tran(ui);
+                self.panel_ac(ui);
+                self.panel_sweep(ui);
+                self.panel_noise(ui);
+                self.panel_variation(ui);
+                self.panel_results(ui);
+            }
+        }
     }
 
     pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
-        ui.heading("回路図");
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.tool, Tool::Select, "選択").on_hover_text("部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます");
             ui.selectable_value(&mut self.tool, Tool::Wire, "配線").on_hover_text("端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックか右クリックで終わります");
@@ -176,6 +190,7 @@ impl SchEditor {
                             c.value = format!("{v}{rest}");
                             self.slider = Some((i, base, c.value.clone()));
                         }
+                        ui.checkbox(&mut self.live, "自動で再計算").on_hover_text("オンにすると、値を動かすたびに、開いている解析 (DC / 過渡 / AC) をやり直します。重い回路ではオフにしてください");
                     }
                 }
                 if c.kind == Kind::VSource {
