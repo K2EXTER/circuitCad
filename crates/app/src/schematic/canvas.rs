@@ -194,9 +194,14 @@ impl SchEditor {
                     }
                 }
             }
-        for pr in &self.problems {
+        for (k, pr) in self.problems.iter().enumerate() {
             if let Some(a) = pr.at {
-                painter.circle_stroke(self.to_screen(rect, (a.0 as f32, a.1 as f32)), 11.0, Stroke::new(2.0, Color32::from_rgb(230, 0, 200)));
+                let color = match pr.severity {
+                    Severity::Error => Color32::from_rgb(230, 0, 200),
+                    Severity::Warning => Color32::from_rgb(230, 160, 20),
+                };
+                let focus = self.erc_focus == Some(k);
+                painter.circle_stroke(self.to_screen(rect, (a.0 as f32, a.1 as f32)), if focus { 16.0 } else { 11.0 }, Stroke::new(if focus { 3.5 } else { 2.0 }, color));
             }
         }
 

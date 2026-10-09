@@ -4,7 +4,7 @@
 mod netlist;
 mod spice;
 
-pub use netlist::{erc, extract, net_at, Net, PinRef, Problem};
+pub use netlist::{erc, extract, net_at, Net, PinRef, Problem, Severity};
 pub use spice::to_spice;
 
 use serde::{Deserialize, Serialize};

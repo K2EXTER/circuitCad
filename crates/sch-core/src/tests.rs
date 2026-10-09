@@ -265,3 +265,67 @@ fn net_at_keeps_label_names() {
     s.labels.push(Label { pos: (-2, 0), text: "SIG".into() });
     assert_eq!(net_at(&s, (-2, 0)).unwrap(), "SIG");
 }
+
+#[test]
+fn every_erc_finding_explains_itself() {
+    let mut s = divider();
+    s.components[1].refdes = "V1".into();
+    for p in erc(&s) {
+        assert!(p.hint.chars().count() > 20, "no explanation for: {}", p.message);
+    }
+    assert!(!erc(&s).is_empty());
+}
+
+#[test]
+fn a_wire_that_stops_short_of_a_pin_is_found_and_pointed_out() {
+    let mut s = divider();
+    let r1 = s.components[1].pins();
+    // the wire from the source ends one grid step before R1's pin 1
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (r1[0].1.0 - 1, r1[0].1.1));
+    let found = erc(&s);
+    let dangling = found.iter().find(|p| p.message.contains("線の端")).expect("dangling end reported");
+    assert_eq!(dangling.severity, Severity::Warning);
+    assert_eq!(dangling.at, Some((r1[0].1.0 - 1, r1[0].1.1)));
+    let pin = found.iter().find(|p| p.message.contains("R1 ピン1")).expect("pin reported");
+    assert_eq!(pin.severity, Severity::Error);
+    assert!(pin.hint.contains("近く"), "the hint names the nearby wire end: {}", pin.hint);
+}
+
+#[test]
+fn a_source_with_both_terminals_on_one_net_is_a_short() {
+    let mut s = divider();
+    wire(&mut s, (0, -2), (0, 2));
+    let found = erc(&s);
+    let short = found.iter().find(|p| p.message.contains("電源 V1") && p.message.contains("短絡")).expect("source short");
+    assert_eq!(short.severity, Severity::Error);
+    assert_eq!(short.at, Some((0, 0)));
+}
+
+#[test]
+fn a_clean_circuit_has_no_findings() {
+    let mut s = divider();
+    let r2 = s.components[2].pins();
+    for (a, b) in [((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), r2[0].1), (r2[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 6))] {
+        wire(&mut s, a, b);
+    }
+    assert_eq!(erc(&s), vec![]);
+}
+
+#[test]
+fn a_missing_ground_is_explained() {
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0);
+    let p = erc(&s).into_iter().find(|p| p.message.contains("GND")).unwrap();
+    assert!(p.hint.contains("基準"));
+    assert_eq!(p.at, None);
+}
+
+#[test]
+fn a_label_named_gnd_counts_as_the_reference() {
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0);
+    assert!(erc(&s).iter().any(|p| p.message.contains("GNDシンボル")));
+    s.labels.push(Label { pos: (-2, 0), text: "GND".into() });
+    assert!(!erc(&s).iter().any(|p| p.message.contains("GNDシンボル")));
+}

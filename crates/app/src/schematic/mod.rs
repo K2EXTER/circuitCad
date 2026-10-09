@@ -10,7 +10,7 @@ use sim_core::{
 };
 use std::collections::BTreeSet;
 use crate::source_form::SourceForm;
-use sch_core::{erc, extract, net_at, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Wire};
+use sch_core::{erc, extract, net_at, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Severity, Wire};
 use std::path::PathBuf;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -99,6 +99,10 @@ pub struct SchEditor {
     zoom: f32, // pixels per grid step
     pan: Vec2, // grid position at the screen centre
     problems: Vec<Problem>,
+    /// The ERC finding whose explanation is open.
+    erc_focus: Option<usize>,
+    /// An ERC check has been run since the last change of the list.
+    erc_ran: bool,
     pub status: String,
     pub library: Vec<PartDef>,
     lib_errors: Vec<String>,
@@ -345,6 +349,8 @@ impl Default for SchEditor {
             zoom: 22.0,
             pan: Vec2::new(10.0, 6.0),
             problems: vec![],
+            erc_focus: None,
+            erc_ran: false,
             status: "回路図: 部品を選んで配置し、配線ツールで線をつなぎます".into(),
         }
     }

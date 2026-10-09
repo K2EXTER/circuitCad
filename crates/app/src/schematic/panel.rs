@@ -178,12 +178,36 @@ impl SchEditor {
             self.delete_selected();
         }
         ui.separator();
-        if ui.button("ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンがどこにもつながっていない、部品番号がダブっている、などを探して赤紫の丸で示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
+        if ui.button("ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
             self.problems = erc(&self.sch);
-            self.status = format!("ERC: 問題 {} 件", self.problems.len());
+            self.erc_focus = None;
+            self.erc_ran = true;
+            let errors = self.problems.iter().filter(|p| p.severity == Severity::Error).count();
+            self.status = format!("ERC: エラー {} 件、注意 {} 件", errors, self.problems.len() - errors);
         }
-        for p in &self.problems {
-            ui.colored_label(Color32::from_rgb(230, 0, 200), &p.message);
+        if self.erc_ran && self.problems.is_empty() {
+            ui.colored_label(Color32::from_rgb(60, 160, 90), "✔ 問題は見つかりませんでした");
+        }
+        let mut jump = None;
+        for (k, p) in self.problems.iter().enumerate() {
+            let (mark, color) = match p.severity {
+                Severity::Error => ("✖", Color32::from_rgb(220, 40, 60)),
+                Severity::Warning => ("▲", Color32::from_rgb(210, 150, 20)),
+            };
+            let label = egui::RichText::new(format!("{mark} {}", p.message)).color(color);
+            let tip = if p.at.is_some() { "クリックで、その場所へ移動して説明を表示します" } else { "クリックで説明を表示します" };
+            if ui.link(label).on_hover_text(tip).clicked() {
+                self.erc_focus = Some(k);
+                jump = p.at;
+            }
+            if self.erc_focus == Some(k) {
+                ui.indent(("erc_hint", k), |ui| {
+                    ui.small(&p.hint);
+                });
+            }
+        }
+        if let Some(at) = jump {
+            self.pan = Vec2::new(at.0 as f32, at.1 as f32);
         }
         ui.separator();
         ui.horizontal(|ui| {
