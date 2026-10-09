@@ -2,7 +2,9 @@
 //! point with the healthy circuit, so a learner sees what a failure does to the voltages.
 
 use crate::circuit::{Circuit, Element};
+use crate::ac::{ac_analysis, AcSettings};
 use crate::dc::{dc_op, DcResult, SimError};
+use crate::montecarlo::minus_3db;
 use crate::measure::{wave_measure, WaveMeasure};
 use crate::spectrum::stats;
 use crate::tran::{transient, TranSettings};
@@ -279,6 +281,92 @@ impl TranFaultReport {
     }
 }
 
+/// A fault compared in the frequency domain: the gain at a node, healthy and broken.
+#[derive(Clone, Debug)]
+pub struct AcFaultReport {
+    pub element: String,
+    pub fault: Fault,
+    pub node: String,
+    pub freq: Vec<f64>,
+    pub healthy_db: Vec<f64>,
+    /// `Err` when the broken circuit cannot be solved.
+    pub faulted_db: Result<Vec<f64>, SimError>,
+}
+
+/// Runs the AC analysis on the healthy circuit and with `element` broken as `fault`, and returns the
+/// gain (dB) at `node` for both.
+pub fn simulate_fault_ac(c: &Circuit, element: &str, fault: Fault, s: &AcSettings, node: &str) -> Result<AcFaultReport, SimError> {
+    let broken = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
+    let signal = format!("V({node})");
+    let h = ac_analysis(c, s)?;
+    let hs = h.signal(&signal).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
+    let faulted_db = ac_analysis(&broken, s).and_then(|r| r.signal(&signal).map(|g| g.db()).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
+    Ok(AcFaultReport { element: element.into(), fault, node: node.into(), freq: h.freq.clone(), healthy_db: hs.db(), faulted_db })
+}
+
+fn peak(freq: &[f64], db: &[f64]) -> Option<(f64, f64)> {
+    (0..db.len()).max_by(|&a, &b| db[a].total_cmp(&db[b])).map(|i| (freq[i], db[i]))
+}
+
+fn hz(f: f64) -> String {
+    format!("{}Hz", format_value((f * 100.0).round() / 100.0))
+}
+
+impl AcFaultReport {
+    /// What changed in the frequency response, in plain Japanese.
+    pub fn summary(&self) -> Vec<String> {
+        let head = format!("{} を「{}」にしたときの V({}) の周波数特性", self.element, self.fault.label(), self.node);
+        let f_db = match &self.faulted_db {
+            Err(e) => return vec![format!("{head}: AC解析が計算できませんでした ({e})")],
+            Ok(d) => d,
+        };
+        let mut out = vec![head];
+        let mut changed = false;
+        let (fr, hd) = (&self.freq, &self.healthy_db);
+        if let (Some((hf, hp)), Some((ff, fp))) = (peak(fr, hd), peak(fr, f_db)) {
+            if (hp - fp).abs() > 1.0 {
+                out.push(format!("最大ゲイン: {hp:.1} dB ({}) → {fp:.1} dB ({})", hz(hf), hz(ff)));
+                changed = true;
+            } else if (hf / ff).ln().abs() > 0.3 && hp > -60.0 {
+                out.push(format!("ゲインが最大になる周波数: {} → {}", hz(hf), hz(ff)));
+                changed = true;
+            }
+        }
+        let mag = |db: &[f64]| db.iter().map(|d| 10f64.powf(d / 20.0)).collect::<Vec<_>>();
+        match (minus_3db(fr, &mag(hd)), minus_3db(fr, &mag(f_db))) {
+            (Some(a), Some(b)) if (a / b).ln().abs() > 0.1 => {
+                out.push(format!("-3dB点 (カットオフ): {} → {}", hz(a), hz(b)));
+                changed = true;
+            }
+            (Some(a), None) => {
+                out.push(format!("-3dB点 ({}) が範囲内になくなりました (ゲインが下がらない、または全域で低い)", hz(a)));
+                changed = true;
+            }
+            (None, Some(b)) => {
+                out.push(format!("-3dB点が {} に現れました", hz(b)));
+                changed = true;
+            }
+            _ => {}
+        }
+        if let (Some(a), Some(b)) = (hd.first(), f_db.first())
+            && (a - b).abs() > 1.0
+        {
+            out.push(format!("低い周波数 ({}) のゲイン: {a:.1} dB → {b:.1} dB", hz(fr[0])));
+            changed = true;
+        }
+        if let (Some(a), Some(b)) = (hd.last(), f_db.last())
+            && (a - b).abs() > 1.0
+        {
+            out.push(format!("高い周波数 ({}) のゲイン: {a:.1} dB → {b:.1} dB", hz(*fr.last().unwrap())));
+            changed = true;
+        }
+        if !changed {
+            out.push("周波数特性はほとんど変わりませんでした。別の点を見るか、周波数の範囲を変えてみましょう".into());
+        }
+        out
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,5 +456,27 @@ mod tests {
         let s = simulate_fault_tran(&c, "C1", Fault::Short, &set, "OUT").unwrap();
         assert!(s.summary().iter().any(|l| l.contains("見られなくなりました") || l.contains("振幅")), "{:?}", s.summary());
         assert!(simulate_fault_tran(&c, "C1", Fault::Open, &set, "NOPE").is_err());
+    }
+
+    #[test]
+    fn ac_fault_moves_the_cutoff_and_the_summary_says_so() {
+        use crate::ac::AcSweep;
+        // R1 = 1k, C1 = 159 nF: cutoff 1 kHz. R1 x10 moves it to 100 Hz; C1 open removes it.
+        let mut c = Circuit::new();
+        let (vin, out) = (c.node("IN"), c.node("OUT"));
+        c.add(Element::VSource { name: "V1".into(), p: vin, n: 0, wave: crate::waveform::parse_source_full("AC 1").unwrap().wave, ac: Some((1.0, 0.0)) });
+        c.add(Element::Resistor { name: "R1".into(), a: vin, b: out, r: 1e3 });
+        c.add(Element::Capacitor { name: "C1".into(), a: out, b: 0, c: 159e-9 });
+        let set = AcSettings { fstart: 10.0, fstop: 100e3, sweep: AcSweep::Decade(20) };
+        let r = simulate_fault_ac(&c, "R1", Fault::Scale(10.0), &set, "OUT").unwrap();
+        let text = r.summary().join("
+");
+        assert!(text.contains("-3dB点") && text.contains("Hz → "), "{text}");
+        let open = simulate_fault_ac(&c, "C1", Fault::Open, &set, "OUT").unwrap().summary().join("
+");
+        assert!(open.contains("-3dB点") && open.contains("なくなりました"), "{open}");
+        assert!(simulate_fault_ac(&c, "C1", Fault::Open, &set, "NOPE").is_err());
+        // a part that does not matter leaves the response alone
+        assert!(simulate_fault_ac(&c, "R1", Fault::Scale(1.0), &set, "OUT").is_err());
     }
 }

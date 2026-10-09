@@ -1,16 +1,29 @@
 //! Fault simulation panel: break one part and see what changes at DC.
 
 use super::*;
-use sim_core::{breakable, simulate_fault, simulate_fault_tran, with_fault, Fault, FaultReport, TranFaultReport};
+use sim_core::{breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, TranFaultReport};
 
 /// The last fault run.
 pub(super) struct FaultView {
     pub(super) report: Result<FaultReport, Vec<String>>,
 }
 
-/// The last time-domain fault run: the node's waveform healthy and broken, drawn on top of each other.
-pub(super) struct FaultTranView {
-    pub(super) report: Result<TranFaultReport, Vec<String>>,
+/// How a fault is compared: at DC (voltages), in time (waveform) or in frequency (gain).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum FaultDomain {
+    Dc,
+    Tran,
+    Ac,
+}
+
+pub(super) enum FaultWave {
+    Tran(TranFaultReport),
+    Ac(AcFaultReport),
+}
+
+/// The last waveform fault run (time or frequency domain): the node's waveform healthy and broken, drawn on top of each other.
+pub(super) struct FaultWaveView {
+    pub(super) report: Result<FaultWave, Vec<String>>,
     plot: PlotState,
 }
 
@@ -49,35 +62,58 @@ impl SchEditor {
     }
 
     pub fn set_fault_tran(&mut self, node: &str) {
-        self.fault_tran = true;
+        self.fault_domain = FaultDomain::Tran;
         self.fault_node = node.into();
     }
 
-    pub(super) fn run_fault_tran(&mut self) {
+    pub fn set_fault_ac(&mut self, node: &str) {
+        self.fault_domain = FaultDomain::Ac;
+        self.fault_node = node.into();
+    }
+
+    pub(super) fn run_fault_wave(&mut self) {
         let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
+        let ac = self.fault_domain == FaultDomain::Ac;
         let report = (|| {
             let node = self.fault_watch_node().ok_or_else(|| vec!["見る点 (ノード) がありません。回路に名前のついた点 (ラベルなど) を付けてください".to_string()])?;
-            let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
-                return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
-            };
             let c = self.sim_circuit()?;
-            simulate_fault_tran(&c, self.fault_part.trim(), fault, &TranSettings { tstop, tstep, uic: self.tran_uic }, &node).map_err(|e| vec![e.to_string()])
+            let part = self.fault_part.trim();
+            if ac {
+                let (Some(f0), Some(f1), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
+                    return Err(vec!["AC解析の開始・終了周波数と点数を数値で入力してください (例: 10, 1Meg, 20)".to_string()]);
+                };
+                let set = AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) };
+                simulate_fault_ac(&c, part, fault, &set, &node).map(FaultWave::Ac).map_err(|e| vec![e.to_string()])
+            } else {
+                let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+                    return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
+                };
+                simulate_fault_tran(&c, part, fault, &TranSettings { tstop, tstep, uic: self.tran_uic }, &node).map(FaultWave::Tran).map_err(|e| vec![e.to_string()])
+            }
         })();
         self.status = match &report {
-            Ok(r) => format!("故障シミュレーション (過渡): {} を{}、V({}) を比較", r.element, fault.label(), r.node),
+            Ok(_) => format!("故障シミュレーション ({}): {} を{}", if ac { "AC" } else { "過渡" }, self.fault_part, fault.label()),
             Err(e) => format!("故障シミュレーションに失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        let tstop = parse_value(&self.tran_tstop).unwrap_or(1.0);
-        self.fault_wave = Some(FaultTranView { report, plot: PlotState::new(tstop) });
+        let plot = if ac {
+            let (f0, f1) = (parse_value(&self.ac_fstart).unwrap_or(10.0), parse_value(&self.ac_fstop).unwrap_or(1e6));
+            PlotState::log(f0.max(1e-30), f1.max(f0 * 1.001))
+        } else {
+            PlotState::new(parse_value(&self.tran_tstop).unwrap_or(1.0))
+        };
+        self.fault_wave = Some(FaultWaveView { report, plot });
         self.wave_mode = WaveMode::Fault;
     }
 
     pub(super) fn fault_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.fault_wave.as_mut() else { return };
         let mut close = false;
-        let FaultTranView { report, plot: st } = view;
+        let FaultWaveView { report, plot: st } = view;
         ui.horizontal(|ui| {
-            ui.strong("故障シミュレーション (過渡): 正常と故障の比較");
+            ui.strong(match report {
+                Ok(FaultWave::Ac(_)) => "故障シミュレーション (AC): 周波数特性の比較",
+                _ => "故障シミュレーション (過渡): 正常と故障の比較",
+            });
             if ui.button("閉じる").clicked() {
                 close = true;
             }
@@ -90,26 +126,45 @@ impl SchEditor {
                 }
             }
             Ok(r) => {
+                let (lines, window) = match r {
+                    FaultWave::Tran(t) => (t.summary(), Some(t.window)),
+                    FaultWave::Ac(a) => (a.summary(), None),
+                };
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(300.0);
-                        for (k, l) in r.summary().iter().enumerate() {
+                        for (k, l) in lines.iter().enumerate() {
                             if k == 0 {
                                 ui.strong(l);
                             } else {
                                 ui.label(l);
                             }
                         }
-                        ui.small(format!("測った範囲: {} 〜 {}", eng(r.window.0, "s"), eng(r.window.1, "s")));
+                        if let Some(w) = window {
+                            ui.small(format!("測った範囲: {} 〜 {}", eng(w.0, "s"), eng(w.1, "s")));
+                        }
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
-                    let (h_name, f_name) = (format!("V({}) 正常", r.node), format!("V({}) {}", r.node, r.fault.label()));
-                    let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.healthy_time, v: &r.healthy }];
-                    if let Ok((t, v)) = &r.faulted {
-                        traces.push(Trace { name: &f_name, color: PALETTE[0], t, v });
+                    match r {
+                        FaultWave::Tran(r) => {
+                            let (h_name, f_name) = (format!("V({}) 正常", r.node), format!("V({}) {}", r.node, r.fault.label()));
+                            let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.healthy_time, v: &r.healthy }];
+                            if let Ok((t, v)) = &r.faulted {
+                                traces.push(Trace { name: &f_name, color: PALETTE[0], t, v });
+                            }
+                            let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
+                            plot::draw_group(ui, rect, egui::Id::new("fault_plot"), &traces, st, 0, &style, true);
+                        }
+                        FaultWave::Ac(r) => {
+                            let (h_name, f_name) = (format!("V({}) 正常", r.node), format!("V({}) {}", r.node, r.fault.label()));
+                            let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.freq, v: &r.healthy_db }];
+                            if let Ok(v) = &r.faulted_db {
+                                traces.push(Trace { name: &f_name, color: PALETTE[0], t: &r.freq, v });
+                            }
+                            let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
+                            plot::draw_group(ui, rect, egui::Id::new("fault_plot_ac"), &traces, st, 0, &style, true);
+                        }
                     }
-                    let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
-                    plot::draw_group(ui, rect, egui::Id::new("fault_plot"), &traces, st, 0, &style, true);
                 });
             }
         }
@@ -119,8 +174,8 @@ impl SchEditor {
     }
 
     pub(super) fn run_fault(&mut self) {
-        if self.fault_tran {
-            self.run_fault_tran();
+        if self.fault_domain != FaultDomain::Dc {
+            self.run_fault_wave();
             return;
         }
         let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
@@ -210,10 +265,11 @@ impl SchEditor {
         });
         ui.horizontal(|ui| {
             ui.label("比べる");
-            ui.selectable_value(&mut self.fault_tran, false, "DC (電圧)").on_hover_text("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります");
-            ui.selectable_value(&mut self.fault_tran, true, "過渡 (波形)").on_hover_text("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います");
+            ui.selectable_value(&mut self.fault_domain, FaultDomain::Dc, "DC (電圧)").on_hover_text("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります");
+            ui.selectable_value(&mut self.fault_domain, FaultDomain::Tran, "過渡 (波形)").on_hover_text("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います");
+            ui.selectable_value(&mut self.fault_domain, FaultDomain::Ac, "AC (周波数特性)").on_hover_text("周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます");
         });
-        if self.fault_tran {
+        if self.fault_domain != FaultDomain::Dc {
             ui.horizontal(|ui| {
                 ui.label("見る点");
                 let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();

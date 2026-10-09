@@ -186,13 +186,38 @@ fn transient_fault_on_the_rectifier_is_explained_in_the_panel_flow() {
     e.analyze_fault();
     assert!(e.status.contains("過渡"), "{}", e.status);
     assert!(e.has_wave());
-    let r = e.fault_wave.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let Ok(fault::FaultWave::Tran(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected a transient report") };
     let text = r.summary().join("\n");
     assert!(text.contains("振幅 (p-p)") && text.contains("周波数: 100Hz → 50Hz"), "{text}");
     // with no node chosen, the likely output net is found; a wrong node is explained
     e.fault_node.clear();
     assert_eq!(e.fault_watch_node().as_deref(), Some("VDC"));
     e.set_fault_tran("NOPE");
+    e.analyze_fault();
+    assert!(e.status.contains("失敗"), "{}", e.status);
+}
+
+#[test]
+fn ac_fault_on_the_lowpass_example_moves_the_cutoff() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "rc_lowpass.schjson").unwrap().1;
+    let node = extract(&sch).into_iter().find(|n| n.pins.iter().any(|p| p.refdes == "C1") && n.name != "GND").unwrap().name;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.set_ac_settings("10", "1Meg", "20");
+    e.set_fault("R1", 2); // R1 x10
+    e.set_fault_ac(&node);
+    e.analyze_fault();
+    assert!(e.status.contains("AC"), "{}", e.status);
+    let Ok(fault::FaultWave::Ac(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected an AC report") };
+    let text = r.summary().join("\n");
+    assert!(text.contains("-3dB点 (カットオフ)"), "{text}");
+    // C1 open: the filter stops filtering
+    e.set_fault("C1", 0);
+    e.analyze_fault();
+    let Ok(fault::FaultWave::Ac(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected an AC report") };
+    assert!(r.summary().join("\n").contains("なくなりました"), "{:?}", r.summary());
+    // a bad frequency setting is explained
+    e.set_ac_settings("abc", "1Meg", "20");
     e.analyze_fault();
     assert!(e.status.contains("失敗"), "{}", e.status);
 }

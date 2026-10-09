@@ -167,10 +167,10 @@ pub struct SchEditor {
     wiz_kind: usize,
     wiz_in: Vec<String>,
     fault_part: String,
-    /// Compare in the time domain (true) or at DC (false), and the node watched in the time domain.
-    fault_tran: bool,
+    /// Compare in the time domain or AC, or at DC, and the node watched in the time domain.
+    fault_domain: fault::FaultDomain,
     fault_node: String,
-    fault_wave: Option<fault::FaultTranView>,
+    fault_wave: Option<fault::FaultWaveView>,
     fault_kind: usize,
     fault_view: Option<fault::FaultView>,
     fault_scan: Vec<fault::ScanRow>,
@@ -395,7 +395,7 @@ impl Default for SchEditor {
             wiz_kind: 0,
             wiz_in: vec![],
             fault_part: String::new(),
-            fault_tran: false,
+            fault_domain: fault::FaultDomain::Dc,
             fault_node: String::new(),
             fault_wave: None,
             fault_kind: 0,

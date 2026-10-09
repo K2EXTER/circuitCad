@@ -29,7 +29,7 @@ pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, Dc
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
 pub use designcalc::{divider, e24, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
-pub use fault::{applicable as fault_applicable, breakable, simulate_fault, simulate_fault_tran, with_fault, Fault, FaultReport, PartChange, TranFaultReport};
+pub use fault::{applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
 pub use diagnose::diagnose;
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
