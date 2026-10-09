@@ -527,6 +527,64 @@ mod tests {
         std::fs::write(root.join("tp5100_charger.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Writes docs/examples/ip2332_charger.schjson: `cargo test -p app write_ip2332_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_ip2332_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let app = App::default();
+        let ip = app.sch.library.iter().find(|d| d.name == "IP2332").expect("IP2332 is bundled");
+        let mut s = sch_core::Schematic::default();
+        let label = |s: &mut sch_core::Schematic, comp: usize, pin: &str, text: &str| {
+            let at = s.components[comp].pins().into_iter().find(|p| p.0 == pin).unwrap().1;
+            s.labels.push(sch_core::Label { pos: at, text: text.into() });
+        };
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "5".into();
+        label(&mut s, v, "+", "VIN");
+        label(&mut s, v, "-", "GND");
+        let cin = s.add(Kind::Capacitor, (10, 0), 1);
+        s.components[cin].value = "10u".into();
+        label(&mut s, cin, "1", "VIN");
+        label(&mut s, cin, "2", "GND");
+        let u = s.add_custom(ip.symbol(), &ip.default_value(), &ip.footprint_name(), (34, 0), 0);
+        for (pin, net) in [("8", "VIN"), ("6", "LX"), ("5", "BAT"), ("7", "GND"), ("1", "NTC"), ("2", "ISET"), ("4", "LED1"), ("3", "LED2")] {
+            label(&mut s, u, pin, net);
+        }
+        let l = s.add(Kind::Inductor, (52, -8), 0);
+        s.components[l].value = "2.2u".into();
+        label(&mut s, l, "1", "LX");
+        label(&mut s, l, "2", "BAT");
+        let cout = s.add(Kind::Capacitor, (64, 0), 1);
+        s.components[cout].value = "10u".into();
+        label(&mut s, cout, "1", "BAT");
+        label(&mut s, cout, "2", "GND");
+        let cell = s.add(Kind::Capacitor, (76, 0), 1);
+        s.components[cell].value = "470u IC=2.6 ESR=0.1".into();
+        label(&mut s, cell, "1", "BAT");
+        label(&mut s, cell, "2", "GND");
+        let riset = s.add(Kind::Resistor, (10, 16), 1);
+        s.components[riset].value = "4.3k".into();
+        label(&mut s, riset, "1", "ISET");
+        label(&mut s, riset, "2", "GND");
+        let rntc = s.add(Kind::Resistor, (22, 16), 1);
+        s.components[rntc].value = "10k".into();
+        label(&mut s, rntc, "1", "NTC");
+        label(&mut s, rntc, "2", "GND");
+        // LED1 is a constant-current output (no resistor), LED2 needs one
+        let d1 = s.add(Kind::Led, (48, 18), 0);
+        label(&mut s, d1, "A", "LED1");
+        label(&mut s, d1, "K", "GND");
+        let r2 = s.add(Kind::Resistor, (48, 30), 0);
+        s.components[r2].value = "2k".into();
+        label(&mut s, r2, "1", "LED2");
+        label(&mut s, r2, "2", "A2");
+        let d2 = s.add(Kind::Led, (62, 30), 0);
+        label(&mut s, d2, "A", "A2");
+        label(&mut s, d2, "K", "GND");
+        std::fs::write(root.join("ip2332_charger.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// The router on a real circuit: the NE555 blinker laid out on a grid of parts.
     #[test]
     fn autoroute_handles_the_ne555_blinker() {
@@ -559,7 +617,7 @@ mod tests {
     fn autoplace_then_autoroute_on_the_shipped_examples() {
         use pcb_core::ratsnest::ratsnest;
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-        for name in ["rc_lowpass", "led_blinker", "ne555_blinker", "opamp_amp", "regulator_led"] {
+        for name in ["rc_lowpass", "led_blinker", "ne555_blinker", "opamp_amp", "regulator_led", "tp5100_charger", "ip2332_charger"] {
             let mut app = App::default();
             app.sch.load_path(root.join(format!("{name}.schjson")));
             app.board_ed.import_from_schematic(&app.sch);

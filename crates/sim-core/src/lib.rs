@@ -43,6 +43,8 @@ mod tests_charger;
 #[cfg(test)]
 mod tests_tp5100;
 #[cfg(test)]
+mod tests_ip2332;
+#[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]
 mod tests_logic;
