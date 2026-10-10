@@ -37,7 +37,6 @@ impl SchEditor {
                 self.panel_forms(ui);
             }
             PanelTab::Analyze => {
-                ui.small("知りたいことに合わせて選びます: 各点の電圧 → DC動作点 / 時間とともに → 過渡解析 / 周波数ごとの強さ → AC解析 / 入力と出力の関係 → DCスイープ / 雑音 → ノイズ解析 / 実物とのずれ → 温度とばらつき");
                 ui.horizontal(|ui| {
                     // one button that flips: open everything, then close everything, then open again
                     let all_open = self.sec_mode == 1;
