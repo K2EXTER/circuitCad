@@ -663,9 +663,20 @@ pub fn decoupling_checks(board: &Board) -> Vec<Violation> {
 /// Where two tracks of the same layer meet at an angle sharper than 90 degrees. The wedge of
 /// copper-free space between them traps etchant ("acid trap") and the corner can over-etch; it also
 /// makes a fast signal reflect. Use 45-degree bends (an interior angle of 135 degrees) instead.
+/// A corner that lies on a pad or a via is not reported: the pad's copper fills the point of the wedge
+/// (several tracks meeting under a part's pad is how a pad is normally wired).
 pub fn acute_angle_checks(board: &Board) -> Vec<Violation> {
     let mut out = vec![];
     let tracks = &board.tracks;
+    let covered = |p: Point, side: Side| {
+        board.pads.iter().any(|pd| {
+            (pd.drill.is_some() || pd.side == side)
+                && match pd.shape {
+                    PadShape::Circle { d } => p.dist(pd.pos) <= d / 2.0 + 1e-6,
+                    PadShape::Rect { w, h } | PadShape::Oval { w, h } => (p.x - pd.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - pd.pos.y).abs() <= h / 2.0 + 1e-6,
+                }
+        }) || board.vias.iter().any(|via| p.dist(via.pos) <= via.diameter / 2.0 + 1e-6)
+    };
     for (i, t) in tracks.iter().enumerate() {
         for u in tracks.iter().skip(i + 1).filter(|u| u.side == t.side) {
             for (p, q) in [(t.a, t.b), (t.b, t.a)] {
@@ -677,6 +688,9 @@ pub fn acute_angle_checks(board: &Board) -> Vec<Violation> {
                 } else {
                     continue;
                 };
+                if covered(p, t.side) {
+                    continue;
+                }
                 let (v1, v2) = ((q.x - p.x, q.y - p.y), (far.x - p.x, far.y - p.y));
                 let (l1, l2) = (v1.0.hypot(v1.1), v2.0.hypot(v2.1));
                 if l1 < 1e-6 || l2 < 1e-6 {
@@ -898,6 +912,26 @@ mod tests {
             c.pads.push(p);
         }
         assert!(heat_pads(&c).is_empty());
+    }
+
+    #[test]
+    fn a_sharp_corner_under_a_pad_or_via_is_not_an_acid_trap() {
+        let mut b = board();
+        let corner = Point::new(10.0, 10.0);
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (15.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (14.0, 12.0), 0.25));
+        assert_eq!(acute_angle_checks(&b).len(), 1, "in the open it is reported");
+        b.pads.push(Pad::new(corner, PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
+        assert!(acute_angle_checks(&b).is_empty(), "under a pad it is filled with copper");
+        // a pad on the other side does not cover it ...
+        b.pads[0].side = Side::Bottom;
+        assert_eq!(acute_angle_checks(&b).len(), 1);
+        // ... unless it goes through the board; a via covers it too
+        b.pads[0].drill = Some(0.6);
+        assert!(acute_angle_checks(&b).is_empty());
+        b.pads.clear();
+        b.vias.push(Via { pos: corner, diameter: 0.6, drill: 0.3 });
+        assert!(acute_angle_checks(&b).is_empty());
     }
 
     fn ic_board(cap_x: Option<f64>) -> Board {
