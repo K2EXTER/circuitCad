@@ -43,16 +43,61 @@ struct App {
     mode: Mode,
     sch: SchEditor,
     board_ed: BoardEditor,
+    /// Where the screenshot being taken goes (the capture arrives a frame after the request).
+    shot_path: Option<std::path::PathBuf>,
+    /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
+    auto_shot: Option<(std::path::PathBuf, u32)>,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default() }
+        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, auto_shot: None }
+    }
+}
+
+impl App {
+    /// `--screenshot`: waits a few frames so the analyses and layout have settled, takes the capture, then quits.
+    fn tick_auto_screenshot(&mut self, ui: &egui::Ui) {
+        let Some((path, left)) = self.auto_shot.as_mut() else { return };
+        ui.ctx().request_repaint();
+        if *left > 0 {
+            *left -= 1;
+        } else if self.shot_path.is_none() {
+            self.shot_path = Some(path.clone());
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+        }
+    }
+
+    /// Writes the captured frame as a PNG once the viewport hands it back.
+    fn finish_screenshot(&mut self, ui: &egui::Ui) {
+        let Some(path) = self.shot_path.clone() else { return };
+        let shot = ui.input(|i| {
+            i.events.iter().find_map(|e| match e {
+                egui::Event::Screenshot { image, .. } => Some(image.clone()),
+                _ => None,
+            })
+        });
+        let Some(img) = shot else { return };
+        self.shot_path = None;
+        let [w, h] = img.size;
+        let rgba: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
+        let msg = match image::save_buffer(&path, &rgba, w as u32, h as u32, image::ColorType::Rgba8) {
+            Ok(()) => format!("画面を保存しました: {}", path.display()),
+            Err(e) => format!("画像を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
+        };
+        if self.auto_shot.take().is_some() {
+            println!("{msg}");
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        self.sch.status = msg.clone();
+        self.board_ed.status = msg;
     }
 }
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.finish_screenshot(ui);
+        self.tick_auto_screenshot(ui);
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図");
@@ -73,6 +118,15 @@ impl eframe::App for App {
                     }
                     if ui.button("名前を付けて保存…").clicked() {
                         if sch_mode { self.sch.save(true) } else { self.board_ed.save(true) }
+                    }
+                    ui.separator();
+                    if ui.button("画面をPNGで保存…").on_hover_text("いま見えている画面 (回路図・電圧の色・波形・基板) を画像にします。レポートや質問への添付に使えます").clicked() {
+                        if let Some(p) = rfd::FileDialog::new().add_filter("PNG画像", &["png"]).set_file_name("circuitCad.png").save_file() {
+                            self.shot_path = Some(p);
+                            // the dialog is closed by the time the next frame is drawn, so the capture shows the app only
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                        }
+                        ui.close();
                     }
                     if !sch_mode {
                         ui.separator();
@@ -172,8 +226,12 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--export dir]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
+    if let Some(i) = args.iter().position(|a| a == "--screenshot")
+        && let Some(p) = args.get(i + 1) {
+            app.auto_shot = Some((p.into(), 40));
+        }
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
         if args.iter().any(|a| a == "--dc") {

@@ -16,5 +16,6 @@ part-lib = { version = "0.1.0", path = "../part-lib" }
 pcb-core = { version = "0.1.0", path = "../pcb-core" }
 rfd = "0.17.2"
 sch-core = { version = "0.1.0", path = "../sch-core" }
+image = { version = "0.25", default-features = false, features = ["png"] }
 serde_json = "1.0.151"
 sim-core = { version = "0.1.0", path = "../sim-core" }
