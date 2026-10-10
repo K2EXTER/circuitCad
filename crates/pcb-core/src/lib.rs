@@ -14,6 +14,7 @@ pub mod geom;
 pub mod gerber;
 pub mod gerber_view;
 pub mod model;
+pub mod model3d;
 pub mod netlist;
 pub mod outline;
 pub mod package;

@@ -167,6 +167,8 @@ pub struct BoardEditor {
     size_h: f64,
     /// Corner radius (mm) for rectangular outlines; 0 = square corners.
     size_r: f64,
+    /// The "3Dで見る" window.
+    view3d: view3d::View3d,
     fit_pending: bool,
     /// A left drag with Alt held pans the view (until the button is released).
     alt_pan: bool,
@@ -216,6 +218,7 @@ impl Default for BoardEditor {
             size_w: 50.0,
             size_h: 40.0,
             size_r: 0.0,
+            view3d: view3d::View3d::default(),
             fit_pending: true,
             alt_pan: false,
             order: order::OrderState::default(),
@@ -249,6 +252,7 @@ const BG: Color32 = Color32::from_rgb(18, 22, 18);
 mod history;
 mod view;
 mod width;
+mod view3d;
 mod select;
 mod route;
 mod tools;

@@ -51,4 +51,16 @@ impl BoardEditor {
             self.board.set_rect_outline(x0, y0, x1, y1);
         }
     }
+
+    /// Rounds every corner of the outline with radius `r` mm (the "いまの外形の角を丸める" button).
+    pub fn round_outline(&mut self, r: f64) {
+        self.size_r = r;
+        if r > 0.0 && self.board.outline.len() >= 3 {
+            self.checkpoint();
+            self.board.outline = pcb_core::outline::round_corners(&self.board.outline, r);
+            self.status = format!("基板の角を R{r} mm で丸めました ({} 点)", self.board.outline.len());
+        } else {
+            self.status = "「角R」に 0 より大きい値を入れてください".into();
+        }
+    }
 }

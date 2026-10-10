@@ -25,6 +25,7 @@ const TIPS: &[&str] = &[
     "「パラメータスイープ」で部品の値を何通りか振ると、カットオフや波形のなまり方の違いを重ねて比べられます",
     "AC解析の「安定性の余裕」で位相余裕・ゲイン余裕が見られます。サンプル opamp_loop_gain で、出力に付けたコンデンサを大きくすると余裕が減る様子を試せます",
     "レッスン「交流を直流にする」では、トランス (ライブラリの「トランス」) とブリッジ整流でできるリップルを測れます。平滑コンデンサの容量は「値の決め方」で計算できます",
+    "基板エディタの「3Dで見る」で、出来上がりの色と部品の高さを立体で確認できます。外形の角を丸める (角R) こともできます",
     "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
     "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
     "DCスイープでインバーターの入出力特性を描くと、切替電圧やノイズマージンが分かります",
@@ -150,6 +151,7 @@ impl eframe::App for App {
             return;
         }
         self.board_ed.order_window(ui.ctx());
+        self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
         egui::Panel::left("board_tools").min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
         egui::CentralPanel::default().show(ui, |ui| self.board_ed.canvas(ui));
@@ -168,7 +170,7 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--export dir]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--export dir]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
@@ -233,6 +235,13 @@ fn apply_args(app: &mut App, args: &[String]) {
         app.board_ed.load_path(p.into());
         if args.iter().any(|a| a == "--drc") {
             app.board_ed.run_drc();
+        }
+        if let Some(i) = args.iter().position(|a| a == "--round")
+            && let Some(r) = args.get(i + 1).and_then(|r| r.parse::<f64>().ok()) {
+                app.board_ed.round_outline(r);
+            }
+        if args.iter().any(|a| a == "--3d") {
+            app.board_ed.open_view3d();
         }
         if let Some(i) = args.iter().position(|a| a == "--export")
             && let Some(dir) = args.get(i + 1) {

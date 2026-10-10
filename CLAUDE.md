@@ -39,6 +39,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `model.rs` `Board`/`Track`/`Pad`/`Via`/`Zone`/`Rules` ほか全データ型
 - `drc.rs` `check`(全体)・`clearance`・`shorts`・`connectivity`(銅の接続グループ、ネット判定) — 自動配線もこれを使う
 - `current.rs` 配線の太さと電流(IPC-2221: `width_for_current`/`current_for_width`、`Board.net_currents` との照合 `net_widths`、`widen_net`) / `drc.rs` の `silk_checks` はシルク注意(発注前チェックで警告) / DRCの指摘は日本語で原因と直し方を書く
+- `outline.rs` 曲線の外形(`round_corners`・`rounded_rect`・`ellipse`。外形は多角形のまま、曲線は細かい線分にする) / `model3d.rs` 3Dプレビュー用の部品の箱(`part_boxes`、高さはフットプリントから推測)
 - `ratsnest.rs` 未配線(`Airwire`) / `autoroute.rs` 格子A*の自動配線 (`autoroute`, `route_airwire`、DRCで検証して採用)
 - `netlist.rs` 回路図→基板の取込 / `parts.rs` `place_part` / `footprints.rs`・`package.rs` フットプリント
 - `fab.rs` 発注先プリセット(`PRESETS`)と発注前チェック(`preflight`) / `gerber_view.rs` 書き出したガーバー・ドリルを読み戻して絵にする(`Preview`)
@@ -65,7 +66,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 | `mod.rs` | 型定義(`Tool`,`Item`,`RouteMode`)、`BoardEditor`のフィールド、`snap`等の補助 |
 | `canvas.rs` 描画エリアの流れ・キー操作 / `interact.rs` 範囲選択とポインタ操作 / `draw.rs` 描画(銅、ゾーン、ハイライト) / `panel.rs` 左パネル・選択パネル・ヒント |
 | `select.rs` 当たり判定・範囲選択・移動・削除 / `route.rs` 配線の折れ方 / `tools.rs` クリック時のツール動作 |
-| `width.rs` 「配線の太さ(電流から)」(ネットごとの電流→推奨幅→太くする) / `order.rs` 「発注の準備」ウィンドウ(発注先・チェック・プレビュー・書き出し・注文手順) / `file.rs` 保存・読込・製造出力・回路図取込 / `actions.rs` 自動配線・DRC実行 / `history.rs` / `view.rs` |
+| `view3d.rs` 「3Dで見る」窓(製造ファイルから作った絵を外形に貼り、部品を箱で描く小さなソフトウェアレンダラ。`Cam` が射影) / `width.rs` 「配線の太さ(電流から)」(ネットごとの電流→推奨幅→太くする) / `order.rs` 「発注の準備」ウィンドウ(発注先・チェック・プレビュー・書き出し・注文手順) / `file.rs` 保存・読込・製造出力・回路図取込 / `actions.rs` 自動配線・DRC実行 / `history.rs` / `view.rs` |
 
 ## 「〜を変えたい」早見表
 - 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel.rs` にボタン + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル

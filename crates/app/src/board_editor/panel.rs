@@ -95,13 +95,7 @@ impl BoardEditor {
                 }
             });
             if ui.button("いまの外形の角を丸める").on_hover_text("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)").clicked() {
-                if self.size_r > 0.0 && self.board.outline.len() >= 3 {
-                    self.checkpoint();
-                    self.board.outline = pcb_core::outline::round_corners(&self.board.outline, self.size_r);
-                    self.status = format!("基板の角を R{} mm で丸めました ({} 点)", self.size_r, self.board.outline.len());
-                } else {
-                    self.status = "「角R」に 0 より大きい値を入れてください".into();
-                }
+                self.round_outline(self.size_r);
             }
             if let Some((lo, hi)) = self.board.bounds() {
                 ui.small(format!("現在 {:.1} × {:.1} mm ({}点)", hi.x - lo.x, hi.y - lo.y, self.board.outline.len()));
@@ -145,6 +139,9 @@ impl BoardEditor {
             ui.text_edit_singleline(&mut self.board.name);
 
             ui.separator();
+            if ui.button("3Dで見る…").on_hover_text("基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます").clicked() {
+                self.open_view3d();
+            }
             if ui.button("発注の準備…").on_hover_text("発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します").clicked() {
                 self.open_order();
             }
