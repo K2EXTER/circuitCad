@@ -20,6 +20,28 @@ impl BoardEditor {
         self.pan = Vec2::new(((lo.x + hi.x) / 2.0) as f32, ((lo.y + hi.y) / 2.0) as f32);
     }
 
+    /// The connections of the copper, worked out again only when the board has changed (it costs milliseconds
+    /// on a big board, and the picture asks for it every frame).
+    pub(super) fn cached_connectivity(&self) -> std::rc::Rc<drc::Connectivity> {
+        let key = pcb_core::zonefill::geometry_key(&self.board);
+        let mut c = self.calc_cache.borrow_mut();
+        if c.key != key || (c.conn.is_none() && c.rats.is_none()) {
+            *c = CalcCache { key, conn: None, rats: None };
+        }
+        c.key = key;
+        c.conn.get_or_insert_with(|| std::rc::Rc::new(connectivity(&self.board))).clone()
+    }
+
+    /// The unrouted connections (yellow lines), kept like `cached_connectivity`.
+    pub(super) fn cached_airwires(&self) -> std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>> {
+        let key = pcb_core::zonefill::geometry_key(&self.board);
+        let mut c = self.calc_cache.borrow_mut();
+        if c.key != key {
+            *c = CalcCache { key, conn: None, rats: None };
+        }
+        c.rats.get_or_insert_with(|| std::rc::Rc::new(ratsnest(&self.board))).clone()
+    }
+
     pub(super) fn side_color(&self, s: Side) -> Color32 {
         match s {
             Side::Top => Color32::from_rgb(220, 60, 60),

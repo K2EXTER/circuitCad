@@ -32,8 +32,8 @@ impl BoardEditor {
             let conn = match conn {
                 Some(c) => c,
                 None => {
-                    fresh = connectivity(&self.board);
-                    &fresh
+                    fresh = self.cached_connectivity();
+                    &*fresh
                 }
             };
             *cache = Some((key, self.board.zones.iter().map(|zn| pcb_core::zonefill::zone_fill(&self.board, zn, conn)).collect()));
@@ -186,7 +186,7 @@ impl BoardEditor {
 
     pub(super) fn draw_overlays(&self, painter: &egui::Painter, rect: Rect) {
         if self.vis.airwires {
-            for w in ratsnest(&self.board) {
+            for w in self.cached_airwires().iter() {
                 painter.line_segment([self.to_screen(rect, w.a), self.to_screen(rect, w.b)], Stroke::new(1.0, Color32::from_rgb(240, 220, 90)));
             }
         }

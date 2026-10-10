@@ -181,3 +181,54 @@ fn a_pour_is_cut_to_the_outline_and_round_around_track_ends() {
     let exact = crate::geom::signed_area(&fill[0].outer).abs() - fill[0].holes.iter().map(|h| crate::geom::signed_area(h).abs()).sum::<f64>();
     assert!((area - exact).abs() < 0.01, "{area} vs {exact}");
 }
+
+/// Timing of the per-frame work of the editor on a big board (`cargo test -p pcb-core --release frame_cost -- --ignored --nocapture`).
+#[test]
+#[ignore]
+fn frame_cost() {
+    use std::time::Instant;
+    let (cols, rows): (usize, usize) = std::env::var("FC").ok().and_then(|s| s.split_once('x').map(|(a, b)| (a.parse().unwrap(), b.parse().unwrap()))).unwrap_or((20, 10));
+    let mut b = Board::new("big", 200.0, 100.0);
+    for r in 0..rows {
+        for c in 0..cols {
+            let refdes = format!("R{}", r * cols + c + 1);
+            b.set_part(Part { refdes: refdes.clone(), value: "1k".into(), footprint: "R_0805".into(), pos: Point::new(8.0 + c as f64 * 9.5, 8.0 + r as f64 * 9.5), rot: 0, side: Side::Top }).unwrap();
+            for p in b.pads.iter_mut().filter(|p| p.refdes == refdes) {
+                p.net = format!("N{}", (r * cols + c) % 40 + if p.pin == "1" { 0 } else { 1 });
+            }
+        }
+    }
+    let pads: Vec<Point> = b.pads.iter().map(|p| p.pos).collect();
+    for w in pads.chunks(2) {
+        if let [a, c] = w {
+            b.tracks.push(Track { side: Side::Top, a: *a, b: Point::new(a.x, a.y + 3.0), width: 0.25 });
+            b.tracks.push(Track { side: Side::Top, a: Point::new(a.x, a.y + 3.0), b: Point::new(c.x, a.y + 3.0), width: 0.25 });
+        }
+    }
+    for i in 0..60 {
+        b.vias.push(Via { pos: Point::new(5.0 + i as f64 * 3.0, 4.0), diameter: 0.6, drill: 0.3 });
+    }
+    b.zones.push(Zone::new("N0", Side::Bottom, vec![Point::new(1.0, 1.0), Point::new(199.0, 1.0), Point::new(199.0, 99.0), Point::new(1.0, 99.0)]));
+    println!("parts {} pads {} tracks {} vias {}", b.parts.len(), b.pads.len(), b.tracks.len(), b.vias.len());
+    let t = Instant::now();
+    let conn = drc::connectivity(&b);
+    println!("connectivity  {:?}", t.elapsed());
+    let t = Instant::now();
+    let fill = crate::zonefill::zone_fill(&b, &b.zones[0], &conn);
+    println!("zone_fill     {:?} ({} shapes)", t.elapsed(), fill.len());
+    let t = Instant::now();
+    let tris: usize = fill.iter().map(|s| s.triangles().len()).sum();
+    println!("triangles     {:?} ({tris})", t.elapsed());
+    let t = Instant::now();
+    let n = ratsnest(&b).len();
+    println!("ratsnest      {:?} ({n})", t.elapsed());
+    let t = Instant::now();
+    let _ = crate::zonefill::geometry_key(&b);
+    println!("geometry_key  {:?}", t.elapsed());
+    let t = Instant::now();
+    let v = drc::check(&b).len();
+    println!("drc::check    {:?} ({v})", t.elapsed());
+    let t = Instant::now();
+    let _ = crate::gerber::copper(&b, Side::Bottom);
+    println!("gerber bottom {:?}", t.elapsed());
+}

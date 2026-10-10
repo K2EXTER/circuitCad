@@ -14,7 +14,7 @@ impl BoardEditor {
         if self.board.bounds().is_none() || self.board.outline.is_empty() {
             return "基板の外形を決めましょう。左の「矩形に設定」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です".into();
         }
-        let unrouted = ratsnest(&self.board).len();
+        let unrouted = self.cached_airwires().len();
         if unrouted > 0 {
             return format!("黄色の線 (未配線 {unrouted} 本) が残っています。「配線」ツールで手でつなぐか、左の「自動配線」に任せましょう。広い GND は「銅箔ゾーン」にすると簡単です");
         }
@@ -156,7 +156,7 @@ impl BoardEditor {
             for n in &self.import_notes {
                 ui.colored_label(Color32::from_rgb(255, 180, 60), n);
             }
-            ui.label(format!("未配線: {} 本 (黄色の線)", ratsnest(&self.board).len()));
+            ui.label(format!("未配線: {} 本 (黄色の線)", self.cached_airwires().len()));
             ui.horizontal(|ui| {
                 if ui.add_enabled(!self.undo.is_empty(), egui::Button::new("元に戻す")).on_hover_text("直前の操作を取り消します (Ctrl+Z)").clicked() {
                     self.undo();

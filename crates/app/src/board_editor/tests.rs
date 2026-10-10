@@ -292,6 +292,30 @@ fn parts_switched_off_in_the_picking_filter_stay_out_of_boxes_and_clicks() {
     assert!(!matches!(e.hit_test(on_pad), Some(Item::Part(_))));
 }
 
+#[test]
+fn connections_and_unrouted_lines_are_kept_until_the_board_changes() {
+    let mut e = BoardEditor::default();
+    for (x, name) in [(10.0, "R1"), (20.0, "R2")] {
+        e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top }).unwrap();
+    }
+    for pad in e.board.pads.iter_mut() {
+        pad.net = "N".into(); // every pad on one net: they must be connected
+    }
+    let first = e.cached_airwires();
+    assert!(!first.is_empty());
+    assert!(std::rc::Rc::ptr_eq(&first, &e.cached_airwires()), "nothing changed: the same result is reused");
+    let c1 = e.cached_connectivity();
+    assert!(std::rc::Rc::ptr_eq(&c1, &e.cached_connectivity()));
+    // connect everything with a track: the unrouted lines are worked out again and become fewer
+    let pads: Vec<Point> = e.board.pads.iter().map(|q| q.pos).collect();
+    for w in pads.windows(2) {
+        e.board.tracks.push(Track { side: Side::Top, a: w[0], b: w[1], width: 0.25 });
+    }
+    let after = e.cached_airwires();
+    assert!(after.is_empty(), "{} left", after.len());
+    assert!(!std::rc::Rc::ptr_eq(&c1, &e.cached_connectivity()));
+}
+
 mod order_flow {
     use super::*;
     use pcb_core::fab::{self, Level};

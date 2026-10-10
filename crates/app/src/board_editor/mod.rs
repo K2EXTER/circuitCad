@@ -118,6 +118,14 @@ fn segment_hits_rect(a: Point, b: Point, lo: Point, hi: Point) -> bool {
     true
 }
 
+/// Results of `connectivity` and `ratsnest` for the board as it was when `key` was taken.
+#[derive(Default)]
+struct CalcCache {
+    key: u64,
+    conn: Option<std::rc::Rc<drc::Connectivity>>,
+    rats: Option<std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>>>,
+}
+
 /// What a click or a rubber band may pick up. Switching parts off makes them safe from accidental moves
 /// while selecting and moving vias and tracks.
 #[derive(Clone, Copy)]
@@ -211,6 +219,8 @@ pub struct BoardEditor {
     order: order::OrderState,
     order_preview_src: Option<pcb_core::gerber_view::Preview>,
     /// The pours as geometry (cut to the outline, cleared around other nets), kept until the board changes.
+    /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
+    calc_cache: std::cell::RefCell<CalcCache>,
     zone_cache: std::cell::RefCell<Option<(u64, Vec<Vec<pcb_core::zonefill::FillShape>>)>>,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
@@ -263,6 +273,7 @@ impl Default for BoardEditor {
             alt_pan: false,
             order: order::OrderState::default(),
             order_preview_src: None,
+            calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
             last_export_dir: None,
             lesson: None,
