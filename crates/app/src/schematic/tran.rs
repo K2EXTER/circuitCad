@@ -87,14 +87,14 @@ impl SchEditor {
                 if !*spectrum {
                     // scale controls for the groups that are on screen (voltage, current)
                     let units: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.') && selected.contains(&s.name)).map(|s| s.unit).collect();
-                    let mut groups: Vec<(usize, &str, &str)> = vec![];
+                    let mut groups: Vec<(usize, &str)> = vec![];
                     if units.contains(&"V") {
-                        groups.push((0, "電圧", "V"));
+                        groups.push((0, "V"));
                     }
                     if units.iter().any(|u| *u != "V") {
-                        groups.push((1, "電流", "A"));
+                        groups.push((1, "A"));
                     }
-                    plot::scale_bar(ui, st, "時間", "s", &groups);
+                    plot::scale_bar(ui, st, "s", &groups);
                 }
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();

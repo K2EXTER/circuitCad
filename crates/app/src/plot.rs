@@ -40,14 +40,6 @@ impl PlotState {
     }
 }
 
-/// Zooms the axis range `r` by `f` (2 = show twice as much) around its centre; geometric on a log axis.
-fn zoom_range(r: (f64, f64), f: f64, log: bool) -> (f64, f64) {
-    let (to, from): (fn(f64) -> f64, fn(f64) -> f64) = if log { (|v| v.max(1e-300).log10(), |a| 10f64.powf(a)) } else { (|v| v, |a| a) };
-    let (a0, a1) = (to(r.0), to(r.1));
-    let (c, half) = ((a0 + a1) / 2.0, (a1 - a0) / 2.0 * f);
-    (from(c - half), from(c + half))
-}
-
 /// Scales the range `r` by `f` keeping the point `c` where it is (the pointer stays over the same value).
 fn zoom_about(r: (f64, f64), f: f64, c: f64) -> (f64, f64) {
     (c + (r.0 - c) * f, c + (r.1 - c) * f)
@@ -82,43 +74,26 @@ fn range_boxes(ui: &mut egui::Ui, text: &mut [String; 2], cur: (f64, f64), unit:
     out
 }
 
-/// Separate scale controls for the x axis and for every y group of a viewer: zoom buttons, the
-/// visible range as editable numbers, and (y) an auto-scale switch. `groups` = (group index, name, unit).
-pub fn scale_bar(ui: &mut egui::Ui, st: &mut PlotState, x_name: &str, x_unit: &str, groups: &[(usize, &str, &str)]) {
+/// The visible range of every axis as editable numbers, plus "全体" (x) and an auto-scale switch (y).
+/// `groups` = (group index, unit). Zooming itself is the wheel over the axis numbers (see `draw_group`).
+pub fn scale_bar(ui: &mut egui::Ui, st: &mut PlotState, x_unit: &str, groups: &[(usize, &str)]) {
     ui.horizontal_wrapped(|ui| {
-        ui.strong(format!("横軸 ({x_name})"));
-        if ui.small_button("縮小").on_hover_text("横軸の表示範囲を 2 倍に広げます (全体が小さく見えます)").clicked() {
-            st.x = zoom_range(st.x, 2.0, st.log_x);
-        }
-        if ui.small_button("拡大").on_hover_text("横軸の表示範囲を半分にします (細かい所が見えます)").clicked() {
-            st.x = zoom_range(st.x, 0.5, st.log_x);
+        if let Some(r) = range_boxes(ui, &mut st.x_text, st.x, x_unit, "横軸の表示範囲の始まり / 終わり。数字 (10m, 2u など) を入れて Enter で反映します。横軸の数字の上でホイールを回しても拡大縮小できます") {
+            st.x = r;
         }
         if ui.small_button("全体").on_hover_text("横軸を最初の範囲 (全体) に戻します").clicked() {
             st.x = st.full_x;
         }
-        if let Some(r) = range_boxes(ui, &mut st.x_text, st.x, x_unit, "表示する範囲の始まり / 終わり。数字 (10m, 2u など) を入れて Enter で反映します") {
-            st.x = r;
-        }
-    });
-    for (g, name, unit) in groups {
-        let g = *g;
-        ui.horizontal_wrapped(|ui| {
-            ui.strong(format!("縦軸 ({name})"));
-            ui.checkbox(&mut st.auto_y[g], "自動").on_hover_text("オンのあいだ、いま見えている範囲に合わせて縦軸を自動で決めます。手で動かすと自動でオフになります");
-            if ui.small_button("縮小").on_hover_text("縦軸の表示範囲を 2 倍に広げます").clicked() {
-                st.y[g] = zoom_range(st.y[g], 2.0, false);
-                st.auto_y[g] = false;
-            }
-            if ui.small_button("拡大").on_hover_text("縦軸の表示範囲を半分にします (小さな波が見えます)").clicked() {
-                st.y[g] = zoom_range(st.y[g], 0.5, false);
-                st.auto_y[g] = false;
-            }
-            if let Some(r) = range_boxes(ui, &mut st.y_text[g], st.y[g], unit, "縦軸の下端 / 上端。数字 (-1, 500m など) を入れて Enter で反映します") {
+        for (g, unit) in groups {
+            let g = *g;
+            ui.separator();
+            if let Some(r) = range_boxes(ui, &mut st.y_text[g], st.y[g], unit, "縦軸の下端 / 上端。数字 (-1, 500m など) を入れて Enter で反映します。縦軸の数字の上でホイールを回しても拡大縮小できます") {
                 st.y[g] = r;
                 st.auto_y[g] = false;
             }
-        });
-    }
+            ui.checkbox(&mut st.auto_y[g], "自動").on_hover_text("オンのあいだ、いま見えている範囲に合わせて縦軸を自動で決めます。手で動かすと自動でオフになります");
+        }
+    });
 }
 
 /// How one group of traces is labelled.
@@ -529,17 +504,6 @@ mod tests {
         let (c, f) = (2.0, 3.0);
         let (n0, n1) = zoom_about((a, b), f, c);
         assert!(((c - a) / (b - a) - (c - n0) / (n1 - n0)).abs() < 1e-9);
-    }
-
-    #[test]
-    fn zoom_keeps_the_centre_and_works_on_a_log_axis() {
-        let (a, b) = zoom_range((0.0, 10.0), 0.5, false);
-        assert!((a - 2.5).abs() < 1e-9 && (b - 7.5).abs() < 1e-9);
-        let (a, b) = zoom_range((1.0, 1000.0), 2.0, true);
-        // the geometric centre (about 31.6) stays put: the range doubles in decades
-        assert!(((a * b).sqrt() - 1000f64.sqrt()).abs() < 1e-6 && (b / a - 1e6).abs() / 1e6 < 1e-9, "{a} {b}");
-        let (a, b) = zoom_range((-1.0, 1.0), 2.0, false);
-        assert!((a + 2.0).abs() < 1e-9 && (b - 2.0).abs() < 1e-9);
     }
 
     #[test]

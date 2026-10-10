@@ -59,7 +59,7 @@ impl SchEditor {
                 for w in &res.warnings {
                     ui.colored_label(Color32::from_rgb(220, 160, 40), w);
                 }
-                plot::scale_bar(ui, st, "周波数", "Hz", &[(0, "ゲイン", "dB"), (1, "位相", "°")]);
+                plot::scale_bar(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
