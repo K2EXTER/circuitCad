@@ -313,11 +313,12 @@ fn coin_cell_sample_sags_under_load_and_runs_out_when_the_capacity_is_used() {
 #[test]
 fn right_click_leaves_the_tool_and_the_probe_adds_any_net_to_the_viewer() {
     let mut e = editor_with("rc_lowpass.schjson");
-    // the right click: end the wire being drawn and return to the Select tool, once
+    // the right click: confirm the wire being drawn, then (nothing in progress) return to the Select tool
     e.tool = Tool::Wire;
     e.pending = Some((0, 0));
-    assert!(e.leave_tool());
-    assert!(e.tool == Tool::Select && e.pending.is_none());
+    assert!(e.leave_tool(), "the first right click confirms the wire");
+    assert!(e.tool == Tool::Wire && e.pending.is_none(), "and the Wire tool stays");
+    assert!(e.leave_tool() && e.tool == Tool::Select, "the second one, with nothing being drawn, goes back to Select");
     assert!(!e.leave_tool(), "already in the Select tool: the right click then opens the part window instead");
     e.tool = Tool::Place;
     assert!(e.leave_tool() && e.tool == Tool::Select);

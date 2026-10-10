@@ -116,11 +116,23 @@ impl BoardEditor {
         sp
     }
 
-    /// The right click: drops the track, polygon or part being drawn and returns to the Select tool
-    /// (AutoCAD style). Returns whether the tool changed.
+    /// The right click, AutoCAD style: it confirms what is being drawn (ends the track; closes a
+    /// polygon of three or more points, drops a shorter one) and the tool stays; with nothing in
+    /// progress it returns to the Select tool. Returns whether anything happened.
     pub(super) fn leave_tool(&mut self) -> bool {
-        self.pending = None;
-        self.poly.clear();
+        if self.pending.take().is_some() {
+            self.status = "配線を確定しました (もう一度右クリックで選択ツールに戻ります)".into();
+            return true;
+        }
+        if !self.poly.is_empty() {
+            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+                self.finish_polygon();
+            } else {
+                self.poly.clear();
+                self.status = "多角形の入力を取り消しました".into();
+            }
+            return true;
+        }
         if self.tool == Tool::Select {
             return false;
         }

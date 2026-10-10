@@ -39,17 +39,12 @@ impl SchEditor {
             PanelTab::Analyze => {
                 ui.small("知りたいことに合わせて選びます: 各点の電圧 → DC動作点 / 時間とともに → 過渡解析 / 周波数ごとの強さ → AC解析 / 入力と出力の関係 → DCスイープ / 雑音 → ノイズ解析 / 実物とのずれ → 温度とばらつき");
                 ui.horizontal(|ui| {
-                    if ui.small_button("すべて開く").on_hover_text("すべての解析の設定を開きます").clicked() {
+                    // one button that flips: open everything, then close everything, then open again
+                    let all_open = self.sec_mode == 1;
+                    let (label, tip) = if all_open { ("すべて閉じる", "すべての解析の設定を閉じて、見出しだけにします") } else { ("すべて開く", "すべての解析の設定を開きます。もう一度押すと、すべて閉じます") };
+                    if ui.small_button(label).on_hover_text(tip).clicked() {
                         self.sec_gen += 1;
-                        self.sec_mode = 1;
-                    }
-                    if ui.small_button("基本だけ").on_hover_text("DC・過渡・AC の3つだけ開き、ほかは閉じます").clicked() {
-                        self.sec_gen += 1;
-                        self.sec_mode = 0;
-                    }
-                    if ui.small_button("すべて閉じる").on_hover_text("すべての解析の設定を閉じて、見出しだけにします").clicked() {
-                        self.sec_gen += 1;
-                        self.sec_mode = 2;
+                        self.sec_mode = if all_open { 2 } else { 1 };
                     }
                 });
                 let lesson = self.lesson.is_some();
@@ -77,7 +72,7 @@ impl SchEditor {
     pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.tool, Tool::Select, "選択").on_hover_text("部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます");
-            ui.selectable_value(&mut self.tool, Tool::Wire, "配線").on_hover_text("端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで中断して選択ツールに戻ります");
+            ui.selectable_value(&mut self.tool, Tool::Wire, "配線").on_hover_text("端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります");
             ui.selectable_value(&mut self.tool, Tool::Label, "ラベル").on_hover_text("同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします");
         });
         if self.tool == Tool::Label {
@@ -386,7 +381,7 @@ impl SchEditor {
                 None => {}
             }
         }
-        ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\nダブルクリック: 配線を終了 / 右クリック: 中断して選択ツールに戻る\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (配線中などは右ドラッグも可) / ホイール: 拡大縮小");
+        ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\nダブルクリックか右クリック: 配線を確定 / 配線していないときの右クリック: 選択ツールに戻る\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (配線中などは右ドラッグも可) / ホイール: 拡大縮小");
     }
 }
 

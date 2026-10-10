@@ -15,7 +15,7 @@ impl SchEditor {
             return "まず部品を置きましょう。左の一覧から選んで画面をクリック。「ファイル → 開く」で docs/examples のサンプル回路も試せます".into();
         }
         if self.pending.is_some() {
-            return "配線中: 次の点をクリックして線を延長、ダブルクリックで終了、右クリックで中断して選択ツールに戻ります".into();
+            return "配線中: 次の点をクリックして線を延長、ダブルクリックか右クリックで確定します".into();
         }
         match self.tool {
             Tool::Place if !self.has_wave() => return "クリックで部品を置きます。R キーで回転、右クリックで選択ツールに戻ります。置いた後は「選択」で値を変えられます".into(),

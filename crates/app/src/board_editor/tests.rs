@@ -351,14 +351,20 @@ fn rounded_outlines_from_the_panel_helpers_are_undoable_and_keep_their_size() {
 }
 
 #[test]
-fn right_click_in_the_board_editor_drops_the_drawing_and_returns_to_select() {
+fn right_click_in_the_board_editor_confirms_the_drawing_then_returns_to_select() {
     let mut e = BoardEditor::default();
     e.tool = Tool::Track;
     e.pending = Some(p(5.0, 5.0));
     assert!(e.leave_tool());
-    assert!(matches!(e.tool, Tool::Select) && e.pending.is_none());
+    assert!(matches!(e.tool, Tool::Track) && e.pending.is_none(), "the first right click ends the track, the tool stays");
+    assert!(e.leave_tool() && matches!(e.tool, Tool::Select), "the second one returns to Select");
+    // a polygon of 3+ points is closed by the right click, a shorter one is dropped
     e.tool = Tool::OutlinePoly;
+    e.poly = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0)];
+    assert!(e.leave_tool() && e.poly.is_empty() && matches!(e.tool, Tool::OutlinePoly));
+    assert_eq!(e.board.outline.len(), 3, "the polygon became the outline");
     e.poly.push(p(0.0, 0.0));
-    assert!(e.leave_tool() && e.poly.is_empty());
+    assert!(e.leave_tool() && e.poly.is_empty() && e.board.outline.len() == 3);
+    assert!(e.leave_tool() && matches!(e.tool, Tool::Select));
     assert!(!e.leave_tool());
 }

@@ -166,7 +166,7 @@ impl SchEditor {
                 self.status = "ノードの選択を終了しました".into();
                 return;
             }
-            // AutoCAD style: a right click ends whatever is being drawn and goes back to the Select tool
+            // AutoCAD style: a right click confirms the wire being drawn; with nothing in progress it returns to the Select tool
             if self.leave_tool() {
                 return;
             }
@@ -183,10 +183,14 @@ impl SchEditor {
         }
     }
 
-    /// Ends the wire in progress and returns to the Select tool (the right click). `false` when it is
-    /// the Select tool already, so there is nothing to leave.
+    /// The right click, AutoCAD style: while a wire is being drawn it confirms (ends) the wire and
+    /// the tool stays; with nothing in progress it returns to the Select tool. `false` when it is the
+    /// Select tool already, so there is nothing to leave.
     pub(super) fn leave_tool(&mut self) -> bool {
-        self.pending = None;
+        if self.pending.take().is_some() {
+            self.status = "配線を確定しました (もう一度右クリックで選択ツールに戻ります)".into();
+            return true;
+        }
         if self.tool == Tool::Select {
             return false;
         }
