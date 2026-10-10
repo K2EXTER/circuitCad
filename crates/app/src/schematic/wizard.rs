@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{buck_design, battery_life, zener_regulator, divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -85,6 +85,44 @@ pub(super) const CALCS: &[Calc] = &[
             ("出力電圧のリップル (mV)", "30", "出力に残る細かい波の大きさ (p-p)。マイコン用なら 30〜50mV くらい"),
         ],
         run: |v| buck_design(v[0], v[1], v[2], v[3], v[4], v[5]),
+    },
+    Calc {
+        title: "昇圧コンバータのコイルとコンデンサ",
+        about: "スイッチングで電圧を上げる昇圧 (ブースト) コンバータの、デューティ比・コイル・出力コンデンサを決めます。電池 1〜2 本から 5V を作るときなどに使います (効率は 85 % と仮定します)",
+        inputs: &[
+            ("入力電圧 (V)", "5", "コンバータにつなぐ電源の電圧。電池なら、電圧が下がりきったときの値で見積もると安全です"),
+            ("出力電圧 (V)", "12", "作りたい電圧 (入力より高い値)"),
+            ("出力電流 (mA)", "200", "つなぐ回路が使う電流の最大値"),
+            ("スイッチング周波数 (kHz)", "200", "昇圧ICのスイッチングの周波数。ICのデータシートの値"),
+            ("コイル電流の揺れ (入力電流の %)", "40", "コイルの電流がどれだけ上下するか。20〜40 % が定番"),
+            ("出力電圧のリップル (mV)", "50", "出力に残る細かい波の大きさ (p-p)"),
+        ],
+        run: |v| boost_design(v[0], v[1], v[2], v[3], v[4], v[5]),
+    },
+    Calc {
+        title: "MOSFET のスイッチ (発熱とゲート抵抗)",
+        about: "N チャネル MOSFET で負荷をオン/オフするときの、オンのときの電圧降下・発熱・ゲート抵抗とプルダウン抵抗の目安を調べます",
+        inputs: &[
+            ("ゲートの駆動電圧 (V)", "5", "マイコンの出力 (High) の電圧。3.3V や 5V が多いです"),
+            ("しきい値電圧 Vgs(th) (V)", "2", "MOSFET がオンになり始めるゲート電圧。データシートで確認 (2N7000 は約 2V)"),
+            ("負荷の電流 (mA)", "100", "ドレインに流したい電流"),
+            ("オン抵抗 Rds(on) (mΩ)", "5000", "データシートの値 (ゲート電圧が近い条件のもの)。2N7000 は約 5Ω = 5000mΩ、IRLZ44N は約 22mΩ"),
+            ("負荷の電源電圧 (V)", "5", "負荷につなぐ電源の電圧"),
+        ],
+        run: |v| mosfet_switch(v[0], v[1], v[2], v[3], v[4]),
+    },
+    Calc {
+        title: "オペアンプの増幅 (抵抗の値)",
+        about: "オペアンプで信号を大きくするときの、帰還抵抗と R2 を決め、使える帯域と出力が電源で頭打ちにならないかを確かめます",
+        inputs: &[
+            ("欲しいゲイン (倍)", "11", "出力 ÷ 入力。反転増幅でも正の数で入れます (出力の向きが逆になります)"),
+            ("帰還抵抗 Rf (Ω)", "10k", "出力から戻す抵抗。1k〜1M くらいで、先に決めます (10k がよく使われます)"),
+            ("反転増幅にする (0 = 非反転, 1 = 反転)", "0", "非反転は入力が + 側、反転は入力が − 側 (出力の向きが逆になる)"),
+            ("利得帯域幅積 (kHz)", "1000", "オペアンプのデータシートの GBW。LM358 は約 1MHz = 1000kHz"),
+            ("電源電圧 ± (V)", "5", "オペアンプの電源 (両電源の片側の値)"),
+            ("入力の振幅 (mV)", "100", "入力信号の振幅 (ピーク)"),
+        ],
+        run: |v| opamp_gain(v[0], v[1], v[2], v[3], v[4], v[5]),
     },
     Calc {
         title: "電池の持ち時間",

@@ -410,6 +410,143 @@ pub fn buck_design(vin: f64, vout: f64, i_out_ma: f64, fsw_khz: f64, ripple_pct:
     Ok(o)
 }
 
+/// Step-up (boost) converter: duty cycle, inductor and output capacitor, assuming 85 % efficiency.
+pub fn boost_design(vin: f64, vout: f64, i_out_ma: f64, fsw_khz: f64, ripple_pct: f64, vripple_mv: f64) -> Result<CalcOut, String> {
+    let (vin, vout, iout, f, rp, dv) = (pos("入力電圧", vin)?, pos("出力電圧", vout)?, pos("出力電流", i_out_ma)? / 1000.0, pos("スイッチング周波数", fsw_khz)? * 1000.0, pos("コイル電流のリップル", ripple_pct)? / 100.0, pos("出力電圧のリップル", vripple_mv)? / 1000.0);
+    if vout <= vin {
+        return Err("出力電圧は入力電圧より高くしてください。昇圧コンバータは、電圧を上げるだけです (下げるなら降圧コンバータ)".into());
+    }
+    const EFF: f64 = 0.85;
+    let d = 1.0 - vin * EFF / vout;
+    let iin = iout * vout / (vin * EFF);
+    let di = rp * iin;
+    let lx = vin * d / (f * di);
+    let l = e24(lx, true);
+    let di_real = vin * d / (f * l);
+    let peak = iin + di_real / 2.0;
+    let cx = iout * d / (f * dv);
+    let c = e24(cx, true);
+    let mut o = CalcOut { primary: Some(format_value(l)), ..Default::default() };
+    o.rows = vec![
+        ("デューティ比 (ONの割合)".into(), format!("{:.0} %", d * 100.0)),
+        ("入力側に流れる平均電流".into(), format!("{:.2} A  (出力電流の {:.1} 倍)", iin, iin / iout)),
+        ("コイル (E24, 切り上げ)".into(), format!("{}H  (計算上 {}H)", format_value(l), format_value(lx))),
+        ("コイルに流れる最大の電流".into(), format!("{:.2} A  (コイル・スイッチの定格はこれ以上に)", peak)),
+        ("出力コンデンサ (E24, 切り上げ)".into(), format!("{}F 以上 (ESR の小さいもの)", format_value(c))),
+    ];
+    o.steps = vec![
+        format!("電力はほぼ保存されるので、入力電流は出力電流より大きくなります: Iin = Iout × Vout ÷ (Vin × 効率 {EFF}) = {:.2} A", iin),
+        format!("デューティ比 D = 1 − Vin × 効率 ÷ Vout = 1 − {vin} × {EFF} ÷ {vout} = {:.2}", d),
+        format!("コイル: L = Vin × D ÷ (f × ΔI)。ΔI は入力電流の {:.0} % = {:.0} mA とすると、L = {}H", rp * 100.0, di * 1000.0, format_value(lx)),
+        format!("出力コンデンサ: C = Iout × D ÷ (f × ΔV) = {:.3} A × {:.2} ÷ ({} Hz × {} mV) = {}F", iout, d, format_value(f), dv * 1000.0, format_value(cx)),
+    ];
+    if d > 0.8 {
+        o.cautions.push("デューティ比が 80 % を超えます。昇圧の比が大きすぎて、効率が落ち、IC の限界を超えることがあります。昇圧の比は 4〜5 倍くらいまでが目安です".into());
+    }
+    if iin > 3.0 {
+        o.cautions.push("入力側の電流が 3 A を超えます。コイル・スイッチ・配線をそれに合わせて太くし、入力電源が出せるかも確認しましょう".into());
+    }
+    o.cautions.push("昇圧は、入力電圧が出力に素通しになる経路 (コイル → ダイオード) があります。出力の負荷が短絡すると、電流を止められません。ヒューズや過電流保護を検討します".into());
+    o.cautions.push("電池で使うときは、電池の電圧が下がると入力電流が増えます。電池が減った状態 (電圧が低いとき) でも、計算が成り立つか確認します".into());
+    o.cautions.push("ダイオードはショットキーにし、逆耐圧は出力電圧より十分高くします。コイルは最大の電流で飽和しない定格のものを選びます".into());
+    o.faults = vec![
+        "コイルが飽和する・小さすぎる: 電流が急に増え、スイッチやダイオードを壊したり、IC の保護が働いて出力が不安定になったりします".into(),
+        "ダイオードの断線/逆向き: 出力に電気が出ません。コイルのエネルギーの逃げ場がなく、スイッチの電圧が跳ね上がって壊れます".into(),
+        "出力コンデンサの容量抜け: リップルが増えます。昇圧は出力電流が途切れ途切れなので、降圧よりリップルが大きく出ます".into(),
+        "負荷を短絡する: 入力電源からコイルとダイオード経由で直接電流が流れ続けます (降圧と違い、スイッチを切っても止まりません)".into(),
+    ];
+    Ok(o)
+}
+
+/// N-channel MOSFET low-side switch: conduction loss, gate resistor and pull-down.
+pub fn mosfet_switch(vdrive: f64, vth: f64, i_ma: f64, rds_mohm: f64, vload: f64) -> Result<CalcOut, String> {
+    let (vg, vth, i, rds, vl) = (pos("ゲートの駆動電圧", vdrive)?, pos("しきい値電圧", vth)?, pos("負荷の電流", i_ma)? / 1000.0, pos("オン抵抗", rds_mohm)? / 1000.0, pos("負荷の電源電圧", vload)?);
+    if vg <= vth {
+        return Err(format!("ゲートの駆動電圧 ({vg} V) がしきい値 ({vth} V) 以下です。これではオンになりません。ゲートを上げるか、しきい値の低い (ロジックレベル) MOSFET を選びましょう"));
+    }
+    let vds = i * rds;
+    let p = i * i * rds;
+    let mut o = CalcOut { primary: Some("100".into()), ..Default::default() };
+    o.rows = vec![
+        ("オンのときのドレイン電圧の降下".into(), format!("{:.3} V", vds)),
+        ("MOSFET の発熱 (導通損失)".into(), format!("{:.0} mW", p * 1000.0)),
+        ("ゲート抵抗".into(), "100Ω 前後 (47〜330Ω)".into()),
+        ("ゲートのプルダウン抵抗".into(), "10kΩ (ゲートと GND の間)".into()),
+        ("負荷にかかる電圧".into(), format!("{:.2} V  (電源 {vl} V − 降下)", vl - vds)),
+    ];
+    o.steps = vec![
+        format!("オンのときの降下 = I × Rds(on) = {} A × {} Ω = {:.3} V", i, rds, vds),
+        format!("発熱 = I² × Rds(on) = {} A² × {} Ω = {:.0} mW", i * i, rds, p * 1000.0),
+        "ゲート抵抗: マイコンの出力と MOSFET のゲート容量の間に入れて、立ち上がりの電流と振動 (リンギング) を抑えます。小さな MOSFET なら 100Ω 前後で十分です".into(),
+        "プルダウン: マイコンが起動する前や入力が浮いているときに、ゲートを 0V に引いて、勝手にオンにならないようにします".into(),
+    ];
+    if vg < 1.5 * vth {
+        o.cautions.push(format!("ゲート電圧 {vg} V がしきい値 {vth} V の 1.5 倍に届きません。しきい値のぎりぎりでは、オン抵抗がデータシートの値 (多くはゲート 4.5〜10 V のときの値) より大きくなり、発熱します。データシートの「Rds(on) at Vgs=…」の条件を確認します"));
+    }
+    if p > 0.25 {
+        o.cautions.push("発熱が 0.25 W を超えます。小さな面実装・TO-92 では熱くなるので、オン抵抗の小さい MOSFET を選ぶか、放熱を考えます".into());
+    }
+    o.cautions.push("誘導性の負荷 (リレー・モーター・ソレノイド) には、負荷と並列に、ダイオードを逆向きに入れます。スイッチが切れる瞬間に出る高い電圧で、MOSFET が壊れます".into());
+    o.cautions.push("ドレインの最大電圧 Vds・連続電流 Id は、電源電圧と負荷電流に余裕を持たせます。MOSFET によっては、ボディダイオードで逆向きにも電流が流れます".into());
+    o.faults = vec![
+        "プルダウン抵抗がない: 起動時にゲートが浮き、負荷が勝手にオン/オフしたり、MOSFET が中途半端にオンになって発熱したりします".into(),
+        "ゲート電圧が足りない (しきい値ぎりぎり): 中途半端にオンになり、オン抵抗が大きいまま、大きく発熱します".into(),
+        "誘導性負荷の保護ダイオードがない: オフの瞬間に出る高い電圧 (逆起電力) で、MOSFET が壊れます".into(),
+        "ゲートの静電気/過電圧: ゲートは薄い絶縁膜で、20V (多くの品の上限) を超えたり、静電気が加わったりすると壊れます".into(),
+    ];
+    Ok(o)
+}
+
+/// Op-amp amplifier resistors for a target gain (non-inverting or inverting).
+pub fn opamp_gain(gain: f64, rf_ohm: f64, inverting: f64, gbw_khz: f64, vsupply: f64, vin_peak_mv: f64) -> Result<CalcOut, String> {
+    let (g, rf, gbw, vs, vin) = (pos("ゲイン", gain)?, pos("帰還抵抗", rf_ohm)?, pos("利得帯域幅積", gbw_khz)? * 1000.0, pos("電源電圧", vsupply)?, pos("入力の振幅", vin_peak_mv)? / 1000.0);
+    let inv = inverting >= 0.5;
+    if !inv && g < 1.0 {
+        return Err("非反転増幅のゲインは 1 以上です (1 倍はボルテージフォロワで、R2 は不要です)。1 より小さくしたいときは、反転増幅か分圧を使います".into());
+    }
+    let follower = !inv && (g - 1.0).abs() < 1e-9;
+    let rfs = e24(rf, false);
+    let r2 = if follower { f64::INFINITY } else if inv { e24(rf / g, false) } else { e24(rf / (g - 1.0), false) };
+    let g_real = if follower { 1.0 } else if inv { rfs / r2 } else { 1.0 + rfs / r2 };
+    let bw = gbw / g_real;
+    let vout = vin * g_real;
+    let mut o = CalcOut { primary: if follower { None } else { Some(format_value(r2)) }, ..Default::default() };
+    o.rows = vec![
+        ("方式".into(), if inv { format!("反転増幅: ゲイン −{g}") } else if follower { "ボルテージフォロワ".to_string() } else { format!("非反転増幅: ゲイン {g}") }),
+        ("帰還抵抗 Rf (E24)".into(), r(rfs)),
+        ("もう一方の抵抗 R2 (E24)".into(), if follower { "不要 (R2 は外す)".into() } else { r(r2) }),
+        ("実際のゲイン".into(), format!("{}{:.2} 倍 ({:.1} dB)", if inv { "−" } else { "" }, g_real, 20.0 * g_real.log10())),
+        ("使える帯域 (−3dB)".into(), format!("約 {}Hz", format_value(bw))),
+        ("出力の振幅".into(), format!("{:.2} V (電源 ±{vs} V)", vout)),
+    ];
+    o.steps = vec![
+        if inv {
+            "反転増幅: ゲイン = −Rf ÷ Rin。入力は Rin (= R2) を通して反転入力に入れ、Rf で出力から戻します。入力インピーダンスは Rin で決まるので、大きくしすぎないよう注意".into()
+        } else {
+            "非反転増幅: ゲイン = 1 + Rf ÷ R2 (R2 は反転入力と GND の間)。入力は非反転入力に入れるので、入力インピーダンスが非常に大きくなります".into()
+        },
+        format!("R2 = {}。E24 に丸めると {}、実際のゲインは {:.2} 倍", if inv { "Rf ÷ ゲイン" } else { "Rf ÷ (ゲイン − 1)" }, if follower { "不要".to_string() } else { r(r2) }, g_real),
+        format!("帯域: 利得帯域幅積 ÷ ゲイン = {}Hz ÷ {:.1} = 約 {}Hz", format_value(gbw), g_real, format_value(bw)),
+    ];
+    if vout > vs - 1.5 {
+        o.cautions.push(format!("出力の振幅 {vout:.2} V が、電源 ±{vs} V から 1.5 V ほど引いた範囲 (±{:.1} V くらい) を超えます。LM358 などの出力は電源まで届かず、波形の山が削れます (クリップ)。ゲインを下げるか、電源電圧を上げます", vs - 1.5));
+    }
+    if bw < 20_000.0 {
+        o.cautions.push("使える帯域が 20 kHz より狭いです。音声を扱うなら、ゲインを分けて 2 段にするか、利得帯域幅積の大きいオペアンプにします".into());
+    }
+    if !(1_000.0..=1_000_000.0).contains(&rf) {
+        o.cautions.push("帰還抵抗は 1kΩ〜1MΩ くらいにします。小さすぎるとオペアンプの出力に負担がかかり、大きすぎると入力のバイアス電流・ノイズ・基板の容量の影響が出ます".into());
+    }
+    o.cautions.push("抵抗の許容差でゲインがずれます。精度が必要なら、許容差 1% の金属皮膜を使います (「温度とばらつき」で試せます)".into());
+    o.faults = vec![
+        "帰還抵抗が断線: 帰還がなくなり、ゲインが非常に大きくなって、出力が電源に張り付きます".into(),
+        "R2 が断線 (非反転): ゲインが 1 倍 (ボルテージフォロワ) になります".into(),
+        "電源の片方がない (片電源で両電源を前提に設計): 負の入力で出力が 0 V に張り付き、波形の半分が出ません".into(),
+        "容量性の負荷 (長いケーブルなど) をつなぐ: 位相余裕が減り、発振することがあります。出力に数十Ωの抵抗を直列に入れます".into(),
+    ];
+    Ok(o)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,5 +642,31 @@ mod tests {
         assert!(o.rows[1].1.contains("計算上 97"), "{:?}", o.rows);
         assert!(!o.cautions.is_empty() && !o.faults.is_empty() && o.steps.len() == 3);
         assert!(buck_design(5.0, 12.0, 500.0, 150.0, 40.0, 30.0).is_err());
+    }
+
+    #[test]
+    fn boost_mosfet_and_opamp_calculators() {
+        // 5 V -> 12 V, 200 mA, 200 kHz: D = 1 - 5*0.85/12 = 0.646
+        let b = boost_design(5.0, 12.0, 200.0, 200.0, 40.0, 50.0).unwrap();
+        assert!(b.rows[0].1.contains("65 %"), "{:?}", b.rows);
+        assert!(parse_value(b.primary.as_deref().unwrap()).unwrap() > 10e-6);
+        assert!(boost_design(12.0, 5.0, 200.0, 200.0, 40.0, 50.0).is_err());
+        assert!(!b.cautions.is_empty() && !b.faults.is_empty() && b.steps.len() == 4);
+        // 22 mohm at 5 A is 0.55 W
+        let m = mosfet_switch(5.0, 1.0, 5000.0, 22.0, 12.0).unwrap();
+        assert!(m.rows[1].1.contains("550 mW"), "{:?}", m.rows);
+        assert!(m.cautions.iter().any(|c| c.contains("0.25 W")));
+        assert!(mosfet_switch(2.0, 2.5, 100.0, 100.0, 5.0).is_err());
+        assert!(mosfet_switch(2.5, 2.0, 100.0, 100.0, 5.0).unwrap().cautions.iter().any(|c| c.contains("1.5 倍")));
+        // gain 11 non-inverting with Rf = 10k needs R2 = 1k; 1 MHz / 11 = 91 kHz
+        let a = opamp_gain(11.0, 10e3, 0.0, 1000.0, 5.0, 100.0).unwrap();
+        assert_eq!(a.primary.as_deref(), Some("1k"));
+        assert!(a.rows[4].1.contains("91"), "{:?}", a.rows);
+        // gain 101 with 100 mV peak wants 10 V: clipped on a +-5 V supply
+        let c = opamp_gain(101.0, 100e3, 0.0, 1000.0, 5.0, 100.0).unwrap();
+        assert!(c.cautions.iter().any(|x| x.contains("クリップ")), "{:?}", c.cautions);
+        // inverting gain 10 with Rf = 100k needs 10k
+        assert_eq!(opamp_gain(10.0, 100e3, 1.0, 1000.0, 5.0, 10.0).unwrap().primary.as_deref(), Some("10k"));
+        assert!(opamp_gain(0.5, 10e3, 0.0, 1000.0, 5.0, 100.0).is_err());
     }
 }
