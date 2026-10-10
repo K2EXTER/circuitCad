@@ -480,6 +480,8 @@ const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
+#[cfg(test)]
+pub use challenge::challenge_exists;
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
 pub use lessons::{lesson_ids, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};

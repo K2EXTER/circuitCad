@@ -47,6 +47,8 @@ enum Check {
     Current { label: &'static str, who: Who, set: &'static [(&'static str, &'static str)], lo: f64, hi: f64, explain: &'static [(f64, f64, &'static str)] },
     /// AC gain of the net VOUT at `freq` (dB, against the 1 V AC source of the circuit) is within [lo, hi].
     Gain { label: &'static str, freq: f64, lo: f64, hi: f64, explain: &'static [(f64, f64, &'static str)] },
+    /// The sheet has at least `min` parts of this kind (e.g. the two capacitors a regulator needs).
+    Has { label: &'static str, kind: Kind, min: usize, hint: &'static str },
     /// No part is past its rating (judged with the given load / settings).
     Ratings { label: &'static str, load: Option<&'static str>, set: &'static [(&'static str, &'static str)] },
 }
@@ -365,10 +367,87 @@ const CHALLENGES: &[Challenge] = &[
             Check::Ratings { label: "部品が定格を超えない", load: None, set: NO },
         ],
     },
+    Challenge {
+        id: "draw_psu",
+        lesson: "protection",
+        title: "安定化電源を自分で設計する (最終課題)",
+        goal: "12V の電池やACアダプタ (9〜12V でも動くこと) から、5V (4.8〜5.2V) を取り出す電源の回路を、自分で設計します。使える部品: 三端子レギュレータ LM7805、ショットキーダイオード 1N5819、コンデンサ。条件: (1) 負荷 100Ω でも、重い 22Ω (約 230mA) でも、出力が 4.8〜5.2V。(2) 入力が 9V でも 12V でも、5V が保たれる。(3) 電源を逆向きにつないでも、出力に逆向きの電圧が出ない (−12V にしても出力が 0V 付近)。(4) レギュレータの入力と出力に、コンデンサをつける。(5) どの部品も、定格を超えない (いちばん厳しいのは 12V・負荷 22Ω のとき)。出力のネットには、ラベルツールで「VOUT」という名前を付けます",
+        hints: &[
+            "回路の形: 電源の + → ダイオード → レギュレータの IN。レギュレータの GND は GND へ。OUT が出力 (VOUT)。レギュレータの IN と GND の間、OUT と GND の間に、コンデンサをつけます。",
+            "ダイオードは、逆向きの電流を止めるために、電源とレギュレータの間に直列に入れます。向きは、アノードが電源側、カソード (縞のある側) がレギュレータ側です。ダイオードの電圧降下 (約 0.3V) があっても、入力が 9V なら、7805 のドロップアウト (約 2V) に足ります (9 − 0.3 − 5 = 3.7V の余裕)。",
+            "コンデンサは、データシートのとおり、入力側に 0.33µF (330n)、出力側に 0.1µF (100n) です。7805 のピンは、1 = IN、2 = GND、3 = OUT です。「学ぶ → 値の決め方」の「3端子レギュレータ (78xx) まわり」と「熱 (温度と放熱板)」で、確かめられます。",
+            "答えの目安: 1N5819 (ダイオード)、LM7805、330n と 100n。「答えの回路を見る」で、できあがりを見られます。実際の回路では、さらに、電源の入口にヒューズを入れます (レッスン 21)。ヒューズは、シミュレーションで判定できないので、「値の決め方」の「ヒューズの選び方」で、定格を決めてみましょう。",
+        ],
+        solution: include_str!("../../../../docs/examples/power_supply.schjson"),
+        drop: &[],
+        values: NO,
+        labels: &[],
+        rename: &[],
+        parts0: &[("V1", (0, 0)), ("D1", (14, -8)), ("C1", (28, 4)), ("U1", (42, -4)), ("C2", (58, 4))],
+        parts1: &[("V1", (0, 0))],
+        start_values: NO,
+        grounds0: &[("V1", "-", 0, 5), ("C1", "2", 0, 5), ("U1", "2", 0, 5), ("C2", "2", 0, 5)],
+        grounds1: &[("V1", "-", 0, 5)],
+        checks: &[
+            Check::Erc,
+            Check::Named { net: "VOUT" },
+            Check::Voltage {
+                label: "12V・負荷 100Ω で、出力が 4.8〜5.2V",
+                net: "VOUT",
+                load: Some("100"),
+                set: &[("V1", "12")],
+                lo: 4.8,
+                hi: 5.2,
+                explain: &[
+                    (-1e9, 0.5, "出力が {v} V しかありません。電源 → ダイオード → レギュレータの IN と、レギュレータの GND・OUT のつなぎ方 (7805 は 1 = IN、2 = GND、3 = OUT) を確かめてください。ダイオードの向き (アノードが電源側) も確かめます"),
+                    (0.5, 4.8, "出力が {v} V で、低すぎます。レギュレータの入力が足りないのかもしれません。つなぎ方を確かめてください"),
+                    (5.2, 1e9, "出力が {v} V で、高すぎます。レギュレータが、7805 (5V) になっていますか"),
+                ],
+                gate: true,
+            },
+            Check::Voltage {
+                label: "負荷 22Ω (約 230mA) でも、出力が 4.8〜5.2V",
+                net: "VOUT",
+                load: Some("22"),
+                set: &[("V1", "12")],
+                lo: 4.8,
+                hi: 5.2,
+                explain: &[(-1e9, 4.8, "重い負荷では、出力が {v} V に落ちます。この電流を流せる部品か (7805 は 1A まで)、ダイオードが細すぎないか確かめてください")],
+                gate: false,
+            },
+            Check::Stay {
+                label: "入力が 9〜12V に変わっても、出力が保たれる",
+                net: "VOUT",
+                load: Some("100"),
+                vary: ("V1", "9", "12"),
+                lo: 4.8,
+                hi: 5.2,
+                hint: "入力が低すぎて、レギュレータのドロップアウト (約 2V の余裕) を満たしていないかもしれません。ダイオードを何本も直列にしていませんか",
+            },
+            Check::Voltage {
+                label: "電源を逆向きにつないでも (−12V)、出力に逆向きの電圧が出ない",
+                net: "VOUT",
+                load: Some("100"),
+                set: &[("V1", "-12")],
+                lo: -0.3,
+                hi: 0.3,
+                explain: &[(-1e9, -0.3, "電源を逆にすると、出力に {v} V が出て、つないだ回路を壊します。電源とレギュレータのあいだに、逆向きの電流を止めるダイオードを入れます (アノードが電源側、カソードがレギュレータ側)")],
+                gate: false,
+            },
+            Check::Has { label: "コンデンサが 2 個以上ある (入力側と出力側)", kind: Kind::Capacitor, min: 2, hint: "レギュレータの入力と GND の間、出力と GND の間に、コンデンサをつけます (発振を防ぎ、負荷が変わったときの電圧の乱れを抑えます)" },
+            Check::Ratings { label: "部品が定格を超えない", load: Some("22"), set: &[("V1", "12")] },
+        ],
+    },
 ];
 
 fn challenge(id: &str) -> Option<&'static Challenge> {
     CHALLENGES.iter().find(|c| c.id == id)
+}
+
+/// Whether a challenge of this id exists (items of a learning path that are only a challenge).
+#[cfg(test)]
+pub fn challenge_exists(id: &str) -> bool {
+    challenge(id).is_some()
 }
 
 /// The id of the challenge of a lesson, if it has one.
@@ -522,7 +601,7 @@ impl SchEditor {
             let label = match check {
                 Check::Erc => "配線ミスの点検 (ERC) にエラーがない".to_string(),
                 Check::Named { net } => format!("出力のネットに「{net}」のラベルがある"),
-                Check::Voltage { label, .. } | Check::Stay { label, .. } | Check::Current { label, .. } | Check::Gain { label, .. } | Check::Ratings { label, .. } => label.to_string(),
+                Check::Voltage { label, .. } | Check::Stay { label, .. } | Check::Current { label, .. } | Check::Gain { label, .. } | Check::Has { label, .. } | Check::Ratings { label, .. } => label.to_string(),
             };
             if let Some(why) = &waiting {
                 out.push(CheckResult { label, ok: None, detail: why.clone() });
@@ -586,6 +665,10 @@ impl SchEditor {
                         }
                         None => (false, "周波数特性を計算できませんでした (入力の電源が「AC 1」か、VOUT のラベルがあるかを確かめてください)".to_string(), None),
                     }
+                }
+                Check::Has { kind, min, hint, .. } => {
+                    let n = self.sch.components.iter().filter(|c| c.kind == *kind).count();
+                    (n >= *min, if n >= *min { format!("{n} 個あります") } else { format!("{n} 個しかありません。{hint}") }, None)
                 }
                 Check::Ratings { load, set, .. } => {
                     let worst = self.with_ratings_of(&prepared(&self.sch, *load, set));
@@ -873,6 +956,32 @@ mod tests {
         let mut s = solution("opamp_inv");
         set(&mut s, "R2", "100k");
         assert_eq!(verdict("opamp_inv", s)[2].0, Some(false));
+    }
+
+    /// The final challenge: the answer has a protection diode and two capacitors; without them the judge says which check fails.
+    #[test]
+    fn the_final_challenge_asks_for_reverse_protection_and_capacitors() {
+        // no diode: the supply goes straight to the regulator, a backwards supply shows on the output
+        let mut s = solution("draw_psu");
+        for l in &mut s.labels {
+            if l.text == "VPROT" {
+                l.text = "VIN".into();
+            }
+        }
+        s.components.retain(|c| c.refdes != "D1");
+        let r = verdict("draw_psu", s);
+        let failed: Vec<usize> = r.iter().enumerate().filter(|(_, (ok, _))| *ok == Some(false)).map(|(i, _)| i).collect();
+        assert_eq!(failed, vec![5], "only the reverse-connection check fails: {r:#?}");
+        assert!(r[5].1.contains("ダイオード"), "{r:#?}");
+        // no capacitors: only the capacitor check fails
+        let mut s = solution("draw_psu");
+        s.components.retain(|c| c.kind != Kind::Capacitor);
+        let r = verdict("draw_psu", s);
+        let failed: Vec<usize> = r.iter().enumerate().filter(|(_, (ok, _))| *ok == Some(false)).map(|(i, _)| i).collect();
+        assert_eq!(failed, vec![6], "{r:#?}");
+        // the final challenge opens from the last lesson and from the learning path by its own id
+        assert_eq!(challenge_of_lesson("protection"), Some("draw_psu"));
+        assert!(challenge_exists("draw_psu"));
     }
 
     #[test]

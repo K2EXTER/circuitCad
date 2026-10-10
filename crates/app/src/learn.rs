@@ -77,6 +77,8 @@ pub enum Kind {
     Lesson(&'static str),
     /// The board lesson.
     Board,
+    /// Only a "作ってみよう" challenge (by the item's id); done when the challenge is passed.
+    Build,
     /// Not written yet: shown so the whole route is visible.
     Planned,
 }
@@ -156,7 +158,7 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             name: "4. 製作: 回路図から基板、実機まで",
             about: "設計した電源を、基板にして、組み立てて、性能を測ります",
             items: &[
-                planned("draw_psu", "安定化電源の回路図を自分で描く", "目標 (入力 9〜12V → 出力 5V 500mA) だけ示し、自分で部品を置いて配線する", None),
+                Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, build: true, real: None },
                 Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board, build: false, real: Some("発注するなら、少量・少額で試します") },
                 planned("build_psu", "組み立てて、性能を測る", "部品表・はんだ付け・負荷試験・リップル・温度。測定値をシミュレーションと比べる", Some("完成した電源の性能を測り、シミュレーションとの差とその理由を考えます")),
             ],
@@ -169,17 +171,22 @@ pub fn items(path: &LearningPath) -> impl Iterator<Item = &'static Item> + '_ {
     path.stages.iter().flat_map(|s| s.items.iter())
 }
 
+/// Whether an item is finished: a lesson is marked by its id, a challenge-only item by its challenge's key.
+pub fn item_done(progress: &Progress, item: &Item) -> bool {
+    if item.kind == Kind::Build { progress.is_done(&crate::schematic::challenge_progress_key(item.id)) } else { progress.is_done(item.id) }
+}
+
 /// Progress of a path: (finished, available now, all).
 pub fn summary(path: &LearningPath, progress: &Progress) -> (usize, usize, usize) {
     let all = items(path).count();
     let available = items(path).filter(|i| i.kind != Kind::Planned).count();
-    let finished = items(path).filter(|i| i.kind != Kind::Planned && progress.is_done(i.id)).count();
+    let finished = items(path).filter(|i| i.kind != Kind::Planned && item_done(progress, i)).count();
     (finished, available, all)
 }
 
 /// The next item to do: the first available one that is not finished.
 pub fn next_item(path: &LearningPath, progress: &Progress) -> Option<&'static Item> {
-    items(path).find(|i| i.kind != Kind::Planned && !progress.is_done(i.id))
+    items(path).find(|i| i.kind != Kind::Planned && !item_done(progress, i))
 }
 
 // ------------------------------------------------------------------ the window
@@ -225,7 +232,7 @@ impl LearnWindow {
                 ui.strong(stage.name);
                 ui.label(egui::RichText::new(stage.about).weak());
                 for item in stage.items {
-                    let done = progress.is_done(item.id);
+                    let done = item_done(progress, item);
                     let (mark, color) = match item.kind {
                         Kind::Planned => ("…", Color32::from_gray(120)),
                         _ if done => ("✔", Color32::from_rgb(60, 160, 90)),
@@ -238,7 +245,7 @@ impl LearnWindow {
                         ui.label(if item.kind == Kind::Planned { title.color(Color32::from_gray(130)) } else { title });
                         if item.kind == Kind::Planned {
                             ui.label(egui::RichText::new("(準備中)").weak());
-                        } else if ui.small_button(if done { "もう一度" } else { "始める" }).on_hover_text("この内容のレッスンを開きます").clicked() {
+                        } else if item.kind != Kind::Build && ui.small_button(if done { "もう一度" } else { "始める" }).on_hover_text("この内容のレッスンを開きます").clicked() {
                             action = Some(match item.kind {
                                 Kind::Lesson(id) => Action::Lesson(id),
                                 _ => Action::Board,
@@ -332,7 +339,7 @@ mod tests {
         let mut with = 0;
         for item in items(&PATHS[0]).filter(|i| i.build) {
             with += 1;
-            assert!(crate::schematic::challenge_of_lesson(item.id).is_some(), "{} has no challenge", item.title);
+            assert!(crate::schematic::challenge_of_lesson(item.id).is_some() || crate::schematic::challenge_exists(item.id), "{} has no challenge", item.title);
         }
         assert!(with >= 5, "{with} items offer a challenge");
     }
@@ -351,7 +358,8 @@ mod tests {
         assert_eq!(next_item(p, &progress).unwrap().id, "led");
         // planned items are never recommended, however far the learner is
         for it in items(p).filter(|i| i.kind != Kind::Planned) {
-            progress.mark(it.id);
+            let key = if it.kind == Kind::Build { crate::schematic::challenge_progress_key(it.id) } else { it.id.to_string() };
+            progress.mark(&key);
         }
         assert!(next_item(p, &progress).is_none());
     }
