@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -51,6 +51,20 @@ pub(super) const CALCS: &[Calc] = &[
             ("出力電流 (mA)", "100", "つなぐ回路が使う電流の最大値"),
         ],
         run: |v| regulator(v[0], v[1], v[2]),
+    },
+    Calc {
+        title: "熱 (温度と放熱板)",
+        about: "(入力 − 出力) × 電流 が熱になるレギュレータで、部品の温度と、放熱板が要るかを見積もります",
+        inputs: &[
+            ("入力電圧 (V)", "12", "レギュレータにつなぐ電源の電圧"),
+            ("出力電圧 (V)", "5", "レギュレータの出力"),
+            ("出力電流 (mA)", "500", "流す電流の最大値"),
+            ("熱抵抗 θja (℃/W)", "50", "放熱板なしで、部品の中から空気までの熱の逃げにくさ。データシートで確認 (TO-220 は約 50)"),
+            ("熱抵抗 θjc (℃/W)", "5", "部品の中からケースまで。放熱板をつけるときの計算に使う (TO-220 は約 5)"),
+            ("周囲温度 (℃)", "25", "部品のまわりの空気の温度。箱の中では 40〜50 ℃ で考える"),
+            ("最大接合温度 (℃)", "125", "部品の中の温度の上限。データシートで確認 (78xx は 125 ℃)"),
+        ],
+        run: |v| heat_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6]),
     },
     Calc {
         title: "トランジスタのスイッチ (ベース抵抗)",

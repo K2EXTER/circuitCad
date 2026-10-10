@@ -366,8 +366,23 @@ fn the_power_supply_lessons_walk_their_steps() {
     e.run_sweep();
     e.update_lesson();
     assert_eq!(progress(&e), 4, "{}", e.status);
+    // heat: heavy load, the heat calculator, then a lower input
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("heat"));
+    set_value(&mut e, "R1", "10");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    e.open_wizard(super::wizard::CALCS.iter().position(|c| c.title.starts_with("熱")).unwrap());
+    e.wiz_open = true;
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    set_value(&mut e, "V1", "8");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
     // every new lesson has a real-experiment card
-    for id in ["diode_curve", "zener", "emitter_follower", "series_regulator", "regulator_78xx"] {
+    for id in ["diode_curve", "zener", "emitter_follower", "series_regulator", "regulator_78xx", "heat"] {
         assert!(!super::lessons::lesson_real(idx(id)).is_empty(), "{id}");
     }
 }

@@ -68,7 +68,7 @@ fn every_wizard_calculator_works_with_its_defaults_and_explains_failures() {
         e.open_wizard(k);
         let out = e.wizard_result().unwrap_or_else(|m| panic!("{}: {m}", wizard::CALCS[k].title));
         assert!(!out.steps.is_empty() && !out.cautions.is_empty() && !out.faults.is_empty(), "{}", wizard::CALCS[k].title);
-        assert!(out.primary.is_some() || wizard::CALCS[k].title.contains("配線") || wizard::CALCS[k].title.contains("電池"), "{}", wizard::CALCS[k].title);
+        assert!(out.primary.is_some() || wizard::CALCS[k].title.contains("配線") || wizard::CALCS[k].title.contains("電池") || wizard::CALCS[k].title.starts_with("熱"), "{}", wizard::CALCS[k].title);
     }
     // a typo is explained instead of panicking
     e.open_wizard(0);
@@ -630,6 +630,11 @@ fn regulator_78xx_sample_shows_dropout_and_heat() {
     let (v10, issues) = run("10", "12");
     assert!((v - v10).abs() < 0.05);
     assert!(issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
+    // lesson 20: lowering the input to 8 V turns the red warning into the orange one
+    let (v8, issues) = run("10", "8");
+    assert!((v - v8).abs() < 0.05);
+    assert!(issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Caution), "{issues:?}");
+    assert!(!issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
     let (low, _) = run("100", "6");
     assert!((3.8..4.2).contains(&low), "dropout 2 V: input - 2 V, got {low}");
 }

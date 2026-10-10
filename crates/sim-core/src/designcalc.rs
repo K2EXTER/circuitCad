@@ -197,6 +197,61 @@ pub fn regulator(vin: f64, vout: f64, i_ma: f64) -> Result<CalcOut, String> {
     Ok(o)
 }
 
+/// Heat of a linear regulator (or any part that burns (Vin - Vout) x I): junction temperature and the heat sink it needs.
+pub fn heat_design(vin: f64, vout: f64, i_ma: f64, theta_ja: f64, theta_jc: f64, t_amb: f64, t_jmax: f64) -> Result<CalcOut, String> {
+    let (vin, vout, i) = (pos("入力電圧", vin)?, pos("出力電圧", vout)?, pos("電流", i_ma)? / 1000.0);
+    let (theta_ja, theta_jc) = (pos("熱抵抗 θja", theta_ja)?, pos("熱抵抗 θjc", theta_jc)?);
+    if vin <= vout {
+        return Err("入力電圧は出力電圧より高くしてください (差が熱になります)".into());
+    }
+    if t_jmax <= t_amb {
+        return Err(format!("最大接合温度 ({t_jmax} ℃) は周囲温度 ({t_amb} ℃) より高くしてください"));
+    }
+    let p = (vin - vout) * i;
+    let rise = p * theta_ja;
+    let tj = t_amb + rise;
+    // keep 20 % below the maximum junction temperature
+    let tj_goal = t_jmax - 0.2 * (t_jmax - t_amb);
+    let p_free = (tj_goal - t_amb) / theta_ja;
+    let theta_cs = 1.0;
+    let theta_total = (tj_goal - t_amb) / p;
+    let theta_sa = theta_total - theta_jc - theta_cs;
+    let mut o = CalcOut::default();
+    o.rows = vec![
+        ("発熱 P".into(), format!("{p:.2} W")),
+        ("温度上昇 (放熱板なし)".into(), format!("{rise:.0} ℃")),
+        ("接合部の温度 Tj".into(), format!("{tj:.0} ℃ (上限 {t_jmax:.0} ℃)")),
+        ("放熱板なしで使える電力".into(), format!("{p_free:.2} W")),
+    ];
+    o.steps = vec![
+        format!("発熱 P = (Vin − Vout) × I = ({vin} − {vout}) × {i_ma} mA = {p:.2} W"),
+        format!("温度上昇 = P × θja = {p:.2} × {theta_ja} = {rise:.0} ℃。Tj = 周囲 {t_amb} ℃ + {rise:.0} = {tj:.0} ℃"),
+        format!("余裕を見て、Tj を {tj_goal:.0} ℃ (上限の手前 2 割) 以下にしたい。放熱板なしで使えるのは P ≦ ({tj_goal:.0} − {t_amb}) ÷ {theta_ja} = {p_free:.2} W"),
+    ];
+    if tj <= tj_goal {
+        o.rows.push(("判定".into(), "放熱板なしで使えます".into()));
+    } else if theta_sa > 0.0 {
+        o.rows.push(("必要な放熱板の熱抵抗".into(), format!("{theta_sa:.1} ℃/W 以下")));
+        o.steps.push(format!(
+            "放熱板をつけると、熱は 接合部 → ケース (θjc {theta_jc}) → 放熱板 (取り付け {theta_cs}) → 空気 の順に逃げる。全体 {theta_total:.1} ℃/W 以下にするので、放熱板は {theta_total:.1} − {theta_jc} − {theta_cs} = {theta_sa:.1} ℃/W 以下"
+        ));
+        o.cautions.push("放熱板をつけても足りないほどの熱です。入力電圧を下げる、スイッチングレギュレータにする、電流を減らす、のほうが現実的です".into());
+    } else {
+        o.rows.push(("判定".into(), "放熱板をつけても足りません".into()));
+        o.cautions.push("熱が大きすぎて、放熱板でも間に合いません。入力電圧を下げる (差を小さくする)、スイッチングレギュレータにする、のどちらかです".into());
+    }
+    if tj > t_jmax {
+        o.cautions.push(format!("放熱板なしだと Tj が上限 {t_jmax:.0} ℃ を超えます。多くのレギュレータは、熱保護で出力が止まります"));
+    }
+    o.cautions.push("θja は、基板の銅箔の広さや風で大きく変わります。データシートの値は目安として使い、実際は温度を測って確かめます".into());
+    o.faults = vec![
+        "放熱が足りない: 熱保護で出力が止まる、止まっては復帰を繰り返す (出力が震える)。保護がない部品は壊れる".into(),
+        "放熱板の取り付けがゆるい/グリスなし: θcs が大きくなって温度が下がらない".into(),
+        "周囲が高温 (箱の中): 周囲温度の分だけ Tj が上がる。25 ℃ でなく 40〜50 ℃ で見積もる".into(),
+    ];
+    Ok(o)
+}
+
 /// NPN transistor used as a switch: base resistor.
 pub fn transistor_switch(vin: f64, ic_ma: f64, hfe: f64) -> Result<CalcOut, String> {
     let (vin, ic, hfe) = (pos("入力電圧", vin)?, pos("負荷電流", ic_ma)? / 1000.0, pos("hFE", hfe)?);
@@ -668,5 +723,19 @@ mod tests {
         // inverting gain 10 with Rf = 100k needs 10k
         assert_eq!(opamp_gain(10.0, 100e3, 1.0, 1000.0, 5.0, 10.0).unwrap().primary.as_deref(), Some("10k"));
         assert!(opamp_gain(0.5, 10e3, 0.0, 1000.0, 5.0, 100.0).is_err());
+    }
+
+    #[test]
+    fn heat_design_gives_junction_temperature_and_heat_sink() {
+        // 12 V -> 5 V at 500 mA: 3.5 W, +175 C without a heat sink
+        let o = heat_design(12.0, 5.0, 500.0, 50.0, 5.0, 25.0, 125.0).unwrap();
+        assert!(o.rows.iter().any(|(k, v)| k == "発熱 P" && v.starts_with("3.50")));
+        assert!(o.rows.iter().any(|(k, v)| k == "接合部の温度 Tj" && v.starts_with("200")));
+        assert!(o.rows.iter().any(|(k, v)| k == "必要な放熱板の熱抵抗" && v.starts_with("16.")), "{:?}", o.rows);
+        // 8 V input: 1.5 W, 100 C: fine without a sink
+        let cool = heat_design(8.0, 5.0, 500.0, 50.0, 5.0, 25.0, 125.0).unwrap();
+        assert!(cool.rows.iter().any(|(_, v)| v.contains("放熱板なしで使えます")));
+        assert!(heat_design(5.0, 5.0, 100.0, 50.0, 5.0, 25.0, 125.0).is_err());
+        assert!(heat_design(12.0, 5.0, 100.0, 50.0, 5.0, 130.0, 125.0).is_err());
     }
 }
