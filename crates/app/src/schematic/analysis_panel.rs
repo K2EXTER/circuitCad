@@ -4,7 +4,6 @@ use super::*;
 
 impl SchEditor {
     pub(super) fn panel_dc(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
         ui.horizontal(|ui| {
             if ui.button("DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
                 self.run_dc();
@@ -28,8 +27,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_tran(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.label("過渡解析");
         ui.horizontal(|ui| {
             ui.label("終了");
             ui.add(egui::TextEdit::singleline(&mut self.tran_tstop).desired_width(56.0)).on_hover_text("どこまで時間を進めるか。例: 10m = 10ミリ秒。見たい波形が数周期入る長さにします");
@@ -45,8 +42,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_ac(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.label("AC解析 (周波数特性)");
         ui.horizontal(|ui| {
             ui.label("開始");
             ui.add(egui::TextEdit::singleline(&mut self.ac_fstart).desired_width(48.0)).on_hover_text("測り始める周波数 (Hz)。例: 10");
@@ -62,8 +57,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_sweep(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.label("DCスイープ (入力→出力の特性)");
         ui.horizontal(|ui| {
             ui.label("電源");
             ui.add(egui::TextEdit::singleline(&mut self.sweep_src).desired_width(36.0).hint_text("V2"))
@@ -81,8 +74,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_noise(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.label("ノイズ解析 (熱雑音・ショット雑音)");
         ui.horizontal(|ui| {
             ui.label("出力");
             ui.add(egui::TextEdit::singleline(&mut self.noise_out).desired_width(56.0).hint_text("OUT / A,B"))
@@ -110,8 +101,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_variation(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.label("実験: 温度とばらつき");
         ui.horizontal(|ui| {
             ui.label("温度");
             ui.add(egui::TextEdit::singleline(&mut self.temp_from).desired_width(34.0)).on_hover_text("温度スイープの開始温度 (℃)");

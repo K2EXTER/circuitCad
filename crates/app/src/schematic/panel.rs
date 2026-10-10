@@ -2,6 +2,18 @@
 
 use super::*;
 
+/// The analyses of the "解析" tab: (key, title, open at first, what it is for).
+const ANALYSIS_SECTIONS: &[(&str, &str, bool, &str)] = &[
+    ("dc", "DC動作点 (電圧・電流)", true, "落ち着いたあとの各点の電圧と部品の電流を見ます。まずここから"),
+    ("tran", "過渡解析 (時間の変化)", true, "時間とともに電圧・電流がどう変わるかを、オシロスコープのように見ます"),
+    ("ac", "AC解析 (周波数特性)", true, "周波数ごとの強さ (ゲイン) と位相を見ます。フィルタやアンプの帯域、安定性の余裕も"),
+    ("sweep", "DCスイープ (入力→出力)", false, "入力電圧を変えたときの出力の変化 (伝達特性) を見ます"),
+    ("param", "パラメータスイープ (値を振る)", false, "部品の値を何通りか変えて、波形を重ねて比べます"),
+    ("noise", "ノイズ解析", false, "熱雑音・ショット雑音が出力にどれだけ出るかを見ます"),
+    ("variation", "温度とばらつき", false, "温度を変える・部品の誤差でずれる範囲を調べます"),
+    ("fault", "故障シミュレーション", false, "部品を壊した (断線・ショート・値の間違い) ときに何が起きるかを見ます"),
+];
+
 impl SchEditor {
     pub fn side_panel(&mut self, ui: &mut egui::Ui) {
         // the panel is taller than a small window: let it scroll instead of hiding the bottom controls
@@ -26,14 +38,33 @@ impl SchEditor {
             }
             PanelTab::Analyze => {
                 ui.small("知りたいことに合わせて選びます: 各点の電圧 → DC動作点 / 時間とともに → 過渡解析 / 周波数ごとの強さ → AC解析 / 入力と出力の関係 → DCスイープ / 雑音 → ノイズ解析 / 実物とのずれ → 温度とばらつき");
-                self.panel_dc(ui);
-                self.panel_tran(ui);
-                self.panel_ac(ui);
-                self.panel_sweep(ui);
-                self.panel_param(ui);
-                self.panel_noise(ui);
-                self.panel_variation(ui);
-                self.panel_fault(ui);
+                ui.horizontal(|ui| {
+                    if ui.small_button("すべて開く").on_hover_text("すべての解析の設定を開きます").clicked() {
+                        self.sec_gen += 1;
+                        self.sec_all = true;
+                    }
+                    if ui.small_button("基本だけ").on_hover_text("DC・過渡・AC の3つだけ開き、ほかは閉じます").clicked() {
+                        self.sec_gen += 1;
+                        self.sec_all = false;
+                    }
+                });
+                let lesson = self.lesson.is_some();
+                let open_all = self.sec_all || lesson;
+                for (key, title, basic, hint) in ANALYSIS_SECTIONS {
+                    let id = egui::Id::new(("analysis_section", *key, self.sec_gen, lesson));
+                    egui::CollapsingHeader::new(egui::RichText::new(*title).strong()).id_salt(id).default_open(open_all || *basic).show(ui, |ui| {
+                        match *key {
+                            "dc" => self.panel_dc(ui),
+                            "tran" => self.panel_tran(ui),
+                            "ac" => self.panel_ac(ui),
+                            "sweep" => self.panel_sweep(ui),
+                            "param" => self.panel_param(ui),
+                            "noise" => self.panel_noise(ui),
+                            "variation" => self.panel_variation(ui),
+                            _ => self.panel_fault(ui),
+                        }
+                    }).header_response.on_hover_text(*hint);
+                }
                 self.panel_results(ui);
             }
         }

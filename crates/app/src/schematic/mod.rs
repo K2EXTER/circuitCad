@@ -166,6 +166,9 @@ pub struct SchEditor {
     wiz_open: bool,
     wiz_kind: usize,
     wiz_in: Vec<String>,
+    /// Analysis sections of the "解析" tab: a generation counter (bumped by "すべて開く / 基本だけ" to reset them) and whether all start open.
+    sec_gen: u32,
+    sec_all: bool,
     fault_part: String,
     /// Compare in the time domain or AC, or at DC, and the node watched in the time domain.
     fault_domain: fault::FaultDomain,
@@ -394,6 +397,8 @@ impl Default for SchEditor {
             wiz_open: false,
             wiz_kind: 0,
             wiz_in: vec![],
+            sec_gen: 0,
+            sec_all: false,
             fault_part: String::new(),
             fault_domain: fault::FaultDomain::Dc,
             fault_node: String::new(),

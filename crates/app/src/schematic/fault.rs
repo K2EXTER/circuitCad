@@ -226,8 +226,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_fault(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
-        ui.label("故障シミュレーション (壊れたらどうなる?)");
         ui.small("部品を1つ壊した状態 (断線・ショート・値の間違い) で DC を解き、元の回路と比べます。「どの部品が壊れると危ないか」を、実物を壊さずに学べます");
         let parts: Vec<String> = self.sim_circuit().map(|c| breakable(&c)).unwrap_or_default();
         ui.horizontal(|ui| {
