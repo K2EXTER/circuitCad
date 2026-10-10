@@ -46,7 +46,7 @@ impl SchEditor {
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります / クリック: 測定カーソル A→B / ダブルクリック: 全体表示・カーソル解除");
+            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります / クリック: 測定カーソル A→B / ダブルクリック: 全体表示・カーソル解除 / 軸の数字の上でホイール: その軸だけ拡大縮小");
         });
         let AcView { outcome, selected, plot: st, .. } = view;
         match outcome {

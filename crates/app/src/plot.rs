@@ -48,6 +48,11 @@ fn zoom_range(r: (f64, f64), f: f64, log: bool) -> (f64, f64) {
     (from(c - half), from(c + half))
 }
 
+/// Scales the range `r` by `f` keeping the point `c` where it is (the pointer stays over the same value).
+fn zoom_about(r: (f64, f64), f: f64, c: f64) -> (f64, f64) {
+    (c + (r.0 - c) * f, c + (r.1 - c) * f)
+}
+
 /// One pair of "from / to" text boxes. Typing a number and pressing Enter (or leaving the box)
 /// returns the new range; otherwise the boxes follow the real range.
 fn range_boxes(ui: &mut egui::Ui, text: &mut [String; 2], cur: (f64, f64), unit: &str, tip: &str) -> Option<(f64, f64)> {
@@ -285,6 +290,31 @@ pub fn draw_group(
     let to_ax = |t: f64| if log { t.max(1e-300).log10() } else { t };
     let from_ax = |a: f64| if log { 10f64.powf(a) } else { a };
 
+    // wheel over the axis numbers: the y numbers zoom the y axis, the x numbers zoom the x axis (about the pointer)
+    {
+        let ystrip = Rect::from_min_max(Pos2::new(rect.left(), pa.top()), Pos2::new(pa.left(), pa.bottom()));
+        let xstrip = Rect::from_min_max(Pos2::new(pa.left(), pa.bottom()), Pos2::new(pa.right(), rect.bottom()));
+        let yr = ui.interact(ystrip, id.with("y_axis"), Sense::hover()).on_hover_cursor(egui::CursorIcon::ResizeVertical);
+        let xr = x_labels.then(|| ui.interact(xstrip, id.with("x_axis"), Sense::hover()).on_hover_cursor(egui::CursorIcon::ResizeHorizontal));
+        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+        if scroll != 0.0 {
+            let f = (1.0 - scroll as f64 * 0.002).clamp(0.5, 2.0);
+            let p = ui.input(|i| i.pointer.hover_pos()).unwrap_or(pa.center());
+            if yr.hovered() {
+                // the y range as shown this frame (auto-scaled groups have not been refreshed yet)
+                let (h0, h1) = (pa.height() as f64, st.y[group]);
+                let c = h1.1 - ((p.y - pa.top()) as f64 / h0).clamp(0.0, 1.0) * (h1.1 - h1.0);
+                st.y[group] = zoom_about(st.y[group], f, c);
+                st.auto_y[group] = false;
+            } else if xr.as_ref().is_some_and(|r| r.hovered()) {
+                let (a0, a1) = (to_ax(st.x.0), to_ax(st.x.1));
+                let c = a0 + ((p.x - pa.left()) as f64 / pa.width() as f64).clamp(0.0, 1.0) * (a1 - a0);
+                let (n0, n1) = zoom_about((a0, a1), f, c);
+                st.x = (from_ax(n0), from_ax(n1));
+            }
+        }
+    }
+
     // autoscale y to the visible part of the data
     if st.auto_y[group] {
         let (mut lo, mut hi) = (f64::MAX, f64::MIN);
@@ -489,6 +519,17 @@ pub fn draw_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zooming_about_a_point_keeps_that_point_fixed() {
+        let r = zoom_about((0.0, 10.0), 0.5, 2.0);
+        assert!((r.0 - 1.0).abs() < 1e-9 && (r.1 - 6.0).abs() < 1e-9, "{r:?}");
+        // the point itself maps to the same fraction of the range before and after
+        let (a, b) = (0.0, 10.0);
+        let (c, f) = (2.0, 3.0);
+        let (n0, n1) = zoom_about((a, b), f, c);
+        assert!(((c - a) / (b - a) - (c - n0) / (n1 - n0)).abs() < 1e-9);
+    }
 
     #[test]
     fn zoom_keeps_the_centre_and_works_on_a_log_axis() {
