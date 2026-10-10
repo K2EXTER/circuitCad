@@ -705,7 +705,7 @@ impl SchEditor {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
                 ui.label(lesson.summary);
-                if idx + 1 < LESSONS.len() && ui.button(format!("次のレッスンへ: {}", LESSONS[idx + 1].title)).clicked() {
+                if idx + 1 < LESSONS.len() && ui.button(format!("次のレッスンへ: {}", LESSONS[idx + 1].title)).on_hover_text("このレッスンを終えて、次のレッスンのサンプル回路を開きます").clicked() {
                     next = Some(idx + 1);
                 }
             }

@@ -78,7 +78,7 @@ impl SchEditor {
             ui.selectable_value(&mut self.tool, Tool::Label, "ラベル").on_hover_text("同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします");
         });
         if self.tool == Tool::Label {
-            ui.text_edit_singleline(&mut self.label_text);
+            ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります");
         }
         ui.separator();
         ui.label("部品 (クリックして配置 / Rキーで回転)");
@@ -107,7 +107,7 @@ impl SchEditor {
                         for c in &cats {
                             ui.selectable_value(&mut self.lib_cat, c.clone(), c);
                         }
-                    });
+                    }).response.on_hover_text("ライブラリ部品の分類。選んだ分類だけを一覧に出します");
                 ui.checkbox(&mut self.lib_sim_only, "◎のみ").on_hover_text("シミュレーションモデルのある部品だけを表示します");
             });
             let f = self.lib_filter.to_lowercase();
@@ -161,13 +161,13 @@ impl SchEditor {
             }
             ui.small("◎ = シミュレーションモデルあり");
             ui.horizontal(|ui| {
-                if ui.button("新規作成…").clicked() {
+                if ui.button("新規作成…").on_hover_text("ライブラリに、自分で部品 (記号・パッケージ・シミュレーションモデル) を作って追加します").clicked() {
                     self.form = Some(PartForm::default());
                 }
-                if ui.button("JSONから追加…").clicked() {
+                if ui.button("JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
                     self.import_part_json();
                 }
-                if ui.button("再読み込み").clicked() {
+                if ui.button("再読み込み").on_hover_text("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します").clicked() {
                     self.reload_library();
                 }
             });
@@ -192,7 +192,7 @@ impl SchEditor {
                 if !c.kind.is_power_symbol() {
                     ui.horizontal(|ui| {
                         ui.label("番号");
-                        ui.text_edit_singleline(&mut c.refdes);
+                        ui.text_edit_singleline(&mut c.refdes).on_hover_text("部品番号 (R1、C2、U1 など)。同じ番号が2つあると、どちらかが解析やネットで区別できません");
                     });
                 }
                 if c.kind != Kind::Ground {
@@ -293,13 +293,13 @@ impl SchEditor {
                         for n in pcb_core::footprints::names() {
                             ui.selectable_value(&mut c.footprint, n.clone(), n);
                         }
-                    });
+                    }).response.on_hover_text("基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます");
                 }
-                if ui.button("回転 (R)").clicked() {
+                if ui.button("回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked() {
                     self.rotate_req = Some(i);
                 }
             }
-        if self.selected.is_some() && ui.button("削除 (Delete)").clicked() {
+        if self.selected.is_some() && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
             self.delete_selected();
         }
     }

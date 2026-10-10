@@ -139,7 +139,7 @@ impl BoardEditor {
             ui.separator();
             ui.horizontal(|ui| {
                 ui.strong("2. 発注前のチェック");
-                if ui.button("もう一度チェック").clicked() {
+                if ui.button("もう一度チェック").on_hover_text("いまの基板でチェックをやり直します。直したあとに押します").clicked() {
                     run = true;
                 }
             });
@@ -179,16 +179,16 @@ impl BoardEditor {
             ui.separator();
             ui.strong("3. 出来上がりを見る");
             ui.small("書き出すファイルを読み戻して、基板の絵にします。発注先に届くのはこの形です。配線や穴が想定どおりか確認しましょう");
-            if ui.button(if self.order.preview.is_some() { "プレビューを更新" } else { "プレビューを作る" }).clicked() {
+            if ui.button(if self.order.preview.is_some() { "プレビューを更新" } else { "プレビューを作る" }).on_hover_text("書き出すファイルを読み戻して、出来上がりの絵を作り直します").clicked() {
                 make_preview = true;
             }
             if let Some(pv) = self.order.preview.as_mut() {
                 ui.horizontal(|ui| {
-                    repaint |= ui.selectable_value(&mut pv.bottom, false, "表面から").changed();
-                    repaint |= ui.selectable_value(&mut pv.bottom, true, "裏面から").changed();
+                    repaint |= ui.selectable_value(&mut pv.bottom, false, "表面から").on_hover_text("基板の表面 (部品を載せる面) から見た絵にします").changed();
+                    repaint |= ui.selectable_value(&mut pv.bottom, true, "裏面から").on_hover_text("基板を裏返して、裏面から見た絵にします").changed();
                     repaint |= ui.checkbox(&mut pv.mask, "ソルダーマスク").on_hover_text("緑のレジスト。オフにすると、銅の配線だけが見えます").changed();
-                    repaint |= ui.checkbox(&mut pv.silk, "シルク").changed();
-                    ui.add(egui::Slider::new(&mut pv.zoom, 0.5..=3.0).text("拡大"));
+                    repaint |= ui.checkbox(&mut pv.silk, "シルク").on_hover_text("シルク (白い印刷の文字と枠) の表示を切り替えます").changed();
+                    ui.add(egui::Slider::new(&mut pv.zoom, 0.5..=3.0).text("拡大")).on_hover_text("プレビューの拡大率です");
                 });
                 let w = (ui.available_width() - 8.0).max(200.0) * pv.zoom;
                 let size = Vec2::new(w, w * pv.size_px[1] as f32 / pv.size_px[0] as f32);

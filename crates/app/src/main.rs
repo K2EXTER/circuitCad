@@ -110,23 +110,23 @@ impl eframe::App for App {
         self.help.window(ui.ctx());
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図");
-                ui.selectable_value(&mut self.mode, Mode::Board, "基板パターン");
+                ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図").on_hover_text("回路図の画面。部品を置いて配線し、シミュレーションします");
+                ui.selectable_value(&mut self.mode, Mode::Board, "基板パターン").on_hover_text("基板の画面。回路図から部品を取り込んで、配置・配線します");
                 ui.separator();
                 ui.checkbox(&mut self.show_hints, "ヒント").on_hover_text("画面下に、いま何をするとよいかのヒントを表示します");
                 ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
                 ui.menu_button("ファイル", |ui| {
-                    if ui.button("新規").clicked() {
+                    if ui.button("新規").on_hover_text("いまの図を空にして、新しく始めます").clicked() {
                         if sch_mode { self.sch.new_file() } else { self.board_ed.new_file() }
                     }
-                    if ui.button("開く…").clicked() {
+                    if ui.button("開く…").on_hover_text("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)").clicked() {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
                     }
-                    if ui.button("保存").clicked() {
+                    if ui.button("保存").on_hover_text("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます").clicked() {
                         if sch_mode { self.sch.save(false) } else { self.board_ed.save(false) }
                     }
-                    if ui.button("名前を付けて保存…").clicked() {
+                    if ui.button("名前を付けて保存…").on_hover_text("別の名前で保存します").clicked() {
                         if sch_mode { self.sch.save(true) } else { self.board_ed.save(true) }
                     }
                     ui.separator();
@@ -140,7 +140,7 @@ impl eframe::App for App {
                     }
                     if !sch_mode {
                         ui.separator();
-                        if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").clicked() {
+                        if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").on_hover_text("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます").clicked() {
                             self.board_ed.open_order();
                             ui.close();
                         }
@@ -173,10 +173,10 @@ impl eframe::App for App {
                     }
                 });
                 ui.menu_button("編集", |ui| {
-                    if ui.button("元に戻す (Ctrl+Z)").clicked() {
+                    if ui.button("元に戻す (Ctrl+Z)").on_hover_text("直前の操作を取り消します").clicked() {
                         if sch_mode { self.sch.undo() } else { self.board_ed.undo() }
                     }
-                    if ui.button("やり直し (Ctrl+Y)").clicked() {
+                    if ui.button("やり直し (Ctrl+Y)").on_hover_text("取り消した操作をやり直します").clicked() {
                         if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
                     }
                 });
@@ -202,7 +202,7 @@ impl eframe::App for App {
                     }
                 });
                 if !sch_mode {
-                    if ui.button("DRC").clicked() {
+                    if ui.button("DRC").on_hover_text("設計ルールチェック。配線の間隔が近すぎる・銅が基板の端にはみ出している、などを調べます").clicked() {
                         self.board_ed.run_drc();
                     }
                 }

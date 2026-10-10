@@ -37,46 +37,46 @@ impl BoardEditor {
             ui.separator();
             ui.horizontal(|ui| {
                 ui.label("作業層 (L)").on_hover_text("いま配線や部品を置く面。基板は表と裏の2層に銅を張れます");
-                ui.selectable_value(&mut self.side, Side::Top, "表面");
-                ui.selectable_value(&mut self.side, Side::Bottom, "裏面");
+                ui.selectable_value(&mut self.side, Side::Top, "表面").on_hover_text("配線や部品を置く面を表面にします (L キーでも切り替わります)");
+                ui.selectable_value(&mut self.side, Side::Bottom, "裏面").on_hover_text("配線や部品を置く面を裏面にします (L キーでも切り替わります)");
             });
             ui.horizontal(|ui| {
                 ui.label("配線");
-                ui.selectable_value(&mut self.route_mode, RouteMode::Angle45, "45°");
-                ui.selectable_value(&mut self.route_mode, RouteMode::Orthogonal, "直角");
-                ui.selectable_value(&mut self.route_mode, RouteMode::Free, "自由");
+                ui.selectable_value(&mut self.route_mode, RouteMode::Angle45, "45°").on_hover_text("配線を 45° の斜めを使って曲げます。基板の標準的な引き方で、角が鈍くなり、きれいで製造もしやすくなります");
+                ui.selectable_value(&mut self.route_mode, RouteMode::Orthogonal, "直角").on_hover_text("配線を縦と横だけで曲げます (斜めは使いません)");
+                ui.selectable_value(&mut self.route_mode, RouteMode::Free, "自由").on_hover_text("クリックした点どうしを、そのまま直線でつなぎます (どんな角度でも)。鋭い角ができやすいので注意しましょう");
             });
-            ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm"));
+            ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm")).on_hover_text("カーソルが吸い付く間隔。0 なら吸い付きません。小さいほど細かく置けます (部品の足の間隔は 2.54mm や 1.27mm が多いです)");
             ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
                 .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
-            ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm"));
+            ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
             ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
                 .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
             if matches!(self.tool, Tool::PadTh | Tool::PadSmd) {
-                ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm"));
-                ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm"));
+                ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");
+                ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
             }
             if self.tool == Tool::Hole {
-                ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm"));
+                ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
             }
 
             ui.separator();
             ui.label("表示");
             ui.horizontal_wrapped(|ui| {
-                ui.checkbox(&mut self.vis.top, "表面");
-                ui.checkbox(&mut self.vis.bottom, "裏面");
-                ui.checkbox(&mut self.vis.silk, "シルク");
-                ui.checkbox(&mut self.vis.zones, "ゾーン");
-                ui.checkbox(&mut self.vis.airwires, "未配線");
-                ui.checkbox(&mut self.vis.nets, "ネット名");
+                ui.checkbox(&mut self.vis.top, "表面").on_hover_text("表面の銅 (配線とパッド) を表示します");
+                ui.checkbox(&mut self.vis.bottom, "裏面").on_hover_text("裏面の銅 (配線とパッド) を表示します");
+                ui.checkbox(&mut self.vis.silk, "シルク").on_hover_text("シルク (白い印刷の文字と枠) を表示します");
+                ui.checkbox(&mut self.vis.zones, "ゾーン").on_hover_text("ゾーン (銅を面で塗った所) を表示します");
+                ui.checkbox(&mut self.vis.airwires, "未配線").on_hover_text("未配線 (まだつながっていない接続を示す黄色の線) を表示します");
+                ui.checkbox(&mut self.vis.nets, "ネット名").on_hover_text("パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
                 ui.checkbox(&mut self.vis.ruler, "定規 (mm)").on_hover_text("画面の上と左に、実際の寸法 (mm) の目盛りを出します。拡大すると目盛りが細かくなります。オレンジの印がカーソルの位置です");
             });
 
             ui.separator();
             ui.label("基板外形");
             ui.horizontal(|ui| {
-                ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 "));
-                ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ "));
+                ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 ")).on_hover_text("基板の幅 (mm)。「矩形に設定」を押すと外形に反映されます");
+                ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ ")).on_hover_text("基板の高さ (mm)。「矩形に設定」を押すと外形に反映されます");
                 if ui.button("矩形に設定").on_hover_text("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります").clicked() {
                     self.checkpoint();
                     let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
@@ -111,9 +111,9 @@ impl BoardEditor {
                     if !nets.iter().any(|n| n == "GND") {
                         ui.selectable_value(&mut self.zone_net, "GND".to_string(), "GND");
                     }
-                });
-                ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm"));
-                ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ");
+                }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
+                ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
+                ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
             }
 
             self.selection_panel(ui);
@@ -127,15 +127,15 @@ impl BoardEditor {
             }
             ui.label(format!("未配線: {} 本 (黄色の線)", ratsnest(&self.board).len()));
             ui.horizontal(|ui| {
-                if ui.add_enabled(!self.undo.is_empty(), egui::Button::new("元に戻す")).clicked() {
+                if ui.add_enabled(!self.undo.is_empty(), egui::Button::new("元に戻す")).on_hover_text("直前の操作を取り消します (Ctrl+Z)").clicked() {
                     self.undo();
                 }
-                if ui.add_enabled(!self.redo.is_empty(), egui::Button::new("やり直し")).clicked() {
+                if ui.add_enabled(!self.redo.is_empty(), egui::Button::new("やり直し")).on_hover_text("取り消した操作をやり直します (Ctrl+Y)").clicked() {
                     self.redo();
                 }
             });
             ui.label("基板名 (出力ファイル名)");
-            ui.text_edit_singleline(&mut self.board.name);
+            ui.text_edit_singleline(&mut self.board.name).on_hover_text("製造ファイル (Gerber など) の名前に使います。半角の英数字がおすすめです");
 
             ui.separator();
             if ui.button("3Dで見る…").on_hover_text("基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます").clicked() {
@@ -194,7 +194,7 @@ impl BoardEditor {
         if self.multi.len() > 1 {
             ui.separator();
             ui.label(format!("{} 個を選択中", self.multi.len()));
-            if ui.button("選択を解除 (Esc)").clicked() {
+            if ui.button("選択を解除 (Esc)").on_hover_text("選択をやめます (Esc キーでも同じです)").clicked() {
                 self.multi.clear();
             }
             return;
@@ -205,7 +205,7 @@ impl BoardEditor {
         match sel {
             Item::Track(i) if i < self.board.tracks.len() => {
                 let mut w = self.board.tracks[i].width;
-                let r = ui.add(egui::DragValue::new(&mut w).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"));
+                let r = ui.add(egui::DragValue::new(&mut w).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm")).on_hover_text("選んだ配線の太さ。大きい電流を流す線は太くします");
                 if r.drag_started() || r.gained_focus() {
                     self.checkpoint();
                 }
@@ -214,8 +214,8 @@ impl BoardEditor {
                 }
                 let mut s = self.board.tracks[i].side;
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut s, Side::Top, "表面");
-                    ui.selectable_value(&mut s, Side::Bottom, "裏面");
+                    ui.selectable_value(&mut s, Side::Top, "表面").on_hover_text("この配線を表面に移します");
+                    ui.selectable_value(&mut s, Side::Bottom, "裏面").on_hover_text("この配線を裏面に移します");
                 });
                 if s != self.board.tracks[i].side {
                     self.checkpoint();
@@ -224,8 +224,8 @@ impl BoardEditor {
             }
             Item::Via(i) if i < self.board.vias.len() => {
                 let (mut d, mut dr) = (self.board.vias[i].diameter, self.board.vias[i].drill);
-                let r1 = ui.add(egui::DragValue::new(&mut d).speed(0.05).range(0.3..=3.0).prefix("径 ").suffix(" mm"));
-                let r2 = ui.add(egui::DragValue::new(&mut dr).speed(0.05).range(0.2..=2.0).prefix("穴 ").suffix(" mm"));
+                let r1 = ui.add(egui::DragValue::new(&mut d).speed(0.05).range(0.3..=3.0).prefix("径 ").suffix(" mm")).on_hover_text("選んだビアの外径 (銅の丸の大きさ)");
+                let r2 = ui.add(egui::DragValue::new(&mut dr).speed(0.05).range(0.2..=2.0).prefix("穴 ").suffix(" mm")).on_hover_text("選んだビアの穴径");
                 if r1.drag_started() || r1.gained_focus() || r2.drag_started() || r2.gained_focus() {
                     self.checkpoint();
                 }
@@ -242,11 +242,11 @@ impl BoardEditor {
                     for n in &nets {
                         ui.selectable_value(&mut net, n.clone(), n);
                     }
-                });
+                }).response.on_hover_text("このゾーンでつなぐネット");
                 let mut c = self.board.zones[i].clearance;
-                let r = ui.add(egui::DragValue::new(&mut c).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm"));
+                let r = ui.add(egui::DragValue::new(&mut c).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("このゾーンと、ほかのネットの間をあける距離");
                 let mut th = self.board.zones[i].thermal;
-                let rt = ui.checkbox(&mut th, "サーマルリリーフ");
+                let rt = ui.checkbox(&mut th, "サーマルリリーフ").on_hover_text("スルーホールのパッドを、細い十字の足でゾーンにつなぎます (はんだ付けしやすくなります)");
                 if net != before || r.drag_started() || r.gained_focus() || rt.changed() {
                     self.checkpoint();
                 }
@@ -262,7 +262,7 @@ impl BoardEditor {
                 let (r, side) = (p.refdes.clone(), p.side);
                 ui.label(format!("{}  {}  [{}]  {}", p.refdes, p.value, p.footprint, if side == Side::Bottom { "裏面実装" } else { "表面実装" }));
                 let _ = r;
-                if ui.button(if side == Side::Bottom { "表面に移す (B)" } else { "裏面に移す (B)" }).clicked() {
+                if ui.button(if side == Side::Bottom { "表面に移す (B)" } else { "裏面に移す (B)" }).on_hover_text("部品を反対の面に付け替えます。裏面の部品は左右が反転します (B キーでも)").clicked() {
                     self.flip_selected_part();
                 }
             }
@@ -271,7 +271,7 @@ impl BoardEditor {
             }
             _ => {}
         }
-        if !matches!(sel, Item::Part(_)) && ui.button("削除 (Delete)").clicked() {
+        if !matches!(sel, Item::Part(_)) && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キー)。部品は消せません").clicked() {
             self.delete(sel);
         }
     }

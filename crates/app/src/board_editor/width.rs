@@ -85,7 +85,7 @@ impl BoardEditor {
             for n in widen {
                 self.widen_net_to_need(&n);
             }
-            if report.iter().any(|w| w.too_thin()) && ui.button("足りないネットをすべて推奨幅にする").clicked() {
+            if report.iter().any(|w| w.too_thin()) && ui.button("足りないネットをすべて推奨幅にする").on_hover_text("電流に対して細いネットの配線を、すべて必要な太さまで太くします (Ctrl+Z で戻せます)。太くした結果、配線の間隔が足りるか DRC で確かめましょう").clicked() {
                 let thin: Vec<String> = report.iter().filter(|w| w.too_thin()).map(|w| w.net.clone()).collect();
                 for n in thin {
                     self.widen_net_to_need(&n);

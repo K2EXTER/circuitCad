@@ -406,7 +406,7 @@ impl SchEditor {
                         for n in &nets {
                             ui.selectable_value(&mut self.fault_bridge, n.clone(), n);
                         }
-                    });
+                    }).response.on_hover_text("ブリッジ (ピンを別のネットとつなぐ故障) の相手のネット");
                 });
             }
         }
@@ -463,7 +463,7 @@ impl SchEditor {
                         if r.faulted.is_ok() && ui.button("故障時の電圧を回路図に表示").on_hover_text("回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します").clicked() {
                             show_sheet = true;
                         }
-                        if ui.button("元に戻す (DC解析)").clicked() {
+                        if ui.button("元に戻す (DC解析)").on_hover_text("壊した仮定の結果をやめて、いまの回路のDC解析の結果に戻します").clicked() {
                             restore = true;
                         }
                     });

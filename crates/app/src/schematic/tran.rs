@@ -64,7 +64,7 @@ impl SchEditor {
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.checkbox(spectrum, "スペクトル表示");
+            ui.checkbox(spectrum, "スペクトル表示").on_hover_text("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います");
             if *spectrum {
                 ui.label("解析範囲");
                 let tip = "スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は 0 dB = 1 V (ピーク値)";

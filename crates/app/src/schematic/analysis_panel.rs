@@ -225,7 +225,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                 ui.label(format!("{}: {}", n.name, pins.join(", ")));
             }
         });
-        if ui.button("SPICEネットリストを書き出し…").clicked()
+        if ui.button("SPICEネットリストを書き出し…").on_hover_text("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います").clicked()
             && let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
                 self.status = match std::fs::write(&p, to_spice(&self.sch, "circuitCad")) {
                     Ok(()) => format!("書き出しました: {}", p.display()),

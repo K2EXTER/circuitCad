@@ -213,10 +213,10 @@ impl PartForm {
                 ui.label("1セルの満充電電圧");
                 ui.add(egui::DragValue::new(&mut t.cell_voltage).speed(0.01).range(2.0..=5.0).suffix(" V"))
                     .on_hover_text("リチウムイオンは 4.2V (高電圧タイプ 4.35V)、リン酸鉄リチウムは 3.6V");
-                if ui.small_button("4.2V").clicked() {
+                if ui.small_button("4.2V").on_hover_text("リチウムイオン電池の 1 セルの満充電電圧").clicked() {
                     t.cell_voltage = 4.2;
                 }
-                if ui.small_button("3.6V (リン酸鉄)").clicked() {
+                if ui.small_button("3.6V (リン酸鉄)").on_hover_text("リン酸鉄リチウム電池の 1 セルの満充電電圧").clicked() {
                     t.cell_voltage = 3.6;
                 }
             });
@@ -230,7 +230,7 @@ impl PartForm {
                 CurrentSetting::Fixed => {
                     ui.horizontal(|ui| {
                         ui.label("充電電流");
-                        ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A"));
+                        ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A")).on_hover_text("充電電流 (A)。データシートに書かれた値を入れます");
                     });
                 }
                 CurrentSetting::Resistor => {
@@ -275,7 +275,7 @@ impl PartForm {
                     t.ntc = ntc.then_some((0.3, 2.73));
                 }
                 if let Some((lo, hi)) = &mut t.ntc {
-                    ui.add(egui::DragValue::new(lo).speed(0.01).range(0.0..=5.0).prefix("正常な電圧 ").suffix(" V から"));
+                    ui.add(egui::DragValue::new(lo).speed(0.01).range(0.0..=5.0).prefix("正常な電圧 ").suffix(" V から")).on_hover_text("NTC 端子の電圧がこの値より低いと、温度が高すぎる (または低すぎる) として充電を止めます");
                     ui.add(egui::DragValue::new(hi).speed(0.01).range(0.0..=5.0).suffix(" V まで"))
                         .on_hover_text("NTC に 100µA を流したときの電圧がこの範囲なら充電します (電圧 = 100µA × NTC の抵抗)");
                 }
@@ -300,22 +300,22 @@ impl PartForm {
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
-            ui.text_edit_singleline(&mut self.name);
+            ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
             ui.end_row();
             ui.label("カテゴリ");
-            ui.text_edit_singleline(&mut self.category);
+            ui.text_edit_singleline(&mut self.category).on_hover_text("一覧のグループ名 (例: オペアンプ、トランジスタ)");
             ui.end_row();
             ui.label("部品番号の頭文字");
-            ui.text_edit_singleline(&mut self.prefix);
+            ui.text_edit_singleline(&mut self.prefix).on_hover_text("回路図で付く部品番号の頭文字。IC は U、トランジスタは Q、抵抗は R、ダイオードは D");
             ui.end_row();
             ui.label("値 (省略で部品名)");
-            ui.text_edit_singleline(&mut self.value);
+            ui.text_edit_singleline(&mut self.value).on_hover_text("回路図に表示する値。空なら部品名が入ります");
             ui.end_row();
             ui.label("説明");
-            ui.text_edit_singleline(&mut self.description);
+            ui.text_edit_singleline(&mut self.description).on_hover_text("一覧で部品にポインタを置いたときに出る説明");
             ui.end_row();
             ui.label("データシートURL");
-            ui.text_edit_singleline(&mut self.datasheet);
+            ui.text_edit_singleline(&mut self.datasheet).on_hover_text("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです");
             ui.end_row();
         });
 
@@ -323,18 +323,18 @@ impl PartForm {
 
         ui.separator();
         ui.label("ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
-        ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace));
+        ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
 
         ui.separator();
         ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます)");
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ");
-            ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)");
-            ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)");
-            ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)");
+            ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
+            ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
+            ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
+            ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)").on_hover_text("足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)");
         });
         let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64| {
-            ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm"));
+            ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(pkg_tip(label));
         };
         ui.horizontal_wrapped(|ui| {
             dv(ui, "ピッチ", &mut self.pitch);
@@ -347,7 +347,7 @@ impl PartForm {
                     dv(ui, "列間隔", &mut self.row);
                     dv(ui, "パッド長", &mut self.len);
                     dv(ui, "パッド幅", &mut self.width);
-                    ui.checkbox(&mut self.tht, "スルーホール(DIP)");
+                    ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
                     if self.tht {
                         dv(ui, "穴径", &mut self.drill);
                     }
@@ -368,20 +368,20 @@ impl PartForm {
         ui.separator();
         ui.label("シミュレーションモデル (部品の特性)");
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.sim, SimChoice::None, "なし");
-            ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)");
-            ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)");
+            ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
+            ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
+            ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)").on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
         });
         if self.sim != SimChoice::None {
             ui.horizontal(|ui| {
                 if self.sim == SimChoice::Model {
                     ui.label("素子記号");
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0));
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S");
                 }
                 ui.label("モデル名");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0));
+                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。下の本文と同じ名前にします");
                 ui.label("ノード順のピン番号");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K"));
+                ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
             });
             ui.add(
                 egui::TextEdit::multiline(&mut self.sim_text)
@@ -416,7 +416,7 @@ impl PartForm {
             footprint_preview(ui, &fp);
         }
         let ok = !def.has_errors();
-        if ui.add_enabled(ok, egui::Button::new("保存してライブラリに追加")).clicked() {
+        if ui.add_enabled(ok, egui::Button::new("保存してライブラリに追加")).on_hover_text("この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません").clicked() {
             return Some(def);
         }
         None
@@ -590,5 +590,19 @@ mod tests {
         let mut g = PartForm::default();
         g.apply_template();
         assert!(g.tpl_message.contains("部品名"), "{}", g.tpl_message);
+    }
+}
+
+/// Hover text of a package dimension box of the part form (data sheet "recommended land pattern").
+fn pkg_tip(label: &str) -> &'static str {
+    match label {
+        "ピッチ" => "隣り合う足の中心どうしの間隔 (mm)。例: 1.27、0.65、2.54",
+        "パッド長" => "はんだ付けする銅の四角 (パッド) の長さ。データシートの推奨ランドパターンの値",
+        "パッド幅" => "パッドの幅。足の幅より少し広くします",
+        "列間隔" => "向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62",
+        "対向パッド間隔" => "向かい合うパッドの外側から外側まで (または中心から中心まで) の距離。データシートの推奨寸法を見ます",
+        "パッド径" => "パッド (丸い銅) の直径",
+        "穴径" => "スルーホールの穴の直径。足の太さ + 0.2〜0.3mm",
+        _ => "データシートの推奨ランドパターンの寸法 (mm)",
     }
 }
