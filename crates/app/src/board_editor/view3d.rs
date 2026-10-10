@@ -1,10 +1,11 @@
 //! "3Dで見る" window: the board as the fab will make it (the picture rebuilt from the exported
-//! fabrication files, put on the top and bottom faces) with a body box for every part. A small
+//! fabrication files, put on the top and bottom faces) with solids for every part. A small
 //! software renderer: perspective projection, back-face culling and far-to-near drawing order.
+//! Hovering a part names it, clicking selects it in the board editor.
 
 use super::*;
 use pcb_core::gerber_view::Preview;
-use pcb_core::model3d::{part_boxes, PartBox, BOARD_THICKNESS};
+use pcb_core::model3d::{part_boxes, part_total_height, BodyShape, PartBox, BOARD_THICKNESS};
 
 /// What the window shows, built from the board when it is opened or refreshed.
 struct Scene {
@@ -16,6 +17,10 @@ struct Scene {
     lo: Point,
     hi: Point,
     boxes: Vec<PartBox>,
+    /// `(refdes, value, footprint, height above the board)` for every part, in `Board::parts` order.
+    parts: Vec<(String, String, String, f64)>,
+    /// The tallest part on each side, for case checks.
+    tallest: [Option<(String, f64)>; 2],
 }
 
 pub(super) struct View3d {
@@ -23,6 +28,8 @@ pub(super) struct View3d {
     yaw: f32,
     pitch: f32,
     zoom: f32,
+    pan: Vec2,
+    spin: bool,
     show_parts: bool,
     show_names: bool,
     mask: bool,
@@ -35,7 +42,7 @@ pub(super) struct View3d {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true }
     }
 }
 
@@ -69,7 +76,7 @@ impl Cam {
 }
 
 fn shade(c: [u8; 3], k: f32) -> Color32 {
-    let k = k.clamp(0.0, 1.2);
+    let k = k.clamp(0.0, 1.3);
     Color32::from_rgb((c[0] as f32 * k).min(255.0) as u8, (c[1] as f32 * k).min(255.0) as u8, (c[2] as f32 * k).min(255.0) as u8)
 }
 
@@ -79,17 +86,73 @@ fn light(n: [f32; 3]) -> f32 {
     0.45 + 0.6 * (n[0] * l[0] + n[1] * l[1] + n[2] * l[2]).max(0.0)
 }
 
-/// The six faces of a box as (corners, outward normal).
-fn box_faces(b: &PartBox) -> [([[f64; 3]; 4], [f32; 3]); 6] {
+type Face3 = (Vec<[f64; 3]>, [f32; 3]);
+
+/// The faces of a solid (corners, outward normal): a box has six, a cylinder a ring of sides and two caps.
+fn solid_faces(b: &PartBox) -> Vec<Face3> {
     let (l, h) = (b.lo, b.hi);
-    [
-        ([[l[0], l[1], h[2]], [h[0], l[1], h[2]], [h[0], h[1], h[2]], [l[0], h[1], h[2]]], [0.0, 0.0, 1.0]),
-        ([[l[0], l[1], l[2]], [l[0], h[1], l[2]], [h[0], h[1], l[2]], [h[0], l[1], l[2]]], [0.0, 0.0, -1.0]),
-        ([[l[0], l[1], l[2]], [h[0], l[1], l[2]], [h[0], l[1], h[2]], [l[0], l[1], h[2]]], [0.0, -1.0, 0.0]),
-        ([[h[0], h[1], l[2]], [l[0], h[1], l[2]], [l[0], h[1], h[2]], [h[0], h[1], h[2]]], [0.0, 1.0, 0.0]),
-        ([[l[0], h[1], l[2]], [l[0], l[1], l[2]], [l[0], l[1], h[2]], [l[0], h[1], h[2]]], [-1.0, 0.0, 0.0]),
-        ([[h[0], l[1], l[2]], [h[0], h[1], l[2]], [h[0], h[1], h[2]], [h[0], l[1], h[2]]], [1.0, 0.0, 0.0]),
-    ]
+    match b.shape {
+        BodyShape::Box => vec![
+            (vec![[l[0], l[1], h[2]], [h[0], l[1], h[2]], [h[0], h[1], h[2]], [l[0], h[1], h[2]]], [0.0, 0.0, 1.0]),
+            (vec![[l[0], l[1], l[2]], [l[0], h[1], l[2]], [h[0], h[1], l[2]], [h[0], l[1], l[2]]], [0.0, 0.0, -1.0]),
+            (vec![[l[0], l[1], l[2]], [h[0], l[1], l[2]], [h[0], l[1], h[2]], [l[0], l[1], h[2]]], [0.0, -1.0, 0.0]),
+            (vec![[h[0], h[1], l[2]], [l[0], h[1], l[2]], [l[0], h[1], h[2]], [h[0], h[1], h[2]]], [0.0, 1.0, 0.0]),
+            (vec![[l[0], h[1], l[2]], [l[0], l[1], l[2]], [l[0], l[1], h[2]], [l[0], h[1], h[2]]], [-1.0, 0.0, 0.0]),
+            (vec![[h[0], l[1], l[2]], [h[0], h[1], l[2]], [h[0], h[1], h[2]], [h[0], l[1], h[2]]], [1.0, 0.0, 0.0]),
+        ],
+        BodyShape::Cylinder(axis) => {
+            let a = axis as usize;
+            let (i, j) = ((a + 1) % 3, (a + 2) % 3);
+            let (ci, cj) = ((l[i] + h[i]) / 2.0, (l[j] + h[j]) / 2.0);
+            let (ri, rj) = ((h[i] - l[i]) / 2.0, (h[j] - l[j]) / 2.0);
+            const N: usize = 16;
+            let at = |k: usize, along: f64| {
+                let t = std::f64::consts::TAU * k as f64 / N as f64;
+                let mut p = [0.0; 3];
+                p[a] = along;
+                p[i] = ci + ri * t.cos();
+                p[j] = cj + rj * t.sin();
+                p
+            };
+            let mut faces = vec![];
+            for k in 0..N {
+                let tm = std::f64::consts::TAU * (k as f64 + 0.5) / N as f64;
+                let mut n = [0.0f32; 3];
+                n[i] = tm.cos() as f32;
+                n[j] = tm.sin() as f32;
+                faces.push((vec![at(k, l[a]), at(k + 1, l[a]), at(k + 1, h[a]), at(k, h[a])], n));
+            }
+            let (mut up, mut down) = ([0.0f32; 3], [0.0f32; 3]);
+            up[a] = 1.0;
+            down[a] = -1.0;
+            faces.push(((0..N).map(|k| at(k, h[a])).collect(), up));
+            faces.push(((0..N).rev().map(|k| at(k, l[a])).collect(), down));
+            faces
+        }
+    }
+}
+
+/// Is `p` inside the polygon (even-odd)?
+fn inside(poly: &[Pos2], p: Pos2) -> bool {
+    let mut c = false;
+    let mut j = poly.len() - 1;
+    for i in 0..poly.len() {
+        let (a, b) = (poly[i], poly[j]);
+        if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
+            c = !c;
+        }
+        j = i;
+    }
+    c
+}
+
+/// A drawn face: how near, its outline, colour and the part it belongs to.
+struct Face {
+    w: f32,
+    pts: Vec<Pos2>,
+    color: Color32,
+    part: usize,
+    dark: Color32,
 }
 
 impl Scene {
@@ -106,7 +169,17 @@ impl Scene {
         }
         let (lo, hi) = board.bounds().ok_or("基板の外形がありません")?;
         let tex = Self::textures(&pv, ctx, mask, silk);
-        Ok(Scene { pv, tex, outline, tris, lo, hi, boxes: part_boxes(board) })
+        let parts: Vec<(String, String, String, f64)> = board.parts.iter().map(|p| (p.refdes.clone(), p.value.clone(), p.footprint.clone(), part_total_height(&p.refdes, &p.footprint))).collect();
+        let boxes = part_boxes(board);
+        let mut tallest: [Option<(String, f64)>; 2] = [None, None];
+        for b in &boxes {
+            let side = b.bottom as usize;
+            let height = if b.bottom { -b.lo[2] } else { b.hi[2] - BOARD_THICKNESS };
+            if tallest[side].as_ref().is_none_or(|t| height > t.1) {
+                tallest[side] = Some((b.refdes.clone(), height));
+            }
+        }
+        Ok(Scene { pv, tex, outline, tris, lo, hi, boxes, parts, tallest })
     }
 
     fn textures(pv: &Preview, ctx: &egui::Context, mask: bool, silk: bool) -> [egui::TextureHandle; 2] {
@@ -162,54 +235,68 @@ impl Scene {
         }
     }
 
-    fn boxes(&self, cam: &Cam, bottom: bool, names: bool, painter: &egui::Painter) {
-        let mut list: Vec<(f32, &PartBox)> = self.boxes.iter().filter(|b| b.bottom == bottom).map(|b| (cam.project([(b.lo[0] + b.hi[0]) / 2.0, (b.lo[1] + b.hi[1]) / 2.0, (b.lo[2] + b.hi[2]) / 2.0]).1, b)).collect();
-        list.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (_, b) in list {
-            let mut faces: Vec<(f32, Vec<Pos2>, f32)> = vec![];
-            for (corners, normal) in box_faces(b) {
+    /// Every visible face of the solids on one side of the board, far to near.
+    fn part_faces(&self, cam: &Cam, bottom: bool) -> Vec<Face> {
+        let mut faces: Vec<Face> = vec![];
+        for b in self.boxes.iter().filter(|b| b.bottom == bottom) {
+            for (corners, normal) in solid_faces(b) {
                 let nv = cam.dir(normal);
                 if nv[2] <= 1e-4 {
                     continue;
                 }
-                let pts = corners.map(|p| cam.project(p));
-                faces.push((pts.iter().map(|p| p.1).sum::<f32>() / 4.0, pts.iter().map(|p| p.0).collect(), light(nv)));
+                let proj: Vec<(Pos2, f32)> = corners.iter().map(|p| cam.project(*p)).collect();
+                faces.push(Face {
+                    w: proj.iter().map(|p| p.1).sum::<f32>() / proj.len() as f32,
+                    pts: proj.iter().map(|p| p.0).collect(),
+                    color: shade(b.color, light(nv)),
+                    dark: shade(b.color, 0.4),
+                    part: b.part,
+                });
             }
-            faces.sort_by(|a, b| a.0.total_cmp(&b.0));
-            for (_, pts, k) in faces {
-                painter.add(egui::Shape::convex_polygon(pts, shade(b.color, k), Stroke::new(0.6, shade(b.color, 0.35))));
-            }
-            if names {
-                let z = if bottom { b.lo[2] } else { b.hi[2] };
-                let (pos, _) = cam.project([(b.lo[0] + b.hi[0]) / 2.0, (b.lo[1] + b.hi[1]) / 2.0, z]);
-                painter.text(pos, egui::Align2::CENTER_CENTER, &b.refdes, egui::FontId::proportional(11.0), Color32::WHITE);
-            }
+        }
+        faces.sort_by(|a, b| a.w.total_cmp(&b.w));
+        faces
+    }
+
+    fn draw_faces(faces: &[Face], hover: Option<usize>, selected: Option<usize>, painter: &egui::Painter) {
+        for f in faces {
+            let (fill, edge) = if hover == Some(f.part) {
+                // brighter, with a yellow outline
+                let c = f.color;
+                (Color32::from_rgb(c.r().saturating_add(50), c.g().saturating_add(50), c.b().saturating_add(30)), Stroke::new(1.6, Color32::from_rgb(255, 230, 90)))
+            } else if selected == Some(f.part) {
+                (f.color, Stroke::new(1.6, Color32::from_rgb(90, 220, 255)))
+            } else {
+                (f.color, Stroke::new(0.6, f.dark))
+            };
+            painter.add(egui::Shape::convex_polygon(f.pts.clone(), fill, edge));
         }
     }
 
-    fn draw(&self, cam: &Cam, show_parts: bool, names: bool, painter: &egui::Painter) {
+    /// Draws the scene far to near; returns the part under `pointer`, if any.
+    fn draw(&self, cam: &Cam, v: &View3d, pointer: Option<Pos2>, selected: Option<usize>, painter: &egui::Painter) -> Option<usize> {
         let above = cam.pitch.sin() > 0.0;
-        if above {
-            if show_parts {
-                self.boxes(cam, true, names, painter);
-            }
-            self.face(cam, true, painter);
-            self.walls(cam, painter);
-            self.face(cam, false, painter);
-            if show_parts {
-                self.boxes(cam, false, names, painter);
-            }
-        } else {
-            if show_parts {
-                self.boxes(cam, false, names, painter);
-            }
-            self.face(cam, false, painter);
-            self.walls(cam, painter);
-            self.face(cam, true, painter);
-            if show_parts {
-                self.boxes(cam, true, names, painter);
+        let (near_side, far_side) = (!above, above); // `bottom` flag of the side facing the viewer / hidden behind the board
+        let far = if v.show_parts { self.part_faces(cam, far_side) } else { vec![] };
+        let near = if v.show_parts { self.part_faces(cam, near_side) } else { vec![] };
+        // the part under the pointer: the nearest face that contains it
+        let hover = pointer.and_then(|p| near.iter().rev().find(|f| inside(&f.pts, p)).map(|f| f.part));
+        // far side parts, then the far face, the edge, the near face, and the near side parts
+        Self::draw_faces(&far, None, selected, painter);
+        self.face(cam, far_side, painter);
+        self.walls(cam, painter);
+        self.face(cam, near_side, painter);
+        Self::draw_faces(&near, hover, selected, painter);
+        if v.show_names {
+            for (i, (name, ..)) in self.parts.iter().enumerate() {
+                if let Some(b) = self.boxes.iter().filter(|b| b.part == i && b.bottom == near_side).max_by(|a, b| a.hi[2].total_cmp(&b.hi[2])) {
+                    let z = if near_side { b.lo[2] } else { b.hi[2] };
+                    let (pos, _) = cam.project([(b.lo[0] + b.hi[0]) / 2.0, (b.lo[1] + b.hi[1]) / 2.0, z]);
+                    painter.text(pos, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(11.0), Color32::WHITE);
+                }
             }
         }
+        hover
     }
 }
 
@@ -240,23 +327,25 @@ impl BoardEditor {
         let mut open = true;
         let mut retex = false;
         let mut stale = false;
+        let mut pick: Option<usize> = None;
+        let selected = if let Some(Item::Part(i)) = self.selected { Some(i) } else { None };
         let v = &mut self.view3d;
-        egui::Window::new("3Dで見る").open(&mut open).default_size([860.0, 640.0]).show(ctx, |ui| {
+        egui::Window::new("3Dで見る").open(&mut open).default_size([900.0, 680.0]).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if ui.button("上から").on_hover_text("真上から見ます (部品の配置・配線の確認)").clicked() {
-                    (v.yaw, v.pitch) = (0.0, std::f32::consts::FRAC_PI_2);
+                    (v.yaw, v.pitch, v.pan) = (0.0, std::f32::consts::FRAC_PI_2, Vec2::ZERO);
                 }
                 if ui.button("斜め").on_hover_text("斜め上から見ます (部品の高さや立体感)").clicked() {
-                    (v.yaw, v.pitch) = (0.0, 0.9);
+                    (v.yaw, v.pitch, v.pan) = (0.0, 0.9, Vec2::ZERO);
                 }
                 if ui.button("横から").on_hover_text("真横から見ます (部品の高さや、ケースに入る高さの確認)").clicked() {
-                    (v.yaw, v.pitch) = (0.0, 0.12);
+                    (v.yaw, v.pitch, v.pan) = (0.0, 0.12, Vec2::ZERO);
                 }
                 if ui.button("裏から").on_hover_text("基板を裏返して真下から見ます (裏面の部品と配線)").clicked() {
-                    (v.yaw, v.pitch) = (0.0, -std::f32::consts::FRAC_PI_2);
+                    (v.yaw, v.pitch, v.pan) = (0.0, -std::f32::consts::FRAC_PI_2, Vec2::ZERO);
                 }
                 ui.separator();
-                ui.checkbox(&mut v.show_parts, "部品").on_hover_text("部品の本体を箱で表示します。高さはフットプリントからの目安です");
+                ui.checkbox(&mut v.show_parts, "部品").on_hover_text("部品の本体を表示します。形と高さはフットプリントからの目安です");
                 ui.checkbox(&mut v.show_names, "部品名").on_hover_text("部品番号 (R1 など) を表示します");
                 if ui.checkbox(&mut v.mask, "ソルダーレジスト").on_hover_text("基板の緑色の保護膜。オフにすると、銅箔の配線がそのまま見えます").changed() {
                     retex = true;
@@ -264,32 +353,49 @@ impl BoardEditor {
                 if ui.checkbox(&mut v.silk, "シルク").on_hover_text("白い印刷 (部品の枠や文字)").changed() {
                     retex = true;
                 }
+                ui.checkbox(&mut v.spin, "自動回転").on_hover_text("ゆっくり回して、いろいろな向きから見せます");
                 if ui.button("更新").on_hover_text("基板エディタで変更した内容を反映します").clicked() {
                     stale = true;
                 }
             });
-            ui.small("ドラッグ: 回す / ホイール: 拡大縮小 / ダブルクリック: 初期の向き。出来上がりの絵は、書き出す製造ファイルから作っています");
+            ui.small("左ドラッグ: 回す / 右ドラッグ (または中ドラッグ): 動かす / ホイール: 拡大縮小 / ダブルクリック: 初期の向き / 部品にカーソル: 名前 / 部品をクリック: 選択");
             if let Some(e) = &v.error {
                 ui.colored_label(Color32::from_rgb(230, 60, 60), e);
                 return;
             }
             let Some(scene) = &v.scene else { return };
+            let (w, h) = (scene.hi.x - scene.lo.x, scene.hi.y - scene.lo.y);
+            let mut info = format!("基板 {w:.1} × {h:.1} × {BOARD_THICKNESS} mm");
+            if let Some((r, t)) = &scene.tallest[0] {
+                info += &format!(" / 表側の最も高い部品 {r} (基板の面から {t:.1} mm)");
+            }
+            if let Some((r, t)) = &scene.tallest[1] {
+                info += &format!(" / 裏側 {r} ({t:.1} mm)");
+            }
+            ui.small(info);
             let size = ui.available_size().max(Vec2::new(300.0, 240.0));
             let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
             painter.rect_filled(resp.rect, 4.0, Color32::from_rgb(34, 38, 46));
-            if resp.dragged() {
+            if resp.dragged_by(egui::PointerButton::Primary) {
                 let d = resp.drag_delta();
                 v.yaw -= d.x * 0.01;
                 v.pitch = (v.pitch + d.y * 0.01).clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
             }
+            if resp.dragged_by(egui::PointerButton::Secondary) || resp.dragged_by(egui::PointerButton::Middle) {
+                v.pan += resp.drag_delta();
+            }
             if resp.double_clicked() {
-                (v.yaw, v.pitch, v.zoom) = (0.0, 0.9, 1.0);
+                (v.yaw, v.pitch, v.zoom, v.pan) = (0.0, 0.9, 1.0, Vec2::ZERO);
             }
             if resp.hovered() {
                 let scroll = ui.input(|i| i.smooth_scroll_delta.y);
                 if scroll != 0.0 {
                     v.zoom = (v.zoom * (1.0 + scroll * 0.002)).clamp(0.2, 8.0);
                 }
+            }
+            if v.spin {
+                v.yaw += ui.input(|i| i.stable_dt) * 0.5;
+                ui.ctx().request_repaint();
             }
             // the longest side sets the size; the camera stands back three times the board's diagonal
             let longest = (scene.hi.x - scene.lo.x).max(scene.hi.y - scene.lo.y) as f32;
@@ -300,12 +406,34 @@ impl BoardEditor {
                 scale: 0.95 * resp.rect.width().min(resp.rect.height()) / (longest * 1.15).max(1.0) * v.zoom,
                 center: [((scene.lo.x + scene.hi.x) / 2.0) as f32, ((scene.lo.y + scene.hi.y) / 2.0) as f32, (BOARD_THICKNESS / 2.0) as f32],
                 dist: extent * 3.0,
-                origin: resp.rect.center(),
+                origin: resp.rect.center() + v.pan,
             };
-            scene.draw(&cam, v.show_parts, v.show_names, &painter);
+            let hover = scene.draw(&cam, v, resp.hover_pos(), selected, &painter);
+            if let Some(i) = hover {
+                if let Some((r, val, fp, hh)) = scene.parts.get(i) {
+                    egui::Area::new(egui::Id::new("view3d_tip")).order(egui::Order::Tooltip).fixed_pos(resp.hover_pos().unwrap_or_default() + Vec2::new(14.0, 14.0)).show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.strong(r);
+                            ui.label(format!("値: {}", if val.is_empty() { "—" } else { val }));
+                            ui.label(format!("フットプリント: {}", if fp.is_empty() { "—" } else { fp }));
+                            ui.label(format!("高さの目安: {hh:.1} mm"));
+                        });
+                    });
+                }
+                if resp.clicked_by(egui::PointerButton::Primary) {
+                    pick = Some(i);
+                }
+            }
         });
         if retex && let Some(s) = &mut self.view3d.scene {
             s.tex = Scene::textures(&s.pv, ctx, self.view3d.mask, self.view3d.silk);
+        }
+        if let Some(i) = pick {
+            self.selected = Some(Item::Part(i));
+            self.multi.clear();
+            if let Some(p) = self.board.parts.get(i) {
+                self.status = format!("3D表示から {} を選びました (基板エディタで選択中)", p.refdes);
+            }
         }
         if stale {
             self.view3d.stale = true;
@@ -323,6 +451,10 @@ mod tests {
 
     fn cam(yaw: f32, pitch: f32) -> Cam {
         Cam { yaw, pitch, scale: 10.0, center: [0.0, 0.0, 0.0], dist: 300.0, origin: Pos2::new(100.0, 100.0) }
+    }
+
+    fn solid_box(shape: BodyShape) -> PartBox {
+        PartBox { refdes: "U1".into(), part: 0, lo: [0.0, 0.0, 1.6], hi: [4.0, 4.0, 4.0], color: [30, 30, 30], bottom: false, shape }
     }
 
     #[test]
@@ -350,27 +482,44 @@ mod tests {
     }
 
     #[test]
-    fn a_box_shows_three_faces_from_a_corner_view() {
-        let b = PartBox { refdes: "U1".into(), lo: [0.0, 0.0, 1.6], hi: [4.0, 4.0, 4.0], color: [30, 30, 30], bottom: false };
+    fn a_box_shows_three_faces_and_a_cylinder_its_visible_half() {
         let c = cam(0.5, 0.9);
-        let visible = box_faces(&b).iter().filter(|(_, n)| c.dir(*n)[2] > 1e-4).count();
-        assert_eq!(visible, 3);
+        let faces = |b: &PartBox| solid_faces(b).iter().filter(|(_, n)| c.dir(*n)[2] > 1e-4).count();
+        assert_eq!(faces(&solid_box(BodyShape::Box)), 3);
+        // 16 side facets, about half face the viewer, plus the top cap
+        let cyl = faces(&solid_box(BodyShape::Cylinder(2)));
+        assert!((8..=10).contains(&cyl), "{cyl}");
+        // a cylinder lying along x has a cap at each end and a ring of sides
+        assert_eq!(solid_faces(&solid_box(BodyShape::Cylinder(0))).len(), 18);
         // brighter when facing the light than when turned away
         assert!(light([-0.3, 0.4, 0.85]) > light([0.9, -0.3, 0.1]));
     }
 
     #[test]
-    fn the_window_builds_a_scene_for_a_board_with_a_curved_outline() {
+    fn point_in_polygon_picks_the_face_under_the_pointer() {
+        let sq = [Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0), Pos2::new(10.0, 10.0), Pos2::new(0.0, 10.0)];
+        assert!(inside(&sq, Pos2::new(5.0, 5.0)) && !inside(&sq, Pos2::new(11.0, 5.0)));
+    }
+
+    #[test]
+    fn the_window_builds_a_scene_with_part_info_and_the_tallest_part() {
         let ctx = egui::Context::default();
         let mut b = Board::new("round", 40.0, 25.0);
         b.outline = pcb_core::outline::rounded_rect(0.0, 0.0, 40.0, 25.0, 5.0);
-        let mut pad = Pad::new(Point::new(20.0, 12.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
-        pad.refdes = "J1".into();
-        b.pads.push(pad);
-        b.parts.push(pcb_core::Part { refdes: "J1".into(), value: String::new(), footprint: "PinHeader_1x2".into(), pos: Point::new(20.0, 12.0), rot: 0, side: Side::Top });
+        for k in 0..2 {
+            let mut pad = Pad::new(Point::new(20.0 + 2.54 * k as f64, 12.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+            pad.refdes = "J1".into();
+            b.pads.push(pad);
+        }
+        b.parts.push(pcb_core::Part { refdes: "J1".into(), value: "conn".into(), footprint: "PinHeader_1x2".into(), pos: Point::new(20.0, 12.0), rot: 0, side: Side::Top });
         let s = Scene::build(&b, &ctx, true, true).unwrap();
-        assert_eq!(s.boxes.len(), 1);
+        assert!(s.boxes.len() >= 3, "plastic and pins");
         assert!(s.tris.len() > 10, "{}", s.tris.len());
+        assert_eq!(s.parts[0].0, "J1");
+        let (r, t) = s.tallest[0].clone().unwrap();
+        assert_eq!(r, "J1");
+        assert!(t > 8.0, "the pins make the header the tall part: {t}");
+        assert!(s.tallest[1].is_none());
         // a board without an outline is explained
         b.outline.clear();
         assert!(Scene::build(&b, &ctx, true, true).is_err());

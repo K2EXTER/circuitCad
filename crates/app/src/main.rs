@@ -713,6 +713,25 @@ mod tests {
         assert_eq!(progress(&mut app), 5);
     }
 
+    /// Writes scratch boards (imported + auto-placed + auto-routed) for looking at the 3D view:
+    /// `cargo test -p app write_3d_demos -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_3d_demos() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let dir = std::env::temp_dir().join("claude");
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["opamp_amp", "regulator_led", "bridge_rectifier", "ne555_blinker"] {
+            let mut app = App::default();
+            app.sch.load_path(root.join(format!("{name}.schjson")));
+            app.board_ed.import_from_schematic(&app.sch);
+            app.board_ed.autoplace();
+            app.board_ed.autoroute(None);
+            std::fs::write(dir.join(format!("3d_{name}.pcbjson")), serde_json::to_string_pretty(&app.board_ed.board).unwrap()).unwrap();
+            println!("{name}: {} parts", app.board_ed.board.parts.len());
+        }
+    }
+
     /// Writes a scratch board with parts on both sides (not part of the repository):
     /// `cargo test -p app write_bottom_demo -- --ignored`
     #[test]
