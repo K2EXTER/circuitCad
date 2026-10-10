@@ -213,16 +213,31 @@ impl SchEditor {
                             self.slider = Some((i, cur, c.value.clone()));
                         }
                         let base = self.slider.as_ref().map_or(cur, |s| s.1);
-                        let mut x = (cur / base).log10().clamp(-2.0, 2.0);
+                        let span = self.slider_span;
+                        let mut x = (cur / base).log10().clamp(-span, span);
                         let changed = ui
                             .horizontal(|ui| {
                                 ui.label("スライダー");
-                                ui.add(egui::Slider::new(&mut x, -2.0..=2.0).show_value(false)).on_hover_text(
-                                    "ドラッグして値を動かします (中央 = 今の値、左右に 1/100 〜 100 倍)。
+                                ui.add(egui::Slider::new(&mut x, -span..=span).show_value(false)).on_hover_text(
+                                    "ドラッグして値を動かします (中央 = 今の値)。動かせる幅は右の「幅」で変えられます。
 下の「自動で再計算」をオンにすると、動かしながら波形や電圧が変わるのを見られます",
                                 ).changed()
                             })
                             .inner;
+                        ui.horizontal(|ui| {
+                            ui.label("幅");
+                            for (label, v, tip) in [
+                                ("細かい", 0.3, "今の値の 1/2 〜 2 倍。少しずつ調整できます。収束しにくい回路ではこれを使います"),
+                                ("ふつう", 1.0, "今の値の 1/10 〜 10 倍"),
+                                ("広い", 2.0, "今の値の 1/100 〜 100 倍。大きく動かせますが、極端な値では計算が収束しないことがあります"),
+                            ] {
+                                if ui.selectable_label((self.slider_span - v).abs() < 1e-9, label).on_hover_text(tip).clicked() {
+                                    self.slider_span = v;
+                                    // centre on the value now shown, so the narrower range starts from where the part is
+                                    self.slider = Some((i, cur, c.value.clone()));
+                                }
+                            }
+                        });
                         if changed {
                             let v = format_value(base * 10f64.powf(x));
                             c.value = format!("{v}{rest}");

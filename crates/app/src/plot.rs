@@ -21,15 +21,98 @@ pub struct PlotState {
     pub auto_y: [bool; 2],
     /// Measurement cursors A and B (x positions, shared by every group of the viewer).
     pub cursors: [Option<f64>; 2],
+    /// Text boxes of the scale bar (x from / to, y from / to per group); kept here so typing is not overwritten each frame.
+    pub x_text: [String; 2],
+    pub y_text: [[String; 2]; 2],
 }
 
 impl PlotState {
     pub fn new(tstop: f64) -> Self {
-        Self { x: (0.0, tstop), full_x: (0.0, tstop), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2] }
+        Self::linear(0.0, tstop)
+    }
+
+    pub fn linear(lo: f64, hi: f64) -> Self {
+        Self { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2], x_text: Default::default(), y_text: Default::default() }
     }
 
     pub fn log(f0: f64, f1: f64) -> Self {
-        Self { x: (f0, f1), full_x: (f0, f1), log_x: true, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2] }
+        Self { log_x: true, ..Self::linear(f0, f1) }
+    }
+}
+
+/// Zooms the axis range `r` by `f` (2 = show twice as much) around its centre; geometric on a log axis.
+fn zoom_range(r: (f64, f64), f: f64, log: bool) -> (f64, f64) {
+    let (to, from): (fn(f64) -> f64, fn(f64) -> f64) = if log { (|v| v.max(1e-300).log10(), |a| 10f64.powf(a)) } else { (|v| v, |a| a) };
+    let (a0, a1) = (to(r.0), to(r.1));
+    let (c, half) = ((a0 + a1) / 2.0, (a1 - a0) / 2.0 * f);
+    (from(c - half), from(c + half))
+}
+
+/// One pair of "from / to" text boxes. Typing a number and pressing Enter (or leaving the box)
+/// returns the new range; otherwise the boxes follow the real range.
+fn range_boxes(ui: &mut egui::Ui, text: &mut [String; 2], cur: (f64, f64), unit: &str, tip: &str) -> Option<(f64, f64)> {
+    let mut out = None;
+    let mut edited = [false; 2];
+    for k in 0..2 {
+        if k == 1 {
+            ui.label("〜");
+        }
+        let resp = ui.add(egui::TextEdit::singleline(&mut text[k]).desired_width(66.0)).on_hover_text(tip);
+        edited[k] = resp.lost_focus();
+        if !resp.has_focus() && !resp.lost_focus() {
+            text[k] = sim_core::format_value(if k == 0 { cur.0 } else { cur.1 });
+        }
+    }
+    if edited[0] || edited[1] {
+        if let (Some(a), Some(b)) = (sim_core::parse_value(&text[0]), sim_core::parse_value(&text[1]))
+            && a < b
+        {
+            out = Some((a, b));
+        }
+        // a bad entry falls back to the real range on the next frame
+        text[0] = sim_core::format_value(cur.0);
+        text[1] = sim_core::format_value(cur.1);
+    }
+    ui.label(unit);
+    out
+}
+
+/// Separate scale controls for the x axis and for every y group of a viewer: zoom buttons, the
+/// visible range as editable numbers, and (y) an auto-scale switch. `groups` = (group index, name, unit).
+pub fn scale_bar(ui: &mut egui::Ui, st: &mut PlotState, x_name: &str, x_unit: &str, groups: &[(usize, &str, &str)]) {
+    ui.horizontal_wrapped(|ui| {
+        ui.strong(format!("横軸 ({x_name})"));
+        if ui.small_button("縮小").on_hover_text("横軸の表示範囲を 2 倍に広げます (全体が小さく見えます)").clicked() {
+            st.x = zoom_range(st.x, 2.0, st.log_x);
+        }
+        if ui.small_button("拡大").on_hover_text("横軸の表示範囲を半分にします (細かい所が見えます)").clicked() {
+            st.x = zoom_range(st.x, 0.5, st.log_x);
+        }
+        if ui.small_button("全体").on_hover_text("横軸を最初の範囲 (全体) に戻します").clicked() {
+            st.x = st.full_x;
+        }
+        if let Some(r) = range_boxes(ui, &mut st.x_text, st.x, x_unit, "表示する範囲の始まり / 終わり。数字 (10m, 2u など) を入れて Enter で反映します") {
+            st.x = r;
+        }
+    });
+    for (g, name, unit) in groups {
+        let g = *g;
+        ui.horizontal_wrapped(|ui| {
+            ui.strong(format!("縦軸 ({name})"));
+            ui.checkbox(&mut st.auto_y[g], "自動").on_hover_text("オンのあいだ、いま見えている範囲に合わせて縦軸を自動で決めます。手で動かすと自動でオフになります");
+            if ui.small_button("縮小").on_hover_text("縦軸の表示範囲を 2 倍に広げます").clicked() {
+                st.y[g] = zoom_range(st.y[g], 2.0, false);
+                st.auto_y[g] = false;
+            }
+            if ui.small_button("拡大").on_hover_text("縦軸の表示範囲を半分にします (小さな波が見えます)").clicked() {
+                st.y[g] = zoom_range(st.y[g], 0.5, false);
+                st.auto_y[g] = false;
+            }
+            if let Some(r) = range_boxes(ui, &mut st.y_text[g], st.y[g], unit, "縦軸の下端 / 上端。数字 (-1, 500m など) を入れて Enter で反映します") {
+                st.y[g] = r;
+                st.auto_y[g] = false;
+            }
+        });
     }
 }
 
@@ -406,6 +489,17 @@ pub fn draw_group(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zoom_keeps_the_centre_and_works_on_a_log_axis() {
+        let (a, b) = zoom_range((0.0, 10.0), 0.5, false);
+        assert!((a - 2.5).abs() < 1e-9 && (b - 7.5).abs() < 1e-9);
+        let (a, b) = zoom_range((1.0, 1000.0), 2.0, true);
+        // the geometric centre (about 31.6) stays put: the range doubles in decades
+        assert!(((a * b).sqrt() - 1000f64.sqrt()).abs() < 1e-6 && (b / a - 1e6).abs() / 1e6 < 1e-9, "{a} {b}");
+        let (a, b) = zoom_range((-1.0, 1.0), 2.0, false);
+        assert!((a + 2.0).abs() < 1e-9 && (b - 2.0).abs() < 1e-9);
+    }
 
     #[test]
     fn ticks_are_round() {

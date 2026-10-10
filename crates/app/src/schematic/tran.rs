@@ -84,6 +84,18 @@ impl SchEditor {
                 for w in &res.warnings {
                     ui.colored_label(Color32::from_rgb(220, 160, 40), w);
                 }
+                if !*spectrum {
+                    // scale controls for the groups that are on screen (voltage, current)
+                    let units: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.') && selected.contains(&s.name)).map(|s| s.unit).collect();
+                    let mut groups: Vec<(usize, &str, &str)> = vec![];
+                    if units.contains(&"V") {
+                        groups.push((0, "電圧", "V"));
+                    }
+                    if units.iter().any(|u| *u != "V") {
+                        groups.push((1, "電流", "A"));
+                    }
+                    plot::scale_bar(ui, st, "時間", "s", &groups);
+                }
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
@@ -92,7 +104,7 @@ impl SchEditor {
                             if ui.button("選択をクリア").clicked() {
                                 selected.clear();
                             }
-                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図のピンや配線をクリックすると、その点の電圧の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
+                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
                                 start_probe = true;
                             }
                         });

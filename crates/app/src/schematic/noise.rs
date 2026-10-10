@@ -15,9 +15,9 @@ impl SchEditor {
 
     /// A click at `pt` while choosing the noise output: plain click = output node,
     /// Shift+click = reference node (differential output).
-    pub(super) fn pick_noise_node(&mut self, pt: Pt, shift: bool) {
+    pub(super) fn pick_noise_node(&mut self, g: (f32, f32), pt: Pt, shift: bool) {
         if self.pick_probe {
-            self.probe_node(pt);
+            self.probe_node(g, pt, shift);
             return;
         }
         let Some(name) = net_at(&self.sch, pt) else {
@@ -47,16 +47,23 @@ impl SchEditor {
         self.noise_pick = true;
         self.pick_probe = true;
         self.pick_hover = None;
-        self.status = "波形を見たい点 (ピンや配線) をクリックしてください。続けて追加できます (Esc か右クリックで終了)".into();
+        self.status = "ピンや配線をクリック → その点の電圧、部品の本体をクリック (Shift+ピンでも可) → その部品の電流を、波形に追加します。続けて追加できます (Esc か右クリックで終了)".into();
     }
 
-    /// A click at `pt` while probing: puts V(net) of that point into the open transient / AC viewer.
-    pub(super) fn probe_node(&mut self, pt: Pt) {
-        let Some(name) = net_at(&self.sch, pt) else {
-            self.status = "そこには接続された配線・ピンがありません。部品のピンか配線の上をクリックしてください".into();
+    /// A click while probing puts a signal into the open transient / AC viewer: V(net) for a pin or wire,
+    /// I(part) for the body of a part (or Shift+click on one of its pins).
+    pub(super) fn probe_node(&mut self, g: (f32, f32), pt: Pt, shift: bool) {
+        let pin_owner = || self.sch.components.iter().find(|c| !c.kind.is_power_symbol() && c.pins().iter().any(|(_, p)| *p == pt)).map(|c| c.refdes.clone());
+        let sig = if shift && let Some(r) = pin_owner() {
+            format!("I({r})")
+        } else if let Some(name) = net_at(&self.sch, pt) {
+            format!("V({name})")
+        } else if let Some(i) = self.comp_at(g).filter(|i| !self.sch.components[*i].kind.is_power_symbol()) {
+            format!("I({})", self.sch.components[i].refdes)
+        } else {
+            self.status = "そこには何もありません。ピンや配線 (電圧) か、部品の本体 (電流) をクリックしてください".into();
             return;
         };
-        let sig = format!("V({name})");
         let added = match self.wave_mode {
             WaveMode::Ac => self.ac.as_mut().is_some_and(|v| {
                 let ok = v.outcome.as_ref().is_ok_and(|r| r.signal(&sig).is_some());
@@ -75,6 +82,8 @@ impl SchEditor {
         };
         self.status = if added {
             format!("{sig} を波形に追加しました。続けてクリックできます (Esc か右クリックで終了)")
+        } else if sig.starts_with('I') {
+            format!("{sig} (電流) は、いま表示中の解析結果にありません。ICの内部モデルなど、電流の波形を持たない部品もあります。先に過渡解析かAC解析を実行したか確かめてください")
         } else {
             format!("{sig} は、いま表示中の解析結果にありません。先に過渡解析かAC解析を実行してください (GND は 0V の基準なので波形はありません)")
         };

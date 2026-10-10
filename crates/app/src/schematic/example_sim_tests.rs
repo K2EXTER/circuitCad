@@ -332,14 +332,22 @@ fn right_click_leaves_the_tool_and_the_probe_adds_any_net_to_the_viewer() {
     e.tran.as_mut().unwrap().selected.clear();
     e.start_probe();
     assert!(e.noise_pick && e.pick_probe);
-    e.pick_noise_node(pt, false);
+    let gf = |p: sch_core::Pt| (p.0 as f32, p.1 as f32);
+    e.pick_noise_node(gf(pt), pt, false);
     assert!(e.tran.as_ref().unwrap().selected.contains(&format!("V({net})")), "{} / {:?}", e.status, before);
     assert!(e.noise_pick, "picking goes on, so several points can be added");
+    // the body of a part adds its current; Shift+click on a pin does too
+    let r1 = e.sch.components.iter().find(|c| c.refdes == "R1").unwrap();
+    let body = gf(r1.pos);
+    e.pick_noise_node(body, r1.pos, false);
+    assert!(e.tran.as_ref().unwrap().selected.contains("I(R1)"), "{}", e.status);
+    e.pick_noise_node(gf(pt), pt, true);
+    assert!(e.tran.as_ref().unwrap().selected.contains("I(C1)"), "{}", e.status);
     // a spot with nothing on it is explained, and GND (no waveform) too
-    e.pick_noise_node((200, 200), false);
-    assert!(e.status.contains("接続された"), "{}", e.status);
+    e.pick_noise_node((200.0, 200.0), (200, 200), false);
+    assert!(e.status.contains("何もありません"), "{}", e.status);
     let g = e.sch.components.iter().find(|c| c.kind == sch_core::Kind::Ground).unwrap().pins()[0].1;
-    e.pick_noise_node(g, false);
+    e.pick_noise_node(gf(g), g, false);
     assert!(e.status.contains("GND"), "{}", e.status);
 }
 
@@ -465,4 +473,29 @@ fn inverting_amplifier_sample_gives_minus_ten_and_a_virtual_ground() {
     assert!(lo > -5.1 && lo < -4.5 && hi > 3.0 && hi < 4.0, "{lo}..{hi}");
     let (nlo, nhi) = peaks(&with_r1("100"), "V(N)");
     assert!(nhi.max(-nlo) > 0.05, "{nlo}..{nhi}");
+}
+
+/// "自動で再計算": a value that cannot be solved keeps the last good result instead of replacing it with an error.
+#[test]
+fn live_recalculation_keeps_the_last_good_result_when_a_value_fails() {
+    let mut e = editor_with("rc_lowpass.schjson");
+    e.set_tran_settings("2m", "10u");
+    e.analyze_dc();
+    e.analyze_tran();
+    e.live = true;
+    e.live_update();
+    let r1 = e.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
+    e.sch.components[r1].value = "1.5k".into();
+    e.live_update();
+    assert!(e.tran.as_ref().unwrap().outcome.is_ok());
+    // an unreadable value cannot be simulated: the old picture stays and the status says why
+    e.sch.components[r1].value = "abc".into();
+    e.live_update();
+    assert!(e.dc.as_ref().unwrap().outcome.is_ok(), "the DC result is kept");
+    assert!(e.tran.as_ref().unwrap().outcome.is_ok(), "the waveform is kept");
+    assert!(e.status.contains("収束しませんでした") && e.status.contains("直前の結果"), "{}", e.status);
+    // and the next good value updates again
+    e.sch.components[r1].value = "2k".into();
+    e.live_update();
+    assert!(e.tran.as_ref().unwrap().outcome.is_ok());
 }

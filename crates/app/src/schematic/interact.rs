@@ -115,7 +115,7 @@ impl SchEditor {
         if self.noise_pick {
             if resp.clicked_by(egui::PointerButton::Primary) {
                 let shift = ui.input(|i| i.modifiers.shift);
-                self.pick_noise_node(snapped, shift);
+                self.pick_noise_node(g, snapped, shift);
             }
         } else if resp.clicked_by(egui::PointerButton::Primary) {
             match self.tool {

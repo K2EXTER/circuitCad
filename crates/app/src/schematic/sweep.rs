@@ -48,7 +48,7 @@ impl SchEditor {
             Err(e) => format!("DCスイープに失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         let (lo, hi) = if (b - a).abs() > 1e-12 { (a.min(b), a.max(b)) } else { (a - 1.0, a + 1.0) };
-        self.sweep = Some(SweepView { outcome, selected, show_diag: true, plot: PlotState { x: (lo, hi), full_x: (lo, hi), log_x: false, y: [(-1.0, 1.0); 2], auto_y: [true; 2], cursors: [None; 2] }, temp: false });
+        self.sweep = Some(SweepView { outcome, selected, show_diag: true, plot: PlotState::linear(lo, hi), temp: false });
         self.wave_mode = WaveMode::Sweep;
     }
 

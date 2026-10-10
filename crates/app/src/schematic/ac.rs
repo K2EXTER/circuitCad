@@ -59,6 +59,7 @@ impl SchEditor {
                 for w in &res.warnings {
                     ui.colored_label(Color32::from_rgb(220, 160, 40), w);
                 }
+                plot::scale_bar(ui, st, "周波数", "Hz", &[(0, "ゲイン", "dB"), (1, "位相", "°")]);
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
@@ -67,7 +68,7 @@ impl SchEditor {
                             if ui.button("選択をクリア").clicked() {
                                 selected.clear();
                             }
-                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図のピンや配線をクリックすると、その点の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
+                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
                                 start_probe = true;
                             }
                         });

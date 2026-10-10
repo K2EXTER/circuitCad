@@ -38,33 +38,55 @@ impl SchEditor {
             return;
         }
         self.live_snap = self.sch.clone();
+        // a value that does not converge must not wipe the picture: the last good result stays, with the reason
+        let mut failed: Option<String> = None;
         if self.dc.is_some() {
+            let old = self.dc.take();
             self.run_dc();
+            if let (Some(o), Some(n)) = (old, self.dc.as_ref())
+                && o.outcome.is_ok()
+                && let Err(msgs) = &n.outcome {
+                    failed = Some(format!("DC解析: {}", msgs.first().cloned().unwrap_or_default()));
+                    self.dc = Some(o);
+                }
         }
         match self.wave_mode {
             WaveMode::Tran if self.tran.is_some() => {
                 let old = self.tran.take();
                 self.run_tran();
                 if let (Some(o), Some(n)) = (old, self.tran.as_mut())
-                    && n.outcome.is_ok() && o.outcome.is_ok() {
-                        n.selected = o.selected;
-                        n.plot = o.plot;
-                        n.spectrum = o.spectrum;
-                        n.spec_t0 = o.spec_t0;
-                        n.spec_t1 = o.spec_t1;
-                        n.spec_plot = o.spec_plot;
+                    && o.outcome.is_ok() {
+                        if let Err(msgs) = &n.outcome {
+                            failed = Some(format!("過渡解析: {}", msgs.first().cloned().unwrap_or_default()));
+                            self.tran = Some(o);
+                        } else {
+                            n.selected = o.selected;
+                            n.plot = o.plot;
+                            n.spectrum = o.spectrum;
+                            n.spec_t0 = o.spec_t0;
+                            n.spec_t1 = o.spec_t1;
+                            n.spec_plot = o.spec_plot;
+                        }
                     }
             }
             WaveMode::Ac if self.ac.is_some() => {
                 let old = self.ac.take();
                 self.run_ac();
                 if let (Some(o), Some(n)) = (old, self.ac.as_mut())
-                    && n.outcome.is_ok() && o.outcome.is_ok() {
-                        n.selected = o.selected;
-                        n.plot = o.plot;
+                    && o.outcome.is_ok() {
+                        if let Err(msgs) = &n.outcome {
+                            failed = Some(format!("AC解析: {}", msgs.first().cloned().unwrap_or_default()));
+                            self.ac = Some(o);
+                        } else {
+                            n.selected = o.selected;
+                            n.plot = o.plot;
+                        }
                     }
             }
             _ => {}
+        }
+        if let Some(why) = failed {
+            self.status = format!("この値では計算が収束しませんでした。直前の結果を表示しています (原因: {why})。スライダーの「幅」を「細かい」にするか、値を戻してみてください");
         }
     }
 }

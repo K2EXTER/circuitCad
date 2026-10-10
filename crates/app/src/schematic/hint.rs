@@ -6,7 +6,7 @@ impl SchEditor {
     /// A tip for what to try next, based on what is on screen.
     pub fn hint(&self) -> String {
         if self.noise_pick && self.pick_probe {
-            return "波形を見たい点 (ピンや配線) をクリックします。続けて何か所でも追加できます。Esc か右クリックで終了".into();
+            return "ピンや配線をクリックで電圧、部品の本体をクリックで電流の波形を追加します (Shift+ピンでも電流)。続けて何か所でも追加できます。Esc か右クリックで終了".into();
         }
         if self.noise_pick {
             return "ノイズを測りたいノードをクリックします。Shift+クリックで基準ノード、Esc で中止".into();
