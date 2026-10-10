@@ -297,7 +297,9 @@ fn install_japanese_font(ctx: &egui::Context) {
         "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
     ];
     // fall back to the bundled BIZ UD Gothic (SIL OFL 1.1, see assets/fonts/OFL.txt) so every OS shows Japanese
-    let bytes = CANDIDATES.iter().find_map(|p| std::fs::read(p).ok()).unwrap_or_else(|| BUNDLED_FONT.to_vec());
+    // CIRCUITCAD_BUNDLED_FONT=1 skips the system fonts (to check the bundled one)
+    let use_system = std::env::var_os("CIRCUITCAD_BUNDLED_FONT").is_none();
+    let bytes = CANDIDATES.iter().filter(|_| use_system).find_map(|p| std::fs::read(p).ok()).unwrap_or_else(|| BUNDLED_FONT.to_vec());
     let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert("jp".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
     for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
@@ -922,9 +924,14 @@ mod tests {
         s.components[r2].value = "47".into();
         s.components[r2].footprint = "R_2512".into();
         let q = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 8), 0);
+        // a short wire out of the pin with the net name at its end, so the name does not sit on the reference text
         let label_at = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
             let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap();
-            s.labels.push(sch_core::Label { pos: pt, text: text.into() });
+            let c = s.components[idx].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: text.into() });
         };
         label_at(&mut s, v1, "+", "VCC");
         label_at(&mut s, v1, "-", "GND");
