@@ -85,6 +85,11 @@ impl BoardEditor {
         CIRCUIT
     }
 
+    /// True once every step of the running board lesson is ticked (for the progress record).
+    pub fn lesson_finished(&self) -> bool {
+        self.lesson.as_ref().is_some_and(|l| l.done.iter().all(|d| *d))
+    }
+
     #[cfg(test)]
     pub fn lesson_progress(&mut self) -> usize {
         self.update_lesson();

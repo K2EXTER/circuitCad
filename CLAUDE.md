@@ -32,7 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `measure.rs` 波形の自動測定 `wave_measure`(最小/最大/p-p/周波数/デューティ)。`stability_margins`(位相余裕・ゲイン余裕。反転なら180°ずらす)。ACの-3dB点は `montecarlo.rs` の `minus_3db`
 - `designcalc.rs` 初学者向けの値の計算(LED抵抗・分圧・RCフィルタ・78xx・トランジスタスイッチ。結果+手順+注意点+故障パターンの `CalcOut`、E24丸め)。足すときは `schematic/wizard.rs` の `CALCS` にも追加(平滑コンデンサ `smoothing_cap`、降圧 `buck_design`、昇圧 `boost_design`、MOSFET `mosfet_switch`、オペアンプ `opamp_gain` あり)
 - `fault.rs` 故障シミュレーション(部品を断線/ショート/逆向き/値10倍・1/10/DC電源の低下・上昇にしてDCを解き、元と比較。ピン単位の故障(断線/GNDショート/別ネットとブリッジ)は `break_pin` が `from_schematic_with_pin_fault` で回路図側のピン接続を差し替える(ICの内部モデルもそのまま使える)。`simulate_fault`、`FaultReport::summary` が日本語の説明。`simulate_fault_tran`/`simulate_fault_ac` は過渡波形・ゲインの正常/故障比較)
-- `ratings.rs` 定格チェック `check_ratings`(DC結果から、抵抗・IC等の消費電力をフットプリントごとの目安(`package_power_limit`)と比較、LEDの電流・逆電圧、小形コンデンサの電圧。`RatingIssue{level,message,hint}`、DC解析パネルに🔥/⚠で表示。サンプルは定格超えにしない回帰テストあり)
+- `ratings.rs` 定格チェック `check_ratings`(DC結果から、抵抗・IC等の消費電力をフットプリントごとの目安(`package_power_limit`)と比較、LEDの電流・逆電圧、小形コンデンサの電圧。`RatingIssue{level,message,hint}`、DC解析パネルに⚠(赤=定格超え、橙=余裕が少ない)で表示。サンプルは定格超えにしない回帰テストあり)
 - `paramsweep.rs` パラメータスイープ(部品1つの値を振って過渡/ACを繰り返す、`param_sweep`) 
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
@@ -47,7 +47,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `export.rs` 製造一式 (zip) / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・部品配置CSV / `strokefont.rs` シルク文字
 
 ## app (`crates/app/src`)
-電源記号は値で形が変わる(`symbols.rs` の `source_symbol`: 直流=±の円、SIN=正弦波、PULSE=方形波、PWL/NOISE=折れ線)。`plot.rs` の `scale_bar` は横軸・縦軸(グループごと)の範囲入力・全体・自動(1行、過渡・ACの波形パネルの上に出る。拡大縮小は軸の数字の上のホイール)。軸の数字の上でホイール=その軸だけ拡大縮小(`draw_group`)。`PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。`help.rs` は「操作ガイド」窓(ヘルプメニュー・F1・各パネルの「操作」ボタン、`--guide`。操作の説明は小さい文字で各所に書かず、ここの `SCHEMATIC`/`WAVEFORM`/`BOARD`/`VIEW3D` に足す)。`main.rs` ウィンドウ・メニュー・`TIPS`(豆知識)・引数処理・統合テスト。「ファイル → 画面をPNGで保存」は eframe の Screenshot(`finish_screenshot`)で、起動引数 `--screenshot file.png` は数フレーム後に撮って終了(画面の確認・文書づくり用)。`plot.rs` 波形描画、`part_form.rs` 部品作成フォーム、`source_form.rs` 電源値フォーム。
+電源記号は値で形が変わる(`symbols.rs` の `source_symbol`: 直流=±の円、SIN=正弦波、PULSE=方形波、PWL/NOISE=折れ線)。`plot.rs` の `scale_bar` は横軸・縦軸(グループごと)の範囲入力・全体・自動(1行、過渡・ACの波形パネルの上に出る。拡大縮小は軸の数字の上のホイール)。軸の数字の上でホイール=その軸だけ拡大縮小(`draw_group`)。`PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。`learn.rs` は学習パス(`PATHS` に段階と項目を書く。レッスンは `id` で指定、準備中は `planned`)と完了の記録(`%APPDATA%\circuitCad\progress.json`)と「学習パス」窓(`--learn`)。設計は `docs/learning-path.md`。`help.rs` は「操作ガイド」窓(ヘルプメニュー・F1・各パネルの「操作」ボタン、`--guide`。操作の説明は小さい文字で各所に書かず、ここの `SCHEMATIC`/`WAVEFORM`/`BOARD`/`VIEW3D` に足す)。`main.rs` ウィンドウ・メニュー・`TIPS`(豆知識)・引数処理・統合テスト。「ファイル → 画面をPNGで保存」は eframe の Screenshot(`finish_screenshot`)で、起動引数 `--screenshot file.png` は数フレーム後に撮って終了(画面の確認・文書づくり用)。`plot.rs` 波形描画、`part_form.rs` 部品作成フォーム、`source_form.rs` 電源値フォーム。
 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
 
@@ -82,7 +82,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 配布: 依存クレートを変えたら `python tools/gen_third_party_licenses.py` で `THIRD_PARTY_LICENSES.txt` を作り直す(CIが `--check` で古さを検査、リリースのzipに同梱)。`.github/workflows/release.yml` がタグ `v*` でWindows用のzipを作り、プレリリースとして公開する(macOS/Linuxは動作確認ができるまでmatrixでコメントアウト中)。日本語フォントは `main.rs` の `install_japanese_font` がOSごとの候補パスから読み、無ければ `assets/fonts/BIZUDGothic-Regular.ttf`(OFL、`include_bytes!`)を使う。
 
 ## ドキュメント・サンプル
-`docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式 / `docs/examples/*.schjson` サンプル回路。
+`docs/learning-path.md` 学習パス(安定化電源)の設計 / `docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式 / `docs/examples/*.schjson` サンプル回路。
 
 ## 規約
 - ボタン・入力欄には `on_hover_text` で説明を付ける。エラーメッセージは原因と対処が分かる日本語で。

@@ -185,7 +185,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                     }
                     for r in &dc.ratings {
                         let (mark, col) = if r.level == sim_core::RatingLevel::Over {
-                            ("🔥 定格超え", Color32::from_rgb(230, 60, 60))
+                            ("⚠ 定格超え", Color32::from_rgb(230, 60, 60))
                         } else {
                             ("⚠ 余裕が少ない", Color32::from_rgb(220, 160, 40))
                         };

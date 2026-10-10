@@ -7,6 +7,7 @@ use schematic::SchEditor;
 
 mod board_editor;
 mod help;
+mod learn;
 mod part_form;
 mod plot;
 mod schematic;
@@ -47,17 +48,30 @@ struct App {
     /// Where the screenshot being taken goes (the capture arrives a frame after the request).
     shot_path: Option<std::path::PathBuf>,
     help: help::Help,
+    /// Finished lessons (saved in the app data folder) and the learning-path window.
+    progress: learn::Progress,
+    learn: learn::LearnWindow,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), auto_shot: None }
+        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None }
     }
 }
 
 impl App {
+    /// Opens the board lesson with its sample circuit.
+    fn start_board_lesson(&mut self) {
+        self.mode = Mode::Board;
+        if !self.sch.load_sample(board_editor::BoardEditor::lesson_circuit()) {
+            self.board_ed.status = "レッスンの回路を読み込めませんでした".into();
+        } else {
+            self.board_ed.start_lesson();
+        }
+    }
+
     /// `--screenshot`: waits a few frames so the analyses and layout have settled, takes the capture, then quits.
     fn tick_auto_screenshot(&mut self, ui: &egui::Ui) {
         let Some((path, left)) = self.auto_shot.as_mut() else { return };
@@ -108,6 +122,24 @@ impl eframe::App for App {
             self.help.show(t);
         }
         self.help.window(ui.ctx());
+        // finished lessons go into the saved record; the learning-path window can start one
+        if let Some(id) = self.sch.finished_lesson() {
+            self.progress.mark(id);
+        }
+        if self.board_ed.lesson_finished() {
+            self.progress.mark("board");
+        }
+        if let Some(action) = self.learn.show(ui.ctx(), &mut self.progress) {
+            match action {
+                learn::Action::Lesson(id) => {
+                    if let Some(i) = schematic::lesson_ids().iter().position(|l| *l == id) {
+                        self.mode = Mode::Schematic;
+                        self.sch.start_lesson(i);
+                    }
+                }
+                learn::Action::Board => self.start_board_lesson(),
+            }
+        }
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図").on_hover_text("回路図の画面。部品を置いて配線し、シミュレーションします");
@@ -147,9 +179,16 @@ impl eframe::App for App {
                     }
                 });
                 ui.menu_button("学ぶ", |ui| {
-                    ui.label("サンプル回路を動かしながら学べます");
+                    if ui.button("学習パス: 安定化電源を作ろう…").on_hover_text("入門から、電源の部品、安定化のしくみ、基板と実機まで、順に学ぶ道筋です。どこまで進んだかも残ります").clicked() {
+                        self.learn.open = true;
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.label("サンプル回路を動かしながら学べます (✔ = 完了)");
+                    let ids = schematic::lesson_ids();
                     for (i, t) in schematic::lesson_titles().into_iter().enumerate() {
-                        if ui.button(t).clicked() {
+                        let mark = if self.progress.is_done(ids[i]) { "✔ " } else { "　 " };
+                        if ui.button(format!("{mark}{t}")).clicked() {
                             self.mode = Mode::Schematic;
                             self.sch.start_lesson(i);
                             ui.close();
@@ -162,13 +201,9 @@ impl eframe::App for App {
                         ui.close();
                     }
                     ui.separator();
-                    if ui.button(board_editor::lesson::TITLE).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
-                        self.mode = Mode::Board;
-                        if !self.sch.load_sample(board_editor::BoardEditor::lesson_circuit()) {
-                            self.board_ed.status = "レッスンの回路を読み込めませんでした".into();
-                        } else {
-                            self.board_ed.start_lesson();
-                        }
+                    let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
+                    if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
+                        self.start_board_lesson();
                         ui.close();
                     }
                 });
@@ -251,8 +286,11 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
+    if args.iter().any(|a| a == "--learn") {
+        app.learn.open = true;
+    }
     if let Some(i) = args.iter().position(|a| a == "--guide") {
         app.help.show(match args.get(i + 1).map(|s| s.as_str()) {
             Some("waveform") => help::HelpTab::Waveform,
@@ -360,6 +398,7 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             install_japanese_font(&cc.egui_ctx);
             let mut app = App::default();
+            app.progress = learn::Progress::load(&learn::Progress::default_file());
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
             Ok(Box::new(app))
