@@ -152,8 +152,6 @@ impl eframe::App for App {
                 ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図").on_hover_text("回路図の画面。部品を置いて配線し、シミュレーションします");
                 ui.selectable_value(&mut self.mode, Mode::Board, "基板パターン").on_hover_text("基板の画面。回路図から部品を取り込んで、配置・配線します");
                 ui.separator();
-                ui.checkbox(&mut self.show_hints, "ヒント").on_hover_text("画面下に、いま何をするとよいかのヒントを表示します");
-                ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
                 ui.menu_button("ファイル", |ui| {
                     if ui.button("新規").on_hover_text("いまの図を空にして、新しく始めます").clicked() {
@@ -242,25 +240,29 @@ impl eframe::App for App {
                         self.sch.show_sim_opts = true;
                         ui.close();
                     }
+                    ui.separator();
+                    ui.checkbox(&mut self.show_hints, "画面下にヒントを出す").on_hover_text("画面下に、いま何をするとよいかのヒントと豆知識を表示します");
                 });
-                if !sch_mode {
-                    if ui.button("DRC").on_hover_text("設計ルールチェック。配線の間隔が近すぎる・銅が基板の端にはみ出している、などを調べます").clicked() {
-                        self.board_ed.run_drc();
-                    }
-                }
             });
         });
         self.sch.settings_window(ui.ctx());
         self.sch.wizard_window(ui.ctx());
         egui::Panel::bottom("status").show(ui, |ui| {
-            ui.label(if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status });
+            // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
+            ui.horizontal(|ui| {
+                ui.label(if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status });
+                if self.show_hints {
+                    // rotate the general tips every 12 seconds
+                    let t = ui.input(|i| i.time);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.add(egui::Label::new(egui::RichText::new(format!("豆知識: {}", TIPS[(t / 12.0) as usize % TIPS.len()])).weak()).truncate());
+                    });
+                    ui.request_repaint_after(std::time::Duration::from_secs(2));
+                }
+            });
             if self.show_hints {
                 let hint = if self.mode == Mode::Schematic { self.sch.hint() } else { self.board_ed.hint() };
                 ui.colored_label(egui::Color32::from_rgb(90, 170, 110), format!("ヒント: {hint}"));
-                // rotate the general tips every 12 seconds
-                let t = ui.input(|i| i.time);
-                ui.small(format!("豆知識: {}", TIPS[(t / 12.0) as usize % TIPS.len()]));
-                ui.request_repaint_after(std::time::Duration::from_secs(2));
             }
         });
         if self.mode == Mode::Schematic {

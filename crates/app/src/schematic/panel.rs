@@ -21,7 +21,6 @@ impl SchEditor {
     }
 
     pub(super) fn side_panel_body(&mut self, ui: &mut egui::Ui) {
-        ui.heading("回路図");
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.panel_tab, PanelTab::Draw, "作図")
                 .on_hover_text("部品を置く、配線する、部品の値を変える、配線ミスを点検する (ERC)");
@@ -81,16 +80,17 @@ impl SchEditor {
             ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります");
         }
         ui.separator();
-        ui.label("部品 (クリックして配置 / Rキーで回転)");
-        for k in Kind::PALETTE {
-            if ui.selectable_label(self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k, k.label()).on_hover_text(kind_tip(*k)).clicked() {
-                self.tool = Tool::Place;
-                self.place_lib = None;
-                self.place = *k;
-                self.pending = None;
+        egui::CollapsingHeader::new("基本の部品").default_open(true).show(ui, |ui| {
+            ui.small("クリックして配置 / Rキーで回転");
+            for k in Kind::PALETTE {
+                if ui.selectable_label(self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k, k.label()).on_hover_text(kind_tip(*k)).clicked() {
+                    self.tool = Tool::Place;
+                    self.place_lib = None;
+                    self.place = *k;
+                    self.pending = None;
+                }
             }
-        }
-        ui.separator();
+        });
         let mut chosen = None;
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(true).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))

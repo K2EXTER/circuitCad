@@ -59,16 +59,25 @@ impl SchEditor {
             }
             let f = FontId::proportional((self.zoom * 0.55).clamp(8.0, 18.0));
             let (x0, x1, y0, y1) = comp_extents(c);
-            let ctr = (c.pos.0 as f32 + (x0 + x1) / 2.0, c.pos.1 as f32);
             if c.kind.is_power_symbol() {
                 if c.kind == Kind::Power {
                     painter.text(self.to_screen(rect, (c.pos.0 as f32, c.pos.1 as f32 - 0.8)), Align2::CENTER_BOTTOM, &c.value, f.clone(), SYM);
                 }
             } else {
-                let top = c.pos.1 as f32 + if c.rot % 2 == 0 { y0.min(-1.0) - 0.3 } else { -x1.max(2.0) - 0.3 };
-                painter.text(self.to_screen(rect, (ctr.0, top)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), Color32::from_rgb(20, 60, 140));
-                let bot = c.pos.1 as f32 + if c.rot % 2 == 0 { y1.max(1.0) + 0.3 } else { x1.max(2.0) + 0.3 };
-                painter.text(self.to_screen(rect, (ctr.0, bot)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+                let name_col = Color32::from_rgb(20, 60, 140);
+                // the part's box on the sheet after rotation; a part taller than wide has its pins at the top and bottom
+                let (bx0, bx1, by0, by1) = sheet_box(c.kind, (x0, x1, y0, y1), c.pos, c.rot)
+                    .unwrap_or((c.pos.0 as f32 - 2.0, c.pos.0 as f32 + 2.0, c.pos.1 as f32 - 1.0, c.pos.1 as f32 + 1.0));
+                if by1 - by0 <= bx1 - bx0 {
+                    painter.text(self.to_screen(rect, ((bx0 + bx1) / 2.0, by0 - 0.3)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), name_col);
+                    painter.text(self.to_screen(rect, ((bx0 + bx1) / 2.0, by1 + 0.3)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+                } else {
+                    // name and value go left of the body, level with its middle, so they stay clear of the pin
+                    // voltages (right of each pin) and the wires that run along the pins' line
+                    let (left, mid) = (bx0 - 0.4, (by0 + by1) / 2.0);
+                    painter.text(self.to_screen(rect, (left, mid)), Align2::RIGHT_BOTTOM, &c.refdes, f.clone(), name_col);
+                    painter.text(self.to_screen(rect, (left, mid)), Align2::RIGHT_TOP, &c.value, f, Color32::from_gray(60));
+                }
             }
         }
     }
