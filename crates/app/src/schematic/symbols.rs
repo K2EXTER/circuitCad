@@ -94,6 +94,66 @@ pub(super) fn symbol(kind: Kind) -> Vec<Sh> {
     }
 }
 
+/// What a voltage source's value says it produces, so the symbol can show it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SourceShape {
+    Dc,
+    Sine,
+    Pulse,
+    Other,
+}
+
+pub(super) fn source_shape(value: &str) -> SourceShape {
+    let v = value.trim().to_ascii_uppercase();
+    if v.starts_with("SIN") {
+        SourceShape::Sine
+    } else if v.starts_with("PULSE") {
+        SourceShape::Pulse
+    } else if v.starts_with("PWL") || v.starts_with("NOISE") {
+        SourceShape::Other
+    } else {
+        SourceShape::Dc
+    }
+}
+
+/// A voltage source's symbol: a circle with +/- for DC, a sine wave for an AC source, a square
+/// wave for a pulse source (a small + near the top still marks pin 1).
+pub(super) fn source_symbol(value: &str) -> Vec<Sh> {
+    use Sh::*;
+    let shape = source_shape(value);
+    if shape == SourceShape::Dc {
+        return symbol(Kind::VSource);
+    }
+    let mut v = vec![L(0., -2., 0., -1.2), L(0., 1.2, 0., 2.), C(0., 0., 1.2), L(-0.2, -0.85, 0.2, -0.85), L(0., -1.05, 0., -0.65)];
+    match shape {
+        SourceShape::Sine => {
+            let n = 16;
+            let pt = |i: i32| {
+                let x = -0.8 + 1.6 * i as f32 / n as f32;
+                (x, 0.2 - 0.4 * (2.0 * std::f32::consts::PI * (x + 0.8) / 1.6).sin())
+            };
+            for i in 0..n {
+                let (a, b) = (pt(i), pt(i + 1));
+                v.push(L(a.0, a.1, b.0, b.1));
+            }
+        }
+        SourceShape::Pulse => {
+            let pts = [(-0.9, 0.6), (-0.45, 0.6), (-0.45, -0.1), (0.1, -0.1), (0.1, 0.6), (0.9, 0.6)];
+            for w in pts.windows(2) {
+                v.push(L(w[0].0, w[0].1, w[1].0, w[1].1));
+            }
+        }
+        _ => {
+            // arbitrary waveform: a zigzag
+            let pts = [(-0.9, 0.5), (-0.4, -0.1), (0.0, 0.4), (0.4, 0.0), (0.9, 0.5)];
+            for w in pts.windows(2) {
+                v.push(L(w[0].0, w[0].1, w[1].0, w[1].1));
+            }
+        }
+    }
+    v
+}
+
 /// Local bounding box (xmin, xmax, ymin, ymax).
 pub(super) fn extents(kind: Kind) -> (f32, f32, f32, f32) {
     match kind {
@@ -162,12 +222,16 @@ impl SchEditor {
     }
 
     pub(super) fn draw_symbol(&self, painter: &egui::Painter, rect: Rect, kind: Kind, pos: Pt, rot: u8, color: Color32) {
+        self.draw_shapes(painter, rect, symbol(kind), pos, rot, color);
+    }
+
+    fn draw_shapes(&self, painter: &egui::Painter, rect: Rect, shapes: Vec<Sh>, pos: Pt, rot: u8, color: Color32) {
         let tr = |x: f32, y: f32| {
             let r = rot_f((x, y), rot);
             self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
         };
         let stroke = Stroke::new(1.6, color);
-        for s in symbol(kind) {
+        for s in shapes {
             match s {
                 Sh::L(a, b, c, d) => {
                     painter.line_segment([tr(a, b), tr(c, d)], stroke);
@@ -182,6 +246,7 @@ impl SchEditor {
     pub(super) fn draw_component(&self, painter: &egui::Painter, rect: Rect, c: &Component, color: Color32) {
         match &c.custom {
             Some(sym) => self.draw_custom(painter, rect, sym, c.pos, c.rot, color),
+            None if c.kind == Kind::VSource => self.draw_shapes(painter, rect, source_symbol(&c.value), c.pos, c.rot, color),
             None => self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color),
         }
     }
@@ -254,5 +319,25 @@ impl SchEditor {
         let (w, h) = ((x1 - x0).max(4.0) + 6.0, (y1 - y0).max(4.0) + 6.0);
         self.zoom = (rect.width() / w).min(rect.height() / h).clamp(6.0, 40.0);
         self.pan = Vec2::new((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_source_symbol_follows_its_waveform() {
+        assert_eq!(source_shape("5"), SourceShape::Dc);
+        assert_eq!(source_shape("5 AC 1"), SourceShape::Dc);
+        assert_eq!(source_shape("SIN(0 141.4 50) AC 1"), SourceShape::Sine);
+        assert_eq!(source_shape(" pulse(0 5 1u 1n 1n 1u 2u)"), SourceShape::Pulse);
+        assert_eq!(source_shape("PWL(0 0 1 1)"), SourceShape::Other);
+        // DC keeps the +/- circle; the others draw a waveform (more segments than the DC symbol)
+        assert_eq!(source_symbol("5").len(), symbol(Kind::VSource).len());
+        assert!(source_symbol("SIN(0 1 1k)").len() > 10);
+        // pins stay where they were: every variant has the same two leads
+        let leads = |v: Vec<Sh>| v.iter().filter(|s| matches!(s, Sh::L(0., y, 0., _) if y.abs() >= 1.2 || *y == -2.0)).count();
+        assert!(leads(source_symbol("SIN(0 1 1k)")) >= 2);
     }
 }

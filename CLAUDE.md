@@ -47,7 +47,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `export.rs` 製造一式 (zip) / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・部品配置CSV / `strokefont.rs` シルク文字
 
 ## app (`crates/app/src`)
-`plot.rs` の `PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。`main.rs` ウィンドウ・メニュー・`TIPS`(豆知識)・引数処理・統合テスト。「ファイル → 画面をPNGで保存」は eframe の Screenshot(`finish_screenshot`)で、起動引数 `--screenshot file.png` は数フレーム後に撮って終了(画面の確認・文書づくり用)。`plot.rs` 波形描画、`part_form.rs` 部品作成フォーム、`source_form.rs` 電源値フォーム。
+電源記号は値で形が変わる(`symbols.rs` の `source_symbol`: 直流=±の円、SIN=正弦波、PULSE=方形波、PWL/NOISE=折れ線)。`plot.rs` の `PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。`main.rs` ウィンドウ・メニュー・`TIPS`(豆知識)・引数処理・統合テスト。「ファイル → 画面をPNGで保存」は eframe の Screenshot(`finish_screenshot`)で、起動引数 `--screenshot file.png` は数フレーム後に撮って終了(画面の確認・文書づくり用)。`plot.rs` 波形描画、`part_form.rs` 部品作成フォーム、`source_form.rs` 電源値フォーム。
 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
 
