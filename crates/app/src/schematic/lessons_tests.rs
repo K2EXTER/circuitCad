@@ -328,8 +328,26 @@ fn the_power_supply_lessons_walk_their_steps() {
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
+    // series regulator: DC, load 47, load 22, back to 100 and the input sweep
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("series_regulator"));
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    set_value(&mut e, "R2", "47");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    set_value(&mut e, "R2", "22");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    set_value(&mut e, "R2", "100");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4, "{}", e.status);
     // every new lesson has a real-experiment card
-    for id in ["diode_curve", "zener", "emitter_follower"] {
+    for id in ["diode_curve", "zener", "emitter_follower", "series_regulator"] {
         assert!(!super::lessons::lesson_real(idx(id)).is_empty(), "{id}");
     }
 }

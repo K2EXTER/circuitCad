@@ -573,3 +573,34 @@ fn old_circuits_borrow_the_ratings_of_their_library_parts() {
     let issues = &e.dc.as_ref().unwrap().ratings;
     assert!(issues.iter().any(|i| i.refdes == "Q1" && i.message.contains("この形の目安")), "{issues:?}");
 }
+
+/// The series regulator sample (lesson 18): 5 V that does not care about the load, until the input is too low.
+#[test]
+fn series_regulator_sample_holds_5v_under_load_until_dropout() {
+    let s = example_schematics().into_iter().find(|(n, _)| n == "series_regulator.schjson").unwrap().1;
+    let run = |r2: &str, v1: &str| {
+        let mut t = s.clone();
+        for c in &mut t.components {
+            match c.refdes.as_str() {
+                "R2" => c.value = r2.into(),
+                "V1" => c.value = v1.into(),
+                _ => {}
+            }
+        }
+        let r = dc_op(&from_schematic(&t).unwrap()).unwrap();
+        let issues = sim_core::check_ratings(&t, &r);
+        (r.voltage("VOUT").unwrap(), issues)
+    };
+    let (v, issues) = run("100", "9");
+    assert!((4.9..5.1).contains(&v) && issues.is_empty(), "{v} {issues:?}");
+    let (v47, issues) = run("47", "9");
+    assert!((v - v47).abs() < 0.02, "load regulation: {v} vs {v47}");
+    assert!(issues.iter().any(|i| i.refdes == "Q1" && i.level == sim_core::RatingLevel::Caution), "{issues:?}");
+    let (v22, issues) = run("22", "9");
+    assert!((v - v22).abs() < 0.02);
+    assert!(issues.iter().any(|i| i.refdes == "Q1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
+    let (hi, _) = run("100", "12");
+    assert!((hi - v).abs() < 0.2, "line regulation: {hi} vs {v}");
+    let (low, _) = run("100", "6");
+    assert!(low < 4.0, "dropout: the pass transistor and op-amp need headroom, got {low}");
+}
