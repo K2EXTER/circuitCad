@@ -12,12 +12,14 @@ jobs:
           - os: windows-latest
             name: windows-x64
             bin: circuitCad.exe
-          - os: macos-latest
-            name: macos-arm64
-            bin: circuitCad
-          - os: ubuntu-latest
-            name: linux-x64
-            bin: circuitCad
+          # macOS and Linux have never been built or run by the author: add them back (and drop
+          # `prerelease` below when ready) once someone has checked them.
+          # - os: macos-latest
+          #   name: macos-arm64
+          #   bin: circuitCad
+          # - os: ubuntu-latest
+          #   name: linux-x64
+          #   bin: circuitCad
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -38,3 +40,6 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: circuitCad-${{ matrix.name }}.zip
+          # an early version: shown as a pre-release, not as the latest release
+          prerelease: true
+          generate_release_notes: true
