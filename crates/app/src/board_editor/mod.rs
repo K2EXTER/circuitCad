@@ -118,6 +118,33 @@ fn segment_hits_rect(a: Point, b: Point, lo: Point, hi: Point) -> bool {
     true
 }
 
+/// What a click or a rubber band may pick up. Switching parts off makes them safe from accidental moves
+/// while selecting and moving vias and tracks.
+#[derive(Clone, Copy)]
+struct Pickable {
+    parts: bool,
+    tracks: bool,
+    vias: bool,
+    /// Loose pads and mounting holes.
+    pads: bool,
+    /// Copper pours, silk lines.
+    other: bool,
+}
+
+impl Pickable {
+    const ALL: Pickable = Pickable { parts: true, tracks: true, vias: true, pads: true, other: true };
+
+    fn allows(&self, it: &Item) -> bool {
+        match it {
+            Item::Part(_) => self.parts,
+            Item::Track(_) => self.tracks,
+            Item::Via(_) => self.vias,
+            Item::Pad(_) | Item::Hole(_) => self.pads,
+            Item::Silk(_) | Item::Zone(_) => self.other,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Visible {
     top: bool,
@@ -162,6 +189,10 @@ pub struct BoardEditor {
     undo: Vec<Board>,
     redo: Vec<Board>,
     vis: Visible,
+    /// What the pointer may select / pick up (the "選択できるもの" checkboxes).
+    pick: Pickable,
+    /// The pre-order check (index into `order.checks`) whose place is being shown on the board.
+    check_focus: Option<usize>,
     zone_net: String,
     zone_clearance: f64,
     zone_thermal: bool,
@@ -216,6 +247,8 @@ impl Default for BoardEditor {
             import_notes: vec![],
             undo: vec![],
             redo: vec![],
+            pick: Pickable::ALL,
+            check_focus: None,
             vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true },
             zone_net: "GND".into(),
             zone_clearance: 0.3,

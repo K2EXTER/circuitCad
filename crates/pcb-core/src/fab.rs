@@ -163,10 +163,20 @@ pub struct Check {
     /// Why it matters and how to fix it.
     pub detail: String,
     pub at: Option<Point>,
+    /// The other places the same note is about (`at` is the first of them), so all can be marked on the board.
+    pub also: Vec<Point>,
 }
 
 fn check(level: Level, title: impl Into<String>, detail: impl Into<String>, at: Option<Point>) -> Check {
-    Check { level, title: title.into(), detail: detail.into(), at }
+    Check { level, title: title.into(), detail: detail.into(), at, also: vec![] }
+}
+
+impl Check {
+    fn with_also(mut self, places: impl IntoIterator<Item = Point>) -> Check {
+        let at = self.at;
+        self.also = places.into_iter().filter(|p| Some(*p) != at).collect();
+        self
+    }
 }
 
 /// Everything a beginner should look at before sending the files.
@@ -195,7 +205,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
             format!("基板の外に部品があります: {}{}", names.join(", "), if outside.len() > 5 { " ほか" } else { "" }),
             "回路図から取り込んだ部品は、最初は基板の右の外側に並びます。ドラッグして基板の上に置きましょう",
             Some(first.pos),
-        ));
+        ).with_also(outside.iter().map(|p| p.pos)));
     } else if !board.parts.is_empty() {
         out.push(check(Level::Ok, format!("部品 {} 個はすべて基板の上にあります", board.parts.len()), "", None));
     }
@@ -208,7 +218,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
             format!("未配線が {} 本あります (黄色の線)", airwires.len()),
             "つながっていない接続が残っています。「配線」ツールで手でつなぐか、「自動配線」に任せましょう",
             Some(w.a),
-        ));
+        ).with_also(airwires.iter().map(|w| w.a)));
     } else {
         out.push(check(Level::Ok, "すべて配線されています", "", None));
     }
@@ -216,7 +226,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     // design rules, first the board's own, then the fab's
     let own = drc::check(board);
     if let Some(v) = own.first() {
-        out.push(check(Level::Error, format!("DRC 違反が {} 件あります", own.len()), format!("例: {}。一覧の行をクリックすると場所へ移動します", v.message), Some(v.at)));
+        out.push(check(Level::Error, format!("DRC 違反が {} 件あります", own.len()), format!("例: {}。一覧の行をクリックすると場所へ移動します", v.message), Some(v.at)).with_also(own.iter().map(|x| x.at)));
     } else {
         out.push(check(Level::Ok, "DRC (設計ルールチェック) に違反はありません", "", None));
     }
@@ -237,7 +247,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
                     format!("{} のルールでは違反が {} 件あります", f.name, v.len()),
                     format!("例: {}。線を太く・離す、穴やパッドを大きくするなどで直します。「ルールを{}にする」を押すと、DRC もこのルールで調べます", first.message, f.name),
                     Some(first.at),
-                ));
+                ).with_also(v.iter().map(|x| x.at)));
             } else {
                 out.push(check(Level::Warn, format!("DRC のルールが {} より緩くなっています", f.name), "今の設計は発注先のルールを満たしていますが、DRC の設定が緩いままです。「ルールを発注先に合わせる」を押しておくと、あとで直したときも守られます", None));
             }
@@ -267,25 +277,25 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     // silk screen
     let silk = drc::silk_checks(board);
     if let Some(first) = silk.first() {
-        out.push(check(Level::Warn, format!("シルク (白い印刷) に気になる所が {} 件あります", silk.len()), format!("例: {}", first.message), Some(first.at)));
+        out.push(check(Level::Warn, format!("シルク (白い印刷) に気になる所が {} 件あります", silk.len()), format!("例: {}", first.message), Some(first.at)).with_also(silk.iter().map(|x| x.at)));
     }
 
     // solder mask strips between pads
     let dams = drc::mask_dam_checks(board);
     if let Some(first) = dams.first() {
-        out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)));
+        out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)).with_also(dams.iter().map(|x| x.at)));
     }
 
     // bypass capacitors next to IC supply pins
     let decoupling = drc::decoupling_checks(board);
     if let Some(first) = decoupling.first() {
-        out.push(check(Level::Warn, format!("ICの電源ピンのそばのコンデンサに気になる所が {} 件あります", decoupling.len()), format!("例: {}", first.message), Some(first.at)));
+        out.push(check(Level::Warn, format!("ICの電源ピンのそばのコンデンサに気になる所が {} 件あります", decoupling.len()), format!("例: {}", first.message), Some(first.at)).with_also(decoupling.iter().map(|x| x.at)));
     }
 
     // trace corners
     let acute = drc::acute_angle_checks(board);
     if let Some(first) = acute.first() {
-        out.push(check(Level::Warn, format!("鋭角に曲がっている配線が {} 箇所あります", acute.len()), format!("例: {}", first.message), Some(first.at)));
+        out.push(check(Level::Warn, format!("鋭角に曲がっている配線が {} 箇所あります", acute.len()), format!("例: {}", first.message), Some(first.at)).with_also(acute.iter().map(|x| x.at)));
     }
     if drc::missing_ground_fill(board) {
         out.push(check(Level::Info, "GND のベタ (銅箔ゾーン) がありません", "2層基板では、裏面などを GND のゾーンで塗ると、信号の戻り道が短くなってノイズが減り、配線もしやすくなります。ツール「ゾーン」でネット GND を選んで囲みましょう", None));

@@ -186,9 +186,56 @@ impl BoardEditor {
         for v in &self.violations {
             painter.circle_stroke(self.to_screen(rect, v.at), 10.0, Stroke::new(2.0, Color32::from_rgb(255, 0, 255)));
         }
+        self.draw_check_marks(painter, rect);
         for sel in self.selected.iter().chain(self.multi.iter()) {
             for p in self.item_points(*sel) {
                 painter.circle_stroke(self.to_screen(rect, p), 8.0, Stroke::new(2.0, Color32::WHITE));
+            }
+        }
+    }
+
+    /// While the "発注の準備" window is open: a numbered mark at the place of every note of the pre-order check
+    /// (the same numbers as in the list). The one that was clicked is larger and pulses, with its text beside it.
+    pub(super) fn draw_check_marks(&self, painter: &egui::Painter, rect: Rect) {
+        use pcb_core::fab::Level;
+        if !self.order.open || !self.order.ran {
+            return;
+        }
+        let t = painter.ctx().input(|i| i.time);
+        let mut number = 0;
+        for (idx, c) in self.order.checks.iter().enumerate() {
+            let Some(at) = c.at else { continue };
+            if c.level == Level::Ok {
+                continue;
+            }
+            number += 1;
+            let color = match c.level {
+                Level::Error => Color32::from_rgb(235, 50, 70),
+                Level::Warn => Color32::from_rgb(240, 170, 20),
+                _ => Color32::from_rgb(120, 170, 230),
+            };
+            // the other places of the same note: a smaller ring with the same number
+            for q in &c.also {
+                let qc = self.to_screen(rect, *q);
+                painter.circle_stroke(qc, 7.0, Stroke::new(2.0, color));
+                painter.text(qc + Vec2::new(11.0, -9.0), egui::Align2::LEFT_CENTER, number.to_string(), egui::FontId::proportional(12.0), color);
+            }
+            let center = self.to_screen(rect, at);
+            let focused = self.check_focus == Some(idx);
+            let r = if focused { 16.0 + 5.0 * (t * 4.0).sin().abs() as f32 } else { 10.0 };
+            painter.circle_stroke(center, r, Stroke::new(if focused { 3.0 } else { 2.0 }, color));
+            if focused {
+                painter.circle_stroke(center, r + 5.0, Stroke::new(1.5, color.gamma_multiply(0.5)));
+                painter.ctx().request_repaint();
+            }
+            let tag = egui::Rect::from_center_size(center + Vec2::new(r + 8.0, -r - 2.0), Vec2::new(18.0, 16.0));
+            painter.rect_filled(tag, 3.0, color);
+            painter.text(tag.center(), egui::Align2::CENTER_CENTER, number.to_string(), egui::FontId::proportional(13.0), Color32::BLACK);
+            if focused {
+                let msg = painter.layout(c.title.clone(), egui::FontId::proportional(13.0), Color32::WHITE, 320.0);
+                let box_pos = tag.right_top() + Vec2::new(6.0, 0.0);
+                painter.rect_filled(Rect::from_min_size(box_pos, msg.size() + Vec2::new(10.0, 6.0)), 3.0, Color32::from_black_alpha(210));
+                painter.galley(box_pos + Vec2::new(5.0, 3.0), msg, Color32::WHITE);
             }
         }
     }

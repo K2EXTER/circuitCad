@@ -73,6 +73,28 @@ impl BoardEditor {
             });
 
             ui.separator();
+            ui.label("選択できるもの").on_hover_text("クリックや範囲選択で選べる物を絞ります。部品のチェックを外すと、ビアや配線を囲んで選ぶときに、部品を巻き込んで動かす心配がなくなります");
+            ui.horizontal_wrapped(|ui| {
+                ui.checkbox(&mut self.pick.parts, "部品").on_hover_text("部品を選べる・ドラッグで動かせるようにします。外すと、部品の上でドラッグしても動かず、範囲選択になります");
+                ui.checkbox(&mut self.pick.tracks, "配線").on_hover_text("配線 (トラック) を選べるようにします");
+                ui.checkbox(&mut self.pick.vias, "ビア").on_hover_text("ビアを選べるようにします");
+                ui.checkbox(&mut self.pick.pads, "パッド・穴").on_hover_text("部品に属さないパッドと取付穴を選べるようにします");
+                ui.checkbox(&mut self.pick.other, "ゾーン・シルク").on_hover_text("ゾーン (ベタ) と、部品に属さないシルク線を選べるようにします");
+            });
+            ui.horizontal(|ui| {
+                if ui.small_button("配線・ビアだけ").on_hover_text("配線とビアだけを選べるようにします。部品は動きません").clicked() {
+                    self.pick = Pickable { parts: false, tracks: true, vias: true, pads: false, other: false };
+                    self.multi.retain(|it| matches!(it, Item::Track(_) | Item::Via(_)));
+                    if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
+                        self.selected = None;
+                    }
+                }
+                if ui.small_button("すべて").on_hover_text("すべての物を選べるようにします").clicked() {
+                    self.pick = Pickable::ALL;
+                }
+            });
+
+            ui.separator();
             ui.label("基板外形");
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 ")).on_hover_text("基板の幅 (mm)。「矩形に設定」を押すと外形に反映されます");

@@ -5,8 +5,9 @@ use super::*;
 impl BoardEditor {
     pub(super) fn hit_test(&self, p: Point) -> Option<Item> {
         let tol = 6.0 / self.zoom as f64;
+        let pick = self.pick;
         for (i, v) in self.board.vias.iter().enumerate() {
-            if p.dist(v.pos) <= v.diameter / 2.0 + tol {
+            if pick.vias && p.dist(v.pos) <= v.diameter / 2.0 + tol {
                 return Some(Item::Via(i));
             }
         }
@@ -15,28 +16,33 @@ impl BoardEditor {
             if (p.x - pd.pos.x).abs() <= w / 2.0 + tol && (p.y - pd.pos.y).abs() <= h / 2.0 + tol {
                 if !pd.refdes.is_empty()
                     && let Some(k) = self.board.parts.iter().position(|b| b.refdes == pd.refdes) {
-                        return Some(Item::Part(k));
+                        if pick.parts {
+                            return Some(Item::Part(k));
+                        }
+                        continue;
                     }
-                return Some(Item::Pad(i));
+                if pick.pads {
+                    return Some(Item::Pad(i));
+                }
             }
         }
         for (i, h) in self.board.holes.iter().enumerate() {
-            if p.dist(h.pos) <= h.drill / 2.0 + tol {
+            if pick.pads && p.dist(h.pos) <= h.drill / 2.0 + tol {
                 return Some(Item::Hole(i));
             }
         }
         for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
-            if seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
+            if pick.tracks && seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
                 return Some(Item::Track(i));
             }
         }
         for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty()) {
-            if seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
+            if pick.other && seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
                 return Some(Item::Silk(i));
             }
         }
         for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
-            if polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p) {
+            if pick.other && (polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p)) {
                 return Some(Item::Zone(i));
             }
         }
@@ -122,6 +128,7 @@ impl BoardEditor {
                 out.push(Item::Zone(i));
             }
         }
+        out.retain(|it| self.pick.allows(it));
         out
     }
 

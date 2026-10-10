@@ -143,7 +143,8 @@ impl BoardEditor {
                     run = true;
                 }
             });
-            for c in &self.order.checks {
+            let mut number = 0;
+            for (idx, c) in self.order.checks.iter().enumerate() {
                 let (mark, color) = match c.level {
                     Level::Ok => ("✔", Color32::from_rgb(60, 160, 90)),
                     Level::Info => ("ℹ", Color32::from_gray(150)),
@@ -152,10 +153,15 @@ impl BoardEditor {
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, mark);
+                    if c.at.is_some() && c.level != Level::Ok {
+                        number += 1;
+                        // the same number is drawn on the board at that place
+                        ui.colored_label(color, egui::RichText::new(format!("[{number}]")).strong());
+                    }
                     let text = egui::RichText::new(&c.title);
                     if c.at.is_some() {
-                        if ui.link(text).on_hover_text("クリックで、その場所へ移動します").clicked() {
-                            jump = c.at;
+                        if ui.link(text).on_hover_text("クリックで、基板のその場所へ移動して、印をつけます。基板の上にも、同じ番号の印が出ています").clicked() {
+                            jump = Some((idx, c.at));
                         }
                     } else {
                         ui.label(text);
@@ -244,8 +250,11 @@ impl BoardEditor {
             self.apply_fab(f);
             self.run_checks();
         }
-        if let Some(at) = jump {
+        if let Some((idx, Some(at))) = jump {
             self.pan = Vec2::new(at.x as f32, at.y as f32);
+            // zoom in enough to see what the note is about (never zoom out)
+            self.zoom = self.zoom.max(30.0);
+            self.check_focus = Some(idx);
         }
         if make_preview {
             match self.build_preview(ctx) {

@@ -273,3 +273,19 @@ fn the_validator_rejects_broken_files() {
     assert!(check_excellon("drl-small", &drl, (0.0, 0.0, 5.0, 5.0)).is_err());
     assert!(check_excellon("no-end", &drl.replace("M30\n", ""), (0.0, 0.0, 50.0, 40.0)).is_err());
 }
+
+/// A note that is about several places marks all of them (the first is `at`, the rest are in `also`).
+#[test]
+fn a_note_about_several_places_lists_them_all() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    for (x, y, net_a, net_b) in [(10.0, 10.0, "A", "B"), (25.0, 20.0, "C", "D")] {
+        for (dx, net) in [(0.0, net_a), (0.75, net_b)] {
+            let mut p = Pad::new(Point::new(x + dx, y), PadShape::Rect { w: 0.6, h: 1.0 }, None, Side::Top);
+            p.net = net.into();
+            b.pads.push(p);
+        }
+    }
+    let checks = crate::fab::preflight(&b, None);
+    let dam = checks.iter().find(|c| c.title.contains("ソルダーマスク")).expect("the narrow mask strips are noted");
+    assert!(dam.at.is_some() && dam.also.len() == 1, "{:?}", dam.also);
+}
