@@ -21,7 +21,7 @@ fn v(message: String, at: Point) -> Violation {
 // ---------------------------------------------------------------- geometry
 
 #[derive(Clone, Copy, Debug)]
-enum Geo {
+pub(crate) enum Geo {
     /// Segment `a`-`b` swept by a disc of radius `r` (r > 0: track, round pad, oval pad, via).
     Cap { a: Point, b: Point, r: f64 },
     /// Axis-aligned rectangle.
@@ -32,7 +32,7 @@ fn cross(o: Point, a: Point, b: Point) -> f64 {
     (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 }
 
-fn point_seg(p: Point, a: Point, b: Point) -> f64 {
+pub(crate) fn point_seg(p: Point, a: Point, b: Point) -> f64 {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     let l2 = dx * dx + dy * dy;
     let t = if l2 == 0.0 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / l2).clamp(0.0, 1.0) };
@@ -56,7 +56,7 @@ fn seg_seg(a: Point, b: Point, c: Point, d: Point) -> f64 {
     point_seg(a, c, d).min(point_seg(b, c, d)).min(point_seg(c, a, b)).min(point_seg(d, a, b))
 }
 
-fn point_rect(p: Point, c: Point, hw: f64, hh: f64) -> f64 {
+pub(crate) fn point_rect(p: Point, c: Point, hw: f64, hh: f64) -> f64 {
     let dx = ((p.x - c.x).abs() - hw).max(0.0);
     let dy = ((p.y - c.y).abs() - hh).max(0.0);
     dx.hypot(dy)
@@ -97,7 +97,7 @@ fn dist(x: &Geo, y: &Geo) -> f64 {
     }
 }
 
-fn shape_geo(pos: Point, shape: PadShape) -> Geo {
+pub(crate) fn shape_geo(pos: Point, shape: PadShape) -> Geo {
     match shape {
         PadShape::Circle { d } => Geo::Cap { a: pos, b: pos, r: d / 2.0 },
         PadShape::Rect { w, h } => Geo::Rect { c: pos, hw: w / 2.0, hh: h / 2.0 },
@@ -204,17 +204,17 @@ pub fn check(board: &Board) -> Vec<Violation> {
     let mut out = vec![];
 
     if board.outline.len() < 3 {
-        out.push(v("board outline needs at least 3 points".into(), Point::default()));
+        out.push(v("基板の外形が3点未満で、面になっていません。「基板外形」ツールか「矩形に設定」で外形を決めましょう".into(), Point::default()));
         return out;
     }
 
     for t in &board.tracks {
         if t.width + 1e-9 < r.min_track_width {
-            out.push(v(format!("track width {:.3} < min {:.3}", t.width, r.min_track_width), t.a));
+            out.push(v(format!("配線の幅 {:.3}mm が最小 {:.3}mm より細いです。配線を太くするか、発注先の最小幅に合わせたルールを選びましょう", t.width, r.min_track_width), t.a));
         }
         for p in [t.a, t.b] {
             if !inside_polygon(&board.outline, p) {
-                out.push(v("track endpoint outside board outline".into(), p));
+                out.push(v("配線の端が基板の外にあります。基板の内側に引き直すか、外形を広げましょう".into(), p));
             }
         }
     }
@@ -231,18 +231,18 @@ pub fn check(board: &Board) -> Vec<Violation> {
     }
     for (pos, d, ring) in &drills {
         if *d + 1e-9 < r.min_drill {
-            out.push(v(format!("drill {:.3} < min {:.3}", d, r.min_drill), *pos));
+            out.push(v(format!("穴の径 {:.3}mm が最小 {:.3}mm より小さいです。穴を大きくするか、発注先に合ったルールを選びましょう", d, r.min_drill), *pos));
         }
         if *ring + 1e-9 < r.min_annular_ring {
-            out.push(v(format!("annular ring {:.3} < min {:.3}", ring, r.min_annular_ring), *pos));
+            out.push(v(format!("穴のまわりの銅 (アニュラリング) {:.3}mm が最小 {:.3}mm より細いです。パッド/ビアの直径を大きくするか、穴を小さくしましょう", ring, r.min_annular_ring), *pos));
         }
         if !inside_polygon(&board.outline, *pos) {
-            out.push(v("hole outside board outline".into(), *pos));
+            out.push(v("穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう".into(), *pos));
         }
     }
     for h in &board.holes {
         if !inside_polygon(&board.outline, h.pos) {
-            out.push(v("mounting hole outside board outline".into(), h.pos));
+            out.push(v("取り付け穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう".into(), h.pos));
         }
     }
 
@@ -282,7 +282,7 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
                 if d + 1e-9 < r.min_clearance {
                     let (p, q) = (center(&items[i].geo), center(&items[j].geo));
                     out.push(v(
-                        format!("{} 銅箔間隔 {:.3} < 最小 {:.3}", side_name(side), d, r.min_clearance),
+                        format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ)", side_name(side), d, r.min_clearance),
                         Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
                     ));
                 }
@@ -296,7 +296,7 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
             let edge = Geo::Cap { a: board.outline[e], b: board.outline[(e + 1) % n], r: 0.0 };
             let d = dist(&it.geo, &edge);
             if d + 1e-9 < r.edge_clearance {
-                out.push(v(format!("銅箔と基板端の間隔 {:.3} < 最小 {:.3}", d, r.edge_clearance), center(&it.geo)));
+                out.push(v(format!("銅箔と基板の端の間隔 {:.3}mm が最小 {:.3}mm より狭いです。端から離しましょう (切り出しで銅が欠けたり短絡したりします)", d, r.edge_clearance), center(&it.geo)));
                 break;
             }
         }
@@ -421,6 +421,139 @@ pub fn shorts(board: &Board) -> Vec<Violation> {
         .collect()
 }
 
+/// Smallest silk line width and text height most fabs print legibly (mm).
+pub const MIN_SILK_WIDTH: f64 = 0.15;
+pub const MIN_SILK_TEXT_HEIGHT: f64 = 0.8;
+
+/// Silk-screen problems that are not copper rule violations but spoil the printed board:
+/// silk over an exposed pad (the fab trims it away, or the pad solders badly), lines too thin to
+/// print, and text too small to read.
+pub fn silk_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    for l in &board.silk {
+        if l.width + 1e-9 < MIN_SILK_WIDTH {
+            out.push(v(format!("シルクの線の太さ {:.2}mm が細すぎます (印刷できるのは {:.2}mm 以上が目安)。太くしましょう", l.width, MIN_SILK_WIDTH), l.a));
+        }
+        let line = Geo::Cap { a: l.a, b: l.b, r: l.width / 2.0 };
+        for p in &board.pads {
+            let exposed = p.drill.is_some() || p.side == l.side;
+            if exposed && dist(&line, &shape_geo(p.pos, p.shape)) < 1e-9 {
+                out.push(v(
+                    format!("シルク (白い線) が {} のパッドに重なっています。パッドの上のシルクは製造時に削られ、はんだ付けにも邪魔です。シルクをずらしましょう", if p.refdes.is_empty() { "穴/パッド".to_string() } else { format!("{}.{}", p.refdes, p.pin) }),
+                    p.pos,
+                ));
+                break;
+            }
+        }
+    }
+    for t in &board.texts {
+        if t.height + 1e-9 < MIN_SILK_TEXT_HEIGHT {
+            out.push(v(format!("シルクの文字「{}」の高さ {:.2}mm が小さすぎて読めません ({:.1}mm 以上が目安)", t.text, t.height, MIN_SILK_TEXT_HEIGHT), t.pos));
+        }
+    }
+    out
+}
+
+/// Farther than this (mm) from an IC supply pin, a bypass capacitor stops doing its job: the
+/// trace between them adds inductance that the fast current spikes cannot get through.
+pub const MAX_DECOUPLING_DISTANCE: f64 = 8.0;
+
+fn is_ground_net(net: &str) -> bool {
+    let n = net.to_ascii_uppercase();
+    n.starts_with("GND") || n.ends_with("GND") || n == "VSS" || n == "0"
+}
+
+fn is_supply_net(net: &str) -> bool {
+    let n = net.to_ascii_uppercase();
+    n.starts_with("VCC") || n.starts_with("VDD") || n.starts_with("VBUS") || n.starts_with('+') || n == "V+" || (n.contains('V') && n.chars().next().is_some_and(|c| c.is_ascii_digit()))
+}
+
+/// ICs (refdes `U…` with 5+ pads) whose supply pin has no bypass capacitor (a `C…` part joining the
+/// same net to ground) close by. Skipped when the board has no capacitor on that net at all and
+/// no ground net, so a half-finished board is not nagged.
+pub fn decoupling_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    for part in board.parts.iter().filter(|p| p.refdes.starts_with('U')) {
+        let pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == part.refdes).collect();
+        if pads.len() < 5 {
+            continue;
+        }
+        for sp in pads.iter().filter(|p| is_supply_net(&p.net)) {
+            // capacitors that bridge this supply net and a ground net
+            let mut nearest: Option<f64> = None;
+            for c in board.parts.iter().filter(|c| c.refdes.starts_with('C')) {
+                let cp: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == c.refdes).collect();
+                if !cp.iter().any(|p| is_ground_net(&p.net)) {
+                    continue;
+                }
+                for p in cp.iter().filter(|p| p.net == sp.net) {
+                    let d = ((p.pos.x - sp.pos.x).powi(2) + (p.pos.y - sp.pos.y).powi(2)).sqrt();
+                    nearest = Some(nearest.map_or(d, |n: f64| n.min(d)));
+                }
+            }
+            let at = sp.pos;
+            let pin = format!("{}.{} ({})", part.refdes, sp.pin, sp.net);
+            match nearest {
+                None => out.push(v(
+                    format!("{pin} の電源ピンに、GND との間のバイパスコンデンサ (0.1µF 前後) が見当たりません。ICは切り替えの瞬間に大きな電流を引くため、近くにコンデンサがないと電源が揺れて誤動作します。電源ピンのすぐそばに 0.1µF を足しましょう"),
+                    at,
+                )),
+                Some(d) if d > MAX_DECOUPLING_DISTANCE => out.push(v(
+                    format!("{pin} から一番近いバイパスコンデンサまで {d:.1} mm あります。電源ピンから離れるほど配線のインダクタンスが増えて効きが悪くなります。{:.0} mm 以内、できれば数 mm の距離に置きましょう", MAX_DECOUPLING_DISTANCE),
+                    at,
+                )),
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// Where two tracks of the same layer meet at an angle sharper than 90 degrees. The wedge of
+/// copper-free space between them traps etchant ("acid trap") and the corner can over-etch; it also
+/// makes a fast signal reflect. Use 45-degree bends (an interior angle of 135 degrees) instead.
+pub fn acute_angle_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    let tracks = &board.tracks;
+    for (i, t) in tracks.iter().enumerate() {
+        for u in tracks.iter().skip(i + 1).filter(|u| u.side == t.side) {
+            for (p, q) in [(t.a, t.b), (t.b, t.a)] {
+                // `p` is the shared end; `q` is the far end of t; the far end of u is whichever end is not at p
+                let far = if (u.a.x - p.x).hypot(u.a.y - p.y) < 1e-6 {
+                    u.b
+                } else if (u.b.x - p.x).hypot(u.b.y - p.y) < 1e-6 {
+                    u.a
+                } else {
+                    continue;
+                };
+                let (v1, v2) = ((q.x - p.x, q.y - p.y), (far.x - p.x, far.y - p.y));
+                let (l1, l2) = (v1.0.hypot(v1.1), v2.0.hypot(v2.1));
+                if l1 < 1e-6 || l2 < 1e-6 {
+                    continue;
+                }
+                let cos = ((v1.0 * v2.0 + v1.1 * v2.1) / (l1 * l2)).clamp(-1.0, 1.0);
+                let deg = cos.acos().to_degrees();
+                // a straight continuation is 180; a 45-degree bend is 135; 90 is the sharpest we accept
+                if deg < 89.0 && deg > 1.0 {
+                    out.push(v(
+                        format!("配線が {deg:.0}° の鋭角で曲がっています。鋭角の隙間には、基板をつくる薬品がたまって銅が余計に削れる (酸のたまり)・高速な信号が反射する、といった問題が出ます。曲がり角は 135° (45° の折れ) か 90° にしましょう"),
+                        p,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A board with ground pads but no ground copper pour: worth a hint on a 2-layer board, where a
+/// ground fill gives every signal a short return path and cuts noise.
+pub fn missing_ground_fill(board: &Board) -> bool {
+    let has_ground = board.pads.iter().any(|p| is_ground_net(&p.net));
+    let has_fill = board.zones.iter().any(|z| is_ground_net(&z.net));
+    has_ground && !has_fill && board.pads.iter().filter(|p| !p.net.is_empty()).count() >= 4
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,5 +627,92 @@ mod tests {
         let mut b = board();
         b.tracks.push(track(Side::Top, (0.3, 10.0), (0.3, 20.0), 0.25)); // edge gap ~0.175 < 0.3
         assert_eq!(clearance(&b).len(), 1);
+    }
+
+    #[test]
+    fn silk_over_a_pad_thin_silk_and_tiny_text_are_flagged() {
+        let mut b = board();
+        b.pads.push(Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
+        b.silk.push(SilkLine { side: Side::Top, a: Point::new(9.0, 10.0), b: Point::new(11.0, 10.0), width: 0.15, refdes: String::new() });
+        // far away and on the other side: fine
+        b.silk.push(SilkLine { side: Side::Top, a: Point::new(20.0, 10.0), b: Point::new(22.0, 10.0), width: 0.15, refdes: String::new() });
+        b.silk.push(SilkLine { side: Side::Bottom, a: Point::new(9.0, 10.0), b: Point::new(11.0, 10.0), width: 0.15, refdes: String::new() });
+        assert_eq!(silk_checks(&b).len(), 1, "{:?}", silk_checks(&b));
+        b.silk.push(SilkLine { side: Side::Top, a: Point::new(30.0, 10.0), b: Point::new(32.0, 10.0), width: 0.08, refdes: String::new() });
+        b.texts.push(SilkText { side: Side::Top, pos: Point::new(5.0, 5.0), height: 0.5, text: "R1".into(), refdes: "R1".into() });
+        let v = silk_checks(&b);
+        assert_eq!(v.len(), 3, "{v:?}");
+        assert!(v.iter().any(|x| x.message.contains("パッドに重なって")) && v.iter().any(|x| x.message.contains("細すぎ")) && v.iter().any(|x| x.message.contains("小さすぎ")));
+    }
+
+    fn ic_board(cap_x: Option<f64>) -> Board {
+        let mut b = Board::new("t", 40.0, 40.0);
+        b.parts.push(Part { refdes: "U1".into(), value: "74HC00".into(), footprint: "x".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top });
+        for i in 0..8 {
+            let mut p = Pad::new(Point::new(10.0 + i as f64 * 0.5, 10.0), PadShape::Circle { d: 1.0 }, Some(0.6), Side::Top);
+            p.refdes = "U1".into();
+            p.pin = (i + 1).to_string();
+            p.net = match i {
+                0 => "VCC".into(),
+                1 => "GND".into(),
+                _ => String::new(),
+            };
+            b.pads.push(p);
+        }
+        if let Some(x) = cap_x {
+            b.parts.push(Part { refdes: "C1".into(), value: "100n".into(), footprint: "C_0805".into(), pos: Point::new(x, 10.0), rot: 0, side: Side::Top });
+            for (pin, net, dx) in [("1", "VCC", 0.0), ("2", "GND", 2.0)] {
+                let mut p = Pad::new(Point::new(x + dx, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+                p.refdes = "C1".into();
+                p.pin = pin.into();
+                p.net = net.into();
+                b.pads.push(p);
+            }
+        }
+        b
+    }
+
+    #[test]
+    fn supply_pin_needs_a_bypass_capacitor_nearby() {
+        // no capacitor at all
+        let none = decoupling_checks(&ic_board(None));
+        assert_eq!(none.len(), 1, "{none:?}");
+        assert!(none[0].message.contains("U1.1") && none[0].message.contains("見当たりません"));
+        // a capacitor 2 mm away is fine
+        assert!(decoupling_checks(&ic_board(Some(12.0))).is_empty());
+        // 20 mm away is too far
+        let far = decoupling_checks(&ic_board(Some(30.0)));
+        assert_eq!(far.len(), 1, "{far:?}");
+        assert!(far[0].message.contains("mm あります"));
+    }
+
+    #[test]
+    fn acute_corners_are_flagged_but_45_degree_bends_are_not() {
+        let mut b = board();
+        // 135 degree interior angle (a 45 degree bend)
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (20.0, 10.0), (25.0, 15.0), 0.25));
+        // a plain 90 degree corner
+        b.tracks.push(track(Side::Top, (30.0, 10.0), (35.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (35.0, 10.0), (35.0, 15.0), 0.25));
+        assert!(acute_angle_checks(&b).is_empty(), "{:?}", acute_angle_checks(&b));
+        // 45 degree interior angle: doubling back
+        b.tracks.push(track(Side::Top, (10.0, 30.0), (20.0, 30.0), 0.25));
+        b.tracks.push(track(Side::Top, (20.0, 30.0), (10.0, 35.0), 0.25));
+        let v = acute_angle_checks(&b);
+        assert_eq!(v.len(), 1, "{v:?}");
+        // the same shape on different layers does not touch
+        let mut c = board();
+        c.tracks.push(track(Side::Top, (10.0, 30.0), (20.0, 30.0), 0.25));
+        c.tracks.push(track(Side::Bottom, (20.0, 30.0), (10.0, 35.0), 0.25));
+        assert!(acute_angle_checks(&c).is_empty());
+    }
+
+    #[test]
+    fn a_ground_fill_is_suggested_only_when_there_is_none() {
+        let mut b = ic_board(Some(12.0));
+        assert!(missing_ground_fill(&b));
+        b.zones.push(Zone::new("GND", Side::Bottom, vec![Point::new(1.0, 1.0), Point::new(30.0, 1.0), Point::new(30.0, 30.0)]));
+        assert!(!missing_ground_fill(&b));
     }
 }

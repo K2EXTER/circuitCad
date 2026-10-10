@@ -5,16 +5,49 @@
   "prefix": "Q",
   "footprint_name": "SOT-23_MOS",
   "pins": [
-    { "number": "1", "name": "G", "side": "left" },
-    { "number": "3", "name": "D", "side": "top" },
-    { "number": "2", "name": "S", "side": "bottom" }
+    {
+      "number": "1",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "D",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "S",
+      "side": "bottom"
+    }
   ],
   "package": {
     "type": "explicit",
     "pads": [
-      { "pin": "1", "x": -0.95, "y": 0.95, "shape": "rect", "w": 0.9, "h": 0.8 },
-      { "pin": "2", "x": 0.95, "y": 0.95, "shape": "rect", "w": 0.9, "h": 0.8 },
-      { "pin": "3", "x": 0.0, "y": -0.95, "shape": "rect", "w": 0.9, "h": 0.8 }
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
     ]
   },
   "sim": {
@@ -22,6 +55,15 @@
     "element": "M",
     "name": "AO3400A",
     "text": ".model AO3400A NMOS(VTO=1.05 KP=1.2 LAMBDA=0.02 CGS=250p CGD=30p)",
-    "pins": ["3", "1", "2"]
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "limits": [
+      "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+      "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+      "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+    ]
   }
 }

@@ -1,0 +1,242 @@
+{
+  "name": "TP5100",
+  "category": "電源管理",
+  "description": "TP5100 降圧スイッチング式 リチウムイオン充電IC (QFN-16 4x4)。1セル 4.2V / 2セル 8.4V を CS 端子で切替 (開放=4.2V、VREG につなぐ=8.4V、GND=停止)。入力 4.5〜12V。充電電流 = 0.1 ÷ Rs[Ω] [A] (Rs は VS-BAT 間、0.1Ωで1A、最大2A)。プリチャージ(1セル2.9V/2セル5.8V未満) → 定電流 → 定電圧、満充電後に 80%まで下がると再充電。RTRICK 端子の抵抗でプリチャージ電流を設定 (50kで20%、開放で100%)。TS は電池の温度検出 (GND につなぐと無効)。VIN はピン1,4,5,16、LX はピン2,3 をまとめて「VIN」「LX」として扱います (パッドは同じ接続)。スイッチングは平均化した動作モデルで、リップル・損失・熱制限・入力電流の降圧効果は扱いません (入力電流は出力電流と同じ)。数値は概算",
+  "datasheet": "https://www.toppwr.com/uploadfile/file/20240913/66e3a293b3c42.pdf",
+  "prefix": "U",
+  "footprint_name": "QFN-16_4x4_EP",
+  "pins": [
+    {
+      "number": "1",
+      "name": "VIN",
+      "side": "top"
+    },
+    {
+      "number": "10",
+      "name": "VREG",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "CS",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "RTRICK",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "TS",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "PWR_ON",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "LX",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "VS",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "BAT",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "STDBY",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "CHRG",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -1.95,
+        "y": 0.975,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "2",
+        "x": -1.95,
+        "y": 0.325,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "2",
+        "x": -1.95,
+        "y": -0.325,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "1",
+        "x": -1.95,
+        "y": -0.975,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "1",
+        "x": -0.975,
+        "y": -1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "6",
+        "x": -0.325,
+        "y": -1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "7",
+        "x": 0.325,
+        "y": -1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "8",
+        "x": 0.975,
+        "y": -1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "9",
+        "x": 1.95,
+        "y": -0.975,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "10",
+        "x": 1.95,
+        "y": -0.325,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "11",
+        "x": 1.95,
+        "y": 0.325,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "12",
+        "x": 1.95,
+        "y": 0.975,
+        "shape": "rect",
+        "w": 0.85,
+        "h": 0.3
+      },
+      {
+        "pin": "13",
+        "x": 0.975,
+        "y": 1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "14",
+        "x": 0.325,
+        "y": 1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "15",
+        "x": -0.325,
+        "y": 1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "1",
+        "x": -0.975,
+        "y": 1.95,
+        "shape": "rect",
+        "w": 0.3,
+        "h": 0.85
+      },
+      {
+        "pin": "7",
+        "x": 0,
+        "y": 0,
+        "shape": "rect",
+        "w": 2.5,
+        "h": 2.5
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "TP5100",
+    "text": ".subckt TP5100 vin lx pwr gnd vs bat vreg ts rtrick cs stdby chrg\n* TP5100 behavioural model (averaged buck charger): the switching is replaced by a voltage source on LX.\n* Control signals are in \"sense volts\": 0.1 V across Rs = full current.\n* internal 5 V supply (VREG) once VIN is above the under-voltage lockout\nBvr vr 0 V=5*step(V(vin)-3.6,0.02)\nRvr vr vreg 1\nRvl vreg 0 1Meg\n* CS: left open = single cell (4.2 V), high = two cells (8.4 V), low = shut down\nRcs1 vreg cs 1Meg\nRcs2 cs 0 1Meg\nBdbl dbl 0 V=step(V(cs)-4,0.1)\nBvfl vfl 0 V=4.2+4.2*V(dbl)\nBvtk vtk 0 V=2.9+2.9*V(dbl)\n* trickle current as a fraction of the full current: 0.1 + 0.9 x V(RTRICK); 50k gives 20 %, open gives 100 %\nVone one 0 DC 1\nRtr1 one rtrick 400k\nRtr2 rtrick 0 1G\nBf f 0 V=0.1+0.9*V(rtrick)\n* the charger runs when VIN is above the cell by 0.1 V and above 3.6 V, CS is not low and the cell temperature is fine\n* (TS tied to GND or left open = no temperature check; otherwise 45 % to 80 % of VREG)\nBts tsok 0 V=min(1,step(0.1-V(ts),0.01)+step(V(ts)-2.25,0.02)*step(4-V(ts),0.02))\nBon on 0 V=step(V(vin)-V(bat)-0.1,0.01)*step(V(vin)-3.6,0.02)*step(V(cs)-1,0.05)*V(tsok)\nRtsl ts 0 10Meg\n* the reference is a full 0.1 V above the trickle threshold and the trickle fraction below it;\n* near the float voltage the voltage loop reduces it (full current within 50 mV of the float voltage)\nBcmd cmd 0 V=V(on)*min(0.1*(V(f)+(1-V(f))*step(V(bat)-V(vtk),0.01)),2*(V(vfl)-V(bat)))\n* LX = cell voltage + 100 V/V x (command - sense) + an integral term, limited to 0 .. VIN\nBint 0 cint I=0.02*(V(cmd)-V(vs,bat))\nCint cint 0 1u\nRint cint 0 10k\nBlx ls 0 V=limit(V(bat)+100*(V(cmd)-V(vs,bat))+V(cint),0,V(vin))\nVsn ls ls2 0\nSd ls2 lx ls2 lx SWD\nRlx lx 0 100Meg\n* input current: output power over the efficiency (90 %) and the input voltage\nBin vin 0 I=I(Vsn)*V(bat)/(0.9*max(V(vin),1))\nRiq vin 0 75k\n* status (open drain): CHRG low while charging, STDBY low when the cell is full (current under a tenth)\nBfull full 0 V=V(on)*step(0.01-V(vs,bat),0.002)*step(V(bat)-(V(vfl)-0.15),0.01)\nBchg chg 0 V=V(on)*(1-V(full))\nSch chrg 0 chg 0 SWO\nSsb stdby 0 full 0 SWO\nRch chrg 0 100Meg\nRsb stdby 0 100Meg\n* PWR_ON- is low while VIN is present, otherwise it follows the cell\nBpw pw 0 V=step(V(vin)-3.6,0.02)\nBnpw npw 0 V=1-V(pw)\nSpo pwr 0 pw 0 SWO\nSph pwr bat npw 0 SWO\nRpw pwr 0 100Meg\n.model SWD SW(RON=0.17 ROFF=1G VT=0 VW=0.002)\n.model SWO SW(RON=60 ROFF=1G VT=0.5 VW=0.1)\n.ends TP5100",
+    "pins": [
+      "1",
+      "2",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15"
+    ],
+    "params": {
+      "vfloat_single": 4.2,
+      "vfloat_double": 8.4,
+      "isense_volt": 0.1
+    },
+    "limits": [
+      "充電の3段階 (プリチャージ・定電流・定電圧) と状態表示を、外から見た動きだけで再現する動作モデルです。",
+      "電池は、小さなコンデンサで代用してください (値に IC=3.2 と書くと、その電圧から始まります)。実物の電池は容量が桁違いに大きく、放電特性も複雑です。",
+      "降圧のスイッチングは「LX の平均の電圧」に置き換えた平均化モデルです。リップル、スイッチング損失、熱による制限、逆接続の保護は扱いません。",
+      "入力電流は、出力の電力 ÷ 効率 (90%) ÷ 入力電圧で計算しています。実物の効率は電流と電圧で変わります。",
+      "VIN (ピン 1・4・5・16) と LX (ピン 2・3) は、それぞれ1つのピンにまとめてあります。基板では、すべてのパッドが同じ接続になります。"
+    ]
+  }
+}

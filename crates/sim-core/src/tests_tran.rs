@@ -187,3 +187,43 @@ fn schematic_rc_with_pulse_source() {
     let errs = from_schematic(&s).unwrap_err();
     assert_eq!(errs[0].refdes, "V1");
 }
+
+#[test]
+fn a_capacitor_starts_at_its_initial_voltage() {
+    let mut c = Circuit::new();
+    let a = c.node("a");
+    c.add(Element::Resistor { name: "R1".into(), a, b: 0, r: 1e3 });
+    c.add(Element::Capacitor { name: "C1".into(), a, b: 0, c: 1e-6 });
+    c.set_initial_voltage("C1", 2.0);
+    let r = transient(&c, &TranSettings { tstop: 3e-3, tstep: 10e-6, uic: false }).unwrap();
+    let v = &r.signal("V(a)").unwrap().values;
+    assert!((v[0] - 2.0).abs() < 1e-6, "{}", v[0]);
+    let k = r.time.iter().position(|t| *t >= 1e-3).unwrap();
+    assert!((v[k] / (2.0 * (-r.time[k] / 1e-3f64).exp()) - 1.0).abs() < 0.01, "discharges with tau = RC: {}", v[k]);
+}
+
+#[test]
+fn ic_in_a_schematic_value_and_in_a_subcircuit_line_is_read() {
+    let sub = ".subckt BAT p n\nC1 p n 10u IC=3.7\n.ends BAT";
+    let mut c = Circuit::new();
+    let p = c.node("p");
+    add_subckt_instance(&mut c, "X1", "BAT", sub, &[p, 0]).unwrap();
+    assert_eq!(c.initial, vec![("X1.C1".to_string(), 3.7)]);
+}
+
+#[test]
+fn a_capacitor_value_can_carry_an_initial_voltage() {
+    use sch_core::{Kind, Schematic, Wire};
+    let mut s = Schematic::default();
+    let c = s.add(Kind::Capacitor, (0, 0), 0);
+    let g = s.add(Kind::Ground, (0, 6), 0);
+    let _ = g;
+    s.components[c].value = "100u IC=3.2".into();
+    let pins = s.components[c].pins();
+    s.wires.push(Wire { a: pins[1].1, b: (0, 6) });
+    s.wires.push(Wire { a: pins[0].1, b: (-4, 0) });
+    let circuit = from_schematic(&s).unwrap();
+    assert_eq!(circuit.initial, vec![("C1".to_string(), 3.2)]);
+    s.components[c].value = "100u XYZ=1".into();
+    assert!(from_schematic(&s).is_err());
+}

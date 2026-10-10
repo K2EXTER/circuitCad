@@ -1,6 +1,7 @@
 //! Reading the SPICE text that library parts carry: `.model` cards and flat `.subckt` bodies.
-//! Supported elements: R C L V I E G D Q M S. Anything else is reported, never silently ignored.
+//! Supported elements: R C L V I E G D Q M S B. Anything else is reported, never silently ignored.
 
+use crate::expr::Expr;
 use crate::circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
 use crate::value::parse_value;
 use crate::waveform::parse_source_full;
@@ -180,7 +181,7 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
         let t: Vec<&str> = l.split_whitespace().collect();
         let head = t[0];
         if head.eq_ignore_ascii_case(".ends") {
-            return Ok(());
+            return check_current_refs(c, inst);
         }
         if head.starts_with('.') {
             continue; // .model handled above, other dot-cards (.param, .options) ignored
@@ -191,6 +192,12 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
             'R' | 'C' | 'L' => {
                 need(4)?;
                 let (a, b, x) = (local(c, t[1]), local(c, t[2]), val(t[3])?);
+                if head.starts_with(['C', 'c']) {
+                    // initial voltage: C1 a b 100u IC=3.2
+                    if let Some(ic) = t[4..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix("IC=").map(str::to_string)) {
+                        c.set_initial_voltage(&name, val(&ic)?);
+                    }
+                }
                 c.add(match head.chars().next().unwrap().to_ascii_uppercase() {
                     'R' => Element::Resistor { name, a, b, r: x },
                     'C' => Element::Capacitor { name, a, b, c: x },
@@ -248,8 +255,47 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
                     _ => return Err(format!("{name}: スイッチモデル {} が見つかりません", t[5])),
                 }
             }
-            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G D Q M S のみ)")),
+            'B' => {
+                need(4)?;
+                let (p, n) = (local(c, t[1]), local(c, t[2]));
+                // B1 out 0 V=expression   or   I=expression (the expression may contain spaces)
+                let rest = t[3..].join(" ");
+                let (kind, text) = rest
+                    .split_once('=')
+                    .map(|(k, e)| (k.trim().to_ascii_uppercase(), e.trim().to_string()))
+                    .ok_or_else(|| format!("{name}: B 素子は「B名前 ノード+ ノード- V=式」または「I=式」の形で書いてください"))?;
+                if kind != "V" && kind != "I" {
+                    return Err(format!("{name}: B 素子の「{kind}=」は使えません。V=式 (電圧) か I=式 (電流) にしてください"));
+                }
+                let mut node_of = |nm: &str| local(c, nm);
+                let branch_of = |nm: &str| format!("{inst}.{nm}");
+                let expr = Expr::parse(&text, &mut node_of, &branch_of).map_err(|e| format!("{name}: {e}"))?;
+                c.add(Element::BSource { name, p, n, voltage: kind == "V", expr });
+            }
+            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G D Q M S B のみ)")),
         }
     }
     Err(format!(".subckt {sub_name} に .ends がありません"))
+}
+
+/// Every `I(name)` read by a B source of instance `inst` must name a V source, an inductor, an E
+/// source or a voltage-type B source of the same instance.
+fn check_current_refs(c: &Circuit, inst: &str) -> Result<(), String> {
+    let prefix = format!("{inst}.");
+    for e in c.elements.iter().filter(|e| e.name().starts_with(&prefix)) {
+        let Element::BSource { name, expr, .. } = e else { continue };
+        let mut refs = vec![];
+        expr.branches(&mut refs);
+        for r in refs {
+            let ok = c.elements.iter().any(|x| {
+                x.name().eq_ignore_ascii_case(&r)
+                    && matches!(x, Element::VSource { .. } | Element::Inductor { .. } | Element::Vcvs { .. } | Element::BSource { voltage: true, .. })
+            });
+            if !ok {
+                let short = r.strip_prefix(&prefix).unwrap_or(&r);
+                return Err(format!("{name}: 式の I({short}) は電流を読める素子ではありません。V 電源・コイル・E 素子・V=式の B 素子の名前を書いてください (R や G、I 電源は不可。電流を読みたいときは 0V の電圧源を直列に入れます)"));
+            }
+        }
+    }
+    Ok(())
 }

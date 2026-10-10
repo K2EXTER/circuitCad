@@ -5,16 +5,50 @@
   "prefix": "Q",
   "footprint_name": "TO-92_2N7000",
   "pins": [
-    { "number": "2", "name": "G", "side": "left" },
-    { "number": "3", "name": "D", "side": "top" },
-    { "number": "1", "name": "S", "side": "bottom" }
+    {
+      "number": "2",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "D",
+      "side": "top"
+    },
+    {
+      "number": "1",
+      "name": "S",
+      "side": "bottom"
+    }
   ],
   "package": {
     "type": "explicit",
     "pads": [
-      { "pin": "1", "x": -2.54, "y": 0, "shape": "rect", "w": 1.6, "h": 1.6, "drill": 0.8 },
-      { "pin": "2", "x": 0, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 },
-      { "pin": "3", "x": 2.54, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 }
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
     ]
   },
   "sim": {
@@ -22,6 +56,15 @@
     "element": "M",
     "name": "2N7000",
     "text": ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)",
-    "pins": ["3", "2", "1"]
+    "pins": [
+      "3",
+      "2",
+      "1"
+    ],
+    "limits": [
+      "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+      "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+      "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+    ]
   }
 }

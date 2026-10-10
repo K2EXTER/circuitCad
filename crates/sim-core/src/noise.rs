@@ -10,7 +10,7 @@
 
 use crate::ac::{check_sweep, frequencies, solve_complex, AcSettings, C64};
 use crate::circuit::Circuit;
-use crate::dc::{bjt_eval, compile, exp_safe, floating_warnings, has_ground, mos_eval, solve_op, v, Ce, Ctx, SimError, Strategy, GMIN};
+use crate::dc::{bjt_eval, compile, exp_safe, floating_warnings, has_ground, mos_eval, solve_op, v, Ce, Ctx, SimError, Strategy};
 use std::f64::consts::PI;
 
 const K_B: f64 = 1.380649e-23;
@@ -126,7 +126,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
     let cm = compile(circuit);
     let (op, _) = solve_op(&cm, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])?;
     let mut vj = op.vj.clone();
-    let (jac, _) = cm.assemble(&mut vj, &op.x, &Ctx::dc(GMIN, 1.0));
+    let (jac, _) = cm.assemble(&mut vj, &op.x, &Ctx::dc(crate::options::options().gmin, 1.0));
     let n = cm.n_unknowns;
 
     // input source: where its unit excitation enters the system
@@ -182,13 +182,14 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 let g = m.eval(v(&op.x, *cp) - v(&op.x, *cn)).0;
                 srcs.push(Src { name: name.clone(), p: *a, n: *b, s: kt4 * g });
             }
-            Ce::C { .. } | Ce::L { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } => {}
+            Ce::C { .. } | Ce::L { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } | Ce::B { .. } => {}
         }
     }
 
     // ---- sweep
     let freqs = frequencies(&st.sweep);
     let mut contributions: Vec<NoiseContribution> = srcs.iter().map(|s| NoiseContribution { name: s.name.clone(), psd: Vec::with_capacity(freqs.len()), rms: 0.0 }).collect();
+    let jd = jac.dense();
     let mut out_psd = Vec::with_capacity(freqs.len());
     let mut gain: Vec<f64> = vec![];
     for &f in &freqs {
@@ -197,7 +198,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
         let mut a = vec![C64::ZERO; n * n];
         for r in 0..n {
             for c in 0..n {
-                a[c * n + r] = C64::new(jac.a[r * n + c], 0.0);
+                a[c * n + r] = C64::new(jd[r * n + c], 0.0);
             }
         }
         // transposed stamp: A^T[col][row]

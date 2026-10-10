@@ -1,0 +1,387 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "SIN(0 0.1 1k) AC 1",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        14,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        26,
+        -10
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM358",
+      "pos": [
+        28,
+        2
+      ],
+      "rot": 0,
+      "footprint": "SOIC-8_P1.27",
+      "custom": {
+        "name": "LM358",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "IN+",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "IN-",
+            "side": "left"
+          },
+          {
+            "number": "1",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "V+",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "V-",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM358",
+          "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+          "pins": [
+            "3",
+            "2",
+            "1",
+            "8",
+            "4"
+          ],
+          "params": {
+            "gain_dc": 100000.0,
+            "gbw": 1000000.0
+          },
+          "limits": [
+            "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
+            "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+            "電源ピンをつながないと、出力は 0V に張り付きます。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        44,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        44,
+        10
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        0
+      ],
+      "b": [
+        9,
+        0
+      ]
+    },
+    {
+      "a": [
+        16,
+        0
+      ],
+      "b": [
+        19,
+        0
+      ]
+    },
+    {
+      "a": [
+        24,
+        -10
+      ],
+      "b": [
+        21,
+        -10
+      ]
+    },
+    {
+      "a": [
+        28,
+        -10
+      ],
+      "b": [
+        31,
+        -10
+      ]
+    },
+    {
+      "a": [
+        24,
+        3
+      ],
+      "b": [
+        21,
+        3
+      ]
+    },
+    {
+      "a": [
+        24,
+        1
+      ],
+      "b": [
+        21,
+        1
+      ]
+    },
+    {
+      "a": [
+        32,
+        2
+      ],
+      "b": [
+        35,
+        2
+      ]
+    },
+    {
+      "a": [
+        28,
+        -2
+      ],
+      "b": [
+        28,
+        -5
+      ]
+    },
+    {
+      "a": [
+        28,
+        6
+      ],
+      "b": [
+        28,
+        9
+      ]
+    },
+    {
+      "a": [
+        44,
+        -8
+      ],
+      "b": [
+        44,
+        -11
+      ]
+    },
+    {
+      "a": [
+        44,
+        -4
+      ],
+      "b": [
+        44,
+        -1
+      ]
+    },
+    {
+      "a": [
+        44,
+        8
+      ],
+      "b": [
+        44,
+        5
+      ]
+    },
+    {
+      "a": [
+        44,
+        12
+      ],
+      "b": [
+        44,
+        15
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        9,
+        0
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        19,
+        0
+      ],
+      "text": "N"
+    },
+    {
+      "pos": [
+        21,
+        -10
+      ],
+      "text": "N"
+    },
+    {
+      "pos": [
+        31,
+        -10
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        21,
+        3
+      ],
+      "text": "N"
+    },
+    {
+      "pos": [
+        21,
+        1
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        35,
+        2
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        28,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        28,
+        9
+      ],
+      "text": "VEE"
+    },
+    {
+      "pos": [
+        44,
+        -11
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        44,
+        -1
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        44,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        44,
+        15
+      ],
+      "text": "VEE"
+    }
+  ]
+}

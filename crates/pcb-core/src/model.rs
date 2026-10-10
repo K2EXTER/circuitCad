@@ -230,6 +230,9 @@ pub struct Board {
     /// User-defined footprints used by this board (embedded so the file is self-contained).
     #[serde(default)]
     pub footprints: Vec<crate::footprints::Footprint>,
+    /// Current (A) each net is meant to carry, set by the user: the track widths are checked against it.
+    #[serde(default)]
+    pub net_currents: std::collections::BTreeMap<String, f64>,
     pub rules: Rules,
 }
 
@@ -252,6 +255,7 @@ impl Board {
             texts: vec![],
             zones: vec![],
             footprints: vec![],
+            net_currents: Default::default(),
             rules: Rules::default(),
         }
     }

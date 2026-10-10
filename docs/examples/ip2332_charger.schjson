@@ -1,0 +1,400 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        10,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "IP2332",
+      "pos": [
+        34,
+        0
+      ],
+      "rot": 0,
+      "footprint": "ESOP-8_EP_2.2x3.1",
+      "custom": {
+        "name": "IP2332",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "8",
+            "name": "VIN",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "NTC",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "ISET",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "LX",
+            "side": "right"
+          },
+          {
+            "number": "5",
+            "name": "BAT",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "LED1",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "LED2",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "IP2332",
+          "text": ".subckt IP2332 ntc iset led2 led1 bat lx gnd vin\n* IP2332 behavioural model (averaged synchronous buck charger, one Li-ion cell, 4.2 V).\n* The switching is replaced by a voltage source on LX; B sources hold the control laws.\n* the charger runs for 4.3 V < VIN < 6 V and a cell temperature that is not too hot or too cold (0..1)\nBon on 0 V=step(V(vin)-4.3,0.02)*step(6-V(vin),0.02)*step(V(ntc)-0.3,0.01)*step(2.73-V(ntc),0.01)\n* ISET: a 1 V reference through 1 ohm; x = the current in RISET in mA.\n* ICC = 0.35 + 2.75 / RISET[kohm], 2 A when ISET is open (RISET >= 120k)\nBref ref 0 V=step(V(vin)-4.3,0.02)\nRm ref iset 1\nBx x 0 V=1000*(V(ref)-V(iset))\nBicc icc 0 V=if(V(x)<0.00833,2,0.35+2.75*V(x))\n* NTC: 100 uA into the pin (limited at about 3.4 V); 0.3-0.49 V warm, 0.49-1.8 V normal, 1.8-2.73 V cool\nBntc 0 ntc I=100u-1m*max(V(ntc)-3.3,0)\nRntc ntc 0 100Meg\n* current limit: halved when cool, a fifth below 3 V (pre-charge); float voltage 4.2 V, 4.1 V when warm\nBie ie 0 V=V(icc)*(1-0.5*step(V(ntc)-1.8,0.01))\nBcmd cmd 0 V=V(on)*min(V(ie)*(1-0.8*step(3-V(bat),0.01)),60*(4.2-0.1*step(0.49-V(ntc),0.005)-V(bat)))\n* LX = cell voltage + 3 V/A x (command - current) + an integral term, limited to 0 .. VIN\nBint 0 cint I=0.02*(V(cmd)-I(Vsn))\nCint cint 0 1u\nRint cint 0 10k\nBlx ls 0 V=limit(V(bat)+3*(V(cmd)-I(Vsn))+V(cint),0,V(vin))\nVsn ls ls2 0\n* the switch never pushes current back into VIN\nSd ls2 lx ls2 lx SWD\nRlx lx 0 100Meg\n* input current: output power over the efficiency (92 %) and the input voltage\nBin vin 0 I=I(Vsn)*V(bat)/(0.92*max(V(vin),1))\nRiq vin 0 1k\n* LED1 (5 mA constant current) while charging, LED2 while full; both off at a fault (no blinking is modelled)\nBfull full 0 V=V(on)*step(0.1*V(ie)-I(Vsn),0.005)*step(V(bat)-4.15,0.005)\nBl1 vin led1 I=5m*V(on)*(1-V(full))\nDl1 led1 vin DCL\nRl1 led1 0 100Meg\nBl2 l2 0 V=V(vin)*V(full)\nRl2o l2 led2 100\nRl2 led2 0 100Meg\n.model SWD SW(RON=0.17 ROFF=1G VT=0 VW=0.002)\n.model DCL D(IS=1e-12 N=1)\n.ends IP2332",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "params": {
+            "icc_open": 2.0,
+            "vfloat": 4.2
+          }
+        }
+      }
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "2.2u",
+      "pos": [
+        52,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        64,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "470u IC=2.6 ESR=0.1",
+      "pos": [
+        76,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "4.3k",
+      "pos": [
+        10,
+        16
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        22,
+        16
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        48,
+        18
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "2k",
+      "pos": [
+        48,
+        30
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        62,
+        30
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        10,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        34,
+        -6
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        38,
+        -3
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        38,
+        -1
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        34,
+        6
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        -1
+      ],
+      "text": "NTC"
+    },
+    {
+      "pos": [
+        30,
+        1
+      ],
+      "text": "ISET"
+    },
+    {
+      "pos": [
+        38,
+        1
+      ],
+      "text": "LED1"
+    },
+    {
+      "pos": [
+        38,
+        3
+      ],
+      "text": "LED2"
+    },
+    {
+      "pos": [
+        50,
+        -8
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        54,
+        -8
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        64,
+        -2
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        64,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        76,
+        -2
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        76,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        14
+      ],
+      "text": "ISET"
+    },
+    {
+      "pos": [
+        10,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        22,
+        14
+      ],
+      "text": "NTC"
+    },
+    {
+      "pos": [
+        22,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        46,
+        18
+      ],
+      "text": "LED1"
+    },
+    {
+      "pos": [
+        50,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        46,
+        30
+      ],
+      "text": "LED2"
+    },
+    {
+      "pos": [
+        50,
+        30
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        60,
+        30
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        64,
+        30
+      ],
+      "text": "GND"
+    }
+  ]
+}

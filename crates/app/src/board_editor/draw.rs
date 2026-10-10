@@ -1,0 +1,238 @@
+//! Painting the board: grid, zones, copper, highlights and overlays.
+
+use super::*;
+
+impl BoardEditor {
+    pub(super) fn draw_grid(&self, painter: &egui::Painter, rect: Rect) {
+        if self.grid > 0.0 && self.grid as f32 * self.zoom >= 6.0 {
+            let tl = self.to_world(rect, rect.left_top());
+            let br = self.to_world(rect, rect.right_bottom());
+            let (mut x, y_end) = ((tl.x / self.grid).floor() * self.grid, (br.y / self.grid).floor() * self.grid);
+            while x <= br.x {
+                let mut y = (tl.y / self.grid).ceil() * self.grid;
+                while y >= y_end {
+                    painter.circle_filled(self.to_screen(rect, Point::new(x, y)), 0.8, Color32::from_gray(60));
+                    y -= self.grid;
+                }
+                x += self.grid;
+            }
+        }
+    }
+
+    /// Copper pours with the same cut-outs the Gerber output has (thermal spokes not drawn).
+    pub(super) fn draw_zones(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
+        if !self.vis.zones {
+            return;
+        }
+        let z = self.zoom;
+        for s in [self.side.flip(), self.side] {
+            if !self.side_visible(s) {
+                continue;
+            }
+            let alpha = if s == self.side { 90 } else { 45 };
+            let fill = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
+            for zone in self.board.zones.iter().filter(|zn| zn.side == s) {
+                for t in triangulate(&zone.polygon) {
+                    let pts: Vec<Pos2> = t.iter().map(|p| self.to_screen(rect, *p)).collect();
+                    painter.add(egui::Shape::convex_polygon(pts, fill, Stroke::NONE));
+                }
+                let n = zone.polygon.len();
+                for i in 0..n {
+                    painter.line_segment(
+                        [self.to_screen(rect, zone.polygon[i]), self.to_screen(rect, zone.polygon[(i + 1) % n])],
+                        Stroke::new(1.0, self.side_color(s)),
+                    );
+                }
+                // clearance around everything of another net
+                let Some(conn) = conn else { continue };
+                let c = zone.clearance as f32;
+                let other = |net: Option<&str>| zone.net.is_empty() || net != Some(zone.net.as_str());
+                for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| t.side == s) {
+                    if other(conn.track_net(i)) {
+                        painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 + 2.0 * c) * z, BG));
+                    }
+                }
+                for (j, p) in self.board.pads.iter().enumerate().filter(|(_, p)| p.drill.is_some() || p.side == s) {
+                    if other(conn.pad_net(j)) {
+                        let (w, h) = p.shape.size();
+                        let r = Rect::from_center_size(self.to_screen(rect, p.pos), Vec2::new((w as f32 + 2.0 * c) * z, (h as f32 + 2.0 * c) * z));
+                        match p.shape {
+                            PadShape::Circle { .. } => painter.circle_filled(r.center(), r.width() / 2.0, BG),
+                            _ => painter.rect_filled(r, 0.0, BG),
+                        };
+                    }
+                }
+                for (k, v) in self.board.vias.iter().enumerate() {
+                    if other(conn.via_net(k)) {
+                        painter.circle_filled(self.to_screen(rect, v.pos), (v.diameter as f32 / 2.0 + c) * z, BG);
+                    }
+                }
+                for h in &self.board.holes {
+                    painter.circle_filled(self.to_screen(rect, h.pos), (h.drill as f32 / 2.0 + c) * z, BG);
+                }
+            }
+        }
+    }
+
+    pub(super) fn draw_copper(&self, painter: &egui::Painter, rect: Rect) {
+        let z = self.zoom;
+        let o = &self.board.outline;
+        for i in 0..o.len() {
+            painter.line_segment([self.to_screen(rect, o[i]), self.to_screen(rect, o[(i + 1) % o.len()])], Stroke::new(2.0, Color32::YELLOW));
+        }
+        // inactive layer first, so the active one is on top
+        for s in [self.side.flip(), self.side] {
+            if !self.side_visible(s) {
+                continue;
+            }
+            let alpha = if s == self.side { 255 } else { 90 };
+            let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
+            for t in self.board.tracks.iter().filter(|t| t.side == s) {
+                painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0), col));
+                // round ends, like the Gerber aperture
+                for e in [t.a, t.b] {
+                    painter.circle_filled(self.to_screen(rect, e), (t.width as f32 * z / 2.0).max(0.5), col);
+                }
+            }
+        }
+        for p in &self.board.pads {
+            let visible = p.drill.is_some() && (self.vis.top || self.vis.bottom) || p.drill.is_none() && self.side_visible(p.side);
+            if !visible {
+                continue;
+            }
+            let c = self.to_screen(rect, p.pos);
+            let col = self.side_color(p.side).gamma_multiply(0.9);
+            let (w, h) = p.shape.size();
+            let sz = Vec2::new(w as f32 * z, h as f32 * z);
+            match p.shape {
+                PadShape::Circle { .. } => {
+                    painter.circle_filled(c, sz.x / 2.0, col);
+                }
+                PadShape::Rect { .. } => {
+                    painter.rect_filled(Rect::from_center_size(c, sz), 0.0, col);
+                }
+                PadShape::Oval { .. } => {
+                    painter.rect_filled(Rect::from_center_size(c, sz), sz.min_elem() / 2.0, col);
+                }
+            }
+            if let Some(d) = p.drill {
+                painter.circle_filled(c, d as f32 * z / 2.0, BG);
+            }
+        }
+        for v in &self.board.vias {
+            let c = self.to_screen(rect, v.pos);
+            painter.circle_filled(c, v.diameter as f32 * z / 2.0, Color32::from_rgb(60, 170, 90));
+            painter.circle_filled(c, v.drill as f32 * z / 2.0, BG);
+        }
+        for h in &self.board.holes {
+            painter.circle_stroke(self.to_screen(rect, h.pos), h.drill as f32 * z / 2.0, Stroke::new(1.5, Color32::LIGHT_GRAY));
+        }
+        if self.vis.silk {
+            let silk = Color32::from_rgb(235, 235, 235);
+            for l in self.board.silk.iter().filter(|l| self.side_visible(l.side)) {
+                painter.line_segment([self.to_screen(rect, l.a), self.to_screen(rect, l.b)], Stroke::new((l.width as f32 * z).max(1.0), silk));
+            }
+            for t in self.board.texts.iter().filter(|t| self.side_visible(t.side)) {
+                let stroke = Stroke::new(((t.height * 0.15).max(0.12) as f32 * z).max(1.0), silk);
+                for [a, b] in text_strokes(&t.text, t.height, t.side == Side::Bottom) {
+                    let (pa, pb) = (Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y));
+                    painter.line_segment([self.to_screen(rect, pa), self.to_screen(rect, pb)], stroke);
+                }
+            }
+        }
+    }
+
+    /// Everything electrically connected to the selected track / pad / via.
+    pub(super) fn draw_highlight(&mut self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
+        let (Some(conn), Some(sel)) = (conn, self.selected) else { return };
+        let g = match sel {
+            Item::Track(i) if i < self.board.tracks.len() => conn.track_group(i),
+            Item::Pad(i) if i < self.board.pads.len() => conn.pad_group(i),
+            Item::Via(i) if i < self.board.vias.len() => conn.via_group(i),
+            _ => return,
+        };
+        let z = self.zoom;
+        let hl = Color32::from_rgba_unmultiplied(255, 255, 255, 140);
+        for (i, t) in self.board.tracks.iter().enumerate().filter(|(i, _)| conn.track_group(*i) == g) {
+            let _ = i;
+            painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0) + 4.0, hl));
+        }
+        for (j, p) in self.board.pads.iter().enumerate().filter(|(j, _)| conn.pad_group(*j) == g) {
+            let _ = j;
+            let (w, h) = p.shape.size();
+            painter.rect_stroke(
+                Rect::from_center_size(self.to_screen(rect, p.pos), Vec2::new(w as f32 * z + 6.0, h as f32 * z + 6.0)),
+                0.0,
+                Stroke::new(2.0, hl),
+                egui::StrokeKind::Outside,
+            );
+        }
+        for (k, v) in self.board.vias.iter().enumerate().filter(|(k, _)| conn.via_group(*k) == g) {
+            let _ = k;
+            painter.circle_stroke(self.to_screen(rect, v.pos), v.diameter as f32 * z / 2.0 + 3.0, Stroke::new(2.0, hl));
+        }
+        let net = conn.group_net(g).map(|n| format!("ネット {n}")).unwrap_or_else(|| "ネット未割り当て".into());
+        self.status = format!("選択中の接続: {net}");
+    }
+
+    pub(super) fn draw_overlays(&self, painter: &egui::Painter, rect: Rect) {
+        if self.vis.airwires {
+            for w in ratsnest(&self.board) {
+                painter.line_segment([self.to_screen(rect, w.a), self.to_screen(rect, w.b)], Stroke::new(1.0, Color32::from_rgb(240, 220, 90)));
+            }
+        }
+        if self.vis.nets && self.zoom >= 14.0 {
+            let f = egui::FontId::proportional(10.0);
+            for p in self.board.pads.iter().filter(|p| !p.net.is_empty()) {
+                painter.text(self.to_screen(rect, p.pos), egui::Align2::CENTER_CENTER, &p.net, f.clone(), Color32::WHITE);
+            }
+        }
+        for v in &self.violations {
+            painter.circle_stroke(self.to_screen(rect, v.at), 10.0, Stroke::new(2.0, Color32::from_rgb(255, 0, 255)));
+        }
+        for sel in self.selected.iter().chain(self.multi.iter()) {
+            for p in self.item_points(*sel) {
+                painter.circle_stroke(self.to_screen(rect, p), 8.0, Stroke::new(2.0, Color32::WHITE));
+            }
+        }
+    }
+
+    pub(super) fn draw_cursor(&self, painter: &egui::Painter, rect: Rect, p: Point) {
+        let scr = self.to_screen(rect, p);
+        painter.circle_stroke(scr, 4.0, Stroke::new(1.0, Color32::WHITE));
+        let preview = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 200));
+        match self.tool {
+            Tool::Track => {
+                if let Some(a) = self.pending {
+                    let mut from = a;
+                    for q in self.route_points(a, p) {
+                        painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, q)], Stroke::new((self.track_width as f32 * self.zoom).max(1.0), self.side_color(self.side).gamma_multiply(0.6)));
+                        from = q;
+                    }
+                }
+            }
+            Tool::Silk | Tool::OutlineRect => {
+                if let Some(a) = self.pending {
+                    if self.tool == Tool::OutlineRect {
+                        painter.rect_stroke(Rect::from_two_pos(self.to_screen(rect, a), scr), 0.0, preview, egui::StrokeKind::Middle);
+                    } else {
+                        painter.line_segment([self.to_screen(rect, a), scr], preview);
+                    }
+                }
+            }
+            Tool::OutlinePoly | Tool::Zone => {
+                let col = if self.tool == Tool::Zone { self.side_color(self.side) } else { Color32::YELLOW };
+                for w in self.poly.windows(2) {
+                    painter.line_segment([self.to_screen(rect, w[0]), self.to_screen(rect, w[1])], Stroke::new(1.5, col));
+                }
+                if let Some(last) = self.poly.last() {
+                    painter.line_segment([self.to_screen(rect, *last), scr], preview);
+                }
+                if self.poly.len() >= 3 {
+                    painter.circle_stroke(self.to_screen(rect, self.poly[0]), 6.0, Stroke::new(1.5, Color32::WHITE));
+                }
+            }
+            _ => {}
+        }
+    }
+}

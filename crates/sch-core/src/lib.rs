@@ -4,7 +4,7 @@
 mod netlist;
 mod spice;
 
-pub use netlist::{erc, extract, net_at, Net, PinRef, Problem};
+pub use netlist::{erc, extract, net_at, Net, PinRef, Problem, Severity};
 pub use spice::to_spice;
 
 use serde::{Deserialize, Serialize};
@@ -55,12 +55,12 @@ impl Kind {
             Kind::Inductor => "コイル".into(),
             Kind::Diode => "ダイオード".into(),
             Kind::Led => "LED".into(),
-            Kind::VSource => "直流電源".into(),
+            Kind::VSource => "電源".into(),
             Kind::Npn => "NPNトランジスタ".into(),
             Kind::Header(n) => format!("ヘッダ {n}P"),
             Kind::Custom => "ライブラリ部品".into(),
             Kind::Ground => "GND".into(),
-            Kind::Power => "電源(VCC等)".into(),
+            Kind::Power => "電源ネット(VCC等)".into(),
         }
     }
 
@@ -128,7 +128,7 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Component {
     pub refdes: String,
     pub kind: Kind,
@@ -173,20 +173,20 @@ impl Component {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Wire {
     pub a: Pt,
     pub b: Pt,
 }
 
 /// Net label: names the net it sits on; equal names are the same net.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Label {
     pub pos: Pt,
     pub text: String,
 }
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Schematic {
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,
@@ -283,6 +283,10 @@ pub struct SimModel {
     /// Characteristics for built-in simulators (gain, Vf, ... ); free form.
     #[serde(default)]
     pub params: BTreeMap<String, f64>,
+    /// What the model leaves out or only approximates, one sentence each. Shown next to the part
+    /// so that a result is not mistaken for the real part's behaviour.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub limits: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

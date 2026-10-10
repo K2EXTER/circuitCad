@@ -206,6 +206,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "eframe",
+ "image",
  "part-lib",
  "pcb-core",
  "rfd",

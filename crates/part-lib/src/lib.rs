@@ -246,6 +246,35 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("74HC86_DIP-14", include_str!("../examples/74HC86_DIP-14.part.json")),
     ("74HC02_DIP-14", include_str!("../examples/74HC02_DIP-14.part.json")),
     ("74HC74_DIP-14", include_str!("../examples/74HC74_DIP-14.part.json")),
+    ("TP4056_ESOP-8", include_str!("../examples/TP4056_ESOP-8.part.json")),
+    ("TP5100_QFN-16", include_str!("../examples/TP5100_QFN-16.part.json")),
+    ("IP2332_ESOP-8", include_str!("../examples/IP2332_ESOP-8.part.json")),
+    ("MCP73831_SOT-23-5", include_str!("../examples/MCP73831_SOT-23-5.part.json")),
+    ("1N4007_DO-41", include_str!("../examples/1N4007_DO-41.part.json")),
+    ("1N4728A_DO-41", include_str!("../examples/1N4728A_DO-41.part.json")),
+    ("1N5817_DO-41", include_str!("../examples/1N5817_DO-41.part.json")),
+    ("74HC595_SOIC-16", include_str!("../examples/74HC595_SOIC-16.part.json")),
+    ("AMS1117-5.0_SOT-223", include_str!("../examples/AMS1117-5.0_SOT-223.part.json")),
+    ("ATtiny85_SOIC-8", include_str!("../examples/ATtiny85_SOIC-8.part.json")),
+    ("BSS138_SOT-23", include_str!("../examples/BSS138_SOT-23.part.json")),
+    ("IRLZ44N_TO-220", include_str!("../examples/IRLZ44N_TO-220.part.json")),
+    ("LM317_TO-220", include_str!("../examples/LM317_TO-220.part.json")),
+    ("LM324_SOIC-14", include_str!("../examples/LM324_SOIC-14.part.json")),
+    ("LM393_SOIC-8", include_str!("../examples/LM393_SOIC-8.part.json")),
+    ("LM7812_TO-220", include_str!("../examples/LM7812_TO-220.part.json")),
+    ("MCP1700-3302_SOT-23", include_str!("../examples/MCP1700-3302_SOT-23.part.json")),
+    ("NE5532_SOIC-8", include_str!("../examples/NE5532_SOIC-8.part.json")),
+    ("PN2222A_TO-92", include_str!("../examples/PN2222A_TO-92.part.json")),
+    ("S8050_SOT-23", include_str!("../examples/S8050_SOT-23.part.json")),
+    ("S8550_SOT-23", include_str!("../examples/S8550_SOT-23.part.json")),
+    ("SS14_SMA", include_str!("../examples/SS14_SMA.part.json")),
+    ("BUCK_DEMO", include_str!("../examples/BUCK_DEMO.part.json")),
+    ("CR2032", include_str!("../examples/CR2032.part.json")),
+    ("AA_ALKALINE", include_str!("../examples/AA_ALKALINE.part.json")),
+    ("LIION_18650", include_str!("../examples/LIION_18650.part.json")),
+    ("TRANS_100V-12V_5VA", include_str!("../examples/TRANS_100V-12V_5VA.part.json")),
+    ("TRANS_100V-9V_3VA", include_str!("../examples/TRANS_100V-9V_3VA.part.json")),
+    ("TRANS_230V-12V_5VA", include_str!("../examples/TRANS_230V-12V_5VA.part.json")),
 ];
 
 /// Older bundled versions that are replaced when the user's copy is still unmodified:
@@ -286,6 +315,24 @@ fn is_modelless_original(file: &Path, bundled: &str) -> bool {
     }
 }
 
+/// Key recorded in `.bundled` once a part has been offered the model notes (`sim.limits`).
+fn limits_key(name: &str) -> String {
+    format!("{name}+limits")
+}
+
+/// Is the file an unmodified copy of the bundled part from before it carried model notes?
+/// (Equal to the bundled part in every field except the notes.)
+fn is_original_without_limits(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let Some(sim) = new.sim.as_mut() else { return false };
+    if sim.limits.is_empty() || old.sim.as_ref().is_none_or(|m| !m.limits.is_empty()) {
+        return false;
+    }
+    sim.limits.clear();
+    old == new
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -318,11 +365,25 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         done.insert(key);
     }
+    // parts that gained their model notes after the first release: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = limits_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_without_limits(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
     if done.len() != before || !marker.exists() {
         std::fs::write(&marker, done.into_iter().collect::<Vec<_>>().join("\n"))?;
     }
     Ok(())
 }
+
+pub mod templates;
 
 #[cfg(test)]
 mod tests;

@@ -140,6 +140,7 @@ fn opamp() -> CustomSymbol {
             text: ".subckt LM358 1 2 3 4 5\n* body\n.ends LM358".into(),
             pins: vec!["3".into(), "2".into(), "1".into(), "8".into(), "4".into()],
             params: Default::default(),
+            limits: vec![],
         }),
     }
 }
@@ -264,4 +265,145 @@ fn net_at_keeps_label_names() {
     s.add(Kind::Resistor, (0, 0), 0);
     s.labels.push(Label { pos: (-2, 0), text: "SIG".into() });
     assert_eq!(net_at(&s, (-2, 0)).unwrap(), "SIG");
+}
+
+#[test]
+fn every_erc_finding_explains_itself() {
+    let mut s = divider();
+    s.components[1].refdes = "V1".into();
+    for p in erc(&s) {
+        assert!(p.hint.chars().count() > 20, "no explanation for: {}", p.message);
+    }
+    assert!(!erc(&s).is_empty());
+}
+
+#[test]
+fn a_wire_that_stops_short_of_a_pin_is_found_and_pointed_out() {
+    let mut s = divider();
+    let r1 = s.components[1].pins();
+    // the wire from the source ends one grid step before R1's pin 1
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (r1[0].1.0 - 1, r1[0].1.1));
+    let found = erc(&s);
+    let dangling = found.iter().find(|p| p.message.contains("線の端")).expect("dangling end reported");
+    assert_eq!(dangling.severity, Severity::Warning);
+    assert_eq!(dangling.at, Some((r1[0].1.0 - 1, r1[0].1.1)));
+    let pin = found.iter().find(|p| p.message.contains("R1 ピン1")).expect("pin reported");
+    assert_eq!(pin.severity, Severity::Error);
+    assert!(pin.hint.contains("近く"), "the hint names the nearby wire end: {}", pin.hint);
+}
+
+#[test]
+fn a_source_with_both_terminals_on_one_net_is_a_short() {
+    let mut s = divider();
+    wire(&mut s, (0, -2), (0, 2));
+    let found = erc(&s);
+    let short = found.iter().find(|p| p.message.contains("電源 V1") && p.message.contains("短絡")).expect("source short");
+    assert_eq!(short.severity, Severity::Error);
+    assert_eq!(short.at, Some((0, 0)));
+}
+
+#[test]
+fn a_clean_circuit_has_no_findings() {
+    let mut s = divider();
+    let r2 = s.components[2].pins();
+    for (a, b) in [((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), r2[0].1), (r2[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 6))] {
+        wire(&mut s, a, b);
+    }
+    assert_eq!(erc(&s), vec![]);
+}
+
+#[test]
+fn a_missing_ground_is_explained() {
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0);
+    let p = erc(&s).into_iter().find(|p| p.message.contains("GND")).unwrap();
+    assert!(p.hint.contains("基準"));
+    assert_eq!(p.at, None);
+}
+
+#[test]
+fn a_label_named_gnd_counts_as_the_reference() {
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0);
+    assert!(erc(&s).iter().any(|p| p.message.contains("GNDシンボル")));
+    s.labels.push(Label { pos: (-2, 0), text: "GND".into() });
+    assert!(!erc(&s).iter().any(|p| p.message.contains("GNDシンボル")));
+}
+
+fn wire_all(s: &mut Schematic, pairs: &[(Pt, Pt)]) {
+    for &(a, b) in pairs {
+        wire(s, a, b);
+    }
+}
+
+fn has(found: &[Problem], needle: &str) -> bool {
+    found.iter().any(|p| p.message.contains(needle))
+}
+
+#[test]
+fn an_led_straight_across_the_supply_is_flagged_until_a_resistor_is_added() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0); // + (0,-2), - (0,2)
+    let d = s.add(Kind::Led, (8, 0), 1); // vertical: A at top, K at bottom
+    s.add(Kind::Ground, (0, 6), 0);
+    let dp = s.components[d].pins();
+    wire_all(&mut s, &[((0, -2), (0, -6)), ((0, -6), (8, -6)), ((8, -6), dp[0].1), (dp[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 4)), ((0, 4), (0, 6))]);
+    assert!(has(&erc(&s), "電流を制限する抵抗"), "{:?}", erc(&s));
+
+    // with a series resistor in the top wire the warning goes away
+    s.wires.retain(|w| !(w.a == (0, -6) && w.b == (8, -6)));
+    let r = s.add(Kind::Resistor, (4, -6), 0); // pins at (2,-6) and (6,-6)
+    let rp = s.components[r].pins();
+    wire_all(&mut s, &[((0, -6), rp[0].1), (rp[1].1, (8, -6))]);
+    assert!(!has(&erc(&s), "電流を制限する抵抗"), "{:?}", erc(&s));
+}
+
+#[test]
+fn a_part_with_no_path_to_ground_is_reported_once() {
+    let mut s = divider();
+    let r2 = s.components[2].pins();
+    wire_all(&mut s, &[((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), r2[0].1), (r2[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 6))]);
+    assert!(!has(&erc(&s), "GND とつながっていません"));
+    // an island: two resistors wired to each other only
+    let a = s.add(Kind::Resistor, (20, 0), 0);
+    let b = s.add(Kind::Resistor, (30, 0), 0);
+    let (pa, pb) = (s.components[a].pins(), s.components[b].pins());
+    wire_all(&mut s, &[(pa[1].1, pb[0].1), (pa[0].1, (16, 0)), (pb[1].1, (34, 0))]);
+    s.labels.push(Label { pos: (16, 0), text: "X".into() });
+    s.labels.push(Label { pos: (34, 0), text: "X".into() });
+    let found = erc(&s);
+    assert_eq!(found.iter().filter(|p| p.message.contains("GND とつながっていません")).count(), 1, "{found:?}");
+}
+
+#[test]
+fn labels_that_differ_only_in_case_are_a_warning() {
+    let mut s = divider();
+    s.labels.push(Label { pos: (0, -2), text: "VCC".into() });
+    s.labels.push(Label { pos: (0, -6), text: "Vcc".into() });
+    let found = erc(&s);
+    let p = found.iter().find(|p| p.message.contains("大文字・小文字")).expect("case warning");
+    assert_eq!(p.severity, Severity::Warning);
+    s.labels[1].text = "VCC".into();
+    assert!(!has(&erc(&s), "大文字・小文字"));
+}
+
+#[test]
+fn ic_power_pins_must_reach_a_supply_but_a_regulator_output_counts() {
+    let mut s = Schematic::default();
+    let u = s.add_custom(opamp(), "LM358", "SOIC-8", (20, 0), 0);
+    let r = s.add(Kind::Resistor, (20, -14), 1);
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.add(Kind::Ground, (0, 8), 0);
+    let pin = |s: &Schematic, i: usize, name: &str| s.components[i].pins().into_iter().find(|p| p.0 == name).unwrap().1;
+    let (vplus, rpin) = (pin(&s, u, "8"), pin(&s, r, "2"));
+    // V+ only goes to a resistor: nothing powers it
+    wire(&mut s, vplus, rpin);
+    assert!(has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
+    // wiring V+ to the source's + pin fixes it
+    s.wires.clear();
+    let src = pin(&s, v, "+");
+    wire(&mut s, vplus, (vplus.0, src.1));
+    wire(&mut s, (vplus.0, src.1), src);
+    assert!(!has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
 }

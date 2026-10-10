@@ -1,0 +1,69 @@
+{
+  "name": "BSS138",
+  "category": "MOSFET",
+  "description": "N チャネル MOSFET 50V 0.2A (SOT-23, ピン1=G 2=S 3=D)。ロジックレベル駆動、レベル変換によく使われます。簡易モデル(パラメータは概算)",
+  "prefix": "Q",
+  "footprint_name": "SOT-23_MOS",
+  "pins": [
+    {
+      "number": "1",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "D",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "S",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "M",
+    "name": "BSS138",
+    "text": ".model BSS138 NMOS(VTO=1.3 KP=0.35 LAMBDA=0.02 CGS=30p CGD=5p)",
+    "pins": [
+      "3",
+      "1",
+      "2"
+    ],
+    "limits": [
+      "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+      "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+      "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+    ]
+  }
+}

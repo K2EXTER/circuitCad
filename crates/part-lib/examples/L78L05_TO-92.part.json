@@ -4,13 +4,70 @@
   "description": "L78L05 三端子レギュレータ 5V 100mA (TO-92, ピン1=OUT 2=GND 3=IN)。出力電圧・ドロップアウト・負荷電流が入力電流になることを再現する簡易マクロモデル(安定度・静止電流・過電流保護は無し、数値は概算)",
   "prefix": "U",
   "footprint_name": "TO-92_inline",
-  "pins": [ { "number": "3", "name": "IN", "side": "left" }, { "number": "1", "name": "OUT", "side": "right" }, { "number": "2", "name": "GND", "side": "bottom" } ],
-  "package": { "type": "explicit", "pads": [ { "pin": "1", "x": -2.54, "y": 0, "shape": "rect", "w": 1.6, "h": 1.6, "drill": 0.8 }, { "pin": "2", "x": 0, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 }, { "pin": "3", "x": 2.54, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 } ] },
+  "pins": [
+    {
+      "number": "3",
+      "name": "IN",
+      "side": "left"
+    },
+    {
+      "number": "1",
+      "name": "OUT",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
+    ]
+  },
   "sim": {
     "kind": "subckt",
     "name": "L78L05",
     "text": ".subckt L78L05 in gnd out\nVdo in ind DC 1.7\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.2\nG1 in gnd o out 5.0\n.model DREG D(IS=1e-12 N=1)\n.ends L78L05",
-    "pins": ["3", "2", "1"],
-    "params": { "vout": 5, "dropout": 1.7 }
+    "pins": [
+      "3",
+      "2",
+      "1"
+    ],
+    "params": {
+      "vout": 5,
+      "dropout": 1.7
+    },
+    "limits": [
+      "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
+      "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
+      "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+    ]
   }
 }

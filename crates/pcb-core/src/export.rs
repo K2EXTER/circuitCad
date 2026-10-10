@@ -104,7 +104,7 @@ mod tests {
             width: 0.05,
         });
         let msgs: Vec<_> = drc::check(&b).into_iter().map(|v| v.message).collect();
-        assert!(msgs.iter().any(|m| m.contains("track width")));
-        assert!(msgs.iter().any(|m| m.contains("outside board outline")));
+        assert!(msgs.iter().any(|m| m.contains("配線の幅")));
+        assert!(msgs.iter().any(|m| m.contains("基板の外")));
     }
 }

@@ -1,0 +1,58 @@
+{
+  "name": "LM393",
+  "category": "コンパレータ",
+  "description": "デュアルコンパレータ (SOIC-8)。チャネル1のみ記号化。オープンコレクタ出力なのでプルアップ抵抗が必要です (出力は IN- > IN+ のとき Low)。応答時間・入力オフセットは扱いません。簡易動作モデル(概算)",
+  "prefix": "U",
+  "footprint_name": "SOIC-8_P1.27",
+  "pins": [
+    {
+      "number": "3",
+      "name": "IN+",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "IN-",
+      "side": "left"
+    },
+    {
+      "number": "1",
+      "name": "OUT",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "VCC",
+      "side": "top"
+    },
+    {
+      "number": "4",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 8,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "LM393",
+    "text": "* LM393 comparator, one channel: open-collector output pulls low when IN- is above IN+\n.subckt LM393 inp inn out vcc gnd\nRin inp inn 10Meg\nSout out gnd inn inp SWC\nRiq vcc gnd 25k\n.model SWC SW(RON=50 ROFF=1G VT=0 VW=0.002)\n.ends LM393",
+    "pins": [
+      "3",
+      "2",
+      "1",
+      "8",
+      "4"
+    ],
+    "limits": [
+      "スイッチで作ったコンパレータの動作モデルです。出力はオープンコレクタなので、プルアップ抵抗が必要です (IN- が IN+ より高いとき Low)。",
+      "応答時間 (遅れ)、入力オフセット、入力バイアス電流は扱いません。"
+    ]
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "name": "IP2332",
+  "category": "電源管理",
+  "description": "IP2332 (英集芯 Injoinic) 単セル リチウムイオン 同期降圧 充電IC (ESOP-8、裏のパッドはGND)。ピン: 1=NTC 2=ISET 3=LED2 4=LED1 5=BAT 6=LX 7=GND 8=VIN。入力 4.5〜6V (5V用)、充満電圧 4.2V、最大 2.4A、効率約92%。充電電流 = 0.35 + 2.75 ÷ R_ISET[kΩ] [A] (1.4kで2.4A、2.4kで1.5A、4.3kで1A、ISETを開放すると2A)。3V未満は定電流の1/5でプリチャージ → 定電流 → 4.2Vの定電圧。LXから2.2µHのコイルを通してBATへ。NTC は 100µA を流して電池の温度を見ます (使わないときは 10kΩ を GND へ)。LED1 は 5mA の定電流で充電中に点灯、LED2 は満充電で点灯。スイッチングは平均化した動作モデルで、リップル・損失・熱制限・入力電流の降圧効果・異常時のLED点滅は扱いません。数値は概算",
+  "datasheet": "https://file1.elecfans.com/web2/M00/AD/B3/wKgZomVCQVSAY8tZABCTCFVyR8I216.pdf",
+  "prefix": "U",
+  "footprint_name": "ESOP-8_EP_2.2x3.1",
+  "pins": [
+    {
+      "number": "8",
+      "name": "VIN",
+      "side": "top"
+    },
+    {
+      "number": "1",
+      "name": "NTC",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "ISET",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "LX",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "BAT",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "LED1",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "LED2",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.7,
+        "y": 1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "2",
+        "x": -2.7,
+        "y": 0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "3",
+        "x": -2.7,
+        "y": -0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "4",
+        "x": -2.7,
+        "y": -1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "5",
+        "x": 2.7,
+        "y": -1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "6",
+        "x": 2.7,
+        "y": -0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "7",
+        "x": 2.7,
+        "y": 0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "8",
+        "x": 2.7,
+        "y": 1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "7",
+        "x": 0.0,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 2.2,
+        "h": 3.1
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "IP2332",
+    "text": ".subckt IP2332 ntc iset led2 led1 bat lx gnd vin\n* IP2332 behavioural model (averaged synchronous buck charger, one Li-ion cell, 4.2 V).\n* The switching is replaced by a voltage source on LX; B sources hold the control laws.\n* the charger runs for 4.3 V < VIN < 6 V and a cell temperature that is not too hot or too cold (0..1)\nBon on 0 V=step(V(vin)-4.3,0.02)*step(6-V(vin),0.02)*step(V(ntc)-0.3,0.01)*step(2.73-V(ntc),0.01)\n* ISET: a 1 V reference through 1 ohm; x = the current in RISET in mA.\n* ICC = 0.35 + 2.75 / RISET[kohm], 2 A when ISET is open (RISET >= 120k)\nBref ref 0 V=step(V(vin)-4.3,0.02)\nRm ref iset 1\nBx x 0 V=1000*(V(ref)-V(iset))\nBicc icc 0 V=if(V(x)<0.00833,2,0.35+2.75*V(x))\n* NTC: 100 uA into the pin (limited at about 3.4 V); 0.3-0.49 V warm, 0.49-1.8 V normal, 1.8-2.73 V cool\nBntc 0 ntc I=100u-1m*max(V(ntc)-3.3,0)\nRntc ntc 0 100Meg\n* current limit: halved when cool, a fifth below 3 V (pre-charge); float voltage 4.2 V, 4.1 V when warm\nBie ie 0 V=V(icc)*(1-0.5*step(V(ntc)-1.8,0.01))\nBcmd cmd 0 V=V(on)*min(V(ie)*(1-0.8*step(3-V(bat),0.01)),60*(4.2-0.1*step(0.49-V(ntc),0.005)-V(bat)))\n* LX = cell voltage + 3 V/A x (command - current) + an integral term, limited to 0 .. VIN\nBint 0 cint I=0.02*(V(cmd)-I(Vsn))\nCint cint 0 1u\nRint cint 0 10k\nBlx ls 0 V=limit(V(bat)+3*(V(cmd)-I(Vsn))+V(cint),0,V(vin))\nVsn ls ls2 0\n* the switch never pushes current back into VIN\nSd ls2 lx ls2 lx SWD\nRlx lx 0 100Meg\n* input current: output power over the efficiency (92 %) and the input voltage\nBin vin 0 I=I(Vsn)*V(bat)/(0.92*max(V(vin),1))\nRiq vin 0 1k\n* LED1 (5 mA constant current) while charging, LED2 while full; both off at a fault (no blinking is modelled)\nBfull full 0 V=V(on)*step(0.1*V(ie)-I(Vsn),0.005)*step(V(bat)-4.15,0.005)\nBl1 vin led1 I=5m*V(on)*(1-V(full))\nDl1 led1 vin DCL\nRl1 led1 0 100Meg\nBl2 l2 0 V=V(vin)*V(full)\nRl2o l2 led2 100\nRl2 led2 0 100Meg\n.model SWD SW(RON=0.17 ROFF=1G VT=0 VW=0.002)\n.model DCL D(IS=1e-12 N=1)\n.ends IP2332",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "params": {
+      "vfloat": 4.2,
+      "icc_open": 2.0
+    },
+    "limits": [
+      "充電の3段階 (プリチャージ・定電流・定電圧) と状態表示を、外から見た動きだけで再現する動作モデルです。",
+      "電池は、小さなコンデンサで代用してください (値に IC=3.2 と書くと、その電圧から始まります)。実物の電池は容量が桁違いに大きく、放電特性も複雑です。",
+      "降圧のスイッチングは「LX の平均の電圧」に置き換えた平均化モデルです。リップル、スイッチング損失、熱による制限は扱いません。",
+      "入力電流は、出力の電力 ÷ 効率 (92%) ÷ 入力電圧で計算しています。入力電圧が下がったときの電流の自動調整、電池が無いときと異常時の LED の点滅も扱いません。",
+      "満充電のあとに再充電が始まる電圧は、実物の 4.1V ではなく、電流が終了のしきい値を超える約 4.197V です。"
+    ]
+  }
+}

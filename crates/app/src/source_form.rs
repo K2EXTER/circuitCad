@@ -240,8 +240,11 @@ pub fn show(ui: &mut egui::Ui, f: &mut SourceForm) -> bool {
             });
         }
         WaveKind::Other => {
-            changed |= ui.add(egui::TextEdit::singleline(&mut f.other).desired_width(220.0)).changed();
-            ui.small("例: PWL(0 0 1m 5 2m 0) / NOISE(0.05 1Meg) / 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k)");
+            changed |= ui
+                .add(egui::TextEdit::singleline(&mut f.other).desired_width(220.0))
+                .on_hover_text("例: PWL(0 0 1m 5 2m 0) / NOISE(0.05 1Meg) / 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k)
+(+ の前後は空白)")
+                .changed();
         }
     }
     ui.add_space(2.0);

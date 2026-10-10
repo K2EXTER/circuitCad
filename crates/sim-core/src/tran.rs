@@ -2,7 +2,7 @@
 //! corner, to avoid numerical ringing), Newton-Raphson per step, step halving on failure.
 
 use crate::circuit::Circuit;
-use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Strategy, Ce, GMIN};
+use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Strategy, Ce};
 
 const MAX_POINTS: f64 = 1_000_000.0;
 
@@ -38,6 +38,35 @@ impl TranResult {
     }
 }
 
+/// The operating point the run starts from. Capacitors with an initial voltage (`IC=`) are held at
+/// it by temporary voltage sources while the rest of the circuit settles around them.
+fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>, Vec<f64>), SimError> {
+    let order = [Strategy::Direct, Strategy::Gmin, Strategy::Source];
+    let has_ic = circuit.initial.iter().any(|(n, _)| circuit.elements.iter().any(|e| matches!(e, crate::Element::Capacitor { name, .. } if name == n)));
+    if !has_ic {
+        return solve_op(cm, &order).map(|(att, _)| (att.x, att.vj));
+    }
+    // Capacitors have no branch unknown, and the held sources go last, so every index of the
+    // original circuit is unchanged and the extra unknowns sit at the end.
+    let mut held = circuit.clone();
+    let mut sources = vec![];
+    held.elements.retain(|e| match e {
+        crate::Element::Capacitor { name, a, b, .. } => match circuit.initial.iter().find(|(n, _)| n == name) {
+            Some((_, v)) => {
+                sources.push(crate::Element::vdc(&format!("ic.{name}"), *a, *b, *v));
+                false
+            }
+            None => true,
+        },
+        _ => true,
+    });
+    held.elements.extend(sources);
+    let cm_held = compile(&held);
+    let (att, _) = solve_op(&cm_held, &order)?;
+    let n = cm.n_unknowns;
+    Ok((att.x[..n].to_vec(), att.vj))
+}
+
 pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimError> {
     if !(s.tstop.is_finite() && s.tstop > 0.0) {
         return Err(SimError::Invalid("終了時間は正の値にしてください".into()));
@@ -68,8 +97,8 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     let (mut x, mut vj) = if s.uic {
         (vec![0.0; cm.n_unknowns], cm.zero_junction_state())
     } else {
-        match solve_op(&cm, &[Strategy::Direct, Strategy::Gmin, Strategy::Source]) {
-            Ok((att, _)) => (att.x, att.vj),
+        match start_point(circuit, &cm) {
+            Ok((x, vj)) => (x, vj),
             // an oscillator has no stable operating point (with the capacitors open it sits on
             // the unstable balance point): start from zero charge instead, like SPICE's UIC
             Err(SimError::NoConvergence) => {
@@ -118,9 +147,12 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         for (k, &i) in node_ids.iter().enumerate() {
             res.signals[k].values.push(v(x, i));
         }
-        for (k, e) in cm.element_results(x, Some(t), cap_i).iter().enumerate() {
-            res.signals[node_ids.len() + k].values.push(e.current);
-        }
+        let base = node_ids.len();
+        let mut k = 0;
+        cm.visit_elements(x, Some(t), cap_i, |_, current, _, _, _| {
+            res.signals[base + k].values.push(current);
+            k += 1;
+        });
     };
     record(&mut result, 0.0, &x, &cap_i, &cm);
 
@@ -146,7 +178,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         let att: Attempt = loop {
             let trap = !(force_be || retried);
             let ctx = Ctx {
-                gmin: GMIN,
+                gmin: crate::options::options().gmin,
                 scale: 1.0,
                 t: t + h,
                 dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v }),

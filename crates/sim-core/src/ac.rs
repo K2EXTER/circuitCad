@@ -3,7 +3,7 @@
 //! (junction/diffusion capacitances are not modelled).
 
 use crate::circuit::{Circuit, Element};
-use crate::dc::{compile, floating_warnings, has_ground, solve_op, Ce, Ctx, SimError, Strategy, GMIN};
+use crate::dc::{compile, floating_warnings, has_ground, solve_op, Ce, Ctx, SimError, Strategy};
 use std::f64::consts::PI;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
@@ -230,7 +230,7 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
     // small-signal matrix: the DC Jacobian at the operating point (C open, L short)
     let (op, _) = solve_op(&cm, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])?;
     let mut vj = op.vj.clone();
-    let (jac, _) = cm.assemble(&mut vj, &op.x, &Ctx::dc(GMIN, 1.0));
+    let (jac, _) = cm.assemble(&mut vj, &op.x, &Ctx::dc(crate::options::options().gmin, 1.0));
     let n = cm.n_unknowns;
 
     let freqs = frequencies(s);
@@ -254,7 +254,7 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
     let jw_c = |w: f64| C64::new(0.0, w);
     for &f in &freqs {
         let w = 2.0 * PI * f;
-        let mut a: Vec<C64> = jac.a.iter().map(|&x| C64::new(x, 0.0)).collect();
+        let mut a: Vec<C64> = jac.dense().iter().map(|&x| C64::new(x, 0.0)).collect();
         let mut b = vec![C64::ZERO; n];
         let add = |a: &mut Vec<C64>, r: usize, c: usize, val: C64| {
             if r != 0 && c != 0 {

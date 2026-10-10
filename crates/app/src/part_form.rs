@@ -1,6 +1,7 @@
 //! "Create part" window: pin table + package dimensions + simulation model -> `PartDef`.
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use part_lib::templates::{ChargerTemplate, CurrentSetting, Topology};
 use part_lib::{Issue, PartDef, PinDef};
 use pcb_core::package::PackageSpec;
 use sch_core::{PinSide, SimKind, SimModel};
@@ -42,6 +43,11 @@ pub struct PartForm {
     pub sim_name: String,
     pub sim_text: String,
     pub sim_pins: String,
+    /// What the model leaves out, one note per line.
+    pub sim_limits: String,
+    /// The charger template section and what it said last.
+    pub tpl: ChargerTemplate,
+    pub tpl_message: String,
 }
 
 impl Default for PartForm {
@@ -68,6 +74,9 @@ impl Default for PartForm {
             sim_name: String::new(),
             sim_text: String::new(),
             sim_pins: String::new(),
+            sim_limits: String::new(),
+            tpl: ChargerTemplate::default(),
+            tpl_message: String::new(),
         }
     }
 }
@@ -124,6 +133,7 @@ impl PartForm {
                 text: self.sim_text.clone(),
                 pins: self.sim_pins.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).map(String::from).collect(),
                 params: Default::default(),
+                limits: self.sim_limits.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect(),
             }),
         };
         Ok(PartDef {
@@ -140,43 +150,191 @@ impl PartForm {
         })
     }
 
+    /// Fill the pin list, the model and the description from the charger template.
+    fn apply_template(&mut self) {
+        match self.tpl.generate(&self.name) {
+            Ok(g) => {
+                let side = |s: Option<PinSide>| match s {
+                    Some(PinSide::Left) => "left",
+                    Some(PinSide::Right) => "right",
+                    Some(PinSide::Top) => "top",
+                    _ => "bottom",
+                };
+                self.pins_text = g.pins.iter().map(|p| format!("{} {} {}", p.number, p.name, side(p.side))).collect::<Vec<_>>().join("\n");
+                self.sim = SimChoice::Subckt;
+                self.sim_name = g.sim_name;
+                self.sim_text = g.sim_text;
+                self.sim_pins = g.sim_pins.join(" ");
+                self.description = g.description;
+                self.sim_limits = g.limits.join("\n");
+                if self.category.trim().is_empty() || self.category == "ユーザー" {
+                    self.category = "電源管理".into();
+                }
+                self.tpl_message = format!("ピン {} 本とモデルを作りました。このあと、下の「パッケージ」をデータシートの寸法に合わせ、ピン番号がデータシートの番号になるよう直して保存します", g.pins.len());
+            }
+            Err(e) => self.tpl_message = e,
+        }
+    }
+
+    fn template_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("テンプレートからピンとモデルを作る (リチウムイオン充電IC)").id_salt("tpl_charger").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("例から始める:");
+                if ui.small_button("TP4056 風").on_hover_text("リニア式、電流 = 1200 ÷ R_PROG。まず形を見るのに向いています").clicked() {
+                    self.tpl = ChargerTemplate::default();
+                }
+                if ui.small_button("IP2332 風").on_hover_text("降圧スイッチング式、電流 = 0.35 + 2.75 ÷ R_ISET[kΩ]、入力 4.3〜6V、温度入力あり").clicked() {
+                    self.tpl = ChargerTemplate {
+                        topology: Topology::Buck,
+                        setting: CurrentSetting::Resistor,
+                        current: 2.0,
+                        k: 2750.0,
+                        offset: 0.35,
+                        precharge_fraction: 0.2,
+                        vin_min: 4.3,
+                        vin_max: 6.0,
+                        dropout: 0.1,
+                        ntc: Some((0.3, 2.73)),
+                        ..Default::default()
+                    };
+                }
+            });
+            let t = &mut self.tpl;
+            ui.horizontal(|ui| {
+                ui.label("方式");
+                ui.selectable_value(&mut t.topology, Topology::Linear, "リニア")
+                    .on_hover_text("入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)");
+                ui.selectable_value(&mut t.topology, Topology::Buck, "降圧スイッチング")
+                    .on_hover_text("コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)");
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("セル数");
+                ui.add(egui::DragValue::new(&mut t.cells).range(1..=8)).on_hover_text("電池を直列につなぐ数。満充電電圧 = セル数 × 1セルの電圧");
+                ui.label("1セルの満充電電圧");
+                ui.add(egui::DragValue::new(&mut t.cell_voltage).speed(0.01).range(2.0..=5.0).suffix(" V"))
+                    .on_hover_text("リチウムイオンは 4.2V (高電圧タイプ 4.35V)、リン酸鉄リチウムは 3.6V");
+                if ui.small_button("4.2V").on_hover_text("リチウムイオン電池の 1 セルの満充電電圧").clicked() {
+                    t.cell_voltage = 4.2;
+                }
+                if ui.small_button("3.6V (リン酸鉄)").on_hover_text("リン酸鉄リチウム電池の 1 セルの満充電電圧").clicked() {
+                    t.cell_voltage = 3.6;
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label("充電電流の決め方");
+                ui.selectable_value(&mut t.setting, CurrentSetting::Fixed, "決まった値").on_hover_text("データシートに電流が1つだけ書かれている場合");
+                ui.selectable_value(&mut t.setting, CurrentSetting::Resistor, "抵抗で設定 (PROG 端子)")
+                    .on_hover_text("端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます");
+            });
+            match t.setting {
+                CurrentSetting::Fixed => {
+                    ui.horizontal(|ui| {
+                        ui.label("充電電流");
+                        ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A")).on_hover_text("充電電流 (A)。データシートに書かれた値を入れます");
+                    });
+                }
+                CurrentSetting::Resistor => {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("電流 I[A] =");
+                        ui.add(egui::DragValue::new(&mut t.offset).speed(0.01).range(0.0..=20.0)).on_hover_text("式の定数の部分 (無ければ 0)。例: IP2332 は 0.35");
+                        ui.label("+ k ÷ R[Ω]    k =");
+                        ui.add(egui::DragValue::new(&mut t.k).speed(1.0).range(0.0..=1e6))
+                            .on_hover_text("TP4056 は 1200 (1.2kΩ で 1A)。式が「2.75 ÷ R[kΩ]」なら、Ω に直して k = 2750");
+                        ui.label("PROG 開放時の電流");
+                        ui.add(egui::DragValue::new(&mut t.current).speed(0.01).range(0.0..=20.0).suffix(" A"))
+                            .on_hover_text("PROG 端子に何もつながないときの電流。0 なら充電しません。IP2332 は 2A");
+                    });
+                }
+            }
+            ui.horizontal_wrapped(|ui| {
+                ui.label("プリチャージ: 1セルがこの電圧未満");
+                ui.add(egui::DragValue::new(&mut t.precharge_per_cell).speed(0.01).range(0.0..=5.0).suffix(" V"))
+                    .on_hover_text("空に近い電池は、小さな電流でそっと充電します。0 ならプリチャージなし");
+                ui.label("電流の割合");
+                ui.add(egui::DragValue::new(&mut t.precharge_fraction).speed(0.01).range(0.0..=1.0)).on_hover_text("0.1 = 設定電流の 10%");
+                ui.label("終了電流の割合");
+                ui.add(egui::DragValue::new(&mut t.termination_fraction).speed(0.01).range(0.0..=0.9))
+                    .on_hover_text("定電圧のあと、電流がこの割合まで減ったら満充電とみなします (0.1 = 10%)。状態表示の切替に使います");
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("入力電圧");
+                ui.add(egui::DragValue::new(&mut t.vin_min).speed(0.05).range(0.5..=60.0).prefix("下限 ").suffix(" V"))
+                    .on_hover_text("これを下回ると動きません (低電圧ロックアウト)");
+                ui.add(egui::DragValue::new(&mut t.vin_max).speed(0.05).range(0.0..=60.0).prefix("上限 ").suffix(" V"))
+                    .on_hover_text("これを超えると止まります (過電圧保護)。0 なら上限なし");
+                ui.add(egui::DragValue::new(&mut t.dropout).speed(0.01).range(0.0..=5.0).prefix("電池より ").suffix(" V 以上高い"))
+                    .on_hover_text("入力が電池の電圧よりこれだけ高くないと充電できません");
+            });
+            ui.horizontal_wrapped(|ui| {
+                let mut ntc = t.ntc.is_some();
+                if ui
+                    .checkbox(&mut ntc, "温度入力 (NTC 端子)")
+                    .on_hover_text("電池の温度を見る端子。サーミスタ (NTC) をつなぎ、温度が低すぎる・高すぎるときは充電を止めます")
+                    .changed()
+                {
+                    t.ntc = ntc.then_some((0.3, 2.73));
+                }
+                if let Some((lo, hi)) = &mut t.ntc {
+                    ui.add(egui::DragValue::new(lo).speed(0.01).range(0.0..=5.0).prefix("正常な電圧 ").suffix(" V から")).on_hover_text("NTC 端子の電圧がこの値より低いと、温度が高すぎる (または低すぎる) として充電を止めます");
+                    ui.add(egui::DragValue::new(hi).speed(0.01).range(0.0..=5.0).suffix(" V まで"))
+                        .on_hover_text("NTC に 100µA を流したときの電圧がこの範囲なら充電します (電圧 = 100µA × NTC の抵抗)");
+                }
+                ui.checkbox(&mut t.status, "状態出力 (CHRG / STDBY)").on_hover_text("充電中は CHRG、満充電は STDBY が Low になる出力 (LED をつなぐ端子)");
+            });
+            ui.horizontal(|ui| {
+                if ui
+                    .button("ピンとモデルを作る")
+                    .on_hover_text("上の数字から、ピンの一覧とシミュレーションモデルを作って、下の欄に書き込みます (すでにある内容は置き換わります)")
+                    .clicked()
+                {
+                    self.apply_template();
+                }
+                if !self.tpl_message.is_empty() {
+                    ui.small(&self.tpl_message);
+                }
+            });
+        }).header_response.on_hover_text("データシートの数字を入れるだけで、充電ICの「外から見た動き」のモデルを作ります。市販のSPICEモデルが無いICに使えます。数字は、データシートの「電気的特性」の表から拾います");
+    }
+
     /// Draws the form. Returns a finished definition when the user presses save.
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
-            ui.text_edit_singleline(&mut self.name);
+            ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
             ui.end_row();
             ui.label("カテゴリ");
-            ui.text_edit_singleline(&mut self.category);
+            ui.text_edit_singleline(&mut self.category).on_hover_text("一覧のグループ名 (例: オペアンプ、トランジスタ)");
             ui.end_row();
             ui.label("部品番号の頭文字");
-            ui.text_edit_singleline(&mut self.prefix);
+            ui.text_edit_singleline(&mut self.prefix).on_hover_text("回路図で付く部品番号の頭文字。IC は U、トランジスタは Q、抵抗は R、ダイオードは D");
             ui.end_row();
             ui.label("値 (省略で部品名)");
-            ui.text_edit_singleline(&mut self.value);
+            ui.text_edit_singleline(&mut self.value).on_hover_text("回路図に表示する値。空なら部品名が入ります");
             ui.end_row();
             ui.label("説明");
-            ui.text_edit_singleline(&mut self.description);
+            ui.text_edit_singleline(&mut self.description).on_hover_text("一覧で部品にポインタを置いたときに出る説明");
             ui.end_row();
             ui.label("データシートURL");
-            ui.text_edit_singleline(&mut self.datasheet);
+            ui.text_edit_singleline(&mut self.datasheet).on_hover_text("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです");
             ui.end_row();
         });
 
+        self.template_ui(ui);
+
         ui.separator();
         ui.label("ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
-        ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace));
+        ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
 
         ui.separator();
         ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます)");
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ");
-            ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)");
-            ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)");
-            ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)");
+            ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
+            ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
+            ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
+            ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)").on_hover_text("足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)");
         });
         let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64| {
-            ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm"));
+            ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(pkg_tip(label));
         };
         ui.horizontal_wrapped(|ui| {
             dv(ui, "ピッチ", &mut self.pitch);
@@ -189,7 +347,7 @@ impl PartForm {
                     dv(ui, "列間隔", &mut self.row);
                     dv(ui, "パッド長", &mut self.len);
                     dv(ui, "パッド幅", &mut self.width);
-                    ui.checkbox(&mut self.tht, "スルーホール(DIP)");
+                    ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
                     if self.tht {
                         dv(ui, "穴径", &mut self.drill);
                     }
@@ -210,20 +368,20 @@ impl PartForm {
         ui.separator();
         ui.label("シミュレーションモデル (部品の特性)");
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.sim, SimChoice::None, "なし");
-            ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)");
-            ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)");
+            ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
+            ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
+            ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)").on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
         });
         if self.sim != SimChoice::None {
             ui.horizontal(|ui| {
                 if self.sim == SimChoice::Model {
                     ui.label("素子記号");
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0));
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S");
                 }
                 ui.label("モデル名");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0));
+                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。下の本文と同じ名前にします");
                 ui.label("ノード順のピン番号");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K"));
+                ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
             });
             ui.add(
                 egui::TextEdit::multiline(&mut self.sim_text)
@@ -231,6 +389,13 @@ impl PartForm {
                     .desired_width(f32::INFINITY)
                     .font(egui::TextStyle::Monospace)
                     .hint_text(".model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
+            );
+            ui.label("このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
+            ui.add(
+                egui::TextEdit::multiline(&mut self.sim_limits)
+                    .desired_rows(3)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("例: 温度による変化は扱いません。\n接合容量は扱いません。"),
             );
         }
 
@@ -251,7 +416,7 @@ impl PartForm {
             footprint_preview(ui, &fp);
         }
         let ok = !def.has_errors();
-        if ui.add_enabled(ok, egui::Button::new("保存してライブラリに追加")).clicked() {
+        if ui.add_enabled(ok, egui::Button::new("保存してライブラリに追加")).on_hover_text("この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません").clicked() {
             return Some(def);
         }
         None
@@ -292,4 +457,152 @@ fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Footprint) {
         painter.text(ctr, Align2::CENTER_CENTER, &p.pin, FontId::proportional(11.0), Color32::WHITE);
     }
     painter.rect_stroke(r, 2.0, Stroke::new(1.0, Color32::from_gray(80)), egui::StrokeKind::Inside);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sim_core::{add_subckt_instance, dc_op, Circuit, Element};
+
+    struct Rig {
+        c: Circuit,
+    }
+
+    /// The generated model with `vin` on VIN, a stiff cell source on BAT and `rprog` ohms on PROG
+    /// (None = open); other pins get light loads. Returns the circuit.
+    fn rig(t: &ChargerTemplate, vin: f64, vbat: f64, rprog: Option<f64>) -> Rig {
+        let g = t.generate("TPL").unwrap();
+        let mut c = Circuit::new();
+        let ports: Vec<String> = g.pins.iter().map(|p| p.name.to_ascii_lowercase()).collect();
+        let nodes: Vec<usize> = ports.iter().map(|p| if p == "gnd" { 0 } else { c.node(p) }).collect();
+        add_subckt_instance(&mut c, "U1", &g.sim_name, &g.sim_text, &nodes).unwrap_or_else(|e| panic!("{e}"));
+        let node = |c: &mut Circuit, n: &str| c.node(n);
+        let (vin_n, bat_n) = (node(&mut c, "vin"), node(&mut c, "bat"));
+        c.add(Element::vdc("Vin", vin_n, 0, vin));
+        c.add(Element::vdc("Vbat", bat_n, 0, vbat));
+        if ports.iter().any(|p| p == "lx") {
+            let lx = node(&mut c, "lx");
+            c.add(Element::Inductor { name: "L1".into(), a: lx, b: bat_n, l: 2.2e-6 });
+        }
+        if let (Some(r), true) = (rprog, ports.iter().any(|p| p == "prog")) {
+            let prog = node(&mut c, "prog");
+            c.add(Element::Resistor { name: "Rp".into(), a: prog, b: 0, r });
+        }
+        for (n, pull) in [("chrg", true), ("stdby", true), ("ntc", false)] {
+            if ports.iter().any(|p| p == n) {
+                let id = node(&mut c, n);
+                if pull {
+                    c.add(Element::Resistor { name: format!("Rpull_{n}"), a: vin_n, b: id, r: 1e3 });
+                } else {
+                    c.add(Element::Resistor { name: "Rntc_ext".into(), a: id, b: 0, r: 10e3 });
+                }
+            }
+        }
+        Rig { c }
+    }
+
+    fn charge(t: &ChargerTemplate, vin: f64, vbat: f64, rprog: Option<f64>) -> f64 {
+        dc_op(&rig(t, vin, vbat, rprog).c).unwrap_or_else(|e| panic!("{e:?}")).element("Vbat").unwrap().current
+    }
+
+    fn near(a: f64, b: f64, tol: f64) -> bool {
+        (a - b).abs() <= tol * b.abs().max(1e-3)
+    }
+
+    #[test]
+    fn the_default_template_is_a_working_linear_charger() {
+        let t = ChargerTemplate::default();
+        // I = 1200 / R
+        for (r, want) in [(1.2e3, 1.0), (2.4e3, 0.5), (4.8e3, 0.25)] {
+            let i = charge(&t, 5.0, 3.7, Some(r));
+            assert!(near(i, want, 0.04), "R {r}: {i}");
+        }
+        // pre-charge: a tenth below 2.9 V; taper near 4.2 V; nothing when full or without supply
+        assert!(near(charge(&t, 5.0, 2.5, Some(2.4e3)), 0.05, 0.1));
+        let mid = charge(&t, 5.0, 4.19, Some(2.4e3));
+        assert!(mid < 0.45 && mid > 0.05, "{mid}");
+        assert!(charge(&t, 5.0, 4.21, Some(2.4e3)).abs() < 0.02);
+        assert!(charge(&t, 3.5, 3.0, Some(2.4e3)).abs() < 5e-3);
+        // an open PROG pin gives the open-pin current (0 here)
+        assert!(charge(&t, 5.0, 3.7, None).abs() < 5e-3);
+    }
+
+    #[test]
+    fn the_ip2332_style_template_reproduces_the_bundled_part() {
+        let t = ChargerTemplate {
+            topology: Topology::Buck,
+            current: 2.0,
+            k: 2750.0,
+            offset: 0.35,
+            precharge_fraction: 0.2,
+            vin_min: 4.3,
+            vin_max: 6.0,
+            dropout: 0.1,
+            ntc: Some((0.3, 2.73)),
+            ..Default::default()
+        };
+        // same table as the datasheet: 4.3k -> 1 A, 2.4k -> 1.5 A, open -> 2 A
+        assert!(near(charge(&t, 5.0, 3.7, Some(4.3e3)), 0.99, 0.05));
+        assert!(near(charge(&t, 5.0, 3.7, Some(2.4e3)), 1.5, 0.05));
+        assert!(near(charge(&t, 5.0, 3.7, None), 2.0, 0.05));
+        assert!(charge(&t, 6.5, 3.7, Some(4.3e3)).abs() < 5e-3, "over-voltage");
+        assert!(charge(&t, 4.0, 3.7, Some(4.3e3)).abs() < 5e-3, "under-voltage");
+    }
+
+    #[test]
+    fn two_cells_float_at_8v4_and_pre_charge_at_5v8() {
+        let t = ChargerTemplate { cells: 2, vin_min: 9.0, ..Default::default() };
+        assert!(near(charge(&t, 12.0, 7.4, Some(2.4e3)), 0.5, 0.05));
+        assert!(charge(&t, 12.0, 8.45, Some(2.4e3)).abs() < 0.02);
+        assert!(near(charge(&t, 12.0, 5.0, Some(2.4e3)), 0.05, 0.1), "below 5.8 V");
+    }
+
+    #[test]
+    fn a_fixed_current_part_has_no_prog_pin_and_status_lines_follow() {
+        let t = ChargerTemplate { setting: CurrentSetting::Fixed, current: 0.8, ..Default::default() };
+        assert!(near(charge(&t, 5.0, 3.7, None), 0.8, 0.04));
+        let r = rig(&t, 5.0, 3.7, None);
+        let op = dc_op(&r.c).unwrap();
+        assert!(op.voltage("chrg").unwrap() < 1.0 && op.voltage("stdby").unwrap() > 4.0, "charging");
+        let r = rig(&t, 5.0, 4.2, None);
+        let op = dc_op(&r.c).unwrap();
+        assert!(op.voltage("stdby").unwrap() < 1.0 && op.voltage("chrg").unwrap() > 4.0, "full");
+    }
+
+    #[test]
+    fn applying_the_template_fills_the_form_and_the_result_passes_the_checks() {
+        let mut f = PartForm { name: "MYCHG".into(), tpl: ChargerTemplate { status: false, ..Default::default() }, ..Default::default() };
+        f.apply_template();
+        assert!(f.tpl_message.contains("ピン 4 本"), "{}", f.tpl_message);
+        assert!(f.pins_text.contains("2 GND bottom") && f.pins_text.contains("4 PROG left"));
+        assert!(f.sim == SimChoice::Subckt);
+        assert_eq!(f.sim_pins, "1 2 3 4");
+        assert_eq!(f.category, "電源管理");
+        // with a 4-pin dual package the definition has no errors
+        f.pkg = PkgKind::Dual;
+        let def = f.to_def().unwrap();
+        assert!(!def.has_errors(), "{:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+        // the notes about what the model leaves out go into the saved part
+        assert!(f.sim_limits.lines().count() >= 4, "{}", f.sim_limits);
+        assert_eq!(def.sim.as_ref().unwrap().limits.len(), f.sim_limits.lines().count());
+        assert!(def.sim.unwrap().limits.iter().any(|l| l.contains("リニア") || l.contains("LX")));
+        // a missing name is explained
+        let mut g = PartForm::default();
+        g.apply_template();
+        assert!(g.tpl_message.contains("部品名"), "{}", g.tpl_message);
+    }
+}
+
+/// Hover text of a package dimension box of the part form (data sheet "recommended land pattern").
+fn pkg_tip(label: &str) -> &'static str {
+    match label {
+        "ピッチ" => "隣り合う足の中心どうしの間隔 (mm)。例: 1.27、0.65、2.54",
+        "パッド長" => "はんだ付けする銅の四角 (パッド) の長さ。データシートの推奨ランドパターンの値",
+        "パッド幅" => "パッドの幅。足の幅より少し広くします",
+        "列間隔" => "向かい合う足の列の中心どうしの間隔 (mm)。DIP の 0.3 インチ幅なら 7.62",
+        "対向パッド間隔" => "向かい合うパッドの外側から外側まで (または中心から中心まで) の距離。データシートの推奨寸法を見ます",
+        "パッド径" => "パッド (丸い銅) の直径",
+        "穴径" => "スルーホールの穴の直径。足の太さ + 0.2〜0.3mm",
+        _ => "データシートの推奨ランドパターンの寸法 (mm)",
+    }
 }

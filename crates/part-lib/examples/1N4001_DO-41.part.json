@@ -5,14 +5,37 @@
   "prefix": "D",
   "footprint_name": "D_DO-41_P10.16",
   "pins": [
-    { "number": "K", "name": "K", "side": "right" },
-    { "number": "A", "name": "A", "side": "left" }
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    }
   ],
   "package": {
     "type": "explicit",
     "pads": [
-      { "pin": "K", "x": -5.08, "y": 0, "shape": "rect", "w": 2.0, "h": 2.0, "drill": 1.0 },
-      { "pin": "A", "x": 5.08, "y": 0, "shape": "circle", "w": 2.0, "drill": 1.0 }
+      {
+        "pin": "K",
+        "x": -5.08,
+        "y": 0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 2.0,
+        "drill": 1.0
+      },
+      {
+        "pin": "A",
+        "x": 5.08,
+        "y": 0,
+        "shape": "circle",
+        "w": 2.0,
+        "drill": 1.0
+      }
     ]
   },
   "sim": {
@@ -20,6 +43,14 @@
     "element": "D",
     "name": "1N4001",
     "text": ".model 1N4001 D(IS=14.1n N=1.984 RS=0.0339 BV=50 IBV=5u)",
-    "pins": ["A", "K"]
+    "pins": [
+      "A",
+      "K"
+    ],
+    "limits": [
+      "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+      "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+      "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+    ]
   }
 }

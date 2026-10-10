@@ -5,16 +5,50 @@
   "prefix": "Q",
   "footprint_name": "TO-92_inline",
   "pins": [
-    { "number": "2", "name": "B", "side": "left" },
-    { "number": "3", "name": "C", "side": "bottom" },
-    { "number": "1", "name": "E", "side": "top" }
+    {
+      "number": "2",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "C",
+      "side": "bottom"
+    },
+    {
+      "number": "1",
+      "name": "E",
+      "side": "top"
+    }
   ],
   "package": {
     "type": "explicit",
     "pads": [
-      { "pin": "1", "x": -2.54, "y": 0, "shape": "rect", "w": 1.6, "h": 1.6, "drill": 0.8 },
-      { "pin": "2", "x": 0, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 },
-      { "pin": "3", "x": 2.54, "y": 0, "shape": "circle", "w": 1.6, "drill": 0.8 }
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
     ]
   },
   "sim": {
@@ -22,6 +56,15 @@
     "element": "Q",
     "name": "2N3906",
     "text": ".model 2N3906 PNP(IS=1.4e-14 BF=180 BR=4 RB=10)",
-    "pins": ["3", "2", "1"]
+    "pins": [
+      "3",
+      "2",
+      "1"
+    ],
+    "limits": [
+      "電流増幅率 hFE (BF) は、電流によらず一定です。実物は、電流が小さいときと大きいときに下がり、個体差も大きいです。温度では少し変わるようにしてあります。",
+      "内部の容量と蓄積時間を含みません。そのため、ON/OFF の速さは実物より速く出ます。高速にスイッチする回路の見積もりには使えません。",
+      "耐圧・定格電流・許容損失を超えても壊れません。"
+    ]
   }
 }

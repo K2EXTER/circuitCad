@@ -1,5 +1,6 @@
 //! Simulator-side circuit: nodes and elements, independent of the schematic.
 
+use crate::expr::Expr;
 use crate::waveform::Waveform;
 use std::collections::HashMap;
 
@@ -111,6 +112,9 @@ pub enum Element {
     Vccs { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     /// Conducts between `a` and `b` when v(cp,cn) is above the model's threshold.
     Switch { name: String, a: usize, b: usize, cp: usize, cn: usize, model: SwitchModel },
+    /// Behavioural source. `voltage`: v(p) - v(n) = expr; otherwise the current expr flows from `p`
+    /// through the source to `n`.
+    BSource { name: String, p: usize, n: usize, voltage: bool, expr: Expr },
 }
 
 impl Element {
@@ -130,7 +134,8 @@ impl Element {
             | Element::Mosfet { name, .. }
             | Element::Vcvs { name, .. }
             | Element::Vccs { name, .. }
-            | Element::Switch { name, .. } => name,
+            | Element::Switch { name, .. }
+            | Element::BSource { name, .. } => name,
         }
     }
 }
@@ -142,6 +147,9 @@ pub struct Circuit {
     index: HashMap<String, usize>,
     pub elements: Vec<Element>,
     pub warnings: Vec<String>,
+    /// Starting voltage of capacitors (by element name): used by the transient analysis unless it
+    /// starts from zero.
+    pub initial: Vec<(String, f64)>,
 }
 
 impl Default for Circuit {
@@ -152,7 +160,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![] }
     }
 
     /// Node index for a name; `0` and `GND` (any case) are ground.
@@ -166,6 +174,12 @@ impl Circuit {
         self.names.push(name.to_string());
         self.index.insert(name.to_string(), self.names.len() - 1);
         self.names.len() - 1
+    }
+
+    /// Start capacitor `cap` at `volts` in the transient analysis (SPICE `IC=`).
+    pub fn set_initial_voltage(&mut self, cap: &str, volts: f64) {
+        self.initial.retain(|(n, _)| n != cap);
+        self.initial.push((cap.to_string(), volts));
     }
 
     pub fn add(&mut self, e: Element) {

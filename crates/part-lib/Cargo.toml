@@ -2,6 +2,9 @@
 name = "part-lib"
 version = "0.1.0"
 edition = "2024"
+description = "circuitCad: 部品ライブラリ (回路記号・パッケージ・シミュレーションモデル)"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/K2EXTER/circuitCad"
 
 [dependencies]
 pcb-core = { version = "0.1.0", path = "../pcb-core" }
