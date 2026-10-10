@@ -79,7 +79,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 
 トランス部品は `part-lib/examples/TRANS_*.part.json`(理想変圧器をBソースで作った`.subckt`: `Bs`=電圧源、`Bp`=`-n*I(Bs)`の電流源、巻線抵抗と励磁L)。電池は `part-lib/examples/{CR2032,AA_ALKALINE,LIION_18650}.part.json`(残量を蓄える巨大なC+残量で決まる電圧のBソース+内部抵抗。時間0だけ `Bpull` で残量を1に固定してDC解析でも満充電になる。サンプル `coin_cell_led.schjson`、レッスン10)。降圧コンバータは `part-lib/examples/BUCK_DEMO.part.json`(150kHzのPWM: ランプ+積分型誤差アンプ+tanhのPWM比較器+スイッチ`S`。tanhを滑らかにしてデューティのジッタを抑え、時間0だけ誤差アンプを0に固定してDC解析を通す。サンプル `buck_converter.schjson`、レッスン11、`designcalc::buck_design`)。PNPハイサイドスイッチは `pnp_highside.schjson`(2N3906、生成 `write_pnp_example`、レッスン13、プルアップR2・負荷R3)、オペアンプ反転増幅は `opamp_inverting.schjson`(LM358、生成 `write_inverting_example`、レッスン14)。MOSFETスイッチは `docs/examples/mosfet_switch.schjson`(2N7000、生成は `write_mosfet_example`、レッスン12、負荷はR_2512で定格内)。サンプルは `docs/examples/bridge_rectifier.schjson`(生成は `write_rectifier_example`)、レッスン9がこれを使う。
 
-配布: `.github/workflows/release.yml` がタグ `v*` でWindows/macOS/Linuxのzipを作る。日本語フォントは `main.rs` の `install_japanese_font` がOSごとの候補パスから読み、無ければ `assets/fonts/BIZUDGothic-Regular.ttf`(OFL、`include_bytes!`)を使う。
+配布: 依存クレートを変えたら `python tools/gen_third_party_licenses.py` で `THIRD_PARTY_LICENSES.txt` を作り直す(CIが `--check` で古さを検査、リリースのzipに同梱)。`.github/workflows/release.yml` がタグ `v*` でWindows/macOS/Linuxのzipを作る。日本語フォントは `main.rs` の `install_japanese_font` がOSごとの候補パスから読み、無ければ `assets/fonts/BIZUDGothic-Regular.ttf`(OFL、`include_bytes!`)を使う。
 
 ## ドキュメント・サンプル
 `docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式 / `docs/examples/*.schjson` サンプル回路。

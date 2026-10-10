@@ -10,4 +10,6 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets
+      # the third-party license list must match Cargo.lock (regenerate: python tools/gen_third_party_licenses.py)
+      - run: python tools/gen_third_party_licenses.py --check
       - run: cargo test --workspace

@@ -33,7 +33,7 @@ jobs:
           d=circuitCad-${{ matrix.name }}
           mkdir "$d"
           cp "target/release/${{ matrix.bin }}" "$d/"
-          cp -r docs README.md LICENSE-MIT LICENSE-APACHE "$d/"
+          cp -r docs README.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.txt "$d/"
           if [ "$RUNNER_OS" = Windows ]; then 7z a "$d.zip" "$d"; else zip -r "$d.zip" "$d"; fi
       - uses: softprops/action-gh-release@v2
         with:

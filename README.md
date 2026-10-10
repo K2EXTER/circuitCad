@@ -67,6 +67,8 @@ Linux では、ビルドに GTK などの開発用パッケージ (`libgtk-3-dev
 
 同梱の日本語フォント (BIZ UDゴシック) は、別に SIL Open Font License 1.1 の下で配布されています。
 
+このソフトがビルドに使っているオープンソースのライブラリ (Rust のクレート) とそのライセンスは、[THIRD_PARTY_LICENSES.txt](THIRD_PARTY_LICENSES.txt) にまとめてあります。配布する実行ファイルには、このファイルを同梱します。
+
 ## 開発・支援
 - バグ報告・提案・部品の追加は大歓迎です。[CONTRIBUTING.md](CONTRIBUTING.md) をご覧ください。
 - 開発を応援してくださる方は、リポジトリの **Sponsor** ボタンから支援できます。いただいた支援は、開発の時間と、ライブラリ部品の検証に使います。
