@@ -604,3 +604,32 @@ fn series_regulator_sample_holds_5v_under_load_until_dropout() {
     let (low, _) = run("100", "6");
     assert!(low < 4.0, "dropout: the pass transistor and op-amp need headroom, got {low}");
 }
+
+/// The 78xx sample (lesson 19): 5 V, the dropout, and the heat that (input - output) x current makes.
+#[test]
+fn regulator_78xx_sample_shows_dropout_and_heat() {
+    let s = example_schematics().into_iter().find(|(n, _)| n == "regulator_78xx.schjson").unwrap().1;
+    let run = |r1: &str, v1: &str| {
+        let mut t = s.clone();
+        for c in &mut t.components {
+            match c.refdes.as_str() {
+                "R1" => c.value = r1.into(),
+                "V1" => c.value = v1.into(),
+                _ => {}
+            }
+        }
+        let r = dc_op(&from_schematic(&t).unwrap()).unwrap();
+        let issues = sim_core::check_ratings(&t, &r);
+        (r.voltage("VOUT").unwrap(), issues)
+    };
+    let (v, issues) = run("100", "12");
+    assert!((4.9..5.1).contains(&v) && issues.is_empty(), "{v} {issues:?}");
+    let (v22, issues) = run("22", "12");
+    assert!((v - v22).abs() < 0.05);
+    assert!(issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Caution), "{issues:?}");
+    let (v10, issues) = run("10", "12");
+    assert!((v - v10).abs() < 0.05);
+    assert!(issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
+    let (low, _) = run("100", "6");
+    assert!((3.8..4.2).contains(&low), "dropout 2 V: input - 2 V, got {low}");
+}

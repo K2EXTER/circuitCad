@@ -1,0 +1,315 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "330n",
+      "pos": [
+        14,
+        4
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM7805",
+      "pos": [
+        30,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "TO-220-3",
+      "custom": {
+        "name": "LM7805",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM7805",
+          "text": ".subckt LM7805 in gnd out\nVdo in ind DC 2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends LM7805",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {
+            "dropout": 2.0,
+            "vout": 5.0
+          },
+          "limits": [
+            "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
+            "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
+            "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 35.0,
+          "i_max": 1.5,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "5V ±4%"
+            },
+            {
+              "name": "ドロップアウト電圧",
+              "value": "2V (代表)",
+              "condition": "IO = 1A"
+            },
+            {
+              "name": "熱抵抗 (接合部-周囲)",
+              "value": "50℃/W",
+              "condition": "TO-220"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        46,
+        4
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        60,
+        4
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        14,
+        2
+      ],
+      "b": [
+        14,
+        -1
+      ]
+    },
+    {
+      "a": [
+        14,
+        6
+      ],
+      "b": [
+        14,
+        9
+      ]
+    },
+    {
+      "a": [
+        26,
+        -4
+      ],
+      "b": [
+        23,
+        -4
+      ]
+    },
+    {
+      "a": [
+        30,
+        0
+      ],
+      "b": [
+        30,
+        3
+      ]
+    },
+    {
+      "a": [
+        34,
+        -4
+      ],
+      "b": [
+        37,
+        -4
+      ]
+    },
+    {
+      "a": [
+        46,
+        2
+      ],
+      "b": [
+        46,
+        -1
+      ]
+    },
+    {
+      "a": [
+        46,
+        6
+      ],
+      "b": [
+        46,
+        9
+      ]
+    },
+    {
+      "a": [
+        60,
+        2
+      ],
+      "b": [
+        60,
+        -1
+      ]
+    },
+    {
+      "a": [
+        60,
+        6
+      ],
+      "b": [
+        60,
+        9
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        14,
+        -1
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        14,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        -4
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        30,
+        3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        -4
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        46,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        46,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        60,
+        9
+      ],
+      "text": "GND"
+    }
+  ]
+}

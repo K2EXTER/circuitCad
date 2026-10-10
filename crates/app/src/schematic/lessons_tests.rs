@@ -346,8 +346,28 @@ fn the_power_supply_lessons_walk_their_steps() {
     e.run_sweep();
     e.update_lesson();
     assert_eq!(progress(&e), 4, "{}", e.status);
+    // 78xx: DC, load 22, load 10 (only 12 ohm or less counts for the last load step), then the input sweep
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("regulator_78xx"));
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    set_value(&mut e, "R1", "22");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "22 ohm is not enough for the heat step");
+    set_value(&mut e, "R1", "10");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    set_value(&mut e, "R1", "100");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4, "{}", e.status);
     // every new lesson has a real-experiment card
-    for id in ["diode_curve", "zener", "emitter_follower", "series_regulator"] {
+    for id in ["diode_curve", "zener", "emitter_follower", "series_regulator", "regulator_78xx"] {
         assert!(!super::lessons::lesson_real(idx(id)).is_empty(), "{id}");
     }
 }

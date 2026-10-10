@@ -1331,6 +1331,38 @@ mod tests {
         std::fs::write(root.join("series_regulator.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Generates docs/examples/regulator_78xx.schjson (12 V -> LM7805 with 0.33 uF / 0.1 uF capacitors, 100 ohm load):
+    /// `cargo test -p app write_78xx_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_78xx_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let u = library_part("LM7805");
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "12".into();
+        let c1 = s.add(Kind::Capacitor, (14, 4), 1);
+        s.components[c1].value = "330n".into();
+        let u1 = s.add_custom(u.symbol(), &u.default_value(), &u.footprint_name(), (30, -4), 0);
+        let c2 = s.add(Kind::Capacitor, (46, 4), 1);
+        s.components[c2].value = "100n".into();
+        let r2 = s.add(Kind::Resistor, (60, 4), 1);
+        s.components[r2].value = "100".into();
+        s.components[r2].footprint = "R_2512".into();
+        label_pin(&mut s, v1, "+", "VIN");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, c1, "1", "VIN");
+        label_pin(&mut s, c1, "2", "GND");
+        label_pin(&mut s, u1, "1", "VIN");
+        label_pin(&mut s, u1, "2", "GND");
+        label_pin(&mut s, u1, "3", "VOUT");
+        label_pin(&mut s, c2, "1", "VOUT");
+        label_pin(&mut s, c2, "2", "GND");
+        label_pin(&mut s, r2, "1", "VOUT");
+        label_pin(&mut s, r2, "2", "GND");
+        std::fs::write(root.join("regulator_78xx.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):
     /// `cargo test -p app write_library_demo -- --ignored`
     #[test]
