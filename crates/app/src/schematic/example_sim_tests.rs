@@ -68,7 +68,7 @@ fn every_wizard_calculator_works_with_its_defaults_and_explains_failures() {
         e.open_wizard(k);
         let out = e.wizard_result().unwrap_or_else(|m| panic!("{}: {m}", wizard::CALCS[k].title));
         assert!(!out.steps.is_empty() && !out.cautions.is_empty() && !out.faults.is_empty(), "{}", wizard::CALCS[k].title);
-        assert!(out.primary.is_some() || wizard::CALCS[k].title.contains("配線"), "{}", wizard::CALCS[k].title);
+        assert!(out.primary.is_some() || wizard::CALCS[k].title.contains("配線") || wizard::CALCS[k].title.contains("電池"), "{}", wizard::CALCS[k].title);
     }
     // a typo is explained instead of panicking
     e.open_wizard(0);
@@ -284,4 +284,28 @@ fn reversed_parts_and_supply_faults_work_in_the_panel() {
     s.analyze_fault();
     let rep = s.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
     assert!(rep.label.contains("電圧が 0.5 倍"), "{}", rep.label);
+}
+
+#[test]
+fn coin_cell_sample_sags_under_load_and_runs_out_when_the_capacity_is_used() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "coin_cell_led.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    // 3 V cell, 15 ohm inside: about 9 mA through the LED pulls the terminal down to about 2.86 V
+    let dc = dc_op(&c).unwrap();
+    let v = dc.voltage("VBAT").unwrap();
+    assert!((2.80..2.92).contains(&v), "{v}");
+    assert!((8e-3..10.5e-3).contains(&dc.element("D1").unwrap().current));
+    // a bigger current: a bigger sag
+    let mut heavy = sch.clone();
+    heavy.components.iter_mut().find(|x| x.refdes == "R1").unwrap().value = "10".into();
+    let vh = dc_op(&from_schematic(&heavy).unwrap()).unwrap().voltage("VBAT").unwrap();
+    assert!((2.40..2.56).contains(&vh), "{vh}");
+    // 230 mAh at about 9 mA: roughly 25 hours, then the voltage collapses
+    let t = transient(&c, &TranSettings { tstop: 40.0 * 3600.0, tstep: 600.0, uic: false }).unwrap();
+    let vb = t.signal("V(VBAT)").unwrap();
+    let at = |h: f64| vb.values[t.time.iter().position(|x| *x >= h * 3600.0).unwrap()];
+    assert!(at(10.0) > 2.78, "still healthy after 10 h: {}", at(10.0));
+    assert!(at(35.0) < 2.1, "empty after 35 h: {}", at(35.0));
+    let drop_start = t.time.iter().zip(&vb.values).find(|(_, v)| **v < 2.5).map(|(x, _)| x / 3600.0).unwrap();
+    assert!((22.0..30.0).contains(&drop_start), "the cliff comes after {drop_start} h");
 }

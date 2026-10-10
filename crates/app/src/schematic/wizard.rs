@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{battery_life, zener_regulator, divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -72,6 +72,29 @@ pub(super) const CALCS: &[Calc] = &[
             ("許容リップル (V, p-p)", "1.5", "直流に残る波の大きさ。後ろにレギュレータを入れるなら 1〜2 V、そのままマイコンなどにつなぐなら小さく"),
         ],
         run: |v| smoothing_cap(v[0], v[1], v[2], v[3]),
+    },
+    Calc {
+        title: "電池の持ち時間",
+        about: "電池の容量と負荷の電流から、持ち時間の目安と、内部抵抗による電圧の下がりを調べます。コイン電池に大きな電流を流してよいかの判断にも使えます",
+        inputs: &[
+            ("電池の容量 (mAh)", "230", "電池の表示容量。CR2032 は約 230、単3アルカリは約 2500、18650 は約 2600"),
+            ("負荷の平均電流 (mA)", "9", "つなぐ回路が流す電流の平均。点滅するものは、平均を見積もります"),
+            ("電池の内部抵抗 (Ω)", "15", "CR2032 は約 15、アルカリは約 0.15、リチウムイオンは約 0.06"),
+            ("電池の電圧 (V)", "3", "新しいときの電圧"),
+            ("使える割合 (%)", "70", "表示容量のうち、実際に使える割合。電流が大きいほど減ります。70% くらいで見積もると安全です"),
+        ],
+        run: |v| battery_life(v[0], v[1], v[2], v[3], v[4]),
+    },
+    Calc {
+        title: "ツェナーダイオードで電圧を一定にする",
+        about: "ツェナーダイオードと抵抗で、決まった電圧 (5.1V など) を取り出します。小さな電流の基準電圧に向いています",
+        inputs: &[
+            ("入力電圧 (V)", "12", "ツェナーと抵抗をつなぐ電源の電圧"),
+            ("ツェナー電圧 (V)", "5.1", "ツェナーダイオードの電圧 (1N4733A なら 5.1)"),
+            ("負荷の電流 (最大, mA)", "20", "取り出す電流の最大値"),
+            ("ツェナーに残す電流 (mA)", "5", "ツェナーが働くのに最低限必要な電流。データシートの試験電流 (5〜10mA くらい)"),
+        ],
+        run: |v| zener_regulator(v[0], v[1], v[2], v[3]),
     },
     Calc {
         title: "基板の配線の太さ (電流から)",

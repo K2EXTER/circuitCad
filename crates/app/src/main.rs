@@ -26,6 +26,7 @@ const TIPS: &[&str] = &[
     "AC解析の「安定性の余裕」で位相余裕・ゲイン余裕が見られます。サンプル opamp_loop_gain で、出力に付けたコンデンサを大きくすると余裕が減る様子を試せます",
     "レッスン「交流を直流にする」では、トランス (ライブラリの「トランス」) とブリッジ整流でできるリップルを測れます。平滑コンデンサの容量は「値の決め方」で計算できます",
     "基板エディタの「3Dで見る」で、出来上がりの色と部品の高さを立体で確認できます。外形の角を丸める (角R) こともできます",
+    "電池は電圧源ではなく、内部抵抗を持ち、使うほど電圧が下がります。ライブラリの「電池」と、レッスン「電池の内部抵抗と持ち時間」で試せます",
     "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
     "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
     "DCスイープでインバーターの入出力特性を描くと、切替電圧やノイズマージンが分かります",
@@ -751,6 +752,35 @@ mod tests {
         let dir = std::env::temp_dir().join("claude");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("bottom_demo.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
+    /// `cargo test -p app write_coin_cell_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_coin_cell_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "CR2032").unwrap();
+        let mut s = sch_core::Schematic::default();
+        let bt = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (0, 0), 0);
+        let r = s.add(Kind::Resistor, (20, 0), 0);
+        s.components[r].value = "100".into();
+        let d = s.add(Kind::Led, (34, 0), 0);
+        let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+            let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+            let c = s.components[idx].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: text.into() });
+        };
+        label(&mut s, bt, "1", "VBAT");
+        label(&mut s, bt, "2", "GND");
+        label(&mut s, r, "1", "VBAT");
+        label(&mut s, r, "2", "N1");
+        label(&mut s, d, "A", "N1");
+        label(&mut s, d, "K", "GND");
+        std::fs::write(root.join("coin_cell_led.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
     /// Generates docs/examples/bridge_rectifier.schjson (100 V AC -> transformer -> bridge -> smoothing):

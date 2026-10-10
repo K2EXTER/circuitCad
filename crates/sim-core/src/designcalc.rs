@@ -279,6 +279,89 @@ pub fn smoothing_cap(vrms: f64, i_ma: f64, freq: f64, ripple: f64) -> Result<Cal
     Ok(o)
 }
 
+/// How long a battery lasts and how far its internal resistance pulls the voltage down.
+pub fn battery_life(cap_mah: f64, i_ma: f64, rint: f64, volts: f64, usable_pct: f64) -> Result<CalcOut, String> {
+    let (cap, i, rint, v, pct) = (pos("電池の容量", cap_mah)?, pos("負荷の電流", i_ma)?, pos("内部抵抗", rint)?, pos("電池の電圧", volts)?, pos("使える割合", usable_pct)?);
+    if pct > 100.0 {
+        return Err("使える割合は 100 % 以下にしてください".into());
+    }
+    let hours = cap * pct / 100.0 / i;
+    let drop = i / 1000.0 * rint;
+    let mut o = CalcOut::default();
+    let days = hours / 24.0;
+    o.rows = vec![
+        ("持ち時間の目安".into(), if hours >= 48.0 { format!("{hours:.0} 時間 (約 {days:.1} 日)") } else { format!("{hours:.1} 時間") }),
+        ("内部抵抗での電圧降下".into(), format!("{:.2} V", drop)),
+        ("電流を流したときの端子電圧".into(), format!("{:.2} V", v - drop)),
+        ("電池が出す電力".into(), format!("{:.1} mW", i * (v - drop))),
+    ];
+    o.steps = vec![
+        format!("持ち時間 = 容量 × 使える割合 ÷ 電流 = {cap} mAh × {pct} % ÷ {i} mA = {hours:.1} 時間"),
+        format!("内部抵抗の電圧降下 = 電流 × 内部抵抗 = {} A × {rint} Ω = {drop:.2} V (そのぶん、負荷にかかる電圧が下がります)", format_value(i / 1000.0)),
+    ];
+    if drop > v * 0.1 {
+        o.cautions.push(format!("電圧降下が電池の電圧の {:.0} % あります。内部抵抗の大きい電池 (コイン電池など) に、これだけの電流を流すのは向きません。電流を減らすか、内部抵抗の小さい電池 (アルカリ・リチウムイオン) にしましょう", drop / v * 100.0));
+    }
+    if pct > 85.0 {
+        o.cautions.push("使える割合が高めです。電流が大きいほど、電池の容量は表示より減ります (データシートの容量は小さい電流のときの値)。余裕を見て 50〜80 % で見積もりましょう".into());
+    }
+    o.cautions.push("電池の電圧は、使うにつれて下がります。回路が動く最低電圧 (たとえば 3.3V のマイコンなら 2.7V 前後) になったら「空」と考えます。アルカリ電池は 1.5V → 0.9V、コイン電池は 3V → 2V、リチウムイオンは 4.2V → 3.0V が目安です".into());
+    o.cautions.push("低温では、容量が減って内部抵抗が増えます。屋外で使う機器は、余裕を多めに見ます".into());
+    o.faults = vec![
+        "電池を逆向きに入れる: 多くの回路で動きません。ダイオードを入れて守ると、そのぶん電圧が下がります".into(),
+        "電池をショートする: 内部抵抗だけで電流が決まり、大きな電流で発熱・膨張・破裂のおそれがあります (特にリチウムイオン)。電池の近くにヒューズや保護回路を入れます".into(),
+        "古い電池と新しい電池を混ぜる: 古いほうが先に空になり、逆に充電されたり、液漏れしたりします".into(),
+        "電池が弱ってきた: 内部抵抗が増え、負荷をつなぐと電圧が大きく下がって、無負荷では元気そうに見えます (電圧だけでは残量が分かりません)".into(),
+    ];
+    Ok(o)
+}
+
+/// Zener shunt regulator: resistor, and the power in the resistor and the zener.
+pub fn zener_regulator(vin: f64, vz: f64, i_load_ma: f64, iz_min_ma: f64) -> Result<CalcOut, String> {
+    let (vin, vz, il, izm) = (pos("入力電圧", vin)?, pos("ツェナー電圧", vz)?, pos("負荷電流 (最大)", i_load_ma)? / 1000.0, pos("ツェナーに残す電流", iz_min_ma)? / 1000.0);
+    if vin <= vz {
+        return Err("入力電圧はツェナー電圧より高くしてください (差が数 V 以上あると安定します)".into());
+    }
+    let rx = (vin - vz) / (il + izm);
+    let rs = e24(rx, false);
+    // with the load removed, all the current flows through the zener
+    let i_all = (vin - vz) / rs;
+    let i_min = i_all - il;
+    let (p_r, p_z) = ((vin - vz) * i_all, vz * i_all);
+    let mut o = CalcOut { primary: Some(format_value(rs)), ..Default::default() };
+    o.rows = vec![
+        ("計算上の抵抗".into(), r(rx)),
+        ("使う抵抗 (E24)".into(), r(rs)),
+        ("負荷最大のときツェナーに流れる電流".into(), format!("{:.1} mA", i_min * 1000.0)),
+        ("負荷なしのときツェナーに流れる電流".into(), format!("{:.1} mA", i_all * 1000.0)),
+        ("抵抗の発熱".into(), format!("{:.0} mW", p_r * 1000.0)),
+        ("ツェナーの発熱 (負荷なし)".into(), format!("{:.0} mW", p_z * 1000.0)),
+    ];
+    o.steps = vec![
+        "ツェナーダイオードは、逆向きに電圧をかけると一定の電圧 (ツェナー電圧) で電流を通します。抵抗で電流を制限して、その電圧を取り出します".into(),
+        format!("抵抗の電流 = 負荷電流 + ツェナーに残す電流。R = (Vin − Vz) ÷ (I負荷 + Iz) = ({vin} − {vz}) ÷ {} = {}", format_value(il + izm), r(rx)),
+        format!("負荷を外すと、電流がすべてツェナーに流れます: {:.1} mA。そのときの発熱 = Vz × I = {:.0} mW", i_all * 1000.0, p_z * 1000.0),
+    ];
+    if i_min < izm * 0.9 {
+        o.cautions.push("負荷が最大のとき、ツェナーに十分な電流が残りません。電圧がずれます。抵抗を小さくするか、入力電圧を上げましょう".into());
+    }
+    if p_z > 0.4 {
+        o.cautions.push("ツェナーの発熱が 0.4 W を超えます。一般的な 0.5 W 品では余裕が少ないので、1 W 品にするか、入力電圧を下げましょう".into());
+    }
+    if p_r > 0.2 {
+        o.cautions.push("抵抗の発熱が 0.2 W を超えます。1/2 W 以上の抵抗にしましょう".into());
+    }
+    o.cautions.push("ツェナーの電圧は電流や温度で少しずれます (数 %)。精度が必要なら、リニアレギュレータを使います".into());
+    o.cautions.push("大きな電流には向きません。電流が大きく変わる負荷には、ツェナーの後ろにトランジスタを付けるか、レギュレータ IC を使います。電力のほとんどを抵抗とツェナーが熱にします".into());
+    o.faults = vec![
+        "ツェナーを逆向きにつなぐ: 普通のダイオードとして 0.7 V で導通し、出力が 0.7 V になります".into(),
+        "ツェナーが断線: 電圧が安定せず、入力電圧 (または負荷で決まる電圧) が、そのまま負荷にかかります".into(),
+        "ツェナーがショート: 出力が 0 V になり、抵抗に大きな電流が流れて発熱します".into(),
+        "抵抗が大きすぎる: 負荷が重いときにツェナーが働かず、電圧が下がります".into(),
+    ];
+    Ok(o)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,5 +430,20 @@ mod tests {
         assert!(o.rows.iter().any(|(k, v)| k.contains("耐圧") && v.contains("25 V")), "{:?}", o.rows);
         assert!(smoothing_cap(12.0, 150.0, 50.0, 20.0).is_err());
         assert!(!o.faults.is_empty() && !o.cautions.is_empty());
+    }
+
+    #[test]
+    fn battery_life_and_zener_regulator() {
+        let o = battery_life(230.0, 9.0, 15.0, 3.0, 70.0).unwrap();
+        assert!(o.rows[0].1.contains("17.9"), "{:?}", o.rows);
+        assert!(o.rows[1].1.contains("0.13"), "{:?}", o.rows);
+        assert!(!o.cautions.is_empty() && !o.faults.is_empty());
+        assert!(battery_life(230.0, 100.0, 15.0, 3.0, 70.0).unwrap().cautions.iter().any(|c| c.contains("内部抵抗の大きい電池")));
+        assert!(battery_life(230.0, 9.0, 15.0, 3.0, 120.0).is_err());
+        // 12 V -> 5.1 V zener with 20 mA load and 5 mA left: R = 6.9 / 25 mA = 276 -> 270 ohm
+        let z = zener_regulator(12.0, 5.1, 20.0, 5.0).unwrap();
+        assert_eq!(z.primary.as_deref(), Some("270"));
+        assert!(z.cautions.iter().any(|c| c.contains("ツェナーの電圧は")));
+        assert!(zener_regulator(5.0, 5.1, 20.0, 5.0).is_err());
     }
 }
