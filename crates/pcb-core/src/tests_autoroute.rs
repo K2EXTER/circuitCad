@@ -22,6 +22,7 @@ fn two_pads_are_joined_without_breaking_a_rule() {
     assert_eq!((r.routed, r.failed.len()), (1, 0));
     assert!(ratsnest(&b).is_empty());
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    assert!(drc::acute_angle_checks(&b).is_empty(), "{:?}", drc::acute_angle_checks(&b));
     assert!(b.vias.is_empty(), "a free straight path needs no via");
     assert!(b.tracks.len() <= 3, "straight runs are merged: {}", b.tracks.len());
 }
@@ -38,6 +39,7 @@ fn a_wall_of_another_net_is_crossed_with_vias() {
     assert!(ratsnest(&b).is_empty());
     assert_eq!(b.vias.len(), 2, "down and up again");
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    assert!(drc::acute_angle_checks(&b).is_empty(), "{:?}", drc::acute_angle_checks(&b));
 }
 
 #[test]
@@ -82,4 +84,5 @@ fn many_nets_cross_each_other_cleanly() {
     assert!(r.failed.is_empty(), "{:?}", r.failed);
     assert!(ratsnest(&b).is_empty());
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    assert!(drc::acute_angle_checks(&b).is_empty(), "{:?}", drc::acute_angle_checks(&b));
 }

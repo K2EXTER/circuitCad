@@ -276,6 +276,15 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Warn, format!("ICの電源ピンのそばのコンデンサに気になる所が {} 件あります", decoupling.len()), format!("例: {}", first.message), Some(first.at)));
     }
 
+    // trace corners
+    let acute = drc::acute_angle_checks(board);
+    if let Some(first) = acute.first() {
+        out.push(check(Level::Warn, format!("鋭角に曲がっている配線が {} 箇所あります", acute.len()), format!("例: {}", first.message), Some(first.at)));
+    }
+    if drc::missing_ground_fill(board) {
+        out.push(check(Level::Info, "GND のベタ (銅箔ゾーン) がありません", "2層基板では、裏面などを GND のゾーンで塗ると、信号の戻り道が短くなってノイズが減り、配線もしやすくなります。ツール「ゾーン」でネット GND を選んで囲みましょう", None));
+    }
+
     // BOM
     let blank: Vec<&str> = board.parts.iter().filter(|p| p.value.trim().is_empty()).map(|p| p.refdes.as_str()).collect();
     if !blank.is_empty() {

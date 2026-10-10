@@ -296,6 +296,9 @@ fn shipped_example_boards_can_be_previewed() {
             assert!(pv.size_mm.0 > 5.0, "{}", entry.path().display());
             let checks = pcb_core::fab::preflight(&board, pcb_core::fab::preset("jlcpcb"));
             assert!(!checks.is_empty());
+            // the samples are tidy: no sharp corners, bypass capacitors where an IC needs them
+            assert!(pcb_core::drc::acute_angle_checks(&board).is_empty(), "{}", entry.path().display());
+            assert!(pcb_core::drc::decoupling_checks(&board).is_empty(), "{}", entry.path().display());
             n += 1;
         }
     }

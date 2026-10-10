@@ -39,7 +39,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 ## pcb-core (`crates/pcb-core/src`)
 - `model.rs` `Board`/`Track`/`Pad`/`Via`/`Zone`/`Rules` ほか全データ型
 - `drc.rs` `check`(全体)・`clearance`・`shorts`・`connectivity`(銅の接続グループ、ネット判定) — 自動配線もこれを使う
-- `current.rs` 配線の太さと電流(IPC-2221: `width_for_current`/`current_for_width`、`Board.net_currents` との照合 `net_widths`、`widen_net`) / `drc.rs` の `silk_checks` はシルク注意、`decoupling_checks` はICの電源ピンのバイパスコンデンサ(無い/8mm超で警告、`MAX_DECOUPLING_DISTANCE`)。どちらも発注前チェックで警告 / DRCの指摘は日本語で原因と直し方を書く
+- `current.rs` 配線の太さと電流(IPC-2221: `width_for_current`/`current_for_width`、`Board.net_currents` との照合 `net_widths`、`widen_net`) / `drc.rs` の `silk_checks` はシルク注意、`decoupling_checks` はICの電源ピンのバイパスコンデンサ(無い/8mm超で警告、`MAX_DECOUPLING_DISTANCE`)、`acute_angle_checks` は90°未満の鋭角(酸のたまり)、`missing_ground_fill` はGNDベタが無いときのヒント。どちらも発注前チェックで警告 / DRCの指摘は日本語で原因と直し方を書く
 - `outline.rs` 曲線の外形(`round_corners`・`rounded_rect`・`ellipse`。外形は多角形のまま、曲線は細かい線分にする) / `model3d.rs` 3Dプレビュー用の部品の立体(`part_boxes`が部品ごとに複数の箱/円柱を返す。チップ+電極、ICの足、ヘッダのピン、円柱。種類は `part_kind`、高さは `part_style` でフットプリントから推測)
 - `ratsnest.rs` 未配線(`Airwire`) / `autoroute.rs` 格子A*の自動配線 (`autoroute`, `route_airwire`、DRCで検証して採用)
 - `netlist.rs` 回路図→基板の取込 / `parts.rs` `place_part` / `footprints.rs`・`package.rs` フットプリント

@@ -509,6 +509,51 @@ pub fn decoupling_checks(board: &Board) -> Vec<Violation> {
     out
 }
 
+/// Where two tracks of the same layer meet at an angle sharper than 90 degrees. The wedge of
+/// copper-free space between them traps etchant ("acid trap") and the corner can over-etch; it also
+/// makes a fast signal reflect. Use 45-degree bends (an interior angle of 135 degrees) instead.
+pub fn acute_angle_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    let tracks = &board.tracks;
+    for (i, t) in tracks.iter().enumerate() {
+        for u in tracks.iter().skip(i + 1).filter(|u| u.side == t.side) {
+            for (p, q) in [(t.a, t.b), (t.b, t.a)] {
+                // `p` is the shared end; `q` is the far end of t; the far end of u is whichever end is not at p
+                let far = if (u.a.x - p.x).hypot(u.a.y - p.y) < 1e-6 {
+                    u.b
+                } else if (u.b.x - p.x).hypot(u.b.y - p.y) < 1e-6 {
+                    u.a
+                } else {
+                    continue;
+                };
+                let (v1, v2) = ((q.x - p.x, q.y - p.y), (far.x - p.x, far.y - p.y));
+                let (l1, l2) = (v1.0.hypot(v1.1), v2.0.hypot(v2.1));
+                if l1 < 1e-6 || l2 < 1e-6 {
+                    continue;
+                }
+                let cos = ((v1.0 * v2.0 + v1.1 * v2.1) / (l1 * l2)).clamp(-1.0, 1.0);
+                let deg = cos.acos().to_degrees();
+                // a straight continuation is 180; a 45-degree bend is 135; 90 is the sharpest we accept
+                if deg < 89.0 && deg > 1.0 {
+                    out.push(v(
+                        format!("配線が {deg:.0}° の鋭角で曲がっています。鋭角の隙間には、基板をつくる薬品がたまって銅が余計に削れる (酸のたまり)・高速な信号が反射する、といった問題が出ます。曲がり角は 135° (45° の折れ) か 90° にしましょう"),
+                        p,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// A board with ground pads but no ground copper pour: worth a hint on a 2-layer board, where a
+/// ground fill gives every signal a short return path and cuts noise.
+pub fn missing_ground_fill(board: &Board) -> bool {
+    let has_ground = board.pads.iter().any(|p| is_ground_net(&p.net));
+    let has_fill = board.zones.iter().any(|z| is_ground_net(&z.net));
+    has_ground && !has_fill && board.pads.iter().filter(|p| !p.net.is_empty()).count() >= 4
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -639,5 +684,35 @@ mod tests {
         let far = decoupling_checks(&ic_board(Some(30.0)));
         assert_eq!(far.len(), 1, "{far:?}");
         assert!(far[0].message.contains("mm あります"));
+    }
+
+    #[test]
+    fn acute_corners_are_flagged_but_45_degree_bends_are_not() {
+        let mut b = board();
+        // 135 degree interior angle (a 45 degree bend)
+        b.tracks.push(track(Side::Top, (10.0, 10.0), (20.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (20.0, 10.0), (25.0, 15.0), 0.25));
+        // a plain 90 degree corner
+        b.tracks.push(track(Side::Top, (30.0, 10.0), (35.0, 10.0), 0.25));
+        b.tracks.push(track(Side::Top, (35.0, 10.0), (35.0, 15.0), 0.25));
+        assert!(acute_angle_checks(&b).is_empty(), "{:?}", acute_angle_checks(&b));
+        // 45 degree interior angle: doubling back
+        b.tracks.push(track(Side::Top, (10.0, 30.0), (20.0, 30.0), 0.25));
+        b.tracks.push(track(Side::Top, (20.0, 30.0), (10.0, 35.0), 0.25));
+        let v = acute_angle_checks(&b);
+        assert_eq!(v.len(), 1, "{v:?}");
+        // the same shape on different layers does not touch
+        let mut c = board();
+        c.tracks.push(track(Side::Top, (10.0, 30.0), (20.0, 30.0), 0.25));
+        c.tracks.push(track(Side::Bottom, (20.0, 30.0), (10.0, 35.0), 0.25));
+        assert!(acute_angle_checks(&c).is_empty());
+    }
+
+    #[test]
+    fn a_ground_fill_is_suggested_only_when_there_is_none() {
+        let mut b = ic_board(Some(12.0));
+        assert!(missing_ground_fill(&b));
+        b.zones.push(Zone::new("GND", Side::Bottom, vec![Point::new(1.0, 1.0), Point::new(30.0, 1.0), Point::new(30.0, 30.0)]));
+        assert!(!missing_ground_fill(&b));
     }
 }
