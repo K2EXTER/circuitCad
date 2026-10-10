@@ -38,6 +38,7 @@ pub fn package_power_limit(footprint: &str) -> Option<f64> {
         ("TO-92", 0.5),
         ("TO-220", 2.0),
         ("SOIC", 0.5),
+        ("AXIAL", 0.25),
         ("SMA", 1.0),
         ("DO-41", 1.0),
         ("DO-35", 0.4),

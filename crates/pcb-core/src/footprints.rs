@@ -57,7 +57,7 @@ fn header(name: &str, pins: &[String]) -> Footprint {
 
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
-        "R_0603", "R_0805", "C_0603", "C_0805", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08",
+        "R_0603", "R_0805", "R_1206", "R_2512", "C_0603", "C_0805", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08",
         "D_DO-35_7.62", "LED_5mm", "TO-92", "SOT-23", "PinHeader_1x2_PM",
     ]
     .iter()
@@ -73,6 +73,9 @@ pub fn get(name: &str) -> Option<Footprint> {
     let fp = match name {
         "R_0603" | "C_0603" => smd2(name, 0.825, 0.8, 0.95, ["1", "2"]),
         "R_0805" | "C_0805" | "L_0805" => smd2(name, 0.9125, 1.025, 1.4, ["1", "2"]),
+        // IPC-7351 nominal land patterns for the larger chips (1/4 W and 1 W resistors)
+        "R_1206" => smd2(name, 1.5, 1.2, 1.8, ["1", "2"]),
+        "R_2512" => smd2(name, 2.95, 1.4, 3.4, ["1", "2"]),
         "LED_0805" => smd2(name, 0.9125, 1.025, 1.4, ["K", "A"]),
         "D_SOD-123" => smd2(name, 1.65, 0.91, 1.22, ["K", "A"]),
         "R_Axial_10.16" => tht2(name, 10.16, 1.8, 0.9, ["1", "2"]),

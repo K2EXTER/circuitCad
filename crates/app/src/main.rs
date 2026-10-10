@@ -901,6 +901,46 @@ mod tests {
         std::fs::write(root.join("bridge_rectifier.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Generates docs/examples/mosfet_switch.schjson (5 V pulse -> 2N7000 gate -> 47 ohm load to 5 V):
+    /// `cargo test -p app write_mosfet_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_mosfet_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = part_lib::EXAMPLES
+            .iter()
+            .map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap())
+            .find(|d| d.name == "2N7000")
+            .unwrap();
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "5".into();
+        let v2 = s.add(Kind::VSource, (0, 14), 0);
+        s.components[v2].value = "PULSE(0 5 100u 1u 1u 400u 1m)".into();
+        let r1 = s.add(Kind::Resistor, (10, 8), 0);
+        s.components[r1].value = "100".into();
+        let r2 = s.add(Kind::Resistor, (20, -4), 1);
+        s.components[r2].value = "47".into();
+        s.components[r2].footprint = "R_2512".into();
+        let q = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 8), 0);
+        let label_at = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+            let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+            s.labels.push(sch_core::Label { pos: pt, text: text.into() });
+        };
+        label_at(&mut s, v1, "+", "VCC");
+        label_at(&mut s, v1, "-", "GND");
+        label_at(&mut s, v2, "+", "IN");
+        label_at(&mut s, v2, "-", "GND");
+        label_at(&mut s, r1, "1", "IN");
+        label_at(&mut s, r1, "2", "G");
+        label_at(&mut s, r2, "1", "VCC");
+        label_at(&mut s, r2, "2", "OUT");
+        label_at(&mut s, q, "2", "G");
+        label_at(&mut s, q, "3", "OUT");
+        label_at(&mut s, q, "1", "GND");
+        std::fs::write(root.join("mosfet_switch.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):
     /// `cargo test -p app write_library_demo -- --ignored`
     #[test]

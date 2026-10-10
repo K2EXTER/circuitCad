@@ -393,3 +393,26 @@ fn shipped_examples_have_no_warnings_about_nodes_inside_models() {
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }
+
+/// The MOSFET lesson: off below the threshold, a low but non-zero drop when on, and a heavy load that runs the parts hot.
+#[test]
+fn mosfet_sample_switches_around_2v_and_the_lesson_numbers_hold() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "mosfet_switch.schjson").unwrap().1;
+    let run = |vg: &str, r2: &str| {
+        let mut s = sch.clone();
+        s.components.iter_mut().find(|c| c.refdes == "V2").unwrap().value = vg.into();
+        s.components.iter_mut().find(|c| c.refdes == "R2").unwrap().value = r2.into();
+        let dc = dc_op(&from_schematic(&s).unwrap()).unwrap();
+        let issues = sim_core::check_ratings(&s, &dc);
+        (dc.voltage("OUT").unwrap(), dc.element("Q1").unwrap().current, issues)
+    };
+    assert!((run("1.5", "47").0 - 5.0).abs() < 0.01, "off below the threshold");
+    assert!((2.4..2.9).contains(&run("3", "47").0), "half on at 3 V");
+    let (v, i, issues) = run("5", "47");
+    assert!((0.2..0.4).contains(&v) && (0.09..0.11).contains(&i), "{v} {i}");
+    assert!(issues.is_empty(), "the sample is within ratings: {issues:?}");
+    let (v, i, issues) = run("5", "10");
+    assert!((1.1..1.6).contains(&v) && (0.3..0.4).contains(&i), "{v} {i}");
+    assert!(issues.iter().any(|x| x.refdes == "R2" && x.level == sim_core::RatingLevel::Over), "{issues:?}");
+    assert!(issues.iter().any(|x| x.refdes == "Q1"), "{issues:?}");
+}
