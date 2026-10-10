@@ -166,9 +166,9 @@ pub struct SchEditor {
     wiz_open: bool,
     wiz_kind: usize,
     wiz_in: Vec<String>,
-    /// Analysis sections of the "解析" tab: a generation counter (bumped by "すべて開く / 基本だけ" to reset them) and whether all start open.
+    /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
     sec_gen: u32,
-    sec_all: bool,
+    sec_mode: u8,
     fault_part: String,
     /// Pin to break ("" = break the whole part), how (0 open, 1 to ground, 2 bridge to `fault_bridge`).
     fault_pin: String,
@@ -194,6 +194,8 @@ pub struct SchEditor {
     sweep_stop: String,
     sweep_step: String,
     noise_pick: bool,
+    /// The node picker is choosing a waveform to add to the viewer (not the noise output).
+    pick_probe: bool,
     /// Net name under the cursor while picking, with the grid point it was computed for.
     pick_hover: Option<(Pt, Option<String>)>,
     /// Grid points of the picked output / reference nodes, drawn as rings.
@@ -402,7 +404,7 @@ impl Default for SchEditor {
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,
-            sec_all: false,
+            sec_mode: 0,
             fault_part: String::new(),
             fault_pin: String::new(),
             fault_pin_how: 0,
@@ -426,6 +428,7 @@ impl Default for SchEditor {
             sweep_stop: "5".into(),
             sweep_step: "0.05".into(),
             noise_pick: false,
+            pick_probe: false,
             pick_hover: None,
             noise_marks: vec![],
             wave_mode: WaveMode::Tran,

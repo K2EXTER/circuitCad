@@ -88,6 +88,7 @@ impl SchEditor {
             let label = if self.noise_pick { "選択中… (Esc で中止)" } else { "回路図で選ぶ" };
             if ui.selectable_label(self.noise_pick, label).on_hover_text("押してから回路図のピンや配線をクリックすると、そのノードが出力になり、すぐ解析します。\nShift+クリックで基準ノード (差動出力)").clicked() {
                 self.noise_pick = !self.noise_pick;
+                self.pick_probe = false;
                 self.pick_hover = None;
                 if self.noise_pick {
                     self.status = "回路図の測りたいノードをクリックしてください".into();

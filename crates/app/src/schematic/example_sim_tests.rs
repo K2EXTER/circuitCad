@@ -309,3 +309,35 @@ fn coin_cell_sample_sags_under_load_and_runs_out_when_the_capacity_is_used() {
     let drop_start = t.time.iter().zip(&vb.values).find(|(_, v)| **v < 2.5).map(|(x, _)| x / 3600.0).unwrap();
     assert!((22.0..30.0).contains(&drop_start), "the cliff comes after {drop_start} h");
 }
+
+#[test]
+fn right_click_leaves_the_tool_and_the_probe_adds_any_net_to_the_viewer() {
+    let mut e = editor_with("rc_lowpass.schjson");
+    // the right click: end the wire being drawn and return to the Select tool, once
+    e.tool = Tool::Wire;
+    e.pending = Some((0, 0));
+    assert!(e.leave_tool());
+    assert!(e.tool == Tool::Select && e.pending.is_none());
+    assert!(!e.leave_tool(), "already in the Select tool: the right click then opens the part window instead");
+    e.tool = Tool::Place;
+    assert!(e.leave_tool() && e.tool == Tool::Select);
+    // the probe: pick a pin on the sheet and its voltage joins the transient viewer
+    e.set_tran_settings("2m", "10u");
+    e.analyze_tran();
+    let before = e.tran.as_ref().unwrap().selected.clone();
+    let c1 = e.sch.components.iter().find(|c| c.refdes == "C1").unwrap();
+    let pt = c1.pins().into_iter().find(|(n, _)| n == "1").unwrap().1;
+    let net = sch_core::net_at(&e.sch, pt).unwrap();
+    e.tran.as_mut().unwrap().selected.clear();
+    e.start_probe();
+    assert!(e.noise_pick && e.pick_probe);
+    e.pick_noise_node(pt, false);
+    assert!(e.tran.as_ref().unwrap().selected.contains(&format!("V({net})")), "{} / {:?}", e.status, before);
+    assert!(e.noise_pick, "picking goes on, so several points can be added");
+    // a spot with nothing on it is explained, and GND (no waveform) too
+    e.pick_noise_node((200, 200), false);
+    assert!(e.status.contains("接続された"), "{}", e.status);
+    let g = e.sch.components.iter().find(|c| c.kind == sch_core::Kind::Ground).unwrap().pins()[0].1;
+    e.pick_noise_node(g, false);
+    assert!(e.status.contains("GND"), "{}", e.status);
+}

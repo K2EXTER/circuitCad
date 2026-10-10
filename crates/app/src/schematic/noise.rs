@@ -16,6 +16,10 @@ impl SchEditor {
     /// A click at `pt` while choosing the noise output: plain click = output node,
     /// Shift+click = reference node (differential output).
     pub(super) fn pick_noise_node(&mut self, pt: Pt, shift: bool) {
+        if self.pick_probe {
+            self.probe_node(pt);
+            return;
+        }
         let Some(name) = net_at(&self.sch, pt) else {
             self.status = "そこには接続された配線・ピンがありません。部品のピンか配線の上をクリックしてください".into();
             return;
@@ -36,6 +40,44 @@ impl SchEditor {
         }
         self.noise_pick = false;
         self.run_noise();
+    }
+
+    /// Starts choosing points on the sheet to add to the waveform viewer.
+    pub(super) fn start_probe(&mut self) {
+        self.noise_pick = true;
+        self.pick_probe = true;
+        self.pick_hover = None;
+        self.status = "波形を見たい点 (ピンや配線) をクリックしてください。続けて追加できます (Esc か右クリックで終了)".into();
+    }
+
+    /// A click at `pt` while probing: puts V(net) of that point into the open transient / AC viewer.
+    pub(super) fn probe_node(&mut self, pt: Pt) {
+        let Some(name) = net_at(&self.sch, pt) else {
+            self.status = "そこには接続された配線・ピンがありません。部品のピンか配線の上をクリックしてください".into();
+            return;
+        };
+        let sig = format!("V({name})");
+        let added = match self.wave_mode {
+            WaveMode::Ac => self.ac.as_mut().is_some_and(|v| {
+                let ok = v.outcome.as_ref().is_ok_and(|r| r.signal(&sig).is_some());
+                if ok {
+                    v.selected.insert(sig.clone());
+                }
+                ok
+            }),
+            _ => self.tran.as_mut().is_some_and(|v| {
+                let ok = v.outcome.as_ref().is_ok_and(|r| r.signal(&sig).is_some());
+                if ok {
+                    v.selected.insert(sig.clone());
+                }
+                ok
+            }),
+        };
+        self.status = if added {
+            format!("{sig} を波形に追加しました。続けてクリックできます (Esc か右クリックで終了)")
+        } else {
+            format!("{sig} は、いま表示中の解析結果にありません。先に過渡解析かAC解析を実行してください (GND は 0V の基準なので波形はありません)")
+        };
     }
 
     pub(super) fn run_noise(&mut self) {

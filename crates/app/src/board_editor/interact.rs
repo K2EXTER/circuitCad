@@ -111,9 +111,21 @@ impl BoardEditor {
             self.gdrag = None;
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
-            self.pending = None;
-            self.poly.clear();
+            self.leave_tool();
         }
         sp
+    }
+
+    /// The right click: drops the track, polygon or part being drawn and returns to the Select tool
+    /// (AutoCAD style). Returns whether the tool changed.
+    pub(super) fn leave_tool(&mut self) -> bool {
+        self.pending = None;
+        self.poly.clear();
+        if self.tool == Tool::Select {
+            return false;
+        }
+        self.tool = Tool::Select;
+        self.status = "選択ツールに戻りました".into();
+        true
     }
 }

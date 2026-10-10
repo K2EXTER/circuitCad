@@ -56,6 +56,7 @@ impl SchEditor {
     pub(super) fn tran_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.tran.as_mut() else { return };
         let mut close = false;
+        let mut start_probe = false;
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
@@ -87,9 +88,14 @@ impl SchEditor {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
                         ui.set_width(170.0);
-                        if ui.button("選択をクリア").clicked() {
-                            selected.clear();
-                        }
+                        ui.horizontal(|ui| {
+                            if ui.button("選択をクリア").clicked() {
+                                selected.clear();
+                            }
+                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図のピンや配線をクリックすると、その点の電圧の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
+                                start_probe = true;
+                            }
+                        });
                         // mean and AC RMS (= noise / ripple amplitude) over the visible window
                         let (w0, w1) = if *spectrum {
                             (parse_value(spec_t0).unwrap_or(0.0), parse_value(spec_t1).unwrap_or(f64::MAX))
@@ -215,6 +221,9 @@ impl SchEditor {
                     }
                 });
             }
+        }
+        if start_probe {
+            self.start_probe();
         }
         if close {
             self.tran = None;

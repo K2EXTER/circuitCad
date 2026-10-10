@@ -349,3 +349,16 @@ fn rounded_outlines_from_the_panel_helpers_are_undoable_and_keep_their_size() {
     e.undo();
     assert_eq!(e.board.outline.len(), 4);
 }
+
+#[test]
+fn right_click_in_the_board_editor_drops_the_drawing_and_returns_to_select() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Track;
+    e.pending = Some(p(5.0, 5.0));
+    assert!(e.leave_tool());
+    assert!(matches!(e.tool, Tool::Select) && e.pending.is_none());
+    e.tool = Tool::OutlinePoly;
+    e.poly.push(p(0.0, 0.0));
+    assert!(e.leave_tool() && e.poly.is_empty());
+    assert!(!e.leave_tool());
+}

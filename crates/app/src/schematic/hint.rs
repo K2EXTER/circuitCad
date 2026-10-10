@@ -5,6 +5,9 @@ use super::*;
 impl SchEditor {
     /// A tip for what to try next, based on what is on screen.
     pub fn hint(&self) -> String {
+        if self.noise_pick && self.pick_probe {
+            return "波形を見たい点 (ピンや配線) をクリックします。続けて何か所でも追加できます。Esc か右クリックで終了".into();
+        }
         if self.noise_pick {
             return "ノイズを測りたいノードをクリックします。Shift+クリックで基準ノード、Esc で中止".into();
         }
@@ -12,10 +15,10 @@ impl SchEditor {
             return "まず部品を置きましょう。左の一覧から選んで画面をクリック。「ファイル → 開く」で docs/examples のサンプル回路も試せます".into();
         }
         if self.pending.is_some() {
-            return "配線中: 次の点をクリックして線を延長、ダブルクリックか右クリックで終了します".into();
+            return "配線中: 次の点をクリックして線を延長、ダブルクリックで終了、右クリックで中断して選択ツールに戻ります".into();
         }
         match self.tool {
-            Tool::Place if !self.has_wave() => return "クリックで部品を置きます。R キーで回転、右クリックで中断。置いた後は「選択」で値を変えられます".into(),
+            Tool::Place if !self.has_wave() => return "クリックで部品を置きます。R キーで回転、右クリックで選択ツールに戻ります。置いた後は「選択」で値を変えられます".into(),
             Tool::Wire => return "部品のピン (赤い点) から点へクリックしてつなぎます。T字に分岐する場合は、線の途中に別の線の端を置きます".into(),
             Tool::Label => return "ラベル名を決めて回路図の点をクリック。同じ名前の場所は線なしでつながります (電源 VCC や GND に便利)".into(),
             Tool::Select | Tool::Place => {}

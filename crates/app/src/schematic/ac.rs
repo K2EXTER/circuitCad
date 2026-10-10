@@ -40,6 +40,7 @@ impl SchEditor {
     pub(super) fn ac_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.ac.as_mut() else { return };
         let mut close = false;
+        let mut start_probe = false;
         ui.horizontal(|ui| {
             ui.strong("AC解析 (ボード線図)");
             if ui.button("閉じる").clicked() {
@@ -62,9 +63,14 @@ impl SchEditor {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
                         ui.set_width(170.0);
-                        if ui.button("選択をクリア").clicked() {
-                            selected.clear();
-                        }
+                        ui.horizontal(|ui| {
+                            if ui.button("選択をクリア").clicked() {
+                                selected.clear();
+                            }
+                            if ui.button("回路図で選ぶ").on_hover_text("押してから回路図のピンや配線をクリックすると、その点の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
+                                start_probe = true;
+                            }
+                        });
                         for name in order.iter().filter(|n| selected.contains(**n)).take(4) {
                             if let Some(sg) = res.signal(name).filter(|s| s.unit == "V") {
                                 let txt = match minus_3db(&res.freq, &sg.mag()) {
@@ -147,6 +153,9 @@ impl SchEditor {
                     plot::draw_group(ui, bottom, egui::Id::new("bode_phase"), &phase, st, 1, &ps, true);
                 });
             }
+        }
+        if start_probe {
+            self.start_probe();
         }
         if close {
             self.ac = None;

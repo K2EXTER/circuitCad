@@ -160,11 +160,18 @@ impl SchEditor {
             self.pending = None;
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
-            let was_drawing = self.pending.take().is_some();
-            // right-clicking a part (when not in the middle of a wire) opens its settings window
-            if !was_drawing
-                && matches!(self.tool, Tool::Select)
-                && !self.noise_pick
+            if self.noise_pick {
+                self.noise_pick = false;
+                self.pick_probe = false;
+                self.status = "ノードの選択を終了しました".into();
+                return;
+            }
+            // AutoCAD style: a right click ends whatever is being drawn and goes back to the Select tool
+            if self.leave_tool() {
+                return;
+            }
+            // in the Select tool, right-clicking a part opens its settings window
+            if matches!(self.tool, Tool::Select)
                 && let Some(i) = self.comp_at(g)
                 && let Some(pos) = resp.interact_pointer_pos()
             {
@@ -174,5 +181,17 @@ impl SchEditor {
                 self.part_popup = Some((i, pos, self.popup_serial));
             }
         }
+    }
+
+    /// Ends the wire in progress and returns to the Select tool (the right click). `false` when it is
+    /// the Select tool already, so there is nothing to leave.
+    pub(super) fn leave_tool(&mut self) -> bool {
+        self.pending = None;
+        if self.tool == Tool::Select {
+            return false;
+        }
+        self.tool = Tool::Select;
+        self.status = "選択ツールに戻りました".into();
+        true
     }
 }
