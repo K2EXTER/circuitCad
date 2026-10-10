@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "circuitCad: 回路シミュレータ (DC / 過渡 / AC / ノイズ / 温度 / モンテカルロ)"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/tetoranatti/circuitCad"
+repository = "https://github.com/K2EXTER/circuitCad"
 
 [dependencies]
 sch-core = { version = "0.1.0", path = "../sch-core" }
