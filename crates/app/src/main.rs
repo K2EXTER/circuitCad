@@ -226,7 +226,7 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--order] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--screenshot")
         && let Some(p) = args.get(i + 1) {
@@ -302,6 +302,9 @@ fn apply_args(app: &mut App, args: &[String]) {
             }
         if args.iter().any(|a| a == "--3d") {
             app.board_ed.open_view3d();
+        }
+        if args.iter().any(|a| a == "--order") {
+            app.board_ed.open_order();
         }
         if let Some(i) = args.iter().position(|a| a == "--export")
             && let Some(dir) = args.get(i + 1) {
