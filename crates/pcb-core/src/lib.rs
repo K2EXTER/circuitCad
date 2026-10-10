@@ -15,6 +15,7 @@ pub mod gerber;
 pub mod gerber_view;
 pub mod model;
 pub mod netlist;
+pub mod outline;
 pub mod package;
 pub mod parts;
 pub mod ratsnest;

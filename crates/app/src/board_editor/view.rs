@@ -41,3 +41,14 @@ impl BoardEditor {
         v
     }
 }
+
+impl BoardEditor {
+    /// A rectangular outline with the corner radius set in the panel (square corners when it is 0).
+    pub(super) fn set_outline_box(&mut self, x0: f64, y0: f64, x1: f64, y1: f64) {
+        if self.size_r > 0.0 {
+            self.board.outline = pcb_core::outline::rounded_rect(x0, y0, x1, y1, self.size_r);
+        } else {
+            self.board.set_rect_outline(x0, y0, x1, y1);
+        }
+    }
+}

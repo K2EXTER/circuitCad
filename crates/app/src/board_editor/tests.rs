@@ -327,3 +327,25 @@ fn widening_a_net_to_its_current_is_undoable_and_only_touches_that_net() {
     e.undo();
     assert!((e.board.tracks[0].width - 0.25).abs() < 1e-9);
 }
+
+#[test]
+fn rounded_outlines_from_the_panel_helpers_are_undoable_and_keep_their_size() {
+    let mut e = BoardEditor::default();
+    e.size_r = 4.0;
+    e.checkpoint();
+    e.set_outline_box(0.0, 0.0, 40.0, 25.0);
+    assert!(e.board.outline.len() > 8, "{}", e.board.outline.len());
+    let (lo, hi) = e.board.bounds().unwrap();
+    assert!((hi.x - lo.x - 40.0).abs() < 1e-6 && (hi.y - lo.y - 25.0).abs() < 1e-6);
+    // radius 0 gives the plain rectangle again
+    e.size_r = 0.0;
+    e.set_outline_box(0.0, 0.0, 40.0, 25.0);
+    assert_eq!(e.board.outline.len(), 4);
+    // rounding the current outline, then undo
+    e.size_r = 3.0;
+    e.checkpoint();
+    e.board.outline = pcb_core::outline::round_corners(&e.board.outline, e.size_r);
+    assert!(e.board.outline.len() > 8);
+    e.undo();
+    assert_eq!(e.board.outline.len(), 4);
+}

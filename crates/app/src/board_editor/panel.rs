@@ -78,12 +78,31 @@ impl BoardEditor {
             ui.horizontal(|ui| {
                 ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 "));
                 ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ "));
-                if ui.button("矩形に設定").on_hover_text("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります").clicked() {
+                if ui.button("矩形に設定").on_hover_text("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります").clicked() {
                     self.checkpoint();
                     let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
-                    self.board.set_rect_outline(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
+                    self.set_outline_box(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
                 }
             });
+            ui.horizontal(|ui| {
+                ui.add(egui::DragValue::new(&mut self.size_r).speed(0.1).range(0.0..=100.0).prefix("角R ").suffix(" mm"))
+                    .on_hover_text("角の丸み (半径)。0 なら角ばった形です。ケースに入れる基板や、手で持つ基板は、角を丸めると角が欠けにくく、安全です。大きすぎる値は、入る大きさまで自動で小さくなります");
+                if ui.button("円・長円に設定").on_hover_text("上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に").clicked() {
+                    self.checkpoint();
+                    let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
+                    self.board.outline = pcb_core::outline::ellipse(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
+                    self.status = "基板の外形を円・長円にしました".into();
+                }
+            });
+            if ui.button("いまの外形の角を丸める").on_hover_text("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)").clicked() {
+                if self.size_r > 0.0 && self.board.outline.len() >= 3 {
+                    self.checkpoint();
+                    self.board.outline = pcb_core::outline::round_corners(&self.board.outline, self.size_r);
+                    self.status = format!("基板の角を R{} mm で丸めました ({} 点)", self.size_r, self.board.outline.len());
+                } else {
+                    self.status = "「角R」に 0 より大きい値を入れてください".into();
+                }
+            }
             if let Some((lo, hi)) = self.board.bounds() {
                 ui.small(format!("現在 {:.1} × {:.1} mm ({}点)", hi.x - lo.x, hi.y - lo.y, self.board.outline.len()));
             }

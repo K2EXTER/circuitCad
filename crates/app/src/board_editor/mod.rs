@@ -165,6 +165,8 @@ pub struct BoardEditor {
     zone_thermal: bool,
     size_w: f64,
     size_h: f64,
+    /// Corner radius (mm) for rectangular outlines; 0 = square corners.
+    size_r: f64,
     fit_pending: bool,
     /// A left drag with Alt held pans the view (until the button is released).
     alt_pan: bool,
@@ -213,6 +215,7 @@ impl Default for BoardEditor {
             zone_thermal: true,
             size_w: 50.0,
             size_h: 40.0,
+            size_r: 0.0,
             fit_pending: true,
             alt_pan: false,
             order: order::OrderState::default(),

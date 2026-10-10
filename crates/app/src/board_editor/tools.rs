@@ -71,7 +71,7 @@ impl BoardEditor {
                     let (y0, y1) = (a.y.min(p.y), a.y.max(p.y));
                     if x1 > x0 && y1 > y0 {
                         self.checkpoint();
-                        self.board.set_rect_outline(x0, y0, x1, y1);
+                        self.set_outline_box(x0, y0, x1, y1);
                         self.size_w = x1 - x0;
                         self.size_h = y1 - y0;
                     }
