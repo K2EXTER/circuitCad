@@ -7,6 +7,10 @@ impl BoardEditor {
     pub(super) fn flip_selected_part(&mut self) {
         if let Some(Item::Part(i)) = self.selected
             && i < self.board.parts.len() {
+                if self.board.is_locked(&self.board.parts[i].refdes) {
+                    self.status = "この部品は固定されています。固定を外すと付け替えられます (選択パネルのボタン)".into();
+                    return;
+                }
                 self.checkpoint();
                 let r = self.board.parts[i].refdes.clone();
                 self.board.flip_part(&r);

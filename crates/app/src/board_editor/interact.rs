@@ -13,7 +13,7 @@ impl BoardEditor {
                         let w0 = self.to_world(rect, o);
                         // a left drag that starts on a part or wire moves it instead (below); the inside
                         // of a copper pour does not count, or a box could not be drawn over one
-                        if crossing || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_))) {
+                        if crossing || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_)) || self.is_locked_item(&h)) {
                             self.boxsel = Some(BoxSel { start: w0, crossing });
                         }
                     }
@@ -75,7 +75,7 @@ impl BoardEditor {
             self.draw_cursor(&painter, rect, p);
 
             if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none()
-                && self.hit_test(w).is_some_and(|h| self.multi.contains(&h)) {
+                && self.hit_test(w).is_some_and(|h| self.multi.contains(&h) && !self.is_locked_item(&h)) {
                     self.checkpoint();
                     self.gdrag = Some(GroupDrag { anchor: p, orig: self.board.clone(), items: self.multi.clone() });
                 }
@@ -85,7 +85,8 @@ impl BoardEditor {
                     self.gdrag = Some(g);
                 }
             if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1
-                && let Some(Item::Part(i)) = self.hit_test(w) {
+                && let Some(Item::Part(i)) = self.hit_test(w)
+                && !self.is_locked_item(&Item::Part(i)) {
                     self.checkpoint();
                     let part = &self.board.parts[i];
                     self.drag_part = Some((part.refdes.clone(), Point::new(p.x - part.pos.x, p.y - part.pos.y)));

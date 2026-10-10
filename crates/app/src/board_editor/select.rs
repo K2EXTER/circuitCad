@@ -6,6 +6,8 @@ impl BoardEditor {
     pub(super) fn hit_test(&self, p: Point) -> Option<Item> {
         let tol = 6.0 / self.zoom as f64;
         let pick = self.pick;
+        // what is on the other layer is out of reach while "作業中の面だけ" is on
+        let side_ok = |s: Side| !pick.active_side_only || s == self.side;
         for (i, v) in self.board.vias.iter().enumerate() {
             if pick.vias && p.dist(v.pos) <= v.diameter / 2.0 + tol {
                 return Some(Item::Via(i));
@@ -16,12 +18,14 @@ impl BoardEditor {
             if (p.x - pd.pos.x).abs() <= w / 2.0 + tol && (p.y - pd.pos.y).abs() <= h / 2.0 + tol {
                 if !pd.refdes.is_empty()
                     && let Some(k) = self.board.parts.iter().position(|b| b.refdes == pd.refdes) {
-                        if pick.parts {
+                        let part = &self.board.parts[k];
+                        let through = self.board.pads.iter().any(|q| q.refdes == part.refdes && q.drill.is_some());
+                        if pick.parts && (side_ok(part.side) || through) {
                             return Some(Item::Part(k));
                         }
                         continue;
                     }
-                if pick.pads {
+                if pick.pads && (pd.drill.is_some() || side_ok(pd.side)) {
                     return Some(Item::Pad(i));
                 }
             }
@@ -32,17 +36,17 @@ impl BoardEditor {
             }
         }
         for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
-            if pick.tracks && seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
+            if pick.tracks && side_ok(t.side) && seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
                 return Some(Item::Track(i));
             }
         }
         for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty()) {
-            if pick.other && seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
+            if pick.other && side_ok(l.side) && seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
                 return Some(Item::Silk(i));
             }
         }
         for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
-            if pick.other && (polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p)) {
+            if pick.other && side_ok(z.side) && (polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p)) {
                 return Some(Item::Zone(i));
             }
         }
@@ -128,8 +132,29 @@ impl BoardEditor {
                 out.push(Item::Zone(i));
             }
         }
-        out.retain(|it| self.pick.allows(it));
+        out.retain(|it| self.pick.allows(it) && self.on_pickable_side(it));
         out
+    }
+
+    /// With "作業中の面だけ" on: is the object on the layer being worked on, or through the board?
+    fn on_pickable_side(&self, it: &Item) -> bool {
+        if !self.pick.active_side_only {
+            return true;
+        }
+        let side = match *it {
+            Item::Track(i) => self.board.tracks.get(i).map(|t| t.side),
+            Item::Silk(i) => self.board.silk.get(i).map(|l| l.side),
+            Item::Zone(i) => self.board.zones.get(i).map(|z| z.side),
+            Item::Pad(i) => self.board.pads.get(i).filter(|p| p.drill.is_none()).map(|p| p.side),
+            Item::Part(i) => self.board.parts.get(i).filter(|p| !self.board.pads.iter().any(|q| q.refdes == p.refdes && q.drill.is_some())).map(|p| p.side),
+            Item::Via(_) | Item::Hole(_) => None,
+        };
+        side.is_none_or(|s| s == self.side)
+    }
+
+    /// Is this item a part that was fixed in place?
+    pub(super) fn is_locked_item(&self, it: &Item) -> bool {
+        matches!(*it, Item::Part(i) if self.board.parts.get(i).is_some_and(|p| self.board.is_locked(&p.refdes)))
     }
 
     /// Points to ring when an object is selected.
@@ -155,7 +180,7 @@ impl BoardEditor {
         for it in &g.items {
             match *it {
                 Item::Part(i) => {
-                    if let Some(p) = g.orig.parts.get(i) {
+                    if let Some(p) = g.orig.parts.get(i).filter(|p| !g.orig.is_locked(&p.refdes)) {
                         self.board.place_part(&p.refdes, mv(p.pos), p.rot);
                     }
                 }

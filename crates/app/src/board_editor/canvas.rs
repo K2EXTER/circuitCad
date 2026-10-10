@@ -100,7 +100,11 @@ impl BoardEditor {
         if pressed(Key::Space) {
             self.bend_flip = !self.bend_flip;
         }
-        let grouped_parts: Vec<String> = self.multi.iter().filter_map(|it| if let Item::Part(i) = it { self.board.parts.get(*i).map(|p| p.refdes.clone()) } else { None }).collect();
+        let grouped_parts: Vec<String> = self
+            .multi
+            .iter()
+            .filter_map(|it| if let Item::Part(i) = it { self.board.parts.get(*i).filter(|p| !self.board.is_locked(&p.refdes)).map(|p| p.refdes.clone()) } else { None })
+            .collect();
         if pressed(Key::B) {
             if grouped_parts.is_empty() {
                 self.flip_selected_part();
@@ -113,9 +117,13 @@ impl BoardEditor {
         }
         if pressed(Key::R) {
             if let Some(Item::Part(i)) = self.selected {
-                self.checkpoint();
-                let p = self.board.parts[i].clone();
-                self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
+                if self.board.is_locked(&self.board.parts[i].refdes) {
+                    self.status = "この部品は固定されています。固定を外すと回せます (選択パネルのボタン)".into();
+                } else {
+                    self.checkpoint();
+                    let p = self.board.parts[i].clone();
+                    self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
+                }
             } else if !grouped_parts.is_empty() {
                 self.checkpoint();
                 for r in &grouped_parts {

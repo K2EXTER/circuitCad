@@ -233,10 +233,17 @@ pub struct Board {
     /// Current (A) each net is meant to carry, set by the user: the track widths are checked against it.
     #[serde(default)]
     pub net_currents: std::collections::BTreeMap<String, f64>,
+    /// Parts (by reference designator) that were fixed in place: the editor does not move, turn or flip them.
+    #[serde(default)]
+    pub locked_parts: Vec<String>,
     pub rules: Rules,
 }
 
 impl Board {
+    pub fn is_locked(&self, refdes: &str) -> bool {
+        self.locked_parts.iter().any(|r| r == refdes)
+    }
+
     pub fn new(name: &str, width: f64, height: f64) -> Self {
         Self {
             name: name.to_string(),
@@ -256,6 +263,7 @@ impl Board {
             zones: vec![],
             footprints: vec![],
             net_currents: Default::default(),
+            locked_parts: vec![],
             rules: Rules::default(),
         }
     }

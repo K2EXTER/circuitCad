@@ -115,6 +115,19 @@ impl BoardEditor {
                 painter.circle_filled(c, d as f32 * z / 2.0, BG);
             }
         }
+        // a small padlock at the corner of every fixed part
+        for part in self.board.parts.iter().filter(|p| self.board.is_locked(&p.refdes) && self.side_visible(p.side)) {
+            let pads: Vec<&pcb_core::Pad> = self.board.pads.iter().filter(|q| q.refdes == part.refdes).collect();
+            if pads.is_empty() {
+                continue;
+            }
+            let top = pads.iter().map(|q| q.pos.y + q.shape.size().1 / 2.0).fold(f64::MIN, f64::max);
+            let right = pads.iter().map(|q| q.pos.x + q.shape.size().0 / 2.0).fold(f64::MIN, f64::max);
+            let c = self.to_screen(rect, Point::new(right, top)) + Vec2::new(6.0, -8.0);
+            let col = Color32::from_rgb(250, 200, 70);
+            painter.rect_filled(Rect::from_center_size(c + Vec2::new(0.0, 2.0), Vec2::new(9.0, 7.0)), 1.5, col);
+            painter.circle_stroke(c + Vec2::new(0.0, -2.0), 3.0, Stroke::new(1.5, col));
+        }
         for v in &self.board.vias {
             let c = self.to_screen(rect, v.pos);
             painter.circle_filled(c, v.diameter as f32 * z / 2.0, Color32::from_rgb(60, 170, 90));

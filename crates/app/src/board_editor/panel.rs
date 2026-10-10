@@ -81,16 +81,25 @@ impl BoardEditor {
                 ui.checkbox(&mut self.pick.pads, "パッド・穴").on_hover_text("部品に属さないパッドと取付穴を選べるようにします");
                 ui.checkbox(&mut self.pick.other, "ゾーン・シルク").on_hover_text("ゾーン (ベタ) と、部品に属さないシルク線を選べるようにします");
             });
+            ui.checkbox(&mut self.pick.active_side_only, "作業中の面だけ").on_hover_text("いま作業している面 (枠の色) にある物だけを選べるようにします。薄く表示している反対の面の配線や部品を、誤って選んだり動かしたりしません。ビアと、基板を貫通するスルーホール部品は、どちらの面でも選べます");
             ui.horizontal(|ui| {
                 if ui.small_button("配線・ビアだけ").on_hover_text("配線とビアだけを選べるようにします。部品は動きません").clicked() {
-                    self.pick = Pickable { parts: false, tracks: true, vias: true, pads: false, other: false };
+                    self.pick = Pickable { parts: false, tracks: true, vias: true, pads: false, other: false, active_side_only: self.pick.active_side_only };
                     self.multi.retain(|it| matches!(it, Item::Track(_) | Item::Via(_)));
                     if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
                         self.selected = None;
                     }
                 }
                 if ui.small_button("すべて").on_hover_text("すべての物を選べるようにします").clicked() {
-                    self.pick = Pickable::ALL;
+                    self.pick = Pickable { active_side_only: self.pick.active_side_only, ..Pickable::ALL };
+                }
+                if ui.small_button("部品を全部固定").on_hover_text("いま基板にあるすべての部品を固定します。配置が終わって、配線に進むときに押します").clicked() {
+                    self.board.locked_parts = self.board.parts.iter().map(|p| p.refdes.clone()).collect();
+                    self.status = format!("部品 {} 個を固定しました", self.board.parts.len());
+                }
+                if ui.small_button("固定をすべて外す").on_hover_text("固定した部品をすべて動かせるようにします").clicked() {
+                    self.board.locked_parts.clear();
+                    self.status = "部品の固定をすべて外しました".into();
                 }
             });
 
@@ -284,6 +293,16 @@ impl BoardEditor {
                 let (r, side) = (p.refdes.clone(), p.side);
                 ui.label(format!("{}  {}  [{}]  {}", p.refdes, p.value, p.footprint, if side == Side::Bottom { "裏面実装" } else { "表面実装" }));
                 let _ = r;
+                let locked = self.board.is_locked(&r);
+                if ui.button(if locked { "固定を外す" } else { "固定する" }).on_hover_text("固定すると、ドラッグ・回転 (R)・面の付け替え (B) ができなくなり、範囲選択に巻き込んで動かす心配もなくなります。配置が済んだ部品に使います。基板ファイルに保存されます").clicked() {
+                    self.checkpoint();
+                    if locked {
+                        self.board.locked_parts.retain(|x| x != &r);
+                    } else {
+                        self.board.locked_parts.push(r.clone());
+                    }
+                    self.status = if locked { format!("{r} の固定を外しました") } else { format!("{r} を固定しました") };
+                }
                 if ui.button(if side == Side::Bottom { "表面に移す (B)" } else { "裏面に移す (B)" }).on_hover_text("部品を反対の面に付け替えます。裏面の部品は左右が反転します (B キーでも)").clicked() {
                     self.flip_selected_part();
                 }

@@ -226,9 +226,70 @@ fn pads_on_a_hidden_side_cannot_be_picked() {
     let mut e = BoardEditor::default();
     e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Bottom }).unwrap();
     let on_pad = e.board.pads[0].pos;
+    e.side = Side::Bottom;
     assert!(matches!(e.hit_test(on_pad), Some(Item::Part(0))));
     e.vis.bottom = false;
     assert!(e.hit_test(on_pad).is_none());
+}
+
+#[test]
+fn only_the_layer_being_worked_on_can_be_picked_unless_that_is_switched_off() {
+    let mut e = BoardEditor::default();
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Bottom }).unwrap();
+    e.board.tracks.push(Track { side: Side::Bottom, a: p(20.0, 10.0), b: p(30.0, 10.0), width: 0.25 });
+    e.board.vias.push(Via { pos: p(25.0, 20.0), diameter: 0.6, drill: 0.3 });
+    let (on_pad, on_track, on_via) = (e.board.pads[0].pos, p(25.0, 10.0), p(25.0, 20.0));
+    // working on the top: the bottom part and track are out of reach, the via (through the board) is not
+    e.side = Side::Top;
+    assert!(e.hit_test(on_pad).is_none() && e.hit_test(on_track).is_none());
+    assert!(matches!(e.hit_test(on_via), Some(Item::Via(0))));
+    let all = e.items_in_box(p(0.0, 0.0), p(40.0, 30.0), true);
+    assert_eq!(all, vec![Item::Via(0)], "a box does not take the other layer along");
+    // on the bottom they are reachable; so they are with the switch off
+    e.side = Side::Bottom;
+    assert!(matches!(e.hit_test(on_pad), Some(Item::Part(0))) && matches!(e.hit_test(on_track), Some(Item::Track(0))));
+    e.side = Side::Top;
+    e.pick.active_side_only = false;
+    assert!(matches!(e.hit_test(on_track), Some(Item::Track(0))));
+}
+
+#[test]
+fn a_fixed_part_is_not_dragged_turned_flipped_or_carried_along() {
+    let mut e = BoardEditor::default();
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+    e.board.set_part(pcb_core::Part { refdes: "R2".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(20.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+    e.board.locked_parts.push("R1".into());
+    assert!(e.is_locked_item(&Item::Part(0)) && !e.is_locked_item(&Item::Part(1)));
+    // it can still be selected (to unlock it), but a flip is refused
+    e.selected = Some(Item::Part(0));
+    e.flip_selected_part();
+    assert_eq!(e.board.parts[0].side, Side::Top);
+    assert!(e.status.contains("固定"), "{}", e.status);
+    // a group move leaves it where it is and takes the other part along
+    let g = GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: vec![Item::Part(0), Item::Part(1)] };
+    e.move_group(&g, 5.0, 0.0);
+    assert_eq!(e.board.parts[0].pos, p(10.0, 10.0));
+    assert_eq!(e.board.parts[1].pos, p(25.0, 10.0));
+    // it is saved with the board
+    let json = serde_json::to_string(&e.board).unwrap();
+    let back: pcb_core::Board = serde_json::from_str(&json).unwrap();
+    assert!(back.is_locked("R1") && !back.is_locked("R2"));
+    // an old file without the field loads with nothing fixed
+    let mut v: serde_json::Value = serde_json::from_str(&json).unwrap();
+    v.as_object_mut().unwrap().remove("locked_parts");
+    assert!(serde_json::from_value::<pcb_core::Board>(v).unwrap().locked_parts.is_empty());
+}
+
+#[test]
+fn parts_switched_off_in_the_picking_filter_stay_out_of_boxes_and_clicks() {
+    let mut e = BoardEditor::default();
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+    e.board.vias.push(Via { pos: p(10.0, 10.0), diameter: 0.6, drill: 0.3 });
+    e.pick.parts = false;
+    let items = e.items_in_box(p(0.0, 0.0), p(40.0, 30.0), false);
+    assert!(items.iter().all(|i| !matches!(i, Item::Part(_))) && items.contains(&Item::Via(0)), "{items:?}");
+    let on_pad = e.board.pads[0].pos;
+    assert!(!matches!(e.hit_test(on_pad), Some(Item::Part(_))));
 }
 
 mod order_flow {

@@ -129,10 +129,12 @@ struct Pickable {
     pads: bool,
     /// Copper pours, silk lines.
     other: bool,
+    /// Only what is on the layer being worked on (and what goes through the board: vias, through-hole parts).
+    active_side_only: bool,
 }
 
 impl Pickable {
-    const ALL: Pickable = Pickable { parts: true, tracks: true, vias: true, pads: true, other: true };
+    const ALL: Pickable = Pickable { parts: true, tracks: true, vias: true, pads: true, other: true, active_side_only: true };
 
     fn allows(&self, it: &Item) -> bool {
         match it {
