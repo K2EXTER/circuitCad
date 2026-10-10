@@ -270,6 +270,12 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Warn, format!("シルク (白い印刷) に気になる所が {} 件あります", silk.len()), format!("例: {}", first.message), Some(first.at)));
     }
 
+    // solder mask strips between pads
+    let dams = drc::mask_dam_checks(board);
+    if let Some(first) = dams.first() {
+        out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)));
+    }
+
     // bypass capacitors next to IC supply pins
     let decoupling = drc::decoupling_checks(board);
     if let Some(first) = decoupling.first() {

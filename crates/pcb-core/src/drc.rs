@@ -454,6 +454,58 @@ pub fn silk_checks(board: &Board) -> Vec<Violation> {
     out
 }
 
+/// The narrowest strip of solder mask (mm) that fabs keep between two pad openings. Narrower than this and
+/// the strip peels off during manufacturing, so the solder is not held back during reflow.
+pub const MIN_MASK_DAM: f64 = 0.1;
+
+/// Solder mask dams: between the openings of two pads of different nets the mask must leave a strip (the
+/// "dam"). The openings are the pads grown by `rules.mask_expansion` on each side, so
+/// dam = gap between the pad edges - 2 x expansion. Too narrow = the fab drops it and the solder can bridge.
+pub fn mask_dam_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    let e = board.rules.mask_expansion;
+    let exposed = |p: &Pad, side: Side| p.drill.is_some() || p.side == side;
+    for (i, a) in board.pads.iter().enumerate() {
+        for b in &board.pads[i + 1..] {
+            if !a.net.is_empty() && a.net == b.net {
+                continue;
+            }
+            // two pads of the same part and pin (a pad split in pieces) are one opening
+            if !a.refdes.is_empty() && a.refdes == b.refdes && a.pin == b.pin {
+                continue;
+            }
+            if ![Side::Top, Side::Bottom].into_iter().any(|s| exposed(a, s) && exposed(b, s)) {
+                continue;
+            }
+            let (sa, sb) = (a.shape.size(), b.shape.size());
+            let reach = sa.0.max(sa.1) / 2.0 + sb.0.max(sb.1) / 2.0 + 2.0 * e + MIN_MASK_DAM;
+            if (a.pos.x - b.pos.x).abs() > reach || (a.pos.y - b.pos.y).abs() > reach {
+                continue;
+            }
+            let gap = dist(&shape_geo(a.pos, a.shape), &shape_geo(b.pos, b.shape));
+            let dam = gap - 2.0 * e;
+            if gap < 1e-9 {
+                continue; // touching pads are the DRC's job (clearance / short)
+            }
+            if dam + 1e-9 < MIN_MASK_DAM {
+                let name = |p: &Pad| if p.refdes.is_empty() { "穴/パッド".to_string() } else { format!("{}.{}", p.refdes, p.pin) };
+                out.push(v(
+                    format!(
+                        "{} と {} のパッドの間のソルダーマスクの帯が {:.2}mm しかありません ({:.2}mm 以上が目安)。{}パッドを離す、小さくする、または発注先のマスクの設定を確かめましょう",
+                        name(a),
+                        name(b),
+                        dam.max(0.0),
+                        MIN_MASK_DAM,
+                        if dam <= 0.0 { "マスクの開口がつながり、はんだがブリッジして短絡することがあります。" } else { "製造時に帯が剥がれて、はんだがブリッジすることがあります。" }
+                    ),
+                    Point::new((a.pos.x + b.pos.x) / 2.0, (a.pos.y + b.pos.y) / 2.0),
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// Farther than this (mm) from an IC supply pin, a bypass capacitor stops doing its job: the
 /// trace between them adds inductance that the fast current spikes cannot get through.
 pub const MAX_DECOUPLING_DISTANCE: f64 = 8.0;
@@ -643,6 +695,56 @@ mod tests {
         let v = silk_checks(&b);
         assert_eq!(v.len(), 3, "{v:?}");
         assert!(v.iter().any(|x| x.message.contains("パッドに重なって")) && v.iter().any(|x| x.message.contains("細すぎ")) && v.iter().any(|x| x.message.contains("小さすぎ")));
+    }
+
+    #[test]
+    fn narrow_mask_dams_between_different_nets_are_flagged() {
+        let pad = |x: f64, net: &str| {
+            let mut p = Pad::new(Point::new(x, 10.0), PadShape::Rect { w: 0.6, h: 1.0 }, None, Side::Top);
+            p.net = net.into();
+            p
+        };
+        let mut b = board();
+        // gap 0.2 mm, mask opens 0.05 on each side: a 0.1 mm dam is just enough
+        b.pads = vec![pad(10.0, "A"), pad(10.8, "B")];
+        assert!(mask_dam_checks(&b).is_empty());
+        // gap 0.15 mm: the dam is 0.05 mm
+        b.pads = vec![pad(10.0, "A"), pad(10.75, "B")];
+        let v = mask_dam_checks(&b);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].message.contains("0.05mm") && v[0].message.contains("剥がれ"));
+        // gap 0.08 mm: the openings merge
+        b.pads = vec![pad(10.0, "A"), pad(10.68, "B")];
+        assert!(mask_dam_checks(&b)[0].message.contains("つながり"));
+        // the same net does not need a dam; pads on opposite sides do not share a mask
+        b.pads = vec![pad(10.0, "A"), pad(10.75, "A")];
+        assert!(mask_dam_checks(&b).is_empty());
+        let mut other_side = pad(10.75, "B");
+        other_side.side = Side::Bottom;
+        b.pads = vec![pad(10.0, "A"), other_side];
+        assert!(mask_dam_checks(&b).is_empty());
+    }
+
+    /// The footprints that come with the program keep the mask strip between their own pads (a false alarm on
+    /// every board that uses them would teach the wrong lesson).
+    #[test]
+    fn built_in_footprints_have_mask_dams() {
+        let mut bad = vec![];
+        for name in crate::footprints::names() {
+            let Some(fp) = crate::footprints::get(&name) else { continue };
+            let mut b = board();
+            for (i, p) in fp.pads.iter().enumerate() {
+                let mut pad = Pad::new(Point::new(20.0 + p.pos.x, 20.0 + p.pos.y), p.shape, p.drill, Side::Top);
+                pad.refdes = "U1".into();
+                pad.pin = p.pin.clone();
+                pad.net = format!("N{i}");
+                b.pads.push(pad);
+            }
+            if let Some(first) = mask_dam_checks(&b).first() {
+                bad.push(format!("{name}: {}", first.message));
+            }
+        }
+        assert!(bad.is_empty(), "{bad:#?}");
     }
 
     fn ic_board(cap_x: Option<f64>) -> Board {
