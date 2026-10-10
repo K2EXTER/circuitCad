@@ -51,6 +51,8 @@ pub struct PartForm {
     pub rt_i: String,
     pub rt_p: String,
     pub rt_rows: String,
+    /// Which checklist of what to look up the form offers (index into `CHECKLISTS`).
+    pub rt_kind: usize,
     /// The charger template section and what it said last.
     pub tpl: ChargerTemplate,
     pub tpl_message: String,
@@ -85,6 +87,7 @@ impl Default for PartForm {
             rt_i: String::new(),
             rt_p: String::new(),
             rt_rows: String::new(),
+            rt_kind: 0,
             tpl: ChargerTemplate::default(),
             tpl_message: String::new(),
         }
@@ -133,13 +136,32 @@ impl PartForm {
         let mut rows = vec![];
         for (n, line) in self.rt_rows.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
             let parts: Vec<&str> = line.split('|').map(str::trim).collect();
-            if parts.len() < 2 || parts[0].is_empty() || parts[1].is_empty() {
+            if parts.len() < 2 || parts[0].is_empty() {
                 return Err(format!("データシートの情報 {}行目: 「項目 | 値 | 条件」の形式で入力してください (条件は省略できます。例: 順方向電圧 | 0.9V | IF = 1A)", n + 1));
             }
-            rows.push(SpecRow { name: parts[0].into(), value: parts[1].into(), condition: parts.get(2).map(|s| s.to_string()).unwrap_or_default() });
+            if parts[1].is_empty() {
+                continue; // an item of the checklist that has not been looked up yet
+            }
+            // from a ※ on, a condition is the checklist's note to the learner, not a data sheet figure
+            let condition = parts.get(2).map(|c| c.split('※').next().unwrap_or("").trim().to_string()).unwrap_or_default();
+            rows.push(SpecRow { name: parts[0].into(), value: parts[1].into(), condition });
         }
         let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, rows };
         Ok(Some(r).filter(|r| !r.is_empty()))
+    }
+
+    /// How much of the data sheet section is filled: (maximum ratings given 0..=3, rows with a value, rows still open).
+    fn ratings_progress(&self) -> (usize, usize, usize) {
+        let given = |t: &str| sim_core::parse_value(t.trim()).is_some_and(|v| v > 0.0) as usize;
+        let max_given = given(&self.rt_v) + given(&self.rt_i) + given(&self.rt_p);
+        let (mut filled, mut open) = (0, 0);
+        for line in self.rt_rows.lines().filter(|l| !l.trim().is_empty()) {
+            let parts: Vec<&str> = line.split('|').map(str::trim).collect();
+            if parts.len() >= 2 && !parts[0].is_empty() {
+                if parts[1].is_empty() { open += 1 } else { filled += 1 }
+            }
+        }
+        (max_given, filled, open)
     }
 
     pub fn to_def(&self) -> Result<PartDef, String> {
@@ -401,8 +423,20 @@ impl PartForm {
         ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
 
         ui.separator();
-        egui::CollapsingHeader::new("データシートの情報 (定格・最大定格)").id_salt("part_ratings").show(ui, |ui| {
-            ui.label("データシートの「絶対最大定格」を入れると、回路のシミュレーション結果と比べて、超えそうなときに警告します。空欄は「分からない」として扱います");
+        egui::CollapsingHeader::new("データシートの情報 (定格・最大定格)").id_salt("part_ratings").default_open(true).show(ui, |ui| {
+            ui.label("部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
+            ui.horizontal(|ui| {
+                ui.label("部品の種類");
+                egui::ComboBox::from_id_salt("rt_kind").selected_text(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0).show_ui(ui, |ui| {
+                    for (k, (name, _, _)) in CHECKLISTS.iter().enumerate() {
+                        ui.selectable_value(&mut self.rt_kind, k, *name);
+                    }
+                }).response.on_hover_text("選ぶと、その種類で調べるとよい項目が出ます");
+                if ui.button("調べる項目のチェックリストを入れる").on_hover_text("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)").clicked() {
+                    self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
+                }
+            });
+            ui.label(egui::RichText::new(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1).weak());
             egui::Grid::new("part_ratings_grid").num_columns(2).show(ui, |ui| {
                 ui.label("最大電圧 [V]").on_hover_text("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大");
                 ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0)).on_hover_text("例: 40 / 1000");
@@ -414,11 +448,19 @@ impl PartForm {
                 ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text("例: 0.5 / 625m / 1");
                 ui.end_row();
             });
-            ui.label("そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。条件は省略できます)");
-            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(4).desired_width(f32::INFINITY).hint_text("順方向電圧 | 0.9V | IF = 1A
-電流増幅率 hFE | 100〜300 | IC = 10mA
-逆回復時間 | 2µs"))
-                .on_hover_text("定格・代表値を、データシートのまま書き写します。部品の一覧でポインタを置いたときに出ます");
+            ui.label("そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)");
+            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text("順方向電圧 | 0.9V | IF = 1A"))
+                .on_hover_text("定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます");
+            let (max_given, rows_given, rows_open) = self.ratings_progress();
+            let summary = format!("入力済み: 最大定格 {max_given} / 3 項目、そのほかの情報 {rows_given} 行{}", if rows_open > 0 { format!(" (まだ調べていない項目 {rows_open} 行)") } else { String::new() });
+            if max_given == 0 && rows_given == 0 {
+                ui.colored_label(Color32::from_rgb(220, 160, 40), "データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう");
+            } else {
+                ui.label(summary);
+            }
+            if self.datasheet.trim().is_empty() && (max_given > 0 || rows_given > 0) {
+                ui.colored_label(Color32::from_rgb(220, 160, 40), "データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)");
+            }
         });
 
         ui.separator();
@@ -513,6 +555,96 @@ fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Footprint) {
         painter.text(ctr, Align2::CENTER_CENTER, &p.pin, FontId::proportional(11.0), Color32::WHITE);
     }
     painter.rect_stroke(r, 2.0, Stroke::new(1.0, Color32::from_gray(80)), egui::StrokeKind::Inside);
+}
+
+/// What to look up for each kind of part: (kind, which figures go in the three boxes, [(item, where to find it)]).
+const CHECKLISTS: &[(&str, &str, &[(&str, &str)])] = &[
+    (
+        "ダイオード",
+        "最大電圧 = 逆耐圧 (VRRM)、最大電流 = 平均順電流 (IF(AV))。どちらも「絶対最大定格」の表にあります",
+        &[
+            ("順方向電圧 Vf", "電気的特性。条件の電流 (IF) も一緒に書く"),
+            ("逆回復時間 trr", "電気的特性。スイッチング電源や高い周波数で効く"),
+            ("接合容量 Cj", "電気的特性。高い周波数で効く"),
+            ("非繰り返しサージ電流 IFSM", "絶対最大定格。電源を入れた瞬間の電流に耐えるか"),
+            ("逆方向漏れ電流 IR", "電気的特性。温度で増える"),
+        ],
+    ),
+    (
+        "ツェナーダイオード",
+        "最大電力 = 許容損失 (Pd)。最大電流は、最大ツェナー電流 (IZM) を入れます",
+        &[
+            ("ツェナー電圧 Vz", "電気的特性。測定電流 (IZT) と許容差 (±5% など) も書く"),
+            ("ツェナーインピーダンス Zzt", "電気的特性。小さいほど電圧が安定"),
+            ("温度係数", "電気的特性。温度で電圧がどれだけ動くか"),
+            ("最大ツェナー電流 IZM", "絶対最大定格 (または許容損失 ÷ Vz)"),
+        ],
+    ),
+    (
+        "トランジスタ (バイポーラ)",
+        "最大電圧 = コレクタ・エミッタ間電圧 (VCEO)、最大電流 = コレクタ電流 (IC)、最大電力 = 許容損失 (Ptot)。すべて「絶対最大定格」にあります",
+        &[
+            ("電流増幅率 hFE", "電気的特性。範囲 (最小〜最大) と、条件の電流 (IC) を書く"),
+            ("コレクタ・エミッタ飽和電圧 VCE(sat)", "電気的特性。スイッチに使うとき"),
+            ("ベース・エミッタ間電圧 VBE", "電気的特性。約 0.7V"),
+            ("トランジション周波数 fT", "電気的特性。増幅できる周波数の目安"),
+        ],
+    ),
+    (
+        "MOSFET",
+        "最大電圧 = ドレイン・ソース間電圧 (VDS)、最大電流 = ドレイン電流 (ID)、最大電力 = 許容損失 (PD)。「絶対最大定格」にあります",
+        &[
+            ("しきい値電圧 VGS(th)", "電気的特性。ゲートをこれ以上にするとオンになり始める"),
+            ("オン抵抗 RDS(on)", "電気的特性。ゲート電圧 (VGS) の条件に注意。スイッチの発熱を決める"),
+            ("ゲート・ソース間の最大電圧 VGS", "絶対最大定格。超えるとゲートが壊れる"),
+            ("ゲート電荷 Qg", "電気的特性。ゲートを駆動する電流とスイッチング速度に効く"),
+        ],
+    ),
+    (
+        "レギュレータ (三端子・LDO)",
+        "最大電圧 = 入力電圧の最大、最大電流 = 出力電流の最大。「絶対最大定格」にあります",
+        &[
+            ("出力電圧 Vout", "電気的特性。許容差 (±4% など) も書く"),
+            ("ドロップアウト電圧", "電気的特性。入力が出力よりこれ以上高くないと安定化しない"),
+            ("ライン・レギュレーション", "電気的特性。入力が変わったときの出力の変化"),
+            ("ロード・レギュレーション", "電気的特性。負荷が変わったときの出力の変化"),
+            ("熱抵抗 θJA", "熱の表。電力 × 熱抵抗 = 温度上昇"),
+            ("静止電流 (グラウンド電流)", "電気的特性。電池で使うときの消費"),
+        ],
+    ),
+    (
+        "オペアンプ",
+        "最大電圧 = 電源電圧の最大 (単電源なら合計、両電源なら ± の 2 倍)。「絶対最大定格」にあります",
+        &[
+            ("利得帯域幅積 GBW", "電気的特性。ゲインを上げると帯域が狭くなる"),
+            ("入力オフセット電圧 Vos", "電気的特性。直流のずれ"),
+            ("入力バイアス電流 Ib", "電気的特性。大きな抵抗を使うと効く"),
+            ("出力電圧の振れ幅", "電気的特性。電源までは届かない (レール・ツー・レールかどうか)"),
+            ("スルーレート", "電気的特性。大きな信号で追いつける速さ"),
+            ("動作する電源電圧の範囲", "推奨動作条件。単電源で使えるか"),
+        ],
+    ),
+    (
+        "そのほか",
+        "部品に合わせて、「絶対最大定格」の電圧・電流・電力を入れます",
+        &[
+            ("動作温度範囲", "絶対最大定格 / 推奨動作条件"),
+            ("電源電圧の範囲", "推奨動作条件"),
+            ("消費電流", "電気的特性"),
+        ],
+    ),
+];
+
+/// Adds the checklist of `kind` to the rows already typed: an item whose name is already there is not added again.
+fn merge_checklist(rows: &str, kind: usize) -> String {
+    let (_, _, items) = CHECKLISTS[kind.min(CHECKLISTS.len() - 1)];
+    let mut out: Vec<String> = rows.lines().map(String::from).collect();
+    for (name, hint) in items {
+        if !out.iter().any(|l| l.split('|').next().is_some_and(|n| n.trim() == *name)) {
+            out.push(format!("{name} |  | ※{hint}"));
+        }
+    }
+    out.join("\n")
 }
 
 #[cfg(test)]
@@ -660,5 +792,63 @@ fn pkg_tip(label: &str) -> &'static str {
         "パッド径" => "パッド (丸い銅) の直径",
         "穴径" => "スルーホールの穴の直径。足の太さ + 0.2〜0.3mm",
         _ => "データシートの推奨ランドパターンの寸法 (mm)",
+    }
+}
+
+#[cfg(test)]
+mod ratings_tests {
+    use super::*;
+
+    fn form() -> PartForm {
+        let mut f = PartForm::default();
+        f.name = "TEST".into();
+        f.pins_text = "1 A\n2 K".into();
+        f.pkg = PkgKind::Chip2;
+        f
+    }
+
+    /// The checklist adds the items to look up; typing a value turns a line into a data sheet row, and the
+    /// note to the learner (※...) is not saved as a condition.
+    #[test]
+    fn the_checklist_turns_into_rows_as_values_are_filled_in() {
+        let mut f = form();
+        f.rt_kind = 0; // diode
+        f.rt_rows = merge_checklist(&f.rt_rows, 0);
+        assert!(f.rt_rows.lines().count() >= 4 && f.rt_rows.contains("順方向電圧 Vf") && f.rt_rows.contains("※"));
+        // nothing is looked up yet: the part has no ratings, and saving is still possible
+        let d = f.to_def().unwrap();
+        assert!(d.ratings.is_none());
+        assert_eq!(f.ratings_progress(), (0, 0, f.rt_rows.lines().count()));
+        // the learner fills in the forward voltage and the reverse voltage
+        f.rt_rows = f.rt_rows.replace("順方向電圧 Vf |  | ※", "順方向電圧 Vf | 0.6V (最大) | IF = 1A ※");
+        f.rt_rows = f.rt_rows.replace("順方向電圧 Vf |  | ", "順方向電圧 Vf | 0.6V (最大) | ");
+        f.rt_v = "40".into();
+        let r = f.to_def().unwrap().ratings.unwrap();
+        assert_eq!(r.v_max, Some(40.0));
+        let vf = r.rows.iter().find(|x| x.name == "順方向電圧 Vf").expect("the filled row");
+        assert_eq!(vf.value, "0.6V (最大)");
+        assert_eq!(vf.condition, "IF = 1A", "the note after ※ is dropped");
+        let (max_given, filled, open) = f.ratings_progress();
+        assert_eq!((max_given, filled), (1, 1));
+        assert!(open >= 3);
+        // asking for the checklist again does not repeat the items that are already there
+        let again = merge_checklist(&f.rt_rows, 0);
+        assert_eq!(again.lines().count(), f.rt_rows.lines().count());
+        // every kind has a hint and items
+        for (name, hint, items) in CHECKLISTS {
+            assert!(!name.is_empty() && !hint.is_empty() && !items.is_empty(), "{name}");
+        }
+    }
+
+    #[test]
+    fn a_line_without_a_name_or_a_separator_is_explained() {
+        let mut f = form();
+        f.rt_rows = "順方向電圧 0.6V".into();
+        assert!(f.to_def().unwrap_err().contains("項目 | 値 | 条件"));
+        f.rt_rows = " | 0.6V".into();
+        assert!(f.to_def().is_err());
+        f.rt_rows = String::new();
+        f.rt_v = "abc".into();
+        assert!(f.to_def().unwrap_err().contains("最大電圧"));
     }
 }
