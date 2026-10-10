@@ -1,8 +1,9 @@
 //! "3Dで見る" window: the board as the fab will make it (the picture rebuilt from the exported
-//! fabrication files, put on the top and bottom faces) with solids for every part. A small
-//! software renderer: perspective projection, back-face culling and far-to-near drawing order.
-//! Hovering a part names it, clicking selects it in the board editor.
+//! fabrication files, put on the top and bottom faces) with solids for every part. Drawn by a small
+//! software rasteriser (`raster3d`): perspective projection, back-face culling and a depth buffer, so what is
+//! nearer always hides what is behind it. Hovering a part names it, clicking selects it in the board editor.
 
+use super::raster3d::{outline_part, Buffers, Paint, Picture, Vert, NO_PART};
 use super::*;
 use pcb_core::gerber_view::Preview;
 use pcb_core::model3d::{part_boxes, part_total_height, BodyShape, PartBox, BOARD_THICKNESS};
@@ -10,7 +11,8 @@ use pcb_core::model3d::{part_boxes, part_total_height, BodyShape, PartBox, BOARD
 /// What the window shows, built from the board when it is opened or refreshed.
 struct Scene {
     pv: Preview,
-    tex: [egui::TextureHandle; 2],
+    /// The board picture of the top and of the bottom (what the faces are painted with).
+    img: [Vec<[u8; 4]>; 2],
     /// Outline in counter-clockwise order, and its triangles.
     outline: Vec<Point>,
     tris: Vec<[Point; 3]>,
@@ -38,11 +40,35 @@ pub(super) struct View3d {
     error: Option<String>,
     /// Rebuild the scene on the next frame (set when the window opens).
     stale: bool,
+    /// The part under the pointer in the last picture (drawn brighter in the next one).
+    hover: Option<usize>,
+    /// Changes whenever the scene or its pictures change, so a kept picture is not reused for another.
+    generation: u32,
+    /// The last picture, kept while nothing that shows in it changes.
+    cache: Option<Cached>,
+}
+
+/// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
+struct Cached {
+    key: PictureKey,
+    tex: egui::TextureHandle,
+    ids: Vec<u32>,
+    size: [usize; 2],
+}
+
+#[derive(PartialEq)]
+struct PictureKey {
+    camera: [u32; 5],
+    size: [usize; 2],
+    parts: bool,
+    hover: Option<usize>,
+    selected: Option<usize>,
+    generation: u32,
 }
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None }
     }
 }
 
@@ -75,11 +101,6 @@ impl Cam {
     }
 }
 
-fn shade(c: [u8; 3], k: f32) -> Color32 {
-    let k = k.clamp(0.0, 1.3);
-    Color32::from_rgb((c[0] as f32 * k).min(255.0) as u8, (c[1] as f32 * k).min(255.0) as u8, (c[2] as f32 * k).min(255.0) as u8)
-}
-
 /// Brightness for a face whose normal (view space) is `n`: lit from above-left of the viewer.
 fn light(n: [f32; 3]) -> f32 {
     let l = [-0.35f32, 0.45, 0.82];
@@ -105,7 +126,7 @@ fn solid_faces(b: &PartBox) -> Vec<Face3> {
             let (i, j) = ((a + 1) % 3, (a + 2) % 3);
             let (ci, cj) = ((l[i] + h[i]) / 2.0, (l[j] + h[j]) / 2.0);
             let (ri, rj) = ((h[i] - l[i]) / 2.0, (h[j] - l[j]) / 2.0);
-            const N: usize = 16;
+            const N: usize = 32;
             let at = |k: usize, along: f64| {
                 let t = std::f64::consts::TAU * k as f64 / N as f64;
                 let mut p = [0.0; 3];
@@ -132,31 +153,14 @@ fn solid_faces(b: &PartBox) -> Vec<Face3> {
     }
 }
 
-/// Is `p` inside the polygon (even-odd)?
-fn inside(poly: &[Pos2], p: Pos2) -> bool {
-    let mut c = false;
-    let mut j = poly.len() - 1;
-    for i in 0..poly.len() {
-        let (a, b) = (poly[i], poly[j]);
-        if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
-            c = !c;
-        }
-        j = i;
-    }
-    c
-}
-
-/// A drawn face: how near, its outline, colour and the part it belongs to.
-struct Face {
-    w: f32,
-    pts: Vec<Pos2>,
-    color: Color32,
-    part: usize,
-    dark: Color32,
+fn shade3(c: [u8; 3], k: f32) -> [u8; 3] {
+    let k = k.clamp(0.0, 1.3);
+    [(c[0] as f32 * k).min(255.0) as u8, (c[1] as f32 * k).min(255.0) as u8, (c[2] as f32 * k).min(255.0) as u8]
 }
 
 impl Scene {
     fn build(board: &Board, ctx: &egui::Context, mask: bool, silk: bool) -> Result<Scene, String> {
+        let _ = ctx;
         let files = export::fab_files(board);
         let pv = Preview::from_files(&files, 1000)?;
         let mut outline = board.outline.clone();
@@ -168,7 +172,7 @@ impl Scene {
             return Err("基板の外形が面になっていません。外形を決めてから開いてください".into());
         }
         let (lo, hi) = board.bounds().ok_or("基板の外形がありません")?;
-        let tex = Self::textures(&pv, ctx, mask, silk);
+        let img = Self::images(&pv, mask, silk);
         let parts: Vec<(String, String, String, f64)> = board.parts.iter().map(|p| (p.refdes.clone(), p.value.clone(), p.footprint.clone(), part_total_height(&p.refdes, &p.footprint))).collect();
         let boxes = part_boxes(board);
         let mut tallest: [Option<(String, f64)>; 2] = [None, None];
@@ -179,40 +183,46 @@ impl Scene {
                 tallest[side] = Some((b.refdes.clone(), height));
             }
         }
-        Ok(Scene { pv, tex, outline, tris, lo, hi, boxes, parts, tallest })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, parts, tallest })
     }
 
-    fn textures(pv: &Preview, ctx: &egui::Context, mask: bool, silk: bool) -> [egui::TextureHandle; 2] {
-        let make = |bottom: bool, name: &str| {
-            let rgba: Vec<u8> = pv.render(bottom, mask, silk).iter().flatten().copied().collect();
-            ctx.load_texture(name, egui::ColorImage::from_rgba_unmultiplied([pv.frame.w, pv.frame.h], &rgba), egui::TextureOptions::LINEAR)
+    fn images(pv: &Preview, mask: bool, silk: bool) -> [Vec<[u8; 4]>; 2] {
+        [pv.render(false, mask, silk), pv.render(true, mask, silk)]
+    }
+
+    /// The whole scene into a depth-buffered image of `w` x `h` samples. `cam` must already be in sample units
+    /// (its origin relative to the image). `hover` is drawn brighter.
+    fn render(&self, cam: &Cam, w: usize, h: usize, show_parts: bool, hover: Option<usize>) -> Buffers {
+        let mut buf = Buffers::new(w, h, [34, 38, 46]);
+        let pics = [
+            Picture { w: self.pv.frame.w, h: self.pv.frame.h, rgba: &self.img[0] },
+            Picture { w: self.pv.frame.w, h: self.pv.frame.h, rgba: &self.img[1] },
+        ];
+        let vert = |p: [f64; 3], uv: [f32; 2]| {
+            let (pos, depth) = cam.project(p);
+            Vert { pos, q: 1.0 / (cam.dist - depth).max(cam.dist * 0.2), uv }
         };
-        [make(false, "board3d_top"), make(true, "board3d_bottom")]
-    }
-
-    /// The top or bottom face: the board picture mapped onto the outline triangles.
-    fn face(&self, cam: &Cam, bottom: bool, painter: &egui::Painter) {
-        let (w, h) = (self.hi.x - self.lo.x, self.hi.y - self.lo.y);
-        let z = if bottom { 0.0 } else { BOARD_THICKNESS };
-        let mut mesh = egui::Mesh::with_texture(self.tex[bottom as usize].id());
-        for t in &self.tris {
-            let base = mesh.vertices.len() as u32;
-            for p in t {
-                let (pos, _) = cam.project([p.x, p.y, z]);
-                // the bottom picture is the view from the back: mirrored left to right
-                let u = ((p.x - self.lo.x) / w) as f32;
-                let uv = egui::pos2(if bottom { 1.0 - u } else { u }, ((self.hi.y - p.y) / h) as f32);
-                mesh.vertices.push(egui::epaint::Vertex { pos, uv, color: Color32::WHITE });
+        // the top and bottom faces: the board picture mapped by the picture's own frame (it has a margin around the
+        // outline), so the copper lies exactly where the parts' pads are
+        let fr = self.pv.frame;
+        for bottom in [false, true] {
+            let up = if bottom { -1.0 } else { 1.0 };
+            if cam.dir([0.0, 0.0, up])[2] <= 1e-4 {
+                continue;
             }
-            mesh.indices.extend([base, base + 1, base + 2]);
+            let z = if bottom { 0.0 } else { BOARD_THICKNESS };
+            for t in &self.tris {
+                let corner = |p: &Point| {
+                    let u = ((p.x - fr.x0) * fr.px / fr.w as f64) as f32;
+                    let v = ((fr.y1 - p.y) * fr.px / fr.h as f64) as f32;
+                    // the bottom picture is the view from the back: mirrored left to right
+                    vert([p.x, p.y, z], [if bottom { 1.0 - u } else { u }, v])
+                };
+                buf.triangle([corner(&t[0]), corner(&t[1]), corner(&t[2])], Paint::Texture(bottom as usize), &pics);
+            }
         }
-        painter.add(egui::Shape::mesh(mesh));
-    }
-
-    /// The edge of the board: one wall per outline segment, the ones facing the viewer, far to near.
-    fn walls(&self, cam: &Cam, painter: &egui::Painter) {
+        // the edge of the board
         let n = self.outline.len();
-        let mut walls: Vec<(f32, [Pos2; 4], f32)> = vec![];
         for i in 0..n {
             let (a, b) = (self.outline[i], self.outline[(i + 1) % n]);
             let (dx, dy) = (b.x - a.x, b.y - a.y);
@@ -221,82 +231,42 @@ impl Scene {
                 continue;
             }
             // counter-clockwise outline: the outside is to the right of the direction of travel
-            let normal = [(dy / len) as f32, (-dx / len) as f32, 0.0];
-            let nv = cam.dir(normal);
+            let nv = cam.dir([(dy / len) as f32, (-dx / len) as f32, 0.0]);
             if nv[2] <= 1e-4 {
                 continue;
             }
-            let pts = [[a.x, a.y, 0.0], [b.x, b.y, 0.0], [b.x, b.y, BOARD_THICKNESS], [a.x, a.y, BOARD_THICKNESS]].map(|p| cam.project(p));
-            walls.push((pts.iter().map(|p| p.1).sum::<f32>() / 4.0, pts.map(|p| p.0), light(nv)));
+            let c = |x: f64, y: f64, z: f64| vert([x, y, z], [0.0, 0.0]);
+            let (p0, p1, p2, p3) = (c(a.x, a.y, 0.0), c(b.x, b.y, 0.0), c(b.x, b.y, BOARD_THICKNESS), c(a.x, a.y, BOARD_THICKNESS));
+            let paint = Paint::Flat { color: shade3([176, 150, 92], light(nv)), part: NO_PART };
+            buf.triangle([p0, p1, p2], paint, &pics);
+            buf.triangle([p0, p2, p3], paint, &pics);
         }
-        walls.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (_, pts, k) in walls {
-            painter.add(egui::Shape::convex_polygon(pts.to_vec(), shade([176, 150, 92], k), Stroke::NONE));
+        if !show_parts {
+            return buf;
         }
-    }
-
-    /// Every visible face of the solids on one side of the board, far to near.
-    fn part_faces(&self, cam: &Cam, bottom: bool) -> Vec<Face> {
-        let mut faces: Vec<Face> = vec![];
-        for b in self.boxes.iter().filter(|b| b.bottom == bottom) {
+        for b in &self.boxes {
             for (corners, normal) in solid_faces(b) {
                 let nv = cam.dir(normal);
                 if nv[2] <= 1e-4 {
                     continue;
                 }
-                let proj: Vec<(Pos2, f32)> = corners.iter().map(|p| cam.project(*p)).collect();
-                faces.push(Face {
-                    w: proj.iter().map(|p| p.1).sum::<f32>() / proj.len() as f32,
-                    pts: proj.iter().map(|p| p.0).collect(),
-                    color: shade(b.color, light(nv)),
-                    dark: shade(b.color, 0.4),
-                    part: b.part,
-                });
-            }
-        }
-        faces.sort_by(|a, b| a.w.total_cmp(&b.w));
-        faces
-    }
-
-    fn draw_faces(faces: &[Face], hover: Option<usize>, selected: Option<usize>, painter: &egui::Painter) {
-        for f in faces {
-            let (fill, edge) = if hover == Some(f.part) {
-                // brighter, with a yellow outline
-                let c = f.color;
-                (Color32::from_rgb(c.r().saturating_add(50), c.g().saturating_add(50), c.b().saturating_add(30)), Stroke::new(1.6, Color32::from_rgb(255, 230, 90)))
-            } else if selected == Some(f.part) {
-                (f.color, Stroke::new(1.6, Color32::from_rgb(90, 220, 255)))
-            } else {
-                (f.color, Stroke::new(0.6, f.dark))
-            };
-            painter.add(egui::Shape::convex_polygon(f.pts.clone(), fill, edge));
-        }
-    }
-
-    /// Draws the scene far to near; returns the part under `pointer`, if any.
-    fn draw(&self, cam: &Cam, v: &View3d, pointer: Option<Pos2>, selected: Option<usize>, painter: &egui::Painter) -> Option<usize> {
-        let above = cam.pitch.sin() > 0.0;
-        let (near_side, far_side) = (!above, above); // `bottom` flag of the side facing the viewer / hidden behind the board
-        let far = if v.show_parts { self.part_faces(cam, far_side) } else { vec![] };
-        let near = if v.show_parts { self.part_faces(cam, near_side) } else { vec![] };
-        // the part under the pointer: the nearest face that contains it
-        let hover = pointer.and_then(|p| near.iter().rev().find(|f| inside(&f.pts, p)).map(|f| f.part));
-        // far side parts, then the far face, the edge, the near face, and the near side parts
-        Self::draw_faces(&far, None, selected, painter);
-        self.face(cam, far_side, painter);
-        self.walls(cam, painter);
-        self.face(cam, near_side, painter);
-        Self::draw_faces(&near, hover, selected, painter);
-        if v.show_names {
-            for (i, (name, ..)) in self.parts.iter().enumerate() {
-                if let Some(b) = self.boxes.iter().filter(|b| b.part == i && b.bottom == near_side).max_by(|a, b| a.hi[2].total_cmp(&b.hi[2])) {
-                    let z = if near_side { b.lo[2] } else { b.hi[2] };
-                    let (pos, _) = cam.project([(b.lo[0] + b.hi[0]) / 2.0, (b.lo[1] + b.hi[1]) / 2.0, z]);
-                    painter.text(pos, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(11.0), Color32::WHITE);
+                let mut color = shade3(b.color, light(nv));
+                if hover == Some(b.part) {
+                    color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
+                }
+                let vs: Vec<Vert> = corners.iter().map(|p| vert(*p, [0.0, 0.0])).collect();
+                let paint = Paint::Flat { color, part: b.part as u32 };
+                for k in 1..vs.len().saturating_sub(1) {
+                    buf.triangle([vs[0], vs[k], vs[k + 1]], paint, &pics);
+                }
+                // a thin dark edge round every face, so the shape reads even where two faces are lit alike
+                let dark = shade3(b.color, 0.4);
+                for k in 0..vs.len() {
+                    buf.line(vs[k], vs[(k + 1) % vs.len()], dark);
                 }
             }
         }
-        hover
+        buf
     }
 }
 
@@ -313,6 +283,7 @@ impl BoardEditor {
         }
         if self.view3d.stale {
             self.view3d.stale = false;
+            self.view3d.generation += 1;
             match Scene::build(&self.board, ctx, self.view3d.mask, self.view3d.silk) {
                 Ok(s) => {
                     self.view3d.scene = Some(s);
@@ -412,7 +383,58 @@ impl BoardEditor {
                 dist: extent * 3.0,
                 origin: resp.rect.center() + v.pan,
             };
-            let hover = scene.draw(&cam, v, resp.hover_pos(), selected, &painter);
+            // the picture: drawn at twice the size and averaged (release builds), and kept while nothing in it changes
+            let ss = if cfg!(debug_assertions) { 1 } else { 2 };
+            let size_px = [resp.rect.width().round().max(1.0) as usize, resp.rect.height().round().max(1.0) as usize];
+            let key = PictureKey {
+                camera: [v.yaw.to_bits(), v.pitch.to_bits(), v.zoom.to_bits(), v.pan.x.to_bits(), v.pan.y.to_bits()],
+                size: size_px,
+                parts: v.show_parts,
+                hover: v.hover,
+                selected,
+                generation: v.generation,
+            };
+            if v.cache.as_ref().is_none_or(|c| c.key != key) {
+                let s = ss as f32;
+                let local = Cam { scale: cam.scale * s, origin: Pos2::new((cam.origin.x - resp.rect.min.x) * s, (cam.origin.y - resp.rect.min.y) * s), ..cam };
+                let buf = scene.render(&local, size_px[0] * ss, size_px[1] * ss, v.show_parts, v.hover);
+                let (mut pixels, ids, w, h) = buf.resolve(ss);
+                if let Some(s) = selected {
+                    outline_part(&mut pixels, &ids, w, h, s as u32, [90, 220, 255]);
+                }
+                if let Some(hv) = v.hover {
+                    outline_part(&mut pixels, &ids, w, h, hv as u32, [255, 230, 90]);
+                }
+                let rgba: Vec<u8> = pixels.iter().flatten().copied().collect();
+                let tex = ui.ctx().load_texture("board3d_view", egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba), egui::TextureOptions::LINEAR);
+                v.cache = Some(Cached { key, tex, ids, size: [w, h] });
+            }
+            let mut hover = None;
+            if let Some(c) = &v.cache {
+                painter.image(c.tex.id(), resp.rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                if let Some(p) = resp.hover_pos() {
+                    let (x, y) = ((p.x - resp.rect.min.x) as usize, (p.y - resp.rect.min.y) as usize);
+                    if x < c.size[0] && y < c.size[1] {
+                        let id = c.ids[y * c.size[0] + x];
+                        hover = (id != NO_PART && v.show_parts).then_some(id as usize);
+                    }
+                }
+            }
+            if hover != v.hover {
+                // the part under the pointer changed: draw it brighter in the next picture
+                v.hover = hover;
+                ui.ctx().request_repaint();
+            }
+            if v.show_names {
+                let near_side = cam.pitch.sin() <= 0.0;
+                for (i, (name, ..)) in scene.parts.iter().enumerate() {
+                    if let Some(b) = scene.boxes.iter().filter(|b| b.part == i && b.bottom == near_side).max_by(|a, b| a.hi[2].total_cmp(&b.hi[2])) {
+                        let z = if near_side { b.lo[2] } else { b.hi[2] };
+                        let (pos, _) = cam.project([(b.lo[0] + b.hi[0]) / 2.0, (b.lo[1] + b.hi[1]) / 2.0, z]);
+                        painter.text(pos, egui::Align2::CENTER_CENTER, name, egui::FontId::proportional(11.0), Color32::WHITE);
+                    }
+                }
+            }
             if let Some(i) = hover {
                 if let Some((r, val, fp, hh)) = scene.parts.get(i) {
                     egui::Area::new(egui::Id::new("view3d_tip")).order(egui::Order::Tooltip).fixed_pos(resp.hover_pos().unwrap_or_default() + Vec2::new(14.0, 14.0)).show(ui.ctx(), |ui| {
@@ -430,7 +452,8 @@ impl BoardEditor {
             }
         });
         if retex && let Some(s) = &mut self.view3d.scene {
-            s.tex = Scene::textures(&s.pv, ctx, self.view3d.mask, self.view3d.silk);
+            s.img = Scene::images(&s.pv, self.view3d.mask, self.view3d.silk);
+            self.view3d.generation += 1;
         }
         if let Some(i) = pick {
             self.selected = Some(Item::Part(i));
@@ -493,19 +516,45 @@ mod tests {
         let c = cam(0.5, 0.9);
         let faces = |b: &PartBox| solid_faces(b).iter().filter(|(_, n)| c.dir(*n)[2] > 1e-4).count();
         assert_eq!(faces(&solid_box(BodyShape::Box)), 3);
-        // 16 side facets, about half face the viewer, plus the top cap
+        // 32 side facets, about half face the viewer, plus the top cap
         let cyl = faces(&solid_box(BodyShape::Cylinder(2)));
-        assert!((8..=10).contains(&cyl), "{cyl}");
+        assert!((16..=18).contains(&cyl), "{cyl}");
         // a cylinder lying along x has a cap at each end and a ring of sides
-        assert_eq!(solid_faces(&solid_box(BodyShape::Cylinder(0))).len(), 18);
+        assert_eq!(solid_faces(&solid_box(BodyShape::Cylinder(0))).len(), 34);
         // brighter when facing the light than when turned away
         assert!(light([-0.3, 0.4, 0.85]) > light([0.9, -0.3, 0.1]));
     }
 
+    /// The board picture lies where the parts' pads are: looking straight down, the copper of a pad is under the
+    /// pad's position in the 3D scene (the picture has a margin around the outline, which the mapping must account for).
     #[test]
-    fn point_in_polygon_picks_the_face_under_the_pointer() {
-        let sq = [Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0), Pos2::new(10.0, 10.0), Pos2::new(0.0, 10.0)];
-        assert!(inside(&sq, Pos2::new(5.0, 5.0)) && !inside(&sq, Pos2::new(11.0, 5.0)));
+    fn the_board_picture_and_the_part_positions_agree() {
+        let ctx = egui::Context::default();
+        let mut b = Board::new("t", 40.0, 25.0);
+        for (x, name) in [(8.0, "R1"), (30.0, "R2")] {
+            for dx in [-1.0, 1.0] {
+                let mut pad = Pad::new(Point::new(x + dx, 12.0), PadShape::Rect { w: 1.2, h: 1.6 }, None, Side::Top);
+                pad.refdes = name.into();
+                b.pads.push(pad);
+            }
+            b.parts.push(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: Point::new(x, 12.0), rot: 0, side: Side::Top });
+        }
+        let s = Scene::build(&b, &ctx, false, false).unwrap();
+        let (w, h) = (800usize, 500usize);
+        let cam = Cam { yaw: 0.0, pitch: std::f32::consts::FRAC_PI_2, scale: 16.0, center: [20.0, 12.5, 0.8], dist: 300.0, origin: Pos2::new(w as f32 / 2.0, h as f32 / 2.0) };
+        let (img, _, w, _) = s.render(&cam, w, h, false, None).resolve(1);
+        let at = |x: f64, y: f64| {
+            let (p, _) = cam.project([x, y, BOARD_THICKNESS]);
+            img[p.y.round() as usize * w + p.x.round() as usize]
+        };
+        let gold = |c: [u8; 4]| c[0] > 180 && c[1] > 140 && c[2] < 120;
+        for pad in &b.pads {
+            assert!(gold(at(pad.pos.x, pad.pos.y)), "no copper under the pad at {:?}: {:?}", pad.pos, at(pad.pos.x, pad.pos.y));
+        }
+        // between the two pads of a part and away from them it is bare board
+        assert!(!gold(at(8.0, 12.0)) && !gold(at(20.0, 20.0)));
+        // the copper of a pad ends where the pad ends (0.6 mm from its centre, but not 1 mm)
+        assert!(gold(at(7.0 + 0.5, 12.0)) && !gold(at(7.0 - 1.0, 12.0)));
     }
 
     #[test]

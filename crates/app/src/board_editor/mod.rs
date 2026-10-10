@@ -304,6 +304,7 @@ const BG: Color32 = Color32::from_rgb(18, 22, 18);
 mod history;
 mod view;
 mod width;
+mod raster3d;
 mod view3d;
 mod select;
 mod route;
