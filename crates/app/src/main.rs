@@ -1005,6 +1005,93 @@ mod tests {
         std::fs::write(root.join("mosfet_switch.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Short wire out of a pin with the net name at its end (shared by the sample generators below).
+    fn label_pin(s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str) {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    }
+
+    fn library_part(name: &str) -> part_lib::PartDef {
+        part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == name).unwrap()
+    }
+
+    /// Generates docs/examples/pnp_highside.schjson (PNP 2N3906 switching a 220 ohm load from the 5 V rail):
+    /// `cargo test -p app write_pnp_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_pnp_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = library_part("2N3906");
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "5".into();
+        let v2 = s.add(Kind::VSource, (0, 16), 0);
+        s.components[v2].value = "PULSE(5 0 100u 1u 1u 400u 1m)".into();
+        let r1 = s.add(Kind::Resistor, (12, 10), 0);
+        s.components[r1].value = "4.7k".into();
+        let r3 = s.add(Kind::Resistor, (20, -2), 1);
+        s.components[r3].value = "10k".into();
+        let q = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (28, 6), 0);
+        let r2 = s.add(Kind::Resistor, (28, 20), 1);
+        s.components[r2].value = "220".into();
+        s.components[r2].footprint = "R_1206".into();
+        label_pin(&mut s, v1, "+", "VCC");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, v2, "+", "IN");
+        label_pin(&mut s, v2, "-", "GND");
+        label_pin(&mut s, r1, "1", "IN");
+        label_pin(&mut s, r1, "2", "B");
+        label_pin(&mut s, r3, "1", "VCC");
+        label_pin(&mut s, r3, "2", "B");
+        label_pin(&mut s, q, "2", "B");
+        label_pin(&mut s, q, "1", "VCC");
+        label_pin(&mut s, q, "3", "OUT");
+        label_pin(&mut s, r2, "1", "OUT");
+        label_pin(&mut s, r2, "2", "GND");
+        std::fs::write(root.join("pnp_highside.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/opamp_inverting.schjson (LM358, gain -10, +-5 V supplies):
+    /// `cargo test -p app write_inverting_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_inverting_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = library_part("LM358");
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "SIN(0 0.1 1k) AC 1".into();
+        let r1 = s.add(Kind::Resistor, (14, 0), 0);
+        s.components[r1].value = "1k".into();
+        let r2 = s.add(Kind::Resistor, (26, -10), 0);
+        s.components[r2].value = "10k".into();
+        let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (28, 2), 0);
+        let vp = s.add(Kind::VSource, (44, -6), 0);
+        s.components[vp].value = "5".into();
+        let vn = s.add(Kind::VSource, (44, 10), 0);
+        s.components[vn].value = "5".into();
+        label_pin(&mut s, v1, "+", "IN");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, r1, "1", "IN");
+        label_pin(&mut s, r1, "2", "N");
+        label_pin(&mut s, r2, "1", "N");
+        label_pin(&mut s, r2, "2", "OUT");
+        label_pin(&mut s, u, "2", "N");
+        label_pin(&mut s, u, "3", "GND");
+        label_pin(&mut s, u, "1", "OUT");
+        label_pin(&mut s, u, "8", "VCC");
+        label_pin(&mut s, u, "4", "VEE");
+        label_pin(&mut s, vp, "+", "VCC");
+        label_pin(&mut s, vp, "-", "GND");
+        label_pin(&mut s, vn, "+", "GND");
+        label_pin(&mut s, vn, "-", "VEE");
+        std::fs::write(root.join("opamp_inverting.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):
     /// `cargo test -p app write_library_demo -- --ignored`
     #[test]

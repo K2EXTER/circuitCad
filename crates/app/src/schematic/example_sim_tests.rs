@@ -416,3 +416,53 @@ fn mosfet_sample_switches_around_2v_and_the_lesson_numbers_hold() {
     assert!(issues.iter().any(|x| x.refdes == "R2" && x.level == sim_core::RatingLevel::Over), "{issues:?}");
     assert!(issues.iter().any(|x| x.refdes == "Q1"), "{issues:?}");
 }
+
+/// The PNP lesson: on when the input is Low, partly on with a large base resistor, a hot load at 47 ohms.
+#[test]
+fn pnp_sample_switches_the_high_side_and_the_lesson_numbers_hold() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "pnp_highside.schjson").unwrap().1;
+    let run = |vin: &str, r1: &str, r2: &str| {
+        let mut s = sch.clone();
+        for (name, v) in [("V2", vin), ("R1", r1), ("R3", r2)] {
+            s.components.iter_mut().find(|c| c.refdes == name).unwrap().value = v.into();
+        }
+        let dc = dc_op(&from_schematic(&s).unwrap()).unwrap();
+        (dc.voltage("OUT").unwrap(), sim_core::check_ratings(&s, &dc))
+    };
+    let (on, issues) = run("0", "4.7k", "220");
+    assert!((4.8..5.0).contains(&on) && issues.is_empty(), "{on} {issues:?}");
+    assert!(run("5", "4.7k", "220").0 < 0.01, "off when the input is High");
+    let (part, _) = run("0", "47k", "220");
+    assert!((0.6..1.3).contains(&part), "partly on with a large base resistor: {part}");
+    let (hot, issues) = run("0", "4.7k", "47");
+    assert!(hot > 4.7, "{hot}");
+    assert!(issues.iter().any(|x| x.refdes == "R3"), "{issues:?}");
+}
+
+/// The inverting amplifier lesson: gain -10 with 180 degrees of phase, a virtual ground, clipping at gain -100.
+#[test]
+fn inverting_amplifier_sample_gives_minus_ten_and_a_virtual_ground() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "opamp_inverting.schjson").unwrap().1;
+    let with_r1 = |r1: &str| {
+        let mut s = sch.clone();
+        s.components.iter_mut().find(|c| c.refdes == "R1").unwrap().value = r1.into();
+        from_schematic(&s).unwrap()
+    };
+    let r = ac_analysis(&with_r1("1k"), &AcSettings { fstart: 10.0, fstop: 1e6, sweep: AcSweep::Decade(10) }).unwrap();
+    let sg = r.signal("V(OUT)").unwrap();
+    assert!((sg.db()[0] - 20.0).abs() < 0.1 && (sg.phase_deg()[0].abs() - 180.0).abs() < 1.0, "{} {}", sg.db()[0], sg.phase_deg()[0]);
+    let peaks = |c: &sim_core::Circuit, node: &str| {
+        let t = transient(c, &TranSettings { tstop: 3e-3, tstep: 5e-6, uic: false }).unwrap();
+        let v = &t.signal(node).unwrap().values;
+        (v.iter().cloned().fold(f64::MAX, f64::min), v.iter().cloned().fold(f64::MIN, f64::max))
+    };
+    let (lo, hi) = peaks(&with_r1("1k"), "V(OUT)");
+    assert!((hi - 1.0).abs() < 0.05 && (lo + 1.0).abs() < 0.05, "{lo}..{hi}");
+    let (nlo, nhi) = peaks(&with_r1("1k"), "V(N)");
+    assert!(nlo.abs() < 0.003 && nhi.abs() < 0.003, "virtual ground {nlo}..{nhi}");
+    // gain -100 clips against the supply and the inverting input leaves 0 V
+    let (lo, hi) = peaks(&with_r1("100"), "V(OUT)");
+    assert!(lo > -5.1 && lo < -4.5 && hi > 3.0 && hi < 4.0, "{lo}..{hi}");
+    let (nlo, nhi) = peaks(&with_r1("100"), "V(N)");
+    assert!(nhi.max(-nlo) > 0.05, "{nlo}..{nhi}");
+}
