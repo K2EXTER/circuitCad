@@ -170,6 +170,10 @@ pub struct SchEditor {
     sec_gen: u32,
     sec_all: bool,
     fault_part: String,
+    /// Pin to break ("" = break the whole part), how (0 open, 1 to ground, 2 bridge to `fault_bridge`).
+    fault_pin: String,
+    fault_pin_how: usize,
+    fault_bridge: String,
     /// Compare in the time domain or AC, or at DC, and the node watched in the time domain.
     fault_domain: fault::FaultDomain,
     fault_node: String,
@@ -400,6 +404,9 @@ impl Default for SchEditor {
             sec_gen: 0,
             sec_all: false,
             fault_part: String::new(),
+            fault_pin: String::new(),
+            fault_pin_how: 0,
+            fault_bridge: String::new(),
             fault_domain: fault::FaultDomain::Dc,
             fault_node: String::new(),
             fault_wave: None,

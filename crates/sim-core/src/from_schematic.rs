@@ -27,6 +27,35 @@ fn err(r: &str, m: impl Into<String>) -> ConvertError {
 /// Parts with an explicit failure are reported as errors; parts that simply have nothing to
 /// simulate (headers, parts without a model) become warnings on the circuit.
 pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
+    build(s, None)
+}
+
+/// What happens to one pin in a pin fault.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PinHow {
+    /// The pin is disconnected: it sits on a node of its own.
+    Open,
+    /// The pin is joined to ground.
+    Ground,
+    /// The pin is joined to the named net (a solder bridge to a neighbour).
+    Join(String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PinFaultSpec {
+    pub refdes: String,
+    /// Pin as the schematic names it (`Component::pins()`): "1", "A", "C", a library pin number, ...
+    pub pin: String,
+    pub how: PinHow,
+}
+
+/// The circuit of `s` with one pin of one part disconnected, grounded or bridged to another net.
+/// The rest of the part keeps its connections, so the fault is faithful for library ICs as well.
+pub fn from_schematic_with_pin_fault(s: &Schematic, f: &PinFaultSpec) -> Result<Circuit, Vec<ConvertError>> {
+    build(s, Some(f))
+}
+
+fn build(s: &Schematic, fault: Option<&PinFaultSpec>) -> Result<Circuit, Vec<ConvertError>> {
     let mut c = Circuit::new();
     let mut pin_node: HashMap<(String, String), usize> = HashMap::new();
     for net in extract(s) {
@@ -34,6 +63,14 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
         for p in net.pins {
             pin_node.insert((p.refdes, p.pin), n);
         }
+    }
+    if let Some(f) = fault {
+        let node = match &f.how {
+            PinHow::Open => c.node(&format!("{}.{}.open", f.refdes, f.pin)),
+            PinHow::Ground => 0,
+            PinHow::Join(net) => c.node(net),
+        };
+        pin_node.insert((f.refdes.clone(), f.pin.clone()), node);
     }
     // pins on no net at all get a private node so elements can still be built
     let mut lone = 0;

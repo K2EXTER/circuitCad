@@ -221,3 +221,67 @@ fn ac_fault_on_the_lowpass_example_moves_the_cutoff() {
     e.analyze_fault();
     assert!(e.status.contains("失敗"), "{}", e.status);
 }
+
+fn editor_with(example: &str) -> SchEditor {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == example).unwrap_or_else(|| panic!("{example}")).1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e
+}
+
+#[test]
+fn pin_faults_break_one_pin_of_an_ic_and_of_a_transistor() {
+    // op-amp amplifier: the gain network hangs on IN-; opening that pin of the LM358 changes the output
+    let mut e = editor_with("opamp_amp.schjson");
+    e.fault_part = "U1".into();
+    e.fault_pin = "2".into();
+    assert!(e.pin_choices("U1").iter().any(|(n, d)| n == "2" && d.contains("IN-")), "{:?}", e.pin_choices("U1"));
+    // at DC the input is 0 V so nothing moves; in the time domain the open feedback pin is plain to see
+    e.set_tran_settings("3m", "5u");
+    e.set_fault_tran("OUT");
+    e.analyze_fault();
+    let Ok(fault::FaultWave::Tran(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected a transient report") };
+    assert!(r.label.contains("ピン 2 IN-") && r.label.contains("断線"), "{}", r.label);
+    assert!(r.summary().len() > 1, "{:?}", r.summary());
+    e.fault_domain = fault::FaultDomain::Dc;
+    // bridging a pin to ground, and a missing net name is explained
+    e.fault_pin_how = 2;
+    e.analyze_fault();
+    assert!(e.status.contains("失敗"), "{}", e.status);
+    e.fault_bridge = "GND".into();
+    e.analyze_fault();
+    assert!(e.fault_view.as_ref().unwrap().report.as_ref().unwrap().label.contains("ブリッジ"));
+    // the scan includes pin rows for the IC
+    e.analyze_fault_scan();
+    assert!(e.fault_scan.iter().any(|row| row.part == "U1" && !row.pin.is_empty()), "no pin rows");
+    // a library transistor (2N3904: pin 2 = B): the base pin has a readable name, and the scan covers its pins
+    let mut q = editor_with("npn_not.schjson");
+    q.fault_part = "Q1".into();
+    q.fault_pin = "2".into();
+    q.analyze_fault();
+    let r = q.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    assert!(r.label.contains("ピン 2 B") && r.element == "Q1", "{}", r.label);
+    q.analyze_fault_scan();
+    assert_eq!(q.fault_scan.iter().filter(|row| row.part == "Q1" && !row.pin.is_empty()).count(), 3);
+}
+
+#[test]
+fn reversed_parts_and_supply_faults_work_in_the_panel() {
+    let mut e = editor_with("bridge_rectifier.schjson");
+    e.set_tran_settings("0.3", "100u");
+    // D1 fitted backwards: tran compare at VDC
+    let kind = 4; // ALL_FAULTS[4] = Reverse
+    e.set_fault("D1", kind);
+    e.set_fault_tran("VDC");
+    e.analyze_fault();
+    let Ok(fault::FaultWave::Tran(r)) = &e.fault_wave.as_ref().unwrap().report else { panic!("expected a transient report") };
+    assert!(r.label.contains("逆向き"), "{}", r.label);
+    assert!(!r.summary().is_empty());
+    // the supply of a DC circuit: half voltage
+    let mut s = editor_with("rc_lowpass.schjson");
+    s.sch.components.iter_mut().find(|c| c.refdes == "V1").unwrap().value = "5".into();
+    s.set_fault("V1", 5); // Scale(0.5)
+    s.analyze_fault();
+    let rep = s.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    assert!(rep.label.contains("電圧が 0.5 倍"), "{}", rep.label);
+}

@@ -2,6 +2,7 @@
 //! point with the healthy circuit, so a learner sees what a failure does to the voltages.
 
 use crate::circuit::{Circuit, Element};
+use crate::waveform::Waveform;
 use crate::ac::{ac_analysis, AcSettings};
 use crate::dc::{dc_op, DcResult, SimError};
 use crate::montecarlo::minus_3db;
@@ -16,8 +17,10 @@ pub enum Fault {
     Open,
     /// The part's main terminals joined by a tiny resistance.
     Short,
-    /// Value multiplied by this factor (R, C, L only).
+    /// Value multiplied by this factor (R, C, L; a DC source's voltage).
     Scale(f64),
+    /// Connected the wrong way round (diode, transistor: the two main terminals swapped).
+    Reverse,
 }
 
 impl Fault {
@@ -27,6 +30,7 @@ impl Fault {
             Fault::Short => "ショート".into(),
             Fault::Scale(k) if k > 1.0 => format!("値が {} 倍", format_value(k)),
             Fault::Scale(k) => format!("値が 1/{}", format_value(1.0 / k)),
+            Fault::Reverse => "逆向きにつなぐ".into(),
         }
     }
 }
@@ -53,7 +57,9 @@ pub fn applicable(e: &Element) -> Vec<Fault> {
         Element::Resistor { .. } | Element::Capacitor { .. } | Element::Inductor { .. } => {
             vec![Fault::Open, Fault::Short, Fault::Scale(10.0), Fault::Scale(0.1)]
         }
-        Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. } => vec![Fault::Open, Fault::Short],
+        Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. } => vec![Fault::Open, Fault::Short, Fault::Reverse],
+        // a supply with a fixed DC value can die or sag / surge (signal sources have no single "voltage")
+        Element::VSource { wave: Waveform::Dc(v), .. } if *v != 0.0 => vec![Fault::Open, Fault::Scale(0.5), Fault::Scale(1.5)],
         _ => vec![],
     }
 }
@@ -77,9 +83,21 @@ pub fn with_fault(c: &Circuit, element: &str, fault: Fault) -> Option<Circuit> {
     }
     let mut out = c.clone();
     match fault {
+        // a dead supply is a source that gives 0 V (removing it would leave its loop open and unsolvable)
+        Fault::Open if matches!(c.elements[idx], Element::VSource { .. }) => {
+            if let Element::VSource { wave, .. } = &mut out.elements[idx] {
+                *wave = Waveform::Dc(0.0);
+            }
+        }
         Fault::Open => {
             out.elements.remove(idx);
         }
+        Fault::Reverse => match &mut out.elements[idx] {
+            Element::Diode { a, k, .. } => std::mem::swap(a, k),
+            Element::Bjt { c, e, .. } => std::mem::swap(c, e),
+            Element::Mosfet { d, s, .. } => std::mem::swap(d, s),
+            _ => return None,
+        },
         Fault::Short => {
             let (a, b) = main_pins(&c.elements[idx])?;
             out.elements[idx] = Element::Resistor { name: element.into(), a, b, r: SHORT_OHMS };
@@ -88,16 +106,61 @@ pub fn with_fault(c: &Circuit, element: &str, fault: Fault) -> Option<Circuit> {
             Element::Resistor { r, .. } => *r *= k,
             Element::Capacitor { c, .. } => *c *= k,
             Element::Inductor { l, .. } => *l *= k,
+            Element::VSource { wave: Waveform::Dc(v), .. } => *v *= k,
             _ => return None,
         },
     }
     Some(out)
 }
 
+/// A circuit with something broken, and how to call that in words.
+#[derive(Clone, Debug)]
+pub struct Broken {
+    pub circuit: Circuit,
+    /// The part (or "U1") that was broken.
+    pub element: String,
+    /// What was done to it, e.g. "断線 (オープン)" or "ピン 2 (OUT) を断線".
+    pub label: String,
+}
+
+/// Words for `fault` on `element`, which depend on what the element is (a supply "dies", it is not "opened").
+pub fn describe_fault(c: &Circuit, element: &str, fault: Fault) -> String {
+    match (c.elements.iter().find(|e| e.name() == element), fault) {
+        (Some(Element::VSource { .. }), Fault::Open) => "電源が切れる (0V)".into(),
+        (Some(Element::VSource { .. }), Fault::Scale(k)) => format!("電圧が {k} 倍"),
+        _ => fault.label(),
+    }
+}
+
+/// `element` of `c` broken as `fault`; `None` when the fault does not apply to it.
+pub fn break_part(c: &Circuit, element: &str, fault: Fault) -> Option<Broken> {
+    let circuit = with_fault(c, element, fault)?;
+    Some(Broken { circuit, element: element.into(), label: describe_fault(c, element, fault) })
+}
+
+/// Breaks one pin of one part of the schematic (disconnected, grounded or bridged to another net).
+/// Returns the healthy circuit and the broken one, both at `temp_c`. `label` says what was done,
+/// for the reports ("ピン 2 (OUT) を断線").
+pub fn break_pin(s: &sch_core::Schematic, temp_c: f64, spec: &crate::PinFaultSpec, label: &str) -> Result<(Circuit, Broken), SimError> {
+    let join = |e: Vec<crate::ConvertError>| SimError::Invalid(e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" / "));
+    let healthy = crate::from_schematic(s).map_err(join)?.at_temperature(temp_c);
+    if !s.components.iter().any(|c| c.refdes == spec.refdes && c.pins().iter().any(|(n, _)| *n == spec.pin)) {
+        return Err(SimError::Invalid(format!("{} にピン {} がありません", spec.refdes, spec.pin)));
+    }
+    let circuit = crate::from_schematic_with_pin_fault(s, spec).map_err(join)?.at_temperature(temp_c);
+    Ok((healthy, Broken { circuit, element: spec.refdes.clone(), label: label.into() }))
+}
+
+fn not_applicable(element: &str, fault: Fault) -> SimError {
+    SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label()))
+}
+
 #[derive(Clone, Debug)]
 pub struct FaultReport {
     pub element: String,
-    pub fault: Fault,
+    pub label: String,
+    /// The fault when it is a whole-part fault (pin faults have none).
+    pub fault: Option<Fault>,
     pub baseline: DcResult,
     /// `Err` when the broken circuit has no DC solution.
     pub faulted: Result<DcResult, SimError>,
@@ -116,9 +179,17 @@ pub struct PartChange {
 
 /// Breaks `element` as `fault` and compares the DC operating points.
 pub fn simulate_fault(c: &Circuit, element: &str, fault: Fault) -> Result<FaultReport, SimError> {
-    let broken = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
+    let b = break_part(c, element, fault).ok_or_else(|| not_applicable(element, fault))?;
+    let mut r = simulate_broken(c, &b)?;
+    r.fault = Some(fault);
+    Ok(r)
+}
+
+/// Compares the DC operating points of `c` and of the broken circuit.
+pub fn simulate_broken(c: &Circuit, b: &Broken) -> Result<FaultReport, SimError> {
+    let (element, broken) = (b.element.as_str(), &b.circuit);
     let baseline = dc_op(c)?;
-    let faulted = dc_op(&broken);
+    let faulted = dc_op(broken);
     let mut node_changes = vec![];
     let mut part_changes = vec![];
     if let Ok(f) = &faulted {
@@ -142,7 +213,7 @@ pub fn simulate_fault(c: &Circuit, element: &str, fault: Fault) -> Result<FaultR
             }
         }
     }
-    Ok(FaultReport { element: element.into(), fault, baseline, faulted, node_changes, part_changes })
+    Ok(FaultReport { element: element.into(), label: b.label.clone(), fault: None, baseline, faulted, node_changes, part_changes })
 }
 
 fn volts(v: f64) -> String {
@@ -157,7 +228,7 @@ impl FaultReport {
     /// What happened, in plain Japanese, most important first.
     pub fn summary(&self) -> Vec<String> {
         let mut out = vec![];
-        let head = format!("{} を「{}」にしたとき", self.element, self.fault.label());
+        let head = format!("{} を「{}」にしたとき", self.element, self.label);
         match &self.faulted {
             Err(e) => {
                 out.push(format!("{head}、回路は DC では計算できませんでした ({e})。実機でも動作が定まらない、または大電流が流れる状態です"));
@@ -168,8 +239,8 @@ impl FaultReport {
         if self.node_changes.is_empty() && self.part_changes.is_empty() {
             out.push(format!("{head}、DC の電圧と電流はほとんど変わりませんでした。"));
             match (self.fault, self.baseline.element(&self.element)) {
-                (Fault::Open, Some(e)) if e.current.abs() < 1e-9 => out.push("この部品には DC では電流が流れていないためです (コンデンサは DC では元から断線扱い)。過渡解析・AC解析なら違いが見えます".into()),
-                (Fault::Short, _) if self.element.starts_with('L') => out.push("コイルは DC では元からショート扱いです。過渡解析・AC解析なら違いが見えます".into()),
+                (Some(Fault::Open), Some(e)) if e.current.abs() < 1e-9 => out.push("この部品には DC では電流が流れていないためです (コンデンサは DC では元から断線扱い)。過渡解析・AC解析なら違いが見えます".into()),
+                (Some(Fault::Short), _) if self.element.starts_with('L') => out.push("コイルは DC では元からショート扱いです。過渡解析・AC解析なら違いが見えます".into()),
                 _ => {}
             }
             return out;
@@ -196,7 +267,7 @@ impl FaultReport {
 #[derive(Clone, Debug)]
 pub struct TranFaultReport {
     pub element: String,
-    pub fault: Fault,
+    pub label: String,
     pub node: String,
     pub healthy_time: Vec<f64>,
     pub healthy: Vec<f64>,
@@ -213,12 +284,18 @@ pub struct TranFaultReport {
 /// Runs the transient analysis on the healthy circuit and with `element` broken as `fault`,
 /// and measures `node` in both.
 pub fn simulate_fault_tran(c: &Circuit, element: &str, fault: Fault, s: &TranSettings, node: &str) -> Result<TranFaultReport, SimError> {
-    let broken = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
+    let b = break_part(c, element, fault).ok_or_else(|| not_applicable(element, fault))?;
+    simulate_broken_tran(c, &b, s, node)
+}
+
+/// The transient comparison for an already broken circuit.
+pub fn simulate_broken_tran(c: &Circuit, b: &Broken, s: &TranSettings, node: &str) -> Result<TranFaultReport, SimError> {
+    let (element, broken) = (b.element.as_str(), &b.circuit);
     let signal = format!("V({node})");
     let pick = |r: &crate::TranResult| r.signal(&signal).map(|g| (r.time.clone(), g.values.clone()));
     let h = transient(c, s)?;
     let (healthy_time, healthy) = pick(&h).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
-    let faulted = transient(&broken, s).and_then(|r| pick(&r).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
+    let faulted = transient(broken, s).and_then(|r| pick(&r).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
     let window = (s.tstop * 0.5, s.tstop);
     let measure = |t: &[f64], v: &[f64]| (wave_measure(t, v, window.0, window.1), stats(t, v, window.0, window.1).map(|x| x.mean));
     let (healthy_measure, healthy_mean) = measure(&healthy_time, &healthy);
@@ -226,13 +303,13 @@ pub fn simulate_fault_tran(c: &Circuit, element: &str, fault: Fault, s: &TranSet
         Ok((t, v)) => measure(t, v),
         Err(_) => (None, None),
     };
-    Ok(TranFaultReport { element: element.into(), fault, node: node.into(), healthy_time, healthy, faulted, window, healthy_measure, faulted_measure, healthy_mean, faulted_mean })
+    Ok(TranFaultReport { element: element.into(), label: b.label.clone(), node: node.into(), healthy_time, healthy, faulted, window, healthy_measure, faulted_measure, healthy_mean, faulted_mean })
 }
 
 impl TranFaultReport {
     /// What changed at the node, in plain Japanese.
     pub fn summary(&self) -> Vec<String> {
-        let head = format!("{} を「{}」にしたときの V({})", self.element, self.fault.label(), self.node);
+        let head = format!("{} を「{}」にしたときの V({})", self.element, self.label, self.node);
         if let Err(e) = &self.faulted {
             return vec![format!("{head}: 過渡解析が計算できませんでした ({e})。大電流が流れるか、動作が定まらない状態です")];
         }
@@ -285,7 +362,7 @@ impl TranFaultReport {
 #[derive(Clone, Debug)]
 pub struct AcFaultReport {
     pub element: String,
-    pub fault: Fault,
+    pub label: String,
     pub node: String,
     pub freq: Vec<f64>,
     pub healthy_db: Vec<f64>,
@@ -296,12 +373,18 @@ pub struct AcFaultReport {
 /// Runs the AC analysis on the healthy circuit and with `element` broken as `fault`, and returns the
 /// gain (dB) at `node` for both.
 pub fn simulate_fault_ac(c: &Circuit, element: &str, fault: Fault, s: &AcSettings, node: &str) -> Result<AcFaultReport, SimError> {
-    let broken = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
+    let b = break_part(c, element, fault).ok_or_else(|| not_applicable(element, fault))?;
+    simulate_broken_ac(c, &b, s, node)
+}
+
+/// The frequency-response comparison for an already broken circuit.
+pub fn simulate_broken_ac(c: &Circuit, b: &Broken, s: &AcSettings, node: &str) -> Result<AcFaultReport, SimError> {
+    let (element, broken) = (b.element.as_str(), &b.circuit);
     let signal = format!("V({node})");
     let h = ac_analysis(c, s)?;
     let hs = h.signal(&signal).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません")))?;
-    let faulted_db = ac_analysis(&broken, s).and_then(|r| r.signal(&signal).map(|g| g.db()).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
-    Ok(AcFaultReport { element: element.into(), fault, node: node.into(), freq: h.freq.clone(), healthy_db: hs.db(), faulted_db })
+    let faulted_db = ac_analysis(broken, s).and_then(|r| r.signal(&signal).map(|g| g.db()).ok_or_else(|| SimError::Invalid(format!("ノード {node} が見つかりません"))));
+    Ok(AcFaultReport { element: element.into(), label: b.label.clone(), node: node.into(), freq: h.freq.clone(), healthy_db: hs.db(), faulted_db })
 }
 
 fn peak(freq: &[f64], db: &[f64]) -> Option<(f64, f64)> {
@@ -315,7 +398,7 @@ fn hz(f: f64) -> String {
 impl AcFaultReport {
     /// What changed in the frequency response, in plain Japanese.
     pub fn summary(&self) -> Vec<String> {
-        let head = format!("{} を「{}」にしたときの V({}) の周波数特性", self.element, self.fault.label(), self.node);
+        let head = format!("{} を「{}」にしたときの V({}) の周波数特性", self.element, self.label, self.node);
         let f_db = match &self.faulted_db {
             Err(e) => return vec![format!("{head}: AC解析が計算できませんでした ({e})")],
             Ok(d) => d,
@@ -408,9 +491,9 @@ mod tests {
     #[test]
     fn faults_that_do_not_apply_are_refused() {
         let c = divider();
-        assert!(simulate_fault(&c, "V1", Fault::Open).is_err());
+        assert!(simulate_fault(&c, "V1", Fault::Short).is_err());
         assert!(with_fault(&c, "R1", Fault::Scale(3.0)).is_none());
-        assert_eq!(breakable(&c), vec!["R1".to_string(), "R2".to_string()]);
+        assert_eq!(breakable(&c), vec!["V1".to_string(), "R1".to_string(), "R2".to_string()]);
     }
 
     #[test]
@@ -478,5 +561,33 @@ mod tests {
         assert!(simulate_fault_ac(&c, "C1", Fault::Open, &set, "NOPE").is_err());
         // a part that does not matter leaves the response alone
         assert!(simulate_fault_ac(&c, "R1", Fault::Scale(1.0), &set, "OUT").is_err());
+    }
+
+    #[test]
+    fn reversed_diode_and_a_dying_supply() {
+        use crate::circuit::DiodeModel;
+        // 5 V - R1 - D1 - GND: the diode conducts; reversed it blocks and the node floats up to 5 V
+        let mut c = Circuit::new();
+        let (vin, mid) = (c.node("IN"), c.node("MID"));
+        c.add(Element::vdc("V1", vin, 0, 5.0));
+        c.add(Element::Resistor { name: "R1".into(), a: vin, b: mid, r: 1e3 });
+        c.add(Element::Diode { name: "D1".into(), a: mid, k: 0, model: DiodeModel::default() });
+        let healthy = dc_op(&c).unwrap().voltage("MID").unwrap();
+        assert!((0.5..0.9).contains(&healthy), "{healthy}");
+        let rev = simulate_fault(&c, "D1", Fault::Reverse).unwrap();
+        assert!((rev.faulted.as_ref().unwrap().voltage("MID").unwrap() - 5.0).abs() < 0.01);
+        assert!(rev.summary().join("
+").contains("逆向きにつなぐ"), "{:?}", rev.summary());
+        // the supply: half voltage halves everything, "dead" gives 0 V
+        let half = simulate_fault(&c, "V1", Fault::Scale(0.5)).unwrap();
+        assert!((half.faulted.as_ref().unwrap().voltage("IN").unwrap() - 2.5).abs() < 1e-6);
+        assert!(half.summary().join("
+").contains("電圧が 0.5 倍"), "{:?}", half.summary());
+        let dead = simulate_fault(&c, "V1", Fault::Open).unwrap();
+        assert!(dead.faulted.as_ref().unwrap().voltage("IN").unwrap().abs() < 1e-9);
+        assert!(dead.summary().join("
+").contains("電源が切れる"));
+        // a transistor can be fitted backwards too
+        assert!(applicable(&Element::Bjt { name: "Q1".into(), c: 1, b: 2, e: 0, model: crate::BjtModel::default() }).contains(&Fault::Reverse));
     }
 }

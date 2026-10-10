@@ -29,13 +29,13 @@ pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, Dc
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
 pub use designcalc::{divider, e24, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
-pub use fault::{applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
+pub use fault::{describe_fault, break_pin, break_part, simulate_broken, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
 pub use diagnose::diagnose;
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
 pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, McStats, TranMetric};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
-pub use from_schematic::{from_schematic, ConvertError};
+pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, ConvertError, PinFaultSpec, PinHow};
 pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{transient, Signal, TranResult, TranSettings};
