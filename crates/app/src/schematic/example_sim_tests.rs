@@ -499,3 +499,52 @@ fn live_recalculation_keeps_the_last_good_result_when_a_value_fails() {
     e.live_update();
     assert!(e.tran.as_ref().unwrap().outcome.is_ok());
 }
+
+/// The power-supply path's three new samples: the numbers the lessons quote.
+#[test]
+fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {
+    let load = |n: &str| example_schematics().into_iter().find(|(m, _)| m == n).unwrap().1;
+    let set = |s: &mut Schematic, r: &str, v: &str| s.components.iter_mut().find(|c| c.refdes == r).unwrap().value = v.into();
+    let dc = |s: &Schematic| dc_op(&from_schematic(s).unwrap()).unwrap();
+    // diodes: silicon flattens near 0.72 V, the Schottky near 0.30 V, at 3 V
+    let d = load("diode_iv.schjson");
+    let r = dc(&d);
+    assert!((0.70..0.80).contains(&r.voltage("A1").unwrap()) && (0.28..0.38).contains(&r.voltage("A2").unwrap()));
+    let drift = |t: f64| {
+        let r = dc_op(&from_schematic(&d).unwrap().at_temperature(t)).unwrap();
+        (r.voltage("A1").unwrap(), r.voltage("A2").unwrap())
+    };
+    assert!(drift(75.0).0 < drift(0.0).0 - 0.08 && drift(75.0).1 < drift(0.0).1 - 0.15, "hotter: lower Vf, the Schottky more");
+    let mut t = d.clone();
+    set(&mut t, "R1", "1.5k");
+    let slow = dc(&t);
+    assert!(slow.element("D1").unwrap().current < 0.003 && r.voltage("A1").unwrap() - slow.voltage("A1").unwrap() < 0.15, "10x less current, ~0.1 V less");
+    // zener: ~5.2 V at 1k, falls apart at 100 ohm; the input moves the output only a little
+    let z = load("zener_regulator.schjson");
+    let vout = |s: &Schematic| dc(s).voltage("VOUT").unwrap();
+    assert!((5.0..5.4).contains(&vout(&z)));
+    let mut heavy = z.clone();
+    set(&mut heavy, "R2", "100");
+    assert!((3.3..3.9).contains(&vout(&heavy)), "starved zener");
+    let mut mid = z.clone();
+    set(&mut mid, "R2", "220");
+    assert!((4.95..5.2).contains(&vout(&mid)));
+    let (mut lo, mut hi) = (z.clone(), z.clone());
+    set(&mut lo, "V1", "6");
+    set(&mut hi, "V1", "15");
+    assert!(vout(&hi) - vout(&lo) < 0.7 && vout(&hi) > vout(&lo), "input moves 9 V, output < 0.7 V");
+    // emitter follower: Vz - 0.7 V, holds under load, then the transistor runs hot
+    let f = load("emitter_follower.schjson");
+    let r = dc(&f);
+    assert!((4.3..4.5).contains(&r.voltage("VOUT").unwrap()) && (r.voltage("Z").unwrap() - r.voltage("VOUT").unwrap() - 0.7).abs() < 0.15);
+    assert!(sim_core::check_ratings(&f, &r).is_empty(), "the sample itself is within ratings");
+    let mut g = f.clone();
+    set(&mut g, "R2", "47");
+    let r47 = dc(&g);
+    assert!(r.voltage("VOUT").unwrap() - r47.voltage("VOUT").unwrap() < 0.1);
+    let issues = sim_core::check_ratings(&g, &r47);
+    assert!(issues.iter().any(|i| i.refdes == "Q1" && i.level == sim_core::RatingLevel::Caution), "{issues:?}");
+    set(&mut g, "R2", "22");
+    let issues = sim_core::check_ratings(&g, &dc(&g));
+    assert!(issues.iter().any(|i| i.refdes == "Q1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
+}

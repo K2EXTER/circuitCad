@@ -286,8 +286,13 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
+    if let Some(i) = args.iter().position(|a| a == "--lesson")
+        && let Some(id) = args.get(i + 1)
+        && let Some(n) = schematic::lesson_ids().iter().position(|l| l == id) {
+            app.sch.start_lesson(n);
+        }
     if args.iter().any(|a| a == "--learn") {
         app.learn.open = true;
     }
@@ -1165,6 +1170,95 @@ mod tests {
         label_pin(&mut s, vn, "+", "GND");
         label_pin(&mut s, vn, "-", "VEE");
         std::fs::write(root.join("opamp_inverting.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/diode_iv.schjson (two diodes, each behind 100 ohm, fed by one source to sweep):
+    /// `cargo test -p app write_diode_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_diode_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let (si, schottky) = (library_part("1N4007"), library_part("1N5819"));
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "3".into();
+        let r1 = s.add(Kind::Resistor, (14, -6), 0);
+        s.components[r1].value = "150".into();
+        let d1 = s.add_custom(si.symbol(), &si.default_value(), &si.footprint_name(), (28, -6), 0);
+        let r2 = s.add(Kind::Resistor, (14, 8), 0);
+        s.components[r2].value = "150".into();
+        let d2 = s.add_custom(schottky.symbol(), &schottky.default_value(), &schottky.footprint_name(), (28, 8), 0);
+        label_pin(&mut s, v1, "+", "VIN");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, r1, "1", "VIN");
+        label_pin(&mut s, r1, "2", "A1");
+        label_pin(&mut s, d1, "A", "A1");
+        label_pin(&mut s, d1, "K", "GND");
+        label_pin(&mut s, r2, "1", "VIN");
+        label_pin(&mut s, r2, "2", "A2");
+        label_pin(&mut s, d2, "A", "A2");
+        label_pin(&mut s, d2, "K", "GND");
+        std::fs::write(root.join("diode_iv.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/zener_regulator.schjson (9 V -> 150 ohm -> 5.1 V zener, 1 k load):
+    /// `cargo test -p app write_zener_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_zener_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let z = library_part("1N4733A");
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "9".into();
+        let r1 = s.add(Kind::Resistor, (14, -8), 0);
+        s.components[r1].value = "150".into();
+        s.components[r1].footprint = "R_1206".into();
+        let d1 = s.add_custom(z.symbol(), &z.default_value(), &z.footprint_name(), (28, 2), 1);
+        let r2 = s.add(Kind::Resistor, (42, 2), 1);
+        s.components[r2].value = "1k".into();
+        label_pin(&mut s, v1, "+", "VIN");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, r1, "1", "VIN");
+        label_pin(&mut s, r1, "2", "VOUT");
+        label_pin(&mut s, d1, "K", "VOUT");
+        label_pin(&mut s, d1, "A", "GND");
+        label_pin(&mut s, r2, "1", "VOUT");
+        label_pin(&mut s, r2, "2", "GND");
+        std::fs::write(root.join("zener_regulator.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/emitter_follower.schjson (zener reference + NPN follower, 220 ohm load):
+    /// `cargo test -p app write_follower_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_follower_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let (z, q) = (library_part("1N4733A"), library_part("2N3904"));
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "9".into();
+        let r1 = s.add(Kind::Resistor, (14, -8), 0);
+        s.components[r1].value = "330".into();
+        let d1 = s.add_custom(z.symbol(), &z.default_value(), &z.footprint_name(), (28, 2), 1);
+        let q1 = s.add_custom(q.symbol(), &q.default_value(), &q.footprint_name(), (44, -2), 0);
+        let r2 = s.add(Kind::Resistor, (58, 6), 1);
+        s.components[r2].value = "220".into();
+        s.components[r2].footprint = "R_1206".into();
+        label_pin(&mut s, v1, "+", "VIN");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, r1, "1", "VIN");
+        label_pin(&mut s, r1, "2", "Z");
+        label_pin(&mut s, d1, "K", "Z");
+        label_pin(&mut s, d1, "A", "GND");
+        for (pin, net) in [("C", "VIN"), ("B", "Z"), ("E", "VOUT")] {
+            // the library part names its pins by number: look the number up by name
+            let num = q.pins.iter().find(|p| p.name == pin).map(|p| p.number.clone()).unwrap();
+            label_pin(&mut s, q1, &num, net);
+        }
+        label_pin(&mut s, r2, "1", "VOUT");
+        label_pin(&mut s, r2, "2", "GND");
+        std::fs::write(root.join("emitter_follower.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
     /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):

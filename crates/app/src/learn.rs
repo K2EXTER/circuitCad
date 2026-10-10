@@ -130,12 +130,11 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             name: "2. 基礎: 電源をつくる部品",
             about: "ダイオード・コンデンサ・ツェナー・トランジスタ。電圧を整え、ならし、一定にし、電流を増やす部品の働きです",
             items: &[
-                planned("diode_curve", "ダイオードの特性", "0.6V 付近で流れ始める曲線を、DCスイープで描く", Some("ダイオードの順方向電圧を、電流を変えて測ります")),
-                lesson("rectifier", "交流を直流にする (整流と平滑)", "整流・平滑コンデンサ・リップル。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行います。商用電源 (100V) の配線は、危険なので行いません")),
-                planned("ripple", "リップルを測る・減らす", "平滑コンデンサの容量・負荷電流とリップルの関係", Some("オシロスコープ (またはテスタの交流レンジ) でリップルを測り、シミュレーションと比べます")),
-                planned("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。長所と限界 (負荷で電圧が動く)", Some("ツェナーと抵抗で 5.1V を作り、負荷を変えて電圧の変化を測ります")),
+                lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")),
+                lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")),
+                lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")),
                 lesson("bjt_switch", "トランジスタのスイッチ", "ベース電流でコレクタ電流を制御する。電流を増やす部品の入口", Some("トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります")),
-                planned("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核", Some("ツェナーの電圧を、トランジスタで大電流にします")),
+                lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")),
             ],
         },
         Stage {
@@ -324,7 +323,7 @@ mod tests {
         let mut progress = Progress::default();
         let (done, available, all) = summary(p, &progress);
         assert_eq!(done, 0);
-        assert!(available >= 8 && all > available, "some steps are still to be written");
+        assert!(available >= 12 && all > available, "some steps are still to be written");
         // the first thing to do is the first lesson; finishing it moves the recommendation on
         assert_eq!(next_item(p, &progress).unwrap().id, "divider");
         progress.mark("divider");

@@ -280,3 +280,56 @@ fn a_library_part_shows_its_model_notes_in_the_tooltip_and_old_circuits_borrow_t
     let mcu = e.library.iter().find(|d| d.sim.is_none()).unwrap();
     assert_eq!(super::panel::lib_hover_for_test(mcu), mcu.description);
 }
+
+/// The three power-supply lessons tick their steps as the learner acts and carry a real-experiment card.
+#[test]
+fn the_power_supply_lessons_walk_their_steps() {
+    let idx = |id: &str| lesson_ids().iter().position(|l| *l == id).unwrap();
+    // diode: a sweep, a temperature sweep, then R1 changed and measured
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("diode_curve"));
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    e.run_temp_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "R1", "1.5k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert_eq!(e.finished_lesson(), Some("diode_curve"));
+    // zener: DC, a heavy load measured, then the input sweep
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("zener"));
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    set_value(&mut e, "R2", "100");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    set_value(&mut e, "R2", "1k");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    // follower: DC, load 47, load 22 (only a load of 30 ohm or less counts for the last step)
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("emitter_follower"));
+    e.run_dc();
+    e.update_lesson();
+    set_value(&mut e, "R2", "47");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "47 ohm is not enough for the last step");
+    set_value(&mut e, "R2", "22");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    // every new lesson has a real-experiment card
+    for id in ["diode_curve", "zener", "emitter_follower"] {
+        assert!(!super::lessons::lesson_real(idx(id)).is_empty(), "{id}");
+    }
+}
