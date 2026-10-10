@@ -129,6 +129,9 @@ impl eframe::App for App {
         if self.board_ed.lesson_finished() {
             self.progress.mark("board");
         }
+        if let Some(key) = self.sch.finished_challenge() {
+            self.progress.mark(&key);
+        }
         if let Some(action) = self.learn.show(ui.ctx(), &mut self.progress) {
             match action {
                 learn::Action::Lesson(id) => {
@@ -136,6 +139,10 @@ impl eframe::App for App {
                         self.mode = Mode::Schematic;
                         self.sch.start_lesson(i);
                     }
+                }
+                learn::Action::Build(id) => {
+                    self.mode = Mode::Schematic;
+                    self.sch.start_challenge(id, 0);
                 }
                 learn::Action::Board => self.start_board_lesson(),
             }
@@ -263,6 +270,7 @@ impl eframe::App for App {
             }
             egui::CentralPanel::default().show(ui, |ui| self.sch.canvas(ui));
             self.sch.lesson_window(ui.ctx());
+            self.sch.challenge_window(ui.ctx());
             self.sch.part_popup_window(ui.ctx());
             return;
         }
@@ -286,12 +294,19 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
         && let Some(n) = schematic::lesson_ids().iter().position(|l| l == id) {
             app.sch.start_lesson(n);
+        }
+    if let Some(i) = args.iter().position(|a| a == "--challenge")
+        && let Some(id) = args.get(i + 1) {
+            app.sch.start_challenge(id, args.get(i + 2).and_then(|l| l.parse().ok()).unwrap_or(0));
+            if args.iter().any(|a| a == "--judge") {
+                app.sch.run_judge();
+            }
         }
     if args.iter().any(|a| a == "--new-part") {
         app.sch.open_part_form();

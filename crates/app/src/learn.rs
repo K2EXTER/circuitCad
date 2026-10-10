@@ -87,6 +87,8 @@ pub struct Item {
     pub title: &'static str,
     pub about: &'static str,
     pub kind: Kind,
+    /// The lesson has a "作ってみよう" challenge of the same id (build it yourself, judged by what it does).
+    pub build: bool,
     /// A hands-on experiment on a real board / breadboard belongs to this step (a note, until the cards exist).
     pub real: Option<&'static str>,
 }
@@ -105,11 +107,11 @@ pub struct LearningPath {
 }
 
 const fn lesson(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
-    Item { id, title, about, kind: Kind::Lesson(id), real }
+    Item { id, title, about, kind: Kind::Lesson(id), build: false, real }
 }
 
 const fn planned(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
-    Item { id, title, about, kind: Kind::Planned, real }
+    Item { id, title, about, kind: Kind::Planned, build: false, real }
 }
 
 pub const PATHS: &[LearningPath] = &[LearningPath {
@@ -132,7 +134,7 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             items: &[
                 lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")),
                 lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")),
-                lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")),
+                Item { build: true, ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },
                 lesson("bjt_switch", "トランジスタのスイッチ", "ベース電流でコレクタ電流を制御する。電流を増やす部品の入口", Some("トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります")),
                 lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")),
             ],
@@ -155,7 +157,7 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             about: "設計した電源を、基板にして、組み立てて、性能を測ります",
             items: &[
                 planned("draw_psu", "安定化電源の回路図を自分で描く", "目標 (入力 9〜12V → 出力 5V 500mA) だけ示し、自分で部品を置いて配線する", None),
-                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board, real: Some("発注するなら、少量・少額で試します") },
+                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board, build: false, real: Some("発注するなら、少量・少額で試します") },
                 planned("build_psu", "組み立てて、性能を測る", "部品表・はんだ付け・負荷試験・リップル・温度。測定値をシミュレーションと比べる", Some("完成した電源の性能を測り、シミュレーションとの差とその理由を考えます")),
             ],
         },
@@ -186,6 +188,8 @@ pub fn next_item(path: &LearningPath, progress: &Progress) -> Option<&'static It
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     Lesson(&'static str),
+    /// The "作ってみよう" challenge of a lesson (by the lesson's id).
+    Build(&'static str),
     Board,
 }
 
@@ -239,6 +243,12 @@ impl LearnWindow {
                                 Kind::Lesson(id) => Action::Lesson(id),
                                 _ => Action::Board,
                             });
+                        }
+                        if item.build {
+                            let passed = progress.is_done(&crate::schematic::challenge_progress_key(item.id));
+                            if ui.small_button(if passed { "✔ 作ってみよう" } else { "作ってみよう" }).on_hover_text("目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあと、判定ボタンで調べます").clicked() {
+                                action = Some(Action::Build(item.id));
+                            }
                         }
                         if item.real.is_some() {
                             ui.colored_label(Color32::from_rgb(90, 170, 220), "[実験あり]").on_hover_text(item.real.unwrap_or_default());

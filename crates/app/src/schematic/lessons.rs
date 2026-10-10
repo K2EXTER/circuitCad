@@ -845,6 +845,7 @@ impl SchEditor {
         let mut close = false;
         let mut restart = false;
         let mut next = None;
+        let mut build = None;
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(360.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
@@ -881,6 +882,14 @@ impl SchEditor {
                         });
                     }
                 });
+            if let Some(cid) = challenge_of_lesson(lesson.id) {
+                ui.separator();
+                ui.label(egui::RichText::new("自分で作ってみよう").strong());
+                ui.label("見るだけでなく、目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあとは、判定ボタンで、動きを調べます");
+                if ui.button("チャレンジを始める").on_hover_text("いまの回路を空にして、目標から自分で作ります。あとで、このレッスンに戻れます").clicked() {
+                    build = Some(cid);
+                }
+            }
             if !lesson.real.is_empty() {
                 egui::CollapsingHeader::new("実機で確かめよう (実験)").id_salt(("real", idx)).default_open(false).show(ui, |ui| {
                     ui.label("シミュレーションの結果を、実際の部品で確かめます。安全のため、12V 以下の低い電圧だけで行い、商用電源 (100V) は使いません");
@@ -910,6 +919,10 @@ impl SchEditor {
                 }
             });
         });
+        if let Some(id) = build {
+            self.start_challenge(id, 0);
+            return;
+        }
         if let Some(n) = next {
             self.start_lesson(n);
         } else if restart {

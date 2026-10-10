@@ -157,6 +157,8 @@ pub struct SchEditor {
     mc_metric: TranMetric,
     /// The running lesson and the circuit it started from.
     lesson: Option<ActiveLesson>,
+    /// The "作ってみよう" challenge being worked on.
+    challenge: Option<challenge::ActiveChallenge>,
     /// A left drag with Alt held pans the view (until the button is released).
     alt_pan: bool,
     /// Floating settings window opened by right-clicking a part: (component index, where, serial for a fresh window position).
@@ -400,6 +402,7 @@ impl Default for SchEditor {
             panel_tab: PanelTab::Draw,
             mc_metric: TranMetric::RiseTime,
             lesson: None,
+            challenge: None,
             alt_pan: false,
             part_popup: None,
             sim_opts: sim_core::SimOptions::default(),
@@ -477,6 +480,7 @@ const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
+pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
 pub use lessons::{lesson_ids, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
 mod symbols;
@@ -484,6 +488,7 @@ mod wave;
 mod ac;
 mod analysis_panel;
 mod sweep;
+mod challenge;
 mod lessons;
 mod noise;
 mod variation;
