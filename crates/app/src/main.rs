@@ -274,7 +274,7 @@ fn main() -> eframe::Result {
 }
 
 /// egui's built-in fonts lack Japanese glyphs, and mixing them with a Windows font puts Latin
-/// letters and kana on slightly different baselines. So use one Windows font that covers both
+/// letters and kana on slightly different baselines. So use one system font that covers both
 /// Japanese and half-width alphanumerics for everything; egui's own fonts stay as a fallback.
 fn install_japanese_font(ctx: &egui::Context) {
     const CANDIDATES: &[&str] = &[
@@ -282,6 +282,17 @@ fn install_japanese_font(ctx: &egui::Context) {
         r"C:\Windows\Fonts\meiryo.ttc",
         r"C:\Windows\Fonts\YuGothM.ttc",
         r"C:\Windows\Fonts\msgothic.ttc",
+        // macOS
+        "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+        // Linux (Noto CJK / IPA / Takao packages)
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
+        "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
     ];
     for path in CANDIDATES {
         if let Ok(bytes) = std::fs::read(path) {

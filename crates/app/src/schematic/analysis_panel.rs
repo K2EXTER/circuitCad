@@ -185,6 +185,14 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                     for w in &res.warnings {
                         ui.colored_label(Color32::from_rgb(220, 160, 40), w);
                     }
+                    for r in &dc.ratings {
+                        let (mark, col) = if r.level == sim_core::RatingLevel::Over {
+                            ("🔥 定格超え", Color32::from_rgb(230, 60, 60))
+                        } else {
+                            ("⚠ 余裕が少ない", Color32::from_rgb(220, 160, 40))
+                        };
+                        ui.colored_label(col, format!("{mark}: {}", r.message)).on_hover_text(&r.hint);
+                    }
                     egui::CollapsingHeader::new("解析結果").default_open(true).show(ui, |ui| {
                         egui::Grid::new("dc_nodes").striped(true).show(ui, |ui| {
                             for (n, v) in res.voltages.iter().filter(|(n, _)| !n.contains('.')) {

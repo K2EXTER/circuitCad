@@ -84,7 +84,8 @@ impl SchEditor {
             let vs = res.voltages.iter().map(|(_, v)| *v);
             v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
         }
-        DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range, fault }
+        let ratings = outcome.as_ref().map(|r| sim_core::check_ratings(&self.sch, r)).unwrap_or_default();
+        DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range, fault, ratings }
     }
 
     pub fn analyze_dc(&mut self) {

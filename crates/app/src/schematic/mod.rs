@@ -293,6 +293,8 @@ struct DcView {
     v_range: (f64, f64),
     /// Set when this is a what-if result with a broken part ("R1 を断線"), not the real circuit.
     fault: Option<String>,
+    /// Parts running past what their package / type usually allows.
+    ratings: Vec<sim_core::RatingIssue>,
 }
 
 /// Wire colour for a net voltage: blue at the lowest voltage of the circuit, red at the highest.
