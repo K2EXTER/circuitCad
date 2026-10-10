@@ -362,6 +362,54 @@ pub fn zener_regulator(vin: f64, vz: f64, i_load_ma: f64, iz_min_ma: f64) -> Res
     Ok(o)
 }
 
+/// Step-down (buck) converter: duty cycle, inductor and output capacitor from the ripple you accept.
+pub fn buck_design(vin: f64, vout: f64, i_out_ma: f64, fsw_khz: f64, ripple_pct: f64, vripple_mv: f64) -> Result<CalcOut, String> {
+    let (vin, vout, iout, f, rp, dv) = (pos("入力電圧", vin)?, pos("出力電圧", vout)?, pos("出力電流", i_out_ma)? / 1000.0, pos("スイッチング周波数", fsw_khz)? * 1000.0, pos("コイル電流のリップル", ripple_pct)? / 100.0, pos("出力電圧のリップル", vripple_mv)? / 1000.0);
+    if vout >= vin {
+        return Err("出力電圧は入力電圧より低くしてください。降圧コンバータは、電圧を下げるだけです".into());
+    }
+    let d = vout / vin;
+    let di = rp * iout;
+    let lx = (vin - vout) * d / (f * di);
+    let l = e24(lx, true);
+    let di_real = (vin - vout) * d / (f * l);
+    let cx = di_real / (8.0 * f * dv);
+    let c = e24(cx, true);
+    let peak = iout + di_real / 2.0;
+    let mut o = CalcOut { primary: Some(format_value(l)), ..Default::default() };
+    o.rows = vec![
+        ("デューティ比 (ONの割合)".into(), format!("{:.0} %", d * 100.0)),
+        ("コイル (E24, 切り上げ)".into(), format!("{}H  (計算上 {}H)", format_value(l), format_value(lx))),
+        ("そのときのコイル電流の揺れ".into(), format!("{:.0} mA (p-p)", di_real * 1000.0)),
+        ("コイルに流れる最大の電流".into(), format!("{:.2} A  (コイルの定格はこれ以上に)", peak)),
+        ("出力コンデンサ (E24, 切り上げ)".into(), format!("{}F 以上 (ESR の小さいもの)", format_value(c))),
+        ("ダイオードの電流 (平均)".into(), format!("{:.0} mA", iout * (1.0 - d) * 1000.0)),
+    ];
+    o.steps = vec![
+        format!("デューティ比 D = Vout ÷ Vin = {vout} ÷ {vin} = {:.2}", d),
+        format!("コイル: L = (Vin − Vout) × D ÷ (f × ΔI)。ΔI は出力電流の {:.0} % = {:.0} mA とすると、L = {:.1} V × {:.2} ÷ ({} Hz × {:.3} A) = {}H", rp * 100.0, di * 1000.0, vin - vout, d, format_value(f), di, format_value(lx)),
+        format!("出力コンデンサ: C = ΔI ÷ (8 × f × ΔV) = {:.3} A ÷ (8 × {} Hz × {} mV) = {}F", di_real, format_value(f), dv * 1000.0, format_value(cx)),
+    ];
+    if rp < 0.15 {
+        o.cautions.push("コイル電流の揺れを小さくしすぎると、大きなコイルが必要で、応答も遅くなります。出力電流の 20〜40 % が定番です".into());
+    }
+    if rp > 0.6 {
+        o.cautions.push("コイル電流の揺れが大きいと、軽負荷で電流が 0 まで下がる (不連続) ことがあり、リップルも増えます。20〜40 % が定番です".into());
+    }
+    o.cautions.push("コイルは、最大の電流で飽和しない (インダクタンスが落ちない) 定格電流のものにします。飽和すると電流が急に増え、スイッチやダイオードを壊します".into());
+    o.cautions.push("ダイオードはショットキー (順方向電圧が小さい) を使い、逆耐圧は入力電圧より十分高く、電流はコイルの最大電流以上にします。ダイオードの損失が、効率を左右します".into());
+    o.cautions.push("出力コンデンサは、容量だけでなく ESR (内部抵抗) でもリップルが決まります (ESR × コイル電流の揺れ)。ESR の小さいセラミックか低ESRの電解を選びます".into());
+    o.cautions.push("基板では、スイッチ → ダイオード → コイルの電流が速く流れる輪を小さくし、配線を短く太くします (ノイズと損失を減らします)".into());
+    o.faults = vec![
+        "ダイオードの付け忘れ/断線: コイルの電流の逃げ場がなくなり、スイッチがOFFになった瞬間に SW の電圧が跳ね上がって、IC が壊れます".into(),
+        "ダイオードを逆向きにつなぐ: 常に短絡のようになり、スイッチに大電流が流れます (発熱・破損)".into(),
+        "コイルが飽和する・小さすぎる: 電流が大きく揺れ、ピーク電流で保護が働いたり、素子が壊れたりします".into(),
+        "出力コンデンサの容量抜け (劣化): リップルが増え、出力が不安定になります。電解コンデンサは熱で劣化します".into(),
+        "フィードバック分圧の抵抗が断線: FB の電圧が分からず、出力が入力電圧近くまで上がることがあります (出力に付ける回路を壊します)".into(),
+    ];
+    Ok(o)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -445,5 +493,17 @@ mod tests {
         assert_eq!(z.primary.as_deref(), Some("270"));
         assert!(z.cautions.iter().any(|c| c.contains("ツェナーの電圧は")));
         assert!(zener_regulator(5.0, 5.1, 20.0, 5.0).is_err());
+    }
+
+    #[test]
+    fn buck_design_matches_the_textbook_numbers() {
+        // 12 V -> 5 V, 500 mA, 150 kHz, 40 % current ripple, 30 mV ripple
+        let o = buck_design(12.0, 5.0, 500.0, 150.0, 40.0, 30.0).unwrap();
+        // D = 0.4167; dI = 0.2 A; L = 7 * 0.4167 / (150k * 0.2) = 97 uH -> 100 uH
+        assert_eq!(o.primary.as_deref(), Some("100u"), "{:?}", o.rows);
+        assert!(o.rows[0].1.contains("42 %"), "{:?}", o.rows);
+        assert!(o.rows[1].1.contains("計算上 97"), "{:?}", o.rows);
+        assert!(!o.cautions.is_empty() && !o.faults.is_empty() && o.steps.len() == 3);
+        assert!(buck_design(5.0, 12.0, 500.0, 150.0, 40.0, 30.0).is_err());
     }
 }

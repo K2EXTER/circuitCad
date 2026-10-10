@@ -1,0 +1,58 @@
+{
+  "name": "BUCK_DEMO",
+  "category": "レギュレータ",
+  "description": "学習用の簡易降圧 (バック) コンバータ IC。150kHz の PWM でスイッチを入り切りして、入力電圧を下げます。ピン: 1=VIN 2=GND 3=SW 4=FB。出力電圧 = 1.23V × (1 + R上 ÷ R下) (FBは分圧の中点につなぐ)。外付けに、コイル (SW → 出力)、ダイオード (GND → SW、カソードが SW)、出力コンデンサが必要です。入力 4.5〜40V。ソフトスタートつき",
+  "prefix": "U",
+  "footprint_name": "TO-220-4_inline",
+  "pins": [
+    {
+      "number": "1",
+      "name": "VIN",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "3",
+      "name": "SW",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "FB",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 4,
+    "pitch": 2.54,
+    "pad_d": 1.8,
+    "drill": 1.0
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "BUCK_DEMO",
+    "text": "* Simplified step-down (buck) regulator IC: 150 kHz PWM, internal high-side switch, soft-start, 1.23 V reference.\n.subckt BUCK_DEMO vin gnd sw fb\nRq vin gnd 4k\nVclk ramp gnd PULSE(0 1 0 6.5u 0.1u 10n 6.67u)\nBgm gnd comp I=limit(0.32m*12/max(V(vin),3)*(1.23-V(fb)),-250u,250u)\nCcomp comp gnd 1u\nBzero comp gnd I=if(time<1u,1000*V(comp),0)\nBctl ctl gnd V=limit(V(comp),0,0.95)\nBpwm pwm gnd V=0.5*(1+tanh(30*(V(ctl)-V(ramp)-0.03)))\nS1 vin sw pwm gnd SWMAIN\n.model SWMAIN SW(RON=0.15 ROFF=1MEG VT=0.5 VW=0.15)\n.ends BUCK_DEMO",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "params": {
+      "vref": 1.23,
+      "fsw_khz": 150
+    },
+    "limits": [
+      "150kHz で実際にスイッチを入り切りする動作モデルです。デューティ比、コイルのリップル電流、出力のリップル、スイッチの導通損失 (0.15Ω)、ダイオードの損失が、波形と電流に出ます。誤差アンプは積分型で、ゆっくり出力を合わせます (ソフトスタートも兼ねる)。",
+      "扱わないもの: 過電流・短絡の保護、過熱保護、スイッチの切替時間と切替損失、軽負荷での間欠動作、入力側のリップル電流、制御ループの細かい補償 (負荷が急に変わったときの応答は、実物より遅く、行き過ぎも少ない)。数値は一般的な降圧ICの概算です。",
+      "制御回路の消費電流は、VIN と GND の間の 4kΩ の抵抗で表しています (12V で約 3mA)。",
+      "時間刻みは 0.1µs (100n) 程度にしてください。粗いと、スイッチの切り替わりの位置がずれて、出力電圧の平均がずれます。計算に時間がかかるので、見る時間は 5〜10ms 程度から始めましょう。",
+      "コイルとダイオードを付け忘れると、出力が出ません。ダイオードは SW から GND へ、カソードを SW 側につけます。"
+    ]
+  }
+}

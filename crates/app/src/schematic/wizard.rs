@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{battery_life, zener_regulator, divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{buck_design, battery_life, zener_regulator, divider, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -72,6 +72,19 @@ pub(super) const CALCS: &[Calc] = &[
             ("許容リップル (V, p-p)", "1.5", "直流に残る波の大きさ。後ろにレギュレータを入れるなら 1〜2 V、そのままマイコンなどにつなぐなら小さく"),
         ],
         run: |v| smoothing_cap(v[0], v[1], v[2], v[3]),
+    },
+    Calc {
+        title: "降圧コンバータのコイルとコンデンサ",
+        about: "スイッチングで電圧を下げる降圧 (バック) コンバータの、デューティ比・コイル・出力コンデンサを、許せるリップルから決めます",
+        inputs: &[
+            ("入力電圧 (V)", "12", "コンバータにつなぐ電源の電圧"),
+            ("出力電圧 (V)", "5", "作りたい電圧 (入力より低い値)"),
+            ("出力電流 (mA)", "500", "つなぐ回路が使う電流の最大値"),
+            ("スイッチング周波数 (kHz)", "150", "降圧ICのスイッチングの周波数。ICのデータシートの値 (多くは 100〜500kHz)"),
+            ("コイル電流の揺れ (出力電流の %)", "40", "コイルの電流がどれだけ上下するか。20〜40 % が定番"),
+            ("出力電圧のリップル (mV)", "30", "出力に残る細かい波の大きさ (p-p)。マイコン用なら 30〜50mV くらい"),
+        ],
+        run: |v| buck_design(v[0], v[1], v[2], v[3], v[4], v[5]),
     },
     Calc {
         title: "電池の持ち時間",

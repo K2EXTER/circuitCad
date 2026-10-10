@@ -342,3 +342,39 @@ fn right_click_leaves_the_tool_and_the_probe_adds_any_net_to_the_viewer() {
     e.pick_noise_node(g, false);
     assert!(e.status.contains("GND"), "{}", e.status);
 }
+
+/// Runs the buck sample for 5 ms and measures the last 0.6 ms: (mean Vout, Vout p-p, inductor current min / max, efficiency).
+fn buck_run(l: &str, rl: &str) -> (f64, f64, f64, f64, f64) {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "buck_converter.schjson").unwrap().1;
+    let mut s2 = sch;
+    s2.components.iter_mut().find(|c| c.refdes == "L1").unwrap().value = l.into();
+    s2.components.iter_mut().find(|c| c.refdes == "R3").unwrap().value = rl.into();
+    let c = from_schematic(&s2).unwrap();
+    let t = transient(&c, &TranSettings { tstop: 5e-3, tstep: 100e-9, uic: false }).unwrap();
+    let w = (4.4e-3, 5e-3);
+    let v = t.signal("V(VOUT)").unwrap();
+    let vo = wave_measure(&t.time, &v.values, w.0, w.1).unwrap();
+    let il = wave_measure(&t.time, &t.signal("I(L1)").unwrap().values, w.0, w.1).unwrap();
+    let iin = signal_stats(&t.time, &t.signal("I(V1)").unwrap().values, w.0, w.1).unwrap();
+    let vm = signal_stats(&t.time, &v.values, w.0, w.1).unwrap().mean;
+    let pout = vm * vm / rl.parse::<f64>().unwrap();
+    (vm, vo.pp, il.min, il.max, pout / (12.0 * -iin.mean))
+}
+
+#[test]
+fn buck_sample_regulates_5v_switches_at_150khz_and_the_lesson_numbers_hold() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "buck_converter.schjson").unwrap().1;
+    // at DC the switch is open: nothing at the output, and the DC solution exists
+    assert!(dc_op(&from_schematic(&sch).unwrap()).unwrap().voltage("VOUT").unwrap().abs() < 0.05);
+    let (v, pp, imin, imax, eff) = buck_run("100u DCR=0.05", "20");
+    assert!((4.5..5.3).contains(&v), "Vout {v}");
+    assert!(pp < 0.3, "output ripple {pp}");
+    assert!(imin > 0.0 && imax - imin < 0.45, "continuous inductor current {imin}..{imax}");
+    assert!((0.88..0.98).contains(&eff), "efficiency {eff}");
+    // a small coil: the current swings more and touches zero (discontinuous)
+    let (_, _, imin2, imax2, _) = buck_run("22u DCR=0.05", "20");
+    assert!(imin2 < 0.02 && imax2 - imin2 > 0.55, "{imin2}..{imax2}");
+    // twice the load current, the output still holds, and the efficiency is lower (more current through the losses)
+    let (v3, _, _, _, eff3) = buck_run("100u DCR=0.05", "10");
+    assert!((4.6..5.3).contains(&v3) && (0.82..0.93).contains(&eff3) && eff3 < eff, "{v3} {eff3}");
+}

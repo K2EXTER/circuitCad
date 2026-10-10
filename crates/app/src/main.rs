@@ -27,6 +27,7 @@ const TIPS: &[&str] = &[
     "レッスン「交流を直流にする」では、トランス (ライブラリの「トランス」) とブリッジ整流でできるリップルを測れます。平滑コンデンサの容量は「値の決め方」で計算できます",
     "基板エディタの「3Dで見る」で、出来上がりの色と部品の高さを立体で確認できます。外形の角を丸める (角R) こともできます",
     "電池は電圧源ではなく、内部抵抗を持ち、使うほど電圧が下がります。ライブラリの「電池」と、レッスン「電池の内部抵抗と持ち時間」で試せます",
+    "降圧コンバータは、スイッチを高速に入り切りして電圧を下げるので、リニアレギュレータより熱くなりません。レッスン「降圧コンバータ」で、コイルの電流と効率を見られます",
     "抵抗値を変えて解析をやり直すと、回路の動きがどう変わるか体感できます",
     "ノイズ解析の素子名にカーソルを合わせると、雑音の原因と対策が読めます",
     "DCスイープでインバーターの入出力特性を描くと、切替電圧やノイズマージンが分かります",
@@ -752,6 +753,59 @@ mod tests {
         let dir = std::env::temp_dir().join("claude");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("bottom_demo.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/buck_converter.schjson (12 V -> BUCK_DEMO -> 5 V):
+    /// `cargo test -p app write_buck_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_buck_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+        let (buck, schottky) = (find("BUCK_DEMO"), find("1N5819"));
+        let mut s = sch_core::Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "12".into();
+        let u = s.add_custom(buck.symbol(), &buck.default_value(), &buck.footprint_name(), (24, 0), 0);
+        let l = s.add(Kind::Inductor, (44, -6), 0);
+        s.components[l].value = "100u DCR=0.05".into();
+        let d = s.add_custom(schottky.symbol(), &schottky.default_value(), &schottky.footprint_name(), (44, 8), 0);
+        let c = s.add(Kind::Capacitor, (62, 4), 1);
+        s.components[c].value = "100u ESR=0.05".into();
+        let r1 = s.add(Kind::Resistor, (74, -4), 1);
+        s.components[r1].value = "30k".into();
+        let r2 = s.add(Kind::Resistor, (74, 8), 1);
+        s.components[r2].value = "10k".into();
+        let rl = s.add(Kind::Resistor, (86, 4), 1);
+        s.components[rl].value = "20".into();
+        let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+            let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+            let c = s.components[idx].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: text.into() });
+        };
+        label(&mut s, v, "+", "VIN");
+        label(&mut s, v, "-", "GND");
+        label(&mut s, u, "1", "VIN");
+        label(&mut s, u, "2", "GND");
+        label(&mut s, u, "3", "SW");
+        label(&mut s, u, "4", "FB");
+        label(&mut s, l, "1", "SW");
+        label(&mut s, l, "2", "VOUT");
+        for (pin, net) in [("A", "GND"), ("K", "SW")] {
+            label(&mut s, d, pin, net);
+        }
+        label(&mut s, c, "1", "VOUT");
+        label(&mut s, c, "2", "GND");
+        label(&mut s, r1, "1", "VOUT");
+        label(&mut s, r1, "2", "FB");
+        label(&mut s, r2, "1", "FB");
+        label(&mut s, r2, "2", "GND");
+        label(&mut s, rl, "1", "VOUT");
+        label(&mut s, rl, "2", "GND");
+        std::fs::write(root.join("buck_converter.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
     /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):

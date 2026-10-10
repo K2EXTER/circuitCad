@@ -1,0 +1,489 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "BUCK_DEMO",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-220-4_inline",
+      "custom": {
+        "name": "BUCK_DEMO",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VIN",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "3",
+            "name": "SW",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "FB",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "BUCK_DEMO",
+          "text": "* Simplified step-down (buck) regulator IC: 150 kHz PWM, internal high-side switch, soft-start, 1.23 V reference.\n.subckt BUCK_DEMO vin gnd sw fb\nRq vin gnd 4k\nVclk ramp gnd PULSE(0 1 0 6.5u 0.1u 10n 6.67u)\nBgm gnd comp I=limit(0.32m*12/max(V(vin),3)*(1.23-V(fb)),-250u,250u)\nCcomp comp gnd 1u\nBzero comp gnd I=if(time<1u,1000*V(comp),0)\nBctl ctl gnd V=limit(V(comp),0,0.95)\nBpwm pwm gnd V=0.5*(1+tanh(30*(V(ctl)-V(ramp)-0.03)))\nS1 vin sw pwm gnd SWMAIN\n.model SWMAIN SW(RON=0.15 ROFF=1MEG VT=0.5 VW=0.15)\n.ends BUCK_DEMO",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {
+            "fsw_khz": 150.0,
+            "vref": 1.23
+          },
+          "limits": [
+            "150kHz で実際にスイッチを入り切りする動作モデルです。デューティ比、コイルのリップル電流、出力のリップル、スイッチの導通損失 (0.15Ω)、ダイオードの損失が、波形と電流に出ます。誤差アンプは積分型で、ゆっくり出力を合わせます (ソフトスタートも兼ねる)。",
+            "扱わないもの: 過電流・短絡の保護、過熱保護、スイッチの切替時間と切替損失、軽負荷での間欠動作、入力側のリップル電流、制御ループの細かい補償 (負荷が急に変わったときの応答は、実物より遅く、行き過ぎも少ない)。数値は一般的な降圧ICの概算です。",
+            "制御回路の消費電流は、VIN と GND の間の 4kΩ の抵抗で表しています (12V で約 3mA)。",
+            "時間刻みは 0.1µs (100n) 程度にしてください。粗いと、スイッチの切り替わりの位置がずれて、出力電圧の平均がずれます。計算に時間がかかるので、見る時間は 5〜10ms 程度から始めましょう。",
+            "コイルとダイオードを付け忘れると、出力が出ません。ダイオードは SW から GND へ、カソードを SW 側につけます。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "100u DCR=0.05",
+      "pos": [
+        44,
+        -6
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N5819",
+      "pos": [
+        44,
+        8
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N5819",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N5819",
+          "text": ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+            "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+            "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "100u ESR=0.05",
+      "pos": [
+        62,
+        4
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "30k",
+      "pos": [
+        74,
+        -4
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        74,
+        8
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "20",
+      "pos": [
+        86,
+        4
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        0
+      ],
+      "b": [
+        17,
+        0
+      ]
+    },
+    {
+      "a": [
+        24,
+        4
+      ],
+      "b": [
+        24,
+        7
+      ]
+    },
+    {
+      "a": [
+        28,
+        -1
+      ],
+      "b": [
+        31,
+        -1
+      ]
+    },
+    {
+      "a": [
+        28,
+        1
+      ],
+      "b": [
+        31,
+        1
+      ]
+    },
+    {
+      "a": [
+        42,
+        -6
+      ],
+      "b": [
+        39,
+        -6
+      ]
+    },
+    {
+      "a": [
+        46,
+        -6
+      ],
+      "b": [
+        49,
+        -6
+      ]
+    },
+    {
+      "a": [
+        40,
+        8
+      ],
+      "b": [
+        37,
+        8
+      ]
+    },
+    {
+      "a": [
+        48,
+        8
+      ],
+      "b": [
+        51,
+        8
+      ]
+    },
+    {
+      "a": [
+        62,
+        2
+      ],
+      "b": [
+        62,
+        -1
+      ]
+    },
+    {
+      "a": [
+        62,
+        6
+      ],
+      "b": [
+        62,
+        9
+      ]
+    },
+    {
+      "a": [
+        74,
+        -6
+      ],
+      "b": [
+        74,
+        -9
+      ]
+    },
+    {
+      "a": [
+        74,
+        -2
+      ],
+      "b": [
+        74,
+        1
+      ]
+    },
+    {
+      "a": [
+        74,
+        6
+      ],
+      "b": [
+        74,
+        3
+      ]
+    },
+    {
+      "a": [
+        74,
+        10
+      ],
+      "b": [
+        74,
+        13
+      ]
+    },
+    {
+      "a": [
+        86,
+        2
+      ],
+      "b": [
+        86,
+        -1
+      ]
+    },
+    {
+      "a": [
+        86,
+        6
+      ],
+      "b": [
+        86,
+        9
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        17,
+        0
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        24,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        31,
+        -1
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        31,
+        1
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        39,
+        -6
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        49,
+        -6
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        37,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        51,
+        8
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        62,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        62,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        74,
+        -9
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        74,
+        1
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        74,
+        3
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        74,
+        13
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        86,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        86,
+        9
+      ],
+      "text": "GND"
+    }
+  ]
+}
