@@ -4,7 +4,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec
 use part_lib::templates::{ChargerTemplate, CurrentSetting, Topology};
 use part_lib::{Issue, PartDef, PinDef};
 use pcb_core::package::PackageSpec;
-use sch_core::{PinSide, SimKind, SimModel};
+use sch_core::{PartRatings, PinSide, SimKind, SimModel, SpecRow};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum PkgKind {
@@ -45,6 +45,12 @@ pub struct PartForm {
     pub sim_pins: String,
     /// What the model leaves out, one note per line.
     pub sim_limits: String,
+    /// Data sheet ratings: absolute maximum voltage [V] / current [A] / power [W] (blank = not given) and
+    /// further rows, one per line as `name | value | condition`.
+    pub rt_v: String,
+    pub rt_i: String,
+    pub rt_p: String,
+    pub rt_rows: String,
     /// The charger template section and what it said last.
     pub tpl: ChargerTemplate,
     pub tpl_message: String,
@@ -75,6 +81,10 @@ impl Default for PartForm {
             sim_text: String::new(),
             sim_pins: String::new(),
             sim_limits: String::new(),
+            rt_v: String::new(),
+            rt_i: String::new(),
+            rt_p: String::new(),
+            rt_rows: String::new(),
             tpl: ChargerTemplate::default(),
             tpl_message: String::new(),
         }
@@ -106,6 +116,30 @@ impl PartForm {
             out.push(PinDef { number: t[0].into(), name: t[1].into(), side });
         }
         Ok(out)
+    }
+
+    /// The data sheet information typed into the form (None when nothing was typed).
+    fn parse_ratings(&self) -> Result<Option<PartRatings>, String> {
+        let num = |label: &str, t: &str| -> Result<Option<f64>, String> {
+            let t = t.trim();
+            if t.is_empty() {
+                return Ok(None);
+            }
+            sim_core::parse_value(t)
+                .filter(|v| *v > 0.0)
+                .map(Some)
+                .ok_or_else(|| format!("{label}「{t}」を、0 より大きい数で入力してください (例: 40 / 1.5 / 500m)"))
+        };
+        let mut rows = vec![];
+        for (n, line) in self.rt_rows.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+            let parts: Vec<&str> = line.split('|').map(str::trim).collect();
+            if parts.len() < 2 || parts[0].is_empty() || parts[1].is_empty() {
+                return Err(format!("データシートの情報 {}行目: 「項目 | 値 | 条件」の形式で入力してください (条件は省略できます。例: 順方向電圧 | 0.9V | IF = 1A)", n + 1));
+            }
+            rows.push(SpecRow { name: parts[0].into(), value: parts[1].into(), condition: parts.get(2).map(|s| s.to_string()).unwrap_or_default() });
+        }
+        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, rows };
+        Ok(Some(r).filter(|r| !r.is_empty()))
     }
 
     pub fn to_def(&self) -> Result<PartDef, String> {
@@ -147,6 +181,7 @@ impl PartForm {
             package,
             footprint_name: None,
             sim,
+            ratings: self.parse_ratings()?,
         })
     }
 
@@ -364,6 +399,27 @@ impl PartForm {
             }
         });
         ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
+
+        ui.separator();
+        egui::CollapsingHeader::new("データシートの情報 (定格・最大定格)").id_salt("part_ratings").show(ui, |ui| {
+            ui.label("データシートの「絶対最大定格」を入れると、回路のシミュレーション結果と比べて、超えそうなときに警告します。空欄は「分からない」として扱います");
+            egui::Grid::new("part_ratings_grid").num_columns(2).show(ui, |ui| {
+                ui.label("最大電圧 [V]").on_hover_text("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大");
+                ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0)).on_hover_text("例: 40 / 1000");
+                ui.end_row();
+                ui.label("最大電流 [A]").on_hover_text("流してよい最大の連続電流 (ダイオードなら平均順電流 IF、トランジスタなら Ic の最大)");
+                ui.add(egui::TextEdit::singleline(&mut self.rt_i).desired_width(80.0)).on_hover_text("例: 1 / 200m");
+                ui.end_row();
+                ui.label("最大電力 [W]").on_hover_text("部品が熱にしてよい最大の電力 (許容損失 Ptot)。周囲温度が高いと下がります。データシートの条件を確認します");
+                ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text("例: 0.5 / 625m / 1");
+                ui.end_row();
+            });
+            ui.label("そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。条件は省略できます)");
+            ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(4).desired_width(f32::INFINITY).hint_text("順方向電圧 | 0.9V | IF = 1A
+電流増幅率 hFE | 100〜300 | IC = 10mA
+逆回復時間 | 2µs"))
+                .on_hover_text("定格・代表値を、データシートのまま書き写します。部品の一覧でポインタを置いたときに出ます");
+        });
 
         ui.separator();
         ui.label("シミュレーションモデル (部品の特性)");

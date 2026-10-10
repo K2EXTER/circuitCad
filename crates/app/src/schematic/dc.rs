@@ -84,8 +84,22 @@ impl SchEditor {
             let vs = res.voltages.iter().map(|(_, v)| *v);
             v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
         }
-        let ratings = outcome.as_ref().map(|r| sim_core::check_ratings(&self.sch, r)).unwrap_or_default();
+        let ratings = outcome.as_ref().map(|r| sim_core::check_ratings(&self.with_library_ratings(), r)).unwrap_or_default();
         DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range, fault, ratings }
+    }
+
+    /// The sheet with data sheet ratings filled in from the library for placed parts that were saved without
+    /// them (circuits from before the ratings existed).
+    pub(super) fn with_library_ratings(&self) -> Schematic {
+        let mut s = self.sch.clone();
+        for c in &mut s.components {
+            if let Some(sym) = c.custom.as_mut()
+                && sym.ratings.is_none()
+                && let Some(d) = self.library.iter().find(|d| d.name == sym.name) {
+                    sym.ratings = d.ratings.clone().filter(|r| !r.is_empty());
+                }
+        }
+        s
     }
 
     pub fn analyze_dc(&mut self) {

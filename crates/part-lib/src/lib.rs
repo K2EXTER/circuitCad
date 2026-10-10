@@ -3,7 +3,8 @@
 
 use pcb_core::footprints::Footprint;
 use pcb_core::package::PackageSpec;
-use sch_core::{CustomSymbol, PinSide, SimKind, SimModel, SymPin};
+use sch_core::{CustomSymbol, PartRatings, PinSide, SimKind, SimModel, SymPin};
+pub use sch_core::SpecRow;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -45,6 +46,9 @@ pub struct PartDef {
     pub footprint_name: Option<String>,
     #[serde(default)]
     pub sim: Option<SimModel>,
+    /// Data sheet ratings (absolute maximum voltage / current / power and other figures).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ratings: Option<PartRatings>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,6 +82,7 @@ impl PartDef {
                 })
                 .collect(),
             sim: self.sim.clone(),
+            ratings: self.ratings.clone().filter(|r| !r.is_empty()),
         }
     }
 
@@ -333,6 +338,23 @@ fn is_original_without_limits(file: &Path, bundled: &str) -> bool {
     old == new
 }
 
+/// Key recorded in `.bundled` once a part has been offered its data sheet ratings.
+fn ratings_key(name: &str) -> String {
+    format!("{name}+ratings")
+}
+
+/// Is the file an unmodified copy of the bundled part from before it carried ratings?
+/// (Equal to the bundled part in every field except the ratings.)
+fn is_original_without_ratings(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(mut new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    if new.ratings.is_none() || old.ratings.is_some() {
+        return false;
+    }
+    new.ratings = None;
+    old == new
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -373,6 +395,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if file.exists() && is_original_without_limits(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // parts that gained their data sheet ratings after the first release: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = ratings_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_without_ratings(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

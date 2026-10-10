@@ -32,7 +32,7 @@ pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, Para
 pub use designcalc::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, e24, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 pub use fault::{describe_fault, break_pin, break_part, simulate_broken, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
 pub use diagnose::diagnose;
-pub use ratings::{check_ratings, package_power_limit, RatingIssue, RatingLevel};
+pub use ratings::{check_ratings, meets, package_power_limit, requirement, stress, RatingIssue, RatingLevel, Requirement, Stress};
 pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
 pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, McStats, TranMetric};

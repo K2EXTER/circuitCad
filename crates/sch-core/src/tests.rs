@@ -123,6 +123,7 @@ fn spice_deck() {
 fn opamp() -> CustomSymbol {
     let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side };
     CustomSymbol {
+        ratings: None,
         name: "LM358".into(),
         prefix: "U".into(),
         pins: vec![

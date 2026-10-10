@@ -187,6 +187,7 @@ impl SchEditor {
     pub(super) fn panel_properties(&mut self, ui: &mut egui::Ui) {
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
+                let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());
                 let c = &mut self.sch.components[i];
                 ui.label("選択中の部品");
                 if !c.kind.is_power_symbol() {
@@ -295,6 +296,7 @@ impl SchEditor {
                         }
                     }).response.on_hover_text("基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます");
                 }
+                advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
                 if ui.button("回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked() {
                     self.rotate_req = Some(i);
                 }
@@ -396,6 +398,14 @@ impl SchEditor {
 /// Tooltip of a library part: its description, then what its model leaves out.
 fn lib_hover(d: &part_lib::PartDef) -> String {
     let mut t = d.description.clone();
+    if let Some(r) = d.ratings.as_ref().filter(|r| !r.is_empty()) {
+        t.push_str("
+
+");
+        t.push_str(&r.summary());
+        t.push_str("
+(データシートの代表的な値。使う前に、必ずデータシートで確かめてください)");
+    }
     if let Some(m) = &d.sim
         && !m.limits.is_empty() {
             t.push_str("\n\nこのモデルの限界 (実物との違い):");
@@ -446,4 +456,98 @@ PWL(0 0 1m 5) … 折れ線 (時間 電圧 の組)
 NOISE(0.05 1Meg) … ノイズ (実効値 最高周波数)。5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) のように + でつなげます (+ の前後は空白)",
         _ => "部品の値。単位つきの数字は 10k, 100n, 4.7u のように書けます",
     }
+}
+
+/// Common wattages of resistors, smallest first.
+const RESISTOR_WATTS: &[f64] = &[0.0625, 0.1, 0.125, 0.25, 0.5, 1.0, 2.0, 5.0];
+
+fn watt_label(w: f64) -> String {
+    match w {
+        w if (w - 0.0625).abs() < 1e-9 => "1/16W".into(),
+        w if (w - 0.125).abs() < 1e-9 => "1/8W".into(),
+        w if (w - 0.25).abs() < 1e-9 => "1/4W".into(),
+        w if (w - 0.5).abs() < 1e-9 => "1/2W".into(),
+        w => format!("{}W", sch_core_trim(w)),
+    }
+}
+
+fn sch_core_trim(v: f64) -> String {
+    let s = format!("{v:.3}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// "部品選びのヒント" for the selected part: its data sheet figures, what this circuit asks of it (from the
+/// DC result), the rating it would need with a margin of 2, whether it has that, and library parts that do.
+fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool, library: &[PartDef]) {
+    let lib_def = c.custom.as_ref().and_then(|s| library.iter().find(|d| d.name == s.name));
+    let ratings = c.custom.as_ref().and_then(|s| s.ratings.as_ref()).or_else(|| lib_def.and_then(|d| d.ratings.as_ref()));
+    if c.kind != Kind::Resistor && c.custom.is_none() {
+        return;
+    }
+    egui::CollapsingHeader::new("部品選びのヒント (この回路で必要な定格)").id_salt(("advice", &c.refdes)).default_open(false).show(ui, |ui| {
+        if let Some(r) = ratings.filter(|r| !r.is_empty()) {
+            ui.label(egui::RichText::new("データシートの情報").strong());
+            for l in r.summary().lines() {
+                ui.label(format!("・{l}"));
+            }
+        } else if c.custom.is_some() {
+            ui.label("この部品には、定格 (データシートの情報) が入っていません。「新規作成」の部品フォームの「データシートの情報」で入れられます");
+        }
+        let Some(view) = dc else {
+            ui.label("DC動作点を解析すると、この回路でこの部品にかかる電流・電力と、必要な定格が出ます");
+            return;
+        };
+        let Ok(res) = &view.outcome else {
+            ui.label("DC動作点が解けていないので、必要な定格を出せません");
+            return;
+        };
+        if !fresh {
+            ui.colored_label(Color32::from_rgb(220, 160, 40), "回路を変えたので、いまは前の解析結果です。DC動作点をもう一度解析してください");
+        }
+        let st = sim_core::stress(res, &c.refdes);
+        let (Some(i), Some(p)) = (st.i, st.p) else {
+            ui.label("この部品は、解析結果に個別の値がありません (IC の内部モデルなど)");
+            return;
+        };
+        ui.separator();
+        ui.label(egui::RichText::new("この回路でかかる値").strong());
+        ui.label(format!("・電流 {}  電力 {}", eng(i, "A"), eng(p, "W")));
+        if matches!(c.custom.as_ref().and_then(|s| s.sim.as_ref()).map(|m| m.element.to_ascii_uppercase()).as_deref(), Some("Q" | "M" | "J")) {
+            ui.label(format!("・部品の両端の電圧 (Vce / Vds) {}", eng(st.v.unwrap_or(0.0), "V")));
+        }
+        ui.label(format!("・回路の最大電圧 {}", eng(st.v_circuit, "V")));
+        let req = sim_core::requirement(&st, 2.0);
+        ui.label(egui::RichText::new("余裕を 2 倍とるなら").strong()).on_hover_text("部品は、定格ぎりぎりで使うと、熱や劣化で壊れやすくなります。電圧・電流・電力は、最低でも 2 倍の余裕を見るのが、初学者の目安です");
+        if c.kind == Kind::Resistor {
+            let need = req.p_min;
+            let pick = RESISTOR_WATTS.iter().copied().find(|w| *w >= need);
+            ui.label(format!("・抵抗の定格電力 {} 以上 → {}", eng(need, "W"), pick.map_or("5W を超えます。電流を減らすか、抵抗を直列・並列に分けてください".to_string(), |w| format!("{} の抵抗が使えます", watt_label(w)))));
+            return;
+        }
+        ui.label(format!("・最大電圧 {} 以上 / 最大電流 {} 以上 / 最大電力 {} 以上", eng(req.v_min, "V"), eng(req.i_min, "A"), eng(req.p_min, "W")));
+        match ratings.filter(|r| !r.is_empty()) {
+            Some(r) => {
+                let ok = sim_core::meets(&req, r, true);
+                let (text, color) = if ok { ("✔ この部品は、2 倍の余裕を満たしています", Color32::from_rgb(60, 160, 90)) } else { ("✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)", Color32::from_rgb(230, 90, 70)) };
+                ui.colored_label(color, text);
+            }
+            None => {
+                ui.label("この部品の定格が分からないので、判定できません。データシートで、上の条件を満たすか確かめてください");
+            }
+        }
+        // library parts of the same kind that would do
+        if let Some(def) = lib_def {
+            let cat = if def.category.is_empty() { None } else { Some(def.category.as_str()) };
+            let mut ok: Vec<&PartDef> = library.iter().filter(|d| d.name != def.name && cat.is_some_and(|c| d.category == c) && d.ratings.as_ref().is_some_and(|r| sim_core::meets(&req, r, true))).collect();
+            ok.sort_by(|a, b| a.name.cmp(&b.name));
+            if !ok.is_empty() {
+                ui.label(egui::RichText::new("同じ種類で、条件を満たすライブラリ部品").strong());
+                ui.horizontal_wrapped(|ui| {
+                    for d in ok.iter().take(8) {
+                        ui.label(&d.name).on_hover_text(d.ratings.as_ref().map(|r| r.summary()).unwrap_or_default());
+                    }
+                });
+            }
+        }
+    });
 }

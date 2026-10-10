@@ -3,6 +3,24 @@
 use super::*;
 
 impl SchEditor {
+    /// Selects the part with this number (for scripts and screenshots). False if there is none.
+    pub fn select_part(&mut self, refdes: &str) -> bool {
+        match self.sch.components.iter().position(|c| c.refdes == refdes) {
+            Some(i) => {
+                self.set_selection(vec![Sel::Comp(i)]);
+                self.panel_tab = PanelTab::Draw;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Opens the new-part form (for scripts and screenshots).
+    pub fn open_part_form(&mut self) {
+        self.form = Some(PartForm::default());
+        self.panel_tab = PanelTab::Draw;
+    }
+
     pub(super) fn comp_at(&self, g: (f32, f32)) -> Option<usize> {
         self.sch.components.iter().enumerate().rev().find_map(|(i, c)| {
             let rel = (g.0 - c.pos.0 as f32, g.1 - c.pos.1 as f32);

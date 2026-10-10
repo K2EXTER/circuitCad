@@ -289,6 +289,73 @@ pub struct SimModel {
     pub limits: Vec<String>,
 }
 
+/// One datasheet row: a rated or typical figure, e.g. ("順方向電圧", "0.9V", "IF = 1A").
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SpecRow {
+    pub name: String,
+    pub value: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub condition: String,
+}
+
+/// Datasheet information of a part: the absolute maximum ratings (beyond them the part can be
+/// damaged) and any other figures worth keeping next to it. All of it is optional.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct PartRatings {
+    /// Largest voltage the part may see (reverse voltage, Vce, Vds, supply), in volts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub v_max: Option<f64>,
+    /// Largest continuous current, in amperes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub i_max: Option<f64>,
+    /// Largest power the part may dissipate, in watts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub p_max: Option<f64>,
+    /// Rated / typical figures from the data sheet, free form.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rows: Vec<SpecRow>,
+}
+
+impl PartRatings {
+    pub fn is_empty(&self) -> bool {
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.rows.is_empty()
+    }
+
+    /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.
+    pub fn summary(&self) -> String {
+        let fmt = |v: f64, u: &str| format!("{}{u}", trim_float(v));
+        let mut max = vec![];
+        if let Some(v) = self.v_max {
+            max.push(format!("電圧 {}", fmt(v, "V")));
+        }
+        if let Some(i) = self.i_max {
+            max.push(format!("電流 {}", fmt(i, "A")));
+        }
+        if let Some(p) = self.p_max {
+            max.push(format!("電力 {}", fmt(p, "W")));
+        }
+        let mut t = String::new();
+        if !max.is_empty() {
+            t.push_str(&format!("最大定格: {}", max.join("・")));
+        }
+        for r in &self.rows {
+            if !t.is_empty() {
+                t.push('\n');
+            }
+            t.push_str(&format!("{}: {}", r.name, r.value));
+            if !r.condition.is_empty() {
+                t.push_str(&format!(" ({})", r.condition));
+            }
+        }
+        t
+    }
+}
+
+fn trim_float(v: f64) -> String {
+    let s = format!("{v:.4}");
+    s.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CustomSymbol {
     pub name: String,
@@ -296,6 +363,9 @@ pub struct CustomSymbol {
     pub pins: Vec<SymPin>,
     #[serde(default)]
     pub sim: Option<SimModel>,
+    /// Data sheet ratings of the part (None = not given).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ratings: Option<PartRatings>,
 }
 
 pub struct PinGeom {

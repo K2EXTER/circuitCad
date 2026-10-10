@@ -284,3 +284,57 @@ fn an_installed_copy_from_before_the_notes_gets_them_once() {
     assert!(read("TP4056_ESOP-8").sim.unwrap().limits.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn an_installed_copy_from_before_the_ratings_gets_them_once() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_ratings_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    install_examples(&dir).unwrap();
+    let path = |n: &str| dir.join(format!("{n}{FILE_SUFFIX}"));
+    let read = |n: &str| -> PartDef { serde_json::from_str(&std::fs::read_to_string(path(n)).unwrap()).unwrap() };
+    assert_eq!(read("1N5819_DO-41").ratings.unwrap().v_max, Some(40.0), "a fresh install has the ratings");
+
+    // an old library: no ratings; the user edited one of the parts
+    for n in ["1N5819_DO-41", "2N3904_TO-92"] {
+        let mut d = read(n);
+        d.ratings = None;
+        if n == "2N3904_TO-92" {
+            d.description = "mein 2N3904".into();
+        }
+        std::fs::write(path(n), serde_json::to_string_pretty(&d).unwrap()).unwrap();
+    }
+    let kept: Vec<String> = std::fs::read_to_string(dir.join(".bundled")).unwrap().lines().filter(|l| !l.ends_with("+ratings")).map(String::from).collect();
+    std::fs::write(dir.join(".bundled"), kept.join("
+")).unwrap();
+    install_examples(&dir).unwrap();
+    assert!(read("1N5819_DO-41").ratings.is_some(), "the unmodified copy gains the ratings");
+    assert!(read("2N3904_TO-92").ratings.is_none(), "an edited copy is left alone");
+
+    // once offered, a user who removes them is not given them again
+    let mut d = read("1N5819_DO-41");
+    d.ratings = None;
+    std::fs::write(path("1N5819_DO-41"), serde_json::to_string_pretty(&d).unwrap()).unwrap();
+    install_examples(&dir).unwrap();
+    assert!(read("1N5819_DO-41").ratings.is_none());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn bundled_ratings_are_sane_and_summarise_in_japanese() {
+    let mut n = 0;
+    for (name, text) in EXAMPLES {
+        let d: PartDef = serde_json::from_str(text).unwrap();
+        let Some(r) = &d.ratings else { continue };
+        n += 1;
+        for v in [r.v_max, r.i_max, r.p_max].into_iter().flatten() {
+            assert!(v > 0.0 && v.is_finite(), "{name}");
+        }
+        assert!(!r.summary().is_empty(), "{name}");
+        // the ratings travel with the placed symbol
+        assert_eq!(d.symbol().ratings.as_ref(), Some(r), "{name}");
+    }
+    assert!(n >= 20, "{n} parts carry ratings");
+    let d: PartDef = serde_json::from_str(EXAMPLES.iter().find(|(n, _)| n.starts_with("1N5819")).unwrap().1).unwrap();
+    let s = d.ratings.unwrap().summary();
+    assert!(s.contains("電圧 40V") && s.contains("電流 1A") && s.contains("順方向電圧"), "{s}");
+}

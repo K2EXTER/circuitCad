@@ -548,3 +548,28 @@ fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {
     let issues = sim_core::check_ratings(&g, &dc(&g));
     assert!(issues.iter().any(|i| i.refdes == "Q1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
 }
+
+/// A circuit saved before parts carried ratings still gets them: they are taken from the library by part name.
+#[test]
+fn old_circuits_borrow_the_ratings_of_their_library_parts() {
+    let mut s = example_schematics().into_iter().find(|(n, _)| n == "emitter_follower.schjson").unwrap().1;
+    for c in &mut s.components {
+        if let Some(sym) = c.custom.as_mut() {
+            sym.ratings = None;
+        }
+        if c.refdes == "R2" {
+            c.value = "22".into();
+        }
+    }
+    let mut e = SchEditor::default();
+    e.sch = s;
+    e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect();
+    e.run_dc();
+    let issues = &e.dc.as_ref().unwrap().ratings;
+    assert!(issues.iter().any(|i| i.refdes == "Q1" && i.message.contains("最大定格")), "{issues:?}");
+    // without the library the old circuit has only the package rule of thumb (TO-92: 0.5 W), so the wording differs
+    e.library.clear();
+    e.run_dc();
+    let issues = &e.dc.as_ref().unwrap().ratings;
+    assert!(issues.iter().any(|i| i.refdes == "Q1" && i.message.contains("この形の目安")), "{issues:?}");
+}

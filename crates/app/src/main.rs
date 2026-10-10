@@ -286,13 +286,16 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
         && let Some(n) = schematic::lesson_ids().iter().position(|l| l == id) {
             app.sch.start_lesson(n);
         }
+    if args.iter().any(|a| a == "--new-part") {
+        app.sch.open_part_form();
+    }
     if args.iter().any(|a| a == "--learn") {
         app.learn.open = true;
     }
@@ -313,6 +316,10 @@ fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--dc") {
             app.sch.analyze_dc();
         }
+        if let Some(i) = args.iter().position(|a| a == "--select")
+            && let Some(r) = args.get(i + 1) {
+                app.sch.select_part(r);
+            }
         if let Some(i) = args.iter().position(|a| a == "--ac")
             && let (Some(f0), Some(f1), Some(p)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
                 app.sch.set_ac_settings(f0, f1, p);
