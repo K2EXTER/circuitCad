@@ -276,6 +276,8 @@ fn main() -> eframe::Result {
 /// egui's built-in fonts lack Japanese glyphs, and mixing them with a Windows font puts Latin
 /// letters and kana on slightly different baselines. So use one system font that covers both
 /// Japanese and half-width alphanumerics for everything; egui's own fonts stay as a fallback.
+const BUNDLED_FONT: &[u8] = include_bytes!("../assets/fonts/BIZUDGothic-Regular.ttf");
+
 fn install_japanese_font(ctx: &egui::Context) {
     const CANDIDATES: &[&str] = &[
         r"C:\Windows\Fonts\BIZ-UDGothicR.ttc",
@@ -294,24 +296,21 @@ fn install_japanese_font(ctx: &egui::Context) {
         "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf",
         "/usr/share/fonts/truetype/takao-gothic/TakaoPGothic.ttf",
     ];
-    for path in CANDIDATES {
-        if let Ok(bytes) = std::fs::read(path) {
-            let mut fonts = egui::FontDefinitions::default();
-            fonts.font_data.insert("jp".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
-            for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-                fonts.families.entry(fam).or_default().insert(0, "jp".into());
-            }
-            ctx.set_fonts(fonts);
-            // the default body / button size (12.5 px) is not a whole pixel count (13 px fails the same way), and with this font the
-            // thin hyphen / minus stroke then vanishes ("1e-6" reads "1e 6", "-3dB" reads "3dB")
-            ctx.all_styles_mut(|style| {
-                for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
-                    style.text_styles.insert(ts, egui::FontId::proportional(14.0));
-                }
-            });
-            return;
-        }
+    // fall back to the bundled BIZ UD Gothic (SIL OFL 1.1, see assets/fonts/OFL.txt) so every OS shows Japanese
+    let bytes = CANDIDATES.iter().find_map(|p| std::fs::read(p).ok()).unwrap_or_else(|| BUNDLED_FONT.to_vec());
+    let mut fonts = egui::FontDefinitions::default();
+    fonts.font_data.insert("jp".into(), std::sync::Arc::new(egui::FontData::from_owned(bytes)));
+    for fam in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts.families.entry(fam).or_default().insert(0, "jp".into());
     }
+    ctx.set_fonts(fonts);
+    // the default body / button size (12.5 px) is not a whole pixel count (13 px fails the same way), and with this font the
+    // thin hyphen / minus stroke then vanishes ("1e-6" reads "1e 6", "-3dB" reads "3dB")
+    ctx.all_styles_mut(|style| {
+        for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
+            style.text_styles.insert(ts, egui::FontId::proportional(14.0));
+        }
+    });
 }
 
 #[cfg(test)]

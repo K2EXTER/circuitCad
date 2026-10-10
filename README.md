@@ -21,7 +21,7 @@ cargo run -p app --release
 cargo test --workspace
 ```
 
-日本語の表示には、システムの日本語フォント (Windows: BIZ UDゴシック / メイリオ / 游ゴシック、macOS: ヒラギノ、Linux: Noto Sans CJK / IPA など) を実行時に読み込みます。Linux では `fonts-noto-cjk` などを入れてください。
+日本語の表示には、システムの日本語フォント (Windows: BIZ UDゴシック / メイリオ / 游ゴシック、macOS: ヒラギノ、Linux: Noto Sans CJK / IPA など) を実行時に読み込みます。見つからないときは、同梱の BIZ UDゴシック (モリサワ、SIL Open Font License 1.1。`crates/app/assets/fonts/OFL.txt`) を使うので、どの OS でも日本語が表示されます。
 
 ビルド済みの実行ファイルは、リリースページ (タグ `v*` で自動生成) から入手できます。
 
