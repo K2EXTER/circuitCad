@@ -33,7 +33,6 @@ impl BoardEditor {
 
     pub(super) fn panel_widths(&mut self, ui: &mut egui::Ui) {
         egui::CollapsingHeader::new("配線の太さ (電流から)").default_open(false).show(ui, |ui| {
-            ui.small("ネットごとに流す電流を入れると、必要な線幅を計算し、足りない配線を教えます (銅箔 35µm・温度上昇 10℃ の外層)。電源やモーターの線は、信号線より太くします");
             let nets = self.board_nets();
             if nets.is_empty() {
                 ui.small("回路図から部品を取り込むと、ネットの一覧が出ます");
@@ -92,6 +91,6 @@ impl BoardEditor {
                     self.widen_net_to_need(&n);
                 }
             }
-        });
+        }).header_response.on_hover_text("ネットごとに流す電流を入れると、必要な線幅を計算し、足りない配線を教えます (銅箔 35µm・温度上昇 10℃ の外層)。電源やモーターの線は、信号線より太くします");
     }
 }

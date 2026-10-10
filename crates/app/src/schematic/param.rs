@@ -48,7 +48,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_param(&mut self, ui: &mut egui::Ui) {
-        ui.small("部品の値を何通りか変えて同じ解析をくり返し、波形を重ねて表示します。「Rを変えるとカットオフがどう動くか」を一度に見られます");
         let parts = self.sweepable();
         let selected_part = match self.selected {
             Some(Sel::Comp(i)) => self.sch.components.get(i).map(|c| (c.refdes.clone(), c.value.clone())),

@@ -53,7 +53,6 @@ impl SchEditor {
         if ui.button("AC解析を実行").on_hover_text("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます").clicked() {
             self.run_ac();
         }
-        ui.small("入力にする電源の値を「AC 1」にしてください");
     }
 
     pub(super) fn panel_sweep(&mut self, ui: &mut egui::Ui) {
@@ -98,7 +97,6 @@ impl SchEditor {
                 self.run_noise();
             }
         });
-        ui.small("周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示");
     }
 
     pub(super) fn panel_variation(&mut self, ui: &mut egui::Ui) {

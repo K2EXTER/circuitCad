@@ -105,8 +105,6 @@ impl SchEditor {
                             } else {
                                 "ノイズマージンがほとんどありません。回路や部品の組み合わせを見直しましょう。"
                             });
-                        } else {
-                            ui.small("電圧の信号を選ぶと、反転する (インバーターの) 特性なら VOH / VOL / 切替電圧 / ノイズマージンを計算します");
                         }
                         if !temp {
                             ui.checkbox(show_diag, "「出力 = 入力」の線").on_hover_text("この線と曲線が交わる所が切替電圧 Vth です");

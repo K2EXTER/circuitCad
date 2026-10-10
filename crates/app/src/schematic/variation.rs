@@ -123,7 +123,6 @@ impl SchEditor {
                     ui.colored_label(Color32::from_rgb(230, 60, 60), "どの回も収束しませんでした");
                     return;
                 };
-                ui.small("部品の値を、許容差の範囲でランダムに変えて何度も計算しました。縦棒が高いところほど、よく出る値です");
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {
                         ui.set_width(300.0);

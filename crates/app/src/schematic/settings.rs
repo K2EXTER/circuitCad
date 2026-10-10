@@ -29,7 +29,6 @@ impl SchEditor {
         let mut open = true;
         let mut o = self.sim_opts;
         egui::Window::new("シミュレーション設定").open(&mut open).default_width(380.0).show(ctx, |ui| {
-            ui.small("ふだんは変えなくて大丈夫です。「収束しませんでした」と出たとき、または結果の精度を上げたいときに調整します。");
             ui.horizontal(|ui| {
                 if ui.button("標準").on_hover_text("初期値に戻します").clicked() {
                     o = SimOptions::default();
@@ -54,7 +53,6 @@ impl SchEditor {
                 ui.end_row();
             });
             ui.separator();
-            ui.small("変えたあとは、解析をもう一度実行してください (「自動で再計算」がオンなら自動で反映されます)。");
         });
         self.sim_opts = o;
         if !open {

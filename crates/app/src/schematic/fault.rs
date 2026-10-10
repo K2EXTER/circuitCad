@@ -312,7 +312,6 @@ impl SchEditor {
     }
 
     pub(super) fn panel_fault(&mut self, ui: &mut egui::Ui) {
-        ui.small("部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます");
         let circuit = self.sim_circuit().ok();
         let parts: Vec<String> = self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
         ui.horizontal(|ui| {

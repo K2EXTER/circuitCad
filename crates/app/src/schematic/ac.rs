@@ -43,14 +43,13 @@ impl SchEditor {
         let mut start_probe = false;
         let mut open_help = false;
         ui.horizontal(|ui| {
-            ui.strong("AC解析 (ボード線図)");
+            ui.strong("AC解析 (ボード線図)").on_hover_text("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります");
             if ui.button("閉じる").clicked() {
                 close = true;
             }
             if ui.small_button("操作").on_hover_text("波形のズーム・測定カーソル・信号の選び方を開きます").clicked() {
                 open_help = true;
             }
-            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります");
         });
         let AcView { outcome, selected, plot: st, .. } = view;
         match outcome {
@@ -87,7 +86,6 @@ impl SchEditor {
                             }
                         }
                         egui::CollapsingHeader::new("安定性の余裕 (位相余裕・ゲイン余裕)").show(ui, |ui| {
-                            ui.small("帰還ループを1か所で切って、1周したときのゲイン (一巡伝達関数) を測った波形に使います。選んだ信号を、そのゲインとして扱います");
                             for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
                                 let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
                                 let Some(m) = stability_margins(&res.freq, &sg.db(), &sg.phase_deg()) else { continue };

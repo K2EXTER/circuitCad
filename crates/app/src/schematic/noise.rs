@@ -137,7 +137,6 @@ impl SchEditor {
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("縦軸: 電圧ノイズ密度 [dB, 0 dB = 1 nV/√Hz]。60 dB = 1 µV/√Hz");
         });
         let NoiseView { outcome, selected, plot: st } = view;
         match outcome {

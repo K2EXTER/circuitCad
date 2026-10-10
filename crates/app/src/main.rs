@@ -156,7 +156,7 @@ impl eframe::App for App {
                         }
                     }
                     ui.separator();
-                    if ui.button("値の決め方 (計算ツール)…").on_hover_text("LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます").clicked() {
+                    if ui.button("値の決め方 (計算ツール)…").on_hover_text("LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます。部品の値は、勘ではなく計算で決められます。入力を変えると、結果・計算のしかた・注意点・壊れ方がすぐ下に出ます").clicked() {
                         self.mode = Mode::Schematic;
                         self.sch.open_wizard(0);
                         ui.close();
@@ -196,7 +196,7 @@ impl eframe::App for App {
                     ui.label("F1 キーでも開けます");
                 });
                 ui.menu_button("設定", |ui| {
-                    if ui.button("シミュレーション設定…").on_hover_text("計算の精度や収束のしやすさを調整します").clicked() {
+                    if ui.button("シミュレーション設定…").on_hover_text("計算の精度や収束のしやすさを調整します。ふだんは変えなくて大丈夫です。「収束しませんでした」と出たとき、または結果の精度を上げたいときに調整します。変えたあとは、解析をもう一度実行してください (「自動で再計算」がオンなら自動で反映されます)。").clicked() {
                         self.sch.show_sim_opts = true;
                         ui.close();
                     }
