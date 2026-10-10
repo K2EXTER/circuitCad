@@ -506,6 +506,59 @@ pub fn mask_dam_checks(board: &Board) -> Vec<Violation> {
     out
 }
 
+/// A surface-mount pad this big (mm²) on a part with several pins is a heat pad (the exposed pad of a QFN or
+/// ESOP, the tab of a SOT-223): the part gets rid of its heat through it.
+pub const HEAT_PAD_AREA: f64 = 4.0;
+
+/// The heat pads of the board: (index into `board.pads`, area in mm²). A pad counts when it is surface-mount,
+/// at least `HEAT_PAD_AREA`, on a part with three or more pads, and more than twice as big as any other pad of it.
+pub fn heat_pads(board: &Board) -> Vec<(usize, f64)> {
+    let area = |p: &Pad| {
+        let (w, h) = p.shape.size();
+        match p.shape {
+            PadShape::Circle { d } => std::f64::consts::PI * d * d / 4.0,
+            _ => w * h,
+        }
+    };
+    let mut out = vec![];
+    for (i, p) in board.pads.iter().enumerate() {
+        if p.drill.is_some() || p.refdes.is_empty() || area(p) < HEAT_PAD_AREA {
+            continue;
+        }
+        let others: Vec<f64> = board.pads.iter().enumerate().filter(|(j, q)| *j != i && q.refdes == p.refdes).map(|(_, q)| area(q)).collect();
+        if others.len() >= 2 && others.iter().all(|a| area(p) > 2.0 * a) {
+            out.push((i, area(p)));
+        }
+    }
+    out
+}
+
+/// Thermal vias: a heat pad needs vias in it that carry the heat through the board to copper on the back (about one
+/// per 2.5 mm², at least two). Without them the heat has only the small top-side copper to spread in.
+pub fn thermal_via_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    for (i, area) in heat_pads(board) {
+        let p = &board.pads[i];
+        let (w, h) = p.shape.size();
+        let inside = |c: Point| match p.shape {
+            PadShape::Circle { d } => c.dist(p.pos) <= d / 2.0,
+            _ => (c.x - p.pos.x).abs() <= w / 2.0 && (c.y - p.pos.y).abs() <= h / 2.0,
+        };
+        let have = board.vias.iter().filter(|v| inside(v.pos)).count();
+        let need = ((area / 2.5).ceil() as usize).clamp(2, 9);
+        if have < need {
+            out.push(v(
+                format!(
+                    "{}.{} は放熱パッド (面積 {area:.1}mm²) ですが、中に熱を裏面へ逃がすビア (サーマルビア) が {have} 個しかありません ({need} 個以上が目安)。パッドの中にビアを格子状に置いて (穴 0.3mm くらい)、裏面の同じネットの銅 (ゾーン) につなぐと、熱が基板全体に広がります",
+                    p.refdes, p.pin
+                ),
+                p.pos,
+            ));
+        }
+    }
+    out
+}
+
 /// A copper pour piece thinner than this (mm, as an equivalent strip width) is a sliver.
 pub const MIN_POUR_WIDTH: f64 = 0.2;
 
@@ -813,6 +866,38 @@ mod tests {
         b.zones.push(z(5.0, 5.0, 25.0, 5.12));
         let v = zone_checks(&b);
         assert!(v.iter().any(|x| x.message.contains("スリバー")), "{v:?}");
+    }
+
+    #[test]
+    fn a_heat_pad_needs_thermal_vias() {
+        let mut b = board();
+        // a small 3-pin part with a big tab (like a SOT-223)
+        for (x, y, w, h, pin) in [(10.0, 10.0, 2.0, 1.5, "1"), (10.0, 12.3, 2.0, 1.5, "2"), (16.0, 11.0, 2.0, 3.8, "3")] {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, None, Side::Top);
+            p.refdes = "U1".into();
+            p.pin = pin.into();
+            b.pads.push(p);
+        }
+        assert_eq!(heat_pads(&b).len(), 1, "only the tab is a heat pad");
+        let v = thermal_via_checks(&b);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].message.contains("U1.3") && v[0].message.contains("0 個"), "{v:?}");
+        // vias in the tab: 7.6 mm2 asks for 4
+        for dy in [-1.2, -0.4, 0.4] {
+            b.vias.push(Via { pos: Point::new(16.0, 11.0 + dy), diameter: 0.6, drill: 0.3 });
+        }
+        assert_eq!(thermal_via_checks(&b).len(), 1, "three are not enough");
+        b.vias.push(Via { pos: Point::new(16.0, 12.8), diameter: 0.6, drill: 0.3 });
+        assert!(thermal_via_checks(&b).is_empty());
+        // a plain two-pad resistor with big pads is not a heat pad
+        let mut c = board();
+        for (x, pin) in [(10.0, "1"), (14.0, "2")] {
+            let mut p = Pad::new(Point::new(x, 10.0), PadShape::Rect { w: 1.5, h: 3.0 }, None, Side::Top);
+            p.refdes = "R1".into();
+            p.pin = pin.into();
+            c.pads.push(p);
+        }
+        assert!(heat_pads(&c).is_empty());
     }
 
     fn ic_board(cap_x: Option<f64>) -> Board {

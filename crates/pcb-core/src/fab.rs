@@ -286,6 +286,12 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)).with_also(dams.iter().map(|x| x.at)));
     }
 
+    // heat pads without thermal vias
+    let thermal = drc::thermal_via_checks(board);
+    if let Some(first) = thermal.first() {
+        out.push(check(Level::Warn, format!("放熱パッドにサーマルビアが足りない部品が {} 個あります", thermal.len()), format!("例: {}", first.message), Some(first.at)).with_also(thermal.iter().map(|x| x.at)));
+    }
+
     // slivers and islands of the copper pours
     let pours = drc::zone_checks(board);
     if let Some(first) = pours.first() {
