@@ -316,6 +316,27 @@ fn connections_and_unrouted_lines_are_kept_until_the_board_changes() {
     assert!(!std::rc::Rc::ptr_eq(&c1, &e.cached_connectivity()));
 }
 
+#[test]
+fn routing_and_vias_snap_to_track_ends_and_the_router_grid_fits_the_editor_grid() {
+    // the router's pitch divides the editor's grid, so every grid point is a router point too
+    for grid in [0.5, 0.25, 1.0, 1.27, 2.54, 0.1] {
+        let pitch = actions::route_pitch(grid);
+        let k = grid / pitch;
+        assert!((k - k.round()).abs() < 1e-9 && pitch <= 0.25 + 1e-9, "grid {grid}: pitch {pitch}");
+    }
+    assert_eq!(actions::route_pitch(0.0), 0.2);
+    // a track end that is off the editor's grid (as the router leaves them) is snapped to, not the grid point beside it
+    let mut e = BoardEditor::default();
+    e.grid = 0.5;
+    e.zoom = 20.0;
+    e.board.tracks.push(Track { side: Side::Top, a: p(10.1, 10.0), b: p(10.35, 10.25), width: 0.25 });
+    assert_eq!(e.snap_object(p(10.4, 10.2)), Some(p(10.35, 10.25)));
+    assert_eq!(e.snap_object(p(14.0, 14.0)), None);
+    // tracks of the other layer do not attract while working on this one
+    e.side = Side::Bottom;
+    assert_eq!(e.snap_object(p(10.4, 10.2)), None);
+}
+
 mod order_flow {
     use super::*;
     use pcb_core::fab::{self, Level};
@@ -384,6 +405,7 @@ fn shipped_example_boards_can_be_previewed() {
             // the samples are tidy: no sharp corners, bypass capacitors where an IC needs them
             assert!(pcb_core::drc::acute_angle_checks(&board).is_empty(), "{}", entry.path().display());
             assert!(pcb_core::drc::decoupling_checks(&board).is_empty(), "{}", entry.path().display());
+            assert!(pcb_core::drc::zone_checks(&board).is_empty(), "{}: {:?}", entry.path().display(), pcb_core::drc::zone_checks(&board));
             n += 1;
         }
     }

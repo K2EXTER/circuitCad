@@ -183,6 +183,9 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
         hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
     }
     let g = opt.grid;
+    // the lattice is anchored at the board's origin (not at the outline's corner), so its points are the same
+    // ones the editor's grid snaps to, whatever the outline looks like
+    lo = Point::new((lo.x / g).floor() * g, (lo.y / g).floor() * g);
     let (nx, ny) = (((hi.x - lo.x) / g).floor() as usize + 1, ((hi.y - lo.y) / g).floor() as usize + 1);
     if nx * ny > 4_000_000 {
         return None;

@@ -51,26 +51,27 @@ impl BoardEditor {
         }
     }
 
+    /// The pad centre, via centre or track end close to `w` (within 10 px), for routing and vias to meet what is
+    /// already there, whatever the grid: off-grid footprints, and the tracks the auto-router laid.
+    pub(super) fn snap_object(&self, w: Point) -> Option<Point> {
+        let tol = 10.0 / self.zoom as f64;
+        let pads = self.board.pads.iter().filter(|p| p.drill.is_some() || p.side == self.side).map(|p| p.pos);
+        let vias = self.board.vias.iter().map(|v| v.pos);
+        let ends = self.board.tracks.iter().filter(|t| t.side == self.side).flat_map(|t| [t.a, t.b]);
+        pads.chain(vias).chain(ends).filter(|c| c.dist(w) <= tol).min_by(|a, b| a.dist(w).total_cmp(&b.dist(w)))
+    }
+
     pub(super) fn pointer(&mut self, resp: &egui::Response, rect: Rect, painter: &egui::Painter) -> Option<Point> {
         let mut sp = None;
         if let Some(pos) = resp.hover_pos() {
             let w = self.to_world(rect, pos);
             let mut p = Point::new(snap(w.x, self.grid), snap(w.y, self.grid));
-            if matches!(self.tool, Tool::Track) {
-                // snap routing to pad / via centres so off-grid footprints can be connected
-                let tol = 10.0 / self.zoom as f64;
-                let near = self
-                    .board
-                    .pads
-                    .iter()
-                    .map(|p| p.pos)
-                    .chain(self.board.vias.iter().map(|v| v.pos))
-                    .filter(|c| c.dist(w) <= tol)
-                    .min_by(|a, b| a.dist(w).total_cmp(&b.dist(w)));
-                if let Some(c) = near {
+            if matches!(self.tool, Tool::Track | Tool::Via)
+                && let Some(c) = self.snap_object(w) {
+                    // snapped onto something that is already there: a green ring says so
                     p = c;
+                    painter.circle_stroke(self.to_screen(rect, c), 9.0, Stroke::new(2.0, Color32::from_rgb(90, 230, 120)));
                 }
-            }
             sp = Some(p);
             self.draw_cursor(&painter, rect, p);
 

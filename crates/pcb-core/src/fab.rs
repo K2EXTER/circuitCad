@@ -286,6 +286,12 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)).with_also(dams.iter().map(|x| x.at)));
     }
 
+    // slivers and islands of the copper pours
+    let pours = drc::zone_checks(board);
+    if let Some(first) = pours.first() {
+        out.push(check(Level::Warn, format!("ベタ (ゾーン) に、細いかけらや孤立した島が {} 箇所あります", pours.len()), format!("例: {}", first.message), Some(first.at)).with_also(pours.iter().map(|x| x.at)));
+    }
+
     // bypass capacitors next to IC supply pins
     let decoupling = drc::decoupling_checks(board);
     if let Some(first) = decoupling.first() {

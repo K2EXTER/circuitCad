@@ -506,6 +506,52 @@ pub fn mask_dam_checks(board: &Board) -> Vec<Violation> {
     out
 }
 
+/// A copper pour piece thinner than this (mm, as an equivalent strip width) is a sliver.
+pub const MIN_POUR_WIDTH: f64 = 0.2;
+
+/// Problems of the pours that the clearance rules do not see, found on the copper that will really be made
+/// (`zonefill`): slivers (thin strips of copper left between cut-outs, which peel off in manufacturing), and
+/// islands (pieces of the pour that touch no pad or via of its net, so they are connected to nothing and only
+/// act as an antenna).
+pub fn zone_checks(board: &Board) -> Vec<Violation> {
+    use crate::geom::{inside_polygon, signed_area};
+    let mut out = vec![];
+    if board.zones.is_empty() {
+        return out;
+    }
+    let conn = connectivity(board);
+    for z in &board.zones {
+        let side = if z.side == Side::Top { "表面" } else { "裏面" };
+        let name = if z.net.is_empty() { "ネットなし".to_string() } else { z.net.clone() };
+        for shape in crate::zonefill::zone_fill(board, z, &conn) {
+            let perimeter = |c: &[Point]| (0..c.len()).map(|i| c[i].dist(c[(i + 1) % c.len()])).sum::<f64>();
+            let area = signed_area(&shape.outer).abs() - shape.holes.iter().map(|h| signed_area(h).abs()).sum::<f64>();
+            let edge = perimeter(&shape.outer) + shape.holes.iter().map(|h| perimeter(h)).sum::<f64>();
+            let at = shape.outer[0];
+            if edge > 0.0 && 2.0 * area / edge < MIN_POUR_WIDTH {
+                out.push(v(
+                    format!("{side}のゾーン ({name}) に、細い銅のかけら (スリバー、幅 約 {:.2}mm) があります。細すぎる銅は製造中にはがれて、ショートのもとになります。ゾーンの形を変える、配線やパッドの位置を動かす、クリアランスを小さくして、細い所をなくしましょう", 2.0 * area / edge),
+                    at,
+                ));
+                continue;
+            }
+            if z.net.is_empty() {
+                continue;
+            }
+            let inside = |p: Point| inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p));
+            let touches_pad = board.pads.iter().any(|p| p.net == z.net && (p.drill.is_some() || p.side == z.side) && inside(p.pos));
+            let touches_via = board.vias.iter().enumerate().any(|(k, via)| conn.via_net(k) == Some(z.net.as_str()) && inside(via.pos));
+            if !touches_pad && !touches_via {
+                out.push(v(
+                    format!("{side}のゾーン ({name}) に、どこにもつながっていない銅の島 ({area:.1} mm²) があります。電気的には何ともつながらず、ノイズを拾うアンテナになります。島にビアかパッドをつなぐ、島を消す (ゾーンの形を変える)、のどちらかにしましょう"),
+                    at,
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// Farther than this (mm) from an IC supply pin, a bypass capacitor stops doing its job: the
 /// trace between them adds inductance that the fast current spikes cannot get through.
 pub const MAX_DECOUPLING_DISTANCE: f64 = 8.0;
@@ -745,6 +791,28 @@ mod tests {
             }
         }
         assert!(bad.is_empty(), "{bad:#?}");
+    }
+
+    #[test]
+    fn pour_slivers_and_islands_are_found() {
+        let mut b = board();
+        let z = |x0: f64, y0: f64, x1: f64, y1: f64| Zone::new("GND", Side::Top, vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)]);
+        // a plain pour with a GND pad in it: nothing to report
+        let mut gnd = Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        gnd.net = "GND".into();
+        b.pads.push(gnd);
+        b.zones.push(z(5.0, 5.0, 25.0, 15.0));
+        assert!(zone_checks(&b).is_empty(), "{:?}", zone_checks(&b));
+        // a track of another net cuts the pour in two: the far piece touches no GND pad, it is an island
+        b.tracks.push(Track { side: Side::Top, a: Point::new(18.0, 4.0), b: Point::new(18.0, 16.0), width: 0.25 });
+        let v = zone_checks(&b);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].message.contains("島"), "{v:?}");
+        // a pour that is only a thin strip is a sliver
+        let mut b = board();
+        b.zones.push(z(5.0, 5.0, 25.0, 5.12));
+        let v = zone_checks(&b);
+        assert!(v.iter().any(|x| x.message.contains("スリバー")), "{v:?}");
     }
 
     fn ic_board(cap_x: Option<f64>) -> Board {
