@@ -46,7 +46,6 @@ impl BoardEditor {
                 ui.selectable_value(&mut self.route_mode, RouteMode::Orthogonal, "直角");
                 ui.selectable_value(&mut self.route_mode, RouteMode::Free, "自由");
             });
-            ui.small("配線中: V = ビアで層を切替 / Space = 曲がり方を反転");
             ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm"));
             ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
                 .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
@@ -154,7 +153,8 @@ impl BoardEditor {
             ui.label("自動配線");
             ui.horizontal(|ui| {
                 if ui.button("全部").on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
-線幅・ビア径は下の設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます").clicked() {
+線幅・ビア径は下の設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
+2層・45°配線で、ルール違反になる配線は自動的にやめます").clicked() {
                     self.autoroute(None);
                 }
                 let sel_net = match self.selected {
@@ -167,7 +167,6 @@ impl BoardEditor {
                         self.autoroute(Some(&n));
                     }
             });
-            ui.small("2層・45°配線。ルール違反になる配線は自動的にやめます");
             ui.separator();
             self.panel_widths(ui);
             ui.separator();

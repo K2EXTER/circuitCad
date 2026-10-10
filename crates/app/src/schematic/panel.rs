@@ -198,7 +198,7 @@ impl SchEditor {
                 if c.kind != Kind::Ground {
                     ui.horizontal(|ui| {
                         ui.label("値");
-                        ui.text_edit_singleline(&mut c.value);
+                        ui.text_edit_singleline(&mut c.value).on_hover_text(value_hint(c.kind));
                     });
                 }
                 if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) {
@@ -267,21 +267,11 @@ impl SchEditor {
                             ui.colored_label(Color32::from_rgb(230, 60, 60), msg);
                         }
                     }
-                    ui.collapsing("値の書き方 (テキストで直接入力する場合)", |ui| {
-                        ui.small("例: 5 / SIN(0 1 1k) / PULSE(0 5 100u 1u 1u 400u 1m) / PWL(0 0 1m 5) / 5 AC 1");
-                        ui.small("ノイズ: NOISE(実効値 最高周波数 [シード]) 例: 5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) (+ の前後は空白)");
-                    });
                 }
                 if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
                     && ui.small_button("値の決め方…").on_hover_text("この部品の値を計算で決める窓を開きます (LEDの抵抗・分圧・フィルタなど)").clicked()
                 {
                     self.wiz_open = true;
-                }
-                if c.kind == Kind::Capacitor {
-                    ui.small("例: 100n / 100n ESR=20m ESL=5n (等価直列抵抗・インダクタンス) / 100u IC=3.2 (過渡解析を始めるときの電圧。電池の代わりに使えます)");
-                }
-                if c.kind == Kind::Inductor {
-                    ui.small("例: 10u / 10u DCR=0.1 (巻線抵抗)");
                 }
                 if let Some(sym) = &c.custom {
                     ui.label(format!("フットプリント: {}", c.footprint));
@@ -331,7 +321,6 @@ impl SchEditor {
             .default_pos(pos + egui::vec2(12.0, 12.0))
             .default_width(260.0)
             .show(ctx, |ui| {
-                ui.small("値や番号を直すと回路に反映されます。Esc または × で閉じます");
                 self.panel_properties(ui);
             });
         if !open || ctx.input(|i| i.key_pressed(egui::Key::Escape)) || self.selected != Some(Sel::Comp(i)) {
@@ -437,4 +426,24 @@ pub(super) fn limits_ui(ui: &mut egui::Ui, limits: &[String], id: &str) {
             });
         }
     });
+}
+
+/// What can be typed in the value field of a part of this kind (shown when the pointer rests on the field).
+fn value_hint(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Capacitor => "容量。例: 100n / 4.7u
+100n ESR=20m ESL=5n … 等価直列抵抗・インダクタンスも入れられます
+100u IC=3.2 … 過渡解析を始めるときの電圧 (電池の代わりに使えます)",
+        Kind::Inductor => "インダクタンス。例: 10u / 1m
+10u DCR=0.1 … 巻線抵抗も入れられます",
+        Kind::Resistor => "抵抗値。例: 100 / 4.7k / 1Meg (k = 1000、Meg = 100万、m = 1/1000、u = 1/100万、n、p)",
+        Kind::VSource => "電源の値。例:
+5 … 直流 5V
+SIN(0 1 1k) … 正弦波 (中心 振幅 周波数)
+PULSE(0 5 100u 1u 1u 400u 1m) … 方形波 (低 高 遅延 立上り 立下り 幅 周期)
+PWL(0 0 1m 5) … 折れ線 (時間 電圧 の組)
+5 AC 1 … AC解析の入力にする
+NOISE(0.05 1Meg) … ノイズ (実効値 最高周波数)。5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) のように + でつなげます (+ の前後は空白)",
+        _ => "部品の値。単位つきの数字は 10k, 100n, 4.7u のように書けます",
+    }
 }

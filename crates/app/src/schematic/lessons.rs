@@ -667,7 +667,6 @@ impl SchEditor {
         let mut next = None;
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(360.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
-            ui.small("操作は左パネルで行います。部品の値の変更は「作図」タブ、解析の実行は「解析」タブです (手順に合わせて自動で切り替わります)");
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();
             for (k, step) in lesson.steps.iter().enumerate() {

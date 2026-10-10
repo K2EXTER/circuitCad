@@ -67,10 +67,11 @@ impl SchEditor {
             ui.checkbox(spectrum, "スペクトル表示");
             if *spectrum {
                 ui.label("解析範囲");
-                ui.add(egui::TextEdit::singleline(spec_t0).desired_width(70.0));
+                let tip = "スペクトルを計算する時間の範囲 (秒)。立ち上がり直後を除いた範囲を指定してください。縦軸は 0 dB = 1 V (ピーク値)";
+                ui.add(egui::TextEdit::singleline(spec_t0).desired_width(70.0)).on_hover_text(tip);
                 ui.label("〜");
-                ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0));
-                ui.small("秒 / 0 dB = 1 V(ピーク値)。立ち上がり直後を除いた範囲を指定してください");
+                ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0)).on_hover_text(tip);
+                ui.label("秒");
             } else {
                 if ui.small_button("操作").on_hover_text("波形のズーム・測定カーソル・信号の選び方を開きます").clicked() {
                     open_help = true;
