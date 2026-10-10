@@ -245,6 +245,7 @@ const BG: Color32 = Color32::from_rgb(18, 22, 18);
 // The editor is one type spread over several files; the child modules see its private fields.
 mod history;
 mod view;
+mod width;
 mod select;
 mod route;
 mod tools;

@@ -153,6 +153,8 @@ impl BoardEditor {
             });
             ui.small("2層・45°配線。ルール違反になる配線は自動的にやめます");
             ui.separator();
+            self.panel_widths(ui);
+            ui.separator();
             if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                 self.run_drc();
             }

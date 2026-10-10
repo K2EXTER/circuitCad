@@ -73,7 +73,56 @@ pub(super) const CALCS: &[Calc] = &[
         ],
         run: |v| smoothing_cap(v[0], v[1], v[2], v[3]),
     },
+    Calc {
+        title: "基板の配線の太さ (電流から)",
+        about: "基板の銅の配線に流せる電流から、必要な線幅を決めます。電源やモーターの線を信号線と同じ細さにすると、熱を持って焼けることがあります",
+        inputs: &[
+            ("流す電流 (A)", "1", "その配線に流れる最大の電流。つなぐ部品のデータシートの最大電流や、電源の容量から見積もります"),
+            ("許す温度上昇 (℃)", "10", "配線が周囲より何度まで熱くなってよいか。10℃ が一般的で、余裕を見るなら 5〜10℃"),
+            ("銅箔の厚さ (µm)", "35", "ふつうの2層基板は 35µm (1oz)。厚銅は 70µm (2oz)。発注先の仕様で確認します"),
+        ],
+        run: |v| trace_width(v[0], v[1], v[2]),
+    },
 ];
+
+/// Track width for a current (IPC-2221), with cautions and failure patterns, as a calculator result.
+fn trace_width(amps: f64, rise: f64, um: f64) -> Result<CalcOut, String> {
+    use pcb_core::current::{current_for_width, round_up_width, width_for_current, CopperSpec};
+    for (name, v) in [("電流", amps), ("温度上昇", rise), ("銅箔の厚さ", um)] {
+        if !(v.is_finite() && v > 0.0) {
+            return Err(format!("{name}は 0 より大きい数にしてください"));
+        }
+    }
+    let ext = CopperSpec { thickness_um: um, rise_c: rise, external: true };
+    let int = CopperSpec { external: false, ..ext };
+    let (w_ext, w_int) = (width_for_current(amps, &ext), width_for_current(amps, &int));
+    let rec = round_up_width(w_ext);
+    let mut o = CalcOut::default();
+    o.rows = vec![
+        ("計算上の線幅 (表面・裏面)".into(), format!("{w_ext:.3} mm")),
+        ("使う線幅 (0.05mm 刻みで切り上げ)".into(), format!("{rec:.2} mm")),
+        ("内層に配線する場合".into(), format!("{w_int:.2} mm (内層は熱が逃げにくい)")),
+        ("その幅で流せる電流".into(), format!("{:.2} A", current_for_width(rec, &ext))),
+    ];
+    o.steps = vec![
+        "IPC-2221 の式: I = k × ΔT^0.44 × A^0.725 (A: 配線の断面積 [mil²]、ΔT: 温度上昇、k: 表面 0.048・内層 0.024)".into(),
+        format!("断面積 A = (I ÷ (k × ΔT^0.44))^(1/0.725)。幅 = A ÷ 銅箔の厚さ ({um} µm = {:.2} mil) = {w_ext:.3} mm", um / 25.4),
+    ];
+    if rec > 2.0 {
+        o.cautions.push("2 mm を超える太さです。配線でなく、ゾーン (銅を面で塗る) や基板の両面に同じ配線を重ねることを検討しましょう".into());
+    }
+    o.cautions.push("線幅は配線のいちばん細い所で決まります。パッドにつながる部分や、ビア・コネクタの手前で細くなっていないか確認します".into());
+    o.cautions.push("ビア1個に流せる電流は小さい (1A 前後)。大電流の線を層替えするときは、ビアを複数並べます".into());
+    o.cautions.push("短時間だけ流れる電流 (モーターの起動など) と、ずっと流れる電流を分けて考えます。この式は、ずっと流れる電流が目安です".into());
+    o.cautions.push("線幅を太くすると、隣の配線との間隔が減ります。基板エディタの「配線の太さ」で自動で太くしたあと、DRC で間隔を確かめましょう".into());
+    o.faults = vec![
+        "細すぎる配線: 熱を持って基板が変色し、最悪は銅が焼き切れて (ヒューズのように) 断線します".into(),
+        "ビアが足りない/細い: 大電流の途中で熱を持ちます。電源の層替えにビアを複数使います".into(),
+        "パッドへの接続部だけ細い: そこが一番熱くなる所 (ボトルネック) になります".into(),
+        "銅箔が計画より薄い (安い発注の既定は 35µm): 流せる電流が減ります。仕様を確認しましょう".into(),
+    ];
+    Ok(o)
+}
 
 impl SchEditor {
     /// Opens the window on calculator `k`.

@@ -204,17 +204,17 @@ pub fn check(board: &Board) -> Vec<Violation> {
     let mut out = vec![];
 
     if board.outline.len() < 3 {
-        out.push(v("board outline needs at least 3 points".into(), Point::default()));
+        out.push(v("基板の外形が3点未満で、面になっていません。「基板外形」ツールか「矩形に設定」で外形を決めましょう".into(), Point::default()));
         return out;
     }
 
     for t in &board.tracks {
         if t.width + 1e-9 < r.min_track_width {
-            out.push(v(format!("track width {:.3} < min {:.3}", t.width, r.min_track_width), t.a));
+            out.push(v(format!("配線の幅 {:.3}mm が最小 {:.3}mm より細いです。配線を太くするか、発注先の最小幅に合わせたルールを選びましょう", t.width, r.min_track_width), t.a));
         }
         for p in [t.a, t.b] {
             if !inside_polygon(&board.outline, p) {
-                out.push(v("track endpoint outside board outline".into(), p));
+                out.push(v("配線の端が基板の外にあります。基板の内側に引き直すか、外形を広げましょう".into(), p));
             }
         }
     }
@@ -231,18 +231,18 @@ pub fn check(board: &Board) -> Vec<Violation> {
     }
     for (pos, d, ring) in &drills {
         if *d + 1e-9 < r.min_drill {
-            out.push(v(format!("drill {:.3} < min {:.3}", d, r.min_drill), *pos));
+            out.push(v(format!("穴の径 {:.3}mm が最小 {:.3}mm より小さいです。穴を大きくするか、発注先に合ったルールを選びましょう", d, r.min_drill), *pos));
         }
         if *ring + 1e-9 < r.min_annular_ring {
-            out.push(v(format!("annular ring {:.3} < min {:.3}", ring, r.min_annular_ring), *pos));
+            out.push(v(format!("穴のまわりの銅 (アニュラリング) {:.3}mm が最小 {:.3}mm より細いです。パッド/ビアの直径を大きくするか、穴を小さくしましょう", ring, r.min_annular_ring), *pos));
         }
         if !inside_polygon(&board.outline, *pos) {
-            out.push(v("hole outside board outline".into(), *pos));
+            out.push(v("穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう".into(), *pos));
         }
     }
     for h in &board.holes {
         if !inside_polygon(&board.outline, h.pos) {
-            out.push(v("mounting hole outside board outline".into(), h.pos));
+            out.push(v("取り付け穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう".into(), h.pos));
         }
     }
 
@@ -282,7 +282,7 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
                 if d + 1e-9 < r.min_clearance {
                     let (p, q) = (center(&items[i].geo), center(&items[j].geo));
                     out.push(v(
-                        format!("{} 銅箔間隔 {:.3} < 最小 {:.3}", side_name(side), d, r.min_clearance),
+                        format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ)", side_name(side), d, r.min_clearance),
                         Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
                     ));
                 }
@@ -296,7 +296,7 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
             let edge = Geo::Cap { a: board.outline[e], b: board.outline[(e + 1) % n], r: 0.0 };
             let d = dist(&it.geo, &edge);
             if d + 1e-9 < r.edge_clearance {
-                out.push(v(format!("銅箔と基板端の間隔 {:.3} < 最小 {:.3}", d, r.edge_clearance), center(&it.geo)));
+                out.push(v(format!("銅箔と基板の端の間隔 {:.3}mm が最小 {:.3}mm より狭いです。端から離しましょう (切り出しで銅が欠けたり短絡したりします)", d, r.edge_clearance), center(&it.geo)));
                 break;
             }
         }
@@ -421,6 +421,39 @@ pub fn shorts(board: &Board) -> Vec<Violation> {
         .collect()
 }
 
+/// Smallest silk line width and text height most fabs print legibly (mm).
+pub const MIN_SILK_WIDTH: f64 = 0.15;
+pub const MIN_SILK_TEXT_HEIGHT: f64 = 0.8;
+
+/// Silk-screen problems that are not copper rule violations but spoil the printed board:
+/// silk over an exposed pad (the fab trims it away, or the pad solders badly), lines too thin to
+/// print, and text too small to read.
+pub fn silk_checks(board: &Board) -> Vec<Violation> {
+    let mut out = vec![];
+    for l in &board.silk {
+        if l.width + 1e-9 < MIN_SILK_WIDTH {
+            out.push(v(format!("シルクの線の太さ {:.2}mm が細すぎます (印刷できるのは {:.2}mm 以上が目安)。太くしましょう", l.width, MIN_SILK_WIDTH), l.a));
+        }
+        let line = Geo::Cap { a: l.a, b: l.b, r: l.width / 2.0 };
+        for p in &board.pads {
+            let exposed = p.drill.is_some() || p.side == l.side;
+            if exposed && dist(&line, &shape_geo(p.pos, p.shape)) < 1e-9 {
+                out.push(v(
+                    format!("シルク (白い線) が {} のパッドに重なっています。パッドの上のシルクは製造時に削られ、はんだ付けにも邪魔です。シルクをずらしましょう", if p.refdes.is_empty() { "穴/パッド".to_string() } else { format!("{}.{}", p.refdes, p.pin) }),
+                    p.pos,
+                ));
+                break;
+            }
+        }
+    }
+    for t in &board.texts {
+        if t.height + 1e-9 < MIN_SILK_TEXT_HEIGHT {
+            out.push(v(format!("シルクの文字「{}」の高さ {:.2}mm が小さすぎて読めません ({:.1}mm 以上が目安)", t.text, t.height, MIN_SILK_TEXT_HEIGHT), t.pos));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -494,5 +527,21 @@ mod tests {
         let mut b = board();
         b.tracks.push(track(Side::Top, (0.3, 10.0), (0.3, 20.0), 0.25)); // edge gap ~0.175 < 0.3
         assert_eq!(clearance(&b).len(), 1);
+    }
+
+    #[test]
+    fn silk_over_a_pad_thin_silk_and_tiny_text_are_flagged() {
+        let mut b = board();
+        b.pads.push(Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
+        b.silk.push(SilkLine { side: Side::Top, a: Point::new(9.0, 10.0), b: Point::new(11.0, 10.0), width: 0.15, refdes: String::new() });
+        // far away and on the other side: fine
+        b.silk.push(SilkLine { side: Side::Top, a: Point::new(20.0, 10.0), b: Point::new(22.0, 10.0), width: 0.15, refdes: String::new() });
+        b.silk.push(SilkLine { side: Side::Bottom, a: Point::new(9.0, 10.0), b: Point::new(11.0, 10.0), width: 0.15, refdes: String::new() });
+        assert_eq!(silk_checks(&b).len(), 1, "{:?}", silk_checks(&b));
+        b.silk.push(SilkLine { side: Side::Top, a: Point::new(30.0, 10.0), b: Point::new(32.0, 10.0), width: 0.08, refdes: String::new() });
+        b.texts.push(SilkText { side: Side::Top, pos: Point::new(5.0, 5.0), height: 0.5, text: "R1".into(), refdes: "R1".into() });
+        let v = silk_checks(&b);
+        assert_eq!(v.len(), 3, "{v:?}");
+        assert!(v.iter().any(|x| x.message.contains("パッドに重なって")) && v.iter().any(|x| x.message.contains("細すぎ")) && v.iter().any(|x| x.message.contains("小さすぎ")));
     }
 }

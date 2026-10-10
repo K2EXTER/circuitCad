@@ -301,3 +301,29 @@ fn shipped_example_boards_can_be_previewed() {
     }
     assert!(n >= 1, "no example boards found");
 }
+
+#[test]
+fn widening_a_net_to_its_current_is_undoable_and_only_touches_that_net() {
+    let mut e = BoardEditor::default();
+    for (x, net) in [(5.0, "VIN"), (25.0, "VIN"), (5.0, "SIG"), (25.0, "SIG")] {
+        let y = if net == "VIN" { 10.0 } else { 20.0 };
+        let mut pad = Pad::new(p(x, y), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+        pad.net = net.into();
+        e.board.pads.push(pad);
+    }
+    e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 10.0), b: p(25.0, 10.0), width: 0.25 });
+    e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 20.0), b: p(25.0, 20.0), width: 0.25 });
+    assert_eq!(e.board_nets(), vec!["VIN".to_string(), "SIG".to_string()]);
+    // nothing declared: nothing to widen
+    assert_eq!(e.widen_net_to_need("VIN"), 0);
+    e.board.net_currents.insert("VIN".into(), 2.0);
+    assert_eq!(e.widen_net_to_need("VIN"), 1);
+    assert!(e.board.tracks[0].width > 0.6, "{}", e.board.tracks[0].width);
+    assert!((e.board.tracks[1].width - 0.25).abs() < 1e-9, "the signal net keeps its width");
+    // already wide enough: a second call changes nothing and leaves no extra undo step
+    let steps = e.undo.len();
+    assert_eq!(e.widen_net_to_need("VIN"), 0);
+    assert_eq!(e.undo.len(), steps);
+    e.undo();
+    assert!((e.board.tracks[0].width - 0.25).abs() < 1e-9);
+}

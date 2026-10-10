@@ -4,6 +4,7 @@
 pub mod assembly;
 pub mod autoplace;
 pub mod autoroute;
+pub mod current;
 pub mod drc;
 pub mod excellon;
 pub mod export;

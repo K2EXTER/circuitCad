@@ -246,6 +246,30 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         }
     }
 
+    // track widths against the currents the user declared
+    let conn = drc::connectivity(board);
+    let widths = crate::current::net_widths(board, &conn, &crate::current::CopperSpec::default());
+    let thin: Vec<&crate::current::NetWidth> = widths.iter().filter(|w| w.too_thin()).collect();
+    if let Some(first) = thin.first() {
+        out.push(check(
+            Level::Warn,
+            format!("電流に対して配線が細いネットがあります: {}", thin.iter().take(4).map(|w| w.net.as_str()).collect::<Vec<_>>().join(", ")),
+            format!(
+                "例: {} は {:.1} A を流す設定で、{:.2} mm 以上 (銅箔 35µm・温度上昇 10℃ の目安) が必要ですが、細い所は {:.2} mm です。細い配線は熱を持ち、焼けたり基板が傷んだりします。左の「配線の太さ」で「推奨幅にする」を押しましょう",
+                first.net, first.amps, first.needed, first.thinnest.unwrap_or(0.0)
+            ),
+            first.at,
+        ));
+    } else if !widths.is_empty() {
+        out.push(check(Level::Ok, format!("電流を設定したネット {} 本は、配線の太さが足りています", widths.len()), "", None));
+    }
+
+    // silk screen
+    let silk = drc::silk_checks(board);
+    if let Some(first) = silk.first() {
+        out.push(check(Level::Warn, format!("シルク (白い印刷) に気になる所が {} 件あります", silk.len()), format!("例: {}", first.message), Some(first.at)));
+    }
+
     // BOM
     let blank: Vec<&str> = board.parts.iter().filter(|p| p.value.trim().is_empty()).map(|p| p.refdes.as_str()).collect();
     if !blank.is_empty() {
