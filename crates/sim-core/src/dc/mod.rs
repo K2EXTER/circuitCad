@@ -221,6 +221,10 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
 pub(crate) fn floating_warnings(circuit: &Circuit) -> Vec<String> {
     let mut w = circuit.warnings.clone();
     for i in floating_nodes(circuit) {
+        // a node inside a part ("U1.comp", "C1.esr") is the model's business: the learner cannot wire it
+        if circuit.names[i].contains('.') {
+            continue;
+        }
         w.push(format!("ノード {} にGNDへのDC経路がありません (0Vとして扱います)", circuit.names[i]));
     }
     w

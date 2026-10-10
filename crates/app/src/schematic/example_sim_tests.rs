@@ -378,3 +378,18 @@ fn buck_sample_regulates_5v_switches_at_150khz_and_the_lesson_numbers_hold() {
     let (v3, _, _, _, eff3) = buck_run("100u DCR=0.05", "10");
     assert!((4.6..5.3).contains(&v3) && (0.82..0.93).contains(&eff3) && eff3 < eff, "{v3} {eff3}");
 }
+
+/// A learner reads every warning: the bundled samples should not raise warnings that come from inside a model.
+#[test]
+fn shipped_examples_have_no_warnings_about_nodes_inside_models() {
+    let mut bad = vec![];
+    for (name, sch) in example_schematics() {
+        let Ok(c) = from_schematic(&sch) else { continue };
+        if let Ok(dc) = dc_op(&c) {
+            for w in dc.warnings.iter().filter(|w| w.contains('.')) {
+                bad.push(format!("{name}: {w}"));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{bad:#?}");
+}
