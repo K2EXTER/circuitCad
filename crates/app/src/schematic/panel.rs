@@ -399,7 +399,9 @@ impl SchEditor {
                 None => {}
             }
         }
-        ui.small("左クリック: 配置 / 配線 (斜めは自動でL字)\nダブルクリックか右クリック: 配線を確定 / 配線していないときの右クリック: 選択ツールに戻る\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (配線中などは右ドラッグも可) / ホイール: 拡大縮小");
+        if ui.small_button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
+            self.help_request = Some(crate::help::HelpTab::Schematic);
+        }
     }
 }
 

@@ -106,6 +106,8 @@ pub struct SchEditor {
     /// An ERC check has been run since the last change of the list.
     erc_ran: bool,
     pub status: String,
+    /// Set by the small "操作" buttons; the app opens the guide on that page.
+    pub help_request: Option<crate::help::HelpTab>,
     pub library: Vec<PartDef>,
     lib_errors: Vec<String>,
     lib_dir: PathBuf,
@@ -463,6 +465,7 @@ impl Default for SchEditor {
             erc_focus: None,
             erc_ran: false,
             status: "回路図: 部品を選んで配置し、配線ツールで線をつなぎます".into(),
+            help_request: None,
         }
     }
 }

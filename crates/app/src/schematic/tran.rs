@@ -57,6 +57,7 @@ impl SchEditor {
         let Some(view) = self.tran.as_mut() else { return };
         let mut close = false;
         let mut start_probe = false;
+        let mut open_help = false;
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
@@ -71,7 +72,9 @@ impl SchEditor {
                 ui.add(egui::TextEdit::singleline(spec_t1).desired_width(70.0));
                 ui.small("秒 / 0 dB = 1 V(ピーク値)。立ち上がり直後を除いた範囲を指定してください");
             } else {
-                ui.small("ドラッグ: 移動 / ホイール: 時間軸ズーム (Ctrl: 縦軸) / 縦軸の数字の上でホイール: 縦軸だけ拡大縮小 / 横軸の数字の上でホイール: 横軸だけ拡大縮小 / クリック: 測定カーソル A→B (2点の差と周期が出ます) / ダブルクリック: 全体表示・カーソル解除 / 統計値は表示中の範囲");
+                if ui.small_button("操作").on_hover_text("波形のズーム・測定カーソル・信号の選び方を開きます").clicked() {
+                    open_help = true;
+                }
             }
         });
         match outcome {
@@ -233,6 +236,9 @@ impl SchEditor {
                     }
                 });
             }
+        }
+        if open_help {
+            self.help_request = Some(crate::help::HelpTab::Waveform);
         }
         if start_probe {
             self.start_probe();

@@ -6,6 +6,7 @@ use eframe::egui;
 use schematic::SchEditor;
 
 mod board_editor;
+mod help;
 mod part_form;
 mod plot;
 mod schematic;
@@ -45,13 +46,14 @@ struct App {
     board_ed: BoardEditor,
     /// Where the screenshot being taken goes (the capture arrives a frame after the request).
     shot_path: Option<std::path::PathBuf>,
+    help: help::Help,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, auto_shot: None }
+        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), auto_shot: None }
     }
 }
 
@@ -98,6 +100,14 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.finish_screenshot(ui);
         self.tick_auto_screenshot(ui);
+        // F1, and the small "操作" buttons of the panels, open the guide
+        if ui.input(|i| i.key_pressed(egui::Key::F1)) {
+            self.help.show(if self.mode == Mode::Schematic { help::HelpTab::Schematic } else { help::HelpTab::Board });
+        }
+        if let Some(t) = self.sch.help_request.take().or_else(|| self.board_ed.help_request.take()) {
+            self.help.show(t);
+        }
+        self.help.window(ui.ctx());
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図");
@@ -170,6 +180,21 @@ impl eframe::App for App {
                         if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
                     }
                 });
+                ui.menu_button("ヘルプ", |ui| {
+                    for (t, name, tip) in [
+                        (help::HelpTab::Schematic, "回路図の操作", "部品の置き方・配線・選択・キー操作"),
+                        (help::HelpTab::Waveform, "波形の操作", "ズーム・測定カーソル・信号の選び方"),
+                        (help::HelpTab::Board, "基板の操作", "配置・配線・ビア・層の切り替え"),
+                        (help::HelpTab::View3d, "3D表示の操作", "回す・動かす・拡大"),
+                    ] {
+                        if ui.button(name).on_hover_text(tip).clicked() {
+                            self.help.show(t);
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    ui.label("F1 キーでも開けます");
+                });
                 ui.menu_button("設定", |ui| {
                     if ui.button("シミュレーション設定…").on_hover_text("計算の精度や収束のしやすさを調整します").clicked() {
                         self.sch.show_sim_opts = true;
@@ -226,8 +251,16 @@ fn install_crash_log() {
 }
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
-/// [--drc] [--round R] [--3d] [--order] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
+    if let Some(i) = args.iter().position(|a| a == "--guide") {
+        app.help.show(match args.get(i + 1).map(|s| s.as_str()) {
+            Some("waveform") => help::HelpTab::Waveform,
+            Some("board") => help::HelpTab::Board,
+            Some("3d") => help::HelpTab::View3d,
+            _ => help::HelpTab::Schematic,
+        });
+    }
     if let Some(i) = args.iter().position(|a| a == "--screenshot")
         && let Some(p) = args.get(i + 1) {
             app.auto_shot = Some((p.into(), 40));

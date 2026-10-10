@@ -327,6 +327,7 @@ impl BoardEditor {
         let mut open = true;
         let mut retex = false;
         let mut stale = false;
+        let mut want_help = false;
         let mut pick: Option<usize> = None;
         let selected = if let Some(Item::Part(i)) = self.selected { Some(i) } else { None };
         let v = &mut self.view3d;
@@ -357,8 +358,11 @@ impl BoardEditor {
                 if ui.button("更新").on_hover_text("基板エディタで変更した内容を反映します").clicked() {
                     stale = true;
                 }
+                if ui.small_button("操作").on_hover_text("回す・動かす・拡大の操作を開きます").clicked() {
+                    want_help = true;
+                }
             });
-            ui.small("左ドラッグ: 回す / 右ドラッグ (または中ドラッグ): 動かす / ホイール: 拡大縮小 / ダブルクリック: 初期の向き / 部品にカーソル: 名前 / 部品をクリック: 選択");
+            // (the rotate / pan / zoom operations are in the guide)
             if let Some(e) = &v.error {
                 ui.colored_label(Color32::from_rgb(230, 60, 60), e);
                 return;
@@ -434,6 +438,9 @@ impl BoardEditor {
             if let Some(p) = self.board.parts.get(i) {
                 self.status = format!("3D表示から {} を選びました (基板エディタで選択中)", p.refdes);
             }
+        }
+        if want_help {
+            self.help_request = Some(crate::help::HelpTab::View3d);
         }
         if stale {
             self.view3d.stale = true;

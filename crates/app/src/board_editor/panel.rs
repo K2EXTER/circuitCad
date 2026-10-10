@@ -185,9 +185,9 @@ impl BoardEditor {
                 self.zoom = self.zoom.max(25.0);
             }
             ui.separator();
-            ui.small(
-                "左クリック: 配置・選択 / 右クリック: 描いているものを確定 (描いていないときは選択ツールに戻る)\n選択ツール: 左ドラッグ = 完全に囲んだものを選択 / 右ドラッグ = 触れたものも選択 (Shiftで追加)\n中ドラッグ: 移動 (他のツールでは右ドラッグも可) / ホイール: 拡大縮小\nCtrl+Z: 元に戻す / Ctrl+Y: やり直し / Delete: 削除\nR: 部品を回転 / B: 部品の表裏反転 / L: 層切替 / F: 全体表示",
-            );
+            if ui.small_button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
+                self.help_request = Some(crate::help::HelpTab::Board);
+            }
         });
     }
 
@@ -195,7 +195,6 @@ impl BoardEditor {
         if self.multi.len() > 1 {
             ui.separator();
             ui.label(format!("{} 個を選択中", self.multi.len()));
-            ui.small("ドラッグでまとめて移動 / R: 部品を回転 / B: 部品の表裏反転 / Delete: 削除 (部品を除く)");
             if ui.button("選択を解除 (Esc)").clicked() {
                 self.multi.clear();
             }
@@ -263,7 +262,6 @@ impl BoardEditor {
                 let p = &self.board.parts[i];
                 let (r, side) = (p.refdes.clone(), p.side);
                 ui.label(format!("{}  {}  [{}]  {}", p.refdes, p.value, p.footprint, if side == Side::Bottom { "裏面実装" } else { "表面実装" }));
-                ui.small("ドラッグで移動 / R で回転 / B で表裏を反転");
                 let _ = r;
                 if ui.button(if side == Side::Bottom { "表面に移す (B)" } else { "裏面に移す (B)" }).clicked() {
                     self.flip_selected_part();

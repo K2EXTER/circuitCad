@@ -155,6 +155,8 @@ pub struct BoardEditor {
     gdrag: Option<GroupDrag>,
     drag_part: Option<(String, Point)>,
     pub status: String,
+    /// Set by the small "操作" buttons; the app opens the guide on that page.
+    pub help_request: Option<crate::help::HelpTab>,
     violations: Vec<drc::Violation>,
     import_notes: Vec<String>,
     undo: Vec<Board>,
@@ -207,6 +209,7 @@ impl Default for BoardEditor {
             gdrag: None,
             drag_part: None,
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
+            help_request: None,
             violations: vec![],
             import_notes: vec![],
             undo: vec![],

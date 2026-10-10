@@ -41,12 +41,16 @@ impl SchEditor {
         let Some(view) = self.ac.as_mut() else { return };
         let mut close = false;
         let mut start_probe = false;
+        let mut open_help = false;
         ui.horizontal(|ui| {
             ui.strong("AC解析 (ボード線図)");
             if ui.button("閉じる").clicked() {
                 close = true;
             }
-            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります / クリック: 測定カーソル A→B / ダブルクリック: 全体表示・カーソル解除 / 軸の数字の上でホイール: その軸だけ拡大縮小");
+            if ui.small_button("操作").on_hover_text("波形のズーム・測定カーソル・信号の選び方を開きます").clicked() {
+                open_help = true;
+            }
+            ui.small("ゲインは 0dB = 1 V(または 1 A)。入力の電源を「AC 1」にすると、そのまま伝達関数になります");
         });
         let AcView { outcome, selected, plot: st, .. } = view;
         match outcome {
@@ -154,6 +158,9 @@ impl SchEditor {
                     plot::draw_group(ui, bottom, egui::Id::new("bode_phase"), &phase, st, 1, &ps, true);
                 });
             }
+        }
+        if open_help {
+            self.help_request = Some(crate::help::HelpTab::Waveform);
         }
         if start_probe {
             self.start_probe();
