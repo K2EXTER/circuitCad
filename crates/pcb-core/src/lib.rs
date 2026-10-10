@@ -21,6 +21,7 @@ pub mod package;
 pub mod parts;
 pub mod ratsnest;
 pub mod strokefont;
+pub mod zonefill;
 
 #[cfg(test)]
 mod tests_autoroute;

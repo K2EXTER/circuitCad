@@ -9,6 +9,16 @@ use std::f64::consts::PI;
 /// enough to keep the file small.
 pub const ARC_STEP_DEG: f64 = 6.0;
 
+/// Largest distance (mm) between a true arc and the straight pieces that stand for it. A big radius gets
+/// shorter pieces than a small one, so a large rounded corner or a circle does not look like a polygon.
+pub const ARC_TOLERANCE: f64 = 0.002;
+
+/// The turn (radians) of one straight piece of an arc of radius `r`: within `ARC_TOLERANCE`, never above `ARC_STEP_DEG`.
+fn arc_step(r: f64) -> f64 {
+    let by_tolerance = if r > ARC_TOLERANCE { 2.0 * (1.0 - ARC_TOLERANCE / r).clamp(-1.0, 1.0).acos() } else { PI / 2.0 };
+    by_tolerance.min(ARC_STEP_DEG.to_radians()).max(0.001)
+}
+
 fn sub(a: Point, b: Point) -> (f64, f64) {
     (a.x - b.x, a.y - b.y)
 }
@@ -59,7 +69,7 @@ pub fn round_corners(poly: &[Point], radius: f64) -> Vec<Point> {
         while sweep < -PI {
             sweep += 2.0 * PI;
         }
-        let steps = ((sweep.abs() / ARC_STEP_DEG.to_radians()).ceil() as usize).max(1);
+        let steps = ((sweep.abs() / arc_step(r)).ceil() as usize).max(1);
         for s in 0..=steps {
             let a = a1 + sweep * s as f64 / steps as f64;
             out.push(Point::new(c.x + r * a.cos(), c.y + r * a.sin()));
@@ -78,7 +88,7 @@ pub fn rounded_rect(x0: f64, y0: f64, x1: f64, y1: f64, radius: f64) -> Vec<Poin
 /// A circle (or the ellipse that fits the box when the box is not square) as a polygon.
 pub fn ellipse(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Point> {
     let (c, rx, ry) = (Point::new((x0 + x1) / 2.0, (y0 + y1) / 2.0), (x1 - x0).abs() / 2.0, (y1 - y0).abs() / 2.0);
-    let n = (360.0 / ARC_STEP_DEG) as usize;
+    let n = ((2.0 * PI / arc_step(rx.max(ry))).ceil() as usize).max((360.0 / ARC_STEP_DEG) as usize);
     (0..n)
         .map(|k| {
             let a = 2.0 * PI * k as f64 / n as f64;

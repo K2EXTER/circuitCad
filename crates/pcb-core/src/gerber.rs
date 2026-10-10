@@ -138,39 +138,28 @@ fn pad_on_copper(p: &Pad, side: Side) -> bool {
 /// copper is drawn afterwards, on top of the cut-outs.
 fn zones(g: &mut GerberLayer, board: &Board, side: Side, conn: &Connectivity) {
     for z in board.zones.iter().filter(|z| z.side == side && z.polygon.len() >= 3) {
-        let c = z.clearance;
         let same = |net: Option<&str>| !z.net.is_empty() && net == Some(z.net.as_str());
-        g.polarity(false);
-        g.region(&z.polygon);
-        g.polarity(true);
-        for (i, t) in board.tracks.iter().enumerate().filter(|(_, t)| t.side == side) {
-            if !same(conn.track_net(i)) {
-                g.line(t.a, t.b, t.width + 2.0 * c);
+        // the pour itself: already cut to the board outline and cleared around other nets, holes and the edge
+        for shape in crate::zonefill::zone_fill(board, z, conn) {
+            g.polarity(false);
+            g.region(&shape.outer);
+            if !shape.holes.is_empty() {
+                g.polarity(true);
+                for h in &shape.holes {
+                    g.region(h);
+                }
             }
         }
+        // thermal relief: a clear ring around the through-hole pads of the zone's net, then four spokes
+        g.polarity(true);
         let mut spokes: Vec<(Point, f64)> = vec![];
         for (j, p) in board.pads.iter().enumerate().filter(|(_, p)| pad_on_copper(p, side)) {
-            if !same(conn.pad_net(j)) {
-                g.flash(p.pos, p.shape, c);
-            } else if z.thermal && p.drill.is_some() && inside_polygon(&z.polygon, p.pos) {
+            if same(conn.pad_net(j)) && z.thermal && p.drill.is_some() && inside_polygon(&z.polygon, p.pos) {
                 let (w, h) = p.shape.size();
                 let ring = w.max(h) + 2.0 * z.thermal_gap;
                 g.flash(p.pos, PadShape::Circle { d: ring }, 0.0);
                 spokes.push((p.pos, ring / 2.0));
             }
-        }
-        for (k, v) in board.vias.iter().enumerate() {
-            if !same(conn.via_net(k)) {
-                g.flash(v.pos, PadShape::Circle { d: v.diameter }, c);
-            }
-        }
-        for h in &board.holes {
-            g.flash(h.pos, PadShape::Circle { d: h.drill }, c);
-        }
-        let n = board.outline.len();
-        let edge = c.max(board.rules.edge_clearance);
-        for i in 0..n {
-            g.line(board.outline[i], board.outline[(i + 1) % n], 2.0 * edge);
         }
         g.polarity(false);
         for (pos, r) in spokes {

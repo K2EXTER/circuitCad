@@ -20,6 +20,7 @@ impl BoardEditor {
         self.draw_copper(&painter, rect);
         self.draw_highlight(&painter, rect, conn.as_ref());
         self.draw_overlays(&painter, rect);
+        self.draw_layer_badge(&painter, rect);
 
         if !self.alt_pan {
             self.box_selection(ui, &resp, rect, &painter);

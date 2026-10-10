@@ -177,6 +177,8 @@ pub struct BoardEditor {
     /// The "発注の準備" window.
     order: order::OrderState,
     order_preview_src: Option<pcb_core::gerber_view::Preview>,
+    /// The pours as geometry (cut to the outline, cleared around other nets), kept until the board changes.
+    zone_cache: std::cell::RefCell<Option<(u64, Vec<Vec<pcb_core::zonefill::FillShape>>)>>,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -226,6 +228,7 @@ impl Default for BoardEditor {
             alt_pan: false,
             order: order::OrderState::default(),
             order_preview_src: None,
+            zone_cache: std::cell::RefCell::new(None),
             last_export_dir: None,
             lesson: None,
             drc_ran: false,

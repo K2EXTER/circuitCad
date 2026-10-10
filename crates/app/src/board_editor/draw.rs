@@ -19,56 +19,49 @@ impl BoardEditor {
         }
     }
 
-    /// Copper pours with the same cut-outs the Gerber output has (thermal spokes not drawn).
+    /// Copper pours as the fab will get them: cut to the board outline, cleared around other nets and the
+    /// edge (thermal spokes not drawn). The shapes come from the same code as the Gerber output.
     pub(super) fn draw_zones(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
-        if !self.vis.zones {
+        if !self.vis.zones || self.board.zones.is_empty() {
             return;
         }
-        let z = self.zoom;
+        let key = pcb_core::zonefill::geometry_key(&self.board);
+        let mut cache = self.zone_cache.borrow_mut();
+        if cache.as_ref().is_none_or(|(k, _)| *k != key) {
+            let fresh;
+            let conn = match conn {
+                Some(c) => c,
+                None => {
+                    fresh = connectivity(&self.board);
+                    &fresh
+                }
+            };
+            *cache = Some((key, self.board.zones.iter().map(|zn| pcb_core::zonefill::zone_fill(&self.board, zn, conn)).collect()));
+        }
+        let Some((_, fills)) = cache.as_ref() else { return };
         for s in [self.side.flip(), self.side] {
             if !self.side_visible(s) {
                 continue;
             }
-            let alpha = if s == self.side { 90 } else { 45 };
+            let alpha = if s == self.side { 90 } else { 40 };
             let fill = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
-            for zone in self.board.zones.iter().filter(|zn| zn.side == s) {
-                for t in triangulate(&zone.polygon) {
-                    let pts: Vec<Pos2> = t.iter().map(|p| self.to_screen(rect, *p)).collect();
-                    painter.add(egui::Shape::convex_polygon(pts, fill, Stroke::NONE));
-                }
-                let n = zone.polygon.len();
-                for i in 0..n {
-                    painter.line_segment(
-                        [self.to_screen(rect, zone.polygon[i]), self.to_screen(rect, zone.polygon[(i + 1) % n])],
-                        Stroke::new(1.0, self.side_color(s)),
-                    );
-                }
-                // clearance around everything of another net
-                let Some(conn) = conn else { continue };
-                let c = zone.clearance as f32;
-                let other = |net: Option<&str>| zone.net.is_empty() || net != Some(zone.net.as_str());
-                for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| t.side == s) {
-                    if other(conn.track_net(i)) {
-                        painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 + 2.0 * c) * z, BG));
+            let edge = self.side_color(s).gamma_multiply(if s == self.side { 0.8 } else { 0.35 });
+            for (zone, shapes) in self.board.zones.iter().zip(fills.iter()).filter(|(zn, _)| zn.side == s) {
+                let _ = zone;
+                for shape in shapes {
+                    let mut mesh = egui::Mesh::default();
+                    for t in shape.triangles() {
+                        let base = mesh.vertices.len() as u32;
+                        for p in t {
+                            mesh.colored_vertex(self.to_screen(rect, p), fill);
+                        }
+                        mesh.add_triangle(base, base + 1, base + 2);
                     }
-                }
-                for (j, p) in self.board.pads.iter().enumerate().filter(|(_, p)| p.drill.is_some() || p.side == s) {
-                    if other(conn.pad_net(j)) {
-                        let (w, h) = p.shape.size();
-                        let r = Rect::from_center_size(self.to_screen(rect, p.pos), Vec2::new((w as f32 + 2.0 * c) * z, (h as f32 + 2.0 * c) * z));
-                        match p.shape {
-                            PadShape::Circle { .. } => painter.circle_filled(r.center(), r.width() / 2.0, BG),
-                            _ => painter.rect_filled(r, 0.0, BG),
-                        };
+                    painter.add(egui::Shape::mesh(mesh));
+                    for contour in std::iter::once(&shape.outer).chain(shape.holes.iter()) {
+                        let pts: Vec<Pos2> = contour.iter().map(|p| self.to_screen(rect, *p)).collect();
+                        painter.add(egui::Shape::closed_line(pts, Stroke::new(1.0, edge)));
                     }
-                }
-                for (k, v) in self.board.vias.iter().enumerate() {
-                    if other(conn.via_net(k)) {
-                        painter.circle_filled(self.to_screen(rect, v.pos), (v.diameter as f32 / 2.0 + c) * z, BG);
-                    }
-                }
-                for h in &self.board.holes {
-                    painter.circle_filled(self.to_screen(rect, h.pos), (h.drill as f32 / 2.0 + c) * z, BG);
                 }
             }
         }
@@ -79,13 +72,15 @@ impl BoardEditor {
         let o = &self.board.outline;
         for i in 0..o.len() {
             painter.line_segment([self.to_screen(rect, o[i]), self.to_screen(rect, o[(i + 1) % o.len()])], Stroke::new(2.0, Color32::YELLOW));
+            // round joints, so a curve made of many short pieces does not show its corners
+            painter.circle_filled(self.to_screen(rect, o[i]), 1.0, Color32::YELLOW);
         }
         // inactive layer first, so the active one is on top
         for s in [self.side.flip(), self.side] {
             if !self.side_visible(s) {
                 continue;
             }
-            let alpha = if s == self.side { 255 } else { 90 };
+            let alpha = if s == self.side { 255 } else { 60 };
             let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
             for t in self.board.tracks.iter().filter(|t| t.side == s) {
                 painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0), col));
@@ -101,7 +96,8 @@ impl BoardEditor {
                 continue;
             }
             let c = self.to_screen(rect, p.pos);
-            let col = self.side_color(p.side).gamma_multiply(0.9);
+            // a surface-mount pad on the layer that is not being worked on is shown dim
+            let col = self.side_color(p.side).gamma_multiply(if p.drill.is_some() || p.side == self.side { 0.9 } else { 0.35 });
             let (w, h) = p.shape.size();
             let sz = Vec2::new(w as f32 * z, h as f32 * z);
             match p.shape {
@@ -195,6 +191,23 @@ impl BoardEditor {
                 painter.circle_stroke(self.to_screen(rect, p), 8.0, Stroke::new(2.0, Color32::WHITE));
             }
         }
+    }
+
+    /// A frame and a label in the colour of the layer being worked on, so the front and the back cannot be mixed up.
+    pub(super) fn draw_layer_badge(&self, painter: &egui::Painter, rect: Rect) {
+        let col = self.side_color(self.side);
+        painter.rect_stroke(rect.shrink(1.5), 0.0, Stroke::new(3.0, col.gamma_multiply(0.85)), egui::StrokeKind::Inside);
+        let (name, color_name) = match self.side {
+            Side::Top => ("表面", "赤"),
+            Side::Bottom => ("裏面", "青"),
+        };
+        let text = format!("作業中: {name} ({color_name})   Lキーで切り替え  ・  もう一方の面は薄く表示");
+        let font = egui::FontId::proportional(14.0);
+        let galley = painter.layout_no_wrap(text, font, Color32::WHITE);
+        let pos = rect.min + Vec2::new(30.0, 26.0);
+        let bg = Rect::from_min_size(pos, galley.size() + Vec2::new(16.0, 8.0));
+        painter.rect_filled(bg, 4.0, col.gamma_multiply(0.85));
+        painter.galley(pos + Vec2::new(8.0, 4.0), galley, Color32::WHITE);
     }
 
     pub(super) fn draw_cursor(&self, painter: &egui::Painter, rect: Rect, p: Point) {

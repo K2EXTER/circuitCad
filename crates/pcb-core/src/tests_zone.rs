@@ -60,21 +60,24 @@ fn zone_output_has_region_cutouts_and_thermals() {
     b.zones.push(Zone::new("GND", Side::Top, rect(5.0, 5.0, 35.0, 25.0)));
 
     let top = gerber::copper(&b, Side::Top);
-    assert_eq!(count(&top, "G36*"), 1);
-    assert_eq!(count(&top, "G37*"), 1);
+    // the pour, and one hole each for the foreign pads and track (merged into one) and the mounting hole
+    assert_eq!(count(&top, "G36*"), 3);
+    assert_eq!(count(&top, "G37*"), 3);
     assert!(top.find("G36*").unwrap() < top.find("%LPC*%").unwrap());
     // the clear section ends before the normal copper is drawn dark again
     let last_dark = top.rfind("%LPD*%").unwrap();
     assert!(last_dark > top.find("%LPC*%").unwrap());
     assert!(top[last_dark..].contains("D03*"), "pads are flashed after the cut-outs");
 
-    assert!(top.contains("C,0.850000"), "track 0.25 + 2 x 0.3 clearance");
-    assert!(top.contains("R,1.600000X1.600000"), "SMD pad 1.0 + 2 x 0.3");
     assert!(top.contains("C,2.200000"), "thermal ring: pad 1.6 + 2 x 0.3 gap");
     assert!(top.contains("C,0.300000"), "thermal spokes");
-    assert!(top.contains("C,0.600000"), "board edge clearance line (2 x 0.3), also the NPTH hole ring is 3.6");
-    assert!(top.contains("C,3.600000"), "mounting hole 3.0 + 2 x 0.3");
     assert_eq!(count(&top, "X10000000Y10000000D03*"), 2, "thermal ring and the pad itself");
+    // the cut-outs are real geometry: the mounting hole's hole is a ring of r = 1.5 + 0.3 around (30, 8)
+    let fill = crate::zonefill::zone_fill(&b, &b.zones[0], &drc::connectivity(&b));
+    assert_eq!(fill.len(), 1);
+    let near_hole = fill[0].holes.iter().find(|h| crate::geom::inside_polygon(h, Point::new(30.0, 8.0))).expect("hole around the mounting hole");
+    let r = near_hole.iter().map(|p| p.dist(Point::new(30.0, 8.0))).fold(0.0, f64::max);
+    assert!((r - 1.8).abs() < 0.01, "radius {r}");
 
     // the bottom layer is untouched by a top zone
     let bottom = gerber::copper(&b, Side::Bottom);
@@ -87,10 +90,9 @@ fn a_foreign_net_pad_inside_the_zone_is_cleared_not_connected() {
     pad(&mut b, 10.0, 10.0, "GND", true);
     pad(&mut b, 20.0, 15.0, "VCC", false);
     b.zones.push(Zone::new("GND", Side::Top, rect(5.0, 5.0, 35.0, 25.0)));
-    let top = gerber::copper(&b, Side::Top);
-    let clear_part = &top[top.find("%LPC*%").unwrap()..];
-    let flash_before_dark = &clear_part[..clear_part.find("%LPD*%").unwrap()];
-    assert!(flash_before_dark.contains("X20000000Y15000000D03*"), "VCC pad is flashed in clear polarity");
+    let fill = crate::zonefill::zone_fill(&b, &b.zones[0], &drc::connectivity(&b));
+    assert!(fill.iter().any(|s| s.holes.iter().any(|h| crate::geom::inside_polygon(h, Point::new(20.0, 15.0)))), "the VCC pad is cut out of the pour");
+    assert!(!fill.iter().any(|s| s.holes.iter().any(|h| crate::geom::inside_polygon(h, Point::new(10.0, 10.0)))), "the GND pad is not (it gets thermal spokes)");
     assert!(drc::shorts(&b).is_empty());
 }
 
@@ -147,4 +149,35 @@ fn designator_text_follows_the_part() {
 
     b.remove_part("R1");
     assert!(b.texts.is_empty());
+}
+
+/// A pour drawn past the board edge is cut to the board, with the edge clearance left free, and the
+/// clearance around a track has round ends (no square stubs).
+#[test]
+fn a_pour_is_cut_to_the_outline_and_round_around_track_ends() {
+    let mut b = board();
+    b.zones.push(Zone::new("GND", Side::Top, rect(-10.0, -10.0, 60.0, 50.0)));
+    b.tracks.push(Track { side: Side::Top, a: Point::new(10.0, 15.0), b: Point::new(20.0, 15.0), width: 0.25 });
+    b.pads.push({
+        let mut p = Pad::new(Point::new(10.0, 15.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        p.net = "SIG".into();
+        p
+    });
+    let fill = crate::zonefill::zone_fill(&b, &b.zones[0], &drc::connectivity(&b));
+    assert_eq!(fill.len(), 1);
+    let edge = b.rules.edge_clearance.max(b.zones[0].clearance);
+    for p in &fill[0].outer {
+        assert!(p.x >= edge - 1e-6 && p.x <= 40.0 - edge + 1e-6 && p.y >= edge - 1e-6 && p.y <= 30.0 - edge + 1e-6, "{p:?} is outside the board or in the edge clearance");
+    }
+    // past the end of the track the hole is round: a point on the extension of the track, within the clearance, is cut out
+    let c = b.zones[0].clearance;
+    let end = Point::new(20.0 + 0.125 + c - 0.01, 15.0);
+    assert!(fill[0].holes.iter().any(|h| crate::geom::inside_polygon(h, end)));
+    // ... but the square corner a flat cap would leave is not: it stays copper
+    let corner = Point::new(20.0 + 0.125 + c - 0.02, 15.0 + 0.125 + c - 0.02);
+    assert!(!fill[0].holes.iter().any(|h| crate::geom::inside_polygon(h, corner)));
+    // the triangles of the shape cover its area
+    let area: f64 = fill[0].triangles().iter().map(|t| crate::geom::signed_area(t).abs()).sum();
+    let exact = crate::geom::signed_area(&fill[0].outer).abs() - fill[0].holes.iter().map(|h| crate::geom::signed_area(h).abs()).sum::<f64>();
+    assert!((area - exact).abs() < 0.01, "{area} vs {exact}");
 }

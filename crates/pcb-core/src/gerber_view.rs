@@ -281,7 +281,10 @@ pub fn rasterize(prims: &[Prim], f: &Frame) -> Vec<u8> {
 
 /// The layers of a board, rebuilt from its fabrication files.
 pub struct Preview {
+    /// The picture's pixels (what `render` returns).
     pub frame: Frame,
+    /// The layers are drawn `SUPERSAMPLE` times finer than `frame` and averaged by `render`, so edges are smooth.
+    fine: Frame,
     copper: [Vec<u8>; 2],
     mask: [Vec<u8>; 2],
     silk: [Vec<u8>; 2],
@@ -291,6 +294,9 @@ pub struct Preview {
     pub drills: Vec<(f64, usize, bool)>,
     pub size_mm: (f64, f64),
 }
+
+/// Samples per picture pixel on each axis (the layers are drawn this much finer, then averaged).
+const SUPERSAMPLE: usize = 2;
 
 fn find<'a>(files: &'a [(String, String)], ext: &str) -> Result<&'a str, String> {
     files.iter().find(|(n, _)| n.to_ascii_uppercase().ends_with(ext)).map(|(_, t)| t.as_str()).ok_or_else(|| format!("{ext} のファイルがありません"))
@@ -315,12 +321,13 @@ impl Preview {
             hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
         }
         let frame = Frame::around(lo, hi, max_side);
-        let board = rasterize(&[Prim::Region { pts, clear: false }], &frame);
-        let layer = |ext: &str| -> Result<Vec<u8>, String> { Ok(rasterize(&parse_gerber(find(files, ext)?)?, &frame)) };
+        let fine = Frame { px: frame.px * SUPERSAMPLE as f64, w: frame.w * SUPERSAMPLE, h: frame.h * SUPERSAMPLE, ..frame };
+        let board = rasterize(&[Prim::Region { pts, clear: false }], &fine);
+        let layer = |ext: &str| -> Result<Vec<u8>, String> { Ok(rasterize(&parse_gerber(find(files, ext)?)?, &fine)) };
 
         let mut hits = parse_excellon(find(files, "-PTH.DRL")?)?.into_iter().map(|(d, p)| (d, p, true)).collect::<Vec<_>>();
         hits.extend(parse_excellon(find(files, "-NPTH.DRL")?)?.into_iter().map(|(d, p)| (d, p, false)));
-        let holes = rasterize(&hits.iter().map(|(d, p, _)| Prim::Flash { ap: Aperture::Circle(*d), at: *p, clear: false }).collect::<Vec<_>>(), &frame);
+        let holes = rasterize(&hits.iter().map(|(d, p, _)| Prim::Flash { ap: Aperture::Circle(*d), at: *p, clear: false }).collect::<Vec<_>>(), &fine);
         let mut drills: Vec<(f64, usize, bool)> = vec![];
         for (d, _, plated) in &hits {
             match drills.iter_mut().find(|(x, _, pl)| (x - d).abs() < 1e-6 && pl == plated) {
@@ -332,6 +339,7 @@ impl Preview {
 
         Ok(Preview {
             frame,
+            fine,
             copper: [layer(".GTL")?, layer(".GBL")?],
             mask: [layer(".GTS")?, layer(".GBS")?],
             silk: [layer(".GTO")?, layer(".GBO")?],
@@ -342,28 +350,45 @@ impl Preview {
         })
     }
 
-    /// RGBA pixels, row by row. `bottom` looks at the board from the back (mirrored).
+    /// RGBA pixels, row by row. `bottom` looks at the board from the back (mirrored). Each pixel is the
+    /// average of `SUPERSAMPLE` x `SUPERSAMPLE` samples, so the edges of tracks, pads and the outline are smooth.
     pub fn render(&self, bottom: bool, show_mask: bool, show_silk: bool) -> Vec<[u8; 4]> {
         let (w, h) = (self.frame.w, self.frame.h);
+        let fw = self.fine.w;
         let side = bottom as usize;
         let mut img = vec![[0u8; 4]; w * h];
         for j in 0..h {
             for i in 0..w {
-                let src = j * w + if bottom { w - 1 - i } else { i };
-                let px = &mut img[j * w + i];
-                if self.board[src] == 0 {
-                    continue;
+                // premultiplied sums over the samples of this pixel
+                let mut acc = [0u32; 4];
+                for dj in 0..SUPERSAMPLE {
+                    for di in 0..SUPERSAMPLE {
+                        let fi = i * SUPERSAMPLE + di;
+                        let src = (j * SUPERSAMPLE + dj) * fw + if bottom { fw - 1 - fi } else { fi };
+                        if self.board[src] == 0 {
+                            continue;
+                        }
+                        let mut c = [14u8, 70, 44]; // bare board (green)
+                        if self.copper[side][src] != 0 {
+                            let open = self.mask[side][src] != 0;
+                            c = if !show_mask || open { [214, 176, 58] } else { [38, 128, 76] };
+                        }
+                        if show_silk && self.silk[side][src] != 0 {
+                            c = [238, 238, 232];
+                        }
+                        if self.holes[src] != 0 {
+                            c = [22, 22, 22];
+                        }
+                        for k in 0..3 {
+                            acc[k] += c[k] as u32;
+                        }
+                        acc[3] += 1;
+                    }
                 }
-                *px = [14, 70, 44, 255]; // bare board (green)
-                if self.copper[side][src] != 0 {
-                    let open = self.mask[side][src] != 0;
-                    *px = if !show_mask || open { [214, 176, 58, 255] } else { [38, 128, 76, 255] };
-                }
-                if show_silk && self.silk[side][src] != 0 {
-                    *px = [238, 238, 232, 255];
-                }
-                if self.holes[src] != 0 {
-                    *px = [22, 22, 22, 255];
+                if acc[3] > 0 {
+                    let n = acc[3];
+                    let total = (SUPERSAMPLE * SUPERSAMPLE) as u32;
+                    img[j * w + i] = [(acc[0] / n) as u8, (acc[1] / n) as u8, (acc[2] / n) as u8, (255 * n / total) as u8];
                 }
             }
         }
@@ -372,18 +397,18 @@ impl Preview {
 
     /// Is there copper on `side` at this millimetre position (for tests and probing)?
     pub fn copper_at(&self, side: crate::model::Side, p: Point) -> bool {
-        let i = ((p.x - self.frame.x0) * self.frame.px).floor();
-        let j = ((self.frame.y1 - p.y) * self.frame.px).floor();
-        if i < 0.0 || j < 0.0 || i as usize >= self.frame.w || j as usize >= self.frame.h {
+        let i = ((p.x - self.fine.x0) * self.fine.px).floor();
+        let j = ((self.fine.y1 - p.y) * self.fine.px).floor();
+        if i < 0.0 || j < 0.0 || i as usize >= self.fine.w || j as usize >= self.fine.h {
             return false;
         }
-        let k = j as usize * self.frame.w + i as usize;
+        let k = j as usize * self.fine.w + i as usize;
         self.copper[(side == crate::model::Side::Bottom) as usize][k] != 0
     }
 
     pub fn hole_at(&self, p: Point) -> bool {
-        let i = ((p.x - self.frame.x0) * self.frame.px).floor();
-        let j = ((self.frame.y1 - p.y) * self.frame.px).floor();
-        i >= 0.0 && j >= 0.0 && (i as usize) < self.frame.w && (j as usize) < self.frame.h && self.holes[j as usize * self.frame.w + i as usize] != 0
+        let i = ((p.x - self.fine.x0) * self.fine.px).floor();
+        let j = ((self.fine.y1 - p.y) * self.fine.px).floor();
+        i >= 0.0 && j >= 0.0 && (i as usize) < self.fine.w && (j as usize) < self.fine.h && self.holes[j as usize * self.fine.w + i as usize] != 0
     }
 }
