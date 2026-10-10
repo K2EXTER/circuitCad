@@ -252,6 +252,47 @@ pub fn heat_design(vin: f64, vout: f64, i_ma: f64, theta_ja: f64, theta_jc: f64,
     Ok(o)
 }
 
+/// Fuse choice: the standard rating above `i_ma / 0.7`, checked against the supply voltage and the part to protect.
+pub fn fuse_design(i_ma: f64, vsupply: f64, r_fault: f64, part_max_ma: f64) -> Result<CalcOut, String> {
+    let (i, v, rf, imax) = (pos("通常の電流", i_ma)? / 1000.0, pos("電源電圧", vsupply)?, pos("ショート時の抵抗", r_fault)?, pos("守る部品の最大電流", part_max_ma)? / 1000.0);
+    const STANDARD: [f64; 20] = [0.1, 0.125, 0.2, 0.25, 0.315, 0.4, 0.5, 0.63, 0.8, 1.0, 1.25, 1.6, 2.0, 2.5, 3.15, 4.0, 5.0, 6.3, 8.0, 10.0];
+    let need = i / 0.7;
+    let Some(rating) = STANDARD.iter().copied().find(|s| *s >= need * (1.0 - 1e-9)) else {
+        return Err(format!("通常の電流 {i_ma} mA に合う、ふつうのヒューズ (10 A まで) がありません。電流がとても大きいので、専用の部品とデータシートで選びます"));
+    };
+    let i_short = v / rf;
+    let mut o = CalcOut::default();
+    o.rows = vec![
+        ("ヒューズの定格電流".into(), format!("{rating} A")),
+        ("ヒューズの定格電圧".into(), format!("{:.0} V 以上 (直流の定格で)", (v * 1.25).ceil().max(v + 1.0))),
+        ("ショート時に流れる電流".into(), format!("{i_short:.1} A (抵抗 {rf} Ω のとき)")),
+        ("ヒューズが切れる目安".into(), format!("定格の 2 倍 = {:.2} A で、数秒以内", rating * 2.0)),
+    ];
+    o.steps = vec![
+        format!("通常の電流 {i:.3} A は、ヒューズの定格の 7 割以下にする (熱と寿命のため)。定格 ≧ {i:.3} ÷ 0.7 = {need:.2} A。標準の値で、それ以上の最小は {rating} A"),
+        format!("ショート時の電流 = 電源電圧 ÷ 回路の抵抗 = {v} ÷ {rf} = {i_short:.1} A。この電流が流れ続けると、配線や部品が焼ける"),
+        format!("ヒューズは、定格の約 2 倍の電流で数秒以内に切れる。守りたい部品の最大電流は {imax:.2} A"),
+    ];
+    if rating * 2.0 > imax {
+        o.cautions.push(format!("定格の 2 倍 ({:.2} A) が、守る部品の最大電流 ({imax:.2} A) を超えます。ヒューズが切れる前に、部品が壊れるかもしれません。もっと小さいヒューズか、電流を制限する抵抗を足しましょう", rating * 2.0));
+    }
+    if rating > need * 2.0 {
+        o.cautions.push("ヒューズの定格が、通常の電流よりかなり大きいです。小さな過電流では切れず、守れない範囲があります".into());
+    }
+    if i_short < rating * 2.0 {
+        o.cautions.push(format!("ショート時の電流 ({i_short:.1} A) が、ヒューズが切れる電流 ({:.2} A) に届きません。電源が弱い場合 (電池など) は、ヒューズが切れずに、部品が熱くなり続けます", rating * 2.0));
+    }
+    o.cautions.push("ヒューズの定格電圧は、使う電源の電圧以上にします。直流は、交流より切れたあとの火花 (アーク) が消えにくいので、直流の定格を確かめます".into());
+    o.cautions.push("切れたヒューズは、原因を直してから交換します。定格の大きいものや、針金で代用してはいけません".into());
+    o.faults = vec![
+        "ヒューズがない: ショートで電流が流れ続け、配線や部品が焼ける。発煙・発火のもと".into(),
+        "定格が大きすぎる: 配線や部品が先に焼ける".into(),
+        "定格が小さすぎる: 通常の動作 (起動時の突入電流) で切れる。遅く切れるタイプ (スローブロー) を検討".into(),
+        "回復型 (ポリスイッチ) は、切れずに抵抗が上がって電流を減らす。繰り返し使えるが、切れる電流の精度は低い".into(),
+    ];
+    Ok(o)
+}
+
 /// NPN transistor used as a switch: base resistor.
 pub fn transistor_switch(vin: f64, ic_ma: f64, hfe: f64) -> Result<CalcOut, String> {
     let (vin, ic, hfe) = (pos("入力電圧", vin)?, pos("負荷電流", ic_ma)? / 1000.0, pos("hFE", hfe)?);
@@ -737,5 +778,19 @@ mod tests {
         assert!(cool.rows.iter().any(|(_, v)| v.contains("放熱板なしで使えます")));
         assert!(heat_design(5.0, 5.0, 100.0, 50.0, 5.0, 25.0, 125.0).is_err());
         assert!(heat_design(12.0, 5.0, 100.0, 50.0, 5.0, 130.0, 125.0).is_err());
+    }
+
+    #[test]
+    fn fuse_design_picks_a_standard_rating_and_warns_about_weak_protection() {
+        // 300 mA normally: 0.3 / 0.7 = 0.43 A -> 0.5 A
+        let o = fuse_design(300.0, 9.0, 0.5, 1000.0).unwrap();
+        assert!(o.rows.iter().any(|(k, v)| k == "ヒューズの定格電流" && v == "0.5 A"), "{:?}", o.rows);
+        assert!(o.rows.iter().any(|(k, v)| k == "ショート時に流れる電流" && v.starts_with("18.0")));
+        assert!(o.cautions.iter().all(|c| !c.contains("最大電流 (")), "1 A part is safe behind a 0.5 A fuse");
+        // a 0.3 A part cannot be protected by a 0.5 A fuse
+        assert!(fuse_design(300.0, 9.0, 0.5, 300.0).unwrap().cautions.iter().any(|c| c.contains("部品が壊れる")));
+        // a weak supply never blows it
+        assert!(fuse_design(300.0, 3.0, 5.0, 1000.0).unwrap().cautions.iter().any(|c| c.contains("届きません")));
+        assert!(fuse_design(20000.0, 9.0, 0.5, 1000.0).is_err());
     }
 }

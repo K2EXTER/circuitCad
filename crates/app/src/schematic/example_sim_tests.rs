@@ -68,7 +68,7 @@ fn every_wizard_calculator_works_with_its_defaults_and_explains_failures() {
         e.open_wizard(k);
         let out = e.wizard_result().unwrap_or_else(|m| panic!("{}: {m}", wizard::CALCS[k].title));
         assert!(!out.steps.is_empty() && !out.cautions.is_empty() && !out.faults.is_empty(), "{}", wizard::CALCS[k].title);
-        assert!(out.primary.is_some() || wizard::CALCS[k].title.contains("配線") || wizard::CALCS[k].title.contains("電池") || wizard::CALCS[k].title.starts_with("熱"), "{}", wizard::CALCS[k].title);
+        assert!(out.primary.is_some() || wizard::CALCS[k].title.contains("配線") || wizard::CALCS[k].title.contains("電池") || wizard::CALCS[k].title.starts_with("熱") || wizard::CALCS[k].title.starts_with("ヒューズ"), "{}", wizard::CALCS[k].title);
     }
     // a typo is explained instead of panicking
     e.open_wizard(0);
@@ -637,4 +637,35 @@ fn regulator_78xx_sample_shows_dropout_and_heat() {
     assert!(!issues.iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
     let (low, _) = run("100", "6");
     assert!((3.8..4.2).contains(&low), "dropout 2 V: input - 2 V, got {low}");
+}
+
+/// The protection sample (lesson 21): R1 bare, R2 behind a Schottky diode, R3 behind a P-channel MOSFET.
+#[test]
+fn reverse_protection_sample_blocks_a_backwards_supply() {
+    let s = example_schematics().into_iter().find(|(n, _)| n == "reverse_protection.schjson").unwrap().1;
+    let run = |v1: &str, r2: &str| {
+        let mut t = s.clone();
+        for c in &mut t.components {
+            match c.refdes.as_str() {
+                "V1" => c.value = v1.into(),
+                "R2" => c.value = r2.into(),
+                _ => {}
+            }
+        }
+        let r = dc_op(&from_schematic(&t).unwrap()).unwrap();
+        let issues = sim_core::check_ratings(&t, &r);
+        (r, issues)
+    };
+    let (r, issues) = run("9", "330");
+    let (d, m) = (r.voltage("OUT_D").unwrap(), r.voltage("OUT_M").unwrap());
+    assert!((8.5..8.8).contains(&d) && (8.95..9.01).contains(&m), "diode {d} V, MOSFET {m} V");
+    assert!(issues.is_empty(), "{issues:?}");
+    // backwards: the bare load sees -9 V, both protected loads see nothing
+    let (r, _) = run("-9", "330");
+    assert!(r.voltage("OUT_D").unwrap().abs() < 0.01 && r.voltage("OUT_M").unwrap().abs() < 0.01);
+    assert!(r.voltage("VIN").unwrap() < -8.9, "the bare load is wired straight to the supply");
+    assert!(9.0 - d > 0.2 && 9.0 - m < 0.02, "the diode loses ~0.3 V, the MOSFET almost nothing");
+    // a short behind the diode: a huge current, the rating check complains about D1
+    let (_, issues) = run("9", "1");
+    assert!(issues.iter().any(|i| i.refdes == "D1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
 }

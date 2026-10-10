@@ -1363,6 +1363,45 @@ mod tests {
         std::fs::write(root.join("regulator_78xx.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Generates docs/examples/reverse_protection.schjson (9 V source feeding three 330 ohm loads: bare, behind a
+    /// Schottky diode, behind a P-channel MOSFET; set V1 to -9 to connect the supply backwards):
+    /// `cargo test -p app write_protection_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_protection_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let (d, q) = (library_part("1N5819"), library_part("AO3401A"));
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "9".into();
+        let r3 = s.add(Kind::Resistor, (20, -16), 1);
+        s.components[r3].value = "330".into();
+        s.components[r3].footprint = "R_2512".into();
+        let d1 = s.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), (16, 0), 0);
+        let r1 = s.add(Kind::Resistor, (34, 4), 1);
+        s.components[r1].value = "330".into();
+        s.components[r1].footprint = "R_2512".into();
+        let q1 = s.add_custom(q.symbol(), &q.default_value(), &q.footprint_name(), (16, 16), 0);
+        let r2 = s.add(Kind::Resistor, (34, 20), 1);
+        s.components[r2].value = "330".into();
+        s.components[r2].footprint = "R_2512".into();
+        label_pin(&mut s, v1, "+", "VIN");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, r3, "1", "VIN");
+        label_pin(&mut s, r3, "2", "GND");
+        label_pin(&mut s, d1, "A", "VIN");
+        label_pin(&mut s, d1, "K", "OUT_D");
+        label_pin(&mut s, r1, "1", "OUT_D");
+        label_pin(&mut s, r1, "2", "GND");
+        for (pin, net) in [("D", "VIN"), ("G", "GND"), ("S", "OUT_M")] {
+            let num = q.pins.iter().find(|p| p.name == pin).map(|p| p.number.clone()).unwrap();
+            label_pin(&mut s, q1, &num, net);
+        }
+        label_pin(&mut s, r2, "1", "OUT_M");
+        label_pin(&mut s, r2, "2", "GND");
+        std::fs::write(root.join("reverse_protection.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Generates docs/examples/regulator_led.schjson (12 V -> LM7805 -> resistor -> LED):
     /// `cargo test -p app write_library_demo -- --ignored`
     #[test]

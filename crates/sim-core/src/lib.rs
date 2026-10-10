@@ -29,7 +29,7 @@ pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel}
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
-pub use designcalc::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, e24, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+pub use designcalc::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, e24, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 pub use fault::{describe_fault, break_pin, break_part, simulate_broken, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
 pub use diagnose::diagnose;
 pub use ratings::{check_ratings, meets, package_power_limit, requirement, stress, RatingIssue, RatingLevel, Requirement, Stress};

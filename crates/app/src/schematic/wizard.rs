@@ -2,7 +2,7 @@
 //! typical failure patterns, for beginners.
 
 use super::*;
-use sim_core::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
+use sim_core::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 
 /// One calculator: its title, what it is for, the inputs (label, default, hover help) and the function.
 pub(super) struct Calc {
@@ -65,6 +65,17 @@ pub(super) const CALCS: &[Calc] = &[
             ("最大接合温度 (℃)", "125", "部品の中の温度の上限。データシートで確認 (78xx は 125 ℃)"),
         ],
         run: |v| heat_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6]),
+    },
+    Calc {
+        title: "ヒューズの選び方",
+        about: "ショートや故障で電流が流れすぎたときに、電源を切るヒューズの定格を決めます",
+        inputs: &[
+            ("通常の電流 (mA)", "300", "回路が普通に使う電流の最大値"),
+            ("電源電圧 (V)", "9", "ヒューズにかかる電源の電圧 (ヒューズの定格電圧を決める)"),
+            ("ショート時の抵抗 (Ω)", "0.5", "ショートしたときの、配線と電源の内部抵抗の合計。電池や細い配線だと 0.5〜数 Ω"),
+            ("守る部品の最大電流 (mA)", "1000", "ヒューズで守りたい部品 (ダイオードなど) の、データシートの最大電流"),
+        ],
+        run: |v| fuse_design(v[0], v[1], v[2], v[3]),
     },
     Calc {
         title: "トランジスタのスイッチ (ベース抵抗)",
