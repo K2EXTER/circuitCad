@@ -120,6 +120,8 @@ pub struct SchEditor {
     lib_prefs: library::LibPrefs,
     /// The part list takes more height.
     lib_tall: bool,
+    /// The quick-add box (key A), when open.
+    quick: Option<quick::QuickAdd>,
     place_lib: Option<usize>,
     form: Option<PartForm>,
     dc: Option<DcView>,
@@ -394,6 +396,7 @@ impl Default for SchEditor {
             library,
             lib_prefs,
             lib_tall: false,
+            quick: None,
             lib_errors,
             lib_dir,
             lib_filter: String::new(),
@@ -514,6 +517,7 @@ const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
+mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};

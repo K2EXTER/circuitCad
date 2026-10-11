@@ -20,6 +20,7 @@ impl SchEditor {
         let hover = resp.hover_pos();
         self.pan_and_zoom(ui, &resp, rect, hover);
         self.handle_keys(ui);
+        self.quick_add_ui(ui);
 
         self.draw_grid(&painter, rect);
         self.draw_wires(&painter, rect);
@@ -109,6 +110,9 @@ impl SchEditor {
             }
             if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
                 self.delete_selected();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::A) && !i.modifiers.command) {
+                self.open_quick_add();
             }
             if ui.input(|i| i.key_pressed(egui::Key::F)) {
                 self.fit_pending = true;
