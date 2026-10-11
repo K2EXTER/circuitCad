@@ -1,0 +1,68 @@
+{
+  "name": "C_100n_0603",
+  "category": "コンデンサ",
+  "description": "コンデンサ 100nF (ESR 30m・ESL 600p)。データシートの数値から作ったモデルです。実物の値は個体差や温度で変わります 【見本】数値は代表的な例で、実際の部品のデータシートの値ではありません。「新規作成」のチップ部品の欄から、手元の部品の数値でつくり直してください",
+  "datasheet": "",
+  "prefix": "C",
+  "value": "100n",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.825,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.8,
+        "h": 0.95,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.825,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 0.8,
+        "h": 0.95,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "C_0603",
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "C_100n_0603",
+    "text": ".subckt C_100n_0603 1 2\nResr 1 n_esr 30m\nLesl n_esr n_esl 600p\nC1 n_esl 2 100n\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "温度による値の変化は扱いません。",
+      "セラミックコンデンサは、直流の電圧をかけると容量が下がります。このモデルは下がりません (「DCバイアスで下がる量」に入れると反映できます)。"
+    ]
+  },
+  "ratings": {
+    "v_max": 16.0
+  },
+  "glyph": "capacitor"
+}

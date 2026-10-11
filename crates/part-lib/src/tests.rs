@@ -338,3 +338,64 @@ fn bundled_ratings_are_sane_and_summarise_in_japanese() {
     let s = d.ratings.unwrap().summary();
     assert!(s.contains("電圧 40V") && s.contains("電流 1A") && s.contains("順方向電圧"), "{s}");
 }
+
+/// Regenerates the bundled chip part samples: `cargo test -p part-lib write_chip_examples -- --ignored`.
+#[test]
+#[ignore]
+fn write_chip_examples() {
+    use crate::passive::{PassiveKind, PassiveTemplate};
+    use pcb_core::package::{PackageSpec, PadSpec};
+    use sch_core::PartRatings;
+    let note = " 【見本】数値は代表的な例で、実際の部品のデータシートの値ではありません。「新規作成」のチップ部品の欄から、手元の部品の数値でつくり直してください";
+    let mut cases: Vec<(String, PassiveTemplate, &str, PartRatings)> = vec![];
+    let mut c1 = PassiveTemplate::new(PassiveKind::Capacitor, 100e-9);
+    c1.esr = Some(0.03);
+    c1.esl = Some(0.6e-9);
+    cases.push(("C_100n_0603".into(), c1, "C_0603", PartRatings { v_max: Some(16.0), ..Default::default() }));
+    let mut c2 = PassiveTemplate::new(PassiveKind::Capacitor, 10e-6);
+    c2.esr = Some(5e-3);
+    c2.esl = Some(1e-9);
+    c2.bias_loss = 0.4;
+    cases.push(("C_10u_0805".into(), c2, "C_0805", PartRatings { v_max: Some(10.0), ..Default::default() }));
+    let mut l1 = PassiveTemplate::new(PassiveKind::Inductor, 10e-6);
+    l1.dcr = Some(0.15);
+    l1.cp = Some(crate::passive::cp_from_srf(10e-6, 40e6).unwrap());
+    cases.push(("L_10u_0805".into(), l1, "L_0805", PartRatings { i_max: Some(0.8), ..Default::default() }));
+    let mut r1 = PassiveTemplate::new(PassiveKind::Resistor, 10e3);
+    r1.esl = Some(1e-9);
+    r1.cp = Some(100e-15);
+    cases.push(("R_10k_0603".into(), r1, "R_0603", PartRatings { p_max: Some(0.1), ..Default::default() }));
+    for (name, t, fp, ratings) in cases {
+        let g = t.generate(&name).unwrap();
+        let built = pcb_core::footprints::get(fp).unwrap();
+        let shape = |p: &pcb_core::footprints::FpPad| {
+            let (w, h) = p.shape.size();
+            PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: "rect".into(), w, h, drill: None, slot: 0.0, slot_v: false }
+        };
+        let def = PartDef {
+            name: name.clone(),
+            category: t.kind.label().into(),
+            description: format!("{}{note}", g.description),
+            datasheet: String::new(),
+            prefix: t.kind.prefix().into(),
+            value: Some(g.value_text.clone()),
+            pins: g.pins.clone(),
+            package: PackageSpec::Explicit { pads: built.pads.iter().map(shape).collect(), holes: vec![] },
+            footprint_name: Some(fp.into()),
+            sim: Some(sch_core::SimModel {
+                kind: sch_core::SimKind::Subckt,
+                element: String::new(),
+                name: g.sim_name.clone(),
+                text: g.sim_text.clone(),
+                pins: g.sim_pins.clone(),
+                params: Default::default(),
+                limits: g.limits.clone(),
+            }),
+            ratings: Some(ratings),
+            glyph: t.kind.glyph().into(),
+        };
+        assert!(!def.has_errors(), "{name}: {:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+        let path = format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"));
+        std::fs::write(path, serde_json::to_string_pretty(&def).unwrap()).unwrap();
+    }
+}

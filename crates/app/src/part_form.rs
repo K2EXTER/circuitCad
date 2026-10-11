@@ -1,6 +1,7 @@
 //! "Create part" window: pin table + package dimensions + simulation model -> `PartDef`.
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+use part_lib::passive::{self, PassiveKind, PassiveTemplate};
 use part_lib::templates::{ChargerTemplate, CurrentSetting, Topology};
 use part_lib::{Issue, PartDef, PinDef};
 use pcb_core::footprints::Footprint;
@@ -42,6 +43,21 @@ pub struct PartForm {
     pub tht: bool,
     /// Extra pads and holes beyond the package: shield legs, locating pegs, slots. One per line, see `EXTRAS_HELP`.
     pub extras: String,
+    /// A built-in footprint used as the package (empty = the dimensions typed below).
+    pub fp_preset: String,
+    /// Symbol drawn for a chip part (see `PartDef.glyph`); set by the chip part section.
+    pub glyph: String,
+    /// The chip part section: kind, value and what the data sheet says, as typed.
+    pub pas_kind: PassiveKind,
+    pub pas_value: String,
+    pub pas_esr: String,
+    pub pas_esl: String,
+    pub pas_dcr: String,
+    pub pas_cp: String,
+    pub pas_srf: String,
+    pub pas_bias: String,
+    pub pas_table: String,
+    pub pas_message: Option<Result<String, String>>,
     pub sim: SimChoice,
     pub sim_element: String,
     pub sim_name: String,
@@ -84,6 +100,18 @@ impl Default for PartForm {
             drill: 1.0,
             tht: false,
             extras: String::new(),
+            fp_preset: String::new(),
+            glyph: String::new(),
+            pas_kind: PassiveKind::Capacitor,
+            pas_value: String::new(),
+            pas_esr: String::new(),
+            pas_esl: String::new(),
+            pas_dcr: String::new(),
+            pas_cp: String::new(),
+            pas_srf: String::new(),
+            pas_bias: String::new(),
+            pas_table: String::new(),
+            pas_message: None,
             sim: SimChoice::None,
             sim_element: "D".into(),
             sim_name: String::new(),
@@ -126,6 +154,20 @@ const EXTRAS_EXAMPLES: &[(&str, &str, &str)] = &[
     ("長穴(めっきなし)", "穴 0 3 1.0 2.0", "幅 1.0mm、長さ 2.0mm の横の長穴"),
     ("面実装のシールド", "パッド SH -4 -2 1.5 2.0", "面実装 (SMD) タイプの固定用パッド"),
 ];
+
+/// A frequency: `30M` is 30 MHz here (not milli), `100k`, `1G`, an optional `Hz`.
+fn parse_freq(t: &str) -> Option<f64> {
+    let l = t.trim().to_lowercase();
+    let l = l.trim_end_matches("hz").trim();
+    let l = if l.ends_with('m') && !l.ends_with("meg") { format!("{}meg", &l[..l.len() - 1]) } else { l.to_string() };
+    sim_core::parse_value(&l)
+}
+
+/// An impedance or resistance: `20m` is 20 milliohm, an optional `Ω` / `ohm`.
+fn parse_ohm(t: &str) -> Option<f64> {
+    let l = t.trim().to_lowercase();
+    sim_core::parse_value(l.trim_end_matches("ohm").trim_end_matches('ω').trim())
+}
 
 fn parse_side(t: &str) -> Option<PinSide> {
     match t.to_ascii_lowercase().as_str() {
@@ -351,6 +393,16 @@ impl PartForm {
             PkgKind::Quad => PackageSpec::Quad { pins: n, pitch: self.pitch, span: self.span, pad_len: self.len, pad_width: self.width },
             PkgKind::Row => PackageSpec::SingleRow { pins: n, pitch: self.pitch, pad_d: self.pad_d, drill: self.drill },
         };
+        // a built-in footprint replaces the typed dimensions
+        let (package, footprint_name) = match self.fp_preset.trim() {
+            "" => (package, None),
+            name => {
+                let fp = pcb_core::footprints::get(name).ok_or_else(|| format!("フットプリント {name} が見つかりません"))?;
+                let pads = fp.pads.iter().map(|p| pad_spec(&fp, p)).collect();
+                let holes = fp.holes.iter().map(|h| HoleSpec { x: h.pos.x, y: h.pos.y, drill: h.drill, slot: h.slot, slot_v: h.slot_v }).collect();
+                (PackageSpec::Explicit { pads, holes }, Some(name.to_string()))
+            }
+        };
         let package = if extra_pads.is_empty() && extra_holes.is_empty() {
             package
         } else {
@@ -381,11 +433,153 @@ impl PartForm {
             value: Some(self.value.trim().to_string()).filter(|s| !s.is_empty()),
             pins,
             package,
-            footprint_name: None,
+            footprint_name,
             sim,
             ratings: self.parse_ratings()?,
+            glyph: self.glyph.clone(),
         })
     }
+
+    fn pas_number(&self, label: &str, t: &str, freq: bool) -> Result<Option<f64>, String> {
+        let t = t.trim();
+        if t.is_empty() {
+            return Ok(None);
+        }
+        let parsed = if freq { parse_freq(t) } else { parse_ohm(t) };
+        parsed.filter(|v| *v > 0.0).map(Some).ok_or_else(|| format!("{label}「{t}」を、0 より大きい数で入力してください (例: 20m / 1n / 30M)"))
+    }
+
+    /// Fill the form from the chip part section: pins, symbol, value and a `.subckt` with the parasitics.
+    fn apply_passive(&mut self) -> Result<String, String> {
+        let value = self.pas_number(self.pas_kind.label(), &self.pas_value, false)?.ok_or("値を入力してください (例: 100n / 4.7k / 10u)")?;
+        let mut t = PassiveTemplate::new(self.pas_kind, value);
+        t.esr = self.pas_number("ESR", &self.pas_esr, false)?;
+        t.esl = self.pas_number("ESL", &self.pas_esl, false)?;
+        t.dcr = self.pas_number("DCR", &self.pas_dcr, false)?;
+        t.cp = self.pas_number("並列容量", &self.pas_cp, false)?;
+        let mut notes = vec![];
+        if let Some(f0) = self.pas_number("自己共振周波数", &self.pas_srf, true)? {
+            match t.kind {
+                PassiveKind::Capacitor if t.esl.is_none() => {
+                    let esl = passive::esl_from_srf(value, f0)?;
+                    t.esl = Some(esl);
+                    notes.push(format!("ESL は自己共振周波数から {} と求めました", passive::eng(esl)));
+                }
+                PassiveKind::Inductor | PassiveKind::Resistor if t.cp.is_none() => {
+                    let cp = passive::cp_from_srf(value, f0)?;
+                    t.cp = Some(cp);
+                    notes.push(format!("並列容量は自己共振周波数から {} と求めました", passive::eng(cp)));
+                }
+                _ => {}
+            }
+        }
+        let bias = self.pas_bias.trim().trim_end_matches('%').trim();
+        if !bias.is_empty() {
+            t.bias_loss = bias.parse::<f64>().map_err(|_| format!("DCバイアスで下がる量「{bias}」を % の数で入力してください (例: 30)"))? / 100.0;
+        }
+        let size = self.fp_preset.rsplit('_').next().filter(|_| !self.fp_preset.is_empty()).map(|s| format!("_{s}")).unwrap_or_default();
+        let name = if self.name.trim().is_empty() { format!("{}_{}{size}", t.kind.prefix(), passive::eng(value)) } else { self.name.trim().to_string() };
+        let g = t.generate(&name)?;
+        self.name = name;
+        self.prefix = t.kind.prefix().into();
+        self.value = g.value_text;
+        self.description = g.description;
+        if self.category.trim().is_empty() || self.category == "ユーザー" {
+            self.category = t.kind.label().into();
+        }
+        self.pins_text = "1 1 left\n2 2 right".into();
+        self.sim = SimChoice::Subckt;
+        self.sim_name = g.sim_name;
+        self.sim_text = g.sim_text;
+        self.sim_pins = g.sim_pins.join(" ");
+        self.sim_limits = g.limits.join("\n");
+        self.glyph = t.kind.glyph().into();
+        if self.fp_preset.is_empty() {
+            self.pkg = PkgKind::Chip2;
+        }
+        let tail = if notes.is_empty() { String::new() } else { format!("。{}", notes.join("。")) };
+        Ok(format!("ピンとモデルを作りました{tail}。このあと、パッケージを選び (0603 など)、定格 (耐圧など) をデータシートから入れて保存します"))
+    }
+
+    /// Fit ESR and ESL to the impedance table typed in the form.
+    fn fit_from_table(&mut self) -> Result<String, String> {
+        let c = self.pas_number("容量", &self.pas_value, false)?.ok_or("先に上の「値」に容量を入れてください (表の容量。DCバイアス時の表ならそのときの容量)")?;
+        let mut pts = vec![];
+        for (n, line) in self.pas_table.lines().enumerate().filter(|(_, l)| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
+            let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',' || c == '|').filter(|s| !s.is_empty()).collect();
+            let (f, z) = match (t.first().and_then(|s| parse_freq(s)), t.get(1).and_then(|s| parse_ohm(s))) {
+                (Some(f), Some(z)) => (f, z),
+                _ => return Err(format!("インピーダンスの表 {}行目: 「周波数 インピーダンス」の形で入力してください (例: 1M 0.05)", n + 1)),
+            };
+            pts.push((f, z));
+        }
+        let fit = passive::fit_cap(c, &pts)?;
+        self.pas_esr = passive::eng(fit.esr);
+        self.pas_esl = passive::eng(fit.esl);
+        let mut m = format!("ESR = {}Ω、ESL = {}H と求めました (共振 {}Hz、表との差は最大 {:.0}%)。上の欄に入れたので、「部品を作る」を押すとモデルに入ります", self.pas_esr, self.pas_esl, passive::eng(fit.srf), fit.max_error_pct);
+        for w in &fit.warnings {
+            m.push_str(&format!("\n注意: {w}"));
+        }
+        Ok(m)
+    }
+
+    fn passive_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる").id_salt("pas_section").default_open(!self.glyph.is_empty()).show(ui, |ui| {
+            ui.small("容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます");
+            ui.horizontal(|ui| {
+                for k in [PassiveKind::Capacitor, PassiveKind::Resistor, PassiveKind::Inductor] {
+                    ui.selectable_value(&mut self.pas_kind, k, k.label());
+                }
+            });
+            let kind = self.pas_kind;
+            egui::Grid::new("pas_grid").num_columns(2).show(ui, |ui| {
+                let row = |ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str, hint: &str| {
+                    ui.label(label).on_hover_text(tip);
+                    ui.add(egui::TextEdit::singleline(text).desired_width(120.0).hint_text(hint)).on_hover_text(tip);
+                    ui.end_row();
+                };
+                row(ui, &format!("値 ({})", kind.unit()), &mut self.pas_value, "コンデンサは容量 (例: 100n、4.7u)、抵抗は抵抗値 (例: 10k)、コイルはインダクタンス (例: 10u)", "100n");
+                match kind {
+                    PassiveKind::Capacitor => {
+                        row(ui, "ESR (等価直列抵抗)", &mut self.pas_esr, "データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます", "20m");
+                        row(ui, "ESL (等価直列インダクタンス)", &mut self.pas_esl, "高い周波数で効いてくる直列のインダクタンス。小さいチップほど小さい (0603 で 0.5〜1nH ほど)。自己共振周波数から求めることもできます", "800p");
+                        row(ui, "自己共振周波数 (Hz)", &mut self.pas_srf, "容量と ESL が共振する周波数。ESL が空のとき、ここから ESL を求めます。M は MHz (例: 30M)", "30M");
+                        row(ui, "DCバイアスで下がる量 (%)", &mut self.pas_bias, "セラミックコンデンサは、直流の電圧をかけると容量が減ります。使う電圧での値をデータシートの「DCバイアス特性」の曲線から読み、減った割合を入れると、その分小さい容量で計算します", "30");
+                    }
+                    PassiveKind::Resistor => {
+                        row(ui, "寄生インダクタンス (H)", &mut self.pas_esl, "高い周波数で効く直列のインダクタンス。チップ抵抗で 1〜2nH ほど", "2n");
+                        row(ui, "並列容量 (F)", &mut self.pas_cp, "両端の間の容量。チップ抵抗で 0.05〜0.2pF ほど", "100f");
+                    }
+                    PassiveKind::Inductor => {
+                        row(ui, "DCR (巻線抵抗)", &mut self.pas_dcr, "巻線の直流抵抗。損失と発熱の元になります", "100m");
+                        row(ui, "並列容量 (F)", &mut self.pas_cp, "巻線の間の容量。自己共振周波数から求めることもできます", "1p");
+                        row(ui, "自己共振周波数 (Hz)", &mut self.pas_srf, "コイルがこれより高い周波数でコンデンサのようになる限界。並列容量が空のとき、ここから求めます。M は MHz", "30M");
+                    }
+                }
+            });
+            if kind == PassiveKind::Capacitor {
+                ui.label("インピーダンスの表 (データシートの周波数特性。1行に「周波数 インピーダンス」。周波数の M は MHz)");
+                ui.add(egui::TextEdit::multiline(&mut self.pas_table).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("100k 0.2\n1M 0.03\n10M 0.05\n100M 0.4"))
+                    .on_hover_text("データシートのグラフから、いくつかの点を読み取って書きます。谷 (一番低い所) の前後も入れると確かです。例: 周波数 1M、インピーダンス 0.05 は「1M 0.05」");
+                if ui.button("表から ESR と ESL を求める").on_hover_text("表に合うように、ESR と ESL を計算して上の欄に入れます。「値」の容量を使います").clicked() {
+                    self.pas_message = Some(self.fit_from_table());
+                }
+            }
+            if ui.button("部品を作る (ピンとモデルを入れる)").on_hover_text("ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます").clicked() {
+                self.pas_message = Some(self.apply_passive());
+            }
+            match &self.pas_message {
+                Some(Ok(m)) => {
+                    ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                }
+                None => {}
+            }
+        });
+    }
+
 
     /// Fill the pin list, the model and the description from the charger template.
     fn apply_template(&mut self) {
@@ -556,6 +750,7 @@ impl PartForm {
             ui.end_row();
         });
 
+        self.passive_ui(ui);
         self.template_ui(ui);
 
         ui.separator();
@@ -569,6 +764,16 @@ impl PartForm {
             ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
             ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
             ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)").on_hover_text("足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)");
+        });
+        ui.horizontal(|ui| {
+            ui.label("標準のフットプリント");
+            let shown = if self.fp_preset.is_empty() { "(下の寸法を使う)".to_string() } else { self.fp_preset.clone() };
+            egui::ComboBox::from_id_salt("fp_preset").selected_text(shown).width(200.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.fp_preset, String::new(), "(下の寸法を使う)");
+                for n in pcb_core::footprints::names() {
+                    ui.selectable_value(&mut self.fp_preset, n.clone(), n);
+                }
+            }).response.on_hover_text("0603 や 0805 のチップ部品、DIP・ピンヘッダなど、あらかじめ用意された形です。選ぶと、下の寸法の代わりにこの形を使います。ピン番号は、形ごとのピン名 (チップは 1 と 2、ダイオードは K と A、トランジスタは E B C など) に合わせます");
         });
         let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64| {
             ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(pkg_tip(label));
@@ -1199,5 +1404,67 @@ mod extras_tests {
         f.extras = "脚 SH 0 0 2.0 3.0 1.2 0.5".into();
         let d = f.to_def().unwrap();
         assert!(d.validate().iter().any(|i| i.error && i.message.contains("slot")), "a slot shorter than its width is refused by the package");
+    }
+}
+
+#[cfg(test)]
+mod passive_form_tests {
+    use super::*;
+
+    #[test]
+    fn a_chip_capacitor_from_data_sheet_numbers() {
+        let mut f = PartForm::default();
+        f.fp_preset = "C_0603".into();
+        f.pas_value = "100n".into();
+        f.pas_esr = "20m".into();
+        f.pas_srf = "30M".into();
+        f.pas_bias = "30%".into();
+        let msg = f.apply_passive().unwrap();
+        assert!(msg.contains("ESL は自己共振周波数から"), "{msg}");
+        assert_eq!((f.name.as_str(), f.prefix.as_str(), f.glyph.as_str(), f.value.as_str()), ("C_100n_0603", "C", "capacitor", "100n"));
+        let d = f.to_def().unwrap();
+        assert!(!d.has_errors(), "{:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+        assert_eq!(d.footprint_name(), "C_0603");
+        assert_eq!(d.footprint().unwrap().pads.len(), 2);
+        let sim = d.sim.clone().unwrap();
+        assert!(sim.text.contains("Resr") && sim.text.contains("Lesl") && sim.text.contains("C1 n_esl 2 70n"), "{}", sim.text);
+        assert!(d.symbol().glyph == "capacitor");
+    }
+
+    #[test]
+    fn the_impedance_table_gives_esr_and_esl() {
+        let mut f = PartForm::default();
+        f.pas_value = "100n".into();
+        f.pas_table = "100k abc".into();
+        assert!(f.fit_from_table().unwrap_err().contains("1行目"));
+        // |Z| of 100 nF with ESR 30 mΩ and ESL 0.9 nH
+        let z = |hz: f64| passive::cap_impedance(100e-9, 0.03, 0.9e-9, hz);
+        f.pas_table = [1e5, 1e6, 5e6, 2.4e7, 1e8, 3e8].iter().map(|&hz| format!("{} {:.5}", hz, z(hz))).collect::<Vec<_>>().join("\n");
+        let m = f.fit_from_table().unwrap();
+        assert!(m.contains("求めました"), "{m}");
+        let esr = sim_core::parse_value(&f.pas_esr).unwrap();
+        let esl = sim_core::parse_value(&f.pas_esl).unwrap();
+        assert!((esr / 0.03 - 1.0).abs() < 0.05 && (esl / 0.9e-9 - 1.0).abs() < 0.05, "{esr} {esl}");
+    }
+
+    #[test]
+    fn frequencies_read_m_as_mega_and_resistances_as_milli() {
+        assert_eq!(parse_freq("30M"), Some(30e6));
+        assert_eq!(parse_freq("100kHz"), Some(100e3));
+        assert_eq!(parse_freq("1.5MHz"), Some(1.5e6));
+        assert_eq!(parse_ohm("20m"), Some(0.02));
+        assert_eq!(parse_ohm("0.05Ω"), Some(0.05));
+    }
+
+    #[test]
+    fn mistakes_in_the_chip_section_are_explained() {
+        let mut f = PartForm::default();
+        assert!(f.apply_passive().unwrap_err().contains("値を入力"));
+        f.pas_value = "100n".into();
+        f.pas_esr = "abc".into();
+        assert!(f.apply_passive().unwrap_err().contains("ESR"));
+        f.pas_esr.clear();
+        f.pas_bias = "200".into();
+        assert!(f.apply_passive().unwrap_err().contains("0〜95"));
     }
 }

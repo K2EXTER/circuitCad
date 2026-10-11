@@ -1,0 +1,68 @@
+{
+  "name": "C_10u_0805",
+  "category": "コンデンサ",
+  "description": "コンデンサ 10uF (ESR 5m・ESL 1n・DCバイアス時の容量 6u (40% 低下))。データシートの数値から作ったモデルです。実物の値は個体差や温度で変わります 【見本】数値は代表的な例で、実際の部品のデータシートの値ではありません。「新規作成」のチップ部品の欄から、手元の部品の数値でつくり直してください",
+  "datasheet": "",
+  "prefix": "C",
+  "value": "10u",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.9125,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.025,
+        "h": 1.4,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      },
+      {
+        "pin": "2",
+        "x": 0.9125,
+        "y": 0.0,
+        "shape": "rect",
+        "w": 1.025,
+        "h": 1.4,
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false
+      }
+    ],
+    "holes": []
+  },
+  "footprint_name": "C_0805",
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "C_10u_0805",
+    "text": ".subckt C_10u_0805 1 2\nResr 1 n_esr 5m\nLesl n_esr n_esl 1n\nC1 n_esl 2 6u\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "温度による値の変化は扱いません。",
+      "容量は、かける電圧で下がった値 (6u) の一定値として扱います。電圧が変わっても動きません。"
+    ]
+  },
+  "ratings": {
+    "v_max": 10.0
+  },
+  "glyph": "capacitor"
+}

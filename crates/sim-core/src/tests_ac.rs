@@ -226,3 +226,26 @@ fn op_amp_macro_model_open_loop_response() {
     let k = db.iter().position(|d| *d < 0.0).unwrap();
     assert!(r.freq[k] > 0.9e6 && r.freq[k] < 1.2e6, "{}", r.freq[k]);
 }
+
+/// A chip capacitor made by the part template has its resonance where its ESL says, and the dip is as deep as its ESR.
+#[test]
+fn a_template_capacitor_resonates_at_its_srf() {
+    use part_lib::passive::{srf, PassiveKind, PassiveTemplate};
+    let (cc, esr, esl) = (100e-9, 0.05, 1e-9);
+    let mut t = PassiveTemplate::new(PassiveKind::Capacitor, cc);
+    t.esr = Some(esr);
+    t.esl = Some(esl);
+    let g = t.generate("C100n").unwrap();
+    let mut c = Circuit::new();
+    src(&mut c, "V1", "in", "0", "AC 1");
+    res(&mut c, "R1", "in", "x", 10.0);
+    let (x, gnd) = (c.node("x"), c.node("0"));
+    add_subckt_instance(&mut c, "C1", &g.sim_name, &g.sim_text, &[x, gnd]).unwrap();
+    let r = ac_analysis(&c, &sweep(1e5, 1e9, 60)).unwrap();
+    let vx = r.signal("V(x)").unwrap();
+    let (k, low) = (0..r.freq.len()).map(|k| (k, vx.re[k].hypot(vx.im[k]))).min_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
+    let f0 = srf(cc, esl);
+    assert!((r.freq[k] / f0 - 1.0).abs() < 0.1, "dip at {} Hz, expected {f0}", r.freq[k]);
+    // |Z| = ESR at resonance; V(x) = Z / (10 + Z)
+    assert!((low * 10.0 / esr - 1.0).abs() < 0.1, "dip depth {low}");
+}

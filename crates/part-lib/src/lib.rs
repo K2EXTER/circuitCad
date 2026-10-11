@@ -49,6 +49,10 @@ pub struct PartDef {
     /// Data sheet ratings (absolute maximum voltage / current / power and other figures).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ratings: Option<PartRatings>,
+    /// Draw the part as a capacitor / resistor / inductor symbol ("capacitor", "resistor", "inductor") instead of a box.
+    /// Only for two pins, one on each side.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub glyph: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -83,6 +87,7 @@ impl PartDef {
                 .collect(),
             sim: self.sim.clone(),
             ratings: self.ratings.clone().filter(|r| !r.is_empty()),
+            glyph: self.glyph.clone(),
         }
     }
 
@@ -111,6 +116,15 @@ impl PartDef {
                 err("番号が空のピンがあります".into());
             } else if !seen.insert(p.number.as_str()) {
                 err(format!("ピン番号 {} が重複しています", p.number));
+            }
+        }
+
+        if !self.glyph.is_empty() {
+            let sides: Vec<_> = self.symbol().pins.iter().map(|p| p.side).collect();
+            if !["capacitor", "resistor", "inductor"].contains(&self.glyph.as_str()) {
+                err(format!("glyph「{}」は capacitor / resistor / inductor のどれかにしてください", self.glyph));
+            } else if sides.len() != 2 || !sides.contains(&PinSide::Left) || !sides.contains(&PinSide::Right) {
+                err("glyph (コンデンサ・抵抗・コイルの記号) は、左右に 1 本ずつの 2 ピンの部品だけに使えます".into());
             }
         }
 
@@ -226,6 +240,10 @@ pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
 pub const EXAMPLES: &[(&str, &str)] = &[
     ("NE555_DIP-8", include_str!("../examples/NE555_DIP-8.part.json")),
     ("USB_DEMO_TH", include_str!("../examples/USB_DEMO_TH.part.json")),
+    ("C_100n_0603", include_str!("../examples/C_100n_0603.part.json")),
+    ("C_10u_0805", include_str!("../examples/C_10u_0805.part.json")),
+    ("L_10u_0805", include_str!("../examples/L_10u_0805.part.json")),
+    ("R_10k_0603", include_str!("../examples/R_10k_0603.part.json")),
     ("1N4148", include_str!("../examples/1N4148.part.json")),
     ("LM358_SOIC-8", include_str!("../examples/LM358_SOIC-8.part.json")),
     ("TL072_SOIC-8", include_str!("../examples/TL072_SOIC-8.part.json")),
@@ -418,6 +436,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+pub mod passive;
 pub mod templates;
 
 #[cfg(test)]

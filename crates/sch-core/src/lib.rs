@@ -366,6 +366,9 @@ pub struct CustomSymbol {
     /// Data sheet ratings of the part (None = not given).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ratings: Option<PartRatings>,
+    /// "capacitor" / "resistor" / "inductor": drawn as that symbol instead of a box (two pins, left and right).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub glyph: String,
 }
 
 pub struct PinGeom {

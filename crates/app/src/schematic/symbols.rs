@@ -253,6 +253,28 @@ impl SchEditor {
 
     pub(super) fn draw_custom(&self, painter: &egui::Painter, rect: Rect, sym: &CustomSymbol, pos: Pt, rot: u8, color: Color32) {
         let l = sym.layout();
+        // a chip capacitor / resistor / inductor from the library looks like the basic part
+        let glyph = match sym.glyph.as_str() {
+            "capacitor" => Some(Kind::Capacitor),
+            "resistor" => Some(Kind::Resistor),
+            "inductor" => Some(Kind::Inductor),
+            _ => None,
+        };
+        if let Some(kind) = glyph.filter(|_| l.pins.len() == 2 && l.pins.iter().all(|p| matches!(p.side, PinSide::Left | PinSide::Right))) {
+            let tr = |x: f32, y: f32| {
+                let r = rot_f((x, y), rot);
+                self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
+            };
+            let stroke = Stroke::new(1.6, color);
+            let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
+            for p in &l.pins {
+                let s = if p.tip.0 < 0 { -2.0 } else { 2.0 };
+                painter.line_segment([tr(p.tip.0 as f32, p.tip.1 as f32), tr(s, 0.0)], stroke);
+                painter.text(tr((p.tip.0 as f32 + s) / 2.0, -0.45), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
+            }
+            self.draw_symbol(painter, rect, kind, pos, rot, color);
+            return;
+        }
         let tr = |x: f32, y: f32| {
             let r = rot_f((x, y), rot);
             self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
