@@ -1033,6 +1033,43 @@ mod tests {
         }
     }
 
+    /// Generates docs/examples/cap_impedance.schjson: a 1 V AC source feeds three 1 ohm resistors, each loaded by a
+    /// capacitor (electrolytic / ceramic / both in parallel). With the 1 ohm series resistor, V(node) ~ |Z| while |Z| << 1 ohm:
+    /// `cargo test -p app write_cap_impedance_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_cap_impedance_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+        let (elec, cer) = (find("CE_100u_16V"), find("C_10u_0805"));
+        let mut s = sch_core::Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "SIN(0 1 1k) AC 1".into();
+        let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+            let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+            let c = s.components[idx].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: text.into() });
+        };
+        label(&mut s, v, "+", "IN");
+        label(&mut s, v, "-", "GND");
+        // (node, x, parts on that node)
+        for (node, x, caps) in [("ZE", 20, vec![(&elec, 0)]), ("ZC", 36, vec![(&cer, 0)]), ("ZP", 52, vec![(&elec, 0), (&cer, 12)])] {
+            let r = s.add(Kind::Resistor, (x, 0), 1);
+            s.components[r].value = "1".into();
+            label(&mut s, r, "1", "IN");
+            label(&mut s, r, "2", node);
+            for (def, dx) in caps {
+                let c = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (x + dx, 14), 1);
+                label(&mut s, c, "1", node);
+                label(&mut s, c, "2", "GND");
+            }
+        }
+        std::fs::write(root.join("cap_impedance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
     /// `cargo test -p app write_coin_cell_example -- --ignored`
     #[test]

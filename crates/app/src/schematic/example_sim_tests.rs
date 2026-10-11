@@ -406,6 +406,25 @@ fn buck_output_cap_swap_samples_differ_in_ripple() {
     assert!(ppe > 2.0 * ppc && ppe < 0.15, "electrolytic {ppe} V vs ceramic {ppc} V");
 }
 
+#[test]
+fn cap_impedance_sample_electrolytic_wins_low_ceramic_wins_high() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "cap_impedance.schjson").unwrap().1;
+    let r = ac_analysis(&from_schematic(&sch).unwrap(), &AcSettings { fstart: 100.0, fstop: 100e6, sweep: AcSweep::Decade(20) }).unwrap();
+    // with the 1 ohm series resistor V(node) ~ |Z| while it is well below 1 ohm
+    let z = |n: &str, f: f64| {
+        let m = r.signal(n).unwrap().mag();
+        m[r.freq.iter().position(|&x| x >= f * 0.999).unwrap()]
+    };
+    // low frequencies: the 100 uF electrolytic is the better short; the 6 uF (after DC bias) ceramic barely conducts
+    assert!(z("V(ZE)", 1e3) < z("V(ZC)", 1e3) - 0.1 && z("V(ZE)", 1e4) < z("V(ZC)", 1e4) / 3.0);
+    // at 1 MHz the ceramic is ten times better; the electrolytic stays near its 0.3 ohm ESR and its ESL takes over above
+    assert!(z("V(ZC)", 1e6) * 8.0 < z("V(ZE)", 1e6) && z("V(ZE)", 1e6) > 0.2 && z("V(ZE)", 1e7) > 0.5);
+    // together they cover both ends, and never do worse than the better of the two by more than a little
+    for f in [1e3, 1e4, 1e5, 1e6, 1e7] {
+        assert!(z("V(ZP)", f) < z("V(ZE)", f).min(z("V(ZC)", f)) * 1.1, "{f}");
+    }
+}
+
 /// A learner reads every warning: the bundled samples should not raise warnings that come from inside a model.
 #[test]
 fn shipped_examples_have_no_warnings_about_nodes_inside_models() {
