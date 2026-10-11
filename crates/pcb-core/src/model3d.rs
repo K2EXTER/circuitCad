@@ -155,6 +155,11 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
         Kind::Chip => {
             // body in the middle, a silver cap at each end
             let (len, wid) = if along_x { (sx, sy) } else { (sy, sx) };
+            // the real chip is about as long as the distance between the pad centres: the outer half of
+            // each pad (where the track meets it) stays visible, not buried under the body
+            let centres: Vec<f64> = pads.iter().map(|p| if along_x { p.pos.x } else { p.pos.y }).collect();
+            let span = centres.iter().cloned().fold(f64::MIN, f64::max) - centres.iter().cloned().fold(f64::MAX, f64::min);
+            let len = if span > 0.0 { (span + 0.1).min(len) } else { len };
             let wid = wid * 0.8;
             let cap = len * 0.2;
             let mk = |a0: f64, a1: f64, c: [u8; 3], hh: f64| {
@@ -283,6 +288,20 @@ mod tests {
         assert_eq!(top.iter().filter(|x| x.color == SILVER).count(), 2);
         assert!(top.iter().map(|x| x.lo[0]).fold(f64::MAX, f64::min) < 9.2 && top.iter().map(|x| x.hi[0]).fold(f64::MIN, f64::max) > 10.8);
         assert!(boxes.iter().filter(|x| x.bottom).all(|x| x.hi[2] == 0.0 && x.lo[2] < 0.0 && x.part == 1));
+    }
+
+    #[test]
+    fn a_chip_leaves_the_outer_part_of_its_pads_uncovered() {
+        // R_0603: pad centres 1.65 mm apart, pads 0.8 mm long: the pads reach 1.225 mm from the middle
+        let mut b = Board::new("t", 20.0, 20.0);
+        let fp = crate::footprints::get("R_0603").unwrap();
+        for p in &fp.pads {
+            b.pads.push(pad("R1", 10.0 + p.pos.x, 10.0 + p.pos.y, 0.8, 0.95, None));
+        }
+        b.parts.push(part("R1", "R_0603", Side::Top));
+        let boxes = part_boxes(&b);
+        let reach = boxes.iter().map(|x| (x.hi[0] - 10.0).max(10.0 - x.lo[0])).fold(0.0, f64::max);
+        assert!(reach < 0.95 && reach > 0.8, "the whole chip is {reach} mm from the middle at most, about the real 1.6 mm long");
     }
 
     #[test]
