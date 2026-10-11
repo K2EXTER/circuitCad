@@ -222,8 +222,8 @@ fn rich_board() -> Board {
         b.tracks.push(Track { side, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.25 });
     }
     b.vias.push(Via { pos: Point::new(30.0, 25.0), diameter: 0.6, drill: 0.3 });
-    b.holes.push(Hole { pos: Point::new(3.0, 3.0), drill: 3.2 });
-    b.holes.push(Hole { pos: Point::new(47.0, 37.0), drill: 3.2 });
+    b.holes.push(Hole::new(Point::new(3.0, 3.0), 3.2));
+    b.holes.push(Hole::new(Point::new(47.0, 37.0), 3.2));
     b.silk.push(SilkLine { side: Side::Top, a: Point::new(5.0, 5.0), b: Point::new(15.0, 5.0), width: 0.15, refdes: String::new() });
     for side in [Side::Top, Side::Bottom] {
         b.zones.push(Zone::new(

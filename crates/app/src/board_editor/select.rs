@@ -30,7 +30,8 @@ impl BoardEditor {
                 }
             }
         }
-        for (i, h) in self.board.holes.iter().enumerate() {
+        // a part's own holes belong to the part: they are not picked on their own
+        for (i, h) in self.board.holes.iter().enumerate().filter(|(_, h)| h.refdes.is_empty()) {
             if pick.pads && p.dist(h.pos) <= h.drill / 2.0 + tol {
                 return Some(Item::Hole(i));
             }
@@ -106,7 +107,7 @@ impl BoardEditor {
                 out.push(Item::Via(i));
             }
         }
-        for (i, h) in self.board.holes.iter().enumerate() {
+        for (i, h) in self.board.holes.iter().enumerate().filter(|(_, h)| h.refdes.is_empty()) {
             if rect_hit(h.pos, h.drill, h.drill) {
                 out.push(Item::Hole(i));
             }

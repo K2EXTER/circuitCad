@@ -56,7 +56,7 @@ fn zone_output_has_region_cutouts_and_thermals() {
     pad(&mut b, 20.0, 15.0, "SIG", false); // other net: cleared
     pad(&mut b, 24.0, 15.0, "SIG", false);
     b.tracks.push(Track { side: Side::Top, a: Point::new(20.0, 15.0), b: Point::new(24.0, 15.0), width: 0.25 });
-    b.holes.push(Hole { pos: Point::new(30.0, 8.0), drill: 3.0 });
+    b.holes.push(Hole::new(Point::new(30.0, 8.0), 3.0));
     b.zones.push(Zone::new("GND", Side::Top, rect(5.0, 5.0, 35.0, 25.0)));
 
     let top = gerber::copper(&b, Side::Top);

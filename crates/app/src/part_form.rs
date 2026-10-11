@@ -3,7 +3,9 @@
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
 use part_lib::templates::{ChargerTemplate, CurrentSetting, Topology};
 use part_lib::{Issue, PartDef, PinDef};
-use pcb_core::package::PackageSpec;
+use pcb_core::footprints::Footprint;
+use pcb_core::package::{HoleSpec, PackageSpec, PadSpec};
+use pcb_core::PadShape;
 use sch_core::{PartRatings, PinSide, SimKind, SimModel, SpecRow};
 
 #[derive(Clone, Copy, PartialEq)]
@@ -14,7 +16,7 @@ pub enum PkgKind {
     Row,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SimChoice {
     None,
     Model,
@@ -38,6 +40,8 @@ pub struct PartForm {
     pub pad_d: f64,
     pub drill: f64,
     pub tht: bool,
+    /// Extra pads and holes beyond the package: shield legs, locating pegs, slots. One per line, see `EXTRAS_HELP`.
+    pub extras: String,
     pub sim: SimChoice,
     pub sim_element: String,
     pub sim_name: String,
@@ -56,6 +60,8 @@ pub struct PartForm {
     /// The charger template section and what it said last.
     pub tpl: ChargerTemplate,
     pub tpl_message: String,
+    /// What the last "fill from SPICE" did or why it could not.
+    pub spice_message: Option<Result<String, String>>,
 }
 
 impl Default for PartForm {
@@ -77,6 +83,7 @@ impl Default for PartForm {
             pad_d: 1.7,
             drill: 1.0,
             tht: false,
+            extras: String::new(),
             sim: SimChoice::None,
             sim_element: "D".into(),
             sim_name: String::new(),
@@ -90,9 +97,35 @@ impl Default for PartForm {
             rt_kind: 0,
             tpl: ChargerTemplate::default(),
             tpl_message: String::new(),
+            spice_message: None,
         }
     }
 }
+
+/// A built footprint pad written back as an explicit pad.
+fn pad_spec(_fp: &Footprint, p: &pcb_core::footprints::FpPad) -> PadSpec {
+    let (shape, w, h) = match p.shape {
+        PadShape::Circle { d } => ("circle", d, 0.0),
+        PadShape::Rect { w, h } => ("rect", w, h),
+        PadShape::Oval { w, h } => ("oval", w, h),
+    };
+    PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: shape.into(), w, h, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
+}
+
+const EXTRAS_HELP: &str = "1行に1つ。座標は部品の中心からの mm (右が +X、上が +Y)。
+  脚 ピン名 X Y パッド幅 パッド高さ 穴径 [長穴の長さ] [v]   … めっきのある穴 (USBのシェル脚など)。長穴は長さを足す (縦向きは最後に v)
+  穴 X Y 穴径 [長穴の長さ] [v]                            … めっきなしの穴 (位置決めの突起用の穴、ネジ穴)
+  パッド ピン名 X Y 幅 高さ                                … 面実装の追加パッド (シールドのはんだ付け部分など)
+ピン名はピン表の「番号」と同じにします。シェル用のピン (例: SH) をピン表に足して、回路図でGNDなどにつなぎます。";
+
+/// Example lines the learner edits to the numbers of the data sheet.
+const EXTRAS_EXAMPLES: &[(&str, &str, &str)] = &[
+    ("シェル脚(めっき穴)", "脚 SH -6.5 0 2.0 3.0 1.2", "コネクタの金属の外側 (シェル) をはんだ付けする脚。ピン名 SH をピン表にも足します"),
+    ("位置決めの穴(めっきなし)", "穴 0 -3 1.0", "部品の突起が入る穴。めっきなしなので、回路にはつながりません"),
+    ("長穴(めっき)", "脚 SH 6.5 0 1.6 3.6 0.8 2.4 v", "穴径 0.8mm、長さ 2.4mm の縦の長穴 (USB Type-C の固定脚など)"),
+    ("長穴(めっきなし)", "穴 0 3 1.0 2.0", "幅 1.0mm、長さ 2.0mm の横の長穴"),
+    ("面実装のシールド", "パッド SH -4 -2 1.5 2.0", "面実装 (SMD) タイプの固定用パッド"),
+];
 
 fn parse_side(t: &str) -> Option<PinSide> {
     match t.to_ascii_lowercase().as_str() {
@@ -104,7 +137,110 @@ fn parse_side(t: &str) -> Option<PinSide> {
     }
 }
 
+/// What pasted SPICE text says about the part: model or subcircuit, its name and the terminal roles in node order.
+#[derive(Debug, PartialEq)]
+pub struct SpiceGuess {
+    pub subckt: bool,
+    pub name: String,
+    /// Element letter of a `.model` (D, Q, M, S); empty for a `.subckt`.
+    pub element: &'static str,
+    /// Terminal names in node order (a `.subckt`'s ports, or A K / C B E / D G S for a `.model`).
+    pub roles: Vec<String>,
+    /// Side of each terminal on the symbol, same order as `roles`.
+    pub sides: Vec<&'static str>,
+}
+
+/// Find the first `.subckt` (else the first `.model`) in pasted SPICE text.
+pub fn guess_spice(text: &str) -> Result<SpiceGuess, String> {
+    let mut lines: Vec<String> = vec![];
+    for raw in text.lines() {
+        let l = raw.split(';').next().unwrap_or("").trim();
+        if l.is_empty() || l.starts_with('*') {
+            continue;
+        }
+        match (l.strip_prefix('+'), lines.last_mut()) {
+            (Some(rest), Some(last)) => {
+                last.push(' ');
+                last.push_str(rest.trim());
+            }
+            _ => lines.push(l.to_string()),
+        }
+    }
+    let card = |dir: &str| lines.iter().find(|l| l.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case(dir)));
+    if let Some(l) = card(".subckt") {
+        let mut it = l.split_whitespace().skip(1);
+        let name = it.next().ok_or(".subckt に名前がありません。`.subckt 名前 端子1 端子2 …` の形で書きます")?.to_string();
+        let roles: Vec<String> = it.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).map(String::from).collect();
+        if roles.is_empty() {
+            return Err(format!(".subckt {name} に端子がありません。名前のあとに端子を並べます (例: .subckt {name} IN OUT GND)"));
+        }
+        let half = roles.len().div_ceil(2);
+        let sides = (0..roles.len()).map(|i| if i < half { "left" } else { "right" }).collect();
+        return Ok(SpiceGuess { subckt: true, name, element: "", roles, sides });
+    }
+    let l = card(".model").ok_or("`.model` も `.subckt` も見つかりません。SPICEモデルの文をそのまま貼ってください")?;
+    let rest: Vec<&str> = l.split_whitespace().skip(1).collect();
+    let name = rest.first().ok_or(".model に名前がありません。`.model 名前 種類(パラメータ)` の形で書きます")?.to_string();
+    let ty = rest.get(1..).unwrap_or(&[]).join(" ");
+    let ty = ty.split(['(', ' ']).next().unwrap_or("").to_ascii_uppercase();
+    let (element, roles, sides): (&str, &[&str], &[&str]) = match ty.as_str() {
+        "D" => ("D", &["A", "K"], &["left", "right"]),
+        "NPN" | "PNP" => ("Q", &["C", "B", "E"], &["top", "left", "bottom"]),
+        "NMOS" | "PMOS" => ("M", &["D", "G", "S"], &["top", "left", "bottom"]),
+        "SW" => ("S", &[], &[]),
+        _ => return Err(format!(".model {name} の種類「{ty}」は未対応です (D / NPN / PNP / NMOS / PMOS / SW)")),
+    };
+    Ok(SpiceGuess { subckt: false, name, element, roles: roles.iter().map(|s| s.to_string()).collect(), sides: sides.to_vec() })
+}
+
 impl PartForm {
+    /// Fill the model kind, name, element, pin list and node order from the pasted SPICE text.
+    /// Returns what was done, for the learner. Pins the learner already wrote are kept when they can be matched.
+    pub fn autofill_from_spice(&mut self) -> Result<String, String> {
+        let g = guess_spice(&self.sim_text)?;
+        self.sim = if g.subckt { SimChoice::Subckt } else { SimChoice::Model };
+        self.sim_name = g.name.clone();
+        if !g.subckt {
+            self.sim_element = g.element.to_string();
+            if self.prefix.trim().is_empty() || self.prefix == "U" {
+                self.prefix = if g.element == "D" { "D" } else { "Q" }.into();
+            }
+        }
+        if self.name.trim().is_empty() {
+            self.name = g.name.clone();
+        }
+        if g.roles.is_empty() {
+            return Ok(format!("スイッチ {} のモデルとして入力しました。ピンの対応 (制御側 2 本、スイッチ側 2 本) は自分で確かめてください", g.name));
+        }
+        // match the pins already written by name, in the model's node order
+        let existing = self.parse_pins().unwrap_or_default();
+        let find = |role: &str| existing.iter().find(|p| p.name.eq_ignore_ascii_case(role) || p.number.eq_ignore_ascii_case(role)).map(|p| p.number.clone());
+        let matched: Vec<Option<String>> = g.roles.iter().map(|r| find(r)).collect();
+        if !existing.is_empty() && matched.iter().all(Option::is_some) {
+            self.sim_pins = matched.into_iter().flatten().collect::<Vec<_>>().join(" ");
+            return Ok(format!("{} を入力しました。いまのピン表の名前 ({}) と対応づけました", g.name, g.roles.join(" ")));
+        }
+        let is_default = self.pins_text.trim() == PartForm::default().pins_text.trim() || self.pins_text.trim().is_empty();
+        if is_default {
+            // model terminals get numbers in node order, the symbol sides put them where a schematic expects them
+            let numbers: Vec<String> = (1..=g.roles.len()).map(|n| n.to_string()).collect();
+            self.pins_text = g.roles.iter().zip(&numbers).zip(&g.sides).map(|((r, n), s)| format!("{n} {r} {s}")).collect::<Vec<_>>().join("\n");
+            self.sim_pins = numbers.join(" ");
+            if !g.subckt {
+                self.pkg = if g.element == "D" { PkgKind::Chip2 } else { PkgKind::Row };
+            } else {
+                // a dual-row package needs an even number of pins; the learner sets the real package from the data sheet
+                self.pkg = if g.roles.len() % 2 == 0 { PkgKind::Dual } else { PkgKind::Row };
+            }
+            return Ok(format!("{} を入力しました。ピン {} 本 ({}) を作りました。ピン番号はデータシートの番号に直してください (sim の対応も同じ番号に)", g.name, g.roles.len(), g.roles.join(" ")));
+        }
+        if existing.len() == g.roles.len() {
+            self.sim_pins = existing.iter().map(|p| p.number.clone()).collect::<Vec<_>>().join(" ");
+            return Ok(format!("{} を入力しました。ピンの名前が合わなかったので、ピン表の上から順に端子 ({}) へ対応づけました。順番を確かめてください", g.name, g.roles.join(" ")));
+        }
+        Err(format!("モデルの端子は {} 本 ({}) ですが、ピン表は {} 本です。ピン表を端子の数に合わせるか、ピン表を消してからもう一度押してください", g.roles.len(), g.roles.join(" "), existing.len()))
+    }
+
     fn parse_pins(&self) -> Result<Vec<PinDef>, String> {
         let mut out = vec![];
         for (n, line) in self.pins_text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
@@ -164,9 +300,44 @@ impl PartForm {
         (max_given, filled, open)
     }
 
+    /// The extra pads and holes typed into the form.
+    fn parse_extras(&self) -> Result<(Vec<PadSpec>, Vec<HoleSpec>), String> {
+        let (mut pads, mut holes) = (vec![], vec![]);
+        for (n, line) in self.extras.lines().enumerate().filter(|(_, l)| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
+            let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
+            let at = |m: String| format!("追加のパッドと穴 {}行目: {m}", n + 1);
+            // a trailing v / h says which way a slot runs
+            let (t, slot_v) = match t.last().map(|s| s.to_ascii_lowercase()) {
+                Some(o) if matches!(o.as_str(), "v" | "縦") => (&t[..t.len() - 1], true),
+                Some(o) if matches!(o.as_str(), "h" | "横") => (&t[..t.len() - 1], false),
+                _ => (&t[..], false),
+            };
+            let num = |i: usize, what: &str| -> Result<f64, String> {
+                t.get(i).and_then(|s| s.parse::<f64>().ok()).ok_or_else(|| at(format!("{what}を数字 (mm) で入力してください")))
+            };
+            let slot = |i: usize| -> Result<f64, String> { if t.len() > i { num(i, "長穴の長さ") } else { Ok(0.0) } };
+            match t[0].to_ascii_lowercase().as_str() {
+                "脚" | "leg" | "pth" | "th" => {
+                    let (x, y, w, h, drill, sl) = (num(2, "X")?, num(3, "Y")?, num(4, "パッドの幅")?, num(5, "パッドの高さ")?, num(6, "穴径")?, slot(7)?);
+                    let shape = if sl > 0.0 || (w - h).abs() > 1e-9 { "oval" } else { "circle" };
+                    pads.push(PadSpec { pin: t.get(1).ok_or_else(|| at("ピン名がありません".into()))?.to_string(), x, y, shape: shape.into(), w, h, drill: Some(drill), slot: sl, slot_v });
+                }
+                "パッド" | "pad" | "smd" => {
+                    let (x, y, w, h) = (num(2, "X")?, num(3, "Y")?, num(4, "パッドの幅")?, num(5, "パッドの高さ")?);
+                    pads.push(PadSpec { pin: t.get(1).ok_or_else(|| at("ピン名がありません".into()))?.to_string(), x, y, shape: "rect".into(), w, h, drill: None, slot: 0.0, slot_v: false });
+                }
+                "穴" | "hole" | "npth" => holes.push(HoleSpec { x: num(1, "X")?, y: num(2, "Y")?, drill: num(3, "穴径")?, slot: slot(4)?, slot_v }),
+                other => return Err(at(format!("先頭の言葉「{other}」が分かりません。脚 / 穴 / パッド のどれかで始めてください (書き方は下の説明)"))),
+            }
+        }
+        Ok((pads, holes))
+    }
+
     pub fn to_def(&self) -> Result<PartDef, String> {
         let pins = self.parse_pins()?;
-        let n = pins.len();
+        let (extra_pads, extra_holes) = self.parse_extras()?;
+        // pins that only exist as extra pads (the shell, say) are not part of the package's row of pads
+        let n = pins.iter().filter(|p| !extra_pads.iter().any(|e| e.pin == p.number)).count();
         let package = match self.pkg {
             PkgKind::Chip2 => PackageSpec::Chip2 { pitch: self.pitch, pad_len: self.len, pad_width: self.width },
             PkgKind::Dual => PackageSpec::Dual {
@@ -179,6 +350,15 @@ impl PartForm {
             },
             PkgKind::Quad => PackageSpec::Quad { pins: n, pitch: self.pitch, span: self.span, pad_len: self.len, pad_width: self.width },
             PkgKind::Row => PackageSpec::SingleRow { pins: n, pitch: self.pitch, pad_d: self.pad_d, drill: self.drill },
+        };
+        let package = if extra_pads.is_empty() && extra_holes.is_empty() {
+            package
+        } else {
+            // the package's own pads and the extras become one explicit list
+            let fp = package.build(self.name.trim())?;
+            let mut pads: Vec<PadSpec> = fp.pads.iter().map(|p| pad_spec(&fp, p)).collect();
+            pads.extend(extra_pads);
+            PackageSpec::Explicit { pads, holes: extra_holes }
         };
         let sim = match self.sim {
             SimChoice::None => None,
@@ -421,6 +601,24 @@ impl PartForm {
             }
         });
         ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
+        egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
+            ui.small("USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
+            ui.small(EXTRAS_HELP);
+            ui.horizontal_wrapped(|ui| {
+                ui.label("例を足す:");
+                for (label, line, tip) in EXTRAS_EXAMPLES {
+                    if ui.small_button(*label).on_hover_text(format!("{tip}
+数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                        if !self.extras.is_empty() && !self.extras.ends_with('\n') {
+                            self.extras.push('\n');
+                        }
+                        self.extras.push_str(line);
+                    }
+                }
+            });
+            ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
+                .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
+        });
 
         ui.separator();
         egui::CollapsingHeader::new("データシートの情報 (定格・最大定格)").id_salt("part_ratings").default_open(true).show(ui, |ui| {
@@ -465,11 +663,52 @@ impl PartForm {
 
         ui.separator();
         ui.label("シミュレーションモデル (部品の特性)");
+        ui.small("メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
             ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
             ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)").on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
         });
+        let mut autofill = false;
+        let pasted = ui.add(
+            egui::TextEdit::multiline(&mut self.sim_text)
+                .desired_rows(if self.sim == SimChoice::None { 3 } else { 5 })
+                .desired_width(f32::INFINITY)
+                .font(egui::TextStyle::Monospace)
+                .hint_text("ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
+        ).on_hover_text("貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます");
+        // a paste into an empty model box fills the form right away
+        if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
+            autofill = true;
+        }
+        ui.horizontal(|ui| {
+            if ui.button("貼ったモデルから自動入力").on_hover_text("上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です").clicked() {
+                autofill = true;
+            }
+            if ui.button("SPICEファイルを読む…").on_hover_text("メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します").clicked()
+                && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
+            {
+                match std::fs::read_to_string(&p) {
+                    Ok(t) => {
+                        self.sim_text = t;
+                        autofill = true;
+                    }
+                    Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。文字コードが UTF-8 でないときは、テキストエディタで開いて貼り付けてください"))),
+                }
+            }
+        });
+        if autofill {
+            self.spice_message = Some(self.autofill_from_spice());
+        }
+        match &self.spice_message {
+            Some(Ok(m)) => {
+                ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+            }
+            Some(Err(e)) => {
+                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+            }
+            None => {}
+        }
         if self.sim != SimChoice::None {
             ui.horizontal(|ui| {
                 if self.sim == SimChoice::Model {
@@ -477,23 +716,17 @@ impl PartForm {
                     ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S");
                 }
                 ui.label("モデル名");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。下の本文と同じ名前にします");
+                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします");
                 ui.label("ノード順のピン番号");
                 ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
             });
-            ui.add(
-                egui::TextEdit::multiline(&mut self.sim_text)
-                    .desired_rows(5)
-                    .desired_width(f32::INFINITY)
-                    .font(egui::TextStyle::Monospace)
-                    .hint_text(".model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
-            );
             ui.label("このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
             ui.add(
                 egui::TextEdit::multiline(&mut self.sim_limits)
                     .desired_rows(3)
                     .desired_width(f32::INFINITY)
-                    .hint_text("例: 温度による変化は扱いません。\n接合容量は扱いません。"),
+                    .hint_text("例: 温度による変化は扱いません。
+接合容量は扱いません。"),
             );
         }
 
@@ -533,6 +766,13 @@ fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Footprint) {
         y0 = y0.min(p.pos.y - h / 2.0);
         y1 = y1.max(p.pos.y + h / 2.0);
     }
+    for h in &fp.holes {
+        let (a, b) = pcb_core::slot_ends(h.pos, h.drill, h.slot, h.slot_v);
+        x0 = x0.min(a.x.min(b.x) - h.drill / 2.0);
+        x1 = x1.max(a.x.max(b.x) + h.drill / 2.0);
+        y0 = y0.min(a.y.min(b.y) - h.drill / 2.0);
+        y1 = y1.max(a.y.max(b.y) + h.drill / 2.0);
+    }
     let scale = ((r.width() as f64 - 20.0) / (x1 - x0).max(0.1)).min((r.height() as f64 - 20.0) / (y1 - y0).max(0.1)) as f32;
     let c = r.center();
     let to = |x: f64, y: f64| Pos2::new(c.x + ((x - (x0 + x1) / 2.0) as f32) * scale, c.y - ((y - (y0 + y1) / 2.0) as f32) * scale);
@@ -550,9 +790,15 @@ fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Footprint) {
             }
         }
         if let Some(d) = p.drill {
-            painter.circle_filled(ctr, d as f32 * scale / 2.0, Color32::from_rgb(18, 22, 18));
+            let (a, b) = pcb_core::slot_ends(p.pos, d, p.slot, p.slot_v);
+            crate::board_editor::capsule(&painter, to(a.x, a.y), to(b.x, b.y), d as f32 * scale / 2.0, Color32::from_rgb(18, 22, 18), None);
         }
         painter.text(ctr, Align2::CENTER_CENTER, &p.pin, FontId::proportional(11.0), Color32::WHITE);
+    }
+    // holes of the part (no copper): an outline only
+    for h in &fp.holes {
+        let (a, b) = pcb_core::slot_ends(h.pos, h.drill, h.slot, h.slot_v);
+        crate::board_editor::capsule(&painter, to(a.x, a.y), to(b.x, b.y), h.drill as f32 * scale / 2.0, Color32::TRANSPARENT, Some(Stroke::new(1.5, Color32::LIGHT_GRAY)));
     }
     painter.rect_stroke(r, 2.0, Stroke::new(1.0, Color32::from_gray(80)), egui::StrokeKind::Inside);
 }
@@ -850,5 +1096,108 @@ mod ratings_tests {
         f.rt_rows = String::new();
         f.rt_v = "abc".into();
         assert!(f.to_def().unwrap_err().contains("最大電圧"));
+    }
+}
+
+#[cfg(test)]
+mod spice_paste_tests {
+    use super::*;
+
+    #[test]
+    fn a_pasted_diode_model_fills_the_form() {
+        let mut f = PartForm::default();
+        f.sim_text = "* vendor\n.MODEL DX D (IS=1n\n+ RS=1)".into();
+        f.autofill_from_spice().unwrap();
+        assert_eq!((f.sim, f.sim_name.as_str(), f.sim_element.as_str(), f.sim_pins.as_str()), (SimChoice::Model, "DX", "D", "1 2"));
+        assert_eq!(f.name, "DX");
+        let d = f.to_def().unwrap();
+        assert!(!d.has_errors(), "{:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_transistor_keeps_its_pin_names_in_node_order() {
+        let mut f = PartForm::default();
+        f.name = "BC".into();
+        f.pins_text = "1 E\n2 B\n3 C".into();
+        f.pkg = PkgKind::Row;
+        f.sim_text = ".model BC NPN(BF=200)".into();
+        f.autofill_from_spice().unwrap();
+        assert_eq!(f.sim_pins, "3 2 1", "C B E");
+        assert_eq!(f.sim_element, "Q");
+        assert!(!f.to_def().unwrap().has_errors());
+    }
+
+    #[test]
+    fn a_subcircuit_makes_one_pin_per_port() {
+        let mut f = PartForm::default();
+        f.sim_text = ".subckt AMP IN+ IN- OUT VCC GND\nR1 IN+ OUT 1k\n.ends".into();
+        f.autofill_from_spice().unwrap();
+        assert_eq!(f.sim, SimChoice::Subckt);
+        assert_eq!(f.parse_pins().unwrap().len(), 5);
+        assert_eq!(f.sim_pins, "1 2 3 4 5");
+        let d = f.to_def().unwrap();
+        assert!(!d.has_errors(), "{:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn bad_text_and_mismatched_pins_are_explained() {
+        let mut f = PartForm::default();
+        f.sim_text = "R1 1 2 1k".into();
+        assert!(f.autofill_from_spice().unwrap_err().contains(".model"));
+        f.sim_text = ".model Z TRIAC(X=1)".into();
+        assert!(f.autofill_from_spice().unwrap_err().contains("未対応"));
+        f.sim_text = ".model BC NPN()".into();
+        f.pins_text = "1 X\n2 Y".into();
+        assert!(f.autofill_from_spice().unwrap_err().contains("3 本"));
+    }
+}
+
+#[cfg(test)]
+mod extras_tests {
+    use super::*;
+
+    fn usb_form() -> PartForm {
+        let mut f = PartForm::default();
+        f.name = "USB_TEST".into();
+        f.prefix = "J".into();
+        f.pins_text = "1 VBUS\n2 D-\n3 D+\n4 GND\nSH SHIELD".into();
+        f.pkg = PkgKind::Row;
+        f.pitch = 2.5;
+        f.extras = "脚 SH -6.5 0 2.0 3.0 1.2\n脚 SH 6.5 0 2.0 3.0 1.2\n# a comment\n穴 0 -3 1.0\n穴 0 3 1.0 2.0".into();
+        f
+    }
+
+    #[test]
+    fn shield_legs_and_pegs_join_the_package() {
+        let d = usb_form().to_def().unwrap();
+        assert!(!d.has_errors(), "{:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+        let fp = d.footprint().unwrap();
+        // 4 signal pads from the row, 2 shield legs sharing the pin SH
+        assert_eq!(fp.pads.len(), 6);
+        assert_eq!(fp.pads.iter().filter(|p| p.pin == "SH").count(), 2);
+        assert_eq!(fp.holes.len(), 2);
+        assert!(fp.holes[1].slot > fp.holes[1].drill, "the second peg hole is a slot");
+    }
+
+    #[test]
+    fn a_vertical_plated_slot_and_smd_pad_are_read() {
+        let mut f = usb_form();
+        f.extras = "脚 SH 6.5 0 1.6 3.6 0.8 2.4 v\nパッド SH -4 -2 1.5 2.0".into();
+        let fp = f.to_def().unwrap().footprint().unwrap();
+        let slot = fp.pads.iter().find(|p| p.slot > 0.0).unwrap();
+        assert!(slot.slot_v && slot.drill == Some(0.8));
+        assert!(fp.pads.iter().any(|p| p.drill.is_none() && p.pin == "SH"));
+    }
+
+    #[test]
+    fn mistakes_name_the_line() {
+        let mut f = usb_form();
+        f.extras = "脚 SH -6.5 0 2.0 3.0".into();
+        assert!(f.to_def().unwrap_err().contains("1行目"));
+        f.extras = "ねじ 1 2 3".into();
+        assert!(f.to_def().unwrap_err().contains("脚 / 穴 / パッド"));
+        f.extras = "脚 SH 0 0 2.0 3.0 1.2 0.5".into();
+        let d = f.to_def().unwrap();
+        assert!(d.validate().iter().any(|i| i.error && i.message.contains("slot")), "a slot shorter than its width is refused by the package");
     }
 }

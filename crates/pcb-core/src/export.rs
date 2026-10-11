@@ -47,7 +47,7 @@ mod tests {
             width: 0.25,
         });
         b.vias.push(Via { pos: Point::new(10.0, 10.0), diameter: 0.6, drill: 0.3 });
-        b.holes.push(Hole { pos: Point::new(2.0, 2.0), drill: 3.2 });
+        b.holes.push(Hole::new(Point::new(2.0, 2.0), 3.2));
         b
     }
 

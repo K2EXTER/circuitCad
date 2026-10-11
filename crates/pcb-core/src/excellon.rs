@@ -7,7 +7,10 @@ fn key(d: f64) -> i64 {
     (d * 1000.0).round() as i64 // 1 µm
 }
 
-fn write_file(function: &str, hits: &[(f64, Point)]) -> String {
+/// A drill hit: diameter, position, and the other end when it is a slot (routed with `G85`).
+type Hit = (f64, Point, Option<Point>);
+
+fn write_file(function: &str, hits: &[Hit]) -> String {
     let mut tools: Vec<i64> = hits.iter().map(|h| key(h.0)).collect();
     tools.sort_unstable();
     tools.dedup();
@@ -25,9 +28,15 @@ fn write_file(function: &str, hits: &[(f64, Point)]) -> String {
     s.push_str("%\nG90\nG05\n");
     for (i, t) in tools.iter().enumerate() {
         let _ = writeln!(s, "T{}", i + 1);
-        for (d, p) in hits.iter().filter(|h| key(h.0) == *t) {
-            let _ = d;
-            let _ = writeln!(s, "X{:.4}Y{:.4}", p.x, p.y);
+        for (_, p, end) in hits.iter().filter(|h| key(h.0) == *t) {
+            match end {
+                Some(e) => {
+                    let _ = writeln!(s, "X{:.4}Y{:.4}G85X{:.4}Y{:.4}", p.x, p.y, e.x, e.y);
+                }
+                None => {
+                    let _ = writeln!(s, "X{:.4}Y{:.4}", p.x, p.y);
+                }
+            }
         }
     }
     s.push_str("T0\nM30\n");
@@ -39,16 +48,28 @@ pub fn plated(board: &Board) -> String {
     let mut hits = vec![];
     for p in &board.pads {
         if let Some(d) = p.drill {
-            hits.push((d, p.pos));
+            hits.push(if p.slot > d + 1e-9 {
+                let (a, b) = slot_ends(p.pos, d, p.slot, p.slot_v);
+                (d, a, Some(b))
+            } else {
+                (d, p.pos, None)
+            });
         }
     }
     for v in &board.vias {
-        hits.push((v.drill, v.pos));
+        hits.push((v.drill, v.pos, None));
     }
     write_file("Plated,1,2,PTH", &hits)
 }
 
 pub fn non_plated(board: &Board) -> String {
-    let hits: Vec<_> = board.holes.iter().map(|h| (h.drill, h.pos)).collect();
+    let hits: Vec<Hit> = board
+        .holes
+        .iter()
+        .map(|h| {
+            let (a, b) = h.ends();
+            if h.is_slot() { (h.drill, a, Some(b)) } else { (h.drill, h.pos, None) }
+        })
+        .collect();
     write_file("NonPlated,1,2,NPTH", &hits)
 }

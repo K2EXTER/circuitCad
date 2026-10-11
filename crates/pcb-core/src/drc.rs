@@ -241,7 +241,8 @@ pub fn check(board: &Board) -> Vec<Violation> {
         }
     }
     for h in &board.holes {
-        if !inside_polygon(&board.outline, h.pos) {
+        let (a, b) = h.ends();
+        if !(inside_polygon(&board.outline, h.pos) && inside_polygon(&board.outline, a) && inside_polygon(&board.outline, b)) {
             out.push(v("取り付け穴が基板の外にあります。基板の内側に動かすか、外形を広げましょう".into(), h.pos));
         }
     }

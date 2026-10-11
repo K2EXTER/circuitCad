@@ -112,35 +112,87 @@ impl SchEditor {
                     }).response.on_hover_text("ライブラリ部品の分類。選んだ分類だけを一覧に出します");
                 ui.checkbox(&mut self.lib_sim_only, "◎のみ").on_hover_text("シミュレーションモデルのある部品だけを表示します");
             });
+            ui.checkbox(&mut self.lib_tall, "一覧を広く").on_hover_text("部品の一覧の高さを広げます。部品が多いときに、スクロールしなくても探しやすくなります");
             let f = self.lib_filter.to_lowercase();
-            egui::ScrollArea::vertical().max_height(280.0).auto_shrink([false, true]).show(ui, |ui| {
-                // grouped by category, then by name
-                let mut order: Vec<usize> = (0..self.library.len()).collect();
-                order.sort_by_key(|&i| (cat_of(&self.library[i]), self.library[i].name.to_lowercase()));
-                let mut last = String::new();
-                for i in order {
+            let filtering = !f.is_empty() || !self.lib_cat.is_empty() || self.lib_sim_only;
+            // which parts pass the search / category / simulation filters
+            let shown: Vec<usize> = (0..self.library.len())
+                .filter(|&i| {
                     let d = &self.library[i];
-                    let c = cat_of(d);
-                    if (!self.lib_cat.is_empty() && self.lib_cat != c) || (self.lib_sim_only && d.sim.is_none()) {
-                        continue;
+                    if (!self.lib_cat.is_empty() && self.lib_cat != cat_of(d)) || (self.lib_sim_only && d.sim.is_none()) {
+                        return false;
                     }
-                    if !f.is_empty() {
-                        let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
-                        if ![d.name.as_str(), d.description.as_str(), c.as_str(), pins.as_str(), d.footprint_name().as_str()].iter().any(|t| t.to_lowercase().contains(&f)) {
-                            continue;
-                        }
+                    if f.is_empty() {
+                        return true;
                     }
-                    if c != last {
-                        ui.label(egui::RichText::new(&c).small().weak());
-                        last = c;
+                    let pins = d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(" ");
+                    [d.name.as_str(), d.description.as_str(), cat_of(d).as_str(), pins.as_str(), d.footprint_name().as_str()].iter().any(|t| t.to_lowercase().contains(&f))
+                })
+                .collect();
+            let by_name = |n: &String| self.library.iter().position(|d| &d.name == n);
+            let favs: Vec<usize> = self.lib_prefs.fav.iter().filter_map(by_name).collect();
+            let recents: Vec<usize> = self.lib_prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
+            let mut toggle_fav: Option<String> = None;
+            let mut row = |ui: &mut egui::Ui, i: usize, selected: bool, prefs: &library::LibPrefs| {
+                let d = &self.library[i];
+                ui.horizontal(|ui| {
+                    let fav = prefs.is_fav(&d.name);
+                    if ui.add(egui::Button::new(egui::RichText::new(if fav { "★" } else { "☆" }).color(if fav { Color32::from_rgb(240, 190, 40) } else { Color32::GRAY })).frame(false).small())
+                        .on_hover_text(if fav { "お気に入りから外します" } else { "お気に入りに入れます。一覧の先頭に出ます" })
+                        .clicked()
+                    {
+                        toggle_fav = Some(d.name.clone());
                     }
                     let mark = if d.sim.is_some() { " ◎" } else { "" };
-                    let selected = self.tool == Tool::Place && self.place_lib == Some(i);
-                    if ui.selectable_label(selected, format!("  {}{mark}", d.name)).on_hover_text(lib_hover(d)).clicked() {
+                    if ui.selectable_label(selected, format!("{}{mark}", d.name)).on_hover_text(lib_hover(d)).clicked() {
                         chosen = Some(i);
                     }
+                });
+            };
+            egui::ScrollArea::vertical().max_height(if self.lib_tall { 640.0 } else { 280.0 }).auto_shrink([false, true]).show(ui, |ui| {
+                let sel = |i: usize| self.tool == Tool::Place && self.place_lib == Some(i);
+                if !filtering {
+                    for (title, ids, tip) in [("★ お気に入り", &favs, "☆ を押した部品"), ("最近使った部品", &recents, "最近置いた部品 (新しい順)")] {
+                        if !ids.is_empty() {
+                            ui.label(egui::RichText::new(title).small().strong()).on_hover_text(tip);
+                            for &i in ids {
+                                row(ui, i, sel(i), &self.lib_prefs);
+                            }
+                            ui.add_space(4.0);
+                        }
+                    }
+                }
+                // grouped by category (folded unless searching), then by name
+                let mut order = shown.clone();
+                order.sort_by_key(|&i| (cat_of(&self.library[i]), self.library[i].name.to_lowercase()));
+                let mut groups: Vec<(String, Vec<usize>)> = vec![];
+                for i in order {
+                    let c = cat_of(&self.library[i]);
+                    match groups.last_mut() {
+                        Some((g, v)) if *g == c => v.push(i),
+                        _ => groups.push((c, vec![i])),
+                    }
+                }
+                if groups.is_empty() {
+                    ui.small("条件に合う部品がありません。検索の文字やカテゴリを変えてみてください");
+                }
+                for (c, ids) in groups {
+                    let holds_selected = ids.iter().any(|&i| sel(i));
+                    let mut h = egui::CollapsingHeader::new(format!("{c} ({})", ids.len())).id_salt(("libcat", &c));
+                    if filtering || holds_selected {
+                        h = h.open(Some(true));
+                    }
+                    h.show(ui, |ui| {
+                        for &i in &ids {
+                            row(ui, i, sel(i), &self.lib_prefs);
+                        }
+                    });
                 }
             });
+            if let Some(n) = toggle_fav {
+                self.lib_prefs.toggle_fav(&n);
+                self.lib_prefs.save(&self.lib_dir);
+            }
             if let Some(d) = self.place_lib.and_then(|k| self.library.get(k)) {
                 ui.group(|ui| {
                     ui.strong(&d.name);
@@ -179,9 +231,7 @@ impl SchEditor {
             }
         });
         if let Some(i) = chosen {
-            self.tool = Tool::Place;
-            self.place_lib = Some(i);
-            self.pending = None;
+            self.choose_library_part(i);
         }
         ui.separator();
     }

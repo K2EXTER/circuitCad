@@ -102,7 +102,7 @@ impl BoardEditor {
             }
             Tool::Hole => {
                 self.checkpoint();
-                self.board.holes.push(Hole { pos: p, drill: self.hole_drill });
+                self.board.holes.push(Hole::new(p, self.hole_drill));
             }
         }
     }

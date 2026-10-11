@@ -136,7 +136,7 @@ fn group_move_and_delete() {
     let mut e = BoardEditor::default();
     e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 5.0), b: p(10.0, 5.0), width: 0.25 });
     e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3 });
-    e.board.holes.push(Hole { pos: p(30.0, 30.0), drill: 3.2 });
+    e.board.holes.push(Hole::new(p(30.0, 30.0), 3.2));
     let items = e.items_in_box(p(3.0, 3.0), p(12.0, 10.0), false);
     assert_eq!(items.len(), 2);
     e.set_selection(items.clone());

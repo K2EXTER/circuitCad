@@ -39,6 +39,7 @@ impl Board {
         self.silk.retain(|s| s.refdes != part.refdes);
         self.texts.retain(|t| t.refdes != part.refdes);
 
+        let mut new_holes: Vec<Hole> = vec![];
         let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
         let bottom = part.side == Side::Bottom;
         for fpad in &fp.pads {
@@ -57,10 +58,39 @@ impl Board {
             y0 = y0.min(pos.y - h / 2.0);
             y1 = y1.max(pos.y + h / 2.0);
             let mut pad = Pad::new(pos, shape, fpad.drill, part.side);
+            pad.slot = fpad.slot;
+            pad.slot_v = fpad.slot_v ^ (part.rot % 2 == 1);
             pad.refdes = part.refdes.clone();
             pad.net = old_nets.get(&fpad.pin).cloned().unwrap_or_default();
             pad.pin = fpad.pin.clone();
             self.pads.push(pad);
+        }
+        // the part's own holes (locating pegs) follow it, and count for its outline
+        for fh in &fp.holes {
+            let local = if bottom { Point::new(-fh.pos.x, fh.pos.y) } else { fh.pos };
+            let r = rotate(local, part.rot);
+            let pos = Point::new(part.pos.x + r.x, part.pos.y + r.y);
+            let mut hole = Hole::new(pos, fh.drill);
+            hole.slot = fh.slot;
+            hole.slot_v = fh.slot_v ^ (part.rot % 2 == 1);
+            hole.refdes = part.refdes.clone();
+            let (a, b) = hole.ends();
+            let rad = fh.drill / 2.0;
+            x0 = x0.min(a.x.min(b.x) - rad);
+            x1 = x1.max(a.x.max(b.x) + rad);
+            y0 = y0.min(a.y.min(b.y) - rad);
+            y1 = y1.max(a.y.max(b.y) + rad);
+            new_holes.push(hole);
+        }
+        // holes of the same part are replaced in place, so the indices of other holes (a drag in progress) stay put
+        let old: Vec<usize> = (0..self.holes.len()).filter(|&i| self.holes[i].refdes == part.refdes).collect();
+        if old.len() == new_holes.len() {
+            for (i, h) in old.into_iter().zip(new_holes) {
+                self.holes[i] = h;
+            }
+        } else {
+            self.holes.retain(|h| h.refdes != part.refdes);
+            self.holes.extend(new_holes);
         }
         let m = 0.3;
         let c = [Point::new(x0 - m, y0 - m), Point::new(x1 + m, y0 - m), Point::new(x1 + m, y1 + m), Point::new(x0 - m, y1 + m)];
@@ -89,6 +119,7 @@ impl Board {
         self.pads.retain(|p| p.refdes != refdes);
         self.silk.retain(|s| s.refdes != refdes);
         self.texts.retain(|t| t.refdes != refdes);
+        self.holes.retain(|h| h.refdes != refdes);
     }
 
     /// Turn a part over to the other side of the board (position and rotation are kept;

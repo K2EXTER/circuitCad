@@ -225,6 +225,7 @@ pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
 /// Parts that ship with the program. They are copied into the user's library once.
 pub const EXAMPLES: &[(&str, &str)] = &[
     ("NE555_DIP-8", include_str!("../examples/NE555_DIP-8.part.json")),
+    ("USB_DEMO_TH", include_str!("../examples/USB_DEMO_TH.part.json")),
     ("1N4148", include_str!("../examples/1N4148.part.json")),
     ("LM358_SOIC-8", include_str!("../examples/LM358_SOIC-8.part.json")),
     ("TL072_SOIC-8", include_str!("../examples/TL072_SOIC-8.part.json")),

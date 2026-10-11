@@ -9,22 +9,42 @@ pub struct FpPad {
     pub pos: Point,
     pub shape: PadShape,
     pub drill: Option<f64>,
+    /// A plated slot `slot` long (`drill` wide); 0 = round. Along x, or along y with `slot_v`.
+    #[serde(default)]
+    pub slot: f64,
+    #[serde(default)]
+    pub slot_v: bool,
+}
+
+/// A non-plated hole that belongs to the part (a locating peg, a screw hole in a connector's housing).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FpHole {
+    pub pos: Point,
+    pub drill: f64,
+    /// Slot length (0 = round); along x, or along y with `slot_v`.
+    #[serde(default)]
+    pub slot: f64,
+    #[serde(default)]
+    pub slot_v: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Footprint {
     pub name: String,
     pub pads: Vec<FpPad>,
+    #[serde(default)]
+    pub holes: Vec<FpHole>,
 }
 
 fn pad(pin: &str, x: f64, y: f64, shape: PadShape, drill: Option<f64>) -> FpPad {
-    FpPad { pin: pin.to_string(), pos: Point::new(x, y), shape, drill }
+    FpPad { pin: pin.to_string(), pos: Point::new(x, y), shape, drill, slot: 0.0, slot_v: false }
 }
 
 fn smd2(name: &str, half_pitch: f64, w: f64, h: f64, pins: [&str; 2]) -> Footprint {
     let s = PadShape::Rect { w, h };
     Footprint {
         name: name.into(),
+        holes: vec![],
         pads: vec![pad(pins[0], -half_pitch, 0.0, s, None), pad(pins[1], half_pitch, 0.0, s, None)],
     }
 }
@@ -33,6 +53,7 @@ fn tht2(name: &str, pitch: f64, d: f64, drill: f64, pins: [&str; 2]) -> Footprin
     let s = PadShape::Circle { d };
     Footprint {
         name: name.into(),
+        holes: vec![],
         pads: vec![
             pad(pins[0], -pitch / 2.0, 0.0, PadShape::Rect { w: d, h: d }, Some(drill)),
             pad(pins[1], pitch / 2.0, 0.0, s, Some(drill)),
@@ -44,6 +65,7 @@ fn header(name: &str, pins: &[String]) -> Footprint {
     let pitch = 2.54;
     Footprint {
         name: name.into(),
+        holes: vec![],
         pads: pins
             .iter()
             .enumerate()
@@ -86,6 +108,7 @@ pub fn get(name: &str) -> Option<Footprint> {
             let s = PadShape::Circle { d: 1.5 };
             Footprint {
                 name: name.into(),
+                holes: vec![],
                 pads: vec![
                     pad("E", -2.54, 0.0, PadShape::Rect { w: 1.5, h: 1.5 }, Some(0.8)),
                     pad("B", 0.0, 0.0, s, Some(0.8)),
@@ -97,6 +120,7 @@ pub fn get(name: &str) -> Option<Footprint> {
             let s = PadShape::Rect { w: 0.9, h: 0.8 };
             Footprint {
                 name: name.into(),
+                holes: vec![],
                 pads: vec![pad("B", -0.95, 0.95, s, None), pad("E", 0.95, 0.95, s, None), pad("C", 0.0, -0.95, s, None)],
             }
         }

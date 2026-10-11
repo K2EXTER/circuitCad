@@ -128,8 +128,13 @@ pub fn parse_gerber(text: &str) -> Result<Vec<Prim>, String> {
     Ok(out)
 }
 
-/// Drill hits `(diameter, position)` from an Excellon file.
+/// Drill hits `(diameter, position)` from an Excellon file (a slot gives its start point).
 pub fn parse_excellon(text: &str) -> Result<Vec<(f64, Point)>, String> {
+    Ok(parse_excellon_slots(text)?.into_iter().map(|(d, p, _)| (d, p)).collect())
+}
+
+/// Drill hits `(diameter, position, other end of a slot)` from an Excellon file; slots are `X..Y..G85X..Y..`.
+pub fn parse_excellon_slots(text: &str) -> Result<Vec<(f64, Point, Option<Point>)>, String> {
     let mut tools: Vec<(u32, f64)> = vec![];
     let mut cur = None;
     let mut out = vec![];
@@ -156,10 +161,15 @@ pub fn parse_excellon(text: &str) -> Result<Vec<(f64, Point)>, String> {
         }
         if l.starts_with('X') {
             let d = cur.ok_or("ドリルが選ばれていません")?;
-            let y = l.find('Y').ok_or("Y 座標がありません")?;
-            let x: f64 = l[1..y].parse().map_err(|_| "X 座標が不正です")?;
-            let yy: f64 = l[y + 1..].parse().map_err(|_| "Y 座標が不正です")?;
-            out.push((d, Point::new(x, yy)));
+            let xy = |t: &str| -> Result<Point, String> {
+                let t = t.strip_prefix('X').ok_or("X 座標がありません")?;
+                let y = t.find('Y').ok_or("Y 座標がありません")?;
+                Ok(Point::new(t[..y].parse().map_err(|_| "X 座標が不正です")?, t[y + 1..].parse().map_err(|_| "Y 座標が不正です")?))
+            };
+            match l.split_once("G85") {
+                Some((a, b)) => out.push((d, xy(a)?, Some(xy(b)?))),
+                None => out.push((d, xy(l)?, None)),
+            }
         }
     }
     Ok(out)
@@ -325,11 +335,21 @@ impl Preview {
         let board = rasterize(&[Prim::Region { pts, clear: false }], &fine);
         let layer = |ext: &str| -> Result<Vec<u8>, String> { Ok(rasterize(&parse_gerber(find(files, ext)?)?, &fine)) };
 
-        let mut hits = parse_excellon(find(files, "-PTH.DRL")?)?.into_iter().map(|(d, p)| (d, p, true)).collect::<Vec<_>>();
-        hits.extend(parse_excellon(find(files, "-NPTH.DRL")?)?.into_iter().map(|(d, p)| (d, p, false)));
-        let holes = rasterize(&hits.iter().map(|(d, p, _)| Prim::Flash { ap: Aperture::Circle(*d), at: *p, clear: false }).collect::<Vec<_>>(), &fine);
+        let mut hits = parse_excellon_slots(find(files, "-PTH.DRL")?)?.into_iter().map(|(d, p, e)| (d, p, e, true)).collect::<Vec<_>>();
+        hits.extend(parse_excellon_slots(find(files, "-NPTH.DRL")?)?.into_iter().map(|(d, p, e)| (d, p, e, false)));
+        // a slot is a fat line with round ends
+        let holes = rasterize(
+            &hits
+                .iter()
+                .map(|(d, p, e, _)| match e {
+                    Some(e) => Prim::Line { a: *p, b: *e, width: *d, clear: false },
+                    None => Prim::Flash { ap: Aperture::Circle(*d), at: *p, clear: false },
+                })
+                .collect::<Vec<_>>(),
+            &fine,
+        );
         let mut drills: Vec<(f64, usize, bool)> = vec![];
-        for (d, _, plated) in &hits {
+        for (d, _, _, plated) in &hits {
             match drills.iter_mut().find(|(x, _, pl)| (x - d).abs() < 1e-6 && pl == plated) {
                 Some(e) => e.1 += 1,
                 None => drills.push((*d, 1, *plated)),

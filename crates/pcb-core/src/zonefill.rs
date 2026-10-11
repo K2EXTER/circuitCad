@@ -134,7 +134,13 @@ pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillSha
         }
     }
     for h in &board.holes {
-        cuts.push(circle(h.pos, h.drill / 2.0 + c));
+        // a slot is cleared with circles along its centre line
+        let (a, b) = h.ends();
+        let steps = ((a.dist(b) / (h.drill / 2.0).max(0.05)).ceil() as usize).max(1);
+        for k in 0..=steps {
+            let t = k as f64 / steps as f64;
+            cuts.push(circle(Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t), h.drill / 2.0 + c));
+        }
     }
     let n = board.outline.len();
     let edge = c.max(board.rules.edge_clearance);
@@ -202,6 +208,8 @@ pub fn geometry_key(board: &Board) -> u64 {
     for hole in &board.holes {
         pt(&mut h, hole.pos);
         f(&mut h, hole.drill);
+        f(&mut h, hole.slot);
+        f(&mut h, hole.slot_v as u8 as f64);
     }
     for p in &board.outline {
         pt(&mut h, *p);

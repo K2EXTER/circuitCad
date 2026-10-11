@@ -62,6 +62,11 @@ pub struct Pad {
     pub pos: Point,
     pub shape: PadShape,
     pub drill: Option<f64>,
+    /// With a drill: a plated slot `slot` long (and `drill` wide), along x or, with `slot_v`, along y. 0 = round hole.
+    #[serde(default)]
+    pub slot: f64,
+    #[serde(default)]
+    pub slot_v: bool,
     pub side: Side,
     /// Owning part (empty for a loose pad) and its pin name.
     #[serde(default)]
@@ -75,7 +80,7 @@ pub struct Pad {
 
 impl Pad {
     pub fn new(pos: Point, shape: PadShape, drill: Option<f64>, side: Side) -> Self {
-        Self { pos, shape, drill, side, refdes: String::new(), pin: String::new(), net: String::new() }
+        Self { pos, shape, drill, slot: 0.0, slot_v: false, side, refdes: String::new(), pin: String::new(), net: String::new() }
     }
 }
 
@@ -106,11 +111,40 @@ pub struct Via {
     pub drill: f64,
 }
 
-/// Non-plated mounting hole.
+/// Non-plated hole: a mounting screw hole, or a locating peg hole that belongs to a part (`refdes` set).
+/// With `slot` > `drill` it is a slot (a routed hole, `slot` long and `drill` wide), along x or, with `slot_v`, along y.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Hole {
     pub pos: Point,
     pub drill: f64,
+    #[serde(default)]
+    pub slot: f64,
+    #[serde(default)]
+    pub slot_v: bool,
+    /// Owning part (empty for a loose hole). A part's holes follow it when it moves or turns.
+    #[serde(default)]
+    pub refdes: String,
+}
+
+impl Hole {
+    pub fn new(pos: Point, drill: f64) -> Self {
+        Self { pos, drill, slot: 0.0, slot_v: false, refdes: String::new() }
+    }
+
+    pub fn is_slot(&self) -> bool {
+        self.slot > self.drill + 1e-9
+    }
+
+    /// The two ends of the slot's centre line (both the centre for a round hole).
+    pub fn ends(&self) -> (Point, Point) {
+        slot_ends(self.pos, self.drill, self.slot, self.slot_v)
+    }
+}
+
+/// Centres of the two round ends of a slot `slot` long and `drill` wide at `pos` (both `pos` when it is round).
+pub fn slot_ends(pos: Point, drill: f64, slot: f64, vertical: bool) -> (Point, Point) {
+    let half = ((slot - drill) / 2.0).max(0.0);
+    if vertical { (Point::new(pos.x, pos.y - half), Point::new(pos.x, pos.y + half)) } else { (Point::new(pos.x - half, pos.y), Point::new(pos.x + half, pos.y)) }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

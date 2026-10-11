@@ -165,9 +165,10 @@ fn old_files_without_a_side_load_as_top_parts() {
 fn pads_sharing_a_pin_are_one_connection_and_all_get_the_net() {
     use crate::footprints::{Footprint, FpPad};
     // a SOT-223-like package: pin 2 is both a normal pad and the large tab
-    let pad = |pin: &str, x: f64, y: f64, w: f64, h: f64| FpPad { pin: pin.into(), pos: Point::new(x, y), shape: PadShape::Rect { w, h }, drill: None };
+    let pad = |pin: &str, x: f64, y: f64, w: f64, h: f64| FpPad { pin: pin.into(), pos: Point::new(x, y), shape: PadShape::Rect { w, h }, drill: None, slot: 0.0, slot_v: false };
     let fp = Footprint {
         name: "TAB3".into(),
+        holes: vec![],
         pads: vec![pad("1", -3.0, 2.3, 2.0, 1.5), pad("2", -3.0, 0.0, 2.0, 1.5), pad("3", -3.0, -2.3, 2.0, 1.5), pad("2", 3.0, 0.0, 2.0, 3.8)],
     };
     let mut b = board();

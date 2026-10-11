@@ -36,5 +36,7 @@ mod tests_bottom;
 mod tests_zone;
 #[cfg(test)]
 mod tests_fab;
+#[cfg(test)]
+mod tests_holes;
 
 pub use model::*;

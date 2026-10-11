@@ -14,7 +14,7 @@ fn routed() -> Board {
     pad(&mut b, 5.0, 10.0, "A");
     pad(&mut b, 25.0, 10.0, "A");
     b.tracks.push(Track { side: Side::Top, a: Point::new(5.0, 10.0), b: Point::new(25.0, 10.0), width: 0.25 });
-    b.holes.push(Hole { pos: Point::new(15.0, 4.0), drill: 3.0 });
+    b.holes.push(Hole::new(Point::new(15.0, 4.0), 3.0));
     b
 }
 

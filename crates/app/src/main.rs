@@ -649,8 +649,8 @@ mod tests {
         route(b, Side::Top, &[c2, Point::new(c2.x, c2.y - 1.8)]);
         let _ = v_m;
         b.zones.push(Zone::new("GND", Side::Bottom, vec![Point::new(2.0, 2.0), Point::new(38.0, 2.0), Point::new(38.0, 23.0), Point::new(2.0, 23.0)]));
-        b.holes.push(pcb_core::Hole { pos: Point::new(3.0, 3.0), drill: 3.0 });
-        b.holes.push(pcb_core::Hole { pos: Point::new(37.0, 3.0), drill: 3.0 });
+        b.holes.push(pcb_core::Hole::new(Point::new(3.0, 3.0), 3.0));
+        b.holes.push(pcb_core::Hole::new(Point::new(37.0, 3.0), 3.0));
         let v = pcb_core::drc::check(b);
         println!("DRC: {v:?}");
         std::fs::write(root.join("rlc_board.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();

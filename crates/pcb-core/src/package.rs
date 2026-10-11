@@ -1,7 +1,7 @@
 //! Parametric package (land pattern) generators, so a footprint can be described by the
 //! few dimensions printed in a datasheet's "recommended land pattern" drawing.
 
-use crate::footprints::{Footprint, FpPad};
+use crate::footprints::{Footprint, FpHole, FpPad};
 use crate::model::{PadShape, Point};
 use serde::{Deserialize, Serialize};
 
@@ -29,7 +29,12 @@ pub enum PackageSpec {
     /// One row of through-hole pins (headers, TO-92 style strips). Pin 1 square.
     SingleRow { pins: usize, pitch: f64, pad_d: f64, drill: f64 },
     /// Anything else: list every pad.
-    Explicit { pads: Vec<PadSpec> },
+    /// `holes` are non-plated holes of the part (locating pegs); a pad with `drill` and `slot` is a plated slot.
+    Explicit {
+        pads: Vec<PadSpec>,
+        #[serde(default)]
+        holes: Vec<HoleSpec>,
+    },
 }
 
 fn default_shape() -> String {
@@ -51,18 +56,49 @@ pub struct PadSpec {
     pub h: f64,
     #[serde(default)]
     pub drill: Option<f64>,
+    /// Slot length of a plated slot (`drill` wide); 0 = round hole.
+    #[serde(default)]
+    pub slot: f64,
+    /// The slot runs along y instead of x.
+    #[serde(default)]
+    pub slot_v: bool,
+}
+
+/// A non-plated hole of a part (position relative to the part origin, y up).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HoleSpec {
+    pub x: f64,
+    pub y: f64,
+    pub drill: f64,
+    #[serde(default)]
+    pub slot: f64,
+    #[serde(default)]
+    pub slot_v: bool,
 }
 
 fn fp_pad(pin: String, x: f64, y: f64, shape: PadShape, drill: Option<f64>) -> FpPad {
-    FpPad { pin, pos: Point::new(x, y), shape, drill }
+    FpPad { pin, pos: Point::new(x, y), shape, drill, slot: 0.0, slot_v: false }
 }
 
 fn positive(name: &str, v: f64) -> Result<(), String> {
     if v.is_finite() && v > 0.0 { Ok(()) } else { Err(format!("{name} は正の値にしてください")) }
 }
 
+/// A slot needs a hole to be cut from and must be at least as long as it is wide.
+fn check_slot(what: &str, drill: Option<f64>, slot: f64) -> Result<(), String> {
+    if slot == 0.0 {
+        return Ok(());
+    }
+    match drill {
+        None => Err(format!("{what}: slot は穴のあるパッドにだけ付けられます (drill を指定してください)")),
+        Some(d) if slot < d => Err(format!("{what}: slot (長穴の長さ {slot}) は drill (穴の幅 {d}) 以上にしてください")),
+        Some(_) => Ok(()),
+    }
+}
+
 impl PackageSpec {
     pub fn build(&self, name: &str) -> Result<Footprint, String> {
+        let mut fp_holes: Vec<FpHole> = vec![];
         let pads = match self {
             PackageSpec::Chip2 { pitch, pad_len, pad_width } => {
                 positive("pitch", *pitch)?;
@@ -143,7 +179,7 @@ impl PackageSpec {
                     })
                     .collect()
             }
-            PackageSpec::Explicit { pads } => {
+            PackageSpec::Explicit { pads, holes } => {
                 if pads.is_empty() {
                     return Err("pads が空です".into());
                 }
@@ -156,12 +192,21 @@ impl PackageSpec {
                         "circle" => PadShape::Circle { d: p.w },
                         other => return Err(format!("未知のパッド形状: {other}")),
                     };
-                    v.push(fp_pad(p.pin.clone(), p.x, p.y, shape, p.drill));
+                    let mut pad = fp_pad(p.pin.clone(), p.x, p.y, shape, p.drill);
+                    check_slot(&p.pin, p.drill, p.slot)?;
+                    pad.slot = p.slot;
+                    pad.slot_v = p.slot_v;
+                    v.push(pad);
+                }
+                for h in holes {
+                    positive("holes の drill", h.drill)?;
+                    check_slot("holes", Some(h.drill), h.slot)?;
+                    fp_holes.push(FpHole { pos: Point::new(h.x, h.y), drill: h.drill, slot: h.slot, slot_v: h.slot_v });
                 }
                 v
             }
         };
-        Ok(Footprint { name: name.to_string(), pads })
+        Ok(Footprint { name: name.to_string(), pads, holes: fp_holes })
     }
 }
 

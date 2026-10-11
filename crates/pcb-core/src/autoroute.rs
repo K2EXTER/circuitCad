@@ -252,7 +252,8 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
         }
     }
     for h in &board.holes {
-        let geo = Geo::Cap { a: h.pos, b: h.pos, r: h.drill / 2.0 };
+        let (ha, hb) = h.ends();
+        let geo = Geo::Cap { a: ha, b: hb, r: h.drill / 2.0 };
         for l in 0..2 {
             grid.mark(l, &geo, -1, t_need, v_need);
         }

@@ -11,7 +11,7 @@ use sim_core::{diagnose, stability_margins, minus_3db, wave_measure,
 use std::collections::BTreeSet;
 use crate::source_form::SourceForm;
 use sch_core::{erc, extract, net_at, on_segment, to_spice, Component, CustomSymbol, Kind, Label, PinSide, Problem, Pt, Schematic, Severity, Wire};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tool {
@@ -116,6 +116,10 @@ pub struct SchEditor {
     lib_cat: String,
     /// Only parts that have a simulation model.
     lib_sim_only: bool,
+    /// Favorite and recently placed library parts (saved next to the library).
+    lib_prefs: library::LibPrefs,
+    /// The part list takes more height.
+    lib_tall: bool,
     place_lib: Option<usize>,
     form: Option<PartForm>,
     dc: Option<DcView>,
@@ -385,8 +389,11 @@ impl Default for SchEditor {
         let lib_dir = part_lib::default_dir();
         let _ = part_lib::install_examples(&lib_dir);
         let (library, lib_errors) = part_lib::load_dir(&lib_dir);
+        let lib_prefs = library::LibPrefs::load(&lib_dir);
         Self {
             library,
+            lib_prefs,
+            lib_tall: false,
             lib_errors,
             lib_dir,
             lib_filter: String::new(),

@@ -320,6 +320,7 @@ mod actions;
 mod canvas;
 mod interact;
 mod draw;
+pub(crate) use draw::capsule;
 mod order;
 mod ruler;
 pub mod lesson;

@@ -112,7 +112,12 @@ impl BoardEditor {
                 }
             }
             if let Some(d) = p.drill {
-                painter.circle_filled(c, d as f32 * z / 2.0, BG);
+                if p.slot > d + 1e-9 {
+                    let (a, b) = pcb_core::slot_ends(p.pos, d, p.slot, p.slot_v);
+                    capsule(painter, self.to_screen(rect, a), self.to_screen(rect, b), d as f32 * z / 2.0, BG, None);
+                } else {
+                    painter.circle_filled(c, d as f32 * z / 2.0, BG);
+                }
             }
         }
         // a small padlock at the corner of every fixed part
@@ -134,7 +139,8 @@ impl BoardEditor {
             painter.circle_filled(c, v.drill as f32 * z / 2.0, BG);
         }
         for h in &self.board.holes {
-            painter.circle_stroke(self.to_screen(rect, h.pos), h.drill as f32 * z / 2.0, Stroke::new(1.5, Color32::LIGHT_GRAY));
+            let (a, b) = h.ends();
+            capsule(painter, self.to_screen(rect, a), self.to_screen(rect, b), h.drill as f32 * z / 2.0, Color32::TRANSPARENT, Some(Stroke::new(1.5, Color32::LIGHT_GRAY)));
         }
         if self.vis.silk {
             let silk = Color32::from_rgb(235, 235, 235);
@@ -306,6 +312,38 @@ impl BoardEditor {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+/// A slot (or a round hole when `a == b`): a line `r` away on both sides with round ends.
+pub(crate) fn capsule(painter: &egui::Painter, a: Pos2, b: Pos2, r: f32, fill: Color32, stroke: Option<Stroke>) {
+    let d = b - a;
+    let len = d.length();
+    if len < 0.5 {
+        match stroke {
+            Some(s) => painter.circle_stroke(a, r, s),
+            None => painter.circle_filled(a, r, fill),
+        };
+        return;
+    }
+    // the ends are circles, the middle a quad; the outline of both together is the capsule
+    let mut pts = vec![];
+    let ang = d.y.atan2(d.x);
+    for k in 0..=12 {
+        let t = ang - std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * k as f32 / 12.0;
+        pts.push(b + Vec2::new(t.cos(), t.sin()) * r);
+    }
+    for k in 0..=12 {
+        let t = ang + std::f32::consts::FRAC_PI_2 + std::f32::consts::PI * k as f32 / 12.0;
+        pts.push(a + Vec2::new(t.cos(), t.sin()) * r);
+    }
+    match stroke {
+        Some(s) => {
+            painter.add(egui::Shape::closed_line(pts, s));
+        }
+        None => {
+            painter.add(egui::Shape::convex_polygon(pts, fill, Stroke::NONE));
         }
     }
 }
