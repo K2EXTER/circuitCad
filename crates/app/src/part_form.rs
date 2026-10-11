@@ -729,6 +729,7 @@ impl PartForm {
 
     /// Draws the form. Returns a finished definition when the user presses save.
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
+        ui.label(egui::RichText::new("① 基本情報").strong().size(15.0));
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
             ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
@@ -750,83 +751,13 @@ impl PartForm {
             ui.end_row();
         });
 
-        self.passive_ui(ui);
-        self.template_ui(ui);
-
-        ui.separator();
-        ui.label("ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
-        ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
-
-        ui.separator();
-        ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます)");
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
-            ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
-            ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
-            ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)").on_hover_text("足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)");
-        });
-        ui.horizontal(|ui| {
-            ui.label("標準のフットプリント");
-            let shown = if self.fp_preset.is_empty() { "(下の寸法を使う)".to_string() } else { self.fp_preset.clone() };
-            egui::ComboBox::from_id_salt("fp_preset").selected_text(shown).width(200.0).show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.fp_preset, String::new(), "(下の寸法を使う)");
-                for n in pcb_core::footprints::names() {
-                    ui.selectable_value(&mut self.fp_preset, n.clone(), n);
-                }
-            }).response.on_hover_text("0603 や 0805 のチップ部品、DIP・ピンヘッダなど、あらかじめ用意された形です。選ぶと、下の寸法の代わりにこの形を使います。ピン番号は、形ごとのピン名 (チップは 1 と 2、ダイオードは K と A、トランジスタは E B C など) に合わせます");
-        });
-        let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64| {
-            ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(pkg_tip(label));
-        };
-        ui.horizontal_wrapped(|ui| {
-            dv(ui, "ピッチ", &mut self.pitch);
-            match self.pkg {
-                PkgKind::Chip2 => {
-                    dv(ui, "パッド長", &mut self.len);
-                    dv(ui, "パッド幅", &mut self.width);
-                }
-                PkgKind::Dual => {
-                    dv(ui, "列間隔", &mut self.row);
-                    dv(ui, "パッド長", &mut self.len);
-                    dv(ui, "パッド幅", &mut self.width);
-                    ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
-                    if self.tht {
-                        dv(ui, "穴径", &mut self.drill);
-                    }
-                }
-                PkgKind::Quad => {
-                    dv(ui, "対向パッド間隔", &mut self.span);
-                    dv(ui, "パッド長", &mut self.len);
-                    dv(ui, "パッド幅", &mut self.width);
-                }
-                PkgKind::Row => {
-                    dv(ui, "パッド径", &mut self.pad_d);
-                    dv(ui, "穴径", &mut self.drill);
-                }
-            }
-        });
-        ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
-        egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
-            ui.small("USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
-            ui.small(EXTRAS_HELP);
-            ui.horizontal_wrapped(|ui| {
-                ui.label("例を足す:");
-                for (label, line, tip) in EXTRAS_EXAMPLES {
-                    if ui.small_button(*label).on_hover_text(format!("{tip}
-数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
-                        if !self.extras.is_empty() && !self.extras.ends_with('\n') {
-                            self.extras.push('\n');
-                        }
-                        self.extras.push_str(line);
-                    }
-                }
-            });
-            ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
-                .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
+        egui::CollapsingHeader::new(egui::RichText::new("かんたん作成 (テンプレート)").strong().size(15.0)).id_salt("part_templates").default_open(!self.glyph.is_empty()).show(ui, |ui| {
+            ui.small("チップ部品や充電ICは、データシートの数字を入れるだけで、下の欄を自動で埋められます");
+            self.passive_ui(ui);
+            self.template_ui(ui);
         });
 
-        ui.separator();
-        egui::CollapsingHeader::new("データシートの情報 (定格・最大定格)").id_salt("part_ratings").default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(egui::RichText::new("② データシートの情報 (定格・最大定格)").strong().size(15.0)).id_salt("part_ratings").default_open(true).show(ui, |ui| {
             ui.label("部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
             ui.horizontal(|ui| {
                 ui.label("部品の種類");
@@ -866,75 +797,150 @@ impl PartForm {
             }
         });
 
-        ui.separator();
-        ui.label("シミュレーションモデル (部品の特性)");
-        ui.small("メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
-            ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
-            ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)").on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
-        });
-        let mut autofill = false;
-        let pasted = ui.add(
-            egui::TextEdit::multiline(&mut self.sim_text)
-                .desired_rows(if self.sim == SimChoice::None { 3 } else { 5 })
-                .desired_width(f32::INFINITY)
-                .font(egui::TextStyle::Monospace)
-                .hint_text("ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
-        ).on_hover_text("貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます");
-        // a paste into an empty model box fills the form right away
-        if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
-            autofill = true;
-        }
-        ui.horizontal(|ui| {
-            if ui.button("貼ったモデルから自動入力").on_hover_text("上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です").clicked() {
+        egui::CollapsingHeader::new(egui::RichText::new("③ シミュレーションモデル (部品の特性)").strong().size(15.0)).id_salt("part_sim").default_open(true).show(ui, |ui| {
+            ui.label("シミュレーションモデル (部品の特性)");
+            ui.small("メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
+                ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
+                ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)").on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
+            });
+            let mut autofill = false;
+            let pasted = ui.add(
+                egui::TextEdit::multiline(&mut self.sim_text)
+                    .desired_rows(if self.sim == SimChoice::None { 3 } else { 5 })
+                    .desired_width(f32::INFINITY)
+                    .font(egui::TextStyle::Monospace)
+                    .hint_text("ここに SPICE モデルを貼る: .model D1 D(IS=1n)  /  .subckt NAME 1 2 3 ... .ends"),
+            ).on_hover_text("貼り付けると、モデルの種類・名前・端子からフォームを自動で埋めます。ピン表を自分で書いてあるときは、その名前 (A K / C B E など) に合わせて対応づけます");
+            // a paste into an empty model box fills the form right away
+            if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
                 autofill = true;
             }
-            if ui.button("SPICEファイルを読む…").on_hover_text("メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します").clicked()
-                && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
-            {
-                match std::fs::read_to_string(&p) {
-                    Ok(t) => {
-                        self.sim_text = t;
-                        autofill = true;
-                    }
-                    Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。文字コードが UTF-8 でないときは、テキストエディタで開いて貼り付けてください"))),
-                }
-            }
-        });
-        if autofill {
-            self.spice_message = Some(self.autofill_from_spice());
-        }
-        match &self.spice_message {
-            Some(Ok(m)) => {
-                ui.colored_label(Color32::from_rgb(60, 170, 90), m);
-            }
-            Some(Err(e)) => {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
-            }
-            None => {}
-        }
-        if self.sim != SimChoice::None {
             ui.horizontal(|ui| {
-                if self.sim == SimChoice::Model {
-                    ui.label("素子記号");
-                    ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S");
+                if ui.button("貼ったモデルから自動入力").on_hover_text("上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です").clicked() {
+                    autofill = true;
                 }
-                ui.label("モデル名");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします");
-                ui.label("ノード順のピン番号");
-                ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
+                if ui.button("SPICEファイルを読む…").on_hover_text("メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します").clicked()
+                    && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
+                {
+                    match std::fs::read_to_string(&p) {
+                        Ok(t) => {
+                            self.sim_text = t;
+                            autofill = true;
+                        }
+                        Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。文字コードが UTF-8 でないときは、テキストエディタで開いて貼り付けてください"))),
+                    }
+                }
             });
-            ui.label("このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
-            ui.add(
-                egui::TextEdit::multiline(&mut self.sim_limits)
-                    .desired_rows(3)
-                    .desired_width(f32::INFINITY)
-                    .hint_text("例: 温度による変化は扱いません。
-接合容量は扱いません。"),
-            );
-        }
+            if autofill {
+                self.spice_message = Some(self.autofill_from_spice());
+            }
+            match &self.spice_message {
+                Some(Ok(m)) => {
+                    ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                }
+                None => {}
+            }
+            if self.sim != SimChoice::None {
+                ui.horizontal(|ui| {
+                    if self.sim == SimChoice::Model {
+                        ui.label("素子記号");
+                        ui.add(egui::TextEdit::singleline(&mut self.sim_element).desired_width(30.0)).on_hover_text("素子の種類の記号。ダイオード D、バイポーラトランジスタ Q、MOSFET M、スイッチ S");
+                    }
+                    ui.label("モデル名");
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_name).desired_width(120.0)).on_hover_text("`.model` や `.subckt` に付けた名前。上の本文と同じ名前にします");
+                    ui.label("ノード順のピン番号");
+                    ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
+                });
+                ui.label("このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
+                ui.add(
+                    egui::TextEdit::multiline(&mut self.sim_limits)
+                        .desired_rows(3)
+                        .desired_width(f32::INFINITY)
+                        .hint_text("例: 温度による変化は扱いません。
+    接合容量は扱いません。"),
+                );
+            }
 
+        });
+
+        egui::CollapsingHeader::new(egui::RichText::new("④ ピン").strong().size(15.0)).id_salt("part_pins").default_open(true).show(ui, |ui| {
+            ui.label("ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
+            ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
+        });
+
+        egui::CollapsingHeader::new(egui::RichText::new("⑤ 基板の形 (パッケージ)").strong().size(15.0)).id_salt("part_pkg").default_open(true).show(ui, |ui| {
+            ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます)");
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
+                ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
+                ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
+                ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)").on_hover_text("足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)");
+            });
+            ui.horizontal(|ui| {
+                ui.label("標準のフットプリント");
+                let shown = if self.fp_preset.is_empty() { "(下の寸法を使う)".to_string() } else { self.fp_preset.clone() };
+                egui::ComboBox::from_id_salt("fp_preset").selected_text(shown).width(200.0).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.fp_preset, String::new(), "(下の寸法を使う)");
+                    for n in pcb_core::footprints::names() {
+                        ui.selectable_value(&mut self.fp_preset, n.clone(), n);
+                    }
+                }).response.on_hover_text("0603 や 0805 のチップ部品、DIP・ピンヘッダなど、あらかじめ用意された形です。選ぶと、下の寸法の代わりにこの形を使います。ピン番号は、形ごとのピン名 (チップは 1 と 2、ダイオードは K と A、トランジスタは E B C など) に合わせます");
+            });
+            let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64| {
+                ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(pkg_tip(label));
+            };
+            ui.horizontal_wrapped(|ui| {
+                dv(ui, "ピッチ", &mut self.pitch);
+                match self.pkg {
+                    PkgKind::Chip2 => {
+                        dv(ui, "パッド長", &mut self.len);
+                        dv(ui, "パッド幅", &mut self.width);
+                    }
+                    PkgKind::Dual => {
+                        dv(ui, "列間隔", &mut self.row);
+                        dv(ui, "パッド長", &mut self.len);
+                        dv(ui, "パッド幅", &mut self.width);
+                        ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
+                        if self.tht {
+                            dv(ui, "穴径", &mut self.drill);
+                        }
+                    }
+                    PkgKind::Quad => {
+                        dv(ui, "対向パッド間隔", &mut self.span);
+                        dv(ui, "パッド長", &mut self.len);
+                        dv(ui, "パッド幅", &mut self.width);
+                    }
+                    PkgKind::Row => {
+                        dv(ui, "パッド径", &mut self.pad_d);
+                        dv(ui, "穴径", &mut self.drill);
+                    }
+                }
+            });
+            ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
+            egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
+                ui.small("USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
+                ui.small(EXTRAS_HELP);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("例を足す:");
+                    for (label, line, tip) in EXTRAS_EXAMPLES {
+                        if ui.small_button(*label).on_hover_text(format!("{tip}
+    数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                            if !self.extras.is_empty() && !self.extras.ends_with('\n') {
+                                self.extras.push('\n');
+                            }
+                            self.extras.push_str(line);
+                        }
+                    }
+                });
+                ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
+                    .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
+            });
+        });
         ui.separator();
         let def = match self.to_def() {
             Ok(d) => d,
