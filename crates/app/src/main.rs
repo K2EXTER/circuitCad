@@ -391,6 +391,10 @@ fn apply_args(app: &mut App, args: &[String]) {
             && let (Some(stop), Some(step)) = (args.get(i + 1), args.get(i + 2)) {
                 app.sch.set_tran_settings(stop, step);
                 app.sch.analyze_tran();
+                if let Some(j) = args.iter().position(|a| a == "--power")
+                    && let Some(n) = args.get(j + 1..j + 5) {
+                        app.sch.set_power_signals([n[0].clone(), n[1].clone(), n[2].clone(), n[3].clone()]);
+                    }
                 if args.iter().any(|a| a == "--spectrum") {
                     app.sch.show_spectrum();
                 }

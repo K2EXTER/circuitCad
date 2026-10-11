@@ -14,6 +14,13 @@ impl SchEditor {
         self.run_tran();
     }
 
+    /// Picks the signals of the power box (command line `--power <in V> <in I> <out V> <out I>`).
+    pub fn set_power_signals(&mut self, names: [String; 4]) {
+        if let Some(v) = self.tran.as_mut() {
+            v.power = names;
+        }
+    }
+
     pub fn set_tran_settings(&mut self, tstop: &str, tstep: &str) {
         self.tran_tstop = tstop.into();
         self.tran_tstep = tstep.into();
@@ -39,8 +46,10 @@ impl SchEditor {
             Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         let ghost = self.tran.as_ref().and_then(|v| v.ghost.clone());
+        let power = self.tran.as_ref().map(|v| v.power.clone()).unwrap_or_default();
         self.tran = Some(TranView {
             ghost,
+            power,
             outcome,
             selected,
             plot: PlotState::new(tstop),
@@ -60,7 +69,7 @@ impl SchEditor {
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
-        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, .. } = view;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, power, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
             if ui.button("閉じる").clicked() {
@@ -172,6 +181,7 @@ impl SchEditor {
                                 ui.small("下の一覧で信号を選んでください");
                             }
                         });
+                        egui::CollapsingHeader::new("電力と効率").default_open(power.iter().any(|p| !p.is_empty())).show(ui, |ui| power_ui::power_ui(ui, res, &order, st.x, power));
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {
                                 let mut on = selected.contains(*name);

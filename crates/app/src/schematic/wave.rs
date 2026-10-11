@@ -67,6 +67,7 @@ impl SchEditor {
                             n.spec_t1 = o.spec_t1;
                             n.spec_plot = o.spec_plot;
                             n.ghost = o.ghost;
+                            n.power = o.power;
                         }
                     }
             }

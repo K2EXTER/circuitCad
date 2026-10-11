@@ -35,6 +35,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `ratings.rs` 定格チェック `check_ratings`(部品のJSONの `ratings`(最大電圧/電流/電力+データシートの行。`sch_core::PartRatings`、`CustomSymbol.ratings` に載って回路図と一緒に保存される)があればそれと比べ、無ければパッケージの目安。`stress`/`requirement`/`meets` は「この回路で必要な定格(余裕2倍)」と同種の候補部品の判定で、`schematic/panel.rs` の `advice_ui` が使う。古い回路は `with_library_ratings` でライブラリから補う。ライブラリの既存インストールには `part-lib` の `ratings_key` の移行が一度だけ届ける)。以下は元の説明:(DC結果から、抵抗・IC等の消費電力をフットプリントごとの目安(`package_power_limit`)と比較、LEDの電流・逆電圧、小形コンデンサの電圧。`RatingIssue{level,message,hint}`、DC解析パネルに⚠(赤=定格超え、橙=余裕が少ない)で表示。サンプルは定格超えにしない回帰テストあり)
 - `paramsweep.rs` パラメータスイープ(部品1つの値を振って過渡/ACを繰り返す、`param_sweep`) 
 - `spec.rs` スペック(合否の表): `Spec{kind,target,at,lo,hi}` を `evaluate`(`SpecInputs{dc,tran,ac}` の結果から値を読み、範囲と比べて `SpecEval{value,pass,note}`)。種類 `SpecKind`(DC電圧/電流、過渡の平均・リップル(後半)・最大・最小、AC の-3dB点・ある周波数のゲイン・位相余裕)。GUIは `schematic/spec_table.rs`(解析タブの「スペック」、`--spec <種類番号> <対象> <下限|-> <上限|-> [周波数]`)。いまは保存されない(セッション内)
+- `power.rs` 平均電力 `mean_power`(表示範囲での v*i の時間平均)と効率 `efficiency`。GUIは `schematic/power_ui.rs`(過渡の波形パネルの「電力と効率」、`--tran … --power <入力V> <入力I> <出力V> <出力I>`)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
 ## pcb-core (`crates/pcb-core/src`)

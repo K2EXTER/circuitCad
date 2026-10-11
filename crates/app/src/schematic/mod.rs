@@ -305,6 +305,8 @@ struct TranView {
     spec_plot: Option<PlotState>,
     spec_cache: Option<(String, Vec<(String, Spectrum)>)>,
     ghost: Option<Ghost>,
+    /// Signals picked in the power box: input V, input I, output V, output I.
+    power: [String; 4],
     /// The schematic this result was computed from.
     signature: String,
 }
@@ -529,6 +531,7 @@ mod interact;
 mod panel;
 mod fault;
 mod spec_table;
+mod power_ui;
 mod wizard;
 mod param;
 mod settings;
