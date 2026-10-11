@@ -33,7 +33,8 @@ impl SchEditor {
             Err(e) => format!("AC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), signature: self.signature() });
+        let ghost = self.ac.as_ref().and_then(|v| v.ghost.clone());
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature() });
         self.wave_mode = WaveMode::Ac;
     }
 
@@ -51,7 +52,7 @@ impl SchEditor {
                 open_help = true;
             }
         });
-        let AcView { outcome, selected, plot: st, .. } = view;
+        let AcView { outcome, selected, plot: st, ghost, .. } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
@@ -73,6 +74,20 @@ impl SchEditor {
                             }
                             if ui.button("回路図で選ぶ").on_hover_text("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
                                 start_probe = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("いまの特性を残す").on_hover_text("選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます").clicked() {
+                                let mut sigs = vec![];
+                                for sg in order.iter().filter(|n| selected.contains(**n)).filter_map(|n| res.signal(n)) {
+                                    let name = format!("{} (前)", sg.name);
+                                    sigs.push(GhostSig { base: sg.name.clone(), name: name.clone(), group: 0, v: sg.db() });
+                                    sigs.push(GhostSig { base: sg.name.clone(), name, group: 1, v: sg.phase_deg() });
+                                }
+                                *ghost = Some(Ghost { x: res.freq.clone(), sigs });
+                            }
+                            if ghost.is_some() && ui.button("消す").on_hover_text("残してある「前」の特性を消します").clicked() {
+                                *ghost = None;
                             }
                         });
                         for name in order.iter().filter(|n| selected.contains(**n)).take(4) {
@@ -145,8 +160,16 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "左の一覧から信号を選んでください", FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db }).collect();
-                    let phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: ph }).collect();
+                    let mut mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db }).collect();
+                    let mut phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: ph }).collect();
+                    // kept "before" curves go first, so they are painted behind the live ones
+                    if let Some(gh) = ghost.as_ref() {
+                        for gs in gh.sigs.iter().rev() {
+                            let Some(k) = chosen.iter().position(|(n, _, _)| *n == gs.base) else { continue };
+                            let tr = Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v };
+                            if gs.group == 0 { mag.insert(0, tr) } else { phase.insert(0, tr) }
+                        }
+                    }
                     let h = rect.height() / 2.0;
                     let top = Rect::from_min_size(rect.min, Vec2::new(rect.width(), h - 2.0));
                     let bottom = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h), Vec2::new(rect.width(), h - 2.0));

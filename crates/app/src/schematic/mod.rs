@@ -184,6 +184,8 @@ pub struct SchEditor {
     fault_domain: fault::FaultDomain,
     fault_node: String,
     fault_wave: Option<fault::FaultWaveView>,
+    /// Targets for the design (pass / fail table); kept for the session.
+    specs: Vec<spec_table::SpecRow>,
     fault_kind: usize,
     fault_view: Option<fault::FaultView>,
     fault_scan: Vec<fault::ScanRow>,
@@ -263,11 +265,30 @@ struct NoiseView {
     plot: PlotState,
 }
 
+/// A kept copy of earlier waveforms, drawn dimmed behind the new ones so a change can be compared with "before".
+#[derive(Clone)]
+struct Ghost {
+    x: Vec<f64>,
+    sigs: Vec<GhostSig>,
+}
+
+#[derive(Clone)]
+struct GhostSig {
+    /// Signal name in the result (matches the live trace it is drawn behind).
+    base: String,
+    /// Name shown in the readout.
+    name: String,
+    /// Plot group (0 = voltage / magnitude, 1 = current / phase).
+    group: usize,
+    v: Vec<f64>,
+}
+
 /// A finished AC sweep (Bode plot).
 struct AcView {
     outcome: Result<AcResult, Vec<String>>,
     selected: BTreeSet<String>,
     plot: PlotState,
+    ghost: Option<Ghost>,
     /// The schematic this result was computed from.
     signature: String,
 }
@@ -283,6 +304,7 @@ struct TranView {
     spec_t1: String,
     spec_plot: Option<PlotState>,
     spec_cache: Option<(String, Vec<(String, Spectrum)>)>,
+    ghost: Option<Ghost>,
     /// The schematic this result was computed from.
     signature: String,
 }
@@ -421,6 +443,7 @@ impl Default for SchEditor {
             fault_domain: fault::FaultDomain::Dc,
             fault_node: String::new(),
             fault_wave: None,
+            specs: vec![],
             fault_kind: 0,
             fault_view: None,
             fault_scan: vec![],
@@ -505,6 +528,7 @@ mod draw;
 mod interact;
 mod panel;
 mod fault;
+mod spec_table;
 mod wizard;
 mod param;
 mod settings;

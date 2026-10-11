@@ -38,7 +38,9 @@ impl SchEditor {
             Ok(r) => format!("過渡解析: 完了 ({} 点, 再試行 {} 回)", r.time.len(), r.retries),
             Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
+        let ghost = self.tran.as_ref().and_then(|v| v.ghost.clone());
         self.tran = Some(TranView {
+            ghost,
             outcome,
             selected,
             plot: PlotState::new(tstop),
@@ -58,7 +60,7 @@ impl SchEditor {
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
-        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, .. } = view;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
             if ui.button("閉じる").clicked() {
@@ -110,6 +112,20 @@ impl SchEditor {
                             }
                             if ui.button("回路図で選ぶ").on_hover_text("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)").clicked() {
                                 start_probe = true;
+                            }
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.button("いまの波形を残す").on_hover_text("選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます").clicked() {
+                                let sigs = order
+                                    .iter()
+                                    .filter(|n| selected.contains(**n))
+                                    .filter_map(|n| res.signal(n))
+                                    .map(|sg| GhostSig { base: sg.name.clone(), name: format!("{} (前)", sg.name), group: if sg.unit == "V" { 0 } else { 1 }, v: sg.values.clone() })
+                                    .collect();
+                                *ghost = Some(Ghost { x: res.time.clone(), sigs });
+                            }
+                            if ghost.is_some() && ui.button("消す").on_hover_text("残してある「前」の波形を消します").clicked() {
+                                *ghost = None;
                             }
                         });
                         // mean and AC RMS (= noise / ripple amplitude) over the visible window
@@ -222,6 +238,15 @@ impl SchEditor {
                             let g = if sg.unit == "V" { 0 } else { 1 };
                             groups[g].push(Trace { name: &sg.name, color: PALETTE[k % PALETTE.len()], t: &res.time, v: &sg.values });
                             k += 1;
+                        }
+                    }
+                    // kept "before" waveforms go first, so they are painted behind the live ones
+                    if let Some(gh) = ghost.as_ref() {
+                        for gs in gh.sigs.iter().rev() {
+                            let Some(k) = order.iter().filter(|n| selected.contains(**n)).position(|n| *n == gs.base) else { continue };
+                            if !groups[gs.group].is_empty() {
+                                groups[gs.group].insert(0, Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v });
+                            }
                         }
                     }
                     let used: Vec<usize> = (0..2).filter(|g| !groups[*g].is_empty()).collect();

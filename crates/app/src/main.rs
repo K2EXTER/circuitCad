@@ -366,6 +366,12 @@ fn apply_args(app: &mut App, args: &[String]) {
                 None => {}
             }
         }
+        for (i, _) in args.iter().enumerate().filter(|(_, a)| *a == "--spec") {
+            // --spec <kind index 0..8> <target> <lo|-> <hi|-> [frequency]  (repeatable; put it after --dc / --tran / --ac)
+            if let (Some(k), Some(t), Some(lo), Some(hi)) = (args.get(i + 1).and_then(|k| k.parse().ok()), args.get(i + 2), args.get(i + 3), args.get(i + 4)) {
+                app.sch.add_spec(k, t, lo, hi, args.get(i + 5).filter(|a| !a.starts_with("--")).map_or("", |a| a.as_str()));
+            }
+        }
         if let Some(i) = args.iter().position(|a| a == "--param") {
             // --param <part> <from> <to> <count> <node> [tran]  (AC unless "tran"; uses the --ac / --tran settings)
             if let (Some(part), Some(a), Some(b), Some(n), Some(node)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3), args.get(i + 4), args.get(i + 5)) {

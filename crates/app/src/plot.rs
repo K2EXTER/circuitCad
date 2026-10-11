@@ -119,6 +119,11 @@ pub const PALETTE: [Color32; 8] = [
     Color32::from_rgb(225, 225, 225),
 ];
 
+/// The dimmed colour of a kept ("before") trace drawn behind the live one of the same colour.
+pub fn ghost_color(c: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), 100)
+}
+
 /// Engineering-notation label for an axis value, with decimals chosen from the tick step.
 pub fn axis_label(v: f64, step: f64) -> String {
     if v == 0.0 {
@@ -564,6 +569,13 @@ mod tests {
         assert!(text.iter().any(|l| l.contains("A=0") && l.contains("B=3") && l.contains("Δ=3")), "{text:?}");
         let f = cursor_report(&tr, &[Some(100.0), Some(200.0)], &Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true }, true);
         assert!(f.iter().any(|(_, l)| l.contains("2.000 倍") && l.contains("1.00 オクターブ")));
+    }
+
+    #[test]
+    fn ghost_colour_keeps_the_hue_but_is_see_through() {
+        let g = ghost_color(Color32::from_rgb(240, 200, 60));
+        assert!(g.a() < 255 && g.a() > 0);
+        assert!(g.r() > g.b(), "{g:?}");
     }
 
     #[test]

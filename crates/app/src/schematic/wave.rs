@@ -66,6 +66,7 @@ impl SchEditor {
                             n.spec_t0 = o.spec_t0;
                             n.spec_t1 = o.spec_t1;
                             n.spec_plot = o.spec_plot;
+                            n.ghost = o.ghost;
                         }
                     }
             }
@@ -80,6 +81,7 @@ impl SchEditor {
                         } else {
                             n.selected = o.selected;
                             n.plot = o.plot;
+                            n.ghost = o.ghost;
                         }
                     }
             }
