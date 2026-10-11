@@ -417,6 +417,9 @@ fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--drc") {
             app.board_ed.run_drc();
         }
+        if args.iter().any(|a| a == "--autoplace") {
+            app.board_ed.autoplace();
+        }
         if let Some(i) = args.iter().position(|a| a == "--round")
             && let Some(r) = args.get(i + 1).and_then(|r| r.parse::<f64>().ok()) {
                 app.board_ed.round_outline(r);

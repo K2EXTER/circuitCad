@@ -9,6 +9,12 @@ const GAP: f64 = 1.6;
 const LABEL: f64 = 2.4;
 /// Space between the parts and the board edge (mm).
 const MARGIN: f64 = 3.0;
+/// Part origins land on this grid (mm), the editor's default snap, so hand-moved parts line up with placed ones.
+const SNAP: f64 = 0.5;
+
+fn snap(v: f64) -> f64 {
+    (v / SNAP).round() * SNAP
+}
 
 #[derive(Debug, Default)]
 pub struct PlaceReport {
@@ -107,7 +113,7 @@ fn place(board: &mut Board, turn: bool) -> Result<PlaceReport, String> {
         let (refdes, lo, ..) = &items[*i];
         let rot = board.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
         // the pad box starts GAP/2 inside its cell
-        board.place_part(refdes, Point::new(MARGIN + GAP / 2.0 + sx - lo.x, MARGIN + GAP / 2.0 + LABEL + sy - lo.y), rot);
+        board.place_part(refdes, Point::new(snap(MARGIN + GAP / 2.0 + sx - lo.x), snap(MARGIN + GAP / 2.0 + LABEL + sy - lo.y)), rot);
     }
     if turn {
         turn_to_shorten(board);
@@ -132,7 +138,7 @@ fn turn_to_shorten(board: &mut Board) {
             let Some(c0) = center(board, &part.refdes) else { continue };
             board.place_part(&part.refdes, part.pos, part.rot + 2);
             if let Some(c1) = center(board, &part.refdes) {
-                board.place_part(&part.refdes, Point::new(part.pos.x + c0.x - c1.x, part.pos.y + c0.y - c1.y), part.rot + 2);
+                board.place_part(&part.refdes, Point::new(snap(part.pos.x + c0.x - c1.x), snap(part.pos.y + c0.y - c1.y)), part.rot + 2);
             }
             if airwire_length(board) < before - 1e-6 {
                 better = true;
