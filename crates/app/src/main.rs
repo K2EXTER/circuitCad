@@ -1012,6 +1012,27 @@ mod tests {
         std::fs::write(root.join("buck_converter.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Generates docs/examples/buck_cout_electrolytic.schjson and buck_cout_ceramic.schjson: the buck sample with
+    /// its output capacitor swapped for a library part (the rest is identical, so the two can be compared):
+    /// `cargo test -p app write_buck_cout_examples -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_buck_cout_examples() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let base: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join("buck_converter.schjson")).unwrap()).unwrap();
+        let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+        for (file, part) in [("buck_cout_electrolytic.schjson", "CE_100u_16V"), ("buck_cout_ceramic.schjson", "C_10u_0805")] {
+            let def = find(part);
+            let mut s = base.clone();
+            let c = s.components.iter_mut().find(|c| c.refdes == "C1").unwrap();
+            c.kind = Kind::Custom;
+            c.custom = Some(def.symbol());
+            c.value = def.default_value();
+            c.footprint = def.footprint_name();
+            std::fs::write(root.join(file), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+        }
+    }
+
     /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
     /// `cargo test -p app write_coin_cell_example -- --ignored`
     #[test]

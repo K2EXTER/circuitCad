@@ -387,6 +387,25 @@ fn buck_sample_regulates_5v_switches_at_150khz_and_the_lesson_numbers_hold() {
     assert!((4.6..5.3).contains(&v3) && (0.82..0.93).contains(&eff3) && eff3 < eff, "{v3} {eff3}");
 }
 
+/// Runs a buck sample variant for 5 ms and measures the last 0.6 ms: (mean Vout, Vout p-p).
+fn cout_run(file: &str) -> (f64, f64) {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == file).unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let t = transient(&c, &TranSettings { tstop: 5e-3, tstep: 100e-9, uic: false }).unwrap();
+    let v = t.signal("V(VOUT)").unwrap();
+    let vo = wave_measure(&t.time, &v.values, 4.4e-3, 5e-3).unwrap();
+    (signal_stats(&t.time, &v.values, 4.4e-3, 5e-3).unwrap().mean, vo.pp)
+}
+
+#[test]
+fn buck_output_cap_swap_samples_differ_in_ripple() {
+    let (ve, ppe) = cout_run("buck_cout_electrolytic.schjson");
+    let (vc, ppc) = cout_run("buck_cout_ceramic.schjson");
+    // both regulate the same; the electrolytic's 0.3 ohm ESR (x the ~0.3 A coil ripple) dominates its ripple even though it has 10x the capacitance
+    assert!((4.5..5.3).contains(&ve) && (4.5..5.3).contains(&vc), "{ve} {vc}");
+    assert!(ppe > 2.0 * ppc && ppe < 0.15, "electrolytic {ppe} V vs ceramic {ppc} V");
+}
+
 /// A learner reads every warning: the bundled samples should not raise warnings that come from inside a model.
 #[test]
 fn shipped_examples_have_no_warnings_about_nodes_inside_models() {
