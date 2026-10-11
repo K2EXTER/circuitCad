@@ -297,6 +297,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("CR2032", include_str!("../examples/CR2032.part.json")),
     ("AA_ALKALINE", include_str!("../examples/AA_ALKALINE.part.json")),
     ("LIION_18650", include_str!("../examples/LIION_18650.part.json")),
+    ("LIION_18650_CHG", include_str!("../examples/LIION_18650_CHG.part.json")),
     ("TRANS_100V-12V_5VA", include_str!("../examples/TRANS_100V-12V_5VA.part.json")),
     ("TRANS_100V-9V_3VA", include_str!("../examples/TRANS_100V-9V_3VA.part.json")),
     ("TRANS_230V-12V_5VA", include_str!("../examples/TRANS_230V-12V_5VA.part.json")),

@@ -425,6 +425,27 @@ fn cap_impedance_sample_electrolytic_wins_low_ceramic_wins_high() {
     }
 }
 
+#[test]
+fn cell_charge_sample_runs_cc_then_cv_and_stops_at_full() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "li_ion_cell_charge.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let t = transient(&c, &TranSettings { tstop: 4.0 * 3600.0, tstep: 20.0, uic: false }).unwrap();
+    let sig = |n: &str| t.signal(n).unwrap().values.clone();
+    let (bat, chrg, stdby) = (sig("V(BAT)"), sig("V(CHRG)"), sig("V(STDBY)"));
+    let at = |v: &[f64], h: f64| v[t.time.iter().position(|x| *x >= h * 3600.0 - 1e-9).unwrap_or(t.time.len() - 1)];
+    // starts at 20 %: about 3.6 V open circuit plus 1 A through 0.06 ohm
+    assert!((3.55..3.80).contains(&at(&bat, 0.0)), "start {}", at(&bat, 0.0));
+    // constant current (1 A): the terminal voltage climbs steadily, status LED CHRG lit (low), STDBY off (high)
+    assert!(at(&bat, 0.5) < at(&bat, 1.0) && at(&bat, 1.0) < at(&bat, 2.0));
+    assert!(at(&chrg, 1.0) < 1.0 && at(&stdby, 1.0) > 2.0);
+    // constant voltage: it sits at 4.2 V once full, and the charger reports done (CHRG off, STDBY lit)
+    assert!((4.15..4.22).contains(&at(&bat, 4.0)) && at(&bat, 4.0) <= 4.2 + 1e-3, "end {}", at(&bat, 4.0));
+    assert!(at(&chrg, 4.0) > 2.0 && at(&stdby, 4.0) < 1.0);
+    // 80 % of 2600 mAh at 1 A: the end comes between 2 and 3.2 hours
+    let done = t.time.iter().zip(&stdby).find(|(h, v)| **h > 3600.0 && **v < 1.0).map(|(h, _)| h / 3600.0).unwrap();
+    assert!((2.0..3.2).contains(&done), "done after {done} h");
+}
+
 /// A learner reads every warning: the bundled samples should not raise warnings that come from inside a model.
 #[test]
 fn shipped_examples_have_no_warnings_about_nodes_inside_models() {

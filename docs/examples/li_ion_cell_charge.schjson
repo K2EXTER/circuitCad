@@ -1,0 +1,357 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "TP4056",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "ESOP-8_EP",
+      "custom": {
+        "name": "TP4056",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "8",
+            "name": "CE",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "PROG",
+            "side": "left"
+          },
+          {
+            "number": "1",
+            "name": "TEMP",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "VCC",
+            "side": "top"
+          },
+          {
+            "number": "5",
+            "name": "BAT",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "CHRG",
+            "side": "right"
+          },
+          {
+            "number": "6",
+            "name": "STDBY",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TP4056",
+          "text": ".subckt TP4056 temp prog gnd vcc bat stdby chrg ce\n* TP4056 behavioural model\n* Linear Li-ion charger as a behavioural model: pre-charge, constant current, constant voltage.\n* Control signals are scaled so that 1 V = 1 A. Amplifiers and \"the smaller one wins\" selectors are\n* made of controlled sources and switches, as in the NE555 model.\nVref1 r1 gnd DC 1.0\nVref0 r0 gnd DC 0.1\nV29 v29 gnd DC 2.9\nV37 v37 gnd DC 3.7\nV40 v40 gnd DC 4.0\nV15 v15 gnd DC 1.5\nV01 v01 gnd DC 0.1\nVreg vreg gnd DC 4.2\n* PROG reference: 1 V for constant current, 0.1 V while the cell is deeply discharged\nRrf rf gnd 1k\nSr1 r1 rf bat v29 SWC\nSr0 r0 rf v29 bat SWC\n* error amplifiers: current loop (PROG held at the reference) and voltage loop (cell voltage)\nEa ea gnd rf prog 1000\nEb eb gnd vreg bat 20\n* the smaller one wins\nRm m gnd 1k\nSma ea m eb ea SWC\nSmb eb m ea eb SWC\n* only positive, only when VCC is high enough, above the cell and enabled\nSx m n1 m gnd SWC\nSg1 n1 n2 vcc bo SWC\nSg2 n2 n3 vcc v37 SWC\nSg3 n3 u ce v15 SWC\nRl u gnd 1k\nRn1 n1 gnd 1Meg\nRn2 n2 gnd 1Meg\nRn3 n3 gnd 1Meg\nVbo bo bat DC 0.3\n* pass element: the charge current, and its image (1200x smaller) out of PROG\nGb vcc bat u gnd 1\nGp gnd prog u gnd 0.000833333333\n* status (open drain): low while charging (PROG above 0.1 V or the cell not yet full)\nSc1 chrg c1 prog v01 SWO\nSc2 c1 gnd vcc v37 SWO\nSc3 chrg c2 v40 bat SWO\nSc4 c2 gnd vcc v37 SWO\nSs1 stdby s1 bat v40 SWO\nSs2 s1 s2 v01 prog SWO\nSs3 s2 gnd vcc v37 SWO\nRc1 c1 gnd 100Meg\nRc2 c2 gnd 100Meg\nRs1 s1 gnd 100Meg\nRs2 s2 gnd 100Meg\nRiq vcc gnd 20k\nRt temp gnd 100Meg\n.model SWC SW(RON=1 ROFF=1G VT=0 VW=0.005)\n.model SWO SW(RON=60 ROFF=1G VT=0 VW=0.005)\n.ends TP4056",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ],
+          "params": {
+            "iprog_ratio": 1200.0,
+            "vreg": 4.2
+          }
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1.2k",
+      "pos": [
+        30,
+        22
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        70,
+        14
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        84,
+        14
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        70,
+        26
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        84,
+        26
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "BT1",
+      "kind": "Custom",
+      "value": "LIION_18650_CHG",
+      "pos": [
+        62,
+        0
+      ],
+      "rot": 0,
+      "footprint": "BatteryHolder_18650",
+      "custom": {
+        "name": "LIION_18650_CHG",
+        "prefix": "BT",
+        "pins": [
+          {
+            "number": "1",
+            "name": "+",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "-",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LIION_18650_CHG",
+          "text": ".subckt LIION_18650_CHG p n\nRs p pi 0.06\nBv pi n V=3.0+1.2*(0.5*limit(V(soc),0,1)+0.500*(1-exp(-8*limit(V(soc),0,1))))\nBi soc 0 I=if(V(soc)>0,if(V(soc)>=1,max(-I(Bv),0),-I(Bv)),if(-I(Bv)<0,-I(Bv),0))\nCsoc soc 0 9360\nBpull soc 0 I=if(time<1u,1000*(V(soc)-0.2),0)\n.ends LIION_18650_CHG",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {
+            "capacity_mah": 2600.0,
+            "rint": 0.06
+          },
+          "limits": [
+            "残量 20% (空に近い) から始まる電池モデルです。容量 2600mAh、内部抵抗 0.06Ω、開放電圧は残量でなめらかに変わり、空に近づくと急に下がります。",
+            "充電: 電池に流れ込む電流のぶんだけ残量が増えます。満充電 (残量 100%) では、それ以上電流を受けつけません。端子電圧は「開放電圧 + 電流 × 内部抵抗」なので、定電流で充電している間は開放電圧より高く見え、定電圧に切り替わると電流が細って、開放電圧が 4.2V に近づきます。",
+            "電池の中身は、残量を蓄える巨大なコンデンサと、残量で決まる電圧のBソース、内部抵抗の組み合わせです。長い時間 (数時間) を過渡解析で見るときは、時間刻みを大きくしてください。",
+            "扱わないもの: 温度による容量と内部抵抗の変化、充電の効率 (ロス) と大電流での容量低下、劣化、自己放電、保護回路。数値は一般的な品の概算で、メーカー・品番で大きく違います。"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        26,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        26,
+        0
+      ],
+      "text": "PROG"
+    },
+    {
+      "pos": [
+        30,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        34,
+        -2
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        34,
+        2
+      ],
+      "text": "STDBY"
+    },
+    {
+      "pos": [
+        34,
+        0
+      ],
+      "text": "CHRG"
+    },
+    {
+      "pos": [
+        26,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        28,
+        22
+      ],
+      "text": "PROG"
+    },
+    {
+      "pos": [
+        32,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        68,
+        14
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        72,
+        14
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        82,
+        14
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        86,
+        14
+      ],
+      "text": "CHRG"
+    },
+    {
+      "pos": [
+        68,
+        26
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        72,
+        26
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        82,
+        26
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        86,
+        26
+      ],
+      "text": "STDBY"
+    },
+    {
+      "pos": [
+        66,
+        0
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        58,
+        0
+      ],
+      "text": "GND"
+    }
+  ]
+}

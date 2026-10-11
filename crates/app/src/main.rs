@@ -728,6 +728,28 @@ mod tests {
         std::fs::write(root.join("li_ion_charger.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Writes docs/examples/li_ion_cell_charge.schjson: the TP4056 charger sample with the 470 uF stand-in replaced
+    /// by the 18650 cell model (starts at 20 %): `cargo test -p app write_cell_charge_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_cell_charge_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join("li_ion_charger.schjson")).unwrap()).unwrap();
+        let cell = s.components.iter().position(|c| c.kind == Kind::Capacitor && c.value.starts_with("470u")).unwrap();
+        let pins: Vec<_> = s.components[cell].pins().into_iter().map(|p| p.1).collect();
+        s.labels.retain(|l| !pins.contains(&l.pos));
+        s.components.remove(cell);
+        let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LIION_18650_CHG").unwrap();
+        let bt = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (62, 0), 0);
+        for (pin, net) in [("1", "BAT"), ("2", "GND")] {
+            let at = s.components[bt].pins().into_iter().find(|p| p.0 == pin).unwrap().1;
+            s.labels.push(sch_core::Label { pos: at, text: net.into() });
+        }
+        // the PROG resistor sets 1 A (1200 / 1.2k); 6k would be 0.2 A
+        s.components.iter_mut().find(|c| c.value == "6k").unwrap().value = "1.2k".into();
+        std::fs::write(root.join("li_ion_cell_charge.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Writes docs/examples/tp5100_charger.schjson: `cargo test -p app write_tp5100_example -- --ignored`
     #[test]
     #[ignore]
