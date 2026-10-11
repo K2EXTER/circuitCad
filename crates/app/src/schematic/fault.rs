@@ -1,7 +1,7 @@
 //! Fault simulation panel: break one part and see what changes at DC.
 
 use super::*;
-use sim_core::{break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
+use sim_core::{assess_safety, chain_failure, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
 
 /// The last fault run.
 pub(super) struct FaultView {
@@ -37,11 +37,12 @@ pub(super) struct ScanRow {
     label: String,
     /// Largest voltage change at any node (V); `f64::INFINITY` when the broken circuit cannot be solved.
     pub(super) severity: f64,
-    hot: bool,
+    /// Whether a part ends up past its rating (see `sim_core::assess_safety`).
+    pub(super) danger: Danger,
 }
 
 /// Every way to break a whole part; the panel offers the ones that fit the part.
-const ALL_FAULTS: [Fault; 7] = [Fault::Open, Fault::Short, Fault::Scale(10.0), Fault::Scale(0.1), Fault::Reverse, Fault::Scale(0.5), Fault::Scale(1.5)];
+const ALL_FAULTS: [Fault; 10] = [Fault::Open, Fault::Short, Fault::Scale(10.0), Fault::Scale(0.1), Fault::Reverse, Fault::Scale(0.5), Fault::Scale(1.5), Fault::TurnShort(0.1), Fault::TurnShort(0.2), Fault::TurnShort(0.5)];
 
 impl SchEditor {
     pub fn set_fault(&mut self, part: &str, kind: usize) {
@@ -51,6 +52,10 @@ impl SchEditor {
 
     pub fn analyze_fault(&mut self) {
         self.run_fault();
+    }
+
+    pub fn analyze_fault_chain(&mut self) {
+        self.run_fault_chain();
     }
 
     pub fn analyze_fault_scan(&mut self) {
@@ -261,25 +266,50 @@ impl SchEditor {
         self.fault_view = Some(FaultView { report });
     }
 
+    /// Breaks the chosen part, then lets every part that goes past its rating fail in turn (transient run).
+    pub(super) fn run_fault_chain(&mut self) {
+        let report = (|| {
+            if !self.fault_pin.is_empty() {
+                return Err(vec!["連鎖故障は、部品全体の故障で調べます。「壊し方」を「部品全体」にしてください".to_string()]);
+            }
+            let part = self.fault_part.trim();
+            if part.is_empty() {
+                return Err(vec!["壊す部品を選んでください".to_string()]);
+            }
+            let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
+            let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+                return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
+            };
+            let c = self.sim_circuit()?;
+            chain_failure(&self.sch, &c, part, fault, &TranSettings { tstop, tstep, uic: self.tran_uic }).map_err(|e| vec![e.to_string()])
+        })();
+        self.status = match &report {
+            Ok(r) => format!("連鎖故障: {} 個の部品が壊れました", r.steps.len()),
+            Err(e) => format!("連鎖故障の解析に失敗: {}", e.first().cloned().unwrap_or_default()),
+        };
+        self.fault_chain = Some(report);
+    }
+
     pub(super) fn run_fault_scan(&mut self) {
         let Ok(c) = self.sim_circuit() else {
             self.status = "回路を計算できないため、故障を試せません。先に DC動作点を解析してエラーを直してください".into();
             return;
         };
+        let sch = self.sch.clone();
         let rate = |r: &FaultReport| {
             let severity = match &r.faulted {
                 Err(_) => f64::INFINITY,
                 Ok(_) => r.node_changes.iter().map(|(_, a, b)| (b - a).abs()).fold(0.0, f64::max),
             };
-            (severity, r.part_changes.iter().any(|p| p.power.1 > 0.25 && p.power.1 > 2.0 * p.power.0.max(0.0)))
+            (severity, assess_safety(&sch, r).level)
         };
         let mut rows = vec![];
         for part in breakable(&c) {
             for fault in ALL_FAULTS {
                 let Some(b) = break_part(&c, &part, fault) else { continue };
                 let Ok(r) = simulate_broken(&c, &b) else { continue };
-                let (severity, hot) = rate(&r);
-                rows.push(ScanRow { part: part.clone(), pin: String::new(), fault_kind: ALL_FAULTS.iter().position(|f| *f == fault).unwrap_or(0), label: b.label, severity, hot });
+                let (severity, danger) = rate(&r);
+                rows.push(ScanRow { part: part.clone(), pin: String::new(), fault_kind: ALL_FAULTS.iter().position(|f| *f == fault).unwrap_or(0), label: b.label, severity, danger });
             }
         }
         // ICs and transistors: every pin disconnected in turn (the usual solder / contact failure)
@@ -292,11 +322,11 @@ impl SchEditor {
                 let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how };
                 let Ok((healthy, b)) = break_pin(&self.sch, temp, &spec, &label) else { continue };
                 let Ok(r) = simulate_broken(&healthy, &b) else { continue };
-                let (severity, hot) = rate(&r);
-                rows.push(ScanRow { part: part.clone(), pin, fault_kind: 0, label, severity, hot });
+                let (severity, danger) = rate(&r);
+                rows.push(ScanRow { part: part.clone(), pin, fault_kind: 0, label, severity, danger });
             }
         }
-        rows.sort_by(|a, b| b.severity.total_cmp(&a.severity));
+        rows.sort_by(|a, b| b.danger.cmp(&a.danger).then(b.severity.total_cmp(&a.severity)));
         self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
         self.fault_scan = rows;
     }
@@ -369,6 +399,7 @@ impl SchEditor {
                     let tip = match f {
                         Fault::Open => "足が外れた・はんだ不良・パターン切れ。その部品が回路から消えた状態にします (電源は 0V になります)",
                         Fault::Short => "足同士がつながった (はんだブリッジ・部品の破壊)。ごく小さな抵抗でつなぎます",
+                        Fault::TurnShort(_) => "コイルの巻線の層と層の絶縁がやぶれて、巻線の一部がショートした状態 (レアショート)。インダクタンスが下がって電流が増え、ショートした部分には大きな電流が回って発熱します。「連鎖故障を追う」で、そのあと何が壊れていくかを見られます",
                         Fault::Reverse => "向きを逆につけた (ダイオード/LED のアノードとカソード、トランジスタのコレクタとエミッタ)。部品の向き間違いは、初心者の失敗でいちばん多いものの一つです",
                         Fault::Scale(x) if *x > 1.0 => "値の読み間違い・部品の取り違え・電源電圧の上昇。値を大きくします",
                         _ => "値の読み間違い・部品の取り違え・容量抜け・電源電圧の低下。値を小さくします",
@@ -437,10 +468,34 @@ impl SchEditor {
             if ui.button("故障を試す").on_hover_text("選んだ部品やピンを壊して解析し、変わった電圧と電流を日本語で説明します。回路そのものは変わりません").clicked() {
                 self.run_fault();
             }
-            if ui.button("全部品を順に壊す").on_hover_text("すべての部品を、断線・ショート・逆向き・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、影響の大きい順に並べます (DCで比べます)。クリックで詳しく見られます").clicked() {
+            if ui.button("連鎖故障を追う").on_hover_text("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)").clicked() {
+                self.run_fault_chain();
+            }
+            if ui.button("全部品を順に壊す").on_hover_text("すべての部品を、断線・ショート・逆向き・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。クリックで詳しく見られます").clicked() {
                 self.run_fault_scan();
             }
         });
+        match &self.fault_chain {
+            Some(Err(msgs)) => {
+                for m in msgs {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+            }
+            Some(Ok(r)) => {
+                ui.separator();
+                for (k, l) in r.summary().iter().enumerate() {
+                    if k == 0 {
+                        ui.strong(l);
+                    } else {
+                        ui.label(l);
+                    }
+                }
+                if ui.small_button("閉じる").on_hover_text("連鎖故障の説明を消します").clicked() {
+                    self.fault_chain = None;
+                }
+            }
+            None => {}
+        }
         let mut show_sheet = false;
         let mut restore = false;
         if let Some(view) = &self.fault_view {
@@ -458,6 +513,17 @@ impl SchEditor {
                         } else {
                             ui.label(l);
                         }
+                    }
+                    let safety = assess_safety(&self.sch, r);
+                    let col = match safety.level {
+                        Danger::Danger => Color32::from_rgb(230, 70, 60),
+                        Danger::Caution => Color32::from_rgb(230, 170, 50),
+                        Danger::Safe => Color32::from_rgb(90, 180, 110),
+                    };
+                    ui.separator();
+                    for (k, l) in safety.summary().iter().enumerate() {
+                        let t = egui::RichText::new(l);
+                        ui.label(if k == 0 { t.strong().color(col) } else { t });
                     }
                     ui.horizontal(|ui| {
                         if r.faulted.is_ok() && ui.button("故障時の電圧を回路図に表示").on_hover_text("回路図の電圧表示を、壊れた状態の値に切り替えます。元に戻すには右のボタンか、DC解析を実行します").clicked() {
@@ -478,7 +544,7 @@ impl SchEditor {
         }
         if !self.fault_scan.is_empty() {
             let mut pick = None;
-            egui::CollapsingHeader::new("影響の大きい順").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new("危険な順 (定格超え → 電圧の変化)").default_open(true).show(ui, |ui| {
                 egui::ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                     for (k, row) in self.fault_scan.iter().enumerate() {
                         let effect = if row.severity.is_infinite() {
@@ -488,8 +554,13 @@ impl SchEditor {
                         } else {
                             format!("電圧が最大 {:.2} V 変化", row.severity)
                         };
-                        let text = format!("{} {}: {}{}", row.part, row.label, effect, if row.hot { " 🔥発熱" } else { "" });
-                        let col = if row.severity.is_infinite() || row.hot { Color32::from_rgb(230, 90, 70) } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
+                        let mark = match row.danger {
+                            Danger::Danger => " 🔥定格超え",
+                            Danger::Caution => " ⚠余裕なし",
+                            Danger::Safe => "",
+                        };
+                        let text = format!("{} {}: {}{}", row.part, row.label, effect, mark);
+                        let col = if row.severity.is_infinite() || row.danger == Danger::Danger { Color32::from_rgb(230, 90, 70) } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
                         if ui.selectable_label(false, egui::RichText::new(text).color(col)).on_hover_text("クリックで、この故障の詳しい結果を表示します").clicked() {
                             pick = Some(k);
                         }

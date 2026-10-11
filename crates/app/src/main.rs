@@ -295,7 +295,7 @@ fn install_crash_log() {
     }));
 }
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
 /// [--drc] [--round R] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -355,13 +355,20 @@ fn apply_args(app: &mut App, args: &[String]) {
                 Some("scan") => app.sch.analyze_fault_scan(),
                 Some(part) => {
                     app.sch.set_fault(part, args.get(i + 2).and_then(|k| k.parse().ok()).unwrap_or(0));
+                    let mut chain = false;
                     // ... <kind> tran <node>: compare the waveform at <node> instead of the DC voltages
+                    // ... <kind> chain: follow the failures that come after (kind 7 / 8 / 9 = coil layer short 10 / 20 / 50%)
                     match args.get(i + 3).map(|m| m.as_str()) {
+                        Some("chain") => chain = true,
                         Some("tran") => app.sch.set_fault_tran(args.get(i + 4).map_or("", |n| n.as_str())),
                         Some("ac") => app.sch.set_fault_ac(args.get(i + 4).map_or("", |n| n.as_str())),
                         _ => {}
                     }
-                    app.sch.analyze_fault();
+                    if chain {
+                        app.sch.analyze_fault_chain();
+                    } else {
+                        app.sch.analyze_fault();
+                    }
                 }
                 None => {}
             }
@@ -1173,6 +1180,40 @@ mod tests {
         label_pin(&mut s, r2, "1", "OUT");
         label_pin(&mut s, r2, "2", "GND");
         std::fs::write(root.join("pnp_highside.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
+    /// Generates docs/examples/coil_layer_short.schjson (a relay coil driven by a 2N7000 with a flyback diode):
+    /// `cargo test -p app write_coil_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_coil_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let def = library_part("2N7000");
+        let mut s = sch_core::Schematic::default();
+        let v1 = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v1].value = "12".into();
+        let v2 = s.add(Kind::VSource, (0, 16), 0);
+        s.components[v2].value = "PULSE(0 5 0 10u 10u 1m 2m)".into();
+        let r1 = s.add(Kind::Resistor, (12, 10), 0);
+        s.components[r1].value = "100".into();
+        let l1 = s.add(Kind::Inductor, (28, -6), 1);
+        s.components[l1].value = "20m DCR=80".into();
+        let d1 = s.add(Kind::Diode, (38, -6), 1);
+        let q = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (28, 10), 0);
+        label_pin(&mut s, v1, "+", "VCC");
+        label_pin(&mut s, v1, "-", "GND");
+        label_pin(&mut s, v2, "+", "IN");
+        label_pin(&mut s, v2, "-", "GND");
+        label_pin(&mut s, r1, "1", "IN");
+        label_pin(&mut s, r1, "2", "G");
+        label_pin(&mut s, l1, "1", "VCC");
+        label_pin(&mut s, l1, "2", "OUT");
+        label_pin(&mut s, d1, "A", "OUT");
+        label_pin(&mut s, d1, "K", "VCC");
+        label_pin(&mut s, q, "2", "G");
+        label_pin(&mut s, q, "3", "OUT");
+        label_pin(&mut s, q, "1", "GND");
+        std::fs::write(root.join("coil_layer_short.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
     /// Generates docs/examples/opamp_inverting.schjson (LM358, gain -10, +-5 V supplies):

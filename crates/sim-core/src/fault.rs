@@ -21,6 +21,10 @@ pub enum Fault {
     Scale(f64),
     /// Connected the wrong way round (diode, transistor: the two main terminals swapped).
     Reverse,
+    /// A coil whose insulation broke between layers: this fraction of its turns is shorted. The
+    /// rest has `(1 - x)^2` of the inductance (the shorted turns cancel the flux) and `1 - x` of the
+    /// winding resistance, and the shorted turns carry `(1 - x) / x` times the coil current.
+    TurnShort(f64),
 }
 
 impl Fault {
@@ -31,9 +35,13 @@ impl Fault {
             Fault::Scale(k) if k > 1.0 => format!("値が {} 倍", format_value(k)),
             Fault::Scale(k) => format!("値が 1/{}", format_value(1.0 / k)),
             Fault::Reverse => "逆向きにつなぐ".into(),
+            Fault::TurnShort(x) => format!("巻線のレアショート ({:.0}% の巻数)", x * 100.0),
         }
     }
 }
+
+/// Fractions of the turns offered for a layer short.
+pub const TURN_SHORTS: [f64; 3] = [0.1, 0.2, 0.5];
 
 /// Resistance that stands in for a short.
 const SHORT_OHMS: f64 = 1e-3;
@@ -54,7 +62,12 @@ pub fn breakable(c: &Circuit) -> Vec<String> {
 /// Faults that make sense for this kind of element.
 pub fn applicable(e: &Element) -> Vec<Fault> {
     match e {
-        Element::Resistor { .. } | Element::Capacitor { .. } | Element::Inductor { .. } => {
+        Element::Inductor { .. } => {
+            let mut v = vec![Fault::Open, Fault::Short, Fault::Scale(10.0), Fault::Scale(0.1)];
+            v.extend(TURN_SHORTS.map(Fault::TurnShort));
+            v
+        }
+        Element::Resistor { .. } | Element::Capacitor { .. } => {
             vec![Fault::Open, Fault::Short, Fault::Scale(10.0), Fault::Scale(0.1)]
         }
         Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. } => vec![Fault::Open, Fault::Short, Fault::Reverse],
@@ -65,7 +78,7 @@ pub fn applicable(e: &Element) -> Vec<Fault> {
 }
 
 /// The main two terminals of an element (what a short joins).
-fn main_pins(e: &Element) -> Option<(usize, usize)> {
+pub(crate) fn main_pins(e: &Element) -> Option<(usize, usize)> {
     match e {
         Element::Resistor { a, b, .. } | Element::Capacitor { a, b, .. } | Element::Inductor { a, b, .. } => Some((*a, *b)),
         Element::Diode { a, k, .. } => Some((*a, *k)),
@@ -101,6 +114,17 @@ pub fn with_fault(c: &Circuit, element: &str, fault: Fault) -> Option<Circuit> {
         Fault::Short => {
             let (a, b) = main_pins(&c.elements[idx])?;
             out.elements[idx] = Element::Resistor { name: element.into(), a, b, r: SHORT_OHMS };
+        }
+        Fault::TurnShort(x) => {
+            let keep = 1.0 - x;
+            if let Element::Inductor { l, .. } = &mut out.elements[idx] {
+                *l *= keep * keep;
+            }
+            // the winding resistance (`<name>.DCR`) shrinks with the turns that are left
+            let dcr = format!("{element}.DCR");
+            if let Some(Element::Resistor { r, .. }) = out.elements.iter_mut().find(|e| e.name() == dcr) {
+                *r *= keep;
+            }
         }
         Fault::Scale(k) => match &mut out.elements[idx] {
             Element::Resistor { r, .. } => *r *= k,
@@ -240,6 +264,7 @@ impl FaultReport {
             out.push(format!("{head}、DC の電圧と電流はほとんど変わりませんでした。"));
             match (self.fault, self.baseline.element(&self.element)) {
                 (Some(Fault::Open), Some(e)) if e.current.abs() < 1e-9 => out.push("この部品には DC では電流が流れていないためです (コンデンサは DC では元から断線扱い)。過渡解析・AC解析なら違いが見えます".into()),
+                (Some(Fault::TurnShort(_)), _) => out.push("コイルは DC では元からショート扱いなので、レアショートで変わるのはインダクタンス(電流の立ち上がり)です。過渡解析か「連鎖故障を追う」で見えます".into()),
                 (Some(Fault::Short), _) if self.element.starts_with('L') => out.push("コイルは DC では元からショート扱いです。過渡解析・AC解析なら違いが見えます".into()),
                 _ => {}
             }
@@ -258,6 +283,72 @@ impl FaultReport {
                 l += " (電流が止まります)";
             }
             out.push(l);
+        }
+        out
+    }
+}
+
+/// How dangerous a fault is for the parts (and the person at the bench).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Danger {
+    /// Nothing runs past its rating that did not already.
+    Safe,
+    /// A part loses its margin (hot, close to its maximum).
+    Caution,
+    /// A part is past its rating, or the broken circuit has no stable state (large current).
+    Danger,
+}
+
+/// The rating checks of the broken circuit, minus what was already flagged when healthy.
+#[derive(Clone, Debug)]
+pub struct FaultSafety {
+    pub level: Danger,
+    /// New or worse findings, worst first.
+    pub issues: Vec<crate::RatingIssue>,
+    /// The broken circuit could not be solved at DC.
+    pub unsolvable: bool,
+}
+
+/// Rates `r` against the part ratings of `sch` (the schematic `r` was made from).
+pub fn assess_safety(sch: &sch_core::Schematic, r: &FaultReport) -> FaultSafety {
+    use crate::RatingLevel;
+    let Ok(f) = &r.faulted else {
+        return FaultSafety { level: Danger::Danger, issues: vec![], unsolvable: true };
+    };
+    let before = crate::check_ratings(sch, &r.baseline);
+    let worst_before = |refdes: &str| before.iter().filter(|i| i.refdes == refdes).map(|i| i.level).max();
+    let mut issues: Vec<crate::RatingIssue> = crate::check_ratings(sch, f).into_iter().filter(|i| worst_before(&i.refdes).is_none_or(|l| i.level > l)).collect();
+    issues.sort_by(|a, b| b.level.cmp(&a.level));
+    let level = match issues.first().map(|i| i.level) {
+        Some(RatingLevel::Over) => Danger::Danger,
+        Some(RatingLevel::Caution) => Danger::Caution,
+        None => Danger::Safe,
+    };
+    FaultSafety { level, issues, unsolvable: false }
+}
+
+impl FaultSafety {
+    /// Plain Japanese: the verdict first, then the parts at risk and what to do about it.
+    pub fn summary(&self) -> Vec<String> {
+        let mut out = vec![];
+        if self.unsolvable {
+            out.push("安全性: 危険。DC では状態が定まりません。実機では大電流が流れたり、部品が壊れたりするおそれがあります".into());
+            out.push("対策: 電源にヒューズや電流制限をつけ、故障しても電流が上がりきらないようにします".into());
+            return out;
+        }
+        out.push(match self.level {
+            Danger::Safe => "安全性: 定格を超える部品は新しく出ませんでした (壊れても部品は無事な範囲です)".into(),
+            Danger::Caution => "安全性: 注意。余裕がなくなる部品があります".into(),
+            Danger::Danger => "安全性: 危険。定格を超える部品があり、焼損・発煙のおそれがあります".into(),
+        });
+        for i in self.issues.iter().take(4) {
+            out.push(format!("・{}", i.message));
+        }
+        if let Some(i) = self.issues.first() {
+            out.push(format!("対策: {}", i.hint));
+        }
+        if self.level == Danger::Danger {
+            out.push("電源側にヒューズを入れると、故障のときに電流を切って被害を止められます (レッスン「保護回路」)".into());
         }
         out
     }
@@ -518,6 +609,26 @@ mod tests {
         let r = simulate_fault(&c, "R2", Fault::Short).unwrap();
         let s = r.summary().join("\n");
         assert!(s.contains("R1") && s.contains("1W 超"), "{s}");
+    }
+
+    #[test]
+    fn safety_rates_a_shorted_led_resistor_as_danger_and_a_healthy_one_as_safe() {
+        let s: sch_core::Schematic = serde_json::from_str(include_str!("../../../docs/examples/led.schjson")).unwrap();
+        let c = crate::from_schematic(&s).unwrap();
+        // no limiter: the LED takes everything the supply gives
+        let short = simulate_fault(&c, "R1", Fault::Short).unwrap();
+        let sf = assess_safety(&s, &short);
+        assert_eq!(sf.level, Danger::Danger, "{sf:?}");
+        assert!(sf.summary().iter().any(|l| l.contains("D1")), "{:?}", sf.summary());
+        // a bigger resistor only dims the LED
+        let dim = assess_safety(&s, &simulate_fault(&c, "R1", Fault::Scale(10.0)).unwrap());
+        assert_eq!(dim.level, Danger::Safe, "{dim:?}");
+        // findings that were there before the fault are not blamed on it
+        let mut hot = s.clone();
+        hot.components.iter_mut().filter(|x| x.refdes == "R1").for_each(|x| x.value = "10".into());
+        let hc = crate::from_schematic(&hot).unwrap();
+        let again = assess_safety(&hot, &simulate_fault(&hc, "R1", Fault::Scale(0.1)).unwrap());
+        assert!(again.issues.iter().all(|i| i.level > crate::RatingLevel::Caution) || again.issues.is_empty(), "{again:?}");
     }
 
     #[test]

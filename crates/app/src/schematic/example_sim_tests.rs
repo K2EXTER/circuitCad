@@ -96,7 +96,7 @@ fn fault_simulation_on_the_regulator_example() {
     // the scan covers every breakable part and puts the worst case first
     e.analyze_fault_scan();
     assert!(e.fault_scan.len() >= 4);
-    assert!(e.fault_scan.windows(2).all(|w| w[0].severity >= w[1].severity));
+    assert!(e.fault_scan.windows(2).all(|w| w[0].danger > w[1].danger || (w[0].danger == w[1].danger && w[0].severity >= w[1].severity)));
 }
 
 /// The op-amp loop-gain sample: a capacitive load adds a pole near the crossover and eats the phase margin.
@@ -668,4 +668,23 @@ fn reverse_protection_sample_blocks_a_backwards_supply() {
     // a short behind the diode: a huge current, the rating check complains about D1
     let (_, issues) = run("9", "1");
     assert!(issues.iter().any(|i| i.refdes == "D1" && i.level == sim_core::RatingLevel::Over), "{issues:?}");
+}
+
+/// The relay-coil sample: half the turns of L1 shorted takes the driver past its 200 mA, then the turns burn.
+#[test]
+fn chain_failure_on_the_coil_example_runs_from_the_panel() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "coil_layer_short.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.tran_tstop = "10m".into();
+    e.tran_tstep = "5u".into();
+    e.set_fault("L1", 9); // ALL_FAULTS[9] = 50% of the turns
+    e.analyze_fault_chain();
+    let r = e.fault_chain.as_ref().unwrap().as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    let text = r.summary().join("\n");
+    assert!(text.contains("Q1") && text.contains("L1") && text.contains("ヒューズ"), "{text}");
+    // a pin fault cannot be chained: the panel says so instead of guessing
+    e.fault_pin = "1".into();
+    e.analyze_fault_chain();
+    assert!(e.fault_chain.as_ref().unwrap().is_err());
 }
