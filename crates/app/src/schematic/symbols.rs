@@ -255,7 +255,7 @@ impl SchEditor {
         let l = sym.layout();
         // a chip capacitor / resistor / inductor from the library looks like the basic part
         let glyph = match sym.glyph.as_str() {
-            "capacitor" => Some(Kind::Capacitor),
+            "capacitor" | "electrolytic" => Some(Kind::Capacitor),
             "resistor" => Some(Kind::Resistor),
             "inductor" => Some(Kind::Inductor),
             _ => None,
@@ -273,6 +273,12 @@ impl SchEditor {
                 painter.text(tr((p.tip.0 as f32 + s) / 2.0, -0.45), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
             }
             self.draw_symbol(painter, rect, kind, pos, rot, color);
+            if sym.glyph == "electrolytic" {
+                // polarity: a "+" beside the plate of the left (pin 1) lead
+                for (a, b) in [((-1.5, -0.9), (-0.9, -0.9)), ((-1.2, -1.2), (-1.2, -0.6))] {
+                    painter.line_segment([tr(a.0, a.1), tr(b.0, b.1)], stroke);
+                }
+            }
             return;
         }
         let tr = |x: f32, y: f32| {

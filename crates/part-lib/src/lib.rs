@@ -121,8 +121,8 @@ impl PartDef {
 
         if !self.glyph.is_empty() {
             let sides: Vec<_> = self.symbol().pins.iter().map(|p| p.side).collect();
-            if !["capacitor", "resistor", "inductor"].contains(&self.glyph.as_str()) {
-                err(format!("glyph「{}」は capacitor / resistor / inductor のどれかにしてください", self.glyph));
+            if !["capacitor", "electrolytic", "resistor", "inductor"].contains(&self.glyph.as_str()) {
+                err(format!("glyph「{}」は capacitor / electrolytic / resistor / inductor のどれかにしてください", self.glyph));
             } else if sides.len() != 2 || !sides.contains(&PinSide::Left) || !sides.contains(&PinSide::Right) {
                 err("glyph (コンデンサ・抵抗・コイルの記号) は、左右に 1 本ずつの 2 ピンの部品だけに使えます".into());
             }
@@ -242,6 +242,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("USB_DEMO_TH", include_str!("../examples/USB_DEMO_TH.part.json")),
     ("C_100n_0603", include_str!("../examples/C_100n_0603.part.json")),
     ("C_10u_0805", include_str!("../examples/C_10u_0805.part.json")),
+    ("CE_100u_16V", include_str!("../examples/CE_100u_16V.part.json")),
     ("L_10u_0805", include_str!("../examples/L_10u_0805.part.json")),
     ("R_10k_0603", include_str!("../examples/R_10k_0603.part.json")),
     ("1N4148", include_str!("../examples/1N4148.part.json")),

@@ -365,6 +365,11 @@ fn write_chip_examples() {
     r1.esl = Some(1e-9);
     r1.cp = Some(100e-15);
     cases.push(("R_10k_0603".into(), r1, "R_0603", PartRatings { p_max: Some(0.1), ..Default::default() }));
+    // an aluminium electrolytic: large ESR/ESL, polarised symbol, radial footprint
+    let mut e1 = PassiveTemplate::new(PassiveKind::Capacitor, 100e-6);
+    e1.esr = Some(0.3);
+    e1.esl = Some(15e-9);
+    cases.push(("CE_100u_16V".into(), e1, "CP_Radial_D5_P2.0", PartRatings { v_max: Some(16.0), ..Default::default() }));
     for (name, t, fp, ratings) in cases {
         let g = t.generate(&name).unwrap();
         let built = pcb_core::footprints::get(fp).unwrap();
@@ -375,7 +380,7 @@ fn write_chip_examples() {
         let def = PartDef {
             name: name.clone(),
             category: t.kind.label().into(),
-            description: format!("{}{note}", g.description),
+            description: format!("{}{}{note}", g.description, if name.starts_with("CE_") { " 電解コンデンサ: 極性があります (四角いパッド・記号の + が プラス側)。耐圧の 2 倍ほどの余裕を見て選び、逆向きにつなぐと壊れます。" } else { "" }),
             datasheet: String::new(),
             prefix: t.kind.prefix().into(),
             value: Some(g.value_text.clone()),
@@ -392,7 +397,7 @@ fn write_chip_examples() {
                 limits: g.limits.clone(),
             }),
             ratings: Some(ratings),
-            glyph: t.kind.glyph().into(),
+            glyph: if name.starts_with("CE_") { "electrolytic".into() } else { t.kind.glyph().into() },
         };
         assert!(!def.has_errors(), "{name}: {:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
         let path = format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"));
