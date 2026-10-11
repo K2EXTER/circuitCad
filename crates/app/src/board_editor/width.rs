@@ -32,7 +32,7 @@ impl BoardEditor {
     }
 
     pub(super) fn panel_widths(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("配線の太さ (電流から)").default_open(false).show(ui, |ui| {
+        egui::CollapsingHeader::new("配線の太さ (電流から)").default_open(false).open(self.widths_open.take()).show(ui, |ui| {
             let nets = self.board_nets();
             if nets.is_empty() {
                 ui.small("回路図から部品を取り込むと、ネットの一覧が出ます");
@@ -79,6 +79,7 @@ impl BoardEditor {
                     ui.end_row();
                 }
             });
+            self.ir_drop_ui(ui);
             if let Some(w) = use_width {
                 self.track_width = w;
             }
@@ -92,5 +93,104 @@ impl BoardEditor {
                 }
             }
         }).header_response.on_hover_text("ネットごとに流す電流を入れると、必要な線幅を計算し、足りない配線を教えます (銅箔 35µm・温度上昇 10℃ の外層)。電源やモーターの線は、信号線より太くします");
+    }
+}
+
+/// A number that changes whenever the copper or the declared currents change (to tell a stale result).
+fn copper_fingerprint(b: &Board) -> f64 {
+    let mut s = 0.0;
+    for (i, t) in b.tracks.iter().enumerate() {
+        s += (i as f64 + 1.0) * (t.a.x * 1.3 + t.a.y * 1.7 + t.b.x * 2.1 + t.b.y * 2.9 + t.width * 7.0 + if t.side == Side::Top { 0.0 } else { 3.3 });
+    }
+    for (i, v) in b.vias.iter().enumerate() {
+        s += (i as f64 + 1.0) * (v.pos.x * 0.7 + v.pos.y * 1.1 + v.drill);
+    }
+    for (i, p) in b.pads.iter().enumerate() {
+        s += (i as f64 + 1.0) * (p.pos.x * 0.9 + p.pos.y * 1.9) + p.net.len() as f64 * 0.01;
+    }
+    for z in &b.zones {
+        s += z.polygon.iter().map(|p| p.x * 0.3 + p.y * 0.4).sum::<f64>() + z.net.len() as f64;
+    }
+    for (n, a) in &b.net_currents {
+        s += a * 13.0 + n.len() as f64;
+    }
+    s
+}
+
+impl BoardEditor {
+    /// Declares a current for `net`, computes the drop and opens the panel (command line `--ir <net> <amps>`).
+    pub fn show_ir_drop(&mut self, net: &str, amps: f64) {
+        self.board.net_currents.insert(net.to_string(), amps);
+        let fp = copper_fingerprint(&self.board);
+        self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));
+        self.widths_open = Some(true);
+    }
+
+    /// "電圧降下" part of the width panel: the voltage the copper eats at each net's declared current.
+    fn ir_drop_ui(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("配線の電圧降下").strong());
+            if ui.button("計算する").on_hover_text("上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください").clicked() {
+                let fp = copper_fingerprint(&self.board);
+                self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));
+            }
+        });
+        let fp = copper_fingerprint(&self.board);
+        let Some((made_for, nets)) = self.ir_drop.as_ref() else {
+            ui.small("電流を入れたネットについて、配線の抵抗による電圧降下を調べます (電源とGNDの両方を調べると、部品に届く電圧が分かります)");
+            return;
+        };
+        if (made_for - fp).abs() > 1e-9 {
+            ui.colored_label(egui::Color32::from_rgb(220, 160, 40), "配線か電流が変わりました。「計算する」で更新してください");
+        }
+        if nets.is_empty() {
+            ui.small("電流が入っているネットがありません (上の欄に A を入れてください)");
+        }
+        for nd in nets {
+            if let Some(note) = &nd.note {
+                ui.small(format!("{}: {note}", nd.net));
+                continue;
+            }
+            let src = format!("{}.{}", nd.source.0, nd.source.1);
+            match nd.worst() {
+                Some(w) => {
+                    let v = w.drop_v.unwrap_or(0.0);
+                    let col = if v >= 0.1 { egui::Color32::from_rgb(230, 70, 60) } else if v >= 0.03 { egui::Color32::from_rgb(220, 160, 40) } else { egui::Color32::from_rgb(90, 190, 110) };
+                    let line = format!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ)", nd.net, v * 1000.0, format!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0);
+                    let r = ui.colored_label(col, line);
+                    r.on_hover_text(self.ir_detail(nd, &src));
+                }
+                None => {
+                    ui.small(format!("{}: 入口 {src} からつながっているピンがありません (配線が切れています)", nd.net));
+                }
+            }
+            if nd.pads.iter().any(|p| p.ohm.is_none()) {
+                let names: Vec<String> = nd.pads.iter().filter(|p| p.ohm.is_none()).map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
+                ui.colored_label(egui::Color32::from_rgb(230, 70, 60), format!("  つながっていない: {}", names.join(", ")));
+            }
+        }
+        ui.small("目安: 30 mV 未満は問題なし、100 mV 以上は電源の電圧が目に見えて下がります。電源とGNDの降下は足し算で効きます");
+    }
+
+    fn ir_detail(&self, nd: &pcb_core::irdrop::NetDrop, src: &str) -> String {
+        let mut s = format!("電流 {:.2} A が {src}{} から入るとして、各ピンまでの抵抗と電圧降下:
+", nd.amps, if nd.source_auto { " (自動で選んだ入口: コネクタがあればそこ、なければ最初のピン)" } else { "" });
+        for p in &nd.pads {
+            match p.ohm {
+                Some(r) => s += &format!("  {}.{}  {:.1} mΩ  {:.1} mV
+", p.refdes, p.pin, r * 1000.0, r * nd.amps * 1000.0),
+                None => s += &format!("  {}.{}  つながっていません
+", p.refdes, p.pin),
+            }
+        }
+        s += "各ピンが電流の全部を1つで引くとした、いちばん厳しい見積もりです。";
+        if nd.has_zone {
+            s += "
+ベタ (銅の面) は、抵抗の小さい面としておおまかに入れています。";
+        }
+        s += "
+銅は 35µm、ビアは壁の厚み 25µm の円筒として計算しています";
+        s
     }
 }

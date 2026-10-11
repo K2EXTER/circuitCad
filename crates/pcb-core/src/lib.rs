@@ -11,6 +11,7 @@ pub mod export;
 pub mod fab;
 pub mod footprints;
 pub mod geom;
+pub mod irdrop;
 pub mod gerber;
 pub mod gerber_view;
 pub mod model;

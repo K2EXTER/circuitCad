@@ -173,6 +173,10 @@ pub struct BoardEditor {
     side: Side,
     grid: f64,
     track_width: f64,
+    /// Voltage drop along the nets' copper, with a fingerprint of the board it was computed for.
+    /// Open the width panel on the next frame (command line `--ir`).
+    widths_open: Option<bool>,
+    ir_drop: Option<(f64, Vec<pcb_core::irdrop::NetDrop>)>,
     pad_size: f64,
     pad_drill: f64,
     via_dia: f64,
@@ -237,6 +241,8 @@ impl Default for BoardEditor {
             side: Side::Top,
             grid: 0.5,
             track_width: 0.25,
+            ir_drop: None,
+            widths_open: None,
             pad_size: 1.6,
             pad_drill: 0.8,
             via_dia: 0.6,

@@ -406,6 +406,12 @@ fn apply_args(app: &mut App, args: &[String]) {
             && let Some(r) = args.get(i + 1).and_then(|r| r.parse::<f64>().ok()) {
                 app.board_ed.round_outline(r);
             }
+        for (i, _) in args.iter().enumerate().filter(|(_, a)| *a == "--ir") {
+            // --ir <net> <amps>  (repeatable): declare the net's current and show the voltage drop of its copper
+            if let (Some(net), Some(a)) = (args.get(i + 1), args.get(i + 2).and_then(|a| a.parse::<f64>().ok())) {
+                app.board_ed.show_ir_drop(net, a);
+            }
+        }
         if args.iter().any(|a| a == "--3d") {
             app.board_ed.open_view3d();
         }
