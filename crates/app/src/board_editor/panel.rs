@@ -42,12 +42,7 @@ impl BoardEditor {
                 }
             });
             egui::CollapsingHeader::new("ツールの設定").default_open(true).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("作業層 (L)").on_hover_text("いま配線を置く銅箔の層。部品とシルクは表面か裏面にだけ置けます (内層を選んでいるときは表面)");
-                    for l in self.board.copper_layers() {
-                        ui.selectable_value(&mut self.side, l, l.label()).on_hover_text("配線を置く層をこの層にします (L キーで順に切り替わります)");
-                    }
-                });
+                ui.label("作業層は、画面右上の「層」で切り替えます (L キーでも順に切り替わります)").on_hover_text("いま配線を置く銅箔の層。部品とシルクは表面か裏面にだけ置けます (内層を選んでいるときは表面)。右上の「層」は、たたんで小さくできます");
                 self.layer_count_ui(ui);
                 ui.checkbox(&mut self.shove, "押しのけ配線").on_hover_text("配線を引くとき・配線をドラッグで動かすとき、邪魔になる別のネットの配線を脇へ寄せます。パッドやビアに固定された配線は動かさず、寄せきれないときは普通に引きます。プレビューが橙色なら押しのけ、赤ならルール違反です");
                 ui.horizontal(|ui| {
@@ -173,9 +168,6 @@ impl BoardEditor {
                 ui.horizontal_wrapped(|ui| {
                     ui.checkbox(&mut self.vis.top, "表面").on_hover_text("表面の銅 (配線とパッド) を表示します");
                     ui.checkbox(&mut self.vis.bottom, "裏面").on_hover_text("裏面の銅 (配線とパッド) を表示します");
-                    if self.board.inner_layers > 0 {
-                        ui.checkbox(&mut self.vis.inner, "内層").on_hover_text("内層の銅 (配線) を表示します");
-                    }
                     ui.checkbox(&mut self.vis.silk, "シルク").on_hover_text("シルク (白い印刷の文字と枠) を表示します");
                     ui.checkbox(&mut self.vis.zones, "ゾーン").on_hover_text("ゾーン (銅を面で塗った所) を表示します");
                     ui.checkbox(&mut self.vis.airwires, "未配線").on_hover_text("未配線 (まだつながっていない接続を示す黄色の線) を表示します");

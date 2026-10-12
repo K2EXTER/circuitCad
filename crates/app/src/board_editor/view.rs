@@ -54,7 +54,7 @@ impl BoardEditor {
         match s {
             Side::Top => self.vis.top,
             Side::Bottom => self.vis.bottom,
-            Side::Inner(_) => self.vis.inner,
+            Side::Inner(n) => self.vis.inner_hidden & (1 << n.min(31)) == 0,
         }
     }
 

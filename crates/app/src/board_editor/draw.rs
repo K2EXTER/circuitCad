@@ -267,7 +267,6 @@ impl BoardEditor {
             Side::Top => ("表面".to_string(), "赤"),
             Side::Bottom => ("裏面".to_string(), "青"),
             s @ Side::Inner(n) => (s.label(), ["金", "緑", "紫", "青緑"][(n as usize - 1) % 4]),
-            s => (s.label(), "")
         };
         let text = format!("作業中: {name} ({color_name})   Lキーで切り替え  ・  もう一方の面は薄く表示");
         let font = egui::FontId::proportional(14.0);

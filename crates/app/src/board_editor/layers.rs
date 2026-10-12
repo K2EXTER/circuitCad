@@ -40,3 +40,50 @@ impl BoardEditor {
         self.status = format!("銅箔を {total} 層にしました");
     }
 }
+
+impl BoardEditor {
+    /// The layer switcher floating over the canvas (top right): folds down to the name of the working layer,
+    /// unfolds to one row per copper layer with an eye (show / hide) and a radio (work on this layer).
+    pub(super) fn layer_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
+        let layers = self.board.copper_layers();
+        let pos = rect.right_top() + Vec2::new(-14.0, 14.0);
+        let id = egui::Id::new("layer_overlay_fold");
+        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+                let title = if state.is_open() { "層".to_string() } else { format!("層: {}", self.side.label()) };
+                state
+                    .show_header(ui, |ui| {
+                        ui.label(title).on_hover_text("三角でたたみます / ひらきます。L キーでも作業層を順に切り替えられます");
+                    })
+                    .body(|ui| {
+                        for l in layers.iter().copied() {
+                            ui.horizontal(|ui| {
+                                let mut shown = self.side_visible(l);
+                                if ui.checkbox(&mut shown, "").on_hover_text("この層の銅を表示 / 非表示にします").changed() {
+                                    match l {
+                                        Side::Top => self.vis.top = shown,
+                                        Side::Bottom => self.vis.bottom = shown,
+                                        Side::Inner(n) => {
+                                            let bit = 1u32 << n.min(31);
+                                            self.vis.inner_hidden = if shown { self.vis.inner_hidden & !bit } else { self.vis.inner_hidden | bit };
+                                        }
+                                    }
+                                }
+                                let (r, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+                                ui.painter().rect_filled(r, 2.0, self.side_color(l));
+                                if ui.selectable_value(&mut self.side, l, l.label()).on_hover_text("配線を置く層をこの層にします").clicked() {
+                                    // working on a layer shows it
+                                    match l {
+                                        Side::Top => self.vis.top = true,
+                                        Side::Bottom => self.vis.bottom = true,
+                                        Side::Inner(n) => self.vis.inner_hidden &= !(1u32 << n.min(31)),
+                                    }
+                                }
+                            });
+                        }
+                    });
+            });
+        });
+    }
+}

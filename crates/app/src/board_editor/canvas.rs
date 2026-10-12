@@ -21,6 +21,7 @@ impl BoardEditor {
         self.draw_highlight(&painter, rect, conn.as_deref());
         self.draw_overlays(&painter, rect);
         self.draw_layer_badge(&painter, rect);
+        self.layer_overlay(ui, rect);
 
         if !self.alt_pan {
             self.box_selection(ui, &resp, rect, &painter);

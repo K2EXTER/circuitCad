@@ -159,7 +159,8 @@ impl Pickable {
 struct Visible {
     top: bool,
     bottom: bool,
-    inner: bool,
+    /// Inner layers switched off in the layer overlay.
+    inner_hidden: u32,
     silk: bool,
     airwires: bool,
     nets: bool,
@@ -280,7 +281,7 @@ impl Default for BoardEditor {
             redo: vec![],
             pick: Pickable::ALL,
             check_focus: None,
-            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true, inner: true },
+            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true, inner_hidden: 0 },
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
