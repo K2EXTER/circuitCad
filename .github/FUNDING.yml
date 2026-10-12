@@ -1,8 +1,6 @@
 # GitHub の Sponsor ボタンの設定。
-# GitHub Sponsors の登録 (https://github.com/sponsors) が済んだら、次の行のコメントを外してください。
-# 登録前にアカウント名を書くと、リポジトリに設定エラーが表示されます。
-#
-# github: [K2EXTER]
+# GitHub Sponsors の承認が済んだので有効にしています。
+github: [K2EXTER]
 #
 # ほかの支援サービスを使う場合 (例):
 # ko_fi: your-name
