@@ -446,6 +446,21 @@ fn cell_charge_sample_runs_cc_then_cv_and_stops_at_full() {
     assert!((2.0..3.2).contains(&done), "done after {done} h");
 }
 
+#[test]
+fn tp5100_cell_charge_sample_runs_cc_then_cv_and_stops_at_full() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "tp5100_cell_charge.schjson").unwrap().1;
+    let t = transient(&from_schematic(&sch).unwrap(), &TranSettings { tstop: 4.0 * 3600.0, tstep: 20.0, uic: false }).unwrap();
+    let sig = |n: &str| t.signal(n).unwrap().values.clone();
+    let (bat, chrg, stdby, i) = (sig("V(BAT)"), sig("V(CHRG)"), sig("V(STDBY)"), sig("I(R1)"));
+    let at = |v: &[f64], h: f64| v[t.time.iter().position(|x| *x >= h * 3600.0 - 1e-9).unwrap_or(t.time.len() - 1)];
+    // 0.1 / 0.1 ohm = 1 A while the cell is below the float voltage, then the current tapers
+    assert!((0.9..1.05).contains(&at(&i, 1.0)), "{}", at(&i, 1.0));
+    assert!(at(&i, 3.0) < 0.2 && at(&i, 4.0) < 0.05);
+    assert!(at(&bat, 0.5) < at(&bat, 1.0) && at(&bat, 1.0) < at(&bat, 2.0));
+    assert!((4.15..4.22).contains(&at(&bat, 4.0)) && at(&bat, 4.0) <= 4.2 + 1e-3);
+    assert!(at(&chrg, 1.0) < 1.0 && at(&stdby, 1.0) > 2.0 && at(&chrg, 4.0) > 2.0 && at(&stdby, 4.0) < 1.0);
+}
+
 /// A learner reads every warning: the bundled samples should not raise warnings that come from inside a model.
 #[test]
 fn shipped_examples_have_no_warnings_about_nodes_inside_models() {

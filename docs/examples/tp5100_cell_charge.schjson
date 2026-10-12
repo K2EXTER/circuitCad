@@ -1,0 +1,526 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "9",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        10,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "TP5100",
+      "pos": [
+        34,
+        0
+      ],
+      "rot": 0,
+      "footprint": "QFN-16_4x4_EP",
+      "custom": {
+        "name": "TP5100",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VIN",
+            "side": "top"
+          },
+          {
+            "number": "10",
+            "name": "VREG",
+            "side": "left"
+          },
+          {
+            "number": "13",
+            "name": "CS",
+            "side": "left"
+          },
+          {
+            "number": "12",
+            "name": "RTRICK",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "TS",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "PWR_ON",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "LX",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "VS",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "BAT",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "STDBY",
+            "side": "right"
+          },
+          {
+            "number": "15",
+            "name": "CHRG",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TP5100",
+          "text": ".subckt TP5100 vin lx pwr gnd vs bat vreg ts rtrick cs stdby chrg\n* TP5100 behavioural model (averaged buck charger): the switching is replaced by a voltage source on LX.\n* Control signals are in \"sense volts\": 0.1 V across Rs = full current.\n* internal 5 V supply (VREG) once VIN is above the under-voltage lockout\nBvr vr 0 V=5*step(V(vin)-3.6,0.02)\nRvr vr vreg 1\nRvl vreg 0 1Meg\n* CS: left open = single cell (4.2 V), high = two cells (8.4 V), low = shut down\nRcs1 vreg cs 1Meg\nRcs2 cs 0 1Meg\nBdbl dbl 0 V=step(V(cs)-4,0.1)\nBvfl vfl 0 V=4.2+4.2*V(dbl)\nBvtk vtk 0 V=2.9+2.9*V(dbl)\n* trickle current as a fraction of the full current: 0.1 + 0.9 x V(RTRICK); 50k gives 20 %, open gives 100 %\nVone one 0 DC 1\nRtr1 one rtrick 400k\nRtr2 rtrick 0 1G\nBf f 0 V=0.1+0.9*V(rtrick)\n* the charger runs when VIN is above the cell by 0.1 V and above 3.6 V, CS is not low and the cell temperature is fine\n* (TS tied to GND or left open = no temperature check; otherwise 45 % to 80 % of VREG)\nBts tsok 0 V=min(1,step(0.1-V(ts),0.01)+step(V(ts)-2.25,0.02)*step(4-V(ts),0.02))\nBon on 0 V=step(V(vin)-V(bat)-0.1,0.01)*step(V(vin)-3.6,0.02)*step(V(cs)-1,0.05)*V(tsok)\nRtsl ts 0 10Meg\n* the reference is a full 0.1 V above the trickle threshold and the trickle fraction below it;\n* near the float voltage the voltage loop reduces it (full current within 50 mV of the float voltage)\nBcmd cmd 0 V=V(on)*min(0.1*(V(f)+(1-V(f))*step(V(bat)-V(vtk),0.01)),2*(V(vfl)-V(bat)))\n* LX = cell voltage + 100 V/V x (command - sense) + an integral term, limited to 0 .. VIN\nBint 0 cint I=0.02*(V(cmd)-V(vs,bat))\nCint cint 0 1u\nRint cint 0 10k\nBlx ls 0 V=limit(V(bat)+100*(V(cmd)-V(vs,bat))+V(cint),0,V(vin))\nVsn ls ls2 0\nSd ls2 lx ls2 lx SWD\nRlx lx 0 100Meg\n* input current: output power over the efficiency (90 %) and the input voltage\nBin vin 0 I=I(Vsn)*V(bat)/(0.9*max(V(vin),1))\nRiq vin 0 75k\n* status (open drain): CHRG low while charging, STDBY low when the cell is full (current under a tenth)\nBfull full 0 V=V(on)*step(0.01-V(vs,bat),0.002)*step(V(bat)-(V(vfl)-0.15),0.01)\nBchg chg 0 V=V(on)*(1-V(full))\nSch chrg 0 chg 0 SWO\nSsb stdby 0 full 0 SWO\nRch chrg 0 100Meg\nRsb stdby 0 100Meg\n* PWR_ON- is low while VIN is present, otherwise it follows the cell\nBpw pw 0 V=step(V(vin)-3.6,0.02)\nBnpw npw 0 V=1-V(pw)\nSpo pwr 0 pw 0 SWO\nSph pwr bat npw 0 SWO\nRpw pwr 0 100Meg\n.model SWD SW(RON=0.17 ROFF=1G VT=0 VW=0.002)\n.model SWO SW(RON=60 ROFF=1G VT=0.5 VW=0.1)\n.ends TP5100",
+          "pins": [
+            "1",
+            "2",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15"
+          ],
+          "params": {
+            "isense_volt": 0.1,
+            "vfloat_double": 8.4,
+            "vfloat_single": 4.2
+          }
+        }
+      }
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "10u",
+      "pos": [
+        52,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Diode",
+      "value": "1N5817",
+      "pos": [
+        52,
+        6
+      ],
+      "rot": 1,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "0.1",
+      "pos": [
+        66,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        10,
+        16
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "50k",
+      "pos": [
+        22,
+        16
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        44,
+        22
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        58,
+        22
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        44,
+        34
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        58,
+        34
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    },
+    {
+      "refdes": "BT1",
+      "kind": "Custom",
+      "value": "LIION_18650_CHG",
+      "pos": [
+        80,
+        0
+      ],
+      "rot": 0,
+      "footprint": "BatteryHolder_18650",
+      "custom": {
+        "name": "LIION_18650_CHG",
+        "prefix": "BT",
+        "pins": [
+          {
+            "number": "1",
+            "name": "+",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "-",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LIION_18650_CHG",
+          "text": ".subckt LIION_18650_CHG p n\nRs p pi 0.06\nBv pi n V=3.0+1.2*(0.5*limit(V(soc),0,1)+0.500*(1-exp(-8*limit(V(soc),0,1))))\nBi soc 0 I=if(V(soc)>0,if(V(soc)>=1,max(-I(Bv),0),-I(Bv)),if(-I(Bv)<0,-I(Bv),0))\nCsoc soc 0 9360\nBpull soc 0 I=if(time<1u,1000*(V(soc)-0.2),0)\n.ends LIION_18650_CHG",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {
+            "capacity_mah": 2600.0,
+            "rint": 0.06
+          },
+          "limits": [
+            "残量 20% (空に近い) から始まる電池モデルです。容量 2600mAh、内部抵抗 0.06Ω、開放電圧は残量でなめらかに変わり、空に近づくと急に下がります。",
+            "充電: 電池に流れ込む電流のぶんだけ残量が増えます。満充電 (残量 100%) では、それ以上電流を受けつけません。端子電圧は「開放電圧 + 電流 × 内部抵抗」なので、定電流で充電している間は開放電圧より高く見え、定電圧に切り替わると電流が細って、開放電圧が 4.2V に近づきます。",
+            "電池の中身は、残量を蓄える巨大なコンデンサと、残量で決まる電圧のBソース、内部抵抗の組み合わせです。長い時間 (数時間) を過渡解析で見るときは、時間刻みを大きくしてください。",
+            "扱わないもの: 温度による容量と内部抵抗の変化、充電の効率 (ロス) と大電流での容量低下、劣化、自己放電、保護回路。数値は一般的な品の概算で、メーカー・品番で大きく違います。"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        -2
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        10,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        34,
+        -7
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        38,
+        -4
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        34,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        38,
+        -2
+      ],
+      "text": "VS"
+    },
+    {
+      "pos": [
+        38,
+        0
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        30,
+        -4
+      ],
+      "text": "VREG"
+    },
+    {
+      "pos": [
+        30,
+        2
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        0
+      ],
+      "text": "RTRICK"
+    },
+    {
+      "pos": [
+        38,
+        2
+      ],
+      "text": "STDBY"
+    },
+    {
+      "pos": [
+        38,
+        4
+      ],
+      "text": "CHRG"
+    },
+    {
+      "pos": [
+        50,
+        -8
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        54,
+        -8
+      ],
+      "text": "VS"
+    },
+    {
+      "pos": [
+        52,
+        4
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        52,
+        8
+      ],
+      "text": "LX"
+    },
+    {
+      "pos": [
+        64,
+        -8
+      ],
+      "text": "VS"
+    },
+    {
+      "pos": [
+        68,
+        -8
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        10,
+        14
+      ],
+      "text": "VREG"
+    },
+    {
+      "pos": [
+        10,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        22,
+        14
+      ],
+      "text": "RTRICK"
+    },
+    {
+      "pos": [
+        22,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        42,
+        22
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        46,
+        22
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        56,
+        22
+      ],
+      "text": "A0"
+    },
+    {
+      "pos": [
+        60,
+        22
+      ],
+      "text": "CHRG"
+    },
+    {
+      "pos": [
+        42,
+        34
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        46,
+        34
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        56,
+        34
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        60,
+        34
+      ],
+      "text": "STDBY"
+    },
+    {
+      "pos": [
+        84,
+        0
+      ],
+      "text": "BAT"
+    },
+    {
+      "pos": [
+        76,
+        0
+      ],
+      "text": "GND"
+    }
+  ]
+}
