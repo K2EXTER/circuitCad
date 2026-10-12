@@ -124,6 +124,8 @@ pub struct SchEditor {
     quick: Option<quick::QuickAdd>,
     place_lib: Option<usize>,
     form: Option<PartForm>,
+    /// The "import from KiCad" window (symbol list and optional footprint).
+    kicad: Option<kicad_import::KicadImport>,
     dc: Option<DcView>,
     show_v: bool,
     show_i: bool,
@@ -404,6 +406,7 @@ impl Default for SchEditor {
             lib_sim_only: false,
             place_lib: None,
             form: None,
+            kicad: None,
             dc: None,
             show_i: true,
             show_v: true,
@@ -535,6 +538,7 @@ mod variation;
 mod tran;
 mod dc;
 mod library;
+mod kicad_import;
 mod edit;
 mod history;
 mod hint;

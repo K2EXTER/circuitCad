@@ -224,6 +224,9 @@ impl SchEditor {
                 if ui.button("JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
                     self.import_part_json();
                 }
+                if ui.button("KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
+                    self.open_kicad_import();
+                }
                 if ui.button("再読み込み").on_hover_text("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します").clicked() {
                     self.reload_library();
                 }
@@ -444,6 +447,7 @@ impl SchEditor {
                 None => {}
             }
         }
+        self.kicad_window(ui.ctx());
         if ui.small_button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
             self.help_request = Some(crate::help::HelpTab::Schematic);
         }

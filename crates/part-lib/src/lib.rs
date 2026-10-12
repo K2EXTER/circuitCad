@@ -438,6 +438,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+pub mod kicad;
 pub mod passive;
 pub mod templates;
 

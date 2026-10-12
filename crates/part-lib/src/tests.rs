@@ -404,3 +404,87 @@ fn write_chip_examples() {
         std::fs::write(path, serde_json::to_string_pretty(&def).unwrap()).unwrap();
     }
 }
+
+const KICAD_SYM: &str = r##"(kicad_symbol_lib (version 20231120) (generator "kicad_symbol_editor")
+  (symbol "LM358" (pin_names (offset 1.016)) (in_bom yes) (on_board yes)
+    (property "Reference" "U" (at 0 0 0))
+    (property "Value" "LM358" (at 0 0 0))
+    (property "Footprint" "Package_SO:SOIC-8" (at 0 0 0))
+    (property "Datasheet" "http://www.ti.com/lit/ds/symlink/lm358.pdf" (at 0 0 0))
+    (property "Description" "Dual op amp" (at 0 0 0))
+    (symbol "LM358_1_1"
+      (pin output line (at 7.62 0 180) (length 2.54) (name "~" (effects)) (number "1" (effects)))
+      (pin input line (at -7.62 2.54 0) (length 2.54) (name "-" (effects)) (number "2" (effects)))
+      (pin input line (at -7.62 -2.54 0) (length 2.54) (name "+" (effects)) (number "3" (effects))))
+    (symbol "LM358_3_1"
+      (pin power_in line (at -2.54 -7.62 90) (length 3.81) (name "V-" (effects)) (number "4" (effects)))
+      (pin power_in line (at -2.54 7.62 270) (length 3.81) (name "V+" (effects)) (number "8" (effects)))))
+  (symbol "R" (property "Reference" "R") (property "Value" "R") (property "Footprint" "")
+    (symbol "R_1_1"
+      (pin passive line (at 0 3.81 270) (length 1.27) (name "~") (number "1"))
+      (pin passive line (at 0 -3.81 90) (length 1.27) (name "~") (number "2"))))
+  (symbol "R_Small" (extends "R") (property "Reference" "R") (property "Value" "R_Small"))
+  (symbol "PWR_FLAG" (property "Reference" "#FLG") (symbol "PWR_FLAG_1_1" (pin power_out line (at 0 0 90) (length 0) (name "pwr") (number "1")))))"##;
+
+const KICAD_MOD: &str = r#"(footprint "SOIC-8_3.9x4.9mm_P1.27mm" (version 20221018) (descr "SOIC, 8 Pin")
+  (pad "1" smd roundrect (at -2.475 -1.905) (size 1.95 0.6) (layers "F.Cu" "F.Paste" "F.Mask"))
+  (pad "2" smd roundrect (at -2.475 -0.635) (size 1.95 0.6) (layers "F.Cu"))
+  (pad "3" smd roundrect (at -2.475 0.635) (size 1.95 0.6) (layers "F.Cu"))
+  (pad "4" smd roundrect (at -2.475 1.905) (size 1.95 0.6) (layers "F.Cu"))
+  (pad "8" smd roundrect (at 2.475 -1.905) (size 1.95 0.6) (layers "F.Cu"))
+  (pad "" np_thru_hole circle (at 0 0) (size 1 1) (drill 1) (layers "*.Cu"))
+  (pad "9" thru_hole oval (at 5 0 90) (size 1.5 3) (drill oval 1 2) (layers "*.Cu")))"#;
+
+#[test]
+fn kicad_symbol_pins_and_sides() {
+    let syms = kicad::parse_symbols(KICAD_SYM).unwrap();
+    let names: Vec<_> = syms.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, ["LM358", "R", "R_Small"], "power flag is skipped");
+    let lm = &syms[0];
+    assert_eq!(lm.prefix, "U");
+    assert_eq!(lm.units, 2);
+    let side = |n: &str| lm.pins.iter().find(|p| p.number == n).unwrap().side.unwrap();
+    assert_eq!(side("1"), PinSide::Right);
+    assert_eq!(side("2"), PinSide::Left);
+    assert_eq!(side("4"), PinSide::Bottom);
+    assert_eq!(side("8"), PinSide::Top);
+    // left side is listed top to bottom
+    let left: Vec<_> = lm.pins.iter().filter(|p| p.side == Some(PinSide::Left)).map(|p| p.number.as_str()).collect();
+    assert_eq!(left, ["2", "3"]);
+    assert_eq!(syms[2].pins.len(), 2, "extends takes the parent's pins");
+}
+
+#[test]
+fn kicad_footprint_pads_and_holes() {
+    let fp = kicad::parse_footprint(KICAD_MOD).unwrap();
+    assert_eq!(fp.pads.len(), 6);
+    assert_eq!(fp.holes.len(), 1);
+    assert_eq!(fp.pads[0].y, 1.905, "y is flipped (up is positive)");
+    let slot = fp.pads.iter().find(|p| p.pin == "9").unwrap();
+    assert_eq!((slot.w, slot.h), (3.0, 1.5), "rotated 90 degrees swaps the size");
+    assert_eq!((slot.drill, slot.slot, slot.slot_v), (Some(1.0), 2.0, false), "slot turned with the pad");
+}
+
+#[test]
+fn kicad_part_is_valid_and_keeps_the_footprint() {
+    let syms = kicad::parse_symbols(KICAD_SYM).unwrap();
+    let fp = kicad::parse_footprint(KICAD_MOD).unwrap();
+    let with_fp = kicad::to_part(&syms[0], Some(&fp)).unwrap();
+    assert!(!with_fp.has_errors(), "{:?}", with_fp.validate());
+    assert_eq!(with_fp.footprint_name(), "SOIC-8_3.9x4.9mm_P1.27mm");
+    let tiny = kicad::parse_footprint("(footprint \"X\" (pad \"1\" smd rect (at 0 0) (size 1 1)))").unwrap();
+    assert!(kicad::to_part(&syms[0], Some(&tiny)).is_err(), "pins without pads are refused");
+    let p = kicad::to_part(&syms[0], None).unwrap();
+    assert!(!p.has_errors(), "{:?}", p.validate());
+    assert_eq!(p.category, "KiCad");
+    let r = kicad::to_part(&syms[1], None).unwrap();
+    assert_eq!(r.glyph, "resistor");
+    assert!(!r.has_errors(), "{:?}", r.validate());
+}
+
+#[test]
+fn kicad_rejects_other_files() {
+    assert!(kicad::parse_symbols("(footprint \"x\")").is_err());
+    assert!(kicad::parse_footprint("(kicad_symbol_lib)").is_err());
+    assert!(kicad::parse_sexpr("(a (b").is_err());
+}
