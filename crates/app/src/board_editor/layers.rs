@@ -46,7 +46,7 @@ impl BoardEditor {
     /// unfolds to one row per copper layer with an eye (show / hide) and a radio (work on this layer).
     pub(super) fn layer_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
         let layers = self.board.copper_layers();
-        let pos = rect.right_top() + Vec2::new(-14.0, 14.0);
+        let pos = rect.right_top() + Vec2::new(-14.0, 30.0);
         let id = egui::Id::new("layer_overlay_fold");
         egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| {
             egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
