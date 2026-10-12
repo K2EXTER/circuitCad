@@ -49,7 +49,7 @@ fn segs_intersect(a: Point, b: Point, c: Point, d: Point) -> bool {
     point_seg(c, a, b) < 1e-12 || point_seg(d, a, b) < 1e-12 || point_seg(a, c, d) < 1e-12 || point_seg(b, c, d) < 1e-12
 }
 
-fn seg_seg(a: Point, b: Point, c: Point, d: Point) -> f64 {
+pub fn seg_seg(a: Point, b: Point, c: Point, d: Point) -> f64 {
     if segs_intersect(a, b, c, d) {
         return 0.0;
     }
@@ -125,38 +125,28 @@ fn center(g: &Geo) -> Point {
 
 struct Cu {
     geo: Geo,
-    top: bool,
-    bottom: bool,
+    /// Copper layers the item is on (a through hole or via is on all of them).
+    layers: Vec<Side>,
 }
 
 impl Cu {
     fn on(&self, s: Side) -> bool {
-        match s {
-            Side::Top => self.top,
-            Side::Bottom => self.bottom,
-        }
+        self.layers.contains(&s)
     }
 }
 
 fn copper_items(board: &Board) -> Vec<Cu> {
+    let all = board.copper_layers();
     let mut out = vec![];
     for t in &board.tracks {
-        out.push(Cu {
-            geo: Geo::Cap { a: t.a, b: t.b, r: t.width / 2.0 },
-            top: t.side == Side::Top,
-            bottom: t.side == Side::Bottom,
-        });
+        out.push(Cu { geo: Geo::Cap { a: t.a, b: t.b, r: t.width / 2.0 }, layers: vec![t.side] });
     }
     for p in &board.pads {
-        let both = p.drill.is_some();
-        out.push(Cu {
-            geo: shape_geo(p.pos, p.shape),
-            top: both || p.side == Side::Top,
-            bottom: both || p.side == Side::Bottom,
-        });
+        let layers = if p.drill.is_some() { all.clone() } else { vec![p.side] };
+        out.push(Cu { geo: shape_geo(p.pos, p.shape), layers });
     }
     for via in &board.vias {
-        out.push(Cu { geo: Geo::Cap { a: via.pos, b: via.pos, r: via.diameter / 2.0 }, top: true, bottom: true });
+        out.push(Cu { geo: Geo::Cap { a: via.pos, b: via.pos, r: via.diameter / 2.0 }, layers: all.clone() });
     }
     out
 }
@@ -180,7 +170,7 @@ fn groups(items: &[Cu]) -> Vec<usize> {
     let mut parent: Vec<usize> = (0..items.len()).collect();
     for i in 0..items.len() {
         for j in (i + 1)..items.len() {
-            let shared = [Side::Top, Side::Bottom].iter().any(|&s| items[i].on(s) && items[j].on(s));
+            let shared = items[i].layers.iter().any(|&s| items[j].on(s));
             if shared && dist(&items[i].geo, &items[j].geo) <= 1e-9 {
                 let (a, b) = (find(&mut parent, i), find(&mut parent, j));
                 parent[a] = b;
@@ -196,6 +186,10 @@ fn side_name(s: Side) -> &'static str {
     match s {
         Side::Top => "表面",
         Side::Bottom => "裏面",
+        Side::Inner(1) => "内層1",
+        Side::Inner(2) => "内層2",
+        Side::Inner(3) => "内層3",
+        Side::Inner(_) => "内層",
     }
 }
 
@@ -272,7 +266,7 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
     let grp = connectivity(board).items;
     let mut out = vec![];
 
-    for side in [Side::Top, Side::Bottom] {
+    for side in board.copper_layers() {
         let on: Vec<usize> = (0..items.len()).filter(|&i| items[i].on(side)).collect();
         for (k, &i) in on.iter().enumerate() {
             for &j in &on[k + 1..] {
@@ -575,7 +569,7 @@ pub fn zone_checks(board: &Board) -> Vec<Violation> {
     }
     let conn = connectivity(board);
     for z in &board.zones {
-        let side = if z.side == Side::Top { "表面" } else { "裏面" };
+        let side = side_name(z.side);
         let name = if z.net.is_empty() { "ネットなし".to_string() } else { z.net.clone() };
         for shape in crate::zonefill::zone_fill(board, z, &conn) {
             let perimeter = |c: &[Point]| (0..c.len()).map(|i| c[i].dist(c[(i + 1) % c.len()])).sum::<f64>();

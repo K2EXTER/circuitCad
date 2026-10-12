@@ -171,12 +171,18 @@ fn zones(g: &mut GerberLayer, board: &Board, side: Side, conn: &Connectivity) {
     }
 }
 
+/// The Gerber file function of a copper layer ("Copper,L2,Inr" for the first inner layer ...).
+fn copper_func(board: &Board, side: Side) -> String {
+    match side {
+        Side::Top => "Copper,L1,Top".into(),
+        Side::Inner(n) => format!("Copper,L{},Inr", n as usize + 1),
+        Side::Bottom => format!("Copper,L{},Bot", board.inner_layers as usize + 2),
+    }
+}
+
 pub fn copper(board: &Board, side: Side) -> String {
-    let func = match side {
-        Side::Top => "Copper,L1,Top",
-        Side::Bottom => "Copper,L2,Bot",
-    };
-    let mut g = GerberLayer::new(func);
+    let func = copper_func(board, side);
+    let mut g = GerberLayer::new(&func);
     if !board.zones.is_empty() {
         let conn = connectivity(board);
         zones(&mut g, board, side, &conn);
@@ -197,7 +203,7 @@ pub fn copper(board: &Board, side: Side) -> String {
 pub fn mask(board: &Board, side: Side) -> String {
     let func = match side {
         Side::Top => "Soldermask,Top",
-        Side::Bottom => "Soldermask,Bot",
+        Side::Bottom | Side::Inner(_) => "Soldermask,Bot",
     };
     let mut g = GerberLayer::new(func);
     let e = board.rules.mask_expansion;
@@ -210,7 +216,7 @@ pub fn mask(board: &Board, side: Side) -> String {
 pub fn silk(board: &Board, side: Side) -> String {
     let func = match side {
         Side::Top => "Legend,Top",
-        Side::Bottom => "Legend,Bot",
+        Side::Bottom | Side::Inner(_) => "Legend,Bot",
     };
     let mut g = GerberLayer::new(func);
     for l in board.silk.iter().filter(|l| l.side == side) {

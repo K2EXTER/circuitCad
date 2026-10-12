@@ -94,6 +94,16 @@ impl BoardEditor {
                     self.selected = Some(Item::Part(i));
                     self.multi.clear();
                 }
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
+                // the pointer has already moved a few pixels when the drag is recognised: look where it was pressed
+                && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
+                && let w0 = self.to_world(rect, o)
+                && let Some(Item::Track(i)) = self.hit_test(w0) {
+                    self.start_track_drag(i, Point::new(snap(w0.x, self.grid), snap(w0.y, self.grid)));
+                }
+            if self.seg_drag.is_some() && resp.dragged_by(egui::PointerButton::Primary) {
+                self.update_track_drag(p);
+            }
             if let Some((r, off)) = self.drag_part.clone()
                 && resp.dragged_by(egui::PointerButton::Primary)
                     && let Some(rot) = self.board.parts.iter().find(|q| q.refdes == r).map(|q| q.rot) {
@@ -105,10 +115,11 @@ impl BoardEditor {
             if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
                 self.finish_polygon();
             }
-            let layer = if self.side == Side::Top { "表面" } else { "裏面" };
+            let layer = self.side.label();
             self.status = format!("X {:.2}  Y {:.2} mm   [{layer}]", p.x, p.y);
         }
         if resp.drag_stopped() {
+            self.finish_track_drag();
             self.drag_part = None;
             self.gdrag = None;
         }

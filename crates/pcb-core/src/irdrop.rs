@@ -88,6 +88,7 @@ fn side_id(s: Side) -> u8 {
     match s {
         Side::Top => 0,
         Side::Bottom => 1,
+        Side::Inner(n) => 1 + n,
     }
 }
 
@@ -173,6 +174,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
     out.source = (board.pads[src_id].refdes.clone(), board.pads[src_id].pin.clone());
 
     let mut g = Graph::default();
+    let layers = board.copper_layers();
     // pads: a through-hole pad is on both layers, joined by its barrel
     let mut pad_node: HashMap<usize, usize> = HashMap::new();
     for &i in &pad_ids {
@@ -180,8 +182,11 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         let n = g.node(p.side, p.pos);
         pad_node.insert(i, n);
         if let Some(d) = p.drill {
-            let m = g.node(p.side.flip(), p.pos);
-            g.edge(n, m, via_resistance(d));
+            // the barrel joins every copper layer, one edge per step between neighbouring layers
+            for w in layers.windows(2) {
+                let (x, y) = (g.node(w[0], p.pos), g.node(w[1], p.pos));
+                g.edge(x, y, via_resistance(d));
+            }
         }
     }
     // tracks of the net; the end of a track snaps to a pad or via it touches
@@ -194,11 +199,13 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         }
         for v in &board.vias {
             if v.pos.dist(q) <= v.diameter / 2.0 + 0.01 {
-                let (a, b) = (g.node(side, v.pos), g.node(side.flip(), v.pos));
-                if !g.edges.iter().any(|&(x, y, _)| (x == a && y == b) || (x == b && y == a)) {
-                    g.edge(a, b, via_resistance(v.drill));
+                for w in layers.windows(2) {
+                    let (x, y) = (g.node(w[0], v.pos), g.node(w[1], v.pos));
+                    if !g.edges.iter().any(|&(e, f, _)| (e == x && f == y) || (e == y && f == x)) {
+                        g.edge(x, y, via_resistance(v.drill));
+                    }
                 }
-                return a;
+                return g.node(side, v.pos);
             }
         }
         g.node(side, q)

@@ -179,7 +179,7 @@ pub fn geometry_key(board: &Board) -> u64 {
     };
     for z in &board.zones {
         z.net.hash(&mut h);
-        (z.side == Side::Top).hash(&mut h);
+        z.side.hash(&mut h);
         z.thermal.hash(&mut h);
         f(&mut h, z.clearance);
         for p in &z.polygon {
@@ -187,7 +187,7 @@ pub fn geometry_key(board: &Board) -> u64 {
         }
     }
     for t in &board.tracks {
-        (t.side == Side::Top).hash(&mut h);
+        t.side.hash(&mut h);
         pt(&mut h, t.a);
         pt(&mut h, t.b);
         f(&mut h, t.width);
@@ -198,7 +198,7 @@ pub fn geometry_key(board: &Board) -> u64 {
         f(&mut h, w);
         f(&mut h, hh);
         p.drill.map(f64::to_bits).hash(&mut h);
-        (p.side == Side::Top).hash(&mut h);
+        p.side.hash(&mut h);
         p.net.hash(&mut h);
     }
     for v in &board.vias {

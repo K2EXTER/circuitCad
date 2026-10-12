@@ -5,6 +5,7 @@ pub mod assembly;
 pub mod autoplace;
 pub mod autoroute;
 pub mod current;
+pub mod diffpair;
 pub mod drc;
 pub mod excellon;
 pub mod export;
@@ -21,11 +22,18 @@ pub mod outline;
 pub mod package;
 pub mod parts;
 pub mod ratsnest;
+pub mod shove;
 pub mod strokefont;
 pub mod zonefill;
 
 #[cfg(test)]
 mod tests_autoroute;
+#[cfg(test)]
+mod tests_layers;
+#[cfg(test)]
+mod tests_shove;
+#[cfg(test)]
+mod tests_diffpair;
 #[cfg(test)]
 mod tests_order;
 #[cfg(test)]

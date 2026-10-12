@@ -43,10 +43,13 @@ impl BoardEditor {
             });
             egui::CollapsingHeader::new("ツールの設定").default_open(true).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("作業層 (L)").on_hover_text("いま配線や部品を置く面。基板は表と裏の2層に銅を張れます");
-                    ui.selectable_value(&mut self.side, Side::Top, "表面").on_hover_text("配線や部品を置く面を表面にします (L キーでも切り替わります)");
-                    ui.selectable_value(&mut self.side, Side::Bottom, "裏面").on_hover_text("配線や部品を置く面を裏面にします (L キーでも切り替わります)");
+                    ui.label("作業層 (L)").on_hover_text("いま配線を置く銅箔の層。部品とシルクは表面か裏面にだけ置けます (内層を選んでいるときは表面)");
+                    for l in self.board.copper_layers() {
+                        ui.selectable_value(&mut self.side, l, l.label()).on_hover_text("配線を置く層をこの層にします (L キーで順に切り替わります)");
+                    }
                 });
+                self.layer_count_ui(ui);
+                ui.checkbox(&mut self.shove, "押しのけ配線").on_hover_text("配線を引くとき・配線をドラッグで動かすとき、邪魔になる別のネットの配線を脇へ寄せます。パッドやビアに固定された配線は動かさず、寄せきれないときは普通に引きます。プレビューが橙色なら押しのけ、赤ならルール違反です");
                 ui.horizontal(|ui| {
                     ui.label("配線");
                     ui.selectable_value(&mut self.route_mode, RouteMode::Angle45, "45°").on_hover_text("配線を 45° の斜めを使って曲げます。基板の標準的な引き方で、角が鈍くなり、きれいで製造もしやすくなります");
@@ -140,6 +143,7 @@ impl BoardEditor {
                         }
                 });
                 self.panel_widths(ui);
+                self.panel_pairs(ui);
             });
             egui::CollapsingHeader::new("④ チェックと発注").default_open(true).show(ui, |ui| {
                 if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
@@ -169,6 +173,9 @@ impl BoardEditor {
                 ui.horizontal_wrapped(|ui| {
                     ui.checkbox(&mut self.vis.top, "表面").on_hover_text("表面の銅 (配線とパッド) を表示します");
                     ui.checkbox(&mut self.vis.bottom, "裏面").on_hover_text("裏面の銅 (配線とパッド) を表示します");
+                    if self.board.inner_layers > 0 {
+                        ui.checkbox(&mut self.vis.inner, "内層").on_hover_text("内層の銅 (配線) を表示します");
+                    }
                     ui.checkbox(&mut self.vis.silk, "シルク").on_hover_text("シルク (白い印刷の文字と枠) を表示します");
                     ui.checkbox(&mut self.vis.zones, "ゾーン").on_hover_text("ゾーン (銅を面で塗った所) を表示します");
                     ui.checkbox(&mut self.vis.airwires, "未配線").on_hover_text("未配線 (まだつながっていない接続を示す黄色の線) を表示します");
@@ -234,10 +241,15 @@ impl BoardEditor {
                 if r.changed() {
                     self.board.tracks[i].width = w;
                 }
+                if ui.button("このネットの配線を全部消す").on_hover_text("この配線がつながっているネットの、配線とビアをすべて消します (パッドは残り、未配線の線が戻ります)。引き直したいときに使います").clicked() {
+                    self.rip_up_selected_net(i);
+                    return;
+                }
                 let mut s = self.board.tracks[i].side;
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut s, Side::Top, "表面").on_hover_text("この配線を表面に移します");
-                    ui.selectable_value(&mut s, Side::Bottom, "裏面").on_hover_text("この配線を裏面に移します");
+                    for l in self.board.copper_layers() {
+                        ui.selectable_value(&mut s, l, l.label()).on_hover_text("この配線をこの層に移します");
+                    }
                 });
                 if s != self.board.tracks[i].side {
                     self.checkpoint();

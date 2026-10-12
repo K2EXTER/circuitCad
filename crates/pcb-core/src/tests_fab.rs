@@ -289,3 +289,13 @@ fn a_note_about_several_places_lists_them_all() {
     let dam = checks.iter().find(|c| c.title.contains("ソルダーマスク")).expect("the narrow mask strips are noted");
     assert!(dam.at.is_some() && dam.also.len() == 1, "{:?}", dam.also);
 }
+
+#[test]
+fn a_board_with_inner_layers_gets_a_note_about_ordering() {
+    let mut b = Board::new("m", 30.0, 20.0);
+    assert!(!fab::preflight(&b, None).iter().any(|c| c.title.contains("層の基板")));
+    b.inner_layers = 2;
+    let c = fab::preflight(&b, None);
+    let note = c.iter().find(|c| c.title.contains("4 層の基板")).expect("note");
+    assert_eq!(note.level, fab::Level::Warn);
+}

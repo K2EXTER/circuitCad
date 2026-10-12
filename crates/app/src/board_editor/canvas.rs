@@ -92,7 +92,7 @@ impl BoardEditor {
             self.finish_polygon();
         }
         if pressed(Key::L) {
-            self.side = self.side.flip();
+            self.side = self.next_layer();
         }
         if pressed(Key::F) {
             self.fit_pending = true;

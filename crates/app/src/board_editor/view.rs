@@ -46,6 +46,7 @@ impl BoardEditor {
         match s {
             Side::Top => Color32::from_rgb(220, 60, 60),
             Side::Bottom => Color32::from_rgb(70, 110, 230),
+            Side::Inner(n) => [Color32::from_rgb(210, 160, 40), Color32::from_rgb(60, 170, 90), Color32::from_rgb(170, 90, 200), Color32::from_rgb(40, 170, 180)][(n as usize - 1) % 4],
         }
     }
 
@@ -53,7 +54,23 @@ impl BoardEditor {
         match s {
             Side::Top => self.vis.top,
             Side::Bottom => self.vis.bottom,
+            Side::Inner(_) => self.vis.inner,
         }
+    }
+
+    /// The copper layers in drawing order: the ones not being worked on first, the working layer last (on top).
+    pub(super) fn layer_order(&self) -> Vec<Side> {
+        let mut v = self.board.copper_layers();
+        v.retain(|&s| s != self.side);
+        v.push(self.side);
+        v
+    }
+
+    /// The next copper layer down (and back to the top after the bottom), for the L key and for vias.
+    pub(super) fn next_layer(&self) -> Side {
+        let v = self.board.copper_layers();
+        let i = v.iter().position(|&s| s == self.side).unwrap_or(0);
+        v[(i + 1) % v.len()]
     }
 
     pub(super) fn nets(&self) -> Vec<String> {

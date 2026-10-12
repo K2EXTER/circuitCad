@@ -39,7 +39,7 @@ impl BoardEditor {
             *cache = Some((key, self.board.zones.iter().map(|zn| pcb_core::zonefill::zone_fill(&self.board, zn, conn)).collect()));
         }
         let Some((_, fills)) = cache.as_ref() else { return };
-        for s in [self.side.flip(), self.side] {
+        for s in self.layer_order() {
             if !self.side_visible(s) {
                 continue;
             }
@@ -76,7 +76,7 @@ impl BoardEditor {
             painter.circle_filled(self.to_screen(rect, o[i]), 1.0, Color32::YELLOW);
         }
         // inactive layer first, so the active one is on top
-        for s in [self.side.flip(), self.side] {
+        for s in self.layer_order() {
             if !self.side_visible(s) {
                 continue;
             }
@@ -264,8 +264,10 @@ impl BoardEditor {
         let col = self.side_color(self.side);
         painter.rect_stroke(rect.shrink(1.5), 0.0, Stroke::new(3.0, col.gamma_multiply(0.85)), egui::StrokeKind::Inside);
         let (name, color_name) = match self.side {
-            Side::Top => ("表面", "赤"),
-            Side::Bottom => ("裏面", "青"),
+            Side::Top => ("表面".to_string(), "赤"),
+            Side::Bottom => ("裏面".to_string(), "青"),
+            s @ Side::Inner(n) => (s.label(), ["金", "緑", "紫", "青緑"][(n as usize - 1) % 4]),
+            s => (s.label(), "")
         };
         let text = format!("作業中: {name} ({color_name})   Lキーで切り替え  ・  もう一方の面は薄く表示");
         let font = egui::FontId::proportional(14.0);
@@ -283,10 +285,16 @@ impl BoardEditor {
         match self.tool {
             Tool::Track => {
                 if let Some(a) = self.pending {
+                    let (pushed, bad) = self.route_preview(a, p);
+                    let base = if bad { Color32::from_rgb(255, 60, 60) } else if pushed > 0 { Color32::from_rgb(255, 190, 40) } else { self.side_color(self.side) };
                     let mut from = a;
                     for q in self.route_points(a, p) {
-                        painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, q)], Stroke::new((self.track_width as f32 * self.zoom).max(1.0), self.side_color(self.side).gamma_multiply(0.6)));
+                        painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, q)], Stroke::new((self.track_width as f32 * self.zoom).max(1.0), base.gamma_multiply(0.7)));
                         from = q;
+                    }
+                    if bad || pushed > 0 {
+                        let msg = if bad { "ルール違反になります (間隔が足りません)".to_string() } else { format!("{pushed} 本を押しのけます") };
+                        painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, msg, egui::FontId::proportional(13.0), base);
                     }
                 }
             }

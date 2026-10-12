@@ -478,3 +478,130 @@ fn right_click_in_the_board_editor_confirms_the_drawing_then_returns_to_select()
     assert!(e.leave_tool() && matches!(e.tool, Tool::Select));
     assert!(!e.leave_tool());
 }
+
+#[test]
+fn layer_count_changes_and_the_layer_key_walks_through_them() {
+    let mut e = BoardEditor::default();
+    assert_eq!(e.next_layer(), Side::Bottom, "two layers: top <-> bottom as before");
+    e.set_layer_count(4);
+    assert_eq!(e.board.copper_layers().len(), 4);
+    assert_eq!(e.next_layer(), Side::Inner(1));
+    e.side = Side::Inner(2);
+    assert_eq!(e.next_layer(), Side::Bottom);
+    assert_eq!(e.layer_order().last(), Some(&Side::Inner(2)), "the working layer is drawn last");
+    // a part or pad is never put on an inner layer
+    assert_eq!(e.side.outer(), Side::Top);
+}
+
+#[test]
+fn fewer_layers_are_refused_while_copper_is_on_the_removed_ones() {
+    let mut e = BoardEditor::default();
+    e.set_layer_count(4);
+    e.board.tracks.push(Track { side: Side::Inner(2), a: p(1.0, 1.0), b: p(5.0, 1.0), width: 0.25 });
+    e.set_layer_count(2);
+    assert_eq!(e.board.inner_layers, 2, "refused");
+    assert!(e.status.contains("内層"), "{}", e.status);
+    e.board.tracks.clear();
+    e.side = Side::Inner(1);
+    e.set_layer_count(2);
+    assert_eq!((e.board.inner_layers, e.side), (0, Side::Top));
+    e.undo();
+    assert_eq!(e.board.inner_layers, 2, "undo brings the layers back");
+}
+
+#[test]
+fn a_pair_is_added_routed_and_undone() {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 60.0, 30.0);
+    for (x, net, y) in [(5.0, "USB_DP", 10.0), (5.0, "USB_DM", 11.0), (50.0, "USB_DP", 10.0), (50.0, "USB_DM", 11.0)] {
+        let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 0.3, h: 0.3 }, None, Side::Top);
+        pad.net = net.into();
+        e.board.pads.push(pad);
+    }
+    e.track_width = 0.2;
+    e.grid = 0.0;
+    let found = pcb_core::diffpair::suggest_pairs(&e.board_nets());
+    assert_eq!(found.len(), 1);
+    e.board.diff_pairs = found;
+    e.route_pair_at(0);
+    assert!(ratsnest(&e.board).is_empty(), "{}", e.status);
+    assert!(pcb_core::diffpair::check_pairs(&e.board).iter().all(|v| !v.message.contains("片方だけ")));
+    e.undo();
+    assert!(e.board.tracks.is_empty(), "one undo removes the whole pair route");
+}
+
+fn two_net_editor() -> BoardEditor {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 40.0, 30.0);
+    for (x, y, net) in [(5.0, 12.0, "B"), (35.0, 12.0, "B")] {
+        let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        pad.net = net.into();
+        e.board.pads.push(pad);
+    }
+    e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 12.0), b: p(20.0, 12.0), width: 0.25 });
+    e.board.tracks.push(Track { side: Side::Top, a: p(20.0, 12.0), b: p(35.0, 12.0), width: 0.25 });
+    e.track_width = 0.25;
+    e.grid = 0.0;
+    e.route_mode = RouteMode::Free;
+    e
+}
+
+#[test]
+fn routing_next_to_another_net_pushes_it_aside_and_undo_restores_it() {
+    let mut e = two_net_editor();
+    assert_eq!(e.route_preview(p(12.0, 11.65), p(28.0, 11.65)).0, 2, "the preview says two tracks are pushed");
+    e.pending = Some(p(12.0, 11.65));
+    e.tool = Tool::Track;
+    e.click(p(28.0, 11.65));
+    assert!(drc::check(&e.board).is_empty(), "{:?}", drc::check(&e.board));
+    assert!(e.status.contains("押しのけ"), "{}", e.status);
+    e.undo();
+    assert_eq!(e.board.tracks.len(), 2);
+    assert_eq!(e.board.tracks[0].b.y, 12.0, "undo brings back the original position");
+}
+
+#[test]
+fn shove_can_be_turned_off() {
+    let mut e = two_net_editor();
+    e.shove = false;
+    e.pending = Some(p(12.0, 11.65));
+    e.tool = Tool::Track;
+    e.click(p(28.0, 11.65));
+    assert_eq!(e.board.tracks[0].b.y, 12.0);
+    assert!(!drc::check(&e.board).is_empty(), "the rule is broken, as drawn");
+}
+
+#[test]
+fn a_track_dragged_with_the_mouse_follows_and_undoes_in_one_step() {
+    let mut e = two_net_editor();
+    e.board.tracks.push(Track { side: Side::Top, a: p(10.0, 8.0), b: p(30.0, 8.0), width: 0.25 });
+    let before = e.undo.len();
+    e.start_track_drag(2, p(20.0, 8.0));
+    e.update_track_drag(p(20.0, 9.0));
+    e.update_track_drag(p(20.0, 11.65 - 8.0 + 8.0)); // all the way up beside net B
+    e.finish_track_drag();
+    assert_eq!(e.undo.len(), before + 1);
+    assert!(drc::check(&e.board).is_empty(), "{:?}", drc::check(&e.board));
+    e.undo();
+    assert_eq!(e.board.tracks[2].a.y, 8.0);
+}
+
+#[test]
+fn a_drag_that_goes_nowhere_leaves_no_undo_step() {
+    let mut e = two_net_editor();
+    let before = e.undo.len();
+    e.start_track_drag(0, p(10.0, 12.0));
+    e.update_track_drag(p(10.0, 12.0));
+    e.finish_track_drag();
+    assert_eq!(e.undo.len(), before);
+}
+
+#[test]
+fn ripping_up_a_net_from_the_selected_track() {
+    let mut e = two_net_editor();
+    e.rip_up_selected_net(0);
+    assert!(e.board.tracks.is_empty());
+    assert_eq!(ratsnest(&e.board).len(), 1);
+    e.undo();
+    assert_eq!(e.board.tracks.len(), 2);
+}

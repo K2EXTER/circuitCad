@@ -8,7 +8,7 @@ use zip::write::SimpleFileOptions;
 /// JLCPCB, PCBWay, OSH Park etc. recognise automatically.
 pub fn fab_files(board: &Board) -> Vec<(String, String)> {
     let n = &board.name;
-    vec![
+    let mut files = vec![
         (format!("{n}.GTL"), gerber::copper(board, Side::Top)),
         (format!("{n}.GBL"), gerber::copper(board, Side::Bottom)),
         (format!("{n}.GTS"), gerber::mask(board, Side::Top)),
@@ -18,7 +18,12 @@ pub fn fab_files(board: &Board) -> Vec<(String, String)> {
         (format!("{n}.GKO"), gerber::outline(board)),
         (format!("{n}-PTH.DRL"), excellon::plated(board)),
         (format!("{n}-NPTH.DRL"), excellon::non_plated(board)),
-    ]
+    ];
+    // inner copper layers: .G1, .G2 ... (the Protel convention)
+    for k in 1..=board.inner_layers {
+        files.insert(1 + k as usize, (format!("{n}.G{k}"), gerber::copper(board, Side::Inner(k))));
+    }
+    files
 }
 
 pub fn zip_bytes(board: &Board) -> zip::result::ZipResult<Vec<u8>> {

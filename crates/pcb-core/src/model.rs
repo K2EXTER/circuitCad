@@ -15,18 +15,42 @@ impl Point {
     }
 }
 
+/// A face of the board, or (for copper only: tracks and zones) an inner copper layer.
+/// `Inner(n)` counts from the top, 1-based; it is only valid up to `Board::inner_layers`.
+/// Parts, pads and silkscreen are always `Top` or `Bottom`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Side {
     Top,
     Bottom,
+    Inner(u8),
 }
 
 impl Side {
+    /// The other face. An inner layer has no other face, so it stays.
     pub fn flip(self) -> Side {
         match self {
             Side::Top => Side::Bottom,
             Side::Bottom => Side::Top,
+            inner => inner,
         }
+    }
+
+    /// The face a part, pad or silkscreen goes on when this layer is being worked on (inner layers have none: the top).
+    pub fn outer(self) -> Side {
+        if self.is_inner() { Side::Top } else { self }
+    }
+
+    /// Name for the screen: 表面 / 内層1 / 裏面.
+    pub fn label(self) -> String {
+        match self {
+            Side::Top => "表面".into(),
+            Side::Bottom => "裏面".into(),
+            Side::Inner(n) => format!("内層{n}"),
+        }
+    }
+
+    pub fn is_inner(self) -> bool {
+        matches!(self, Side::Inner(_))
     }
 }
 
@@ -270,10 +294,25 @@ pub struct Board {
     /// Parts (by reference designator) that were fixed in place: the editor does not move, turn or flip them.
     #[serde(default)]
     pub locked_parts: Vec<String>,
+    /// Number of inner copper layers (0 = a two-layer board). The copper layers are
+    /// `Top`, `Inner(1)` .. `Inner(inner_layers)`, `Bottom`.
+    #[serde(default)]
+    pub inner_layers: u8,
+    /// Differential pairs: two nets routed side by side with the same length.
+    #[serde(default)]
+    pub diff_pairs: Vec<crate::diffpair::DiffPair>,
     pub rules: Rules,
 }
 
 impl Board {
+    /// All copper layers from the top face to the bottom face.
+    pub fn copper_layers(&self) -> Vec<Side> {
+        let mut v = vec![Side::Top];
+        v.extend((1..=self.inner_layers).map(Side::Inner));
+        v.push(Side::Bottom);
+        v
+    }
+
     pub fn is_locked(&self, refdes: &str) -> bool {
         self.locked_parts.iter().any(|r| r == refdes)
     }
@@ -298,6 +337,8 @@ impl Board {
             footprints: vec![],
             net_currents: Default::default(),
             locked_parts: vec![],
+            inner_layers: 0,
+            diff_pairs: vec![],
             rules: Rules::default(),
         }
     }

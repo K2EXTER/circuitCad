@@ -196,6 +196,17 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
     out.push(check(Level::Ok, format!("基板の大きさ {:.1} × {:.1} mm", hi.x - lo.x, hi.y - lo.y), "外形が決まっています", None));
 
+    // the presets are for two-layer orders
+    if board.inner_layers > 0 {
+        let n = board.inner_layers as usize + 2;
+        out.push(check(
+            Level::Warn,
+            format!("{n} 層の基板です (内層 {} 枚)", board.inner_layers),
+            format!("書き出した zip には内層のファイル (.G1 …) が入ります。発注の画面で層数を {n} 層にし、層構成 (積層) と板厚を発注先の指定に合わせてください。プリセットの寸法の値は 2 層向けなので、内層のある基板は発注先の「多層」の製造能力で確かめましょう"),
+            None,
+        ));
+    }
+
     // parts must be on the board
     let outside: Vec<&Part> = board.parts.iter().filter(|p| !inside_polygon(&board.outline, p.pos)).collect();
     if let Some(first) = outside.first() {
@@ -284,6 +295,12 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     let dams = drc::mask_dam_checks(board);
     if let Some(first) = dams.first() {
         out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)).with_also(dams.iter().map(|x| x.at)));
+    }
+
+    // differential pairs: length and spacing
+    let pairs = crate::diffpair::check_pairs(board);
+    if let Some(first) = pairs.first() {
+        out.push(check(Level::Warn, format!("差動ペアに気になる所が {} 件あります", pairs.len()), format!("例: {}", first.message), Some(first.at)).with_also(pairs.iter().map(|x| x.at)));
     }
 
     // heat pads without thermal vias

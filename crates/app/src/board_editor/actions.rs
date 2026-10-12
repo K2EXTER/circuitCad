@@ -23,8 +23,21 @@ impl BoardEditor {
             return;
         }
         self.checkpoint();
-        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid) };
-        let report = autoroute::autoroute(&mut self.board, &opt, net);
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None };
+        // differential pairs first, side by side; the rest afterwards
+        let mut pair_routed = 0;
+        let mut pair_failed = vec![];
+        for d in self.board.diff_pairs.clone() {
+            if net.is_none_or(|n| n == d.p || n == d.n) {
+                let r = autoroute::route_pair(&mut self.board, &d, &opt);
+                pair_routed += r.routed;
+                pair_failed.extend(r.failed);
+            }
+        }
+        let mut report = autoroute::autoroute(&mut self.board, &opt, net);
+        report.routed += pair_routed;
+        // a pair connection that failed is tried again by the plain router above; count only what is still open
+        let _ = pair_failed;
         self.violations.clear();
         if report.routed == 0 {
             self.undo.pop(); // nothing changed: no undo step
@@ -60,6 +73,7 @@ impl BoardEditor {
 
     pub fn run_drc(&mut self) {
         self.violations = drc::check(&self.board);
+        self.violations.extend(pcb_core::diffpair::check_pairs(&self.board));
         self.drc_ran = true;
         self.status = format!("DRC: 違反 {} 件", self.violations.len());
     }

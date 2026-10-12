@@ -159,6 +159,7 @@ impl Pickable {
 struct Visible {
     top: bool,
     bottom: bool,
+    inner: bool,
     silk: bool,
     airwires: bool,
     nets: bool,
@@ -176,6 +177,8 @@ pub struct BoardEditor {
     /// Voltage drop along the nets' copper, with a fingerprint of the board it was computed for.
     /// Open the width panel on the next frame (command line `--ir`).
     widths_open: Option<bool>,
+    /// The two nets picked in the diff-pair panel for a new pair.
+    pair_new: (String, String),
     ir_drop: Option<(f64, Vec<pcb_core::irdrop::NetDrop>)>,
     pad_size: f64,
     pad_drill: f64,
@@ -195,6 +198,12 @@ pub struct BoardEditor {
     boxsel: Option<BoxSel>,
     gdrag: Option<GroupDrag>,
     drag_part: Option<(String, Point)>,
+    /// Dragging one track with the Select tool: (the board as it was, the track, where the pointer took hold).
+    seg_drag: Option<(Board, usize, Point)>,
+    /// Push other nets' tracks aside while routing and dragging tracks.
+    shove: bool,
+    /// The routing preview's verdict for the last cursor position: (key, tracks pushed, rule broken).
+    preview_cache: std::cell::RefCell<Option<(u64, usize, bool)>>,
     pub status: String,
     /// Set by the small "操作" buttons; the app opens the guide on that page.
     pub help_request: Option<crate::help::HelpTab>,
@@ -243,6 +252,7 @@ impl Default for BoardEditor {
             track_width: 0.25,
             ir_drop: None,
             widths_open: None,
+            pair_new: Default::default(),
             pad_size: 1.6,
             pad_drill: 0.8,
             via_dia: 0.6,
@@ -259,6 +269,9 @@ impl Default for BoardEditor {
             boxsel: None,
             gdrag: None,
             drag_part: None,
+            seg_drag: None,
+            shove: true,
+            preview_cache: Default::default(),
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,
             violations: vec![],
@@ -267,7 +280,7 @@ impl Default for BoardEditor {
             redo: vec![],
             pick: Pickable::ALL,
             check_focus: None,
-            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true },
+            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true, inner: true },
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
@@ -314,6 +327,9 @@ mod raster3d;
 mod view3d;
 mod select;
 mod route;
+mod layers;
+mod shoving;
+mod pairs;
 mod tools;
 mod file;
 mod actions;

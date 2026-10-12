@@ -64,7 +64,7 @@ impl BoardEditor {
                 None => self.pending = Some(p),
                 Some(a) => {
                     self.checkpoint();
-                    self.board.silk.push(SilkLine { side: self.side, a, b: p, width: 0.15, refdes: String::new() });
+                    self.board.silk.push(SilkLine { side: self.side.outer(), a, b: p, width: 0.15, refdes: String::new() });
                     self.pending = Some(p);
                 }
             },
@@ -90,11 +90,11 @@ impl BoardEditor {
             }
             Tool::PadTh => {
                 self.checkpoint();
-                self.board.pads.push(Pad::new(p, PadShape::Circle { d: self.pad_size }, Some(self.pad_drill), self.side));
+                self.board.pads.push(Pad::new(p, PadShape::Circle { d: self.pad_size }, Some(self.pad_drill), self.side.outer()));
             }
             Tool::PadSmd => {
                 self.checkpoint();
-                self.board.pads.push(Pad::new(p, PadShape::Rect { w: self.pad_size, h: self.pad_size * 0.7 }, None, self.side));
+                self.board.pads.push(Pad::new(p, PadShape::Rect { w: self.pad_size, h: self.pad_size * 0.7 }, None, self.side.outer()));
             }
             Tool::Via => {
                 self.checkpoint();

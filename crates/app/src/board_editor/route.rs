@@ -34,17 +34,32 @@ impl BoardEditor {
         self.checkpoint();
         self.push_route(a, p);
         self.board.vias.push(Via { pos: p, diameter: self.via_dia, drill: self.via_drill });
-        self.side = self.side.flip();
+        self.side = self.next_layer();
         self.pending = Some(p);
     }
 
-    pub(super) fn push_route(&mut self, a: Point, p: Point) {
+    /// The tracks a route from `a` to `p` would lay on the working layer.
+    pub(super) fn route_segments(&self, a: Point, p: Point) -> Vec<Track> {
         let mut from = a;
+        let mut v = vec![];
         for q in self.route_points(a, p) {
             if from.dist(q) > 1e-9 {
-                self.board.tracks.push(Track { side: self.side, a: from, b: q, width: self.track_width });
+                v.push(Track { side: self.side, a: from, b: q, width: self.track_width });
             }
             from = q;
+        }
+        v
+    }
+
+    pub(super) fn push_route(&mut self, a: Point, p: Point) {
+        let new = self.route_segments(a, p);
+        if self.shove {
+            let pushed = pcb_core::shove::add_tracks(&mut self.board, new);
+            if pushed > 0 {
+                self.status = format!("押しのけ配線: 邪魔な配線 {pushed} 本を脇へ寄せました");
+            }
+        } else {
+            self.board.tracks.extend(new);
         }
     }
 }

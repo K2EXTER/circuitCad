@@ -1,4 +1,4 @@
-//! A small grid router for two-layer boards.
+//! A small grid router for boards with two or more copper layers.
 //!
 //! Every unrouted connection (see [`ratsnest`]) is searched on a grid with A*: 45° moves,
 //! a penalty for bends (so lines stay straight) and vias to change layers. Copper of other
@@ -23,11 +23,14 @@ pub struct RouteOptions {
     pub via_drill: f64,
     /// Grid pitch (mm). Smaller finds more routes but is slower.
     pub grid: f64,
+    /// Run next to this net (of an already routed differential partner), centre to centre `distance` mm away:
+    /// cells at that distance are cheaper, so the new line follows the old one.
+    pub follow: Option<(String, f64)>,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2 }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None }
     }
 }
 
@@ -92,19 +95,22 @@ struct Grid {
     ny: usize,
     /// Per layer: 0 free, n > 0 only net n may pass, -1 blocked. `trk` is for track centres,
     /// `via` for via centres (larger clearance).
-    trk: [Vec<i32>; 2],
-    via: [Vec<i32>; 2],
+    trk: Vec<Vec<i32>>,
+    via: Vec<Vec<i32>>,
+    /// The copper layers, top to bottom: the index is the layer number used in `trk` / `via`.
+    layers: Vec<Side>,
+    /// Per layer: cells next to the net to follow (empty when not following).
+    near: Vec<Vec<bool>>,
 }
 
-fn layer(s: Side) -> usize {
-    match s {
-        Side::Top => 0,
-        Side::Bottom => 1,
+impl Grid {
+    fn layer(&self, s: Side) -> usize {
+        self.layers.iter().position(|&x| x == s).unwrap_or(0)
     }
-}
 
-fn side(l: usize) -> Side {
-    if l == 0 { Side::Top } else { Side::Bottom }
+    fn side(&self, l: usize) -> Side {
+        self.layers[l]
+    }
 }
 
 /// Distance from a point to the edge of a shape (0 inside).
@@ -162,13 +168,13 @@ fn passable(cell: i32, net: i32) -> bool {
     cell == 0 || cell == net
 }
 
-fn pad_layers(p: &Pad) -> &'static [usize] {
+fn pad_layers(p: &Pad, layers: usize) -> Vec<usize> {
     if p.drill.is_some() {
-        &[0, 1]
+        (0..layers).collect()
     } else if p.side == Side::Top {
-        &[0]
+        vec![0]
     } else {
-        &[1]
+        vec![layers - 1]
     }
 }
 
@@ -190,7 +196,9 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     if nx * ny > 4_000_000 {
         return None;
     }
-    let mut grid = Grid { x0: lo.x, y0: lo.y, g, nx, ny, trk: [vec![0; nx * ny], vec![0; nx * ny]], via: [vec![0; nx * ny], vec![0; nx * ny]] };
+    let layers = board.copper_layers();
+    let nl = layers.len();
+    let mut grid = Grid { x0: lo.x, y0: lo.y, g, nx, ny, trk: vec![vec![0; nx * ny]; nl], via: vec![vec![0; nx * ny]; nl], layers, near: vec![] };
 
     let r = &board.rules;
     // A path sampled on the grid can pass closer to a corner than its cells do, so inflate a little more.
@@ -203,14 +211,14 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     let n = board.outline.len();
     for e in 0..n {
         let edge = Geo::Cap { a: board.outline[e], b: board.outline[(e + 1) % n], r: 0.0 };
-        for l in 0..2 {
+        for l in 0..nl {
             grid.mark(l, &edge, -1, t_edge, v_edge);
         }
     }
     for j in 0..ny {
         for i in 0..nx {
             if !inside_polygon(&board.outline, grid.pos(i, j)) {
-                for l in 0..2 {
+                for l in 0..nl {
                     grid.trk[l][j * nx + i] = -1;
                     grid.via[l][j * nx + i] = -1;
                 }
@@ -235,27 +243,44 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     for (k, t) in board.tracks.iter().enumerate() {
         let net = id_of(conn.track_net(k));
         let geo = Geo::Cap { a: t.a, b: t.b, r: t.width / 2.0 };
-        grid.mark(layer(t.side), &geo, net, t_need, v_need);
+        grid.mark(grid.layer(t.side), &geo, net, t_need, v_need);
     }
     for (k, p) in board.pads.iter().enumerate() {
         let net = id_of(conn.pad_net(k).or(if p.net.is_empty() { None } else { Some(p.net.as_str()) }));
         let geo = shape_geo(p.pos, p.shape);
-        for &l in pad_layers(p) {
+        for l in pad_layers(p, nl) {
             grid.mark(l, &geo, net, t_need, v_need);
         }
     }
     for (k, v) in board.vias.iter().enumerate() {
         let net = id_of(conn.via_net(k));
         let geo = Geo::Cap { a: v.pos, b: v.pos, r: v.diameter / 2.0 };
-        for l in 0..2 {
+        for l in 0..nl {
             grid.mark(l, &geo, net, t_need, v_need);
         }
     }
     for h in &board.holes {
         let (ha, hb) = h.ends();
         let geo = Geo::Cap { a: ha, b: hb, r: h.drill / 2.0 };
-        for l in 0..2 {
+        for l in 0..nl {
             grid.mark(l, &geo, -1, t_need, v_need);
+        }
+    }
+    if let Some((follow, d0)) = &opt.follow {
+        grid.near = vec![vec![false; nx * ny]; nl];
+        let (lo_d, hi_d) = (d0 - g * 0.6, d0 + g * 0.6);
+        for t in board.tracks.iter().enumerate().filter(|(k, _)| conn.track_net(*k) == Some(follow.as_str())).map(|(_, t)| t) {
+            let geo = Geo::Cap { a: t.a, b: t.b, r: 0.0 };
+            let l = grid.layer(t.side);
+            let (i0, j0, i1, j1) = grid.cells_near(geo_bbox(&geo), hi_d);
+            for j in j0..=j1 {
+                for i in i0..=i1 {
+                    let d = geo_dist(grid.pos(i, j), &geo);
+                    if d >= lo_d && d <= hi_d {
+                        grid.near[l][j * nx + i] = true;
+                    }
+                }
+            }
         }
     }
     Some(grid)
@@ -291,7 +316,7 @@ fn pad_cells(grid: &Grid, pad: &Pad, net: i32) -> Vec<(usize, usize, usize)> {
     let geo = shape_geo(pad.pos, pad.shape);
     let (i0, j0, i1, j1) = grid.cells_near(geo_bbox(&geo), grid.g);
     let mut out = vec![];
-    for &l in pad_layers(pad) {
+    for l in pad_layers(pad, grid.layers.len()) {
         for j in j0..=j1 {
             for i in i0..=i1 {
                 if geo_dist(grid.pos(i, j), &geo) <= grid.g && passable(grid.trk[l][j * grid.nx + i], net) {
@@ -316,22 +341,24 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     }
 
     let (nx, ny) = (grid.nx, grid.ny);
-    let n_states = 2 * nx * ny * 9;
+    let nl = grid.layers.len();
+    let n_states = nl * nx * ny * 9;
     let enc = |l: usize, i: usize, j: usize, d: usize| (((l * ny + j) * nx + i) * 9 + d) as u32;
     let dec = |s: u32| {
         let s = s as usize;
         let (cell, d) = (s / 9, s % 9);
         (cell / (nx * ny), cell % nx, (cell / nx) % ny, d)
     };
-    let mut is_goal = vec![false; 2 * nx * ny];
+    let mut is_goal = vec![false; nl * nx * ny];
     for &(l, i, j) in &goals {
         is_goal[(l * ny + j) * nx + i] = true;
     }
     let gc = grid_cell(&grid, pad_b.pos);
+    let following = !grid.near.is_empty();
     let g = grid.g as f32;
     let h = |i: usize, j: usize| {
         let (dx, dy) = ((i as f32 - gc.0 as f32).abs(), (j as f32 - gc.1 as f32).abs());
-        g * (dx.max(dy) + 0.4142 * dx.min(dy)) * 0.8
+        g * (dx.max(dy) + 0.4142 * dx.min(dy)) * if following { 0.4 } else { 0.8 }
     };
     let via_cost = 3.0f32; // a via costs as much as 3 mm of track
 
@@ -374,7 +401,10 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
             if diagonal && !(passable(grid.trk[l][j * nx + ni], net) && passable(grid.trk[l][nj * nx + i], net)) {
                 continue;
             }
-            let step = if diagonal { g * std::f32::consts::SQRT_2 } else { g };
+            let mut step = if diagonal { g * std::f32::consts::SQRT_2 } else { g };
+            if following && grid.near[l][nj * nx + ni] {
+                step *= 0.5; // running next to the partner line is cheap
+            }
             let turn = if d == NO_DIR {
                 0.0
             } else {
@@ -390,15 +420,20 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
             }
         }
         // change layer with a via
-        let o = 1 - l;
+        // (a via goes through every layer, so the spot must be free on all of them)
         let idx = j * nx + i;
-        if passable(grid.via[l][idx], net) && passable(grid.via[o][idx], net) && passable(grid.trk[o][idx], net) {
-            let ns = enc(o, i, j, NO_DIR);
-            let nc = c0 + via_cost;
-            if nc < cost[ns as usize] {
-                cost[ns as usize] = nc;
-                parent[ns as usize] = s;
-                heap.push(Node { f: nc + h(i, j), s: ns });
+        if (0..nl).all(|k| passable(grid.via[k][idx], net)) {
+            for o in (0..nl).filter(|&o| o != l) {
+                if !passable(grid.trk[o][idx], net) {
+                    continue;
+                }
+                let ns = enc(o, i, j, NO_DIR);
+                let nc = c0 + via_cost;
+                if nc < cost[ns as usize] {
+                    cost[ns as usize] = nc;
+                    parent[ns as usize] = s;
+                    heap.push(Node { f: nc + h(i, j), s: ns });
+                }
             }
         }
     }
@@ -422,7 +457,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     let mut vias = vec![];
     let mut emit = |l: usize, a: Point, b: Point| {
         if a.dist(b) > 1e-9 {
-            tracks.push(Track { side: side(l), a, b, width: opt.track_width });
+            tracks.push(Track { side: grid.side(l), a, b, width: opt.track_width });
         }
     };
     emit(cells[0].0, pad_a.pos, cells[0].1);
@@ -432,7 +467,9 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
         let (l, p, d) = cells[k];
         if l != cells[k - 1].0 {
             emit(cells[k - 1].0, run_from, cells[k - 1].1);
-            vias.push(Via { pos: p, diameter: opt.via_diameter, drill: opt.via_drill });
+            if !vias.iter().any(|v: &Via| v.pos == p) {
+                vias.push(Via { pos: p, diameter: opt.via_diameter, drill: opt.via_drill });
+            }
             run_from = p;
             run_dir = None;
         } else {
@@ -457,4 +494,19 @@ fn grid_cell(grid: &Grid, p: Point) -> (usize, usize) {
     let i = (((p.x - grid.x0) / grid.g).round().max(0.0) as usize).min(grid.nx - 1);
     let j = (((p.y - grid.y0) / grid.g).round().max(0.0) as usize).min(grid.ny - 1);
     (i, j)
+}
+
+/// Route a differential pair: the "+" net first, then the "-" net, which prefers to run beside the first at the
+/// pair's gap. Every route is still checked with the DRC (see [`route_airwire`]); the pair rules are checked
+/// afterwards by [`crate::diffpair::check_pairs`].
+pub fn route_pair(board: &mut Board, pair: &crate::diffpair::DiffPair, opt: &RouteOptions) -> RouteReport {
+    let mut first = opt.clone();
+    first.follow = None;
+    let mut report = autoroute(board, &first, Some(&pair.p));
+    let mut second = opt.clone();
+    second.follow = Some((pair.p.clone(), opt.track_width + pair.gap));
+    let r2 = autoroute(board, &second, Some(&pair.n));
+    report.routed += r2.routed;
+    report.failed.extend(r2.failed);
+    report
 }
