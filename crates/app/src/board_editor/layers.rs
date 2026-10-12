@@ -49,8 +49,10 @@ impl BoardEditor {
         let pos = rect.right_top() + Vec2::new(-14.0, 14.0);
         let id = egui::Id::new("layer_overlay_fold");
         egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+            egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+                // dark text on the whitish glass
+                ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
+                let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
                 let title = if state.is_open() { "層".to_string() } else { format!("層: {}", self.side.label()) };
                 state
                     .show_header(ui, |ui| {
