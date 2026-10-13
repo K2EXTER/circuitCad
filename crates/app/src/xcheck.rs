@@ -316,14 +316,14 @@ pub fn run_cli(args: &[String]) -> bool {
     let tran = args.iter().any(|a| a == "--tran");
     let out = val("--out").unwrap_or(if tran { "xcheck_tran_report.txt" } else { "xcheck_report.txt" });
     let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
-        (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> [--tran [--tstop 秒] [--tstep 秒] [--ourstep 秒] [--ngstep 秒]] [--ngspice <exe>] [--out report.txt]\n".to_string(),
+        (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> [--tran [--tstop 秒] [--tstep 秒] [--ourstep 秒] [--ngstep 秒] [--lte 許容]] [--ngspice <exe>] [--out report.txt]\n".to_string(),
         (_, None) => "ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください\n".to_string(),
         (Some(p), Some(exe)) if tran => {
             let num = |flag: &str| val(flag).and_then(parse_value);
             crate::xcheck_tran::run_path(
                 Path::new(p),
                 &exe,
-                crate::xcheck_tran::Given { tstop: num("--tstop"), tstep: num("--tstep"), ours_step: num("--ourstep"), ng_step: num("--ngstep") },
+                crate::xcheck_tran::Given { tstop: num("--tstop"), tstep: num("--tstep"), ours_step: num("--ourstep"), ng_step: num("--ngstep"), lte: num("--lte") },
             )
         }
         (Some(p), Some(exe)) => run_path(Path::new(p), &exe),
@@ -406,4 +406,6 @@ mod tests {
         assert!(to_spice(&s, "t").contains("MQ1 OUT G 0 0 2N7000"));
     }
 }
+
+
 

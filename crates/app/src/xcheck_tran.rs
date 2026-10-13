@@ -16,8 +16,8 @@ const MAX_STEPS: f64 = 20_000.0;
 
 #[derive(Debug, PartialEq)]
 pub enum TranOutcome {
-    Match { nodes: usize, tstop: f64, worst: String, nrmse: f64 },
-    Differ { nodes: usize, tstop: f64, worst: String, nrmse: f64, peak: f64, bad: usize },
+    Match { nodes: usize, tstop: f64, worst: String, nrmse: f64, ripple: String },
+    Differ { nodes: usize, tstop: f64, worst: String, nrmse: f64, peak: f64, at: f64, bad: usize, ripple: String },
     Skipped(String),
     Failed(String),
 }
@@ -104,12 +104,20 @@ pub fn interpolate(t: &[f64], v: &[f64], x: f64) -> f64 {
     }
 }
 
-/// (normalised RMS error, peak error) of `ours` against `theirs`, both on the time axis `t`.
-pub fn waveform_error(ours: &[f64], theirs: &[f64]) -> (f64, f64) {
+/// (normalised RMS error, peak error) of `ours` against `theirs` on the time axis `t`.
+/// The RMS is weighted by time: the step control puts many points into a fast event, and counting
+/// points would let that one event dominate.
+pub fn waveform_error(t: &[f64], ours: &[f64], theirs: &[f64]) -> (f64, f64) {
     let (lo, hi) = theirs.iter().fold((f64::MAX, f64::MIN), |(l, h), &x| (l.min(x), h.max(x)));
     let span = (hi - lo).max(MIN_SPAN);
-    let n = ours.len().max(1) as f64;
-    let rms = (ours.iter().zip(theirs).map(|(a, b)| (a - b) * (a - b)).sum::<f64>() / n).sqrt();
+    let (mut sum, mut total) = (0.0, 0.0);
+    for k in 1..t.len().min(ours.len()) {
+        let dt = t[k] - t[k - 1];
+        let (e0, e1) = (ours[k - 1] - theirs[k - 1], ours[k] - theirs[k]);
+        sum += dt * (e0 * e0 + e1 * e1) / 2.0;
+        total += dt;
+    }
+    let rms = if total > 0.0 { (sum / total).sqrt() } else { 0.0 };
     let peak = ours.iter().zip(theirs).map(|(a, b)| (a - b).abs()).fold(0.0, f64::max);
     (rms / span, peak)
 }
@@ -122,6 +130,8 @@ pub struct Given {
     pub tstep: Option<f64>,
     pub ours_step: Option<f64>,
     pub ng_step: Option<f64>,
+    /// Our step-error tolerance (`SimOptions::lte_reltol`); a huge value switches the control off.
+    pub lte: Option<f64>,
 }
 
 pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Given) -> TranOutcome {
@@ -141,6 +151,11 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
         Ok(c) => c,
         Err(e) => return TranOutcome::Failed(format!("自前エンジン: 回路を作れません ({})", e.first().map(|x| x.to_string()).unwrap_or_default())),
     };
+    if let Some(l) = given.lte {
+        let mut o = sim_core::options();
+        o.lte_reltol = l;
+        sim_core::set_options(o);
+    }
     let ours = match transient(&circuit, &TranSettings { tstop, tstep: ours_step, uic: false }) {
         Ok(r) => r,
         Err(e) => return TranOutcome::Failed(format!("自前エンジン: {e}")),
@@ -169,33 +184,50 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
     }
 
     let (mut n, mut bad) = (0, 0);
-    let mut worst: Option<(f64, String, f64)> = None;
+    let mut worst: Option<(f64, String, f64, f64)> = None;
+    let mut ripple: Vec<String> = vec![];
     for (name, sp) in &nets {
         let (Some(a), Some((_, b))) = (ours.signal(&format!("V({name})")), cols.iter().find(|(c, _)| *c == format!("v({})", sp.to_ascii_lowercase()))) else { continue };
         // compare on our time axis, inside the span both reached
         let end = ours.time.last().copied().unwrap_or(0.0).min(*t.last().unwrap());
         let (mine, theirs): (Vec<f64>, Vec<f64>) = ours.time.iter().zip(&a.values).filter(|(x, _)| **x <= end).map(|(x, v)| (*v, interpolate(&t, b, *x))).unzip();
-        let (nrmse, peak) = waveform_error(&mine, &theirs);
+        let (nrmse, peak) = waveform_error(&ours.time[..mine.len()], &mine, &theirs);
+        let at = mine.iter().zip(&theirs).enumerate().fold((0, 0.0), |m, (k, (a, b))| if (a - b).abs() > m.1 { (k, (a - b).abs()) } else { m }).0;
+        let at = ours.time[at];
+        // ripple: the peak-to-peak of the last fifth of the run, which a timing shift of an edge does not disturb
+        let from = mine.len() - mine.len() / 5;
+        let pp = |v: &[f64]| v[from..].iter().cloned().fold(f64::MIN, f64::max) - v[from..].iter().cloned().fold(f64::MAX, f64::min);
+        let (pm, pt) = (pp(&mine), pp(&theirs));
+        if pt > 1e-3 && (pm / pt - 1.0).abs() > 0.1 {
+            ripple.push(format!("{name} 末尾のp-p 自前{pm:.3e} ngspice{pt:.3e}"));
+        }
         n += 1;
         if nrmse > NRMSE_TOL {
             bad += 1;
         }
         if worst.as_ref().is_none_or(|w| nrmse > w.0) {
-            worst = Some((nrmse, name.clone(), peak));
+            worst = Some((nrmse, name.clone(), peak, at));
         }
     }
+    let ripple = ripple.join(" / ");
     match worst {
         None => TranOutcome::Skipped("名前が一致するノードがありません".into()),
-        Some((nrmse, name, peak)) if bad > 0 => TranOutcome::Differ { nodes: n, tstop, worst: name, nrmse, peak, bad },
-        Some((nrmse, name, _)) => TranOutcome::Match { nodes: n, tstop, worst: name, nrmse },
+        Some((nrmse, name, peak, at)) if bad > 0 => TranOutcome::Differ { nodes: n, tstop, worst: name, nrmse, peak, at, bad, ripple },
+        Some((nrmse, name, ..)) => TranOutcome::Match { nodes: n, tstop, worst: name, nrmse, ripple },
     }
+}
+
+fn note(ripple: &str) -> String {
+    if ripple.is_empty() { String::new() } else { format!("  [リップルの差: {ripple}]") }
 }
 
 fn describe(o: &TranOutcome) -> String {
     match o {
-        TranOutcome::Match { nodes, tstop, worst, nrmse } => format!("{nodes} ノード ({tstop:.3e} 秒)。最大誤差 {worst} {:.3}%", nrmse * 100.0),
-        TranOutcome::Differ { nodes, tstop, worst, nrmse, peak, bad } => {
-            format!("{bad}/{nodes} ノードがズレ ({tstop:.3e} 秒)。最大: {worst} 誤差 {:.2}%、ピーク差 {peak:.3e} V", nrmse * 100.0)
+        TranOutcome::Match { nodes, tstop, worst, nrmse, ripple } => {
+            format!("{nodes} ノード ({tstop:.3e} 秒)。最大誤差 {worst} {:.3}%{}", nrmse * 100.0, note(ripple))
+        }
+        TranOutcome::Differ { nodes, tstop, worst, nrmse, peak, at, bad, ripple } => {
+            format!("{bad}/{nodes} ノードがズレ ({tstop:.3e} 秒)。最大: {worst} 誤差 {:.2}%、ピーク差 {peak:.3e} V (t={at:.4e} 秒){}", nrmse * 100.0, note(ripple))
         }
         TranOutcome::Skipped(m) | TranOutcome::Failed(m) => m.clone(),
     }
@@ -251,10 +283,17 @@ mod tests {
         let theirs: Vec<f64> = (0..100).map(|k| (k as f64 * 0.2).sin() * 5.0).collect();
         let near: Vec<f64> = theirs.iter().map(|x| x + 0.01).collect();
         let far: Vec<f64> = theirs.iter().map(|x| x + 0.5).collect();
-        assert!(waveform_error(&near, &theirs).0 < NRMSE_TOL);
-        assert!(waveform_error(&far, &theirs).0 > NRMSE_TOL);
+        let t: Vec<f64> = (0..100).map(|k| k as f64).collect();
+        assert!(waveform_error(&t, &near, &theirs).0 < NRMSE_TOL);
+        assert!(waveform_error(&t, &far, &theirs).0 > NRMSE_TOL);
         // a flat node is judged against MIN_SPAN, not against its tiny swing
-        assert!(waveform_error(&[0.0005; 10], &[0.0; 10]).0 < NRMSE_TOL);
+        let t10: Vec<f64> = (0..10).map(|k| k as f64).collect();
+        assert!(waveform_error(&t10, &[0.0005; 10], &[0.0; 10]).0 < NRMSE_TOL);
+        // a burst of points inside one event does not count more than the time it lasts
+        let tt = [0.0, 10.0, 10.001, 10.002, 10.003, 20.0];
+        let r = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0];
+        let o: Vec<f64> = r.iter().zip([0.0, 0.0, 5.0, 5.0, 0.0, 0.0]).map(|(a, d)| a + d).collect();
+        assert!(waveform_error(&tt, &o, &r).0 < 0.001);
     }
 
     #[test]
