@@ -78,7 +78,15 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
                 let _ = writeln!(out, "{r} {} {} {m}", nd(r, "A"), nd(r, "K"));
             }
             Kind::VSource => {
-                let _ = writeln!(out, "{r} {} {} DC {}", nd(r, "+"), nd(r, "-"), c.value);
+                // "5" -> "DC 5"; "SIN(0 1 1k) AC 1", "PULSE(...)", "DC 1.7 AC 1" are already source specs
+                let v = c.value.trim();
+                let word = v.split(|ch: char| !ch.is_ascii_alphabetic()).next().unwrap_or("").to_ascii_uppercase();
+                let spec = matches!(word.as_str(), "SIN" | "PULSE" | "PWL" | "EXP" | "SFFM" | "DC" | "AC");
+                if spec {
+                    let _ = writeln!(out, "{r} {} {} {v}", nd(r, "+"), nd(r, "-"));
+                } else {
+                    let _ = writeln!(out, "{r} {} {} DC {v}", nd(r, "+"), nd(r, "-"));
+                }
             }
             Kind::Npn => {
                 npn_models = true;

@@ -230,6 +230,20 @@ fn alias_cards(theirs: Vec<(String, f64)>, mine: &mut [(String, f64)]) -> Vec<(S
     out
 }
 
+/// Run an ngspice deck whose results go to a file (`wrdata`); fails with ngspice's first error line.
+pub(crate) fn run_ngspice_script(exe: &Path, work: &Path, tag: &str, script: &str) -> Result<(), String> {
+    let cir = work.join(format!("{tag}_script.cir"));
+    std::fs::write(&cir, script).map_err(|_| "作業ファイルを書けません".to_string())?;
+    let out = Command::new(exe).arg("-b").arg(&cir).output().map_err(|e| format!("ngspice を起動できません: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
+    // "doAnalyses: TRAN: Timestep too small ..." says more than the "empty netlist" error that follows it
+    let why = text.lines().find(|l| l.contains("doAnalyses")).or_else(|| text.lines().find(|l| l.to_ascii_lowercase().contains("error")));
+    match why {
+        Some(why) => Err(format!("ngspice: {}", why.trim())),
+        None => Ok(()),
+    }
+}
+
 /// Run ngspice in batch mode on a deck; returns its node voltages or why it gave none.
 fn run_ngspice(exe: &Path, work: &Path, tag: &str, deck: &str) -> Result<Vec<(String, f64)>, String> {
     let cir = work.join(format!("{tag}.cir"));
@@ -299,10 +313,19 @@ pub fn run_path(path: &Path, exe: &Path) -> String {
 pub fn run_cli(args: &[String]) -> bool {
     let Some(i) = args.iter().position(|a| a == "--xcheck") else { return false };
     let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|j| args.get(j + 1)).map(|s| s.as_str());
-    let out = val("--out").unwrap_or("xcheck_report.txt");
+    let tran = args.iter().any(|a| a == "--tran");
+    let out = val("--out").unwrap_or(if tran { "xcheck_tran_report.txt" } else { "xcheck_report.txt" });
     let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
-        (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> [--ngspice <exe>] [--out report.txt]\n".to_string(),
+        (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> [--tran [--tstop 秒] [--tstep 秒] [--ourstep 秒] [--ngstep 秒]] [--ngspice <exe>] [--out report.txt]\n".to_string(),
         (_, None) => "ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください\n".to_string(),
+        (Some(p), Some(exe)) if tran => {
+            let num = |flag: &str| val(flag).and_then(parse_value);
+            crate::xcheck_tran::run_path(
+                Path::new(p),
+                &exe,
+                crate::xcheck_tran::Given { tstop: num("--tstop"), tstep: num("--tstep"), ours_step: num("--ourstep"), ng_step: num("--ngstep") },
+            )
+        }
         (Some(p), Some(exe)) => run_path(Path::new(p), &exe),
     };
     let _ = std::fs::write(out, &report);

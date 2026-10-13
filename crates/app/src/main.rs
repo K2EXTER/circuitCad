@@ -13,6 +13,7 @@ mod plot;
 mod schematic;
 mod source_form;
 mod xcheck;
+mod xcheck_tran;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
