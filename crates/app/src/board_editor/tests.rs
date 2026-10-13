@@ -549,7 +549,12 @@ fn two_net_editor() -> BoardEditor {
 #[test]
 fn routing_next_to_another_net_pushes_it_aside_and_undo_restores_it() {
     let mut e = two_net_editor();
-    assert_eq!(e.route_preview(p(12.0, 11.65), p(28.0, 11.65)).0, 2, "the preview says two tracks are pushed");
+    let preview = e.route_preview(p(12.0, 11.65), p(28.0, 11.65));
+    assert_eq!(preview.pushed, 2, "the preview says two tracks are pushed");
+    // and shows where they would go: an end of each is pushed away from the new route, and the board is untouched
+    assert_eq!(preview.moved.len(), 2);
+    assert!(preview.moved.iter().all(|(old, new)| (new.a.y - old.a.y).abs().max((new.b.y - old.b.y).abs()) > 0.05), "{:?}", preview.moved);
+    assert_eq!(e.board.tracks[0].b.y, 12.0, "looking does not move anything");
     e.pending = Some(p(12.0, 11.65));
     e.tool = Tool::Track;
     e.click(p(28.0, 11.65));

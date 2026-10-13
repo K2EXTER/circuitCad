@@ -204,7 +204,7 @@ pub struct BoardEditor {
     /// Push other nets' tracks aside while routing and dragging tracks.
     shove: bool,
     /// The routing preview's verdict for the last cursor position: (key, tracks pushed, rule broken).
-    preview_cache: std::cell::RefCell<Option<(u64, usize, bool)>>,
+    preview_cache: std::cell::RefCell<Option<shoving::PreviewCache>>,
     pub status: String,
     /// Set by the small "操作" buttons; the app opens the guide on that page.
     pub help_request: Option<crate::help::HelpTab>,

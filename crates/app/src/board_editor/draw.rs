@@ -284,15 +284,33 @@ impl BoardEditor {
         match self.tool {
             Tool::Track => {
                 if let Some(a) = self.pending {
-                    let (pushed, bad) = self.route_preview(a, p);
+                    let preview = self.route_preview(a, p);
+                    let (pushed, bad) = (preview.pushed, preview.bad);
                     let base = if bad { Color32::from_rgb(255, 60, 60) } else if pushed > 0 { Color32::from_rgb(255, 190, 40) } else { self.side_color(self.side) };
+                    // the tracks that would be pushed aside: where they are (a thin line) and where they would go
+                    if !preview.throttled {
+                        let orange = Color32::from_rgb(255, 190, 40);
+                        for (old, new) in &preview.moved {
+                            painter.line_segment([self.to_screen(rect, old.a), self.to_screen(rect, old.b)], Stroke::new(1.0, orange.gamma_multiply(0.6)));
+                            painter.line_segment([self.to_screen(rect, new.a), self.to_screen(rect, new.b)], Stroke::new((new.width as f32 * self.zoom).max(1.5), orange.gamma_multiply(0.55)));
+                        }
+                    } else {
+                        // a slow board: the picture is of an earlier cursor position, so it is not drawn; look again soon
+                        painter.ctx().request_repaint_after(super::shoving::PREVIEW_THROTTLE);
+                    }
                     let mut from = a;
                     for q in self.route_points(a, p) {
                         painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, q)], Stroke::new((self.track_width as f32 * self.zoom).max(1.0), base.gamma_multiply(0.7)));
                         from = q;
                     }
-                    if bad || pushed > 0 {
-                        let msg = if bad { "ルール違反になります (間隔が足りません)".to_string() } else { format!("{pushed} 本を押しのけます") };
+                    if bad || pushed > 0 || preview.throttled {
+                        let msg = if bad {
+                            "ルール違反になります (間隔が足りません)".to_string()
+                        } else if preview.throttled {
+                            "押しのけの計算が重いので、少し遅れて表示します".to_string()
+                        } else {
+                            format!("{pushed} 本を押しのけます")
+                        };
                         painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, msg, egui::FontId::proportional(13.0), base);
                     }
                 }
