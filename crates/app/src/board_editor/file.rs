@@ -34,23 +34,28 @@ impl BoardEditor {
     pub fn load_path(&mut self, p: PathBuf) {
         match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str::<Board>(&s).map_err(|e| e.to_string())) {
             Ok(b) => {
-                let (lo, hi) = b.bounds().unwrap_or((Point::default(), Point::default()));
-                self.size_w = hi.x - lo.x;
-                self.size_h = hi.y - lo.y;
-                self.board = b;
-                self.path = Some(p.clone());
-                self.selected = None;
-                self.multi.clear();
-                self.pending = None;
-                self.poly.clear();
-                self.violations.clear();
-                self.undo.clear();
-                self.redo.clear();
-                self.fit_pending = true;
+                self.adopt(b, Some(p.clone()));
                 self.status = format!("開きました: {}", p.display());
             }
             Err(e) => self.status = format!("読み込み失敗: {e}"),
         }
+    }
+
+    /// Make `b` the board being edited (from a file, or from a project; `path` is None for a project).
+    pub fn adopt(&mut self, b: Board, path: Option<PathBuf>) {
+        let (lo, hi) = b.bounds().unwrap_or((Point::default(), Point::default()));
+        self.size_w = hi.x - lo.x;
+        self.size_h = hi.y - lo.y;
+        self.board = b;
+        self.path = path;
+        self.selected = None;
+        self.multi.clear();
+        self.pending = None;
+        self.poly.clear();
+        self.violations.clear();
+        self.undo.clear();
+        self.redo.clear();
+        self.fit_pending = true;
     }
 
     pub fn export(&mut self) {

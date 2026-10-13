@@ -10,6 +10,7 @@ mod help;
 mod learn;
 mod part_form;
 mod plot;
+mod project;
 mod schematic;
 mod source_form;
 mod xcheck;
@@ -38,6 +39,7 @@ const TIPS: &[&str] = &[
     "ERC で配線ミスを点検してから解析や基板に進むと、原因探しが楽です",
     "docs/examples にサンプル回路があります。「ファイル → 開く」から読み込めます",
     "基板に進む前に、回路図の部品にフットプリント (形) が合っているか確認しましょう",
+    "「ファイル → プロジェクトを保存」で、回路図と基板を1つのファイル (.ccproj) にまとめて保存できます",
     "基板は DRC が 0 件になってから、製造ファイルを書き出して発注します",
     "このヒント欄は、メニューの「ヒント」チェックで消せます",
 ];
@@ -55,15 +57,58 @@ struct App {
     learn: learn::LearnWindow,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
+    /// The `.ccproj` file the schematic and board were opened from / last saved to.
+    project: Option<std::path::PathBuf>,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None }
+        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None, project: None }
     }
 }
 
 impl App {
+    /// Save the schematic and the board together; asks for the file when there is none yet or `as_new`.
+    fn save_project(&mut self, as_new: bool) {
+        let path = if as_new || self.project.is_none() {
+            let name = if self.board_ed.board.name.is_empty() { "project".to_string() } else { self.board_ed.board.name.clone() };
+            rfd::FileDialog::new().add_filter("circuitCad プロジェクト", &[project::EXTENSION]).set_file_name(format!("{name}.{}", project::EXTENSION)).save_file()
+        } else {
+            self.project.clone()
+        };
+        let Some(p) = path else { return };
+        let msg = match project::save(&p, &self.sch.sch, &self.board_ed.board) {
+            Ok(()) => {
+                self.project = Some(p.clone());
+                format!("プロジェクトを保存しました (回路図と基板): {}", p.display())
+            }
+            Err(e) => format!("プロジェクトを保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
+        };
+        self.sch.status = msg.clone();
+        self.board_ed.status = msg;
+    }
+
+    /// Open a project: both the schematic and the board are replaced.
+    fn open_project(&mut self) {
+        if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad プロジェクト", &[project::EXTENSION]).pick_file() {
+            self.load_project(p);
+        }
+    }
+
+    fn load_project(&mut self, p: std::path::PathBuf) {
+        let msg = match project::load(&p) {
+            Ok(pr) => {
+                self.sch.adopt(pr.schematic, None);
+                self.board_ed.adopt(pr.board, None);
+                self.project = Some(p.clone());
+                format!("プロジェクトを開きました: {}", p.display())
+            }
+            Err(e) => format!("プロジェクトを開けませんでした: {e}"),
+        };
+        self.sch.status = msg.clone();
+        self.board_ed.status = msg;
+    }
+
     /// Opens the board lesson with its sample circuit.
     fn start_board_lesson(&mut self) {
         self.mode = Mode::Board;
@@ -156,10 +201,24 @@ impl eframe::App for App {
                 ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
                 ui.menu_button("ファイル", |ui| {
+                    if ui.button("プロジェクトを開く…").on_hover_text("回路図と基板をまとめて保存したファイル (.ccproj) を開きます。いまの回路図と基板は置き換わります").clicked() {
+                        self.open_project();
+                        ui.close();
+                    }
+                    if ui.button("プロジェクトを保存").on_hover_text("回路図と基板を、1つのファイル (.ccproj) にまとめて保存します。まだ保存していなければ、保存先を選びます").clicked() {
+                        self.save_project(false);
+                        ui.close();
+                    }
+                    if ui.button("名前を付けてプロジェクトを保存…").on_hover_text("回路図と基板を、別の名前のプロジェクトとして保存します").clicked() {
+                        self.save_project(true);
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.label(if sch_mode { "いまの回路図だけ" } else { "いまの基板だけ" });
                     if ui.button("新規").on_hover_text("いまの図を空にして、新しく始めます").clicked() {
                         if sch_mode { self.sch.new_file() } else { self.board_ed.new_file() }
                     }
-                    if ui.button("開く…").on_hover_text("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)").clicked() {
+                    if ui.button("開く…").on_hover_text("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」").clicked() {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
                     }
                     if ui.button("保存").on_hover_text("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます").clicked() {
@@ -334,6 +393,9 @@ fn apply_args(app: &mut App, args: &[String]) {
         && let Some(p) = args.get(i + 1) {
             app.auto_shot = Some((p.into(), 40));
         }
+    if let Some(p) = args.iter().find(|a| a.ends_with(".ccproj")) {
+        app.load_project(p.into());
+    }
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
         if args.iter().any(|a| a == "--dc") {

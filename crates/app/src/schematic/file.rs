@@ -34,17 +34,22 @@ impl SchEditor {
     pub fn load_path(&mut self, p: PathBuf) {
         match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string())) {
             Ok(s) => {
-                self.sch = s;
-                self.reset_history();
-                self.path = Some(p.clone());
-                self.selected = None;
-                self.pending = None;
-                self.problems.clear();
-                self.dc = None;
-                self.fit_pending = true;
+                self.adopt(s, Some(p.clone()));
                 self.status = format!("開きました: {}", p.display());
             }
             Err(e) => self.status = format!("読み込み失敗: {e}"),
         }
+    }
+
+    /// Make `s` the sheet being edited (from a file, or from a project; `path` is None for a project).
+    pub fn adopt(&mut self, s: Schematic, path: Option<PathBuf>) {
+        self.sch = s;
+        self.reset_history();
+        self.path = path;
+        self.selected = None;
+        self.pending = None;
+        self.problems.clear();
+        self.dc = None;
+        self.fit_pending = true;
     }
 }
