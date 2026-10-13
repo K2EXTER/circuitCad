@@ -1,0 +1,713 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "SIN(0 141.4 50) AC 1",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "T1",
+      "kind": "Custom",
+      "value": "TR100_12V_5VA",
+      "pos": [
+        16,
+        0
+      ],
+      "rot": 0,
+      "footprint": "Transformer_EI30",
+      "custom": {
+        "name": "TR100_12V_5VA",
+        "prefix": "T",
+        "pins": [
+          {
+            "number": "1",
+            "name": "P1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "P2",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "S1",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "S2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TR100_12V_5VA",
+          "text": ".subckt TR100_12V_5VA p1 p2 s1 s2\nRp p1 pi 80.0\nLm pi p2 42.4\nBs sx s2 V=0.14500*V(pi,p2)\nBp pi p2 I=-0.14500*I(Bs)\nRs sx s1 4.32\n.ends TR100_12V_5VA",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {
+            "lm": 42.4,
+            "ratio": 0.145,
+            "rp": 80.0,
+            "rs": 4.32
+          },
+          "limits": [
+            "理想変圧器 + 1次/2次の巻線抵抗 + 励磁インダクタンスのモデルです。巻数比・電圧降下 (電圧変動率)・無負荷電流の概算を再現します。",
+            "扱わないもの: 漏れインダクタンス、鉄心の飽和とヒステリシス、巻線間容量、突入電流、温度上昇。数値はこの容量の小型トランスの一般的な値からの概算です。",
+            "1次側と2次側は絶縁されています (回路図上で別のネット)。実機では安全規格に適合した品を使い、商用電源の配線は専門家の確認を受けてください。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "D1",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        52,
+        0
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        64,
+        0
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D4",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        76,
+        0
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "1000u",
+      "pos": [
+        92,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM317",
+      "pos": [
+        116,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "TO-220-3",
+      "custom": {
+        "name": "LM317",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "1",
+            "name": "ADJ",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM317",
+          "text": ".subckt LM317 in adj out\nVdo in ind DC 2\nE1 c0 adj ind adj 1\nVr vr adj DC 1.25\nEx xh adj c0 vr 1000\nD1 xh yh DREG\nRy yh adj 1k\nEy y adj yh adj 0.001\nEc c adj c0 y 1\nE2 o adj c adj 1\nRo o out 0.05\nG1 in adj o out 20.0\nIadj in adj DC 50u\n.model DREG D(IS=1e-12 N=1)\n.ends LM317",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {
+            "dropout": 2.0,
+            "vref": 1.25
+          },
+          "limits": [
+            "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
+            "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
+            "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 40.0,
+          "i_max": 1.5,
+          "rows": [
+            {
+              "name": "基準電圧",
+              "value": "1.25V"
+            },
+            {
+              "name": "入出力電圧差の最小",
+              "value": "2V (代表)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "240",
+      "pos": [
+        134,
+        -10
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1.2k",
+      "pos": [
+        134,
+        6
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "1u",
+      "pos": [
+        148,
+        4
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        162,
+        4
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -1
+      ],
+      "b": [
+        9,
+        -1
+      ]
+    },
+    {
+      "a": [
+        12,
+        1
+      ],
+      "b": [
+        9,
+        1
+      ]
+    },
+    {
+      "a": [
+        20,
+        -1
+      ],
+      "b": [
+        23,
+        -1
+      ]
+    },
+    {
+      "a": [
+        20,
+        1
+      ],
+      "b": [
+        23,
+        1
+      ]
+    },
+    {
+      "a": [
+        38,
+        0
+      ],
+      "b": [
+        35,
+        0
+      ]
+    },
+    {
+      "a": [
+        42,
+        0
+      ],
+      "b": [
+        45,
+        0
+      ]
+    },
+    {
+      "a": [
+        50,
+        0
+      ],
+      "b": [
+        47,
+        0
+      ]
+    },
+    {
+      "a": [
+        54,
+        0
+      ],
+      "b": [
+        57,
+        0
+      ]
+    },
+    {
+      "a": [
+        62,
+        0
+      ],
+      "b": [
+        59,
+        0
+      ]
+    },
+    {
+      "a": [
+        66,
+        0
+      ],
+      "b": [
+        69,
+        0
+      ]
+    },
+    {
+      "a": [
+        74,
+        0
+      ],
+      "b": [
+        71,
+        0
+      ]
+    },
+    {
+      "a": [
+        78,
+        0
+      ],
+      "b": [
+        81,
+        0
+      ]
+    },
+    {
+      "a": [
+        92,
+        -2
+      ],
+      "b": [
+        92,
+        -5
+      ]
+    },
+    {
+      "a": [
+        92,
+        2
+      ],
+      "b": [
+        92,
+        5
+      ]
+    },
+    {
+      "a": [
+        112,
+        -4
+      ],
+      "b": [
+        109,
+        -4
+      ]
+    },
+    {
+      "a": [
+        120,
+        -4
+      ],
+      "b": [
+        123,
+        -4
+      ]
+    },
+    {
+      "a": [
+        116,
+        0
+      ],
+      "b": [
+        116,
+        3
+      ]
+    },
+    {
+      "a": [
+        134,
+        -12
+      ],
+      "b": [
+        134,
+        -15
+      ]
+    },
+    {
+      "a": [
+        134,
+        -8
+      ],
+      "b": [
+        134,
+        -5
+      ]
+    },
+    {
+      "a": [
+        134,
+        4
+      ],
+      "b": [
+        134,
+        1
+      ]
+    },
+    {
+      "a": [
+        134,
+        8
+      ],
+      "b": [
+        134,
+        11
+      ]
+    },
+    {
+      "a": [
+        148,
+        2
+      ],
+      "b": [
+        148,
+        -1
+      ]
+    },
+    {
+      "a": [
+        148,
+        6
+      ],
+      "b": [
+        148,
+        9
+      ]
+    },
+    {
+      "a": [
+        162,
+        2
+      ],
+      "b": [
+        162,
+        -1
+      ]
+    },
+    {
+      "a": [
+        162,
+        6
+      ],
+      "b": [
+        162,
+        9
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "MAINS"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        9,
+        -1
+      ],
+      "text": "MAINS"
+    },
+    {
+      "pos": [
+        9,
+        1
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        -1
+      ],
+      "text": "AC1"
+    },
+    {
+      "pos": [
+        23,
+        1
+      ],
+      "text": "AC2"
+    },
+    {
+      "pos": [
+        35,
+        0
+      ],
+      "text": "AC1"
+    },
+    {
+      "pos": [
+        45,
+        0
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        47,
+        0
+      ],
+      "text": "AC2"
+    },
+    {
+      "pos": [
+        57,
+        0
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        59,
+        0
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        69,
+        0
+      ],
+      "text": "AC1"
+    },
+    {
+      "pos": [
+        71,
+        0
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        81,
+        0
+      ],
+      "text": "AC2"
+    },
+    {
+      "pos": [
+        92,
+        -5
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        92,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        109,
+        -4
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        123,
+        -4
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        116,
+        3
+      ],
+      "text": "ADJ"
+    },
+    {
+      "pos": [
+        134,
+        -15
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        134,
+        -5
+      ],
+      "text": "ADJ"
+    },
+    {
+      "pos": [
+        134,
+        1
+      ],
+      "text": "ADJ"
+    },
+    {
+      "pos": [
+        134,
+        11
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        148,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        148,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        162,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        162,
+        9
+      ],
+      "text": "GND"
+    }
+  ]
+}

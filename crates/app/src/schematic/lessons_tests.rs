@@ -406,6 +406,32 @@ fn the_power_supply_lessons_walk_their_steps() {
     }
 }
 
+/// Lesson 23: transient, turn the dial up, turn it too far, then the heat calculator.
+#[test]
+fn the_variable_supply_lesson_walks_its_steps() {
+    let idx = lesson_ids().iter().position(|l| *l == "variable_supply").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    set_value(&mut e, "R2", "2k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "2k is not too far");
+    set_value(&mut e, "R2", "3k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    e.open_wizard(super::wizard::CALCS.iter().position(|c| c.title.starts_with("熱")).unwrap());
+    e.wiz_open = true;
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!(!super::lessons::lesson_real(idx).is_empty());
+}
+
 /// Lesson 22: run the transient, trace a 10% layer short (the coil burns alone), then 50% (the driver dies first), then the fuse calculator.
 #[test]
 fn the_coil_layer_short_lesson_walks_its_steps() {

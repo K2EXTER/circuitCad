@@ -1200,6 +1200,72 @@ mod tests {
         std::fs::write(root.join("bridge_rectifier.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 
+    /// Generates docs/examples/variable_supply.schjson (100 V AC -> transformer -> bridge -> smoothing -> LM317 whose
+    /// R2 is the output dial, 100 ohm load): `cargo test -p app write_variable_supply_example -- --ignored`
+    #[test]
+    #[ignore]
+    fn write_variable_supply_example() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let (tr, reg) = (library_part("TR100_12V_5VA"), library_part("LM317"));
+        let mut s = sch_core::Schematic::default();
+        let v = s.add(Kind::VSource, (0, 0), 0);
+        s.components[v].value = "SIN(0 141.4 50) AC 1".into();
+        let t = s.add_custom(tr.symbol(), &tr.default_value(), &tr.footprint_name(), (16, 0), 0);
+        let mut diodes = vec![];
+        for x in [40, 52, 64, 76] {
+            let d = s.add(Kind::Diode, (x, 0), 0);
+            s.components[d].value = "1N4007".into();
+            diodes.push(d);
+        }
+        let c1 = s.add(Kind::Capacitor, (92, 0), 1);
+        s.components[c1].value = "1000u".into();
+        let u1 = s.add_custom(reg.symbol(), &reg.default_value(), &reg.footprint_name(), (116, -4), 0);
+        // R1 (OUT-ADJ) is fixed, R2 (ADJ-GND) is the dial
+        let r1 = s.add(Kind::Resistor, (134, -10), 1);
+        s.components[r1].value = "240".into();
+        let r2 = s.add(Kind::Resistor, (134, 6), 1);
+        s.components[r2].value = "1.2k".into();
+        let c2 = s.add(Kind::Capacitor, (148, 4), 1);
+        s.components[c2].value = "1u".into();
+        let r3 = s.add(Kind::Resistor, (162, 4), 1);
+        s.components[r3].value = "100".into();
+        s.components[r3].footprint = "R_2512".into();
+        // a short wire out of the pin, with the net name at its end (so the name does not sit on the symbol)
+        let label = |s: &mut sch_core::Schematic, idx: usize, pin: usize, text: &str| {
+            let pt = s.components[idx].pins()[pin].1;
+            let c = s.components[idx].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            s.wires.push(Wire { a: pt, b: end });
+            s.labels.push(sch_core::Label { pos: end, text: text.into() });
+        };
+        label(&mut s, v, 0, "MAINS");
+        label(&mut s, v, 1, "GND");
+        label(&mut s, t, 0, "MAINS");
+        label(&mut s, t, 1, "GND");
+        label(&mut s, t, 2, "AC1");
+        label(&mut s, t, 3, "AC2");
+        // pins of a diode: 0 = anode, 1 = cathode
+        for (k, (a, kk)) in [("AC1", "VDC"), ("AC2", "VDC"), ("GND", "AC1"), ("GND", "AC2")].iter().enumerate() {
+            label(&mut s, diodes[k], 0, a);
+            label(&mut s, diodes[k], 1, kk);
+        }
+        label(&mut s, c1, 0, "VDC");
+        label(&mut s, c1, 1, "GND");
+        label_pin(&mut s, u1, "3", "VDC");
+        label_pin(&mut s, u1, "2", "VOUT");
+        label_pin(&mut s, u1, "1", "ADJ");
+        label(&mut s, r1, 0, "VOUT");
+        label(&mut s, r1, 1, "ADJ");
+        label(&mut s, r2, 0, "ADJ");
+        label(&mut s, r2, 1, "GND");
+        label(&mut s, c2, 0, "VOUT");
+        label(&mut s, c2, 1, "GND");
+        label(&mut s, r3, 0, "VOUT");
+        label(&mut s, r3, 1, "GND");
+        std::fs::write(root.join("variable_supply.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+    }
+
     /// Generates docs/examples/mosfet_switch.schjson (5 V pulse -> 2N7000 gate -> 47 ohm load to 5 V):
     /// `cargo test -p app write_mosfet_example -- --ignored`
     #[test]

@@ -715,6 +715,33 @@ fn regulator_78xx_sample_shows_dropout_and_heat() {
     assert!((3.8..4.2).contains(&low), "dropout 2 V: input - 2 V, got {low}");
 }
 
+/// The variable supply sample (lesson 23): the dial R2 sets the output, until the smoothed DC (minus 2 V) is out of reach.
+#[test]
+fn variable_supply_sample_follows_the_dial_until_headroom_runs_out() {
+    let s = example_schematics().into_iter().find(|(n, _)| n == "variable_supply.schjson").unwrap().1;
+    let run = |r2: &str, r3: &str| {
+        let mut t = s.clone();
+        for c in &mut t.components {
+            match c.refdes.as_str() {
+                "R2" => c.value = r2.into(),
+                "R3" => c.value = r3.into(),
+                _ => {}
+            }
+        }
+        let tr = transient(&from_schematic(&t).unwrap(), &TranSettings { tstop: 0.3, tstep: 100e-6, uic: false }).unwrap();
+        wave_measure(&tr.time, &tr.signal("V(VOUT)").unwrap().values, 0.2, 0.3).unwrap()
+    };
+    let mid = run("1.2k", "100");
+    assert!((7.3..7.9).contains(&((mid.max + mid.min) / 2.0)) && mid.pp < 0.05, "{mid:?}");
+    let high = run("2k", "100");
+    assert!((11.4..12.2).contains(&((high.max + high.min) / 2.0)) && high.pp < 0.05, "{high:?}");
+    // 3k asks for 17 V but the smoothed DC is only about 15 V: the output follows the ripple
+    let over = run("3k", "100");
+    assert!(over.max < 14.0 && over.pp > 0.3, "{over:?}");
+    let low = run("100", "100");
+    assert!((1.7..2.1).contains(&((low.max + low.min) / 2.0)), "{low:?}");
+}
+
 /// The protection sample (lesson 21): R1 bare, R2 behind a Schottky diode, R3 behind a P-channel MOSFET.
 #[test]
 fn reverse_protection_sample_blocks_a_backwards_supply() {
