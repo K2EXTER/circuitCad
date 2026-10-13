@@ -409,3 +409,28 @@ fn ic_power_pins_must_reach_a_supply_but_a_regulator_output_counts() {
     wire(&mut s, (vplus.0, src.1), src);
     assert!(!has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
 }
+
+#[test]
+fn old_two_lead_glyph_sheet_gets_short_leads() {
+    // a version-0 sheet: electrolytic cap at (10,10) whose pins used to sit at +-4, wires on them
+    let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false };
+    let sym = CustomSymbol {
+        name: "CE".into(),
+        prefix: "C".into(),
+        pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)],
+        sim: None,
+        ratings: None,
+        glyph: "electrolytic".into(),
+    };
+    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym) };
+    let mut s = Schematic::default();
+    s.components.push(c);
+    assert_eq!(s.components[0].pins()[0].1, (8, 10)); // new leads are 2 long
+    s.layout_version = 0;
+    s.wires = vec![Wire { a: (6, 10), b: (0, 10) }, Wire { a: (14, 10), b: (14, 20) }];
+    s.migrate();
+    assert_eq!(s.layout_version, LAYOUT_VERSION);
+    assert!(s.wires.contains(&Wire { a: (8, 10), b: (0, 10) })); // straight wire: end moved
+    assert!(s.wires.contains(&Wire { a: (14, 10), b: (14, 20) })); // bent: kept ...
+    assert!(s.wires.contains(&Wire { a: (12, 10), b: (14, 10) })); // ... with a stub
+}

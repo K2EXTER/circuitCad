@@ -187,11 +187,84 @@ pub struct Label {
     pub text: String,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+/// Sheet layout version. 0 = files saved before two-lead glyph parts (electrolytic, chip R/C/L)
+/// got short leads; they are fixed up when read (see `RawSchematic`).
+pub const LAYOUT_VERSION: u32 = 1;
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(from = "RawSchematic")]
 pub struct Schematic {
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,
     pub labels: Vec<Label>,
+    pub layout_version: u32,
+}
+
+impl Default for Schematic {
+    fn default() -> Self {
+        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION }
+    }
+}
+
+#[derive(Deserialize)]
+struct RawSchematic {
+    components: Vec<Component>,
+    wires: Vec<Wire>,
+    labels: Vec<Label>,
+    #[serde(default)]
+    layout_version: u32,
+}
+
+impl From<RawSchematic> for Schematic {
+    fn from(r: RawSchematic) -> Self {
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version };
+        s.migrate();
+        s
+    }
+}
+
+impl Schematic {
+    /// Bring an old sheet up to date. Version 0 drew two-lead glyph parts with leads 4 grid steps
+    /// long; now they are 2, like the basic symbols. Wire ends and labels on the old pin move to the
+    /// new one; a wire that would turn diagonal gets a short stub to the old spot instead.
+    fn migrate(&mut self) {
+        if self.layout_version >= LAYOUT_VERSION {
+            return;
+        }
+        self.layout_version = LAYOUT_VERSION;
+        let mut stubs: Vec<Wire> = vec![];
+        for c in &self.components {
+            let Some(sym) = c.custom.as_ref().filter(|s| s.is_two_lead_glyph()) else { continue };
+            for p in &sym.pins {
+                let sign = if p.side == PinSide::Left { -1 } else { 1 };
+                let at = |x: i32| {
+                    let r = rotate((x, 0), c.rot);
+                    (c.pos.0 + r.0, c.pos.1 + r.1)
+                };
+                let (old, new) = (at(4 * sign), at(2 * sign));
+                for w in &mut self.wires {
+                    for (end, other) in [(0, w.b), (1, w.a)] {
+                        let e = if end == 0 { &mut w.a } else { &mut w.b };
+                        if *e != old {
+                            continue;
+                        }
+                        if new.0 == other.0 || new.1 == other.1 {
+                            *e = new;
+                        } else if !stubs.iter().any(|s| s.a == new && s.b == old) {
+                            stubs.push(Wire { a: new, b: old });
+                        }
+                    }
+                }
+                for l in &mut self.labels {
+                    if l.pos == old {
+                        l.pos = new;
+                    }
+                }
+            }
+        }
+        self.wires.retain(|w| w.a != w.b);
+        self.wires.extend(stubs);
+    }
 }
 
 impl Schematic {
@@ -394,11 +467,22 @@ pub struct SymLayout {
 }
 
 impl CustomSymbol {
+    /// A capacitor / resistor / inductor glyph with one lead on each of the left and right.
+    pub fn is_two_lead_glyph(&self) -> bool {
+        matches!(self.glyph.as_str(), "capacitor" | "electrolytic" | "resistor" | "inductor")
+            && self.pins.len() == 2
+            && self.pins.iter().all(|p| matches!(p.side, PinSide::Left | PinSide::Right))
+    }
+
     /// Box symbol: pins on each side are spaced 2 grid steps apart, in the order given.
     pub fn layout(&self) -> SymLayout {
         let count = |s: PinSide| self.pins.iter().filter(|p| p.side == s).count() as i32;
-        let hw = 2.max(count(PinSide::Top).max(count(PinSide::Bottom)));
-        let hh = 2.max(count(PinSide::Left).max(count(PinSide::Right)));
+        let (hw, hh) = if self.is_two_lead_glyph() {
+            // drawn as the basic symbol: pin tips at +-2, same as the basic C/R/L
+            (0, 1)
+        } else {
+            (2.max(count(PinSide::Top).max(count(PinSide::Bottom))), 2.max(count(PinSide::Left).max(count(PinSide::Right))))
+        };
         let mut idx = [0i32; 4];
         let mut pins = vec![];
         for p in &self.pins {

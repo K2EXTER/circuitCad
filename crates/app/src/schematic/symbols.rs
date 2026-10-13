@@ -168,6 +168,9 @@ pub(super) fn extents(kind: Kind) -> (f32, f32, f32, f32) {
 }
 
 pub(super) fn sym_extents(sym: &CustomSymbol) -> (f32, f32, f32, f32) {
+    if sym.is_two_lead_glyph() {
+        return (-2., 2., -1., 1.);
+    }
     let l = sym.layout();
     let (w, h) = ((l.hw + 2) as f32, (l.hh + 2) as f32);
     (-w, w, -h, h)
@@ -260,7 +263,7 @@ impl SchEditor {
             "inductor" => Some(Kind::Inductor),
             _ => None,
         };
-        if let Some(kind) = glyph.filter(|_| l.pins.len() == 2 && l.pins.iter().all(|p| matches!(p.side, PinSide::Left | PinSide::Right))) {
+        if let Some(kind) = glyph.filter(|_| sym.is_two_lead_glyph()) {
             let tr = |x: f32, y: f32| {
                 let r = rot_f((x, y), rot);
                 self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
