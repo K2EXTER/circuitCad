@@ -225,6 +225,9 @@ pub struct Zone {
     pub thermal_gap: f64,
     #[serde(default = "default_spoke")]
     pub spoke_width: f64,
+    /// Drop pieces of the pour that touch no pad, via or track of its net (isolated fragments).
+    #[serde(default)]
+    pub remove_islands: bool,
 }
 
 impl Zone {
@@ -237,6 +240,7 @@ impl Zone {
             thermal: true,
             thermal_gap: default_thermal_gap(),
             spoke_width: default_spoke(),
+            remove_islands: false,
         }
     }
 }

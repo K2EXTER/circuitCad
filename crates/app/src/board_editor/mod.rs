@@ -220,6 +220,7 @@ pub struct BoardEditor {
     zone_net: String,
     zone_clearance: f64,
     zone_thermal: bool,
+    zone_remove_islands: bool,
     size_w: f64,
     size_h: f64,
     /// Corner radius (mm) for rectangular outlines; 0 = square corners.
@@ -285,6 +286,7 @@ impl Default for BoardEditor {
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
+            zone_remove_islands: true,
             size_w: 50.0,
             size_h: 40.0,
             size_r: 0.0,

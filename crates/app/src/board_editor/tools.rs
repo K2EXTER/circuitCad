@@ -39,6 +39,7 @@ impl BoardEditor {
                 let mut z = Zone::new(&self.zone_net, self.side, poly);
                 z.clearance = self.zone_clearance;
                 z.thermal = self.zone_thermal;
+                z.remove_islands = self.zone_remove_islands;
                 self.board.zones.push(z);
                 self.status = format!("ゾーンを追加しました (ネット {})", self.zone_net);
             }

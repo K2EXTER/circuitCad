@@ -164,7 +164,20 @@ pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillSha
             out.push(FillShape { outer, holes: it.map(|h| to_points(&h)).collect() });
         }
     }
+    if zone.remove_islands && !zone.net.is_empty() {
+        out.retain(|shape| touches_net(board, zone, conn, shape));
+    }
     out
+}
+
+/// True when a pad, via or track end of the zone's net lies inside the pour piece `shape`.
+fn touches_net(board: &Board, zone: &Zone, conn: &Connectivity, shape: &FillShape) -> bool {
+    use crate::geom::inside_polygon;
+    let net = Some(zone.net.as_str());
+    let inside = |p: Point| inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p));
+    board.pads.iter().enumerate().any(|(j, p)| conn.pad_net(j) == net && (p.drill.is_some() || p.side == zone.side) && inside(p.pos))
+        || board.vias.iter().enumerate().any(|(k, v)| conn.via_net(k) == net && inside(v.pos))
+        || board.tracks.iter().enumerate().any(|(i, t)| t.side == zone.side && conn.track_net(i) == net && (inside(t.a) || inside(t.b)))
 }
 
 /// A number that changes whenever something a pour depends on changes (zones, copper, holes, outline,
@@ -181,6 +194,7 @@ pub fn geometry_key(board: &Board) -> u64 {
         z.net.hash(&mut h);
         z.side.hash(&mut h);
         z.thermal.hash(&mut h);
+        z.remove_islands.hash(&mut h);
         f(&mut h, z.clearance);
         for p in &z.polygon {
             pt(&mut h, *p);

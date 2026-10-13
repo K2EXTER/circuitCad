@@ -870,6 +870,11 @@ mod tests {
         let v = zone_checks(&b);
         assert_eq!(v.len(), 1, "{v:?}");
         assert!(v[0].message.contains("島"), "{v:?}");
+        // with islands removed the far piece is not drawn, and nothing is reported
+        b.zones[0].remove_islands = true;
+        let conn = connectivity(&b);
+        assert_eq!(crate::zonefill::zone_fill(&b, &b.zones[0], &conn).len(), 1);
+        assert!(zone_checks(&b).is_empty(), "{:?}", zone_checks(&b));
         // a pour that is only a thin strip is a sliver
         let mut b = board();
         b.zones.push(z(5.0, 5.0, 25.0, 5.12));
