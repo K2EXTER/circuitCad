@@ -157,7 +157,7 @@ impl BoardEditor {
                 Some(w) => {
                     let v = w.drop_v.unwrap_or(0.0);
                     let col = if v >= 0.1 { egui::Color32::from_rgb(230, 70, 60) } else if v >= 0.03 { egui::Color32::from_rgb(220, 160, 40) } else { egui::Color32::from_rgb(90, 190, 110) };
-                    let line = format!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ)", nd.net, v * 1000.0, format!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0);
+                    let line = format!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ)", nd.net, v * 1000.0, format_args!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0);
                     let r = ui.colored_label(col, line);
                     r.on_hover_text(self.ir_detail(nd, &src));
                 }

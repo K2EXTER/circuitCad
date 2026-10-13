@@ -291,8 +291,6 @@ fn the_op_amp_models_have_their_stated_bandwidth() {
         let s = parse_source_full("2.5 AC 1").unwrap();
         let a = c.node("in");
         c.add(Element::VSource { name: "Vin".into(), p: a, n: 0, wave: s.wave, ac: s.ac });
-        let (vp, vn) = if name == "TL072" { (5.0, 0.0) } else { (5.0, 0.0) };
-        let _ = (vp, vn);
         place(&mut c, &def, "U1", &[("3", "in"), ("2", "out"), ("1", "out"), ("8", "vp"), ("4", "0")]);
         let r = ac_analysis(&c, &AcSettings { fstart: 1e3, fstop: 1e8, sweep: AcSweep::Decade(20) }).unwrap();
         let out = r.signal("V(out)").unwrap();

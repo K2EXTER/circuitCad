@@ -242,6 +242,6 @@ mod tests {
         // along the diagonal some pixels are only partly covered
         assert!(img.iter().any(|c| c[0] > 0 && c[0] < 200), "an anti-aliased edge has in-between values");
         outline_part(&mut img, &ids, w, h, 7, [255, 230, 90]);
-        assert!(img.iter().any(|c| *c == [255, 230, 90, 255]));
+        assert!(img.contains(&[255, 230, 90, 255]));
     }
 }

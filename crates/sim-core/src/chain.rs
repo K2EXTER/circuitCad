@@ -119,12 +119,11 @@ fn overs(sch: &Schematic, c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Vec<Ov
         let Some(cur) = tr.signal(&format!("I({r})")) else { continue };
         let ratings = comp.custom.as_ref().and_then(|s| s.ratings.as_ref());
         let peak = in_window(&tr.time, w).map(|k| cur.values[k].abs()).fold(0.0, f64::max);
-        if let Some(imax) = ratings.and_then(|x| x.i_max) {
-            if peak > imax {
+        if let Some(imax) = ratings.and_then(|x| x.i_max)
+            && peak > imax {
                 out.push(Over { refdes: r.into(), ratio: peak / imax, why: format!("{r} のピーク電流 {} が最大定格 {} を超えた", amps(peak), amps(imax)) });
                 continue;
             }
-        }
         if comp.kind == Kind::Led && peak > 0.03 {
             out.push(Over { refdes: r.into(), ratio: peak / 0.03, why: format!("{r} (LED) のピーク電流 {} が上限の目安 30 mA を超えた", amps(peak)) });
             continue;
@@ -241,13 +240,12 @@ pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, 
         });
         let Some((o, f)) = next else {
             // nothing else is past its rating: the shorted turns finally burn through
-            if let Some(why) = burn.take() {
-                if let Some(broken) = with_fault(&cur, element, Fault::Open) {
+            if let Some(why) = burn.take()
+                && let Some(broken) = with_fault(&cur, element, Fault::Open) {
                     rep.steps.push(ChainStep { part: element.into(), what: "焼損して断線".into(), why, fault: Fault::Open });
                     cur = broken;
                     continue;
                 }
-            }
             break;
         };
         if rep.steps.len() > MAX_CHAIN {
@@ -283,11 +281,10 @@ impl ChainReport {
             ChainEnd::Unsolvable => "このあと回路は計算できなくなります。実機では大電流が流れ続け、電源や配線まで傷むおそれがあります".into(),
             ChainEnd::Cut => format!("{MAX_CHAIN} 個壊れてもまだ続きます。ここで打ち切りました"),
         });
-        if let Some((n, h, f)) = &self.supply {
-            if *f > 1.5 * h && *f > 0.05 {
+        if let Some((n, h, f)) = &self.supply
+            && *f > 1.5 * h && *f > 0.05 {
                 out.push(format!("電源 {n} のピーク電流は {} → {} になります。電源の直後にヒューズを入れると、連鎖が広がる前に切れて止められます", amps(*h), amps(*f)));
             }
-        }
         out
     }
 }

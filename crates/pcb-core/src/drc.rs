@@ -151,7 +151,7 @@ fn copper_items(board: &Board) -> Vec<Cu> {
     out
 }
 
-fn find(parent: &mut Vec<usize>, i: usize) -> usize {
+fn find(parent: &mut [usize], i: usize) -> usize {
     let mut r = i;
     while parent[r] != r {
         r = parent[r];
@@ -340,7 +340,7 @@ fn anchors_inside(g: &Geo, poly: &[Point]) -> bool {
     }
 }
 
-fn pad_nets(board: &Board, parent: &mut Vec<usize>, n_tracks: usize) -> HashMap<usize, String> {
+fn pad_nets(board: &Board, parent: &mut [usize], n_tracks: usize) -> HashMap<usize, String> {
     let mut m = HashMap::new();
     for (j, p) in board.pads.iter().enumerate() {
         if !p.net.is_empty() {

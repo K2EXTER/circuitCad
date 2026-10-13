@@ -174,7 +174,7 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
                 L(g.0, g.1, -0.9, 0.0),
                 L(-0.9, -1.0, -0.9, 1.0),
                 // channel, drawn in three pieces
-                L(-0.4, -1.0 * k, -0.4, -0.6 * k),
+                L(-0.4, -k, -0.4, -0.6 * k),
                 L(-0.4, -0.2, -0.4, 0.2),
                 L(-0.4, 0.6 * k, -0.4, 1.0 * k),
                 L(-0.4, -0.8 * k, 0.0, -0.8 * k),

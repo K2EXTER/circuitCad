@@ -127,7 +127,7 @@ pub(crate) use newton::{Attempt, Fail};
 fn floating_nodes(c: &Circuit) -> Vec<usize> {
     let n = c.names.len();
     let mut parent: Vec<usize> = (0..n).collect();
-    fn find(p: &mut Vec<usize>, i: usize) -> usize {
+    fn find(p: &mut [usize], i: usize) -> usize {
         let mut r = i;
         while p[r] != r {
             r = p[r];

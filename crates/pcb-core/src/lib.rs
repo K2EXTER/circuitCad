@@ -1,6 +1,9 @@
 //! PCB data model and manufacturing-file export (Gerber RS-274X / Excellon).
 //! All lengths are millimetres.
 
+// `!(x > 0.0)` is deliberate: it is also true for NaN, which `x <= 0.0` is not.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+
 pub mod assembly;
 pub mod autoplace;
 pub mod autoroute;

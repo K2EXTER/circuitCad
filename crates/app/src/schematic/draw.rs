@@ -49,7 +49,7 @@ impl SchEditor {
         for (i, c) in self.sch.components.iter().enumerate() {
             let sel = self.is_sel(Sel::Comp(i));
             let col = if sel { Color32::from_rgb(0, 80, 220) } else { SYM };
-            self.draw_component(&painter, rect, c, col);
+            self.draw_component(painter, rect, c, col);
             for (_, p) in c.pins() {
                 painter.rect_filled(
                     Rect::from_center_size(self.to_screen(rect, (p.0 as f32, p.1 as f32)), Vec2::splat(4.0)),
@@ -203,8 +203,8 @@ impl SchEditor {
             Tool::Place => {
                 let ghost = Color32::from_rgba_unmultiplied(120, 20, 20, 120);
                 match self.place_lib.and_then(|k| self.library.get(k)) {
-                    Some(d) => self.draw_custom(&painter, rect, &d.symbol(), snapped, self.rot, ghost),
-                    None => self.draw_symbol(&painter, rect, self.place, snapped, self.rot, ghost),
+                    Some(d) => self.draw_custom(painter, rect, &d.symbol(), snapped, self.rot, ghost),
+                    None => self.draw_symbol(painter, rect, self.place, snapped, self.rot, ghost),
                 }
             }
             Tool::Wire => {

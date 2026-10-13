@@ -253,12 +253,9 @@ impl FaultReport {
     pub fn summary(&self) -> Vec<String> {
         let mut out = vec![];
         let head = format!("{} を「{}」にしたとき", self.element, self.label);
-        match &self.faulted {
-            Err(e) => {
-                out.push(format!("{head}、回路は DC では計算できませんでした ({e})。実機でも動作が定まらない、または大電流が流れる状態です"));
-                return out;
-            }
-            Ok(_) => {}
+        if let Err(e) = &self.faulted {
+            out.push(format!("{head}、回路は DC では計算できませんでした ({e})。実機でも動作が定まらない、または大電流が流れる状態です"));
+            return out;
         }
         if self.node_changes.is_empty() && self.part_changes.is_empty() {
             out.push(format!("{head}、DC の電圧と電流はほとんど変わりませんでした。"));
@@ -318,7 +315,7 @@ pub fn assess_safety(sch: &sch_core::Schematic, r: &FaultReport) -> FaultSafety 
     let before = crate::check_ratings(sch, &r.baseline);
     let worst_before = |refdes: &str| before.iter().filter(|i| i.refdes == refdes).map(|i| i.level).max();
     let mut issues: Vec<crate::RatingIssue> = crate::check_ratings(sch, f).into_iter().filter(|i| worst_before(&i.refdes).is_none_or(|l| i.level > l)).collect();
-    issues.sort_by(|a, b| b.level.cmp(&a.level));
+    issues.sort_by_key(|i| std::cmp::Reverse(i.level));
     let level = match issues.first().map(|i| i.level) {
         Some(RatingLevel::Over) => Danger::Danger,
         Some(RatingLevel::Caution) => Danger::Caution,

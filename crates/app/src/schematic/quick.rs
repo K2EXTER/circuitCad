@@ -159,12 +159,11 @@ impl SchEditor {
         if esc {
             return;
         }
-        if enter {
-            if let Some(h) = hits.get(q.sel) {
+        if enter
+            && let Some(h) = hits.get(q.sel) {
                 self.pick_quick(h.target);
                 return;
             }
-        }
         let mut chosen = None;
         let mut keep = true;
         egui::Area::new(egui::Id::new("quick_add")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_TOP, [0.0, 70.0]).show(&ctx, |ui| {

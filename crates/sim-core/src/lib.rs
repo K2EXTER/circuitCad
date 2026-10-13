@@ -1,5 +1,10 @@
 //! Circuit simulation core (GUI independent): DC operating point so far.
 
+// `!(x > 0.0)` is deliberate: it is also true for NaN, which `x <= 0.0` is not.
+#![allow(clippy::neg_cmp_op_on_partial_ord)]
+// Structs with many fields (calculation results, test fixtures) are filled by assigning after `Default::default()`; that reads better than one long initializer.
+#![allow(clippy::field_reassign_with_default)]
+
 mod ac;
 mod chain;
 mod circuit;

@@ -207,7 +207,7 @@ pub fn cursor_report(traces: &[Trace], c: &[Option<f64>; 2], style: &Style, log:
             let d = b - a;
             let mut l = format!("Δ{} = {}", style.x_name, xs(d));
             if d != 0.0 && style.x_unit == "s" {
-                l += &format!("  (1/Δ{} = {})", style.x_name, format!("{}Hz", axis_label(1.0 / d.abs(), 1.0 / d.abs() / 100.0)));
+                l += &format!("  (1/Δ{} = {})", style.x_name, format_args!("{}Hz", axis_label(1.0 / d.abs(), 1.0 / d.abs() / 100.0)));
             }
             out.push((None, l));
         }

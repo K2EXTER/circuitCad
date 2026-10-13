@@ -381,11 +381,10 @@ impl SchEditor {
                 self.fault_pin.clear();
             }
             let pins = self.pin_choices(&self.fault_part);
-            if ui.selectable_label(!self.fault_pin.is_empty(), "ピン単位").on_hover_text("1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します").clicked() && self.fault_pin.is_empty() {
-                if let Some((n, _)) = pins.first() {
+            if ui.selectable_label(!self.fault_pin.is_empty(), "ピン単位").on_hover_text("1本のピンだけ、はんだ不良 (断線) や、隣とのはんだブリッジ (ショート) にします。ICのピンは、この方法で壊します").clicked() && self.fault_pin.is_empty()
+                && let Some((n, _)) = pins.first() {
                     self.fault_pin = n.clone();
                 }
-            }
         });
         if self.fault_pin.is_empty() {
             if whole.is_empty() && !self.fault_part.is_empty() {

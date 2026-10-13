@@ -31,7 +31,7 @@ impl FillShape {
         let contours: Vec<Path> = std::iter::once(&self.outer).chain(self.holes.iter()).map(|c| c.iter().map(|p| [p.x, p.y]).collect()).collect();
         let t = contours.as_slice().triangulate().to_triangulation::<u32>();
         t.indices
-            .chunks_exact(3)
+            .as_chunks::<3>().0.iter()
             .map(|i| {
                 let p = |k: u32| Point::new(t.points[k as usize][0], t.points[k as usize][1]);
                 [p(i[0]), p(i[1]), p(i[2])]

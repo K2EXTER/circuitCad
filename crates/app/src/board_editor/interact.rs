@@ -73,7 +73,7 @@ impl BoardEditor {
                     painter.circle_stroke(self.to_screen(rect, c), 9.0, Stroke::new(2.0, Color32::from_rgb(90, 230, 120)));
                 }
             sp = Some(p);
-            self.draw_cursor(&painter, rect, p);
+            self.draw_cursor(painter, rect, p);
 
             if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none()
                 && self.hit_test(w).is_some_and(|h| self.multi.contains(&h) && !self.is_locked_item(&h)) {

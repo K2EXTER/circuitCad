@@ -1,5 +1,7 @@
 // No console window on Windows (panics are written to %APPDATA%\circuitCad\crash.log instead).
 #![windows_subsystem = "windows"]
+// Structs with many fields (calculation results, test fixtures) are filled by assigning after `Default::default()`; that reads better than one long initializer.
+#![allow(clippy::field_reassign_with_default)]
 
 use board_editor::BoardEditor;
 use eframe::egui;
@@ -1683,7 +1685,7 @@ mod tests {
     }
 
     /// Generates docs/examples/series_regulator.schjson (3.3 V zener reference + LM358 + NPN pass transistor
-    /// + feedback divider -> 5 V, 100 ohm load):
+    /// and feedback divider -> 5 V, 100 ohm load):
     /// `cargo test -p app write_series_regulator_example -- --ignored`
     #[test]
     #[ignore]

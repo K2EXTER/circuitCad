@@ -220,7 +220,7 @@ pub fn check_ratings(sch: &Schematic, dc: &DcResult) -> Vec<RatingIssue> {
             _ => {}
         }
     }
-    out.sort_by(|a, b| b.level.cmp(&a.level));
+    out.sort_by_key(|i| std::cmp::Reverse(i.level));
     out
 }
 

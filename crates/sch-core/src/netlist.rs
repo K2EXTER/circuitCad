@@ -378,7 +378,7 @@ pub fn erc(s: &Schematic) -> Vec<Problem> {
 
     // parts that are not connected to GND through any chain of parts
     let mut parent: Vec<usize> = (0..nets.len()).collect();
-    fn find(p: &mut Vec<usize>, i: usize) -> usize {
+    fn find(p: &mut [usize], i: usize) -> usize {
         let mut r = i;
         while p[r] != r {
             r = p[r];

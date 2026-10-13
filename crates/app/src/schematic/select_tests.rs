@@ -92,7 +92,7 @@ fn parts_may_touch_but_not_overlap_and_ground_symbols_are_exempt() {
     assert!(r((0, 1), 0), "shifted one row");
     assert!(!r((4, 0), 0), "pins meeting end to end is the normal way to join parts");
     assert!(!r((0, 2), 0), "stacked with the edges touching");
-    assert!(r((4, 0), 1) == false && r((3, 0), 1) == false, "a vertical resistor beside R1 fits");
+    assert!(!r((4, 0), 1) && !r((3, 0), 1), "a vertical resistor beside R1 fits");
     assert!(r((1, 0), 1), "a vertical resistor across R1 does not");
     // moving a part does not collide with itself
     assert!(!e.would_overlap(Kind::Resistor, extents(Kind::Resistor), (0, 0), 0, &[0]));

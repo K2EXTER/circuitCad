@@ -196,7 +196,7 @@ impl Frame {
         Frame { x0: lo.x - 1.0, y1: hi.y + 1.0, px, w: (w_mm * px).ceil() as usize, h: (h_mm * px).ceil() as usize }
     }
 
-    fn to_mm(&self, i: usize, j: usize) -> Point {
+    fn to_mm(self, i: usize, j: usize) -> Point {
         Point::new(self.x0 + (i as f64 + 0.5) / self.px, self.y1 - (j as f64 + 0.5) / self.px)
     }
 
