@@ -406,6 +406,3 @@ mod tests {
         assert!(to_spice(&s, "t").contains("MQ1 OUT G 0 0 2N7000"));
     }
 }
-
-
-

@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 
 /// A node agrees when the RMS difference is below this fraction of the larger of its swing and `MIN_SPAN` volts.
 const NRMSE_TOL: f64 = 0.01;
+/// ... or, for edge-dominated signals, when every edge is within this fraction of a period.
+const EDGE_TOL: f64 = 0.02;
 const MIN_SPAN: f64 = 0.1;
 /// Most output points per run (keeps both simulators quick).
 const MAX_STEPS: f64 = 20_000.0;
@@ -17,7 +19,7 @@ const MAX_STEPS: f64 = 20_000.0;
 #[derive(Debug, PartialEq)]
 pub enum TranOutcome {
     Match { nodes: usize, tstop: f64, worst: String, nrmse: f64, ripple: String },
-    Differ { nodes: usize, tstop: f64, worst: String, nrmse: f64, peak: f64, at: f64, bad: usize, ripple: String },
+    Differ { nodes: usize, tstop: f64, worst: String, nrmse: f64, peak: f64, at: f64, bad: usize, bad_list: String, ripple: String },
     Skipped(String),
     Failed(String),
 }
@@ -52,7 +54,8 @@ fn timescale(w: &Waveform) -> Result<Option<(f64, f64)>, String> {
 }
 
 /// Run length and step for the circuit: the longest "worth showing" time, the finest step.
-pub fn pick_settings(s: &Schematic) -> Result<(f64, f64), String> {
+/// `Ok(None)`: no source changes with time (the circuit may still move by itself).
+pub fn pick_settings(s: &Schematic) -> Result<Option<(f64, f64)>, String> {
     let (mut step, mut stop): (f64, f64) = (f64::INFINITY, 0.0);
     for c in s.components.iter().filter(|c| c.kind == Kind::VSource) {
         let src = parse_source_full(&c.value).map_err(|m| format!("{} の値を読めません ({}): {m}", c.refdes, c.value))?;
@@ -62,9 +65,22 @@ pub fn pick_settings(s: &Schematic) -> Result<(f64, f64), String> {
         }
     }
     if !step.is_finite() || stop <= 0.0 {
-        return Err("時間変化する電源がありません (--tstop と --tstep で指定できます)".into());
+        return Ok(None);
     }
-    Ok((stop, step.max(stop / MAX_STEPS)))
+    Ok(Some((stop, step.max(stop / MAX_STEPS))))
+}
+
+/// Run length and step for circuits that move by themselves (their own oscillator or start-up);
+/// anything else gets a short run that checks the circuit stays at its operating point.
+fn own_dynamics(tag: &str) -> (f64, f64) {
+    match tag {
+        // 150 kHz PWM: the start-up of the output filter
+        "buck_converter" | "buck_cout_ceramic" | "buck_cout_electrolytic" => (1e-3, 100e-9),
+        // astable timers: a few periods of about a second
+        "ne555_blinker" => (3.0, 5e-4),
+        "led_blinker" => (5.0, 2e-3),
+        _ => (1e-3, 10e-6),
+    }
 }
 
 /// `wrdata` with `wr_vecnames`: a header line of names, then one row per time point whose first
@@ -90,6 +106,40 @@ pub fn parse_wrdata(text: &str) -> Option<(Vec<f64>, Columns)> {
     }
     let time = cols.remove(0);
     Some((time, names.into_iter().skip(1).zip(cols).collect()))
+}
+
+/// Times at which `v` crosses `level` (either direction), by linear interpolation.
+pub fn crossings(t: &[f64], v: &[f64], level: f64) -> Vec<f64> {
+    let mut out = vec![];
+    for k in 1..t.len().min(v.len()) {
+        let (a, b) = (v[k - 1] - level, v[k] - level);
+        if (a < 0.0) != (b < 0.0) && b != a {
+            out.push(t[k - 1] + (t[k] - t[k - 1]) * (-a) / (b - a));
+        }
+    }
+    out
+}
+
+/// For a signal that is mostly edges (a PWM node, an oscillator output): how far the edges of
+/// `ours` are from those of `theirs`, as a fraction of the period. `Err` (with the reason) when the two do not have
+/// the same number of edges or there are too few to speak of a period.
+pub fn edge_drift(ours: (&[f64], &[f64]), theirs: (&[f64], &[f64])) -> Result<f64, String> {
+    let (lo, hi) = theirs.1.iter().fold((f64::MAX, f64::MIN), |(l, h), &x| (l.min(x), h.max(x)));
+    if hi - lo < 0.5 {
+        return Err("振れ幅が小さい".into());
+    }
+    let level = (lo + hi) / 2.0;
+    let (a, b) = (crossings(ours.0, ours.1, level), crossings(theirs.0, theirs.1, level));
+    if b.len() < 4 || a.len().abs_diff(b.len()) > 1 {
+        return Err(format!("エッジの数が違う (自前{} ngspice{})", a.len(), b.len()));
+    }
+    let n = a.len().min(b.len());
+    let mut gaps: Vec<f64> = (0..n - 2).map(|i| b[i + 2] - b[i]).collect();
+    gaps.sort_by(|x, y| x.total_cmp(y));
+    let period = gaps[gaps.len() / 2];
+    // each edge of theirs against the nearest edge of ours (an extra or missing edge at the ends must not shift the pairing)
+    let drift = b.iter().map(|&x| a.iter().map(|&y| (x - y).abs()).fold(f64::MAX, f64::min)).fold(0.0, f64::max);
+    Ok(drift / period)
 }
 
 /// Linear interpolation of `(t, v)` at `x` (clamped at the ends).
@@ -143,7 +193,11 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
     }
     let (tstop, tstep) = match (given.tstop.zip(given.tstep), pick_settings(s)) {
         (Some(g), _) => g,
-        (None, Ok((x, y))) => (given.tstop.unwrap_or(x), given.tstep.unwrap_or(y)),
+        (None, Ok(Some((x, y)))) => (given.tstop.unwrap_or(x), given.tstep.unwrap_or(y)),
+        (None, Ok(None)) => {
+            let (x, y) = own_dynamics(tag);
+            (given.tstop.unwrap_or(x), given.tstep.unwrap_or(y))
+        }
         (None, Err(m)) => return TranOutcome::Skipped(m),
     };
     let (ours_step, ng_step) = (given.ours_step.unwrap_or(tstep), given.ng_step.unwrap_or(tstep));
@@ -161,6 +215,9 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
         Err(e) => return TranOutcome::Failed(format!("自前エンジン: {e}")),
     };
 
+    // An oscillator with no operating point starts from all zeros in our engine (SPICE's UIC): do the
+    // same in ngspice, and leave out the t = 0 sample, where even the supply reads 0 V.
+    let zero_start = ours.warnings.iter().any(|w| w.contains("すべてゼロ"));
     // only nets of the schematic, under the names to_spice gave them
     let nets: Vec<(String, String)> = extract(s).iter().map(|n| (n.name.clone(), spice_node(&n.name))).filter(|(_, sp)| sp != "0").collect();
     let body = to_spice_for(s, tag, Dialect::Ngspice);
@@ -169,7 +226,8 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
     let _ = std::fs::remove_file(&out_file);
     let vecs: Vec<String> = nets.iter().map(|(_, sp)| format!("v({sp})")).collect();
     let script = format!(
-        "{body}.options reltol=1e-6 vntol=1e-8 abstol=1e-12\n.control\nset noaskquit\nset wr_singlescale\nset wr_vecnames\ntran {ng_step:e} {tstop:e} 0 {ng_step:e}\nwrdata {} {}\n.endc\n.end\n",
+        "{body}.options reltol=1e-6 vntol=1e-8 abstol=1e-12\n.control\nset noaskquit\nset wr_singlescale\nset wr_vecnames\ntran {ng_step:e} {tstop:e} 0 {ng_step:e}{}\nwrdata {} {}\n.endc\n.end\n",
+        if zero_start { " uic" } else { "" },
         out_file.to_string_lossy().replace('\\', "/"),
         vecs.join(" ")
     );
@@ -186,14 +244,17 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
     let (mut n, mut bad) = (0, 0);
     let mut worst: Option<(f64, String, f64, f64)> = None;
     let mut ripple: Vec<String> = vec![];
+    let mut bad_names: Vec<String> = vec![];
     for (name, sp) in &nets {
         let (Some(a), Some((_, b))) = (ours.signal(&format!("V({name})")), cols.iter().find(|(c, _)| *c == format!("v({})", sp.to_ascii_lowercase()))) else { continue };
         // compare on our time axis, inside the span both reached
         let end = ours.time.last().copied().unwrap_or(0.0).min(*t.last().unwrap());
-        let (mine, theirs): (Vec<f64>, Vec<f64>) = ours.time.iter().zip(&a.values).filter(|(x, _)| **x <= end).map(|(x, v)| (*v, interpolate(&t, b, *x))).unzip();
-        let (nrmse, peak) = waveform_error(&ours.time[..mine.len()], &mine, &theirs);
+        let skip = usize::from(zero_start);
+        let (mine, theirs): (Vec<f64>, Vec<f64>) =
+            ours.time.iter().zip(&a.values).skip(skip).filter(|(x, _)| **x <= end).map(|(x, v)| (*v, interpolate(&t, b, *x))).unzip();
+        let (nrmse, peak) = waveform_error(&ours.time[skip..skip + mine.len()], &mine, &theirs);
         let at = mine.iter().zip(&theirs).enumerate().fold((0, 0.0), |m, (k, (a, b))| if (a - b).abs() > m.1 { (k, (a - b).abs()) } else { m }).0;
-        let at = ours.time[at];
+        let at = ours.time[skip + at];
         // ripple: the peak-to-peak of the last fifth of the run, which a timing shift of an edge does not disturb
         let from = mine.len() - mine.len() / 5;
         let pp = |v: &[f64]| v[from..].iter().cloned().fold(f64::MIN, f64::max) - v[from..].iter().cloned().fold(f64::MAX, f64::min);
@@ -202,17 +263,33 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
             ripple.push(format!("{name} 末尾のp-p 自前{pm:.3e} ngspice{pt:.3e}"));
         }
         n += 1;
-        if nrmse > NRMSE_TOL {
-            bad += 1;
+        // a waveform that is mostly edges differs wherever an edge sits a little off: judge it by the edge times
+        let timing = if nrmse > NRMSE_TOL {
+            edge_drift((&ours.time[skip..skip + mine.len()], &mine), (&ours.time[skip..skip + mine.len()], &theirs))
+        } else {
+            Err(String::new())
+        };
+        match timing {
+            Ok(d) if d <= EDGE_TOL => ripple.push(format!("{name} は形の差{:.1}%だがエッジ時刻のずれは周期の{:.1}%", nrmse * 100.0, d * 100.0)),
+            _ if nrmse > NRMSE_TOL => {
+                bad += 1;
+                let edges = match &timing {
+                    Ok(d) => format!("エッジのずれ 周期の{:.1}%", d * 100.0),
+                    Err(why) => format!("エッジは比べられない: {why}"),
+                };
+                bad_names.push(format!("{name} {:.1}% ({edges})", nrmse * 100.0));
+            }
+            _ => {}
         }
-        if worst.as_ref().is_none_or(|w| nrmse > w.0) {
+        if worst.as_ref().is_none_or(|w| nrmse > w.0) && !matches!(timing, Ok(d) if d <= EDGE_TOL) {
             worst = Some((nrmse, name.clone(), peak, at));
         }
     }
     let ripple = ripple.join(" / ");
+    let bad_list = bad_names.join(", ");
     match worst {
         None => TranOutcome::Skipped("名前が一致するノードがありません".into()),
-        Some((nrmse, name, peak, at)) if bad > 0 => TranOutcome::Differ { nodes: n, tstop, worst: name, nrmse, peak, at, bad, ripple },
+        Some((nrmse, name, peak, at)) if bad > 0 => TranOutcome::Differ { nodes: n, tstop, worst: name, nrmse, peak, at, bad, bad_list, ripple },
         Some((nrmse, name, ..)) => TranOutcome::Match { nodes: n, tstop, worst: name, nrmse, ripple },
     }
 }
@@ -226,8 +303,8 @@ fn describe(o: &TranOutcome) -> String {
         TranOutcome::Match { nodes, tstop, worst, nrmse, ripple } => {
             format!("{nodes} ノード ({tstop:.3e} 秒)。最大誤差 {worst} {:.3}%{}", nrmse * 100.0, note(ripple))
         }
-        TranOutcome::Differ { nodes, tstop, worst, nrmse, peak, at, bad, ripple } => {
-            format!("{bad}/{nodes} ノードがズレ ({tstop:.3e} 秒)。最大: {worst} 誤差 {:.2}%、ピーク差 {peak:.3e} V (t={at:.4e} 秒){}", nrmse * 100.0, note(ripple))
+        TranOutcome::Differ { nodes, tstop, worst, nrmse, peak, at, bad, bad_list, ripple } => {
+            format!("{bad}/{nodes} ノードがズレ [{bad_list}] ({tstop:.3e} 秒)。最大: {worst} 誤差 {:.2}%、ピーク差 {peak:.3e} V (t={at:.4e} 秒){}", nrmse * 100.0, note(ripple))
         }
         TranOutcome::Skipped(m) | TranOutcome::Failed(m) => m.clone(),
     }
@@ -294,6 +371,23 @@ mod tests {
         let r = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0];
         let o: Vec<f64> = r.iter().zip([0.0, 0.0, 5.0, 5.0, 0.0, 0.0]).map(|(a, d)| a + d).collect();
         assert!(waveform_error(&tt, &o, &r).0 < 0.001);
+    }
+
+    #[test]
+    fn edge_times_tell_a_shifted_square_wave_from_a_wrong_one() {
+        // a 1 kHz square wave, sampled every 10 us
+        let t: Vec<f64> = (0..2000).map(|k| k as f64 * 1e-5).collect();
+        let square = |shift: f64| -> Vec<f64> { t.iter().map(|x| if ((x - shift) / 5e-4).floor() as i64 % 2 == 0 { 5.0 } else { 0.0 }).collect() };
+        let theirs = square(0.0);
+        // 10 us late = 1 % of the period: edges agree although the waveform differs at every edge
+        let d = edge_drift((&t, &square(1e-5)), (&t, &theirs)).unwrap();
+        assert!((d - 0.01).abs() < 0.002, "{d}");
+        // a quarter period late is far outside
+        assert!(edge_drift((&t, &square(2.5e-4)), (&t, &theirs)).unwrap() > 0.2);
+        // a missing half of the edges, or a flat signal, cannot be judged by timing
+        assert!(edge_drift((&t, &vec![5.0; t.len()]), (&t, &theirs)).is_err());
+        assert!(edge_drift((&t, &theirs), (&t, &vec![0.1; t.len()])).is_err());
+        assert_eq!(crossings(&[0.0, 1.0, 2.0], &[0.0, 2.0, 0.0], 1.0), vec![0.5, 1.5]);
     }
 
     #[test]
