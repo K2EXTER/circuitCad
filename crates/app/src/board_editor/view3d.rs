@@ -25,6 +25,14 @@ struct Scene {
     tallest: [Option<(String, f64)>; 2],
     /// Every net name on the board, for the highlight list.
     nets: Vec<String>,
+    /// For every part: how high it stands above the face it is on (mm), and whether that face is the bottom.
+    heights: Vec<f64>,
+    bottoms: Vec<bool>,
+    /// How far (mm) each part is over the case height (0 = within it, or not checked), the limits drawn as rings
+    /// (top, bottom), and the settings these were computed for.
+    over: Vec<f64>,
+    rings: [Option<f64>; 2],
+    applied: Option<(bool, u64, u64)>,
     /// Copper of the highlighted net as triangles (`true` = bottom face), drawn just above the board picture.
     glow: Vec<(bool, [Point; 3])>,
 }
@@ -62,6 +70,10 @@ pub(super) struct View3d {
     followed: Option<String>,
     /// A part to move the camera to on the next frame.
     focus: Option<usize>,
+    /// The case height check: on/off and the room above the top face and below the bottom face (mm).
+    check_height: bool,
+    limit_top: f64,
+    limit_bottom: f64,
 }
 
 /// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
@@ -80,11 +92,13 @@ struct PictureKey {
     hover: Option<usize>,
     selected: Option<usize>,
     generation: u32,
+    /// Drawn coarsely (while the view is being dragged or zoomed) or fully.
+    draft: bool,
 }
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0 }
     }
 }
 
@@ -199,10 +213,40 @@ impl Scene {
                 tallest[side] = Some((b.refdes.clone(), height));
             }
         }
+        let mut heights = vec![0.0f64; board.parts.len()];
+        for b in &boxes {
+            let height = if b.bottom { -b.lo[2] } else { b.hi[2] - BOARD_THICKNESS };
+            if let Some(h) = heights.get_mut(b.part) {
+                *h = h.max(height);
+            }
+        }
+        let bottoms: Vec<bool> = board.parts.iter().map(|p| p.side == Side::Bottom).collect();
+        let over = vec![0.0; board.parts.len()];
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, parts, tallest, nets, glow: vec![] })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, nets, glow: vec![] })
+    }
+
+    /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
+    /// is not checked). Returns whether anything changed, so the picture is redrawn only then.
+    fn set_limits(&mut self, on: bool, top: f64, bottom: f64) -> bool {
+        let key = Some((on, top.to_bits(), bottom.to_bits()));
+        if self.applied == key {
+            return false;
+        }
+        self.applied = key;
+        let lim = |side_bottom: bool| if !on { 0.0 } else if side_bottom { bottom } else { top };
+        self.over = (0..self.parts.len()).map(|i| if lim(self.bottoms[i]) > 0.0 { (self.heights[i] - lim(self.bottoms[i])).max(0.0) } else { 0.0 }).collect();
+        self.rings = [Some(lim(false)).filter(|l| *l > 0.0), Some(lim(true)).filter(|l| *l > 0.0)];
+        true
+    }
+
+    /// The parts over the case height, worst first: `(refdes, mm over)`.
+    fn over_list(&self) -> Vec<(String, f64)> {
+        let mut v: Vec<(String, f64)> = self.over.iter().enumerate().filter(|(_, o)| **o > 1e-6).map(|(i, o)| (self.parts[i].0.clone(), *o)).collect();
+        v.sort_by(|a, b| b.1.total_cmp(&a.1));
+        v
     }
 
     fn images(pv: &Preview, mask: bool, silk: bool) -> [Vec<[u8; 4]>; 2] {
@@ -265,6 +309,16 @@ impl Scene {
             buf.triangle([p0, p1, p2], paint, &pics);
             buf.triangle([p0, p2, p3], paint, &pics);
         }
+        // the case height as a ring round the outline, above the top face and below the bottom face
+        for (k, ring) in self.rings.iter().enumerate() {
+            if let Some(l) = ring {
+                let z = if k == 0 { BOARD_THICKNESS + l } else { -l };
+                for i in 0..n {
+                    let (a, b) = (self.outline[i], self.outline[(i + 1) % n]);
+                    buf.line(vert([a.x, a.y, z], [0.0, 0.0]), vert([b.x, b.y, z], [0.0, 0.0]), [255, 170, 40]);
+                }
+            }
+        }
         if !show_parts {
             return buf;
         }
@@ -274,7 +328,8 @@ impl Scene {
                 if nv[2] <= 1e-4 {
                     continue;
                 }
-                let mut color = shade3(b.color, light(nv));
+                let too_tall = self.over.get(b.part).is_some_and(|o| *o > 1e-6);
+                let mut color = shade3(if too_tall { [225, 50, 40] } else { b.color }, light(nv));
                 if hover == Some(b.part) {
                     color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
                 }
@@ -338,13 +393,36 @@ fn focus_on(scene: &Scene, part: usize, rect: Rect, yaw: f32, pitch: f32) -> Opt
     Some((pitch, zoom, rect.center() - pos))
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Quality {
+    /// While the view is moved: fast and a little blurry.
+    Draft,
+    /// Rendered `n` times over and averaged (smooth edges).
+    Fine(usize),
+}
+
+/// Index into a picture of `size` samples for the pointer at `p` over the window `rect` (the picture is stretched
+/// to the window, so a draft has fewer samples than pixels).
+fn sample_at(rect: Rect, size: [usize; 2], p: Pos2) -> Option<usize> {
+    let (u, v) = ((p.x - rect.min.x) / rect.width().max(1.0), (p.y - rect.min.y) / rect.height().max(1.0));
+    if !(0.0..1.0).contains(&u) || !(0.0..1.0).contains(&v) {
+        return None;
+    }
+    let (x, y) = ((u * size[0] as f32) as usize, (v * size[1] as f32) as usize);
+    (x < size[0] && y < size[1]).then_some(y * size[0] + x)
+}
+
 /// One picture of the scene at `ss` x supersampling: the pixels, the part under each, and the size.
 /// `hover` and `selected` get an outline (pass `None` for a clean picture to save).
-fn snapshot(scene: &Scene, rect: Rect, cam: &Cam, show_parts: bool, ss: usize, hover: Option<usize>, selected: Option<usize>) -> (Vec<[u8; 4]>, Vec<u32>, usize, usize) {
-    let s = ss as f32;
+fn snapshot(scene: &Scene, rect: Rect, cam: &Cam, show_parts: bool, q: Quality, hover: Option<usize>, selected: Option<usize>) -> (Vec<[u8; 4]>, Vec<u32>, usize, usize) {
+    // a draft is drawn at half the size (a quarter of the pixels, no averaging); a fine picture at `n` times, then averaged
+    let (s, ss) = match q {
+        Quality::Draft => (0.5f32, 1),
+        Quality::Fine(n) => (n as f32, n),
+    };
     let local = Cam { scale: cam.scale * s, origin: Pos2::new((cam.origin.x - rect.min.x) * s, (cam.origin.y - rect.min.y) * s), ..*cam };
-    let (w, h) = (rect.width().round().max(1.0) as usize, rect.height().round().max(1.0) as usize);
-    let buf = scene.render(&local, w * ss, h * ss, show_parts, hover);
+    let (w, h) = ((rect.width().round().max(1.0) * s).round().max(1.0) as usize, (rect.height().round().max(1.0) * s).round().max(1.0) as usize);
+    let buf = scene.render(&local, w, h, show_parts, hover);
     let (mut pixels, ids, w, h) = buf.resolve(ss);
     if let Some(s) = selected {
         outline_part(&mut pixels, &ids, w, h, s as u32, [90, 220, 255]);
@@ -477,6 +555,12 @@ impl BoardEditor {
             new_net = Some(sel_net.clone());
         }
         self.view3d.followed = sel_net;
+        if self.view3d.scene.is_some() {
+            let (on, top, bottom) = (self.view3d.check_height, self.view3d.limit_top, self.view3d.limit_bottom);
+            if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_limits(on, top, bottom)) {
+                self.view3d.generation += 1;
+            }
+        }
         let mut open = true;
         let mut retex = false;
         let mut stale = false;
@@ -508,6 +592,11 @@ impl BoardEditor {
                 }
                 if ui.checkbox(&mut v.silk, "シルク").on_hover_text("白い印刷 (部品の枠や文字)").changed() {
                     retex = true;
+                }
+                ui.checkbox(&mut v.check_height, "ケース高さ").on_hover_text("ケースに入る高さを調べます。基板の面からこの高さを超える部品は赤くなり、高さの上限が橙の枠で見えます。0 にした面は調べません");
+                if v.check_height {
+                    ui.add(egui::DragValue::new(&mut v.limit_top).range(0.0..=200.0).speed(0.1).prefix("表 ").suffix(" mm")).on_hover_text("表側の、基板の面からケースまでの高さ (部品に使える高さ)");
+                    ui.add(egui::DragValue::new(&mut v.limit_bottom).range(0.0..=200.0).speed(0.1).prefix("裏 ").suffix(" mm")).on_hover_text("裏側の、基板の面からケースまでの高さ");
                 }
                 ui.checkbox(&mut v.spin, "自動回転").on_hover_text("ゆっくり回して、いろいろな向きから見せます");
                 if ui.button("更新").on_hover_text("基板エディタで変更した内容を反映します").clicked() {
@@ -551,6 +640,16 @@ impl BoardEditor {
                 info += &format!(" / 裏側 {r} ({t:.1} mm)");
             }
             ui.small(info);
+            if v.check_height {
+                let over = scene.over_list();
+                if over.is_empty() {
+                    ui.colored_label(Color32::from_rgb(70, 190, 100), "✔ どの部品もケースの高さに収まっています");
+                } else {
+                    let names: Vec<String> = over.iter().take(6).map(|(r, o)| format!("{r} (+{o:.1} mm)")).collect();
+                    let more = if over.len() > 6 { format!(" ほか {} 個", over.len() - 6) } else { String::new() };
+                    ui.colored_label(Color32::from_rgb(230, 70, 60), format!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
+                }
+            }
             let size = ui.available_size().max(Vec2::new(300.0, 240.0));
             let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
             painter.rect_filled(resp.rect, 4.0, Color32::from_rgb(34, 38, 46));
@@ -574,9 +673,11 @@ impl BoardEditor {
             {
                 (v.pitch, v.zoom, v.pan) = (pitch, zoom, pan);
             }
+            let mut moving = resp.dragged();
             if resp.hovered() {
                 let scroll = ui.input(|i| i.smooth_scroll_delta.y);
                 if scroll != 0.0 {
+                    moving = true;
                     v.zoom = (v.zoom * (1.0 + scroll * 0.002)).clamp(0.2, MAX_ZOOM);
                 }
             }
@@ -586,7 +687,7 @@ impl BoardEditor {
             }
             let cam = camera(scene, resp.rect, v.yaw, v.pitch, v.zoom, v.pan);
             // the picture: drawn at twice the size and averaged (release builds), and kept while nothing in it changes
-            let ss = if cfg!(debug_assertions) { 1 } else { 2 };
+            let quality = if moving { Quality::Draft } else { Quality::Fine(if cfg!(debug_assertions) { 1 } else { 2 }) };
             let size_px = [resp.rect.width().round().max(1.0) as usize, resp.rect.height().round().max(1.0) as usize];
             let key = PictureKey {
                 camera: [v.yaw.to_bits(), v.pitch.to_bits(), v.zoom.to_bits(), v.pan.x.to_bits(), v.pan.y.to_bits()],
@@ -595,16 +696,21 @@ impl BoardEditor {
                 hover: v.hover,
                 selected,
                 generation: v.generation,
+                draft: moving,
             };
+            if moving {
+                // one more frame once it stops, to draw the full picture
+                ui.ctx().request_repaint();
+            }
             if v.cache.as_ref().is_none_or(|c| c.key != key) {
-                let (pixels, ids, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, ss, v.hover, selected);
+                let (pixels, ids, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, quality, v.hover, selected);
                 let rgba: Vec<u8> = pixels.iter().flatten().copied().collect();
                 let tex = ui.ctx().load_texture("board3d_view", egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba), egui::TextureOptions::LINEAR);
                 v.cache = Some(Cached { key, tex, ids, size: [w, h] });
             }
             if save_png {
                 // a clean picture (no outlines), drawn at twice the size
-                let (pixels, _, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, 2, None, None);
+                let (pixels, _, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, Quality::Fine(2), None, None);
                 if let Some(path) = rfd::FileDialog::new().add_filter("PNG画像", &["png"]).set_file_name("board3d.png").save_file() {
                     let rgba: Vec<u8> = pixels.iter().flatten().copied().collect();
                     note = Some(match image::save_buffer(&path, &rgba, w as u32, h as u32, image::ColorType::Rgba8) {
@@ -616,12 +722,11 @@ impl BoardEditor {
             let mut hover = None;
             if let Some(c) = &v.cache {
                 painter.image(c.tex.id(), resp.rect, Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
-                if let Some(p) = resp.hover_pos() {
-                    let (x, y) = ((p.x - resp.rect.min.x) as usize, (p.y - resp.rect.min.y) as usize);
-                    if x < c.size[0] && y < c.size[1] {
-                        let id = c.ids[y * c.size[0] + x];
-                        hover = (id != NO_PART && v.show_parts).then_some(id as usize);
-                    }
+                if let Some(p) = resp.hover_pos()
+                    && let Some(k) = sample_at(resp.rect, c.size, p)
+                {
+                    let id = c.ids[k];
+                    hover = (id != NO_PART && v.show_parts).then_some(id as usize);
                 }
             }
             if hover != v.hover {
@@ -647,6 +752,9 @@ impl BoardEditor {
                             ui.label(format!("値: {}", if val.is_empty() { "—" } else { val }));
                             ui.label(format!("フットプリント: {}", if fp.is_empty() { "—" } else { fp }));
                             ui.label(format!("高さの目安: {hh:.1} mm"));
+                            if let Some(o) = scene.over.get(i).filter(|o| **o > 1e-6) {
+                                ui.colored_label(Color32::from_rgb(230, 70, 60), format!("ケースの高さを {o:.1} mm 超えています"));
+                            }
                         });
                     });
                 }
@@ -797,7 +905,7 @@ mod tests {
         s.glow = net_glow(&b, &pcb_core::drc::connectivity(&b), "B");
         assert!(!s.glow.is_empty() && s.glow.iter().all(|(bottom, _)| !bottom));
         let (rect, cam) = top_view(&s);
-        let (img, ..) = snapshot(&s, rect, &cam, false, 1, None, None);
+        let (img, ..) = snapshot(&s, rect, &cam, false, Quality::Fine(1), None, None);
         let at = |x: f64, y: f64| {
             let (p, _) = cam.project([x, y, BOARD_THICKNESS]);
             img[p.y.round() as usize * 800 + p.x.round() as usize]
@@ -807,7 +915,7 @@ mod tests {
         // the other net's pads (x=7, x=29) and bare board are not lit
         assert!(!lit(at(7.0, 12.0)) && !lit(at(29.0, 12.0)) && !lit(at(20.0, 12.0)));
         s.glow.clear();
-        let (img, ..) = snapshot(&s, rect, &cam, false, 1, None, None);
+        let (img, ..) = snapshot(&s, rect, &cam, false, Quality::Fine(1), None, None);
         let (p, _) = cam.project([9.0, 12.0, BOARD_THICKNESS]);
         assert!(!lit(img[p.y.round() as usize * 800 + p.x.round() as usize]));
     }
@@ -836,12 +944,74 @@ mod tests {
         let b = two_resistors();
         let s = Scene::build(&b, &egui::Context::default(), true, true).unwrap();
         let (rect, cam) = top_view(&s);
-        let (px, ids, w, h) = snapshot(&s, rect, &cam, true, 2, Some(0), Some(1));
+        let (px, ids, w, h) = snapshot(&s, rect, &cam, true, Quality::Fine(2), Some(0), Some(1));
         assert_eq!((w, h, px.len(), ids.len()), (800, 500, 400_000, 400_000));
         // hover / selected outlines are colours that only outlines use
         assert!(px.iter().any(|c| c[..3] == [255, 230, 90]));
-        let (clean, ..) = snapshot(&s, rect, &cam, true, 2, None, None);
+        let (clean, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(2), None, None);
         assert!(!clean.iter().any(|c| c[..3] == [255, 230, 90] || c[..3] == [90, 220, 255]));
+    }
+
+    fn tall_and_short() -> Board {
+        let mut b = two_resistors();
+        for (dx, pin) in [(-1.0, "1"), (1.0, "2")] {
+            let mut pad = Pad::new(Point::new(20.0 + dx, 20.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+            pad.refdes = "C1".into();
+            pad.pin = pin.into();
+            b.pads.push(pad);
+        }
+        b.parts.push(pcb_core::Part { refdes: "C1".into(), value: "100u".into(), footprint: "CP_Radial_D5_P2.0".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top });
+        b
+    }
+
+    #[test]
+    fn parts_over_the_case_height_turn_red_and_are_listed() {
+        let b = tall_and_short();
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        // not checked: nothing is over
+        assert!(s.set_limits(false, 3.0, 0.0) && s.over_list().is_empty());
+        assert!(!s.set_limits(false, 3.0, 0.0), "same settings: nothing to redraw");
+        // 3 mm of room above the top face: the 4.5 mm can is 1.5 mm over, the chips are not
+        assert!(s.set_limits(true, 3.0, 5.0));
+        let list = s.over_list();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].0, "C1");
+        assert!((list[0].1 - 1.5).abs() < 0.01, "{:?}", list);
+        assert_eq!(s.rings[0], Some(3.0));
+        // a limit of 0 on a face means that face is not checked
+        s.set_limits(true, 0.0, 5.0);
+        assert!(s.over_list().is_empty() && s.rings[0].is_none());
+        // seen from above, the can is red; with the check off it is its own colour
+        s.set_limits(true, 3.0, 5.0);
+        let (rect, cam) = top_view(&s);
+        let (img, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(1), None, None);
+        let (p, _) = cam.project([20.0, 20.0, BOARD_THICKNESS + 4.5]);
+        let c = img[p.y.round() as usize * 800 + p.x.round() as usize];
+        assert!(c[0] > 150 && c[1] < 90, "red can: {c:?}");
+        s.set_limits(false, 3.0, 5.0);
+        let (img, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(1), None, None);
+        let c = img[p.y.round() as usize * 800 + p.x.round() as usize];
+        assert!(c[1] > 90, "orange can: {c:?}");
+    }
+
+    #[test]
+    fn a_draft_is_half_size_and_hover_still_finds_the_part() {
+        let b = tall_and_short();
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        s.set_limits(false, 0.0, 0.0);
+        let (rect, cam) = top_view(&s);
+        let (px, ids, w, h) = snapshot(&s, rect, &cam, true, Quality::Draft, None, None);
+        assert_eq!((w, h, px.len(), ids.len()), (400, 250, 100_000, 100_000));
+        // the pointer over the can in the window finds the can in the half-size picture
+        let (p, _) = cam.project([20.0, 20.0, BOARD_THICKNESS + 4.5]);
+        let k = sample_at(rect, [w, h], p).unwrap();
+        assert_eq!(ids[k], 2, "C1 is the third part");
+        assert!(sample_at(rect, [w, h], Pos2::new(-5.0, 10.0)).is_none() && sample_at(rect, [w, h], Pos2::new(800.0, 10.0)).is_none());
+        // the draft looks like the fine picture at the same place (the can's colour)
+        let (fine, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(1), None, None);
+        let d = px[(p.y / 2.0) as usize * 400 + (p.x / 2.0) as usize];
+        let f = fine[p.y.round() as usize * 800 + p.x.round() as usize];
+        assert!((d[0] as i32 - f[0] as i32).abs() < 12 && (d[1] as i32 - f[1] as i32).abs() < 12);
     }
 
     #[test]
