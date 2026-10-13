@@ -123,10 +123,11 @@ impl PartDef {
         if self.prefix != "C" {
             return None;
         }
-        if self.glyph == "electrolytic" || self.name.starts_with("CE_") {
-            Some("電解")
-        } else if self.name.starts_with("CT_") {
+        // the name prefix is checked first: a tantalum is polarised like an electrolytic (same glyph)
+        if self.name.starts_with("CT_") {
             Some("タンタル")
+        } else if self.glyph == "electrolytic" || self.name.starts_with("CE_") {
+            Some("電解")
         } else if self.name.starts_with("CF_") || self.description.contains("フィルムコンデンサ") {
             Some("フィルム")
         } else if self.glyph == "capacitor" {

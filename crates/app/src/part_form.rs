@@ -42,7 +42,9 @@ pub enum PartType {
     Ic,
     Transistor,
     Diode,
-    Chip,
+    Capacitor,
+    Resistor,
+    Inductor,
     Connector,
 }
 
@@ -50,7 +52,9 @@ const PART_TYPES: &[(PartType, &str, &str)] = &[
     (PartType::Ic, "IC", "オペアンプ・レギュレータ・マイコンなど。足が2列に並ぶ (SOIC・DIP) 形を例に、ピン・パッケージ・本体の外形を入れます。QFN や放熱パッドは「③ 基板の形」で変えます"),
     (PartType::Transistor, "トランジスタ", "NPN・PNP・MOSFET。足が1列の形 (TO-92 など) を例に入れます。記号は規格の形になります"),
     (PartType::Diode, "ダイオード", "整流・ショットキー・ツェナー・LED。足が2本の形 (DO-35 など) を例に入れます。カソードの棒も付きます"),
-    (PartType::Chip, "チップ部品", "抵抗・コンデンサ・コイル (0603 など)。「① 基本」の「かんたん作成」に、データシートの数字を入れて作ります"),
+    (PartType::Capacitor, "コンデンサ", "積層セラミック・電解・タンタル・フィルム。種類を選ぶと、基板の形 (リード付きかチップか)・極性・高さの例が入ります。「① 基本」の「かんたん作成」に、容量と ESR などの数字を入れてモデルを作ります"),
+    (PartType::Resistor, "抵抗", "チップ抵抗 (0603 など) かリード付き。「① 基本」の「かんたん作成」に、抵抗値を入れて作ります"),
+    (PartType::Inductor, "コイル", "チップインダクタかリード付き。「① 基本」の「かんたん作成」に、インダクタンスと DCR を入れて作ります"),
     (PartType::Connector, "コネクタ", "ピンヘッダ・端子台など、足が1列に並ぶ部品"),
 ];
 
@@ -65,6 +69,10 @@ pub struct PartForm {
     /// The tab shown and the kind of part chosen first (None = not chosen: the form is as before).
     pub tab: FormTab,
     pub ptype: Option<PartType>,
+    /// The sub-kind chosen under the kind ("ceramic", "electrolytic", "tantalum", "film", "chip", "leaded").
+    pub ptype_sub: &'static str,
+    /// A polarised capacitor (electrolytic, tantalum): the symbol shows the + and the pins are named + and -.
+    pub pas_polar: bool,
     pub name: String,
     pub category: String,
     pub prefix: String,
@@ -142,6 +150,8 @@ impl Default for PartForm {
         Self {
             tab: FormTab::Basic,
             ptype: None,
+            ptype_sub: "",
+            pas_polar: false,
             name: String::new(),
             category: "ユーザー".into(),
             prefix: "U".into(),
@@ -582,13 +592,13 @@ impl PartForm {
         if self.category.trim().is_empty() || self.category == "ユーザー" {
             self.category = t.kind.label().into();
         }
-        self.pins_text = "1 1 left\n2 2 right".into();
+        self.pins_text = if self.pas_polar && t.kind == PassiveKind::Capacitor { "1 + left\n2 - right" } else { "1 1 left\n2 2 right" }.into();
         self.sim = SimChoice::Subckt;
         self.sim_name = g.sim_name;
         self.sim_text = g.sim_text;
         self.sim_pins = g.sim_pins.join(" ");
         self.sim_limits = g.limits.join("\n");
-        self.glyph = t.kind.glyph().into();
+        self.glyph = if self.pas_polar && t.kind == PassiveKind::Capacitor { "electrolytic" } else { t.kind.glyph() }.into();
         if self.fp_preset.is_empty() {
             self.pkg = PkgKind::Chip2;
         }
@@ -1172,8 +1182,31 @@ impl PartForm {
                     }
                 });
             }
-            Some(PartType::Chip) => {
-                ui.small("チップ部品 (抵抗・コンデンサ・コイル) は、「基本」タブの「かんたん作成」に、データシートの数字を入れるだけで作れます");
+            Some(PartType::Capacitor) => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("どの種類?");
+                    for (k, label, tip) in [
+                        ("ceramic", "積層セラミック", "チップ部品。小さくて高い周波数に強い。極性なし。電圧がかかると容量が減ります"),
+                        ("electrolytic", "電解", "リード付きの円筒形。容量が大きく、電源の平滑に使う。極性があり、ESR は大きめ"),
+                        ("tantalum", "タンタル", "小さくて容量が大きい。極性があり、耐圧に余裕を見ないと壊れます"),
+                        ("film", "フィルム", "リード付きの箱形。極性なし。ESR・ESL が小さく、容量が安定します"),
+                    ] {
+                        if ui.selectable_label(self.ptype_sub == k, label).on_hover_text(tip).clicked() {
+                            self.set_capacitor(k);
+                        }
+                    }
+                });
+                ui.small("名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます");
+            }
+            Some(t @ (PartType::Resistor | PartType::Inductor)) => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("どの形?");
+                    for (k, label, tip) in [("chip", "チップ", "面実装の小さい部品 (0603・0805 など)"), ("leaded", "リード付き", "足を基板の穴に通す部品")] {
+                        if ui.selectable_label(self.ptype_sub == k, label).on_hover_text(tip).clicked() {
+                            self.set_resistor_or_inductor(t, k);
+                        }
+                    }
+                });
             }
             _ => {}
         }
@@ -1236,13 +1269,12 @@ impl PartForm {
                 self.body_pin = "1".into();
                 self.tab = FormTab::Pins;
             }
-            PartType::Chip => {
-                self.prefix = "C".into();
-                self.glyph.clear();
-                self.pins_text = "1 1\n2 2".into();
-                self.pkg = PkgKind::Chip2;
-                (self.pitch, self.len, self.width) = (1.65, 0.8, 0.95);
-                self.body_on = false;
+            PartType::Capacitor => {
+                self.set_capacitor("ceramic");
+                self.tab = FormTab::Basic;
+            }
+            PartType::Resistor | PartType::Inductor => {
+                self.set_resistor_or_inductor(t, "chip");
                 self.tab = FormTab::Basic;
             }
             PartType::Connector => {
@@ -1257,6 +1289,74 @@ impl PartForm {
                 self.body_mark = BodyMark::Dot;
                 self.tab = FormTab::Pins;
             }
+        }
+    }
+
+    /// Starting points for the kinds of capacitor: the footprint, the polarity, the height and the name prefix.
+    fn set_capacitor(&mut self, kind: &'static str) {
+        self.ptype = Some(PartType::Capacitor);
+        self.ptype_sub = kind;
+        self.pas_kind = PassiveKind::Capacitor;
+        self.prefix = "C".into();
+        self.pas_polar = matches!(kind, "electrolytic" | "tantalum");
+        self.glyph = if self.pas_polar { "electrolytic" } else { "capacitor" }.into();
+        self.pins_text = if self.pas_polar { "1 + left\n2 - right" } else { "1 1 left\n2 2 right" }.into();
+        self.body_on = false;
+        self.thermal_on = false;
+        self.extras.clear();
+        match kind {
+            "ceramic" => {
+                self.fp_preset.clear();
+                self.pkg = PkgKind::Chip2;
+                (self.pitch, self.len, self.width) = (1.65, 0.8, 0.95);
+                self.height = 0.0;
+            }
+            "electrolytic" => {
+                self.fp_preset = "CP_Radial_D5_P2.0".into();
+                self.height = 11.0;
+            }
+            "tantalum" => {
+                self.fp_preset = "CP_Radial_D5_P2.0".into();
+                self.height = 7.0;
+            }
+            _ => {
+                self.fp_preset = "C_Disc_5.08".into();
+                self.height = 9.0;
+            }
+        }
+        let head = match kind {
+            "electrolytic" => "CE_",
+            "tantalum" => "CT_",
+            "film" => "CF_",
+            _ => "C_",
+        };
+        if self.name.trim().is_empty() {
+            self.name = head.into();
+        } else if let Some(rest) = ["CE_", "CT_", "CF_", "C_"].iter().find_map(|h| self.name.strip_prefix(h)) {
+            self.name = format!("{head}{rest}");
+        }
+    }
+
+    fn set_resistor_or_inductor(&mut self, t: PartType, shape: &'static str) {
+        let resistor = t == PartType::Resistor;
+        self.ptype = Some(t);
+        self.ptype_sub = shape;
+        self.pas_kind = if resistor { PassiveKind::Resistor } else { PassiveKind::Inductor };
+        self.prefix = if resistor { "R" } else { "L" }.into();
+        self.glyph = if resistor { "resistor" } else { "inductor" }.into();
+        self.pins_text = "1 1 left\n2 2 right".into();
+        self.pas_polar = false;
+        self.body_on = false;
+        self.thermal_on = false;
+        self.extras.clear();
+        if shape == "chip" {
+            self.fp_preset.clear();
+            self.pkg = PkgKind::Chip2;
+            (self.pitch, self.len, self.width) = if resistor { (1.65, 0.8, 0.95) } else { (1.825, 1.025, 1.4) };
+            self.height = 0.0;
+        } else {
+            self.fp_preset = "R_Axial_10.16".into();
+            self.height = if resistor { 2.4 } else { 5.0 };
         }
     }
 
@@ -1843,7 +1943,7 @@ mod extras_tests {
     /// own symbol, and the transistor / diode choices change the symbol.
     #[test]
     fn each_kind_of_part_starts_from_a_valid_definition() {
-        for name in ["ic", "transistor", "diode", "chip", "connector"] {
+        for name in ["ic", "transistor", "diode", "capacitor", "resistor", "inductor", "connector"] {
             let mut f = PartForm::for_type(name);
             assert!(f.ptype.is_some(), "{name}");
             f.name = format!("TEST_{name}");
@@ -1863,6 +1963,27 @@ mod extras_tests {
             let sym = d.symbol();
             assert_eq!((sym.layout().hw, sym.layout().hh), (0, 0), "{kind}: the small transistor layout");
         }
+        // each kind of capacitor: the polarity, the footprint and the name prefix, and the template keeps them
+        for (kind, polar, head, fp) in [("ceramic", false, "C_", ""), ("electrolytic", true, "CE_", "CP_Radial_D5_P2.0"), ("tantalum", true, "CT_", "CP_Radial_D5_P2.0"), ("film", false, "CF_", "C_Disc_5.08")] {
+            let mut f = PartForm::for_type("capacitor");
+            f.set_capacitor(kind);
+            assert!(f.name.starts_with(head), "{kind}: {}", f.name);
+            assert_eq!(f.fp_preset, fp);
+            f.name = format!("{head}100u_TEST");
+            f.pas_value = "100u".into();
+            f.apply_passive().unwrap();
+            let d = f.to_def().unwrap();
+            assert!(!d.has_errors(), "{kind}: {:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+            assert_eq!(d.glyph == "electrolytic", polar, "{kind}");
+            assert_eq!(d.pins.iter().any(|p| p.name == "+"), polar, "{kind}");
+            assert!(d.footprint().unwrap().pads.iter().all(|p| (p.drill.is_some()) == !fp.is_empty()), "{kind}: leaded parts are through-hole");
+            assert_eq!(d.capacitor_family(), Some(match kind { "ceramic" => "積層セラミック", "electrolytic" => "電解", "tantalum" => "タンタル", _ => "フィルム" }), "{kind}");
+        }
+        // a leaded resistor and a chip coil
+        let mut f = PartForm::for_type("resistor");
+        f.set_resistor_or_inductor(PartType::Resistor, "leaded");
+        f.name = "R_TEST".into();
+        assert_eq!(f.to_def().unwrap().footprint().unwrap().pads.len(), 2);
         // a diode keeps its 2 leads small
         let mut f = PartForm::for_type("diode");
         f.name = "D_TEST".into();
