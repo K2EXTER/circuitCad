@@ -1,7 +1,7 @@
 use crate::spice_in::Model;
 use crate::*;
 
-const VT: f64 = 0.025852;
+use crate::dc::VT;
 
 fn vs(c: &mut Circuit, name: &str, p: &str, n: &str, dc: f64) {
     let (p, n) = (c.node(p), c.node(n));

@@ -93,7 +93,7 @@ fn diode_shot_noise_and_unknown_nodes() {
     let r = noise_analysis(&c, &settings(1.0, 100.0, "a", None)).unwrap();
     let op = dc_op(&c).unwrap();
     let id = op.element("D1").unwrap().current;
-    let gd = id / 0.025852;
+    let gd = id / crate::dc::VT;
     // shot current 2qI across the diode, in parallel with R1 (which also has its own thermal noise)
     let z = 1.0 / (gd + 1e-3);
     let want = (2.0 * 1.602176634e-19 * id + 4.0 * KB * 300.0 * 1e-3) * z * z;

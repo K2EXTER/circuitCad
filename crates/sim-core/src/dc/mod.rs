@@ -5,7 +5,9 @@ use crate::circuit::{BjtModel, Circuit, Element, MosModel, SwitchModel};
 use crate::waveform::Waveform;
 use std::fmt;
 
-const VT: f64 = 0.025852; // kT/q at 300.15 K
+/// kT/q at the nominal 27 C (300.15 K): k/q = 8.617333e-5 V/K. (0.025852 was kT/q at 300.00 K, 0.05 %
+/// low: a forward junction voltage is about 25 Vt, so that is 0.3 mV and a 1 % change of current.)
+pub(crate) const VT: f64 = 8.617333262e-5 * 300.15;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SimError {

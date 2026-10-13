@@ -2,7 +2,7 @@ use crate::*;
 use sch_core::{extract, Kind, Schematic, Wire};
 use std::f64::consts::PI;
 
-const VT: f64 = 0.025852;
+use crate::dc::VT;
 
 fn src(c: &mut Circuit, name: &str, p: &str, n: &str, spec: &str) {
     let (p, n) = (c.node(p), c.node(n));

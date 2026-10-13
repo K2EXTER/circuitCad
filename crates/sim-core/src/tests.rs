@@ -1,7 +1,7 @@
 use crate::*;
 use sch_core::{Kind, Schematic, Wire};
 
-const VT: f64 = 0.025852;
+use crate::dc::VT;
 
 fn r(c: &mut Circuit, name: &str, a: &str, b: &str, ohms: f64) {
     let (a, b) = (c.node(a), c.node(b));

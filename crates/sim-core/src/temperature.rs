@@ -1,4 +1,4 @@
-//! Circuit temperature. The solver itself runs at the nominal 27 °C (kT/q = 25.85 mV); a different
+//! Circuit temperature. The solver itself runs at the nominal 27 °C (kT/q = 25.865 mV); a different
 //! temperature is applied by rewriting the semiconductor models, so every analysis (DC, transient,
 //! AC) picks it up without knowing about temperature:
 //!
