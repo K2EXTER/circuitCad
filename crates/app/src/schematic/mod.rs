@@ -321,6 +321,8 @@ struct TranView {
     ghost: Option<Ghost>,
     /// Signals picked in the power box: input V, input I, output V, output I.
     power: [String; 4],
+    /// Ripple current and life of the electrolytic capacitors that give data sheet figures.
+    parts: Vec<sim_core::RippleReport>,
     /// The schematic this result was computed from.
     signature: String,
 }

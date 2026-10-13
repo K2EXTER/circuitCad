@@ -392,11 +392,70 @@ pub struct PartRatings {
     /// Rated / typical figures from the data sheet, free form.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub rows: Vec<SpecRow>,
+    /// The ripple current an electrolytic capacitor may carry (from the data sheet).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ripple: Option<RippleRating>,
+    /// The endurance of an electrolytic capacitor: hours at its highest temperature.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub life: Option<LifeRating>,
+}
+
+/// Rated ripple current: `i_rms` amperes (rms) at `freq_hz`, at the capacitor's highest temperature.
+/// `coeffs` is the data sheet's table of multipliers by frequency (low frequencies carry less).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RippleRating {
+    pub i_rms: f64,
+    /// The frequency the rated current is given at (100 kHz on most data sheets).
+    pub freq_hz: f64,
+    /// (frequency in Hz, multiplier), from the data sheet's "multiplier for ripple current" table.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub coeffs: Vec<(f64, f64)>,
+}
+
+impl RippleRating {
+    /// The ripple current allowed at `freq` Hz: the rated current times the table's multiplier at that
+    /// frequency relative to the one at the rated frequency (the table is interpolated on a log frequency axis,
+    /// and held at its ends). Without a table, the rated current at every frequency.
+    pub fn allowed_at(&self, freq: f64) -> f64 {
+        let at = |f: f64| -> f64 {
+            let pts = &self.coeffs;
+            let (first, last) = match (pts.first(), pts.last()) {
+                (Some(a), Some(b)) => (a, b),
+                _ => return 1.0,
+            };
+            if f <= first.0 {
+                return first.1;
+            }
+            if f >= last.0 {
+                return last.1;
+            }
+            let k = pts.windows(2).position(|w| f >= w[0].0 && f <= w[1].0).unwrap_or(0);
+            let (a, b) = (pts[k], pts[k + 1]);
+            let x = (f.ln() - a.0.ln()) / (b.0.ln() - a.0.ln());
+            a.1 + (b.1 - a.1) * x
+        };
+        let reference = at(self.freq_hz.max(1.0));
+        if reference <= 0.0 { self.i_rms } else { self.i_rms * at(freq.max(1.0)) / reference }
+    }
+}
+
+/// Endurance: the capacitor lasts `hours` at `temp_c` (its highest temperature), rated voltage and ripple current.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct LifeRating {
+    pub hours: f64,
+    pub temp_c: f64,
+}
+
+impl LifeRating {
+    /// The usual rule: every 10 degrees below the rated temperature doubles the life, every 10 above halves it.
+    pub fn at(&self, core_temp_c: f64) -> f64 {
+        self.hours * 2f64.powf((self.temp_c - core_temp_c) / 10.0)
+    }
 }
 
 impl PartRatings {
     pub fn is_empty(&self) -> bool {
-        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.rows.is_empty()
+        self.v_max.is_none() && self.i_max.is_none() && self.p_max.is_none() && self.rows.is_empty() && self.ripple.is_none() && self.life.is_none()
     }
 
     /// "最大定格: 電圧 40V・電流 1A・電力 1W" plus the free rows, for tooltips.
@@ -415,6 +474,18 @@ impl PartRatings {
         let mut t = String::new();
         if !max.is_empty() {
             t.push_str(&format!("最大定格: {}", max.join("・")));
+        }
+        if let Some(r) = &self.ripple {
+            if !t.is_empty() {
+                t.push('\n');
+            }
+            t.push_str(&format!("定格リップル電流: {}A rms ({}Hz)", trim_float(r.i_rms), trim_float(r.freq_hz)));
+        }
+        if let Some(l) = &self.life {
+            if !t.is_empty() {
+                t.push('\n');
+            }
+            t.push_str(&format!("寿命: {} 時間 ({}℃)", trim_float(l.hours), trim_float(l.temp_c)));
         }
         for r in &self.rows {
             if !t.is_empty() {

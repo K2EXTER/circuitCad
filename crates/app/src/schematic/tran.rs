@@ -45,11 +45,15 @@ impl SchEditor {
             Ok(r) => format!("過渡解析: 完了 ({} 点, 再試行 {} 回)", r.time.len(), r.retries),
             Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
+        // the capacitors' ripple current and life, from the second half of the run
+        let ambient = self.temp_c.trim().parse::<f64>().ok().filter(|v| *v > -273.0 && *v < 1000.0).unwrap_or(T_NOM_C);
+        let parts = outcome.as_ref().map(|r| sim_core::ripple_reports(&self.with_library_ratings(), r, ambient)).unwrap_or_default();
         let ghost = self.tran.as_ref().and_then(|v| v.ghost.clone());
         let power = self.tran.as_ref().map(|v| v.power.clone()).unwrap_or_default();
         self.tran = Some(TranView {
             ghost,
             power,
+            parts,
             outcome,
             selected,
             plot: PlotState::new(tstop),
@@ -69,7 +73,7 @@ impl SchEditor {
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
-        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, power, .. } = view;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
             if ui.button("閉じる").clicked() {
@@ -98,6 +102,25 @@ impl SchEditor {
             Ok(res) => {
                 for w in &res.warnings {
                     ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                }
+                if !parts.is_empty() {
+                    egui::CollapsingHeader::new("部品の定格 (リップル電流・寿命)").default_open(true).show(ui, |ui| {
+                        for r in parts.iter() {
+                            let color = match r.level {
+                                Some(sim_core::RatingLevel::Over) => Color32::from_rgb(230, 60, 60),
+                                Some(sim_core::RatingLevel::Caution) => Color32::from_rgb(220, 160, 40),
+                                None => Color32::from_rgb(60, 170, 90),
+                            };
+                            ui.colored_label(color, r.message());
+                            if !r.hint().is_empty() {
+                                ui.small(r.hint());
+                            }
+                            if let Some(t) = r.life_text() {
+                                ui.label(t);
+                            }
+                        }
+                        ui.small("リップル電流は、計算の後半の波形の交流分の実効値です。寿命は「温度が 10℃ 下がると 2 倍」の目安で、データシートの条件 (定格電圧・定格リップル電流) での値から見積もります。実際の寿命は、使い方で大きく変わります");
+                    });
                 }
                 if !*spectrum {
                     // scale controls for the groups that are on screen (voltage, current)

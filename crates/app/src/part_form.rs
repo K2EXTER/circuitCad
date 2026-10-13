@@ -8,7 +8,7 @@ use pcb_core::footprints::Footprint;
 use pcb_core::body::{BodyMark, BodySpec};
 use pcb_core::package::{HoleSpec, PackageSpec, PadSpec};
 use pcb_core::PadShape;
-use sch_core::{PartRatings, PinSide, SimKind, SimModel, SpecRow};
+use sch_core::{LifeRating, PartRatings, PinSide, RippleRating, SimKind, SimModel, SpecRow};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum PkgKind {
@@ -116,6 +116,8 @@ pub struct PartForm {
     pub pas_kind: PassiveKind,
     pub pas_value: String,
     pub pas_esr: String,
+    /// The impedance at 100 kHz from the data sheet's table; for an electrolytic it is about the ESR.
+    pub pas_z100k: String,
     pub pas_esl: String,
     pub pas_dcr: String,
     pub pas_cp: String,
@@ -136,6 +138,13 @@ pub struct PartForm {
     pub rt_i: String,
     pub rt_p: String,
     pub rt_rows: String,
+    /// An electrolytic capacitor's rated ripple current [A rms] and the frequency it is given at, the data sheet's
+    /// multiplier table (one `frequency multiplier` per line), and its endurance (hours at a temperature).
+    pub rt_ripple: String,
+    pub rt_ripple_f: String,
+    pub rt_ripple_table: String,
+    pub rt_life_h: String,
+    pub rt_life_t: String,
     /// Which checklist of what to look up the form offers (index into `CHECKLISTS`).
     pub rt_kind: usize,
     /// The charger template section and what it said last.
@@ -187,6 +196,7 @@ impl Default for PartForm {
             pas_kind: PassiveKind::Capacitor,
             pas_value: String::new(),
             pas_esr: String::new(),
+            pas_z100k: String::new(),
             pas_esl: String::new(),
             pas_dcr: String::new(),
             pas_cp: String::new(),
@@ -204,6 +214,11 @@ impl Default for PartForm {
             rt_i: String::new(),
             rt_p: String::new(),
             rt_rows: String::new(),
+            rt_ripple: String::new(),
+            rt_ripple_f: "100k".into(),
+            rt_ripple_table: String::new(),
+            rt_life_h: String::new(),
+            rt_life_t: "105".into(),
             rt_kind: 0,
             tpl: ChargerTemplate::default(),
             tpl_message: String::new(),
@@ -406,7 +421,30 @@ impl PartForm {
             let condition = parts.get(2).map(|c| c.split('※').next().unwrap_or("").trim().to_string()).unwrap_or_default();
             rows.push(SpecRow { name: parts[0].into(), value: parts[1].into(), condition });
         }
-        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, rows };
+        let ripple = match num("定格リップル電流", &self.rt_ripple)? {
+            None => None,
+            Some(i_rms) => {
+                let freq_hz = parse_freq(self.rt_ripple_f.trim()).filter(|f| *f > 0.0).ok_or_else(|| format!("リップル電流の周波数「{}」を、0 より大きい数で入力してください (例: 100k / 120)", self.rt_ripple_f.trim()))?;
+                let mut coeffs = vec![];
+                for (n, line) in self.rt_ripple_table.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+                    let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',' || c == '|').filter(|s| !s.is_empty()).collect();
+                    match (t.first().and_then(|s| parse_freq(s)), t.get(1).and_then(|s| s.parse::<f64>().ok())) {
+                        (Some(f), Some(m)) if f > 0.0 && m > 0.0 => coeffs.push((f, m)),
+                        _ => return Err(format!("リップル電流の補正係数 {}行目: 「周波数 係数」の形で入力してください (例: 120 0.55 / 1k 0.77)", n + 1)),
+                    }
+                }
+                coeffs.sort_by(|a, b| a.0.total_cmp(&b.0));
+                Some(RippleRating { i_rms, freq_hz, coeffs })
+            }
+        };
+        let life = match num("寿命", &self.rt_life_h)? {
+            None => None,
+            Some(hours) => {
+                let temp_c = self.rt_life_t.trim().parse::<f64>().ok().filter(|t| *t > -100.0 && *t < 400.0).ok_or_else(|| format!("寿命の温度「{}」を数値 (℃) で入力してください (例: 105)", self.rt_life_t.trim()))?;
+                Some(LifeRating { hours, temp_c })
+            }
+        };
+        let r = PartRatings { v_max: num("最大電圧", &self.rt_v)?, i_max: num("最大電流", &self.rt_i)?, p_max: num("最大電力", &self.rt_p)?, rows, ripple, life };
         Ok(Some(r).filter(|r| !r.is_empty()))
     }
 
@@ -414,7 +452,8 @@ impl PartForm {
     fn ratings_progress(&self) -> (usize, usize, usize) {
         let given = |t: &str| sim_core::parse_value(t.trim()).is_some_and(|v| v > 0.0) as usize;
         let max_given = given(&self.rt_v) + given(&self.rt_i) + given(&self.rt_p);
-        let (mut filled, mut open) = (0, 0);
+        // the capacitor's ripple current and life count as figures looked up
+        let (mut filled, mut open) = (given(&self.rt_ripple) + given(&self.rt_life_h), 0);
         for line in self.rt_rows.lines().filter(|l| !l.trim().is_empty()) {
             let parts: Vec<&str> = line.split('|').map(str::trim).collect();
             if parts.len() >= 2 && !parts[0].is_empty() {
@@ -647,6 +686,21 @@ impl PartForm {
                 match kind {
                     PassiveKind::Capacitor => {
                         row(ui, "ESR (等価直列抵抗)", &mut self.pas_esr, "データシートの ESR か、インピーダンスの最小値。大きいほどリップルが大きく、発熱します。下の表から求めることもできます", "20m");
+                        // for an electrolytic / tantalum only: there the impedance at 100 kHz is about the ESR
+                        if self.pas_polar {
+                            ui.label("インピーダンス Z (Ω)").on_hover_text("データシートの「インピーダンス」(100kHz の値) を入れて「ESR に入れる」を押すと、上の ESR に写します。電解コンデンサでは、100kHz のインピーダンスはほぼ ESR です (容量の分は、そのころには小さくなっています)。ただし ESR は周波数と温度で大きく変わります (120Hz の tanδ から求めると、もっと大きくなります)");
+                            ui.horizontal(|ui| {
+                                ui.add(egui::TextEdit::singleline(&mut self.pas_z100k).desired_width(80.0).hint_text("0.3"));
+                                if ui.small_button("→ ESR に入れる").on_hover_text("この値を ESR の欄に入れます (100kHz のときの値として)").clicked() {
+                                    match self.pas_number("インピーダンス", &self.pas_z100k, false) {
+                                        Ok(Some(z)) => self.pas_esr = passive::eng(z),
+                                        Ok(None) => {}
+                                        Err(e) => self.pas_message = Some(Err(e)),
+                                    }
+                                }
+                            });
+                            ui.end_row();
+                        }
                         row(ui, "ESL (等価直列インダクタンス)", &mut self.pas_esl, "高い周波数で効いてくる直列のインダクタンス。小さいチップほど小さい (0603 で 0.5〜1nH ほど)。自己共振周波数から求めることもできます", "800p");
                         row(ui, "自己共振周波数 (Hz)", &mut self.pas_srf, "容量と ESL が共振する周波数。ESL が空のとき、ここから ESL を求めます。M は MHz (例: 30M)", "30M");
                         row(ui, "DCバイアスで下がる量 (%)", &mut self.pas_bias, "セラミックコンデンサは、直流の電圧をかけると容量が減ります。使う電圧での値をデータシートの「DCバイアス特性」の曲線から読み、減った割合を入れると、その分小さい容量で計算します", "30");
@@ -865,13 +919,23 @@ impl PartForm {
     /// The tab of the data sheet's ratings.
     fn tab_ratings(&mut self, ui: &mut egui::Ui) {
             ui.label("部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
+            // the kind chosen at the top decides which items to look up; only an IC (op-amp, regulator ...) or no choice
+            // at all leaves the question open
+            let decided = self.checklist_for_type();
+            if let Some(k) = decided {
+                self.rt_kind = k;
+            }
             ui.horizontal(|ui| {
-                ui.label("部品の種類");
-                egui::ComboBox::from_id_salt("rt_kind").selected_text(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0).show_ui(ui, |ui| {
-                    for (k, (name, _, _)) in CHECKLISTS.iter().enumerate() {
-                        ui.selectable_value(&mut self.rt_kind, k, *name);
-                    }
-                }).response.on_hover_text("選ぶと、その種類で調べるとよい項目が出ます");
+                if decided.is_some() {
+                    ui.label(format!("調べる項目: {}", CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0)).on_hover_text("上で選んだ部品の種類に合わせた項目です。変えるときは、いちばん上の「部品の種類」を選び直します");
+                } else {
+                    ui.label(if self.ptype == Some(PartType::Ic) { "どの IC?" } else { "部品の種類" });
+                    egui::ComboBox::from_id_salt("rt_kind").selected_text(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0).show_ui(ui, |ui| {
+                        for (k, (name, _, _)) in CHECKLISTS.iter().enumerate() {
+                            ui.selectable_value(&mut self.rt_kind, k, *name);
+                        }
+                    }).response.on_hover_text("選ぶと、その種類で調べるとよい項目が出ます");
+                }
                 if ui.button("調べる項目のチェックリストを入れる").on_hover_text("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)").clicked() {
                     self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
                 }
@@ -888,6 +952,34 @@ impl PartForm {
                 ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text("例: 0.5 / 625m / 1");
                 ui.end_row();
             });
+            // only where it belongs: an electrolytic / tantalum capacitor, a part that already has such figures, or
+            // a part whose kind was not chosen
+            let filled = !self.rt_ripple.trim().is_empty() || !self.rt_life_h.trim().is_empty();
+            let polar = self.pas_polar || filled;
+            if polar || self.ptype.is_none() {
+            egui::CollapsingHeader::new("電解コンデンサの項目 (リップル電流と寿命)").id_salt("rt_electrolytic").default_open(polar).show(ui, |ui| {
+                ui.small("入れると、過渡解析の結果に、このコンデンサに流れたリップル電流が定格を超えていないか、推定寿命がどれくらいかが出ます。データシートの「定格リップル電流」「寿命 (耐久性)」「リップル電流の周波数補正係数」の表から写します");
+                egui::Grid::new("rt_electrolytic_grid").num_columns(2).show(ui, |ui| {
+                    ui.label("定格リップル電流 [A rms]").on_hover_text("コンデンサに流してよい、交流分の実効値 (データシートの Rated Ripple Current)。mA rms で書いてあるときは 540m のように入れます。最高温度 (105℃ など) での値です");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple).desired_width(80.0).hint_text("540m")).on_hover_text("例: 540m / 1.2。データシートの表の、容量と電圧に合う行の値");
+                        ui.label("周波数");
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_ripple_f).desired_width(60.0)).on_hover_text("その値が決められている周波数。データシートの表の見出しにあります (たいてい 100kHz。120Hz のこともあります)");
+                    });
+                    ui.end_row();
+                    ui.label("周波数の補正係数").on_hover_text("リップル電流の定格に掛ける係数の表 (Multiplier for Ripple Current)。低い周波数ほど、流してよい電流が小さくなります。1行に「周波数 係数」");
+                    ui.add(egui::TextEdit::multiline(&mut self.rt_ripple_table).desired_rows(4).desired_width(160.0).hint_text("120 0.55\n1k 0.77\n10k 0.94\n100k 1.0")).on_hover_text("例: 120 0.55 / 1k 0.77 / 10k 0.94 / 100k 1.0。容量の範囲ごとに表が分かれているときは、この部品の容量の行を入れます。空のときは、周波数によらず定格のままです");
+                    ui.end_row();
+                    ui.label("寿命 [時間]").on_hover_text("定格電圧・定格リップル電流・最高温度で使ったときの寿命 (Endurance)。ケースの大きさで違うことがあります (例: 6000 / 10000)");
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_h).desired_width(80.0).hint_text("6000")).on_hover_text("例: 6000 / 10000");
+                        ui.label("温度 [℃]");
+                        ui.add(egui::TextEdit::singleline(&mut self.rt_life_t).desired_width(50.0)).on_hover_text("その寿命が決められている温度。最高使用温度 (105 など)");
+                    });
+                    ui.end_row();
+                });
+            });
+            }
             ui.label("そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)");
             ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text("順方向電圧 | 0.9V | IF = 1A"))
                 .on_hover_text("定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます");
@@ -1219,9 +1311,27 @@ impl PartForm {
         }
     }
 
+    /// The checklist of what to look up that the kind of part chosen at the top settles (None = still open: an IC
+    /// may be an op-amp or a regulator, or no kind was chosen).
+    fn checklist_for_type(&self) -> Option<usize> {
+        let by_name = |head: &str| CHECKLISTS.iter().position(|c| c.0.starts_with(head));
+        match self.ptype? {
+            PartType::Ic => None,
+            PartType::Transistor => by_name(if matches!(self.glyph.as_str(), "nmos" | "pmos") { "MOSFET" } else { "トランジスタ" }),
+            PartType::Diode => by_name(if self.glyph == "zener" { "ツェナー" } else { "ダイオード" }),
+            PartType::Capacitor if self.pas_polar => by_name("電解コンデンサ"),
+            PartType::Capacitor | PartType::Resistor | PartType::Inductor | PartType::Connector => by_name("そのほか"),
+        }
+    }
+
     /// A form that starts from this kind of part ("ic", "transistor", "diode", "chip", "connector"), for scripts and screenshots.
     pub fn for_type(name: &str) -> Self {
         let mut f = PartForm::default();
+        // a kind of capacitor by its own name
+        if let Some(k) = ["ceramic", "electrolytic", "tantalum", "film"].into_iter().find(|k| *k == name) {
+            f.set_capacitor(k);
+            return f;
+        }
         if let Some((t, _, _)) = PART_TYPES.iter().find(|(t, _, _)| format!("{t:?}").eq_ignore_ascii_case(name)) {
             f.apply_type(*t);
         }
@@ -1575,6 +1685,19 @@ const CHECKLISTS: &[(&str, &str, &[(&str, &str)])] = &[
             ("出力電圧の振れ幅", "電気的特性。電源までは届かない (レール・ツー・レールかどうか)"),
             ("スルーレート", "電気的特性。大きな信号で追いつける速さ"),
             ("動作する電源電圧の範囲", "推奨動作条件。単電源で使えるか"),
+        ],
+    ),
+    (
+        "電解コンデンサ (アルミ・タンタル)",
+        "最大電圧 = 定格電圧 (Rated Voltage、Vdc)。最大電流・最大電力は空のままでよい。下の「電解コンデンサの項目」に、リップル電流と寿命を入れます",
+        &[
+            ("使用温度範囲", "仕様の表。最高温度 (105℃ など) で寿命とリップル電流の値が決まる"),
+            ("容量許容差", "仕様の表。±20% (20℃、120Hz) など"),
+            ("漏れ電流 LC", "仕様の表。0.01CV または 3µA の大きいほど、など。2 分後の値"),
+            ("損失角の正接 tanδ", "仕様の表。電圧ごと、120Hz。ESR に換算できる (ESR = tanδ ÷ 2πfC)"),
+            ("インピーダンス Z (100kHz)", "サイズの表。20℃ と −10℃。電解ではほぼ ESR (「かんたん作成」の「ESR に入れる」)"),
+            ("低温特性 Z(−25℃)/Z(20℃)", "仕様の表。寒いと ESR が何倍になるか"),
+            ("外形 φD × L とリード間隔 F", "寸法の表。基板の形 (リード間隔、穴径はリード径 d + 0.2〜0.3mm) と高さに使う"),
         ],
     ),
     (
@@ -1990,6 +2113,54 @@ mod extras_tests {
         f.glyph = "zener".into();
         let sym = f.to_def().unwrap().symbol();
         assert_eq!((sym.layout().hw, sym.layout().hh), (0, 1));
+    }
+
+    /// The electrolytic capacitor's figures: rated ripple current with its frequency table, and the endurance.
+    #[test]
+    fn ripple_current_and_life_are_read_from_the_ratings_tab() {
+        let mut f = PartForm::for_type("electrolytic");
+        f.name = "CE_TEST".into();
+        let name_of = |f: &PartForm| CHECKLISTS[f.checklist_for_type().unwrap()].0;
+        assert!(name_of(&f).starts_with("電解コンデンサ"), "the checklist follows the kind");
+        // the kind at the top settles the checklist; an IC leaves the question open
+        let mut t = PartForm::for_type("transistor");
+        assert!(name_of(&t).starts_with("トランジスタ"));
+        t.set_transistor("nmos");
+        assert_eq!(name_of(&t), "MOSFET");
+        let mut d = PartForm::for_type("diode");
+        assert_eq!(name_of(&d), "ダイオード");
+        d.glyph = "zener".into();
+        assert!(name_of(&d).starts_with("ツェナー"));
+        assert!(PartForm::for_type("ic").checklist_for_type().is_none() && PartForm::default().checklist_for_type().is_none());
+        assert_eq!(name_of(&PartForm::for_type("ceramic")), "そのほか");
+        f.rt_v = "16".into();
+        f.rt_ripple = "540m".into();
+        f.rt_ripple_f = "100k".into();
+        f.rt_ripple_table = "120 0.55
+1k 0.77
+10k 0.94
+100k 1.0".into();
+        f.rt_life_h = "6000".into();
+        f.rt_life_t = "105".into();
+        let r = f.to_def().unwrap().ratings.unwrap();
+        let rip = r.ripple.clone().unwrap();
+        assert!((rip.i_rms - 0.54).abs() < 1e-9 && rip.freq_hz == 100e3 && rip.coeffs.len() == 4);
+        assert!((rip.allowed_at(120.0) - 0.54 * 0.55).abs() < 1e-9);
+        assert_eq!(r.life, Some(sch_core::LifeRating { hours: 6000.0, temp_c: 105.0 }));
+        assert!(r.summary().contains("定格リップル電流") && r.summary().contains("寿命"));
+        // mistakes are told in words
+        f.rt_ripple_table = "120 abc".into();
+        assert!(f.to_def().unwrap_err().contains("1行目"));
+        f.rt_ripple_table.clear();
+        f.rt_ripple_f = "x".into();
+        assert!(f.to_def().unwrap_err().contains("周波数"));
+        f.rt_ripple_f = "100k".into();
+        f.rt_life_t = "hot".into();
+        assert!(f.to_def().unwrap_err().contains("温度"));
+        // with nothing typed there are no such figures
+        let mut g = PartForm::for_type("electrolytic");
+        g.name = "CE_X".into();
+        assert!(g.to_def().unwrap().ratings.is_none());
     }
 
     #[test]

@@ -479,6 +479,21 @@ fn is_original_without_holes(file: &Path, bundled: &str) -> bool {
     has_hole(&new) && !has_hole(&old) && old == PartDef { package: old.package.clone(), height: old.height, ..new }
 }
 
+/// Key recorded in `.bundled` once a part has been offered its ripple current and life.
+fn ripple_key(name: &str) -> String {
+    format!("{name}+ripple")
+}
+
+/// Is the file an unmodified copy of the bundled part from before it carried ripple current and life?
+/// (Equal to the bundled part in every field except the ratings.)
+fn is_original_without_ripple(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let has = |d: &PartDef| d.ratings.as_ref().is_some_and(|r| r.ripple.is_some() || r.life.is_some());
+    // the old ratings keep only what they had: the voltage
+    has(&new) && !has(&old) && old == PartDef { ratings: old.ratings.clone(), ..new }
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -543,6 +558,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if file.exists() && is_original_without_holes(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // capacitors that gained their ripple current and life: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = ripple_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_without_ripple(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

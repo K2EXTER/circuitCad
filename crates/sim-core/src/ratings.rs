@@ -321,8 +321,8 @@ mod sheet {
         let req = requirement(&st, 2.0);
         assert!((req.v_min - 2.0 * 9.0).abs() < 1e-6, "the supply is 9 V: {req:?}");
         assert!((req.p_min - 2.0 * st.p.unwrap()).abs() < 1e-12 && req.i_min > 0.03);
-        let ok = sch_core::PartRatings { v_max: Some(40.0), i_max: Some(0.2), p_max: Some(0.625), rows: vec![] };
-        let small = sch_core::PartRatings { v_max: Some(12.0), i_max: Some(0.2), p_max: Some(0.625), rows: vec![] };
+        let ok = sch_core::PartRatings { v_max: Some(40.0), i_max: Some(0.2), p_max: Some(0.625), ..Default::default() };
+        let small = sch_core::PartRatings { v_max: Some(12.0), i_max: Some(0.2), p_max: Some(0.625), ..Default::default() };
         let unknown = sch_core::PartRatings::default();
         assert!(meets(&req, &ok, true) && !meets(&req, &small, true), "12 V is below twice the supply");
         assert!(!meets(&req, &unknown, true), "a rating the sheet does not give cannot be taken as met");

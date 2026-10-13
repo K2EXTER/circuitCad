@@ -791,3 +791,25 @@ fn chain_failure_on_the_coil_example_runs_from_the_panel() {
     e.analyze_fault_chain();
     assert!(e.fault_chain.as_ref().unwrap().is_err());
 }
+
+/// The electrolytic output capacitor of the buck sample: its ripple current and life come out of the run,
+/// from the part's data sheet figures (the sample was saved before the part had them: the library supplies them).
+#[test]
+fn the_electrolytic_capacitor_of_the_buck_sample_reports_ripple_current_and_life() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "buck_cout_electrolytic.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.library = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).collect();
+    e.adopt(sch, None);
+    e.set_tran_settings("2m", "200n");
+    e.analyze_tran();
+    let parts = &e.tran.as_ref().unwrap().parts;
+    assert_eq!(parts.len(), 1, "{parts:?}");
+    let r = &parts[0];
+    assert_eq!(r.refdes, "C1");
+    // the 150 kHz ripple of the coil current flows in the capacitor: tens of mA to a few hundred mA rms
+    assert!(r.i_rms > 0.02 && r.i_rms < 1.0, "{}", r.i_rms);
+    // counted from the zero crossings of the current (a few of the ripple's cycles are lost in the switching noise)
+    assert!((100e3..200e3).contains(&r.freq), "{}", r.freq);
+    assert!(r.allowed.is_some() && r.life_hours.is_some() && r.core_temp_c >= 27.0);
+    assert!(r.message().contains("C1") && r.life_text().is_some());
+}

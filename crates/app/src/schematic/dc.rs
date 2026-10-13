@@ -94,9 +94,19 @@ impl SchEditor {
         let mut s = self.sch.clone();
         for c in &mut s.components {
             if let Some(sym) = c.custom.as_mut()
-                && sym.ratings.is_none()
                 && let Some(d) = self.library.iter().find(|d| d.name == sym.name) {
-                    sym.ratings = d.ratings.clone().filter(|r| !r.is_empty());
+                    match sym.ratings.as_mut() {
+                        None => sym.ratings = d.ratings.clone().filter(|r| !r.is_empty()),
+                        // a capacitor saved before ripple current and life were part of the ratings gets them from the library
+                        Some(r) => {
+                            if r.ripple.is_none() {
+                                r.ripple = d.ratings.as_ref().and_then(|x| x.ripple.clone());
+                            }
+                            if r.life.is_none() {
+                                r.life = d.ratings.as_ref().and_then(|x| x.life.clone());
+                            }
+                        }
+                    }
                 }
         }
         s

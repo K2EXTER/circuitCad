@@ -16,10 +16,6 @@ impl SchEditor {
     }
 
     /// Opens the new-part form (for scripts and screenshots).
-    pub fn open_part_form(&mut self) {
-        self.open_part_form_for("");
-    }
-
     /// Switches the open new-part form to a tab (`--form-tab <name>`).
     pub fn set_form_tab(&mut self, name: &str) {
         if let Some(f) = self.form.as_mut() {

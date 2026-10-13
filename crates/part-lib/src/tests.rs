@@ -369,7 +369,11 @@ fn write_chip_examples() {
     let mut e1 = PassiveTemplate::new(PassiveKind::Capacitor, 100e-6);
     e1.esr = Some(0.3);
     e1.esl = Some(15e-9);
-    cases.push(("CE_100u_16V".into(), e1, "CP_Radial_D5_P2.0", PartRatings { v_max: Some(16.0), ..Default::default() }));
+    // ripple current and endurance as an aluminium electrolytic data sheet gives them (representative figures,
+    // not those of a real series: a 5 x 11 mm 100 uF part carries about 0.3 A rms at 100 kHz, 105 degrees)
+    let ripple = sch_core::RippleRating { i_rms: 0.3, freq_hz: 100e3, coeffs: vec![(120.0, 0.55), (1e3, 0.77), (10e3, 0.94), (100e3, 1.0)] };
+    let life = sch_core::LifeRating { hours: 6000.0, temp_c: 105.0 };
+    cases.push(("CE_100u_16V".into(), e1, "CP_Radial_D5_P2.0", PartRatings { v_max: Some(16.0), ripple: Some(ripple), life: Some(life), ..Default::default() }));
     // a tantalum (polarised, ESR of about an ohm) and a metallised film capacitor (non-polar, tiny ESR/ESL, leaded)
     let mut t1 = PassiveTemplate::new(PassiveKind::Capacitor, 10e-6);
     t1.esr = Some(1.5);
@@ -520,4 +524,36 @@ fn leaded_capacitors_are_through_hole() {
         let fp = d.footprint().unwrap();
         assert!(fp.pads.iter().all(|p| p.drill.is_some()), "{name}: pads without a hole");
     }
+}
+
+/// The bundled electrolytic carries ripple current and endurance, and an installed copy that is still the
+/// original gets them once; a copy the user edited is left alone.
+#[test]
+fn the_bundled_electrolytic_has_ripple_and_life_and_old_copies_get_them_once() {
+    let bundled = example("CE_100u_16V");
+    let r = bundled.ratings.clone().unwrap();
+    assert!(r.ripple.is_some() && r.life.is_some() && r.v_max == Some(16.0));
+    let text = serde_json::to_string_pretty(&bundled).unwrap();
+    let dir = std::env::temp_dir().join(format!("cc_ripple_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // an installed copy from before: the same part with only the voltage
+    let mut old = bundled.clone();
+    old.ratings = Some(sch_core::PartRatings { v_max: Some(16.0), ..Default::default() });
+    let file = dir.join(format!("CE_100u_16V{}", crate::FILE_SUFFIX));
+    std::fs::write(&file, serde_json::to_string_pretty(&old).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "CE_100u_16V").unwrap();
+    install_examples(&dir).unwrap();
+    let after: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(after.ratings.unwrap().ripple, r.ripple, "{text}");
+    // an edited copy (another description) stays as the user left it
+    let mut edited = old.clone();
+    edited.description = "my own words".into();
+    std::fs::write(&file, serde_json::to_string_pretty(&edited).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "CE_100u_16V").unwrap();
+    install_examples(&dir).unwrap();
+    let kept: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(kept.description, "my own words");
+    assert!(kept.ratings.unwrap().ripple.is_none());
+    let _ = std::fs::remove_dir_all(&dir);
 }
