@@ -24,16 +24,16 @@ pub(crate) struct Attempt {
 impl Compiled {
     /// Newton-Raphson. Plain steps first; if that does not converge, again with backtracking.
     pub(crate) fn newton(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
-        match self.newton_with(x0.clone(), vj0.clone(), ctx, false, 1.0) {
+        match self.newton_with(x0.clone(), vj0.clone(), ctx, false, 1.0, f64::INFINITY) {
             Err(Fail::NoConv) => {
-                let r = self.newton_with(x0.clone(), vj0.clone(), ctx, true, 1.0);
+                let r = self.newton_with(x0.clone(), vj0.clone(), ctx, true, 1.0, f64::INFINITY);
                 if !self.has_b || !matches!(r, Err(Fail::NoConv)) {
                     return r;
                 }
                 // A clipped feedback loop in a behavioural source can make full Newton steps
                 // jump between two points; taking only a part of every step breaks that cycle.
                 for damp in [0.5, 0.2] {
-                    let r = self.newton_with(x0.clone(), vj0.clone(), ctx, false, damp);
+                    let r = self.newton_with(x0.clone(), vj0.clone(), ctx, false, damp, f64::INFINITY);
                     if !matches!(r, Err(Fail::NoConv)) {
                         return r;
                     }
@@ -42,6 +42,23 @@ impl Compiled {
             }
             other => other,
         }
+    }
+
+    /// `newton`, then shorter steps if it fails: close to the point where a latch splits into two
+    /// stable states the full step has no fixed point to land on, but a damped iteration slides
+    /// down into one of them.
+    pub(crate) fn newton_damped(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
+        let r = self.newton(x0.clone(), vj0.clone(), ctx);
+        if !matches!(r, Err(Fail::NoConv)) {
+            return r;
+        }
+        for (damp, max_dx) in [(0.3, f64::INFINITY), (0.1, f64::INFINITY), (1.0, 2.0), (1.0, 0.5), (0.5, 0.1)] {
+            let r = self.newton_with(x0.clone(), vj0.clone(), ctx, false, damp, max_dx);
+            if !matches!(r, Err(Fail::NoConv)) {
+                return r;
+            }
+        }
+        Err(Fail::NoConv)
     }
 
     /// One solve is exact for a linear circuit. The matrix depends only on gmin and the
@@ -73,7 +90,7 @@ impl Compiled {
     /// With `backtrack`, a full step that makes the residual of the circuit equations larger is
     /// halved until it helps. A regenerative loop (flip-flop, multivibrator) close to its
     /// switching point has a nearly singular Jacobian, and the full step then overshoots wildly.
-    pub(super) fn newton_with(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx, backtrack: bool, damp: f64) -> Result<Attempt, Fail> {
+    pub(super) fn newton_with(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx, backtrack: bool, damp: f64, max_dx: f64) -> Result<Attempt, Fail> {
         if self.linear {
             return self.solve_linear(x0, vj0, ctx);
         }
@@ -131,7 +148,10 @@ impl Compiled {
                 let dx: Vec<f64> = xn.iter().zip(&x_old).map(|(a, b)| a - b).collect();
                 prev = Some((x_old, dx, if limited { f64::INFINITY } else { r2 }, vj_old, 1.0));
             }
-            x = if damp < 1.0 { x.iter().zip(&xn).map(|(a, b)| a + damp * (b - a)).collect() } else { xn };
+            // a part of the step, and never more than `max_dx` volts/amps for any unknown
+            let big = x.iter().zip(&xn).map(|(a, b)| (b - a).abs()).fold(0.0, f64::max);
+            let part = if big * damp > max_dx { max_dx / big } else { damp };
+            x = if part < 1.0 { x.iter().zip(&xn).map(|(a, b)| a + part * (b - a)).collect() } else { xn };
         }
         Err(Fail::NoConv)
     }

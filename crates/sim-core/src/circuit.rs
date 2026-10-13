@@ -80,8 +80,13 @@ impl Default for SwitchModel {
 impl SwitchModel {
     /// Conductance and its derivative with respect to the control voltage.
     pub fn eval(&self, vc: f64) -> (f64, f64) {
+        self.eval_widened(vc, 1.0)
+    }
+
+    /// Like `eval` with the transition `widen` times wider (a convergence aid for the DC solver).
+    pub fn eval_widened(&self, vc: f64, widen: f64) -> (f64, f64) {
         let (gon, goff) = (1.0 / self.ron.max(1e-9), 1.0 / self.roff.max(1e-9));
-        let w = self.vw.abs().max(1e-6);
+        let w = self.vw.abs().max(1e-6) * widen;
         let s = ((vc - (self.vt - w)) / (2.0 * w)).clamp(0.0, 1.0);
         let smooth = s * s * (3.0 - 2.0 * s);
         let dsmooth = if s > 0.0 && s < 1.0 { 6.0 * s * (1.0 - s) / (2.0 * w) } else { 0.0 };

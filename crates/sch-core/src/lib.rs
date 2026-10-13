@@ -2,10 +2,11 @@
 //! Coordinates are integer grid steps, so connectivity is exact.
 
 mod netlist;
+mod ngspice;
 mod spice;
 
 pub use netlist::{erc, extract, net_at, Net, PinRef, Problem, Severity};
-pub use spice::to_spice;
+pub use spice::{node as spice_node, to_spice, to_spice_for, Dialect};
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

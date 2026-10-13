@@ -101,6 +101,8 @@ pub(crate) struct Ctx<'a> {
     /// Time of the solution being computed (transient only).
     pub t: f64,
     pub dynamic: Option<Dyn<'a>>,
+    /// Factor by which switch transitions are widened (1 = as modelled).
+    pub sw_widen: f64,
 }
 
 impl Ctx<'_> {
@@ -109,7 +111,7 @@ impl Ctx<'_> {
     }
 
     pub fn dc(gmin: f64, scale: f64) -> Ctx<'static> {
-        Ctx { gmin, scale, t: 0.0, dynamic: None }
+        Ctx { gmin, scale, t: 0.0, dynamic: None, sw_widen: 1.0 }
     }
 }
 
@@ -197,7 +199,7 @@ impl Compiled {
                 Ce::S { a, b, cp, cn, m: sw, .. } => {
                     // i = g(vc) * vab; linearised with the control derivative as a transconductance
                     let (vab, vc) = (v(x, *a) - v(x, *b), v(x, *cp) - v(x, *cn));
-                    let (g, dg) = sw.eval(vc);
+                    let (g, dg) = sw.eval_widened(vc, ctx.sw_widen);
                     let k = dg * vab;
                     m.g(*a, *b, g);
                     m.gn(*a, *cp, k);

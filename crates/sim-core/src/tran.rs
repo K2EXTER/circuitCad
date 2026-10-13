@@ -2,7 +2,7 @@
 //! corner, to avoid numerical ringing), Newton-Raphson per step, step halving on failure.
 
 use crate::circuit::Circuit;
-use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Strategy, Ce};
+use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Ce};
 
 const MAX_POINTS: f64 = 1_000_000.0;
 
@@ -41,7 +41,7 @@ impl TranResult {
 /// The operating point the run starts from. Capacitors with an initial voltage (`IC=`) are held at
 /// it by temporary voltage sources while the rest of the circuit settles around them.
 fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>, Vec<f64>), SimError> {
-    let order = [Strategy::Direct, Strategy::Gmin, Strategy::Source];
+    let order = crate::dc::DC_ORDER;
     let has_ic = circuit.initial.iter().any(|(n, _)| circuit.elements.iter().any(|e| matches!(e, crate::Element::Capacitor { name, .. } if name == n)));
     if !has_ic {
         return solve_op(cm, &order).map(|(att, _)| (att.x, att.vj));
@@ -182,6 +182,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                 scale: 1.0,
                 t: t + h,
                 dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v }),
+                sw_widen: 1.0,
             };
             match cm.newton(x.clone(), vj.clone(), &ctx) {
                 Ok(a) => break a,

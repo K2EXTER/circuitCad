@@ -190,3 +190,14 @@ fn ne555_blinker_example_blinks_about_once_a_second() {
     assert!(peak > 2e-3 && peak < 8e-3, "LED current {peak}");
     assert!(r.warnings.iter().any(|w| w.contains("ゼロ")), "start-from-zero notice: {:?}", r.warnings);
 }
+
+#[test]
+fn the_dc_panel_finds_a_point_for_the_latch() {
+    // the 555 is bistable: plain Newton, gmin and source stepping all cycle. `dc_op` must still
+    // return a point (the transient keeps starting from zero charge, tested above).
+    let c = astable(5.0, 1e3, 68e3, 10e-6);
+    let r = dc_op(&c).expect("the DC panel must find an operating point");
+    assert_eq!(r.strategy, "switch widening");
+    assert!((r.voltage("vcc").unwrap() - 5.0).abs() < 1e-6);
+    assert!(r.voltages.iter().all(|(_, v)| v.is_finite() && v.abs() < 5.5));
+}

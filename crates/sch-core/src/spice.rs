@@ -3,15 +3,30 @@ use std::collections::HashMap;
 use std::collections::BTreeSet;
 use std::fmt::Write;
 
-fn node(name: &str) -> String {
+/// The node name `to_spice` writes for a net (ground is `0`, other characters become `_`).
+pub fn node(name: &str) -> String {
     if name == "GND" {
         return "0".into();
     }
     name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' }).collect()
 }
 
+/// Which simulator the deck is for. Behavioural-source expressions differ between them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Dialect {
+    /// Our own expression syntax, as the part files write it.
+    Generic,
+    /// `if`/`step`/`limit`/`temp` rewritten for ngspice (see `ngspice.rs`).
+    Ngspice,
+}
+
 /// SPICE deck for the schematic (components only; analysis cards are left to the user).
 pub fn to_spice(s: &Schematic, title: &str) -> String {
+    to_spice_for(s, title, Dialect::Generic)
+}
+
+/// `to_spice` for a given simulator.
+pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
     let mut pin_node: HashMap<(String, String), String> = HashMap::new();
     for n in extract(s) {
         for p in &n.pins {
@@ -74,7 +89,11 @@ pub fn to_spice(s: &Schematic, title: &str) -> String {
                     let _ = writeln!(out, "* {r} ({}): シミュレーションモデルなし", c.value);
                     continue;
                 };
-                let nodes: Vec<String> = sim.pins.iter().map(|p| nd(r, p)).collect();
+                let mut nodes: Vec<String> = sim.pins.iter().map(|p| nd(r, p)).collect();
+                // a MOSFET card has four nodes (D G S B); the part has three, so the body goes to the source
+                if sim.kind == SimKind::Model && sim.element.eq_ignore_ascii_case("M") && nodes.len() == 3 {
+                    nodes.push(nodes[2].clone());
+                }
                 let inst = match sim.kind {
                     SimKind::Subckt => format!("X{r}"),
                     SimKind::Model if r.starts_with(sim.element.as_str()) => r.clone(),
@@ -82,7 +101,10 @@ pub fn to_spice(s: &Schematic, title: &str) -> String {
                 };
                 let _ = writeln!(out, "{inst} {} {}", nodes.join(" "), sim.name);
                 if included.insert(sim.name.to_ascii_lowercase()) {
-                    model_text.push_str(sim.text.trim_end());
+                    match dialect {
+                        Dialect::Generic => model_text.push_str(sim.text.trim_end()),
+                        Dialect::Ngspice => model_text.push_str(crate::ngspice::convert_text(sim.text.trim_end()).trim_end()),
+                    }
                     model_text.push('\n');
                 }
             }

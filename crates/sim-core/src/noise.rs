@@ -10,7 +10,7 @@
 
 use crate::ac::{check_sweep, frequencies, solve_complex, AcSettings, C64};
 use crate::circuit::Circuit;
-use crate::dc::{bjt_eval, compile, exp_safe, floating_warnings, has_ground, mos_eval, solve_op, v, Ce, Ctx, SimError, Strategy};
+use crate::dc::{bjt_eval, compile, exp_safe, floating_warnings, has_ground, mos_eval, solve_op, v, Ce, Ctx, SimError};
 use std::f64::consts::PI;
 
 const K_B: f64 = 1.380649e-23;
@@ -124,7 +124,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
     }
     let warnings = floating_warnings(circuit);
     let cm = compile(circuit);
-    let (op, _) = solve_op(&cm, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])?;
+    let (op, _) = solve_op(&cm, &crate::dc::DC_ORDER)?;
     let mut vj = op.vj.clone();
     let (jac, _) = cm.assemble(&mut vj, &op.x, &Ctx::dc(crate::options::options().gmin, 1.0));
     let n = cm.n_unknowns;

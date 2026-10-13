@@ -166,7 +166,17 @@ pub(crate) enum Strategy {
     Direct,
     Gmin,
     Source,
+    /// Switches start with wide transitions that narrow step by step to the modelled width
+    /// (latches and comparators built from switches have no usable gradient otherwise).
+    Widen,
 }
+
+/// The order in which the operating point is attempted before a transient, AC or noise run. Those
+/// rely on a bistable or oscillating circuit reporting "no operating point" and starting from zero.
+pub(crate) const DC_ORDER: [Strategy; 3] = [Strategy::Direct, Strategy::Gmin, Strategy::Source];
+
+/// `dc_op` (the DC panel) also tries `Widen`, so that a latch settles into one of its stable states.
+pub(crate) const DC_ORDER_WIDEN: [Strategy; 4] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::Widen];
 
 impl Compiled {
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
@@ -196,12 +206,23 @@ impl Compiled {
                 }
                 Ok(Attempt { x, vj, iterations: iters })
             }
+            Strategy::Widen => {
+                let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
+                for widen in [1000.0, 300.0, 100.0, 30.0, 10.0, 5.0, 3.0, 2.0, 1.5, 1.0] {
+                    let ctx = Ctx { sw_widen: widen, ..Ctx::dc(crate::options::options().gmin, 1.0) };
+                    let a = self.newton_damped(x, vj, &ctx)?;
+                    iters += a.iterations;
+                    x = a.x;
+                    vj = a.vj;
+                }
+                Ok(Attempt { x, vj, iterations: iters })
+            }
         }
     }
 }
 
 pub fn dc_op(circuit: &Circuit) -> Result<DcResult, SimError> {
-    dc_op_with(circuit, &[Strategy::Direct, Strategy::Gmin, Strategy::Source])
+    dc_op_with(circuit, &DC_ORDER_WIDEN)
 }
 
 /// Floating-node warnings are produced by the caller; this only needs a ground reference.
@@ -240,6 +261,7 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
                     Strategy::Direct => "direct",
                     Strategy::Gmin => "gmin stepping",
                     Strategy::Source => "source stepping",
+                    Strategy::Widen => "switch widening",
                 };
                 return Ok((att, name));
             }

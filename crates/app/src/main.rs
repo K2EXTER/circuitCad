@@ -12,6 +12,7 @@ mod part_form;
 mod plot;
 mod schematic;
 mod source_form;
+mod xcheck;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -448,6 +449,10 @@ fn apply_args(app: &mut App, args: &[String]) {
 
 fn main() -> eframe::Result {
     install_crash_log();
+    // developer tool: compare the DC solution with ngspice, no window
+    if xcheck::run_cli(&std::env::args().skip(1).collect::<Vec<_>>()) {
+        return Ok(());
+    }
     eframe::run_native(
         "circuitCad",
         eframe::NativeOptions {
