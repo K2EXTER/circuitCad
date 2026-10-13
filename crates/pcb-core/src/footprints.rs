@@ -42,6 +42,9 @@ pub struct Footprint {
     /// The body outline and polarity marks drawn on the silkscreen. Empty = a box around the pads is drawn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub silk: Vec<FpLine>,
+    /// The body as the data sheet draws it (size and orientation mark): the 3D view builds the part's box from it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<crate::body::BodySpec>,
     #[serde(default)]
     pub holes: Vec<FpHole>,
     /// Height of the part's body above the board (mm), when the data sheet says. The 3D view guesses from the name otherwise.
@@ -60,6 +63,7 @@ fn smd2(name: &str, half_pitch: f64, w: f64, h: f64, pins: [&str; 2]) -> Footpri
         holes: vec![],
         height: None,
         silk: vec![],
+        body: None,
         pads: vec![pad(pins[0], -half_pitch, 0.0, s, None), pad(pins[1], half_pitch, 0.0, s, None)],
     }
 }
@@ -71,6 +75,7 @@ fn tht2(name: &str, pitch: f64, d: f64, drill: f64, pins: [&str; 2]) -> Footprin
         holes: vec![],
         height: None,
         silk: vec![],
+        body: None,
         pads: vec![
             pad(pins[0], -pitch / 2.0, 0.0, PadShape::Rect { w: d, h: d }, Some(drill)),
             pad(pins[1], pitch / 2.0, 0.0, s, Some(drill)),
@@ -85,6 +90,7 @@ fn header(name: &str, pins: &[String]) -> Footprint {
         holes: vec![],
         height: None,
         silk: vec![],
+        body: None,
         pads: pins
             .iter()
             .enumerate()
@@ -132,6 +138,7 @@ pub fn get(name: &str) -> Option<Footprint> {
                 holes: vec![],
                 height: None,
                 silk: vec![],
+                body: None,
                 pads: vec![
                     pad("E", -2.54, 0.0, PadShape::Rect { w: 1.5, h: 1.5 }, Some(0.8)),
                     pad("B", 0.0, 0.0, s, Some(0.8)),
@@ -146,6 +153,7 @@ pub fn get(name: &str) -> Option<Footprint> {
                 holes: vec![],
                 height: None,
                 silk: vec![],
+                body: None,
                 pads: vec![pad("B", -0.95, 0.95, s, None), pad("E", 0.95, 0.95, s, None), pad("C", 0.0, -0.95, s, None)],
             }
         }

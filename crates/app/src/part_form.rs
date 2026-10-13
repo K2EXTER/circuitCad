@@ -18,6 +18,42 @@ pub enum PkgKind {
     Row,
 }
 
+/// The tabs of the form.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum FormTab {
+    Basic,
+    Pins,
+    Package,
+    Sim,
+    Ratings,
+}
+
+const FORM_TABS: &[(FormTab, &str, &str)] = &[
+    (FormTab::Basic, "① 基本", "部品の名前・番号の頭文字・値・説明。チップ部品や充電ICは、ここの「かんたん作成」で数字を入れるだけで作れます"),
+    (FormTab::Pins, "② ピン", "ピンの番号と名前、記号のどの辺に出すか。データシートの「ピン配置」の表を見ながら入れます"),
+    (FormTab::Package, "③ 基板の形", "データシートの推奨ランドパターン (パッド) と外形寸法 (本体の大きさ・高さ) を入れます。右の絵で確かめられます"),
+    (FormTab::Sim, "④ シミュレーション", "SPICE モデルを貼ると、種類・端子を自動で入力します。シミュレーションしない部品 (基板づくりだけ) は「なし」のままです"),
+    (FormTab::Ratings, "⑤ 定格", "データシートの絶対最大定格 (電圧・電流・電力) と電気的特性。入れておくと、回路で超えそうなときに警告します"),
+];
+
+/// What kind of part: the first question of the form.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum PartType {
+    Ic,
+    Transistor,
+    Diode,
+    Chip,
+    Connector,
+}
+
+const PART_TYPES: &[(PartType, &str, &str)] = &[
+    (PartType::Ic, "IC", "オペアンプ・レギュレータ・マイコンなど。足が2列に並ぶ (SOIC・DIP) 形を例に、ピン・パッケージ・本体の外形を入れます。QFN や放熱パッドは「③ 基板の形」で変えます"),
+    (PartType::Transistor, "トランジスタ", "NPN・PNP・MOSFET。足が1列の形 (TO-92 など) を例に入れます。記号は規格の形になります"),
+    (PartType::Diode, "ダイオード", "整流・ショットキー・ツェナー・LED。足が2本の形 (DO-35 など) を例に入れます。カソードの棒も付きます"),
+    (PartType::Chip, "チップ部品", "抵抗・コンデンサ・コイル (0603 など)。「① 基本」の「かんたん作成」に、データシートの数字を入れて作ります"),
+    (PartType::Connector, "コネクタ", "ピンヘッダ・端子台など、足が1列に並ぶ部品"),
+];
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum SimChoice {
     None,
@@ -26,6 +62,9 @@ pub enum SimChoice {
 }
 
 pub struct PartForm {
+    /// The tab shown and the kind of part chosen first (None = not chosen: the form is as before).
+    pub tab: FormTab,
+    pub ptype: Option<PartType>,
     pub name: String,
     pub category: String,
     pub prefix: String,
@@ -101,6 +140,8 @@ pub struct PartForm {
 impl Default for PartForm {
     fn default() -> Self {
         Self {
+            tab: FormTab::Basic,
+            ptype: None,
             name: String::new(),
             category: "ユーザー".into(),
             prefix: "U".into(),
@@ -781,9 +822,8 @@ impl PartForm {
         }).header_response.on_hover_text("データシートの数字を入れるだけで、充電ICの「外から見た動き」のモデルを作ります。市販のSPICEモデルが無いICに使えます。数字は、データシートの「電気的特性」の表から拾います");
     }
 
-    /// Draws the form. Returns a finished definition when the user presses save.
-    pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
-        ui.label(egui::RichText::new("① 基本情報").strong().size(15.0));
+    /// The ① basic information tab (name, category, prefix, value, description, data sheet URL) and the easy templates.
+    fn tab_basic(&mut self, ui: &mut egui::Ui) {
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
             ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
@@ -805,13 +845,15 @@ impl PartForm {
             ui.end_row();
         });
 
-        egui::CollapsingHeader::new(egui::RichText::new("かんたん作成 (テンプレート)").strong().size(15.0)).id_salt("part_templates").default_open(!self.glyph.is_empty()).show(ui, |ui| {
+        ui.add_space(6.0);
+        ui.label(egui::RichText::new("かんたん作成 (テンプレート)").strong());
             ui.small("チップ部品や充電ICは、データシートの数字を入れるだけで、下の欄を自動で埋められます");
             self.passive_ui(ui);
             self.template_ui(ui);
-        });
+    }
 
-        egui::CollapsingHeader::new(egui::RichText::new("② データシートの情報 (定格・最大定格)").strong().size(15.0)).id_salt("part_ratings").default_open(true).show(ui, |ui| {
+    /// The tab of the data sheet's ratings.
+    fn tab_ratings(&mut self, ui: &mut egui::Ui) {
             ui.label("部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
             ui.horizontal(|ui| {
                 ui.label("部品の種類");
@@ -849,9 +891,10 @@ impl PartForm {
             if self.datasheet.trim().is_empty() && (max_given > 0 || rows_given > 0) {
                 ui.colored_label(Color32::from_rgb(220, 160, 40), "データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)");
             }
-        });
+    }
 
-        egui::CollapsingHeader::new(egui::RichText::new("③ シミュレーションモデル (部品の特性)").strong().size(15.0)).id_salt("part_sim").default_open(true).show(ui, |ui| {
+    /// The tab of the simulation model.
+    fn tab_sim(&mut self, ui: &mut egui::Ui) {
             ui.label("シミュレーションモデル (部品の特性)");
             ui.small("メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
             ui.horizontal(|ui| {
@@ -920,14 +963,16 @@ impl PartForm {
                 );
             }
 
-        });
+    }
 
-        egui::CollapsingHeader::new(egui::RichText::new("④ ピン").strong().size(15.0)).id_salt("part_pins").default_open(true).show(ui, |ui| {
+    /// The tab of the pins.
+    fn tab_pins(&mut self, ui: &mut egui::Ui) {
             ui.label("ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
             ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
-        });
+    }
 
-        egui::CollapsingHeader::new(egui::RichText::new("⑤ 基板の形 (パッケージ)").strong().size(15.0)).id_salt("part_pkg").default_open(true).show(ui, |ui| {
+    /// The tab of the board shape: package, thermal pad, body, extra pads and holes.
+    fn tab_package(&mut self, ui: &mut egui::Ui) {
             ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます)");
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
@@ -974,9 +1019,7 @@ impl PartForm {
                         dv(ui, "穴径", &mut self.drill);
                     }
                 }
-                dv(ui, "高さ (mm)", &mut self.height);
             });
-            ui.small("高さ: データシートの「基板からの高さ」。0 のままなら3D表示は名前から推測します。ケースに入るかの確認に使います");
             if matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) {
                 ui.checkbox(&mut self.thermal_on, "放熱パッド (ICの裏の大きなパッド) を付ける").on_hover_text("QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します");
                 if self.thermal_on {
@@ -988,7 +1031,11 @@ impl PartForm {
                     });
                 }
             }
-            ui.checkbox(&mut self.body_on, "本体の外形 (シルクの輪郭と向きの印) を描く").on_hover_text("データシートの外形寸法の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます");
+            ui.horizontal_wrapped(|ui| {
+                ui.add(egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix("高さ ").suffix(" mm")).on_hover_text("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います");
+                ui.small("側面図の高さ (0 = 未入力)");
+            });
+            ui.checkbox(&mut self.body_on, "本体の外形 (上面図の幅×長さ) を描く").on_hover_text("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります");
             if self.body_on {
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.body_circle, false, "四角").on_hover_text("四角い本体 (IC、チップ部品)");
@@ -1037,28 +1084,268 @@ impl PartForm {
                 ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
                     .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
             });
+    }
+
+    /// Draws the form. Returns a finished definition when the user presses save.
+    pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
+        let built = self.to_def();
+        self.kind_bar(ui);
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            for (tab, label, tip) in FORM_TABS {
+                let warn = match tab {
+                    FormTab::Basic => self.name.trim().is_empty(),
+                    FormTab::Pins => self.parse_pins().is_err(),
+                    FormTab::Package => built.is_err() || built.as_ref().is_ok_and(|d| d.footprint().is_err()),
+                    _ => false,
+                };
+                let text = if warn { format!("⚠ {label}") } else { (*label).to_string() };
+                ui.selectable_value(&mut self.tab, *tab, egui::RichText::new(text).size(15.0)).on_hover_text(*tip);
+            }
         });
         ui.separator();
-        let def = match self.to_def() {
+        let h = 470.0;
+        let mut saved = None;
+        ui.horizontal_top(|ui| {
+            let right_w = 370.0;
+            // the window may be dragged wider; the form keeps to a width where nothing stretches across the screen
+            let total = ui.available_width().clamp(760.0, 1040.0);
+            let left_w = total - right_w - 20.0;
+            ui.allocate_ui_with_layout(Vec2::new(left_w, h), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_width(left_w);
+                egui::ScrollArea::vertical().id_salt("part_form_tab").max_height(h).auto_shrink([false, false]).show(ui, |ui| {
+                    match self.tab {
+                        FormTab::Basic => self.tab_basic(ui),
+                        FormTab::Pins => self.tab_pins(ui),
+                        FormTab::Package => self.tab_package(ui),
+                        FormTab::Sim => self.tab_sim(ui),
+                        FormTab::Ratings => self.tab_ratings(ui),
+                    }
+                });
+            });
+            ui.separator();
+            ui.allocate_ui_with_layout(Vec2::new(right_w, h), egui::Layout::top_down(egui::Align::Min), |ui| {
+                ui.set_width(right_w);
+                saved = self.preview_pane(ui, &built);
+            });
+        });
+        saved
+    }
+
+    /// The first question: what kind of part is this. Fills pins, package, body and symbol with a starting point.
+    fn kind_bar(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new("部品の種類").strong());
+            for (t, label, tip) in PART_TYPES {
+                if ui.selectable_label(self.ptype == Some(*t), egui::RichText::new(*label).size(15.0)).on_hover_text(*tip).clicked() {
+                    self.apply_type(*t);
+                }
+            }
+        });
+        match self.ptype {
+            Some(PartType::Transistor) => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("どの種類?");
+                    for (k, label, tip) in [
+                        ("npn", "NPN", "ベース電流でコレクタ→エミッタの電流を制御する。負荷を GND 側で切り替える"),
+                        ("pnp", "PNP", "NPN と電流の向きが逆。電源側で切り替える"),
+                        ("nmos", "Nch MOSFET", "ゲート電圧で制御。大電流のスイッチに向く"),
+                        ("pmos", "Pch MOSFET", "N チャネルと極性が逆。電源側で切り替える"),
+                    ] {
+                        if ui.selectable_label(self.glyph == k, label).on_hover_text(tip).clicked() {
+                            self.set_transistor(k);
+                        }
+                    }
+                });
+            }
+            Some(PartType::Diode) => {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("どの種類?");
+                    for (k, label, tip) in [
+                        ("diode", "整流・スイッチング", "電流を一方向に流す。記号は三角と線"),
+                        ("schottky", "ショットキー", "順方向の電圧降下が小さい。棒の両端が S 形の記号"),
+                        ("zener", "ツェナー", "逆向きで電圧を一定に保つ。棒の両端が Z 形の記号"),
+                    ] {
+                        if ui.selectable_label(self.glyph == k, label).on_hover_text(tip).clicked() {
+                            self.glyph = k.into();
+                        }
+                    }
+                });
+            }
+            Some(PartType::Chip) => {
+                ui.small("チップ部品 (抵抗・コンデンサ・コイル) は、「基本」タブの「かんたん作成」に、データシートの数字を入れるだけで作れます");
+            }
+            _ => {}
+        }
+    }
+
+    /// Shows one tab ("basic", "pins", "package", "sim", "ratings"), for scripts and screenshots.
+    pub fn show_tab(&mut self, name: &str) {
+        if let Some((t, _, _)) = FORM_TABS.iter().zip(["basic", "pins", "package", "sim", "ratings"]).find(|(_, n)| *n == name).map(|(t, _)| t) {
+            self.tab = *t;
+        }
+    }
+
+    /// A form that starts from this kind of part ("ic", "transistor", "diode", "chip", "connector"), for scripts and screenshots.
+    pub fn for_type(name: &str) -> Self {
+        let mut f = PartForm::default();
+        if let Some((t, _, _)) = PART_TYPES.iter().find(|(t, _, _)| format!("{t:?}").eq_ignore_ascii_case(name)) {
+            f.apply_type(*t);
+        }
+        f
+    }
+
+    fn apply_type(&mut self, t: PartType) {
+        self.ptype = Some(t);
+        self.fp_preset.clear();
+        self.thermal_on = false;
+        self.extras.clear();
+        self.body_pin.clear();
+        match t {
+            PartType::Ic => {
+                self.prefix = "U".into();
+                self.glyph.clear();
+                self.pins_text = "1 IN\n2 GND\n3 OUT\n4 VCC".into();
+                self.pkg = PkgKind::Dual;
+                self.tht = false;
+                (self.pitch, self.row, self.len, self.width) = (1.27, 5.4, 1.55, 0.6);
+                self.body_on = true;
+                self.body_circle = false;
+                self.body_mark = BodyMark::Dot;
+                self.fit_body();
+                self.tab = FormTab::Pins;
+            }
+            PartType::Transistor => {
+                self.prefix = "Q".into();
+                self.pkg = PkgKind::Row;
+                (self.pitch, self.pad_d, self.drill) = (2.54, 1.5, 0.8);
+                self.body_on = false;
+                self.set_transistor("npn");
+                self.tab = FormTab::Pins;
+            }
+            PartType::Diode => {
+                self.prefix = "D".into();
+                self.glyph = "diode".into();
+                self.pins_text = "1 K right\n2 A left".into();
+                self.pkg = PkgKind::Row;
+                (self.pitch, self.pad_d, self.drill) = (7.62, 1.8, 0.9);
+                self.body_on = true;
+                self.body_circle = false;
+                (self.body_w, self.body_h, self.body_x, self.body_y) = (3.8, 1.8, 0.0, 0.0);
+                self.body_mark = BodyMark::Bar;
+                self.body_pin = "1".into();
+                self.tab = FormTab::Pins;
+            }
+            PartType::Chip => {
+                self.prefix = "C".into();
+                self.glyph.clear();
+                self.pins_text = "1 1\n2 2".into();
+                self.pkg = PkgKind::Chip2;
+                (self.pitch, self.len, self.width) = (1.65, 0.8, 0.95);
+                self.body_on = false;
+                self.tab = FormTab::Basic;
+            }
+            PartType::Connector => {
+                self.prefix = "J".into();
+                self.glyph.clear();
+                self.pins_text = "1 1\n2 2\n3 3\n4 4".into();
+                self.pkg = PkgKind::Row;
+                (self.pitch, self.pad_d, self.drill) = (2.54, 1.7, 1.0);
+                self.body_on = true;
+                self.body_circle = false;
+                (self.body_w, self.body_h, self.body_x, self.body_y) = (10.16, 2.5, 0.0, 0.0);
+                self.body_mark = BodyMark::Dot;
+                self.tab = FormTab::Pins;
+            }
+        }
+    }
+
+    fn set_transistor(&mut self, kind: &str) {
+        self.glyph = kind.into();
+        // pin numbers 1 2 3 along the row; the sides decide where each lead leaves the symbol
+        self.pins_text = match kind {
+            "npn" => "1 E bottom\n2 B left\n3 C top",
+            "pnp" => "1 E top\n2 B left\n3 C bottom",
+            "nmos" => "1 S bottom\n2 G left\n3 D top",
+            _ => "1 S top\n2 G left\n3 D bottom",
+        }
+        .into();
+    }
+
+    /// A body that fits the pads of a dual-row IC (the data sheet's outline is the value to type; this is a start).
+    fn fit_body(&mut self) {
+        if self.pkg == PkgKind::Dual {
+            let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count().max(2);
+            self.body_w = (self.row - 1.5).max(1.0);
+            self.body_h = self.pitch * (n / 2).saturating_sub(1) as f64 + 1.1;
+            self.body_x = 0.0;
+            self.body_y = 0.0;
+        }
+    }
+
+    /// The right-hand side: the symbol and the footprint drawn to scale, what is wrong, and the save button.
+    fn preview_pane(&mut self, ui: &mut egui::Ui, built: &Result<PartDef, String>) -> Option<PartDef> {
+        let def = match built {
             Ok(d) => d,
             Err(e) => {
                 ui.colored_label(Color32::from_rgb(230, 60, 60), e);
                 return None;
             }
         };
-        let issues: Vec<Issue> = def.validate();
-        for i in &issues {
-            let (c, mark) = if i.error { (Color32::from_rgb(230, 60, 60), "エラー") } else { (Color32::from_rgb(220, 160, 40), "注意") };
-            ui.colored_label(c, format!("{mark}: {}", i.message));
-        }
+        ui.label(egui::RichText::new("回路図の記号").strong());
+        symbol_preview(ui, def);
+        ui.label(egui::RichText::new("基板の形 (実寸比)").strong());
         if let Ok(fp) = def.footprint() {
             footprint_preview(ui, &fp);
+            if let Some(h) = fp.height {
+                ui.small(format!("本体の高さ {h:.2} mm"));
+            }
         }
+        let issues: Vec<Issue> = def.validate();
+        egui::ScrollArea::vertical().id_salt("part_form_issues").max_height(110.0).auto_shrink([false, true]).show(ui, |ui| {
+            if issues.is_empty() {
+                ui.colored_label(Color32::from_rgb(60, 170, 90), "✔ 問題は見つかりません");
+            }
+            for i in &issues {
+                let (c, mark) = if i.error { (Color32::from_rgb(230, 60, 60), "エラー") } else { (Color32::from_rgb(220, 160, 40), "注意") };
+                ui.colored_label(c, format!("{mark}: {}", i.message));
+            }
+        });
         let ok = !def.has_errors();
-        if ui.add_enabled(ok, egui::Button::new("保存してライブラリに追加")).on_hover_text("この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません").clicked() {
-            return Some(def);
+        if ui.add_enabled(ok, egui::Button::new(egui::RichText::new("保存してライブラリに追加").size(15.0))).on_hover_text("この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません").clicked() {
+            return Some(def.clone());
         }
         None
+    }
+}
+
+/// The schematic symbol of the part, as it will be drawn on the sheet.
+fn symbol_preview(ui: &mut egui::Ui, def: &PartDef) {
+    let sym = def.symbol();
+    let lines = crate::schematic::symbol_lines(&sym);
+    let (resp, painter) = ui.allocate_painter(Vec2::new(ui.available_width().min(370.0), 120.0), Sense::hover());
+    let r = resp.rect;
+    painter.rect_filled(r, 2.0, Color32::from_rgb(248, 245, 236));
+    if lines.is_empty() {
+        return;
+    }
+    let (mut x0, mut x1, mut y0, mut y1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for (a, b) in &lines {
+        for p in [a, b] {
+            x0 = x0.min(p[0]);
+            x1 = x1.max(p[0]);
+            y0 = y0.min(p[1]);
+            y1 = y1.max(p[1]);
+        }
+    }
+    let scale = ((r.width() - 40.0) / (x1 - x0).max(1.0)).min((r.height() - 24.0) / (y1 - y0).max(1.0)).min(26.0);
+    let c = r.center();
+    let to = |p: [f32; 2]| Pos2::new(c.x + (p[0] - (x0 + x1) / 2.0) * scale, c.y + (p[1] - (y0 + y1) / 2.0) * scale);
+    for (a, b) in &lines {
+        painter.line_segment([to(*a), to(*b)], Stroke::new(1.6, Color32::from_rgb(120, 30, 30)));
+    }
+    for (name, p) in crate::schematic::symbol_pin_labels(&sym) {
+        painter.text(to(p), Align2::CENTER_BOTTOM, name, FontId::proportional(10.0), Color32::from_gray(90));
     }
 }
 
@@ -1550,6 +1837,38 @@ mod extras_tests {
         let d = f.to_def().unwrap();
         let back: PartDef = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
         assert_eq!(back.body, d.body);
+    }
+
+    /// Every starting point of the "kind of part" bar makes a part with no errors once it has a name, with its
+    /// own symbol, and the transistor / diode choices change the symbol.
+    #[test]
+    fn each_kind_of_part_starts_from_a_valid_definition() {
+        for name in ["ic", "transistor", "diode", "chip", "connector"] {
+            let mut f = PartForm::for_type(name);
+            assert!(f.ptype.is_some(), "{name}");
+            f.name = format!("TEST_{name}");
+            let d = f.to_def().unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert!(!d.has_errors(), "{name}: {:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+            assert!(d.footprint().is_ok(), "{name}");
+            assert!(!crate::schematic::symbol_lines(&d.symbol()).is_empty(), "{name}: a symbol to draw");
+        }
+        // a transistor of each kind gets its own pin sides and a standard symbol with the small layout
+        for (kind, glyph) in [("npn", "npn"), ("pnp", "pnp"), ("nmos", "nmos"), ("pmos", "pmos")] {
+            let mut f = PartForm::for_type("transistor");
+            f.set_transistor(kind);
+            f.name = "Q_TEST".into();
+            let d = f.to_def().unwrap();
+            assert_eq!(d.glyph, glyph);
+            assert!(!d.has_errors(), "{kind}: {:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+            let sym = d.symbol();
+            assert_eq!((sym.layout().hw, sym.layout().hh), (0, 0), "{kind}: the small transistor layout");
+        }
+        // a diode keeps its 2 leads small
+        let mut f = PartForm::for_type("diode");
+        f.name = "D_TEST".into();
+        f.glyph = "zener".into();
+        let sym = f.to_def().unwrap().symbol();
+        assert_eq!((sym.layout().hw, sym.layout().hh), (0, 1));
     }
 
     #[test]

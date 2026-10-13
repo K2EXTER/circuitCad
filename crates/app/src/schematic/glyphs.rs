@@ -295,6 +295,51 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
     }
 }
 
+/// The symbol of a part as line segments in grid units (leads included), for the preview in the part form:
+/// the standard symbol when the part has one, the basic capacitor / resistor / inductor for a chip part,
+/// else the box with its pins.
+pub(crate) fn symbol_lines(sym: &CustomSymbol) -> Vec<([f32; 2], [f32; 2])> {
+    use super::symbols::symbol;
+    let l = sym.layout();
+    let mut out: Vec<([f32; 2], [f32; 2])> = vec![];
+    let mut add = |shapes: Vec<Sh>| {
+        for s in shapes {
+            match s {
+                L(a, b, c, d) => out.push(([a, b], [c, d])),
+                C(x, y, r) => {
+                    let n = 24;
+                    for i in 0..n {
+                        let (t0, t1) = (std::f32::consts::TAU * i as f32 / n as f32, std::f32::consts::TAU * (i + 1) as f32 / n as f32);
+                        out.push(([x + r * t0.cos(), y + r * t0.sin()], [x + r * t1.cos(), y + r * t1.sin()]));
+                    }
+                }
+            }
+        }
+    };
+    if let Some(shapes) = body_glyph(sym).and_then(|g| body(g, &l)) {
+        add(shapes);
+        return out;
+    }
+    if sym.is_two_lead_glyph() {
+        let kind = match sym.glyph.as_str() {
+            "capacitor" | "electrolytic" => sch_core::Kind::Capacitor,
+            "resistor" => sch_core::Kind::Resistor,
+            _ => sch_core::Kind::Inductor,
+        };
+        add(symbol(kind));
+        return out;
+    }
+    let (hw, hh) = (l.hw as f32, l.hh as f32);
+    add(vec![L(-hw, -hh, hw, -hh), L(hw, -hh, hw, hh), L(hw, hh, -hw, hh), L(-hw, hh, -hw, -hh)]);
+    add(l.pins.iter().map(|p| L(p.tip.0 as f32, p.tip.1 as f32, p.edge.0 as f32, p.edge.1 as f32)).collect());
+    out
+}
+
+/// The pin names of a part's symbol with the point each one is drawn at (for the preview).
+pub(crate) fn symbol_pin_labels(sym: &CustomSymbol) -> Vec<(String, [f32; 2])> {
+    sym.layout().pins.iter().map(|p| (p.name.clone(), [p.tip.0 as f32, p.tip.1 as f32 - 0.2])).collect()
+}
+
 /// Extra marks for the basic LED: arrow heads on the two light rays.
 pub(super) fn led_arrow_heads() -> Vec<Sh> {
     let mut v = arrow_head((0.6, -1.5), (0.707, -0.707));

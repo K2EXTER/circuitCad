@@ -100,6 +100,8 @@ pub struct SchEditor {
     gdrag: Option<GroupDrag>,
     /// A rotation asked for by the property panel, applied once the panel's borrow has ended.
     rotate_req: Option<usize>,
+    /// The selection was put away when the Place tool was chosen (reset when another tool is chosen).
+    place_cleared: bool,
     drag: Option<(usize, Pt)>,
     zoom: f32, // pixels per grid step
     pan: Vec2, // grid position at the screen centre
@@ -506,6 +508,7 @@ impl Default for SchEditor {
             boxsel: None,
             gdrag: None,
             rotate_req: None,
+            place_cleared: false,
             drag: None,
             zoom: 22.0,
             pan: Vec2::new(10.0, 6.0),
@@ -533,6 +536,7 @@ pub use lessons::{lesson_ids, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
 mod symbols;
 mod glyphs;
+pub(crate) use glyphs::{symbol_lines, symbol_pin_labels};
 mod wave;
 mod ac;
 mod analysis_panel;

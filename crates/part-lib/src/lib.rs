@@ -141,6 +141,7 @@ impl PartDef {
         fp.height = self.height.filter(|h| h.is_finite() && *h > 0.0);
         if let Some(b) = self.body.as_ref().filter(|b| b.w > 0.0 && (b.shape == "circle" || b.h > 0.0)) {
             fp.silk = pcb_core::body::body_lines(b, &fp.pads);
+            fp.body = Some(b.clone());
         }
         Ok(fp)
     }

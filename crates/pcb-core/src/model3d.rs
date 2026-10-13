@@ -185,11 +185,65 @@ fn pin1_dot(pads: &[&Pad], lo: [f64; 2], hi: [f64; 2], top: f64) -> Option<Solid
     Some(solid([x - r, y - r, top], [x + r, y + r, top + 0.05], MARK, BodyShape::Cylinder(2)))
 }
 
+/// The body the data sheet gives (size, orientation mark): a box or a cylinder of its height, with the mark on top.
+/// `local` positions are in the footprint's frame; a bottom part is mirrored and the part is turned by `rot`.
+fn data_sheet_body(part: &Part, pads: &[&Pad], body: &crate::body::BodySpec, h: f64, color: [u8; 3]) -> Vec<Solid> {
+    use crate::body::BodyMark;
+    let bottom = part.side == Side::Bottom;
+    let place = |x: f64, y: f64| {
+        let local = if bottom { Point::new(-x, y) } else { Point::new(x, y) };
+        let r = crate::parts::rotate(local, part.rot);
+        (part.pos.x + r.x, part.pos.y + r.y)
+    };
+    let circle = body.shape == "circle";
+    let (w, l) = if circle { (body.w, body.w) } else { (body.w, body.h) };
+    let (w, l) = if part.rot % 2 == 1 { (l, w) } else { (w, l) };
+    let (cx, cy) = place(body.x, body.y);
+    // surface-mount parts sit a little above the pads, leaded ones on the board
+    let z0 = if pads.iter().any(|p| p.drill.is_some()) { 0.0 } else { 0.15 };
+    let top = z0 + h;
+    let main = solid([cx - w / 2.0, cy - l / 2.0, z0], [cx + w / 2.0, cy + l / 2.0, top], color, if circle { BodyShape::Cylinder(2) } else { BodyShape::Box });
+    let mut v = vec![main];
+    let marked = pads.iter().copied().find(|p| body.mark_pin.is_empty() || p.pin == body.mark_pin).or(pads.first().copied());
+    if let Some(m) = marked {
+        let (dx, dy) = (m.pos.x - cx, m.pos.y - cy);
+        let (ux, uy) = if dx.abs() >= dy.abs() { (dx.signum(), 0.0) } else { (0.0, dy.signum()) };
+        match body.mark {
+            BodyMark::Dot => {
+                let (hw, hh) = (w / 2.0, l / 2.0);
+                let r = (hw.min(hh) * 0.16).clamp(0.2, 0.6);
+                let towards = |off: f64, half: f64| if off.abs() < half * 0.2 { 0.0 } else { off.signum() * (half - r - 0.25).max(0.0) };
+                let (x, y) = (cx + towards(dx, hw), cy + towards(dy, hh));
+                v.push(solid([x - r, y - r, top], [x + r, y + r, top + 0.05], MARK, BodyShape::Cylinder(2)));
+            }
+            BodyMark::Bar => {
+                // a pale band across the top at the marked pad's end
+                let band = ((if ux != 0.0 { w } else { l }) * 0.14).clamp(0.3, 1.0);
+                if ux != 0.0 {
+                    let (a, b) = if ux > 0.0 { (cx + w / 2.0 - band, cx + w / 2.0) } else { (cx - w / 2.0, cx - w / 2.0 + band) };
+                    v.push(solid([a, cy - l / 2.0, top], [b, cy + l / 2.0, top + 0.05], MARK, BodyShape::Box));
+                } else {
+                    let (a, b) = if uy > 0.0 { (cy + l / 2.0 - band, cy + l / 2.0) } else { (cy - l / 2.0, cy - l / 2.0 + band) };
+                    v.push(solid([cx - w / 2.0, a, top], [cx + w / 2.0, b, top + 0.05], MARK, BodyShape::Box));
+                }
+            }
+            // the + sign is drawn on the silkscreen; the 3D body stays plain
+            BodyMark::Plus | BodyMark::None => {}
+        }
+    }
+    v
+}
+
 /// All the solids of one part, in board x / y and height above the board surface.
 fn solids(board: &Board, part: &Part) -> Vec<Solid> {
     let pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == part.refdes).collect();
     if pads.is_empty() {
         return vec![];
+    }
+    // a library part with the body from its data sheet: the box of that size and height
+    if let Some(body) = board.footprint(&part.footprint).and_then(|f| f.body).filter(|b| b.w > 0.0 && (b.shape == "circle" || b.h > 0.0)) {
+        let (h, color) = style_in(board, part);
+        return data_sheet_body(part, &pads, &body, h, color);
     }
     let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
     for p in &pads {
@@ -343,6 +397,38 @@ pub fn part_boxes(board: &Board) -> Vec<PartBox> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A part whose footprint carries the data sheet body is drawn as that body: its size, its height,
+    /// turned with the part, with the pin 1 dot on top.
+    #[test]
+    fn a_data_sheet_body_sets_the_size_and_height_of_the_3d_part() {
+        use crate::body::{BodyMark, BodySpec};
+        let mut b = Board::new("t", 30.0, 30.0);
+        let mut fp = crate::footprints::get("R_0805").unwrap();
+        fp.name = "BODY".into();
+        fp.height = Some(2.0);
+        fp.body = Some(BodySpec { shape: "rect".into(), w: 4.0, h: 3.0, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "BODY".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+        let boxes = part_boxes(&b);
+        let body = &boxes[0];
+        assert!((body.hi[0] - body.lo[0] - 4.0).abs() < 1e-9 && (body.hi[1] - body.lo[1] - 3.0).abs() < 1e-9);
+        assert!((body.hi[2] - body.lo[2] - 2.0).abs() < 1e-9, "the height of the data sheet");
+        assert_eq!(boxes.len(), 2, "the body and the pin 1 dot");
+        // turned a quarter: width and length swap
+        b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "BODY".into(), pos: Point::new(10.0, 10.0), rot: 1, side: Side::Top }).unwrap();
+        let turned = &part_boxes(&b)[0];
+        assert!((turned.hi[0] - turned.lo[0] - 3.0).abs() < 1e-9 && (turned.hi[1] - turned.lo[1] - 4.0).abs() < 1e-9);
+        // a circle is a cylinder along z
+        let mut fp = crate::footprints::get("R_0805").unwrap();
+        fp.name = "ROUND".into();
+        fp.body = Some(BodySpec { shape: "circle".into(), w: 5.0, h: 0.0, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new() });
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "U2".into(), value: "x".into(), footprint: "ROUND".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top }).unwrap();
+        let round = part_boxes(&b).into_iter().find(|p| p.refdes == "U2").unwrap();
+        assert_eq!(round.shape, BodyShape::Cylinder(2));
+        assert!((round.hi[0] - round.lo[0] - 5.0).abs() < 1e-9);
+    }
 
     fn pad(refdes: &str, x: f64, y: f64, w: f64, h: f64, drill: Option<f64>) -> Pad {
         let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, drill, Side::Top);

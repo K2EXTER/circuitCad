@@ -88,6 +88,16 @@ impl SchEditor {
         if let Some(i) = self.rotate_req.take() {
             self.rotate_comp(i);
         }
+        // choosing a part to place puts the selection away, so R (and Delete) cannot hit a part picked earlier
+        if self.tool == Tool::Place {
+            if !self.place_cleared {
+                self.place_cleared = true;
+                self.selected = None;
+                self.multi.clear();
+            }
+        } else {
+            self.place_cleared = false;
+        }
         if !typing {
             let (cmd, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
             if cmd && ui.input(|i| i.key_pressed(egui::Key::Z)) {
@@ -97,6 +107,8 @@ impl SchEditor {
             }
             if ui.input(|i| i.key_pressed(egui::Key::R)) {
                 match self.selected {
+                    // placing: R turns the part about to be placed, never a part on the sheet
+                    _ if self.tool == Tool::Place => self.rot = (self.rot + 1) % 4,
                     Some(Sel::Comp(i)) => self.rotate_comp(i),
                     _ if self.multi.iter().any(|s| matches!(s, Sel::Comp(_))) => {
                         for s in self.multi.clone() {
@@ -125,5 +137,41 @@ impl SchEditor {
                 self.tool = Tool::Select;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn press(e: &mut SchEditor, key: egui::Key) {
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        input.events.push(egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+        let mut out = ctx.run_ui(input, |ui| e.handle_keys(ui));
+        out.textures_delta.clear();
+    }
+
+    /// Choosing a part to place puts the selection away, and R then turns the part about to be placed,
+    /// not a part picked earlier.
+    #[test]
+    fn r_in_the_place_tool_does_not_turn_a_selected_part() {
+        let mut e = SchEditor::default();
+        let r = e.sch.add(Kind::Resistor, (10, 10), 0);
+        // in the Select tool R turns the selected part
+        e.tool = Tool::Select;
+        e.selected = Some(Sel::Comp(r));
+        press(&mut e, egui::Key::R);
+        assert_eq!(e.sch.components[r].rot, 1);
+        // choosing a part to place clears the selection
+        e.choose_library_part(0);
+        press(&mut e, egui::Key::A); // any frame in the Place tool
+        assert!(e.selected.is_none() && e.multi.is_empty());
+        // even with something selected again, R turns the pending part only
+        e.selected = Some(Sel::Comp(r));
+        let before = e.rot;
+        press(&mut e, egui::Key::R);
+        assert_eq!(e.sch.components[r].rot, 1, "the part on the sheet stays");
+        assert_eq!(e.rot, (before + 1) % 4);
     }
 }

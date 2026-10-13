@@ -206,7 +206,7 @@ impl PackageSpec {
                 v
             }
         };
-        Ok(Footprint { name: name.to_string(), pads, holes: fp_holes, height: None, silk: vec![] })
+        Ok(Footprint { name: name.to_string(), pads, holes: fp_holes, height: None, silk: vec![], body: None })
     }
 }
 

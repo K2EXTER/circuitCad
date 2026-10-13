@@ -465,9 +465,14 @@ fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.run_judge();
             }
         }
-    if args.iter().any(|a| a == "--new-part") {
-        app.sch.open_part_form();
+    if let Some(i) = args.iter().position(|a| a == "--new-part") {
+        // --new-part [ic|transistor|diode|chip|connector]
+        app.sch.open_part_form_for(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
     }
+    if let Some(i) = args.iter().position(|a| a == "--form-tab")
+        && let Some(t) = args.get(i + 1) {
+            app.sch.set_form_tab(t);
+        }
     if args.iter().any(|a| a == "--learn") {
         app.learn.open = true;
     }

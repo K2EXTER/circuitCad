@@ -520,7 +520,7 @@ impl SchEditor {
         if let Some(mut form) = self.form.take() {
             let mut open = true;
             let mut saved = None;
-            egui::Window::new("部品を作成").open(&mut open).default_width(560.0).vscroll(true).show(ui.ctx(), |ui| {
+            egui::Window::new("部品を作成").open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
                 saved = form.ui(ui);
             });
             match saved {

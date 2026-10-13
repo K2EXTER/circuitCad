@@ -17,7 +17,19 @@ impl SchEditor {
 
     /// Opens the new-part form (for scripts and screenshots).
     pub fn open_part_form(&mut self) {
-        self.form = Some(PartForm::default());
+        self.open_part_form_for("");
+    }
+
+    /// Switches the open new-part form to a tab (`--form-tab <name>`).
+    pub fn set_form_tab(&mut self, name: &str) {
+        if let Some(f) = self.form.as_mut() {
+            f.show_tab(name);
+        }
+    }
+
+    /// Opens the new-part form already set to a kind of part (`--new-part <kind>`).
+    pub fn open_part_form_for(&mut self, kind: &str) {
+        self.form = Some(PartForm::for_type(kind));
         self.panel_tab = PanelTab::Draw;
     }
 
