@@ -2,6 +2,7 @@
 //! and simulation model, typically transcribed from the datasheet.
 
 use pcb_core::footprints::Footprint;
+use pcb_core::body::BodySpec;
 use pcb_core::package::PackageSpec;
 use sch_core::{CustomSymbol, PartRatings, PinSide, SimKind, SimModel, SymPin};
 pub use sch_core::SpecRow;
@@ -60,6 +61,9 @@ pub struct PartDef {
     /// Only for two pins, one on each side.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub glyph: String,
+    /// The body as the data sheet draws it (a rectangle or circle with an orientation mark): the silkscreen outline of the footprint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub body: Option<BodySpec>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -135,6 +139,9 @@ impl PartDef {
     pub fn footprint(&self) -> Result<Footprint, String> {
         let mut fp = self.package.build(&self.footprint_name())?;
         fp.height = self.height.filter(|h| h.is_finite() && *h > 0.0);
+        if let Some(b) = self.body.as_ref().filter(|b| b.w > 0.0 && (b.shape == "circle" || b.h > 0.0)) {
+            fp.silk = pcb_core::body::body_lines(b, &fp.pads);
+        }
         Ok(fp)
     }
 
@@ -171,6 +178,13 @@ impl PartDef {
                 }
             } else if !BODY_GLYPHS.contains(&self.glyph.as_str()) {
                 err(format!("glyph「{}」は capacitor / electrolytic / resistor / inductor / {} のどれかにしてください", self.glyph, BODY_GLYPHS.join(" / ")));
+            }
+        }
+
+        if let Some(b) = &self.body {
+            let names: Vec<&str> = self.pins.iter().map(|p| p.number.as_str()).chain(self.pins.iter().map(|p| p.name.as_str())).collect();
+            if let Err(e) = b.validate(&names) {
+                err(e);
             }
         }
 

@@ -4,6 +4,7 @@
 pub mod assembly;
 pub mod autoplace;
 pub mod autoroute;
+pub mod body;
 pub mod current;
 pub mod diffpair;
 pub mod drc;

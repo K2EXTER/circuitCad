@@ -400,5 +400,6 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         sim: None,
         ratings: None,
         glyph: glyph.into(),
+        body: None,
     })
 }

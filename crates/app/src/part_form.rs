@@ -5,6 +5,7 @@ use part_lib::passive::{self, PassiveKind, PassiveTemplate};
 use part_lib::templates::{ChargerTemplate, CurrentSetting, Topology};
 use part_lib::{Issue, PartDef, PinDef};
 use pcb_core::footprints::Footprint;
+use pcb_core::body::{BodyMark, BodySpec};
 use pcb_core::package::{HoleSpec, PackageSpec, PadSpec};
 use pcb_core::PadShape;
 use sch_core::{PartRatings, PinSide, SimKind, SimModel, SpecRow};
@@ -41,6 +42,21 @@ pub struct PartForm {
     pub pad_d: f64,
     pub drill: f64,
     pub tht: bool,
+    /// The exposed pad under an IC (QFN, ESOP, SOT-223 tab): its pin, width and length. The pin must be in the pin table.
+    pub thermal_on: bool,
+    pub thermal_pin: String,
+    pub thermal_w: f64,
+    pub thermal_h: f64,
+    /// The body drawn on the silkscreen: a rectangle (`body_w` x `body_h`) or a circle (`body_w` across), centred `body_x`, `body_y` from the origin.
+    pub body_on: bool,
+    pub body_circle: bool,
+    pub body_w: f64,
+    pub body_h: f64,
+    pub body_x: f64,
+    pub body_y: f64,
+    pub body_mark: BodyMark,
+    /// The pin the orientation mark belongs to (empty = the first pad).
+    pub body_pin: String,
     /// Body height above the board in mm (0 = not given: the 3D view guesses from the footprint).
     pub height: f64,
     /// Extra pads and holes beyond the package: shield legs, locating pegs, slots. One per line, see `EXTRAS_HELP`.
@@ -101,6 +117,18 @@ impl Default for PartForm {
             pad_d: 1.7,
             drill: 1.0,
             tht: false,
+            thermal_on: false,
+            thermal_pin: String::new(),
+            thermal_w: 3.0,
+            thermal_h: 3.0,
+            body_on: false,
+            body_circle: false,
+            body_w: 3.9,
+            body_h: 4.9,
+            body_x: 0.0,
+            body_y: 0.0,
+            body_mark: BodyMark::Dot,
+            body_pin: String::new(),
             height: 0.0,
             extras: String::new(),
             fp_preset: String::new(),
@@ -380,7 +408,20 @@ impl PartForm {
 
     pub fn to_def(&self) -> Result<PartDef, String> {
         let pins = self.parse_pins()?;
-        let (extra_pads, extra_holes) = self.parse_extras()?;
+        let (mut extra_pads, extra_holes) = self.parse_extras()?;
+        if self.thermal_on && matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) {
+            let pin = self.thermal_pin.trim();
+            if pin.is_empty() {
+                return Err("放熱パッドのピン番号を入れてください (ピン表に、そのピンの行も書きます。例: 9 EP)".into());
+            }
+            if !pins.iter().any(|p| p.number == pin) {
+                return Err(format!("放熱パッドのピン「{pin}」が、ピン表にありません。ピン表に「{pin} GND」のように1行足してください"));
+            }
+            if self.thermal_w <= 0.0 || self.thermal_h <= 0.0 {
+                return Err("放熱パッドの幅と長さは 0 より大きい値にしてください".into());
+            }
+            extra_pads.push(PadSpec { pin: pin.to_string(), x: 0.0, y: 0.0, shape: "rect".into(), w: self.thermal_w, h: self.thermal_h, drill: None, slot: 0.0, slot_v: false });
+        }
         // pins that only exist as extra pads (the shell, say) are not part of the package's row of pads
         let n = pins.iter().filter(|p| !extra_pads.iter().any(|e| e.pin == p.number)).count();
         let package = match self.pkg {
@@ -441,6 +482,15 @@ impl PartForm {
             sim,
             ratings: self.parse_ratings()?,
             glyph: self.glyph.clone(),
+            body: self.body_on.then(|| BodySpec {
+                shape: if self.body_circle { "circle" } else { "rect" }.into(),
+                w: self.body_w,
+                h: self.body_h,
+                x: self.body_x,
+                y: self.body_y,
+                mark: self.body_mark,
+                mark_pin: self.body_pin.trim().to_string(),
+            }),
         })
     }
 
@@ -927,7 +977,48 @@ impl PartForm {
                 dv(ui, "高さ (mm)", &mut self.height);
             });
             ui.small("高さ: データシートの「基板からの高さ」。0 のままなら3D表示は名前から推測します。ケースに入るかの確認に使います");
-            ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
+            if matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) {
+                ui.checkbox(&mut self.thermal_on, "放熱パッド (ICの裏の大きなパッド) を付ける").on_hover_text("QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します");
+                if self.thermal_on {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("ピン番号");
+                        ui.add(egui::TextEdit::singleline(&mut self.thermal_pin).desired_width(40.0).hint_text("9")).on_hover_text("放熱パッドのピン番号。ピン表にある番号にします (GND につなぐことが多い)");
+                        ui.add(egui::DragValue::new(&mut self.thermal_w).speed(0.01).range(0.1..=50.0).prefix("幅 ").suffix(" mm")).on_hover_text("データシートの推奨ランドパターンの、放熱パッドの幅");
+                        ui.add(egui::DragValue::new(&mut self.thermal_h).speed(0.01).range(0.1..=50.0).prefix("長さ ").suffix(" mm")).on_hover_text("データシートの推奨ランドパターンの、放熱パッドの長さ");
+                    });
+                }
+            }
+            ui.checkbox(&mut self.body_on, "本体の外形 (シルクの輪郭と向きの印) を描く").on_hover_text("データシートの外形寸法の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます");
+            if self.body_on {
+                ui.horizontal_wrapped(|ui| {
+                    ui.selectable_value(&mut self.body_circle, false, "四角").on_hover_text("四角い本体 (IC、チップ部品)");
+                    ui.selectable_value(&mut self.body_circle, true, "円").on_hover_text("丸い本体 (ラジアルの電解コンデンサ、LED)");
+                    let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64, lo: f64| {
+                        ui.add(egui::DragValue::new(v).speed(0.01).range(lo..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(body_tip(label));
+                    };
+                    dv(ui, if self.body_circle { "直径" } else { "幅" }, &mut self.body_w, 0.1);
+                    if !self.body_circle {
+                        dv(ui, "長さ", &mut self.body_h, 0.1);
+                    }
+                    dv(ui, "中心X", &mut self.body_x, -100.0);
+                    dv(ui, "中心Y", &mut self.body_y, -100.0);
+                });
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("向きの印");
+                    for (m, label, tip) in [
+                        (BodyMark::None, "なし", "印を付けません"),
+                        (BodyMark::Dot, "点", "本体の角の内側に点を打ちます。ICの1番ピンの印です"),
+                        (BodyMark::Bar, "棒", "本体の端の近くに線を引きます。ダイオードのカソードや、LEDの平らな側の印です"),
+                        (BodyMark::Plus, "＋", "極性のあるコンデンサの ＋ 側の印です"),
+                    ] {
+                        ui.selectable_value(&mut self.body_mark, m, label).on_hover_text(tip);
+                    }
+                    if self.body_mark != BodyMark::None {
+                        ui.label("のピン");
+                        ui.add(egui::TextEdit::singleline(&mut self.body_pin).desired_width(40.0).hint_text("1")).on_hover_text("印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号");
+                    }
+                });
+            }
             egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
                 ui.small("USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
                 ui.small(EXTRAS_HELP);
@@ -983,6 +1074,14 @@ fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Footprint) {
         y0 = y0.min(p.pos.y - h / 2.0);
         y1 = y1.max(p.pos.y + h / 2.0);
     }
+    for l in &fp.silk {
+        for q in [l.a, l.b] {
+            x0 = x0.min(q.x);
+            x1 = x1.max(q.x);
+            y0 = y0.min(q.y);
+            y1 = y1.max(q.y);
+        }
+    }
     for h in &fp.holes {
         let (a, b) = pcb_core::slot_ends(h.pos, h.drill, h.slot, h.slot_v);
         x0 = x0.min(a.x.min(b.x) - h.drill / 2.0);
@@ -1016,6 +1115,10 @@ fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Footprint) {
     for h in &fp.holes {
         let (a, b) = pcb_core::slot_ends(h.pos, h.drill, h.slot, h.slot_v);
         crate::board_editor::capsule(&painter, to(a.x, a.y), to(b.x, b.y), h.drill as f32 * scale / 2.0, Color32::TRANSPARENT, Some(Stroke::new(1.5, Color32::LIGHT_GRAY)));
+    }
+    // the body outline and orientation mark (silkscreen)
+    for l in &fp.silk {
+        painter.line_segment([to(l.a.x, l.a.y), to(l.b.x, l.b.y)], Stroke::new(1.3, Color32::from_gray(235)));
     }
     painter.rect_stroke(r, 2.0, Stroke::new(1.0, Color32::from_gray(80)), egui::StrokeKind::Inside);
 }
@@ -1396,6 +1499,59 @@ mod extras_tests {
         assert!(fp.holes[1].slot > fp.holes[1].drill, "the second peg hole is a slot");
     }
 
+    /// The data sheet's body and exposed pad go into the footprint: an 8-pin SOIC with a pin 1 dot, a QFN-like
+    /// part with a thermal pad, and the mistakes the form refuses.
+    #[test]
+    fn the_body_and_the_thermal_pad_come_from_the_form() {
+        let mut f = PartForm { name: "SOIC8_TEST".into(), pins_text: "1 A
+2 B
+3 C
+4 D
+5 E
+6 F
+7 G
+8 H".into(), ..PartForm::default() };
+        f.pkg = PkgKind::Dual;
+        f.body_on = true;
+        let plain = f.to_def().unwrap().footprint().unwrap();
+        assert!(!plain.silk.is_empty(), "the body outline is drawn");
+        // the thermal pad is one more pad, in the middle, sharing nothing with the row
+        f.pins_text.push_str("
+9 EP");
+        f.thermal_on = true;
+        f.thermal_pin = "9".into();
+        f.thermal_w = 2.4;
+        f.thermal_h = 3.4;
+        let d = f.to_def().unwrap();
+        assert!(!d.has_errors(), "{:?}", d.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
+        let fp = d.footprint().unwrap();
+        assert_eq!(fp.pads.len(), 9);
+        let ep = fp.pads.iter().find(|p| p.pin == "9").unwrap();
+        assert_eq!((ep.pos.x, ep.pos.y), (0.0, 0.0));
+        assert_eq!(ep.shape.size(), (2.4, 3.4));
+        // the outline stays clear of every pad
+        assert!(fp.silk.iter().all(|l| fp.pads.iter().all(|p| {
+            let (w, h) = p.shape.size();
+            [l.a, l.b].iter().all(|q| (q.x - p.pos.x).abs() > w / 2.0 || (q.y - p.pos.y).abs() > h / 2.0)
+        })));
+        // a pin that is not in the pin table, a missing pin and a bad body are refused with a message
+        f.thermal_pin = "99".into();
+        assert!(f.to_def().unwrap_err().contains("ピン表"));
+        f.thermal_pin = "".into();
+        assert!(f.to_def().unwrap_err().contains("ピン番号"));
+        f.thermal_on = false;
+        f.body_w = 0.0;
+        assert!(f.to_def().unwrap().validate().iter().any(|i| i.error && i.message.contains("幅")));
+        f.body_w = 3.9;
+        f.body_pin = "Z".into();
+        assert!(f.to_def().unwrap().validate().iter().any(|i| i.error && i.message.contains("向きの印")));
+        // the definition survives saving as JSON
+        f.body_pin = "1".into();
+        let d = f.to_def().unwrap();
+        let back: PartDef = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(back.body, d.body);
+    }
+
     #[test]
     fn a_vertical_plated_slot_and_smd_pad_are_read() {
         let mut f = usb_form();
@@ -1478,5 +1634,16 @@ mod passive_form_tests {
         f.pas_esr.clear();
         f.pas_bias = "200".into();
         assert!(f.apply_passive().unwrap_err().contains("0〜95"));
+    }
+}
+
+/// Hover text of a body dimension box (data sheet "package outline").
+fn body_tip(label: &str) -> &'static str {
+    match label {
+        "幅" => "本体の横の大きさ (データシートの外形寸法の E など)。パッドの列と直角の向きではなく、基板の X 方向です",
+        "直径" => "丸い本体の直径 (データシートの D)",
+        "長さ" => "本体の縦の大きさ (基板の Y 方向)",
+        "中心X" => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (X)。ふつうは 0",
+        _ => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0",
     }
 }
