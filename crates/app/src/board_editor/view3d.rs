@@ -23,7 +23,17 @@ struct Scene {
     parts: Vec<(String, String, String, f64)>,
     /// The tallest part on each side, for case checks.
     tallest: [Option<(String, f64)>; 2],
+    /// Every net name on the board, for the highlight list.
+    nets: Vec<String>,
+    /// Copper of the highlighted net as triangles (`true` = bottom face), drawn just above the board picture.
+    glow: Vec<(bool, [Point; 3])>,
 }
+
+/// Colour of the highlighted net, and how far (mm) it floats above the board so it wins the depth test.
+const GLOW: [u8; 3] = [255, 60, 170];
+const GLOW_LIFT: f64 = 0.05;
+/// Largest zoom (the scroll wheel and "選択部品へ寄る" share it).
+const MAX_ZOOM: f32 = 30.0;
 
 pub(super) struct View3d {
     pub(super) open: bool,
@@ -46,6 +56,12 @@ pub(super) struct View3d {
     generation: u32,
     /// The last picture, kept while nothing that shows in it changes.
     cache: Option<Cached>,
+    /// The net drawn in colour on the board, and the net of the editor's selection last followed (so picking
+    /// another net in the list is not undone by the same selection every frame).
+    net: Option<String>,
+    followed: Option<String>,
+    /// A part to move the camera to on the next frame.
+    focus: Option<usize>,
 }
 
 /// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
@@ -68,7 +84,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None }
     }
 }
 
@@ -183,7 +199,10 @@ impl Scene {
                 tallest[side] = Some((b.refdes.clone(), height));
             }
         }
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, parts, tallest })
+        let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
+        nets.sort();
+        nets.dedup();
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, parts, tallest, nets, glow: vec![] })
     }
 
     fn images(pv: &Preview, mask: bool, silk: bool) -> [Vec<[u8; 4]>; 2] {
@@ -219,6 +238,11 @@ impl Scene {
                     vert([p.x, p.y, z], [if bottom { 1.0 - u } else { u }, v])
                 };
                 buf.triangle([corner(&t[0]), corner(&t[1]), corner(&t[2])], Paint::Texture(bottom as usize), &pics);
+            }
+            let zg = if bottom { -GLOW_LIFT } else { BOARD_THICKNESS + GLOW_LIFT };
+            for (_, t) in self.glow.iter().filter(|(b, _)| *b == bottom) {
+                let vs = t.map(|p| vert([p.x, p.y, zg], [0.0, 0.0]));
+                buf.triangle(vs, Paint::Flat { color: GLOW, part: NO_PART }, &pics);
             }
         }
         // the edge of the board
@@ -270,11 +294,153 @@ impl Scene {
     }
 }
 
+/// The camera for a window of `rect`: the longest side of the board fills most of it at zoom 1.
+fn camera(scene: &Scene, rect: Rect, yaw: f32, pitch: f32, zoom: f32, pan: Vec2) -> Cam {
+    let longest = (scene.hi.x - scene.lo.x).max(scene.hi.y - scene.lo.y) as f32;
+    // the camera stands back three times the board's diagonal
+    let extent = ((scene.hi.x - scene.lo.x).hypot(scene.hi.y - scene.lo.y)) as f32;
+    Cam {
+        yaw,
+        pitch,
+        scale: 0.95 * rect.width().min(rect.height()) / (longest * 1.15).max(1.0) * zoom,
+        center: [((scene.lo.x + scene.hi.x) / 2.0) as f32, ((scene.lo.y + scene.hi.y) / 2.0) as f32, (BOARD_THICKNESS / 2.0) as f32],
+        dist: extent * 3.0,
+        origin: rect.center() + pan,
+    }
+}
+
+/// Where to put the camera to look at part `part` closely: `(pitch, zoom, pan)`. A part on the far face turns the
+/// board over (looks from below) so it is seen, not hidden behind the board.
+fn focus_on(scene: &Scene, part: usize, rect: Rect, yaw: f32, pitch: f32) -> Option<(f32, f32, Vec2)> {
+    let mut boxes = scene.boxes.iter().filter(|b| b.part == part);
+    let first = boxes.next()?;
+    let (mut lo, mut hi) = (first.lo, first.hi);
+    let mut bottom = first.bottom;
+    for b in boxes {
+        for k in 0..3 {
+            lo[k] = lo[k].min(b.lo[k]);
+            hi[k] = hi[k].max(b.hi[k]);
+        }
+        bottom |= b.bottom;
+    }
+    let pitch = if bottom && pitch.sin() > 0.0 {
+        -0.9
+    } else if !bottom && pitch.sin() < 0.0 {
+        0.9
+    } else {
+        pitch
+    };
+    let diag = ((hi[0] - lo[0]).powi(2) + (hi[1] - lo[1]).powi(2) + (hi[2] - lo[2]).powi(2)).sqrt() as f32;
+    let base = camera(scene, rect, yaw, pitch, 1.0, Vec2::ZERO).scale;
+    let zoom = (0.4 * rect.width().min(rect.height()) / diag.max(2.0) / base).clamp(0.2, MAX_ZOOM);
+    let at = [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0];
+    let (pos, _) = camera(scene, rect, yaw, pitch, zoom, Vec2::ZERO).project(at);
+    Some((pitch, zoom, rect.center() - pos))
+}
+
+/// One picture of the scene at `ss` x supersampling: the pixels, the part under each, and the size.
+/// `hover` and `selected` get an outline (pass `None` for a clean picture to save).
+fn snapshot(scene: &Scene, rect: Rect, cam: &Cam, show_parts: bool, ss: usize, hover: Option<usize>, selected: Option<usize>) -> (Vec<[u8; 4]>, Vec<u32>, usize, usize) {
+    let s = ss as f32;
+    let local = Cam { scale: cam.scale * s, origin: Pos2::new((cam.origin.x - rect.min.x) * s, (cam.origin.y - rect.min.y) * s), ..*cam };
+    let (w, h) = (rect.width().round().max(1.0) as usize, rect.height().round().max(1.0) as usize);
+    let buf = scene.render(&local, w * ss, h * ss, show_parts, hover);
+    let (mut pixels, ids, w, h) = buf.resolve(ss);
+    if let Some(s) = selected {
+        outline_part(&mut pixels, &ids, w, h, s as u32, [90, 220, 255]);
+    }
+    if let Some(hv) = hover {
+        outline_part(&mut pixels, &ids, w, h, hv as u32, [255, 230, 90]);
+    }
+    (pixels, ids, w, h)
+}
+
+/// A convex outline of the segment `a`-`b` swept by a disc of radius `r` (a track, a round or oval pad, a via).
+fn capsule(a: Point, b: Point, r: f64) -> Vec<Point> {
+    const N: usize = 8;
+    let th = if (b.x - a.x).hypot(b.y - a.y) < 1e-9 { 0.0 } else { (b.y - a.y).atan2(b.x - a.x) };
+    let half = std::f64::consts::FRAC_PI_2;
+    let mut out = Vec::with_capacity(2 * N + 2);
+    for (c, from) in [(b, th - half), (a, th + half)] {
+        for k in 0..=N {
+            let t = from + std::f64::consts::PI * k as f64 / N as f64;
+            out.push(Point::new(c.x + r * t.cos(), c.y + r * t.sin()));
+        }
+    }
+    out
+}
+
+/// The copper of net `net` (tracks, pads, vias, and what the zones join to it) as triangles per face. Inner
+/// layers are not visible from outside, so they are left out.
+fn net_glow(board: &Board, conn: &drc::Connectivity, net: &str) -> Vec<(bool, [Point; 3])> {
+    let mut out: Vec<(bool, [Point; 3])> = vec![];
+    let mut add = |bottom: bool, poly: &[Point]| {
+        for k in 1..poly.len().saturating_sub(1) {
+            out.push((bottom, [poly[0], poly[k], poly[k + 1]]));
+        }
+    };
+    for (i, t) in board.tracks.iter().enumerate() {
+        if conn.track_net(i) == Some(net) {
+            match t.side {
+                Side::Top => add(false, &capsule(t.a, t.b, t.width / 2.0)),
+                Side::Bottom => add(true, &capsule(t.a, t.b, t.width / 2.0)),
+                Side::Inner(_) => {}
+            }
+        }
+    }
+    for (i, p) in board.pads.iter().enumerate() {
+        if conn.pad_net(i) != Some(net) {
+            continue;
+        }
+        let poly = match p.shape {
+            PadShape::Circle { d } => capsule(p.pos, p.pos, d / 2.0),
+            PadShape::Rect { w, h } => vec![Point::new(p.pos.x - w / 2.0, p.pos.y - h / 2.0), Point::new(p.pos.x + w / 2.0, p.pos.y - h / 2.0), Point::new(p.pos.x + w / 2.0, p.pos.y + h / 2.0), Point::new(p.pos.x - w / 2.0, p.pos.y + h / 2.0)],
+            PadShape::Oval { w, h } if w >= h => {
+                let d = (w - h) / 2.0;
+                capsule(Point::new(p.pos.x - d, p.pos.y), Point::new(p.pos.x + d, p.pos.y), h / 2.0)
+            }
+            PadShape::Oval { w, h } => {
+                let d = (h - w) / 2.0;
+                capsule(Point::new(p.pos.x, p.pos.y - d), Point::new(p.pos.x, p.pos.y + d), w / 2.0)
+            }
+        };
+        let faces: &[bool] = match (p.drill.is_some(), p.side) {
+            (true, _) => &[false, true],
+            (false, Side::Top) => &[false],
+            (false, Side::Bottom) => &[true],
+            _ => &[],
+        };
+        for &f in faces {
+            add(f, &poly);
+        }
+    }
+    for (i, v) in board.vias.iter().enumerate() {
+        if conn.via_net(i) == Some(net) {
+            let poly = capsule(v.pos, v.pos, v.diameter / 2.0);
+            add(false, &poly);
+            add(true, &poly);
+        }
+    }
+    out
+}
+
 impl BoardEditor {
     /// Opens (and rebuilds) the 3D window.
     pub fn open_view3d(&mut self) {
         self.view3d.open = true;
         self.view3d.stale = true;
+    }
+
+    /// Recomputes the copper of the highlighted net (after the scene was rebuilt or another net was picked).
+    fn apply_net_glow(&mut self) {
+        let glow = match &self.view3d.net {
+            Some(n) => net_glow(&self.board, &self.cached_connectivity(), n),
+            None => vec![],
+        };
+        if let Some(sc) = &mut self.view3d.scene {
+            sc.glow = glow;
+        }
+        self.view3d.generation += 1;
     }
 
     pub fn view3d_window(&mut self, ctx: &egui::Context) {
@@ -288,6 +454,7 @@ impl BoardEditor {
                 Ok(s) => {
                     self.view3d.scene = Some(s);
                     self.view3d.error = None;
+                    self.apply_net_glow();
                 }
                 Err(e) => {
                     self.view3d.scene = None;
@@ -295,10 +462,27 @@ impl BoardEditor {
                 }
             }
         }
+        // a track, pad or via picked in the editor lights up its net here (once per pick, so the list stays usable)
+        let sel_net: Option<String> = {
+            let b = &self.board;
+            match self.selected {
+                Some(Item::Track(i)) if i < b.tracks.len() => self.cached_connectivity().track_net(i).map(str::to_string),
+                Some(Item::Pad(i)) if i < b.pads.len() => self.cached_connectivity().pad_net(i).map(str::to_string),
+                Some(Item::Via(i)) if i < b.vias.len() => self.cached_connectivity().via_net(i).map(str::to_string),
+                _ => None,
+            }
+        };
+        let mut new_net: Option<Option<String>> = None;
+        if sel_net.is_some() && sel_net != self.view3d.followed {
+            new_net = Some(sel_net.clone());
+        }
+        self.view3d.followed = sel_net;
         let mut open = true;
         let mut retex = false;
         let mut stale = false;
         let mut want_help = false;
+        let mut save_png = false;
+        let mut note: Option<String> = None;
         let mut pick: Option<usize> = None;
         let selected = if let Some(Item::Part(i)) = self.selected { Some(i) } else { None };
         let v = &mut self.view3d;
@@ -328,6 +512,25 @@ impl BoardEditor {
                 ui.checkbox(&mut v.spin, "自動回転").on_hover_text("ゆっくり回して、いろいろな向きから見せます");
                 if ui.button("更新").on_hover_text("基板エディタで変更した内容を反映します").clicked() {
                     stale = true;
+                }
+                if ui.add_enabled(selected.is_some(), egui::Button::new("選択部品へ寄る")).on_hover_text("基板エディタで選んでいる部品に近づきます。裏面の部品なら基板を裏返して見ます。ダブルクリックでも、部品の上なら寄れます").clicked() {
+                    v.focus = selected;
+                }
+                if ui.button("PNG保存").on_hover_text("いま見えている向きの絵を画像ファイルに保存します (発注前の確認や、人に見せるときに)").clicked() {
+                    save_png = true;
+                }
+                if let Some(sc) = &v.scene {
+                    let shown = v.net.clone().unwrap_or_else(|| "なし".into());
+                    egui::ComboBox::from_id_salt("view3d_net").selected_text(format!("ネット強調: {shown}")).show_ui(ui, |ui| {
+                        if ui.selectable_label(v.net.is_none(), "なし").clicked() {
+                            new_net = Some(None);
+                        }
+                        for n in &sc.nets {
+                            if ui.selectable_label(v.net.as_deref() == Some(n.as_str()), n).clicked() {
+                                new_net = Some(Some(n.clone()));
+                            }
+                        }
+                    }).response.on_hover_text("選んだネットの銅 (配線・パッド・ビア) を桃色に光らせます。基板エディタで配線やパッドを選んでも、そのネットが光ります");
                 }
                 if ui.small_button("操作").on_hover_text("回す・動かす・拡大の操作を開きます").clicked() {
                     want_help = true;
@@ -360,29 +563,28 @@ impl BoardEditor {
                 v.pan += resp.drag_delta();
             }
             if resp.double_clicked() {
-                (v.yaw, v.pitch, v.zoom, v.pan) = (0.0, 0.9, 1.0, Vec2::ZERO);
+                if let Some(i) = v.hover.filter(|_| v.show_parts) {
+                    v.focus = Some(i);
+                } else {
+                    (v.yaw, v.pitch, v.zoom, v.pan) = (0.0, 0.9, 1.0, Vec2::ZERO);
+                }
+            }
+            if let Some(i) = v.focus.take()
+                && let Some((pitch, zoom, pan)) = focus_on(scene, i, resp.rect, v.yaw, v.pitch)
+            {
+                (v.pitch, v.zoom, v.pan) = (pitch, zoom, pan);
             }
             if resp.hovered() {
                 let scroll = ui.input(|i| i.smooth_scroll_delta.y);
                 if scroll != 0.0 {
-                    v.zoom = (v.zoom * (1.0 + scroll * 0.002)).clamp(0.2, 8.0);
+                    v.zoom = (v.zoom * (1.0 + scroll * 0.002)).clamp(0.2, MAX_ZOOM);
                 }
             }
             if v.spin {
                 v.yaw += ui.input(|i| i.stable_dt) * 0.5;
                 ui.ctx().request_repaint();
             }
-            // the longest side sets the size; the camera stands back three times the board's diagonal
-            let longest = (scene.hi.x - scene.lo.x).max(scene.hi.y - scene.lo.y) as f32;
-            let extent = ((scene.hi.x - scene.lo.x).hypot(scene.hi.y - scene.lo.y)) as f32;
-            let cam = Cam {
-                yaw: v.yaw,
-                pitch: v.pitch,
-                scale: 0.95 * resp.rect.width().min(resp.rect.height()) / (longest * 1.15).max(1.0) * v.zoom,
-                center: [((scene.lo.x + scene.hi.x) / 2.0) as f32, ((scene.lo.y + scene.hi.y) / 2.0) as f32, (BOARD_THICKNESS / 2.0) as f32],
-                dist: extent * 3.0,
-                origin: resp.rect.center() + v.pan,
-            };
+            let cam = camera(scene, resp.rect, v.yaw, v.pitch, v.zoom, v.pan);
             // the picture: drawn at twice the size and averaged (release builds), and kept while nothing in it changes
             let ss = if cfg!(debug_assertions) { 1 } else { 2 };
             let size_px = [resp.rect.width().round().max(1.0) as usize, resp.rect.height().round().max(1.0) as usize];
@@ -395,19 +597,21 @@ impl BoardEditor {
                 generation: v.generation,
             };
             if v.cache.as_ref().is_none_or(|c| c.key != key) {
-                let s = ss as f32;
-                let local = Cam { scale: cam.scale * s, origin: Pos2::new((cam.origin.x - resp.rect.min.x) * s, (cam.origin.y - resp.rect.min.y) * s), ..cam };
-                let buf = scene.render(&local, size_px[0] * ss, size_px[1] * ss, v.show_parts, v.hover);
-                let (mut pixels, ids, w, h) = buf.resolve(ss);
-                if let Some(s) = selected {
-                    outline_part(&mut pixels, &ids, w, h, s as u32, [90, 220, 255]);
-                }
-                if let Some(hv) = v.hover {
-                    outline_part(&mut pixels, &ids, w, h, hv as u32, [255, 230, 90]);
-                }
+                let (pixels, ids, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, ss, v.hover, selected);
                 let rgba: Vec<u8> = pixels.iter().flatten().copied().collect();
                 let tex = ui.ctx().load_texture("board3d_view", egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba), egui::TextureOptions::LINEAR);
                 v.cache = Some(Cached { key, tex, ids, size: [w, h] });
+            }
+            if save_png {
+                // a clean picture (no outlines), drawn at twice the size
+                let (pixels, _, w, h) = snapshot(scene, resp.rect, &cam, v.show_parts, 2, None, None);
+                if let Some(path) = rfd::FileDialog::new().add_filter("PNG画像", &["png"]).set_file_name("board3d.png").save_file() {
+                    let rgba: Vec<u8> = pixels.iter().flatten().copied().collect();
+                    note = Some(match image::save_buffer(&path, &rgba, w as u32, h as u32, image::ColorType::Rgba8) {
+                        Ok(()) => format!("3D表示を保存しました: {}", path.display()),
+                        Err(e) => format!("3D表示を保存できませんでした: {e} (保存先のフォルダに書き込めるか確認してください)"),
+                    });
+                }
             }
             let mut hover = None;
             if let Some(c) = &v.cache {
@@ -451,6 +655,13 @@ impl BoardEditor {
                 }
             }
         });
+        if let Some(n) = new_net {
+            self.view3d.net = n;
+            self.apply_net_glow();
+        }
+        if let Some(n) = note {
+            self.status = n;
+        }
         if retex && let Some(s) = &mut self.view3d.scene {
             s.img = Scene::images(&s.pv, self.view3d.mask, self.view3d.silk);
             self.view3d.generation += 1;
@@ -555,6 +766,82 @@ mod tests {
         assert!(!gold(at(8.0, 12.0)) && !gold(at(20.0, 20.0)));
         // the copper of a pad ends where the pad ends (0.6 mm from its centre, but not 1 mm)
         assert!(gold(at(7.0 + 0.5, 12.0)) && !gold(at(7.0 - 1.0, 12.0)));
+    }
+
+    fn two_resistors() -> Board {
+        let mut b = Board::new("t", 40.0, 25.0);
+        for (x, name) in [(8.0, "R1"), (30.0, "R2")] {
+            for (dx, net) in [(-1.0, "A"), (1.0, "B")] {
+                let mut pad = Pad::new(Point::new(x + dx, 12.0), PadShape::Rect { w: 1.2, h: 1.6 }, None, Side::Top);
+                pad.refdes = name.into();
+                pad.net = net.into();
+                b.pads.push(pad);
+            }
+            b.parts.push(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: Point::new(x, 12.0), rot: 0, side: Side::Top });
+        }
+        b.tracks.push(pcb_core::Track { side: Side::Top, a: Point::new(9.0, 12.0), b: Point::new(15.0, 12.0), width: 0.5 });
+        b
+    }
+
+    fn top_view(s: &Scene) -> (Rect, Cam) {
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 500.0));
+        (rect, camera(s, rect, 0.0, std::f32::consts::FRAC_PI_2, 1.0, Vec2::ZERO))
+    }
+
+    #[test]
+    fn a_picked_net_lights_its_copper_and_nothing_else() {
+        let b = two_resistors();
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        assert_eq!(s.nets, vec!["A".to_string(), "B".to_string()]);
+        // net B: the pads at x=9 and x=31 and the track leaving the first
+        s.glow = net_glow(&b, &pcb_core::drc::connectivity(&b), "B");
+        assert!(!s.glow.is_empty() && s.glow.iter().all(|(bottom, _)| !bottom));
+        let (rect, cam) = top_view(&s);
+        let (img, ..) = snapshot(&s, rect, &cam, false, 1, None, None);
+        let at = |x: f64, y: f64| {
+            let (p, _) = cam.project([x, y, BOARD_THICKNESS]);
+            img[p.y.round() as usize * 800 + p.x.round() as usize]
+        };
+        let lit = |c: [u8; 4]| c[0] > 200 && c[1] < 100 && c[2] > 120;
+        assert!(lit(at(9.0, 12.0)) && lit(at(12.0, 12.0)) && lit(at(31.0, 12.0)), "pad, track, pad");
+        // the other net's pads (x=7, x=29) and bare board are not lit
+        assert!(!lit(at(7.0, 12.0)) && !lit(at(29.0, 12.0)) && !lit(at(20.0, 12.0)));
+        s.glow.clear();
+        let (img, ..) = snapshot(&s, rect, &cam, false, 1, None, None);
+        let (p, _) = cam.project([9.0, 12.0, BOARD_THICKNESS]);
+        assert!(!lit(img[p.y.round() as usize * 800 + p.x.round() as usize]));
+    }
+
+    #[test]
+    fn focusing_a_part_centres_it_and_fills_more_of_the_view() {
+        let b = two_resistors();
+        let s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 500.0));
+        let (pitch, zoom, pan) = focus_on(&s, 1, rect, 0.0, 0.9).unwrap();
+        assert!(zoom > 2.0, "a small part is magnified: {zoom}");
+        let cam = camera(&s, rect, 0.0, pitch, zoom, pan);
+        let (lo, hi) = (s.boxes.iter().filter(|b| b.part == 1).map(|b| b.lo[2]).fold(f64::MAX, f64::min), s.boxes.iter().filter(|b| b.part == 1).map(|b| b.hi[2]).fold(0.0, f64::max));
+        let (p, _) = cam.project([30.0, 12.0, (lo + hi) / 2.0]);
+        assert!((p.x - 400.0).abs() < 20.0 && (p.y - 250.0).abs() < 20.0, "{p:?}");
+        assert!(focus_on(&s, 9, rect, 0.0, 0.9).is_none());
+        // a part on the bottom is looked at from below
+        let mut b2 = two_resistors();
+        b2.parts[1].side = Side::Bottom;
+        let s2 = Scene::build(&b2, &egui::Context::default(), false, false).unwrap();
+        assert!(focus_on(&s2, 1, rect, 0.0, 0.9).unwrap().0 < 0.0);
+    }
+
+    #[test]
+    fn a_snapshot_is_a_clean_picture_of_the_window_size() {
+        let b = two_resistors();
+        let s = Scene::build(&b, &egui::Context::default(), true, true).unwrap();
+        let (rect, cam) = top_view(&s);
+        let (px, ids, w, h) = snapshot(&s, rect, &cam, true, 2, Some(0), Some(1));
+        assert_eq!((w, h, px.len(), ids.len()), (800, 500, 400_000, 400_000));
+        // hover / selected outlines are colours that only outlines use
+        assert!(px.iter().any(|c| c[..3] == [255, 230, 90]));
+        let (clean, ..) = snapshot(&s, rect, &cam, true, 2, None, None);
+        assert!(!clean.iter().any(|c| c[..3] == [255, 230, 90] || c[..3] == [90, 220, 255]));
     }
 
     #[test]
