@@ -155,6 +155,17 @@ impl BoardEditor {
                     self.pan = Vec2::new(at.x as f32, at.y as f32);
                     self.zoom = self.zoom.max(25.0);
                 }
+                let lacking = pcb_core::drc::thermal_via_checks(&self.board).len();
+                if lacking > 0
+                    && ui
+                        .button(format!("サーマルビアを置く ({lacking} 個の放熱パッド)"))
+                        .on_hover_text("放熱パッド (ICの裏のパッドなど) の中に、熱を裏面へ逃がすビアを格子状に置きます。そのあと、裏面に同じネット (たいてい GND) のゾーンを作ると、熱が基板全体に広がります")
+                        .clicked()
+                {
+                    self.checkpoint();
+                    let n = pcb_core::drc::add_thermal_vias(&mut self.board);
+                    self.status = if n > 0 { format!("サーマルビアを {n} 個置きました。裏面に同じネットのゾーンを作ってください") } else { "サーマルビアを置けませんでした (パッドが小さい、または他の穴に近すぎます)".into() };
+                }
                 if ui.button("3Dで見る…").on_hover_text("基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます").clicked() {
                     self.open_view3d();
                 }

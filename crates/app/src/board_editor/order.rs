@@ -169,7 +169,8 @@ impl BoardEditor {
                 });
                 if !c.detail.is_empty() && c.level != Level::Ok {
                     ui.indent(("detail", &c.title), |ui| {
-                        ui.small(&c.detail);
+                        // the explanation is the part to read: normal size, not the small print
+                        ui.label(&c.detail);
                     });
                 }
             }

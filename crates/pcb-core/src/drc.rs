@@ -528,11 +528,64 @@ pub fn heat_pads(board: &Board) -> Vec<(usize, f64)> {
     out
 }
 
+/// A pour that touches a heat pad spreads its heat when the copper piece it sits in is at least this big (mm²,
+/// about 10 × 10 mm); then half the thermal vias are enough. A small piece (cut up by other nets' copper, or
+/// a pour that is only an island around the pad) spreads little, so the full number stays.
+pub const POUR_SPREAD_AREA: f64 = 100.0;
+
+/// How many thermal vias a heat pad of `area` mm² should have, given the copper (mm²) of the same-net pour
+/// piece it sits in (0 = no pour): about one per 2.5 mm², at least two; half that with a big pour (at least one).
+pub fn thermal_via_need(area: f64, pour_area: f64) -> usize {
+    let base = ((area / 2.5).ceil() as usize).clamp(2, 9);
+    if pour_area >= POUR_SPREAD_AREA { base.div_ceil(2).max(1) } else { base }
+}
+
+/// The actual copper of every pour (what `zonefill` draws), to see how much copper a pad sits in.
+struct PourFills {
+    fills: Vec<(Side, String, Vec<crate::zonefill::FillShape>)>,
+}
+
+impl PourFills {
+    fn new(board: &Board) -> Self {
+        if board.zones.is_empty() {
+            return Self { fills: vec![] };
+        }
+        let conn = connectivity(board);
+        Self { fills: board.zones.iter().map(|z| (z.side, z.net.clone(), crate::zonefill::zone_fill(board, z, &conn))).collect() }
+    }
+
+    /// Copper (mm²) of the piece of a same-net pour on the pad's side that the pad sits in; 0 when no pour touches it.
+    fn area_at(&self, pad: &Pad) -> f64 {
+        use crate::geom::{inside_polygon, signed_area};
+        if pad.net.is_empty() {
+            return 0.0;
+        }
+        let mut best = 0.0f64;
+        for (side, net, shapes) in &self.fills {
+            if *side != pad.side || *net != pad.net {
+                continue;
+            }
+            for sh in shapes {
+                if inside_polygon(&sh.outer, pad.pos) && !sh.holes.iter().any(|h| inside_polygon(h, pad.pos)) {
+                    best = best.max(signed_area(&sh.outer).abs() - sh.holes.iter().map(|h| signed_area(h).abs()).sum::<f64>());
+                }
+            }
+        }
+        best
+    }
+}
+
 /// Thermal vias: a heat pad needs vias in it that carry the heat through the board to copper on the back (about one
-/// per 2.5 mm², at least two). Without them the heat has only the small top-side copper to spread in.
+/// per 2.5 mm², at least two; half that when a big pour of the pad's net touches it). Without them the heat has
+/// only the small top-side copper to spread in.
 pub fn thermal_via_checks(board: &Board) -> Vec<Violation> {
     let mut out = vec![];
-    for (i, area) in heat_pads(board) {
+    let heat = heat_pads(board);
+    if heat.is_empty() {
+        return out;
+    }
+    let pours = PourFills::new(board);
+    for (i, area) in heat {
         let p = &board.pads[i];
         let (w, h) = p.shape.size();
         let inside = |c: Point| match p.shape {
@@ -540,11 +593,22 @@ pub fn thermal_via_checks(board: &Board) -> Vec<Violation> {
             _ => (c.x - p.pos.x).abs() <= w / 2.0 && (c.y - p.pos.y).abs() <= h / 2.0,
         };
         let have = board.vias.iter().filter(|v| inside(v.pos)).count();
-        let need = ((area / 2.5).ceil() as usize).clamp(2, 9);
+        let pour = pours.area_at(p);
+        let need = thermal_via_need(area, pour);
         if have < need {
+            let pour_note = if pour >= POUR_SPREAD_AREA {
+                format!("接しているベタ: 約 {pour:.0}mm² (広いので、目安をベタなしの半分にしています)")
+            } else if pour > 0.0 {
+                format!("接しているベタ: 約 {pour:.0}mm² ({POUR_SPREAD_AREA:.0}mm² に足りず、熱があまり広がらないので、目安はそのままです。ベタが他のネットの銅で細かく切られていないか確認してください)")
+            } else {
+                format!("接しているベタ: なし (同じネットのベタ {POUR_SPREAD_AREA:.0}mm² 以上が接していれば、目安は半分になります)")
+            };
             out.push(v(
                 format!(
-                    "{}.{} は放熱パッド (面積 {area:.1}mm²) ですが、中に熱を裏面へ逃がすビア (サーマルビア) が {have} 個しかありません ({need} 個以上が目安)。パッドの中にビアを格子状に置いて (穴 0.3mm くらい)、裏面の同じネットの銅 (ゾーン) につなぐと、熱が基板全体に広がります",
+                    "{}.{} は放熱パッドです (面積 {area:.1}mm²)。
+推奨: サーマルビア {need} 個以上 (いま {have} 個)
+{pour_note}
+意味: サーマルビアは、部品の熱を裏面の銅へ逃がす穴です。パッドの中に格子状に置き (穴 0.3mm くらい)、裏面の同じネットの銅 (ゾーン) につなぐと、熱が基板全体に広がります。基板エディタの「サーマルビアを置く」で自動で置けます",
                     p.refdes, p.pin
                 ),
                 p.pos,
@@ -552,6 +616,58 @@ pub fn thermal_via_checks(board: &Board) -> Vec<Violation> {
         }
     }
     out
+}
+
+/// Put the missing thermal vias into the heat pads: a grid of 0.3 mm vias inside each pad that has fewer than the
+/// check asks for. The vias join the pad's copper (and so its net); joining the copper on the back is up to the
+/// user's pour. Returns how many vias were added; nothing is added when that would make the DRC worse.
+pub fn add_thermal_vias(board: &mut Board) -> usize {
+    let drill = board.rules.min_drill.max(0.3);
+    let dia = drill + 0.3;
+    let gap = dia + board.rules.min_clearance;
+    let margin = dia / 2.0 + 0.1;
+    let before = check(board).len();
+    let backup = board.vias.len();
+    let pours = PourFills::new(board);
+    for (i, area) in heat_pads(board) {
+        let p = board.pads[i].clone();
+        let (w, h) = p.shape.size();
+        let inside = |c: Point, m: f64| match p.shape {
+            PadShape::Circle { d } => c.dist(p.pos) <= d / 2.0 - m,
+            _ => (c.x - p.pos.x).abs() <= w / 2.0 - m && (c.y - p.pos.y).abs() <= h / 2.0 - m,
+        };
+        let have = board.vias.iter().filter(|v| inside(v.pos, 0.0)).count();
+        let need = thermal_via_need(area, pours.area_at(&p));
+        if have >= need {
+            continue;
+        }
+        let (iw, ih) = ((w - 2.0 * margin).max(0.0), (h - 2.0 * margin).max(0.0));
+        // a grid of about the pad's proportions with enough cells, as tight as the via spacing allows
+        let fit = |len: f64| (len / gap).floor() as usize + 1;
+        let (max_x, max_y) = (fit(iw), fit(ih));
+        let nx = (((need as f64) * iw.max(0.1) / ih.max(0.1)).sqrt().ceil() as usize).clamp(1, max_x);
+        let ny = need.div_ceil(nx).clamp(1, max_y);
+        let at = |k: usize, n: usize, len: f64| if n == 1 { 0.0 } else { -len / 2.0 + len * k as f64 / (n - 1) as f64 };
+        let mut have = have;
+        'grid: for iy in 0..ny {
+            for ix in 0..nx {
+                if have >= need {
+                    break 'grid;
+                }
+                let c = Point::new(p.pos.x + at(ix, nx, iw), p.pos.y + at(iy, ny, ih));
+                let near = board.vias.iter().any(|v| v.pos.dist(c) < gap) || board.pads.iter().enumerate().any(|(j, q)| j != i && q.drill.is_some() && q.pos.dist(c) < gap);
+                if inside(c, margin - 0.1) && !near {
+                    board.vias.push(Via { pos: c, diameter: dia, drill });
+                    have += 1;
+                }
+            }
+        }
+    }
+    if check(board).len() > before {
+        board.vias.truncate(backup);
+        return 0;
+    }
+    board.vias.len() - backup
 }
 
 /// A copper pour piece thinner than this (mm, as an equivalent strip width) is a sliver.
@@ -880,6 +996,64 @@ mod tests {
         b.zones.push(z(5.0, 5.0, 25.0, 5.12));
         let v = zone_checks(&b);
         assert!(v.iter().any(|x| x.message.contains("スリバー")), "{v:?}");
+    }
+
+    #[test]
+    fn thermal_vias_are_placed_in_the_heat_pad() {
+        let mut b = board();
+        for (x, y, w, h, pin) in [(10.0, 10.0, 2.0, 1.5, "1"), (10.0, 12.3, 2.0, 1.5, "2"), (16.0, 11.0, 2.0, 3.8, "3")] {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, None, Side::Top);
+            p.refdes = "U1".into();
+            p.pin = pin.into();
+            b.pads.push(p);
+        }
+        assert_eq!(thermal_via_checks(&b).len(), 1);
+        let before = check(&b).len();
+        let n = add_thermal_vias(&mut b);
+        assert!(n >= 4, "added {n}");
+        assert!(thermal_via_checks(&b).is_empty(), "{:?}", thermal_via_checks(&b));
+        assert!(check(&b).len() <= before, "the new vias must not add DRC errors: {:?}", check(&b));
+        // nothing more to add the second time
+        assert_eq!(add_thermal_vias(&mut b), 0);
+    }
+
+    #[test]
+    fn a_big_pour_halves_the_thermal_vias_but_a_small_one_does_not() {
+        let tab_board = || {
+            let mut b = board();
+            for (x, y, w, h, pin, net) in [(10.0, 10.0, 2.0, 1.5, "1", "VIN"), (10.0, 12.3, 2.0, 1.5, "2", "VOUT"), (16.0, 11.0, 2.0, 3.8, "3", "GND")] {
+                let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, None, Side::Top);
+                p.refdes = "U1".into();
+                p.pin = pin.into();
+                p.net = net.into();
+                b.pads.push(p);
+            }
+            b
+        };
+        let rect = |x0: f64, y0: f64, x1: f64, y1: f64| vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)];
+        // no pour: 7.6 mm2 asks for 4
+        let b = tab_board();
+        assert!(thermal_via_checks(&b)[0].message.contains("4 個以上") && thermal_via_checks(&b)[0].message.contains("接しているベタ: なし"));
+        // a 20 x 20 mm GND pour around the tab: half, so 2 vias are enough
+        let mut big = tab_board();
+        big.zones.push(Zone::new("GND", Side::Top, rect(14.0, 5.0, 34.0, 25.0)));
+        let msg = thermal_via_checks(&big)[0].message.clone();
+        assert!(msg.contains("2 個以上") && msg.contains("半分"), "{msg}");
+        for dy in [-0.9, 0.9] {
+            big.vias.push(Via { pos: Point::new(16.0, 11.0 + dy), diameter: 0.6, drill: 0.3 });
+        }
+        assert!(thermal_via_checks(&big).is_empty(), "{:?}", thermal_via_checks(&big));
+        // a 6 x 6 mm pour (an island around the tab) is too small to spread heat: the full number stays
+        let mut small = tab_board();
+        small.zones.push(Zone::new("GND", Side::Top, rect(14.0, 8.0, 20.0, 14.0)));
+        let msg = thermal_via_checks(&small)[0].message.clone();
+        assert!(msg.contains("4 個以上") && msg.contains("足りず"), "{msg}");
+        // a GND pour on another net's tab does not count
+        let mut other = tab_board();
+        other.zones.push(Zone::new("VIN", Side::Top, rect(14.0, 5.0, 34.0, 25.0)));
+        assert!(thermal_via_checks(&other)[0].message.contains("接しているベタ: なし"));
+        // the auto-placer follows the same count
+        assert_eq!(add_thermal_vias(&mut big), 0, "already enough with the pour");
     }
 
     #[test]
