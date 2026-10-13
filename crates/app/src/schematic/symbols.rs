@@ -173,6 +173,10 @@ pub(super) fn sym_extents(sym: &CustomSymbol) -> (f32, f32, f32, f32) {
         return (-2., 2., -1., 1.);
     }
     let l = sym.layout();
+    // a compact diode / battery: the leads are the whole width, the body is one step each side of the line
+    if l.hw == 0 && l.hh == 1 {
+        return (-2., 2., -1., 1.);
+    }
     let (w, h) = ((l.hw + 2) as f32, (l.hh + 2) as f32);
     (-w, w, -h, h)
 }

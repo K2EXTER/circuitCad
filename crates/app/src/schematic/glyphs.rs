@@ -322,3 +322,20 @@ mod tests {
         assert!(n >= 45, "only {n} parts got a standard symbol");
     }
 }
+
+#[cfg(test)]
+mod size_tests {
+    use super::super::symbols::sym_extents;
+
+    /// New parts with a small symbol also take a small place on the sheet (overlap check, label position).
+    #[test]
+    fn compact_parts_have_small_extents() {
+        let get = |n: &str| {
+            let (_, t) = part_lib::EXAMPLES.iter().find(|(f, _)| f.starts_with(n)).unwrap();
+            serde_json::from_str::<part_lib::PartDef>(t).unwrap().symbol()
+        };
+        assert_eq!(sym_extents(&get("1N4007")), (-2., 2., -1., 1.));
+        assert_eq!(sym_extents(&get("CR2032")), (-2., 2., -1., 1.));
+        assert_eq!(sym_extents(&get("BC547")), (-2., 2., -2., 2.));
+    }
+}
