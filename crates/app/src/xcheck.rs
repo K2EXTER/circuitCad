@@ -3,7 +3,7 @@
 //! `circuitCad --xcheck <file.schjson | folder> [--ngspice <exe>] [--out report.txt]`
 //! The app has no console on Windows, so the report always goes to a file (default `xcheck_report.txt`).
 
-use sch_core::{extract, spice_node, to_spice, to_spice_for, Dialect, Kind, Schematic};
+use sch_core::{extract, spice_node, to_spice_for, Dialect, Kind, Schematic};
 use sim_core::{dc_op, from_schematic, parse_source_full, parse_value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,6 +11,12 @@ use std::process::Command;
 /// A node agrees when |a-b| <= ABS_TOL + REL_TOL*max(|a|,|b|) (ngspice's own reltol is 1e-3, vntol 1 uV).
 const REL_TOL: f64 = 1e-3;
 const ABS_TOL: f64 = 1e-5;
+/// Currents are compared as `i(<source>)` entries, with their own absolute tolerance (ngspice's abstol is 1 pA).
+const ABS_TOL_I: f64 = 1e-9;
+
+fn tolerance(name: &str, a: f64, b: f64) -> f64 {
+    (if name.starts_with("i(") { ABS_TOL_I } else { ABS_TOL }) + REL_TOL * a.abs().max(b.abs())
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Outcome {
@@ -37,14 +43,35 @@ impl Outcome {
     }
 }
 
-/// Node voltages from ngspice's batch output (`.op` prints `name<TAB>value` lines). Names are lower-cased.
+/// Node voltages and source/inductor branch currents from ngspice's batch output (`.op` prints
+/// `name<TAB>value` lines). Names are lower-cased; `v1#branch` becomes `i(v1)`.
 pub fn parse_op_output(text: &str) -> Vec<(String, f64)> {
     let mut v = vec![];
     for line in text.lines() {
         let mut t = line.split_whitespace();
-        let (Some(name), Some(val), None) = (t.next(), t.next(), t.next()) else { continue };
-        // branch currents (`v1#branch`) and device internals are not node voltages
-        if name.contains('#') || name.contains('[') {
+        let (Some(name), Some(mut val)) = (t.next(), t.next()) else { continue };
+        // `print` lines read `name = value`, the older table `name value`
+        if val == "=" {
+            let Some(x) = t.next() else { continue };
+            val = x;
+        }
+        if t.next().is_some() {
+            continue;
+        }
+        // `@r1[i]`, `@d1[id]`, `@q1[ic]`: a device current, named like a source current
+        if let Some(dev) = name.strip_prefix('@').and_then(|n| n.split('[').next()) {
+            if let Ok(x) = val.parse::<f64>() {
+                v.push((format!("i({})", dev.to_ascii_lowercase()), x));
+            }
+            continue;
+        }
+        if name.contains('[') {
+            continue;
+        }
+        if let Some(src) = name.strip_suffix("#branch") {
+            if let Ok(x) = val.parse::<f64>() {
+                v.push((format!("i({})", src.to_ascii_lowercase()), x));
+            }
             continue;
         }
         if let Ok(x) = val.parse::<f64>()
@@ -64,7 +91,7 @@ pub fn compare(ours: &[(String, f64)], theirs: &[(String, f64)]) -> Outcome {
         n += 1;
         let d = (a - b).abs();
         // rank by how far past its own tolerance a node is, so the worst offender is named
-        let excess = d / (ABS_TOL + REL_TOL * a.abs().max(b.abs()));
+        let excess = d / tolerance(&name.to_ascii_lowercase(), *a, *b);
         if excess > 1.0 {
             bad += 1;
         }
@@ -111,8 +138,9 @@ pub fn check_schematic(s: &Schematic, exe: &Path, work: &Path, tag: &str) -> Out
     };
     let ours = dc_op(&circuit);
 
-    let mut deck = to_spice_for(s, tag, Dialect::Ngspice);
-    deck = deck.replace("\n.end\n", "\n.op\n.end\n");
+    let body = to_spice_for(s, tag, Dialect::Ngspice);
+    let body = body.strip_suffix(".end\n").unwrap_or(&body);
+    let deck = analysis_deck(body, None);
     let theirs = match run_ngspice(exe, work, tag, &deck) {
         Ok(v) => v,
         Err(m) => return Outcome::Failed(match &ours {
@@ -127,23 +155,79 @@ pub fn check_schematic(s: &Schematic, exe: &Path, work: &Path, tag: &str) -> Out
 
     // only nets of the schematic, under the names to_spice gave them
     let nets: Vec<String> = extract(s).iter().map(|n| n.name.clone()).collect();
-    let mine: Vec<(String, f64)> = ours
+    let mut mine: Vec<(String, f64)> = ours
         .voltages
         .iter()
         .filter(|(n, _)| nets.contains(n))
         .map(|(n, v)| (spice_node(n), *v))
         .filter(|(n, _)| n != "0")
+        .chain(ours.elements.iter().map(|e| (format!("i({})", e.name.to_ascii_lowercase()), e.current)))
         .collect();
+    let theirs = alias_cards(theirs, &mut mine);
     let first = compare(&mine, &theirs);
     let Outcome::Differ { nodes, worst, ours: a, theirs: b, .. } = &first else { return first };
     // retry with ngspice's leakage turned (almost) off
-    let low = deck.replace("\n.op\n", "\n.options gmin=1e-15\n.op\n");
+    let low = analysis_deck(body, Some(1e-15));
     match run_ngspice(exe, work, &format!("{tag}_lowgmin"), &low) {
-        Ok(t2) if matches!(compare(&mine, &t2), Outcome::Match { .. }) => {
+        Ok(t2) if matches!(compare(&mine, &alias_cards(t2.clone(), &mut mine.clone())), Outcome::Match { .. }) => {
             Outcome::MatchLowGmin { nodes: *nodes, node: worst.clone(), ours: *a, theirs: *b }
         }
         _ => first,
     }
+}
+
+/// The deck plus an operating-point run that prints every node voltage, every source current and
+/// the current of each top-level resistor, diode, BJT and MOSFET (`.op` alone prints no device currents).
+fn analysis_deck(body: &str, gmin: Option<f64>) -> String {
+    let mut deck = body.to_string();
+    // ngspice's default reltol (1e-3) leaves its own currents inconsistent with each other (a diode
+    // 3.6 % off the resistor in series with it), so solve as tightly as our engine does
+    deck.push_str(".options reltol=1e-6 vntol=1e-8 abstol=1e-12\n");
+    if let Some(g) = gmin {
+        deck.push_str(&format!(".options gmin={g:e}\n"));
+    }
+    deck.push_str(".control\nset noaskquit\nop\nprint all\n");
+    // element cards come first, before the first dot card
+    for line in body.lines().skip(1).take_while(|l| !l.starts_with('.')) {
+        let Some(card) = line.split_whitespace().next().filter(|c| !c.starts_with(['*', '+'])) else { continue };
+        let prop = match card.chars().next().map(|c| c.to_ascii_uppercase()) {
+            Some('R') => "i",
+            Some('D' | 'M') => "id",
+            Some('Q') => "ic",
+            _ => continue,
+        };
+        deck.push_str(&format!("print @{}[{prop}]\n", card.to_ascii_lowercase()));
+    }
+    deck.push_str(".endc\n.end\n");
+    deck
+}
+
+/// Our MOSFET is `Q1` while the card is `MQ1`: let the ngspice name follow ours when only that differs.
+///
+/// ngspice reports a PMOS drain current with the opposite sign when the channel conducts the other
+/// way round (drain above source), while the node voltages and the neighbours' currents agree with
+/// ours. So MOSFET currents are compared by size: both sides are made positive.
+fn alias_cards(theirs: Vec<(String, f64)>, mine: &mut [(String, f64)]) -> Vec<(String, f64)> {
+    let mut mos = vec![];
+    let out = theirs
+        .into_iter()
+        .map(|(n, v)| {
+            let inner = n.strip_prefix("i(m").and_then(|r| r.strip_suffix(')')).map(|r| format!("i({r})"));
+            match inner {
+                Some(alias) if mine.iter().any(|(m, _)| *m == alias) && !mine.iter().any(|(m, _)| *m == n) => {
+                    mos.push(alias.clone());
+                    (alias, v.abs())
+                }
+                _ => (n, v),
+            }
+        })
+        .collect();
+    for (m, v) in mine.iter_mut() {
+        if mos.contains(m) {
+            *v = v.abs();
+        }
+    }
+    out
 }
 
 /// Run ngspice in batch mode on a deck; returns its node voltages or why it gave none.
@@ -162,12 +246,12 @@ fn run_ngspice(exe: &Path, work: &Path, tag: &str, deck: &str) -> Result<Vec<(St
 
 fn describe(o: &Outcome) -> String {
     match o {
-        Outcome::Match { nodes } => format!("{nodes} ノード"),
+        Outcome::Match { nodes } => format!("{nodes} 値 (電圧と電流)"),
         Outcome::MatchLowGmin { nodes, node, ours, theirs } => format!(
-            "{nodes} ノード。ngspice の既定gmin(1e-12)では {node} が 自前={ours:.4e} ngspice={theirs:.4e} とずれるが、gmin=1e-15 なら一致 (自前は gmin→0 の値)"
+            "{nodes} 値。ngspice の既定gmin(1e-12)では {node} が 自前={ours:.4e} ngspice={theirs:.4e} とずれるが、gmin=1e-15 なら一致 (自前は gmin→0 の値)"
         ),
         Outcome::Differ { nodes, worst, ours, theirs, bad } => {
-            format!("{bad}/{nodes} ノードがズレ。最大: {worst} 自前={ours:.6} ngspice={theirs:.6} (差 {:.3e})", (ours - theirs).abs())
+            format!("{bad}/{nodes} 値がズレ。最大: {worst} 自前={ours:.6e} ngspice={theirs:.6e} (差 {:.3e})", (ours - theirs).abs())
         }
         Outcome::Skipped(m) | Outcome::Failed(m) => m.clone(),
     }
@@ -190,7 +274,7 @@ pub fn run_path(path: &Path, exe: &Path) -> String {
     };
     let work = std::env::temp_dir().join("circuitcad_xcheck");
     let _ = std::fs::create_dir_all(&work);
-    let mut report = format!("DC動作点の検算 (自前エンジン vs ngspice)  許容: 相対{REL_TOL} + 絶対{ABS_TOL}V\n\n");
+    let mut report = format!("DC動作点の検算 (自前エンジン vs ngspice)  許容: 相対{REL_TOL} + 絶対{ABS_TOL}V (電流は{ABS_TOL_I}A)\n\n");
     let mut counts = [0usize; 5];
     for f in &files {
         let tag = f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
@@ -229,12 +313,36 @@ pub fn run_cli(args: &[String]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sch_core::to_spice;
 
     #[test]
     fn parses_ngspice_op_lines() {
         let text = "Doing analysis at TEMP = 27.000000\n\tin                               1.000000e+01\n\tOut\t5.000000e+00\n\tv1#branch                        -5.00000e-03\nNo. of Data Rows : 1\n";
         let v = parse_op_output(text);
-        assert_eq!(v, vec![("in".to_string(), 10.0), ("out".to_string(), 5.0)]);
+        assert_eq!(v, vec![("in".to_string(), 10.0), ("out".to_string(), 5.0), ("i(v1)".to_string(), -5e-3)]);
+    }
+
+    #[test]
+    fn parses_print_lines_and_builds_the_analysis_deck() {
+        let v = parse_op_output("n_2 = 1.948002e+00\nv1#branch = -9.24848e-03\n@r1[i] = 9.248479e-03\n@mq1[id] = -2.7e-02\n");
+        assert_eq!(
+            v,
+            vec![("n_2".to_string(), 1.948002), ("i(v1)".to_string(), -9.24848e-3), ("i(r1)".to_string(), 9.248479e-3), ("i(mq1)".to_string(), -2.7e-2)]
+        );
+        let deck = analysis_deck("* t\nV1 a 0 DC 5\nR1 a b 1k\nD1 b 0 DDEF\nQ1 c b 0 QNPN\nMQ2 a b 0 0 NM\nXU1 a b SUB\n.model DDEF D\n", None);
+        for want in ["print @r1[i]\n", "print @d1[id]\n", "print @q1[ic]\n", "print @mq2[id]\n", "reltol=1e-6"] {
+            assert!(deck.contains(want), "{want} missing in {deck}");
+        }
+        assert!(!deck.contains("@v1") && !deck.contains("@xu1"));
+        assert!(analysis_deck("* t\nR1 a 0 1\n", Some(1e-15)).contains("gmin=1e-15"));
+    }
+
+    #[test]
+    fn mosfet_currents_are_compared_by_size() {
+        let mut mine = vec![("i(q1)".to_string(), 0.027)];
+        let theirs = alias_cards(vec![("i(mq1)".to_string(), -0.027)], &mut mine);
+        assert_eq!(theirs, vec![("i(q1)".to_string(), 0.027)]);
+        assert!(matches!(compare(&mine, &theirs), Outcome::Match { .. }));
     }
 
     #[test]
