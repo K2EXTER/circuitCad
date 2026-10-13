@@ -170,7 +170,7 @@ struct Visible {
 
 pub struct BoardEditor {
     pub board: Board,
-    path: Option<PathBuf>,
+    pub path: Option<PathBuf>,
     tool: Tool,
     side: Side,
     grid: f64,
@@ -210,6 +210,11 @@ pub struct BoardEditor {
     pub help_request: Option<crate::help::HelpTab>,
     violations: Vec<drc::Violation>,
     import_notes: Vec<String>,
+    /// Counts changes (one per `checkpoint`) and replaced boards; `saved_rev` is its value when the board was last saved or opened.
+    pub rev: u64,
+    saved_rev: u64,
+    /// How the schematic differs from this board, with the (schematic rev, board rev) it was worked out for.
+    sync_cache: Option<((u64, u64), file::SchDiff)>,
     undo: Vec<Board>,
     redo: Vec<Board>,
     vis: Visible,
@@ -278,6 +283,9 @@ impl Default for BoardEditor {
             help_request: None,
             violations: vec![],
             import_notes: vec![],
+            rev: 0,
+            saved_rev: 0,
+            sync_cache: None,
             undo: vec![],
             redo: vec![],
             pick: Pickable::ALL,

@@ -24,12 +24,32 @@ impl SchEditor {
             self.undo.remove(0);
         }
         self.redo.clear();
+        self.rev += 1;
     }
 
     pub(super) fn reset_history(&mut self) {
         self.undo.clear();
         self.redo.clear();
         self.committed = self.sch.clone();
+        // a sheet that was just opened or replaced counts as saved
+        self.rev += 1;
+        self.saved_rev = self.rev;
+    }
+
+    #[cfg(test)]
+    pub fn commit_history_for_test(&mut self) {
+        self.commit_history();
+    }
+
+    /// Has the sheet changed since it was last saved or opened?
+    pub fn dirty(&self) -> bool {
+        self.rev != self.saved_rev || self.sch != self.committed
+    }
+
+    /// The sheet was just written to a file.
+    pub fn mark_saved(&mut self) {
+        self.commit_history();
+        self.saved_rev = self.rev;
     }
 
     pub fn undo(&mut self) {
@@ -49,6 +69,7 @@ impl SchEditor {
     }
 
     pub(super) fn after_history(&mut self, msg: &str) {
+        self.rev += 1;
         self.committed = self.sch.clone();
         self.selected = None;
         self.multi.clear();

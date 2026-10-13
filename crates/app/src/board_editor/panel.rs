@@ -86,6 +86,11 @@ impl BoardEditor {
                 if ui.button("回路図から取り込み").on_hover_text("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します").clicked() {
                     self.import_from_schematic(sch);
                 }
+                let diff = self.schematic_diff(sch).clone();
+                if !diff.is_empty() {
+                    ui.colored_label(Color32::from_rgb(255, 180, 60), format!("回路図と違います: {}", diff.summary()))
+                        .on_hover_text("取り込んだあとに、回路図が変わったか、基板が変わりました。「回路図から取り込み」を押すと、基板の部品の位置と配線は残したまま、値・形・つながりが回路図に合わせて更新されます");
+                }
                 for n in &self.import_notes {
                     ui.colored_label(Color32::from_rgb(255, 180, 60), n);
                 }

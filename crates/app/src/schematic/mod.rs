@@ -77,6 +77,9 @@ pub struct SchEditor {
     undo: Vec<Schematic>,
     redo: Vec<Schematic>,
     committed: Schematic,
+    /// Counts every committed edit and every replaced sheet; `saved_rev` is its value when the sheet was last saved or opened.
+    pub rev: u64,
+    saved_rev: u64,
     /// Value slider: (component, the value the slider is centred on, the text it last wrote).
     slider: Option<(usize, f64, String)>,
     /// How far the value slider reaches from the centre, in decades (0.3 = 1/2..2x, 1 = 1/10..10x, 2 = 1/100..100x).
@@ -84,7 +87,7 @@ pub struct SchEditor {
     /// Re-run the open analysis whenever the circuit changes.
     live: bool,
     live_snap: Schematic,
-    path: Option<PathBuf>,
+    pub path: Option<PathBuf>,
     tool: Tool,
     place: Kind,
     rot: u8,
@@ -486,6 +489,8 @@ impl Default for SchEditor {
             undo: vec![],
             redo: vec![],
             committed: Schematic::default(),
+            rev: 0,
+            saved_rev: 0,
             slider: None,
             slider_span: 1.0,
             live: false,

@@ -17,6 +17,7 @@ impl BoardEditor {
             self.status = match serde_json::to_string_pretty(&self.board).map(|s| std::fs::write(&p, s)) {
                 Ok(Ok(())) => {
                     self.path = Some(p.clone());
+                    self.mark_saved();
                     format!("保存しました: {}", p.display())
                 }
                 Ok(Err(e)) => format!("保存失敗: {e}"),
@@ -56,6 +57,9 @@ impl BoardEditor {
         self.undo.clear();
         self.redo.clear();
         self.fit_pending = true;
+        // a board that was just opened counts as saved
+        self.rev += 1;
+        self.saved_rev = self.rev;
     }
 
     pub fn export(&mut self) {
@@ -86,8 +90,8 @@ impl BoardEditor {
         Ok(n)
     }
 
-    pub fn import_from_schematic(&mut self, sch_ed: &SchEditor) {
-        let sch = &sch_ed.sch;
+    /// The parts and nets of the schematic as the board import sees them.
+    fn netlist_of(sch: &sch_core::Schematic) -> (Vec<NetlistPart>, Vec<NetlistNet>) {
         let parts: Vec<NetlistPart> = sch
             .components
             .iter()
@@ -113,6 +117,45 @@ impl BoardEditor {
                     .collect(),
             })
             .collect();
+        (parts, nets)
+    }
+
+    /// How the schematic differs from the board right now (what "回路図から取り込み" would change); worked out again
+    /// only when the schematic or the board changed. Empty when the board has no parts yet (nothing imported).
+    pub fn schematic_diff(&mut self, sch_ed: &SchEditor) -> &SchDiff {
+        let key = (sch_ed.rev, self.rev);
+        if self.sync_cache.as_ref().is_none_or(|(k, _)| *k != key) {
+            let diff = if self.board.parts.is_empty() { SchDiff::default() } else { self.diff_against(&sch_ed.sch) };
+            self.sync_cache = Some((key, diff));
+        }
+        &self.sync_cache.as_ref().unwrap().1
+    }
+
+    fn diff_against(&self, sch: &sch_core::Schematic) -> SchDiff {
+        let (parts, nets) = Self::netlist_of(sch);
+        let mut d = SchDiff::default();
+        for p in &parts {
+            match self.board.parts.iter().find(|b| b.refdes == p.refdes) {
+                None => d.added.push(p.refdes.clone()),
+                Some(b) if b.value != p.value || b.footprint != p.footprint => d.changed.push(p.refdes.clone()),
+                Some(_) => {}
+            }
+        }
+        d.removed = self.board.parts.iter().filter(|b| !parts.iter().any(|p| p.refdes == b.refdes)).map(|b| b.refdes.clone()).collect();
+        let expected: std::collections::HashMap<(&str, &str), &str> = nets.iter().flat_map(|n| n.pins.iter().map(move |(r, p)| ((r.as_str(), p.as_str()), n.name.as_str()))).collect();
+        d.nets = self
+            .board
+            .pads
+            .iter()
+            .filter(|p| !p.refdes.is_empty() && parts.iter().any(|q| q.refdes == p.refdes))
+            .filter(|p| p.net != expected.get(&(p.refdes.as_str(), p.pin.as_str())).copied().unwrap_or(""))
+            .count();
+        d
+    }
+
+    pub fn import_from_schematic(&mut self, sch_ed: &SchEditor) {
+        let sch = &sch_ed.sch;
+        let (parts, nets) = Self::netlist_of(sch);
         // library parts bring their own footprint
         self.checkpoint();
         for c in sch.components.iter().filter(|c| c.custom.is_some()) {
@@ -126,5 +169,46 @@ impl BoardEditor {
         self.multi.clear();
         self.import_notes = rep.warnings.clone();
         self.status = format!("取り込み完了: 追加 {} / 更新 {} / 削除 {} / 警告 {}", rep.added.len(), rep.updated, rep.removed.len(), rep.warnings.len());
+    }
+}
+
+/// What differs between the schematic and the board (see `BoardEditor::schematic_diff`).
+#[derive(Default, Clone, Debug)]
+pub struct SchDiff {
+    /// Parts only the schematic has.
+    pub added: Vec<String>,
+    /// Parts only the board has.
+    pub removed: Vec<String>,
+    /// Parts whose value or footprint differs.
+    pub changed: Vec<String>,
+    /// Pads whose net differs from the schematic's.
+    pub nets: usize,
+}
+
+impl SchDiff {
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty() && self.nets == 0
+    }
+
+    /// "追加 2 (R3 C4) / 削除 1 …", for the status line and the tooltip.
+    pub fn summary(&self) -> String {
+        let list = |v: &Vec<String>| {
+            let shown: Vec<&str> = v.iter().take(4).map(|s| s.as_str()).collect();
+            format!("{} ({}{})", v.len(), shown.join(" "), if v.len() > 4 { " …" } else { "" })
+        };
+        let mut t = vec![];
+        if !self.added.is_empty() {
+            t.push(format!("追加 {}", list(&self.added)));
+        }
+        if !self.removed.is_empty() {
+            t.push(format!("削除 {}", list(&self.removed)));
+        }
+        if !self.changed.is_empty() {
+            t.push(format!("値・形が違う {}", list(&self.changed)));
+        }
+        if self.nets > 0 {
+            t.push(format!("つなぎが違うパッド {}", self.nets));
+        }
+        t.join(" / ")
     }
 }

@@ -59,15 +59,90 @@ struct App {
     auto_shot: Option<(std::path::PathBuf, u32)>,
     /// The `.ccproj` file the schematic and board were opened from / last saved to.
     project: Option<std::path::PathBuf>,
+    /// Set once the user agreed to close (or a script closes the window), so the unsaved-changes question is not asked again.
+    closing_ok: bool,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None, project: None }
+        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None, project: None, closing_ok: false }
+    }
+}
+
+/// What the user answered to "there are unsaved changes".
+#[derive(PartialEq)]
+enum Ask {
+    Save,
+    Discard,
+    Cancel,
+}
+
+fn ask_unsaved(what: &str) -> Ask {
+    let r = rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Warning)
+        .set_title("保存していない変更があります")
+        .set_description(format!("{what}\n\nはい: 保存してから続ける\nいいえ: 保存せずに続ける (変更は失われます)\nキャンセル: やめる"))
+        .set_buttons(rfd::MessageButtons::YesNoCancel)
+        .show();
+    match r {
+        rfd::MessageDialogResult::Yes => Ask::Save,
+        rfd::MessageDialogResult::No => Ask::Discard,
+        _ => Ask::Cancel,
     }
 }
 
 impl App {
+    /// Has the schematic or the board changed since it was last saved or opened?
+    fn dirty(&self) -> bool {
+        self.sch.dirty() || self.board_ed.dirty()
+    }
+
+    /// Before the work is thrown away (open, new, close): when something is unsaved, ask. True = go on.
+    fn confirm_unsaved(&mut self, what: &str) -> bool {
+        if !self.dirty() {
+            return true;
+        }
+        match ask_unsaved(&format!("回路図か基板に、保存していない変更があります。{what}")) {
+            Ask::Cancel => false,
+            Ask::Discard => true,
+            Ask::Save => {
+                self.save_everything();
+                !self.dirty()
+            }
+        }
+    }
+
+    /// Like `confirm_unsaved`, for one editor only ("新規" and "開く" of the schematic or of the board).
+    fn confirm_unsaved_one(&mut self, schematic: bool, what: &str) -> bool {
+        let dirty = if schematic { self.sch.dirty() } else { self.board_ed.dirty() };
+        if !dirty {
+            return true;
+        }
+        match ask_unsaved(&format!("{}に、保存していない変更があります。{what}", if schematic { "回路図" } else { "基板" })) {
+            Ask::Cancel => false,
+            Ask::Discard => true,
+            Ask::Save => {
+                if schematic { self.sch.save(false) } else { self.board_ed.save(false) }
+                !(if schematic { self.sch.dirty() } else { self.board_ed.dirty() })
+            }
+        }
+    }
+
+    /// Save what changed: the project when there is one (or nothing was saved to its own file yet),
+    /// else the schematic and the board to their own files.
+    fn save_everything(&mut self) {
+        if self.project.is_some() || (self.sch.path.is_none() && self.board_ed.path.is_none()) {
+            self.save_project(false);
+        } else {
+            if self.sch.dirty() {
+                self.sch.save(false);
+            }
+            if self.board_ed.dirty() {
+                self.board_ed.save(false);
+            }
+        }
+    }
+
     /// Save the schematic and the board together; asks for the file when there is none yet or `as_new`.
     fn save_project(&mut self, as_new: bool) {
         let path = if as_new || self.project.is_none() {
@@ -80,6 +155,8 @@ impl App {
         let msg = match project::save(&p, &self.sch.sch, &self.board_ed.board) {
             Ok(()) => {
                 self.project = Some(p.clone());
+                self.sch.mark_saved();
+                self.board_ed.mark_saved();
                 format!("プロジェクトを保存しました (回路図と基板): {}", p.display())
             }
             Err(e) => format!("プロジェクトを保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
@@ -90,6 +167,9 @@ impl App {
 
     /// Open a project: both the schematic and the board are replaced.
     fn open_project(&mut self) {
+        if !self.confirm_unsaved("プロジェクトを開くと、いまの回路図と基板は置き換わります。") {
+            return;
+        }
         if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad プロジェクト", &[project::EXTENSION]).pick_file() {
             self.load_project(p);
         }
@@ -149,6 +229,8 @@ impl App {
             Err(e) => format!("画像を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
         };
         if self.auto_shot.take().is_some() {
+            // a script closes the window: no question
+            self.closing_ok = true;
             println!("{msg}");
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
         }
@@ -159,6 +241,14 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // closing the window with unsaved changes: ask first
+        if ui.ctx().input(|i| i.viewport().close_requested()) && !self.closing_ok && self.dirty() {
+            ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if self.confirm_unsaved("このまま閉じると、変更は失われます。") {
+                self.closing_ok = true;
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        }
         self.finish_screenshot(ui);
         self.tick_auto_screenshot(ui);
         // F1, and the small "操作" buttons of the panels, open the guide
@@ -197,7 +287,9 @@ impl eframe::App for App {
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.selectable_value(&mut self.mode, Mode::Schematic, "回路図").on_hover_text("回路図の画面。部品を置いて配線し、シミュレーションします");
-                ui.selectable_value(&mut self.mode, Mode::Board, "基板パターン").on_hover_text("基板の画面。回路図から部品を取り込んで、配置・配線します");
+                let stale = !self.board_ed.schematic_diff(&self.sch).is_empty();
+                ui.selectable_value(&mut self.mode, Mode::Board, if stale { "基板パターン ●" } else { "基板パターン" })
+                    .on_hover_text(if stale { "回路図と基板が合っていません。基板の画面で「回路図から取り込み」を押すと反映されます (詳しくは基板の左パネル)" } else { "基板の画面。回路図から部品を取り込んで、配置・配線します" });
                 ui.separator();
                 let sch_mode = self.mode == Mode::Schematic;
                 ui.menu_button("ファイル", |ui| {
@@ -215,11 +307,13 @@ impl eframe::App for App {
                     }
                     ui.separator();
                     ui.label(if sch_mode { "いまの回路図だけ" } else { "いまの基板だけ" });
-                    if ui.button("新規").on_hover_text("いまの図を空にして、新しく始めます").clicked() {
+                    if ui.button("新規").on_hover_text("いまの図を空にして、新しく始めます").clicked() && self.confirm_unsaved_one(sch_mode, "新規にすると、いまの図は消えます。") {
                         if sch_mode { self.sch.new_file() } else { self.board_ed.new_file() }
+                        ui.close();
                     }
-                    if ui.button("開く…").on_hover_text("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」").clicked() {
+                    if ui.button("開く…").on_hover_text("保存したファイルを開きます (回路図は .schjson、基板は .pcbjson)。回路図と基板をまとめて開くときは「プロジェクトを開く」").clicked() && self.confirm_unsaved_one(sch_mode, "開くと、いまの図は置き換わります。") {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
+                        ui.close();
                     }
                     if ui.button("保存").on_hover_text("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます").clicked() {
                         if sch_mode { self.sch.save(false) } else { self.board_ed.save(false) }
@@ -1865,4 +1959,52 @@ mod tests {
         assert!(need > 0.25 && b.tracks.len() >= 2);
         assert!(pcb_core::drc::check(b).is_empty());
     }
+    /// A fresh app has nothing to save; edits make the editors dirty and saving (or opening) makes them clean again.
+    #[test]
+    fn unsaved_changes_are_tracked() {
+        let mut app = App::default();
+        assert!(!app.dirty());
+        // a schematic edit counts once it is committed (the frame loop does this)
+        app.sch.sch.add(Kind::Resistor, (6, -6), 0);
+        assert!(app.sch.dirty() && app.dirty());
+        app.sch.mark_saved();
+        assert!(!app.sch.dirty());
+        // a board edit counts through `checkpoint`; importing is one
+        app.board_ed.import_from_schematic(&app.sch);
+        assert!(app.board_ed.dirty());
+        app.board_ed.mark_saved();
+        assert!(!app.dirty());
+        // a sheet or board that was just opened is clean, whatever was there before
+        app.sch.sch.add(Kind::Resistor, (12, -6), 0);
+        app.sch.adopt(sch_core::Schematic::default(), None);
+        app.board_ed.import_from_schematic(&app.sch);
+        app.board_ed.adopt(pcb_core::Board::new("x", 20.0, 20.0), None);
+        assert!(!app.dirty());
+    }
+
+    /// The board notices when the schematic changed after the import, and stops noticing after a new import.
+    #[test]
+    fn the_board_notices_a_changed_schematic() {
+        let mut app = App::default();
+        assert!(app.sch.load_sample(board_editor::BoardEditor::lesson_circuit()));
+        assert!(app.board_ed.schematic_diff(&app.sch).is_empty(), "nothing imported yet: nothing to compare");
+        app.board_ed.import_from_schematic(&app.sch);
+        assert!(app.board_ed.schematic_diff(&app.sch).is_empty(), "{:?}", app.board_ed.schematic_diff(&app.sch));
+        // a value changed
+        let first = app.sch.sch.components.iter().position(|c| matches!(c.kind, Kind::Resistor)).unwrap();
+        let name = app.sch.sch.components[first].refdes.clone();
+        app.sch.sch.components[first].value = "123k".into();
+        app.sch.commit_history_for_test();
+        assert_eq!(app.board_ed.schematic_diff(&app.sch).changed, vec![name]);
+        // a new part
+        let n = app.sch.sch.add(Kind::Resistor, (60, 60), 0);
+        app.sch.sch.components[n].refdes = "R99".into();
+        app.sch.commit_history_for_test();
+        assert!(app.board_ed.schematic_diff(&app.sch).added.contains(&"R99".to_string()));
+        assert!(app.board_ed.schematic_diff(&app.sch).summary().contains("R99"));
+        // importing again brings the board up to date
+        app.board_ed.import_from_schematic(&app.sch);
+        assert!(app.board_ed.schematic_diff(&app.sch).is_empty(), "{:?}", app.board_ed.schematic_diff(&app.sch));
+    }
+
 }

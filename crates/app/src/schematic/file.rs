@@ -17,6 +17,7 @@ impl SchEditor {
             self.status = match serde_json::to_string_pretty(&self.sch).map(|s| std::fs::write(&p, s)) {
                 Ok(Ok(())) => {
                     self.path = Some(p.clone());
+                    self.mark_saved();
                     format!("保存しました: {}", p.display())
                 }
                 Ok(Err(e)) => format!("保存失敗: {e}"),
