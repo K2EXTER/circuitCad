@@ -34,7 +34,24 @@ impl BoardEditor {
                 pair_failed.extend(r.failed);
             }
         }
-        let mut report = autoroute::autoroute(&mut self.board, &opt, net);
+        // nets with a declared current ("配線の太さ (電流から)") are routed with the width that current needs
+        let mut report = autoroute::RouteReport::default();
+        let mut wide: Vec<(String, f64)> = vec![];
+        for (n, amps) in self.board.net_currents.clone() {
+            let need = pcb_core::current::round_up_width(pcb_core::current::width_for_current(amps, &Default::default()));
+            if need > opt.track_width + 1e-9 && net.is_none_or(|x| x == n) {
+                wide.push((n, need));
+            }
+        }
+        for (n, w) in &wide {
+            let r = autoroute::autoroute(&mut self.board, &RouteOptions { track_width: *w, ..opt.clone() }, Some(n));
+            report.routed += r.routed;
+            report.failed.extend(r.failed);
+        }
+        let rest = autoroute::autoroute(&mut self.board, &opt, net);
+        report.routed += rest.routed;
+        // a wide net that failed may still go through with the normal width (the width check then warns)
+        report.failed = rest.failed;
         report.routed += pair_routed;
         // a pair connection that failed is tried again by the plain router above; count only what is still open
         let _ = pair_failed;

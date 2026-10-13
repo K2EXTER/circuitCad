@@ -1738,12 +1738,30 @@ mod tests {
         let mut app = App::default();
         app.sch.load_path(root.join(format!("docs/examples/{name}.schjson")));
         app.board_ed.import_from_schematic(&app.sch);
-        app.board_ed.autoplace();
+        if name == "power_supply" && std::env::var("CIRCUITCAD_HAND").is_ok() {
+            // a hand layout: input on the left, diode, regulator, capacitors beside the regulator pins
+            let b = &mut app.board_ed.board;
+            b.set_rect_outline(0.0, 0.0, 36.0, 20.0);
+            for (r, x, y, rot) in [("V1", 4.0, 10.0, 0), ("D1", 14.0, 15.0, 0), ("U1", 23.0, 9.0, 0), ("C1", 17.0, 5.0, 0), ("C2", 29.0, 5.0, 0)] {
+                b.place_part(r, Point::new(x, y), rot);
+            }
+        } else {
+            app.board_ed.autoplace();
+        }
         println!("{}", app.board_ed.status);
+        if std::env::var("CIRCUITCAD_CURRENTS").is_ok() {
+            for n in ["VPROT", "VOUT", "GND"] {
+                app.board_ed.board.net_currents.insert(n.into(), 1.0);
+            }
+        }
         app.board_ed.autoroute(None);
         println!("{}", app.board_ed.status);
         let b = &mut app.board_ed.board;
         b.name = name.clone();
+        let conn = pcb_core::drc::connectivity(b);
+        for w in pcb_core::current::net_widths(b, &conn, &Default::default()) {
+            println!("  WIDTH {} needs {:.2} mm, thinnest drawn {:?}", w.net, w.needed, w.thinnest);
+        }
         let (w, h) = (b.outline.iter().map(|p| p.x).fold(0.0, f64::max), b.outline.iter().map(|p| p.y).fold(0.0, f64::max));
         let poly = vec![Point::new(0.5, 0.5), Point::new(w - 0.5, 0.5), Point::new(w - 0.5, h - 0.5), Point::new(0.5, h - 0.5)];
         let mut z = pcb_core::Zone::new("GND", Side::Bottom, poly);
@@ -1761,5 +1779,28 @@ mod tests {
         std::fs::create_dir_all(&out).unwrap();
         println!("{:?}", app.board_ed.write_fab_files(&out));
         std::fs::write(out.join(format!("{name}.pcbjson")), serde_json::to_string_pretty(&app.board_ed.board).unwrap()).unwrap();
+    }
+    #[test]
+    fn autoroute_uses_the_width_a_declared_net_current_needs() {
+        use pcb_core::{Pad, PadShape};
+        let mut app = App::default();
+        let b = &mut app.board_ed.board;
+        *b = pcb_core::Board::new("w", 30.0, 20.0);
+        for (x, net) in [(5.0, "P"), (25.0, "P"), (5.0, "S"), (25.0, "S")] {
+            let mut p = Pad::new(Point::new(x, if net == "P" { 6.0 } else { 14.0 }), PadShape::Rect { w: 1.5, h: 1.5 }, None, Side::Top);
+            p.net = net.into();
+            b.pads.push(p);
+        }
+        b.net_currents.insert("P".into(), 2.0);
+        let need = pcb_core::current::round_up_width(pcb_core::current::width_for_current(2.0, &Default::default()));
+        app.board_ed.autoroute(None);
+        let b = &app.board_ed.board;
+        let conn = pcb_core::drc::connectivity(b);
+        for (i, t) in b.tracks.iter().enumerate() {
+            let expect = if conn.track_net(i) == Some("P") { need } else { 0.25 };
+            assert!((t.width - expect).abs() < 1e-9, "track {i} is {} mm, expected {expect}", t.width);
+        }
+        assert!(need > 0.25 && b.tracks.len() >= 2);
+        assert!(pcb_core::drc::check(b).is_empty());
     }
 }
