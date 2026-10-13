@@ -192,7 +192,7 @@ impl PassiveTemplate {
         l.push(".ends".into());
         let extra = if parts.is_empty() { "理想の部品".to_string() } else { parts.join("・") };
         let value_text = eng(self.value);
-        let pin = |n: &str, side| PinDef { number: n.into(), name: n.into(), side: Some(side) };
+        let pin = |n: &str, side| PinDef { number: n.into(), name: n.into(), side: Some(side), sim_only: false };
         Ok(Generated {
             pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)],
             sim_name: sub,

@@ -1,0 +1,72 @@
+{
+  "name": "1N4742A",
+  "category": "ツェナー",
+  "description": "ツェナーダイオード 12V 1W (DO-41, 帯の側がカソード K)。簡易モデル(パラメータは概算)",
+  "prefix": "D",
+  "footprint_name": "D_DO-41_P10.16",
+  "pins": [
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "K",
+        "x": -5.08,
+        "y": 0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 2.0,
+        "drill": 1.0
+      },
+      {
+        "pin": "A",
+        "x": 5.08,
+        "y": 0,
+        "shape": "circle",
+        "w": 2.0,
+        "drill": 1.0
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "1N4742A",
+    "text": ".model 1N4742A D(IS=50f N=1 RS=9 BV=12 IBV=21m)",
+    "pins": [
+      "A",
+      "K"
+    ],
+    "limits": [
+      "降伏電圧つきのダイオードのモデルです。電流を増やしたときのツェナー電圧の変化 (ツェナーインピーダンス) は簡易な式で、実物とずれます。",
+      "ツェナー電圧は温度で変わらない値です。実物は温度で変わります。",
+      "接合容量と逆回復時間は扱いません。許容損失 (W) を超えても壊れません。"
+    ]
+  },
+  "ratings": {
+    "i_max": 0.076,
+    "p_max": 1,
+    "rows": [
+      {
+        "name": "ツェナー電圧",
+        "value": "12V ±5%",
+        "condition": "IZT = 21mA"
+      },
+      {
+        "name": "ツェナーインピーダンス",
+        "value": "9Ω (最大)",
+        "condition": "IZT = 21mA"
+      }
+    ]
+  }
+}

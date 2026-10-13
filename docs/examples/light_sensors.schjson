@@ -1,0 +1,475 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "0.5",
+      "pos": [
+        0,
+        16
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "1",
+      "pos": [
+        0,
+        32
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        28,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RL1",
+      "kind": "Custom",
+      "value": "LDR_GL5528",
+      "pos": [
+        28,
+        22
+      ],
+      "rot": 0,
+      "footprint": "LDR_P5.08",
+      "custom": {
+        "name": "LDR_GL5528",
+        "prefix": "RL",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "B",
+            "side": "right"
+          },
+          {
+            "number": "L",
+            "name": "LIGHT",
+            "side": "bottom",
+            "sim_only": true
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LDR_GL5528",
+          "text": ".subckt LDR_GL5528 a b l\n* LIGHT pin: 1 V = 100 lx. R = 15k at 10 lx, gamma 0.6, at most 1 Meg (dark)\nRl l 0 100Meg\nBr a b I=V(a,b)/min(1Meg,15k*pow(10/max(100*V(l),0.001),0.6))\n.ends LDR_GL5528",
+          "pins": [
+            "1",
+            "2",
+            "L"
+          ],
+          "params": {},
+          "limits": [
+            "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で明るさ [lx] (1V = 100 lx)を与えます。つながないと 0 として扱います。",
+            "抵抗値は明るさのべき乗(γ=0.6)で近似しています。実物のばらつきは大きく(同じ型番で2倍以上違う)、温度・色(波長)による違いも扱いません。",
+            "応答は瞬時です。実物は暗→明で数十ms、明→暗で数百msかかります。"
+          ]
+        },
+        "ratings": {
+          "v_max": 150.0,
+          "p_max": 0.1,
+          "rows": [
+            {
+              "name": "明抵抗",
+              "value": "8〜20kΩ",
+              "condition": "10lx"
+            },
+            {
+              "name": "暗抵抗",
+              "value": "1MΩ (最小)"
+            },
+            {
+              "name": "γ値",
+              "value": "0.6 (代表)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "22k",
+      "pos": [
+        58,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "BPW34",
+      "pos": [
+        58,
+        22
+      ],
+      "rot": 0,
+      "footprint": "Photodiode_P5.08",
+      "custom": {
+        "name": "BPW34",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "L",
+            "name": "IRRAD",
+            "side": "bottom",
+            "sim_only": true
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "BPW34",
+          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34",
+          "pins": [
+            "A",
+            "K",
+            "L"
+          ],
+          "params": {},
+          "limits": [
+            "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で光の強さ [mW/cm²] (1V = 1mW/cm²)を与えます。つながないと 0 として扱います。",
+            "光電流は光の強さに比例します(波長による感度の違いは扱いません)。接合容量(約70pF)と応答速度は扱いません。",
+            "使い方: 逆バイアス(カソードを+側)で電流を読むか、トランスインピーダンスアンプにつなぎます。開放電圧は約0.4Vで頭打ちになります。"
+          ]
+        },
+        "ratings": {
+          "v_max": 32.0,
+          "p_max": 0.15,
+          "rows": [
+            {
+              "name": "短絡光電流",
+              "value": "75µA (代表)",
+              "condition": "1mW/cm², 950nm"
+            },
+            {
+              "name": "暗電流",
+              "value": "2nA (代表)",
+              "condition": "VR = 10V"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        14
+      ],
+      "b": [
+        0,
+        11
+      ]
+    },
+    {
+      "a": [
+        0,
+        18
+      ],
+      "b": [
+        0,
+        21
+      ]
+    },
+    {
+      "a": [
+        0,
+        30
+      ],
+      "b": [
+        0,
+        27
+      ]
+    },
+    {
+      "a": [
+        0,
+        34
+      ],
+      "b": [
+        0,
+        37
+      ]
+    },
+    {
+      "a": [
+        28,
+        -2
+      ],
+      "b": [
+        28,
+        -5
+      ]
+    },
+    {
+      "a": [
+        28,
+        2
+      ],
+      "b": [
+        28,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        22
+      ],
+      "b": [
+        21,
+        22
+      ]
+    },
+    {
+      "a": [
+        32,
+        22
+      ],
+      "b": [
+        35,
+        22
+      ]
+    },
+    {
+      "a": [
+        28,
+        26
+      ],
+      "b": [
+        28,
+        29
+      ]
+    },
+    {
+      "a": [
+        58,
+        -2
+      ],
+      "b": [
+        58,
+        -5
+      ]
+    },
+    {
+      "a": [
+        58,
+        2
+      ],
+      "b": [
+        58,
+        5
+      ]
+    },
+    {
+      "a": [
+        62,
+        22
+      ],
+      "b": [
+        65,
+        22
+      ]
+    },
+    {
+      "a": [
+        54,
+        22
+      ],
+      "b": [
+        51,
+        22
+      ]
+    },
+    {
+      "a": [
+        58,
+        26
+      ],
+      "b": [
+        58,
+        29
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        11
+      ],
+      "text": "LUX"
+    },
+    {
+      "pos": [
+        0,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        27
+      ],
+      "text": "IRRAD"
+    },
+    {
+      "pos": [
+        0,
+        37
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        28,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        28,
+        5
+      ],
+      "text": "VLDR"
+    },
+    {
+      "pos": [
+        21,
+        22
+      ],
+      "text": "VLDR"
+    },
+    {
+      "pos": [
+        35,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        28,
+        29
+      ],
+      "text": "LUX"
+    },
+    {
+      "pos": [
+        58,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        58,
+        5
+      ],
+      "text": "VPD"
+    },
+    {
+      "pos": [
+        65,
+        22
+      ],
+      "text": "VPD"
+    },
+    {
+      "pos": [
+        51,
+        22
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        58,
+        29
+      ],
+      "text": "IRRAD"
+    }
+  ]
+}

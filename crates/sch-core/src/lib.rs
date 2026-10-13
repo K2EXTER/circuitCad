@@ -256,6 +256,10 @@ pub struct SymPin {
     pub number: String,
     pub name: String,
     pub side: PinSide,
+    /// A pin that only exists for the simulation (e.g. the light or magnetic-field input of a
+    /// sensor model): it has no pad and is left out of the board netlist.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sim_only: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

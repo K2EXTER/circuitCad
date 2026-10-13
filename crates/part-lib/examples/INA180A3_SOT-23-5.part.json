@@ -1,0 +1,113 @@
+{
+  "name": "INA180A3",
+  "category": "センサ",
+  "description": "INA180A3 電流検出アンプ (SOT-23-5, ゲイン 100倍、片方向)。シャント抵抗の電圧を増幅して出力する(ハイサイド/ローサイド両用、-0.2〜26V の同相電圧)。ピン1=OUT 2=GND 3=IN+ 4=IN- 5=V+。ピン配置は要確認",
+  "prefix": "U",
+  "footprint_name": "SOT-23-5_P0.95",
+  "pins": [
+    {
+      "number": "3",
+      "name": "IN+",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "IN-",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "V+",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "1",
+      "name": "OUT",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": -1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "2",
+        "x": 0.0,
+        "y": -1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "3",
+        "x": 0.95,
+        "y": -1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "4",
+        "x": 0.95,
+        "y": 1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      },
+      {
+        "pin": "5",
+        "x": -0.95,
+        "y": 1.3,
+        "shape": "rect",
+        "w": 0.6,
+        "h": 1.1
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "INA180A3",
+    "text": ".subckt INA180A3 inp inn vp gnd out\n* gain 100; the output cannot go below ~5 mV or above V+ - 0.2 V\nBo o gnd V=limit(100*V(inp,inn),0.005,V(vp,gnd)-0.2)*step(V(vp,gnd)-2.6,0.2)\nRiq vp gnd 12k\nRo o out 5\n.ends INA180A3",
+    "pins": [
+      "3",
+      "4",
+      "5",
+      "2",
+      "1"
+    ],
+    "limits": [
+      "入力オフセット(±150µV)・入力バイアス電流・同相除去比・帯域(350kHz)は扱いません。小さな電流(出力が約5mV 以下)では実物と同様に 0 付近で頭打ちになります。",
+      "片方向のアンプです。IN- が IN+ より高い(逆向きの電流)と、出力は 0 付近のままです。",
+      "シャント抵抗は別に置いてください(例: 10mΩ に 3A で 30mV → 1.5V)。"
+    ]
+  },
+  "ratings": {
+    "v_max": 26,
+    "rows": [
+      {
+        "name": "ゲイン",
+        "value": "100V/V"
+      },
+      {
+        "name": "同相電圧範囲",
+        "value": "-0.2〜26V"
+      },
+      {
+        "name": "電源電圧",
+        "value": "2.7〜5.5V"
+      }
+    ]
+  }
+}

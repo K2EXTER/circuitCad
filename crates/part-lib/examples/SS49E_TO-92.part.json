@@ -1,0 +1,96 @@
+{
+  "name": "SS49E",
+  "category": "センサ",
+  "description": "SS49E リニアホールセンサ (TO-92, ピン1=+Vs 2=GND 3=Vout + 磁界ピン)。磁界ゼロで電源の半分、磁界に比例して出力が振れる(5Vで 1.4mV/G)。B ピンに電圧源をつなぎ、1V = 100G (10mT) として磁界を与える。ピン配置は要確認",
+  "prefix": "U",
+  "footprint_name": "TO-92_inline",
+  "pins": [
+    {
+      "number": "1",
+      "name": "+VS",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "3",
+      "name": "VOUT",
+      "side": "right"
+    },
+    {
+      "number": "B",
+      "name": "B",
+      "side": "left",
+      "sim_only": true
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "SS49E",
+    "text": ".subckt SS49E vs gnd out b\n* B pin: 1 V = 100 G. Ratiometric: Vs/2 + (Vs/5) * 1.4 mV/G * B, kept 0.2 V inside the supply\nRb b 0 100Meg\nRiq vs gnd 830\nBh h gnd V=limit(V(vs,gnd)/2+0.028*V(vs,gnd)*V(b),0.2,V(vs,gnd)-0.2)*step(V(vs,gnd)-2.5,0.2)\nRo h out 1\n.ends SS49E",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "B"
+    ],
+    "limits": [
+      "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で磁束密度 [G] (1V = 100G, 正負あり。極性で出力が上下)を与えます。つながないと 0 として扱います。",
+      "感度は電源電圧に比例(レシオメトリック)です。温度ドリフト・オフセット誤差・ノイズ・応答速度は扱いません。",
+      "実物は ±650G 付近で出力が飽和します。このモデルは電源の 0.2V 内側で飽和します。"
+    ]
+  },
+  "ratings": {
+    "v_max": 10,
+    "rows": [
+      {
+        "name": "感度",
+        "value": "1.4mV/G",
+        "condition": "Vs = 5V"
+      },
+      {
+        "name": "ゼロ磁界出力",
+        "value": "Vs/2 (2.5V)",
+        "condition": "Vs = 5V"
+      },
+      {
+        "name": "電源電流",
+        "value": "6mA (代表)",
+        "condition": "Vs = 5V"
+      }
+    ]
+  }
+}

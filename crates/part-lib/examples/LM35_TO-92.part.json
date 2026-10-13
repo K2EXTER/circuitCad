@@ -1,0 +1,94 @@
+{
+  "name": "LM35",
+  "category": "センサ",
+  "description": "LM35 温度センサ(出力 10mV/℃、4〜30V 電源、TO-92, ピン1=+Vs 2=Vout 3=GND)。出力はシミュレーションの温度(解析タブの温度設定・温度スイープ)に連動する。簡易モデル",
+  "prefix": "U",
+  "footprint_name": "TO-92_inline",
+  "pins": [
+    {
+      "number": "1",
+      "name": "+VS",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "VOUT",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "LM35",
+    "text": ".subckt LM35 vs out gnd\n* quiescent current about 60 uA at 5 V\nRiq vs gnd 83k\n* 10 mV per degree C, never above the supply minus 1.5 V, never negative (single supply)\nBt t gnd V=max(min(0.01*temp,V(vs,gnd)-1.5),0)*step(V(vs,gnd)-3.5,0.3)\nRo t out 1\n.ends LM35",
+    "pins": [
+      "1",
+      "2",
+      "3"
+    ],
+    "limits": [
+      "出力は 10mV/℃ ちょうどです。実物の誤差(±0.5℃ 程度)・非直線性は扱いません。",
+      "単電源の使い方だけを扱います。0℃より低い温度では出力は 0V になります(実物は負電源が必要)。",
+      "自己発熱・応答の遅れ(熱時定数)・出力に大きな容量をつけたときの発振は扱いません。",
+      "温度は解析タブの温度設定・温度スイープで変えます。回路全体が同じ温度になります。"
+    ]
+  },
+  "ratings": {
+    "v_max": 30,
+    "rows": [
+      {
+        "name": "出力",
+        "value": "10mV/℃",
+        "condition": "0℃ で 0V"
+      },
+      {
+        "name": "精度",
+        "value": "±0.5℃ (代表)",
+        "condition": "25℃"
+      },
+      {
+        "name": "電源電流",
+        "value": "60µA (代表)"
+      },
+      {
+        "name": "測定範囲",
+        "value": "0〜100℃",
+        "condition": "LM35D, 単電源"
+      }
+    ]
+  }
+}

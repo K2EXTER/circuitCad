@@ -1,0 +1,145 @@
+{
+  "name": "ACS712-05B",
+  "category": "センサ",
+  "description": "ACS712-05B ホール電流センサ ±5A (SOIC-8, 絶縁)。電流を IP+ から IP- へ流すと、出力が Vcc/2 を中心に 185mV/A で振れる。導体抵抗 1.2mΩ。基板では 1・2番ピンと 3・4番ピンを、それぞれ同じネットにつなぐ(記号では1本ずつ)。ピン配置は要確認",
+  "prefix": "U",
+  "footprint_name": "SOIC-8_ACS712",
+  "pins": [
+    {
+      "number": "1",
+      "name": "IP+",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "IP-",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "6",
+      "name": "FILTER",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "VIOUT",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.7,
+        "y": 1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "1",
+        "x": -2.7,
+        "y": 0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "3",
+        "x": -2.7,
+        "y": -0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "3",
+        "x": -2.7,
+        "y": -1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "5",
+        "x": 2.7,
+        "y": -1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "6",
+        "x": 2.7,
+        "y": -0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "7",
+        "x": 2.7,
+        "y": 0.635,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      },
+      {
+        "pin": "8",
+        "x": 2.7,
+        "y": 1.905,
+        "shape": "rect",
+        "w": 1.55,
+        "h": 0.6
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "ACS712",
+    "text": ".subckt ACS712 ipp ipn gnd filt out vcc\n* primary conductor 1.2 mohm; current into IP+ and out of IP- is positive\nVp ipp x DC 0\nRp x ipn 1.2m\nRiq vcc gnd 1k\n* ratiometric: Vcc/2 + 185 mV/A at 5 V, kept inside the supply\nBs s gnd V=limit(V(vcc,gnd)/2+0.037*V(vcc,gnd)*I(Vp),0.1,V(vcc,gnd)-0.1)*step(V(vcc,gnd)-3,0.3)\n* FILTER pin: 1.7k with an external capacitor to ground makes a low-pass filter\nRf s filt 1.7k\nBo o gnd V=V(filt,gnd)\nRo o out 1\n.ends ACS712",
+    "pins": [
+      "1",
+      "3",
+      "5",
+      "6",
+      "7",
+      "8"
+    ],
+    "limits": [
+      "出力は電流に比例(185mV/A、ゼロ電流で Vcc/2)で、電源電圧に比例します。オフセット誤差・温度ドリフト・ノイズ(21mV 程度)・帯域(80kHz)は扱いません。",
+      "FILTER ピンと GND の間に外付けコンデンサ(コンデンサなしなら 80kHz 相当は再現しません)をつけると、1.7kΩとのローパスになります。",
+      "ホール素子の絶縁(2.1kV)・過電流(±5A の定格)は扱いません。"
+    ]
+  },
+  "ratings": {
+    "v_max": 6,
+    "i_max": 5,
+    "rows": [
+      {
+        "name": "感度",
+        "value": "185mV/A",
+        "condition": "Vcc = 5V"
+      },
+      {
+        "name": "導体抵抗",
+        "value": "1.2mΩ"
+      },
+      {
+        "name": "ゼロ電流出力",
+        "value": "Vcc/2"
+      }
+    ]
+  }
+}

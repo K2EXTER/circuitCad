@@ -1,0 +1,67 @@
+{
+  "name": "1N5408",
+  "category": "整流ダイオード",
+  "description": "整流ダイオード 1000V 3A (DO-201AD, 帯の側がカソード K)。商用電源の整流に。簡易モデル(パラメータは概算)",
+  "prefix": "D",
+  "footprint_name": "D_DO-201AD_P15.24",
+  "pins": [
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "K",
+        "x": -7.62,
+        "y": 0,
+        "shape": "rect",
+        "w": 2.6,
+        "h": 2.6,
+        "drill": 1.3
+      },
+      {
+        "pin": "A",
+        "x": 7.62,
+        "y": 0,
+        "shape": "circle",
+        "w": 2.6,
+        "drill": 1.3
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "1N5408",
+    "text": ".model 1N5408 D(IS=14n N=1.9 RS=0.03 BV=1000 IBV=5u)",
+    "pins": [
+      "A",
+      "K"
+    ],
+    "limits": [
+      "接合容量と逆回復時間は扱いません。",
+      "耐圧や定格電流を超えても壊れません(逆耐圧 BV を超えると電流が流れます)。"
+    ]
+  },
+  "ratings": {
+    "v_max": 1000,
+    "i_max": 3,
+    "p_max": 3,
+    "rows": [
+      {
+        "name": "順方向電圧",
+        "value": "1.2V (最大)",
+        "condition": "IF = 3A"
+      }
+    ]
+  }
+}

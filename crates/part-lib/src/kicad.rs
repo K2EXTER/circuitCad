@@ -196,7 +196,7 @@ fn symbol_of(all: &[&Node], sym: &Node, depth: usize) -> Option<KicadSymbol> {
                 _ => a.1.total_cmp(&b.1),
             })
         });
-        v.into_iter().map(|(side, _, _, number, name)| PinDef { number, name, side: Some(side) }).collect()
+        v.into_iter().map(|(side, _, _, number, name)| PinDef { number, name, side: Some(side), sim_only: false }).collect()
     };
     let nonempty = |s: &str, fallback: &str| if s.is_empty() { fallback.to_string() } else { s.to_string() };
     Some(KicadSymbol {

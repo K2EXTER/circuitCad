@@ -6,7 +6,7 @@
 //! is what Newton's method needs.
 //!
 //! Syntax: numbers with SPICE suffixes (`4.7k`, `100u`), `+ - * / ^`, comparisons `< > <= >=`
-//! (1 or 0), `time`, `V(node)`, `V(a,b)`, `I(source)` (current through a V source, inductor or
+//! (1 or 0), `time`, `temp` (circuit temperature in °C), `V(node)`, `V(a,b)`, `I(source)` (current through a V source, inductor or
 //! another voltage-type B source) and the functions
 //! `abs min max limit sqrt exp ln pow tanh if step`.
 
@@ -64,6 +64,8 @@ impl Func {
 pub enum Expr {
     Num(f64),
     Time,
+    /// Circuit temperature in °C: 27 until `Circuit::at_temperature` substitutes the real value.
+    Temp,
     Node(usize),
     Branch(String),
     Neg(Box<Expr>),
@@ -239,10 +241,11 @@ impl Parser<'_, '_> {
         if !open {
             return match id.as_str() {
                 "time" | "t" => Ok(Expr::Time),
+                "temp" => Ok(Expr::Temp),
                 "pi" => Ok(Expr::Num(std::f64::consts::PI)),
                 _ => {
                     self.pos = start;
-                    self.err(&format!("「{id}」は使えません。電圧は V(ノード名)、電流は I(電源名)、時間は time と書きます"))
+                    self.err(&format!("「{id}」は使えません。電圧は V(ノード名)、電流は I(電源名)、時間は time、温度(℃)は temp と書きます"))
                 }
             };
         }
@@ -358,6 +361,17 @@ impl CExpr {
 }
 
 impl Expr {
+    /// The same expression with `temp` replaced by `temp_c` (°C).
+    pub fn at_temperature(&self, temp_c: f64) -> Expr {
+        match self {
+            Expr::Temp => Expr::Num(temp_c),
+            Expr::Neg(a) => Expr::Neg(Box::new(a.at_temperature(temp_c))),
+            Expr::Bin(op, a, b) => Expr::Bin(*op, Box::new(a.at_temperature(temp_c)), Box::new(b.at_temperature(temp_c))),
+            Expr::Call(f, args) => Expr::Call(*f, args.iter().map(|a| a.at_temperature(temp_c)).collect()),
+            other => other.clone(),
+        }
+    }
+
     /// `branch_index(name)` gives the solution-vector index of the current through that element.
     pub fn compile(&self, branch_index: &dyn Fn(&str) -> Option<usize>) -> CExpr {
         let mut vars: Vec<Var> = vec![];
@@ -376,6 +390,7 @@ impl Expr {
         match self {
             Expr::Num(v) => Tree::Num(*v),
             Expr::Time => Tree::Time,
+            Expr::Temp => Tree::Num(crate::temperature::T_NOM_C),
             Expr::Node(0) => Tree::Ground,
             Expr::Node(n) => Tree::Var(slot(Var::Node(*n), vars)),
             Expr::Branch(name) => match bi(name) {

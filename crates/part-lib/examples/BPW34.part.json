@@ -1,0 +1,78 @@
+{
+  "name": "BPW34",
+  "category": "センサ",
+  "description": "フォトダイオード BPW34 相当 (A=アノード K=カソード + 光量ピン)。光が当たると逆向きに電流が流れる。IRRAD ピンに電圧源をつなぎ、1V = 1mW/cm² として光の強さを与える(約75µA/mW/cm²)。ランドは概算",
+  "prefix": "D",
+  "footprint_name": "Photodiode_P5.08",
+  "pins": [
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "L",
+      "name": "IRRAD",
+      "side": "bottom",
+      "sim_only": true
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "K",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 0.9
+      },
+      {
+        "pin": "A",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 0.9
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "BPW34",
+    "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34",
+    "pins": [
+      "A",
+      "K",
+      "L"
+    ],
+    "limits": [
+      "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で光の強さ [mW/cm²] (1V = 1mW/cm²)を与えます。つながないと 0 として扱います。",
+      "光電流は光の強さに比例します(波長による感度の違いは扱いません)。接合容量(約70pF)と応答速度は扱いません。",
+      "使い方: 逆バイアス(カソードを+側)で電流を読むか、トランスインピーダンスアンプにつなぎます。開放電圧は約0.4Vで頭打ちになります。"
+    ]
+  },
+  "ratings": {
+    "v_max": 32,
+    "p_max": 0.15,
+    "rows": [
+      {
+        "name": "短絡光電流",
+        "value": "75µA (代表)",
+        "condition": "1mW/cm², 950nm"
+      },
+      {
+        "name": "暗電流",
+        "value": "2nA (代表)",
+        "condition": "VR = 10V"
+      }
+    ]
+  }
+}

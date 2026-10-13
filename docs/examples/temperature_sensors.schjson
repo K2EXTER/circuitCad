@@ -1,0 +1,529 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM35",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "LM35",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "+VS",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "VOUT",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM35",
+          "text": ".subckt LM35 vs out gnd\n* quiescent current about 60 uA at 5 V\nRiq vs gnd 83k\n* 10 mV per degree C, never above the supply minus 1.5 V, never negative (single supply)\nBt t gnd V=max(min(0.01*temp,V(vs,gnd)-1.5),0)*step(V(vs,gnd)-3.5,0.3)\nRo t out 1\n.ends LM35",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {},
+          "limits": [
+            "出力は 10mV/℃ ちょうどです。実物の誤差(±0.5℃ 程度)・非直線性は扱いません。",
+            "単電源の使い方だけを扱います。0℃より低い温度では出力は 0V になります(実物は負電源が必要)。",
+            "自己発熱・応答の遅れ(熱時定数)・出力に大きな容量をつけたときの発振は扱いません。",
+            "温度は解析タブの温度設定・温度スイープで変えます。回路全体が同じ温度になります。"
+          ]
+        },
+        "ratings": {
+          "v_max": 30.0,
+          "rows": [
+            {
+              "name": "出力",
+              "value": "10mV/℃",
+              "condition": "0℃ で 0V"
+            },
+            {
+              "name": "精度",
+              "value": "±0.5℃ (代表)",
+              "condition": "25℃"
+            },
+            {
+              "name": "電源電流",
+              "value": "60µA (代表)"
+            },
+            {
+              "name": "測定範囲",
+              "value": "0〜100℃",
+              "condition": "LM35D, 単電源"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        44,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "TMP36",
+      "pos": [
+        24,
+        24
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "TMP36",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "+VS",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "VOUT",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TMP36",
+          "text": ".subckt TMP36 vs out gnd\n* quiescent current about 50 uA at 3.3 V\nRiq vs gnd 66k\n* 500 mV offset + 10 mV per degree C (negative temperatures work), limited by the supply\nBt t gnd V=max(min(0.5+0.01*temp,V(vs,gnd)-0.3),0)*step(V(vs,gnd)-2.2,0.3)\nRo t out 1\n.ends TMP36",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {},
+          "limits": [
+            "出力は 0.5V + 10mV/℃ ちょうどです。実物の誤差(±1〜2℃)は扱いません。",
+            "自己発熱・応答の遅れ(熱時定数)・出力に大きな容量をつけたときの発振は扱いません。",
+            "温度は解析タブの温度設定・温度スイープで変えます。回路全体が同じ温度になります。"
+          ]
+        },
+        "ratings": {
+          "v_max": 5.5,
+          "rows": [
+            {
+              "name": "出力",
+              "value": "0.5V + 10mV/℃",
+              "condition": "25℃ で 0.75V"
+            },
+            {
+              "name": "精度",
+              "value": "±1℃ (代表)",
+              "condition": "25℃"
+            },
+            {
+              "name": "測定範囲",
+              "value": "-40〜125℃"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        44,
+        24
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        64,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RT1",
+      "kind": "Custom",
+      "value": "NTC_10k_B3950",
+      "pos": [
+        64,
+        24
+      ],
+      "rot": 1,
+      "footprint": "Thermistor_Disc_P5.08",
+      "custom": {
+        "name": "NTC_10k_B3950",
+        "prefix": "RT",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "NTC_10k_B3950",
+          "text": ".subckt NTC_10k_B3950 a b\n* resistance follows the circuit temperature\nBr a b I=V(a,b)/(10k*exp(3950*(1/(temp+273.15)-1/298.15)))\n.ends NTC_10k_B3950",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "抵抗値はシミュレーションの温度で決まります。温度は解析タブの温度設定・温度スイープで変えます(回路全体が同じ温度になります)。",
+            "自己発熱(流す電流で温度が上がる)・熱の応答の遅れは扱いません。電流を流しすぎると実物は測定値がずれます。",
+            "B定数(3950K)の式で近似しています。広い温度範囲では実物の値とずれます。"
+          ]
+        },
+        "ratings": {
+          "p_max": 0.25,
+          "rows": [
+            {
+              "name": "抵抗値",
+              "value": "10kΩ ±1%",
+              "condition": "25℃"
+            },
+            {
+              "name": "B定数",
+              "value": "3950K ±1%",
+              "condition": "25〜50℃"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        -4
+      ],
+      "b": [
+        24,
+        -7
+      ]
+    },
+    {
+      "a": [
+        28,
+        0
+      ],
+      "b": [
+        31,
+        0
+      ]
+    },
+    {
+      "a": [
+        24,
+        4
+      ],
+      "b": [
+        24,
+        7
+      ]
+    },
+    {
+      "a": [
+        44,
+        -2
+      ],
+      "b": [
+        44,
+        -5
+      ]
+    },
+    {
+      "a": [
+        44,
+        2
+      ],
+      "b": [
+        44,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        20
+      ],
+      "b": [
+        24,
+        17
+      ]
+    },
+    {
+      "a": [
+        28,
+        24
+      ],
+      "b": [
+        31,
+        24
+      ]
+    },
+    {
+      "a": [
+        24,
+        28
+      ],
+      "b": [
+        24,
+        31
+      ]
+    },
+    {
+      "a": [
+        44,
+        22
+      ],
+      "b": [
+        44,
+        19
+      ]
+    },
+    {
+      "a": [
+        44,
+        26
+      ],
+      "b": [
+        44,
+        29
+      ]
+    },
+    {
+      "a": [
+        64,
+        -2
+      ],
+      "b": [
+        64,
+        -5
+      ]
+    },
+    {
+      "a": [
+        64,
+        2
+      ],
+      "b": [
+        64,
+        5
+      ]
+    },
+    {
+      "a": [
+        64,
+        20
+      ],
+      "b": [
+        64,
+        17
+      ]
+    },
+    {
+      "a": [
+        64,
+        28
+      ],
+      "b": [
+        64,
+        31
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        24,
+        -7
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        31,
+        0
+      ],
+      "text": "VLM35"
+    },
+    {
+      "pos": [
+        24,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        44,
+        -5
+      ],
+      "text": "VLM35"
+    },
+    {
+      "pos": [
+        44,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        24,
+        17
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        31,
+        24
+      ],
+      "text": "VTMP36"
+    },
+    {
+      "pos": [
+        24,
+        31
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        44,
+        19
+      ],
+      "text": "VTMP36"
+    },
+    {
+      "pos": [
+        44,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        64,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        64,
+        5
+      ],
+      "text": "VNTC"
+    },
+    {
+      "pos": [
+        64,
+        17
+      ],
+      "text": "VNTC"
+    },
+    {
+      "pos": [
+        64,
+        31
+      ],
+      "text": "GND"
+    }
+  ]
+}

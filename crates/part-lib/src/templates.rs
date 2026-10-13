@@ -142,7 +142,7 @@ impl ChargerTemplate {
             pins.push(("STDBY", PinSide::Right));
         }
         let has = |n: &str| pins.iter().any(|p| p.0 == n);
-        let pin_defs: Vec<PinDef> = pins.iter().enumerate().map(|(i, (n, s))| PinDef { number: (i + 1).to_string(), name: n.to_string(), side: Some(*s) }).collect();
+        let pin_defs: Vec<PinDef> = pins.iter().enumerate().map(|(i, (n, s))| PinDef { number: (i + 1).to_string(), name: n.to_string(), side: Some(*s), sim_only: false }).collect();
         let ports: Vec<String> = pins.iter().map(|p| p.0.to_ascii_lowercase()).collect();
 
         let vfl = self.float_voltage();

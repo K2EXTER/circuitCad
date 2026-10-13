@@ -1,0 +1,88 @@
+{
+  "name": "TMP36",
+  "category": "センサ",
+  "description": "TMP36 温度センサ(出力 0.5V + 10mV/℃、2.7〜5.5V 電源、TO-92, ピン1=+Vs 2=Vout 3=GND)。出力はシミュレーションの温度に連動する。簡易モデル",
+  "prefix": "U",
+  "footprint_name": "TO-92_inline",
+  "pins": [
+    {
+      "number": "1",
+      "name": "+VS",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "VOUT",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.6,
+        "h": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.6,
+        "drill": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "TMP36",
+    "text": ".subckt TMP36 vs out gnd\n* quiescent current about 50 uA at 3.3 V\nRiq vs gnd 66k\n* 500 mV offset + 10 mV per degree C (negative temperatures work), limited by the supply\nBt t gnd V=max(min(0.5+0.01*temp,V(vs,gnd)-0.3),0)*step(V(vs,gnd)-2.2,0.3)\nRo t out 1\n.ends TMP36",
+    "pins": [
+      "1",
+      "2",
+      "3"
+    ],
+    "limits": [
+      "出力は 0.5V + 10mV/℃ ちょうどです。実物の誤差(±1〜2℃)は扱いません。",
+      "自己発熱・応答の遅れ(熱時定数)・出力に大きな容量をつけたときの発振は扱いません。",
+      "温度は解析タブの温度設定・温度スイープで変えます。回路全体が同じ温度になります。"
+    ]
+  },
+  "ratings": {
+    "v_max": 5.5,
+    "rows": [
+      {
+        "name": "出力",
+        "value": "0.5V + 10mV/℃",
+        "condition": "25℃ で 0.75V"
+      },
+      {
+        "name": "精度",
+        "value": "±1℃ (代表)",
+        "condition": "25℃"
+      },
+      {
+        "name": "測定範囲",
+        "value": "-40〜125℃"
+      }
+    ]
+  }
+}

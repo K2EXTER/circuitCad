@@ -564,3 +564,5 @@ mod example_overlap_tests;
 
 #[cfg(test)]
 mod example_sim_tests;
+#[cfg(test)]
+mod sensor_example_tests;

@@ -1,0 +1,81 @@
+{
+  "name": "LDR_GL5528",
+  "category": "センサ",
+  "description": "CdS 光センサ(LDR) GL5528 相当 (2端子 + 光量ピン)。明るいほど抵抗が下がる。10lx で約15kΩ、100lx で約4kΩ、暗所で1MΩ。光量ピン LIGHT に電圧源をつなぎ、1V = 100 lx として明るさを与える",
+  "prefix": "RL",
+  "footprint_name": "LDR_P5.08",
+  "pins": [
+    {
+      "number": "1",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "B",
+      "side": "right"
+    },
+    {
+      "number": "L",
+      "name": "LIGHT",
+      "side": "bottom",
+      "sim_only": true
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 0.9
+      },
+      {
+        "pin": "2",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 0.9
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "LDR_GL5528",
+    "text": ".subckt LDR_GL5528 a b l\n* LIGHT pin: 1 V = 100 lx. R = 15k at 10 lx, gamma 0.6, at most 1 Meg (dark)\nRl l 0 100Meg\nBr a b I=V(a,b)/min(1Meg,15k*pow(10/max(100*V(l),0.001),0.6))\n.ends LDR_GL5528",
+    "pins": [
+      "1",
+      "2",
+      "L"
+    ],
+    "limits": [
+      "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で明るさ [lx] (1V = 100 lx)を与えます。つながないと 0 として扱います。",
+      "抵抗値は明るさのべき乗(γ=0.6)で近似しています。実物のばらつきは大きく(同じ型番で2倍以上違う)、温度・色(波長)による違いも扱いません。",
+      "応答は瞬時です。実物は暗→明で数十ms、明→暗で数百msかかります。"
+    ]
+  },
+  "ratings": {
+    "p_max": 0.1,
+    "v_max": 150,
+    "rows": [
+      {
+        "name": "明抵抗",
+        "value": "8〜20kΩ",
+        "condition": "10lx"
+      },
+      {
+        "name": "暗抵抗",
+        "value": "1MΩ (最小)"
+      },
+      {
+        "name": "γ値",
+        "value": "0.6 (代表)"
+      }
+    ]
+  }
+}

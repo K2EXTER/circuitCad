@@ -26,7 +26,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson を開け�
 - `tran.rs` 過渡 / `ac.rs` AC / `noise.rs` ノイズ / `dcsweep.rs` DCスイープ / `spectrum.rs` FFT・統計
 - `waveform.rs` 電源波形 (SIN/PULSE/PWL) / `value.rs` `parse_value`・`format_value`(SPICE数値) / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `from_schematic.rs` 部品→素子の変換 (素子名 = 部品番号 refdes)。新しい部品種別はここ
-- `temperature.rs` 温度 (`Circuit::at_temperature` がモデルを書き換える、`temp_sweep`) / `montecarlo.rs` 許容差ばらつき解析 (`monte_carlo`、感度つき。測る量は `McMeasure`: DC電圧 / ACの-3dBカットオフ / 過渡のステップ応答指標)
+- `temperature.rs` 温度 (`Circuit::at_temperature` がモデルを書き換える、`temp_sweep`。B素子の式の `temp`(℃)も置き換えるので、温度センサ LM35/TMP36 と NTC/PT100 が温度設定に連動する。部品は `part-lib/examples`、テスト `tests_parts_power.rs`。光・磁界などは `PinDef.sim_only`=シミュレーション専用ピン(パッド無し、基板取込 `board_editor/file.rs` で除外)に電圧で与える: LDR_GL5528/BPW34/SS49E。電流センサ ACS712-05B/INA180A1〜A3)。サンプル `temperature_sensors.schjson`(LM35/TMP36/NTCを温度スイープで比べる)・`light_sensors.schjson`(LDRとフォトダイオード。光量源 V2/V3 を変える)・`current_sensors.schjson`(10mΩシャント+INA180A2とACS712で同じ電流を読む)。生成とテストは `schematic/sensor_example_tests.rs`(`write_sensor_examples`) / `montecarlo.rs` 許容差ばらつき解析 (`monte_carlo`、感度つき。測る量は `McMeasure`: DC電圧 / ACの-3dBカットオフ / 過渡のステップ応答指標)
 - `stepmetrics.rs` ステップ応答の指標 `step_metrics` (立ち上がり・行き過ぎ・整定、波形ビューアと `McMeasure::Tran` が使う)
 - `options.rs` 計算精度の設定 `SimOptions`(reltol/vntol/abstol/gmin/反復上限、スレッドごと。GUIの「設定」メニューが毎フレーム `set_options`) / `diagnose.rs` 解析失敗時の原因と直し方(日本語ヒント)
 - `measure.rs` 波形の自動測定 `wave_measure`(最小/最大/p-p/周波数/デューティ)。`stability_margins`(位相余裕・ゲイン余裕。反転なら180°ずらす)。ACの-3dB点は `montecarlo.rs` の `minus_3db`

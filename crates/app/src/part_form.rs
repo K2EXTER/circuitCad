@@ -294,7 +294,7 @@ impl PartForm {
                 None => None,
                 Some(s) => Some(parse_side(s).ok_or_else(|| format!("{}行目: 向き「{s}」は left/right/top/bottom のいずれかです", n + 1))?),
             };
-            out.push(PinDef { number: t[0].into(), name: t[1].into(), side });
+            out.push(PinDef { number: t[0].into(), name: t[1].into(), side, sim_only: false });
         }
         Ok(out)
     }

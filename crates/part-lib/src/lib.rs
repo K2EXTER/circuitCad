@@ -22,6 +22,9 @@ pub struct PinDef {
     /// Omitted: the first half goes left, the rest right.
     #[serde(default)]
     pub side: Option<PinSide>,
+    /// Simulation-only input (no pad): the sensor's light / field / ... stimulus, given as a voltage.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sim_only: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -83,6 +86,7 @@ impl PartDef {
                     number: p.number.clone(),
                     name: p.name.clone(),
                     side: p.side.unwrap_or(if i < half { PinSide::Left } else { PinSide::Right }),
+                    sim_only: p.sim_only,
                 })
                 .collect(),
             sim: self.sim.clone(),
@@ -131,7 +135,7 @@ impl PartDef {
         match self.footprint() {
             Err(e) => err(format!("package: {e}")),
             Ok(fp) => {
-                for p in &self.pins {
+                for p in self.pins.iter().filter(|p| !p.sim_only) {
                     if !fp.pads.iter().any(|pad| pad.pin == p.number) {
                         err(format!("ピン {} ({}) に対応するパッドがパッケージにありません", p.number, p.name));
                     }
@@ -301,6 +305,31 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("TRANS_100V-12V_5VA", include_str!("../examples/TRANS_100V-12V_5VA.part.json")),
     ("TRANS_100V-9V_3VA", include_str!("../examples/TRANS_100V-9V_3VA.part.json")),
     ("TRANS_230V-12V_5VA", include_str!("../examples/TRANS_230V-12V_5VA.part.json")),
+    ("LM7809_TO-220", include_str!("../examples/LM7809_TO-220.part.json")),
+    ("TL431_SOT-23", include_str!("../examples/TL431_SOT-23.part.json")),
+    ("IRF540N_TO-220", include_str!("../examples/IRF540N_TO-220.part.json")),
+    ("IRFZ44N_TO-220", include_str!("../examples/IRFZ44N_TO-220.part.json")),
+    ("IRF9540N_TO-220", include_str!("../examples/IRF9540N_TO-220.part.json")),
+    ("TIP120_TO-220", include_str!("../examples/TIP120_TO-220.part.json")),
+    ("TIP125_TO-220", include_str!("../examples/TIP125_TO-220.part.json")),
+    ("BD139_TO-126", include_str!("../examples/BD139_TO-126.part.json")),
+    ("BD140_TO-126", include_str!("../examples/BD140_TO-126.part.json")),
+    ("1N5822_DO-201AD", include_str!("../examples/1N5822_DO-201AD.part.json")),
+    ("1N5408_DO-201AD", include_str!("../examples/1N5408_DO-201AD.part.json")),
+    ("UF4007_DO-41", include_str!("../examples/UF4007_DO-41.part.json")),
+    ("BAT54_SOT-23", include_str!("../examples/BAT54_SOT-23.part.json")),
+    ("1N4742A_DO-41", include_str!("../examples/1N4742A_DO-41.part.json")),
+    ("LM35_TO-92", include_str!("../examples/LM35_TO-92.part.json")),
+    ("TMP36_TO-92", include_str!("../examples/TMP36_TO-92.part.json")),
+    ("NTC_10k_B3950", include_str!("../examples/NTC_10k_B3950.part.json")),
+    ("PT100", include_str!("../examples/PT100.part.json")),
+    ("LDR_GL5528", include_str!("../examples/LDR_GL5528.part.json")),
+    ("BPW34", include_str!("../examples/BPW34.part.json")),
+    ("SS49E_TO-92", include_str!("../examples/SS49E_TO-92.part.json")),
+    ("ACS712-05B_SOIC-8", include_str!("../examples/ACS712-05B_SOIC-8.part.json")),
+    ("INA180A1_SOT-23-5", include_str!("../examples/INA180A1_SOT-23-5.part.json")),
+    ("INA180A2_SOT-23-5", include_str!("../examples/INA180A2_SOT-23-5.part.json")),
+    ("INA180A3_SOT-23-5", include_str!("../examples/INA180A3_SOT-23-5.part.json")),
 ];
 
 /// Older bundled versions that are replaced when the user's copy is still unmodified:

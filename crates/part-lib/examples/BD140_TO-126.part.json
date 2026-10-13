@@ -1,0 +1,63 @@
+{
+  "name": "BD140",
+  "category": "トランジスタ",
+  "description": "PNP パワートランジスタ 80V 1.5A (TO-126, ピン1=E 2=C 3=B)。BD139 の相補。簡易モデル",
+  "prefix": "Q",
+  "footprint_name": "TO-126-3_Vertical",
+  "pins": [
+    {
+      "number": "1",
+      "name": "E",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "C",
+      "side": "bottom"
+    },
+    {
+      "number": "3",
+      "name": "B",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "single_row",
+    "pins": 3,
+    "pitch": 2.54,
+    "pad_d": 1.8,
+    "drill": 1.0
+  },
+  "sim": {
+    "kind": "model",
+    "element": "Q",
+    "name": "BD140",
+    "text": ".model BD140 PNP(IS=2e-13 BF=120 BR=8)",
+    "pins": [
+      "2",
+      "3",
+      "1"
+    ],
+    "limits": [
+      "Ebers-Moll の簡易モデルです。電流増幅率は電流で変わりません(実物は大電流で下がります)。",
+      "容量・飽和時の細かい特性は扱いません。耐圧・定格電流を超えても壊れません。"
+    ]
+  },
+  "ratings": {
+    "v_max": 80,
+    "i_max": 1.5,
+    "p_max": 12.5,
+    "rows": [
+      {
+        "name": "直流電流増幅率 hFE",
+        "value": "40〜250",
+        "condition": "IC = 150mA, VCE = 2V"
+      },
+      {
+        "name": "コレクタ飽和電圧",
+        "value": "0.5V (最大)",
+        "condition": "IC = 500mA, IB = 50mA"
+      }
+    ]
+  }
+}

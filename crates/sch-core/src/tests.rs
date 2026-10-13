@@ -121,7 +121,7 @@ fn spice_deck() {
 }
 
 fn opamp() -> CustomSymbol {
-    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side };
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false };
     CustomSymbol {
         ratings: None,
         glyph: String::new(),

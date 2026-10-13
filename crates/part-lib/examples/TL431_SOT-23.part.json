@@ -1,0 +1,90 @@
+{
+  "name": "TL431",
+  "category": "基準電圧",
+  "description": "TL431 可変シャント・レギュレータ(基準電圧 2.495V、SOT-23, ピン1=CATHODE 2=REF 3=ANODE)。REF が 2.495V になるようカソード電流が流れる。外付け抵抗の分圧で 2.5〜36V に設定。簡易モデル(数値は概算)。ピン配置は必ずデータシートで確認",
+  "prefix": "U",
+  "footprint_name": "SOT-23",
+  "pins": [
+    {
+      "number": "1",
+      "name": "CATHODE",
+      "side": "top"
+    },
+    {
+      "number": "2",
+      "name": "REF",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "ANODE",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "2",
+        "x": 0.95,
+        "y": 0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      },
+      {
+        "pin": "3",
+        "x": 0.0,
+        "y": -0.95,
+        "shape": "rect",
+        "w": 0.9,
+        "h": 0.8
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "TL431",
+    "text": ".subckt TL431 cat ref an\n* reference input current about 2 uA\nRref ref an 1.25Meg\n* the cathode current rises steeply once REF is above 2.495 V (and the cathode is above ~1.2 V)\nBk cat an I=limit(200*(V(ref,an)-2.495),0,0.1)*step(V(cat,an)-1.2,0.2)\nRleak cat an 10Meg\n.ends TL431",
+    "pins": [
+      "1",
+      "2",
+      "3"
+    ],
+    "limits": [
+      "基準電圧は 2.495V で一定です。温度による変化・初期誤差(±0.5〜2%)は扱いません。",
+      "カソード電流は 0〜100mA の範囲で制御します。最小動作電流(約 1mA)を下回ると実物は regulation しなくなりますが、このモデルは小さな電流でも regulation します。",
+      "出力インピーダンスの周波数特性(AC)・位相の遅れは扱いません。大きな容量負荷での発振は再現しません。",
+      "耐圧(36V)・最大電流を超えても壊れません。"
+    ]
+  },
+  "ratings": {
+    "v_max": 36,
+    "i_max": 0.1,
+    "p_max": 0.4,
+    "rows": [
+      {
+        "name": "基準電圧",
+        "value": "2.495V (代表)",
+        "condition": "TL431, 25℃"
+      },
+      {
+        "name": "最小カソード電流",
+        "value": "1mA",
+        "condition": "regulation に必要"
+      },
+      {
+        "name": "REF 入力電流",
+        "value": "2µA (代表)"
+      }
+    ]
+  }
+}

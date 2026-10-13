@@ -1,0 +1,71 @@
+{
+  "name": "NTC_10k_B3950",
+  "category": "センサ",
+  "description": "NTC サーミスタ 10kΩ (25℃)・B定数 3950K (2端子)。温度が上がると抵抗が下がる。分圧してマイコンで温度を測る定番。25℃ で 10kΩ、100℃ で約 680Ω",
+  "prefix": "RT",
+  "glyph": "resistor",
+  "footprint_name": "Thermistor_Disc_P5.08",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.54,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 0.9
+      },
+      {
+        "pin": "2",
+        "x": 2.54,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 0.9
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "NTC_10k_B3950",
+    "text": ".subckt NTC_10k_B3950 a b\n* resistance follows the circuit temperature\nBr a b I=V(a,b)/(10k*exp(3950*(1/(temp+273.15)-1/298.15)))\n.ends NTC_10k_B3950",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "limits": [
+      "抵抗値はシミュレーションの温度で決まります。温度は解析タブの温度設定・温度スイープで変えます(回路全体が同じ温度になります)。",
+      "自己発熱(流す電流で温度が上がる)・熱の応答の遅れは扱いません。電流を流しすぎると実物は測定値がずれます。",
+      "B定数(3950K)の式で近似しています。広い温度範囲では実物の値とずれます。"
+    ]
+  },
+  "ratings": {
+    "p_max": 0.25,
+    "rows": [
+      {
+        "name": "抵抗値",
+        "value": "10kΩ ±1%",
+        "condition": "25℃"
+      },
+      {
+        "name": "B定数",
+        "value": "3950K ±1%",
+        "condition": "25〜50℃"
+      }
+    ]
+  }
+}

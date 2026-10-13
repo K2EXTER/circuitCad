@@ -49,6 +49,7 @@ impl Circuit {
                     let shrink = 0.002 * (temp_c - T_NOM_C);
                     model.vto = model.vto.signum() * (model.vto.abs() - shrink).max(0.05);
                 }
+                Element::BSource { expr, .. } => *expr = expr.at_temperature(temp_c),
                 _ => {}
             }
         }

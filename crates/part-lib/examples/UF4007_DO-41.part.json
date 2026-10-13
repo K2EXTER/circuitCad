@@ -1,0 +1,71 @@
+{
+  "name": "UF4007",
+  "category": "整流ダイオード",
+  "description": "ファストリカバリ整流ダイオード 1000V 1A (DO-41, 帯の側がカソード K)。スイッチング電源の整流に(逆回復 75ns)。簡易モデル(パラメータは概算)",
+  "prefix": "D",
+  "footprint_name": "D_DO-41_P10.16",
+  "pins": [
+    {
+      "number": "K",
+      "name": "K",
+      "side": "right"
+    },
+    {
+      "number": "A",
+      "name": "A",
+      "side": "left"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "K",
+        "x": -5.08,
+        "y": 0,
+        "shape": "rect",
+        "w": 2.0,
+        "h": 2.0,
+        "drill": 1.0
+      },
+      {
+        "pin": "A",
+        "x": 5.08,
+        "y": 0,
+        "shape": "circle",
+        "w": 2.0,
+        "drill": 1.0
+      }
+    ]
+  },
+  "sim": {
+    "kind": "model",
+    "element": "D",
+    "name": "UF4007",
+    "text": ".model UF4007 D(IS=1n N=2.0 RS=0.3 BV=1000 IBV=5u)",
+    "pins": [
+      "A",
+      "K"
+    ],
+    "limits": [
+      "逆回復時間(75ns)は扱いません。スイッチング電源のスパイクや損失は実物より小さく出ます。",
+      "接合容量は扱いません。耐圧や定格電流を超えても壊れません。"
+    ]
+  },
+  "ratings": {
+    "v_max": 1000,
+    "i_max": 1,
+    "p_max": 1,
+    "rows": [
+      {
+        "name": "順方向電圧",
+        "value": "1.7V (最大)",
+        "condition": "IF = 1A"
+      },
+      {
+        "name": "逆回復時間",
+        "value": "75ns (最大)"
+      }
+    ]
+  }
+}

@@ -91,7 +91,22 @@ impl BoardEditor {
             .collect();
         let nets: Vec<NetlistNet> = sch_core::extract(sch)
             .into_iter()
-            .map(|n| NetlistNet { name: n.name, pins: n.pins.into_iter().map(|p| (p.refdes, p.pin)).collect() })
+            .map(|n| NetlistNet {
+                name: n.name,
+                // simulation-only pins (sensor stimulus inputs) have no pad
+                pins: n
+                    .pins
+                    .into_iter()
+                    .filter(|p| {
+                        !sch.components
+                            .iter()
+                            .find(|c| c.refdes == p.refdes)
+                            .and_then(|c| c.custom.as_ref())
+                            .is_some_and(|s| s.pins.iter().any(|sp| sp.sim_only && sp.number == p.pin))
+                    })
+                    .map(|p| (p.refdes, p.pin))
+                    .collect(),
+            })
             .collect();
         // library parts bring their own footprint
         self.checkpoint();
