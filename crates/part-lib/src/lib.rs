@@ -449,6 +449,20 @@ fn is_original_without_ratings(file: &Path, bundled: &str) -> bool {
     old == new
 }
 
+/// Key recorded in `.bundled` once a part has been offered its corrected pads.
+fn pads_key(name: &str) -> String {
+    format!("{name}+pads")
+}
+
+/// Is the file an unmodified copy of a bundled leaded part from when its pads had no hole (drawn as surface mount)?
+/// (Equal to the bundled part in every field except the package.)
+fn is_original_without_holes(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    let has_hole = |d: &PartDef| matches!(&d.package, PackageSpec::Explicit { pads, .. } if pads.iter().any(|p| p.drill.is_some()));
+    has_hole(&new) && !has_hole(&old) && old == PartDef { package: old.package.clone(), height: old.height, ..new }
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -501,6 +515,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if file.exists() && is_original_without_ratings(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // leaded parts whose pads first came without holes: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = pads_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_without_holes(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

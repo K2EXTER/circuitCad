@@ -382,9 +382,15 @@ fn write_chip_examples() {
     for (name, t, fp, ratings) in cases {
         let g = t.generate(&name).unwrap();
         let built = pcb_core::footprints::get(fp).unwrap();
+        // keep the footprint's pad shape and hole (a leaded part must stay through-hole)
         let shape = |p: &pcb_core::footprints::FpPad| {
             let (w, h) = p.shape.size();
-            PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: "rect".into(), w, h, drill: None, slot: 0.0, slot_v: false }
+            let kind = match p.shape {
+                pcb_core::model::PadShape::Circle { .. } => "circle",
+                pcb_core::model::PadShape::Oval { .. } => "oval",
+                pcb_core::model::PadShape::Rect { .. } => "rect",
+            };
+            PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: kind.into(), w, h, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
         };
         let def = PartDef {
             name: name.clone(),
@@ -396,7 +402,12 @@ fn write_chip_examples() {
             pins: g.pins.clone(),
             package: PackageSpec::Explicit { pads: built.pads.iter().map(shape).collect(), holes: vec![] },
             footprint_name: Some(fp.into()),
-            height: None,
+            height: match name.as_str() {
+                "CE_100u_16V" => Some(11.0),
+                "CT_10u_16V" => Some(7.0),
+                "CF_100n_63V" => Some(9.0),
+                _ => None,
+            },
             sim: Some(sch_core::SimModel {
                 kind: sch_core::SimKind::Subckt,
                 element: String::new(),
@@ -497,4 +508,15 @@ fn kicad_rejects_other_files() {
     assert!(kicad::parse_symbols("(footprint \"x\")").is_err());
     assert!(kicad::parse_footprint("(kicad_symbol_lib)").is_err());
     assert!(kicad::parse_sexpr("(a (b").is_err());
+}
+
+/// The leaded capacitors are through-hole: their pads carry a hole (they were once generated as surface-mount pads).
+#[test]
+fn leaded_capacitors_are_through_hole() {
+    for name in ["CE_100u_16V", "CT_10u_16V", "CF_100n_63V"] {
+        let (_, text) = EXAMPLES.iter().find(|(n, _)| *n == name).unwrap();
+        let d: PartDef = serde_json::from_str(text).unwrap();
+        let fp = d.footprint().unwrap();
+        assert!(fp.pads.iter().all(|p| p.drill.is_some()), "{name}: pads without a hole");
+    }
 }

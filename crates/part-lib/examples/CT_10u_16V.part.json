@@ -27,7 +27,7 @@
         "shape": "rect",
         "w": 1.6,
         "h": 1.6,
-        "drill": null,
+        "drill": 0.8,
         "slot": 0.0,
         "slot_v": false
       },
@@ -35,10 +35,10 @@
         "pin": "2",
         "x": 1.0,
         "y": 0.0,
-        "shape": "rect",
+        "shape": "circle",
         "w": 1.6,
         "h": 1.6,
-        "drill": null,
+        "drill": 0.8,
         "slot": 0.0,
         "slot_v": false
       }
@@ -46,6 +46,7 @@
     "holes": []
   },
   "footprint_name": "CP_Radial_D5_P2.0",
+  "height": 7.0,
   "sim": {
     "kind": "subckt",
     "element": "",
