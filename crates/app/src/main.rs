@@ -1727,4 +1727,39 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("sheet.pcbjson"), serde_json::to_string_pretty(&b).unwrap()).unwrap();
     }
+    /// End-to-end trial: schematic -> board -> autoplace -> autoroute -> GND pour -> DRC -> preflight -> fab files.
+    /// `CIRCUITCAD_TRIAL=power_supply cargo test -p app fab_trial -- --ignored --nocapture`
+    /// Writes to `target/fab_trial/<name>/`.
+    #[test]
+    #[ignore]
+    fn fab_trial() {
+        let name = std::env::var("CIRCUITCAD_TRIAL").unwrap_or("power_supply".into());
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut app = App::default();
+        app.sch.load_path(root.join(format!("docs/examples/{name}.schjson")));
+        app.board_ed.import_from_schematic(&app.sch);
+        app.board_ed.autoplace();
+        println!("{}", app.board_ed.status);
+        app.board_ed.autoroute(None);
+        println!("{}", app.board_ed.status);
+        let b = &mut app.board_ed.board;
+        b.name = name.clone();
+        let (w, h) = (b.outline.iter().map(|p| p.x).fold(0.0, f64::max), b.outline.iter().map(|p| p.y).fold(0.0, f64::max));
+        let poly = vec![Point::new(0.5, 0.5), Point::new(w - 0.5, 0.5), Point::new(w - 0.5, h - 0.5), Point::new(0.5, h - 0.5)];
+        let mut z = pcb_core::Zone::new("GND", Side::Bottom, poly);
+        z.remove_islands = true;
+        b.zones.push(z);
+        let viol = pcb_core::drc::check(&app.board_ed.board);
+        println!("DRC {} violations", viol.len());
+        for v in &viol {
+            println!("  DRC ({:.1},{:.1}) {}", v.at.x, v.at.y, v.message);
+        }
+        for c in pcb_core::fab::preflight(&app.board_ed.board, pcb_core::fab::PRESETS.first()) {
+            println!("  PRE {:?} {}", c.level, c.title);
+        }
+        let out = root.join("target/fab_trial").join(&name);
+        std::fs::create_dir_all(&out).unwrap();
+        println!("{:?}", app.board_ed.write_fab_files(&out));
+        std::fs::write(out.join(format!("{name}.pcbjson")), serde_json::to_string_pretty(&app.board_ed.board).unwrap()).unwrap();
+    }
 }

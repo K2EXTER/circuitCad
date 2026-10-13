@@ -15,11 +15,20 @@ fn csv(field: &str) -> String {
     if field.contains([',', '"', '\n']) { format!("\"{}\"", field.replace('"', "\"\"")) } else { field.to_string() }
 }
 
+/// The value as it is bought: simulation parameters written after it ("100u ESR=0.05") are dropped.
+fn bom_value(value: &str) -> String {
+    let mut words = value.split_whitespace();
+    match (words.next(), words.clone().next()) {
+        (Some(first), Some(_)) if words.all(|w| w.contains('=')) => first.to_string(),
+        _ => value.trim().to_string(),
+    }
+}
+
 /// One row per distinct (value, footprint), designators listed together.
 pub fn bom_csv(board: &Board) -> String {
     let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for p in &board.parts {
-        groups.entry((p.value.clone(), p.footprint.clone())).or_default().push(p.refdes.clone());
+        groups.entry((bom_value(&p.value), p.footprint.clone())).or_default().push(p.refdes.clone());
     }
     let mut rows: Vec<(String, String, Vec<String>)> = groups.into_iter().map(|((v, f), mut r)| {
         r.sort_by_key(|x| natural_key(x));
@@ -78,6 +87,14 @@ mod tests {
         assert_eq!(lines.len(), 4);
         // rows ordered by first designator: C, J, R
         assert!(lines[1].starts_with("100n") && lines[3].starts_with("10k"));
+    }
+
+    #[test]
+    fn simulation_parameters_are_not_part_of_the_bom_value() {
+        assert_eq!(bom_value("100u ESR=0.05"), "100u");
+        assert_eq!(bom_value("100u DCR=0.05 ESL=2n"), "100u");
+        assert_eq!(bom_value("10k"), "10k");
+        assert_eq!(bom_value("Conn 2 pin"), "Conn 2 pin");
     }
 
     #[test]
