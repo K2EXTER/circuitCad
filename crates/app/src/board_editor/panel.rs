@@ -31,6 +31,12 @@ impl BoardEditor {
                     self.tool = *t;
                     self.pending = None;
                     self.poly.clear();
+                    // what was selected stays behind: R, B and Delete must not reach it from another tool
+                    if *t != Tool::Select {
+                        self.selected = None;
+                        self.multi.clear();
+                        self.boxsel = None;
+                    }
                 }
             }
             ui.horizontal(|ui| {

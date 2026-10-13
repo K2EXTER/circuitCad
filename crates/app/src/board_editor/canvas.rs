@@ -76,7 +76,10 @@ impl BoardEditor {
             self.redo();
             return;
         }
-        if pressed(Key::Delete) || pressed(Key::Backspace) {
+        // R, B and Delete act on what is selected, and only the Select tool selects: in another tool they do nothing
+        // to a part or a track picked earlier
+        let selecting = self.tool == Tool::Select;
+        if selecting && (pressed(Key::Delete) || pressed(Key::Backspace)) {
             if !self.multi.is_empty() {
                 self.delete_multi();
             } else if let Some(it) = self.selected {
@@ -106,7 +109,7 @@ impl BoardEditor {
             .iter()
             .filter_map(|it| if let Item::Part(i) = it { self.board.parts.get(*i).filter(|p| !self.board.is_locked(&p.refdes)).map(|p| p.refdes.clone()) } else { None })
             .collect();
-        if pressed(Key::B) {
+        if selecting && pressed(Key::B) {
             if grouped_parts.is_empty() {
                 self.flip_selected_part();
             } else {
@@ -116,7 +119,7 @@ impl BoardEditor {
                 }
             }
         }
-        if pressed(Key::R) {
+        if selecting && pressed(Key::R) {
             if let Some(Item::Part(i)) = self.selected {
                 if self.board.is_locked(&self.board.parts[i].refdes) {
                     self.status = "この部品は固定されています。固定を外すと回せます (選択パネルのボタン)".into();
@@ -139,5 +142,53 @@ impl BoardEditor {
             && let (Some(a), Some(p)) = (self.pending, cursor) {
                 self.route_via(a, p);
             }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn press(e: &mut BoardEditor, key: egui::Key) {
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        input.events.push(egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
+        let mut out = ctx.run_ui(input, |ui| e.handle_keys(ui, None));
+        out.textures_delta.clear();
+    }
+
+    fn editor() -> BoardEditor {
+        let mut e = BoardEditor::default();
+        e.board = pcb_core::Board::new("t", 40.0, 30.0);
+        e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: pcb_core::Point::new(10.0, 10.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
+        e
+    }
+
+    /// R, B and Delete reach a selected part or track only from the Select tool, so a part picked earlier is
+    /// not turned, flipped or deleted while another tool is at work.
+    #[test]
+    fn r_b_and_delete_only_act_in_the_select_tool() {
+        let mut e = editor();
+        e.tool = Tool::Select;
+        e.selected = Some(Item::Part(0));
+        press(&mut e, egui::Key::R);
+        assert_eq!(e.board.parts[0].rot, 1, "R turns the selected part in the Select tool");
+        press(&mut e, egui::Key::B);
+        assert_eq!(e.board.parts[0].side, pcb_core::Side::Bottom, "B turns it over");
+        press(&mut e, egui::Key::B);
+        // the same keys in another tool, with the selection still there (a script or an old state)
+        e.tool = Tool::Track;
+        e.selected = Some(Item::Part(0));
+        press(&mut e, egui::Key::R);
+        press(&mut e, egui::Key::B);
+        assert_eq!((e.board.parts[0].rot, e.board.parts[0].side), (1, pcb_core::Side::Top));
+        // a track selected earlier is not deleted from another tool either
+        e.board.tracks.push(pcb_core::Track { a: pcb_core::Point::new(1.0, 1.0), b: pcb_core::Point::new(5.0, 1.0), width: 0.25, side: pcb_core::Side::Top });
+        e.selected = Some(Item::Track(0));
+        press(&mut e, egui::Key::Delete);
+        assert_eq!(e.board.tracks.len(), 1);
+        e.tool = Tool::Select;
+        press(&mut e, egui::Key::Delete);
+        assert!(e.board.tracks.is_empty(), "Delete removes it in the Select tool");
     }
 }
