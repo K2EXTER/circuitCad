@@ -73,8 +73,16 @@ fn led_blinker_example_runs() {
     assert!(n1 >= 8 && n2 >= 8, "{n1} {n2}");
     // the two collectors are in opposite states most of the time
     let (a, b) = (r.signal("V(COL1)").unwrap(), r.signal("V(COL2)").unwrap());
-    let opposite = a.values.iter().zip(&b.values).filter(|(x, y)| (**x > 2.5) != (**y > 2.5)).count();
-    assert!(opposite as f64 > 0.9 * a.values.len() as f64, "{opposite} of {}", a.values.len());
+    // weighted by time: the step control puts more points into the flips than into the flat parts
+    let (mut opposite, mut total) = (0.0, 0.0);
+    for k in 1..r.time.len() {
+        let dt = r.time[k] - r.time[k - 1];
+        total += dt;
+        if (a.values[k] > 2.5) != (b.values[k] > 2.5) {
+            opposite += dt;
+        }
+    }
+    assert!(opposite > 0.9 * total, "{opposite} s of {total} s");
 }
 
 #[test]

@@ -214,7 +214,7 @@ mod tests {
         // start-up ramp to 5 V in the first half, then 5 V +/- 0.1 V
         let time: Vec<f64> = (0..=200).map(|i| i as f64 * 1e-3).collect();
         let values: Vec<f64> = time.iter().map(|&t| if t < 0.1 { 50.0 * t } else { 5.0 + 0.1 * (t * 2000.0).sin().signum() }).collect();
-        let tr = TranResult { time, signals: vec![Signal { name: "V(out)".into(), unit: "V", values }], warnings: vec![], retries: 0 };
+        let tr = TranResult { time, signals: vec![Signal { name: "V(out)".into(), unit: "V", values }], warnings: vec![], retries: 0, rejected: 0 };
         let inp = Inputs { tran: Some(&tr), ..Default::default() };
         let mean = evaluate(&spec(SpecKind::TranMean, "V(out)", Some(4.9), Some(5.1)), &inp);
         assert_eq!(mean.pass, Some(true), "{mean:?}");

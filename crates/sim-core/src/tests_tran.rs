@@ -227,3 +227,29 @@ fn a_capacitor_value_can_carry_an_initial_voltage() {
     s.components[c].value = "100u XYZ=1".into();
     assert!(from_schematic(&s).is_err());
 }
+
+/// Series RLC (R 10, L 1 mH, C 1 uF: rings at 5 kHz, period 200 us) after a voltage step, with a
+/// largest step of a quarter period. A fixed step of that size is far off; the error control must
+/// refine it where the waveform bends and stay within 0.5 % of the closed form.
+#[test]
+fn step_control_follows_the_closed_form_even_with_a_coarse_step() {
+    let mut c = Circuit::new();
+    let (a, b, o) = (c.node("a"), c.node("b"), c.node("o"));
+    c.add(Element::VSource {
+        name: "V1".into(),
+        p: a,
+        n: 0,
+        wave: Waveform::Pulse { v1: 0.0, v2: 1.0, td: 0.0, tr: 1e-9, tf: 1e-9, pw: 1.0, per: f64::INFINITY },
+        ac: None,
+    });
+    c.add(Element::Resistor { name: "R1".into(), a, b, r: 10.0 });
+    c.add(Element::Inductor { name: "L1".into(), a: b, b: o, l: 1e-3 });
+    c.add(Element::Capacitor { name: "C1".into(), a: o, b: 0, c: 1e-6 });
+    let r = transient(&c, &TranSettings { tstop: 1e-3, tstep: 50e-6, uic: false }).unwrap();
+    let (alpha, w0) = (5000.0_f64, 1.0 / (1e-3_f64 * 1e-6).sqrt());
+    let wd = (w0 * w0 - alpha * alpha).sqrt();
+    let exact = |t: f64| 1.0 - (-alpha * t).exp() * ((wd * t).cos() + alpha / wd * (wd * t).sin());
+    let err = max_err(&r, "V(o)", exact);
+    assert!(err < 0.005, "worst error {err} V");
+    assert!(r.rejected > 0 && r.time.len() > 21, "the step must have been refined: {} points, {} rejected", r.time.len(), r.rejected);
+}

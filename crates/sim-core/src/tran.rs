@@ -5,6 +5,9 @@ use crate::circuit::Circuit;
 use crate::dc::{compile, floating_warnings, has_ground, solve_op, v, Attempt, Ctx, Dyn, SimError, Ce};
 
 const MAX_POINTS: f64 = 1_000_000.0;
+/// Absolute floors of the step-error check: a capacitor voltage (V) and an inductor current (A).
+const LTE_ABS_V: f64 = 1e-6;
+const LTE_ABS_I: f64 = 1e-9;
 
 #[derive(Clone, Debug)]
 pub struct TranSettings {
@@ -30,6 +33,8 @@ pub struct TranResult {
     pub warnings: Vec<String>,
     /// Newton solves that were thrown away and retried with a smaller step.
     pub retries: usize,
+    /// Steps thrown away because the error estimate was too large, and redone smaller.
+    pub rejected: usize,
 }
 
 impl TranResult {
@@ -65,6 +70,61 @@ fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>,
     let (att, _) = solve_op(&cm_held, &order)?;
     let n = cm.n_unknowns;
     Ok((att.x[..n].to_vec(), att.vj))
+}
+
+/// The capacitor voltages and inductor currents of a solution (the integrator's state variables).
+fn reactive_state(cm: &crate::dc::Compiled, x: &[f64]) -> (Vec<f64>, Vec<f64>) {
+    let (mut cv, mut il) = (vec![0.0; cm.n_caps], vec![0.0; cm.n_inds]);
+    for e in &cm.ce {
+        match e {
+            Ce::C { a, b, idx, .. } => cv[*idx] = v(x, *a) - v(x, *b),
+            Ce::L { br, idx, .. } => il[*idx] = x[*br],
+            _ => {}
+        }
+    }
+    (cv, il)
+}
+
+/// Divided difference of order `pts.len() - 1` through `(t, y)` points.
+fn divided_difference(pts: &[(f64, f64)]) -> f64 {
+    let mut d: Vec<f64> = pts.iter().map(|p| p.1).collect();
+    for k in 1..pts.len() {
+        for i in 0..pts.len() - k {
+            d[i] = (d[i + 1] - d[i]) / (pts[i + k].0 - pts[i].0);
+        }
+    }
+    d[0]
+}
+
+/// One earlier accepted point: time, capacitor voltages, inductor currents.
+type Sample = (f64, Vec<f64>, Vec<f64>);
+
+/// Local truncation error of the step to `t_new` relative to what is allowed (> 1: too big).
+/// Trapezoidal: h^3/12 times the third derivative (= 6 DD3); backward Euler: h^2/2 times the second (= 2 DD2).
+/// `None` while there are not enough smooth earlier points.
+fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], il: &[f64], trap: bool, rel: f64) -> Option<f64> {
+    let need = if trap { 3 } else { 2 };
+    if hist.len() < need {
+        return None;
+    }
+    let past = &hist[hist.len() - need..];
+    let h = t_new - past[need - 1].0;
+    let mut worst: f64 = 0.0;
+    let mut check = |get: &dyn Fn(&Sample) -> f64, new: f64, abs: f64| {
+        let mut pts: Vec<(f64, f64)> = past.iter().map(|p| (p.0, get(p))).collect();
+        pts.push((t_new, new));
+        let dd = divided_difference(&pts).abs();
+        let err = if trap { h.powi(3) * dd / 2.0 } else { h * h * dd };
+        let old = pts[need - 1].1;
+        worst = worst.max(err / (rel * new.abs().max(old.abs()) + abs));
+    };
+    for (k, &new) in cv.iter().enumerate() {
+        check(&|p| p.1[k], new, LTE_ABS_V);
+    }
+    for (k, &new) in il.iter().enumerate() {
+        check(&|p| p.2[k], new, LTE_ABS_I);
+    }
+    Some(worst)
 }
 
 pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimError> {
@@ -133,7 +193,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     bps.dedup_by(|a, b| (*a - *b).abs() <= 1e-15 * s.tstop.max(1e-12));
     let mut bp_idx = 0;
 
-    let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0 };
+    let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0, rejected: 0 };
     let node_ids: Vec<usize> = (1..cm.node_names.len()).collect();
     for &i in &node_ids {
         result.signals.push(Signal { name: format!("V({})", cm.node_names[i]), unit: "V", values: vec![] });
@@ -159,11 +219,19 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     let eps = 1e-12 * s.tstop;
     let mut t = 0.0;
     let mut force_be = true; // first step: no derivative history yet
+    let lte_rel = crate::options::options().lte_reltol;
+    // `tstep` is the largest step; `h_ctrl` is the step the error control currently trusts
+    let h_min = s.tstep * 1e-4;
+    let mut h_ctrl = s.tstep / 10.0;
+    // the last accepted points (time, capacitor voltages, inductor currents) for the error estimate;
+    // a source corner breaks the smoothness, so the history restarts there
+    let mut hist: Vec<(f64, Vec<f64>, Vec<f64>)> = vec![(0.0, cap_v.clone(), ind_i.clone())];
     while t < s.tstop - eps {
         while bp_idx < bps.len() && bps[bp_idx] <= t + eps {
             bp_idx += 1;
         }
-        let mut h = s.tstep.min(s.tstop - t);
+        let mut h = h_ctrl.min(s.tstep).min(s.tstop - t);
+        let wanted = h;
         let mut lands_on_bp = false;
         if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
             h = bps[bp_idx] - t;
@@ -173,32 +241,66 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
             h = s.tstop - t;
         }
 
-        let mut tries = 0;
         let mut retried = false;
-        let att: Attempt = loop {
-            let trap = !(force_be || retried);
-            let ctx = Ctx {
-                gmin: crate::options::options().gmin,
-                scale: 1.0,
-                t: t + h,
-                dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v }),
-                sw_widen: 1.0,
-            };
-            match cm.newton(x.clone(), vj.clone(), &ctx) {
-                Ok(a) => break a,
-                Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
-                Err(crate::dc::Fail::NoConv) => {
-                    tries += 1;
-                    result.retries += 1;
-                    lands_on_bp = false;
-                    // the trapezoidal rule keeps the old capacitor current, which for a fast
-                    // switching event no step size can fix: retry with backward Euler
-                    retried = true;
-                    h /= 4.0;
-                    if tries > 12 || h < 1e-18 {
-                        return Err(SimError::NoConvergence);
+        let mut rejects = 0;
+        // one pass per tried step size: Newton (shrinking on failure), then the error check
+        let (att, ratio, order) = 'step: loop {
+            let mut tries = 0;
+            let mut h_back = 0.0;
+            let att: Attempt = loop {
+                let trap = !(force_be || retried);
+                let ctx = Ctx {
+                    gmin: crate::options::options().gmin,
+                    scale: 1.0,
+                    t: t + h,
+                    dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v }),
+                    sw_widen: 1.0,
+                };
+                match cm.newton(x.clone(), vj.clone(), &ctx) {
+                    Ok(a) => break a,
+                    Err(crate::dc::Fail::Singular) => return Err(SimError::Singular),
+                    Err(crate::dc::Fail::NoConv) => {
+                        tries += 1;
+                        result.retries += 1;
+                        lands_on_bp = false;
+                        // the trapezoidal rule keeps the old capacitor current, which for a fast
+                        // switching event no step size can fix: retry with backward Euler
+                        retried = true;
+                        if tries == 4 && h * 16.0 < s.tstep.min(s.tstop - t) {
+                            // An instant switching event (a latch, a logic gate) may have no solution
+                            // close to the old state at all, yet one far away that a big step lands on:
+                            // shrinking never helps there, so try the largest step once, then go on shrinking.
+                            h_back = h / 4.0;
+                            h = s.tstep.min(s.tstop - t);
+                            if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
+                                h = bps[bp_idx] - t;
+                                lands_on_bp = true;
+                            }
+                        } else if h_back > 0.0 {
+                            h = h_back;
+                            h_back = 0.0;
+                        } else {
+                            h /= 4.0;
+                        }
+                        if tries > 12 || h < 1e-18 {
+                            return Err(SimError::NoConvergence);
+                        }
                     }
                 }
+            };
+            let trap = !(force_be || retried);
+            let order = if trap { 3.0 } else { 2.0 };
+            let (cv, il) = reactive_state(&cm, &att.x);
+            let ratio = step_error_ratio(&hist, t + h, &cv, &il, trap, lte_rel);
+            match ratio {
+                // too inaccurate: redo this step with a smaller one (unless it is already tiny)
+                Some(r) if r > 1.0 && h > h_min && rejects < 12 => {
+                    rejects += 1;
+                    result.rejected += 1;
+                    lands_on_bp = false;
+                    h *= (0.9 * r.powf(-1.0 / order)).clamp(0.125, 0.9);
+                }
+                _ => break 'step (att, ratio, order),
             }
         };
 
@@ -225,6 +327,23 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         // the step after a retry has no reliable current history either
         force_be = lands_on_bp || retried;
         record(&mut result, t, &x, &cap_i, &cm);
+
+        // the next step: grow while the error estimate leaves room, never beyond `tstep`
+        if lands_on_bp {
+            hist.clear();
+            // restart from about the length of the step that reached the corner
+            h_ctrl = h.max(s.tstep * 1e-3).min(s.tstep);
+        } else if retried {
+            h_ctrl = h.max(h_min);
+        } else if h >= wanted * 0.999 || ratio.is_some_and(|r| r > 1.0) {
+            let growth = ratio.map_or(2.0, |r| (0.9 * r.max(1e-12).powf(-1.0 / order)).clamp(0.5, 2.0));
+            h_ctrl = (h * growth).clamp(h_min, s.tstep);
+        }
+        // else: the step was cut short by the end of the run; keep the controller's value
+        hist.push((t, cap_v.clone(), ind_i.clone()));
+        if hist.len() > 3 {
+            hist.remove(0);
+        }
     }
 
     warnings.dedup();

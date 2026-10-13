@@ -382,9 +382,10 @@ fn buck_sample_regulates_5v_switches_at_150khz_and_the_lesson_numbers_hold() {
     // a small coil: the current swings more and touches zero (discontinuous)
     let (_, _, imin2, imax2, _) = buck_run("22u DCR=0.05", "20");
     assert!(imin2 < 0.02 && imax2 - imin2 > 0.55, "{imin2}..{imax2}");
-    // twice the load current, the output still holds, and the efficiency is lower (more current through the losses)
+    // twice the load current: the output still holds, and the efficiency is higher (the fixed losses of the
+    // control circuit weigh less). ngspice agrees: 0.900 at 20 ohm, 0.916 at 10 ohm; ours 0.894 and 0.911.
     let (v3, _, _, _, eff3) = buck_run("100u DCR=0.05", "10");
-    assert!((4.6..5.3).contains(&v3) && (0.82..0.93).contains(&eff3) && eff3 < eff, "{v3} {eff3}");
+    assert!((4.6..5.3).contains(&v3) && (0.82..0.95).contains(&eff3) && eff3 > eff, "{v3} {eff3} vs {eff}");
 }
 
 /// Runs a buck sample variant for 5 ms and measures the last 0.6 ms: (mean Vout, Vout p-p).
@@ -403,7 +404,8 @@ fn buck_output_cap_swap_samples_differ_in_ripple() {
     let (vc, ppc) = cout_run("buck_cout_ceramic.schjson");
     // both regulate the same; the electrolytic's 0.3 ohm ESR (x the ~0.3 A coil ripple) dominates its ripple even though it has 10x the capacitance
     assert!((4.5..5.3).contains(&ve) && (4.5..5.3).contains(&vc), "{ve} {vc}");
-    assert!(ppe > 2.0 * ppc && ppe < 0.15, "electrolytic {ppe} V vs ceramic {ppc} V");
+    // ngspice measures 0.104 V (electrolytic) and 0.070 V (ceramic) in this window
+    assert!(ppe > 1.3 * ppc && ppe < 0.15, "electrolytic {ppe} V vs ceramic {ppc} V");
 }
 
 #[test]

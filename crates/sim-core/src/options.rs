@@ -16,11 +16,14 @@ pub struct SimOptions {
     pub gmin: f64,
     /// Newton iterations per solve before giving up.
     pub max_iter: usize,
+    /// Transient step control: allowed error of a capacitor voltage / inductor current per step,
+    /// relative to its size. The time step shrinks below `tstep` where the waveform bends faster.
+    pub lte_reltol: f64,
 }
 
 impl Default for SimOptions {
     fn default() -> Self {
-        SimOptions { reltol: 1e-6, vntol: 1e-8, abstol: 1e-12, gmin: 1e-12, max_iter: 150 }
+        SimOptions { reltol: 1e-6, vntol: 1e-8, abstol: 1e-12, gmin: 1e-12, max_iter: 150, lte_reltol: 1e-4 }
     }
 }
 
@@ -44,6 +47,7 @@ pub fn set_options(o: SimOptions) {
             abstol: ok(o.abstol, d.abstol),
             gmin: ok(o.gmin, d.gmin),
             max_iter: o.max_iter.clamp(10, 10_000),
+            lte_reltol: ok(o.lte_reltol, d.lte_reltol),
         })
     });
 }
