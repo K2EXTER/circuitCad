@@ -93,9 +93,28 @@ impl Board {
             self.holes.extend(new_holes);
         }
         let m = 0.3;
-        let c = [Point::new(x0 - m, y0 - m), Point::new(x1 + m, y0 - m), Point::new(x1 + m, y1 + m), Point::new(x0 - m, y1 + m)];
-        for i in 0..4 {
-            self.silk.push(SilkLine { side: part.side, a: c[i], b: c[(i + 1) % 4], width: 0.15, refdes: part.refdes.clone() });
+        // the footprint's own body outline and polarity marks; a box around the pads when it has none.
+        // (A footprint saved in a board or a library part may predate its outline: the built-in one of that name is used.)
+        let outline = if fp.silk.is_empty() { footprints::get(&fp.name).map(|b| b.silk).unwrap_or_default() } else { fp.silk.clone() };
+        if outline.is_empty() {
+            let c = [Point::new(x0 - m, y0 - m), Point::new(x1 + m, y0 - m), Point::new(x1 + m, y1 + m), Point::new(x0 - m, y1 + m)];
+            for i in 0..4 {
+                self.silk.push(SilkLine { side: part.side, a: c[i], b: c[(i + 1) % 4], width: 0.15, refdes: part.refdes.clone() });
+            }
+        } else {
+            let place = |q: Point| {
+                let local = if bottom { Point::new(-q.x, q.y) } else { q };
+                let r = rotate(local, part.rot);
+                Point::new(part.pos.x + r.x, part.pos.y + r.y)
+            };
+            for l in &outline {
+                let (a, b) = (place(l.a), place(l.b));
+                x0 = x0.min(a.x.min(b.x));
+                x1 = x1.max(a.x.max(b.x));
+                y0 = y0.min(a.y.min(b.y));
+                y1 = y1.max(a.y.max(b.y));
+                self.silk.push(SilkLine { side: part.side, a, b, width: 0.15, refdes: part.refdes.clone() });
+            }
         }
 
         // designator above the part, centred

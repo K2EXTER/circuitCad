@@ -28,10 +28,20 @@ pub struct FpHole {
     pub slot_v: bool,
 }
 
+/// A silkscreen line of a footprint (relative to the part origin, y up).
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct FpLine {
+    pub a: Point,
+    pub b: Point,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Footprint {
     pub name: String,
     pub pads: Vec<FpPad>,
+    /// The body outline and polarity marks drawn on the silkscreen. Empty = a box around the pads is drawn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub silk: Vec<FpLine>,
     #[serde(default)]
     pub holes: Vec<FpHole>,
     /// Height of the part's body above the board (mm), when the data sheet says. The 3D view guesses from the name otherwise.
@@ -49,6 +59,7 @@ fn smd2(name: &str, half_pitch: f64, w: f64, h: f64, pins: [&str; 2]) -> Footpri
         name: name.into(),
         holes: vec![],
         height: None,
+        silk: vec![],
         pads: vec![pad(pins[0], -half_pitch, 0.0, s, None), pad(pins[1], half_pitch, 0.0, s, None)],
     }
 }
@@ -59,6 +70,7 @@ fn tht2(name: &str, pitch: f64, d: f64, drill: f64, pins: [&str; 2]) -> Footprin
         name: name.into(),
         holes: vec![],
         height: None,
+        silk: vec![],
         pads: vec![
             pad(pins[0], -pitch / 2.0, 0.0, PadShape::Rect { w: d, h: d }, Some(drill)),
             pad(pins[1], pitch / 2.0, 0.0, s, Some(drill)),
@@ -72,6 +84,7 @@ fn header(name: &str, pins: &[String]) -> Footprint {
         name: name.into(),
         holes: vec![],
         height: None,
+        silk: vec![],
         pads: pins
             .iter()
             .enumerate()
@@ -118,6 +131,7 @@ pub fn get(name: &str) -> Option<Footprint> {
                 name: name.into(),
                 holes: vec![],
                 height: None,
+                silk: vec![],
                 pads: vec![
                     pad("E", -2.54, 0.0, PadShape::Rect { w: 1.5, h: 1.5 }, Some(0.8)),
                     pad("B", 0.0, 0.0, s, Some(0.8)),
@@ -131,6 +145,7 @@ pub fn get(name: &str) -> Option<Footprint> {
                 name: name.into(),
                 holes: vec![],
                 height: None,
+                silk: vec![],
                 pads: vec![pad("B", -0.95, 0.95, s, None), pad("E", 0.95, 0.95, s, None), pad("C", 0.0, -0.95, s, None)],
             }
         }
@@ -143,5 +158,54 @@ pub fn get(name: &str) -> Option<Footprint> {
             header(name, &(1..=n).map(|i| i.to_string()).collect::<Vec<_>>())
         }
     };
+    let mut fp = fp;
+    fp.silk = outline(name);
     Some(fp)
+}
+
+fn line(a: (f64, f64), b: (f64, f64)) -> FpLine {
+    FpLine { a: Point::new(a.0, a.1), b: Point::new(b.0, b.1) }
+}
+
+fn rect_lines(hx: f64, hy: f64) -> Vec<FpLine> {
+    vec![line((-hx, -hy), (hx, -hy)), line((hx, -hy), (hx, hy)), line((hx, hy), (-hx, hy)), line((-hx, hy), (-hx, -hy))]
+}
+
+fn circle_lines(r: f64) -> Vec<FpLine> {
+    let n = 32;
+    (0..n)
+        .map(|i| {
+            let (a, b) = (std::f64::consts::TAU * i as f64 / n as f64, std::f64::consts::TAU * (i + 1) as f64 / n as f64);
+            line((r * a.cos(), r * a.sin()), (r * b.cos(), r * b.sin()))
+        })
+        .collect()
+}
+
+/// Silkscreen of the through-hole parts whose look tells the polarity or the size: the body of a radial capacitor
+/// with its + and - marks, a box capacitor, an axial resistor, a diode with its cathode bar, a 5 mm LED with its
+/// flat. Chip parts and the rest have none (a box around the pads is drawn instead).
+fn outline(name: &str) -> Vec<FpLine> {
+    match name {
+        // radial electrolytic: the can, + above the square pad (pin 1) and - above the other lead
+        "CP_Radial_D5_P2.0" => {
+            let mut v = circle_lines(2.7);
+            v.extend([line((-1.25, 1.7), (-0.75, 1.7)), line((-1.0, 1.45), (-1.0, 1.95)), line((0.75, 1.7), (1.25, 1.7))]);
+            v
+        }
+        "C_Disc_5.08" => rect_lines(3.7, 2.0),
+        "R_Axial_10.16" => rect_lines(3.2, 1.3),
+        // the cathode (K, left) is marked by a bar on the body
+        "D_DO-35_7.62" => {
+            let mut v = rect_lines(1.9, 0.9);
+            v.push(line((-1.2, -0.9), (-1.2, 0.9)));
+            v
+        }
+        // 5 mm LED: the flat side is the cathode (K, left)
+        "LED_5mm" => {
+            let mut v = circle_lines(2.9);
+            v.push(line((-2.5, -1.47), (-2.5, 1.47)));
+            v
+        }
+        _ => vec![],
+    }
 }

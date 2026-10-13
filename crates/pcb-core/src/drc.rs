@@ -1179,3 +1179,42 @@ mod tests {
         assert!(!missing_ground_fill(&b));
     }
 }
+
+#[cfg(test)]
+mod silk_outline_tests {
+    use super::*;
+    use crate::model::Part;
+
+    /// A radial capacitor, a box capacitor, an axial resistor, a diode and an LED are drawn with their body
+    /// (and polarity marks), in every orientation and on both sides, without silk over a pad.
+    #[test]
+    fn through_hole_parts_get_a_body_outline_clear_of_the_pads() {
+        for name in ["CP_Radial_D5_P2.0", "C_Disc_5.08", "R_Axial_10.16", "D_DO-35_7.62", "LED_5mm"] {
+            for rot in 0..4u8 {
+                for side in [Side::Top, Side::Bottom] {
+                    let mut b = Board::new("t", 40.0, 40.0);
+                    b.set_part(Part { refdes: "X1".into(), value: "v".into(), footprint: name.into(), pos: Point::new(20.0, 20.0), rot, side }).unwrap();
+                    assert!(b.silk.len() >= 4 && b.silk.iter().all(|l| l.refdes == "X1"), "{name}");
+                    assert!(silk_checks(&b).is_empty(), "{name} rot {rot} {side:?}: {:?}", silk_checks(&b));
+                }
+            }
+        }
+        // the can of the electrolytic is round: many short lines, and marks for + and -
+        let mut b = Board::new("t", 40.0, 40.0);
+        b.set_part(Part { refdes: "C1".into(), value: "100u".into(), footprint: "CP_Radial_D5_P2.0".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top }).unwrap();
+        assert!(b.silk.len() > 30, "{}", b.silk.len());
+        let far = b.silk.iter().map(|l| l.a.dist(Point::new(20.0, 20.0))).fold(0.0f64, f64::max);
+        assert!((far - 2.7).abs() < 0.2, "the can has a radius of about 2.7 mm, got {far}");
+        // a footprint saved without the outline (a library part, an old board) still gets the built-in one
+        let mut b = Board::new("t", 40.0, 40.0);
+        let mut fp = crate::footprints::get("CP_Radial_D5_P2.0").unwrap();
+        fp.silk.clear();
+        b.add_footprint(fp);
+        b.set_part(Part { refdes: "C1".into(), value: "100u".into(), footprint: "CP_Radial_D5_P2.0".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top }).unwrap();
+        assert!(b.silk.len() > 30);
+        // a chip part still gets the box around its pads
+        let mut b = Board::new("t", 40.0, 40.0);
+        b.set_part(Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top }).unwrap();
+        assert_eq!(b.silk.len(), 4);
+    }
+}
