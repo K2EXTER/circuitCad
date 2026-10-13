@@ -109,10 +109,7 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
                 };
                 let _ = writeln!(out, "{inst} {} {}", nodes.join(" "), sim.name);
                 if included.insert(sim.name.to_ascii_lowercase()) {
-                    match dialect {
-                        Dialect::Generic => model_text.push_str(sim.text.trim_end()),
-                        Dialect::Ngspice => model_text.push_str(crate::ngspice::convert_text(sim.text.trim_end()).trim_end()),
-                    }
+                    model_text.push_str(sim.text.trim_end());
                     model_text.push('\n');
                 }
             }
@@ -127,5 +124,9 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
     }
     out.push_str(&model_text);
     out.push_str(".end\n");
-    out
+    match dialect {
+        Dialect::Generic => out,
+        // the whole deck: a switch part's card sits at the top level and its model in the model text
+        Dialect::Ngspice => crate::ngspice::convert_text(&out),
+    }
 }

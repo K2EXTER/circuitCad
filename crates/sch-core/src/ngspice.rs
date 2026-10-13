@@ -1,11 +1,101 @@
-//! Rewrites the behavioural-source (`B`) expressions of a part's `.subckt` into ngspice's dialect.
+//! Rewrites a SPICE deck into ngspice's dialect.
 //!
-//! Our expressions have `if(c,a,b)`, `step(x,w)`, `limit(x,lo,hi)`, `temp` and a natural `log`;
-//! ngspice has `ternary_fcn`, `temper`, no `step`/`limit`, and its `log` is base 10.
+//! * Behavioural-source (`B`) expressions: ours has `if(c,a,b)`, `step(x,w)`, `limit(x,lo,hi)`,
+//!   `temp` and a natural `log`; ngspice has `ternary_fcn`, `temper`, no `step`/`limit`, and its
+//!   `log` is base 10.
+//! * Voltage-controlled switches: ours moves smoothly between `roff` and `ron` over `vt +- vw`
+//!   (that smoothness is what lets Newton's method settle latches and comparators); ngspice's `SW`
+//!   model has no `vw` and switches sharply. Each `S` element becomes a `B` current source with
+//!   the same smooth conductance.
 
-/// Convert every `Bxxx ... V=<expr>` / `I=<expr>` line of a SPICE text.
+use std::collections::HashMap;
+
+/// A switch model as our engine reads it (defaults as in `SwitchModel::default`).
+#[derive(Clone, Copy, Debug)]
+struct Sw {
+    ron: f64,
+    roff: f64,
+    vt: f64,
+    vw: f64,
+}
+
+/// SPICE number with an engineering suffix ("1G", "4.7k", "100meg", "5m").
+fn spice_number(t: &str) -> Option<f64> {
+    let t = t.trim().to_ascii_lowercase();
+    let end = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '+' || c == '-' || c == 'e')).unwrap_or(t.len());
+    // an 'e' just before the suffix ("1e" + "meg") is not an exponent
+    let (num, suf) = match t[..end].parse::<f64>() {
+        Ok(_) => t.split_at(end),
+        Err(_) => t.split_at(t[..end].trim_end_matches('e').len()),
+    };
+    let v: f64 = num.parse().ok()?;
+    let mult = if suf.starts_with("meg") {
+        1e6
+    } else {
+        match suf.chars().next() {
+            Some('f') => 1e-15,
+            Some('p') => 1e-12,
+            Some('n') => 1e-9,
+            Some('u') => 1e-6,
+            Some('m') => 1e-3,
+            Some('k') => 1e3,
+            Some('g') => 1e9,
+            Some('t') => 1e12,
+            _ => 1.0,
+        }
+    };
+    Some(v * mult)
+}
+
+/// `.model NAME SW(RON=.. ROFF=.. VT=.. VW=..)` -> (lower-case name, parameters).
+fn switch_model(line: &str) -> Option<(String, Sw)> {
+    let mut t = line.split_whitespace();
+    if !t.next()?.eq_ignore_ascii_case(".model") {
+        return None;
+    }
+    let name = t.next()?.to_ascii_lowercase();
+    let mut words = t.flat_map(|w| w.split(['(', ')', ',']).filter(|x| !x.is_empty()).map(str::to_string).collect::<Vec<_>>());
+    if !words.next()?.eq_ignore_ascii_case("sw") {
+        return None;
+    }
+    let mut m = Sw { ron: 1.0, roff: 1e9, vt: 0.0, vw: 0.01 };
+    for w in words {
+        let Some((k, v)) = w.split_once('=') else { continue };
+        let Some(x) = spice_number(v) else { continue };
+        match k.to_ascii_lowercase().as_str() {
+            "ron" => m.ron = x,
+            "roff" => m.roff = x,
+            "vt" => m.vt = x,
+            "vw" => m.vw = x,
+            _ => {}
+        }
+    }
+    Some((name, m))
+}
+
+/// `Sxxx a b cp cn MODEL` -> a `B` current source with the switch's smooth conductance.
+fn switch_to_b(line: &str, models: &HashMap<String, Sw>) -> Option<String> {
+    let t: Vec<&str> = line.split_whitespace().collect();
+    if t.len() < 6 || !t[0].starts_with(['S', 's']) {
+        return None;
+    }
+    let m = models.get(&t[5].to_ascii_lowercase())?;
+    let (gon, goff) = (1.0 / m.ron.max(1e-9), 1.0 / m.roff.max(1e-9));
+    let w = m.vw.abs().max(1e-6);
+    let s = format!("min(max((V({},{})-({:e}))/{:e},0),1)", t[3], t[4], m.vt - w, 2.0 * w);
+    Some(format!("B{} {} {} I=V({},{})*exp({:e}+({:e})*({s}*{s}*(3-2*{s})))", t[0], t[1], t[2], t[1], t[2], goff.ln(), gon.ln() - goff.ln()))
+}
+
+/// Convert a deck or a part's model text: switches first, then every `Bxxx ... V=<expr>` / `I=<expr>` line.
 pub fn convert_text(text: &str) -> String {
-    text.lines().map(convert_line).collect::<Vec<_>>().join("\n") + if text.ends_with('\n') { "\n" } else { "" }
+    let models: HashMap<String, Sw> = text.lines().filter_map(switch_model).collect();
+    let lines: Vec<String> = text
+        .lines()
+        .filter(|l| switch_model(l).is_none())
+        .map(|l| switch_to_b(l, &models).unwrap_or_else(|| l.to_string()))
+        .map(|l| convert_line(&l))
+        .collect();
+    lines.join("\n") + if text.ends_with('\n') { "\n" } else { "" }
 }
 
 fn convert_line(line: &str) -> String {
@@ -144,6 +234,31 @@ mod tests {
         // nested calls and a default width work too
         assert!(!convert_expr("V(on)*min(0.1*(1-step(V(x),0.01)),2)").contains("step("));
         assert!(convert_expr("step(V(a))").contains("(2*1e-3)"));
+    }
+
+    #[test]
+    fn spice_numbers_read_suffixes() {
+        assert_eq!(spice_number("1G"), Some(1e9));
+        assert_eq!(spice_number("100meg"), Some(1e8));
+        assert_eq!(spice_number("4.7k"), Some(4700.0));
+        assert_eq!(spice_number("5m"), Some(5e-3));
+        assert_eq!(spice_number("1e-3"), Some(1e-3));
+        assert_eq!(spice_number("0.005"), Some(0.005));
+        assert_eq!(spice_number("x"), None);
+    }
+
+    #[test]
+    fn a_switch_becomes_a_smooth_b_source_and_its_model_goes() {
+        let t = "Scr vcc rcmp thres ctl SWC\nRsp a b 1k\n.model SWC SW(RON=100 ROFF=1G VT=0 VW=0.005)\n";
+        let o = convert_text(t);
+        assert!(!o.to_ascii_lowercase().contains(".model") && !o.starts_with("Scr"), "{o}");
+        assert!(o.contains("BScr vcc rcmp I=V(vcc,rcmp)*exp("), "{o}");
+        assert!(o.contains("min(max((V(thres,ctl)-(-5e-3))/1e-2,0),1)"), "{o}");
+        // 1/roff and ln(gon/goff) as numbers: ln(1e-9) = -20.72..., ln(1e-2/1e-9) = 16.11...
+        assert!(o.contains("exp(-2.0723") && o.contains("(1.6118"), "{o}");
+        assert!(o.contains("Rsp a b 1k"));
+        // a switch whose model is not in the text is left alone, and other models stay
+        assert_eq!(convert_text("S1 a b c d NOPE\n.model D1 D(IS=1e-14)\n"), "S1 a b c d NOPE\n.model D1 D(IS=1e-14)\n");
     }
 
     #[test]
