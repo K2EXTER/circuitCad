@@ -101,6 +101,8 @@ struct Grid {
     layers: Vec<Side>,
     /// Per layer: cells next to the net to follow (empty when not following).
     near: Vec<Vec<bool>>,
+    /// Cells where no via may be put because its copper would sit on a pad (any layer, any net).
+    no_via: Vec<bool>,
 }
 
 impl Grid {
@@ -140,6 +142,18 @@ impl Grid {
         let hi_i = (((bb.2 + margin - self.x0) / self.g).ceil().max(0.0) as usize).min(self.nx - 1);
         let hi_j = (((bb.3 + margin - self.y0) / self.g).ceil().max(0.0) as usize).min(self.ny - 1);
         (lo_i, lo_j, hi_i, hi_j)
+    }
+
+    /// Forbid vias whose centre is closer than `r` to the pad shape (the via would overlap the pad).
+    fn mark_no_via(&mut self, geo: &Geo, r: f64) {
+        let (i0, j0, i1, j1) = self.cells_near(geo_bbox(geo), r);
+        for j in j0..=j1 {
+            for i in i0..=i1 {
+                if geo_dist(self.pos(i, j), geo) < r {
+                    self.no_via[j * self.nx + i] = true;
+                }
+            }
+        }
     }
 
     /// Mark every cell whose centre is closer than `need_*` to the shape.
@@ -198,7 +212,7 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     }
     let layers = board.copper_layers();
     let nl = layers.len();
-    let mut grid = Grid { x0: lo.x, y0: lo.y, g, nx, ny, trk: vec![vec![0; nx * ny]; nl], via: vec![vec![0; nx * ny]; nl], layers, near: vec![] };
+    let mut grid = Grid { x0: lo.x, y0: lo.y, g, nx, ny, trk: vec![vec![0; nx * ny]; nl], via: vec![vec![0; nx * ny]; nl], layers, near: vec![], no_via: vec![false; nx * ny] };
 
     let r = &board.rules;
     // A path sampled on the grid can pass closer to a corner than its cells do, so inflate a little more.
@@ -251,6 +265,7 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
         for l in pad_layers(p, nl) {
             grid.mark(l, &geo, net, t_need, v_need);
         }
+        grid.mark_no_via(&geo, opt.via_diameter / 2.0);
     }
     for (k, v) in board.vias.iter().enumerate() {
         let net = id_of(conn.via_net(k));
@@ -422,7 +437,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
         // change layer with a via
         // (a via goes through every layer, so the spot must be free on all of them)
         let idx = j * nx + i;
-        if (0..nl).all(|k| passable(grid.via[k][idx], net)) {
+        if !grid.no_via[idx] && (0..nl).all(|k| passable(grid.via[k][idx], net)) {
             for o in (0..nl).filter(|&o| o != l) {
                 if !passable(grid.trk[o][idx], net) {
                     continue;

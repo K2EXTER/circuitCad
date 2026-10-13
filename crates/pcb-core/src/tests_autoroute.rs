@@ -86,3 +86,24 @@ fn many_nets_cross_each_other_cleanly() {
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
     assert!(drc::acute_angle_checks(&b).is_empty(), "{:?}", drc::acute_angle_checks(&b));
 }
+
+#[test]
+fn vias_are_not_put_on_pads() {
+    let mut b = Board::new("t", 30.0, 20.0);
+    pad(&mut b, 5.0, 10.0, "A", false);
+    pad(&mut b, 25.0, 10.0, "A", false);
+    // the top is walled at x=15 and the bottom at x=11, so the only place to change layer is between them,
+    // where a big surface-mount pad of the same net sits: a via there would land on the pad
+    let mut big = Pad::new(Point::new(13.0, 10.0), PadShape::Circle { d: 2.4 }, None, Side::Top);
+    big.net = "A".into();
+    b.pads.push(big);
+    track(&mut b, Side::Top, (15.0, 0.5), (15.0, 19.5));
+    track(&mut b, Side::Bottom, (11.0, 0.5), (11.0, 19.5));
+    let _ = autoroute(&mut b, &RouteOptions::default(), None);
+    for v in &b.vias {
+        for p in &b.pads {
+            let (w, h) = p.shape.size();
+            assert!(v.pos.dist(p.pos) > v.diameter / 2.0 + w.min(h) / 2.0 - 1e-6, "via at {:?} sits on pad at {:?}", v.pos, p.pos);
+        }
+    }
+}
