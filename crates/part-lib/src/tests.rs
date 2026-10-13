@@ -370,6 +370,15 @@ fn write_chip_examples() {
     e1.esr = Some(0.3);
     e1.esl = Some(15e-9);
     cases.push(("CE_100u_16V".into(), e1, "CP_Radial_D5_P2.0", PartRatings { v_max: Some(16.0), ..Default::default() }));
+    // a tantalum (polarised, ESR of about an ohm) and a metallised film capacitor (non-polar, tiny ESR/ESL, leaded)
+    let mut t1 = PassiveTemplate::new(PassiveKind::Capacitor, 10e-6);
+    t1.esr = Some(1.5);
+    t1.esl = Some(2e-9);
+    cases.push(("CT_10u_16V".into(), t1, "CP_Radial_D5_P2.0", PartRatings { v_max: Some(16.0), ..Default::default() }));
+    let mut f1 = PassiveTemplate::new(PassiveKind::Capacitor, 100e-9);
+    f1.esr = Some(0.02);
+    f1.esl = Some(8e-9);
+    cases.push(("CF_100n_63V".into(), f1, "C_Disc_5.08", PartRatings { v_max: Some(63.0), ..Default::default() }));
     for (name, t, fp, ratings) in cases {
         let g = t.generate(&name).unwrap();
         let built = pcb_core::footprints::get(fp).unwrap();
@@ -380,7 +389,7 @@ fn write_chip_examples() {
         let def = PartDef {
             name: name.clone(),
             category: t.kind.label().into(),
-            description: format!("{}{}{note}", g.description, if name.starts_with("CE_") { " 電解コンデンサ: 極性があります (四角いパッド・記号の + が プラス側)。耐圧の 2 倍ほどの余裕を見て選び、逆向きにつなぐと壊れます。" } else { "" }),
+            description: format!("{}{}{note}", g.description, if name.starts_with("CE_") { " 電解コンデンサ: 極性があります (四角いパッド・記号の + が プラス側)。耐圧の 2 倍ほどの余裕を見て選び、逆向きにつなぐと壊れます。" } else if name.starts_with("CT_") { " タンタルコンデンサ: 極性があります (記号の + が プラス側)。ESR は電解より小さめですが、耐圧の 2 倍以上の余裕を見ないと、ショートして燃えることがあります。" } else if name.starts_with("CF_") { " フィルムコンデンサ: 極性はありません。ESR・ESL が小さく、容量の温度変化や電圧による変化も小さいので、フィルタやタイミング回路に向きます。" } else { "" }),
             datasheet: String::new(),
             prefix: t.kind.prefix().into(),
             value: Some(g.value_text.clone()),
@@ -398,7 +407,7 @@ fn write_chip_examples() {
                 limits: g.limits.clone(),
             }),
             ratings: Some(ratings),
-            glyph: if name.starts_with("CE_") { "electrolytic".into() } else { t.kind.glyph().into() },
+            glyph: if name.starts_with("CE_") || name.starts_with("CT_") { "electrolytic".into() } else { t.kind.glyph().into() },
         };
         assert!(!def.has_errors(), "{name}: {:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
         let path = format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"));

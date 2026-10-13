@@ -15,6 +15,46 @@ const ANALYSIS_SECTIONS: &[(&str, &str, bool, &str)] = &[
     ("fault", "故障シミュレーション", false, "部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます"),
 ];
 
+/// Which family of the tree a library part belongs to under the basic part `k` (None = not under this one).
+fn part_family(k: Kind, d: &PartDef) -> Option<&'static str> {
+    match k {
+        Kind::Capacitor => d.capacitor_family(),
+        _ => match (k, d.symbol().glyph.as_str()) {
+            (Kind::Diode, "diode") => Some("整流・スイッチング"),
+            (Kind::Diode, "schottky") => Some("ショットキー"),
+            (Kind::Diode, "zener") => Some("ツェナー"),
+            (Kind::Npn, "npn") => Some("NPN"),
+            (Kind::Npn, "pnp") => Some("PNP"),
+            (Kind::Npn, "nmos") => Some("MOSFET Nch"),
+            (Kind::Npn, "pmos") => Some("MOSFET Pch"),
+            _ => None,
+        },
+    }
+}
+
+/// One line about each family, shown under its name in the tree.
+fn family_tip(family: &str) -> &'static str {
+    match family {
+        "整流・スイッチング" => "電流を一方向に流します。1N400x は電源の整流、1N4148 は小信号の高速スイッチ用です",
+        "ショットキー" => "順方向の電圧降下が小さく (約0.3〜0.5V) 高速。電源の整流や逆流防止に向きます。逆方向の漏れ電流は大きめです",
+        "ツェナー" => "逆向きにつなぐと、決まった電圧 (ツェナー電圧) で電流が流れ、電圧を一定に保ちます。基準電圧や簡単な保護に使います",
+        "NPN" => "ベース電流で、コレクタからエミッタへ流れる電流を制御します。負荷を GND 側で切り替える (ローサイド) のに使います",
+        "PNP" => "NPN と電流の向きが逆。電源側で負荷を切り替える (ハイサイド) のに使います",
+        "MOSFET Nch" => "ゲート電圧で制御します。ゲートに電流がほとんど要らず、大電流のスイッチに向きます (GND 側で切り替える)",
+        "MOSFET Pch" => "N チャネルと極性が逆。電源側で負荷を切り替える (ハイサイド) のに使います",
+        _ => cap_tip(family),
+    }
+}
+
+fn cap_tip(family: &str) -> &'static str {
+    match family {
+        "電解" => "容量が大きく、電源の平滑に使います。極性があり、逆につなぐと壊れます。ESR が大きめです",
+        "タンタル" => "小さくて容量が大きく、ESR は電解より小さめ。極性があり、耐圧に余裕を見ないと壊れます",
+        "フィルム" => "極性なし。ESR・ESL が小さく、温度や電圧で容量が変わりにくいので、フィルタやタイミングに向きます",
+        _ => "極性なし。小さくて高い周波数に強い、チップ部品の定番です。電圧がかかると容量が減ります",
+    }
+}
+
 impl SchEditor {
     pub fn side_panel(&mut self, ui: &mut egui::Ui) {
         // the panel is taller than a small window: let it scroll instead of hiding the bottom controls
@@ -90,10 +130,57 @@ impl SchEditor {
             ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります");
         }
         ui.separator();
+        let mut chosen = None;
+        // library parts hang under the basic part of their kind (capacitor, diode, transistor), grouped by family
+        let families: Vec<(Kind, Vec<(&str, Vec<usize>)>)> = [Kind::Capacitor, Kind::Diode, Kind::Npn]
+            .into_iter()
+            .map(|k| {
+                let names: &[&str] = match k {
+                    Kind::Capacitor => &["積層セラミック", "電解", "タンタル", "フィルム"],
+                    Kind::Diode => &["整流・スイッチング", "ショットキー", "ツェナー"],
+                    _ => &["NPN", "PNP", "MOSFET Nch", "MOSFET Pch"],
+                };
+                let groups = names
+                    .iter()
+                    .map(|f| (*f, (0..self.library.len()).filter(|&i| part_family(k, &self.library[i]) == Some(*f)).collect::<Vec<_>>()))
+                    .filter(|(_, v)| !v.is_empty())
+                    .collect::<Vec<_>>();
+                (k, groups)
+            })
+            .filter(|(_, g)| !g.is_empty())
+            .collect();
         egui::CollapsingHeader::new("基本の部品").default_open(true).show(ui, |ui| {
             ui.small("クリックして配置 / Rキーで回転");
             for k in Kind::PALETTE {
-                if ui.selectable_label(self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k, k.label()).on_hover_text(kind_tip(*k)).clicked() {
+                let selected = self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k;
+                let mut click = false;
+                if let Some((_, cap_kinds)) = families.iter().find(|(fk, _)| fk == k) {
+                    // a folder, not a button: it opens to the plain part and the kinds from the library
+                    let title = match k {
+                        Kind::Npn => "トランジスタ".to_string(),
+                        _ => k.label(),
+                    };
+                    egui::CollapsingHeader::new(title).id_salt(("part_tree", k.label())).default_open(false).show(ui, |ui| {
+                        click = ui.selectable_label(selected, format!("{} (基本)", k.label())).on_hover_text(kind_tip(*k)).clicked();
+                        for (family, parts) in cap_kinds.iter() {
+                            egui::CollapsingHeader::new(*family)
+                                .id_salt(("part_family", k.label(), *family))
+                                .default_open(false)
+                                .show(ui, |ui| {
+                                    ui.small(family_tip(family));
+                                    for &i in parts {
+                                        let sel = self.tool == Tool::Place && self.place_lib == Some(i);
+                                        if ui.selectable_label(sel, &self.library[i].name).on_hover_text(lib_hover(&self.library[i])).clicked() {
+                                            chosen = Some(i);
+                                        }
+                                    }
+                                });
+                        }
+                    });
+                } else {
+                    click = ui.selectable_label(selected, k.label()).on_hover_text(kind_tip(*k)).clicked();
+                }
+                if click {
                     self.tool = Tool::Place;
                     self.place_lib = None;
                     self.place = *k;
@@ -101,22 +188,6 @@ impl SchEditor {
                 }
             }
         });
-        let mut chosen = None;
-        // electrolytic capacitors live in the library; point to them from the basic list
-        let electrolytic: Vec<usize> = (0..self.library.len())
-            .filter(|&i| self.library[i].glyph == "electrolytic" || self.library[i].name.starts_with("CE_"))
-            .collect();
-        if !electrolytic.is_empty() {
-            egui::CollapsingHeader::new("コンデンサの種類 (電解など)").default_open(true).show(ui, |ui| {
-                ui.small("極性のある電解コンデンサは、ここから置けます (上の「コンデンサ」は極性なし)");
-                for &i in &electrolytic {
-                    let selected = self.tool == Tool::Place && self.place_lib == Some(i);
-                    if ui.selectable_label(selected, format!("電解 {}", self.library[i].name)).on_hover_text(lib_hover(&self.library[i])).clicked() {
-                        chosen = Some(i);
-                    }
-                }
-            }).header_response.on_hover_text("電解コンデンサは + と − の向きがあり、逆につなぐと壊れます。容量が大きく、電源の平滑に使います");
-        }
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(true).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");

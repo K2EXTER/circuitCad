@@ -113,6 +113,25 @@ impl PartDef {
         }
     }
 
+    /// The kind of capacitor a library part is (for the tree under "コンデンサ"): 電解 / タンタル / フィルム /
+    /// 積層セラミック, by the glyph, the name prefix (CE_ CT_ CF_) and the description. None for other parts.
+    pub fn capacitor_family(&self) -> Option<&'static str> {
+        if self.prefix != "C" {
+            return None;
+        }
+        if self.glyph == "electrolytic" || self.name.starts_with("CE_") {
+            Some("電解")
+        } else if self.name.starts_with("CT_") {
+            Some("タンタル")
+        } else if self.name.starts_with("CF_") || self.description.contains("フィルムコンデンサ") {
+            Some("フィルム")
+        } else if self.glyph == "capacitor" {
+            Some("積層セラミック")
+        } else {
+            None
+        }
+    }
+
     pub fn footprint(&self) -> Result<Footprint, String> {
         let mut fp = self.package.build(&self.footprint_name())?;
         fp.height = self.height.filter(|h| h.is_finite() && *h > 0.0);
@@ -270,6 +289,8 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("C_100n_0603", include_str!("../examples/C_100n_0603.part.json")),
     ("C_10u_0805", include_str!("../examples/C_10u_0805.part.json")),
     ("CE_100u_16V", include_str!("../examples/CE_100u_16V.part.json")),
+    ("CT_10u_16V", include_str!("../examples/CT_10u_16V.part.json")),
+    ("CF_100n_63V", include_str!("../examples/CF_100n_63V.part.json")),
     ("L_10u_0805", include_str!("../examples/L_10u_0805.part.json")),
     ("R_10k_0603", include_str!("../examples/R_10k_0603.part.json")),
     ("1N4148", include_str!("../examples/1N4148.part.json")),
