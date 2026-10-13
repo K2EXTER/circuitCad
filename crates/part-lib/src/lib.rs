@@ -68,6 +68,11 @@ pub struct Issue {
     pub message: String,
 }
 
+/// Glyphs that draw a standard body (diode, transistor ...) inside the box; the pins keep their box positions.
+pub const BODY_GLYPHS: [&str; 15] = [
+    "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg",
+];
+
 impl PartDef {
     pub fn footprint_name(&self) -> String {
         self.footprint_name.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| self.name.clone())
@@ -78,6 +83,15 @@ impl PartDef {
     }
 
     pub fn symbol(&self) -> CustomSymbol {
+        let mut sym = self.symbol_plain();
+        // a bundled part without a glyph still gets its standard symbol (and the small layout that goes with it)
+        if sym.glyph.is_empty() {
+            sym.glyph = sym.inferred_glyph().into();
+        }
+        sym
+    }
+
+    fn symbol_plain(&self) -> CustomSymbol {
         let half = self.pins.len().div_ceil(2);
         CustomSymbol {
             name: self.name.clone(),
@@ -131,10 +145,13 @@ impl PartDef {
 
         if !self.glyph.is_empty() {
             let sides: Vec<_> = self.symbol().pins.iter().map(|p| p.side).collect();
-            if !["capacitor", "electrolytic", "resistor", "inductor"].contains(&self.glyph.as_str()) {
-                err(format!("glyph「{}」は capacitor / electrolytic / resistor / inductor のどれかにしてください", self.glyph));
-            } else if sides.len() != 2 || !sides.contains(&PinSide::Left) || !sides.contains(&PinSide::Right) {
-                err("glyph (コンデンサ・抵抗・コイルの記号) は、左右に 1 本ずつの 2 ピンの部品だけに使えます".into());
+            let chip = ["capacitor", "electrolytic", "resistor", "inductor"].contains(&self.glyph.as_str());
+            if chip {
+                if sides.len() != 2 || !sides.contains(&PinSide::Left) || !sides.contains(&PinSide::Right) {
+                    err("glyph (コンデンサ・抵抗・コイルの記号) は、左右に 1 本ずつの 2 ピンの部品だけに使えます".into());
+                }
+            } else if !BODY_GLYPHS.contains(&self.glyph.as_str()) {
+                err(format!("glyph「{}」は capacitor / electrolytic / resistor / inductor / {} のどれかにしてください", self.glyph, BODY_GLYPHS.join(" / ")));
             }
         }
 

@@ -474,12 +474,53 @@ impl CustomSymbol {
             && self.pins.iter().all(|p| matches!(p.side, PinSide::Left | PinSide::Right))
     }
 
+    /// The standard-symbol glyph a bundled part gets, guessed from its name and pin names ("" = none).
+    pub fn inferred_glyph(&self) -> &'static str {
+        let by_name: &[(&[&str], &str)] = &[
+            (&["1N4001", "1N4007", "1N4148", "1N5408", "UF4007"], "diode"),
+            (&["1N4728A", "1N4733A", "1N4742A"], "zener"),
+            (&["1N5817", "1N5819", "1N5822", "SS14", "BAT54"], "schottky"),
+            (&["2N3904", "BC547", "BD139", "PN2222A", "S8050", "TIP120"], "npn"),
+            (&["2N3906", "BD140", "S8550", "TIP125"], "pnp"),
+            (&["2N7000", "BSS138", "AO3400A", "IRF540N", "IRFZ44N", "IRLZ44N"], "nmos"),
+            (&["AO3401A", "IRF9540N"], "pmos"),
+            (&["LM324", "LM358", "LM393", "MCP6001", "MCP6002", "NE5532", "TL072"], "opamp"),
+            (&["LDR_GL5528"], "ldr"),
+            (&["BPW34"], "photodiode"),
+            (&["TL431"], "shunt_reg"),
+        ];
+        if let Some((_, g)) = by_name.iter().find(|(names, _)| names.contains(&self.name.as_str())) {
+            return g;
+        }
+        let has = |n: &str| self.pins.iter().any(|p| p.name == n);
+        if self.pins.len() == 4 && has("P1") && has("P2") && has("S1") && has("S2") {
+            return "transformer";
+        }
+        if self.pins.len() == 2 && has("+") && has("-") {
+            return "battery";
+        }
+        ""
+    }
+
+    /// Body half-extents of a standard symbol drawn small: diodes and batteries (two leads, left and
+    /// right) and transistors (left lead, top and bottom leads) take the room of a chip part.
+    fn compact_size(&self) -> Option<(i32, i32)> {
+        let on = |s: PinSide| self.pins.iter().filter(|p| p.side == s).count();
+        match self.glyph.as_str() {
+            "diode" | "zener" | "schottky" | "tvs" | "battery" if self.pins.len() == 2 && on(PinSide::Left) == 1 && on(PinSide::Right) == 1 => Some((0, 1)),
+            "npn" | "pnp" | "nmos" | "pmos" if self.pins.len() == 3 && on(PinSide::Left) == 1 && on(PinSide::Top) == 1 && on(PinSide::Bottom) == 1 => Some((0, 0)),
+            _ => None,
+        }
+    }
+
     /// Box symbol: pins on each side are spaced 2 grid steps apart, in the order given.
     pub fn layout(&self) -> SymLayout {
         let count = |s: PinSide| self.pins.iter().filter(|p| p.side == s).count() as i32;
         let (hw, hh) = if self.is_two_lead_glyph() {
             // drawn as the basic symbol: pin tips at +-2, same as the basic C/R/L
             (0, 1)
+        } else if let Some(size) = self.compact_size() {
+            size
         } else {
             (2.max(count(PinSide::Top).max(count(PinSide::Bottom))), 2.max(count(PinSide::Left).max(count(PinSide::Right))))
         };

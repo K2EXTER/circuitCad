@@ -18,7 +18,12 @@ const ANALYSIS_SECTIONS: &[(&str, &str, bool, &str)] = &[
 impl SchEditor {
     pub fn side_panel(&mut self, ui: &mut egui::Ui) {
         // the panel is taller than a small window: let it scroll instead of hiding the bottom controls
-        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| self.side_panel_body(ui));
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            // leave room on the right so this bar does not sit on top of the inner part-list bar
+            let bar = ui.spacing().scroll.allocated_width() + 10.0;
+            ui.set_max_width((ui.available_width() - bar).max(100.0));
+            self.side_panel_body(ui)
+        });
     }
 
     pub(super) fn side_panel_body(&mut self, ui: &mut egui::Ui) {
@@ -97,6 +102,21 @@ impl SchEditor {
             }
         });
         let mut chosen = None;
+        // electrolytic capacitors live in the library; point to them from the basic list
+        let electrolytic: Vec<usize> = (0..self.library.len())
+            .filter(|&i| self.library[i].glyph == "electrolytic" || self.library[i].name.starts_with("CE_"))
+            .collect();
+        if !electrolytic.is_empty() {
+            egui::CollapsingHeader::new("コンデンサの種類 (電解など)").default_open(true).show(ui, |ui| {
+                ui.small("極性のある電解コンデンサは、ここから置けます (上の「コンデンサ」は極性なし)");
+                for &i in &electrolytic {
+                    let selected = self.tool == Tool::Place && self.place_lib == Some(i);
+                    if ui.selectable_label(selected, format!("電解 {}", self.library[i].name)).on_hover_text(lib_hover(&self.library[i])).clicked() {
+                        chosen = Some(i);
+                    }
+                }
+            }).header_response.on_hover_text("電解コンデンサは + と − の向きがあり、逆につなぐと壊れます。容量が大きく、電源の平滑に使います");
+        }
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(true).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");

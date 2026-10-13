@@ -527,6 +527,7 @@ pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key}
 pub use lessons::{lesson_ids, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
 mod symbols;
+mod glyphs;
 mod wave;
 mod ac;
 mod analysis_panel;

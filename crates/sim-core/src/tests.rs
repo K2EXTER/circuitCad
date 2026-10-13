@@ -315,10 +315,12 @@ fn library_diode_model_is_used() {
     s.add(Kind::VSource, (0, 0), 0); // 5 V default
     s.add(Kind::Resistor, (6, -6), 0);
     s.components[1].value = "1k".into();
-    s.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), (12, -6), 0); // A tip (8,-6), K tip (16,-6)
+    s.add_custom(d.symbol(), &d.default_value(), &d.footprint_name(), (12, -6), 0); // A tip (10,-6), K tip (14,-6)
     s.add(Kind::Ground, (16, 6), 0);
     wire(&mut s, (0, -2), (0, -6));
     wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (10, -6));
+    wire(&mut s, (14, -6), (16, -6));
     wire(&mut s, (16, -6), (16, 6));
     wire(&mut s, (0, 2), (0, 6));
     wire(&mut s, (0, 6), (16, 6));

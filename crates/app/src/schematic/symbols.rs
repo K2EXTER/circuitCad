@@ -50,6 +50,7 @@ pub(super) fn symbol(kind: Kind) -> Vec<Sh> {
             ];
             if kind == Kind::Led {
                 v.extend([L(0., -0.9, 0.6, -1.5), L(0.6, -0.9, 1.2, -1.5)]);
+                v.extend(super::glyphs::led_arrow_heads());
             }
             v
         }
@@ -256,6 +257,21 @@ impl SchEditor {
 
     pub(super) fn draw_custom(&self, painter: &egui::Painter, rect: Rect, sym: &CustomSymbol, pos: Pt, rot: u8, color: Color32) {
         let l = sym.layout();
+        // diodes, transistors, op-amps ... get their standard symbol; the pins stay where the box puts them
+        if let Some(shapes) = super::glyphs::body_glyph(sym).and_then(|g| super::glyphs::body(g, &l)) {
+            self.draw_shapes(painter, rect, shapes, pos, rot, color);
+            let tr = |x: f32, y: f32| {
+                let r = rot_f((x, y), rot);
+                self.to_screen(rect, (pos.0 as f32 + r.0, pos.1 as f32 + r.1))
+            };
+            let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
+            for p in &l.pins {
+                let (mx, my) = ((p.tip.0 + p.edge.0) as f32 / 2.0, (p.tip.1 + p.edge.1) as f32 / 2.0);
+                let off = if matches!(p.side, PinSide::Left | PinSide::Right) { (0.0, -0.45) } else { (0.45, 0.0) };
+                painter.text(tr(mx + off.0, my + off.1), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
+            }
+            return;
+        }
         // a chip capacitor / resistor / inductor from the library looks like the basic part
         let glyph = match sym.glyph.as_str() {
             "capacitor" | "electrolytic" => Some(Kind::Capacitor),
@@ -276,6 +292,9 @@ impl SchEditor {
                 painter.text(tr((p.tip.0 as f32 + s) / 2.0, -0.45), Align2::CENTER_CENTER, &p.number, num_font.clone(), Color32::from_gray(110));
             }
             self.draw_symbol(painter, rect, kind, pos, rot, color);
+            if super::glyphs::is_thermistor(sym) {
+                self.draw_shapes(painter, rect, super::glyphs::thermistor_mark(), pos, rot, color);
+            }
             if sym.glyph == "electrolytic" {
                 // polarity: a "+" beside the plate of the left (pin 1) lead
                 for (a, b) in [((-1.5, -0.9), (-0.9, -0.9)), ((-1.2, -1.2), (-1.2, -0.6))] {
