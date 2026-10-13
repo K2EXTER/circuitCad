@@ -387,6 +387,7 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         description.push_str(" (KiCad から取り込み。シミュレーションモデルはありません。)");
     }
     Ok(PartDef {
+        height: None,
         name: sym.name.clone(),
         category: "KiCad".into(),
         description,

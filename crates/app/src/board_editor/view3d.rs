@@ -6,7 +6,7 @@
 use super::raster3d::{outline_part, Buffers, Paint, Picture, Vert, NO_PART};
 use super::*;
 use pcb_core::gerber_view::Preview;
-use pcb_core::model3d::{part_boxes, part_total_height, BodyShape, PartBox, BOARD_THICKNESS};
+use pcb_core::model3d::{part_boxes, part_height_on, BodyShape, PartBox, BOARD_THICKNESS};
 
 /// What the window shows, built from the board when it is opened or refreshed.
 struct Scene {
@@ -189,7 +189,7 @@ impl Scene {
         }
         let (lo, hi) = board.bounds().ok_or("基板の外形がありません")?;
         let img = Self::images(&pv, mask, silk);
-        let parts: Vec<(String, String, String, f64)> = board.parts.iter().map(|p| (p.refdes.clone(), p.value.clone(), p.footprint.clone(), part_total_height(&p.refdes, &p.footprint))).collect();
+        let parts: Vec<(String, String, String, f64)> = board.parts.iter().map(|p| (p.refdes.clone(), p.value.clone(), p.footprint.clone(), part_height_on(board, p))).collect();
         let boxes = part_boxes(board);
         let mut tallest: [Option<(String, f64)>; 2] = [None, None];
         for b in &boxes {

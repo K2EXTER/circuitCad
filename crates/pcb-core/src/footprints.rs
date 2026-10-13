@@ -34,6 +34,9 @@ pub struct Footprint {
     pub pads: Vec<FpPad>,
     #[serde(default)]
     pub holes: Vec<FpHole>,
+    /// Height of the part's body above the board (mm), when the data sheet says. The 3D view guesses from the name otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<f64>,
 }
 
 fn pad(pin: &str, x: f64, y: f64, shape: PadShape, drill: Option<f64>) -> FpPad {
@@ -45,6 +48,7 @@ fn smd2(name: &str, half_pitch: f64, w: f64, h: f64, pins: [&str; 2]) -> Footpri
     Footprint {
         name: name.into(),
         holes: vec![],
+        height: None,
         pads: vec![pad(pins[0], -half_pitch, 0.0, s, None), pad(pins[1], half_pitch, 0.0, s, None)],
     }
 }
@@ -54,6 +58,7 @@ fn tht2(name: &str, pitch: f64, d: f64, drill: f64, pins: [&str; 2]) -> Footprin
     Footprint {
         name: name.into(),
         holes: vec![],
+        height: None,
         pads: vec![
             pad(pins[0], -pitch / 2.0, 0.0, PadShape::Rect { w: d, h: d }, Some(drill)),
             pad(pins[1], pitch / 2.0, 0.0, s, Some(drill)),
@@ -66,6 +71,7 @@ fn header(name: &str, pins: &[String]) -> Footprint {
     Footprint {
         name: name.into(),
         holes: vec![],
+        height: None,
         pads: pins
             .iter()
             .enumerate()
@@ -111,6 +117,7 @@ pub fn get(name: &str) -> Option<Footprint> {
             Footprint {
                 name: name.into(),
                 holes: vec![],
+                height: None,
                 pads: vec![
                     pad("E", -2.54, 0.0, PadShape::Rect { w: 1.5, h: 1.5 }, Some(0.8)),
                     pad("B", 0.0, 0.0, s, Some(0.8)),
@@ -123,6 +130,7 @@ pub fn get(name: &str) -> Option<Footprint> {
             Footprint {
                 name: name.into(),
                 holes: vec![],
+                height: None,
                 pads: vec![pad("B", -0.95, 0.95, s, None), pad("E", 0.95, 0.95, s, None), pad("C", 0.0, -0.95, s, None)],
             }
         }

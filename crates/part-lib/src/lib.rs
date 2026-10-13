@@ -47,6 +47,10 @@ pub struct PartDef {
     /// Footprint name on the PCB; defaults to `name`.
     #[serde(default)]
     pub footprint_name: Option<String>,
+    /// Height of the body above the board (mm) from the data sheet: the 3D view and the case-height check use it
+    /// instead of guessing from the footprint name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<f64>,
     #[serde(default)]
     pub sim: Option<SimModel>,
     /// Data sheet ratings (absolute maximum voltage / current / power and other figures).
@@ -96,7 +100,9 @@ impl PartDef {
     }
 
     pub fn footprint(&self) -> Result<Footprint, String> {
-        self.package.build(&self.footprint_name())
+        let mut fp = self.package.build(&self.footprint_name())?;
+        fp.height = self.height.filter(|h| h.is_finite() && *h > 0.0);
+        Ok(fp)
     }
 
     /// Everything that can be checked without a simulator.

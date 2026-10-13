@@ -46,6 +46,7 @@
     "holes": []
   },
   "footprint_name": "CP_Radial_D5_P2.0",
+  "height": 11.0,
   "sim": {
     "kind": "subckt",
     "element": "",

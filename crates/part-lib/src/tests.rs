@@ -387,6 +387,7 @@ fn write_chip_examples() {
             pins: g.pins.clone(),
             package: PackageSpec::Explicit { pads: built.pads.iter().map(shape).collect(), holes: vec![] },
             footprint_name: Some(fp.into()),
+            height: None,
             sim: Some(sch_core::SimModel {
                 kind: sch_core::SimKind::Subckt,
                 element: String::new(),

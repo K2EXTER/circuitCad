@@ -118,6 +118,38 @@ pub fn part_total_height(refdes: &str, footprint: &str) -> f64 {
     }
 }
 
+/// `part_style` with the body height of the footprint when it says one (a library part's data sheet value).
+fn style_in(board: &Board, part: &Part) -> (f64, [u8; 3]) {
+    let (h, color) = part_style(&part.refdes, &part.footprint);
+    match board.footprint(&part.footprint).and_then(|f| f.height).filter(|h| h.is_finite() && *h > 0.0) {
+        Some(given) => (given, color),
+        None => (h, color),
+    }
+}
+
+/// `part_total_height` for a part on a board: the footprint's own height wins over the guess.
+pub fn part_height_on(board: &Board, part: &Part) -> f64 {
+    let (h, _) = style_in(board, part);
+    match part_kind(&part.refdes, &part.footprint) {
+        Kind::Header => h + 6.0,
+        _ => h,
+    }
+}
+
+/// The pad that carries one of the pin names (the first name wins), for polarity and pin 1 marks.
+fn pad_named<'a>(pads: &[&'a Pad], names: &[&str]) -> Option<&'a Pad> {
+    names.iter().find_map(|n| pads.iter().copied().find(|p| p.pin == *n))
+}
+
+/// Is the capacitor of this footprint polarized (an electrolytic)? By the footprint name or a "+" pin.
+fn is_polarized(footprint: &str, pads: &[&Pad]) -> bool {
+    let fp = footprint.to_ascii_lowercase();
+    fp.contains("cp_") || fp.contains("radial") || fp.contains("elec") || pads.iter().any(|p| p.pin == "+")
+}
+
+const MARK: [u8; 3] = [226, 226, 230];
+const CATHODE_LED: [u8; 3] = [70, 190, 100];
+
 const SILVER: [u8; 3] = [196, 198, 204];
 const GOLD: [u8; 3] = [214, 176, 58];
 
@@ -133,6 +165,26 @@ fn solid(lo: [f64; 3], hi: [f64; 3], color: [u8; 3], shape: BodyShape) -> Solid 
     Solid { lo, hi, color, shape }
 }
 
+fn b_box() -> BodyShape {
+    BodyShape::Box
+}
+
+/// A pale dot on the top of an IC body, in the corner next to pin 1 (the pad named "1"), like the printed dot or
+/// notch of the real package. Nothing when the part has no pin named "1".
+fn pin1_dot(pads: &[&Pad], lo: [f64; 2], hi: [f64; 2], top: f64) -> Option<Solid> {
+    let p1 = pad_named(pads, &["1"])?;
+    let (cx, cy) = ((lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0);
+    let (hw, hh) = ((hi[0] - lo[0]) / 2.0, (hi[1] - lo[1]) / 2.0);
+    if hw <= 0.0 || hh <= 0.0 {
+        return None;
+    }
+    let r = (hw.min(hh) * 0.16).clamp(0.2, 0.6);
+    // towards the corner on pin 1's side; an axis the pad is centred on stays centred
+    let towards = |off: f64, half: f64| if off.abs() < half * 0.2 { 0.0 } else { off.signum() * (half - r - 0.25).max(0.0) };
+    let (x, y) = (cx + towards(p1.pos.x - cx, hw), cy + towards(p1.pos.y - cy, hh));
+    Some(solid([x - r, y - r, top], [x + r, y + r, top + 0.05], MARK, BodyShape::Cylinder(2)))
+}
+
 /// All the solids of one part, in board x / y and height above the board surface.
 fn solids(board: &Board, part: &Part) -> Vec<Solid> {
     let pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == part.refdes).collect();
@@ -145,7 +197,11 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
         lo = Point::new(lo.x.min(p.pos.x - w / 2.0), lo.y.min(p.pos.y - h / 2.0));
         hi = Point::new(hi.x.max(p.pos.x + w / 2.0), hi.y.max(p.pos.y + h / 2.0));
     }
-    let (kind, (h, color)) = (part_kind(&part.refdes, &part.footprint), part_style(&part.refdes, &part.footprint));
+    let (kind, (h, color)) = (part_kind(&part.refdes, &part.footprint), style_in(board, part));
+    let prefix = prefix(&part.refdes);
+    // the cathode (diode, LED) and the minus lead (electrolytic) of a polarized part
+    let cathode = pad_named(&pads, &["K"]);
+    let minus = if is_polarized(&part.footprint, &pads) { pad_named(&pads, &["-", "2"]) } else { None };
     let (cx, cy) = ((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
     let (sx, sy) = (hi.x - lo.x, hi.y - lo.y);
     // the long way across the pads
@@ -165,26 +221,75 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             let mk = |a0: f64, a1: f64, c: [u8; 3], hh: f64| {
                 if along_x { solid([cx - len / 2.0 + a0, cy - wid / 2.0, 0.0], [cx - len / 2.0 + a1, cy + wid / 2.0, hh], c, b) } else { solid([cx - wid / 2.0, cy - len / 2.0 + a0, 0.0], [cx + wid / 2.0, cy - len / 2.0 + a1, hh], c, b) }
             };
-            vec![mk(cap, len - cap, color, h), mk(0.0, cap, SILVER, h), mk(len - cap, len, SILVER, h)]
+            // a diode's cathode end is white (the printed band), an LED's green
+            let mark = if prefix == 'D' && !part.footprint.to_ascii_lowercase().contains("led") { MARK } else { CATHODE_LED };
+            let (mut c0, mut c1) = (SILVER, SILVER);
+            if let Some(k) = cathode.filter(|_| prefix == 'D') {
+                let at = if along_x { k.pos.x } else { k.pos.y };
+                let mid = if along_x { cx } else { cy };
+                if at < mid {
+                    c0 = mark;
+                } else {
+                    c1 = mark;
+                }
+            }
+            vec![mk(cap, len - cap, color, h), mk(0.0, cap, c0, h), mk(len - cap, len, c1, h)]
         }
         Kind::Axial => {
             let (len, dia) = (if along_x { sx } else { sy } * 0.55, h);
             let (a, c) = if along_x { ([cx - len / 2.0, cy - dia / 2.0, 0.3], [cx + len / 2.0, cy + dia / 2.0, 0.3 + dia]) } else { ([cx - dia / 2.0, cy - len / 2.0, 0.3], [cx + dia / 2.0, cy + len / 2.0, 0.3 + dia]) };
             let wire = 0.45;
             let lead = if along_x { solid([lo.x + 0.6, cy - wire / 2.0, 0.3 + dia / 2.0 - wire / 2.0], [hi.x - 0.6, cy + wire / 2.0, 0.3 + dia / 2.0 + wire / 2.0], SILVER, b) } else { solid([cx - wire / 2.0, lo.y + 0.6, 0.3 + dia / 2.0 - wire / 2.0], [cx + wire / 2.0, hi.y - 0.6, 0.3 + dia / 2.0 + wire / 2.0], SILVER, b) };
-            vec![lead, solid(a, c, color, BodyShape::Cylinder(if along_x { 0 } else { 1 }))]
+            let mut v = vec![lead, solid(a, c, color, BodyShape::Cylinder(if along_x { 0 } else { 1 }))];
+            if let Some(k) = cathode.filter(|_| prefix == 'D') {
+                // the printed band round the cathode end of the body
+                let (band, grow) = (len * 0.16, 0.04);
+                let to_low = if along_x { k.pos.x < cx } else { k.pos.y < cy };
+                let (b0, b1) = if to_low { (0.0, band) } else { (len - band, len) };
+                let (lo_a, hi_a) = if along_x { (cx - len / 2.0 + b0, cx - len / 2.0 + b1) } else { (cy - len / 2.0 + b0, cy - len / 2.0 + b1) };
+                let (ca, cb) = (a, c);
+                let band_solid = if along_x { solid([lo_a, ca[1] - grow, ca[2] - grow], [hi_a, cb[1] + grow, cb[2] + grow], MARK, BodyShape::Cylinder(0)) } else { solid([ca[0] - grow, lo_a, ca[2] - grow], [cb[0] + grow, hi_a, cb[2] + grow], MARK, BodyShape::Cylinder(1)) };
+                v.push(band_solid);
+            }
+            v
         }
         Kind::Can => {
             let dia = (sx.max(sy) * 2.0).max(5.0);
-            vec![solid([cx - dia / 2.0, cy - dia / 2.0, 0.0], [cx + dia / 2.0, cy + dia / 2.0, h], color, BodyShape::Cylinder(2))]
+            let mut v = vec![solid([cx - dia / 2.0, cy - dia / 2.0, 0.0], [cx + dia / 2.0, cy + dia / 2.0, h], color, BodyShape::Cylinder(2))];
+            if let Some(m) = minus {
+                // the light stripe down the side of the can, on the minus lead's side
+                let (dx, dy) = (m.pos.x - cx, m.pos.y - cy);
+                let (r, w, out) = (dia / 2.0, dia * 0.22, 0.06);
+                v.push(if dx.abs() >= dy.abs() {
+                    let (a, b) = if dx < 0.0 { (cx - r - out, cx - r + 0.4) } else { (cx + r - 0.4, cx + r + out) };
+                    solid([a, cy - w / 2.0, 0.0], [b, cy + w / 2.0, h], MARK, b_box())
+                } else {
+                    let (a, b) = if dy < 0.0 { (cy - r - out, cy - r + 0.4) } else { (cy + r - 0.4, cy + r + out) };
+                    solid([cx - w / 2.0, a, 0.0], [cx + w / 2.0, b, h], MARK, b_box())
+                });
+            }
+            v
         }
         Kind::Led => {
             let dia = 5.0;
-            vec![
+            let mut v = vec![
                 solid([cx - dia / 2.0 - 0.3, cy - dia / 2.0 - 0.3, 0.0], [cx + dia / 2.0 + 0.3, cy + dia / 2.0 + 0.3, 1.2], color, BodyShape::Cylinder(2)),
                 solid([cx - dia / 2.0, cy - dia / 2.0, 1.2], [cx + dia / 2.0, cy + dia / 2.0, 5.5], color, BodyShape::Cylinder(2)),
                 solid([cx - dia * 0.35, cy - dia * 0.35, 5.5], [cx + dia * 0.35, cy + dia * 0.35, h], color, BodyShape::Cylinder(2)),
-            ]
+            ];
+            if let Some(k) = cathode {
+                // the flat on the cathode side of the rim: a pale patch sticking out a little
+                let (r, w, out) = (dia / 2.0 + 0.3, 2.2, 0.06);
+                let (dx, dy) = (k.pos.x - cx, k.pos.y - cy);
+                v.push(if dx.abs() >= dy.abs() {
+                    let (a, b) = if dx < 0.0 { (cx - r - out, cx - r + 0.3) } else { (cx + r - 0.3, cx + r + out) };
+                    solid([a, cy - w / 2.0, 0.0], [b, cy + w / 2.0, 1.2], MARK, b_box())
+                } else {
+                    let (a, b) = if dy < 0.0 { (cy - r - out, cy - r + 0.3) } else { (cy + r - 0.3, cy + r + out) };
+                    solid([cx - w / 2.0, a, 0.0], [cx + w / 2.0, b, 1.2], MARK, b_box())
+                });
+            }
+            v
         }
         Kind::Header => {
             let mut v = vec![solid([lo.x - 0.5, lo.y - 0.5, 0.0], [hi.x + 0.5, hi.y + 0.5, h], color, b)];
@@ -206,13 +311,17 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             let pad_len = pads.iter().map(|p| p.shape.size().0.max(p.shape.size().1)).sum::<f64>() / pads.len() as f64;
             let s = (pad_len * 0.35).min(sx.min(sy) * 0.25);
             v.push(solid([lo.x + s, lo.y + s, leg_h], [hi.x - s, hi.y - s, leg_h + h], color, b));
+            v.extend(pin1_dot(&pads, [lo.x + s, lo.y + s], [hi.x - s, hi.y - s], leg_h + h));
             v
         }
         Kind::Dip => {
             // two rows of pins: the plastic sits between them
             let xs: BTreeSet<i64> = pads.iter().map(|p| (p.pos.x * 100.0).round() as i64).collect();
             let (shx, shy) = if xs.len() <= 2 && sx > 6.0 { (1.4, 0.2) } else { (0.2, 1.4) };
-            vec![solid([lo.x + shx, lo.y + shy, 0.0], [hi.x - shx, hi.y - shy, h], color, b)]
+            let (blo, bhi) = ([lo.x + shx, lo.y + shy], [hi.x - shx, hi.y - shy]);
+            let mut v = vec![solid([blo[0], blo[1], 0.0], [bhi[0], bhi[1], h], color, b)];
+            v.extend(pin1_dot(&pads, blo, bhi, h));
+            v
         }
         Kind::Other => vec![solid([lo.x - 0.1, lo.y - 0.1, 0.0], [hi.x + 0.1, hi.y + 0.1, h], color, b)],
     }
@@ -243,6 +352,131 @@ mod tests {
 
     fn part(refdes: &str, fp: &str, side: Side) -> Part {
         Part { refdes: refdes.into(), value: "v".into(), footprint: fp.into(), pos: Point::default(), rot: 0, side }
+    }
+
+    fn pin_pad(refdes: &str, pin: &str, x: f64, y: f64, w: f64, h: f64, drill: Option<f64>) -> Pad {
+        let mut p = pad(refdes, x, y, w, h, drill);
+        p.pin = pin.into();
+        p
+    }
+
+    fn one(b: &Board, refdes: &str) -> Vec<PartBox> {
+        part_boxes(b).into_iter().filter(|x| x.refdes == refdes).collect()
+    }
+
+    #[test]
+    fn an_ic_has_a_dot_next_to_pin_1() {
+        let mut b = Board::new("t", 40.0, 25.0);
+        // SOIC-like: pin 1 top left (smaller x, bigger y), pin 8 bottom right
+        for k in 0..4 {
+            b.pads.push(pin_pad("U1", &format!("{}", k + 1), 10.0 - 2.7, 10.0 + 1.9 - 1.27 * k as f64, 1.5, 0.6, None));
+            b.pads.push(pin_pad("U1", &format!("{}", 8 - k), 10.0 + 2.7, 10.0 + 1.9 - 1.27 * k as f64, 1.5, 0.6, None));
+        }
+        b.parts.push(part("U1", "SOIC-8_P1.27", Side::Top));
+        let boxes = one(&b, "U1");
+        let dot = boxes.iter().find(|x| x.color == MARK).expect("a pin 1 dot");
+        assert_eq!(dot.shape, BodyShape::Cylinder(2));
+        let body = boxes.iter().filter(|x| x.color != SILVER && x.color != MARK).max_by(|a, c| a.hi[2].total_cmp(&c.hi[2])).unwrap();
+        assert!(dot.lo[2] >= body.hi[2] - 1e-9, "on top of the body");
+        let (dx, dy) = ((dot.lo[0] + dot.hi[0]) / 2.0, (dot.lo[1] + dot.hi[1]) / 2.0);
+        assert!(dx < 10.0 && dy > 10.0, "top left, next to pad 1: {dx} {dy}");
+        // a DIP has one too, and a part without a pin called 1 (a transistor) has none
+        let mut d = Board::new("t", 40.0, 25.0);
+        for k in 0..2 {
+            d.pads.push(pin_pad("U2", &format!("{}", k + 1), 5.0, 5.0 - 2.54 * k as f64, 1.6, 1.6, Some(0.8)));
+            d.pads.push(pin_pad("U2", &format!("{}", 8 - k), 12.6, 5.0 - 2.54 * k as f64, 1.6, 1.6, Some(0.8)));
+        }
+        d.parts.push(part("U2", "DIP-8_W7.62", Side::Top));
+        assert!(one(&d, "U2").iter().any(|x| x.color == MARK));
+        let mut q = Board::new("t", 40.0, 25.0);
+        for (pin, x) in [("B", 0.0), ("C", 1.0), ("E", 2.0)] {
+            q.pads.push(pin_pad("Q1", pin, 10.0 + x, 10.0, 0.9, 0.8, None));
+        }
+        q.parts.push(part("Q1", "SOT-23", Side::Top));
+        assert!(!one(&q, "Q1").iter().any(|x| x.color == MARK));
+    }
+
+    #[test]
+    fn a_diode_shows_its_cathode_end_and_an_led_its_flat() {
+        let mut b = Board::new("t", 60.0, 25.0);
+        // SMD diode: K on the left
+        b.pads.push(pin_pad("D1", "K", 10.0 - 1.65, 10.0, 0.9, 1.2, None));
+        b.pads.push(pin_pad("D1", "A", 10.0 + 1.65, 10.0, 0.9, 1.2, None));
+        b.parts.push(part("D1", "D_SOD-123", Side::Top));
+        let cap = |r: &str| one(&b, r).into_iter().filter(|x| x.color == MARK).collect::<Vec<_>>();
+        let c = cap("D1");
+        assert_eq!(c.len(), 1);
+        assert!((c[0].lo[0] + c[0].hi[0]) / 2.0 < 10.0, "the white end is the K side");
+        // the same diode with A on the left: the mark follows the cathode
+        let mut b2 = Board::new("t", 60.0, 25.0);
+        b2.pads.push(pin_pad("D1", "A", 10.0 - 1.65, 10.0, 0.9, 1.2, None));
+        b2.pads.push(pin_pad("D1", "K", 10.0 + 1.65, 10.0, 0.9, 1.2, None));
+        b2.parts.push(part("D1", "D_SOD-123", Side::Top));
+        let m = one(&b2, "D1").into_iter().find(|x| x.color == MARK).unwrap();
+        assert!((m.lo[0] + m.hi[0]) / 2.0 > 10.0);
+        // axial diode: a band on the K side, not on a resistor
+        let mut a = Board::new("t", 60.0, 25.0);
+        a.pads.push(pin_pad("D2", "K", 20.0, 10.0, 1.8, 1.8, Some(0.9)));
+        a.pads.push(pin_pad("D2", "A", 27.62, 10.0, 1.8, 1.8, Some(0.9)));
+        a.pads.push(pin_pad("R1", "1", 20.0, 18.0, 1.8, 1.8, Some(0.9)));
+        a.pads.push(pin_pad("R1", "2", 30.16, 18.0, 1.8, 1.8, Some(0.9)));
+        a.parts.push(part("D2", "D_DO-35_7.62", Side::Top));
+        a.parts.push(part("R1", "R_Axial_10.16", Side::Top));
+        let band = one(&a, "D2").into_iter().find(|x| x.color == MARK).expect("band");
+        assert_eq!(band.shape, BodyShape::Cylinder(0));
+        assert!((band.lo[0] + band.hi[0]) / 2.0 < 23.81, "cathode side");
+        assert!(!one(&a, "R1").iter().any(|x| x.color == MARK));
+        // LED 5 mm: a pale patch on the rim at the K side (below here, K is at smaller y)
+        let mut l = Board::new("t", 60.0, 25.0);
+        l.pads.push(pin_pad("D3", "K", 30.0, 10.0 - 1.27, 1.8, 1.8, Some(0.9)));
+        l.pads.push(pin_pad("D3", "A", 30.0, 10.0 + 1.27, 1.8, 1.8, Some(0.9)));
+        l.parts.push(part("D3", "LED_5mm", Side::Top));
+        let flat = one(&l, "D3").into_iter().find(|x| x.color == MARK).expect("flat");
+        assert!((flat.lo[1] + flat.hi[1]) / 2.0 < 10.0 && flat.shape == BodyShape::Box);
+        // an SMD LED has a green cathode end
+        let mut s = Board::new("t", 60.0, 25.0);
+        s.pads.push(pin_pad("D4", "K", 8.0, 10.0, 1.0, 1.4, None));
+        s.pads.push(pin_pad("D4", "A", 10.0, 10.0, 1.0, 1.4, None));
+        s.parts.push(part("D4", "LED_0805", Side::Top));
+        assert!(one(&s, "D4").iter().any(|x| x.color == CATHODE_LED));
+    }
+
+    #[test]
+    fn an_electrolytic_has_a_stripe_on_the_minus_side_and_a_ceramic_disc_has_none() {
+        let mut b = Board::new("t", 60.0, 25.0);
+        b.pads.push(pin_pad("C1", "1", 10.0 - 1.0, 10.0, 1.6, 1.6, Some(0.8)));
+        b.pads.push(pin_pad("C1", "2", 10.0 + 1.0, 10.0, 1.6, 1.6, Some(0.8)));
+        b.pads.push(pin_pad("C2", "1", 30.0 - 2.54, 10.0, 1.6, 1.6, Some(0.8)));
+        b.pads.push(pin_pad("C2", "2", 30.0 + 2.54, 10.0, 1.6, 1.6, Some(0.8)));
+        b.parts.push(part("C1", "CP_Radial_D5_P2.0", Side::Top));
+        b.parts.push(part("C2", "C_Disc_5.08", Side::Top));
+        let stripe = one(&b, "C1").into_iter().find(|x| x.color == MARK).expect("stripe");
+        assert!((stripe.lo[0] + stripe.hi[0]) / 2.0 > 10.0, "pin 2 (the minus lead) is on the right");
+        assert!(!one(&b, "C2").iter().any(|x| x.color == MARK));
+    }
+
+    #[test]
+    fn the_height_given_for_a_footprint_replaces_the_guess() {
+        let mut b = Board::new("t", 40.0, 25.0);
+        let mut fp = crate::footprints::get("C_Disc_5.08").unwrap();
+        fp.name = "C_Big".into();
+        fp.height = Some(11.0);
+        b.add_footprint(fp);
+        for p in crate::footprints::get("C_Disc_5.08").unwrap().pads {
+            b.pads.push(pin_pad("C1", &p.pin, 10.0 + p.pos.x, 10.0 + p.pos.y, 1.6, 1.6, Some(0.8)));
+            b.pads.push(pin_pad("C2", &p.pin, 25.0 + p.pos.x, 10.0 + p.pos.y, 1.6, 1.6, Some(0.8)));
+        }
+        b.parts.push(part("C1", "C_Big", Side::Top));
+        b.parts.push(part("C2", "C_Disc_5.08", Side::Top));
+        assert_eq!(part_height_on(&b, &b.parts[0]), 11.0);
+        assert_eq!(part_height_on(&b, &b.parts[1]), part_total_height("C2", "C_Disc_5.08"));
+        let top = |r: &str| one(&b, r).iter().map(|x| x.hi[2]).fold(0.0, f64::max);
+        assert!((top("C1") - (BOARD_THICKNESS + 11.0)).abs() < 1e-9 && top("C2") < BOARD_THICKNESS + 6.0);
+        // the height is saved with the footprint, and an old footprint without it still reads
+        let json = serde_json::to_string(&b.footprints[0]).unwrap();
+        assert!(json.contains("\"height\":11"));
+        let old: crate::footprints::Footprint = serde_json::from_str(r#"{"name":"X","pads":[]}"#).unwrap();
+        assert_eq!(old.height, None);
     }
 
     #[test]

@@ -41,6 +41,8 @@ pub struct PartForm {
     pub pad_d: f64,
     pub drill: f64,
     pub tht: bool,
+    /// Body height above the board in mm (0 = not given: the 3D view guesses from the footprint).
+    pub height: f64,
     /// Extra pads and holes beyond the package: shield legs, locating pegs, slots. One per line, see `EXTRAS_HELP`.
     pub extras: String,
     /// A built-in footprint used as the package (empty = the dimensions typed below).
@@ -99,6 +101,7 @@ impl Default for PartForm {
             pad_d: 1.7,
             drill: 1.0,
             tht: false,
+            height: 0.0,
             extras: String::new(),
             fp_preset: String::new(),
             glyph: String::new(),
@@ -434,6 +437,7 @@ impl PartForm {
             pins,
             package,
             footprint_name,
+            height: Some(self.height).filter(|h| *h > 0.0),
             sim,
             ratings: self.parse_ratings()?,
             glyph: self.glyph.clone(),
@@ -920,7 +924,9 @@ impl PartForm {
                         dv(ui, "穴径", &mut self.drill);
                     }
                 }
+                dv(ui, "高さ (mm)", &mut self.height);
             });
+            ui.small("高さ: データシートの「基板からの高さ」。0 のままなら3D表示は名前から推測します。ケースに入るかの確認に使います");
             ui.small("特殊な形状(サーマルパッド等)は、保存した JSON の package を explicit にして直接編集できます");
             egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
                 ui.small("USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");

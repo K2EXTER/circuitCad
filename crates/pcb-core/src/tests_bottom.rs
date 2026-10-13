@@ -169,6 +169,7 @@ fn pads_sharing_a_pin_are_one_connection_and_all_get_the_net() {
     let fp = Footprint {
         name: "TAB3".into(),
         holes: vec![],
+        height: None,
         pads: vec![pad("1", -3.0, 2.3, 2.0, 1.5), pad("2", -3.0, 0.0, 2.0, 1.5), pad("3", -3.0, -2.3, 2.0, 1.5), pad("2", 3.0, 0.0, 2.0, 3.8)],
     };
     let mut b = board();
