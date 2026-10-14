@@ -43,13 +43,14 @@ impl SchEditor {
 
     /// Has the sheet changed since it was last saved or opened?
     pub fn dirty(&self) -> bool {
-        self.rev != self.saved_rev || self.sch != self.committed
+        self.rev != self.saved_rev || self.sch != self.committed || self.spec_items() != self.saved_specs
     }
 
     /// The sheet was just written to a file.
     pub fn mark_saved(&mut self) {
         self.commit_history();
         self.saved_rev = self.rev;
+        self.saved_specs = self.spec_items();
     }
 
     pub fn undo(&mut self) {

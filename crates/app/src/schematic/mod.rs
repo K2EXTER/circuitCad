@@ -199,6 +199,8 @@ pub struct SchEditor {
     fault_wave: Option<fault::FaultWaveView>,
     /// Targets for the design (pass / fail table); kept for the session.
     specs: Vec<spec_table::SpecRow>,
+    /// The spec table as last saved or opened (a changed table counts as an unsaved change).
+    saved_specs: Vec<spec_table::SpecItem>,
     fault_kind: usize,
     fault_view: Option<fault::FaultView>,
     fault_scan: Vec<fault::ScanRow>,
@@ -467,6 +469,7 @@ impl Default for SchEditor {
             fault_node: String::new(),
             fault_wave: None,
             specs: vec![],
+            saved_specs: vec![],
             fault_kind: 0,
             fault_view: None,
             fault_scan: vec![],
@@ -533,6 +536,7 @@ use lessons::ActiveLesson;
 mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;
+pub use spec_table::{take_specs, with_specs, SpecItem};
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
 pub use lessons::{lesson_ids, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};

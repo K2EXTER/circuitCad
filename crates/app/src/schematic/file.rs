@@ -14,7 +14,7 @@ impl SchEditor {
             self.path.clone()
         };
         if let Some(p) = path {
-            self.status = match serde_json::to_string_pretty(&self.sch).map(|s| std::fs::write(&p, s)) {
+            self.status = match self.sheet_json().map(|s| std::fs::write(&p, s)) {
                 Ok(Ok(())) => {
                     self.path = Some(p.clone());
                     self.mark_saved();
@@ -26,6 +26,13 @@ impl SchEditor {
         }
     }
 
+    /// The sheet and its spec table as the text of a `.schjson` file.
+    fn sheet_json(&self) -> Result<String, serde_json::Error> {
+        let mut value = serde_json::to_value(&self.sch)?;
+        with_specs(&mut value, &self.spec_items());
+        serde_json::to_string_pretty(&value)
+    }
+
     pub fn open(&mut self) {
         if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad 回路図", &["schjson"]).pick_file() {
             self.load_path(p);
@@ -33,9 +40,16 @@ impl SchEditor {
     }
 
     pub fn load_path(&mut self, p: PathBuf) {
-        match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string())) {
-            Ok(s) => {
+        let read = |p: &PathBuf| -> Result<(Schematic, Vec<SpecItem>), String> {
+            let text = std::fs::read_to_string(p).map_err(|e| e.to_string())?;
+            let mut value: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+            let specs = take_specs(&mut value);
+            Ok((serde_json::from_value(value).map_err(|e| e.to_string())?, specs))
+        };
+        match read(&p) {
+            Ok((s, specs)) => {
                 self.adopt(s, Some(p.clone()));
+                self.set_spec_items(&specs);
                 self.status = format!("開きました: {}", p.display());
             }
             Err(e) => self.status = format!("読み込み失敗: {e}"),
@@ -50,6 +64,8 @@ impl SchEditor {
         self.selected = None;
         self.pending = None;
         self.problems.clear();
+        self.specs.clear();
+        self.saved_specs.clear();
         self.dc = None;
         self.fit_pending = true;
     }

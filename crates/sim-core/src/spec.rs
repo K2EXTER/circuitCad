@@ -38,6 +38,25 @@ impl SpecKind {
         SpecKind::PhaseMargin,
     ];
 
+    /// Stable name used in saved files (never rename; the labels may change).
+    pub fn key(self) -> &'static str {
+        match self {
+            SpecKind::DcVoltage => "dc_voltage",
+            SpecKind::DcCurrent => "dc_current",
+            SpecKind::TranMean => "tran_mean",
+            SpecKind::TranPp => "tran_pp",
+            SpecKind::TranMax => "tran_max",
+            SpecKind::TranMin => "tran_min",
+            SpecKind::AcCutoff => "ac_cutoff",
+            SpecKind::AcGainAt => "ac_gain_at",
+            SpecKind::PhaseMargin => "phase_margin",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<SpecKind> {
+        SpecKind::ALL.into_iter().find(|k| k.key() == key)
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             SpecKind::DcVoltage => "DC電圧",
@@ -187,6 +206,14 @@ pub fn evaluate(spec: &Spec, inp: &Inputs) -> SpecEval {
 mod tests {
     use super::*;
     use crate::{AcSignal, Signal};
+
+    #[test]
+    fn every_kind_round_trips_through_its_key() {
+        for k in SpecKind::ALL {
+            assert_eq!(SpecKind::from_key(k.key()), Some(k));
+        }
+        assert_eq!(SpecKind::from_key("nope"), None);
+    }
 
     fn spec(kind: SpecKind, target: &str, lo: Option<f64>, hi: Option<f64>) -> Spec {
         Spec { kind, target: target.into(), at: 0.0, lo, hi }

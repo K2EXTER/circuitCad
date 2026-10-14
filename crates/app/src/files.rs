@@ -83,7 +83,7 @@ impl App {
             self.project.clone()
         };
         let Some(p) = path else { return };
-        let msg = match project::save(&p, &self.sch.sch, &self.board_ed.board) {
+        let msg = match project::save(&p, &self.sch.sch, &self.board_ed.board, &self.sch.spec_items()) {
             Ok(()) => {
                 self.project = Some(p.clone());
                 self.sch.mark_saved();
@@ -110,6 +110,7 @@ impl App {
         let msg = match project::load(&p) {
             Ok(pr) => {
                 self.sch.adopt(pr.schematic, None);
+                self.sch.set_spec_items(&pr.specs);
                 self.board_ed.adopt(pr.board, None);
                 self.project = Some(p.clone());
                 format!("プロジェクトを開きました: {}", p.display())
