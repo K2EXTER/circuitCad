@@ -6,6 +6,8 @@
 
 [**⬇ Windows 版をダウンロード**](https://github.com/K2EXTER/circuitCad/releases) (アルファ版・インストール不要・zip を展開して `circuitCad.exe` を起動)
 
+開発の経緯 (AI を使って、1週間で作った記録) は、Zenn の記事にまとめています: [Claude Codeで1週間・約5万行: 初学者向けの回路CAD「circuitCad」をRustで作った記録](https://zenn.dev/k2exter/articles/d54c59e62156c3)
+
 > **状態: 初期バージョン (アルファ)。** 動作確認は Windows だけで、基板の発注の実績もまだありません。使う前に、下の「[現在の状態と既知の制限](#現在の状態と既知の制限)」を読んでください。
 
 ![回路図に電圧と電流を重ねて表示した画面](docs/images/schematic-dc.png)
@@ -116,4 +118,5 @@ Linux では、ビルドに GTK などの開発用パッケージ (`libgtk-3-dev
 ## 開発・支援
 - バグ報告・提案・部品の追加は大歓迎です。[CONTRIBUTING.md](CONTRIBUTING.md) をご覧ください。
 - 開発の支援は GitHub Sponsors で受け付けています。リポジトリの **Sponsor** ボタンから支援できます。いただいた支援は、開発の時間と、ライブラリ部品の検証に使う予定です。
+- 作り方 (AI との開発の進め方・失敗も含めて) は、[Zenn の記事](https://zenn.dev/k2exter/articles/d54c59e62156c3) に書きました。
 - コードの地図は [CLAUDE.md](CLAUDE.md)、各ファイルの詳しい説明は [docs/code-notes/](docs/code-notes/) にあります (AI アシスタント向けに書いたものですが、人が読んでも構成をつかめます)。
