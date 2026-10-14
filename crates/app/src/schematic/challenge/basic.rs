@@ -20,7 +20,7 @@ pub(super) const ZENER: Challenge = Challenge {
     parts0: &[("V1", (0, 0)), ("R1", (10, -6)), ("D1", (20, 0))],
     parts1: &[("V1", (0, 0))],
     start_values: NO,
-    grounds0: &[("V1", "-", 0, 5), ("D1", "A", 0, 5)],
+    grounds0: &[("V1", "-", 0, 5), ("D1", "A", 0, -5)],
     grounds1: &[("V1", "-", 0, 5)],
     checks: &[
         Check::Erc,
@@ -208,7 +208,7 @@ pub(super) const EMITTER_FOLLOWER: Challenge = Challenge {
     parts0: &[("V1", (0, 0)), ("R1", (10, -8)), ("D1", (22, 2)), ("Q1", (34, -2))],
     parts1: &[("V1", (0, 0))],
     start_values: NO,
-    grounds0: &[("V1", "-", 0, 5), ("D1", "A", 0, 5)],
+    grounds0: &[("V1", "-", 0, 5), ("D1", "A", 0, -5)],
     grounds1: &[("V1", "-", 0, 5)],
     checks: &[
         Check::Erc,

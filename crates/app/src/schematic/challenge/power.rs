@@ -20,7 +20,7 @@ pub(super) const SERIES_REGULATOR: Challenge = Challenge {
     parts0: &[("V1", (0, 0)), ("R1", (14, -10)), ("D1", (28, 0)), ("U1", (44, -4)), ("Q1", (62, -8)), ("R3", (62, 10)), ("R4", (50, 14))],
     parts1: &[("V1", (0, 0)), ("R1", (14, -10))],
     start_values: NO,
-    grounds0: &[("V1", "-", 0, 5), ("D1", "A", 0, 5), ("R4", "2", 0, 5)],
+    grounds0: &[("V1", "-", 0, 5), ("D1", "A", 0, -5), ("R4", "2", 0, 5)],
     grounds1: &[("V1", "-", 0, 5)],
     checks: &[
         Check::Erc,

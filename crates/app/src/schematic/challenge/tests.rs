@@ -25,6 +25,31 @@ mod challenge_tests {
     }
 
     /// Every challenge: its answer passes every check, its start sheets are wire-free and judged without a crash.
+    /// A ground placed with a fixed offset from a pin used to land on the body of a part that is drawn the other
+    /// way up (the zener's anode is at the top); no ground may sit between the pins of another part.
+    #[test]
+    fn no_start_ground_lands_on_another_part() {
+        for ch in CHALLENGES {
+            for level in [0, 1] {
+                let mut e = SchEditor::default();
+                e.start_challenge(ch.id, level);
+                for g in e.sch.components.iter().filter(|c| c.kind == Kind::Ground) {
+                    for c in e.sch.components.iter().filter(|c| c.kind != Kind::Ground) {
+                        let pins: Vec<(i32, i32)> = c.pins().into_iter().map(|(_, p)| p).collect();
+                        if pins.len() < 2 {
+                            continue;
+                        }
+                        let (x0, x1) = (pins.iter().map(|p| p.0).min().unwrap(), pins.iter().map(|p| p.0).max().unwrap());
+                        let (y0, y1) = (pins.iter().map(|p| p.1).min().unwrap(), pins.iter().map(|p| p.1).max().unwrap());
+                        let inside = g.pos.0 > x0 && g.pos.0 < x1 && g.pos.1 > y0 && g.pos.1 < y1;
+                        let on_lead = (g.pos.0 == x0 && x0 == x1 && g.pos.1 > y0 && g.pos.1 < y1) || (g.pos.1 == y0 && y0 == y1 && g.pos.0 > x0 && g.pos.0 < x1);
+                        assert!(!inside && !on_lead, "{} level {level}: a ground at {:?} lies on {} ({x0},{y0})-({x1},{y1})", ch.id, g.pos, c.refdes);
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn every_answer_passes_and_every_start_sheet_is_bare() {
         let ids = lesson_ids();
