@@ -7,6 +7,8 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 - CIでの検算: `docs/xcheck/ngspice_dc.json` に、同梱サンプルの ngspice のDC動作点(生の出力)が保存してあり、テスト `dc_points_still_match_the_stored_ngspice_answers` が自前の結果と比べる(ngspice は不要)。保存するのは既定設定で一致した回路だけ(`ip2332_charger` は gmin依存、`variable_supply` はズレなので外れている)。モデルを意図して変えたら `circuitCad --xcheck docs/examples --golden docs/xcheck/ngspice_dc.json` で作り直し、差分を読む。
 
+- 過渡波形のCI検算: `docs/xcheck/ngspice_tran.json` に、同梱サンプル32件の ngspice の過渡解析を「10個の窓ごとの平均・最小・最大」にまとめて保存してある(`xcheck_tran.rs` の `window_stats`)。テスト `transient_runs_still_match_the_stored_ngspice_statistics` が、保存した刻みで自前を走らせ、窓の平均(振れ幅の1%)・最小最大(3%、最初の窓は除く)・終わり2窓のリップル(10%)を比べる。波形そのものでなく統計なのは、スイッチング波形は点を間引くとエッジが崩れるため。降圧コンバータの出力コンデンサ違い2件は、定常のリップルを見るため5ms走らせる(`own_dynamics`)。作り直しは `circuitCad --xcheck docs/examples --tran --golden docs/xcheck/ngspice_tran.json`。
+
 ## 描画・波形・プロット
 - 電源記号は値で形が変わる(`symbols.rs` の `source_symbol`: 直流=±の円、SIN=正弦波、PULSE=方形波、PWL/NOISE=折れ線)。
 - `plot.rs` の `scale_bar` は横軸・縦軸(グループごと)の範囲入力・全体・自動(1行、過渡・ACの波形パネルの上に出る。拡大縮小は軸の数字の上のホイール)。

@@ -382,7 +382,7 @@ pub fn run_cli(args: &[String]) -> bool {
     let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|j| args.get(j + 1)).map(|s| s.as_str());
     let tran = args.iter().any(|a| a == "--tran");
     if let (Some(dir), Some(out), Some(exe)) = (args.get(i + 1).filter(|a| !a.starts_with("--")), val("--golden"), find_ngspice(val("--ngspice"))) {
-        let report = write_golden(Path::new(dir), &exe, Path::new(out));
+        let report = if tran { crate::xcheck_tran::write_golden(Path::new(dir), &exe, Path::new(out)) } else { write_golden(Path::new(dir), &exe, Path::new(out)) };
         let _ = std::fs::write("xcheck_golden_report.txt", &report);
         print!("{report}");
         return true;

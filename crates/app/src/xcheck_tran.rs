@@ -75,7 +75,9 @@ pub fn pick_settings(s: &Schematic) -> Result<Option<(f64, f64)>, String> {
 fn own_dynamics(tag: &str) -> (f64, f64) {
     match tag {
         // 150 kHz PWM: the start-up of the output filter
-        "buck_converter" | "buck_cout_ceramic" | "buck_cout_electrolytic" => (1e-3, 100e-9),
+        "buck_converter" => (1e-3, 100e-9),
+        // the two output-capacitor variants are about the steady-state ripple: run until the output has settled (about 4 ms)
+        "buck_cout_ceramic" | "buck_cout_electrolytic" => (5e-3, 100e-9),
         // astable timers: a few periods of about a second
         "ne555_blinker" => (3.0, 5e-4),
         "led_blinker" => (5.0, 2e-3),
@@ -185,6 +187,12 @@ pub struct Given {
 }
 
 pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Given) -> TranOutcome {
+    check_tran_keeping(s, exe, work, tag, given, &mut None)
+}
+
+/// Like `check_tran`; when the circuit matches, `keep` gets ngspice's waveform boiled down to per-window
+/// statistics (what CI compares against, see `docs/xcheck/ngspice_tran.json`).
+pub fn check_tran_keeping(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Given, keep: &mut Option<TranGolden>) -> TranOutcome {
     if s.components.iter().any(|c| c.kind == Kind::Custom && c.custom.as_ref().is_none_or(|x| x.sim.is_none())) {
         return TranOutcome::Skipped("シミュレーションモデルのない部品があります".into());
     }
@@ -287,11 +295,186 @@ pub fn check_tran(s: &Schematic, exe: &Path, work: &Path, tag: &str, given: Give
     }
     let ripple = ripple.join(" / ");
     let bad_list = bad_names.join(", ");
-    match worst {
+    let outcome = match worst {
         None => TranOutcome::Skipped("名前が一致するノードがありません".into()),
         Some((nrmse, name, peak, at)) if bad > 0 => TranOutcome::Differ { nodes: n, tstop, worst: name, nrmse, peak, at, bad, bad_list, ripple },
         Some((nrmse, name, ..)) => TranOutcome::Match { nodes: n, tstop, worst: name, nrmse, ripple },
+    };
+    if matches!(outcome, TranOutcome::Match { .. }) {
+        let nodes = nets
+            .iter()
+            .filter_map(|(_, sp)| {
+                let key = sp.to_ascii_lowercase();
+                cols.iter().find(|(c, _)| *c == format!("v({key})")).map(|(_, b)| (key, window_stats(&t, b, tstop, usize::from(zero_start))))
+            })
+            .collect();
+        *keep = Some(TranGolden { tstop, tstep, zero_start, nodes });
     }
+    outcome
+}
+
+// ------------------------------------------------------------------ stored ngspice answers (for CI)
+
+/// A run is cut into this many equal windows; each keeps the mean, minimum and maximum of a node.
+const WINDOWS: usize = 10;
+/// A window's mean may differ by this fraction of the node's swing (floor `MIN_SPAN`), its minimum / maximum by `EXTREME_TOL`.
+#[cfg(test)]
+const MEAN_TOL: f64 = 0.01;
+#[cfg(test)]
+const EXTREME_TOL: f64 = 0.03;
+/// The ripple (peak-to-peak over the last two windows) may differ by this fraction.
+#[cfg(test)]
+const RIPPLE_TOL: f64 = 0.1;
+
+/// What is kept of ngspice's transient run of one circuit.
+pub struct TranGolden {
+    pub tstop: f64,
+    pub tstep: f64,
+    /// Both engines started from all zeros (and the first sample was left out).
+    pub zero_start: bool,
+    /// (lower-case SPICE node name, [mean, min, max] per window)
+    pub nodes: Vec<(String, Vec<[f64; 3]>)>,
+}
+
+/// Mean (time-weighted), minimum and maximum of a piecewise-linear signal in each of `WINDOWS` equal
+/// windows of `0..tstop`. `skip` leaves out the first samples (the t = 0 sample of a zero start).
+pub fn window_stats(t: &[f64], v: &[f64], tstop: f64, skip: usize) -> Vec<[f64; 3]> {
+    let n = t.len().min(v.len());
+    let (t, v) = (&t[skip.min(n)..n], &v[skip.min(n)..n]);
+    if t.is_empty() {
+        return vec![];
+    }
+    (0..WINDOWS)
+        .map(|k| {
+            let (lo, hi) = (tstop * k as f64 / WINDOWS as f64, tstop * (k + 1) as f64 / WINDOWS as f64);
+            let (mut area, mut mn, mut mx) = (0.0, f64::MAX, f64::MIN);
+            let mut prev = (lo, interpolate(t, v, lo));
+            mn = mn.min(prev.1);
+            mx = mx.max(prev.1);
+            for (&x, &y) in t.iter().zip(v).filter(|(x, _)| **x > lo && **x < hi) {
+                area += (x - prev.0) * (y + prev.1) / 2.0;
+                mn = mn.min(y);
+                mx = mx.max(y);
+                prev = (x, y);
+            }
+            let end = interpolate(t, v, hi);
+            area += (hi - prev.0) * (end + prev.1) / 2.0;
+            mn = mn.min(end);
+            mx = mx.max(end);
+            [area / (hi - lo), mn, mx]
+        })
+        .collect()
+}
+
+/// `Err` (what differs) when our window statistics are not those of the stored ngspice run.
+#[cfg(test)]
+pub fn compare_stats(name: &str, ours: &[[f64; 3]], theirs: &[[f64; 3]]) -> Result<(), String> {
+    if ours.len() != theirs.len() || theirs.is_empty() {
+        return Err(format!("{name}: 窓の数が違う"));
+    }
+    let lo = theirs.iter().map(|w| w[1]).fold(f64::MAX, f64::min);
+    let hi = theirs.iter().map(|w| w[2]).fold(f64::MIN, f64::max);
+    let span = (hi - lo).max(MIN_SPAN);
+    for (k, (a, b)) in ours.iter().zip(theirs).enumerate() {
+        let bad = |what: &str, x: f64, y: f64, tol: f64| {
+            ((x - y).abs() > tol * span).then(|| format!("{name} 窓{k} の{what}: 自前 {x:.4e} / ngspice {y:.4e} (振れ幅 {span:.3e} の {:.1}%)", (x - y).abs() / span * 100.0))
+        };
+        // window 0 starts at t = 0, where the two engines may begin from slightly different initial states
+        // (an astable timer): its extremes are left out, its mean is not
+        let found = bad("平均", a[0], b[0], MEAN_TOL).or_else(|| if k == 0 { None } else { bad("最小", a[1], b[1], EXTREME_TOL) }).or_else(|| if k == 0 { None } else { bad("最大", a[2], b[2], EXTREME_TOL) });
+        if let Some(m) = found {
+            return Err(m);
+        }
+    }
+    let pp = |w: &[[f64; 3]]| w[w.len() - 2..].iter().map(|x| x[2]).fold(f64::MIN, f64::max) - w[w.len() - 2..].iter().map(|x| x[1]).fold(f64::MAX, f64::min);
+    let (pm, pt) = (pp(ours), pp(theirs));
+    if pt > 1e-3 && (pm / pt - 1.0).abs() > RIPPLE_TOL {
+        return Err(format!("{name} のリップル (終わり2窓のp-p): 自前 {pm:.4e} / ngspice {pt:.4e}"));
+    }
+    Ok(())
+}
+
+/// Run our engine with the stored settings and compare with the stored ngspice statistics (no ngspice needed).
+#[cfg(test)]
+pub fn check_against_stored(s: &Schematic, g: &TranGolden) -> Result<(), String> {
+    let circuit = from_schematic(s).map_err(|e| format!("回路を作れません ({})", e.first().map(|x| x.to_string()).unwrap_or_default()))?;
+    let ours = transient(&circuit, &TranSettings { tstop: g.tstop, tstep: g.tstep, uic: false }).map_err(|e| format!("自前エンジン: {e}"))?;
+    let zero_start = ours.warnings.iter().any(|w| w.contains("すべてゼロ"));
+    if zero_start != g.zero_start {
+        return Err(format!("すべてゼロからの開始が変わった (保存={} 今={zero_start})", g.zero_start));
+    }
+    let nets: Vec<(String, String)> = extract(s).iter().map(|n| (n.name.clone(), spice_node(&n.name).to_ascii_lowercase())).collect();
+    let mut errors = vec![];
+    for (key, theirs) in &g.nodes {
+        let Some(a) = nets.iter().find(|(_, sp)| sp == key).and_then(|(name, _)| ours.signal(&format!("V({name})"))) else {
+            errors.push(format!("{key}: 自前の波形がありません"));
+            continue;
+        };
+        let mine = window_stats(&ours.time, &a.values, g.tstop, usize::from(zero_start));
+        if let Err(m) = compare_stats(key, &mine, theirs) {
+            errors.push(m);
+        }
+    }
+    if errors.is_empty() { Ok(()) } else { Err(errors.join(" / ")) }
+}
+
+/// Where the stored answers are kept.
+#[cfg(test)]
+pub const GOLDEN_TRAN: &str = "docs/xcheck/ngspice_tran.json";
+
+fn round6(x: f64) -> f64 {
+    format!("{x:.6e}").parse().unwrap_or(x)
+}
+
+/// Run ngspice over a folder of examples and store the statistics of every circuit that matches.
+pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
+    let work = std::env::temp_dir().join("circuitcad_xcheck_tran");
+    let _ = std::fs::create_dir_all(&work);
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "schjson")).collect();
+    files.sort();
+    let (mut lines, mut left_out) = (vec![], vec![]);
+    for f in &files {
+        let tag = f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let Ok(s) = std::fs::read_to_string(f).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<Schematic>(&t).map_err(|e| e.to_string())) else { continue };
+        let mut keep = None;
+        let outcome = check_tran_keeping(&s, exe, &work, &tag, Given::default(), &mut keep);
+        match keep {
+            Some(g) if matches!(outcome, TranOutcome::Match { .. }) => {
+                let nodes: serde_json::Map<String, serde_json::Value> =
+                    g.nodes.iter().map(|(k, w)| (k.clone(), serde_json::json!(w.iter().map(|x| x.map(round6)).collect::<Vec<_>>()))).collect();
+                let one = serde_json::json!({ "tstop": g.tstop, "tstep": g.tstep, "zero_start": g.zero_start, "nodes": nodes });
+                lines.push(format!("    {}: {}", serde_json::json!(tag), one));
+            }
+            _ => left_out.push(format!("{tag} ({})", outcome.label())),
+        }
+    }
+    let text = format!(
+        "{{\n  \"about\": \"ngspice transient runs of the shipped examples, boiled down to mean/min/max per window ({WINDOWS} windows of 0..tstop); written by `circuitCad --xcheck docs/examples --tran --golden docs/xcheck/ngspice_tran.json`\",\n  \"circuits\": {{\n{}\n  }}\n}}\n",
+        lines.join(",\n")
+    );
+    let written = std::fs::create_dir_all(out.parent().unwrap_or(Path::new("."))).and_then(|_| std::fs::write(out, text));
+    format!("{} 回路を {} に保存 ({:?})\n保存しなかった: {}\n", lines.len(), out.display(), written.map_err(|e| e.to_string()), left_out.join(", "))
+}
+
+/// Read the stored file: circuit name -> run.
+#[cfg(test)]
+pub fn read_golden(text: &str) -> Vec<(String, TranGolden)> {
+    let json: serde_json::Value = serde_json::from_str(text).unwrap_or_default();
+    let num = |v: &serde_json::Value| v.as_f64().unwrap_or(f64::NAN);
+    json["circuits"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(name, c)| {
+            let nodes = c["nodes"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(k, w)| (k.clone(), w.as_array().into_iter().flatten().map(|x| [num(&x[0]), num(&x[1]), num(&x[2])]).collect()))
+                .collect();
+            (name.clone(), TranGolden { tstop: num(&c["tstop"]), tstep: num(&c["tstep"]), zero_start: c["zero_start"].as_bool().unwrap_or(false), nodes })
+        })
+        .collect()
 }
 
 fn note(ripple: &str) -> String {
@@ -344,6 +527,46 @@ pub fn run_path(path: &Path, exe: &Path, given: Given) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The transient run of every stored example must still look like ngspice's (window means, extremes and
+    /// ripple), without running ngspice. After a deliberate model change regenerate the file with
+    /// `circuitCad --xcheck docs/examples --tran --golden docs/xcheck/ngspice_tran.json` and read the diff.
+    #[test]
+    fn transient_runs_still_match_the_stored_ngspice_statistics() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let stored = read_golden(&std::fs::read_to_string(root.join(GOLDEN_TRAN)).expect("stored ngspice runs missing: see the doc comment of this test"));
+        assert!(stored.len() >= 20, "only {} circuits are stored", stored.len());
+        let mut bad = vec![];
+        for (name, g) in &stored {
+            let s: Schematic = serde_json::from_str(&std::fs::read_to_string(root.join(format!("docs/examples/{name}.schjson"))).unwrap()).unwrap();
+            if let Err(m) = check_against_stored(&s, g) {
+                bad.push(format!("{name}: {m}"));
+            }
+        }
+        assert!(bad.is_empty(), "differs from ngspice:\n{}", bad.join("\n"));
+    }
+
+    #[test]
+    fn window_stats_of_a_ramp_and_a_comparison() {
+        // a ramp 0..10 V over 10 s: window k has mean k + 0.5, min k, max k + 1
+        let t: Vec<f64> = (0..=100).map(|i| i as f64 * 0.1).collect();
+        let v: Vec<f64> = t.clone();
+        let w = window_stats(&t, &v, 10.0, 0);
+        assert_eq!(w.len(), WINDOWS);
+        assert!((w[3][0] - 3.5).abs() < 1e-9 && (w[3][1] - 3.0).abs() < 1e-9 && (w[3][2] - 4.0).abs() < 1e-9, "{:?}", w[3]);
+        assert!(compare_stats("x", &w, &w).is_ok());
+        let mut off = w.clone();
+        off[5][0] += 1.0;
+        assert!(compare_stats("x", &off, &w).unwrap_err().contains("窓5"));
+        // ripple: a 5 V swing early on, then a 0.08 V ripple against one of 0.12 V: only the ripple check catches that
+        let mut theirs = vec![[2.5, 0.0, 5.0]; WINDOWS];
+        theirs[WINDOWS - 2] = [5.0, 4.96, 5.04];
+        theirs[WINDOWS - 1] = [5.0, 4.96, 5.04];
+        let mut rippled = theirs.clone();
+        rippled[WINDOWS - 1] = [5.0, 4.94, 5.06];
+        assert!(compare_stats("y", &rippled, &theirs).unwrap_err().contains("リップル"));
+        assert!(compare_stats("y", &theirs, &theirs).is_ok());
+    }
 
     #[test]
     fn reads_wrdata_and_interpolates() {
