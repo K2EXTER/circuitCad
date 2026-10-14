@@ -54,7 +54,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
 
 ### `schematic/` (`SchEditor`) — ファイル一覧: `docs/code-notes/app.md`
-`mod.rs` 型 / `canvas.rs`・`draw.rs`・`interact.rs`・`symbols.rs` 描画と操作 / `panel.rs`・`analysis_panel.rs`・`hint.rs` 左パネル / `edit.rs`・`history.rs`・`file.rs`・`library.rs` / `quick.rs` クイック追加 / `lessons.rs`・`challenge.rs`・`wizard.rs` 学習 / `dc.rs`・`tran.rs`・`ac.rs`・`sweep.rs`・`noise.rs`・`wave.rs` 各解析 / `fault.rs`・`param.rs`・`variation.rs`・`spec_table.rs`・`power_ui.rs`・`settings.rs`
+`mod.rs` 型 / `canvas.rs`・`draw.rs`・`interact.rs`・`symbols.rs` 描画と操作 / `panel.rs`・`analysis_panel.rs`・`hint.rs` 左パネル / `edit.rs`・`history.rs`・`file.rs`・`library.rs` / `quick.rs` クイック追加 / `lessons/`(`mod.rs`=型と窓、`conditions.rs`=手順の自動チェック、`basics/devices/analog/supply.rs`=レッスンのデータ)・`challenge/`(`mod.rs`=型、`basic.rs`/`power.rs`=データ、`judge.rs`=判定、`window.rs`)・`wizard.rs` 学習 / `dc.rs`・`tran.rs`・`ac.rs`・`sweep.rs`・`noise.rs`・`wave.rs` 各解析 / `fault.rs`・`param.rs`・`variation.rs`・`spec_table.rs`・`power_ui.rs`・`settings.rs`
 
 ### `board_editor/` (`BoardEditor`)
 `mod.rs` 型 / `canvas.rs`・`interact.rs`・`draw.rs`・`panel.rs` / `select.rs`・`route.rs`・`tools.rs` / `view3d/`(`mod.rs`=状態、`window.rs`=窓、`scene.rs`=立体と描画、`camera.rs`、`picture.rs`、`glow.rs`)・`raster3d.rs` 3D / `width.rs` 配線の太さ・電圧降下 / `order.rs` 発注の準備 / `file.rs`・`actions.rs`・`history.rs`・`view.rs` / `layers.rs` 層 / `pairs.rs` 差動ペア / `shoving.rs` 押しのけ
@@ -63,7 +63,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel.rs` にボタン + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル
 - 新しい部品種別(基本素子) → `sch-core/lib.rs` の `Kind`、`symbols.rs`、`sim-core/from_schematic.rs`
 - ライブラリ部品を足す → `part-lib/examples/*.part.json` (形式は `docs/part-format.md`)
-- レッスン → `schematic/lessons.rs` の `LESSONS` / チャレンジ → `schematic/challenge.rs` の `CHALLENGES` (答えが通るテストも) / 学習パス → `learn.rs` の `PATHS`
+- レッスン → `schematic/lessons/` に1件の `const` を足して `mod.rs` の `LESSONS` に並べる / チャレンジ → `schematic/challenge/` に1件の `const` を足して `mod.rs` の `CHALLENGES` に並べる (答えが通るテストも) / 学習パス → `learn.rs` の `PATHS`
 - 値の計算 → `sim-core/designcalc.rs` + `schematic/wizard.rs` の `CALCS`
 - DRCルール → `pcb-core/drc/` / 設計ルール既定値 → `model.rs` の `Rules`
 - ヒント文 → `schematic/hint.rs`, `board_editor/panel.rs` の `hint` / 豆知識 → `tips.rs` の `TIPS` / 操作の説明 → `help.rs`

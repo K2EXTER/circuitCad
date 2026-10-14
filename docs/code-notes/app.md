@@ -13,7 +13,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 - `PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。
 
 ## 作ってみよう・学習パス・操作ガイド
-- `schematic/challenge.rs` は「作ってみよう」(目標だけ示して自分で部品を置き・配線し、「判定する」でシミュレーションして判定する。1つの模範解答とは比べない)。
+- `schematic/challenge/` は「作ってみよう」(`mod.rs`=型・`CHALLENGES` の並び・開始/判定の入口、`basic.rs`/`power.rs`=チャレンジ1件ずつの `const`、`judge.rs`=模範解答・開始シート・判定、`window.rs`=窓)(目標だけ示して自分で部品を置き・配線し、「判定する」でシミュレーションして判定する。1つの模範解答とは比べない)。
 - チャレンジは `CHALLENGES` のデータ(開始シート `parts0/parts1/grounds*/start_values`、答え=サンプルの `drop/values/labels/rename`、判定 `checks`: `Erc`/`Named`(出力ネット `VOUT`)/`Voltage`(負荷・入力を足して測る、値の範囲ごとの助言 `explain`)/`Stay`(入力を2点に振る)/`Current`/`Gain`(AC)/`Ratings`)。
 - 足すときは `CHALLENGES` に1件とテスト(答えが通る)。
 - いまは zener・divider・led・rc_lowpass・emitter_follower・opamp_inv・series_regulator・regulator_78xx と、最終課題 draw_psu(lesson は protection、学習パスの `Kind::Build` の項目から id で開く。部品の個数を調べる `Check::Has` あり、答えは `power_supply.schjson`)。
@@ -49,7 +49,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 | 波形の「前」との比較は `Ghost`(`mod.rs`)。過渡・ACの「いまの波形を残す」で薄く残し、再計算(自動も)しても保つ。描画は `plot::ghost_color` |
 | `noise.rs` の `probe_node` は「回路図で選ぶ」(ピン/配線=電圧、部品の本体かShift+ピン=電流)。`wave.rs` の `live_update` は収束しない値では直前の良い結果を残す。値スライダーの幅は `slider_span`(細かい/ふつう/広い) |
 | `quick.rs` クイック追加(Aキー・「クイック追加」ボタン・`--quick <文字>`。`quick_matches` が基本部品+ライブラリを名前/別名/カテゴリ/パッケージ/ピン/説明で検索、全単語一致、お気に入り→最近使った順に優先。↑↓Enter Esc) / `edit.rs` 選択・当たり判定・削除・配線追加 / `history.rs` Undo・Redo / `file.rs` 保存・読込 / `library.rs` ライブラリ |
-| `lessons.rs` 「学ぶ」メニューのレッスン(サンプル回路埋め込み+手順、各手順は状態で自動チェック。足すときは `LESSONS` に追加) / `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
+| `lessons/` (`mod.rs`=型・`LESSONS` の並び・窓、`conditions.rs`=手順の自動チェック関数、`basics.rs`/`devices.rs`/`analog.rs`/`supply.rs`=レッスン1件ずつの `const`) 「学ぶ」メニューのレッスン(サンプル回路埋め込み+手順、各手順は状態で自動チェック。足すときは `LESSONS` に追加) / `variation.rs` 温度スイープ・ばらつき解析(モンテカルロ)の実行と表示 / `dc.rs` `run_dc`・`sim_circuit`(温度適用済みの回路) / `tran.rs` / `ac.rs` / `sweep.rs` / `noise.rs` 各解析の実行と波形パネル / `wave.rs` 表示中の解析切替・自動再計算 `live_update` |
 
 ### `board_editor/` (`BoardEditor`)
 | ファイル | 内容 |
