@@ -53,11 +53,13 @@ struct App {
     project: Option<std::path::PathBuf>,
     /// Set once the user agreed to close (or a script closes the window), so the unsaved-changes question is not asked again.
     closing_ok: bool,
+    /// The first-launch welcome card is up (only when started with no arguments and no lesson finished yet).
+    welcome: bool,
 }
 
 impl Default for App {
     fn default() -> Self {
-        Self { show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None, project: None, closing_ok: false }
     }
 }
 
@@ -91,7 +93,19 @@ impl eframe::App for App {
         if let Some(key) = self.sch.finished_challenge() {
             self.progress.mark(&key);
         }
-        if let Some(action) = self.learn.show(ui.ctx(), &mut self.progress) {
+        let mut action = self.learn.show(ui.ctx(), &mut self.progress);
+        let welcome_choice = if self.welcome { learn::welcome_card(ui.ctx(), &self.progress) } else { None };
+        if let Some(choice) = welcome_choice {
+            self.welcome = false;
+            self.progress.mark_welcomed();
+            match choice {
+                learn::Welcome::Start(a) => action = Some(a),
+                learn::Welcome::Path => self.learn.open = true,
+                learn::Welcome::Guide => self.help.show(help::HelpTab::Schematic),
+                learn::Welcome::Close => {}
+            }
+        }
+        if let Some(action) = action {
             match action {
                 learn::Action::Lesson(id) => {
                     if let Some(i) = schematic::lesson_ids().iter().position(|l| *l == id) {
@@ -279,6 +293,9 @@ fn main() -> eframe::Result {
             app.progress = learn::Progress::load(&learn::Progress::default_file());
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
+            // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
+            let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && !(i > 0 && args[i - 1] == "--screenshot"));
+            app.welcome = !opens_something && app.progress.needs_welcome();
             Ok(Box::new(app))
         }),
     )

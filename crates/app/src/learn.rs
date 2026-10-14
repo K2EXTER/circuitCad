@@ -13,6 +13,8 @@ use std::path::{Path, PathBuf};
 pub struct Progress {
     done: BTreeSet<String>,
     file: Option<PathBuf>,
+    /// The first-launch welcome card has been answered (never shown again); kept by `reset`.
+    welcomed: bool,
     /// Why the last save failed (shown in the window), if it did.
     pub error: Option<String>,
 }
@@ -25,12 +27,25 @@ impl Progress {
 
     /// Reads the record; a missing or unreadable file is an empty record (nothing is lost by starting over).
     pub fn load(file: &Path) -> Self {
-        let done = std::fs::read_to_string(file)
-            .ok()
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        let json = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok());
+        let done = json
+            .as_ref()
             .and_then(|v| v.get("done").and_then(|d| d.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()))
             .unwrap_or_default();
-        Self { done, file: Some(file.to_path_buf()), error: None }
+        let welcomed = json.as_ref().and_then(|v| v.get("welcomed")).and_then(|w| w.as_bool()).unwrap_or(false);
+        Self { done, file: Some(file.to_path_buf()), welcomed, error: None }
+    }
+
+    /// True until the welcome card has been answered once. A learner who already finished a lesson never sees it.
+    pub fn needs_welcome(&self) -> bool {
+        !self.welcomed && self.done.is_empty()
+    }
+
+    pub fn mark_welcomed(&mut self) {
+        if !self.welcomed {
+            self.welcomed = true;
+            self.save();
+        }
     }
 
     pub fn is_done(&self, id: &str) -> bool {
@@ -47,6 +62,7 @@ impl Progress {
         if !self.done.insert(id.to_string()) {
             return false;
         }
+        self.welcomed = true;
         self.save();
         true
     }
@@ -59,7 +75,7 @@ impl Progress {
 
     fn save(&mut self) {
         let Some(file) = &self.file else { return };
-        let json = serde_json::json!({ "version": 1, "done": self.done.iter().collect::<Vec<_>>() });
+        let json = serde_json::json!({ "version": 1, "done": self.done.iter().collect::<Vec<_>>(), "welcomed": self.welcomed });
         let result = file
             .parent()
             .map_or(Ok(()), std::fs::create_dir_all)
@@ -202,6 +218,67 @@ pub enum Action {
     Board,
 }
 
+/// Colour of the grey explanation lines (`weak()` was too faint on the dark background).
+const NOTE: Color32 = Color32::from_gray(175);
+
+/// Wrapped Japanese text with a taller line (the font's default line height makes lines touch).
+fn spaced(text: &str) -> egui::RichText {
+    egui::RichText::new(text).line_height(Some(20.0))
+}
+
+/// The action that opens an item, if it can be opened yet.
+fn item_action(item: &Item) -> Option<Action> {
+    match item.kind {
+        Kind::Lesson(id) => Some(Action::Lesson(id)),
+        Kind::Build => Some(Action::Build(item.id)),
+        Kind::Board => Some(Action::Board),
+        Kind::Planned => None,
+    }
+}
+
+/// What the learner chose on the first-launch card.
+pub enum Welcome {
+    /// Start the recommended first lesson.
+    Start(Action),
+    /// Open the learning-path window.
+    Path,
+    /// Open the operation guide.
+    Guide,
+    /// Closed with the × (or the "あとで" button).
+    Close,
+}
+
+/// The card shown over an empty sheet on the very first launch: where to begin, in three buttons.
+pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome> {
+    let mut choice = None;
+    let mut open = true;
+    egui::Window::new("ようこそ circuitCad へ").open(&mut open).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).default_width(460.0).show(ctx, |ui| {
+        ui.label(spaced("回路図を描き、動かして確かめ、基板にして、発注用のデータまで作れるソフトです。電子工作が初めてでも、レッスンを順にたどれば進められます。"));
+        ui.add_space(6.0);
+        if let Some((next, action)) = next_item(&PATHS[0], progress).and_then(|i| item_action(i).map(|a| (i, a))) {
+            let button = egui::Button::new(egui::RichText::new(format!("▶ 最初のレッスンを始める: {}", next.title)).strong());
+            if ui.add(button).on_hover_text("画面の案内にそって、部品を置いて配線し、電圧を測ります").clicked() {
+                choice = Some(Welcome::Start(action));
+            }
+        }
+        if ui.button("学習パス全体を見る").on_hover_text("電圧を分ける回路から、安定化電源・基板づくりまでの道すじを開きます (「学ぶ」メニューからいつでも開けます)").clicked() {
+            choice = Some(Welcome::Path);
+        }
+        if ui.button("操作ガイドを開く (F1)").on_hover_text("部品の置き方・配線・シミュレーションのやり方を説明します").clicked() {
+            choice = Some(Welcome::Guide);
+        }
+        ui.add_space(4.0);
+        ui.label(spaced("自由に描きたいときは、このカードを閉じて、左の一覧から部品を選んで画面をクリックします。").color(NOTE));
+        if ui.small_button("あとで (もう表示しない)").on_hover_text("このカードを閉じます。次の起動から表示しません").clicked() {
+            choice = Some(Welcome::Close);
+        }
+    });
+    if !open && choice.is_none() {
+        choice = Some(Welcome::Close);
+    }
+    choice
+}
+
 #[derive(Default)]
 pub struct LearnWindow {
     pub open: bool,
@@ -217,7 +294,7 @@ impl LearnWindow {
         let path = &PATHS[0];
         egui::Window::new("学習パス").open(&mut open).default_width(600.0).default_height(720.0).vscroll(true).show(ctx, |ui| {
             ui.heading(path.title);
-            ui.label(path.goal);
+            ui.label(spaced(path.goal));
             let (finished, available, all) = summary(path, progress);
             ui.add(egui::ProgressBar::new(finished as f32 / available.max(1) as f32).text(format!("完了 {finished} / いま学べる {available} (全体 {all})")));
             if let Some(next) = next_item(path, progress) {
@@ -232,7 +309,7 @@ impl LearnWindow {
             for stage in path.stages {
                 ui.add_space(8.0);
                 ui.strong(stage.name);
-                ui.label(egui::RichText::new(stage.about).weak());
+                ui.label(spaced(stage.about).color(NOTE));
                 for item in stage.items {
                     let done = item_done(progress, item);
                     let (mark, color) = match item.kind {
@@ -264,13 +341,14 @@ impl LearnWindow {
                         }
                     });
                     ui.indent(("path_item", path.id, item.id), |ui| {
-                        ui.label(egui::RichText::new(item.about).weak());
+                        ui.label(spaced(item.about).color(NOTE));
                     });
+                    ui.add_space(6.0);
                 }
             }
             ui.add_space(8.0);
             ui.separator();
-            ui.label("[実験あり] = 実機で確かめられる実験があります (ポインタを置くと内容が出ます)。実験は、安全のため低い電圧 (12V 以下) だけで行い、商用電源 (100V) の配線は行いません");
+            ui.label(spaced("[実験あり] = 実機で確かめられる実験があります (ポインタを置くと内容が出ます)。実験は、安全のため低い電圧 (12V 以下) だけで行い、商用電源 (100V) の配線は行いません"));
             if let Some(e) = &progress.error {
                 ui.colored_label(Color32::from_rgb(230, 60, 60), e);
             }
@@ -309,6 +387,26 @@ mod tests {
         q.reset();
         assert_eq!(Progress::load(&f).count(), 0);
         let _ = std::fs::remove_dir_all(f.parent().unwrap());
+    }
+
+    #[test]
+    fn welcome_is_shown_once_and_not_to_learners_with_progress() {
+        let f = temp_file("welcome");
+        let mut p = Progress::load(&f);
+        assert!(p.needs_welcome(), "a fresh start shows the card");
+        p.mark_welcomed();
+        assert!(!Progress::load(&f).needs_welcome(), "answered once: never again");
+        let mut q = Progress::load(&f);
+        q.reset();
+        assert!(!Progress::load(&f).needs_welcome(), "reset keeps the answer");
+        let g = temp_file("welcome-old");
+        let mut old = Progress::load(&g);
+        old.mark("divider");
+        let mut old = Progress::load(&g);
+        assert!(!old.needs_welcome(), "someone with finished lessons is not welcomed again");
+        old.reset();
+        let _ = std::fs::remove_dir_all(f.parent().unwrap());
+        let _ = std::fs::remove_dir_all(g.parent().unwrap());
     }
 
     #[test]

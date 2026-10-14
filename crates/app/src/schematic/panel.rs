@@ -188,7 +188,7 @@ impl SchEditor {
                 }
             }
         });
-        egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(true).show(ui, |ui| {
+        egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(false).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
             let cat_of = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
@@ -322,7 +322,7 @@ impl SchEditor {
                     self.reload_library();
                 }
             });
-            ui.small(format!("保存先: {}", self.lib_dir.display()));
+            ui.small("保存先: ライブラリのフォルダ").on_hover_text(self.lib_dir.display().to_string());
             for e in &self.lib_errors {
                 ui.colored_label(Color32::from_rgb(230, 60, 60), e);
             }
