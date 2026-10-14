@@ -117,62 +117,98 @@ fn find_ngspice(arg: Option<&str>) -> Option<PathBuf> {
     cands.into_iter().flatten().find(|p| Command::new(p).arg("-v").output().is_ok())
 }
 
-/// Check one circuit. `exe` is the ngspice executable, `work` a scratch folder.
-pub fn check_schematic(s: &Schematic, exe: &Path, work: &Path, tag: &str) -> Outcome {
+/// Our side of the check: the schematic with time-varying sources replaced by their DC value, and our
+/// DC solution as (SPICE name, value) pairs. `Err(outcome)` when the circuit cannot be compared at all;
+/// the inner `Err` is our solver's failure (ngspice may still be run to see whether it solves it).
+#[allow(clippy::type_complexity)]
+fn our_side(s: &Schematic) -> Result<(Schematic, Result<Vec<(String, f64)>, String>), Outcome> {
     // The SPICE export writes sources as `DC <value>`, so SIN/PULSE/PWL/AC sources are replaced by
     // the number our DC solver uses for them. This checks the solvers, not the source parsing.
     let mut flat = s.clone();
     for c in flat.components.iter_mut().filter(|c| c.kind == Kind::VSource && parse_value(&c.value).is_none()) {
         match parse_source_full(&c.value) {
             Ok(src) => c.value = format!("{:e}", src.wave.dc_value()),
-            Err(m) => return Outcome::Skipped(format!("{} の値を読めません ({}): {m}", c.refdes, c.value)),
+            Err(m) => return Err(Outcome::Skipped(format!("{} の値を読めません ({}): {m}", c.refdes, c.value))),
         }
     }
-    let s = &flat;
-    if s.components.iter().any(|c| c.kind == Kind::Custom && c.custom.as_ref().is_none_or(|x| x.sim.is_none())) {
-        return Outcome::Skipped("シミュレーションモデルのない部品があります".into());
+    if flat.components.iter().any(|c| c.kind == Kind::Custom && c.custom.as_ref().is_none_or(|x| x.sim.is_none())) {
+        return Err(Outcome::Skipped("シミュレーションモデルのない部品があります".into()));
     }
-    let circuit = match from_schematic(s) {
+    let circuit = match from_schematic(&flat) {
         Ok(c) => c,
-        Err(e) => return Outcome::Failed(format!("自前エンジン: 回路を作れません ({})", e.first().map(|x| x.to_string()).unwrap_or_default())),
+        Err(e) => return Err(Outcome::Failed(format!("自前エンジン: 回路を作れません ({})", e.first().map(|x| x.to_string()).unwrap_or_default()))),
     };
-    let ours = dc_op(&circuit);
+    let ours = dc_op(&circuit).map_err(|e| e.to_string()).map(|r| {
+        // only nets of the schematic, under the names to_spice gave them
+        let nets: Vec<String> = extract(&flat).iter().map(|n| n.name.clone()).collect();
+        r.voltages
+            .iter()
+            .filter(|(n, _)| nets.contains(n))
+            .map(|(n, v)| (spice_node(n), *v))
+            .filter(|(n, _)| n != "0")
+            .chain(r.elements.iter().map(|e| (format!("i({})", e.name.to_ascii_lowercase()), e.current)))
+            .collect()
+    });
+    Ok((flat, ours))
+}
 
-    let body = to_spice_for(s, tag, Dialect::Ngspice);
-    let body = body.strip_suffix(".end\n").unwrap_or(&body);
+/// Check one circuit. `exe` is the ngspice executable, `work` a scratch folder.
+pub fn check_schematic(s: &Schematic, exe: &Path, work: &Path, tag: &str) -> Outcome {
+    check_with_raw(s, exe, work, tag).0
+}
+
+/// Like `check_schematic`, and also ngspice's raw answer under its default settings (empty when ngspice
+/// was not run or failed): the values stored in `docs/xcheck/ngspice_dc.json`.
+pub fn check_with_raw(s: &Schematic, exe: &Path, work: &Path, tag: &str) -> (Outcome, Vec<(String, f64)>) {
+    let (s, ours) = match our_side(s) {
+        Ok(x) => x,
+        Err(o) => return (o, vec![]),
+    };
+    let body = to_spice_for(&s, tag, Dialect::Ngspice);
+    let body = body.strip_suffix(".end
+").unwrap_or(&body);
     let deck = analysis_deck(body, None);
     let theirs = match run_ngspice(exe, work, tag, &deck) {
         Ok(v) => v,
-        Err(m) => return Outcome::Failed(match &ours {
-            Ok(_) => m,
-            Err(e) => format!("自前エンジン: {e} / {m}"),
-        }),
+        Err(m) => {
+            return (
+                Outcome::Failed(match &ours {
+                    Ok(_) => m,
+                    Err(e) => format!("自前エンジン: {e} / {m}"),
+                }),
+                vec![],
+            )
+        }
     };
-    let ours = match ours {
+    let raw = theirs.clone();
+    let mut mine = match ours {
         Ok(r) => r,
-        Err(e) => return Outcome::Failed(format!("自前エンジン: {e} / ngspice は解けた ({} ノード)", theirs.len())),
+        Err(e) => return (Outcome::Failed(format!("自前エンジン: {e} / ngspice は解けた ({} ノード)", theirs.len())), raw),
     };
-
-    // only nets of the schematic, under the names to_spice gave them
-    let nets: Vec<String> = extract(s).iter().map(|n| n.name.clone()).collect();
-    let mut mine: Vec<(String, f64)> = ours
-        .voltages
-        .iter()
-        .filter(|(n, _)| nets.contains(n))
-        .map(|(n, v)| (spice_node(n), *v))
-        .filter(|(n, _)| n != "0")
-        .chain(ours.elements.iter().map(|e| (format!("i({})", e.name.to_ascii_lowercase()), e.current)))
-        .collect();
     let theirs = alias_cards(theirs, &mut mine);
     let first = compare(&mine, &theirs);
-    let Outcome::Differ { nodes, worst, ours: a, theirs: b, .. } = &first else { return first };
+    let Outcome::Differ { nodes, worst, ours: a, theirs: b, .. } = &first else { return (first, raw) };
     // retry with ngspice's leakage turned (almost) off
     let low = analysis_deck(body, Some(1e-15));
-    match run_ngspice(exe, work, &format!("{tag}_lowgmin"), &low) {
+    let outcome = match run_ngspice(exe, work, &format!("{tag}_lowgmin"), &low) {
         Ok(t2) if matches!(compare(&mine, &alias_cards(t2.clone(), &mut mine.clone())), Outcome::Match { .. }) => {
             Outcome::MatchLowGmin { nodes: *nodes, node: worst.clone(), ours: *a, theirs: *b }
         }
         _ => first,
+    };
+    (outcome, raw)
+}
+
+#[cfg(test)]
+/// Compare our DC solution of `s` with ngspice's answer stored earlier (no ngspice needed).
+pub fn check_against_stored(s: &Schematic, stored: &[(String, f64)]) -> Outcome {
+    match our_side(s) {
+        Err(o) => o,
+        Ok((_, Err(e))) => Outcome::Failed(format!("自前エンジン: {e}")),
+        Ok((_, Ok(mut mine))) => {
+            let theirs = alias_cards(stored.to_vec(), &mut mine);
+            compare(&mine, &theirs)
+        }
     }
 }
 
@@ -309,11 +345,48 @@ pub fn run_path(path: &Path, exe: &Path) -> String {
     report
 }
 
+/// Where ngspice's answers for the shipped examples are kept (see `write_golden`).
+#[cfg(test)]
+pub const GOLDEN_DC: &str = "docs/xcheck/ngspice_dc.json";
+
+/// Run ngspice on every example of a folder and store its raw answer for each circuit that agrees with
+/// ours under ngspice's default settings. CI compares against this file, so it needs no ngspice.
+pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
+    let work = std::env::temp_dir().join("circuitcad_xcheck");
+    let _ = std::fs::create_dir_all(&work);
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "schjson")).collect();
+    files.sort();
+    let mut circuits = serde_json::Map::new();
+    let mut left_out = vec![];
+    for f in &files {
+        let tag = f.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let Ok(s) = std::fs::read_to_string(f).map_err(|e| e.to_string()).and_then(|t| serde_json::from_str::<Schematic>(&t).map_err(|e| e.to_string())) else { continue };
+        let (outcome, raw) = check_with_raw(&s, exe, &work, &tag);
+        if matches!(outcome, Outcome::Match { .. }) {
+            let values: serde_json::Map<String, serde_json::Value> = raw.into_iter().map(|(n, v)| (n, serde_json::json!(v))).collect();
+            circuits.insert(tag, values.into());
+        } else {
+            left_out.push(format!("{tag} ({})", outcome.label()));
+        }
+    }
+    let json = serde_json::json!({ "about": "ngspice's DC operating point (raw output, default settings) for the shipped examples; written by `circuitCad --xcheck docs/examples --golden docs/xcheck/ngspice_dc.json`", "circuits": circuits });
+    let written = std::fs::create_dir_all(out.parent().unwrap_or(Path::new("."))).and_then(|_| std::fs::write(out, serde_json::to_string_pretty(&json).unwrap_or_default()));
+    format!("{} 回路を {} に保存 ({:?})
+保存しなかった: {}
+", circuits.len(), out.display(), written.map_err(|e| e.to_string()), left_out.join(", "))
+}
+
 /// Handle `--xcheck ...`; returns true when the flag was present (the GUI must not start then).
 pub fn run_cli(args: &[String]) -> bool {
     let Some(i) = args.iter().position(|a| a == "--xcheck") else { return false };
     let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|j| args.get(j + 1)).map(|s| s.as_str());
     let tran = args.iter().any(|a| a == "--tran");
+    if let (Some(dir), Some(out), Some(exe)) = (args.get(i + 1).filter(|a| !a.starts_with("--")), val("--golden"), find_ngspice(val("--ngspice"))) {
+        let report = write_golden(Path::new(dir), &exe, Path::new(out));
+        let _ = std::fs::write("xcheck_golden_report.txt", &report);
+        print!("{report}");
+        return true;
+    }
     let out = val("--out").unwrap_or(if tran { "xcheck_tran_report.txt" } else { "xcheck_report.txt" });
     let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
         (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> [--tran [--tstop 秒] [--tstep 秒] [--ourstep 秒] [--ngstep 秒] [--lte 許容]] [--ngspice <exe>] [--out report.txt]\n".to_string(),
@@ -386,6 +459,30 @@ mod tests {
         let exe = find_ngspice(None).expect("ngspice not found");
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
         println!("{}", run_path(&dir, &exe));
+    }
+
+    /// The DC operating point of every example stored in `docs/xcheck/ngspice_dc.json` (ngspice's own answer)
+    /// must still match ours. Needs no ngspice. After a deliberate model change, regenerate the file with
+    /// `circuitCad --xcheck docs/examples --golden docs/xcheck/ngspice_dc.json` and read the diff.
+    #[test]
+    fn dc_points_still_match_the_stored_ngspice_answers() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let text = std::fs::read_to_string(root.join(GOLDEN_DC)).expect("stored ngspice answers missing: see the doc comment of this test");
+        let json: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let circuits = json["circuits"].as_object().unwrap();
+        assert!(circuits.len() >= 20, "only {} circuits are stored", circuits.len());
+        let mut bad = vec![];
+        for (name, values) in circuits {
+            let stored: Vec<(String, f64)> = values.as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.as_f64().unwrap())).collect();
+            let s: Schematic = serde_json::from_str(&std::fs::read_to_string(root.join(format!("docs/examples/{name}.schjson"))).unwrap()).unwrap();
+            let o = check_against_stored(&s, &stored);
+            if !matches!(o, Outcome::Match { .. }) {
+                bad.push(format!("{name}: {}", describe(&o)));
+            }
+        }
+        assert!(bad.is_empty(), "differs from ngspice:
+{}", bad.join("
+"));
     }
 
     /// These examples used to end in "did not converge" in the DC panel (found by the ngspice cross-check).

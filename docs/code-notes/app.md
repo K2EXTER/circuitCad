@@ -5,6 +5,8 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 ## 開発用の検算 (xcheck)
 - 開発用の検算 `xcheck.rs` / `xcheck_tran.rs`: `circuitCad --xcheck <file|dir>` が自前のDC動作点(電圧と電流)を、`--xcheck <file|dir> --tran` が過渡波形を(電源が時間変化しない回路は `xcheck_tran.rs` の `own_dynamics` の表の長さで。DC動作点が無くゼロ状態から始まった回路は ngspice にも `uic` を付ける。時間で重みを付けた規格化RMS誤差1%未満か、エッジ主体の波形はエッジ時刻のずれが周期の2%以内なら一致)ngspice と比べて `xcheck_report.txt` / `xcheck_tran_report.txt` に書く(ウィンドウは開かない。ngspice の場所は `--ngspice` か環境変数 `NGSPICE`、既定 `F:\Tools\ngspice\Spice64\bin\ngspice_con.exe`)。ngspice は reltol=1e-6 で解かせる(既定の1e-3だと ngspice 自身の電流が食い違う)。差が出たら gmin=1e-15 でも解き直し、それで一致すれば「gmin依存」。スイッチ(`S` と `.model SW`)は ngspice に `vw` が無いので、方言変換が自前と同じ滑らかな導通の B 電流源 `I=V(a,b)*exp(…)` に置き換える(これで降圧コンバータ・NE555・論理ICが ngspice と合う)。既知の差: 電源投入直後のフリップフロップなど双安定の回路は、自前が釣り合い点にとどまり ngspice が片側に倒れるので合わない(`logic_blinker`、`variable_supply`の浮いた2次側)。ngspice が止まる回路もある(トランス、`led_blinker`)。方言変換は `sch-core/src/ngspice.rs`(`to_spice_for(.., Dialect::Ngspice)`: if/step/limit/log/temp)。`--ourstep` `--ngstep` `--lte` で片方の刻みや許容だけ変えて、どちらのエンジンが粗い刻みに弱いかを見られる。
 
+- CIでの検算: `docs/xcheck/ngspice_dc.json` に、同梱サンプルの ngspice のDC動作点(生の出力)が保存してあり、テスト `dc_points_still_match_the_stored_ngspice_answers` が自前の結果と比べる(ngspice は不要)。保存するのは既定設定で一致した回路だけ(`ip2332_charger` は gmin依存、`variable_supply` はズレなので外れている)。モデルを意図して変えたら `circuitCad --xcheck docs/examples --golden docs/xcheck/ngspice_dc.json` で作り直し、差分を読む。
+
 ## 描画・波形・プロット
 - 電源記号は値で形が変わる(`symbols.rs` の `source_symbol`: 直流=±の円、SIN=正弦波、PULSE=方形波、PWL/NOISE=折れ線)。
 - `plot.rs` の `scale_bar` は横軸・縦軸(グループごと)の範囲入力・全体・自動(1行、過渡・ACの波形パネルの上に出る。拡大縮小は軸の数字の上のホイール)。
