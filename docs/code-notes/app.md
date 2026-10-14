@@ -7,7 +7,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 - CIでの検算: `docs/xcheck/ngspice_dc.json` に、同梱サンプルの ngspice のDC動作点(生の出力)が保存してあり、テスト `dc_points_still_match_the_stored_ngspice_answers` が自前の結果と比べる(ngspice は不要)。保存するのは既定設定で一致した回路だけ(`ip2332_charger` は gmin依存、`variable_supply` はズレなので外れている)。モデルを意図して変えたら `circuitCad --xcheck docs/examples --golden docs/xcheck/ngspice_dc.json` で作り直し、差分を読む。
 
-- 過渡波形のCI検算: `docs/xcheck/ngspice_tran.json` に、同梱サンプル32件の ngspice の過渡解析を「10個の窓ごとの平均・最小・最大」にまとめて保存してある(`xcheck_tran.rs` の `window_stats`)。テスト `transient_runs_still_match_the_stored_ngspice_statistics` が、保存した刻みで自前を走らせ、窓の平均(振れ幅の1%)・最小最大(3%、最初の窓は除く)・終わり2窓のリップル(10%)を比べる。波形そのものでなく統計なのは、スイッチング波形は点を間引くとエッジが崩れるため。降圧コンバータの出力コンデンサ違い2件は、定常のリップルを見るため5ms走らせる(`own_dynamics`)。作り直しは `circuitCad --xcheck docs/examples --tran --golden docs/xcheck/ngspice_tran.json`。
+- 過渡波形のCI検算: `docs/xcheck/ngspice_tran.json` に、同梱サンプル32件の ngspice の過渡解析を「10個の窓ごとの平均・最小・最大」にまとめて保存してある(`xcheck_tran.rs` の `window_stats`)。テスト `transient_runs_still_match_the_stored_ngspice_statistics` が、保存した刻みで自前を走らせ、窓の平均(振れ幅の1%)・最小最大(3%、最初の窓は除く)・リップル(10%、`local_ripple`: 終わり5分の1を100分割した各区間のp-pの中央値。整定途中のゆっくりした揺れや1周期だけの外れ値に影響されない。終わり2窓の幅がリップルの10倍を超える波形、例えばパルス列は比べない)を比べる。リップルを「終わり2窓の最大−最小」で測ると、macOS だけ+12.6%ずれた(5ms でもまだ整定途中で、揺れの位相が CPU の丸めで変わる。周期ごとの山の中央値は3OSで一致)。波形そのものでなく統計なのは、スイッチング波形は点を間引くとエッジが崩れるため。降圧コンバータの出力コンデンサ違い2件は、定常のリップルを見るため5ms走らせる(`own_dynamics`)。作り直しは `circuitCad --xcheck docs/examples --tran --golden docs/xcheck/ngspice_tran.json`。
 
 ## 描画・波形・プロット
 - 電源記号は値で形が変わる(`symbols.rs` の `source_symbol`: 直流=±の円、SIN=正弦波、PULSE=方形波、PWL/NOISE=折れ線)。

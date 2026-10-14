@@ -305,7 +305,7 @@ pub fn check_tran_keeping(s: &Schematic, exe: &Path, work: &Path, tag: &str, giv
             .iter()
             .filter_map(|(_, sp)| {
                 let key = sp.to_ascii_lowercase();
-                cols.iter().find(|(c, _)| *c == format!("v({key})")).map(|(_, b)| (key, window_stats(&t, b, tstop, usize::from(zero_start))))
+                cols.iter().find(|(c, _)| *c == format!("v({key})")).map(|(_, b)| (key, node_stats(&t, b, tstop, usize::from(zero_start))))
             })
             .collect();
         *keep = Some(TranGolden { tstop, tstep, zero_start, nodes });
@@ -322,11 +322,12 @@ const WINDOWS: usize = 10;
 const MEAN_TOL: f64 = 0.01;
 #[cfg(test)]
 const EXTREME_TOL: f64 = 0.03;
-/// The ripple (peak-to-peak over the last two windows) may differ by this fraction. 10 % would be enough on Windows
-/// (buck_cout_ceramic: +1.7 % against ngspice), but the same run on macOS arm64 CI gives +12.6 %: our engine is not
-/// bit-identical across platforms (step control around the switching edges). Tighten this once that is understood.
+/// The ripple (see `local_ripple`) may differ by this fraction. It is a median over many short slices, so one odd
+/// cycle does not move it; the slow settling of a converter's output (which differs by a few mV between CPUs) does not enter.
 #[cfg(test)]
-const RIPPLE_TOL: f64 = 0.15;
+const RIPPLE_TOL: f64 = 0.1;
+/// The run is cut into this many slices for `local_ripple`; the last `RIPPLE_SLICES / 5` of them are used.
+const RIPPLE_SLICES: usize = 100;
 
 /// What is kept of ngspice's transient run of one circuit.
 pub struct TranGolden {
@@ -334,8 +335,55 @@ pub struct TranGolden {
     pub tstep: f64,
     /// Both engines started from all zeros (and the first sample was left out).
     pub zero_start: bool,
-    /// (lower-case SPICE node name, [mean, min, max] per window)
-    pub nodes: Vec<(String, Vec<[f64; 3]>)>,
+    /// (lower-case SPICE node name, what is kept of its waveform)
+    pub nodes: Vec<(String, NodeStats)>,
+}
+
+/// [mean, min, max] per window, and the local ripple.
+pub struct NodeStats {
+    pub windows: Vec<[f64; 3]>,
+    pub ripple: f64,
+}
+
+pub fn node_stats(t: &[f64], v: &[f64], tstop: f64, skip: usize) -> NodeStats {
+    NodeStats { windows: window_stats(t, v, tstop, skip), ripple: local_ripple(t, v, tstop, skip) }
+}
+
+/// Time-weighted mean, minimum and maximum of a piecewise-linear signal between `lo` and `hi`.
+fn span_stats(t: &[f64], v: &[f64], lo: f64, hi: f64) -> [f64; 3] {
+    let (mut area, mut mn, mut mx) = (0.0, f64::MAX, f64::MIN);
+    let mut prev = (lo, interpolate(t, v, lo));
+    mn = mn.min(prev.1);
+    mx = mx.max(prev.1);
+    for (&x, &y) in t.iter().zip(v).filter(|(x, _)| **x > lo && **x < hi) {
+        area += (x - prev.0) * (y + prev.1) / 2.0;
+        mn = mn.min(y);
+        mx = mx.max(y);
+        prev = (x, y);
+    }
+    let end = interpolate(t, v, hi);
+    area += (hi - prev.0) * (end + prev.1) / 2.0;
+    mn = mn.min(end);
+    mx = mx.max(end);
+    [area / (hi - lo), mn, mx]
+}
+
+/// The ripple of a node: the median, over the last fifth of the run cut into `RIPPLE_SLICES` slices, of each
+/// slice's peak-to-peak. A slice is a few switching periods long, so this is the cycle-by-cycle ripple.
+pub fn local_ripple(t: &[f64], v: &[f64], tstop: f64, skip: usize) -> f64 {
+    let n = t.len().min(v.len());
+    let (t, v) = (&t[skip.min(n)..n], &v[skip.min(n)..n]);
+    if t.is_empty() {
+        return 0.0;
+    }
+    let mut pp: Vec<f64> = (RIPPLE_SLICES - RIPPLE_SLICES / 5..RIPPLE_SLICES)
+        .map(|k| {
+            let w = span_stats(t, v, tstop * k as f64 / RIPPLE_SLICES as f64, tstop * (k + 1) as f64 / RIPPLE_SLICES as f64);
+            w[2] - w[1]
+        })
+        .collect();
+    pp.sort_by(|a, b| a.total_cmp(b));
+    pp[pp.len() / 2]
 }
 
 /// Mean (time-weighted), minimum and maximum of a piecewise-linear signal in each of `WINDOWS` equal
@@ -346,38 +394,20 @@ pub fn window_stats(t: &[f64], v: &[f64], tstop: f64, skip: usize) -> Vec<[f64; 
     if t.is_empty() {
         return vec![];
     }
-    (0..WINDOWS)
-        .map(|k| {
-            let (lo, hi) = (tstop * k as f64 / WINDOWS as f64, tstop * (k + 1) as f64 / WINDOWS as f64);
-            let (mut area, mut mn, mut mx) = (0.0, f64::MAX, f64::MIN);
-            let mut prev = (lo, interpolate(t, v, lo));
-            mn = mn.min(prev.1);
-            mx = mx.max(prev.1);
-            for (&x, &y) in t.iter().zip(v).filter(|(x, _)| **x > lo && **x < hi) {
-                area += (x - prev.0) * (y + prev.1) / 2.0;
-                mn = mn.min(y);
-                mx = mx.max(y);
-                prev = (x, y);
-            }
-            let end = interpolate(t, v, hi);
-            area += (hi - prev.0) * (end + prev.1) / 2.0;
-            mn = mn.min(end);
-            mx = mx.max(end);
-            [area / (hi - lo), mn, mx]
-        })
-        .collect()
+    (0..WINDOWS).map(|k| span_stats(t, v, tstop * k as f64 / WINDOWS as f64, tstop * (k + 1) as f64 / WINDOWS as f64)).collect()
 }
 
 /// `Err` (what differs) when our window statistics are not those of the stored ngspice run.
 #[cfg(test)]
-pub fn compare_stats(name: &str, ours: &[[f64; 3]], theirs: &[[f64; 3]]) -> Result<(), String> {
-    if ours.len() != theirs.len() || theirs.is_empty() {
+pub fn compare_stats(name: &str, ours: &NodeStats, theirs: &NodeStats) -> Result<(), String> {
+    let (ours_w, theirs_w) = (&ours.windows, &theirs.windows);
+    if ours_w.len() != theirs_w.len() || theirs_w.is_empty() {
         return Err(format!("{name}: 窓の数が違う"));
     }
-    let lo = theirs.iter().map(|w| w[1]).fold(f64::MAX, f64::min);
-    let hi = theirs.iter().map(|w| w[2]).fold(f64::MIN, f64::max);
+    let lo = theirs_w.iter().map(|w| w[1]).fold(f64::MAX, f64::min);
+    let hi = theirs_w.iter().map(|w| w[2]).fold(f64::MIN, f64::max);
     let span = (hi - lo).max(MIN_SPAN);
-    for (k, (a, b)) in ours.iter().zip(theirs).enumerate() {
+    for (k, (a, b)) in ours_w.iter().zip(theirs_w).enumerate() {
         let bad = |what: &str, x: f64, y: f64, tol: f64| {
             ((x - y).abs() > tol * span).then(|| format!("{name} 窓{k} の{what}: 自前 {x:.4e} / ngspice {y:.4e} (振れ幅 {span:.3e} の {:.1}%)", (x - y).abs() / span * 100.0))
         };
@@ -388,10 +418,13 @@ pub fn compare_stats(name: &str, ours: &[[f64; 3]], theirs: &[[f64; 3]]) -> Resu
             return Err(m);
         }
     }
-    let pp = |w: &[[f64; 3]]| w[w.len() - 2..].iter().map(|x| x[2]).fold(f64::MIN, f64::max) - w[w.len() - 2..].iter().map(|x| x[1]).fold(f64::MAX, f64::min);
-    let (pm, pt) = (pp(ours), pp(theirs));
-    if pt > 1e-3 && (pm / pt - 1.0).abs() > RIPPLE_TOL {
-        return Err(format!("{name} のリップル (終わり2窓のp-p): 自前 {pm:.4e} / ngspice {pt:.4e}"));
+    let (rm, rt) = (ours.ripple, theirs.ripple);
+    // only for a node that settles around a level, where "ripple" means something: the last two windows are not
+    // much wider than the ripple (a pulse train with slow decays between its edges is not compared this way)
+    let last2 = theirs_w[theirs_w.len() - 2..].iter().fold((f64::MAX, f64::MIN), |(l, h), w| (l.min(w[1]), h.max(w[2])));
+    let steady = last2.1 - last2.0 <= 10.0 * rt;
+    if steady && rt > 1e-3 && (rm / rt - 1.0).abs() > RIPPLE_TOL {
+        return Err(format!("{name} のリップル (短い区間ごとのp-pの中央値): 自前 {rm:.4e} / ngspice {rt:.4e}"));
     }
     Ok(())
 }
@@ -412,7 +445,7 @@ pub fn check_against_stored(s: &Schematic, g: &TranGolden) -> Result<(), String>
             errors.push(format!("{key}: 自前の波形がありません"));
             continue;
         };
-        let mine = window_stats(&ours.time, &a.values, g.tstop, usize::from(zero_start));
+        let mine = node_stats(&ours.time, &a.values, g.tstop, usize::from(zero_start));
         if let Err(m) = compare_stats(key, &mine, theirs) {
             errors.push(m);
         }
@@ -443,7 +476,10 @@ pub fn write_golden(dir: &Path, exe: &Path, out: &Path) -> String {
         match keep {
             Some(g) if matches!(outcome, TranOutcome::Match { .. }) => {
                 let nodes: serde_json::Map<String, serde_json::Value> =
-                    g.nodes.iter().map(|(k, w)| (k.clone(), serde_json::json!(w.iter().map(|x| x.map(round6)).collect::<Vec<_>>()))).collect();
+                    g.nodes
+                        .iter()
+                        .map(|(k, n)| (k.clone(), serde_json::json!({ "windows": n.windows.iter().map(|x| x.map(round6)).collect::<Vec<_>>(), "ripple": round6(n.ripple) })))
+                        .collect();
                 let one = serde_json::json!({ "tstop": g.tstop, "tstep": g.tstep, "zero_start": g.zero_start, "nodes": nodes });
                 lines.push(format!("    {}: {}", serde_json::json!(tag), one));
             }
@@ -472,7 +508,7 @@ pub fn read_golden(text: &str) -> Vec<(String, TranGolden)> {
                 .as_object()
                 .into_iter()
                 .flatten()
-                .map(|(k, w)| (k.clone(), w.as_array().into_iter().flatten().map(|x| [num(&x[0]), num(&x[1]), num(&x[2])]).collect()))
+                .map(|(k, n)| (k.clone(), NodeStats { windows: n["windows"].as_array().into_iter().flatten().map(|x| [num(&x[0]), num(&x[1]), num(&x[2])]).collect(), ripple: num(&n["ripple"]) }))
                 .collect();
             (name.clone(), TranGolden { tstop: num(&c["tstop"]), tstep: num(&c["tstep"]), zero_start: c["zero_start"].as_bool().unwrap_or(false), nodes })
         })
@@ -553,21 +589,34 @@ mod tests {
         // a ramp 0..10 V over 10 s: window k has mean k + 0.5, min k, max k + 1
         let t: Vec<f64> = (0..=100).map(|i| i as f64 * 0.1).collect();
         let v: Vec<f64> = t.clone();
-        let w = window_stats(&t, &v, 10.0, 0);
-        assert_eq!(w.len(), WINDOWS);
-        assert!((w[3][0] - 3.5).abs() < 1e-9 && (w[3][1] - 3.0).abs() < 1e-9 && (w[3][2] - 4.0).abs() < 1e-9, "{:?}", w[3]);
+        let w = node_stats(&t, &v, 10.0, 0);
+        assert_eq!(w.windows.len(), WINDOWS);
+        let k3 = w.windows[3];
+        assert!((k3[0] - 3.5).abs() < 1e-9 && (k3[1] - 3.0).abs() < 1e-9 && (k3[2] - 4.0).abs() < 1e-9, "{k3:?}");
         assert!(compare_stats("x", &w, &w).is_ok());
-        let mut off = w.clone();
-        off[5][0] += 1.0;
+        let mut off = NodeStats { windows: w.windows.clone(), ripple: w.ripple };
+        off.windows[5][0] += 1.0;
         assert!(compare_stats("x", &off, &w).unwrap_err().contains("窓5"));
         // ripple: a 5 V swing early on, then a 0.08 V ripple against one of 0.12 V: only the ripple check catches that
-        let mut theirs = vec![[2.5, 0.0, 5.0]; WINDOWS];
-        theirs[WINDOWS - 2] = [5.0, 4.96, 5.04];
-        theirs[WINDOWS - 1] = [5.0, 4.96, 5.04];
-        let mut rippled = theirs.clone();
-        rippled[WINDOWS - 1] = [5.0, 4.94, 5.06];
+        let mut windows = vec![[2.5, 0.0, 5.0]; WINDOWS];
+        windows[WINDOWS - 1] = [5.0, 4.96, 5.04];
+        windows[WINDOWS - 2] = [5.0, 4.96, 5.04];
+        let theirs = NodeStats { windows: windows.clone(), ripple: 0.08 };
+        let rippled = NodeStats { windows, ripple: 0.12 };
         assert!(compare_stats("y", &rippled, &theirs).unwrap_err().contains("リップル"));
         assert!(compare_stats("y", &theirs, &theirs).is_ok());
+    }
+
+    /// The ripple is the median of the slices' peak-to-peak: a slow drift and one odd cycle do not enter.
+    #[test]
+    fn local_ripple_ignores_drift_and_one_odd_cycle() {
+        // 1 s run, 1000 points; a 0.1 V triangle ripple of period 0.01 s on a drift of 1 V/s, with one cycle 0.3 V higher
+        let t: Vec<f64> = (0..=10000).map(|i| i as f64 * 1e-4).collect();
+        let tri = |x: f64| ((x / 0.01).fract() - 0.5).abs() * 0.2;
+        let v: Vec<f64> = t.iter().map(|&x| 4.0 + x + tri(x) + if (0.93..0.94).contains(&x) { 0.3 } else { 0.0 }).collect();
+        let r = local_ripple(&t, &v, 1.0, 0);
+        // a slice is 0.01 s long: ripple 0.1 plus a part of the drift over the slice (up to 0.01 V)
+        assert!((r - 0.105).abs() < 0.006, "{r}");
     }
 
     #[test]
