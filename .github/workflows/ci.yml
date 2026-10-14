@@ -13,3 +13,13 @@ jobs:
       # the third-party license list must match Cargo.lock (regenerate: python tools/gen_third_party_licenses.py)
       - run: python tools/gen_third_party_licenses.py --check
       - run: cargo test --workspace
+  # Linux has never been run by the author: build and test it here before claiming support.
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - run: cargo test --workspace
