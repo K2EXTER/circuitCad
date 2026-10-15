@@ -31,7 +31,7 @@ fn l_shape() -> Board {
 fn a_right_angle_corner_becomes_an_arc() {
     let mut b = l_shape();
     let r = smooth_tracks(&mut b, &SmoothOptions::default());
-    assert_eq!(r, SmoothReport { corners: 1, tapers: 0 });
+    assert_eq!(r, SmoothReport { corners: 1, ..Default::default() });
     assert!(b.tracks.len() >= 5, "two trimmed tracks and at least 3 arc pieces");
     assert!(ratsnest(&b).is_empty(), "still connected");
     assert!(drc::check(&b).is_empty());
@@ -154,4 +154,44 @@ fn only_the_selected_track_is_smoothed() {
     assert!(b.tracks.iter().any(|t| t.a == Point::new(25.0, 5.0) || t.b == Point::new(25.0, 5.0)));
     assert!(b.tracks.iter().all(|t| t.a != Point::new(20.0, 25.0) && t.b != Point::new(20.0, 25.0)));
     assert_eq!(smooth_selected(&mut b, &SmoothOptions::default(), &[]), SmoothReport::default());
+}
+
+/// Two tracks leaving a small pad at 30 degrees from each other.
+fn fork_board() -> Board {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 15.0, "A");
+    let a = 15f64.to_radians();
+    b.tracks.push(trk((5.0, 15.0), (5.0 + 10.0 * a.cos(), 15.0 + 10.0 * a.sin()), 0.25));
+    b.tracks.push(trk((5.0, 15.0), (5.0 + 10.0 * a.cos(), 15.0 - 10.0 * a.sin()), 0.25));
+    pad(&mut b, 5.0 + 10.0 * a.cos(), 15.0 + 10.0 * a.sin(), "A");
+    pad(&mut b, 5.0 + 10.0 * a.cos(), 15.0 - 10.0 * a.sin(), "A");
+    b
+}
+
+#[test]
+fn the_notch_between_two_tracks_at_a_sharp_angle_is_filled_and_rounded() {
+    let mut b = fork_board();
+    let before = b.tracks.clone();
+    let r = smooth_tracks(&mut b, &SmoothOptions { corners: false, tapers: false, ..Default::default() });
+    assert_eq!(r.forks, 1);
+    assert!(b.tracks[..2].iter().zip(&before).all(|(x, y)| x.a == y.a && x.b == y.b), "the routes are not changed");
+    let fill = &b.tracks[2..];
+    assert!(fill.len() >= 3);
+    // the fill runs along the line between the two tracks (y = 15), and gets wider away from the pad
+    assert!(fill.iter().all(|t| (t.a.y - 15.0).abs() < 1e-9 && (t.b.y - 15.0).abs() < 1e-9));
+    assert!(fill.windows(2).all(|w| w[1].width >= w[0].width) && fill.last().unwrap().width > fill[0].width);
+    assert!(fill.last().unwrap().width <= 0.26, "ends as wide as a track");
+    assert!(ratsnest(&b).is_empty());
+    assert!(drc::check(&b).is_empty());
+    // a second run adds nothing
+    assert_eq!(smooth_tracks(&mut b, &SmoothOptions::default()).forks, 0);
+}
+
+#[test]
+fn two_tracks_at_a_wide_angle_are_not_a_fork() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 15.0, "A");
+    b.tracks.push(trk((5.0, 15.0), (15.0, 25.0), 0.25));
+    b.tracks.push(trk((5.0, 15.0), (15.0, 5.0), 0.25)); // 90 degrees apart
+    assert_eq!(smooth_tracks(&mut b, &SmoothOptions::default()).forks, 0);
 }

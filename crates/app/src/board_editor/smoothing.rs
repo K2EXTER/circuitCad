@@ -13,12 +13,14 @@ impl BoardEditor {
                 .on_hover_text("角の丸みの半径。配線が短いと、入る大きさまで自動で小さくなります");
         });
         ui.checkbox(&mut self.smooth.tapers, "太さの段差をなだらかに").on_hover_text("太い配線と細い配線がつながる所と、配線がパッド・ビアに入る根元に、中間の太さの短い配線を挟みます (パッドより細い配線は、根元がパッドの幅から配線の太さへ徐々に細くなります)。電流が急に絞られず、配線の根元が割れにくくなります");
-        if ui.add_enabled(self.smooth.corners || self.smooth.tapers, egui::Button::new("配線を整える")).on_hover_text("全部の配線に上の設定を適用します。パッドやビアに付いた端は動きません。ルール違反が増える所と、接続が切れる所は変えません。元に戻すで取り消せます").clicked() {
+        ui.checkbox(&mut self.smooth.forks, "鋭角の分かれ目を丸める").on_hover_text("1つの点から2本の配線が鋭い角度 (8〜60°) で出ている所は、間にできる細いくぼみの先が鋭くとがっています (製造のときにエッチング液がたまりやすい所です)。そのくぼみを先端から銅で埋めて、先を丸くします。配線の経路は変わりません");
+        let any = self.smooth.corners || self.smooth.tapers || self.smooth.forks;
+        if ui.add_enabled(any, egui::Button::new("配線を整える")).on_hover_text("全部の配線に上の設定を適用します。パッドやビアに付いた端は動きません。ルール違反が増える所と、接続が切れる所は変えません。元に戻すで取り消せます").clicked() {
             self.smooth_tracks();
         }
         let picked = self.picked_tracks();
         if ui
-            .add_enabled(!picked.is_empty() && (self.smooth.corners || self.smooth.tapers), egui::Button::new(format!("選んだ配線だけ整える ({} 本)", picked.len())))
+            .add_enabled(!picked.is_empty() && any, egui::Button::new(format!("選んだ配線だけ整える ({} 本)", picked.len())))
             .on_hover_text("選択している配線 (選択ツールでクリック、またはドラッグで範囲選択) の角と、パッド・ビアに入る根元だけを整えます。角でつながる隣の配線も、角を丸めるぶん短くなります")
             .clicked()
         {
@@ -52,13 +54,13 @@ impl BoardEditor {
         self.report_smooth(r);
     }
 
-    fn report_smooth(&mut self, SmoothReport { corners, tapers }: SmoothReport) {
+    fn report_smooth(&mut self, SmoothReport { corners, tapers, forks }: SmoothReport) {
         self.violations.clear();
-        self.status = if corners + tapers == 0 {
+        self.status = if corners + tapers + forks == 0 {
             self.undo.pop(); // nothing changed: no undo step
             "整えられる所がありませんでした (角がない、短くて入らない、またはルール違反になる所だけです)".into()
         } else {
-            format!("角を {corners} か所丸め、太さの段差を {tapers} か所なだらかにしました")
+            format!("角を {corners} か所丸め、太さの段差を {tapers} か所なだらかにし、鋭角の分かれ目を {forks} か所丸めました")
         };
     }
 }

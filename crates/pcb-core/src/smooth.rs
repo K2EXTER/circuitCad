@@ -21,11 +21,13 @@ pub struct SmoothOptions {
     pub radius: f64,
     /// Step a width change through a few in-between widths.
     pub tapers: bool,
+    /// Fill and round the sharp notch between two tracks that leave one point at a narrow angle.
+    pub forks: bool,
 }
 
 impl Default for SmoothOptions {
     fn default() -> Self {
-        SmoothOptions { corners: true, radius: 0.5, tapers: true }
+        SmoothOptions { corners: true, radius: 0.5, tapers: true, forks: true }
     }
 }
 
@@ -34,13 +36,24 @@ impl Default for SmoothOptions {
 pub struct SmoothReport {
     pub corners: usize,
     pub tapers: usize,
+    /// Sharp notches between two tracks leaving one point that were filled in and rounded.
+    pub forks: usize,
 }
 
 /// A track end moved to a new point, and the tracks that fill the gap.
 struct Edit {
     trims: Vec<(usize, bool, Point)>,
     pieces: Vec<Track>,
-    is_corner: bool,
+    kind: Kind,
+    /// The tracks this edit is about (for "only the selected ones").
+    touches: Vec<usize>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Corner,
+    Taper,
+    Fork,
 }
 
 /// Width differences up to this are left as they are, and no step of a taper is larger (so a taper is not tapered again).
@@ -48,6 +61,9 @@ const MIN_STEP: f64 = 0.1;
 /// Corners that turn less than this are left as they are (the pieces of an arc turn 22.5° each, so an arc is not rounded again).
 const MIN_TURN: f64 = 30.0;
 const MIN_LEN: f64 = 0.05;
+/// Two tracks leaving a point at an angle between these (degrees) get their notch filled; closer than the lower one they run on top of each other.
+const MIN_FORK: f64 = 8.0;
+const MAX_FORK: f64 = 60.0;
 
 type End = (usize, bool);
 
@@ -60,8 +76,8 @@ fn unit(from: Point, to: Point) -> (f64, f64, f64) {
     if l < 1e-9 { (0.0, 0.0, 0.0) } else { ((to.x - from.x) / l, (to.y - from.y) / l, l) }
 }
 
-/// Every place where exactly two tracks of one layer end at the same point, off any pad or via.
-fn joints(board: &Board) -> Vec<(Point, End, End)> {
+/// Every place where exactly two tracks of one layer end at the same point.
+fn pairs(board: &Board) -> Vec<(Point, End, End)> {
     let mut at: HashMap<(i64, i64, Side), Vec<End>> = HashMap::new();
     for (i, t) in board.tracks.iter().enumerate() {
         at.entry(key(t.a, t.side)).or_default().push((i, true));
@@ -74,10 +90,62 @@ fn joints(board: &Board) -> Vec<(Point, End, End)> {
             let t = &board.tracks[v[0].0];
             (if v[0].1 { t.a } else { t.b }, v[0], v[1])
         })
-        .filter(|(p, a, _)| !pinned(board, *p, board.tracks[a.0].side))
         .collect();
     out.sort_by_key(|x| x.1);
     out
+}
+
+/// The same, off any pad or via.
+fn joints(board: &Board) -> Vec<(Point, End, End)> {
+    let mut out = pairs(board);
+    out.retain(|(p, a, _)| !pinned(board, *p, board.tracks[a.0].side));
+    out
+}
+
+/// Two tracks of one width leave `v` at a sharp angle: between them lies a narrow notch whose tip is a sharp
+/// copper corner (an acid trap, and what the acute-angle DRC check looks for). Fill the notch from its tip until it
+/// is as wide as a track, so the gap between the two ends in a round end instead of a point. The routes stay as they are.
+fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
+    let (ti, tj) = (&board.tracks[i], &board.tracks[j]);
+    let w = ti.width;
+    if (w - tj.width).abs() > 0.02 {
+        return None;
+    }
+    let (u1x, u1y, l1) = unit(v, far_end(ti, ia));
+    let (u2x, u2y, l2) = unit(v, far_end(tj, ja));
+    let phi = (u1x * u2x + u1y * u2y).clamp(-1.0, 1.0).acos();
+    if phi < MIN_FORK.to_radians() || phi > MAX_FORK.to_radians() {
+        return None;
+    }
+    let theta = phi / 2.0;
+    let (bx, by) = (u1x + u2x, u1y + u2y);
+    let bl = bx.hypot(by);
+    let (bx, by) = (bx / bl, by / bl);
+    // along the middle line between the tracks: where the notch begins (the edges of the two tracks cross), and where it is as wide as a track
+    let tip = w / (2.0 * theta.sin());
+    let end = (w / 2.0 + w / (2.0 * theta.cos())) / theta.tan();
+    if end - tip < 0.1 || end > l1.min(l2) / 2.0 {
+        return None;
+    }
+    let at = |s: f64| Point::new(v.x + bx * s, v.y + by * s);
+    // done before: a track already ends at the tip
+    if board.tracks.iter().any(|t| t.side == ti.side && (t.a.dist(at(tip)) < 1e-6 || t.b.dist(at(tip)) < 1e-6)) {
+        return None;
+    }
+    // the notch lies entirely under a pad: nothing to fill
+    if pinned(board, at(end), ti.side) && pinned(board, at(tip), ti.side) {
+        return None;
+    }
+    let gap = |s: f64| 2.0 * (s * theta.tan() - w / (2.0 * theta.cos()));
+    const STEPS: usize = 4;
+    let pieces = (0..STEPS)
+        .map(|k| {
+            let (s0, s1) = (tip + (end - tip) * k as f64 / STEPS as f64, tip + (end - tip) * (k + 1) as f64 / STEPS as f64);
+            // never thinner than the rules allow; near the tip the tracks cover more than this anyway
+            Track { side: ti.side, a: at(s0), b: at(s1), width: gap(s1).max(board.rules.min_track_width) }
+        })
+        .collect();
+    Some(Edit { trims: vec![], pieces, kind: Kind::Fork, touches: vec![i, j] })
 }
 
 fn far_end(t: &Track, is_a: bool) -> Point {
@@ -126,7 +194,7 @@ fn corner(board: &Board, v: Point, (i, ia): End, (j, ja): End, radius: f64) -> O
     }
     pts.push(p2);
     let pieces = pts.windows(2).map(|w| Track { side: ti.side, a: w[0], b: w[1], width: ti.width }).collect();
-    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, is_corner: true })
+    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, kind: Kind::Corner, touches: vec![i, j] })
 }
 
 /// Step from the wider track's width to the narrower one's along the end of the wider track at `v`.
@@ -153,7 +221,7 @@ fn taper(board: &Board, v: Point, a: End, b: End) -> Option<Edit> {
             width: tw.width - dw * (k as f64 + 0.5) / n as f64,
         })
         .collect();
-    Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, is_corner: false })
+    Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, kind: Kind::Taper, touches: vec![wide.0] })
 }
 
 /// The copper a track end sits on: how wide a track may be where the teardrop starts (the length of the flat edge it
@@ -206,7 +274,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         b: at(exit + ramp * (k + 1) as f64 / n as f64),
         width: top - dw * k as f64 / n as f64,
     }));
-    Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, is_corner: false })
+    Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, kind: Kind::Taper, touches: vec![i] })
 }
 
 fn apply(board: &mut Board, e: &Edit) {
@@ -221,7 +289,8 @@ fn apply(board: &mut Board, e: &Edit) {
 }
 
 fn report(es: &[&Edit]) -> SmoothReport {
-    SmoothReport { corners: es.iter().filter(|e| e.is_corner).count(), tapers: es.iter().filter(|e| !e.is_corner).count() }
+    let n = |k: Kind| es.iter().filter(|e| e.kind == k).count();
+    SmoothReport { corners: n(Kind::Corner), tapers: n(Kind::Taper), forks: n(Kind::Fork) }
 }
 
 /// Smooth the tracks of `board`. Returns what was done; the board is untouched when nothing could be done safely.
@@ -237,7 +306,20 @@ pub fn smooth_selected(board: &mut Board, opts: &SmoothOptions, tracks: &[usize]
 
 fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> SmoothReport {
     let mut edits = vec![];
+    // ends that belong to a notch are left to it: no corner or teardrop there
+    let mut used: Vec<End> = vec![];
+    if opts.forks {
+        for (v, a, b) in pairs(board) {
+            if let Some(e) = fork(board, v, a, b) {
+                edits.push(e);
+                used.extend([a, b]);
+            }
+        }
+    }
     for (v, a, b) in joints(board) {
+        if used.contains(&a) || used.contains(&b) {
+            continue;
+        }
         let e = if opts.corners { corner(board, v, a, b, opts.radius) } else { None };
         if let Some(e) = e.or_else(|| if opts.tapers { taper(board, v, a, b) } else { None }) {
             edits.push(e);
@@ -246,12 +328,14 @@ fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Sm
     if opts.tapers {
         for i in 0..board.tracks.len() {
             for is_a in [true, false] {
-                edits.extend(pad_taper(board, i, is_a));
+                if !used.contains(&(i, is_a)) {
+                    edits.extend(pad_taper(board, i, is_a));
+                }
             }
         }
     }
     if let Some(only) = only {
-        edits.retain(|e| e.trims.iter().any(|(i, _, _)| only.contains(i)));
+        edits.retain(|e| e.touches.iter().any(|i| only.contains(i)));
     }
     if edits.is_empty() {
         return SmoothReport::default();
