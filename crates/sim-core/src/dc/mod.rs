@@ -75,7 +75,7 @@ pub(crate) enum Ce {
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize },
     /// `bi` is the internal base node (equal to `b` when the model has no `rb`).
-    Q { name: String, c: usize, b: usize, bi: usize, e: usize, ci: usize, ei: usize, m: BjtModel, slot: usize },
+    Q { name: String, c: usize, b: usize, bi: usize, e: usize, ci: usize, ei: usize, m: BjtModel, slot: usize, cap: Option<usize> },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
     S { name: String, a: usize, b: usize, cp: usize, cn: usize, m: SwitchModel },
     /// `br` is only meaningful for a voltage-type source.
@@ -116,7 +116,7 @@ use devices::*;
 use linalg::*;
 
 pub(crate) use build::{compile, v};
-pub(crate) use devices::{bjt_eval, exp_safe, mos_eval};
+pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, depletion, exp_safe, mos_eval};
 pub(crate) use mna::{Ctx, Dyn};
 pub(crate) use newton::{Attempt, Fail};
 

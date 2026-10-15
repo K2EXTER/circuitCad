@@ -79,6 +79,11 @@ fn reactive_state(cm: &crate::dc::Compiled, x: &[f64]) -> (Vec<f64>, Vec<f64>) {
         match e {
             Ce::C { a, b, idx, .. } => cv[*idx] = v(x, *a) - v(x, *b),
             Ce::L { br, idx, .. } => il[*idx] = x[*br],
+            Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
+                let pol = if m.pnp { -1.0 } else { 1.0 };
+                cv[*idx] = pol * (v(x, *bi) - v(x, *ei));
+                cv[*idx + 1] = pol * (v(x, *bi) - v(x, *ci));
+            }
             _ => {}
         }
     }
@@ -177,6 +182,11 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         match e {
             Ce::C { a, b, idx, .. } => cap_v[*idx] = v(&x, *a) - v(&x, *b),
             Ce::L { br, idx, .. } => ind_i[*idx] = x[*br],
+            Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
+                let pol = if m.pnp { -1.0 } else { 1.0 };
+                cap_v[*idx] = pol * (v(&x, *bi) - v(&x, *ei));
+                cap_v[*idx + 1] = pol * (v(&x, *bi) - v(&x, *ci));
+            }
             _ => {}
         }
     }
@@ -317,6 +327,16 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                 Ce::L { p, n, br, idx, .. } => {
                     ind_i[*idx] = att.x[*br];
                     ind_v[*idx] = v(&att.x, *p) - v(&att.x, *n);
+                }
+                Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
+                    let pol = if m.pnp { -1.0 } else { 1.0 };
+                    let k = if trap { 2.0 } else { 1.0 };
+                    let vn = [pol * (v(&att.x, *bi) - v(&att.x, *ei)), pol * (v(&att.x, *bi) - v(&att.x, *ci))];
+                    for (j, vnew) in vn.into_iter().enumerate() {
+                        let (q_new, q_old) = if j == 0 { (crate::dc::bjt_qbe(m, vnew).0, crate::dc::bjt_qbe(m, cap_v[*idx]).0) } else { (crate::dc::bjt_qbc(m, vnew).0, crate::dc::bjt_qbc(m, cap_v[*idx + 1]).0) };
+                        cap_i[*idx + j] = k / h * (q_new - q_old) - if trap { cap_i[*idx + j] } else { 0.0 };
+                        cap_v[*idx + j] = vnew;
+                    }
                 }
                 _ => {}
             }

@@ -53,6 +53,41 @@ pub(crate) fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
     BjtEval { ic, ib, ie: -(ic + ib), dic, dib, die: (-(dic.0 + dib.0), -(dic.1 + dib.1)) }
 }
 
+/// Charge and capacitance (C = dQ/dV) of a junction's depletion layer at `v`: the usual
+/// `cj0 / (1 - v/vj)^m` below `fc * vj` and its tangent line above (so the charge stays finite in forward bias).
+pub(crate) fn depletion(cj0: f64, vj: f64, m: f64, fc: f64, v: f64) -> (f64, f64) {
+    if cj0 <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let vx = fc * vj;
+    let charge = |v: f64| if (m - 1.0).abs() < 1e-9 { -cj0 * vj * (1.0 - v / vj).ln() } else { cj0 * vj / (1.0 - m) * (1.0 - (1.0 - v / vj).powf(1.0 - m)) };
+    if v < vx {
+        (charge(v), cj0 / (1.0 - v / vj).powf(m))
+    } else {
+        // tangent at vx: C(v) = c0 + c1 (v - vx)
+        let c0 = cj0 / (1.0 - fc).powf(m);
+        let c1 = c0 * m / (vj * (1.0 - fc));
+        let d = v - vx;
+        (charge(vx) + c0 * d + 0.5 * c1 * d * d, c0 + c1 * d)
+    }
+}
+
+/// Stored charge and capacitance of the base-emitter junction (depletion plus the forward diffusion charge).
+pub(crate) fn bjt_qbe(m: &BjtModel, vbe: f64) -> (f64, f64) {
+    let (qd, cd) = depletion(m.cje, m.vje, m.mje, m.fc, vbe);
+    let nfvt = m.nf * VT;
+    let ef = exp_safe(vbe / nfvt);
+    (qd + m.tf * m.is * (ef - 1.0), cd + m.tf * m.is / nfvt * ef)
+}
+
+/// Stored charge and capacitance of the base-collector junction.
+pub(crate) fn bjt_qbc(m: &BjtModel, vbc: f64) -> (f64, f64) {
+    let (qd, cd) = depletion(m.cjc, m.vjc, m.mjc, m.fc, vbc);
+    let nrvt = m.nr * VT;
+    let er = exp_safe(vbc / nrvt);
+    (qd + m.tr * m.is * (er - 1.0), cd + m.tr * m.is / nrvt * er)
+}
+
 /// Level-1 MOSFET in NMOS orientation: `(id, gm, gds)` with `id` flowing drain to source.
 /// The device is symmetric, so for `vds < 0` source and drain swap roles.
 pub(crate) fn mos_eval(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {

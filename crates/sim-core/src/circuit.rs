@@ -56,12 +56,31 @@ pub struct BjtModel {
     /// collector voltage by `1 - vbc/vaf - vbe/var`.
     pub vaf: f64,
     pub var: f64,
+    /// Junction capacitances at zero bias (F), built-in potentials (V), grading coefficients, and the point
+    /// (fraction of the potential) where the depletion formula turns into a straight line.
+    pub cje: f64,
+    pub vje: f64,
+    pub mje: f64,
+    pub cjc: f64,
+    pub vjc: f64,
+    pub mjc: f64,
+    pub fc: f64,
+    /// Forward and reverse transit times (s): the diffusion charge is `tf * (forward current)`.
+    pub tf: f64,
+    pub tr: f64,
     pub pnp: bool,
+}
+
+impl BjtModel {
+    /// Does the model store any charge (so that it needs the transient / AC capacitor treatment)?
+    pub fn has_charge(&self) -> bool {
+        self.cje > 0.0 || self.cjc > 0.0 || self.tf > 0.0 || self.tr > 0.0
+    }
 }
 
 impl Default for BjtModel {
     fn default() -> Self {
-        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, rc: 0.0, re: 0.0, vaf: f64::INFINITY, var: f64::INFINITY, pnp: false }
+        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, rc: 0.0, re: 0.0, vaf: f64::INFINITY, var: f64::INFINITY, cje: 0.0, vje: 0.75, mje: 0.33, cjc: 0.0, vjc: 0.75, mjc: 0.33, fc: 0.5, tf: 0.0, tr: 0.0, pnp: false }
     }
 }
 

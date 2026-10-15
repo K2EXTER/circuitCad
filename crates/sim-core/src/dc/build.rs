@@ -85,7 +85,12 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 let bi = internal_node(model.rb, *b);
                 let ci = internal_node(model.rc, *c);
                 let ei = internal_node(model.re, *e);
-                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, bi, e: *e, ci, ei, m: model.clone(), slot: n_slots });
+                // a transistor with charge storage gets two integrator slots: base-emitter, then base-collector
+                let cap = model.has_charge().then(|| {
+                    n_caps += 2;
+                    n_caps - 2
+                });
+                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, bi, e: *e, ci, ei, m: model.clone(), slot: n_slots, cap });
                 n_slots += 2;
             }
         }

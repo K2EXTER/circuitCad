@@ -275,6 +275,17 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
                     let l = if *i0 > 0.0 { l / (1.0 + (op.x[*br] / i0).powi(2)) } else { *l };
                     a[*br * n + *br] = a[*br * n + *br] - jw_c(w) * C64::new(l, 0.0);
                 }
+                Ce::Q { bi, ci, ei, m, slot, cap: Some(_), .. } => {
+                    // small-signal junction capacitances at the operating point
+                    let (cbe, cbc) = (crate::dc::bjt_qbe(m, op.vj[*slot]).1, crate::dc::bjt_qbc(m, op.vj[*slot + 1]).1);
+                    for (n1, n2, cc) in [(*bi, *ei, cbe), (*bi, *ci, cbc)] {
+                        let y = jw_c(w) * C64::new(cc, 0.0);
+                        add(&mut a, n1, n1, y);
+                        add(&mut a, n2, n2, y);
+                        add(&mut a, n1, n2, -y);
+                        add(&mut a, n2, n1, -y);
+                    }
+                }
                 Ce::V { ac: Some((m, ph)), br, .. } => b[*br] = C64::from_polar(*m, *ph),
                 Ce::I { from, to, ac: Some((m, ph)), .. } => {
                     let i = C64::from_polar(*m, *ph);

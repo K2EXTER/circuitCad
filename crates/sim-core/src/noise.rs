@@ -8,6 +8,7 @@
 //! BJT collector/base shot `2q|Ic|`, `2q|Ib|`; MOSFET channel thermal `4kT max(2/3 gm, gds)`.
 //! Capacitors, inductors and controlled sources are noiseless.
 
+use crate::dc::{bjt_qbc, bjt_qbe};
 use crate::ac::{check_sweep, frequencies, solve_complex, AcSettings, C64};
 use crate::circuit::Circuit;
 use crate::dc::{bjt_eval, compile, exp_safe, floating_warnings, has_ground, mos_eval, solve_op, v, Ce, Ctx, SimError};
@@ -163,7 +164,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                     srcs.push(Src { name: format!("{name}.rs"), p: *a, n: *ai, s: kt4 / rs });
                 }
             }
-            Ce::Q { name, c, b, bi, e, ci, ei, m, slot } => {
+            Ce::Q { name, c, b, bi, e, ci, ei, m, slot, .. } => {
                 let q = bjt_eval(m, op.vj[*slot], op.vj[*slot + 1]);
                 srcs.push(Src { name: format!("{name}.ic"), p: *ci, n: *ei, s: 2.0 * Q_E * q.ic.abs() });
                 srcs.push(Src { name: format!("{name}.ib"), p: *bi, n: *ei, s: 2.0 * Q_E * q.ib.abs() });
@@ -224,6 +225,16 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 }
                 Ce::L { l, br, .. } => {
                     a[*br * n + *br] = a[*br * n + *br] - C64::new(0.0, w * l);
+                }
+                Ce::Q { bi, ci, ei, m, slot, cap: Some(_), .. } => {
+                    let (cbe, cbc) = (bjt_qbe(m, op.vj[*slot]).1, bjt_qbc(m, op.vj[*slot + 1]).1);
+                    for (n1, n2, cc) in [(*bi, *ei, cbe), (*bi, *ci, cbc)] {
+                        let y = C64::new(0.0, w * cc);
+                        add(&mut a, n1, n1, y);
+                        add(&mut a, n2, n2, y);
+                        add(&mut a, n1, n2, -y);
+                        add(&mut a, n2, n1, -y);
+                    }
                 }
                 _ => {}
             }

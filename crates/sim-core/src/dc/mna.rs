@@ -276,7 +276,7 @@ impl Compiled {
                         m.current(*p, *n, rest);
                     }
                 }
-                Ce::Q { c: c_out, b, bi, e: e_out, ci, ei, m: bm, slot, .. } => {
+                Ce::Q { c: c_out, b, bi, e: e_out, ci, ei, m: bm, slot, cap, .. } => {
                     if bm.rb > 0.0 {
                         m.g(*b, *bi, 1.0 / bm.rb);
                     }
@@ -308,6 +308,19 @@ impl Compiled {
                         m.gn(node, *c, -dbc);
                         if node != 0 {
                             m.b[node - 1] -= pol * i0 - dbe * pol * lim_be - dbc * pol * lim_bc;
+                        }
+                    }
+                    // charge storage in transient: each junction is a capacitor with charge Q(v), linearised around the iterate
+                    if let (Some(d), Some(idx)) = (&ctx.dynamic, cap) {
+                        let k = if d.trap { 2.0 } else { 1.0 };
+                        for (slot_i, other, vk, (q, cc), q_old) in [
+                            (*idx, *e, lim_be, bjt_qbe(bm, lim_be), bjt_qbe(bm, d.cap_v[*idx]).0),
+                            (*idx + 1, *c, lim_bc, bjt_qbc(bm, lim_bc), bjt_qbc(bm, d.cap_v[*idx + 1]).0),
+                        ] {
+                            let geq = k * cc / d.h;
+                            let rest = k / d.h * (q - cc * vk - q_old) - if d.trap { d.cap_i[slot_i] } else { 0.0 };
+                            m.g(*b, other, geq);
+                            m.current(*b, other, pol * rest);
                         }
                     }
                     // gmin across both junctions keeps the matrix well conditioned
