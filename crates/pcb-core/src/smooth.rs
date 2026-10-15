@@ -156,12 +156,16 @@ fn taper(board: &Board, v: Point, a: End, b: End) -> Option<Edit> {
     Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, is_corner: false })
 }
 
-/// The copper a track end sits on: how wide a track may be where it crosses the edge of that copper (the length of the
-/// edge it leaves through), and how far the end is from that edge in the direction `(ux, uy)`.
+/// The copper a track end sits on: how wide a track may be where the teardrop starts (the length of the flat edge it
+/// leaves a rectangular pad through; the diameter at the centre of a round end), and how far from the track end that is.
 fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(f64, f64)> {
     for q in &board.pads {
         let (w, h) = q.shape.size();
         if (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6 {
+            if !matches!(q.shape, PadShape::Rect { .. }) {
+                // a round end has no flat edge to match: the teardrop starts at the centre, as wide as the pad is
+                return (p.dist(q.pos) < 0.05).then_some((w.min(h), 0.0));
+            }
             let exit = |half: f64, off: f64, u: f64| if u.abs() > 1e-9 { (half * u.signum() - off) / u } else { f64::INFINITY };
             let (tx, ty) = (exit(w / 2.0, p.x - q.pos.x, ux), exit(h / 2.0, p.y - q.pos.y, uy));
             // leaving through a side face of the pad: the edge is as long as the pad is tall, and the round end of the
@@ -170,7 +174,7 @@ fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(
             return Some((edge.min(2.0 * depth), tx.min(ty).max(0.0)));
         }
     }
-    board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).map(|v| (v.diameter, (v.diameter / 2.0 - p.dist(v.pos)).max(0.0)))
+    board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).and_then(|v| (p.dist(v.pos) < 0.05).then_some((v.diameter, 0.0)))
 }
 
 /// Where a track ends on a pad or via that is wider than the track: from the edge of the pad, a short stretch that
@@ -192,7 +196,10 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     let n = ((dw / (MIN_STEP * 0.8)).ceil() as usize).max(2);
     let at = |s: f64| Point::new(v.x + ux * s, v.y + uy * s);
     // the track runs on to the pad's edge; there the first piece is exactly as wide as the edge, and each next is narrower
-    let mut pieces = vec![Track { side: t.side, a: v, b: at(exit), width: t.width }];
+    let mut pieces = vec![];
+    if exit > 1e-6 {
+        pieces.push(Track { side: t.side, a: v, b: at(exit), width: t.width });
+    }
     pieces.extend((0..n).map(|k| Track {
         side: t.side,
         a: at(exit + ramp * k as f64 / n as f64),

@@ -124,3 +124,18 @@ fn a_short_track_at_a_pad_is_left_as_it_is() {
     b.tracks.push(trk((5.0, 5.0), (7.0, 5.0), 0.25));
     assert_eq!(smooth_tracks(&mut b, &SmoothOptions::default()).tapers, 0);
 }
+
+#[test]
+fn a_round_pad_gets_the_teardrop_from_its_centre_not_a_wide_base_beyond_its_edge() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    let mut p = Pad::new(Point::new(5.0, 5.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    pad(&mut b, 25.0, 15.0, "A");
+    b.tracks.push(trk((5.0, 5.0), (25.0, 15.0), 0.25));
+    smooth_tracks(&mut b, &SmoothOptions::default());
+    let at_pad: Vec<&Track> = b.tracks.iter().filter(|t| t.a.dist(Point::new(5.0, 5.0)) < 1e-6 || t.b.dist(Point::new(5.0, 5.0)) < 1e-6).collect();
+    assert!(at_pad.iter().any(|t| (t.width - 1.6).abs() < 1e-9), "as wide as the pad at its centre");
+    assert!(b.tracks.iter().all(|t| t.width <= 1.6 + 1e-9));
+    assert!(ratsnest(&b).is_empty());
+}
