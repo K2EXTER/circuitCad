@@ -119,4 +119,43 @@ impl BoardEditor {
         }
         out
     }
+
+    /// Make the tracks (`only`: these indices; all when `None`) leave their rectangular pads at a right angle, the
+    /// two tracks of one wide pad from its two ends. The nets of "整えないネット" are left alone. Returns how many track
+    /// ends were changed.
+    pub(super) fn align_pad_entries(&mut self, only: Option<Vec<usize>>) -> usize {
+        let conn = drc::connectivity(&self.board);
+        let skip = |i: usize| conn.track_net(i).is_some_and(|n| self.board.finish_exclude.iter().any(|x| x == n));
+        let list: Vec<usize> = only.unwrap_or_else(|| (0..self.board.tracks.len()).collect()).into_iter().filter(|&i| !skip(i)).collect();
+        let opts = pcb_core::padentry::EntryOptions { lead: self.pad_lead_len, spread: self.pad_spread };
+        pcb_core::padentry::align_entries(&mut self.board, &opts, Some(&list)).aligned
+    }
+
+    /// The button: do it for `only` (or every track), as one undo step.
+    pub(super) fn align_pad_entries_button(&mut self, only: Option<Vec<usize>>) {
+        self.checkpoint();
+        let n = self.align_pad_entries(only);
+        self.violations.clear();
+        self.status = if n == 0 {
+            self.undo.pop(); // nothing changed: no undo step
+            "そろえる所がありませんでした (すでに垂直、丸いパッド、すき間が足りない、またはルール違反になる所だけです)".into()
+        } else {
+            format!("パッドの根元 {n} か所を、辺に垂直にそろえました")
+        };
+    }
+
+    pub(super) fn panel_pad_entries(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.label("パッドの根元").on_hover_text("配線がパッドに入る・パッドから出る根元を、パッドの辺に垂直な短い区間にそろえます。自動配線の直後には、新しい配線に自動で行います (「パッドに垂直に出入り」が入っているとき)");
+        ui.checkbox(&mut self.pad_spread, "2本は両端に寄せる").on_hover_text("同じパッドの同じ点から2本が出ているとき、パッドの両端に寄せて、2本を並べて出します (鋭角のくぼみができません)。2本ぶんの幅が入らない小さなパッドでは、寄せません");
+        ui.horizontal(|ui| {
+            if ui.button("全部の配線をそろえる").on_hover_text("すべての配線の、四角いパッドへの根元をそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。「整えないネット」は除きます。元に戻すで取り消せます").clicked() {
+                self.align_pad_entries_button(None);
+            }
+            let picked: Vec<usize> = self.selected.iter().chain(&self.multi).filter_map(|it| if let Item::Track(i) = it { Some(*i) } else { None }).collect();
+            if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("選んだ ({} 本)", picked.len()))).on_hover_text("選択している配線の根元だけをそろえます").clicked() {
+                self.align_pad_entries_button(Some(picked));
+            }
+        });
+    }
 }

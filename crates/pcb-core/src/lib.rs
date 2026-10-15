@@ -24,6 +24,7 @@ pub mod model;
 pub mod model3d;
 pub mod netlist;
 pub mod outline;
+pub mod padentry;
 pub mod package;
 pub mod parts;
 pub mod ratsnest;
@@ -38,6 +39,8 @@ mod tests_autoroute;
 mod tests_layers;
 #[cfg(test)]
 mod tests_meander;
+#[cfg(test)]
+mod tests_padentry;
 #[cfg(test)]
 mod tests_router;
 #[cfg(test)]

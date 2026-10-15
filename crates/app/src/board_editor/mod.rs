@@ -200,6 +200,8 @@ pub struct BoardEditor {
     /// Leave and enter pads at a right angle to their edge, for `pad_lead_len` mm.
     pad_lead: bool,
     pad_lead_len: f64,
+    /// Move two tracks that leave a wide pad from one point to its two ends ("パッドの根元をそろえる").
+    pad_spread: bool,
     zoom: f32, // pixels per mm
     pan: Vec2, // world mm at the screen centre
     pending: Option<Point>,
@@ -288,6 +290,7 @@ impl Default for BoardEditor {
             router_cache: Default::default(),
             pad_lead: true,
             pad_lead_len: 0.5,
+            pad_spread: true,
             zoom: 12.0,
             pan: Vec2::new(25.0, 20.0),
             pending: None,

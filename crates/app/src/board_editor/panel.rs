@@ -154,6 +154,7 @@ impl BoardEditor {
                             self.autoroute(Some(&n));
                         }
                 });
+                self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
                 self.panel_widths(ui);
                 self.panel_pairs(ui);

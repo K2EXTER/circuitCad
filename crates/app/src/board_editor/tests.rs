@@ -821,3 +821,34 @@ fn lengths_are_matched_with_one_undo_step() {
     e.match_lengths(&["A".to_string()], None);
     assert_eq!(e.undo.len(), steps);
 }
+
+#[test]
+fn the_autorouter_leaves_and_enters_pads_at_a_right_angle_when_the_pad_lead_is_on() {
+    let build = |lead: bool| {
+        let mut e = BoardEditor::default();
+        e.board = Board::new("t", 40.0, 30.0);
+        for (x, y) in [(5.0, 5.0), (30.0, 20.0)] {
+            let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+            pad.net = "A".into();
+            e.board.pads.push(pad);
+        }
+        e.track_width = 0.25;
+        e.grid = 0.5;
+        e.pad_lead = lead;
+        e.autoroute(None);
+        e
+    };
+    let axis_aligned = |t: &Track| (t.a.x - t.b.x).abs() < 1e-9 || (t.a.y - t.b.y).abs() < 1e-9;
+    let on = build(true);
+    assert!(pcb_core::ratsnest::ratsnest(&on.board).is_empty(), "{}", on.status);
+    assert!(drc::check(&on.board).is_empty(), "{:?}", drc::check(&on.board));
+    // the track at each pad runs straight out of its edge for at least the half pad plus the lead
+    for pad in [p(5.0, 5.0), p(30.0, 20.0)] {
+        let t = on.board.tracks.iter().find(|t| t.a == pad || t.b == pad).unwrap();
+        assert!(axis_aligned(t) && t.a.dist(t.b) >= 1.0 - 1e-6, "{t:?}");
+    }
+    assert!(on.status.contains("垂直"), "{}", on.status);
+    // with the setting off, the router's own shape is left (it may end at any angle)
+    let off = build(false);
+    assert!(!off.status.contains("垂直"), "{}", off.status);
+}

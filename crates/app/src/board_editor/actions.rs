@@ -23,6 +23,7 @@ impl BoardEditor {
             return;
         }
         self.checkpoint();
+        let tracks_before = self.board.tracks.len();
         let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None };
         // differential pairs first, side by side; the rest afterwards
         let mut pair_routed = 0;
@@ -59,8 +60,11 @@ impl BoardEditor {
         if report.routed == 0 {
             self.undo.pop(); // nothing changed: no undo step
         }
+        // the new tracks leave and enter the pads at a right angle, like those drawn by hand
+        let aligned = if self.pad_lead && report.routed > 0 { self.align_pad_entries(Some((tracks_before..self.board.tracks.len()).collect())) } else { 0 };
         self.status = if report.failed.is_empty() {
-            format!("自動配線: {} 本を配線しました (格子 {:.3} mm。手で足すときは、配線や端の点に吸い付きます)。DRC で確認しましょう", report.routed, opt.grid)
+            let tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
+            format!("自動配線: {} 本を配線しました。{tail}(格子 {:.3} mm。手で足すときは、配線や端の点に吸い付きます)。DRC で確認しましょう", report.routed, opt.grid)
         } else {
             format!(
                 "自動配線: {} 本を配線、{} 本は通せませんでした (黄色の線のまま)。部品の位置を動かすか、手動で配線してください",

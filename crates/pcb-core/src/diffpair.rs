@@ -2,7 +2,7 @@
 //! with the same length. This module measures a pair (length, skew, how well the two lines are coupled),
 //! checks it, and evens out the lengths with a serpentine ("meander") on the shorter line.
 
-use crate::drc::{check, connectivity, point_seg, seg_seg};
+use crate::drc::{connectivity, point_seg, seg_seg};
 use crate::model::*;
 use serde::{Deserialize, Serialize};
 
