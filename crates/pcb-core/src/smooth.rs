@@ -73,9 +73,19 @@ struct Edit {
     pieces: Vec<Track>,
     /// A polygon that is added next to the tracks (does not change the board).
     patch: Option<Patch>,
+    /// What the live finish does instead of `trims` and `pieces`: a polygon with a smooth curved edge (not steps),
+    /// and thin tracks that keep the copper connected.
+    live: Option<Live>,
     kind: Kind,
     /// The tracks this edit is about (for "only the selected ones").
     touches: Vec<usize>,
+}
+
+#[derive(Clone)]
+struct Live {
+    trims: Vec<(usize, bool, Point)>,
+    pieces: Vec<Track>,
+    patch: Patch,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -180,7 +190,7 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
         pts.push(at(cx + rho * a.cos(), rho * a.sin()));
     }
     pts.extend([at(t_up.0, t_up.1), at(t_up.0, t_up.1 + SINK)]);
-    Some(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: ti.side, outline: pts, track: i }), kind: Kind::Fork, touches: vec![i, j] })
+    Some(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: ti.side, outline: pts, track: i }), live: None, kind: Kind::Fork, touches: vec![i, j] })
 }
 
 fn far_end(t: &Track, is_a: bool) -> Point {
@@ -229,7 +239,26 @@ fn corner(board: &Board, v: Point, (i, ia): End, (j, ja): End, radius: f64) -> O
     }
     pts.push(p2);
     let pieces = pts.windows(2).map(|w| Track { side: ti.side, a: w[0], b: w[1], width: ti.width }).collect();
-    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, patch: None, kind: Kind::Corner, touches: vec![i, j] })
+    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, patch: None, live: None, kind: Kind::Corner, touches: vec![i, j] })
+}
+
+/// A smooth step from 0 to 1 (flat at both ends).
+fn ease(t: f64) -> f64 {
+    let t = t.clamp(0.0, 1.0);
+    (1.0 - (std::f64::consts::PI * t).cos()) / 2.0
+}
+
+/// A band along the line from `v` in direction `(ux, uy)`, from distance `s0` to `s1`, whose width goes from `w0`
+/// (up to `s_from`) to `w1` (from `s_to`) as a smooth curve.
+fn band(v: Point, (ux, uy): (f64, f64), s0: f64, s1: f64, (s_from, s_to): (f64, f64), (w0, w1): (f64, f64)) -> Vec<Point> {
+    const STEPS: usize = 12;
+    let (nx, ny) = (-uy, ux);
+    let half = |s: f64| (w0 + (w1 - w0) * ease((s - s_from) / (s_to - s_from).max(1e-9))) / 2.0;
+    let pt = |s: f64, y: f64| Point::new(v.x + ux * s + nx * y, v.y + uy * s + ny * y);
+    let ss: Vec<f64> = (0..=STEPS).map(|k| s0 + (s1 - s0) * k as f64 / STEPS as f64).collect();
+    let mut out: Vec<Point> = ss.iter().map(|&s| pt(s, -half(s))).collect();
+    out.extend(ss.iter().rev().map(|&s| pt(s, half(s))));
+    out
 }
 
 /// Step from the wider track's width to the narrower one's along the end of the wider track at `v`.
@@ -256,28 +285,35 @@ fn taper(board: &Board, v: Point, a: End, b: End) -> Option<Edit> {
             width: tw.width - dw * (k as f64 + 0.5) / n as f64,
         })
         .collect();
-    Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, patch: None, kind: Kind::Taper, touches: vec![wide.0] })
+    // live: the wide track stops `l` short of the joint, and a smooth band takes it down to the narrow track's width
+    let outline = band(v, (ux, uy), -0.02, l + 0.02, (0.0, l), (tn.width, tw.width));
+    let live = Live {
+        trims: vec![(wide.0, wide.1, at(l))],
+        pieces: vec![Track { side: tw.side, a: at(l), b: v, width: tn.width }],
+        patch: Patch { side: tw.side, outline, track: wide.0 },
+    };
+    Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, patch: None, live: Some(live), kind: Kind::Taper, touches: vec![wide.0] })
 }
 
 /// The copper a track end sits on: how wide a track may be where the teardrop starts (the length of the flat edge it
 /// leaves a rectangular pad through; the diameter at the centre of a round end), and how far from the track end that is.
-fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(f64, f64)> {
+fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(f64, f64, bool)> {
     for q in &board.pads {
         let (w, h) = q.shape.size();
         if (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6 {
             if !matches!(q.shape, PadShape::Rect { .. }) {
                 // a round end has no flat edge to match: the teardrop starts at the centre, as wide as the pad is
-                return (p.dist(q.pos) < 0.05).then_some((w.min(h), 0.0));
+                return (p.dist(q.pos) < 0.05).then_some((w.min(h), 0.0, true));
             }
             let exit = |half: f64, off: f64, u: f64| if u.abs() > 1e-9 { (half * u.signum() - off) / u } else { f64::INFINITY };
             let (tx, ty) = (exit(w / 2.0, p.x - q.pos.x, ux), exit(h / 2.0, p.y - q.pos.y, uy));
             // leaving through a side face of the pad: the edge is as long as the pad is tall, and the round end of the
             // track must still fit into the pad's depth
             let (edge, depth) = if tx <= ty { (h, w) } else { (w, h) };
-            return Some((edge.min(2.0 * depth), tx.min(ty).max(0.0)));
+            return Some((edge.min(2.0 * depth), tx.min(ty).max(0.0), false));
         }
     }
-    board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).and_then(|v| (p.dist(v.pos) < 0.05).then_some((v.diameter, 0.0)))
+    board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).and_then(|v| (p.dist(v.pos) < 0.05).then_some((v.diameter, 0.0, true)))
 }
 
 /// Where a track ends on a pad or via that is wider than the track: from the edge of the pad, a short stretch that
@@ -286,7 +322,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     let t = &board.tracks[i];
     let (v, far) = if is_a { (t.a, t.b) } else { (t.b, t.a) };
     let (ux, uy, len) = unit(v, far);
-    let (top, exit) = holder(board, v, t.side, (ux, uy))?;
+    let (top, exit, round) = holder(board, v, t.side, (ux, uy))?;
     let dw = top - t.width;
     if dw <= MIN_STEP {
         return None;
@@ -314,7 +350,26 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         b: at(exit + ramp * (k + 1) as f64 / n as f64),
         width: top - dw * k as f64 / n as f64,
     }));
-    Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, patch: None, kind: Kind::Taper, touches: vec![i] })
+    // live: the polygon. On a round end the sides are the tangents from the edges of the track to the pad's circle;
+    // at a flat edge it is a smooth band from the length of the edge to the track's width.
+    let (outline, stop) = if round {
+        let r = top / 2.0;
+        let lp = r + dw;
+        let (qx, qy) = (lp + 0.02, t.width / 2.0);
+        let th = qy.atan2(qx) + (r / qx.hypot(qy)).acos();
+        let (tx, ty) = (r * th.cos(), r * th.sin());
+        let (nx, ny) = (-uy, ux);
+        let pt = |x: f64, y: f64| Point::new(v.x + ux * x + nx * y, v.y + uy * x + ny * y);
+        (vec![pt(0.0, 0.0), pt(tx, -ty), pt(qx, -qy), pt(qx, qy), pt(tx, ty)], lp)
+    } else {
+        (band(v, (ux, uy), exit - 0.05, exit + ramp + 0.02, (exit, exit + ramp), (top, t.width)), exit + ramp)
+    };
+    let live = (stop <= len / 2.0).then(|| Live {
+        trims: vec![(i, is_a, at(stop))],
+        pieces: vec![Track { side: t.side, a: v, b: at(stop), width: t.width }],
+        patch: Patch { side: t.side, outline, track: i },
+    });
+    Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, patch: None, live, kind: Kind::Taper, touches: vec![i] })
 }
 
 fn apply(board: &mut Board, e: &Edit) {
@@ -431,16 +486,26 @@ pub fn finished(board: &Board) -> Option<Finished> {
     if !board.finish.on {
         return None;
     }
-    let edits = plan(board, &board.finish, None);
-    let track_edits: Vec<Edit> = edits.iter().filter(|e| e.patch.is_none()).cloned().collect();
-    let (new, _) = apply_checked(board, &track_edits);
-    // a patch is added where the other copper keeps its distance from it
-    let conn = crate::drc::connectivity(&new);
-    let patches = edits
-        .iter()
-        .filter_map(|e| e.patch.as_ref().map(|p| (p, e.touches[0])))
-        .filter(|(p, t)| crate::drc::patch_clear(&new, &conn, p.side, &p.outline, *t))
-        .map(|(p, _)| p.clone())
-        .collect();
+    let conn = crate::drc::connectivity(board);
+    // the live version of every edit: the polygon, and the tracks that go with it. A polygon is used only where the
+    // other copper keeps its distance from it.
+    let mut kept_edits: Vec<Edit> = vec![];
+    let mut patches_of: Vec<Option<Patch>> = vec![];
+    for e in plan(board, &board.finish, None) {
+        let (edit, patch) = match (&e.live, &e.patch) {
+            (Some(l), _) => (Edit { trims: l.trims.clone(), pieces: l.pieces.clone(), patch: None, live: None, ..e.clone() }, Some(l.patch.clone())),
+            (None, Some(p)) => (Edit { patch: None, ..e.clone() }, Some(p.clone())),
+            (None, None) => (e, None),
+        };
+        if let Some(p) = &patch
+            && !crate::drc::patch_clear(board, &conn, p.side, &p.outline, p.track)
+        {
+            continue;
+        }
+        kept_edits.push(edit);
+        patches_of.push(patch);
+    }
+    let (new, kept) = apply_checked(board, &kept_edits);
+    let patches = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
     Some(Finished { board: new, patches })
 }
