@@ -149,6 +149,7 @@ impl BoardEditor {
                             self.autoroute(Some(&n));
                         }
                 });
+                self.panel_smooth(ui);
                 self.panel_widths(ui);
                 self.panel_pairs(ui);
             });

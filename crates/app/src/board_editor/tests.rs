@@ -610,3 +610,16 @@ fn ripping_up_a_net_from_the_selected_track() {
     e.undo();
     assert_eq!(e.board.tracks.len(), 2);
 }
+
+#[test]
+fn smoothing_the_tracks_is_one_undo_step_and_nothing_to_do_adds_none() {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 40.0, 30.0);
+    e.board.tracks.push(Track { side: Side::Top, a: Point::new(5.0, 5.0), b: Point::new(25.0, 5.0), width: 0.25 });
+    e.board.tracks.push(Track { side: Side::Top, a: Point::new(25.0, 5.0), b: Point::new(25.0, 20.0), width: 0.25 });
+    e.smooth_tracks();
+    assert!(e.board.tracks.len() > 2, "{}", e.status);
+    let steps = e.undo.len();
+    e.smooth_tracks();
+    assert_eq!(e.undo.len(), steps, "nothing left to smooth: no undo step");
+}

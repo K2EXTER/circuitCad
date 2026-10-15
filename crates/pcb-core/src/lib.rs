@@ -27,6 +27,7 @@ pub mod package;
 pub mod parts;
 pub mod ratsnest;
 pub mod shove;
+pub mod smooth;
 pub mod strokefont;
 pub mod zonefill;
 
@@ -36,6 +37,8 @@ mod tests_autoroute;
 mod tests_layers;
 #[cfg(test)]
 mod tests_shove;
+#[cfg(test)]
+mod tests_smooth;
 #[cfg(test)]
 mod tests_diffpair;
 #[cfg(test)]
