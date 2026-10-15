@@ -12,11 +12,25 @@ pub struct DiodeModel {
     /// Reverse breakdown voltage (positive; infinite = none) and the reverse current at `-bv`.
     pub bv: f64,
     pub ibv: f64,
+    /// Zero-bias junction capacitance (F), built-in potential (V), grading coefficient, the forward-bias knee of the
+    /// depletion formula (fraction of the potential), and the transit time (s) of the diffusion charge.
+    pub cj0: f64,
+    pub vj: f64,
+    pub m: f64,
+    pub fc: f64,
+    pub tt: f64,
+}
+
+impl DiodeModel {
+    /// Does the model store any charge (so that it needs the transient / AC capacitor treatment)?
+    pub fn has_charge(&self) -> bool {
+        self.cj0 > 0.0 || self.tt > 0.0
+    }
 }
 
 impl Default for DiodeModel {
     fn default() -> Self {
-        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3 }
+        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0 }
     }
 }
 

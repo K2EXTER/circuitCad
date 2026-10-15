@@ -1,6 +1,7 @@
 //! Device equations: junction limiting, the transistor and MOSFET models.
 
 use super::*;
+use crate::circuit::DiodeModel;
 
 pub(crate) fn exp_safe(x: f64) -> f64 {
     x.min(80.0).exp()
@@ -70,6 +71,13 @@ pub(crate) fn depletion(cj0: f64, vj: f64, m: f64, fc: f64, v: f64) -> (f64, f64
         let d = v - vx;
         (charge(vx) + c0 * d + 0.5 * c1 * d * d, c0 + c1 * d)
     }
+}
+
+/// Charge and capacitance of a diode junction at `v` (depletion plus the diffusion charge `tt * id`).
+pub(crate) fn diode_q(m: &DiodeModel, nvt: f64, v: f64) -> (f64, f64) {
+    let (qd, cd) = depletion(m.cj0, m.vj, m.m, m.fc, v);
+    let ex = exp_safe(v / nvt);
+    (qd + m.tt * m.is * (ex - 1.0), cd + m.tt * m.is / nvt * ex)
 }
 
 /// Stored charge and capacitance of the base-emitter junction (depletion plus the forward diffusion charge).

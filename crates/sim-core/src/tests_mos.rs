@@ -227,7 +227,7 @@ fn zener_current(m: &DiodeModel, vd: f64) -> f64 {
 
 #[test]
 fn zener_regulates_a_reverse_biased_supply() {
-    let m = DiodeModel { is: 1e-9, n: 1.0, rs: 0.0, bv: 5.1, ibv: 0.02 };
+    let m = DiodeModel { is: 1e-9, n: 1.0, rs: 0.0, bv: 5.1, ibv: 0.02, ..DiodeModel::default() };
     let mut c = Circuit::new();
     vs(&mut c, "V1", "in", "0", 12.0);
     res(&mut c, "R1", "in", "z", 470.0);
@@ -256,7 +256,7 @@ fn zener_regulates_a_reverse_biased_supply() {
 
 #[test]
 fn zener_small_signal_resistance() {
-    let m = DiodeModel { is: 1e-9, n: 1.0, rs: 2.0, bv: 5.1, ibv: 0.02 };
+    let m = DiodeModel { is: 1e-9, n: 1.0, rs: 2.0, bv: 5.1, ibv: 0.02, ..DiodeModel::default() };
     let mut c = Circuit::new();
     let s = parse_source_full("12 AC 1").unwrap();
     let a = c.node("in");
@@ -277,7 +277,7 @@ fn zener_small_signal_resistance() {
 #[test]
 fn zener_in_a_clipping_circuit_converges_from_a_cold_start() {
     // a hard case: large overdrive into a low-voltage zener through a small resistor
-    let m = DiodeModel { is: 1e-12, n: 1.0, rs: 0.5, bv: 3.3, ibv: 0.005 };
+    let m = DiodeModel { is: 1e-12, n: 1.0, rs: 0.5, bv: 3.3, ibv: 0.005, ..DiodeModel::default() };
     let mut c = Circuit::new();
     vs(&mut c, "V1", "in", "0", 24.0);
     res(&mut c, "R1", "in", "z", 100.0);

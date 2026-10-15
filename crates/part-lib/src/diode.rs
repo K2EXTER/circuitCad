@@ -109,15 +109,51 @@ pub fn model_name(name: &str) -> String {
     if s.is_empty() { "DMODEL".into() } else { s }
 }
 
+/// Junction capacitance and transit time of a diode model (zero = not given).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Charge {
+    pub cj0: f64,
+    pub vj: f64,
+    pub m: f64,
+    pub tt: f64,
+}
+
+/// Grading coefficient and built-in potential assumed for a silicon junction when the data sheet gives one capacitance.
+pub const DEFAULT_VJ: f64 = 0.7;
+pub const DEFAULT_M: f64 = 0.5;
+
+/// `CJO` from the data sheet's capacitance `cj` measured at reverse voltage `vr`: `cj0 = cj * (1 + vr/vj)^m`.
+pub fn cj0_from(cj: f64, vr: f64, vj: f64, m: f64) -> Result<f64, String> {
+    if !(cj.is_finite() && cj > 0.0) || !(vr.is_finite() && vr >= 0.0) {
+        return Err("接合容量は 0 より大きい数 (F)、そのときの逆電圧は 0 以上の数 (V) で入れてください (例: 15p と 4)".into());
+    }
+    Ok(cj * (1.0 + vr / vj).powf(m))
+}
+
+/// `TT` from the reverse recovery time `trr` measured with forward current `i_f` switched to reverse current `i_r`:
+/// the storage time is about `tt * ln(1 + i_f / i_r)`.
+pub fn tt_from_trr(trr: f64, i_f: f64, i_r: f64) -> Result<f64, String> {
+    if !(trr.is_finite() && trr > 0.0 && i_f > 0.0 && i_r > 0.0) {
+        return Err("逆回復時間 trr と、測定条件の電流 IF・IR は、0 より大きい数で入れてください (例: 2u と 0.5 と 1)".into());
+    }
+    Ok(trr / (1.0 + i_f / i_r).ln())
+}
+
 /// `.model NAME D(IS=... N=... RS=... BV=... IBV=...)`; `bv` is the reverse voltage rating and `ibv` the
 /// leakage current at it (both omitted when not given).
-pub fn model_text(name: &str, is: f64, n: f64, rs: f64, bv: Option<f64>, ibv: Option<f64>) -> String {
+pub fn model_text(name: &str, is: f64, n: f64, rs: f64, bv: Option<f64>, ibv: Option<f64>, ch: Charge) -> String {
     let mut t = format!(".model {} D(IS={} N={:.3} RS={}", model_name(name), sig(is), n, sig(rs));
     if let Some(b) = bv {
         t += &format!(" BV={}", sig(b));
         if let Some(i) = ibv {
             t += &format!(" IBV={}", sig(i));
         }
+    }
+    if ch.cj0 > 0.0 {
+        t += &format!(" CJO={} VJ={} M={}", sig(ch.cj0), if ch.vj > 0.0 { ch.vj } else { DEFAULT_VJ }, if ch.m > 0.0 { ch.m } else { DEFAULT_M });
+    }
+    if ch.tt > 0.0 {
+        t += &format!(" TT={}", sig(ch.tt));
     }
     t + ")"
 }
@@ -183,8 +219,21 @@ mod tests {
 
     #[test]
     fn model_text_reads_back_in_the_simulator_format() {
-        let t = model_text("1N4007", IS, N, RS, Some(1000.0), Some(5e-6));
+        let t = model_text("1N4007", IS, N, RS, Some(1000.0), Some(5e-6), Charge::default());
         assert_eq!(t, ".model 1N4007 D(IS=7.690e-11 N=1.450 RS=4.200e-2 BV=1.000e3 IBV=5.000e-6)");
         assert_eq!(model_name("my part-1"), "my_part_1");
+    }
+
+    #[test]
+    fn capacitance_and_transit_time_come_from_the_data_sheet_numbers() {
+        // 15 pF at 4 V reverse: cj0 = 15p * (1 + 4/0.7)^0.5 = 38.9 pF
+        let cj0 = cj0_from(15e-12, 4.0, DEFAULT_VJ, DEFAULT_M).unwrap();
+        assert!((cj0 / 38.87e-12 - 1.0).abs() < 0.01, "{cj0}");
+        // trr 2 us at IF = 0.5 A, IR = 1 A: tt = 2u / ln(1.5)
+        let tt = tt_from_trr(2e-6, 0.5, 1.0).unwrap();
+        assert!((tt / (2e-6 / 1.5f64.ln()) - 1.0).abs() < 1e-12);
+        assert!(cj0_from(0.0, 4.0, 0.7, 0.5).is_err() && tt_from_trr(2e-6, 0.0, 1.0).is_err());
+        let t = model_text("D", IS, N, RS, None, None, Charge { cj0, vj: 0.7, m: 0.5, tt });
+        assert!(t.contains("CJO=3.887e-11 VJ=0.7 M=0.5 TT="), "{t}");
     }
 }

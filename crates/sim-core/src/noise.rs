@@ -226,6 +226,13 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 Ce::L { l, br, .. } => {
                     a[*br * n + *br] = a[*br * n + *br] - C64::new(0.0, w * l);
                 }
+                Ce::D { ai, k, nvt, dm, slot, cap: Some(_), .. } => {
+                    let y = C64::new(0.0, w * crate::dc::diode_q(dm, *nvt, op.vj[*slot]).1);
+                    add(&mut a, *ai, *ai, y);
+                    add(&mut a, *k, *k, y);
+                    add(&mut a, *ai, *k, -y);
+                    add(&mut a, *k, *ai, -y);
+                }
                 Ce::Q { bi, ci, ei, m, slot, cap: Some(_), .. } => {
                     let (cbe, cbc) = (bjt_qbe(m, op.vj[*slot]).1, bjt_qbc(m, op.vj[*slot + 1]).1);
                     for (n1, n2, cc) in [(*bi, *ei, cbe), (*bi, *ci, cbc)] {

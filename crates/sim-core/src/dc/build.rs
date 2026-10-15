@@ -58,7 +58,11 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                     *a
                 };
                 let nvt = model.n * VT;
-                ce.push(Ce::D { name: name.clone(), a: *a, ai, k: *k, rs: model.rs, is: model.is, nvt, vcrit: vcrit(nvt, model.is), bv: model.bv, ibv: model.ibv, slot: n_slots });
+                let cap = model.has_charge().then(|| {
+                    n_caps += 1;
+                    n_caps - 1
+                });
+                ce.push(Ce::D { name: name.clone(), a: *a, ai, k: *k, rs: model.rs, is: model.is, nvt, vcrit: vcrit(nvt, model.is), bv: model.bv, ibv: model.ibv, slot: n_slots, dm: model.clone(), cap });
                 n_slots += 1;
             }
             Element::Mosfet { name, d, g, s, model } => ce.push(Ce::M { name: name.clone(), d: *d, g: *g, s: *s, m: model.clone() }),

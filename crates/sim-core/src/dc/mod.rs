@@ -1,7 +1,7 @@
 //! DC operating point: modified nodal analysis + damped Newton-Raphson, with gmin and
 //! source stepping as convergence aids.
 
-use crate::circuit::{BjtModel, Circuit, Element, MosModel, SwitchModel};
+use crate::circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
 use crate::waveform::Waveform;
 use std::fmt;
 
@@ -73,7 +73,7 @@ pub(crate) enum Ce {
     I { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
-    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize },
+    D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize, dm: DiodeModel, cap: Option<usize> },
     /// `bi` is the internal base node (equal to `b` when the model has no `rb`).
     Q { name: String, c: usize, b: usize, bi: usize, e: usize, ci: usize, ei: usize, m: BjtModel, slot: usize, cap: Option<usize> },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
@@ -116,7 +116,9 @@ use devices::*;
 use linalg::*;
 
 pub(crate) use build::{compile, v};
-pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, depletion, exp_safe, mos_eval};
+pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, diode_q, exp_safe, mos_eval};
+#[cfg(test)]
+pub(crate) use devices::depletion;
 pub(crate) use mna::{Ctx, Dyn};
 pub(crate) use newton::{Attempt, Fail};
 

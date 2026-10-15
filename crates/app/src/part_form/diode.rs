@@ -64,13 +64,26 @@ impl PartForm {
         } else {
             ir
         };
+        // charge storage: Cj at a reverse voltage -> CJO; trr at IF / IR -> TT
+        let mut charge = diode::Charge::default();
+        if let Some(cj) = num("接合容量 Cj", &self.dio_cj)? {
+            let vr = if self.dio_cj_vr.trim().is_empty() { 0.0 } else { sim_core::parse_value(&self.dio_cj_vr.trim().to_ascii_lowercase()).filter(|v| *v >= 0.0).ok_or("Cj を測った逆電圧を、0 以上の数 (V) で入力してください (例: 4)")? };
+            charge = diode::Charge { cj0: diode::cj0_from(cj, vr, diode::DEFAULT_VJ, diode::DEFAULT_M)?, vj: diode::DEFAULT_VJ, m: diode::DEFAULT_M, tt: 0.0 };
+            notes.push("接合容量 CJO を求めて入れました (VJ=0.7・M=0.5 と仮定)");
+        }
+        if let Some(trr) = num("逆回復時間 trr", &self.dio_trr)? {
+            let i_f = num("trr の測定条件 IF", &self.dio_trr_if)?.ok_or("trr の測定条件の電流 IF を入れてください (データシートの trr の注に書いてあります)")?;
+            let i_r = num("trr の測定条件 IR", &self.dio_trr_ir)?.ok_or("trr の測定条件の電流 IR を入れてください (データシートの trr の注に書いてあります)")?;
+            charge.tt = diode::tt_from_trr(trr, i_f, i_r)?;
+            notes.push("逆回復時間から TT (拡散の遷移時間) を求めて入れました (目安です)");
+        }
         self.sim = SimChoice::Model;
         self.sim_element = "D".into();
         self.sim_name = diode::model_name(&self.name);
-        self.sim_text = diode::model_text(&self.name, self.dio_is, self.dio_n, self.dio_rs, vrrm, ir);
+        self.sim_text = diode::model_text(&self.name, self.dio_is, self.dio_n, self.dio_rs, vrrm, ir, charge);
         self.sim_pins = format!("{a} {k}");
         if self.sim_limits.trim().is_empty() {
-            self.sim_limits = "IS・N・RS は、データシートのグラフから読み取った点に合わせた近似です。個体差と温度で、実物は変わります。\n接合容量と逆回復時間は扱いません。\n耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。".into();
+            self.sim_limits = "IS・N・RS は、データシートのグラフから読み取った点に合わせた近似です。個体差と温度で、実物は変わります。\n接合容量・逆回復時間は、入れた数値だけの近似です (入れていなければ扱いません)。\n耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。".into();
         }
         if let (Some(v), true) = (vrrm, self.rt_v.trim().is_empty()) {
             self.rt_v = passive::eng(v);
@@ -131,7 +144,26 @@ impl PartForm {
             ui.add(egui::TextEdit::singleline(&mut self.dio_ir).desired_width(80.0).hint_text("5u"));
             ui.end_row();
         });
-        if ui.button("④ このモデルを「④ シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、④ のシミュレーションの欄に入れます。逆耐圧は ⑤ の最大電圧にも入ります").clicked() {
+        ui.label("④ 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
+        egui::Grid::new("dio_charge").num_columns(2).show(ui, |ui| {
+            ui.label("接合容量 Cj [F]").on_hover_text("データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)");
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut self.dio_cj).desired_width(70.0).hint_text("15p"));
+                ui.label("逆電圧 [V]");
+                ui.add(egui::TextEdit::singleline(&mut self.dio_cj_vr).desired_width(50.0).hint_text("4"));
+            });
+            ui.end_row();
+            ui.label("逆回復時間 trr [s]").on_hover_text("データシートの Reverse Recovery Time。電流を順方向から逆向きに切り替えたとき、逆向きの電流が止まるまでの時間。ショットキーには無い (ほぼ 0) ので、空で構いません");
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut self.dio_trr).desired_width(70.0).hint_text("2u"));
+                ui.label("IF [A]");
+                ui.add(egui::TextEdit::singleline(&mut self.dio_trr_if).desired_width(50.0).hint_text("0.5"));
+                ui.label("IR [A]");
+                ui.add(egui::TextEdit::singleline(&mut self.dio_trr_ir).desired_width(50.0).hint_text("1"));
+            });
+            ui.end_row();
+        });
+        if ui.button("⑤ このモデルを「④ シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、④ のシミュレーションの欄に入れます。逆耐圧は ⑤ の最大電圧にも入ります").clicked() {
             self.dio_message = Some(self.dio_apply());
         }
         match &self.dio_message {

@@ -180,7 +180,7 @@ impl Compiled {
                     m.gn(*n, *cp, -gm);
                     m.gn(*n, *cn, *gm);
                 }
-                Ce::D { a, ai, k, rs, is, nvt, vcrit, bv, ibv, slot, .. } => {
+                Ce::D { a, ai, k, rs, is, nvt, vcrit, bv, ibv, slot, dm, cap, .. } => {
                     if *rs > 0.0 {
                         m.g(*a, *ai, 1.0 / rs);
                     }
@@ -205,6 +205,14 @@ impl Compiled {
                     }
                     m.g(*ai, *k, gd);
                     m.current(*ai, *k, id - gd * lim);
+                    // charge storage in transient: the junction as a capacitor with charge Q(v), linearised around the iterate
+                    if let (Some(d), Some(idx)) = (&ctx.dynamic, cap) {
+                        let kk = if d.trap { 2.0 } else { 1.0 };
+                        let (q, cc) = diode_q(dm, *nvt, lim);
+                        let q_old = diode_q(dm, *nvt, d.cap_v[*idx]).0;
+                        m.g(*ai, *k, kk * cc / d.h);
+                        m.current(*ai, *k, kk / d.h * (q - cc * lim - q_old) - if d.trap { d.cap_i[*idx] } else { 0.0 });
+                    }
                 }
                 Ce::S { a, b, cp, cn, m: sw, .. } => {
                     // i = g(vc) * vab; linearised with the control derivative as a transconductance

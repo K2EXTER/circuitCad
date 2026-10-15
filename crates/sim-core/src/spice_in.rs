@@ -65,7 +65,18 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
     match ty.to_ascii_uppercase().as_str() {
         "D" => Ok((
             name,
-            Model::Diode(DiodeModel { is: get("IS", 1e-14), n: get("N", 1.0), rs: get("RS", 0.0), bv: get("BV", f64::INFINITY), ibv: get("IBV", 1e-3) }),
+            Model::Diode(DiodeModel {
+                is: get("IS", 1e-14),
+                n: get("N", 1.0),
+                rs: get("RS", 0.0),
+                bv: get("BV", f64::INFINITY),
+                ibv: get("IBV", 1e-3),
+                cj0: p.get("CJO").or(p.get("CJ0")).or(p.get("CJ")).copied().filter(|v| *v > 0.0).unwrap_or(0.0),
+                vj: p.get("VJ").copied().filter(|v| *v > 0.0).unwrap_or(1.0),
+                m: p.get("M").copied().filter(|v| *v > 0.0 && *v < 0.95).unwrap_or(0.5),
+                fc: get("FC", 0.5).clamp(0.0, 0.95),
+                tt: get("TT", 0.0),
+            }),
         )),
         t @ ("NMOS" | "PMOS") => Ok((
             name,
@@ -170,7 +181,7 @@ pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
             }
         };
         let used: &[&str] = match ty.as_str() {
-            "D" => &["IS", "N", "RS", "BV", "IBV"],
+            "D" => &["IS", "N", "RS", "BV", "IBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT"],
             "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB", "CJE", "VJE", "PE", "MJE", "ME", "CJC", "VJC", "PC", "MJC", "MC", "FC", "TF", "TR"],
             "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD"],
             "SW" | "VSWITCH" => &["RON", "ROFF", "VT", "VW", "VH", "VON", "VOFF"],
@@ -348,6 +359,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         let area = area_of(&t[4..]);
                         m.is *= area;
                         m.rs /= area;
+                        m.cj0 *= area;
                         c.add(Element::Diode { name, a, k, model: m })
                     }
                     _ => return Err(format!("{name}: ダイオードモデル {} が見つかりません", t[3])),

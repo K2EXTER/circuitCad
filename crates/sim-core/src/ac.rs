@@ -275,6 +275,13 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
                     let l = if *i0 > 0.0 { l / (1.0 + (op.x[*br] / i0).powi(2)) } else { *l };
                     a[*br * n + *br] = a[*br * n + *br] - jw_c(w) * C64::new(l, 0.0);
                 }
+                Ce::D { ai, k, nvt, dm, slot, cap: Some(_), .. } => {
+                    let y = jw_c(w) * C64::new(crate::dc::diode_q(dm, *nvt, op.vj[*slot]).1, 0.0);
+                    add(&mut a, *ai, *ai, y);
+                    add(&mut a, *k, *k, y);
+                    add(&mut a, *ai, *k, -y);
+                    add(&mut a, *k, *ai, -y);
+                }
                 Ce::Q { bi, ci, ei, m, slot, cap: Some(_), .. } => {
                     // small-signal junction capacitances at the operating point
                     let (cbe, cbc) = (crate::dc::bjt_qbe(m, op.vj[*slot]).1, crate::dc::bjt_qbc(m, op.vj[*slot + 1]).1);

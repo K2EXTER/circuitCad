@@ -30,7 +30,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。
 - 入れ子の中の素子名は `R1.X1`(頭文字は保つ)、内部ノードは `X1.n`、端子は呼び出し側のノードに置き換える。B素子の式の `V(...)` `I(...)` も同じ規則で書き換える。深さ12まで(自分自身を呼ぶとエラー)。
 - 実在のメーカーモデル(KiCad-Spice-Library の TI・IR・コミュニティ版)で試して足したもの(2026-10-15): `.param` の順序に依存しない評価、`.model` カードの `{param}`(インスタンスごとに展開)、`{式}` が `V()`/`I()` を含むときは式のまま(パラメータ名だけ置換)、`E`/`G` の `VALUE={式}`・`TABLE {式} = (x,y)…`(折れ線を `if` の入れ子に)・`POLY(n)`(1制御は多項式、複数制御は1次項のみ)、`F`/`H`(電流制御源を `I(Vsrc)` を使う B素子に)、4ノードの `Q`(基板ノードは捨てる)、`AREA`(IS倍・RB/RS割り)、`LPNP`→PNP、`VSWITCH`(Von/Voff か Vt/Vh)、`.end` で終わる `.subckt`、B素子の末尾の `Rpar=…` 等の捨てる、式に `& | ! buf inv u pwr tbl()`。未対応の種類の `.model`(JFET等)は、使う素子が出たときだけエラー。使われないモデルパラメータは `ignored_model_params` が返す(VAF・CJE・RC など。試し読みが警告する)。
-- 未対応のまま: `.func`、`.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の高注入(IKF)・漏れ電流(ISE/ISC)・基板容量(CJS)・CCS、MOSFET の LEVEL 3 など。
+- 未対応のまま: `.func`、`.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の高注入(IKF)・漏れ電流(ISE/ISC)・基板容量(CJS)・CCS、ダイオードの再結合電流(ISR/NR)、MOSFET の容量(CGSO/CGDO)・LEVEL 3 など。
 - テスト: `tests_flat.rs`。
 
 ## BJT の早期効果と直列抵抗 (VAF/VAR/RC/RE)
@@ -38,4 +38,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 
 ## BJT の電荷(接合容量 CJE/CJC・遷移時間 TF/TR)
 `dc/devices.rs`: `depletion`(空乏容量。`FC·VJ` までは `CJ0/(1−v/VJ)^M`、その先は接線で延長、電荷は積分形)、`bjt_qbe`/`bjt_qbc`(空乏電荷+拡散電荷 `TF·If` / `TR·Ir` とその容量 dQ/dV)。電荷を持つ素子は `Ce::Q.cap`(積分器の枠を2つ=BE,BC)。過渡は容量と同じ台形/後退オイラーを、電荷 Q(v) を反復点で線形化して使う(`dc/mna.rs`、状態の更新は `tran.rs`)。ACとノイズは動作点の `C=dQ/dV` を BE・BC の間に入れる。`.model` の `CJE/VJE(PE)/MJE(ME)/CJC/VJC(PC)/MJC(MC)/FC/TF/TR`。検証: `tests_bjt.rs`(AC の折れ点が 1/√2、過渡の時定数、`|h21| = βf/√(1+(ωβfTF)²)`)。
+
+## ダイオードの電荷(CJO/VJ/M/FC/TT)
+BJT と同じ作り(`diode_q` = 空乏電荷 + 拡散電荷 `TT·Id`)。`Ce::D` に `dm`(モデルの複製)と `cap`(積分器の枠1つ)を持ち、接合は `ai`–`k` の間(RS があれば内部ノード側)。過渡・AC・ノイズは BJT と同様。`AREA` は CJO も倍にする。検証: `tests_diode_cap.rs`(逆バイアスのAC折れ点が 1/√2、過渡の時定数、順方向で `rd·C = TT`)。フォーム側は `part-lib/diode.rs` の `cj0_from`(Cj と測定した逆電圧から CJO)・`tt_from_trr`(trr と IF/IR から TT)。
 

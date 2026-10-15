@@ -680,4 +680,35 @@ mod passive_form_tests {
 ", " | "));
         }
     }
+
+    /// Cj and trr typed in the diode section become CJO and TT in the model, and the simulator sees the capacitance.
+    #[test]
+    fn the_diode_section_turns_cj_and_trr_into_the_models_charge() {
+        let mut f = PartForm::for_type("diode");
+        f.name = "1N4007".into();
+        f.dio_points = "10m 0.70
+100m 0.79
+1 0.92".into();
+        f.dio_fit().unwrap();
+        f.dio_cj = "15p".into();
+        f.dio_cj_vr = "4".into();
+        f.dio_trr = "2u".into();
+        f.dio_trr_if = "0.5".into();
+        f.dio_trr_ir = "1".into();
+        let m = f.dio_apply().unwrap();
+        assert!(m.contains("CJO") && m.contains("TT"), "{m}");
+        assert!(f.sim_text.contains("CJO=") && f.sim_text.contains("TT="), "{}", f.sim_text);
+        // the simulator reads it
+        let mut c = sim_core::Circuit::new();
+        let a = c.node("a");
+        sim_core::add_model_instance(&mut c, "D1", "D", &f.sim_name, &f.sim_text, &[a, 0]).unwrap();
+        let (cj0, tt) = c.elements.iter().find_map(|e| match e { sim_core::Element::Diode { model, .. } => Some((model.cj0, model.tt)), _ => None }).unwrap();
+        assert!((cj0 / 38.87e-12 - 1.0).abs() < 0.01 && tt > 1e-6, "{cj0} {tt}");
+        // trr without its test currents is explained
+        f.dio_trr_if.clear();
+        assert!(f.dio_apply().unwrap_err().contains("IF"));
+        f.dio_trr_if = "0.5".into();
+        f.dio_cj = "x".into();
+        assert!(f.dio_apply().unwrap_err().contains("Cj"));
+    }
 }
