@@ -182,9 +182,9 @@ X1 a b gnd X ron=2
     add_subckt_instance(&mut c, "U1", "T", t, &[nodes[0], nodes[1], 0]).unwrap_or_else(|e| panic!("{e}"));
     let ron = c.elements.iter().find_map(|e| match e { Element::Switch { model, .. } => Some(model.ron), _ => None }).unwrap();
     assert_eq!(ron, 2.0);
-    let ign = ignored_model_params(".model Q1 NPN(IS=1f BF=100 VAF=80 CJE=1p)
+    let ign = ignored_model_params(".model Q1 NPN(IS=1f BF=100 VAF=80 TF=1n CJE=1p)
 .model D1 D(IS=1n RS=1)");
-    assert_eq!(ign, vec![("Q1".to_string(), vec!["VAF".to_string(), "CJE".to_string()])]);
+    assert_eq!(ign, vec![("Q1".to_string(), vec!["TF".to_string(), "CJE".to_string()])]);
 }
 
 /// Developer check with real vendor files: `SPICE_MODEL_DIR=<dir> cargo test -p sim-core vendor_models -- --ignored --nocapture`.

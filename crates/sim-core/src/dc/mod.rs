@@ -75,7 +75,7 @@ pub(crate) enum Ce {
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
     D { name: String, a: usize, ai: usize, k: usize, rs: f64, is: f64, nvt: f64, vcrit: f64, bv: f64, ibv: f64, slot: usize },
     /// `bi` is the internal base node (equal to `b` when the model has no `rb`).
-    Q { name: String, c: usize, b: usize, bi: usize, e: usize, m: BjtModel, slot: usize },
+    Q { name: String, c: usize, b: usize, bi: usize, e: usize, ci: usize, ei: usize, m: BjtModel, slot: usize },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
     S { name: String, a: usize, b: usize, cp: usize, cn: usize, m: SwitchModel },
     /// `br` is only meaningful for a voltage-type source.
@@ -361,9 +361,9 @@ impl Compiled {
                     let i = if *voltage { x[*br] } else { c.eval(x, t.unwrap_or(0.0)).0 };
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::Q { name, c, b, bi, e, m, .. } => {
+                Ce::Q { name, c, b, bi, e, ci, ei, m, .. } => {
                     let pol = if m.pnp { -1.0 } else { 1.0 };
-                    let q = bjt_eval(m, pol * (v(x, *bi) - v(x, *e)), pol * (v(x, *bi) - v(x, *c)));
+                    let q = bjt_eval(m, pol * (v(x, *bi) - v(x, *ei)), pol * (v(x, *bi) - v(x, *ci)));
                     let (ic, ib, ie) = (pol * q.ic, pol * q.ib, pol * q.ie);
                     let p = v(x, *c) * ic + v(x, *b) * ib + v(x, *e) * ie;
                     push(name, ic, v(x, *c) - v(x, *e), vec![("Ib".into(), ib), ("Ie".into(), ie)], p);

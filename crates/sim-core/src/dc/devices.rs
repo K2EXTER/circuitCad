@@ -41,16 +41,16 @@ pub(crate) fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
     let er = exp_safe(vbc / nrvt);
     let (iff, ir) = (m.is * (ef - 1.0), m.is * (er - 1.0));
     let (gf, gr) = (m.is / nfvt * ef, m.is / nrvt * er);
-    let ic = iff - ir * (1.0 + 1.0 / m.br);
+    // Early effect: the transport current is scaled by k = 1 - vbc/vaf - vbe/var (kept above 0.05)
+    let (dk_be, dk_bc) = (if m.var.is_finite() { -1.0 / m.var } else { 0.0 }, if m.vaf.is_finite() { -1.0 / m.vaf } else { 0.0 });
+    let k_raw = 1.0 + dk_be * vbe + dk_bc * vbc;
+    let (k, dk_be, dk_bc) = if k_raw > 0.05 { (k_raw, dk_be, dk_bc) } else { (0.05, 0.0, 0.0) };
+    let it = iff - ir;
+    let ic = it * k - ir / m.br;
     let ib = iff / m.bf + ir / m.br;
-    BjtEval {
-        ic,
-        ib,
-        ie: -(ic + ib),
-        dic: (gf, -gr * (1.0 + 1.0 / m.br)),
-        dib: (gf / m.bf, gr / m.br),
-        die: (-(gf + gf / m.bf), gr * (1.0 + 1.0 / m.br) - gr / m.br),
-    }
+    let dic = (gf * k + it * dk_be, -gr * k + it * dk_bc - gr / m.br);
+    let dib = (gf / m.bf, gr / m.br);
+    BjtEval { ic, ib, ie: -(ic + ib), dic, dib, die: (-(dic.0 + dib.0), -(dic.1 + dib.1)) }
 }
 
 /// Level-1 MOSFET in NMOS orientation: `(id, gm, gds)` with `id` flowing drain to source.

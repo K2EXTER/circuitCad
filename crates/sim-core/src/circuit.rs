@@ -49,12 +49,19 @@ pub struct BjtModel {
     pub nr: f64,
     /// Base series resistance in ohms (0 = none); adds an internal base node.
     pub rb: f64,
+    /// Collector and emitter series resistance in ohms (0 = none); each adds an internal node.
+    pub rc: f64,
+    pub re: f64,
+    /// Forward and reverse Early voltages (infinite = no Early effect): the collector current grows with the
+    /// collector voltage by `1 - vbc/vaf - vbe/var`.
+    pub vaf: f64,
+    pub var: f64,
     pub pnp: bool,
 }
 
 impl Default for BjtModel {
     fn default() -> Self {
-        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, pnp: false }
+        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, rc: 0.0, re: 0.0, vaf: f64::INFINITY, var: f64::INFINITY, pnp: false }
     }
 }
 

@@ -19,7 +19,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     for e in &c.elements {
         match e {
             Element::Diode { model, .. } if model.rs > 0.0 => internal += 1,
-            Element::Bjt { model, .. } if model.rb > 0.0 => internal += 1,
+            Element::Bjt { model, .. } => internal += [model.rb, model.rc, model.re].iter().filter(|r| **r > 0.0).count(),
             _ => {}
         }
     }
@@ -74,13 +74,18 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 b_exprs.push((ce.len() - 1, expr));
             }
             Element::Bjt { name, c, b, e, model } => {
-                let bi = if model.rb > 0.0 {
-                    n_nodes += 1;
-                    n_nodes - 1
-                } else {
-                    *b
+                let mut internal_node = |r: f64, outer: usize| {
+                    if r > 0.0 {
+                        n_nodes += 1;
+                        n_nodes - 1
+                    } else {
+                        outer
+                    }
                 };
-                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, bi, e: *e, m: model.clone(), slot: n_slots });
+                let bi = internal_node(model.rb, *b);
+                let ci = internal_node(model.rc, *c);
+                let ei = internal_node(model.re, *e);
+                ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, bi, e: *e, ci, ei, m: model.clone(), slot: n_slots });
                 n_slots += 2;
             }
         }

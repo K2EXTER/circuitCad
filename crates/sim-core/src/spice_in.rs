@@ -87,6 +87,10 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 nf: get("NF", 1.0),
                 nr: get("NR", 1.0),
                 rb: get("RB", 0.0),
+                rc: get("RC", 0.0),
+                re: get("RE", 0.0),
+                vaf: p.get("VAF").or(p.get("VA")).copied().filter(|v| *v > 0.0).unwrap_or(f64::INFINITY),
+                var: p.get("VAR").or(p.get("VB")).copied().filter(|v| *v > 0.0).unwrap_or(f64::INFINITY),
                 pnp: t != "NPN",
             }),
         )),
@@ -158,7 +162,7 @@ pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
         };
         let used: &[&str] = match ty.as_str() {
             "D" => &["IS", "N", "RS", "BV", "IBV"],
-            "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB"],
+            "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB"],
             "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD"],
             "SW" | "VSWITCH" => &["RON", "ROFF", "VT", "VW", "VH", "VON", "VOFF"],
             _ => continue,

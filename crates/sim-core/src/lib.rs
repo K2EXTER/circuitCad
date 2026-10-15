@@ -83,6 +83,8 @@ mod tests_tempco;
 #[cfg(test)]
 mod tests_saturation;
 #[cfg(test)]
+mod tests_bjt;
+#[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]
 mod tests_logic;

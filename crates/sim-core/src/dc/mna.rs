@@ -276,11 +276,18 @@ impl Compiled {
                         m.current(*p, *n, rest);
                     }
                 }
-                Ce::Q { c, b, bi, e, m: bm, slot, .. } => {
+                Ce::Q { c: c_out, b, bi, e: e_out, ci, ei, m: bm, slot, .. } => {
                     if bm.rb > 0.0 {
                         m.g(*b, *bi, 1.0 / bm.rb);
                     }
-                    let b = bi; // the junctions sit on the internal base
+                    if bm.rc > 0.0 {
+                        m.g(*c_out, *ci, 1.0 / bm.rc);
+                    }
+                    if bm.re > 0.0 {
+                        m.g(*e_out, *ei, 1.0 / bm.re);
+                    }
+                    // the junctions sit on the internal base, collector and emitter
+                    let (b, c, e) = (bi, ci, ei);
                     let pol = if bm.pnp { -1.0 } else { 1.0 };
                     let crit_be = vcrit(bm.nf * VT, bm.is);
                     let crit_bc = vcrit(bm.nr * VT, bm.is);
