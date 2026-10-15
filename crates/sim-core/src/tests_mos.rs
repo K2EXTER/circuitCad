@@ -288,3 +288,21 @@ fn zener_in_a_clipping_circuit_converges_from_a_cold_start() {
     assert!(vz > 3.2 && vz < 4.5, "{vz}");
     assert_power_balance(&r);
 }
+
+#[test]
+fn a_mosfet_line_scales_kp_by_w_over_l_and_m() {
+    // KP=200u, W/L = 1000u/2u = 500 -> 0.1 A/V^2; two in parallel
+    let text = ".subckt T d g s\nM1 d g s s NM L=2u W=1000u M=2\n.model NM NMOS(KP=200u VTO=1)\n.ends T";
+    let mut c = Circuit::new();
+    let (d, g) = (c.node("d"), c.node("g"));
+    add_subckt_instance(&mut c, "U1", "T", text, &[d, g, 0]).unwrap();
+    let kp = c.elements.iter().find_map(|e| match e { Element::Mosfet { model, .. } => Some(model.kp), _ => None }).unwrap();
+    assert!((kp / 0.2 - 1.0).abs() < 1e-9, "{kp}");
+    // no geometry: W/L = 1, the model's KP as is
+    let t2 = ".subckt T d g s\nM1 d g s s NM\n.model NM NMOS(KP=200u VTO=1)\n.ends T";
+    let mut c = Circuit::new();
+    let (d, g) = (c.node("d"), c.node("g"));
+    add_subckt_instance(&mut c, "U1", "T", t2, &[d, g, 0]).unwrap();
+    let kp = c.elements.iter().find_map(|e| match e { Element::Mosfet { model, .. } => Some(model.kp), _ => None }).unwrap();
+    assert!((kp / 200e-6 - 1.0).abs() < 1e-9, "{kp}");
+}

@@ -35,7 +35,7 @@ pub fn unsupported_notes(text: &str) -> Vec<String> {
         }
         // JFET / mutual inductor / transmission line / switches and the like: not read
         if !low.starts_with('.')
-            && let Some(c @ ('K' | 'T' | 'W' | 'O' | 'U' | 'Z' | 'A')) = l.chars().next().map(|c| c.to_ascii_uppercase())
+            && let Some(c @ ('K' | 'T' | 'W' | 'O' | 'U' | 'Z')) = l.chars().next().map(|c| c.to_ascii_uppercase())
         {
             add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G F H D Q J M S B と、X (入れ子) です", l.split_whitespace().next().unwrap_or("")));
         }

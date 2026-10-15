@@ -256,14 +256,12 @@ fn vendor_models_behave_in_simple_circuits() {
             res(c, "Rl", "out", "0", 10e3);
         }, &["out"]);
     }
-    for vin in [0.0, 0.5, 1.0, -1.0] {
-        run(&format!("OPA211 buffer vin={vin}"), "OPA211.mod", "OPA211", &["inp", "out", "vcc", "vee", "out"], &|c| {
-            vdc(c, "Vcc", "vcc", 5.0);
-            vdc(c, "Vee", "vee", -5.0);
-            vdc(c, "Vin", "inp", vin);
-            res(c, "Rl", "out", "0", 10e3);
-        }, &["out"]);
-    }
+    run("OPA211 all nodes (in 2 V)", "OPA211.mod", "OPA211", &["inp", "out", "vcc", "vee", "out"], &|c| {
+        vdc(c, "Vcc", "vcc", 5.0);
+        vdc(c, "Vee", "vee", -5.0);
+        vdc(c, "Vin", "inp", 2.0);
+        res(c, "Rl", "out", "0", 10e3);
+    }, &["*"]);
     run("LM337 (-12 V in, 100 ohm load)", "lm337-1.lib", "LM337-1", &["in", "adj", "out"], &|c| {
         vdc(c, "Vin", "in", -12.0);
         res(c, "Rl", "out", "0", 100.0);
@@ -385,4 +383,39 @@ fn the_ota_a_device_is_a_transconductance_and_the_other_a_devices_are_explained(
     assert!((v - 1000.0 / 1001.0).abs() < 1e-6, "{v}");
     let e = err(".subckt T a b gnd\nA1 a 0 0 0 0 0 b 0 SCHMITT Vt=0 Vh=1m\n.ends T", "T", &["a", "b"]);
     assert!(e.contains("SCHMITT") && e.contains("未対応"), "{e}");
+}
+
+/// Developer helper: for a subcircuit that does not solve, list the elements whose removal makes the DC point solvable.
+/// `SPICE_MODEL_DIR=<dir> SPICE_DUMP_FILE=<file> SPICE_DUMP_TOP=<name> SPICE_DUMP_PORTS="inp out vcc 0 out" cargo test -p sim-core bisect_singular -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn bisect_singular() {
+    let (Ok(dir), Ok(file), Ok(top), Ok(ports)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP"), std::env::var("SPICE_DUMP_PORTS")) else { return };
+    let text = String::from_utf8_lossy(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap()).to_string();
+    let mut c = Circuit::new();
+    let nodes: Vec<usize> = ports.split_whitespace().map(|p| if p == "0" { 0 } else { c.node(p) }).collect();
+    add_subckt_instance(&mut c, "U1", &top, &text, &nodes).unwrap();
+    for (name, node, v) in [("Vcc", "vcc", 5.0), ("Vin", "inp", 2.0)] {
+        let n = c.node(node);
+        c.add(Element::vdc(name, n, 0, v));
+    }
+    let out = c.node("out");
+    c.add(Element::Resistor { name: "Rl".into(), a: out, b: 0, r: 10e3 });
+    println!("full circuit: {:?}", dc_op(&c).map(|_| "ok"));
+    let mut fixers = vec![];
+    for i in 0..c.elements.len() {
+        let mut c2 = c.clone();
+        let name = c2.elements.remove(i).name().to_string();
+        if dc_op(&c2).is_ok() {
+            fixers.push(name);
+        }
+    }
+    println!("removing one of these makes it solvable: {fixers:?}");
+}
+
+#[test]
+fn rpar_and_cpar_on_a_b_source_become_a_resistor_and_a_capacitor() {
+    // a node fed only by a current source needs Rpar to have a voltage: 1 mA * 2k = 2 V
+    let t = ".subckt T a b gnd\nB1 gnd b I=1m*V(a) Rpar=2k Cpar=1p\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.0).abs() < 1e-6);
 }

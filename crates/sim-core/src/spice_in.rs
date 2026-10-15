@@ -177,6 +177,12 @@ fn area_of(words: &[&str]) -> f64 {
         .unwrap_or(1.0)
 }
 
+/// `M * W / L` of a MOSFET line (`W=`, `L=`, `M=` words; W and L default to 100 um, M to 1).
+fn mos_geometry(words: &[&str]) -> f64 {
+    let find = |key: &str| words.iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(key).and_then(parse_value)).filter(|v| *v > 0.0);
+    find("M=").unwrap_or(1.0) * find("W=").unwrap_or(100e-6) / find("L=").unwrap_or(100e-6)
+}
+
 /// Parameters on `.model` cards that this simulator does not use, by model name (the learner is told: the result
 /// is then an approximation of the real part).
 pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
@@ -416,7 +422,12 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 need(6)?;
                 let (d, g, s) = (local(c, t[1]), local(c, t[2]), local(c, t[3]));
                 match models.get(&t[5].to_ascii_lowercase()) {
-                    Some(Model::Mos(m)) => c.add_mosfet(&name, d, g, s, m.clone()),
+                    Some(Model::Mos(m)) => {
+                        // level-1 transconductance is KP * W / L (and M parallel devices); W and L default to 100 um
+                        let mut m = m.clone();
+                        m.kp *= mos_geometry(&t[6..]);
+                        c.add_mosfet(&name, d, g, s, m);
+                    }
                     _ => return Err(format!("{name}: MOSFETモデル {} が見つかりません", t[5])),
                 }
             }
@@ -432,10 +443,12 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 need(4)?;
                 let (p, n) = (local(c, t[1]), local(c, t[2]));
                 // B1 out 0 V=expression   or   I=expression (the expression may contain spaces)
-                // options after the expression (`Rpar=25k tripdt=30n`) are not used: drop them
+                // options after the expression (`Rpar=25k Cpar=50f tripdt=30n`): Rpar and Cpar are a resistor and a capacitor
+                // across the source (a node fed only by a current source would float without Rpar); the others are not used
                 let mut words: Vec<&str> = t[3..].to_vec();
+                let mut opts: Vec<&str> = vec![];
                 while words.len() > 1 && words.last().is_some_and(|w| w.contains('=') && !w.contains(['<', '>', '(', ')', '+', '*', '/']) && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic())) {
-                    words.pop();
+                    opts.extend(words.pop());
                 }
                 let rest = words.join(" ");
                 let (kind, text) = rest
@@ -448,6 +461,13 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 let mut node_of = |nm: &str| local(c, nm);
                 let branch_of = |nm: &str| format!("{inst}.{nm}");
                 let expr = Expr::parse(&text, &mut node_of, &branch_of).map_err(|e| format!("{name}: {e}"))?;
+                let opt = |key: &str| opts.iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(key).and_then(parse_value)).filter(|v| *v > 0.0);
+                if let Some(r) = opt("RPAR=") {
+                    c.add(Element::Resistor { name: format!("{name}.Rpar"), a: p, b: n, r });
+                }
+                if let Some(cp) = opt("CPAR=") {
+                    c.add(Element::Capacitor { name: format!("{name}.Cpar"), a: p, b: n, c: cp });
+                }
                 c.add(Element::BSource { name, p, n, voltage: kind == "V", expr });
             }
             other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G F H D Q J M S B と X のみ。A は XSPICE の部品です)")),
