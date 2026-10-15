@@ -1,7 +1,7 @@
 //! Push-and-shove editing of tracks: when a new or moved track comes too close to the track of another net,
 //! that track is pushed aside (and the tracks joined to it stretch along), instead of leaving a clearance error.
 //!
-//! The shove is conservative: pads and vias never move, a track pinned at both ends cannot be pushed, a track
+//! The shove is conservative: pads and vias never move, a track pinned at both ends is bent aside (see `dogleg`), a track
 //! is moved by at most [`MAX_SHOVE`] mm, and the result is used only if it breaks fewer rules than leaving
 //! things where they are (and never cuts a connection). Otherwise the board is left as the plain edit made it.
 
@@ -48,7 +48,7 @@ fn away(m: &Track, o: &Track) -> (f64, f64) {
 }
 
 /// Is a track end held in place by a pad or a via?
-fn pinned(board: &Board, p: Point, side: Side) -> bool {
+pub(crate) fn pinned(board: &Board, p: Point, side: Side) -> bool {
     board.pads.iter().any(|q| {
         let (w, h) = q.shape.size();
         (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6
@@ -59,11 +59,48 @@ fn same(a: Point, b: Point) -> bool {
     a.dist(b) < 1e-6
 }
 
+/// Split a track whose both ends are held into five (two straight ends, two 45° ramps and a bulge) so that its
+/// middle sits `need - d` further from the obstacle. `d` is the distance to the obstacle now, `need` the distance it
+/// must have, `away` the direction from the obstacle towards the track. `None` when the track is too short for the
+/// ramps, the obstacle is end-on, or the bulge would exceed [`MAX_SHOVE`].
+fn dogleg(t: &Track, m: &Track, d: f64, need: f64, away: (f64, f64)) -> Option<Vec<Track>> {
+    let len = t.a.dist(t.b);
+    if len < 1e-6 {
+        return None;
+    }
+    let (dx, dy) = ((t.b.x - t.a.x) / len, (t.b.y - t.a.y) / len);
+    let (mut nx, mut ny) = (-dy, dx);
+    let side = nx * away.0 + ny * away.1;
+    if side.abs() < 0.5 {
+        return None;
+    }
+    if side < 0.0 {
+        (nx, ny) = (-nx, -ny);
+    }
+    let s = need - d + 0.01;
+    if s > MAX_SHOVE {
+        return None;
+    }
+    // where the obstacle lies along the track
+    let along = |p: Point| (p.x - t.a.x) * dx + (p.y - t.a.y) * dy;
+    let (lo, hi) = (along(m.a).min(along(m.b)), along(m.a).max(along(m.b)));
+    // a 45° ramp that starts here stays `need` away from the obstacle's end
+    let reach = std::f64::consts::SQRT_2 * need - d - 0.01;
+    let (t1, t2) = (lo - reach, hi + reach);
+    const MIN_PIECE: f64 = 0.05;
+    if t1 < MIN_PIECE || t2 > len - MIN_PIECE {
+        return None;
+    }
+    let at = |u: f64, off: f64| Point::new(t.a.x + dx * u + nx * off, t.a.y + dy * u + ny * off);
+    let pts = [t.a, at(t1, 0.0), at(t1 + s, s), at(t2 - s, s), at(t2, 0.0), t.b];
+    Some(pts.windows(2).map(|w| Track { side: t.side, a: w[0], b: w[1], width: t.width }).collect())
+}
+
 /// Push the tracks that are too close to the `anchors` (indices of tracks that stay where they are) aside.
 /// Returns the shoved board, or `None` when it cannot be done within the limits.
 pub fn resolve(board: &Board, anchors: &[usize]) -> Option<Board> {
     let mut trial = board.clone();
-    let origin: Vec<(Point, Point)> = trial.tracks.iter().map(|t| (t.a, t.b)).collect();
+    let mut origin: Vec<(Point, Point)> = trial.tracks.iter().map(|t| (t.a, t.b)).collect();
     let clearance = board.rules.min_clearance;
     let mut active: Vec<usize> = anchors.to_vec();
     for _ in 0..40 {
@@ -86,7 +123,19 @@ pub fn resolve(board: &Board, anchors: &[usize]) -> Option<Board> {
                 let s = (need - d + 0.01, ux, uy);
                 let (fa, fb) = (pinned(&trial, to.a, to.side), pinned(&trial, to.b, to.side));
                 if fa && fb {
-                    return None;
+                    // both ends are held: bend the middle aside instead
+                    let pieces = dogleg(&to, &tm, d, need, (ux, uy))?;
+                    origin[o] = (pieces[0].a, pieces[0].b);
+                    trial.tracks[o] = pieces[0].clone();
+                    for p in &pieces[1..] {
+                        origin.push((p.a, p.b));
+                        trial.tracks.push(p.clone());
+                        next.push(trial.tracks.len() - 1);
+                    }
+                    if !next.contains(&o) {
+                        next.push(o);
+                    }
+                    continue;
                 }
                 for (end, fixed) in [(to.a, fa), (to.b, fb)] {
                     if fixed {

@@ -48,15 +48,29 @@ fn nothing_is_moved_when_there_is_room() {
 }
 
 #[test]
-fn a_track_pinned_at_both_ends_is_not_moved_and_the_new_track_is_still_added() {
+fn a_track_pinned_at_both_ends_is_bent_aside() {
     let mut b = Board::new("t", 40.0, 30.0);
     pad(&mut b, 5.0, 12.0, "B");
     pad(&mut b, 35.0, 12.0, "B");
     b.tracks.push(trk((5.0, 12.0), (35.0, 12.0), 0.25));
     let n = add_tracks(&mut b, vec![trk((12.0, 11.65), (28.0, 11.65), 0.25)]);
+    assert!(n >= 1);
+    assert!(b.tracks.len() > 2, "the held track was split to bend");
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    assert!(ratsnest(&b).is_empty(), "net B is still connected");
+    assert_eq!((b.tracks[0].a.x, b.tracks[0].a.y), (5.0, 12.0), "the end on the pad stays");
+}
+
+#[test]
+fn a_track_too_short_to_bend_is_left_and_the_new_track_is_still_added() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 12.0, "B");
+    pad(&mut b, 7.0, 12.0, "B");
+    b.tracks.push(trk((5.0, 12.0), (7.0, 12.0), 0.25));
+    let n = add_tracks(&mut b, vec![trk((4.0, 11.65), (8.0, 11.65), 0.25)]);
     assert_eq!(n, 0);
     assert_eq!(b.tracks.len(), 2);
-    assert_eq!(b.tracks[0].a.y, 12.0, "the pinned track stays");
+    assert_eq!(b.tracks[0].a.y, 12.0);
 }
 
 #[test]
