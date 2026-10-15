@@ -12,6 +12,7 @@ mod acute;
 mod connectivity;
 mod decoupling;
 mod geo;
+mod patch;
 mod pour;
 mod silk;
 #[cfg(test)]
@@ -22,6 +23,7 @@ pub use acute::*;
 pub use connectivity::*;
 pub use decoupling::*;
 pub use geo::*;
+pub use patch::*;
 pub use pour::*;
 pub use silk::*;
 pub use thermal::*;

@@ -305,6 +305,9 @@ pub struct Board {
     /// Differential pairs: two nets routed side by side with the same length.
     #[serde(default)]
     pub diff_pairs: Vec<crate::diffpair::DiffPair>,
+    /// Finishing of the copper (rounded corners, teardrops ...) applied when the board is shown and made, not to the tracks.
+    #[serde(default)]
+    pub finish: crate::smooth::Finish,
     pub rules: Rules,
 }
 
@@ -343,6 +346,7 @@ impl Board {
             locked_parts: vec![],
             inner_layers: 0,
             diff_pairs: vec![],
+            finish: Default::default(),
             rules: Rules::default(),
         }
     }

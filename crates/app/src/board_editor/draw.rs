@@ -75,6 +75,8 @@ impl BoardEditor {
             // round joints, so a curve made of many short pieces does not show its corners
             painter.circle_filled(self.to_screen(rect, o[i]), 1.0, Color32::YELLOW);
         }
+        // with the finish on, the copper is drawn as it will be made
+        let finished = self.finished();
         // inactive layer first, so the active one is on top
         for s in self.layer_order() {
             if !self.side_visible(s) {
@@ -82,12 +84,24 @@ impl BoardEditor {
             }
             let alpha = if s == self.side { 255 } else { 60 };
             let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
-            for t in self.board.tracks.iter().filter(|t| t.side == s) {
+            for t in finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice()).iter().filter(|t| t.side == s) {
                 painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0), col));
                 // round ends, like the Gerber aperture
                 for e in [t.a, t.b] {
                     painter.circle_filled(self.to_screen(rect, e), (t.width as f32 * z / 2.0).max(0.5), col);
                 }
+            }
+            for patch in finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == s) {
+                let shape = pcb_core::zonefill::FillShape { outer: patch.outline.clone(), holes: vec![] };
+                let mut mesh = egui::Mesh::default();
+                for t in shape.triangles() {
+                    let base = mesh.vertices.len() as u32;
+                    for p in t {
+                        mesh.colored_vertex(self.to_screen(rect, p), col);
+                    }
+                    mesh.add_triangle(base, base + 1, base + 2);
+                }
+                painter.add(egui::Shape::mesh(mesh));
             }
         }
         for p in &self.board.pads {

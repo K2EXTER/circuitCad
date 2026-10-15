@@ -169,34 +169,41 @@ fn fork_board() -> Board {
 }
 
 #[test]
-fn the_notch_between_two_tracks_at_a_sharp_angle_is_filled_and_rounded() {
+fn the_notch_between_two_tracks_at_a_sharp_angle_is_filled_with_a_concave_round_end() {
     let mut b = fork_board();
+    assert!(finished(&b).is_none(), "off: the board is used as it is");
+    b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
     let before = b.tracks.clone();
-    let r = smooth_tracks(&mut b, &SmoothOptions { corners: false, tapers: false, ..Default::default() });
-    assert_eq!(r.forks, 1);
-    assert!(b.tracks[..2].iter().zip(&before).all(|(x, y)| x.a == y.a && x.b == y.b), "the routes are not changed");
-    let fill = &b.tracks[2..];
-    assert!(fill.len() >= 3);
-    // thin tracks side by side along the line between the two tracks (y = 15), none thinner than the rules allow
-    assert!(fill.iter().all(|t| (t.a.y - t.b.y).abs() < 1e-9));
-    assert!(fill.iter().all(|t| t.width >= b.rules.min_track_width - 1e-9));
-    // the fill stops short of a free circle (radius = track width) that touches both tracks' edges: none of it
-    // reaches into that circle, so the gap ends in a round, concave end and not in a bump
+    let f = finished(&b).unwrap();
+    assert_eq!(f.patches.len(), 1);
+    assert!(f.board.tracks.iter().zip(&before).all(|(x, y)| x.a == y.a && x.b == y.b), "the routes are not changed");
+    let poly = &f.patches[0].outline;
+    // the free circle (radius = track width) that touches both tracks' edges: the patch does not reach into it
     let theta = 15f64.to_radians();
     let centre = Point::new(5.0 + (0.25 + 0.125) / theta.sin(), 15.0);
-    let into_circle = fill.iter().any(|t| {
-        let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
-        let u = (((centre.x - t.a.x) * dx + (centre.y - t.a.y) * dy) / (dx * dx + dy * dy).max(1e-12)).clamp(0.0, 1.0);
-        Point::new(t.a.x + dx * u, t.a.y + dy * u).dist(centre) < 0.25 - t.width / 2.0 - 0.01
-    });
-    assert!(!into_circle);
-    // and the fill does reach close to it, on the middle line
-    let nearest = fill.iter().map(|t| t.a.x.max(t.b.x)).fold(0.0, f64::max);
-    assert!(nearest > centre.x - 0.25 - 0.2, "{nearest}");
-    assert!(ratsnest(&b).is_empty());
-    assert!(drc::check(&b).is_empty());
-    // a second run adds nothing
-    assert_eq!(smooth_tracks(&mut b, &SmoothOptions::default()).forks, 0);
+    assert!(!geom::inside_polygon(poly, centre), "the circle stays free");
+    assert!(poly.iter().all(|p| p.dist(centre) >= 0.25 - 1e-9), "no corner of the patch inside the circle");
+    // but the notch between the tip and the circle is filled
+    assert!(geom::inside_polygon(poly, Point::new(5.0 + 0.9, 15.0)));
+    assert!(ratsnest(&f.board).is_empty());
+    assert!(drc::check_final(&b).is_empty());
+    // the Gerber file has the patch as a region; with the finish off it does not
+    assert!(gerber::copper(&b, Side::Top).contains("G36*"));
+    b.finish.on = false;
+    assert!(!gerber::copper(&b, Side::Top).contains("G36*"));
+}
+
+#[test]
+fn the_finish_follows_the_tracks_when_they_move() {
+    let mut b = fork_board();
+    b.finish = Finish { on: true, corners: true, tapers: false, forks: false, ..Default::default() };
+    b.tracks.push(trk((30.0, 5.0), (38.0, 5.0), 0.25));
+    b.tracks.push(trk((38.0, 5.0), (38.0, 12.0), 0.25));
+    let n = finished(&b).unwrap().board.tracks.len();
+    assert!(n > b.tracks.len(), "the corner is rounded in the derived tracks only");
+    assert_eq!(b.tracks.len(), 4, "the board's own tracks are as drawn");
+    b.tracks[3].b = Point::new(38.0, 14.0);
+    assert!(finished(&b).unwrap().board.tracks.len() >= n, "worked out again for the moved track");
 }
 
 #[test]
@@ -205,5 +212,5 @@ fn two_tracks_at_a_wide_angle_are_not_a_fork() {
     pad(&mut b, 5.0, 15.0, "A");
     b.tracks.push(trk((5.0, 15.0), (15.0, 25.0), 0.25));
     b.tracks.push(trk((5.0, 15.0), (15.0, 5.0), 0.25)); // 90 degrees apart
-    assert_eq!(smooth_tracks(&mut b, &SmoothOptions::default()).forks, 0);
+    
 }

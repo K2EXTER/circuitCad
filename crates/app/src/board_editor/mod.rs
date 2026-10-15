@@ -203,8 +203,8 @@ pub struct BoardEditor {
     seg_drag: Option<(Board, usize, Point)>,
     /// Push other nets' tracks aside while routing and dragging tracks.
     shove: bool,
-    /// What "配線を整える" does: corner radius, and which smoothing steps are on.
-    smooth: pcb_core::smooth::SmoothOptions,
+    /// The copper with the board's finish applied, kept until the copper or the settings change.
+    finish_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::smooth::Finished>)>>,
     /// The routing preview's verdict for the last cursor position: (key, tracks pushed, rule broken).
     preview_cache: std::cell::RefCell<Option<shoving::PreviewCache>>,
     pub status: String,
@@ -280,7 +280,7 @@ impl Default for BoardEditor {
             drag_part: None,
             seg_drag: None,
             shove: true,
-            smooth: Default::default(),
+            finish_cache: Default::default(),
             preview_cache: Default::default(),
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,

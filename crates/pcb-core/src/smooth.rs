@@ -1,9 +1,12 @@
 //! Finishing touches for routed tracks, as real boards have them: corners rounded off, and a width change
 //! stepped smoothly instead of in one jump.
 //!
-//! Tracks stay straight segments (a rounded corner is a few short ones, a taper is a few of changing width), so
-//! DRC, Gerber and the 3D view need nothing new. The result is used only if it breaks no more rules than before
-//! and never cuts a connection; when the whole batch does, the edits are tried one by one and the harmless ones kept.
+//! Two ways to use it. [`smooth_tracks`] / [`smooth_selected`] bake corners and tapers into the tracks of the board
+//! (a rounded corner is a few short tracks, a taper a few of changing width). [`finished`] leaves the board alone and
+//! works out, every time, how the copper looks finished: the derived tracks, and for the fine shapes that tracks
+//! cannot make (the concave end of the notch between two tracks) polygons ([`Patch`]). The settings are `Board.finish`.
+//! In both, the result is used only if it breaks no more rules than before and never cuts a connection; when the whole
+//! batch does, the edits are tried one by one and the harmless ones kept.
 
 use std::collections::HashMap;
 
@@ -12,23 +15,44 @@ use crate::model::*;
 use crate::ratsnest::ratsnest;
 use crate::shove::pinned;
 
-/// What to smooth and how much.
-#[derive(Clone, Copy, Debug)]
-pub struct SmoothOptions {
+/// What to smooth and how much; stored in the board as its "finish" settings.
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct Finish {
+    /// Show and make the board with the finishing applied (the tracks in the file stay as drawn).
+    pub on: bool,
     /// Round the corners where two tracks of the same width meet.
     pub corners: bool,
     /// Corner radius (mm); smaller where the tracks are too short for it.
     pub radius: f64,
     /// Step a width change through a few in-between widths.
     pub tapers: bool,
-    /// Fill and round the sharp notch between two tracks that leave one point at a narrow angle.
+    /// Fill and round the sharp notch between two tracks that leave one point at a narrow angle (only as a patch,
+    /// so only when `on`; baking into the tracks leaves it out).
     pub forks: bool,
 }
 
-impl Default for SmoothOptions {
+pub type SmoothOptions = Finish;
+
+impl Default for Finish {
     fn default() -> Self {
-        SmoothOptions { corners: true, radius: 0.5, tapers: true, forks: true }
+        Finish { on: false, corners: true, radius: 0.5, tapers: true, forks: true }
     }
+}
+
+/// A piece of copper that is a polygon, not a track: the fine shapes of the finishing.
+#[derive(Clone, Debug)]
+pub struct Patch {
+    pub side: Side,
+    pub outline: Vec<Point>,
+}
+
+/// The copper of a board with its finish applied.
+#[derive(Clone, Debug)]
+pub struct Finished {
+    /// The board with the derived tracks (everything else as it was).
+    pub board: Board,
+    pub patches: Vec<Patch>,
 }
 
 /// How many places were smoothed.
@@ -41,9 +65,12 @@ pub struct SmoothReport {
 }
 
 /// A track end moved to a new point, and the tracks that fill the gap.
+#[derive(Clone)]
 struct Edit {
     trims: Vec<(usize, bool, Point)>,
     pieces: Vec<Track>,
+    /// A polygon that is added next to the tracks (does not change the board).
+    patch: Option<Patch>,
     kind: Kind,
     /// The tracks this edit is about (for "only the selected ones").
     touches: Vec<usize>,
@@ -104,11 +131,8 @@ fn joints(board: &Board) -> Vec<(Point, End, End)> {
 
 /// Two tracks of one width leave `v` at a sharp angle: between them lies a narrow notch whose tip is a sharp
 /// copper corner (an acid trap, and what the acute-angle DRC check looks for). Fill the notch from its tip up to a
-/// round, concave end: the gap between the two ends in a circle of free space (radius `w`) that touches both edges,
-/// instead of in a point. The routes stay as they are.
-///
-/// The fill is a row of thin tracks laid along the middle line between the two tracks, side by side across the
-/// notch (it is |y| < x tan(a) - w / (2 cos(a)) for the half angle a); each runs from where the notch is that wide to the circle.
+/// round, concave end: the gap between the two ends in a circle of free space (radius = the track width) that
+/// touches both edges, instead of in a point. The routes stay as they are; the fill is a polygon.
 fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     let (ti, tj) = (&board.tracks[i], &board.tracks[j]);
     let w = ti.width;
@@ -125,47 +149,36 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     let (bx, by) = (u1x + u2x, u1y + u2y);
     let bl = bx.hypot(by);
     let (bx, by) = (bx / bl, by / bl);
-    // x runs along the middle line from `v`, y across it. The edges of the notch are y = +-e(x)
-    let (tan, cos, sin) = (theta.tan(), theta.cos(), theta.sin());
-    let edge_x = |y: f64| (y.abs() + w / (2.0 * cos)) / tan; // where the notch is `2 y` wide
-    // the free circle: radius `rho`, touching both edges, centre at `cx` on the middle line
+    // x runs along the middle line from `v`, y across it. The edges of the notch are y = +-(x tan(a) - w / (2 cos(a)))
+    let (cos, sin) = (theta.cos(), theta.sin());
     let rho = w;
-    let cx = (rho + w / 2.0) / sin;
-    let tip = w / (2.0 * sin);
+    let cx = (rho + w / 2.0) / sin; // the free circle's centre: it touches both edges
+    let tip = w / (2.0 * sin); // where the two edges cross
     if cx - rho - tip < 0.1 || cx + rho > l1.min(l2) / 2.0 {
         return None;
     }
     let at = |x: f64, y: f64| Point::new(v.x + bx * x - by * y, v.y + by * x + bx * y);
-    // the thin tracks: an odd number, the middle one on the middle line
-    let reach = rho * cos; // the circle touches the edges at y = +-reach
-    let min_w = board.rules.min_track_width.max(0.05);
-    // each track is as thin as the rules allow and they overlap, so the round ends trace the circle closely
-    let thick = min_w;
-    let m = ((2.0 * reach / (thick / 3.0)).ceil() as usize).max(3) | 1;
-    let step = 2.0 * reach / m as f64;
-    let end_of = |y: f64| cx - (rho * rho - y * y).max(0.0).sqrt() - thick / 2.0; // short of the circle by the round end
-    // done before: a track already ends where the middle one ends
-    let mark = at(end_of(0.0), 0.0);
-    if board.tracks.iter().any(|t| t.side == ti.side && (t.a.dist(mark) < 1e-6 || t.b.dist(mark) < 1e-6)) {
-        return None;
-    }
     // the notch lies entirely under a pad: nothing to fill
     if pinned(board, at(cx - rho, 0.0), ti.side) && pinned(board, at(tip, 0.0), ti.side) {
         return None;
     }
-    let mut pieces = vec![];
-    for k in 0..m {
-        let y = -reach + (k as f64 + 0.5) * step;
-        let (x0, x1) = (edge_x(y) - 0.05, end_of(y));
-        if x1 < x0 {
-            continue;
-        }
-        pieces.push(Track { side: ti.side, a: at(x0, y), b: at(x1, y), width: thick });
+    // the polygon: from the tip along one edge to where the circle touches it, round the near side of the circle
+    // (a concave arc, seen from the copper), and back along the other edge. The ends are pushed a little into
+    // the two tracks so that the copper overlaps and no hairline is left.
+    const SINK: f64 = 0.03;
+    let t_up = (cx - rho * sin, rho * cos);
+    let t_low = (cx - rho * sin, -rho * cos);
+    let mut pts = vec![at(tip - 0.05, 0.0), at(t_low.0, t_low.1 - SINK), at(t_low.0, t_low.1)];
+    let (a_low, a_up) = (-(std::f64::consts::FRAC_PI_2 + theta), std::f64::consts::FRAC_PI_2 + theta);
+    // from the lower touching point to the upper one through the side that faces the tip (angle pi)
+    let from = std::f64::consts::TAU + a_low; // 270 deg - theta
+    let steps = ((from - a_up) / 10f64.to_radians()).ceil().max(4.0) as usize;
+    for k in 1..steps {
+        let a = from - (from - a_up) * k as f64 / steps as f64;
+        pts.push(at(cx + rho * a.cos(), rho * a.sin()));
     }
-    if pieces.is_empty() {
-        return None;
-    }
-    Some(Edit { trims: vec![], pieces, kind: Kind::Fork, touches: vec![i, j] })
+    pts.extend([at(t_up.0, t_up.1), at(t_up.0, t_up.1 + SINK)]);
+    Some(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: ti.side, outline: pts }), kind: Kind::Fork, touches: vec![i, j] })
 }
 
 fn far_end(t: &Track, is_a: bool) -> Point {
@@ -214,7 +227,7 @@ fn corner(board: &Board, v: Point, (i, ia): End, (j, ja): End, radius: f64) -> O
     }
     pts.push(p2);
     let pieces = pts.windows(2).map(|w| Track { side: ti.side, a: w[0], b: w[1], width: ti.width }).collect();
-    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, kind: Kind::Corner, touches: vec![i, j] })
+    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, patch: None, kind: Kind::Corner, touches: vec![i, j] })
 }
 
 /// Step from the wider track's width to the narrower one's along the end of the wider track at `v`.
@@ -241,7 +254,7 @@ fn taper(board: &Board, v: Point, a: End, b: End) -> Option<Edit> {
             width: tw.width - dw * (k as f64 + 0.5) / n as f64,
         })
         .collect();
-    Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, kind: Kind::Taper, touches: vec![wide.0] })
+    Some(Edit { trims: vec![(wide.0, wide.1, at(l))], pieces, patch: None, kind: Kind::Taper, touches: vec![wide.0] })
 }
 
 /// The copper a track end sits on: how wide a track may be where the teardrop starts (the length of the flat edge it
@@ -294,7 +307,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         b: at(exit + ramp * (k + 1) as f64 / n as f64),
         width: top - dw * k as f64 / n as f64,
     }));
-    Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, kind: Kind::Taper, touches: vec![i] })
+    Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, patch: None, kind: Kind::Taper, touches: vec![i] })
 }
 
 fn apply(board: &mut Board, e: &Edit) {
@@ -313,7 +326,8 @@ fn report(es: &[&Edit]) -> SmoothReport {
     SmoothReport { corners: n(Kind::Corner), tapers: n(Kind::Taper), forks: n(Kind::Fork) }
 }
 
-/// Smooth the tracks of `board`. Returns what was done; the board is untouched when nothing could be done safely.
+/// Bake the finishing into the tracks of `board`. Returns what was done; the board is untouched when nothing could be done
+/// safely. (Forks are patches, which a board does not store: they are not part of this.)
 pub fn smooth_tracks(board: &mut Board, opts: &SmoothOptions) -> SmoothReport {
     smooth(board, opts, None)
 }
@@ -324,7 +338,8 @@ pub fn smooth_selected(board: &mut Board, opts: &SmoothOptions, tracks: &[usize]
     smooth(board, opts, Some(tracks))
 }
 
-fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> SmoothReport {
+/// What the finishing would do on `board`: every edit, the ones for ends that a notch claims left out of the others.
+fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Vec<Edit> {
     let mut edits = vec![];
     // ends that belong to a notch are left to it: no corner or teardrop there
     let mut used: Vec<End> = vec![];
@@ -357,30 +372,63 @@ fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Sm
     if let Some(only) = only {
         edits.retain(|e| e.touches.iter().any(|i| only.contains(i)));
     }
-    if edits.is_empty() {
-        return SmoothReport::default();
-    }
+    edits
+}
+
+/// Apply the track edits to a copy of `board`: all at once if that breaks nothing, else one by one, keeping the
+/// harmless ones. Returns the new board and the edits that were kept.
+fn apply_checked(board: &Board, edits: &[Edit]) -> (Board, Vec<usize>) {
     let (base_drc, base_open) = (check(board).len(), ratsnest(board).len());
     let ok = |b: &Board| check(b).len() <= base_drc && ratsnest(b).len() <= base_open;
     let mut all = board.clone();
-    for e in &edits {
+    for e in edits {
         apply(&mut all, e);
     }
     if ok(&all) {
-        *board = all;
-        return report(&edits.iter().collect::<Vec<_>>());
+        return (all, (0..edits.len()).collect());
     }
     // the batch broke something: keep only the edits that are harmless on their own
     let mut cur = board.clone();
     let mut kept = vec![];
-    for e in &edits {
+    for (k, e) in edits.iter().enumerate() {
         let mut trial = cur.clone();
         apply(&mut trial, e);
         if ok(&trial) {
             cur = trial;
-            kept.push(e);
+            kept.push(k);
         }
     }
-    *board = cur;
-    report(&kept)
+    (cur, kept)
+}
+
+fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> SmoothReport {
+    let opts = SmoothOptions { forks: false, ..*opts };
+    let edits = plan(board, &opts, only);
+    if edits.is_empty() {
+        return SmoothReport::default();
+    }
+    let (new, kept) = apply_checked(board, &edits);
+    *board = new;
+    report(&kept.iter().map(|&k| &edits[k]).collect::<Vec<_>>())
+}
+
+/// The copper of `board` as it is made when its finish settings are on: the tracks with corners rounded and widths
+/// stepped, and the polygons for the notches between tracks. `None` when the finish is off (use the board as it is).
+/// The board is not changed, so this is worked out again whenever it is needed.
+pub fn finished(board: &Board) -> Option<Finished> {
+    if !board.finish.on {
+        return None;
+    }
+    let edits = plan(board, &board.finish, None);
+    let track_edits: Vec<Edit> = edits.iter().filter(|e| e.patch.is_none()).cloned().collect();
+    let (new, _) = apply_checked(board, &track_edits);
+    // a patch is added where the other copper keeps its distance from it
+    let conn = crate::drc::connectivity(&new);
+    let patches = edits
+        .iter()
+        .filter_map(|e| e.patch.as_ref().map(|p| (p, e.touches[0])))
+        .filter(|(p, t)| crate::drc::patch_clear(&new, &conn, p.side, &p.outline, *t))
+        .map(|(p, _)| p.clone())
+        .collect();
+    Some(Finished { board: new, patches })
 }

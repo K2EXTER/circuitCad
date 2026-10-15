@@ -181,6 +181,12 @@ fn copper_func(board: &Board, side: Side) -> String {
 }
 
 pub fn copper(board: &Board, side: Side) -> String {
+    // with the board's finish on, the copper is made as finished: derived tracks, and polygons for the fine shapes
+    let finished = crate::smooth::finished(board);
+    let (board, patches) = match &finished {
+        Some(f) => (&f.board, f.patches.as_slice()),
+        None => (board, &[][..]),
+    };
     let func = copper_func(board, side);
     let mut g = GerberLayer::new(&func);
     if !board.zones.is_empty() {
@@ -195,6 +201,10 @@ pub fn copper(board: &Board, side: Side) -> String {
     }
     for v in &board.vias {
         g.flash(v.pos, PadShape::Circle { d: v.diameter }, 0.0);
+    }
+    for p in patches.iter().filter(|p| p.side == side) {
+        g.polarity(false);
+        g.region(&p.outline);
     }
     g.finish("pcb-core")
 }

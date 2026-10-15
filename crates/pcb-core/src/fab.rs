@@ -235,7 +235,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
 
     // design rules, first the board's own, then the fab's
-    let own = drc::check(board);
+    let own = drc::check_final(board);
     if let Some(v) = own.first() {
         out.push(check(Level::Error, format!("DRC 違反が {} 件あります", own.len()), format!("例: {}。一覧の行をクリックすると場所へ移動します", v.message), Some(v.at)).with_also(own.iter().map(|x| x.at)));
     } else {
@@ -251,7 +251,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
             strict.rules.edge_clearance = strict.rules.edge_clearance.max(board.rules.edge_clearance);
             strict.rules.min_drill = strict.rules.min_drill.max(board.rules.min_drill);
             strict.rules.min_annular_ring = strict.rules.min_annular_ring.max(board.rules.min_annular_ring);
-            let v = drc::check(&strict);
+            let v = drc::check_final(&strict);
             if let Some(first) = v.first() {
                 out.push(check(
                     Level::Error,

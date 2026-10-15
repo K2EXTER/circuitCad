@@ -63,7 +63,7 @@ impl BoardEditor {
     }
 
     pub fn export(&mut self) {
-        self.violations = drc::check(&self.board);
+        self.violations = drc::check_final(&self.board);
         if !self.violations.is_empty() {
             self.status = format!("DRC違反が{}件あります。修正してから書き出してください", self.violations.len());
             return;

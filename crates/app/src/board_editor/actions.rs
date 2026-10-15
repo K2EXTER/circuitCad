@@ -89,7 +89,7 @@ impl BoardEditor {
     }
 
     pub fn run_drc(&mut self) {
-        self.violations = drc::check(&self.board);
+        self.violations = drc::check_final(&self.board);
         self.violations.extend(pcb_core::diffpair::check_pairs(&self.board));
         self.drc_ran = true;
         self.status = format!("DRC: 違反 {} 件", self.violations.len());
