@@ -312,10 +312,10 @@ impl BoardEditor {
                         // a slow board: the picture is of an earlier cursor position, so it is not drawn; look again soon
                         painter.ctx().request_repaint_after(super::shoving::PREVIEW_THROTTLE);
                     }
-                    let mut from = a;
-                    for q in self.route_points(a, p) {
-                        painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, q)], Stroke::new((self.track_width as f32 * self.zoom).max(1.0), base.gamma_multiply(0.7)));
-                        from = q;
+                    // a searched route is drawn in a cooler colour, so it is clear that it goes round what is in the way
+                    let col = if preview.found && !bad { Color32::from_rgb(90, 200, 255) } else { base };
+                    for t in &preview.tracks {
+                        painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((self.track_width as f32 * self.zoom).max(1.0), col.gamma_multiply(0.7)));
                     }
                     if bad || pushed > 0 || preview.throttled {
                         let msg = if bad {

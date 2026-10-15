@@ -21,6 +21,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - 整えないネット `Board.finish_exclude`(そのネットの配線が関わる仕上げは、確定も表示・出力も、すべて作らない。差動ペアや形が特性を決める線を守る)
   - 仕上げは全部まとめて試してDRC違反が増える/接続が切れるなら、1つずつ試して無害なものだけ採用(`apply_checked`)
   - 配線に確定する `smooth_tracks`/`smooth_selected`(角丸めと段差だけ。パッチは基板に保存しないので分かれ目は確定できない。選んだ配線が関わる所だけにもできる)。GUIは「③ 配線」の「配線を整える」(「整えた形で表示・出力」「整えた形を配線に確定する」「選んだ配線だけ確定する」)。3Dビューの銅の絵はガーバーと同じものから作るので整えた形が出る。ネット強調(`view3d/glow.rs`)も整えた形と多角形のパッチを使う。3Dの絵は「更新」で作り直す
+  - `autoroute::Router`(障害物の格子を1回作って使い回し、`path(net, a, b, side, vias, margin, budget)` で任意の2点間の経路を探す。探すのは2点を囲む箱(`margin`)の中だけ、`budget` を超えたら諦める。エディタのライブ経路探索用。`tests_router.rs` の `timing_on_a_large_board`(--ignored、release)で、100×80mm・約600パッドの基板で、格子の構築4.5ms、10mmの経路0.7ms、90mmの経路45ms)
 - `ratsnest.rs` 未配線(`Airwire`) / `autoroute.rs` 格子A*の自動配線 (`autoroute`, `route_airwire`、DRCで検証して採用)
 - `netlist.rs` 回路図→基板の取込 / `parts.rs` `place_part` / `footprints.rs`・`package.rs` フットプリント
 - `fab.rs` 発注先プリセット(`PRESETS`)と発注前チェック(`preflight`) / `gerber_view.rs` 書き出したガーバー・ドリルを読み戻して絵にする(`Preview`)

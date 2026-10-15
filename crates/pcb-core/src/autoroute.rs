@@ -505,6 +505,207 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     Some((tracks, vias))
 }
 
+/// What [`Router::path`] found.
+#[derive(Clone, Debug, Default)]
+pub struct PathResult {
+    pub tracks: Vec<Track>,
+    pub vias: Vec<Via>,
+}
+
+/// The obstacle grid of a board, kept so that many routes between two points can be searched one after the other
+/// quickly (the live route from the start of a track to the cursor): the grid is built once for the copper as it
+/// is, and a search only looks at the box around the two points.
+pub struct Router {
+    grid: Grid,
+    nets: Vec<String>,
+    opt: RouteOptions,
+}
+
+/// The most cells (per layer) a search may look at: a longer route is not searched.
+const MAX_WINDOW_CELLS: usize = 640_000;
+
+impl Router {
+    /// `None` when the board has no outline or is too large for a grid.
+    pub fn new(board: &Board, opt: &RouteOptions) -> Option<Router> {
+        let mut nets: Vec<String> = vec![];
+        let grid = build_grid(board, opt, &mut nets)?;
+        Some(Router { grid, nets, opt: opt.clone() })
+    }
+
+    /// The route from `a` to `b` on layer `side` for net `net` (`None`: a net of its own, which keeps off all other
+    /// copper). It runs between the two points on the grid, with the straight links from the points to the grid at the
+    /// ends. `vias`: it may change layer. Only the box around the two points, grown by `margin` mm, is searched, and
+    /// the search gives up after `budget`. `None` when nothing was found.
+    pub fn path(&self, net: Option<&str>, a: Point, b: Point, side: Side, vias: bool, margin: f64, budget: std::time::Duration) -> Option<PathResult> {
+        let grid = &self.grid;
+        let net_id = net.and_then(|n| self.nets.iter().position(|x| x == n)).map_or(0, |k| k as i32 + 1);
+        let nl = grid.layers.len();
+        let l0 = grid.layer(side);
+        let (ca, cb) = (grid_cell(grid, a), grid_cell(grid, b));
+        let m = (margin / grid.g).ceil() as usize;
+        let (i0, i1) = (ca.0.min(cb.0).saturating_sub(m), (ca.0.max(cb.0) + m).min(grid.nx - 1));
+        let (j0, j1) = (ca.1.min(cb.1).saturating_sub(m), (ca.1.max(cb.1) + m).min(grid.ny - 1));
+        let (ww, wh) = (i1 - i0 + 1, j1 - j0 + 1);
+        if ww * wh > MAX_WINDOW_CELLS {
+            return None;
+        }
+        // a cell of the window: (layer, i, j) -> index
+        let cell = |l: usize, i: usize, j: usize| (l * wh + (j - j0)) * ww + (i - i0);
+        let cells_near = |p: Point, l: usize| -> Vec<(usize, usize)> {
+            let c = grid_cell(grid, p);
+            let mut out = vec![];
+            for j in c.1.saturating_sub(1)..=(c.1 + 1).min(grid.ny - 1) {
+                for i in c.0.saturating_sub(1)..=(c.0 + 1).min(grid.nx - 1) {
+                    if i >= i0 && i <= i1 && j >= j0 && j <= j1 && passable(grid.trk[l][j * grid.nx + i], net_id) {
+                        out.push((i, j));
+                    }
+                }
+            }
+            out
+        };
+        let starts = cells_near(a, l0);
+        let goals = cells_near(b, l0);
+        if starts.is_empty() || goals.is_empty() {
+            return None;
+        }
+        let n_states = nl * ww * wh * 9;
+        let enc = |l: usize, i: usize, j: usize, d: usize| (cell(l, i, j) * 9 + d) as u32;
+        let dec = |s: u32| {
+            let s = s as usize;
+            let (c, d) = (s / 9, s % 9);
+            (c / (ww * wh), i0 + c % ww, j0 + (c / ww) % wh, d)
+        };
+        let mut is_goal = vec![false; nl * ww * wh];
+        for &(i, j) in &goals {
+            is_goal[cell(l0, i, j)] = true;
+        }
+        let g = grid.g as f32;
+        let h = |i: usize, j: usize| {
+            let (dx, dy) = ((i as f32 - cb.0 as f32).abs(), (j as f32 - cb.1 as f32).abs());
+            g * (dx.max(dy) + 0.4142 * dx.min(dy)) * 0.8
+        };
+        let via_cost = 3.0f32;
+        let mut cost = vec![f32::INFINITY; n_states];
+        let mut parent = vec![u32::MAX; n_states];
+        let mut heap = BinaryHeap::new();
+        for &(i, j) in &starts {
+            let s = enc(l0, i, j, NO_DIR);
+            let c = grid.pos(i, j).dist(a) as f32;
+            if c < cost[s as usize] {
+                cost[s as usize] = c;
+                heap.push(Node { f: c + h(i, j), s });
+            }
+        }
+        let started = std::time::Instant::now();
+        let mut end = None;
+        let mut pops = 0usize;
+        while let Some(Node { s, .. }) = heap.pop() {
+            pops += 1;
+            if pops % 1024 == 0 && started.elapsed() > budget {
+                return None;
+            }
+            let (l, i, j, d) = dec(s);
+            let c0 = cost[s as usize];
+            if is_goal[cell(l, i, j)] {
+                end = Some(s);
+                break;
+            }
+            for (nd, (dx, dy)) in DIRS.iter().enumerate() {
+                let (ni, nj) = (i as i32 + dx, j as i32 + dy);
+                if ni < i0 as i32 || nj < j0 as i32 || ni > i1 as i32 || nj > j1 as i32 {
+                    continue;
+                }
+                let (ni, nj) = (ni as usize, nj as usize);
+                if !passable(grid.trk[l][nj * grid.nx + ni], net_id) {
+                    continue;
+                }
+                let diagonal = *dx != 0 && *dy != 0;
+                if diagonal && !(passable(grid.trk[l][j * grid.nx + ni], net_id) && passable(grid.trk[l][nj * grid.nx + i], net_id)) {
+                    continue;
+                }
+                let step = if diagonal { g * std::f32::consts::SQRT_2 } else { g };
+                let turn = if d == NO_DIR {
+                    0.0
+                } else {
+                    let diff = (nd as i32 - d as i32).rem_euclid(8);
+                    g * 0.4 * diff.min(8 - diff) as f32
+                };
+                let ns = enc(l, ni, nj, nd);
+                let nc = c0 + step + turn;
+                if nc < cost[ns as usize] {
+                    cost[ns as usize] = nc;
+                    parent[ns as usize] = s;
+                    heap.push(Node { f: nc + h(ni, nj), s: ns });
+                }
+            }
+            let idx = j * grid.nx + i;
+            if vias && !grid.no_via[idx] && (0..nl).all(|k| passable(grid.via[k][idx], net_id)) {
+                for o in (0..nl).filter(|&o| o != l) {
+                    if !passable(grid.trk[o][idx], net_id) {
+                        continue;
+                    }
+                    let ns = enc(o, i, j, NO_DIR);
+                    let nc = c0 + via_cost;
+                    if nc < cost[ns as usize] {
+                        cost[ns as usize] = nc;
+                        parent[ns as usize] = s;
+                        heap.push(Node { f: nc + h(i, j), s: ns });
+                    }
+                }
+            }
+        }
+        let end = end?;
+        let mut states = vec![end];
+        while parent[*states.last().unwrap() as usize] != u32::MAX {
+            states.push(parent[*states.last().unwrap() as usize]);
+        }
+        states.reverse();
+        let cells: Vec<(usize, Point, usize)> = states
+            .iter()
+            .map(|&s| {
+                let (l, i, j, d) = dec(s);
+                (l, grid.pos(i, j), d)
+            })
+            .collect();
+        let mut tracks = vec![];
+        let mut via_list: Vec<Via> = vec![];
+        let width = self.opt.track_width;
+        let mut emit = |l: usize, p: Point, q: Point| {
+            if p.dist(q) > 1e-9 {
+                tracks.push(Track { side: grid.side(l), a: p, b: q, width });
+            }
+        };
+        emit(cells[0].0, a, cells[0].1);
+        let mut run_from = cells[0].1;
+        let mut run_dir: Option<usize> = None;
+        for k in 1..cells.len() {
+            let (l, p, d) = cells[k];
+            if l != cells[k - 1].0 {
+                emit(cells[k - 1].0, run_from, cells[k - 1].1);
+                if !via_list.iter().any(|v: &Via| v.pos == p) {
+                    via_list.push(Via { pos: p, diameter: self.opt.via_diameter, drill: self.opt.via_drill });
+                }
+                run_from = p;
+                run_dir = None;
+            } else {
+                match run_dir {
+                    Some(rd) if rd != d => {
+                        emit(l, run_from, cells[k - 1].1);
+                        run_from = cells[k - 1].1;
+                        run_dir = Some(d);
+                    }
+                    None => run_dir = Some(d),
+                    _ => {}
+                }
+            }
+        }
+        let last = cells[cells.len() - 1];
+        emit(last.0, run_from, last.1);
+        emit(last.0, last.1, b);
+        Some(PathResult { tracks, vias: via_list })
+    }
+}
+
 fn grid_cell(grid: &Grid, p: Point) -> (usize, usize) {
     let i = (((p.x - grid.x0) / grid.g).round().max(0.0) as usize).min(grid.nx - 1);
     let j = (((p.y - grid.y0) / grid.g).round().max(0.0) as usize).min(grid.ny - 1);

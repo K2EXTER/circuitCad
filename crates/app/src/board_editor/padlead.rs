@@ -41,7 +41,7 @@ impl BoardEditor {
     /// The point where a route leaves (or enters) the pad holding `at`, on the way to (from) `other`: `pad_lead_len`
     /// outside the pad's edge, straight out from the edge. `None` where there is nothing to do: no pad, a round pad,
     /// the free route mode, or the setting off.
-    fn pad_lead_point(&self, at: Point, other: Point) -> Option<Point> {
+    pub(super) fn pad_lead_point(&self, at: Point, other: Point) -> Option<Point> {
         if !self.pad_lead || self.route_mode == RouteMode::Free {
             return None;
         }

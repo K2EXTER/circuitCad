@@ -36,6 +36,8 @@ mod tests_autoroute;
 #[cfg(test)]
 mod tests_layers;
 #[cfg(test)]
+mod tests_router;
+#[cfg(test)]
 mod tests_shove;
 #[cfg(test)]
 mod tests_smooth;

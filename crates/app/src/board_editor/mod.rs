@@ -188,6 +188,11 @@ pub struct BoardEditor {
     hole_drill: f64,
     route_mode: RouteMode,
     bend_flip: bool,
+    /// The Track tool searches a route to the pad under the cursor (round what is in the way), and uses the shove
+    /// where there is none. Off: the plain bent line, no shove.
+    auto_route: bool,
+    /// The obstacle grid of the board, kept until the copper or the settings change.
+    router_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::autoroute::Router>)>>,
     /// Leave and enter pads at a right angle to their edge, for `pad_lead_len` mm.
     pad_lead: bool,
     pad_lead_len: f64,
@@ -272,6 +277,8 @@ impl Default for BoardEditor {
             hole_drill: 3.2,
             route_mode: RouteMode::Angle45,
             bend_flip: false,
+            auto_route: false,
+            router_cache: Default::default(),
             pad_lead: true,
             pad_lead_len: 0.5,
             zoom: 12.0,
@@ -350,6 +357,7 @@ mod layers;
 mod shoving;
 mod smoothing;
 mod padlead;
+mod livepath;
 mod pairs;
 mod tools;
 mod file;

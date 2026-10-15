@@ -19,6 +19,10 @@ pub(super) struct RoutePreview {
     pub moved: Vec<(Track, Track)>,
     /// The answer is that of an earlier cursor position (the shove is slow on this board).
     pub throttled: bool,
+    /// The tracks the route would lay (the plain line, or the searched route).
+    pub tracks: Vec<Track>,
+    /// The route was searched: it goes round what is in the way.
+    pub found: bool,
 }
 
 /// The last preview with the key of what it was worked out for, how long it took and when.
@@ -42,7 +46,7 @@ impl BoardEditor {
         for v in [a.x, a.y, p.x, p.y, self.track_width] {
             v.to_bits().hash(&mut h);
         }
-        (self.side, self.shove, self.route_mode as u8, self.bend_flip, self.pad_lead, self.pad_lead_len.to_bits()).hash(&mut h);
+        (self.side, self.shove, self.auto_route, self.route_mode as u8, self.bend_flip, self.pad_lead, self.pad_lead_len.to_bits()).hash(&mut h);
         let key = h.finish();
         if let Some(c) = self.preview_cache.borrow().as_ref() {
             if c.key == key {
@@ -53,12 +57,14 @@ impl BoardEditor {
             }
         }
         let started = std::time::Instant::now();
-        let new = self.route_segments(a, p);
+        let plan = self.auto_plan(a, p);
+        let (found, tracks) = (plan.found, plan.tracks.clone());
         let mut trial = self.board.clone();
-        let pushed = if self.shove {
-            shove::add_tracks(&mut trial, new)
+        // the shove is part of the automatic route: where the route is not searched, the tracks in the way are pushed
+        let pushed = if self.auto_route && self.shove && !found {
+            shove::add_tracks(&mut trial, plan.tracks)
         } else {
-            trial.tracks.extend(new);
+            trial.tracks.extend(plan.tracks);
             0
         };
         // the tracks that moved: where they were and where they would be
@@ -72,8 +78,9 @@ impl BoardEditor {
             .collect();
         // only the copper-to-copper rule: the route may start in the middle of a pad, or end on the board edge
         let count = |b: &Board| drc::clearance(b).iter().filter(|v| v.message.contains("銅箔どうし")).count();
-        let bad = count(&trial) > count(&self.board);
-        let result = RoutePreview { pushed, bad, moved, throttled: false };
+        // a route that runs over another net's pad or track joins the two nets: that is a short, not just a small gap
+        let bad = count(&trial) > count(&self.board) || drc::shorts(&trial).len() > drc::shorts(&self.board).len();
+        let result = RoutePreview { pushed, bad, moved, throttled: false, tracks, found };
         *self.preview_cache.borrow_mut() = Some(PreviewCache { key, result: result.clone(), cost: started.elapsed(), at: std::time::Instant::now() });
         result
     }
@@ -132,6 +139,7 @@ mod tests {
         e.board = Board::new("t", 40.0, 30.0);
         e.board.tracks.push(Track { side: Side::Top, a: Point::new(5.0, 12.0), b: Point::new(35.0, 12.0), width: 0.25 });
         e.shove = true;
+        e.auto_route = true;
         e.track_width = 0.25;
         e.grid = 0.0;
         e

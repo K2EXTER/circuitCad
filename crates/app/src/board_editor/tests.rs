@@ -543,6 +543,7 @@ fn two_net_editor() -> BoardEditor {
     e.track_width = 0.25;
     e.grid = 0.0;
     e.route_mode = RouteMode::Free;
+    e.auto_route = true; // the shove belongs to the automatic route
     e
 }
 
@@ -709,4 +710,88 @@ fn clicking_from_a_pad_lays_the_lead_and_the_tracks_stay_clear_of_other_pads() {
     assert_eq!(e.board.tracks[0].a, a);
     assert_eq!(e.board.tracks.last().unwrap().b, b);
     assert!(pcb_core::ratsnest::ratsnest(&e.board).is_empty(), "the two pads are connected");
+}
+
+/// Two pads of net A with a wall of another net between them that has a gap at the top.
+fn wall_editor() -> BoardEditor {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 40.0, 30.0);
+    let mut add = |x: f64, y: f64, net: &str| {
+        let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        pad.net = net.into();
+        e.board.pads.push(pad);
+    };
+    add(5.0, 15.0, "A");
+    add(35.0, 15.0, "A");
+    for k in 0..13 {
+        add(20.0, 3.0 + k as f64, "W");
+    }
+    e.tool = Tool::Track;
+    e.track_width = 0.25;
+    e.grid = 0.5;
+    e.zoom = 20.0;
+    e.pad_lead = false;
+    e.route_mode = RouteMode::Angle45;
+    e
+}
+
+#[test]
+fn the_automatic_route_goes_round_the_wall_and_the_manual_one_does_not_look() {
+    let mut e = wall_editor();
+    let (a, z) = (p(5.0, 15.0), p(35.0, 15.0));
+    // manual: the plain line, straight through the wall (shown red, no search)
+    let manual = e.route_preview(a, z);
+    assert!(!manual.found && manual.bad, "{manual:?}");
+    // automatic: a route round the wall
+    e.auto_route = true;
+    let auto = e.route_preview(a, z);
+    assert!(auto.found && !auto.bad, "{auto:?}");
+    assert_eq!(auto.tracks.first().unwrap().a, a);
+    assert_eq!(auto.tracks.last().unwrap().b, z);
+    assert_eq!(e.board.tracks.len(), 0, "looking does not lay anything");
+    // clicking lays it, and the board stays clean and connected; one undo step
+    e.pending = Some(a);
+    e.click(z);
+    assert!(drc::check(&e.board).is_empty(), "{:?}", drc::check(&e.board));
+    assert!(ratsnest(&e.board).is_empty(), "the two pads are connected");
+    assert!(e.status.contains("自動経路"), "{}", e.status);
+    e.undo();
+    assert!(e.board.tracks.is_empty());
+}
+
+#[test]
+fn the_automatic_route_is_searched_only_towards_something_to_connect_to() {
+    let mut e = wall_editor();
+    e.auto_route = true;
+    let a = p(5.0, 15.0);
+    // the cursor is on an empty spot: the plain line (and, with the shove on, no search)
+    let free = e.route_preview(a, p(30.0, 10.0));
+    assert!(!free.found);
+    assert!(e.on_object(p(35.0, 15.0)) && !e.on_object(p(30.0, 10.0)));
+    // the router is built once for the board as it is, and again when the copper changes
+    let r1 = e.router().unwrap();
+    assert!(std::rc::Rc::ptr_eq(&r1, &e.router().unwrap()));
+    e.board.tracks.push(Track { side: Side::Top, a: p(1.0, 1.0), b: p(2.0, 1.0), width: 0.25 });
+    assert!(!std::rc::Rc::ptr_eq(&r1, &e.router().unwrap()));
+}
+
+#[test]
+fn without_the_automatic_route_the_shove_is_not_used_in_routing() {
+    let mut e = two_net_editor();
+    e.auto_route = false;
+    let preview = e.route_preview(p(12.0, 11.65), p(28.0, 11.65));
+    assert_eq!(preview.pushed, 0, "manual routing leaves the other nets where they are");
+    assert!(preview.bad, "and says the clearance is broken");
+}
+
+#[test]
+fn the_automatic_route_goes_round_the_wall_with_the_pad_leads_on_too() {
+    let mut e = wall_editor();
+    e.pad_lead = true;
+    e.auto_route = true;
+    let (a, z) = (p(5.0, 15.0), p(35.0, 15.0));
+    let auto = e.route_preview(a, z);
+    println!("{:?}", auto.tracks);
+    assert!(auto.found && !auto.bad, "{auto:?}");
+    assert!(auto.tracks.iter().any(|t| t.a.y > 15.7 || t.b.y > 15.7), "{:?}", auto.tracks);
 }

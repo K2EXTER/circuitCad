@@ -52,14 +52,18 @@ impl BoardEditor {
     }
 
     pub(super) fn push_route(&mut self, a: Point, p: Point) {
-        let new = self.route_segments(a, p);
-        if self.shove {
-            let pushed = pcb_core::shove::add_tracks(&mut self.board, new);
+        let plan = self.auto_plan(a, p);
+        if plan.found {
+            self.status = "自動経路: 障害物をよけて配線しました".into();
+            self.board.tracks.extend(plan.tracks);
+        } else if self.auto_route && self.shove {
+            // no way round (or nothing to connect to): the plain line, with the tracks in the way pushed aside
+            let pushed = pcb_core::shove::add_tracks(&mut self.board, plan.tracks);
             if pushed > 0 {
                 self.status = format!("押しのけ配線: 邪魔な配線 {pushed} 本を脇へ寄せました");
             }
         } else {
-            self.board.tracks.extend(new);
+            self.board.tracks.extend(plan.tracks);
         }
     }
 }
