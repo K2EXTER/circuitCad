@@ -51,14 +51,16 @@ impl BoardEditor {
         }
     }
 
-    /// The pad centre, via centre or track end close to `w` (within 10 px), for routing and vias to meet what is
+    /// The pad centre (or end of a long pad), via centre or track end close to `w` (within 10 px), for routing and vias to meet what is
     /// already there, whatever the grid: off-grid footprints, and the tracks the auto-router laid.
     pub(super) fn snap_object(&self, w: Point) -> Option<Point> {
         let tol = 10.0 / self.zoom as f64;
         let pads = self.board.pads.iter().filter(|p| p.drill.is_some() || p.side == self.side).map(|p| p.pos);
         let vias = self.board.vias.iter().map(|v| v.pos);
         let ends = self.board.tracks.iter().filter(|t| t.side == self.side).flat_map(|t| [t.a, t.b]);
-        pads.chain(vias).chain(ends).filter(|c| c.dist(w) <= tol).min_by(|a, b| a.dist(w).total_cmp(&b.dist(w)))
+        // routing also snaps to the two ends of a long pad, so two tracks can leave it side by side
+        let pad_ends = if self.tool == Tool::Track { self.pad_end_points() } else { vec![] };
+        pads.chain(vias).chain(ends).chain(pad_ends).filter(|c| c.dist(w) <= tol).min_by(|a, b| a.dist(w).total_cmp(&b.dist(w)))
     }
 
     pub(super) fn pointer(&mut self, resp: &egui::Response, rect: Rect, painter: &egui::Painter) -> Option<Point> {
@@ -66,6 +68,12 @@ impl BoardEditor {
         if let Some(pos) = resp.hover_pos() {
             let w = self.to_world(rect, pos);
             let mut p = Point::new(snap(w.x, self.grid), snap(w.y, self.grid));
+            if self.tool == Tool::Track {
+                // the ends of the pads near the cursor, where the route can snap to
+                for e in self.pad_end_points().into_iter().filter(|e| e.dist(w) * (self.zoom as f64) < 60.0) {
+                    painter.circle_stroke(self.to_screen(rect, e), 4.0, Stroke::new(1.0, Color32::from_rgba_unmultiplied(90, 230, 120, 170)));
+                }
+            }
             if matches!(self.tool, Tool::Track | Tool::Via)
                 && let Some(c) = self.snap_object(w) {
                     // snapped onto something that is already there: a green ring says so

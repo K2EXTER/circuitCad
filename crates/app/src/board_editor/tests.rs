@@ -623,3 +623,90 @@ fn smoothing_the_tracks_is_one_undo_step_and_nothing_to_do_adds_none() {
     e.smooth_tracks();
     assert_eq!(e.undo.len(), steps, "nothing left to smooth: no undo step");
 }
+
+/// A board with one wide pad (3 x 0.6 mm) at (10, 10) and a small one (0.5 mm) far away at (30, 24).
+fn pad_editor() -> BoardEditor {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 50.0, 40.0);
+    for (x, y, w, h) in [(10.0, 10.0, 3.0, 0.6), (30.0, 24.0, 0.5, 0.5)] {
+        let mut pad = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, None, Side::Top);
+        pad.net = "A".into();
+        e.board.pads.push(pad);
+    }
+    e.tool = Tool::Track;
+    e.track_width = 0.25;
+    e.grid = 0.0;
+    e.zoom = 20.0;
+    e.shove = false;
+    e
+}
+
+#[test]
+fn a_long_pad_snaps_at_its_two_ends_and_a_small_one_only_at_its_centre() {
+    let e = pad_editor();
+    let ends = e.pad_end_points();
+    // 3 mm wide: ends a track's width (and a little) in from the short edges; 0.6 mm tall and the 0.5 mm pad: no room for two tracks
+    assert_eq!(ends.len(), 2, "{ends:?}");
+    assert!(ends.iter().all(|q| (q.y - 10.0).abs() < 1e-9 && (q.x - 10.0).abs() > 1.0 && (q.x - 10.0).abs() < 1.5));
+    let near_end = Point::new(ends[0].x + 0.1, ends[0].y + 0.1);
+    assert_eq!(e.snap_object(near_end), Some(ends[0]));
+    // with another tool there is no such snap
+    let mut v = pad_editor();
+    v.tool = Tool::Via;
+    assert_ne!(v.snap_object(near_end), Some(ends[0]));
+}
+
+#[test]
+fn a_route_leaves_and_enters_a_pad_at_a_right_angle_to_its_edge() {
+    let e = pad_editor();
+    let end = e.pad_end_points()[0]; // an end of the wide pad: out through the long side (up or down)
+    let pts = e.route_points(end, Point::new(30.0, 24.0));
+    // first the lead straight out of the pad's side (3 x 0.6 mm: half the height 0.3 plus 0.5 mm), in the direction of the target
+    assert!((pts[0].x - end.x).abs() < 1e-9 && (pts[0].y - (end.y + 0.8)).abs() < 1e-9, "{pts:?}");
+    // the end: a lead into the small pad, horizontal or vertical, ending on its centre
+    let n = pts.len();
+    assert_eq!(pts[n - 1], Point::new(30.0, 24.0));
+    let (before, last) = (pts[n - 2], pts[n - 1]);
+    assert!((before.x - last.x).abs() < 1e-9 || (before.y - last.y).abs() < 1e-9, "the way in is axis-aligned: {pts:?}");
+    assert!(before.dist(last) >= 0.25 + 0.5 - 1e-9, "outside the 0.5 mm pad's edge by the lead: {pts:?}");
+    // every leg is horizontal, vertical or at 45 degrees
+    let mut from = end;
+    for q in &pts {
+        let (dx, dy) = ((q.x - from.x).abs(), (q.y - from.y).abs());
+        assert!(dx < 1e-9 || dy < 1e-9 || (dx - dy).abs() < 1e-6, "{from:?} -> {q:?}");
+        from = *q;
+    }
+}
+
+#[test]
+fn the_pad_lead_can_be_switched_off_and_does_nothing_in_the_free_mode_or_between_close_pads() {
+    let mut e = pad_editor();
+    let a = Point::new(10.0, 10.0);
+    let b = Point::new(30.0, 24.0);
+    let with = e.route_points(a, b).len();
+    e.pad_lead = false;
+    let plain = e.route_points(a, b);
+    assert_eq!(plain, e.route_points_plain(a, b, e.bend_flip));
+    assert!(with > plain.len());
+    e.pad_lead = true;
+    e.route_mode = RouteMode::Free;
+    assert_eq!(e.route_points(a, b), vec![b]);
+    e.route_mode = RouteMode::Angle45;
+    // a pad 2 mm away: the leads would use it all up
+    let mut near = pad_editor();
+    near.board.pads[1].pos = Point::new(12.5, 10.0);
+    assert_eq!(near.route_points(Point::new(10.0, 10.0), Point::new(12.5, 10.0)), near.route_points_plain(Point::new(10.0, 10.0), Point::new(12.5, 10.0), false));
+}
+
+#[test]
+fn clicking_from_a_pad_lays_the_lead_and_the_tracks_stay_clear_of_other_pads() {
+    let mut e = pad_editor();
+    let a = Point::new(10.0, 10.0);
+    let b = Point::new(30.0, 24.0);
+    e.click(a);
+    e.click(b);
+    assert!(e.board.tracks.len() >= 3, "lead, bend(s), lead");
+    assert_eq!(e.board.tracks[0].a, a);
+    assert_eq!(e.board.tracks.last().unwrap().b, b);
+    assert!(pcb_core::ratsnest::ratsnest(&e.board).is_empty(), "the two pads are connected");
+}

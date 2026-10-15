@@ -188,6 +188,9 @@ pub struct BoardEditor {
     hole_drill: f64,
     route_mode: RouteMode,
     bend_flip: bool,
+    /// Leave and enter pads at a right angle to their edge, for `pad_lead_len` mm.
+    pad_lead: bool,
+    pad_lead_len: f64,
     zoom: f32, // pixels per mm
     pan: Vec2, // world mm at the screen centre
     pending: Option<Point>,
@@ -269,6 +272,8 @@ impl Default for BoardEditor {
             hole_drill: 3.2,
             route_mode: RouteMode::Angle45,
             bend_flip: false,
+            pad_lead: true,
+            pad_lead_len: 0.5,
             zoom: 12.0,
             pan: Vec2::new(25.0, 20.0),
             pending: None,
@@ -344,6 +349,7 @@ mod route;
 mod layers;
 mod shoving;
 mod smoothing;
+mod padlead;
 mod pairs;
 mod tools;
 mod file;

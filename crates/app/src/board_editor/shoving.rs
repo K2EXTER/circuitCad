@@ -42,7 +42,7 @@ impl BoardEditor {
         for v in [a.x, a.y, p.x, p.y, self.track_width] {
             v.to_bits().hash(&mut h);
         }
-        (self.side, self.shove, self.route_mode as u8, self.bend_flip).hash(&mut h);
+        (self.side, self.shove, self.route_mode as u8, self.bend_flip, self.pad_lead, self.pad_lead_len.to_bits()).hash(&mut h);
         let key = h.finish();
         if let Some(c) = self.preview_cache.borrow().as_ref() {
             if c.key == key {

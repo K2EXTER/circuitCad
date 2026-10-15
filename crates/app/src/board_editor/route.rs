@@ -3,15 +3,15 @@
 use super::*;
 
 impl BoardEditor {
-    /// Points to visit from `a` to `p` (the last one is `p`), honouring the route mode.
-    pub(super) fn route_points(&self, a: Point, p: Point) -> Vec<Point> {
+    /// Points to visit from `a` to `p` (the last one is `p`), honouring the route mode; `flip` is which way it bends.
+    pub(super) fn route_points_plain(&self, a: Point, p: Point, flip: bool) -> Vec<Point> {
         let (dx, dy) = (p.x - a.x, p.y - a.y);
         let eps = 1e-9;
         if dx.abs() < eps || dy.abs() < eps || self.route_mode == RouteMode::Free {
             return vec![p];
         }
         match self.route_mode {
-            RouteMode::Orthogonal => vec![if self.bend_flip { Point::new(a.x, p.y) } else { Point::new(p.x, a.y) }, p],
+            RouteMode::Orthogonal => vec![if flip { Point::new(a.x, p.y) } else { Point::new(p.x, a.y) }, p],
             _ => {
                 if (dx.abs() - dy.abs()).abs() < eps {
                     return vec![p];
@@ -24,7 +24,7 @@ impl BoardEditor {
                 } else {
                     Point::new(a.x, a.y + sy * (dy.abs() - d))
                 };
-                vec![if self.bend_flip { diag_first } else { straight_first }, p]
+                vec![if flip { diag_first } else { straight_first }, p]
             }
         }
     }
