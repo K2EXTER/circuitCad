@@ -152,6 +152,8 @@ pub struct PartForm {
     pub tpl_message: String,
     /// What the last "fill from SPICE" did or why it could not.
     pub spice_message: Option<Result<String, String>>,
+    /// Result of the last trial read of the model (shown under the model box).
+    pub trial_message: Option<trial::Trial>,
 }
 
 impl Default for PartForm {
@@ -223,6 +225,7 @@ impl Default for PartForm {
             tpl: ChargerTemplate::default(),
             tpl_message: String::new(),
             spice_message: None,
+            trial_message: None,
         }
     }
 }
@@ -234,6 +237,7 @@ mod chip;
 mod preview;
 mod tabs;
 mod template;
+mod trial;
 #[cfg(test)]
 mod tests;
 

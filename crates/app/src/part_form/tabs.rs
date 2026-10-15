@@ -135,6 +135,9 @@ impl PartForm {
                 if ui.button("貼ったモデルから自動入力").on_hover_text("上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です").clicked() {
                     autofill = true;
                 }
+                if ui.button("試し読み").on_hover_text("このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します").clicked() {
+                    self.trial_message = Some(self.trial_read());
+                }
                 if ui.button("SPICEファイルを読む…").on_hover_text("メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します").clicked()
                     && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
                 {
@@ -149,6 +152,19 @@ impl PartForm {
             });
             if autofill {
                 self.spice_message = Some(self.autofill_from_spice());
+                self.trial_message = None;
+            }
+            match &self.trial_message {
+                Some(super::trial::Trial::Ok(m)) => {
+                    ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                }
+                Some(super::trial::Trial::Warn(m)) => {
+                    ui.colored_label(Color32::from_rgb(220, 160, 40), m);
+                }
+                Some(super::trial::Trial::Err(m)) => {
+                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                }
+                None => {}
             }
             match &self.spice_message {
                 Some(Ok(m)) => {
