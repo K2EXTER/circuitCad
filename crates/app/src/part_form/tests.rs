@@ -606,4 +606,19 @@ mod passive_form_tests {
         cap.pas_value = "100n".into();
         assert!(cap.apply_passive().unwrap_err().contains("TC1"));
     }
+
+    /// The leaded-part helper turns the 1N4007's drawing into a hole, pad, pitch and body, and the result is a valid part.
+    #[test]
+    fn the_leaded_part_helper_fills_the_package_from_the_mechanical_drawing() {
+        let mut f = PartForm::for_type("diode");
+        f.name = "1N4007".into();
+        (f.thru_lead, f.thru_len, f.thru_dia) = ("0.864".into(), "5.21".into(), "2.72".into());
+        let t = f.thru_suggest().unwrap();
+        f.thru_apply(&t);
+        assert_eq!((f.drill, f.pad_d, f.pitch), (1.2, 2.0, 10.16));
+        assert_eq!((f.body_w, f.body_h, f.height), (5.21, 2.72, 2.72));
+        assert!(f.to_def().is_ok());
+        f.thru_lead = "abc".into();
+        assert!(f.thru_suggest().unwrap_err().contains("リード径"));
+    }
 }

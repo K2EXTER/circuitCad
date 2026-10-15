@@ -243,7 +243,7 @@ impl PartForm {
 
     /// The tab of the board shape: package, thermal pad, body, extra pads and holes.
     pub(super) fn tab_package(&mut self, ui: &mut egui::Ui) {
-            ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます)");
+            ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
                 ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
@@ -290,6 +290,9 @@ impl PartForm {
                     }
                 }
             });
+            if self.pkg == PkgKind::Row {
+                self.thru_ui(ui);
+            }
             if matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) {
                 ui.checkbox(&mut self.thermal_on, "放熱パッド (ICの裏の大きなパッド) を付ける").on_hover_text("QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します");
                 if self.thermal_on {

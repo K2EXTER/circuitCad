@@ -138,6 +138,12 @@ pub struct PartForm {
     pub dio_n: f64,
     pub dio_rs: f64,
     pub dio_message: Option<Result<String, String>>,
+    /// The leaded-part helper of the package tab: lead diameter, body length / diameter (axial) or lead spacing (radial), in mm as typed.
+    pub thru_lead: String,
+    pub thru_len: String,
+    pub thru_dia: String,
+    pub thru_pitch: String,
+    pub thru_radial: bool,
     pub sim: SimChoice,
     pub sim_element: String,
     pub sim_name: String,
@@ -229,6 +235,11 @@ impl Default for PartForm {
             dio_n: 1.5,
             dio_rs: 0.05,
             dio_message: None,
+            thru_lead: String::new(),
+            thru_len: String::new(),
+            thru_dia: String::new(),
+            thru_pitch: String::new(),
+            thru_radial: false,
             sim: SimChoice::None,
             sim_element: "D".into(),
             sim_name: String::new(),
@@ -259,6 +270,7 @@ mod parse;
 mod chip;
 mod diode;
 mod zchart;
+mod thru;
 mod preview;
 mod tabs;
 mod template;

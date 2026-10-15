@@ -590,6 +590,7 @@ pub mod diode;
 pub mod kicad;
 pub mod passive;
 pub mod templates;
+pub mod thru_hole;
 
 #[cfg(test)]
 mod tests;
