@@ -113,6 +113,8 @@ impl PartForm {
         self.body_pin.clear();
         match t {
             PartType::Ic => {
+                // the ratings list starts at a regulator (the first kind of IC), not at the diode
+                self.rt_kind = CHECKLISTS.iter().position(|c| c.0.starts_with("レギュレータ")).unwrap_or(0);
                 self.prefix = "U".into();
                 self.glyph.clear();
                 self.pins_text = "1 IN\n2 GND\n3 OUT\n4 VCC".into();

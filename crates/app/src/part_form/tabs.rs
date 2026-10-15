@@ -1,8 +1,18 @@
 use super::*;
 
 impl PartForm {
-    /// The ① basic information tab (name, category, prefix, value, description, data sheet URL) and the easy templates.
+    /// The ① basic information tab. What is offered depends on the kind chosen at the top: a capacitor, resistor or
+    /// coil starts from its data sheet numbers (first, since that fills the fields below), an IC may start from the
+    /// charger template, and the other kinds just get the fields.
     pub(super) fn tab_basic(&mut self, ui: &mut egui::Ui) {
+        let passive = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor));
+        if passive {
+            self.passive_ui(ui);
+            ui.add_space(6.0);
+            ui.separator();
+            ui.label(egui::RichText::new("名前など").strong());
+            ui.small("上の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
+        }
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
             ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
@@ -25,10 +35,23 @@ impl PartForm {
         });
 
         ui.add_space(6.0);
-        ui.label(egui::RichText::new("かんたん作成 (テンプレート)").strong());
-            ui.small("チップ部品や充電ICは、データシートの数字を入れるだけで、下の欄を自動で埋められます");
-            self.passive_ui(ui);
-            self.template_ui(ui);
+        match self.ptype {
+            Some(PartType::Ic) => {
+                ui.label(egui::RichText::new("かんたん作成 (ひな形)").strong());
+                self.template_ui(ui);
+                ui.small("ほかの IC は、② ピン → ③ 基板の形 → ④ シミュレーション の順に入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
+            }
+            Some(PartType::Transistor | PartType::Diode | PartType::Connector) => {
+                ui.small("② ピン → ③ 基板の形 → ④ シミュレーション の順に、データシートを見ながら入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
+            }
+            Some(_) => {}
+            None => {
+                ui.label(egui::RichText::new("かんたん作成 (テンプレート)").strong());
+                ui.small("上の「部品の種類」を選ぶと、その種類に合わせた入力欄に変わります。チップ部品や充電IC は、データシートの数字を入れるだけで、下の欄を自動で埋められます");
+                self.passive_ui(ui);
+                self.template_ui(ui);
+            }
+        }
     }
 
     /// The tab of the data sheet's ratings.
@@ -47,6 +70,10 @@ impl PartForm {
                     ui.label(if self.ptype == Some(PartType::Ic) { "どの IC?" } else { "部品の種類" });
                     egui::ComboBox::from_id_salt("rt_kind").selected_text(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].0).show_ui(ui, |ui| {
                         for (k, (name, _, _)) in CHECKLISTS.iter().enumerate() {
+                            // an IC is a regulator, an op-amp or something else; the diode and transistor lists belong to their own kinds
+                            if self.ptype == Some(PartType::Ic) && !["レギュレータ", "オペアンプ", "そのほか"].iter().any(|h| name.starts_with(h)) {
+                                continue;
+                            }
                             ui.selectable_value(&mut self.rt_kind, k, *name);
                         }
                     }).response.on_hover_text("選ぶと、その種類で調べるとよい項目が出ます");

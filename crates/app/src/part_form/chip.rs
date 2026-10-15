@@ -84,14 +84,27 @@ impl PartForm {
         Ok(m)
     }
 
+    /// The chip part section. With a kind chosen at the top (capacitor, resistor, coil) it is shown open under its own
+    /// heading and the kind is fixed; with no kind chosen it is a folded section with its own kind selector.
     pub(super) fn passive_ui(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる").id_salt("pas_section").default_open(!self.glyph.is_empty()).show(ui, |ui| {
-            ui.small("容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます");
-            ui.horizontal(|ui| {
-                for k in [PassiveKind::Capacitor, PassiveKind::Resistor, PassiveKind::Inductor] {
-                    ui.selectable_value(&mut self.pas_kind, k, k.label());
-                }
+        if self.ptype.is_some() {
+            ui.label(egui::RichText::new(format!("かんたん作成: {}をデータシートの数値からつくる", self.pas_kind.label())).strong());
+            self.passive_body(ui);
+        } else {
+            egui::CollapsingHeader::new("チップ部品 (コンデンサ・抵抗・コイル) を、データシートの数値からつくる").id_salt("pas_section").default_open(!self.glyph.is_empty()).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    for k in [PassiveKind::Capacitor, PassiveKind::Resistor, PassiveKind::Inductor] {
+                        ui.selectable_value(&mut self.pas_kind, k, k.label());
+                    }
+                });
+                self.passive_body(ui);
             });
+        }
+    }
+
+    fn passive_body(&mut self, ui: &mut egui::Ui) {
+        {
+            ui.small("容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます");
             let kind = self.pas_kind;
             egui::Grid::new("pas_grid").num_columns(2).show(ui, |ui| {
                 let row = |ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str, hint: &str| {
@@ -153,6 +166,6 @@ impl PartForm {
                 }
                 None => {}
             }
-        });
+        }
     }
 }
