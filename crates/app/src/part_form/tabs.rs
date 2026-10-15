@@ -2,26 +2,15 @@ use super::*;
 
 impl PartForm {
     /// The ① basic information tab. What is offered depends on the kind chosen at the top: a capacitor, resistor or
-    /// coil starts from its data sheet numbers (first, since that fills the fields below), an IC may start from the
-    /// charger template, and the other kinds just get the fields.
+    /// coil can start from its data sheet numbers (below the name fields, which that fills in), an IC may start from
+    /// the charger template, and the other kinds just get the fields.
     pub(super) fn tab_basic(&mut self, ui: &mut egui::Ui) {
         let passive = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor));
         let diode = self.ptype == Some(PartType::Diode) && self.glyph != "zener";
-        if diode {
-            self.diode_ui(ui);
-        }
-        if passive || diode {
-            if passive {
-                self.passive_ui(ui);
-            }
-            ui.add_space(6.0);
-            ui.separator();
-            ui.label(egui::RichText::new("名前など").strong());
-            if passive {
-                ui.small("上の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
-            } else {
-                ui.small("部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
-            }
+        if passive {
+            ui.small("下の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
+        } else if diode {
+            ui.small("部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
         }
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
@@ -43,6 +32,16 @@ impl PartForm {
             ui.text_edit_singleline(&mut self.datasheet).on_hover_text("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです");
             ui.end_row();
         });
+        if passive || diode {
+            ui.add_space(6.0);
+            ui.separator();
+            if diode {
+                self.diode_ui(ui);
+            }
+            if passive {
+                self.passive_ui(ui);
+            }
+        }
 
         ui.add_space(6.0);
         match self.ptype {
