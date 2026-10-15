@@ -241,3 +241,21 @@ fn two_tracks_from_one_pad_point_do_not_get_overlapping_teardrops() {
     assert_eq!(near, 0);
     assert!(b.tracks.len() > n, "the far pads still get theirs");
 }
+
+#[test]
+fn an_excluded_net_is_left_as_drawn_and_the_other_is_finished() {
+    let mut b = l_shape(); // net A
+    pad(&mut b, 5.0, 25.0, "B");
+    pad(&mut b, 20.0, 28.0, "B");
+    b.tracks.push(trk((5.0, 25.0), (20.0, 25.0), 0.25));
+    b.tracks.push(trk((20.0, 25.0), (20.0, 28.0), 0.25));
+    b.finish_exclude = vec!["A".into()];
+    let r = smooth_tracks(&mut b, &SmoothOptions::default());
+    assert_eq!(r.corners, 1, "only net B's corner");
+    assert!(b.tracks.iter().any(|t| t.a == Point::new(25.0, 5.0) || t.b == Point::new(25.0, 5.0)), "net A's corner is still sharp");
+    // the same in the live finish
+    let mut c = l_shape();
+    c.finish = Finish { on: true, ..Default::default() };
+    c.finish_exclude = vec!["A".into()];
+    assert_eq!(finished(&c).unwrap().board.tracks.len(), c.tracks.len(), "nothing is added for an excluded net");
+}

@@ -308,6 +308,9 @@ pub struct Board {
     /// Finishing of the copper (rounded corners, teardrops ...) applied when the board is shown and made, not to the tracks.
     #[serde(default)]
     pub finish: crate::smooth::Finish,
+    /// Nets whose tracks the finishing leaves as they are (a controlled-impedance line, a differential pair ...).
+    #[serde(default)]
+    pub finish_exclude: Vec<String>,
     pub rules: Rules,
 }
 
@@ -347,6 +350,7 @@ impl Board {
             inner_layers: 0,
             diff_pairs: vec![],
             finish: Default::default(),
+            finish_exclude: vec![],
             rules: Rules::default(),
         }
     }

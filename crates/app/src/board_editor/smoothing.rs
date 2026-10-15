@@ -18,6 +18,7 @@ impl BoardEditor {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         pcb_core::zonefill::geometry_key(&self.board).hash(&mut h);
         (f.corners, f.tapers, f.forks, f.radius.to_bits()).hash(&mut h);
+        self.board.finish_exclude.hash(&mut h);
         let key = h.finish();
         let mut cache = self.finish_cache.borrow_mut();
         if let Some((k, v)) = cache.as_ref()
@@ -48,6 +49,7 @@ impl BoardEditor {
             self.checkpoint();
             self.board.finish = f;
         }
+        self.panel_finish_exclude(ui);
         let any = f.corners || f.tapers;
         if ui.add_enabled(any, egui::Button::new("整えた形を配線に確定する")).on_hover_text("角の丸みと段差を、配線そのものに書き込みます (確定すると、ほかの CAD にも渡せます。あとから配線を動かしても、丸めた角は自動では直りません)。ルール違反が増える所と、接続が切れる所は変えません。分かれ目の丸みは確定できません。元に戻すで取り消せます").clicked() {
             self.smooth_tracks();
@@ -60,6 +62,44 @@ impl BoardEditor {
         {
             self.smooth_picked(&picked);
         }
+    }
+
+    /// The nets the finishing leaves alone: a line whose shape matters (controlled impedance, a differential pair).
+    fn panel_finish_exclude(&mut self, ui: &mut egui::Ui) {
+        let nets = self.board_nets();
+        if nets.is_empty() {
+            return;
+        }
+        let count = self.board.finish_exclude.len();
+        egui::CollapsingHeader::new(format!("整えないネット ({count})"))
+            .id_salt("finish_exclude")
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.small("チェックしたネットの配線は、整えません (配線の形が大事な線を守ります)");
+                let mut next = self.board.finish_exclude.clone();
+                for net in &nets {
+                    let mut on = next.contains(net);
+                    if ui.checkbox(&mut on, net).on_hover_text("入れると、このネットの配線は、角の丸み・段差・涙型・分かれ目の丸みを付けません。形が特性を決める線 (USB・高周波・インピーダンスを決めた線など) に使います").changed() {
+                        if on {
+                            next.push(net.clone());
+                        } else {
+                            next.retain(|x| x != net);
+                        }
+                    }
+                }
+                let pairs: Vec<String> = self.board.diff_pairs.iter().flat_map(|d| [d.p.clone(), d.n.clone()]).collect();
+                if !pairs.is_empty() && ui.button("差動ペアのネットを全部入れる").on_hover_text("差動ペアに登録したネット (＋側と－側) をすべて、整えないネットにします").clicked() {
+                    for n in pairs {
+                        if !next.contains(&n) {
+                            next.push(n);
+                        }
+                    }
+                }
+                if next != self.board.finish_exclude {
+                    self.checkpoint();
+                    self.board.finish_exclude = next;
+                }
+            });
     }
 
     /// Select track `i` (for screenshots).

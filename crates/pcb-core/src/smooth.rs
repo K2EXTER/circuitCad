@@ -379,6 +379,11 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Vec<Edit
     if let Some(only) = only {
         edits.retain(|e| e.touches.iter().any(|i| only.contains(i)));
     }
+    // the nets that are left as they are
+    if !board.finish_exclude.is_empty() {
+        let conn = crate::drc::connectivity(board);
+        edits.retain(|e| e.touches.iter().all(|&i| conn.track_net(i).is_none_or(|n| !board.finish_exclude.iter().any(|x| x == n))));
+    }
     edits
 }
 
