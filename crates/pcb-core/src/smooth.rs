@@ -45,6 +45,8 @@ impl Default for Finish {
 pub struct Patch {
     pub side: Side,
     pub outline: Vec<Point>,
+    /// A track of the copper this patch belongs to (its net, for instance, is that track's).
+    pub track: usize,
 }
 
 /// The copper of a board with its finish applied.
@@ -178,7 +180,7 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
         pts.push(at(cx + rho * a.cos(), rho * a.sin()));
     }
     pts.extend([at(t_up.0, t_up.1), at(t_up.0, t_up.1 + SINK)]);
-    Some(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: ti.side, outline: pts }), kind: Kind::Fork, touches: vec![i, j] })
+    Some(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: ti.side, outline: pts, track: i }), kind: Kind::Fork, touches: vec![i, j] })
 }
 
 fn far_end(t: &Track, is_a: bool) -> Point {

@@ -17,7 +17,7 @@ pub(super) fn capsule(a: Point, b: Point, r: f64) -> Vec<Point> {
 
 /// The copper of net `net` (tracks, pads, vias, and what the zones join to it) as triangles per face. Inner
 /// layers are not visible from outside, so they are left out.
-pub(super) fn net_glow(board: &Board, conn: &drc::Connectivity, net: &str) -> Vec<(bool, [Point; 3])> {
+pub(super) fn net_glow(board: &Board, conn: &drc::Connectivity, net: &str, patches: &[pcb_core::smooth::Patch]) -> Vec<(bool, [Point; 3])> {
     let mut out: Vec<(bool, [Point; 3])> = vec![];
     let mut add = |bottom: bool, poly: &[Point]| {
         for k in 1..poly.len().saturating_sub(1) {
@@ -64,6 +64,14 @@ pub(super) fn net_glow(board: &Board, conn: &drc::Connectivity, net: &str) -> Ve
             let poly = capsule(v.pos, v.pos, v.diameter / 2.0);
             add(false, &poly);
             add(true, &poly);
+        }
+    }
+    // the polygons of the finish (see `pcb_core::smooth`)
+    for p in patches.iter().filter(|p| conn.track_net(p.track) == Some(net)) {
+        match p.side {
+            Side::Top => add(false, &p.outline),
+            Side::Bottom => add(true, &p.outline),
+            Side::Inner(_) => {}
         }
     }
     out

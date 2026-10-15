@@ -95,9 +95,12 @@ impl BoardEditor {
 
     /// Recomputes the copper of the highlighted net (after the scene was rebuilt or another net was picked).
     fn apply_net_glow(&mut self) {
-        let glow = match &self.view3d.net {
-            Some(n) => net_glow(&self.board, &self.cached_connectivity(), n),
-            None => vec![],
+        // with the finish on, the highlighted copper is the finished one
+        let finished = self.finished();
+        let glow = match (&self.view3d.net, &finished) {
+            (Some(n), Some(f)) => net_glow(&f.board, &pcb_core::drc::connectivity(&f.board), n, &f.patches),
+            (Some(n), None) => net_glow(&self.board, &self.cached_connectivity(), n, &[]),
+            (None, _) => vec![],
         };
         if let Some(sc) = &mut self.view3d.scene {
             sc.glow = glow;

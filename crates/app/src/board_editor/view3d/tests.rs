@@ -103,12 +103,32 @@ mod view3d_tests {
     }
 
     #[test]
+    fn the_glow_of_a_net_includes_the_polygons_of_the_finish() {
+        // two tracks leave one small pad at a sharp angle: with the finish on, the notch between them is a patch
+        let mut b = pcb_core::Board::new("t", 40.0, 30.0);
+        let mut p = Pad::new(Point::new(5.0, 15.0), PadShape::Rect { w: 0.3, h: 0.3 }, None, Side::Top);
+        p.net = "A".into();
+        b.pads.push(p);
+        let a = 15f64.to_radians();
+        for s in [1.0, -1.0] {
+            b.tracks.push(pcb_core::Track { side: Side::Top, a: Point::new(5.0, 15.0), b: Point::new(5.0 + 10.0 * a.cos(), 15.0 + s * 10.0 * a.sin()), width: 0.25 });
+        }
+        b.finish = pcb_core::smooth::Finish { on: true, corners: false, tapers: false, ..Default::default() };
+        let f = pcb_core::smooth::finished(&b).unwrap();
+        assert_eq!(f.patches.len(), 1);
+        let conn = pcb_core::drc::connectivity(&f.board);
+        let plain = net_glow(&f.board, &conn, "A", &[]).len();
+        let with = net_glow(&f.board, &conn, "A", &f.patches).len();
+        assert!(with > plain, "{with} > {plain}");
+    }
+
+    #[test]
     fn a_picked_net_lights_its_copper_and_nothing_else() {
         let b = two_resistors();
         let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
         assert_eq!(s.nets, vec!["A".to_string(), "B".to_string()]);
         // net B: the pads at x=9 and x=31 and the track leaving the first
-        s.glow = net_glow(&b, &pcb_core::drc::connectivity(&b), "B");
+        s.glow = net_glow(&b, &pcb_core::drc::connectivity(&b), "B", &[]);
         assert!(!s.glow.is_empty() && s.glow.iter().all(|(bottom, _)| !bottom));
         let (rect, cam) = top_view(&s);
         let (img, ..) = snapshot(&s, rect, &cam, false, Quality::Fine(1), None, None);
