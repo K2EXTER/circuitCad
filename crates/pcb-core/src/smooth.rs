@@ -370,7 +370,26 @@ fn corner(board: &Board, v: Point, (i, ia): End, (j, ja): End, radius: f64) -> O
     }
     pts.push(p2);
     let pieces = pts.windows(2).map(|w| Track { side: ti.side, a: w[0], b: w[1], width: ti.width }).collect();
-    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, patch: None, live: None, kind: Kind::Corner, touches: vec![i, j] })
+    // live: the corner is a band of the exact arc (its edges are circles, sampled every 4 degrees), with a few coarse
+    // tracks inside it that only keep the copper connected
+    let r_out = r + ti.width / 2.0;
+    let r_in = (r - ti.width / 2.0).max(0.0);
+    let m = ((sweep.abs() / 4f64.to_radians()).ceil() as usize).max(4);
+    let ang = |k: usize| a1 + sweep * k as f64 / m as f64;
+    let on = |rad: f64, k: usize| Point::new(c.x + rad * ang(k).cos(), c.y + rad * ang(k).sin());
+    let mut outline: Vec<Point> = (0..=m).map(|k| on(r_out, k)).collect();
+    outline.extend((0..=m).rev().map(|k| on(r_in, k)));
+    let n_live = ((sweep.abs() / 15f64.to_radians()).ceil() as usize).max(2);
+    let live_pts: Vec<Point> = (0..=n_live).map(|k| {
+        let a = a1 + sweep * k as f64 / n_live as f64;
+        Point::new(c.x + r * a.cos(), c.y + r * a.sin())
+    }).collect();
+    let live = Live {
+        trims: vec![(i, ia, p1), (j, ja, p2)],
+        pieces: live_pts.windows(2).map(|w| Track { side: ti.side, a: w[0], b: w[1], width: ti.width }).collect(),
+        patch: Patch { side: ti.side, outline, track: i },
+    };
+    Some(Edit { trims: vec![(i, ia, p1), (j, ja, p2)], pieces, patch: None, live: Some(live), kind: Kind::Corner, touches: vec![i, j] })
 }
 
 /// A smooth step from 0 to 1 (flat at both ends).

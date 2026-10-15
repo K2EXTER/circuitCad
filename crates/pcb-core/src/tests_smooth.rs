@@ -299,3 +299,21 @@ fn a_plain_corner_is_not_a_junction_fillet() {
     b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
     assert!(finished(&b).unwrap().patches.is_empty());
 }
+
+#[test]
+fn a_corner_in_the_live_finish_is_a_band_of_the_exact_arc() {
+    let mut b = l_shape();
+    b.finish = Finish { on: true, corners: true, tapers: false, forks: false, radius: 1.0 };
+    let f = finished(&b).unwrap();
+    assert_eq!(f.patches.len(), 1);
+    // the corner (25, 5) is cut by a circle of radius 1 centred at (24, 6): every point of the band lies between the
+    // circles of radius 1 - 0.125 and 1 + 0.125 (the track is 0.25 wide), and the band follows them closely
+    let c = Point::new(24.0, 6.0);
+    let ds: Vec<f64> = f.patches[0].outline.iter().map(|p| p.dist(c)).collect();
+    assert!(ds.iter().all(|d| (d - 0.875).abs() < 1e-9 || (d - 1.125).abs() < 1e-9), "{ds:?}");
+    assert!(ds.len() >= 20, "sampled finely: {}", ds.len());
+    // the tracks that keep it connected are few, and the board is still one piece
+    assert!(f.board.tracks.len() <= 8, "two trimmed tracks and a coarse chain");
+    assert!(ratsnest(&f.board).is_empty());
+    assert!(drc::check_final(&b).is_empty());
+}
