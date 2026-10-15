@@ -46,11 +46,13 @@ pub struct MosModel {
     /// Constant gate-source / gate-drain capacitances (F), for AC and transient.
     pub cgs: f64,
     pub cgd: f64,
+    /// A junction FET: `vto` is the (negative) pinch-off voltage in the n-channel orientation and is used with its sign.
+    pub jfet: bool,
 }
 
 impl Default for MosModel {
     fn default() -> Self {
-        Self { kp: 2e-5, vto: 1.0, lambda: 0.0, pmos: false, cgs: 0.0, cgd: 0.0 }
+        Self { kp: 2e-5, vto: 1.0, lambda: 0.0, pmos: false, cgs: 0.0, cgd: 0.0, jfet: false }
     }
 }
 

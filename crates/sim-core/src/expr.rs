@@ -315,6 +315,15 @@ impl Parser<'_, '_> {
                 }
             };
         }
+        if id == "uramp" {
+            // LTspice: the ramp max(x, 0)
+            self.pos += 1; // (
+            let a = self.expr()?;
+            if !self.eat(b')') {
+                return self.err("閉じ括弧 ) がありません");
+            }
+            return Ok(Expr::Call(Func::Max, vec![a, Expr::Num(0.0)]));
+        }
         if id == "buf" || id == "inv" {
             // LTspice logic buffer / inverter: the argument is a logic level (above 0.5 is true)
             self.pos += 1; // (

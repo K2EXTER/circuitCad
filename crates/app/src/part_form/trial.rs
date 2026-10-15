@@ -35,9 +35,9 @@ pub fn unsupported_notes(text: &str) -> Vec<String> {
         }
         // JFET / mutual inductor / transmission line / switches and the like: not read
         if !low.starts_with('.')
-            && let Some(c @ ('J' | 'K' | 'T' | 'W' | 'O' | 'U' | 'Z')) = l.chars().next().map(|c| c.to_ascii_uppercase())
+            && let Some(c @ ('K' | 'T' | 'W' | 'O' | 'U' | 'Z' | 'A')) = l.chars().next().map(|c| c.to_ascii_uppercase())
         {
-            add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G F H D Q M S B と、X (入れ子) です", l.split_whitespace().next().unwrap_or("")));
+            add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G F H D Q J M S B と、X (入れ子) です", l.split_whitespace().next().unwrap_or("")));
         }
     }
     notes
@@ -144,11 +144,11 @@ R2 out gnd 1k
     fn unsupported_elements_and_functions_are_noticed() {
         let n = unsupported_notes(".func f(x) {x*2}
 .subckt A 1 2
-J1 1 2 3 JM
+K1 L1 L2 0.9
 G1 1 2 value={V(1)}
 .ends");
         assert!(n.iter().any(|s| s.contains(".func")), "{n:?}");
-        assert!(n.iter().any(|s| s.contains("J")), "{n:?}");
+        assert!(n.iter().any(|s| s.contains("K")), "{n:?}");
         // VALUE= is read now (as a behavioural source), so it is not listed
         assert!(!n.iter().any(|s| s.contains("VALUE")), "{n:?}");
     }

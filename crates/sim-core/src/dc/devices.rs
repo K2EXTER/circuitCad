@@ -100,7 +100,7 @@ pub(crate) fn bjt_qbc(m: &BjtModel, vbc: f64) -> (f64, f64) {
 /// The device is symmetric, so for `vds < 0` source and drain swap roles.
 pub(crate) fn mos_eval(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
     pub(super) fn forward(m: &MosModel, vgs: f64, vds: f64) -> (f64, f64, f64) {
-        let vov = vgs - m.vto.abs();
+        let vov = vgs - if m.jfet { m.vto } else { m.vto.abs() };
         if vov <= 0.0 {
             return (0.0, 0.0, 0.0);
         }

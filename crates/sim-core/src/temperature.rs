@@ -51,7 +51,7 @@ impl Circuit {
                     model.nf *= ratio;
                     model.nr *= ratio;
                 }
-                Element::Mosfet { model, .. } => {
+                Element::Mosfet { model, .. } if !model.jfet => {
                     model.kp *= ratio.powf(-1.5);
                     let shrink = 0.002 * (temp_c - T_NOM_C);
                     model.vto = model.vto.signum() * (model.vto.abs() - shrink).max(0.05);

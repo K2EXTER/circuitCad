@@ -193,9 +193,9 @@ X1 a b gnd X ron=2
 #[ignore]
 fn vendor_models_behave_in_simple_circuits() {
     let Ok(dir) = std::env::var("SPICE_MODEL_DIR") else { return };
-    let read = |f: &str| String::from_utf8_lossy(&std::fs::read(std::path::Path::new(&dir).join(f)).unwrap()).to_string();
+    let read = |f: &str| std::fs::read(std::path::Path::new(&dir).join(f)).ok().map(|b| String::from_utf8_lossy(&b).to_string());
     let run = |label: &str, file: &str, top: &str, ports: &[&str], extra: &dyn Fn(&mut Circuit), probe: &[&str]| {
-        let text = read(file);
+        let Some(text) = read(file) else { return };
         let mut c = Circuit::new();
         let nodes: Vec<usize> = ports.iter().map(|p| if *p == "0" { 0 } else { c.node(p) }).collect();
         if let Err(e) = add_subckt_instance(&mut c, "U1", top, &text, &nodes) {
@@ -204,8 +204,9 @@ fn vendor_models_behave_in_simple_circuits() {
         }
         extra(&mut c);
         match dc_op(&c) {
+            Ok(r) if probe == ["*"] => println!("{label}: {}", c.names.iter().skip(1).map(|n| format!("{n}={:.4}", r.voltage(n).unwrap_or(f64::NAN))).collect::<Vec<_>>().join("  ")),
             Ok(r) => println!("{label}: {}", probe.iter().map(|p| format!("V({p})={:.4}", r.voltage(p).unwrap_or(f64::NAN))).collect::<Vec<_>>().join("  ")),
-            Err(e) => println!("{label}: DC ERROR {e:?}"),
+            Err(e) => println!("{label}: DC ERROR {e:?} {:?}", crate::diagnose(&c, &e)),
         }
     };
     let vdc = |c: &mut Circuit, n: &str, node: &str, v: f64| {
@@ -239,4 +240,149 @@ fn vendor_models_behave_in_simple_circuits() {
         vdc(c, "Vin", "inp", 1.0);
         res(c, "Rl", "out", "0", 10e3);
     }, &["out"]);
+    // op-amps as unity-gain buffers (+ in, - in, V+, V-, out, ...): the pin order is the file's own
+    for (label, file, top, order) in [
+        ("ua741 buffer", "ua741.mod", "UA741", ["inp", "out", "vcc", "vee", "out"]),
+        ("TL082 buffer (JFET input)", "tl082.mod", "TL082", ["inp", "out", "vcc", "vee", "out"]),
+        ("OPA211 buffer", "OPA211.mod", "OPA211", ["inp", "out", "vcc", "vee", "out"]),
+        ("MCP6001 buffer", "MCP6001.lib", "MCP6001", ["inp", "out", "vcc", "0", "out"]),
+    ] {
+        run(&format!("{label} (in 2 V, +/-5 V)"), file, top, &order, &|c| {
+            vdc(c, "Vcc", "vcc", 5.0);
+            if order[3] == "vee" {
+                vdc(c, "Vee", "vee", -5.0);
+            }
+            vdc(c, "Vin", "inp", 2.0);
+            res(c, "Rl", "out", "0", 10e3);
+        }, &["out"]);
+    }
+    for vin in [0.0, 0.5, 1.0, -1.0] {
+        run(&format!("OPA211 buffer vin={vin}"), "OPA211.mod", "OPA211", &["inp", "out", "vcc", "vee", "out"], &|c| {
+            vdc(c, "Vcc", "vcc", 5.0);
+            vdc(c, "Vee", "vee", -5.0);
+            vdc(c, "Vin", "inp", vin);
+            res(c, "Rl", "out", "0", 10e3);
+        }, &["out"]);
+    }
+    run("LM337 (-12 V in, 100 ohm load)", "lm337-1.lib", "LM337-1", &["in", "adj", "out"], &|c| {
+        vdc(c, "Vin", "in", -12.0);
+        res(c, "Rl", "out", "0", 100.0);
+        res(c, "Rs", "out", "adj", 240.0);
+        res(c, "Rg", "adj", "0", 1000.0);
+    }, &["out", "adj"]);
+    run("2N3904 (Vbe drive 5 V via 10k, collector 5 V via 1k)", "2n3904.lib", "Q2N3904", &["c", "b", "0"], &|c| {
+        vdc(c, "Vb", "vb", 5.0);
+        res(c, "Rb", "vb", "b", 10e3);
+        vdc(c, "Vc", "vc", 5.0);
+        res(c, "Rc", "vc", "c", 1e3);
+    }, &["c", "b"]);
+    run("IRFZ44N (Vgs 10 V, 12 V via 10 ohm)", "irfz44n.spi", "irfz44n", &["d", "g", "0"], &|c| {
+        vdc(c, "Vg", "g", 10.0);
+        vdc(c, "Vs", "vs", 12.0);
+        res(c, "Rd", "vs", "d", 10.0);
+    }, &["d"]);
+    run("LM35 (supply 5 V)", "LM35_my_model.lib", "LM35", &["out", "vcc", "0"], &|c| {
+        vdc(c, "Vcc", "vcc", 5.0);
+        res(c, "Rl", "out", "0", 100e3);
+    }, &["*"]);
+}
+
+/// Developer helper: print the flattened text of `SPICE_DUMP_FILE` (top subcircuit `SPICE_DUMP_TOP`) from `SPICE_MODEL_DIR`.
+#[test]
+#[ignore]
+fn dump_flat_text() {
+    let (Ok(dir), Ok(file), Ok(top)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP")) else { return };
+    let text = String::from_utf8_lossy(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap()).to_string();
+    let lines = crate::spice_in::logical_lines(&text);
+    match crate::spice_flat::flatten(&text, &top, &lines) {
+        Ok(Some(s)) => println!("{s}"),
+        other => println!("{other:?}"),
+    }
+}
+
+/// Developer helper: find the voltage-defining elements (V, E, L, voltage-type B) that close a loop in a subcircuit.
+#[test]
+#[ignore]
+fn find_voltage_loops() {
+    let (Ok(dir), Ok(file), Ok(top)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP")) else { return };
+    let text = String::from_utf8_lossy(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap()).to_string();
+    let mut c = Circuit::new();
+    let probe = text.lines().find(|l| l.to_ascii_lowercase().starts_with(".subckt")).map(|l| l.split_whitespace().count() - 2).unwrap_or(0);
+    let ports: Vec<usize> = (0..probe).map(|i| c.node(&format!("p{i}"))).collect();
+    add_subckt_instance(&mut c, "U1", &top, &text, &ports).unwrap();
+    let mut parent: Vec<usize> = (0..c.names.len()).collect();
+    fn find(p: &mut Vec<usize>, i: usize) -> usize {
+        if p[i] != i {
+            let r = find(p, p[i]);
+            p[i] = r;
+        }
+        p[i]
+    }
+    for e in &c.elements {
+        let pair = match e {
+            Element::VSource { name, p, n, .. } => Some((name.clone(), *p, *n)),
+            Element::Vcvs { name, p, n, .. } => Some((name.clone(), *p, *n)),
+            Element::Inductor { name, a, b, .. } => Some((name.clone(), *a, *b)),
+            Element::BSource { name, p, n, voltage: true, .. } => Some((name.clone(), *p, *n)),
+            _ => None,
+        };
+        if let Some((name, a, b)) = pair {
+            let (ra, rb) = (find(&mut parent, a), find(&mut parent, b));
+            if ra == rb {
+                println!("LOOP closes at {name}: {} -> {}", c.names[a], c.names[b]);
+            } else {
+                parent[ra] = rb;
+            }
+        }
+    }
+}
+
+#[test]
+fn a_source_with_temp_in_its_value_follows_the_circuit_temperature() {
+    // the LM35 trick: V = temp * 10 mV (temp in degrees C)
+    let t = ".subckt T a b gnd\nV1 a gnd {temp*0.01}\nR1 a b 1k\nR2 b gnd 1k\n.ends T";
+    let mut c = Circuit::new();
+    let nodes: Vec<usize> = ["a", "b"].iter().map(|p| c.node(p)).collect();
+    add_subckt_instance(&mut c, "U1", "T", t, &[nodes[0], nodes[1], 0]).unwrap_or_else(|e| panic!("{e}"));
+    let at = |temp: f64| dc_op(&c.at_temperature(temp)).unwrap().voltage("a").unwrap();
+    assert!((at(27.0) - 0.27).abs() < 1e-9 && (at(100.0) - 1.0).abs() < 1e-9, "{} {}", at(27.0), at(100.0));
+}
+
+#[test]
+fn nested_subckt_definitions_resistor_models_jfets_and_ota_are_read() {
+    // a .subckt inside a .subckt; `R1 a b MODEL value`; an NJF; the LTspice OTA of the universal op-amp
+    let t = ".subckt T a b gnd\nXI a b gnd INNER\n.subckt INNER p q g\nR1 p q RM 2k\n.model RM RES(T_ABS=-273)\n.ends INNER\n.ends T";
+    let t = t.replace("\\n", "\n");
+    assert!((run(&t, "T", &["a", "b", "gnd"], 1.0, "a") - 1.0).abs() < 1e-9);
+    // an n-channel JFET with a pinch-off of -2 V: with the gate at 0 V it conducts, at -3 V it is off
+    let j = ".subckt T d g s\nJ1 d g s JM\n.model JM NJF(Vto=-2 Beta=1m)\n.ends T";
+    let on = {
+        let mut c = Circuit::new();
+        let (d, g) = (c.node("d"), c.node("g"));
+        add_subckt_instance(&mut c, "U1", "T", &j.replace("\\n", "\n"), &[d, g, 0]).unwrap_or_else(|e| panic!("{e}"));
+        c.add(Element::vdc("Vd", d, 0, 5.0));
+        c.add(Element::vdc("Vg", g, 0, 0.0));
+        -dc_op(&c).unwrap().element("Vd").unwrap().current
+    };
+    // saturation: beta * vp^2 = 1 mA * 4 = 4 mA
+    assert!((on / 4e-3 - 1.0).abs() < 0.02, "{on}");
+    let off = {
+        let mut c = Circuit::new();
+        let (d, g) = (c.node("d"), c.node("g"));
+        add_subckt_instance(&mut c, "U1", "T", &j.replace("\\n", "\n"), &[d, g, 0]).unwrap();
+        c.add(Element::vdc("Vd", d, 0, 5.0));
+        c.add(Element::vdc("Vg", g, 0, -3.0));
+        -dc_op(&c).unwrap().element("Vd").unwrap().current
+    };
+    assert!(off.abs() < 1e-6, "{off}");
+}
+
+#[test]
+fn the_ota_a_device_is_a_transconductance_and_the_other_a_devices_are_explained() {
+    // I = G * (V(second node) - V(first node)) into the output: a follower with a 1 kohm load reads G R / (1 + G R)
+    let t = ".subckt T inp out gnd\nA1 out inp 0 0 0 0 out 0 OTA G=1 Cout=1p Iout=1\nR1 out gnd 1k\n.ends T";
+    let v = run(t, "T", &["inp", "out", "gnd"], 1.0, "out");
+    assert!((v - 1000.0 / 1001.0).abs() < 1e-6, "{v}");
+    let e = err(".subckt T a b gnd\nA1 a 0 0 0 0 0 b 0 SCHMITT Vt=0 Vh=1m\n.ends T", "T", &["a", "b"]);
+    assert!(e.contains("SCHMITT") && e.contains("未対応"), "{e}");
 }

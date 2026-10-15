@@ -42,3 +42,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 ## ダイオードの電荷(CJO/VJ/M/FC/TT)
 BJT と同じ作り(`diode_q` = 空乏電荷 + 拡散電荷 `TT·Id`)。`Ce::D` に `dm`(モデルの複製)と `cap`(積分器の枠1つ)を持ち、接合は `ai`–`k` の間(RS があれば内部ノード側)。過渡・AC・ノイズは BJT と同様。`AREA` は CJO も倍にする。検証: `tests_diode_cap.rs`(逆バイアスのAC折れ点が 1/√2、過渡の時定数、順方向で `rd·C = TT`)。フォーム側は `part-lib/diode.rs` の `cj0_from`(Cj と測定した逆電圧から CJO)・`tt_from_trr`(trr と IF/IR から TT)。
 
+## 実在モデルでの追加確認(2回目、2026-10-15)
+KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP6001、irfz44n、IR2110、lm337、LM35、NE555)を `SPICE_MODEL_DIR` の試し読み(`vendor_models_*` テスト)で確かめて足したもの: 入れ子の `.subckt` 定義(スタックで読む。定義は全体で共有)、`TABLE {式} ((x,y)(x,y))`(`=` なし・二重括弧)と `table(x0 y0 x1 y1 …)`(G/E で制御ノード2つ)、`VALUE { 式 }`(`=` なし)、`R1 a b MODEL 値`(RES モデル形式。値はモデル名の次の語)、パラメータに旗(`noiseless`)があっても読む、JFET(`NJF`/`PJF`、`J` 素子。MOSFET と同じ平方則で `kp=2·BETA`、ピンチオフは n チャネル向きで常に負、`MosModel.jfet`)、`uramp()`、LTspice の `A` 素子のうち OTA(電流=G·(第2ノード−第1ノード−ref) を ±Iout で制限して出力へ、Cout があれば出力と GND の間の容量。SCHMITT・SRFLOP・DFLOP・AND・OR などは記憶や遅れを持つので未対応と案内)、値が `{…temp…}` の `V`/`I` 電源は式の B 素子にして温度スイープに追従(LM35 が 0.01V/℃ で動く)。
+結果: 読めて動くのを確認したもの = ua741(バッファ 2.0000V)、TL082(JFET入力、1.9999V)、lm337(−1.2497V の基準)、irfz44n(Rds(on) 約17mΩ)、LM35(27℃で 0.2700V)、OPA197、2N3904。読めるが挙動が合わないもの = OPA211(出力が ±0.7mV に張り付く。原因は未特定)、MCP6001(DC で Singular。原因は未特定)。読めないもの = NE555・IR2110(SCHMITT・SRFLOP・DFLOP などの `A` 素子)。
+

@@ -39,7 +39,8 @@ fn params(s: &str) -> Result<HashMap<String, f64>, String> {
     let cleaned = s.replace(['(', ')', ','], " ");
     let mut m = HashMap::new();
     for tok in cleaned.split_whitespace() {
-        let (k, val) = tok.split_once('=').ok_or_else(|| format!("パラメータ {tok} が K=V の形式ではありません"))?;
+        // a bare word is a flag (`noiseless`): not used
+        let Some((k, val)) = tok.split_once('=') else { continue };
         let x = parse_value(val).ok_or_else(|| format!("パラメータ値 {val} を数値にできません"))?;
         m.insert(k.to_ascii_uppercase(), x);
     }
@@ -87,6 +88,7 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 pmos: t == "PMOS",
                 cgs: get("CGS", 0.0),
                 cgd: get("CGD", 0.0),
+                jfet: false,
             }),
         )),
         t @ ("NPN" | "PNP" | "LPNP") => Ok((
@@ -112,6 +114,20 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 tf: get("TF", 0.0),
                 tr: get("TR", 0.0),
                 pnp: t != "NPN",
+            }),
+        )),
+        // junction FET (level 1): the same square law as the MOSFET with kp = 2*beta; the pinch-off is always negative in
+        // the n-channel orientation the solver works in
+        t @ ("NJF" | "PJF") => Ok((
+            name,
+            Model::Mos(MosModel {
+                kp: 2.0 * get("BETA", 1e-4),
+                vto: -get("VTO", 2.0).abs(),
+                lambda: get("LAMBDA", 0.0),
+                pmos: t == "PJF",
+                cgs: get("CGS", 0.0),
+                cgd: get("CGD", 0.0),
+                jfet: true,
             }),
         )),
         "SW" => {
@@ -184,6 +200,7 @@ pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
             "D" => &["IS", "N", "RS", "BV", "IBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT"],
             "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB", "CJE", "VJE", "PE", "MJE", "ME", "CJC", "VJC", "PC", "MJC", "MC", "FC", "TF", "TR"],
             "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD"],
+            "NJF" | "PJF" => &["BETA", "VTO", "LAMBDA", "CGS", "CGD"],
             "SW" | "VSWITCH" => &["RON", "ROFF", "VT", "VW", "VH", "VON", "VOFF"],
             _ => continue,
         };
@@ -290,16 +307,18 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
         match head.chars().next().unwrap().to_ascii_uppercase() {
             'R' | 'C' | 'L' => {
                 need(4)?;
-                let (a, b, x) = (local(c, t[1]), local(c, t[2]), val(t[3])?);
+                // `R1 a b MODEL 1k` (LTspice / PSpice model form): the value is the word after the model name
+                let vi = if parse_value(t[3]).is_none() && t.len() >= 5 && parse_value(t[4]).is_some() { 4 } else { 3 };
+                let (a, b, x) = (local(c, t[1]), local(c, t[2]), val(t[vi])?);
                 if head.starts_with(['C', 'c']) {
                     // initial voltage: C1 a b 100u IC=3.2
-                    if let Some(ic) = t[4..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix("IC=").map(str::to_string)) {
+                    if let Some(ic) = t[vi + 1..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix("IC=").map(str::to_string)) {
                         c.set_initial_voltage(&name, val(&ic)?);
                     }
                 }
                 // temperature coefficients: TC=a,b  or  TC1=a TC2=b (1/°C, 1/°C²)
                 let (mut tc1, mut tc2) = (0.0, 0.0);
-                for w in t[4..].iter() {
+                for w in t[vi + 1..].iter() {
                     let up = w.to_ascii_uppercase();
                     if let Some(v) = up.strip_prefix("TC=") {
                         let mut it = v.split(',');
@@ -316,7 +335,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 }
                 // saturation of an inductor: ISAT=<A> LDROP=<0..1>  (the inductance has fallen by LDROP at ISAT; default 0.3)
                 if head.starts_with(['L', 'l']) {
-                    let find = |key: &str| t[4..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(key).and_then(parse_value));
+                    let find = |key: &str| t[vi + 1..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(key).and_then(parse_value));
                     if let Some(isat) = find("ISAT=") {
                         let drop = find("LDROP=").unwrap_or(0.3);
                         if !(isat > 0.0 && drop > 0.0 && drop < 1.0) {
@@ -381,6 +400,18 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     _ => return Err(format!("{name}: トランジスタモデル {} が見つかりません (JFET や VDMOS など、未対応の種類のモデルかもしれません)", t[mi])),
                 }
             }
+            'J' => {
+                need(5)?;
+                let (d, g, s) = (local(c, t[1]), local(c, t[2]), local(c, t[3]));
+                match models.get(&t[4].to_ascii_lowercase()) {
+                    Some(Model::Mos(m)) if m.jfet => {
+                        let mut m = m.clone();
+                        m.kp *= area_of(&t[5..]);
+                        c.add_mosfet(&name, d, g, s, m);
+                    }
+                    _ => return Err(format!("{name}: JFET モデル {} が見つかりません (NJF / PJF の .model が要ります)", t[4])),
+                }
+            }
             'M' => {
                 need(6)?;
                 let (d, g, s) = (local(c, t[1]), local(c, t[2]), local(c, t[3]));
@@ -419,7 +450,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 let expr = Expr::parse(&text, &mut node_of, &branch_of).map_err(|e| format!("{name}: {e}"))?;
                 c.add(Element::BSource { name, p, n, voltage: kind == "V", expr });
             }
-            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G F H D Q M S B と X のみ。A は XSPICE の部品、J は JFET です)")),
+            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G F H D Q J M S B と X のみ。A は XSPICE の部品です)")),
         }
     }
     Err(format!(".subckt {sub_name} に .ends がありません"))

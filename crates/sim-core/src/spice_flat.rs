@@ -22,7 +22,7 @@ pub fn needs_flatten(text: &str) -> bool {
     text.lines().any(|l| {
         let l = l.trim_start();
         let low = l.to_ascii_lowercase();
-        low.starts_with(['x', 'f', 'h'])
+        low.starts_with(['x', 'f', 'h', 'a'])
             || low.starts_with(".param")
             || low.contains("params:")
             || l.contains('{')
@@ -299,10 +299,23 @@ fn rename_expr(expr: &str, ports: &HashMap<String, String>, prefix: &str, path: 
     out
 }
 
+/// A piecewise-linear curve of the expression `x` through `pts` (flat beyond the ends), as nested `if(...)`.
+fn pwl_expr(x: &str, pts: &mut [(f64, f64)]) -> String {
+    pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let xs = format!("({x})");
+    let mut expr = format!("({:e})", pts[pts.len() - 1].1);
+    for k in (0..pts.len() - 1).rev() {
+        let ((x0, y0), (x1, y1)) = (pts[k], pts[k + 1]);
+        let seg = if x1 > x0 { format!("({y0:e})+({:e})*({xs}-({x0:e}))", (y1 - y0) / (x1 - x0)) } else { format!("({y0:e})") };
+        expr = format!("if({xs}<({x1:e}),{seg},{expr})");
+    }
+    format!("if({xs}<({:e}),({:e}),{expr})", pts[0].0, pts[0].1)
+}
+
 fn node_count(letter: char) -> Option<usize> {
     Some(match letter {
         'R' | 'C' | 'L' | 'V' | 'I' | 'D' | 'B' => 2,
-        'Q' => 3,
+        'Q' | 'J' => 3,
         'E' | 'G' | 'M' | 'S' => 4,
         _ => return None,
     })
@@ -394,8 +407,23 @@ impl Ctx<'_> {
                 out.extend(self.expand(def2, &sub_path, &port_map, env.clone(), &args, depth + 1)?);
                 continue;
             }
+            if letter == 'A' {
+                out.extend(self.a_device(&t, path, ports, &prefix)?);
+                continue;
+            }
+            // a source whose value follows the circuit temperature (`V1 a b {temp*0.01}`): kept as an expression, so
+            // that a temperature sweep moves it (`temp` is in degrees C)
+            if matches!(letter, 'V' | 'I') {
+                let rt = split_top(raw);
+                if rt.len() == 4 && rt[3].starts_with('{') && rt[3].to_ascii_lowercase().contains("temp") {
+                    let expr = substitute_params(rt[3].trim_start_matches('{').trim_end_matches('}'), &env);
+                    let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                    out.push(format!("B_{head}{suffix} {} {} {}={expr}", rename_node(&rt[1], ports, &prefix), rename_node(&rt[2], ports, &prefix), letter));
+                    continue;
+                }
+            }
             if matches!(letter, 'E' | 'G' | 'F' | 'H') {
-                out.push(self.controlled(&line, &t, letter, path, ports, &prefix)?);
+                out.push(self.controlled(raw, &env, &line, &t, letter, path, ports, &prefix)?);
                 continue;
             }
             let Some(mut n) = node_count(letter) else {
@@ -434,9 +462,35 @@ impl Ctx<'_> {
 }
 
 impl Ctx<'_> {
+    /// An LTspice `A` (XSPICE) device. Only the OTA of the "universal op-amp" is read: a transconductance with a
+    /// current limit and an output capacitance. The others (SCHMITT, SRFLOP, DFLOP, AND ... have a memory or a
+    /// time delay) are reported.
+    fn a_device(&self, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        // A name n1 ... n8 MODEL key=value ...
+        let kind = t.get(9).map(|k| k.to_ascii_uppercase()).unwrap_or_default();
+        if t.len() < 10 {
+            return Err(format!("{head}: A 素子は「A名前 ノード × 8 種類 パラメータ…」の形で書きます"));
+        }
+        if kind != "OTA" {
+            return Err(format!("{head}: XSPICE の部品「{kind}」は未対応です (SCHMITT・SRFLOP・DFLOP・AND・OR のように、記憶や遅れを持つ部品は、1 つの式にできません)。回路図用の別のモデルを探すか、部品作成フォームの「かんたん作成」を使ってください"));
+        }
+        let param = |key: &str| t[10..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
+        let (g, vref, iout, cout) = (param("G").unwrap_or(1.0), param("REF").unwrap_or(0.0), param("IOUT").unwrap_or(1e30), param("COUT").unwrap_or(0.0));
+        // the first node is the one that pulls the output down (LTspice's universal op-amps list the inverting input first)
+        let (inp, inn, out) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[7], ports, prefix));
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let mut lines = vec![format!("B_{head}{suffix} 0 {out} I=limit(({g:e})*(V({inn},{inp})-({vref:e})),{:e},{iout:e})", -iout)];
+        if cout > 0.0 {
+            lines.push(format!("C_{head}{suffix} {out} 0 {cout:e}"));
+        }
+        Ok(lines)
+    }
+
     /// An E / G / F / H line as a behavioural (B) source: `VALUE={expr}`, `POLY(n)` (linear terms, or any degree
     /// with one control) and the current-controlled F / H sources.
-    fn controlled(&self, line: &str, t: &[String], letter: char, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<String, String> {
+    #[allow(clippy::too_many_arguments)]
+    fn controlled(&self, raw: &str, env: &Env, line: &str, t: &[String], letter: char, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<String, String> {
         let head = t[0].as_str();
         let low = line.to_ascii_lowercase();
         let name = format!("B_{head}{}", if path.is_empty() { String::new() } else { format!(".{path}") });
@@ -447,14 +501,52 @@ impl Ctx<'_> {
         let (p, n) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix));
         let rename_ctl = |s: &str| if path.is_empty() { s.to_string() } else { format!("{s}.{path}") };
         // TABLE {expr} = (x1,y1) (x2,y2) ...: a piecewise-linear curve of an expression
+        let raw_low = raw.to_ascii_lowercase();
+        // `G n+ n- cp cn table(x0 y0 x1 y1 ...)`: the curve of the control voltage
         if matches!(letter, 'E' | 'G')
-            && let Some(pos) = low.find("table")
-            && let Some(eq) = low[pos..].find('=').map(|e| e + pos)
+            && let Some(pos) = low.find("table(")
+            && t.len() >= 6
         {
-            let x = rename_expr(line[pos + 5..eq].trim(), ports, prefix, path);
+            let list = &line[pos + 6..];
+            let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split([' ', ',']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+            if nums.len() < 4 || !nums.len().is_multiple_of(2) {
+                return Err(format!("{head}: table(x0 y0 x1 y1 ...) は、点 (x y) を 2 つ以上並べます"));
+            }
+            let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
+            let x = format!("V({},{})", rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix));
+            return Ok(format!("{name} {p} {n} {}={}", if out_is_voltage { "V" } else { "I" }, pwl_expr(&x, &mut pts)));
+        }
+        if matches!(letter, 'E' | 'G')
+            && let Some(pos) = raw_low.find("table")
+        {
+            // `TABLE {expr} = (x,y) ...`, `TABLE {expr} ((x,y)(x,y))` or `TABLE expr = ...`
+            let after = raw[pos + 5..].trim_start();
+            let (expr_raw, rest) = if let Some(inner) = after.strip_prefix('{') {
+                let (mut depth, mut end) = (1, None);
+                for (i, c) in inner.char_indices() {
+                    match c {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                end = Some(i);
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                let end = end.ok_or_else(|| format!("{head}: TABLE の {{ が閉じていません"))?;
+                (&inner[..end], &inner[end + 1..])
+            } else {
+                let eq = after.find('=').ok_or_else(|| format!("{head}: TABLE の式と点 (x,y) の区切りの = がありません"))?;
+                (&after[..eq], &after[eq + 1..])
+            };
+            let x = rename_expr(&substitute_params(expr_raw.trim(), env), ports, prefix, path);
+            let rest = subst_braces(rest, env)?;
             let mut pts: Vec<(f64, f64)> = vec![];
-            for chunk in line[eq + 1..].split(')') {
-                if let Some(open) = chunk.find('(') {
+            for chunk in rest.split(')') {
+                if let Some(open) = chunk.rfind('(') {
                     let nums: Vec<f64> = chunk[open + 1..].split([',', ' ']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
                     if nums.len() == 2 {
                         pts.push((nums[0], nums[1]));
@@ -464,24 +556,17 @@ impl Ctx<'_> {
             if pts.len() < 2 {
                 return Err(format!("{head}: TABLE の点 (x,y) が 2 つ以上ありません"));
             }
-            pts.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let xs = format!("({x})");
-            let mut expr = format!("({:e})", pts[pts.len() - 1].1);
-            for k in (0..pts.len() - 1).rev() {
-                let ((x0, y0), (x1, y1)) = (pts[k], pts[k + 1]);
-                let seg = if x1 > x0 { format!("({y0:e})+({:e})*({xs}-({x0:e}))", (y1 - y0) / (x1 - x0)) } else { format!("({y0:e})") };
-                expr = format!("if({xs}<({x1:e}),{seg},{expr})");
-            }
-            expr = format!("if({xs}<({:e}),({:e}),{expr})", pts[0].0, pts[0].1);
+            let expr = pwl_expr(&x, &mut pts);
             return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
         }
         // VALUE=expr
         if matches!(letter, 'E' | 'G')
             && let Some(pos) = low.find("value")
-            && low[pos + 5..].trim_start().starts_with('=')
+            && !low[pos + 5..].trim().is_empty()
         {
-            let eq = pos + 5 + low[pos + 5..].find('=').unwrap();
-            let expr = rename_expr(line[eq + 1..].trim(), ports, prefix, path);
+            // `VALUE={expr}` and `VALUE { expr }` (the braces are gone by now)
+            let after = line[pos + 5..].trim_start();
+            let expr = rename_expr(after.strip_prefix('=').unwrap_or(after).trim(), ports, prefix, path);
             return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
         }
         // the controls: voltage pairs for E / G, source names for F / H
@@ -544,38 +629,42 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     let mut global: Env = HashMap::new();
     let mut models = vec![];
     let mut model_cards = vec![];
-    let mut cur: Option<(String, Def)> = None;
+    // a .subckt may be defined inside another one: a stack of the blocks being read (definitions are global)
+    let mut stack: Vec<(String, Def)> = vec![];
     for l in lines {
         let low = l.to_ascii_lowercase();
         let word = low.split_whitespace().next().unwrap_or("");
-        match (word, cur.as_mut()) {
-            (".subckt", None) => {
+        match word {
+            ".subckt" => {
                 let t = split_top(l);
                 let name = t.get(1).ok_or(".subckt に名前がありません")?.clone();
                 let split = t.iter().skip(2).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:")).map_or(t.len(), |p| p + 2);
-                cur = Some((name, Def { ports: t[2..split].to_vec(), defaults: assignments(&t[split..])?, body: vec![] }));
+                stack.push((name, Def { ports: t[2..split].to_vec(), defaults: assignments(&t[split..])?, body: vec![] }));
             }
-            (".ends" | ".end", Some(_)) => {
-                let (name, d) = cur.take().unwrap();
+            ".ends" | ".end" if !stack.is_empty() => {
+                let (name, d) = stack.pop().unwrap();
                 defs.insert(name.to_ascii_lowercase(), d);
             }
-            (".model", c) => {
+            ".model" => {
                 model_cards.push(l.clone());
                 if !l.contains(['{', '\'']) {
                     models.push(l.clone());
                 }
-                if let Some((_, d)) = c {
+                if let Some((_, d)) = stack.last_mut() {
                     d.body.push(l.clone());
                 }
             }
-            (".param", None) => {
+            ".param" if stack.is_empty() => {
                 for (k, v) in assignments(&split_top(&l[6..]))? {
                     let val = eval_expr(&v, &global)?;
                     global.insert(k, val);
                 }
             }
-            (_, Some((_, d))) => d.body.push(l.clone()),
-            _ => {}
+            _ => {
+                if let Some((_, d)) = stack.last_mut() {
+                    d.body.push(l.clone());
+                }
+            }
         }
     }
     let top = defs.get(&sub_name.to_ascii_lowercase()).ok_or_else(|| format!(".subckt {sub_name} が見つかりません"))?;
