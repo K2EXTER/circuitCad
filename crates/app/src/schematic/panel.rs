@@ -188,6 +188,10 @@ impl SchEditor {
                 }
             }
         });
+        // outside the (closed by default) library list, so a newcomer can find it without opening anything
+        if ui.button("＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
+            self.form = Some(PartForm::default());
+        }
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(false).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
