@@ -1,7 +1,7 @@
 //! "スペック (合否)" section: targets for the design, checked against the analyses on screen.
 
 use super::*;
-use sim_core::{evaluate_spec, Spec, SpecInputs, SpecKind};
+use sim_core::{compare_measured, evaluate_spec, measure_spec, Agreement, Spec, SpecInputs, SpecKind};
 
 /// One row of the table: the spec plus the text boxes it is typed in (kept so typing is not overwritten).
 pub(super) struct SpecRow {
@@ -9,6 +9,8 @@ pub(super) struct SpecRow {
     lo: String,
     hi: String,
     at: String,
+    /// What the learner measured on the bench (typed text; empty = not measured).
+    measured: String,
 }
 
 impl SpecRow {
@@ -23,7 +25,7 @@ impl SpecRow {
             SpecKind::AcGainAt => ("-23", "-17", "10k"),
             SpecKind::PhaseMargin => ("45", "", ""),
         };
-        Self { spec: Spec { kind, target: target.into(), at: 0.0, lo: None, hi: None }, lo: lo.into(), hi: hi.into(), at: at.into() }
+        Self { spec: Spec { kind, target: target.into(), at: 0.0, lo: None, hi: None }, lo: lo.into(), hi: hi.into(), at: at.into(), measured: String::new() }
     }
 
     /// Copies the typed numbers into the spec; an empty or unreadable box means "no limit".
@@ -42,18 +44,25 @@ pub struct SpecItem {
     pub lo: String,
     pub hi: String,
     pub at: String,
+    /// The bench measurement, as typed (empty when none).
+    pub measured: String,
 }
 
 impl SpecItem {
     fn to_json(&self) -> serde_json::Value {
-        serde_json::json!({ "kind": self.kind, "target": self.target, "lo": self.lo, "hi": self.hi, "at": self.at })
+        let mut v = serde_json::json!({ "kind": self.kind, "target": self.target, "lo": self.lo, "hi": self.hi, "at": self.at });
+        // older versions do not know the key: write it only when there is a measurement
+        if !self.measured.is_empty() {
+            v["measured"] = self.measured.clone().into();
+        }
+        v
     }
 
     fn from_json(v: &serde_json::Value) -> Option<SpecItem> {
         let text = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
         let kind = text("kind");
         SpecKind::from_key(&kind)?;
-        Some(SpecItem { kind, target: text("target"), lo: text("lo"), hi: text("hi"), at: text("at") })
+        Some(SpecItem { kind, target: text("target"), lo: text("lo"), hi: text("hi"), at: text("at"), measured: text("measured") })
     }
 }
 
@@ -78,7 +87,7 @@ impl SchEditor {
     pub fn spec_items(&self) -> Vec<SpecItem> {
         self.specs
             .iter()
-            .map(|r| SpecItem { kind: r.spec.kind.key().into(), target: r.spec.target.clone(), lo: r.lo.clone(), hi: r.hi.clone(), at: r.at.clone() })
+            .map(|r| SpecItem { kind: r.spec.kind.key().into(), target: r.spec.target.clone(), lo: r.lo.clone(), hi: r.hi.clone(), at: r.at.clone(), measured: r.measured.clone() })
             .collect()
     }
 
@@ -89,6 +98,7 @@ impl SchEditor {
             .filter_map(|it| {
                 let mut row = SpecRow::new(SpecKind::from_key(&it.kind)?, &it.target);
                 (row.lo, row.hi, row.at) = (it.lo.clone(), it.hi.clone(), it.at.clone());
+                row.measured = it.measured.clone();
                 row.sync();
                 Some(row)
             })
@@ -107,6 +117,62 @@ impl SchEditor {
         self.panel_tab = PanelTab::Analyze;
         self.sec_mode = 1;
         self.sec_gen += 1;
+    }
+
+    /// Puts the rows of the "組み立てて、性能を測る" step into the table (input voltage, output voltage, a current to
+    /// pick), shows the analysis tab and calculates the DC point so the simulated values are there to compare with.
+    /// Rows that already exist are not added twice. Returns how many rows were added.
+    pub fn add_measure_rows(&mut self) -> usize {
+        let nets: Vec<String> = extract(&self.sch).iter().map(|n| n.name.clone()).collect();
+        let find = |names: &[&str]| names.iter().find_map(|w| nets.iter().find(|n| n.eq_ignore_ascii_case(w)).cloned()).unwrap_or_default();
+        let wanted = [
+            (SpecKind::DcVoltage, find(&["VIN", "VCC", "V+"]), "", ""),
+            (SpecKind::DcVoltage, find(&["VOUT", "OUT"]), "4.75", "5.25"),
+            (SpecKind::DcCurrent, String::new(), "", ""),
+        ];
+        let mut added = 0;
+        for (kind, target, lo, hi) in wanted {
+            // a row that is already there (same kind and target, and a named target) is kept as it is
+            if !target.is_empty() && self.specs.iter().any(|r| r.spec.kind == kind && r.spec.target.eq_ignore_ascii_case(&target)) {
+                continue;
+            }
+            if target.is_empty() && kind == SpecKind::DcCurrent && self.specs.iter().any(|r| r.spec.kind == kind && r.measured.trim().is_empty()) {
+                continue;
+            }
+            let mut row = SpecRow::new(kind, &target);
+            (row.lo, row.hi) = (lo.into(), hi.into());
+            self.specs.push(row);
+            added += 1;
+        }
+        self.panel_tab = PanelTab::Analyze;
+        self.sec_mode = 1;
+        self.sec_gen += 1;
+        self.analyze_dc();
+        added
+    }
+
+    /// How many rows have a bench measurement that could be compared with a simulated value right now.
+    pub fn compared_measurements(&self) -> usize {
+        let dc = self.dc.as_ref().and_then(|v| v.outcome.as_ref().ok());
+        let tran = self.tran.as_ref().and_then(|v| v.outcome.as_ref().ok());
+        let ac = self.ac.as_ref().and_then(|v| v.outcome.as_ref().ok());
+        let inputs = SpecInputs { dc, tran, ac };
+        self.specs
+            .iter()
+            .filter(|r| parse_value(&r.measured).is_some())
+            .filter(|r| {
+                let mut spec = r.spec.clone();
+                spec.at = parse_value(&r.at).unwrap_or(0.0);
+                measure_spec(&spec, &inputs).is_ok()
+            })
+            .count()
+    }
+
+    /// Types a bench measurement into a row (command line `--measured`, for screenshots).
+    pub fn set_spec_measured(&mut self, row: usize, text: &str) {
+        if let Some(r) = self.specs.get_mut(row) {
+            r.measured = text.into();
+        }
     }
 
     pub(super) fn panel_spec(&mut self, ui: &mut egui::Ui) {
@@ -208,6 +274,43 @@ impl SchEditor {
                 (None, _) => egui::RichText::new(format!("  {}", ev.note)).color(Color32::from_gray(150)),
             };
             ui.small(detail);
+            // the bench measurement, compared with the simulated value above
+            ui.horizontal(|ui| {
+                ui.add_space(14.0);
+                ui.label("実測");
+                ui.add(egui::TextEdit::singleline(&mut row.measured).desired_width(64.0).hint_text("例 4.93"))
+                    .on_hover_text("実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。シミュレーションの値と比べて、差と、考えられる理由が出ます");
+                ui.label(row.spec.kind.unit());
+            });
+            if !row.measured.trim().is_empty() {
+                match (parse_value(&row.measured), ev.value) {
+                    (None, _) => {
+                        ui.small(egui::RichText::new("  実測の数字を読めません (4.93、50m、1k のように書きます)").color(FAIL));
+                    }
+                    (Some(_), None) => {
+                        ui.small(egui::RichText::new("  シミュレーションの値が出ると、比べられます (解析を実行してください)").color(Color32::from_gray(150)));
+                    }
+                    (Some(m), Some(sim)) => {
+                        let c = compare_measured(row.spec.kind, sim, m);
+                        let unit = row.spec.kind.unit();
+                        let (what, col) = match c.level {
+                            Agreement::Close => ("よく合っています", PASS),
+                            Agreement::Some => ("少し差があります", Color32::from_rgb(230, 170, 40)),
+                            Agreement::Far => ("大きく違います", FAIL),
+                        };
+                        let pct = c.rel.map(|r| format!(" ({:+.1}%)", r * 100.0)).unwrap_or_default();
+                        ui.label(egui::RichText::new(format!("  {what}{pct}")).color(col).strong());
+                        ui.small(format!("  実測 {} / シミュレーション {} / 差 {}", eng(m, unit), eng(sim, unit), eng(c.diff, unit)));
+                        if !c.hints.is_empty() {
+                            egui::CollapsingHeader::new("差の理由の手がかり").id_salt(("spec_why", i)).show(ui, |ui| {
+                                for h in &c.hints {
+                                    ui.small(format!("・{h}"));
+                                }
+                            });
+                        }
+                    }
+                }
+            }
         }
         if let Some(i) = remove {
             self.specs.remove(i);
@@ -254,7 +357,7 @@ mod save_tests {
     use super::*;
 
     fn item(kind: &str, target: &str, lo: &str, hi: &str) -> SpecItem {
-        SpecItem { kind: kind.into(), target: target.into(), lo: lo.into(), hi: hi.into(), at: String::new() }
+        SpecItem { kind: kind.into(), target: target.into(), lo: lo.into(), hi: hi.into(), at: String::new(), measured: String::new() }
     }
 
     #[test]
@@ -301,6 +404,51 @@ mod save_tests {
         assert_eq!(opened.spec_items(), vec![item("dc_voltage", "OUT", "4.75", "5.25")]);
         assert!(!opened.dirty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_bench_measurement_is_saved_with_the_spec_and_old_files_still_open() {
+        let mut it = item("dc_voltage", "OUT", "4.75", "5.25");
+        it.measured = "4.93".into();
+        let mut v = serde_json::to_value(Schematic::default()).unwrap();
+        with_specs(&mut v, &[it.clone(), item("dc_current", "R1", "", "20m")]);
+        assert!(v["specs"][1].get("measured").is_none(), "no key when there is no measurement");
+        let back = take_specs(&mut v);
+        assert_eq!(back[0].measured, "4.93");
+        assert_eq!(back[1].measured, "");
+        // a file written before the measurement existed reads as "not measured"
+        let mut old = serde_json::to_value(Schematic::default()).unwrap();
+        old["specs"] = serde_json::json!([{ "kind": "dc_voltage", "target": "OUT", "lo": "4", "hi": "6", "at": "" }]);
+        assert_eq!(take_specs(&mut old)[0].measured, "");
+        // typing a measurement is an unsaved change
+        let mut e = SchEditor::default();
+        e.add_spec(0, "OUT", "4.75", "5.25", "");
+        e.mark_saved();
+        assert!(!e.dirty());
+        e.specs[0].measured = "4.93".into();
+        assert!(e.dirty());
+    }
+
+    #[test]
+    fn the_measure_step_adds_its_rows_once_and_counts_compared_readings() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let mut e = SchEditor::default();
+        e.load_path(root.join("series_regulator.schjson"));
+        assert_eq!(e.compared_measurements(), 0);
+        assert_eq!(e.add_measure_rows(), 3, "VIN, VOUT and a current to pick");
+        assert_eq!(e.specs[0].spec.target, "VIN");
+        assert_eq!(e.specs[1].spec.target, "VOUT");
+        assert_eq!(e.add_measure_rows(), 0, "a second press does not add them again");
+        // readings only count when there is a simulated value to compare with (the DC point was calculated)
+        e.specs[0].measured = "9.02".into();
+        e.specs[1].measured = "4.9".into();
+        assert_eq!(e.compared_measurements(), 2);
+        e.specs[2].measured = "49m".into();
+        assert_eq!(e.compared_measurements(), 2, "the current row has no part chosen yet");
+        e.specs[2].spec.target = "R2".into();
+        assert_eq!(e.compared_measurements(), 3);
+        e.specs[0].measured = "abc".into();
+        assert_eq!(e.compared_measurements(), 2, "an unreadable reading does not count");
     }
 
     #[test]

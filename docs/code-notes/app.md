@@ -10,6 +10,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 - 過渡波形のCI検算: `docs/xcheck/ngspice_tran.json` に、同梱サンプル32件の ngspice の過渡解析を「10個の窓ごとの平均・最小・最大」にまとめて保存してある(`xcheck_tran.rs` の `window_stats`)。テスト `transient_runs_still_match_the_stored_ngspice_statistics` が、保存した刻みで自前を走らせ、窓の平均(振れ幅の1%)・最小最大(3%、最初の窓は除く)・リップル(10%、`local_ripple`: 終わり5分の1を100分割した各区間のp-pの中央値。整定途中のゆっくりした揺れや1周期だけの外れ値に影響されない。終わり2窓の幅がリップルの10倍を超える波形、例えばパルス列は比べない)を比べる。リップルを「終わり2窓の最大−最小」で測ると、macOS だけ+12.6%ずれた(5ms でもまだ整定途中で、揺れの位相が CPU の丸めで変わる。周期ごとの山の中央値は3OSで一致)。波形そのものでなく統計なのは、スイッチング波形は点を間引くとエッジが崩れるため。降圧コンバータの出力コンデンサ違い2件は、定常のリップルを見るため5ms走らせる(`own_dynamics`)。作り直しは `circuitCad --xcheck docs/examples --tran --golden docs/xcheck/ngspice_tran.json`。
 
 - `samples.rs`: 「ファイル → サンプル回路を開く」の一覧(`SAMPLES`。`docs/examples` と同じファイルを `include_str!` で埋め込む。足すときは1行と、タイトルが重ならないこと)。`SchEditor::open_sample` は未保存のシートとして開く(上書き保存でサンプルが壊れない)。`SchEditor::new_file` は `rev` を巻き戻さない(基板の「回路図と違います」の判定が `rev` をキーにしているため。巻き戻すと、別の回路を開いても古い判定が残る)。基板だけを開いたとき(回路図が空)は「回路図と違います」を出さない。
+- スペック表の「実測」欄(`spec_table.rs`): 行ごとに `measured`(入力した文字のまま `.schjson`/`.ccproj` の `"specs"` に保存。無ければキーを書かない)。`sim-core::compare_measured` が差・近さ(Close/Some/Far)・理由の手がかりを返す。`add_measure_rows` は学習パスの「組み立てて、性能を測る」用(VIN・VOUT・電流の行を足してDC動作点を計算)、`compared_measurements` は比べられた実測の数(3以上で `build_psu` を完了にする。`main.rs`)。`measure_guide.rs` が案内の窓(`--measure-guide` で開く)。
 - 部品名・値のラベル(`draw.rs draw_components`): 幅のある部品は名前を上、値を下に中央寄せで置くが、上下の辺の中央にピンがあるとき(IC の GND など)は配線の左側へ寄せる(電圧は常にピンの右側に出るため)。LED は光の矢印の分だけ名前を上へ(逆向きなら値を下へ)。電流の文字も、下に配線があれば左へ。
 
 ## 描画・波形・プロット

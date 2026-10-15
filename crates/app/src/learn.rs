@@ -95,6 +95,9 @@ pub enum Kind {
     Board,
     /// Only a "作ってみよう" challenge (by the item's id); done when the challenge is passed.
     Build,
+    /// The bench step: build it, measure it, compare with the simulation (`measure_guide.rs`); done when
+    /// three measurements have been compared (the app marks the item's id).
+    Measure,
     /// Not written yet: shown so the whole route is visible.
     Planned,
 }
@@ -128,6 +131,8 @@ const fn lesson(id: &'static str, title: &'static str, about: &'static str, real
     Item { id, title, about, kind: Kind::Lesson(id), build: false, real }
 }
 
+// no step is "planned" right now; kept for the next one that is shown before it is written
+#[allow(dead_code)]
 const fn planned(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
     Item { id, title, about, kind: Kind::Planned, build: false, real }
 }
@@ -178,7 +183,7 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             items: &[
                 Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, build: true, real: None },
                 Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board, build: false, real: Some("発注するなら、少量・少額で試します") },
-                planned("build_psu", "組み立てて、性能を測る", "部品表・はんだ付け・負荷試験・リップル・温度。測定値をシミュレーションと比べる", Some("完成した電源の性能を測り、シミュレーションとの差とその理由を考えます")),
+                Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
             ],
         },
     ],
@@ -216,13 +221,15 @@ pub enum Action {
     /// The "作ってみよう" challenge of a lesson (by the lesson's id).
     Build(&'static str),
     Board,
+    /// The guide of the bench step.
+    Measure,
 }
 
 /// Colour of the grey explanation lines (`weak()` was too faint on the dark background).
-const NOTE: Color32 = Color32::from_gray(175);
+pub(crate) const NOTE: Color32 = Color32::from_gray(175);
 
 /// Wrapped Japanese text with a taller line (the font's default line height makes lines touch).
-fn spaced(text: &str) -> egui::RichText {
+pub(crate) fn spaced(text: &str) -> egui::RichText {
     egui::RichText::new(text).line_height(Some(20.0))
 }
 
@@ -232,6 +239,7 @@ fn item_action(item: &Item) -> Option<Action> {
         Kind::Lesson(id) => Some(Action::Lesson(id)),
         Kind::Build => Some(Action::Build(item.id)),
         Kind::Board => Some(Action::Board),
+        Kind::Measure => Some(Action::Measure),
         Kind::Planned => None,
     }
 }
@@ -327,6 +335,7 @@ impl LearnWindow {
                         } else if item.kind != Kind::Build && ui.small_button(if done { "もう一度" } else { "始める" }).on_hover_text("この内容のレッスンを開きます").clicked() {
                             action = Some(match item.kind {
                                 Kind::Lesson(id) => Action::Lesson(id),
+                                Kind::Measure => Action::Measure,
                                 _ => Action::Board,
                             });
                         }
@@ -451,7 +460,7 @@ mod tests {
         let mut progress = Progress::default();
         let (done, available, all) = summary(p, &progress);
         assert_eq!(done, 0);
-        assert!(available >= 12 && all > available, "some steps are still to be written");
+        assert!(available >= 12 && all >= available);
         // the first thing to do is the first lesson; finishing it moves the recommendation on
         assert_eq!(next_item(p, &progress).unwrap().id, "divider");
         progress.mark("divider");

@@ -51,7 +51,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cc_project_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("demo.ccproj");
-        let spec = SpecItem { kind: "dc_voltage".into(), target: "OUT".into(), lo: "4.75".into(), hi: "5.25".into(), at: String::new() };
+        let spec = SpecItem { kind: "dc_voltage".into(), target: "OUT".into(), lo: "4.75".into(), hi: "5.25".into(), at: String::new(), measured: "4.93".into() };
         save(&f, &s, &b, std::slice::from_ref(&spec)).unwrap();
         let p = load(&f).unwrap();
         assert_eq!(p.schematic.components.len(), 1);

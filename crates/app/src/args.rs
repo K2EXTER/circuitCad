@@ -23,6 +23,9 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(t) = args.get(i + 1) {
             app.sch.set_form_tab(t);
         }
+    if args.iter().any(|a| a == "--measure-guide") {
+        app.measure.open = true;
+    }
     if args.iter().any(|a| a == "--learn") {
         app.learn.open = true;
     }
@@ -94,6 +97,12 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             // --spec <kind index 0..8> <target> <lo|-> <hi|-> [frequency]  (repeatable; put it after --dc / --tran / --ac)
             if let (Some(k), Some(t), Some(lo), Some(hi)) = (args.get(i + 1).and_then(|k| k.parse().ok()), args.get(i + 2), args.get(i + 3), args.get(i + 4)) {
                 app.sch.add_spec(k, t, lo, hi, args.get(i + 5).filter(|a| !a.starts_with("--")).map_or("", |a| a.as_str()));
+            }
+        }
+        for (i, _) in args.iter().enumerate().filter(|(_, a)| *a == "--measured") {
+            // --measured <spec row index> <text>  (repeatable; after the --spec rows): a typed bench measurement, for screenshots
+            if let (Some(row), Some(text)) = (args.get(i + 1).and_then(|k| k.parse().ok()), args.get(i + 2)) {
+                app.sch.set_spec_measured(row, text);
             }
         }
         if let Some(i) = args.iter().position(|a| a == "--param") {

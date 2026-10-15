@@ -47,7 +47,8 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `tests/` | 統合テスト `flow.rs` と、サンプル回路の生成 `examples.rs` の `write_*` (`--ignored` で実行) |
 | `plot.rs` | 波形描画 (`scale_bar`・`draw_group`・測定カーソル) |
 | `part_form/` | 部品作成フォーム (`parse` 入力→`PartDef` / `kind` 種類 / `tabs` 各タブ / `chip` チップ部品 / `template` 充電IC / `preview` / `checklist`) |
-| `learn.rs` / `help.rs` / `project.rs` | 学習パス / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
+| `learn.rs` / `measure_guide.rs` / `help.rs` / `project.rs` | 学習パス(ウェルカムカードも) / 学習パス最後の「組み立てて測る」の窓 / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
+| `samples.rs` | 「ファイル → サンプル回路を開く」の一覧 (`docs/examples` を埋め込む) |
 | `source_form.rs` | 電源値フォーム |
 | `xcheck.rs` / `xcheck_tran.rs` | 開発用: ngspice との検算 (`--xcheck`) |
 

@@ -202,6 +202,144 @@ pub fn evaluate(spec: &Spec, inp: &Inputs) -> SpecEval {
     }
 }
 
+// ------------------------------------------------------------------ bench measurement vs simulation
+
+/// How well a bench measurement agrees with the simulation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Agreement {
+    /// Within what the parts' tolerances and the meter explain.
+    Close,
+    /// A visible difference that part tolerances or the measuring method can still explain.
+    Some,
+    /// Too large for that: something is connected, measured or modelled differently.
+    Far,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MeasuredCompare {
+    /// measured - simulated.
+    pub diff: f64,
+    /// `diff` as a fraction of the simulated value (None when that is 0).
+    pub rel: Option<f64>,
+    pub level: Agreement,
+    /// Things to check, most likely first.
+    pub hints: Vec<&'static str>,
+}
+
+/// (close, some) limits of |measured - simulated|: a fraction of the simulated value, but never less than a floor
+/// (the meter's own resolution and accuracy).
+fn allowance(kind: SpecKind) -> ((f64, f64), (f64, f64)) {
+    match kind {
+        // 1 % + a few digits of a hand-held meter; a 78xx alone is +/-4 %
+        SpecKind::DcVoltage | SpecKind::TranMean | SpecKind::TranMax | SpecKind::TranMin => ((0.02, 0.02), (0.08, 0.08)),
+        // a meter's current range drops a few 100 mV across itself
+        SpecKind::DcCurrent => ((0.05, 2e-4), (0.15, 1e-3)),
+        // an oscilloscope's bandwidth, probe and ground lead decide a ripple reading
+        SpecKind::TranPp => ((0.25, 5e-3), (0.6, 2e-2)),
+        SpecKind::AcCutoff => ((0.10, 0.0), (0.30, 0.0)),
+        // in dB and degrees the allowance is absolute
+        SpecKind::AcGainAt => ((0.0, 1.0), (0.0, 3.0)),
+        SpecKind::PhaseMargin => ((0.0, 5.0), (0.0, 15.0)),
+    }
+}
+
+fn hints_for(kind: SpecKind, level: Agreement, measured_is_more: bool) -> Vec<&'static str> {
+    if level == Agreement::Close {
+        return vec![];
+    }
+    let mut v: Vec<&'static str> = match kind {
+        SpecKind::DcVoltage | SpecKind::TranMean | SpecKind::TranMax | SpecKind::TranMin => vec![
+            "部品の誤差: 抵抗は ±1〜5%、ツェナーや基準電圧は ±5% ほど、7805 は ±4% ほどあります (データシートの範囲を見ます)",
+            "測り方: テスタの精度 (±0.5〜1% + 数桁)、テスタ棒の接触、基準 (GND) の取り方を確かめます",
+            "電源側: 電池や AC アダプタは、負荷をつなぐと電圧が下がります。つないだ状態で入力電圧も測ります",
+            "配線: ブレッドボードの接触抵抗や、細い配線の電圧降下で、数十 mV 変わります",
+        ],
+        SpecKind::DcCurrent => vec![
+            "テスタの電流レンジは、中で電圧が落ちます。そのぶん電流が小さく測れます (抵抗の電圧と抵抗値から計算し直すと確かめられます)",
+            "部品の誤差: 抵抗の値のずれが、そのまま電流のずれになります",
+            "つなぎ方: 電流は測りたい部品と直列に入れます。並列につなぐと、ヒューズが切れることがあります",
+        ],
+        SpecKind::TranPp => vec![
+            "オシロの測り方: プローブの GND は短く (長いワニ口線は、拾った雑音がリップルに見えます)。帯域制限と AC カップリングも確かめます",
+            "部品: 電解コンデンサの容量は −20〜+20% ずれ、古いものや低温で ESR が増えます (シミュレーションの ESR と比べます)",
+            "テスタの交流レンジでは、リップルの形と大きさは測れません (実効値の目安だけです)",
+        ],
+        SpecKind::AcCutoff | SpecKind::AcGainAt => vec![
+            "部品の誤差: コンデンサは ±10〜20%、抵抗は ±1〜5%。カットオフ周波数にそのまま出ます",
+            "測る機器の入力: オシロやテスタの入力容量・抵抗が、回路につながって周波数特性を変えます",
+            "高い周波数では、ブレッドボードの浮遊容量や配線のインダクタンスが効きます",
+        ],
+        SpecKind::PhaseMargin => vec![
+            "位相余裕は、部品の誤差と配線の浮遊容量に敏感です。実機では、大きな余裕 (45° 以上) を見込みます",
+            "モデルの限界: オペアンプやトランジスタのモデルは、実際の部品の一部の特性しか表せません",
+        ],
+    };
+    if level == Agreement::Far {
+        v.insert(0, "差が大きいときは、まず配線の間違い (つなぎ違い、抜けた脚、極性) と、測っている場所がシミュレーションと同じかを確かめます");
+        v.push("それでも合わないときは、シミュレーションの部品値が、実際に使った部品と同じか確かめます (回路図の値を、手元の部品に合わせます)");
+    }
+    if kind == SpecKind::DcVoltage && measured_is_more && level != Agreement::Close {
+        v.push("測った値のほうが大きいとき: 負荷が軽い (つないだ抵抗が大きい)、または入力電圧が想定より高いことがあります");
+    }
+    v
+}
+
+/// Compares a bench measurement with the simulated value of the same spec.
+pub fn compare_measured(kind: SpecKind, sim: f64, measured: f64) -> MeasuredCompare {
+    let diff = measured - sim;
+    let rel = (sim != 0.0).then(|| diff / sim.abs());
+    let ((cr, cf), (sr, sf)) = allowance(kind);
+    let limit = |frac: f64, floor: f64| (frac * sim.abs()).max(floor);
+    let level = if diff.abs() <= limit(cr, cf) {
+        Agreement::Close
+    } else if diff.abs() <= limit(sr, sf) {
+        Agreement::Some
+    } else {
+        Agreement::Far
+    };
+    MeasuredCompare { diff, rel, level, hints: hints_for(kind, level, diff > 0.0) }
+}
+
+#[cfg(test)]
+mod measured_tests {
+    use super::*;
+
+    #[test]
+    fn a_measurement_is_close_some_or_far_by_kind() {
+        // 5.00 V simulated: 4.93 V is within the meter and the parts, 4.7 V is a visible miss, 4.0 V is something wrong
+        let c = compare_measured(SpecKind::DcVoltage, 5.0, 4.93);
+        assert_eq!(c.level, Agreement::Close);
+        assert!(c.hints.is_empty());
+        assert!((c.rel.unwrap() + 0.014).abs() < 1e-9);
+        assert_eq!(compare_measured(SpecKind::DcVoltage, 5.0, 4.7).level, Agreement::Some);
+        let far = compare_measured(SpecKind::DcVoltage, 5.0, 4.0);
+        assert_eq!(far.level, Agreement::Far);
+        assert!(far.hints[0].contains("配線の間違い"), "{:?}", far.hints);
+        // the floor: 20 mV is fine around 0 V
+        assert_eq!(compare_measured(SpecKind::DcVoltage, 0.0, 0.015).level, Agreement::Close);
+        assert_eq!(compare_measured(SpecKind::DcVoltage, 0.0, 0.015).rel, None);
+    }
+
+    #[test]
+    fn ripple_and_ac_have_their_own_allowances() {
+        assert_eq!(compare_measured(SpecKind::TranPp, 0.100, 0.120).level, Agreement::Close);
+        assert_eq!(compare_measured(SpecKind::TranPp, 0.100, 0.200).level, Agreement::Far);
+        assert_eq!(compare_measured(SpecKind::AcCutoff, 1000.0, 1080.0).level, Agreement::Close);
+        assert_eq!(compare_measured(SpecKind::AcCutoff, 1000.0, 1250.0).level, Agreement::Some);
+        assert_eq!(compare_measured(SpecKind::AcGainAt, -20.0, -22.5).level, Agreement::Some);
+        assert_eq!(compare_measured(SpecKind::PhaseMargin, 60.0, 40.0).level, Agreement::Far);
+    }
+
+    #[test]
+    fn every_kind_has_hints_when_it_does_not_agree() {
+        for k in SpecKind::ALL {
+            let c = compare_measured(k, 1.0, 100.0);
+            assert_eq!(c.level, Agreement::Far, "{k:?}");
+            assert!(c.hints.len() >= 3, "{k:?}: {:?}", c.hints);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

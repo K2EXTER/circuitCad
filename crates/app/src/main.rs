@@ -11,6 +11,7 @@ mod args;
 mod board_editor;
 mod files;
 mod help;
+mod measure_guide;
 mod samples;
 mod learn;
 mod part_form;
@@ -48,6 +49,8 @@ struct App {
     /// Finished lessons (saved in the app data folder) and the learning-path window.
     progress: learn::Progress,
     learn: learn::LearnWindow,
+    /// The guide window of the bench step ("組み立てて、性能を測る").
+    measure: measure_guide::MeasureGuide,
     /// `--screenshot <file>`: (file, frames left before the capture); the app closes after saving.
     auto_shot: Option<(std::path::PathBuf, u32)>,
     /// The `.ccproj` file the schematic and board were opened from / last saved to.
@@ -60,7 +63,7 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), auto_shot: None, project: None, closing_ok: false }
     }
 }
 
@@ -119,6 +122,20 @@ impl eframe::App for App {
                     self.sch.start_challenge(id, 0);
                 }
                 learn::Action::Board => self.start_board_lesson(),
+                learn::Action::Measure => self.measure.open = true,
+            }
+        }
+        // the bench step: the guide window, and "three readings compared with the simulation" finishes it
+        let compared = self.sch.compared_measurements();
+        if compared >= 3 {
+            self.progress.mark("build_psu");
+        }
+        if let Some(learn_action) = self.measure.show(ui.ctx(), self.progress.is_done("build_psu"), compared) {
+            match learn_action {
+                measure_guide::GuideAction::AddRows => {
+                    self.mode = Mode::Schematic;
+                    self.sch.add_measure_rows();
+                }
             }
         }
         egui::Panel::top("menu").show(ui, |ui| {
