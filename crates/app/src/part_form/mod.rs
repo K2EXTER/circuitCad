@@ -124,6 +124,10 @@ pub struct PartForm {
     pub pas_srf: String,
     pub pas_bias: String,
     pub pas_table: String,
+    /// Temperature coefficients typed in ppm (/°C and /°C²) and the table they can be fitted from ("°C percent" per line).
+    pub pas_tc1: String,
+    pub pas_tc2: String,
+    pub pas_tctable: String,
     pub pas_message: Option<Result<String, String>>,
     /// The diode section: points read off the forward characteristics ("current voltage" per line), the reverse
     /// ratings, and the fitted (or slider-set) IS / N / RS.
@@ -214,6 +218,9 @@ impl Default for PartForm {
             pas_srf: String::new(),
             pas_bias: String::new(),
             pas_table: String::new(),
+            pas_tc1: String::new(),
+            pas_tc2: String::new(),
+            pas_tctable: String::new(),
             pas_message: None,
             dio_points: String::new(),
             dio_vrrm: String::new(),
@@ -251,6 +258,7 @@ mod kind;
 mod parse;
 mod chip;
 mod diode;
+mod zchart;
 mod preview;
 mod tabs;
 mod template;

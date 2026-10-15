@@ -79,6 +79,8 @@ mod tests_bsource;
 #[cfg(test)]
 mod tests_flat;
 #[cfg(test)]
+mod tests_tempco;
+#[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]
 mod tests_logic;

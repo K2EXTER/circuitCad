@@ -38,6 +38,8 @@ impl PartForm {
         if !bias.is_empty() {
             t.bias_loss = bias.parse::<f64>().map_err(|_| format!("DCバイアスで下がる量「{bias}」を % の数で入力してください (例: 30)"))? / 100.0;
         }
+        t.tc1 = self.pas_ppm("温度係数 TC1", &self.pas_tc1)?;
+        t.tc2 = self.pas_ppm("温度係数 TC2", &self.pas_tc2)?;
         let size = self.fp_preset.rsplit('_').next().filter(|_| !self.fp_preset.is_empty()).map(|s| format!("_{s}")).unwrap_or_default();
         let name = if self.name.trim().is_empty() { format!("{}_{}{size}", t.kind.prefix(), passive::eng(value)) } else { self.name.trim().to_string() };
         let g = t.generate(&name)?;
@@ -60,28 +62,6 @@ impl PartForm {
         }
         let tail = if notes.is_empty() { String::new() } else { format!("。{}", notes.join("。")) };
         Ok(format!("ピンとモデルを作りました{tail}。このあと、パッケージを選び (0603 など)、定格 (耐圧など) をデータシートから入れて保存します"))
-    }
-
-    /// Fit ESR and ESL to the impedance table typed in the form.
-    pub(super) fn fit_from_table(&mut self) -> Result<String, String> {
-        let c = self.pas_number("容量", &self.pas_value, false)?.ok_or("先に上の「値」に容量を入れてください (表の容量。DCバイアス時の表ならそのときの容量)")?;
-        let mut pts = vec![];
-        for (n, line) in self.pas_table.lines().enumerate().filter(|(_, l)| !l.trim().is_empty() && !l.trim_start().starts_with('#')) {
-            let t: Vec<&str> = line.split(|c: char| c.is_whitespace() || c == ',' || c == '|').filter(|s| !s.is_empty()).collect();
-            let (f, z) = match (t.first().and_then(|s| parse_freq(s)), t.get(1).and_then(|s| parse_ohm(s))) {
-                (Some(f), Some(z)) => (f, z),
-                _ => return Err(format!("インピーダンスの表 {}行目: 「周波数 インピーダンス」の形で入力してください (例: 1M 0.05)", n + 1)),
-            };
-            pts.push((f, z));
-        }
-        let fit = passive::fit_cap(c, &pts)?;
-        self.pas_esr = passive::eng(fit.esr);
-        self.pas_esl = passive::eng(fit.esl);
-        let mut m = format!("ESR = {}Ω、ESL = {}H と求めました (共振 {}Hz、表との差は最大 {:.0}%)。上の欄に入れたので、「部品を作る」を押すとモデルに入ります", self.pas_esr, self.pas_esl, passive::eng(fit.srf), fit.max_error_pct);
-        for w in &fit.warnings {
-            m.push_str(&format!("\n注意: {w}"));
-        }
-        Ok(m)
     }
 
     /// The chip part section. With a kind chosen at the top (capacitor, resistor, coil) it is shown open under its own
@@ -146,14 +126,18 @@ impl PartForm {
                     }
                 }
             });
-            if kind == PassiveKind::Capacitor {
-                ui.label("インピーダンスの表 (データシートの周波数特性。1行に「周波数 インピーダンス」。周波数の M は MHz)");
-                ui.add(egui::TextEdit::multiline(&mut self.pas_table).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("100k 0.2\n1M 0.03\n10M 0.05\n100M 0.4"))
-                    .on_hover_text("データシートのグラフから、いくつかの点を読み取って書きます。谷 (一番低い所) の前後も入れると確かです。例: 周波数 1M、インピーダンス 0.05 は「1M 0.05」");
-                if ui.button("表から ESR と ESL を求める").on_hover_text("表に合うように、ESR と ESL を計算して上の欄に入れます。「値」の容量を使います").clicked() {
-                    self.pas_message = Some(self.fit_from_table());
-                }
+            ui.label("インピーダンスの表 (データシートの周波数特性。1行に「周波数 インピーダンス」。周波数の M は MHz)");
+            ui.add(egui::TextEdit::multiline(&mut self.pas_table).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text(match kind {
+                PassiveKind::Capacitor => "100k 0.2\n1M 0.03\n10M 0.05\n100M 0.4",
+                PassiveKind::Inductor => "100k 6.5\n1M 63\n10M 600\n40M 2.5k\n100M 900",
+                PassiveKind::Resistor => "1M 1k\n100M 1.05k\n500M 1.4k\n1G 2k",
+            }))
+            .on_hover_text("データシートのグラフから、いくつかの点を読み取って書きます。谷 (コンデンサ) や山 (コイル) の前後も入れると確かです。例: 周波数 1M、インピーダンス 0.05 は「1M 0.05」");
+            if ui.button("表から求める").on_hover_text("表に合うように、上の 2 つの値 (ESR と ESL / DCR と並列容量 / 寄生インダクタンスと並列容量) を計算して入れます。「値」を使います").clicked() {
+                self.pas_message = Some(self.fit_from_table());
             }
+            self.pas_chart(ui);
+            self.pas_temperature(ui);
             if ui.button("部品を作る (ピンとモデルを入れる)").on_hover_text("ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます").clicked() {
                 self.pas_message = Some(self.apply_passive());
             }

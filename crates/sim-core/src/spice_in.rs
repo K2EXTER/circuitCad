@@ -207,6 +207,23 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         c.set_initial_voltage(&name, val(&ic)?);
                     }
                 }
+                // temperature coefficients: TC=a,b  or  TC1=a TC2=b (1/°C, 1/°C²)
+                let (mut tc1, mut tc2) = (0.0, 0.0);
+                for w in t[4..].iter() {
+                    let up = w.to_ascii_uppercase();
+                    if let Some(v) = up.strip_prefix("TC=") {
+                        let mut it = v.split(',');
+                        tc1 = it.next().and_then(parse_value).unwrap_or(0.0);
+                        tc2 = it.next().and_then(parse_value).unwrap_or(0.0);
+                    } else if let Some(v) = up.strip_prefix("TC1=") {
+                        tc1 = parse_value(v).unwrap_or(0.0);
+                    } else if let Some(v) = up.strip_prefix("TC2=") {
+                        tc2 = parse_value(v).unwrap_or(0.0);
+                    }
+                }
+                if tc1 != 0.0 || tc2 != 0.0 {
+                    c.set_tempco(&name, tc1, tc2);
+                }
                 c.add(match head.chars().next().unwrap().to_ascii_uppercase() {
                     'R' => Element::Resistor { name, a, b, r: x },
                     'C' => Element::Capacitor { name, a, b, c: x },

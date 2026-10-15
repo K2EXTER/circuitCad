@@ -50,5 +50,7 @@ pub(super) fn install_japanese_font(ctx: &egui::Context) {
         for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
             style.text_styles.insert(ts, egui::FontId::proportional(14.0));
         }
+        // the same for monospace text (tables typed into the part form: "-55 -3" must keep its minus signs)
+        style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::monospace(14.0));
     });
 }

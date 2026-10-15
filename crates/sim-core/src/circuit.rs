@@ -155,6 +155,9 @@ pub struct Circuit {
     /// Starting voltage of capacitors (by element name): used by the transient analysis unless it
     /// starts from zero.
     pub initial: Vec<(String, f64)>,
+    /// Temperature coefficients (SPICE `TC1` / `TC2`, per °C and per °C squared) of resistors, capacitors and
+    /// inductors by element name: the value is scaled by `1 + tc1·ΔT + tc2·ΔT²` at a temperature ΔT away from 27 °C.
+    pub tempcos: Vec<(String, f64, f64)>,
 }
 
 impl Default for Circuit {
@@ -165,7 +168,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![] }
     }
 
     /// Node index for a name; `0` and `GND` (any case) are ground.
@@ -185,6 +188,12 @@ impl Circuit {
     pub fn set_initial_voltage(&mut self, cap: &str, volts: f64) {
         self.initial.retain(|(n, _)| n != cap);
         self.initial.push((cap.to_string(), volts));
+    }
+
+    /// Give resistor / capacitor / inductor `name` the temperature coefficients `tc1` (1/°C) and `tc2` (1/°C²).
+    pub fn set_tempco(&mut self, name: &str, tc1: f64, tc2: f64) {
+        self.tempcos.retain(|(n, _, _)| n != name);
+        self.tempcos.push((name.to_string(), tc1, tc2));
     }
 
     pub fn add(&mut self, e: Element) {

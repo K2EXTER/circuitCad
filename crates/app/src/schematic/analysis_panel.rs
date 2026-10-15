@@ -21,7 +21,7 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.temp_c).desired_width(36.0))
                 .on_hover_text("DC・過渡・AC・DCスイープで使う温度 (摂氏、標準は 27)。
 温度が上がるとダイオードやトランジスタの順方向電圧が約 2 mV/℃ ずつ下がります。
-抵抗とコンデンサは温度で変わらないものとして扱います");
+抵抗・コンデンサ・コイルは、ライブラリ部品の温度係数 (TC1・TC2) を入れたものだけ、温度で値が変わります (基本部品は変わりません)");
             ui.label("℃");
         });
     }

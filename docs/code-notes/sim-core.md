@@ -19,6 +19,9 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - `power.rs` 平均電力 `mean_power`(表示範囲での v*i の時間平均)と効率 `efficiency`。GUIは `schematic/power_ui.rs`(過渡の波形パネルの「電力と効率」、`--tran … --power <入力V> <入力I> <出力V> <出力I>`)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
+## 温度係数 (TC1/TC2)
+`.subckt` の R/C/L 行の `TC=a,b` / `TC1=a` / `TC2=b`(1/℃、1/℃²。27℃基準)を `spice_in` が読み、`Circuit::tempcos`(素子名→係数)に入れる。`Circuit::at_temperature` が値を `1+tc1·ΔT+tc2·ΔT²` 倍する(下限0.01倍)ので、温度設定・温度スイープのすべての解析に効く。係数の無い素子と基本部品は従来どおり温度で変わらない。生成側は `part-lib/passive.rs`(`fit_tempco`、コイルのDCRには銅の係数 `COPPER_TC` を自動で付ける)。テスト: `tests_tempco.rs`。
+
 ## spice_flat.rs (ベンダー形式のSPICE文の展開)
 `add_subckt_instance` は、`.param` / `{式}` / `'式'` / `.subckt ... params:` の既定値 / 入れ子の `X` 呼び出しを含む文を、まず `spice_flat::flatten` で1つの平らな `.subckt` に直してから `spice_in` で読む(どれも使わない文は素通し)。
 - パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。

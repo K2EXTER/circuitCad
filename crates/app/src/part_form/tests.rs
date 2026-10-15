@@ -554,4 +554,56 @@ mod passive_form_tests {
 2 Y".into();
         assert!(f.dio_apply().unwrap_err().contains("A と K"));
     }
+
+    /// Each kind fits its pair from a typed impedance table, and a typed temperature coefficient reaches the
+    /// simulator: the part's value moves in a temperature sweep.
+    #[test]
+    fn the_chip_section_fits_every_kind_and_the_temperature_reaches_the_simulator() {
+        use sim_core::{dc_op, Circuit, Element};
+        // inductor: DCR and parallel capacitance from a table made by the model itself
+        let mut f = PartForm::for_type("inductor");
+        f.pas_value = "10u".into();
+        f.pas_table = [1e4, 1e5, 1e6, 3e6, 1e7, 3e7, 6e7, 1e8, 2e8]
+            .iter()
+            .map(|&hz| format!("{hz} {}", passive::impedance(PassiveKind::Inductor, 10e-6, 0.12, 2e-12, hz)))
+            .collect::<Vec<_>>()
+            .join("
+");
+        let msg = f.fit_from_table().unwrap();
+        assert!(msg.contains("DCR") && msg.contains("並列容量"), "{msg}");
+        assert!(sim_core::parse_value(&f.pas_dcr).is_some_and(|d| (d / 0.12 - 1.0).abs() < 0.15), "{}", f.pas_dcr);
+        // resistor: the same door
+        let mut r = PartForm::for_type("resistor");
+        r.pas_value = "1k".into();
+        r.pas_table = "1M 1000
+100M 1010
+500M 1150
+1G 1700".into();
+        assert!(r.fit_from_table().unwrap().contains("寄生インダクタンス"));
+        // temperature: TCR 1000 ppm on a 1k resistor in a divider
+        let mut r = PartForm::for_type("resistor");
+        r.name = "R_TC".into();
+        r.pas_value = "1k".into();
+        r.pas_tc1 = "1000".into();
+        r.apply_passive().unwrap();
+        assert!(r.sim_text.contains("TC1=1.0000e-3"), "{}", r.sim_text);
+        let mut c = Circuit::new();
+        let (a, o) = (c.node("a"), c.node("o"));
+        sim_core::add_subckt_instance(&mut c, "U1", &r.sim_name, &r.sim_text, &[a, o]).unwrap();
+        c.add(Element::Resistor { name: "R2".into(), a: o, b: 0, r: 1000.0 });
+        c.add(Element::vdc("Vin", a, 0, 1.0));
+        let at = |t: f64| dc_op(&c.at_temperature(t)).unwrap().voltage("o").unwrap();
+        assert!((at(27.0) - 0.5).abs() < 1e-9);
+        assert!((at(127.0) - 1.0 / 2.1).abs() < 1e-9, "{}", at(127.0));
+        // a temperature table becomes TC1 / TC2
+        let mut cap = PartForm::for_type("ceramic");
+        cap.pas_tctable = "125 -9
+85 -3".into();
+        let m = cap.fit_tc_from_table().unwrap();
+        assert!(m.contains("TC1"), "{m}");
+        assert!(!cap.pas_tc1.is_empty());
+        cap.pas_tc1 = "x".into();
+        cap.pas_value = "100n".into();
+        assert!(cap.apply_passive().unwrap_err().contains("TC1"));
+    }
 }

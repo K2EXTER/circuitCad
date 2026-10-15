@@ -64,11 +64,28 @@ pub struct PassiveTemplate {
     pub cp: Option<f64>,
     /// Capacitor: the part of the capacitance lost at the working DC bias (0.4 = only 60 % left).
     pub bias_loss: f64,
+    /// Temperature coefficients of the value (1/°C and 1/°C² from 27 °C): resistance, capacitance or inductance.
+    pub tc1: Option<f64>,
+    pub tc2: Option<f64>,
+}
+
+/// Temperature coefficient of copper (1/°C): the winding resistance of an inductor follows it.
+pub const COPPER_TC: f64 = 3.93e-3;
+
+/// ` TC1=… TC2=…` for a SPICE element line (empty when both are zero or missing).
+fn tc_suffix(tc1: Option<f64>, tc2: Option<f64>) -> String {
+    let mut s = String::new();
+    for (name, v) in [("TC1", tc1), ("TC2", tc2)] {
+        if let Some(v) = v.filter(|v| *v != 0.0) {
+            s += &format!(" {name}={v:.4e}");
+        }
+    }
+    s
 }
 
 impl PassiveTemplate {
     pub fn new(kind: PassiveKind, value: f64) -> Self {
-        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0 }
+        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None }
     }
 }
 
@@ -121,12 +138,23 @@ impl PassiveTemplate {
         positive("ESL", self.esl)?;
         positive("DCR (巻線抵抗)", self.dcr)?;
         positive("並列容量", self.cp)?;
+        for (what, v) in [("温度係数 TC1", self.tc1), ("温度係数 TC2", self.tc2)] {
+            if v.is_some_and(|x| !x.is_finite() || x.abs() > 0.05) {
+                return Err(format!("{what} は 1℃ あたりの割合で入れてください (例: 100ppm/℃ は 100u)。絶対値が 5% を超える値は入れられません"));
+            }
+        }
         if !(0.0..0.95).contains(&self.bias_loss) {
             return Err("DCバイアスによる容量の低下は 0〜95% の間で入れてください (例: 30)".into());
         }
         let sub = spice_name(name);
         let mut l = vec![format!(".subckt {sub} 1 2")];
-        let mut limits = vec!["温度による値の変化は扱いません。".to_string()];
+        let has_tc = self.tc1.is_some_and(|v| v != 0.0) || self.tc2.is_some_and(|v| v != 0.0);
+        let tc = tc_suffix(self.tc1, self.tc2);
+        let mut limits = vec![if has_tc {
+            "温度による値の変化は、27℃ を基準にした温度係数 (TC1・TC2 の 2 次式) で近似しています。温度スイープで確かめられます。データシートのグラフの形とは、少し違います。".to_string()
+        } else {
+            "温度による値の変化は扱いません (温度係数を入れると反映できます)。".to_string()
+        }];
         let mut parts: Vec<String> = vec![];
         let mut node = "1".to_string();
         let next = |n: &mut String, label: &str| -> String {
@@ -148,7 +176,7 @@ impl PassiveTemplate {
                     l.push(format!("Lesl {from} {m} {}", eng(esl)));
                     parts.push(format!("ESL {}", eng(esl)));
                 }
-                l.push(format!("C1 {node} 2 {}", eng(ceff)));
+                l.push(format!("C1 {node} 2 {}{tc}", eng(ceff)));
                 if self.bias_loss > 0.0 {
                     parts.push(format!("DCバイアス時の容量 {} ({:.0}% 低下)", eng(ceff), self.bias_loss * 100.0));
                     limits.push(format!("容量は、かける電圧で下がった値 ({}) の一定値として扱います。電圧が変わっても動きません。", eng(ceff)));
@@ -165,7 +193,7 @@ impl PassiveTemplate {
                     l.push(format!("Lpar 1 {m} {}", eng(esl)));
                     parts.push(format!("寄生インダクタンス {}", eng(esl)));
                 }
-                l.push(format!("R1 {node} 2 {}", eng(self.value)));
+                l.push(format!("R1 {node} 2 {}{tc}", eng(self.value)));
                 if let Some(cp) = self.cp {
                     l.push(format!("Cpar 1 2 {}", eng(cp)));
                     parts.push(format!("並列容量 {}", eng(cp)));
@@ -175,10 +203,10 @@ impl PassiveTemplate {
             PassiveKind::Inductor => {
                 if let Some(dcr) = self.dcr {
                     let m = next(&mut node, "dcr");
-                    l.push(format!("Rdcr 1 {m} {}", eng(dcr)));
+                    l.push(format!("Rdcr 1 {m} {} TC1={COPPER_TC:.4e}", eng(dcr)));
                     parts.push(format!("DCR {}", eng(dcr)));
                 }
-                l.push(format!("L1 {node} 2 {}", eng(self.value)));
+                l.push(format!("L1 {node} 2 {}{tc}", eng(self.value)));
                 if let Some(cp) = self.cp {
                     l.push(format!("Cp 1 2 {}", eng(cp)));
                     parts.push(format!("並列容量 {}", eng(cp)));
@@ -186,6 +214,8 @@ impl PassiveTemplate {
                 limits.push("電流が大きいと起こる磁気飽和 (インダクタンスの低下) は扱いません。".into());
                 if self.dcr.is_none() {
                     limits.push("DCR (巻線の抵抗) を入れていないので、損失のない理想のコイルです。".into());
+                } else {
+                    limits.push("DCR は銅の温度係数 (1℃ あたり約 0.4%) で、温度とともに増えます。".into());
                 }
             }
         }
@@ -295,6 +325,134 @@ pub fn fit_cap(c: f64, points: &[(f64, f64)]) -> Result<CapFit, String> {
     Ok(CapFit { esr, esl, srf: f0, max_error_pct, warnings })
 }
 
+/// A pair of parasitics found from an impedance table: capacitor (ESR, ESL), inductor (DCR, parallel
+/// capacitance), resistor (series inductance, parallel capacitance).
+#[derive(Clone, Debug, PartialEq)]
+pub struct TwoFit {
+    pub a: f64,
+    pub b: f64,
+    /// Where the part resonates by itself, in Hz (the capacitor: series resonance; the others: parallel).
+    pub srf: f64,
+    pub max_error_pct: f64,
+    pub warnings: Vec<String>,
+}
+
+/// |Z| of the part at `f` for the pair `(a, b)` (see [`TwoFit`]); `value` is its C, L or R.
+pub fn impedance(kind: PassiveKind, value: f64, a: f64, b: f64, f: f64) -> f64 {
+    let w = 2.0 * PI * f;
+    match kind {
+        PassiveKind::Capacitor => cap_impedance(value, a, b, f),
+        // (series R + jwL) in parallel with the capacitance b: Z = Zs / (1 + jwb·Zs)
+        PassiveKind::Inductor | PassiveKind::Resistor => {
+            let (re, im) = if kind == PassiveKind::Inductor { (a, w * value) } else { (value, w * a) };
+            let (dr, di) = (1.0 - w * b * im, w * b * re); // 1 + jwb(re + j im)
+            ((re * re + im * im) / (dr * dr + di * di)).sqrt()
+        }
+    }
+}
+
+/// Self-resonant frequency of the part for the pair `(a, b)`.
+pub fn resonance(kind: PassiveKind, value: f64, a: f64, b: f64) -> f64 {
+    match kind {
+        PassiveKind::Capacitor => srf(value, b),
+        PassiveKind::Inductor => 1.0 / (2.0 * PI * (value * b).sqrt()),
+        PassiveKind::Resistor => 1.0 / (2.0 * PI * (a * b).sqrt()),
+    }
+}
+
+/// The log10 ranges searched for the pair of each kind: ((a_lo, a_hi), (b_lo, b_hi)).
+pub fn fit_ranges(kind: PassiveKind) -> ((f64, f64), (f64, f64)) {
+    match kind {
+        PassiveKind::Capacitor => ((-4.0, 2.0), (-12.0, -5.0)),
+        PassiveKind::Inductor => ((-3.0, 3.0), (-14.0, -8.0)),
+        PassiveKind::Resistor => ((-11.0, -6.0), (-15.0, -10.0)),
+    }
+}
+
+/// Fit the pair of parasitics of a part of `value` to `(frequency Hz, |Z| ohm)` points (least squares on ln|Z|).
+pub fn fit_passive(kind: PassiveKind, value: f64, points: &[(f64, f64)]) -> Result<TwoFit, String> {
+    if !(value.is_finite() && value > 0.0) {
+        return Err("先に値を入れてください".into());
+    }
+    if points.len() < 2 {
+        return Err("インピーダンスの表が足りません。周波数と |Z| の組を 2 行以上 (できれば 3〜5 行) 入れてください".into());
+    }
+    if let Some(p) = points.iter().find(|p| !(p.0 > 0.0 && p.1 > 0.0 && p.0.is_finite() && p.1.is_finite())) {
+        return Err(format!("周波数 {} Hz / |Z| {} Ω は 0 より大きい数にしてください", p.0, p.1));
+    }
+    let cost = |a: f64, b: f64| -> f64 { points.iter().map(|&(f, z)| (impedance(kind, value, a, b, f).ln() - z.ln()).powi(2)).sum() };
+    let ((mut lo_a, mut hi_a), (mut lo_b, mut hi_b)) = fit_ranges(kind);
+    let mut best = (f64::MAX, 0.0, 0.0);
+    let mut step = 0.05;
+    for _ in 0..3 {
+        let mut ra = lo_a;
+        while ra <= hi_a + 1e-9 {
+            let mut rb = lo_b;
+            while rb <= hi_b + 1e-9 {
+                let k = cost(10f64.powf(ra), 10f64.powf(rb));
+                if k < best.0 {
+                    best = (k, ra, rb);
+                }
+                rb += step;
+            }
+            ra += step;
+        }
+        (lo_a, hi_a, lo_b, hi_b) = (best.1 - step, best.1 + step, best.2 - step, best.2 + step);
+        step /= 10.0;
+    }
+    let (a, b) = (10f64.powf(best.1), 10f64.powf(best.2));
+    let max_error_pct = points.iter().map(|&(f, z)| ((impedance(kind, value, a, b, f) - z) / z).abs() * 100.0).fold(0.0, f64::max);
+    let f0 = resonance(kind, value, a, b);
+    let fmax = points.iter().map(|p| p.0).fold(0.0, f64::max);
+    let mut warnings = vec![];
+    if fmax < f0 * 0.5 {
+        warnings.push(format!("表の最高周波数 ({}Hz) が自己共振 ({}Hz) よりだいぶ低いので、求めた値は目安です。共振を過ぎた高い周波数の行を足すと確かになります", eng(fmax), eng(f0)));
+    }
+    if max_error_pct > 25.0 {
+        warnings.push(format!("表とモデルの差が最大 {max_error_pct:.0}% あります。値が表と合っているか確かめてください"));
+    }
+    Ok(TwoFit { a, b, srf: f0, max_error_pct, warnings })
+}
+
+/// Fit `1 + tc1·dT + tc2·dT²` (dT from 27 °C) to `(temperature °C, change in percent)` points read off a data
+/// sheet's temperature characteristic. Returns `(tc1, tc2, largest difference in percentage points)`.
+pub fn fit_tempco(points: &[(f64, f64)]) -> Result<(f64, f64, f64), String> {
+    if points.is_empty() {
+        return Err("温度と変化率の点を入れてください (例: 85 -7 は、85℃ で 7% 減る)".into());
+    }
+    if points.iter().any(|(t, p)| !t.is_finite() || !p.is_finite() || *p <= -100.0) {
+        return Err("温度と変化率 (%) は数で入れてください。変化率は −100% より大きい値です".into());
+    }
+    let d: Vec<(f64, f64)> = points.iter().map(|(t, p)| (t - 27.0, p / 100.0)).collect();
+    let (mut s2, mut s3, mut s4, mut y1, mut y2) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    for (x, y) in &d {
+        s2 += x * x;
+        s3 += x * x * x;
+        s4 += x * x * x * x;
+        y1 += x * y;
+        y2 += x * x * y;
+    }
+    let one_point = d.iter().filter(|(x, _)| x.abs() > 1e-9).count() < 2;
+    let det = s2 * s4 - s3 * s3;
+    let (tc1, tc2) = if one_point || det.abs() < 1e-9 {
+        // a single temperature: a straight line through it
+        if s2 < 1e-9 {
+            return Err("27℃ 以外の温度の点を入れてください".into());
+        }
+        (y1 / s2, 0.0)
+    } else {
+        ((y1 * s4 - y2 * s3) / det, (s2 * y2 - s3 * y1) / det)
+    };
+    let err = d.iter().map(|(x, y)| ((tc1 * x + tc2 * x * x) - y).abs() * 100.0).fold(0.0, f64::max);
+    Ok((tc1, tc2, err))
+}
+
+/// Value ratio at `temp_c` for the coefficients (as the simulator applies them).
+pub fn tempco_ratio(tc1: f64, tc2: f64, temp_c: f64) -> f64 {
+    let d = temp_c - 27.0;
+    (1.0 + tc1 * d + tc2 * d * d).max(0.01)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,5 +531,50 @@ mod tests {
         let esl = esl_from_srf(10e-9, 50e6).unwrap();
         assert!((srf(10e-9, esl) - 50e6).abs() < 1.0);
         assert!(cp_from_srf(0.0, 1e6).is_err());
+    }
+
+    #[test]
+    fn the_inductor_pair_is_recovered_from_an_impedance_table() {
+        let (l, dcr, cp) = (10e-6, 0.12, 2e-12);
+        let pts: Vec<(f64, f64)> = [1e4, 1e5, 1e6, 3e6, 1e7, 3e7, 6e7, 1e8, 2e8].iter().map(|&f| (f, impedance(PassiveKind::Inductor, l, dcr, cp, f))).collect();
+        let fit = fit_passive(PassiveKind::Inductor, l, &pts).unwrap();
+        assert!((fit.a / dcr - 1.0).abs() < 0.1, "{fit:?}");
+        assert!((fit.b / cp - 1.0).abs() < 0.1, "{fit:?}");
+        assert!((fit.srf / resonance(PassiveKind::Inductor, l, dcr, cp) - 1.0).abs() < 0.05, "{fit:?}");
+    }
+
+    #[test]
+    fn the_resistor_pair_is_recovered_and_the_capacitor_goes_through_the_same_door() {
+        let (r, lp, cp) = (1000.0, 5e-9, 0.3e-12);
+        let pts: Vec<(f64, f64)> = [1e6, 1e7, 3e7, 1e8, 3e8, 1e9].iter().map(|&f| (f, impedance(PassiveKind::Resistor, r, lp, cp, f))).collect();
+        let fit = fit_passive(PassiveKind::Resistor, r, &pts).unwrap();
+        assert!(fit.max_error_pct < 5.0, "{fit:?}");
+        let (c, esr, esl) = (100e-9, 0.03, 0.9e-9);
+        let pts: Vec<(f64, f64)> = [1e5, 1e6, 1e7, 2.5e7, 6e7, 2e8].iter().map(|&f| (f, cap_impedance(c, esr, esl, f))).collect();
+        let fit = fit_passive(PassiveKind::Capacitor, c, &pts).unwrap();
+        assert!((fit.a / esr - 1.0).abs() < 0.05 && (fit.b / esl - 1.0).abs() < 0.05, "{fit:?}");
+    }
+
+    #[test]
+    fn a_temperature_characteristic_is_fitted_and_written_as_tc() {
+        // X7R-like: 0% at 27 C, -3% at 85 C, -9% at 125 C, -2% at -55 C
+        let (tc1, tc2, err) = fit_tempco(&[(-55.0, -2.0), (85.0, -3.0), (125.0, -9.0)]).unwrap();
+        assert!(err < 3.0, "{err}");
+        assert!((tempco_ratio(tc1, tc2, 27.0) - 1.0).abs() < 1e-12);
+        assert!((tempco_ratio(tc1, tc2, 125.0) - 0.91).abs() < 0.03);
+        // one point: a straight line
+        let (t1, t2, _) = fit_tempco(&[(127.0, 10.0)]).unwrap();
+        assert!((t1 - 1e-3).abs() < 1e-9 && t2 == 0.0);
+        assert!(fit_tempco(&[(27.0, 5.0)]).is_err());
+        let mut t = PassiveTemplate::new(PassiveKind::Resistor, 1000.0);
+        t.tc1 = Some(100e-6);
+        let g = t.generate("R1k").unwrap();
+        assert!(g.sim_text.contains("R1 1 2 1k TC1=1.0000e-4"), "{}", g.sim_text);
+        assert!(g.limits[0].contains("温度係数"));
+        t.tc1 = Some(0.5);
+        assert!(t.generate("R1k").unwrap_err().contains("5%"));
+        let mut l = PassiveTemplate::new(PassiveKind::Inductor, 1e-5);
+        l.dcr = Some(0.1);
+        assert!(l.generate("L").unwrap().sim_text.contains("Rdcr 1 n_dcr 100m TC1=3.9300e-3"));
     }
 }

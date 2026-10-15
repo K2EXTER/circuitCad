@@ -7,7 +7,8 @@
 //!   new temperature, and the current gain `bf` rises slowly;
 //! * MOSFETs: the mobility falls (`kp ∝ T^-1.5`) and the threshold shrinks by about 2 mV per °C.
 //!
-//! Resistors, capacitors and inductors are treated as ideal (no temperature coefficient).
+//! Resistors, capacitors and inductors keep their value unless they carry `TC1` / `TC2` (library parts made
+//! from a data sheet do; see `Circuit::tempcos`): the value is then scaled by `1 + tc1·ΔT + tc2·ΔT²`.
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::{dc_op, SimError};
@@ -32,8 +33,14 @@ impl Circuit {
         let vt = K_OVER_Q * t;
         // saturation current of a junction with emission coefficient n
         let is_at = |is: f64, n: f64, xti: f64| is * ratio.powf(xti / n) * ((EG / (n * vt)) * (ratio - 1.0)).exp();
+        let d_t = temp_c - T_NOM_C;
+        let scale = |tcs: &[(String, f64, f64)], name: &str| tcs.iter().find(|(n, _, _)| n == name).map_or(1.0, |(_, a, b)| (1.0 + a * d_t + b * d_t * d_t).max(0.01));
+        let tcs = std::mem::take(&mut c.tempcos);
         for e in &mut c.elements {
             match e {
+                Element::Resistor { name, r, .. } => *r *= scale(&tcs, name),
+                Element::Capacitor { name, c: cap, .. } => *cap *= scale(&tcs, name),
+                Element::Inductor { name, l, .. } => *l *= scale(&tcs, name),
                 Element::Diode { model, .. } => {
                     model.is = is_at(model.is, model.n, XTI);
                     model.n *= ratio;
@@ -53,6 +60,7 @@ impl Circuit {
                 _ => {}
             }
         }
+        c.tempcos = tcs;
         c
     }
 }
