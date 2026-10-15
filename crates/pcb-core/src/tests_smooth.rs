@@ -259,3 +259,43 @@ fn an_excluded_net_is_left_as_drawn_and_the_other_is_finished() {
     c.finish_exclude = vec!["A".into()];
     assert_eq!(finished(&c).unwrap().board.tracks.len(), c.tracks.len(), "nothing is added for an excluded net");
 }
+
+fn t_board(split: bool) -> Board {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 15.0, "A");
+    pad(&mut b, 25.0, 15.0, "A");
+    pad(&mut b, 15.0, 25.0, "A");
+    if split {
+        b.tracks.push(trk((5.0, 15.0), (15.0, 15.0), 0.25));
+        b.tracks.push(trk((15.0, 15.0), (25.0, 15.0), 0.25));
+    } else {
+        b.tracks.push(trk((5.0, 15.0), (25.0, 15.0), 0.25));
+    }
+    b.tracks.push(trk((15.0, 15.0), (15.0, 25.0), 0.25)); // the branch ends on the trunk
+    b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
+    b
+}
+
+#[test]
+fn both_corners_of_a_t_get_a_concave_fillet() {
+    for split in [false, true] {
+        let b = t_board(split);
+        let f = finished(&b).unwrap();
+        assert_eq!(f.patches.len(), 2, "split = {split}: one corner on each side of the branch");
+        // the corner on the right: apex (15.125, 15.125), fillet radius 0.5, so the free circle is centred at (15.625, 15.625)
+        let right = f.patches.iter().find(|p| p.outline.iter().any(|q| q.x > 15.2)).unwrap();
+        assert!(geom::inside_polygon(&right.outline, Point::new(15.2, 15.2)), "the corner is filled");
+        assert!(!geom::inside_polygon(&right.outline, Point::new(15.625, 15.625)), "the arc stays free");
+        assert!(right.outline.iter().all(|q| q.dist(Point::new(15.625, 15.625)) >= 0.5 - 1e-6 || q.y < 15.2 || q.x < 15.2 || q.dist(Point::new(15.125, 15.125)) < 0.2), "no corner of the fill reaches into the circle");
+        assert!(ratsnest(&f.board).is_empty());
+        assert!(drc::check_final(&b).is_empty());
+        assert!(gerber::copper(&b, Side::Top).contains("G36*"));
+    }
+}
+
+#[test]
+fn a_plain_corner_is_not_a_junction_fillet() {
+    let mut b = l_shape();
+    b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
+    assert!(finished(&b).unwrap().patches.is_empty());
+}

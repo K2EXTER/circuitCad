@@ -157,6 +157,10 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     if phi < MIN_FORK.to_radians() || phi > MAX_FORK.to_radians() {
         return None;
     }
+    // a third track runs through this point: it is a T, and `junctions` takes it
+    if board.tracks.iter().enumerate().any(|(k, t)| k != i && k != j && t.side == ti.side && t.a.dist(v) > 1e-6 && t.b.dist(v) > 1e-6 && crate::drc::point_seg(v, t.a, t.b) < 1e-6) {
+        return None;
+    }
     let theta = phi / 2.0;
     let (bx, by) = (u1x + u2x, u1y + u2y);
     let bl = bx.hypot(by);
@@ -191,6 +195,133 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     }
     pts.extend([at(t_up.0, t_up.1), at(t_up.0, t_up.1 + SINK)]);
     Some(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: ti.side, outline: pts, track: i }), live: None, kind: Kind::Fork, touches: vec![i, j] })
+}
+
+/// One track leaving a junction: its direction, width, how far it runs and which track it is.
+#[derive(Clone, Copy)]
+struct Ray {
+    u: (f64, f64),
+    w: f64,
+    len: f64,
+    track: usize,
+}
+
+/// The tracks that meet at `v` (on one layer, not on a pad or via) when there are three or more ways out: tracks that
+/// end there, and tracks that run through it (each gives two ways out).
+fn junction_rays(board: &Board, v: Point, side: Side) -> Vec<Ray> {
+    let mut rays = vec![];
+    for (k, t) in board.tracks.iter().enumerate().filter(|(_, t)| t.side == side) {
+        let (da, db) = (t.a.dist(v), t.b.dist(v));
+        if da < 1e-6 {
+            let (ux, uy, len) = unit(v, t.b);
+            rays.push(Ray { u: (ux, uy), w: t.width, len, track: k });
+        } else if db < 1e-6 {
+            let (ux, uy, len) = unit(v, t.a);
+            rays.push(Ray { u: (ux, uy), w: t.width, len, track: k });
+        } else if crate::drc::point_seg(v, t.a, t.b) < 1e-6 {
+            for (end, d) in [(t.a, da), (t.b, db)] {
+                let (ux, uy, _) = unit(v, end);
+                rays.push(Ray { u: (ux, uy), w: t.width, len: d, track: k });
+            }
+        }
+    }
+    rays
+}
+
+/// The copper to add in the corner between two tracks `a` and `b` that leave `v`, so that the corner is not sharp: a
+/// concave arc of radius `rho` that touches the edges of both, the corner filled up to it. `None` when the tracks are
+/// too short for it, lie too close to a straight line or too close together.
+fn notch_fill(v: Point, a: &Ray, b: &Ray, rho: f64) -> Option<Vec<Point>> {
+    let phi = (a.u.0 * b.u.0 + a.u.1 * b.u.1).clamp(-1.0, 1.0).acos();
+    if phi < MIN_FORK.to_radians() || phi > 172f64.to_radians() {
+        return None;
+    }
+    // the normal of each ray, pointing into the notch
+    let normal = |r: &Ray, towards: &Ray| {
+        let n = (-r.u.1, r.u.0);
+        if n.0 * towards.u.0 + n.1 * towards.u.1 >= 0.0 { n } else { (-n.0, -n.1) }
+    };
+    let (na, nb) = (normal(a, b), normal(b, a));
+    let det = na.0 * nb.1 - na.1 * nb.0;
+    if det.abs() < 1e-6 {
+        return None;
+    }
+    // where the edges of the two tracks cross: n_a . p = w_a / 2 and n_b . p = w_b / 2
+    let (ra, rb) = (a.w / 2.0, b.w / 2.0);
+    let p = ((ra * nb.1 - na.1 * rb) / det, (na.0 * rb - ra * nb.0) / det);
+    let apex = Point::new(v.x + p.0, v.y + p.1);
+    let reach = p.0.hypot(p.1);
+    let tan_half = (phi / 2.0).tan();
+    // the arc may not need more of the tracks than they have, and stays short
+    let t_max = (a.len.min(b.len) / 2.0 - reach).min(1.5);
+    let rho = rho.min(t_max * tan_half);
+    let t = rho / tan_half;
+    if t < 0.1 || rho < 0.05 {
+        return None;
+    }
+    let (bx, by) = (a.u.0 + b.u.0, a.u.1 + b.u.1);
+    let bl = bx.hypot(by);
+    let (bx, by) = (bx / bl, by / bl);
+    let dist_c = rho / (phi / 2.0).sin();
+    let c = Point::new(apex.x + bx * dist_c, apex.y + by * dist_c);
+    let (ta, tb) = (Point::new(apex.x + a.u.0 * t, apex.y + a.u.1 * t), Point::new(apex.x + b.u.0 * t, apex.y + b.u.1 * t));
+    let (a1, a2) = ((ta.y - c.y).atan2(ta.x - c.x), (tb.y - c.y).atan2(tb.x - c.x));
+    let mut sweep = a2 - a1;
+    while sweep > std::f64::consts::PI {
+        sweep -= std::f64::consts::TAU;
+    }
+    while sweep < -std::f64::consts::PI {
+        sweep += std::f64::consts::TAU;
+    }
+    const SINK: f64 = 0.03;
+    let mut pts = vec![
+        Point::new(apex.x - bx * 0.05, apex.y - by * 0.05),
+        Point::new(ta.x - na.0 * SINK, ta.y - na.1 * SINK),
+        ta,
+    ];
+    let steps = (sweep.abs() / 10f64.to_radians()).ceil().max(3.0) as usize;
+    for k in 1..steps {
+        let ang = a1 + sweep * k as f64 / steps as f64;
+        pts.push(Point::new(c.x + rho * ang.cos(), c.y + rho * ang.sin()));
+    }
+    pts.extend([tb, Point::new(tb.x - nb.0 * SINK, tb.y - nb.1 * SINK)]);
+    Some(pts)
+}
+
+/// Where three or more tracks meet (a T, or a track that ends on the side of another): each corner between two
+/// neighbouring tracks gets a concave round fillet instead of a sharp inside corner.
+fn junctions(board: &Board, radius: f64) -> Vec<Edit> {
+    let mut seen: std::collections::HashSet<(i64, i64, Side)> = Default::default();
+    let mut out = vec![];
+    for t in &board.tracks {
+        for v in [t.a, t.b] {
+            if !seen.insert(key(v, t.side)) || pinned(board, v, t.side) {
+                continue;
+            }
+            let mut rays = junction_rays(board, v, t.side);
+            if rays.len() < 3 {
+                continue;
+            }
+            rays.sort_by(|x, y| x.u.1.atan2(x.u.0).total_cmp(&y.u.1.atan2(y.u.0)));
+            let n = rays.len();
+            for k in 0..n {
+                let (a, b) = (&rays[k], &rays[(k + 1) % n]);
+                if a.track == b.track {
+                    continue; // the two halves of one track that runs through
+                }
+                let Some(outline) = notch_fill(v, a, b, radius) else { continue };
+                out.push(Edit {
+                    trims: vec![],
+                    pieces: vec![],
+                    patch: Some(Patch { side: t.side, outline, track: a.track }),
+                    live: None,
+                    kind: Kind::Fork,
+                    touches: vec![a.track, b.track],
+                });
+            }
+        }
+    }
+    out
 }
 
 fn far_end(t: &Track, is_a: bool) -> Point {
@@ -412,6 +543,7 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Vec<Edit
                 used.extend([a, b]);
             }
         }
+        edits.extend(junctions(board, opts.radius));
     }
     for (v, a, b) in joints(board) {
         if used.contains(&a) || used.contains(&b) {
