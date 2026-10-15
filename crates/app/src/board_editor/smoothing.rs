@@ -26,6 +26,11 @@ impl BoardEditor {
         }
     }
 
+    /// Select track `i` (for screenshots).
+    pub fn select_track(&mut self, i: usize) {
+        self.selected = Some(Item::Track(i)).filter(|_| i < self.board.tracks.len());
+    }
+
     /// Indices of the selected tracks (the one selected and those in the multi-selection).
     fn picked_tracks(&self) -> Vec<usize> {
         let mut v: Vec<usize> = self.selected.iter().chain(&self.multi).filter_map(|it| if let Item::Track(i) = it { Some(*i) } else { None }).collect();
