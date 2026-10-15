@@ -69,8 +69,24 @@ impl SchEditor {
                 let (bx0, bx1, by0, by1) = sheet_box(c.kind, (x0, x1, y0, y1), c.pos, c.rot)
                     .unwrap_or((c.pos.0 as f32 - 2.0, c.pos.0 as f32 + 2.0, c.pos.1 as f32 - 1.0, c.pos.1 as f32 + 1.0));
                 if by1 - by0 <= bx1 - bx0 {
-                    painter.text(self.to_screen(rect, ((bx0 + bx1) / 2.0, by0 - 0.3)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), name_col);
-                    painter.text(self.to_screen(rect, ((bx0 + bx1) / 2.0, by1 + 0.3)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+                    let cx = (bx0 + bx1) / 2.0;
+                    // a pin on the centre line of the top / bottom edge has its wire running through the centred text:
+                    // put the text just left of that wire instead (the voltages are drawn right of the pins)
+                    let wire_at = |y: f32| pin_on_edge(c, y, cx);
+                    // the arrows of an LED rise 1.5 above its centre (or hang 1.5 below when it is turned upside down)
+                    let (arrows_up, arrows_down) = (c.kind == Kind::Led && c.rot % 4 == 0, c.kind == Kind::Led && c.rot % 4 == 2);
+                    let name_y = by0 - if arrows_up { 1.2 } else { 0.3 };
+                    let value_y = by1 + if arrows_down { 1.2 } else { 0.3 };
+                    if wire_at(by0) {
+                        painter.text(self.to_screen(rect, (cx - 0.4, name_y)), Align2::RIGHT_BOTTOM, &c.refdes, f.clone(), name_col);
+                    } else {
+                        painter.text(self.to_screen(rect, (cx, name_y)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), name_col);
+                    }
+                    if wire_at(by1) {
+                        painter.text(self.to_screen(rect, (cx - 0.4, value_y)), Align2::RIGHT_TOP, &c.value, f, Color32::from_gray(60));
+                    } else {
+                        painter.text(self.to_screen(rect, (cx, value_y)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+                    }
                 } else {
                     // name and value go left of the body, level with its middle, so they stay clear of the pin
                     // voltages (right of each pin) and the wires that run along the pins' line
@@ -128,7 +144,10 @@ impl SchEditor {
                     // below the part's value text
                     let at = self.to_screen(rect, ((x0 + x1) / 2.0, y1 + 1.3));
                     let galley = painter.layout_no_wrap(eng(el.current, "A"), f.clone(), col);
-                    let pos = at - Vec2::new(galley.size().x / 2.0, 0.0);
+                    // a wire leaves the middle of the bottom edge: the text goes left of it
+                    let tall = (y1 - sheet_box(c.kind, ext, c.pos, c.rot).map_or(0.0, |b| b.2)) > (x1 - x0);
+                    let wire_below = !tall && pin_on_edge(c, y1, (x0 + x1) / 2.0);
+                    let pos = if wire_below { at - Vec2::new(galley.size().x + 6.0, 0.0) } else { at - Vec2::new(galley.size().x / 2.0, 0.0) };
                     painter.rect_filled(Rect::from_min_size(pos, galley.size()).expand(1.0), 2.0, Color32::from_rgba_unmultiplied(255, 255, 255, 190));
                     painter.galley(pos, galley, col);
                     // arrow along the part: the direction the (conventional) current flows
@@ -223,4 +242,9 @@ impl SchEditor {
             Tool::Select => {}
         }
     }
+}
+
+/// Whether a pin of `c` sits on the horizontal line `y` close to the x of the part's middle: a wire leaves the part there.
+fn pin_on_edge(c: &Component, y: f32, cx: f32) -> bool {
+    c.pins().iter().any(|p| (p.1.1 as f32 - y).abs() < 0.1 && (p.1.0 as f32 - cx).abs() < 1.5)
 }

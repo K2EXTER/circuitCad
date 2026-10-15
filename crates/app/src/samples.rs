@@ -1,0 +1,57 @@
+//! Sample circuits built into the program, for "ファイル → サンプル回路を開く": a beginner can try a finished
+//! circuit at once, without finding the `docs/examples` folder. They are the same files as in `docs/examples`.
+
+pub struct Sample {
+    pub title: &'static str,
+    /// One or two sentences: what the circuit shows, and what to press next.
+    pub about: &'static str,
+    pub json: &'static str,
+}
+
+macro_rules! sample {
+    ($title:expr, $about:expr, $file:expr) => {
+        Sample { title: $title, about: $about, json: include_str!(concat!("../../../docs/examples/", $file, ".schjson")) }
+    };
+}
+
+/// Roughly from the easiest to the most involved.
+pub const SAMPLES: &[Sample] = &[
+    sample!("LED と電流制限抵抗", "電池・抵抗・LED の一番かんたんな回路。「解析」タブの「DC動作点を解析」で、電流が出ます", "led"),
+    sample!("12V から 5V を作って LED を光らせる", "三端子レギュレータ (LM7805) の回路。「DC動作点を解析」で、各点の電圧と電流が回路図に重なります", "regulator_led"),
+    sample!("RC ローパスフィルタ", "抵抗とコンデンサで高い周波数を通しにくくする回路。「AC解析を実行」で、ボード線図が出ます", "rc_lowpass"),
+    sample!("RLC のパルス応答", "パルスを入れると波形が振動して落ち着く回路。「過渡解析を実行」で、波形が出ます", "rlc_pulse"),
+    sample!("ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力を変えても出力があまり動きません", "zener_regulator"),
+    sample!("ブリッジ整流 (交流を直流にする)", "ダイオード 4 個と平滑コンデンサ。「過渡解析を実行」で、リップルが見えます", "bridge_rectifier"),
+    sample!("エミッタフォロワ (電流を増やす)", "トランジスタで、電圧はそのまま流せる電流を増やす回路です", "emitter_follower"),
+    sample!("オペアンプで信号を大きくする", "非反転増幅。抵抗の比でゲインが決まります", "opamp_amp"),
+    sample!("直列レギュレータ (オペアンプ + 基準電圧)", "出力を測って、ずれたら直す (帰還) 安定化電源。電圧安定化の本質です", "series_regulator"),
+    sample!("保護つきの電源 (逆接続ダイオード + 78xx)", "電源を逆につないでも壊れにくくする回路です", "power_supply"),
+    sample!("MOSFET スイッチ", "小さな信号で大きな電流を入り切りする回路です", "mosfet_switch"),
+    sample!("NE555 の点滅回路", "タイマー IC で LED を点滅させます。「過渡解析を実行」で、充放電の波形が見えます", "ne555_blinker"),
+    sample!("降圧コンバータ (スイッチング電源)", "熱にしないで電圧を下げる電源。スイッチの波形とリップルを見られます", "buck_converter"),
+    sample!("充電 IC (TP5100)", "電池を充電する IC の回路です。ライブラリ部品の使い方の例になります", "tp5100_charger"),
+];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_sample_is_a_circuit_with_parts_and_titles_are_unique() {
+        let mut titles = std::collections::HashSet::new();
+        for s in SAMPLES {
+            assert!(titles.insert(s.title), "duplicate title {}", s.title);
+            let sch: sch_core::Schematic = serde_json::from_str(s.json).unwrap_or_else(|e| panic!("{}: {e}", s.title));
+            assert!(!sch.components.is_empty(), "{} is empty", s.title);
+        }
+    }
+
+    #[test]
+    fn a_sample_can_be_opened_and_is_not_saved_over_the_original() {
+        let mut ed = crate::schematic::SchEditor::default();
+        assert!(ed.open_sample(SAMPLES[1].title, SAMPLES[1].json));
+        assert!(!ed.sch.components.is_empty());
+        assert!(ed.status.contains(SAMPLES[1].title), "{}", ed.status);
+        assert!(!ed.open_sample("broken", "{ not json"));
+    }
+}

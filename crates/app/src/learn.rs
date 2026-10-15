@@ -268,7 +268,7 @@ pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome>
             choice = Some(Welcome::Guide);
         }
         ui.add_space(4.0);
-        ui.label(spaced("自由に描きたいときは、このカードを閉じて、左の一覧から部品を選んで画面をクリックします。").color(NOTE));
+        ui.label(spaced("自由に描きたいときは、このカードを閉じて、左の一覧から部品を選んで画面をクリックします。できあがった回路を先に見たいときは、「ファイル → サンプル回路を開く」から。").color(NOTE));
         if ui.small_button("あとで (もう表示しない)").on_hover_text("このカードを閉じます。次の起動から表示しません").clicked() {
             choice = Some(Welcome::Close);
         }

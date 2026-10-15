@@ -158,6 +158,22 @@ fn autoplace_then_autoroute_on_the_shipped_examples() {
     }
 }
 
+/// A board opened on its own (no schematic loaded) is not "different from the schematic".
+#[test]
+fn a_board_opened_alone_is_not_reported_as_different_from_the_schematic() {
+    let mut app = App::default();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    app.board_ed.load_path(root.join("rlc_board.pcbjson"));
+    assert!(!app.board_ed.board.parts.is_empty());
+    assert!(app.board_ed.schematic_diff(&app.sch).is_empty(), "{:?}", app.board_ed.schematic_diff(&app.sch));
+    // with the matching schematic loaded it is compared as before (and agrees)
+    app.sch.load_path(root.join("rlc_pulse.schjson"));
+    assert!(app.board_ed.schematic_diff(&app.sch).is_empty(), "{:?}", app.board_ed.schematic_diff(&app.sch));
+    // ... and a different schematic is noticed
+    assert!(app.sch.load_sample(board_editor::BoardEditor::lesson_circuit()));
+    assert!(!app.board_ed.schematic_diff(&app.sch).is_empty());
+}
+
 /// The board lesson ticks all its steps when the learner does what it asks.
 #[test]
 fn the_board_lesson_walks_from_schematic_to_the_order_window() {

@@ -12,7 +12,7 @@ impl SchEditor {
             return "ノイズを測りたいノードをクリックします。Shift+クリックで基準ノード、Esc で中止".into();
         }
         if self.sch.components.is_empty() {
-            return "まず部品を置きましょう。左の一覧から選んで画面をクリック。「ファイル → 開く」で docs/examples のサンプル回路も試せます".into();
+            return "まず部品を置きましょう。左の一覧から選んで画面をクリック。「ファイル → サンプル回路を開く」で、できあがった回路もすぐ試せます".into();
         }
         if self.pending.is_some() {
             return "配線中: 次の点をクリックして線を延長、ダブルクリックか右クリックで確定します".into();

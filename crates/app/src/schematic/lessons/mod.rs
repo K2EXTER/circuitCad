@@ -102,6 +102,15 @@ impl SchEditor {
         true
     }
 
+    /// Open a built-in sample circuit (as an unsaved sheet, so "保存" asks for a name and never overwrites the sample).
+    pub fn open_sample(&mut self, title: &str, json: &str) -> bool {
+        if !self.load_sample(json) {
+            return false;
+        }
+        self.status = format!("サンプルを開きました: {title}");
+        true
+    }
+
     /// Load a lesson's circuit and start tracking its steps.
     pub fn start_lesson(&mut self, idx: usize) {
         let Some(lesson) = LESSONS.get(idx) else { return };

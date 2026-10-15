@@ -121,11 +121,12 @@ impl BoardEditor {
     }
 
     /// How the schematic differs from the board right now (what "回路図から取り込み" would change); worked out again
-    /// only when the schematic or the board changed. Empty when the board has no parts yet (nothing imported).
+    /// only when the schematic or the board changed. Empty when the board has no parts yet (nothing imported) or the schematic is empty.
     pub fn schematic_diff(&mut self, sch_ed: &SchEditor) -> &SchDiff {
         let key = (sch_ed.rev, self.rev);
         if self.sync_cache.as_ref().is_none_or(|(k, _)| *k != key) {
-            let diff = if self.board.parts.is_empty() { SchDiff::default() } else { self.diff_against(&sch_ed.sch) };
+            // nothing to compare when no part was imported yet, or when no schematic is open (a board opened on its own)
+            let diff = if self.board.parts.is_empty() || sch_ed.sch.components.is_empty() { SchDiff::default() } else { self.diff_against(&sch_ed.sch) };
             self.sync_cache = Some((key, diff));
         }
         &self.sync_cache.as_ref().unwrap().1

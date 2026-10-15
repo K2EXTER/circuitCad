@@ -11,6 +11,7 @@ mod args;
 mod board_editor;
 mod files;
 mod help;
+mod samples;
 mod learn;
 mod part_form;
 mod plot;
@@ -151,6 +152,16 @@ impl eframe::App for App {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
                         ui.close();
                     }
+                    ui.menu_button("サンプル回路を開く", |ui| {
+                        for s in samples::SAMPLES {
+                            if ui.button(s.title).on_hover_text(s.about).clicked() {
+                                if self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") && self.sch.open_sample(s.title, s.json) {
+                                    self.mode = Mode::Schematic;
+                                }
+                                ui.close();
+                            }
+                        }
+                    }).response.on_hover_text("できあがった回路をすぐ開いて、動かしてみます。保存するときは別の名前になるので、サンプルは壊れません");
                     if ui.button("保存").on_hover_text("いまの図を上書き保存します。まだ保存していなければ、保存先を選びます").clicked() {
                         if sch_mode { self.sch.save(false) } else { self.board_ed.save(false) }
                     }

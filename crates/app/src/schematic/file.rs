@@ -4,7 +4,12 @@ use super::*;
 
 impl SchEditor {
     pub fn new_file(&mut self) {
+        // `rev` keeps counting up: the board's "differs from the schematic" cache is keyed by it, and a sheet that
+        // started again from 0 could look unchanged to it
+        let rev = self.rev;
         *self = SchEditor::default();
+        self.rev = rev + 1;
+        self.saved_rev = self.rev;
     }
 
     pub fn save(&mut self, as_new: bool) {
