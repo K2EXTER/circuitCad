@@ -224,6 +224,17 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 if tc1 != 0.0 || tc2 != 0.0 {
                     c.set_tempco(&name, tc1, tc2);
                 }
+                // saturation of an inductor: ISAT=<A> LDROP=<0..1>  (the inductance has fallen by LDROP at ISAT; default 0.3)
+                if head.starts_with(['L', 'l']) {
+                    let find = |key: &str| t[4..].iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(key).and_then(parse_value));
+                    if let Some(isat) = find("ISAT=") {
+                        let drop = find("LDROP=").unwrap_or(0.3);
+                        if !(isat > 0.0 && drop > 0.0 && drop < 1.0) {
+                            return Err(format!("{name}: ISAT は 0 より大きい電流、LDROP は 0〜1 の間 (例: 0.3 = 30% 下がる) にしてください"));
+                        }
+                        c.set_saturation(&name, Circuit::saturation_scale(isat, drop));
+                    }
+                }
                 c.add(match head.chars().next().unwrap().to_ascii_uppercase() {
                     'R' => Element::Resistor { name, a, b, r: x },
                     'C' => Element::Capacitor { name, a, b, c: x },

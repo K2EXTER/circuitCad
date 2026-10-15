@@ -67,6 +67,10 @@ pub struct PassiveTemplate {
     /// Temperature coefficients of the value (1/°C and 1/°C² from 27 °C): resistance, capacitance or inductance.
     pub tc1: Option<f64>,
     pub tc2: Option<f64>,
+    /// Inductor: the current at which the inductance has fallen by `ldrop` (the data sheet's saturation current).
+    pub isat: Option<f64>,
+    /// How far the inductance has fallen at `isat`, as a fraction (0.3 = 30 %, the usual definition).
+    pub ldrop: f64,
 }
 
 /// Temperature coefficient of copper (1/°C): the winding resistance of an inductor follows it.
@@ -85,7 +89,7 @@ fn tc_suffix(tc1: Option<f64>, tc2: Option<f64>) -> String {
 
 impl PassiveTemplate {
     pub fn new(kind: PassiveKind, value: f64) -> Self {
-        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None }
+        Self { kind, value, esr: None, esl: None, dcr: None, cp: None, bias_loss: 0.0, tc1: None, tc2: None, isat: None, ldrop: 0.3 }
     }
 }
 
@@ -138,6 +142,10 @@ impl PassiveTemplate {
         positive("ESL", self.esl)?;
         positive("DCR (巻線抵抗)", self.dcr)?;
         positive("並列容量", self.cp)?;
+        positive("飽和電流 Isat", self.isat)?;
+        if !(0.01..=0.9).contains(&self.ldrop) {
+            return Err("インダクタンスの低下は 1〜90% の間で入れてください (データシートの Isat は 30% 低下が多く、20% や 10% のものもあります)".into());
+        }
         for (what, v) in [("温度係数 TC1", self.tc1), ("温度係数 TC2", self.tc2)] {
             if v.is_some_and(|x| !x.is_finite() || x.abs() > 0.05) {
                 return Err(format!("{what} は 1℃ あたりの割合で入れてください (例: 100ppm/℃ は 100u)。絶対値が 5% を超える値は入れられません"));
@@ -206,12 +214,20 @@ impl PassiveTemplate {
                     l.push(format!("Rdcr 1 {m} {} TC1={COPPER_TC:.4e}", eng(dcr)));
                     parts.push(format!("DCR {}", eng(dcr)));
                 }
-                l.push(format!("L1 {node} 2 {}{tc}", eng(self.value)));
+                let sat = self.isat.map(|i| format!(" ISAT={i:.4e} LDROP={:.3}", self.ldrop)).unwrap_or_default();
+                l.push(format!("L1 {node} 2 {}{tc}{sat}", eng(self.value)));
+                if let Some(i) = self.isat {
+                    parts.push(format!("Isat {}A ({:.0}% 低下)", eng(i), self.ldrop * 100.0));
+                }
                 if let Some(cp) = self.cp {
                     l.push(format!("Cp 1 2 {}", eng(cp)));
                     parts.push(format!("並列容量 {}", eng(cp)));
                 }
-                limits.push("電流が大きいと起こる磁気飽和 (インダクタンスの低下) は扱いません。".into());
+                if self.isat.is_some() {
+                    limits.push(format!("磁気飽和は、インダクタンスが L / (1 + (電流 / i0)²) で下がる式で近似します (Isat で {:.0}% 低下)。実物の曲線の形とは少し違い、温度による Isat の変化は扱いません。", self.ldrop * 100.0));
+                } else {
+                    limits.push("電流が大きいと起こる磁気飽和 (インダクタンスの低下) は扱いません (「飽和電流 Isat」を入れると反映できます)。".into());
+                }
                 if self.dcr.is_none() {
                     limits.push("DCR (巻線の抵抗) を入れていないので、損失のない理想のコイルです。".into());
                 } else {
@@ -447,6 +463,48 @@ pub fn fit_tempco(points: &[(f64, f64)]) -> Result<(f64, f64, f64), String> {
     Ok((tc1, tc2, err))
 }
 
+/// `i0` of the saturation model `L(i) = L / (1 + (i/i0)²)` for a coil whose inductance has fallen by `drop`
+/// at the current `isat`.
+pub fn saturation_i0(isat: f64, drop: f64) -> f64 {
+    isat * ((1.0 - drop) / drop).sqrt()
+}
+
+/// Incremental inductance divided by the small-current inductance at current `i`.
+pub fn inductance_ratio(i0: f64, i: f64) -> f64 {
+    1.0 / (1.0 + (i / i0).powi(2))
+}
+
+/// Fit the saturation model to `(current A, inductance change in percent)` points read off the data sheet's
+/// L-versus-current graph (percent is negative: -30 = 30 % lower). Returns `(isat for a 30 % drop, i0, largest
+/// difference in percentage points)`.
+pub fn fit_saturation(points: &[(f64, f64)]) -> Result<(f64, f64, f64), String> {
+    if points.is_empty() {
+        return Err("電流と L の変化率の点を入れてください (例: 3 -30 は、3A で L が 30% 下がる)".into());
+    }
+    if points.iter().any(|(i, p)| !(i.is_finite() && *i > 0.0) || !p.is_finite() || *p >= 0.0 || *p <= -95.0) {
+        return Err("電流は 0 より大きい数、変化率は −1 〜 −95 (%) の数で入れてください (例: 3 -30)".into());
+    }
+    // the model's ratio is 1 / (1 + (i/i0)^2); the points' ratio is 1 + p/100
+    let cost = |i0: f64| -> f64 { points.iter().map(|&(i, p)| (inductance_ratio(i0, i) - (1.0 + p / 100.0)).powi(2)).sum() };
+    let (lo, hi) = (points.iter().map(|p| p.0).fold(f64::MAX, f64::min).log10() - 2.0, points.iter().map(|p| p.0).fold(0.0, f64::max).log10() + 2.0);
+    let (mut best, mut step, mut a, mut b) = ((f64::MAX, 0.0), 0.05, lo, hi);
+    for _ in 0..3 {
+        let mut r = a;
+        while r <= b + 1e-9 {
+            let k = cost(10f64.powf(r));
+            if k < best.0 {
+                best = (k, r);
+            }
+            r += step;
+        }
+        (a, b) = (best.1 - step, best.1 + step);
+        step /= 10.0;
+    }
+    let i0 = 10f64.powf(best.1);
+    let err = points.iter().map(|&(i, p)| ((inductance_ratio(i0, i) - 1.0) * 100.0 - p).abs()).fold(0.0, f64::max);
+    Ok((i0 * (0.3f64 / 0.7).sqrt(), i0, err))
+}
+
 /// Value ratio at `temp_c` for the coefficients (as the simulator applies them).
 pub fn tempco_ratio(tc1: f64, tc2: f64, temp_c: f64) -> f64 {
     let d = temp_c - 27.0;
@@ -576,5 +634,26 @@ mod tests {
         let mut l = PassiveTemplate::new(PassiveKind::Inductor, 1e-5);
         l.dcr = Some(0.1);
         assert!(l.generate("L").unwrap().sim_text.contains("Rdcr 1 n_dcr 100m TC1=3.9300e-3"));
+    }
+
+    #[test]
+    fn a_saturating_inductor_model_carries_isat_and_the_fit_recovers_it() {
+        let mut l = PassiveTemplate::new(PassiveKind::Inductor, 10e-6);
+        l.isat = Some(3.0);
+        let g = l.generate("L10u").unwrap();
+        assert!(g.sim_text.contains("L1 1 2 10u ISAT=3.0000e0 LDROP=0.300"), "{}", g.sim_text);
+        assert!(g.limits.iter().any(|x| x.contains("飽和")));
+        l.ldrop = 0.0;
+        assert!(l.generate("L").unwrap_err().contains("1〜90%"));
+        l.ldrop = 0.3;
+        l.isat = Some(-1.0);
+        assert!(l.generate("L").unwrap_err().contains("Isat"));
+        // points taken from the model itself: 30 % down at 3 A
+        let i0 = saturation_i0(3.0, 0.3);
+        let pts: Vec<(f64, f64)> = [1.0, 2.0, 3.0, 5.0, 8.0].iter().map(|&i| (i, (inductance_ratio(i0, i) - 1.0) * 100.0)).collect();
+        let (isat, got_i0, err) = fit_saturation(&pts).unwrap();
+        assert!((isat - 3.0).abs() < 0.02 && (got_i0 / i0 - 1.0).abs() < 0.01 && err < 0.1, "{isat} {got_i0} {err}");
+        assert!(fit_saturation(&[(3.0, 10.0)]).is_err());
+        assert!(fit_saturation(&[]).is_err());
     }
 }

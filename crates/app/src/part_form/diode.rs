@@ -187,7 +187,7 @@ impl PartForm {
         for (i, v) in &pts {
             painter.circle_filled(to(*v, *i), 4.0, Color32::from_rgb(230, 90, 60));
         }
-        painter.text(plot.left_top() + Vec2::new(6.0, 4.0), Align2::LEFT_TOP, "● データシートの点   ─ モデルの曲線", font, text);
+        ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
         if !pts.is_empty() {
             let rows: Vec<String> = pts.iter().map(|(i, v)| {
                 let m = diode::vf(is, n, rs, *i);

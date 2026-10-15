@@ -128,6 +128,11 @@ pub struct PartForm {
     pub pas_tc1: String,
     pub pas_tc2: String,
     pub pas_tctable: String,
+    /// Inductor saturation: the current (A) and how far the inductance has fallen there (percent, blank = 30), and the
+    /// "current percent" table of the data sheet's L-versus-current graph.
+    pub pas_isat: String,
+    pub pas_ldrop: String,
+    pub pas_sattable: String,
     pub pas_message: Option<Result<String, String>>,
     /// The diode section: points read off the forward characteristics ("current voltage" per line), the reverse
     /// ratings, and the fitted (or slider-set) IS / N / RS.
@@ -227,6 +232,9 @@ impl Default for PartForm {
             pas_tc1: String::new(),
             pas_tc2: String::new(),
             pas_tctable: String::new(),
+            pas_isat: String::new(),
+            pas_ldrop: String::new(),
+            pas_sattable: String::new(),
             pas_message: None,
             dio_points: String::new(),
             dio_vrrm: String::new(),

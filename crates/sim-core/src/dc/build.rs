@@ -33,7 +33,8 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 n_caps += 1;
             }
             Element::Inductor { name, a, b, l } => {
-                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, l: *l, br: br_base + n_br, idx: n_inds });
+                let i0 = c.saturations.iter().find(|(n, _)| n == name).map_or(0.0, |(_, i)| *i);
+                ce.push(Ce::L { name: name.clone(), p: *a, n: *b, l: *l, br: br_base + n_br, idx: n_inds, i0 });
                 n_br += 1;
                 n_inds += 1;
             }
@@ -99,7 +100,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             *c = compiled;
         }
     }
-    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. }));
+    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
     Compiled { node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), ce }
 }

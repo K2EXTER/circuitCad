@@ -22,6 +22,9 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 ## 温度係数 (TC1/TC2)
 `.subckt` の R/C/L 行の `TC=a,b` / `TC1=a` / `TC2=b`(1/℃、1/℃²。27℃基準)を `spice_in` が読み、`Circuit::tempcos`(素子名→係数)に入れる。`Circuit::at_temperature` が値を `1+tc1·ΔT+tc2·ΔT²` 倍する(下限0.01倍)ので、温度設定・温度スイープのすべての解析に効く。係数の無い素子と基本部品は従来どおり温度で変わらない。生成側は `part-lib/passive.rs`(`fit_tempco`、コイルのDCRには銅の係数 `COPPER_TC` を自動で付ける)。テスト: `tests_tempco.rs`。
 
+## コイルの飽和 (ISAT / LDROP)
+`.subckt` の L 行の `ISAT=<A> LDROP=<0..1>`(LDROP 省略は 0.3)を `spice_in` が読み、`Circuit::saturations`(素子名→`i0`)に入れる。`i0 = Isat·√((1−LDROP)/LDROP)`、増分インダクタンス `L/(1+(i/i0)²)`、磁束 `L·i0·atan(i/i0)`。過渡は磁束の台形/後退オイラーを反復点まわりに線形化(`dc/mna.rs` の `Ce::L`、`i0>0` の素子があると非線形扱い)。ACは直流動作点の電流での増分インダクタンスを使う。DCは従来どおり短絡。ngspiceには無い独自の書き方。テスト: `tests_saturation.rs`(`i = i0·tan(V·t/(L·i0))` の解析解と比べる)。
+
 ## spice_flat.rs (ベンダー形式のSPICE文の展開)
 `add_subckt_instance` は、`.param` / `{式}` / `'式'` / `.subckt ... params:` の既定値 / 入れ子の `X` 呼び出しを含む文を、まず `spice_flat::flatten` で1つの平らな `.subckt` に直してから `spice_in` で読む(どれも使わない文は素通し)。
 - パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。

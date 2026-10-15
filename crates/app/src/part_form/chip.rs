@@ -38,6 +38,12 @@ impl PartForm {
         if !bias.is_empty() {
             t.bias_loss = bias.parse::<f64>().map_err(|_| format!("DCバイアスで下がる量「{bias}」を % の数で入力してください (例: 30)"))? / 100.0;
         }
+        if t.kind == PassiveKind::Inductor {
+            t.isat = self.pas_number("飽和電流 Isat", &self.pas_isat, false)?;
+            if let Some(d) = self.pas_number("インダクタンスの低下", self.pas_ldrop.trim().trim_end_matches('%'), false)? {
+                t.ldrop = d / 100.0;
+            }
+        }
         t.tc1 = self.pas_ppm("温度係数 TC1", &self.pas_tc1)?;
         t.tc2 = self.pas_ppm("温度係数 TC2", &self.pas_tc2)?;
         let size = self.fp_preset.rsplit('_').next().filter(|_| !self.fp_preset.is_empty()).map(|s| format!("_{s}")).unwrap_or_default();
@@ -137,6 +143,9 @@ impl PartForm {
                 self.pas_message = Some(self.fit_from_table());
             }
             self.pas_chart(ui);
+            if kind == PassiveKind::Inductor {
+                self.pas_saturation(ui);
+            }
             self.pas_temperature(ui);
             if ui.button("部品を作る (ピンとモデルを入れる)").on_hover_text("ピン、記号、値、モデルを入れます。パッケージは下の「パッケージ」で選びます").clicked() {
                 self.pas_message = Some(self.apply_passive());

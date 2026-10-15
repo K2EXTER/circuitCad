@@ -145,13 +145,23 @@ impl Compiled {
                     m.branch(*p, *n, *br);
                     m.b[*br] += ctx.source(wave) * scale;
                 }
-                Ce::L { p, n, l, br, idx, .. } => {
+                Ce::L { p, n, l, br, idx, i0, .. } => {
                     // short circuit at DC; v = req*(i - i_old) [- v_old] in transient
                     m.branch(*p, *n, *br);
                     if let Some(d) = &ctx.dynamic {
-                        let req = if d.trap { 2.0 * l / d.h } else { l / d.h };
-                        m.at(*br, *br, -req);
-                        m.b[*br] += -req * d.ind_i[*idx] - if d.trap { d.ind_v[*idx] } else { 0.0 };
+                        if *i0 > 0.0 {
+                            // saturating: v = d(flux)/dt with flux = l*i0*atan(i/i0), linearised around the iterate i_k
+                            let ik = x[*br];
+                            let ld = l / (1.0 + (ik / i0) * (ik / i0));
+                            let flux = |i: f64| l * i0 * (i / i0).atan();
+                            let k = if d.trap { 2.0 } else { 1.0 };
+                            m.at(*br, *br, -k * ld / d.h);
+                            m.b[*br] += k * (flux(ik) - ld * ik - flux(d.ind_i[*idx])) / d.h - if d.trap { d.ind_v[*idx] } else { 0.0 };
+                        } else {
+                            let req = if d.trap { 2.0 * l / d.h } else { l / d.h };
+                            m.at(*br, *br, -req);
+                            m.b[*br] += -req * d.ind_i[*idx] - if d.trap { d.ind_v[*idx] } else { 0.0 };
+                        }
                     }
                 }
                 Ce::I { from, to, wave, .. } => m.current(*from, *to, ctx.source(wave) * scale),

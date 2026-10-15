@@ -621,4 +621,38 @@ mod passive_form_tests {
         f.thru_lead = "abc".into();
         assert!(f.thru_suggest().unwrap_err().contains("リード径"));
     }
+
+    /// A saturation table becomes Isat in the model, and the simulator's coil really loses inductance at that current.
+    #[test]
+    fn the_inductor_saturation_reaches_the_simulator() {
+        use sim_core::{parse_source, transient, Circuit, Element, TranSettings};
+        let mut f = PartForm::for_type("inductor");
+        f.name = "L_SAT".into();
+        f.pas_value = "10u".into();
+        f.pas_sattable = "1 -5
+3 -30
+6 -60".into();
+        let m = f.fit_sat_from_table().unwrap();
+        assert!(m.contains("Isat"), "{m}");
+        assert_eq!(f.pas_ldrop, "30");
+        f.apply_passive().unwrap();
+        assert!(f.sim_text.contains("ISAT="), "{}", f.sim_text);
+        // 1 V across the coil for 40 us: unsaturated it would reach 4 A; saturating, it reaches much more
+        let mut c = Circuit::new();
+        let (a, o) = (c.node("a"), c.node("o"));
+        sim_core::add_subckt_instance(&mut c, "U1", &f.sim_name, &f.sim_text, &[o, 0]).unwrap();
+        c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 1e-3 });
+        c.add(Element::VSource { name: "V1".into(), p: a, n: 0, wave: parse_source("PULSE(0 1 0 1n 1n 1 2)").unwrap(), ac: None });
+        let r = transient(&c, &TranSettings { tstop: 40e-6, tstep: 0.1e-6, uic: true }).unwrap();
+        let i = r.signal("I(U1.L1)").unwrap().values.last().copied().unwrap();
+        assert!(i > 5.0, "{i}");
+        // bad input is explained
+        f.pas_isat = "abc".into();
+        assert!(f.apply_passive().is_err());
+        f.pas_isat = "3".into();
+        f.pas_ldrop = "95".into();
+        assert!(f.apply_passive().unwrap_err().contains("1〜90%"));
+        f.pas_ldrop = "0".into();
+        assert!(f.apply_passive().is_err());
+    }
 }

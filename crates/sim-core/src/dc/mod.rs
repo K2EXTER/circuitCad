@@ -69,7 +69,7 @@ pub(crate) enum Ce {
     R { name: String, a: usize, b: usize, g: f64 },
     C { name: String, a: usize, b: usize, c: f64, idx: usize },
     V { name: String, p: usize, n: usize, wave: Waveform, ac: Option<(f64, f64)>, br: usize },
-    L { name: String, p: usize, n: usize, l: f64, br: usize, idx: usize },
+    L { name: String, p: usize, n: usize, l: f64, br: usize, idx: usize, i0: f64 },
     I { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },

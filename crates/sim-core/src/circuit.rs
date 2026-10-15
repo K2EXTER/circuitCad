@@ -158,6 +158,8 @@ pub struct Circuit {
     /// Temperature coefficients (SPICE `TC1` / `TC2`, per °C and per °C squared) of resistors, capacitors and
     /// inductors by element name: the value is scaled by `1 + tc1·ΔT + tc2·ΔT²` at a temperature ΔT away from 27 °C.
     pub tempcos: Vec<(String, f64, f64)>,
+    /// Saturating inductors by element name: `i0`, the current scale of the model `L(i) = L / (1 + (i/i0)²)`.
+    pub saturations: Vec<(String, f64)>,
 }
 
 impl Default for Circuit {
@@ -168,7 +170,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![] }
     }
 
     /// Node index for a name; `0` and `GND` (any case) are ground.
@@ -194,6 +196,17 @@ impl Circuit {
     pub fn set_tempco(&mut self, name: &str, tc1: f64, tc2: f64) {
         self.tempcos.retain(|(n, _, _)| n != name);
         self.tempcos.push((name.to_string(), tc1, tc2));
+    }
+
+    /// Make inductor `name` saturate: its incremental inductance is `L / (1 + (i/i0)²)` (flux `L·i0·atan(i/i0)`).
+    pub fn set_saturation(&mut self, name: &str, i0: f64) {
+        self.saturations.retain(|(n, _)| n != name);
+        self.saturations.push((name.to_string(), i0));
+    }
+
+    /// `i0` of the saturation model of the inductor `isat` amperes at which the inductance has fallen by `drop` (0..1).
+    pub fn saturation_scale(isat: f64, drop: f64) -> f64 {
+        isat * ((1.0 - drop) / drop).sqrt()
     }
 
     pub fn add(&mut self, e: Element) {
