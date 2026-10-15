@@ -125,6 +125,15 @@ pub struct PartForm {
     pub pas_bias: String,
     pub pas_table: String,
     pub pas_message: Option<Result<String, String>>,
+    /// The diode section: points read off the forward characteristics ("current voltage" per line), the reverse
+    /// ratings, and the fitted (or slider-set) IS / N / RS.
+    pub dio_points: String,
+    pub dio_vrrm: String,
+    pub dio_ir: String,
+    pub dio_is: f64,
+    pub dio_n: f64,
+    pub dio_rs: f64,
+    pub dio_message: Option<Result<String, String>>,
     pub sim: SimChoice,
     pub sim_element: String,
     pub sim_name: String,
@@ -206,6 +215,13 @@ impl Default for PartForm {
             pas_bias: String::new(),
             pas_table: String::new(),
             pas_message: None,
+            dio_points: String::new(),
+            dio_vrrm: String::new(),
+            dio_ir: String::new(),
+            dio_is: 1e-10,
+            dio_n: 1.5,
+            dio_rs: 0.05,
+            dio_message: None,
             sim: SimChoice::None,
             sim_element: "D".into(),
             sim_name: String::new(),
@@ -234,6 +250,7 @@ mod checklist;
 mod kind;
 mod parse;
 mod chip;
+mod diode;
 mod preview;
 mod tabs;
 mod template;

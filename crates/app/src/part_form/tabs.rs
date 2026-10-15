@@ -6,12 +6,22 @@ impl PartForm {
     /// charger template, and the other kinds just get the fields.
     pub(super) fn tab_basic(&mut self, ui: &mut egui::Ui) {
         let passive = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor));
-        if passive {
-            self.passive_ui(ui);
+        let diode = self.ptype == Some(PartType::Diode) && self.glyph != "zener";
+        if diode {
+            self.diode_ui(ui);
+        }
+        if passive || diode {
+            if passive {
+                self.passive_ui(ui);
+            }
             ui.add_space(6.0);
             ui.separator();
             ui.label(egui::RichText::new("名前など").strong());
-            ui.small("上の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
+            if passive {
+                ui.small("上の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
+            } else {
+                ui.small("部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
+            }
         }
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
@@ -41,7 +51,7 @@ impl PartForm {
                 self.template_ui(ui);
                 ui.small("ほかの IC は、② ピン → ③ 基板の形 → ④ シミュレーション の順に入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
             }
-            Some(PartType::Transistor | PartType::Diode | PartType::Connector) => {
+            Some(PartType::Transistor | PartType::Diode | PartType::Connector) if !diode => {
                 ui.small("② ピン → ③ 基板の形 → ④ シミュレーション の順に、データシートを見ながら入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
             }
             Some(_) => {}

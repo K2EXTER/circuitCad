@@ -509,4 +509,49 @@ mod passive_form_tests {
         f.pas_bias = "200".into();
         assert!(f.apply_passive().unwrap_err().contains("0〜95"));
     }
+
+    /// The diode section: example points -> IS/N/RS -> a `.model` in the simulation tab that the simulator
+    /// reads and that gives about the typed voltage at the typed current.
+    #[test]
+    fn the_diode_section_makes_a_model_that_matches_the_points() {
+        use sim_core::{dc_op, Circuit, Element};
+        let mut f = PartForm::for_type("diode");
+        f.name = "1N4007".into();
+        f.dio_points = "10m 0.70
+100m 0.79
+1 0.92".into();
+        f.dio_vrrm = "1000".into();
+        f.dio_ir = "5u".into();
+        f.dio_fit().unwrap();
+        let msg = f.dio_apply().unwrap();
+        assert!(msg.contains("最大電圧"), "{msg}");
+        assert_eq!((f.sim, f.sim_element.as_str(), f.sim_name.as_str()), (SimChoice::Model, "D", "1N4007"));
+        assert_eq!(f.rt_v, "1k");
+        // pins "1 K / 2 A": the model's order is A then K
+        assert_eq!(f.sim_pins, "2 1");
+        assert!(f.sim_text.contains("BV=") && f.sim_text.contains("IBV="), "{}", f.sim_text);
+        // 1 A through the model reads about 0.92 V
+        let mut c = Circuit::new();
+        let (a, k) = (c.node("a"), c.node("k"));
+        c.add(Element::ISource { name: "I1".into(), from: k, to: a, wave: sim_core::Waveform::Dc(1.0), ac: None });
+        c.add(Element::Resistor { name: "Rk".into(), a: k, b: 0, r: 1e-3 });
+        sim_core::add_model_instance(&mut c, "D1", "D", &f.sim_name, &f.sim_text, &[a, k]).unwrap();
+        let v = dc_op(&c).unwrap().voltage("a").unwrap();
+        assert!((v - 0.92).abs() < 0.03, "{v}");
+        assert!(f.to_def().is_ok());
+    }
+
+    #[test]
+    fn mistakes_in_the_diode_section_are_explained() {
+        let mut f = PartForm::for_type("diode");
+        f.dio_points = "10m".into();
+        assert!(f.dio_fit().unwrap_err().contains("電流 電圧"));
+        f.dio_points = "10m 0.7".into();
+        assert!(f.dio_fit().unwrap_err().contains("点が足りません"));
+        assert!(f.dio_apply().unwrap_err().contains("部品名"));
+        f.name = "D1".into();
+        f.pins_text = "1 X
+2 Y".into();
+        assert!(f.dio_apply().unwrap_err().contains("A と K"));
+    }
 }
