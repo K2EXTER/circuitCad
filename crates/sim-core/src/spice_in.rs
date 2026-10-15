@@ -77,6 +77,10 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 m: p.get("M").copied().filter(|v| *v > 0.0 && *v < 0.95).unwrap_or(0.5),
                 fc: get("FC", 0.5).clamp(0.0, 0.95),
                 tt: get("TT", 0.0),
+                isr: get("ISR", 0.0),
+                nr: get("NR", 2.0),
+                eg: p.get("EG").copied().filter(|v| *v > 0.0).unwrap_or(1.11),
+                xti: get("XTI", 3.0),
             }),
         )),
         t @ ("NMOS" | "PMOS") => Ok((
@@ -88,6 +92,8 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 pmos: t == "PMOS",
                 cgs: get("CGS", 0.0),
                 cgd: get("CGD", 0.0),
+                cgso: get("CGSO", 0.0),
+                cgdo: get("CGDO", 0.0),
                 jfet: false,
             }),
         )),
@@ -113,6 +119,15 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 fc: get("FC", 0.5).clamp(0.0, 0.95),
                 tf: get("TF", 0.0),
                 tr: get("TR", 0.0),
+                ise: p.get("ISE").or(p.get("C2")).copied().filter(|v| *v > 0.0).unwrap_or(0.0),
+                ne: p.get("NE").copied().filter(|v| *v > 0.0).unwrap_or(1.5),
+                isc: p.get("ISC").or(p.get("C4")).copied().filter(|v| *v > 0.0).unwrap_or(0.0),
+                nc: p.get("NC").copied().filter(|v| *v > 0.0).unwrap_or(2.0),
+                ikf: p.get("IKF").or(p.get("IK")).copied().filter(|v| *v > 0.0).unwrap_or(f64::INFINITY),
+                ikr: p.get("IKR").copied().filter(|v| *v > 0.0).unwrap_or(f64::INFINITY),
+                eg: p.get("EG").copied().filter(|v| *v > 0.0).unwrap_or(1.11),
+                xti: get("XTI", 3.0),
+                xtb: get("XTB", 1.5),
                 pnp: t != "NPN",
             }),
         )),
@@ -127,6 +142,8 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 pmos: t == "PJF",
                 cgs: get("CGS", 0.0),
                 cgd: get("CGD", 0.0),
+                cgso: 0.0,
+                cgdo: 0.0,
                 jfet: true,
             }),
         )),
@@ -177,10 +194,10 @@ fn area_of(words: &[&str]) -> f64 {
         .unwrap_or(1.0)
 }
 
-/// `M * W / L` of a MOSFET line (`W=`, `L=`, `M=` words; W and L default to 100 um, M to 1).
-fn mos_geometry(words: &[&str]) -> f64 {
+/// `(W, L, M)` of a MOSFET line (`W=`, `L=`, `M=` words; W and L default to 100 um, M to 1).
+fn mos_dims(words: &[&str]) -> (f64, f64, f64) {
     let find = |key: &str| words.iter().find_map(|w| w.to_ascii_uppercase().strip_prefix(key).and_then(parse_value)).filter(|v| *v > 0.0);
-    find("M=").unwrap_or(1.0) * find("W=").unwrap_or(100e-6) / find("L=").unwrap_or(100e-6)
+    (find("W=").unwrap_or(100e-6), find("L=").unwrap_or(100e-6), find("M=").unwrap_or(1.0))
 }
 
 /// Parameters on `.model` cards that this simulator does not use, by model name (the learner is told: the result
@@ -203,9 +220,9 @@ pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
             }
         };
         let used: &[&str] = match ty.as_str() {
-            "D" => &["IS", "N", "RS", "BV", "IBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT"],
-            "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB", "CJE", "VJE", "PE", "MJE", "ME", "CJC", "VJC", "PC", "MJC", "MC", "FC", "TF", "TR"],
-            "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD"],
+            "D" => &["IS", "N", "RS", "BV", "IBV", "CJO", "CJ0", "CJ", "VJ", "M", "FC", "TT", "ISR", "NR", "EG", "XTI"],
+            "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB", "RC", "RE", "VAF", "VA", "VAR", "VB", "CJE", "VJE", "PE", "MJE", "ME", "CJC", "VJC", "PC", "MJC", "MC", "FC", "TF", "TR", "ISE", "C2", "NE", "ISC", "C4", "NC", "IKF", "IK", "IKR", "EG", "XTI", "XTB"],
+            "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD", "CGSO", "CGDO"],
             "NJF" | "PJF" => &["BETA", "VTO", "LAMBDA", "CGS", "CGD"],
             "SW" | "VSWITCH" => &["RON", "ROFF", "VT", "VW", "VH", "VON", "VOFF"],
             _ => continue,
@@ -425,7 +442,11 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     Some(Model::Mos(m)) => {
                         // level-1 transconductance is KP * W / L (and M parallel devices); W and L default to 100 um
                         let mut m = m.clone();
-                        m.kp *= mos_geometry(&t[6..]);
+                        let (w, l, mult) = mos_dims(&t[6..]);
+                        m.kp *= mult * w / l;
+                        // the overlap capacitances per metre of width become fixed gate capacitances
+                        m.cgs = (m.cgs + m.cgso * w) * mult;
+                        m.cgd = (m.cgd + m.cgdo * w) * mult;
                         c.add_mosfet(&name, d, g, s, m);
                     }
                     _ => return Err(format!("{name}: MOSFETモデル {} が見つかりません", t[5])),

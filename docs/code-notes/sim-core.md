@@ -30,7 +30,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。
 - 入れ子の中の素子名は `R1.X1`(頭文字は保つ)、内部ノードは `X1.n`、端子は呼び出し側のノードに置き換える。B素子の式の `V(...)` `I(...)` も同じ規則で書き換える。深さ12まで(自分自身を呼ぶとエラー)。
 - 実在のメーカーモデル(KiCad-Spice-Library の TI・IR・コミュニティ版)で試して足したもの(2026-10-15): `.param` の順序に依存しない評価、`.model` カードの `{param}`(インスタンスごとに展開)、`{式}` が `V()`/`I()` を含むときは式のまま(パラメータ名だけ置換)、`E`/`G` の `VALUE={式}`・`TABLE {式} = (x,y)…`(折れ線を `if` の入れ子に)・`POLY(n)`(1制御は多項式、複数制御は1次項のみ)、`F`/`H`(電流制御源を `I(Vsrc)` を使う B素子に)、4ノードの `Q`(基板ノードは捨てる)、`AREA`(IS倍・RB/RS割り)、`LPNP`→PNP、`VSWITCH`(Von/Voff か Vt/Vh)、`.end` で終わる `.subckt`、B素子の末尾の `Rpar=…` 等の捨てる、式に `& | ! buf inv u pwr tbl()`。未対応の種類の `.model`(JFET等)は、使う素子が出たときだけエラー。使われないモデルパラメータは `ignored_model_params` が返す(VAF・CJE・RC など。試し読みが警告する)。
-- 未対応のまま: `.func`、`.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の高注入(IKF)・漏れ電流(ISE/ISC)・基板容量(CJS)・CCS、ダイオードの再結合電流(ISR/NR)、MOSFET の容量(CGSO/CGDO)・LEVEL 3 など。
+- 未対応のまま: `.func`、`.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の基板容量(CJS・CCS)・バイアスで変わる TF(ITF/VTF/XTF)・BE降伏(BVBE)・雑音(KF/AF)、MOSFET の LEVEL 2 以上の式(体効果・移動度低下など)、JFET のゲート接合(IS)。
 - テスト: `tests_flat.rs`。
 
 ## BJT の早期効果と直列抵抗 (VAF/VAR/RC/RE)
@@ -50,4 +50,11 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - **OPA211(出力が ±0.7mV に張り付いた):** `M` 素子の `W=`/`L=`/`M=` を無視していた。レベル1の相互コンダクタンスは `KP·W/L`(並列数 M 倍、W と L の既定は 100µm)なので、`mos_geometry` で掛けるようにした。OPA211 のスイッチ用 MOSFET(`KP=200u`、W/L が 100 倍違う)が効かず、出力段が働いていなかった。直して、バッファが 2.0000V になった。
 - **MCP6001(DC で Singular):** LTspice の B 素子のオプション `Rpar=…` `Cpar=…`(電源の並列抵抗・並列容量)を捨てていた。電流源 `I=` だけがつながるノードは抵抗が無くて電圧が決まらない。`Rpar`/`Cpar` を抵抗・容量として足すようにして解けた(バッファ 1.9994V)。uc3845a の「電源なしの動作点が求まらない」も同じ原因で消えた。
 - 調べ方: ngspice で同じ回路の動作点を出し、全節点を比べて、差の大きい所(OPA211 は 54 節点が 50mV 以上ずれ、出力段のスイッチ回路が最大)から原因の素子を探す。ngspice が読めないモデル(MCP6001)は、素子を1つずつ外して解けるようになる素子を探す(`bisect_singular` テスト)。
+
+## 残りのモデルパラメータ(2026-10-15)
+- **BJT**(`dc/devices.rs bjt_eval`): 漏れ電流 `ISE/NE`(BE)・`ISC/NC`(BC) をベース電流へ足す(コレクタ電流は BC 漏れだけ引く)。高注入 `IKF`/`IKR`: 輸送電流を `2/(1+√(1+4·q2))`(`q2=If/IKF+Ir/IKR`)で割る。早期効果 `k` との積で微分を取る。`EG`・`XTI`・`XTB`(温度 `temperature.rs`。`XTB` の既定は従来どおり 1.5)。`.model` の別名 `C2`(=ISE)・`C4`(=ISC)・`IK`(=IKF)。
+- **ダイオード**: 再結合電流 `ISR/NR`(`diode_recomb`。DC/過渡/ノイズ/素子の電流表示で共通)、温度 `EG`・`XTI`(ショットキーは `EG≈0.69`・`XTI≈2` で、温度での飽和電流の増え方がシリコンと大きく違う)。
+- **MOSFET**: ゲート重なり容量 `CGSO/CGDO`(F/m)に、素子の `W` と並列数 `M` を掛けて固定の CGS/CGD にする(`spice_in.rs` の `M` 行)。
+- 温度では、`ISE`・`ISC`・`ISR` も各自の `N` で同じ式にかけ、各 `N` を温度比で伸ばす(解く側の `VT` が 27℃ 固定のため)。
+- 検証: `tests_params.rs`(全効果を入れた BJT の微分が差分と一致、IKF の式、漏れ電流、ISR、EG/XTI/XTB の温度式、CGSO、`.model` の読み込み)。実在モデルの警告は、2N3904 が `XTI EG NE ISE IKF XTB NC ISC` → `ITF VTF XTF` だけに、LM7805 が `EG CCS` → `CCS` だけになった。
 

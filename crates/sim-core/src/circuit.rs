@@ -19,6 +19,13 @@ pub struct DiodeModel {
     pub m: f64,
     pub fc: f64,
     pub tt: f64,
+    /// Recombination current in the depletion layer: `isr * (exp(v / (nr vt)) - 1)`, added to the diode current.
+    pub isr: f64,
+    pub nr: f64,
+    /// Band gap (eV) and saturation-current temperature exponent (the usual silicon values, 1.11 and 3, unless the
+    /// model says otherwise: a Schottky diode has about 0.69 and 2).
+    pub eg: f64,
+    pub xti: f64,
 }
 
 impl DiodeModel {
@@ -30,7 +37,7 @@ impl DiodeModel {
 
 impl Default for DiodeModel {
     fn default() -> Self {
-        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0 }
+        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0, isr: 0.0, nr: 2.0, eg: 1.11, xti: 3.0 }
     }
 }
 
@@ -46,13 +53,16 @@ pub struct MosModel {
     /// Constant gate-source / gate-drain capacitances (F), for AC and transient.
     pub cgs: f64,
     pub cgd: f64,
+    /// Gate overlap capacitances per metre of channel width (F/m): the instance's `W` turns them into `cgs` / `cgd`.
+    pub cgso: f64,
+    pub cgdo: f64,
     /// A junction FET: `vto` is the (negative) pinch-off voltage in the n-channel orientation and is used with its sign.
     pub jfet: bool,
 }
 
 impl Default for MosModel {
     fn default() -> Self {
-        Self { kp: 2e-5, vto: 1.0, lambda: 0.0, pmos: false, cgs: 0.0, cgd: 0.0, jfet: false }
+        Self { kp: 2e-5, vto: 1.0, lambda: 0.0, pmos: false, cgs: 0.0, cgd: 0.0, cgso: 0.0, cgdo: 0.0, jfet: false }
     }
 }
 
@@ -84,6 +94,18 @@ pub struct BjtModel {
     /// Forward and reverse transit times (s): the diffusion charge is `tf * (forward current)`.
     pub tf: f64,
     pub tr: f64,
+    /// Base-emitter and base-collector leakage currents (`ise * (exp(vbe / (ne vt)) - 1)`), which add to the base current.
+    pub ise: f64,
+    pub ne: f64,
+    pub isc: f64,
+    pub nc: f64,
+    /// Knees of the forward and reverse current gain at high injection (A; infinite = none).
+    pub ikf: f64,
+    pub ikr: f64,
+    /// Band gap (eV), saturation-current temperature exponent and current-gain temperature exponent.
+    pub eg: f64,
+    pub xti: f64,
+    pub xtb: f64,
     pub pnp: bool,
 }
 
@@ -96,7 +118,7 @@ impl BjtModel {
 
 impl Default for BjtModel {
     fn default() -> Self {
-        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, rc: 0.0, re: 0.0, vaf: f64::INFINITY, var: f64::INFINITY, cje: 0.0, vje: 0.75, mje: 0.33, cjc: 0.0, vjc: 0.75, mjc: 0.33, fc: 0.5, tf: 0.0, tr: 0.0, pnp: false }
+        Self { is: 1e-16, bf: 100.0, br: 1.0, nf: 1.0, nr: 1.0, rb: 0.0, rc: 0.0, re: 0.0, vaf: f64::INFINITY, var: f64::INFINITY, cje: 0.0, vje: 0.75, mje: 0.33, cjc: 0.0, vjc: 0.75, mjc: 0.33, fc: 0.5, tf: 0.0, tr: 0.0, ise: 0.0, ne: 1.5, isc: 0.0, nc: 2.0, ikf: f64::INFINITY, ikr: f64::INFINITY, eg: 1.11, xti: 3.0, xtb: 1.5, pnp: false }
     }
 }
 

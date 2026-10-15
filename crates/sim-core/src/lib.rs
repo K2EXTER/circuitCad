@@ -87,6 +87,8 @@ mod tests_bjt;
 #[cfg(test)]
 mod tests_diode_cap;
 #[cfg(test)]
+mod tests_params;
+#[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]
 mod tests_logic;

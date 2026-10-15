@@ -116,7 +116,7 @@ use devices::*;
 use linalg::*;
 
 pub(crate) use build::{compile, v};
-pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, diode_q, exp_safe, mos_eval};
+pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, diode_q, diode_recomb, exp_safe, mos_eval};
 #[cfg(test)]
 pub(crate) use devices::depletion;
 pub(crate) use mna::{Ctx, Dyn};
@@ -337,9 +337,9 @@ impl Compiled {
                     let (i, vv) = (gm * (v(x, *cp) - v(x, *cn)), v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, .. } => {
+                Ce::D { name, a, ai, k, rs, is, nvt, bv, ibv, dm, .. } => {
                     let vd = v(x, *ai) - v(x, *k);
-                    let mut id = is * (exp_safe(vd / nvt) - 1.0);
+                    let mut id = is * (exp_safe(vd / nvt) - 1.0) + diode_recomb(dm, vd).0;
                     if bv.is_finite() {
                         id -= ibv * exp_safe(-(vd + bv) / nvt);
                     }

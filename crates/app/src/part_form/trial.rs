@@ -88,7 +88,7 @@ impl PartForm {
         let ignored = sim_core::ignored_model_params(&self.sim_text);
         if !ignored.is_empty() {
             let list: Vec<String> = ignored.iter().take(4).map(|(n, ps)| format!("{n}: {}", ps.iter().take(8).cloned().collect::<Vec<_>>().join(" "))).collect();
-            warn.push(format!("素子モデルのパラメータのうち、使わないものがあります ({})。高注入・漏れ電流・ダイオードやMOSFETの容量などで、実物とのずれが出ます", list.join(" / ")));
+            warn.push(format!("素子モデルのパラメータのうち、使わないものがあります ({})。雑音 (KF)・基板容量・バイアスで変わる遷移時間・MOSFET の LEVEL 2 以上の式などで、実物とのずれが出ます", list.join(" / ")));
         }
         if dc.is_err() {
             warn.push("電源をつながない状態の動作点が求まりませんでした。電源が必要なモデルでは普通ですが、回路に置いたら動作点を計算して確かめてください".into());

@@ -198,6 +198,9 @@ impl Compiled {
                     vj[*slot] = lim;
                     let ex = exp_safe(lim / nvt);
                     let (mut id, mut gd) = (is * (ex - 1.0), is / nvt * ex + gmin);
+                    let (ir_, gr_) = diode_recomb(dm, lim);
+                    id += ir_;
+                    gd += gr_;
                     if bv.is_finite() {
                         let eb = exp_safe(-(lim + bv) / nvt);
                         id -= ibv * eb;

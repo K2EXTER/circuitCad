@@ -16,9 +16,6 @@ use crate::dcsweep::{DcSweepResult, DcSweepSignal};
 
 /// Temperature the models are specified at.
 pub const T_NOM_C: f64 = 27.0;
-const EG: f64 = 1.11; // silicon band gap, eV
-const XTI: f64 = 3.0; // saturation-current temperature exponent
-const XTB: f64 = 1.5; // current-gain temperature exponent
 const K_OVER_Q: f64 = 8.617333e-5; // V/K
 
 impl Circuit {
@@ -31,8 +28,8 @@ impl Circuit {
         let (t, tn) = (temp_c + 273.15, T_NOM_C + 273.15);
         let ratio = t / tn;
         let vt = K_OVER_Q * t;
-        // saturation current of a junction with emission coefficient n
-        let is_at = |is: f64, n: f64, xti: f64| is * ratio.powf(xti / n) * ((EG / (n * vt)) * (ratio - 1.0)).exp();
+        // saturation current of a junction with emission coefficient n, band gap eg and temperature exponent xti
+        let is_at = |is: f64, n: f64, xti: f64, eg: f64| is * ratio.powf(xti / n) * ((eg / (n * vt)) * (ratio - 1.0)).exp();
         let d_t = temp_c - T_NOM_C;
         let scale = |tcs: &[(String, f64, f64)], name: &str| tcs.iter().find(|(n, _, _)| n == name).map_or(1.0, |(_, a, b)| (1.0 + a * d_t + b * d_t * d_t).max(0.01));
         let tcs = std::mem::take(&mut c.tempcos);
@@ -42,14 +39,20 @@ impl Circuit {
                 Element::Capacitor { name, c: cap, .. } => *cap *= scale(&tcs, name),
                 Element::Inductor { name, l, .. } => *l *= scale(&tcs, name),
                 Element::Diode { model, .. } => {
-                    model.is = is_at(model.is, model.n, XTI);
+                    model.is = is_at(model.is, model.n, model.xti, model.eg);
+                    model.isr = is_at(model.isr, model.nr, model.xti, model.eg);
                     model.n *= ratio;
+                    model.nr *= ratio;
                 }
                 Element::Bjt { model, .. } => {
-                    model.is = is_at(model.is, model.nf, XTI);
-                    model.bf *= ratio.powf(XTB);
+                    model.is = is_at(model.is, model.nf, model.xti, model.eg);
+                    model.ise = is_at(model.ise, model.ne, model.xti, model.eg);
+                    model.isc = is_at(model.isc, model.nc, model.xti, model.eg);
+                    model.bf *= ratio.powf(model.xtb);
                     model.nf *= ratio;
                     model.nr *= ratio;
+                    model.ne *= ratio;
+                    model.nc *= ratio;
                 }
                 Element::Mosfet { model, .. } if !model.jfet => {
                     model.kp *= ratio.powf(-1.5);

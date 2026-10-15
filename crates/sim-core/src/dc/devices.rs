@@ -36,6 +36,16 @@ pub(crate) struct BjtEval {
     pub(crate) die: (f64, f64),
 }
 
+/// Recombination current of a diode (`isr * (exp(v / (nr vt)) - 1)`) and its conductance.
+pub(crate) fn diode_recomb(m: &DiodeModel, v: f64) -> (f64, f64) {
+    if m.isr <= 0.0 {
+        return (0.0, 0.0);
+    }
+    let nvt = m.nr * VT;
+    let e = exp_safe(v / nvt);
+    (m.isr * (e - 1.0), m.isr / nvt * e)
+}
+
 pub(crate) fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
     let (nfvt, nrvt) = (m.nf * VT, m.nr * VT);
     let ef = exp_safe(vbe / nfvt);
@@ -46,11 +56,25 @@ pub(crate) fn bjt_eval(m: &BjtModel, vbe: f64, vbc: f64) -> BjtEval {
     let (dk_be, dk_bc) = (if m.var.is_finite() { -1.0 / m.var } else { 0.0 }, if m.vaf.is_finite() { -1.0 / m.vaf } else { 0.0 });
     let k_raw = 1.0 + dk_be * vbe + dk_bc * vbc;
     let (k, dk_be, dk_bc) = if k_raw > 0.05 { (k_raw, dk_be, dk_bc) } else { (0.05, 0.0, 0.0) };
+    // high injection: the transport current is divided by (1 + sqrt(1 + 4 q2)) / 2 with q2 = if/ikf + ir/ikr
+    let (inv_f, inv_r) = (if m.ikf.is_finite() { 1.0 / m.ikf } else { 0.0 }, if m.ikr.is_finite() { 1.0 / m.ikr } else { 0.0 });
+    let q2 = iff * inv_f + ir * inv_r;
+    let (h, dh) = if q2 > 0.0 {
+        let s = (1.0 + 4.0 * q2).sqrt();
+        (2.0 / (1.0 + s), -4.0 / ((1.0 + s) * (1.0 + s) * s))
+    } else {
+        (1.0, 0.0)
+    };
+    // leakage currents of the two junctions
+    let leak = |is: f64, n: f64, v: f64| if is > 0.0 { let e = exp_safe(v / (n * VT)); (is * (e - 1.0), is / (n * VT) * e) } else { (0.0, 0.0) };
+    let ((ile, gle), (ilc, glc)) = (leak(m.ise, m.ne, vbe), leak(m.isc, m.nc, vbc));
     let it = iff - ir;
-    let ic = it * k - ir / m.br;
-    let ib = iff / m.bf + ir / m.br;
-    let dic = (gf * k + it * dk_be, -gr * k + it * dk_bc - gr / m.br);
-    let dib = (gf / m.bf, gr / m.br);
+    let tk = it * k * h;
+    let d_tk = (gf * k * h + it * dk_be * h + it * k * dh * gf * inv_f, -gr * k * h + it * dk_bc * h + it * k * dh * gr * inv_r);
+    let ic = tk - ir / m.br - ilc;
+    let ib = iff / m.bf + ile + ir / m.br + ilc;
+    let dic = (d_tk.0, d_tk.1 - gr / m.br - glc);
+    let dib = (gf / m.bf + gle, gr / m.br + glc);
     BjtEval { ic, ib, ie: -(ic + ib), dic, dib, die: (-(dic.0 + dib.0), -(dic.1 + dib.1)) }
 }
 
