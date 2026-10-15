@@ -25,7 +25,7 @@ pub struct SmoothOptions {
 
 impl Default for SmoothOptions {
     fn default() -> Self {
-        SmoothOptions { corners: true, radius: 1.0, tapers: true }
+        SmoothOptions { corners: true, radius: 0.5, tapers: true }
     }
 }
 
@@ -226,6 +226,16 @@ fn report(es: &[&Edit]) -> SmoothReport {
 
 /// Smooth the tracks of `board`. Returns what was done; the board is untouched when nothing could be done safely.
 pub fn smooth_tracks(board: &mut Board, opts: &SmoothOptions) -> SmoothReport {
+    smooth(board, opts, None)
+}
+
+/// Like [`smooth_tracks`], but only where a track in `tracks` (indices) is involved: its corners (the track next to
+/// it gives way too), and where it meets a pad or via.
+pub fn smooth_selected(board: &mut Board, opts: &SmoothOptions, tracks: &[usize]) -> SmoothReport {
+    smooth(board, opts, Some(tracks))
+}
+
+fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> SmoothReport {
     let mut edits = vec![];
     for (v, a, b) in joints(board) {
         let e = if opts.corners { corner(board, v, a, b, opts.radius) } else { None };
@@ -239,6 +249,9 @@ pub fn smooth_tracks(board: &mut Board, opts: &SmoothOptions) -> SmoothReport {
                 edits.extend(pad_taper(board, i, is_a));
             }
         }
+    }
+    if let Some(only) = only {
+        edits.retain(|e| e.trims.iter().any(|(i, _, _)| only.contains(i)));
     }
     if edits.is_empty() {
         return SmoothReport::default();

@@ -139,3 +139,19 @@ fn a_round_pad_gets_the_teardrop_from_its_centre_not_a_wide_base_beyond_its_edge
     assert!(b.tracks.iter().all(|t| t.width <= 1.6 + 1e-9));
     assert!(ratsnest(&b).is_empty());
 }
+
+#[test]
+fn only_the_selected_track_is_smoothed() {
+    let mut b = l_shape();
+    // a second right-angle route, far away
+    pad(&mut b, 5.0, 25.0, "B");
+    pad(&mut b, 20.0, 28.0, "B");
+    b.tracks.push(trk((5.0, 25.0), (20.0, 25.0), 0.25));
+    b.tracks.push(trk((20.0, 25.0), (20.0, 28.0), 0.25));
+    let r = smooth_selected(&mut b, &SmoothOptions::default(), &[2]);
+    assert_eq!(r.corners, 1);
+    // the first route's corner is untouched
+    assert!(b.tracks.iter().any(|t| t.a == Point::new(25.0, 5.0) || t.b == Point::new(25.0, 5.0)));
+    assert!(b.tracks.iter().all(|t| t.a != Point::new(20.0, 25.0) && t.b != Point::new(20.0, 25.0)));
+    assert_eq!(smooth_selected(&mut b, &SmoothOptions::default(), &[]), SmoothReport::default());
+}

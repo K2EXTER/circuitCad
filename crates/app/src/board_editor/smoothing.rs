@@ -16,11 +16,38 @@ impl BoardEditor {
         if ui.add_enabled(self.smooth.corners || self.smooth.tapers, egui::Button::new("配線を整える")).on_hover_text("全部の配線に上の設定を適用します。パッドやビアに付いた端は動きません。ルール違反が増える所と、接続が切れる所は変えません。元に戻すで取り消せます").clicked() {
             self.smooth_tracks();
         }
+        let picked = self.picked_tracks();
+        if ui
+            .add_enabled(!picked.is_empty() && (self.smooth.corners || self.smooth.tapers), egui::Button::new(format!("選んだ配線だけ整える ({} 本)", picked.len())))
+            .on_hover_text("選択している配線 (選択ツールでクリック、またはドラッグで範囲選択) の角と、パッド・ビアに入る根元だけを整えます。角でつながる隣の配線も、角を丸めるぶん短くなります")
+            .clicked()
+        {
+            self.smooth_picked(&picked);
+        }
+    }
+
+    /// Indices of the selected tracks (the one selected and those in the multi-selection).
+    fn picked_tracks(&self) -> Vec<usize> {
+        let mut v: Vec<usize> = self.selected.iter().chain(&self.multi).filter_map(|it| if let Item::Track(i) = it { Some(*i) } else { None }).collect();
+        v.sort_unstable();
+        v.dedup();
+        v.retain(|i| *i < self.board.tracks.len());
+        v
+    }
+
+    fn smooth_picked(&mut self, picked: &[usize]) {
+        self.checkpoint();
+        let r = smooth::smooth_selected(&mut self.board, &self.smooth, picked);
+        self.report_smooth(r);
     }
 
     pub fn smooth_tracks(&mut self) {
         self.checkpoint();
-        let SmoothReport { corners, tapers } = smooth::smooth_tracks(&mut self.board, &self.smooth);
+        let r = smooth::smooth_tracks(&mut self.board, &self.smooth);
+        self.report_smooth(r);
+    }
+
+    fn report_smooth(&mut self, SmoothReport { corners, tapers }: SmoothReport) {
         self.violations.clear();
         self.status = if corners + tapers == 0 {
             self.undo.pop(); // nothing changed: no undo step
