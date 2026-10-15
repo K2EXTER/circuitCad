@@ -30,7 +30,7 @@ impl BoardEditor {
 
     /// Select track `i` (for screenshots).
     pub fn select_track(&mut self, i: usize) {
-        self.selected = Some(Item::Track(i)).filter(|_| i < self.board.tracks.len());
+        self.selected = (i < self.board.tracks.len()).then_some(Item::Track(i));
     }
 
     /// Indices of the selected tracks (the one selected and those in the multi-selection).
