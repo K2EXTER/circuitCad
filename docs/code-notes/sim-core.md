@@ -18,3 +18,11 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - `spec.rs` スペック(合否の表): `Spec{kind,target,at,lo,hi}` を `evaluate`(`SpecInputs{dc,tran,ac}` の結果から値を読み、範囲と比べて `SpecEval{value,pass,note}`)。種類 `SpecKind`(DC電圧/電流、過渡の平均・リップル(後半)・最大・最小、AC の-3dB点・ある周波数のゲイン・位相余裕)。GUIは `schematic/spec_table.rs`(解析タブの「スペック」、`--spec <種類番号> <対象> <下限|-> <上限|-> [周波数]`)。表は `.schjson` と `.ccproj` の回路図部分の `"specs"` に保存される(`SpecItem`=入力した文字のまま、種類は `SpecKind::key()` の安定した名前。`spec_table.rs` の `with_specs`/`take_specs`、古いファイルや未知の種類は空/読み飛ばし)。表を変えると未保存の変更になる(`saved_specs` と比べる)。回路図本体(`Schematic`)には入れない=Undoの履歴に混ざらない
 - `power.rs` 平均電力 `mean_power`(表示範囲での v*i の時間平均)と効率 `efficiency`。GUIは `schematic/power_ui.rs`(過渡の波形パネルの「電力と効率」、`--tran … --power <入力V> <入力I> <出力V> <出力I>`)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
+
+## spice_flat.rs (ベンダー形式のSPICE文の展開)
+`add_subckt_instance` は、`.param` / `{式}` / `'式'` / `.subckt ... params:` の既定値 / 入れ子の `X` 呼び出しを含む文を、まず `spice_flat::flatten` で1つの平らな `.subckt` に直してから `spice_in` で読む(どれも使わない文は素通し)。
+- パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。
+- 入れ子の中の素子名は `R1.X1`(頭文字は保つ)、内部ノードは `X1.n`、端子は呼び出し側のノードに置き換える。B素子の式の `V(...)` `I(...)` も同じ規則で書き換える。深さ12まで(自分自身を呼ぶとエラー)。
+- 未対応のまま: `.func`、`VALUE=`/`TABLE`、`J K T F H` 素子、`.include`/`.lib`(`part_form/trial.rs` の「試し読み」が日本語で指摘する)。
+- テスト: `tests_flat.rs`。
+

@@ -26,6 +26,7 @@ mod ripple;
 mod spec;
 mod spectrum;
 mod spice_in;
+mod spice_flat;
 mod stepmetrics;
 mod temperature;
 mod tran;
@@ -75,6 +76,8 @@ mod tests_tp5100;
 mod tests_ip2332;
 #[cfg(test)]
 mod tests_bsource;
+#[cfg(test)]
+mod tests_flat;
 #[cfg(test)]
 mod tests_dcsweep;
 #[cfg(test)]

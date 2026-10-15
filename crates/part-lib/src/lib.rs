@@ -226,7 +226,7 @@ impl PartDef {
                         err(format!("sim.text に .model {} がありません", sim.name));
                     }
                 }
-                SimKind::Subckt => match subckt_ports(&sim.text) {
+                SimKind::Subckt => match subckt_ports(&sim.text, &sim.name) {
                     None => err("sim.text に .subckt 行がありません".into()),
                     Some((name, ports)) => {
                         if !name.eq_ignore_ascii_case(&sim.name) {
@@ -248,13 +248,19 @@ impl PartDef {
     }
 }
 
-/// `(name, port count)` of the first `.subckt` line.
-fn subckt_ports(text: &str) -> Option<(String, usize)> {
-    let line = text.lines().find(|l| l.trim_start().to_ascii_lowercase().starts_with(".subckt"))?;
-    let mut t = line.split_whitespace().skip(1);
-    let name = t.next()?.to_string();
-    let ports = t.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).count();
-    Some((name, ports))
+/// `(name, port count)` of the `.subckt` called `want` (else the first one).
+fn subckt_ports(text: &str, want: &str) -> Option<(String, usize)> {
+    let mut first = None;
+    for line in text.lines().filter(|l| l.trim_start().to_ascii_lowercase().starts_with(".subckt")) {
+        let mut t = line.split_whitespace().skip(1);
+        let name = t.next()?.to_string();
+        let ports = t.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).count();
+        if name.eq_ignore_ascii_case(want) {
+            return Some((name, ports));
+        }
+        first.get_or_insert((name, ports));
+    }
+    first
 }
 
 // ---------------------------------------------------------------- files

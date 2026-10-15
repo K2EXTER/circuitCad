@@ -16,7 +16,7 @@ pub enum Model {
 }
 
 /// Join continuation lines (`+`), drop comments and blank lines.
-fn logical_lines(text: &str) -> Vec<String> {
+pub(crate) fn logical_lines(text: &str) -> Vec<String> {
     let mut out: Vec<String> = vec![];
     for raw in text.lines() {
         let line = raw.split(';').next().unwrap_or("").trim();
@@ -147,6 +147,15 @@ pub fn add_model_instance(
 /// Instantiate a `.subckt` on `nodes` (ordered like the subcircuit's ports). Internal nodes and
 /// element names are prefixed with `inst.`.
 pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, nodes: &[usize]) -> Result<(), String> {
+    let lines = logical_lines(text);
+    // vendor-style text (.param, {expr}, nested X calls) is first turned into one plain .subckt
+    if let Some(flat) = crate::spice_flat::flatten(text, sub_name, &lines)? {
+        return add_flat_subckt(c, inst, sub_name, &flat, nodes);
+    }
+    add_flat_subckt(c, inst, sub_name, text, nodes)
+}
+
+fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, nodes: &[usize]) -> Result<(), String> {
     let lines = logical_lines(text);
     let models = parse_models(text)?;
     let start = lines

@@ -79,7 +79,15 @@ pub fn guess_spice(text: &str) -> Result<SpiceGuess, String> {
         }
     }
     let card = |dir: &str| lines.iter().find(|l| l.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case(dir)));
-    if let Some(l) = card(".subckt") {
+    // vendor files list the inner blocks too: take the first .subckt that no X line calls
+    let called: Vec<String> = lines
+        .iter()
+        .filter(|l| l.starts_with(['X', 'x']))
+        .filter_map(|l| l.split_whitespace().skip(1).take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).last().map(str::to_ascii_lowercase))
+        .collect();
+    let subckts = lines.iter().filter(|l| l.split_whitespace().next().is_some_and(|w| w.eq_ignore_ascii_case(".subckt")));
+    let top = subckts.clone().find(|l| l.split_whitespace().nth(1).is_some_and(|n| !called.contains(&n.to_ascii_lowercase()))).or(subckts.clone().next());
+    if let Some(l) = top {
         let mut it = l.split_whitespace().skip(1);
         let name = it.next().ok_or(".subckt に名前がありません。`.subckt 名前 端子1 端子2 …` の形で書きます")?.to_string();
         let roles: Vec<String> = it.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).map(String::from).collect();

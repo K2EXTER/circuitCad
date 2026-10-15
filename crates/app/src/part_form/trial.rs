@@ -14,6 +14,7 @@ pub enum Trial {
 }
 
 /// Plain-language notes on constructs in `text` that the simulator does not read (empty = none found).
+/// `.param`, `{expr}` and nested `X` calls are read (see `sim_core::spice_flat`), so they are not listed.
 pub fn unsupported_notes(text: &str) -> Vec<String> {
     let mut notes: Vec<String> = vec![];
     let mut add = |s: String| {
@@ -21,36 +22,25 @@ pub fn unsupported_notes(text: &str) -> Vec<String> {
             notes.push(s);
         }
     };
-    let mut subckts = 0;
     for raw in text.lines() {
         let l = raw.trim();
         if l.is_empty() || l.starts_with(['*', ';', '+']) {
             continue;
         }
         let low = l.to_ascii_lowercase();
-        if low.starts_with(".subckt") {
-            subckts += 1;
-        } else if low.starts_with(".param") || low.starts_with(".func") {
-            add(format!("「{}」は読み飛ばされます。この名前を使う値 ({{…}}) は数値にできません。数値に書き換えてください", l.split_whitespace().next().unwrap_or("")));
+        if low.starts_with(".func") {
+            add("「.func」(自作関数) は読み飛ばされます。関数を使う式は、式を直接書き下してください".into());
         } else if low.starts_with(".include") || low.starts_with(".lib") {
             add(format!("「{}」で別ファイルを読む書き方は使えません。そのファイルの中身も貼ってください", l.split_whitespace().next().unwrap_or("")));
-        }
-        if l.contains('{') && !low.starts_with('.') {
-            add("値に {式} や {名前} が使われています。数値に書き換えてください".into());
         }
         if low.contains("value=") || low.contains("table(") || low.contains(" table ") {
             add("VALUE= や TABLE を使う行があります。V=式 / I=式 の B 素子に書き換えてください".into());
         }
-        if !low.starts_with('.') {
-            match l.chars().next().map(|c| c.to_ascii_uppercase()) {
-                Some('X') => add(format!("「{}」はサブサーキットの呼び出し (入れ子) です。未対応です。中身の素子を直接書くか、その部分を取り除いてください", l.split_whitespace().next().unwrap_or(""))),
-                Some(c @ ('J' | 'K' | 'T' | 'F' | 'H' | 'W' | 'O' | 'U' | 'Z')) => add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G D Q M S B です", l.split_whitespace().next().unwrap_or(""))),
-                _ => {}
-            }
+        if !low.starts_with('.')
+            && let Some(c @ ('J' | 'K' | 'T' | 'F' | 'H' | 'W' | 'O' | 'U' | 'Z')) = l.chars().next().map(|c| c.to_ascii_uppercase())
+        {
+            add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G D Q M S B と、X (入れ子) です", l.split_whitespace().next().unwrap_or("")));
         }
-    }
-    if subckts > 1 {
-        add(format!(".subckt が {subckts} 個あります。使うのは貼った文の最初の 1 つだけです。使いたい 1 つだけを残してください"));
     }
     notes
 }
@@ -121,27 +111,26 @@ R2 out gnd 1k
     }
 
     #[test]
-    fn nested_subckt_calls_fail_with_a_reason() {
-        let f = form(".subckt TOP a b
-X1 a b INNER
-.ends TOP", SimChoice::Subckt, "TOP", "1 2");
-        let Trial::Err(m) = f.trial_read() else { panic!("expected an error") };
-        assert!(m.contains("入れ子"), "{m}");
+    fn nested_calls_and_params_are_read() {
+        let t = ".param Rx=1k\n.subckt INNER p q\nR1 p q {Rx}\n.ends\n.subckt TOP a b\nX1 a b INNER\n.ends TOP";
+        let f = form(t, SimChoice::Subckt, "TOP", "1 2");
+        assert!(matches!(f.trial_read(), Trial::Ok(_)));
+        assert!(unsupported_notes(t).is_empty());
     }
 
     #[test]
-    fn params_and_several_subckts_are_noticed() {
-        let t = ".param Rx=1k
-.subckt A 1 2
-R1 1 2 {Rx}
-.ends
-.subckt B 1 2
-R1 1 2 1k
-.ends";
-        let n = unsupported_notes(t);
-        assert!(n.iter().any(|s| s.contains(".param")), "{n:?}");
-        assert!(n.iter().any(|s| s.contains("{式}")), "{n:?}");
-        assert!(n.iter().any(|s| s.contains("2 個")), "{n:?}");
+    fn a_missing_inner_subckt_is_explained() {
+        let f = form(".subckt TOP a b\nX1 a b INNER\n.ends TOP", SimChoice::Subckt, "TOP", "1 2");
+        let Trial::Err(m) = f.trial_read() else { panic!("expected an error") };
+        assert!(m.contains("INNER") && m.contains("貼って"), "{m}");
+    }
+
+    #[test]
+    fn unsupported_elements_and_functions_are_noticed() {
+        let n = unsupported_notes(".func f(x) {x*2}\n.subckt A 1 2\nJ1 1 2 3 JM\nG1 1 2 value={V(1)}\n.ends");
+        assert!(n.iter().any(|s| s.contains(".func")), "{n:?}");
+        assert!(n.iter().any(|s| s.contains("J")), "{n:?}");
+        assert!(n.iter().any(|s| s.contains("VALUE")), "{n:?}");
     }
 
     #[test]
@@ -150,5 +139,13 @@ R1 1 2 1k
 R1 1 2 1k
 .ends", SimChoice::Subckt, "A", "");
         assert!(matches!(f.trial_read(), Trial::Err(m) if m.contains("ノード順")));
+    }
+
+    #[test]
+    fn the_top_subckt_is_the_one_nobody_calls() {
+        let t = ".subckt INNER p q\nR1 p q 1k\n.ends\n.subckt TOP a b c\nX1 a b INNER\n.ends TOP";
+        let g = parse::guess_spice(t).unwrap();
+        assert_eq!(g.name, "TOP");
+        assert_eq!(g.roles.len(), 3);
     }
 }
