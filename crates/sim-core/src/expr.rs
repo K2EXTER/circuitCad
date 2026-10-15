@@ -50,10 +50,10 @@ impl Func {
             "sqrt" => (Func::Sqrt, 1..=1),
             "exp" => (Func::Exp, 1..=1),
             "ln" | "log" => (Func::Ln, 1..=1),
-            "pow" => (Func::Pow, 2..=2),
+            "pow" | "pwr" => (Func::Pow, 2..=2),
             "tanh" => (Func::Tanh, 1..=1),
             "if" => (Func::If, 3..=3),
-            "step" => (Func::Step, 1..=2),
+            "step" | "u" => (Func::Step, 1..=2),
             _ => return None,
         })
     }
@@ -107,7 +107,45 @@ impl Parser<'_, '_> {
         }
     }
 
+    /// A value used as a logic level: above 0.5 is true (as in LTspice).
+    fn truth(e: Expr) -> Expr {
+        Expr::Bin(Op::Gt, Box::new(e), Box::new(Expr::Num(0.5)))
+    }
+
+    fn logic(cond: Expr, yes: f64, no: f64) -> Expr {
+        Expr::Call(Func::If, vec![cond, Expr::Num(yes), Expr::Num(no)])
+    }
+
+    /// `a | b`: true if either is.
     fn expr(&mut self) -> PResult<Expr> {
+        let mut a = self.and_expr()?;
+        loop {
+            self.ws();
+            if self.s.get(self.pos) != Some(&b'|') {
+                return Ok(a);
+            }
+            self.pos += if self.s.get(self.pos + 1) == Some(&b'|') { 2 } else { 1 };
+            let b = self.and_expr()?;
+            a = Self::logic(Self::truth(a), 1.0, 0.0);
+            a = Expr::Call(Func::If, vec![Self::truth(a), Expr::Num(1.0), Self::logic(Self::truth(b), 1.0, 0.0)]);
+        }
+    }
+
+    /// `a & b`: true if both are.
+    fn and_expr(&mut self) -> PResult<Expr> {
+        let mut a = self.cmp()?;
+        loop {
+            self.ws();
+            if self.s.get(self.pos) != Some(&b'&') {
+                return Ok(a);
+            }
+            self.pos += if self.s.get(self.pos + 1) == Some(&b'&') { 2 } else { 1 };
+            let b = self.cmp()?;
+            a = Expr::Call(Func::If, vec![Self::truth(a), Self::logic(Self::truth(b), 1.0, 0.0), Expr::Num(0.0)]);
+        }
+    }
+
+    fn cmp(&mut self) -> PResult<Expr> {
         let a = self.sum()?;
         self.ws();
         let op = match (self.s.get(self.pos), self.s.get(self.pos + 1)) {
@@ -156,6 +194,12 @@ impl Parser<'_, '_> {
     }
 
     fn unary(&mut self) -> PResult<Expr> {
+        self.ws();
+        if self.s.get(self.pos) == Some(&b'!') && self.s.get(self.pos + 1) != Some(&b'=') {
+            self.pos += 1;
+            let e = self.unary()?;
+            return Ok(Self::logic(Self::truth(e), 0.0, 1.0));
+        }
         if self.eat(b'-') {
             return Ok(Expr::Neg(Box::new(self.unary()?)));
         }
@@ -270,6 +314,55 @@ impl Parser<'_, '_> {
                     self.err("V(ノード) / V(ノード1,ノード2) / I(電源名) の形で書いてください")
                 }
             };
+        }
+        if id == "buf" || id == "inv" {
+            // LTspice logic buffer / inverter: the argument is a logic level (above 0.5 is true)
+            self.pos += 1; // (
+            let a = self.expr()?;
+            if !self.eat(b')') {
+                return self.err("閉じ括弧 ) がありません");
+            }
+            return Ok(if id == "buf" { Self::logic(Self::truth(a), 1.0, 0.0) } else { Self::logic(Self::truth(a), 0.0, 1.0) });
+        }
+        if id == "tbl" || id == "table" {
+            // tbl(x, x1,y1, x2,y2, ...): piecewise-linear in x, flat beyond the ends
+            self.pos += 1; // (
+            let mut args = vec![];
+            loop {
+                args.push(self.expr()?);
+                if self.eat(b',') {
+                    continue;
+                }
+                if self.eat(b')') {
+                    break;
+                }
+                return self.err("引数は , で区切り、最後に ) で閉じます");
+            }
+            let pts: Option<Vec<(f64, f64)>> = args[1..].chunks(2).map(|c| match c {
+                [Expr::Num(x), Expr::Num(y)] => Some((*x, *y)),
+                [Expr::Neg(x), Expr::Num(y)] => match **x { Expr::Num(x) => Some((-x, *y)), _ => None },
+                [Expr::Num(x), Expr::Neg(y)] => match **y { Expr::Num(y) => Some((*x, -y)), _ => None },
+                [Expr::Neg(x), Expr::Neg(y)] => match (&**x, &**y) { (Expr::Num(x), Expr::Num(y)) => Some((-x, -y)), _ => None },
+                _ => None,
+            }).collect();
+            let Some(mut pts) = pts.filter(|p| p.len() >= 2 && args.len() % 2 == 1) else {
+                self.pos = start;
+                return self.err("tbl(x, x1,y1, x2,y2, ...) は、数値の点を 2 つ以上並べて書きます");
+            };
+            pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let x = args[0].clone();
+            let lt = |v: f64| Expr::Bin(Op::Lt, Box::new(x.clone()), Box::new(Expr::Num(v)));
+            let mut e = Expr::Num(pts[pts.len() - 1].1);
+            for k in (0..pts.len() - 1).rev() {
+                let ((x0, y0), (x1, y1)) = (pts[k], pts[k + 1]);
+                let seg = if x1 > x0 {
+                    Expr::Bin(Op::Add, Box::new(Expr::Num(y0)), Box::new(Expr::Bin(Op::Mul, Box::new(Expr::Num((y1 - y0) / (x1 - x0))), Box::new(Expr::Bin(Op::Sub, Box::new(x.clone()), Box::new(Expr::Num(x0)))))))
+                } else {
+                    Expr::Num(y0)
+                };
+                e = Expr::Call(Func::If, vec![lt(x1), seg, e]);
+            }
+            return Ok(Expr::Call(Func::If, vec![lt(pts[0].0), Expr::Num(pts[0].1), e]));
         }
         let Some((func, arity)) = Func::from_name(&id) else {
             self.pos = start;

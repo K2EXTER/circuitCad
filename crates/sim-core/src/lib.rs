@@ -50,7 +50,7 @@ pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
 pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, McStats, TranMetric};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
 pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, ConvertError, PinFaultSpec, PinHow};
-pub use spice_in::{add_model_instance, add_subckt_instance, parse_models};
+pub use spice_in::{add_model_instance, add_subckt_instance, ignored_model_params, parse_models};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{transient, Signal, TranResult, TranSettings};
 pub use stepmetrics::{step_metrics, StepMetrics};

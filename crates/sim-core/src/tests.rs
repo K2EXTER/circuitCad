@@ -382,7 +382,8 @@ fn model_cards_parse() {
         spice_in::Model::Diode(d) => assert_eq!((d.is, d.n, d.rs), (1e-12, 1.5, 2.0)),
         _ => panic!(),
     }
-    assert!(parse_models(".model Z JFET(X=1)").is_err());
+    // a card of an unknown kind is skipped; an element that uses it is reported when it is read
+    assert!(parse_models(".model Z JFET(X=1)").unwrap().is_empty());
 }
 
 #[test]

@@ -117,6 +117,9 @@ impl PartForm {
     /// Fill the model kind, name, element, pin list and node order from the pasted SPICE text.
     /// Returns what was done, for the learner. Pins the learner already wrote are kept when they can be matched.
     pub fn autofill_from_spice(&mut self) -> Result<String, String> {
+        if super::trial::is_encrypted(&self.sim_text) {
+            return Err(super::trial::ENCRYPTED_MSG.into());
+        }
         let g = guess_spice(&self.sim_text)?;
         self.sim = if g.subckt { SimChoice::Subckt } else { SimChoice::Model };
         self.sim_name = g.name.clone();

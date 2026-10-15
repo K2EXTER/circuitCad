@@ -655,4 +655,29 @@ mod passive_form_tests {
         f.pas_ldrop = "0".into();
         assert!(f.apply_passive().is_err());
     }
+
+    /// Developer check: read every SPICE file in the folder named by `SPICE_MODEL_DIR` the way the form does and print
+    /// what the "trial read" says. `SPICE_MODEL_DIR=<dir> cargo test -p app vendor_models -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn vendor_models_in_a_folder_are_trial_read() {
+        let Ok(dir) = std::env::var("SPICE_MODEL_DIR") else { return };
+        let mut files: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(Result::ok).map(|e| e.path()).filter(|p| p.is_file()).collect();
+        files.sort();
+        for p in files {
+            let text = String::from_utf8_lossy(&std::fs::read(&p).unwrap()).to_string();
+            let mut f = PartForm { sim_text: text, ..PartForm::default() };
+            let fill = f.autofill_from_spice();
+            let line = match &fill {
+                Ok(_) => match f.trial_read() {
+                    super::trial::Trial::Ok(m) => format!("OK    {m}"),
+                    super::trial::Trial::Warn(m) => format!("WARN  {m}"),
+                    super::trial::Trial::Err(m) => format!("ERR   {m}"),
+                },
+                Err(e) => format!("FILL-ERR {e}"),
+            };
+            println!("{:<18} top={:<14} pins={:<22} {}", p.file_name().unwrap().to_string_lossy(), f.sim_name, f.sim_pins, line.replace("
+", " | "));
+        }
+    }
 }

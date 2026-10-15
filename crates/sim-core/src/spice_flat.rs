@@ -22,7 +22,12 @@ pub fn needs_flatten(text: &str) -> bool {
     text.lines().any(|l| {
         let l = l.trim_start();
         let low = l.to_ascii_lowercase();
-        low.starts_with('x') || low.starts_with(".param") || low.contains("params:") || l.contains('{') || (!l.starts_with('*') && l.contains('\''))
+        low.starts_with(['x', 'f', 'h'])
+            || low.starts_with(".param")
+            || low.contains("params:")
+            || l.contains('{')
+            || (!l.starts_with('*') && l.contains('\''))
+            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table")))
     })
 }
 
@@ -165,6 +170,46 @@ fn eval_expr(s: &str, env: &Env) -> Result<f64, String> {
     }
 }
 
+/// The text of an expression with the parameter names replaced by their values; V(..) / I(..) arguments, function
+/// names and names that are not parameters stay as they are.
+fn substitute_params(s: &str, env: &Env) -> String {
+    let b: Vec<char> = s.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        if c.is_ascii_digit() || c == '.' {
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == '.' || ((b[i] == '+' || b[i] == '-') && matches!(b[i - 1], 'e' | 'E') && b[..i].iter().rev().take_while(|c| c.is_ascii_alphanumeric() || **c == '.').any(|c| c.is_ascii_digit()))) {
+                out.push(b[i]);
+                i += 1;
+            }
+        } else if c.is_ascii_alphabetic() || c == '_' {
+            let st = i;
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == '_') {
+                i += 1;
+            }
+            let id: String = b[st..i].iter().collect();
+            let low = id.to_ascii_lowercase();
+            let call = b[i..].iter().find(|c| !c.is_whitespace()) == Some(&'(');
+            if call && matches!(low.as_str(), "v" | "i") {
+                // copy the whole argument list
+                let open = i + b[i..].iter().position(|c| *c == '(').unwrap_or(0);
+                let close = b[open..].iter().position(|c| *c == ')').map_or(b.len() - 1, |p| open + p);
+                out.extend(&b[st..=close]);
+                i = close + 1;
+            } else if !call && env.contains_key(&low) {
+                out.push_str(&format!("({:e})", env[&low]));
+            } else {
+                out.push_str(&id);
+            }
+        } else {
+            out.push(c);
+            i += 1;
+        }
+    }
+    out
+}
+
 /// Replace every `{expr}` / `'expr'` in a line by its value.
 fn subst_braces(line: &str, env: &Env) -> Result<String, String> {
     let b: Vec<char> = line.chars().collect();
@@ -196,7 +241,13 @@ fn subst_braces(line: &str, env: &Env) -> Result<String, String> {
         }
         let Some(end) = end else { return Err(format!("「{line}」の {open} が閉じていません")) };
         let inner: String = b[i + 1..end].iter().collect();
-        out.push_str(&format!("{:e}", eval_expr(&inner, env)?));
+        let low = inner.to_ascii_lowercase();
+        if low.contains("v(") || low.contains("i(") || low.contains("time") {
+            // a behavioural expression: only the parameter names are replaced
+            out.push_str(&substitute_params(&inner, env));
+        } else {
+            out.push_str(&format!("{:e}", eval_expr(&inner, env)?));
+        }
         i = end + 1;
     }
     Ok(out)
@@ -259,6 +310,8 @@ fn node_count(letter: char) -> Option<usize> {
 
 struct Ctx<'a> {
     defs: &'a HashMap<String, Def>,
+    /// Lower-case names of the `.model` cards (to tell a transistor's substrate node from its model name).
+    models: &'a std::collections::HashSet<String>,
 }
 
 impl Ctx<'_> {
@@ -276,17 +329,42 @@ impl Ctx<'_> {
             let val = eval_expr(v, &outer)?;
             env.insert(k.clone(), val);
         }
+        // the subcircuit's own .param lines, in any order (a name may be used before the line that defines it)
+        let mut pending: Vec<(String, String)> = vec![];
+        for raw in def.body.iter().filter(|l| l.to_ascii_lowercase().starts_with(".param")) {
+            for (k, v) in assignments(&split_top(&raw[6..]))? {
+                if !call_args.iter().any(|(a, _)| *a == k) {
+                    pending.push((k, v));
+                }
+            }
+        }
+        loop {
+            let before = pending.len();
+            pending.retain(|(k, v)| match eval_expr(v, &env) {
+                Ok(x) => {
+                    env.insert(k.clone(), x);
+                    false
+                }
+                Err(_) => true,
+            });
+            if pending.is_empty() || pending.len() == before {
+                break;
+            }
+        }
+        if let Some((_, v)) = pending.first() {
+            return Err(eval_expr(v, &env).unwrap_err());
+        }
         let prefix = if path.is_empty() { String::new() } else { format!("{path}.") };
         let mut out = vec![];
         for raw in &def.body {
             let low = raw.to_ascii_lowercase();
             if low.starts_with(".param") {
-                for (k, v) in assignments(&split_top(&raw[6..]))? {
-                    // an argument given by the caller wins over the subcircuit's own .param
-                    if !call_args.iter().any(|(a, _)| *a == k) {
-                        let val = eval_expr(&v, &env)?;
-                        env.insert(k, val);
-                    }
+                continue;
+            }
+            if low.starts_with(".model") && raw.contains(['{', '\'']) {
+                // a model card with parameters: its values come from this instance (an unusable card is left out)
+                if let Ok(l) = subst_braces(raw, &env) {
+                    out.push(l);
                 }
                 continue;
             }
@@ -316,19 +394,32 @@ impl Ctx<'_> {
                 out.extend(self.expand(def2, &sub_path, &port_map, env.clone(), &args, depth + 1)?);
                 continue;
             }
-            let Some(n) = node_count(letter) else {
+            if matches!(letter, 'E' | 'G' | 'F' | 'H') {
+                out.push(self.controlled(&line, &t, letter, path, ports, &prefix)?);
+                continue;
+            }
+            let Some(mut n) = node_count(letter) else {
                 out.push(line);
                 continue;
             };
+            let four_node_q = letter == 'Q' && t.len() >= 6 && self.models.contains(&t[5].to_ascii_lowercase()) && !self.models.contains(&t[4].to_ascii_lowercase());
+            if four_node_q {
+                n = 4;
+            }
             if t.len() < n + 1 {
                 out.push(line);
                 continue;
             }
             let mut u = t.clone();
+            if four_node_q {
+                // the substrate node is not modelled: drop it
+                u.remove(4);
+            }
             if !path.is_empty() {
                 u[0] = format!("{head}.{path}");
             }
-            for w in u.iter_mut().skip(1).take(n) {
+            let kept = if four_node_q { 3 } else { n };
+            for w in u.iter_mut().skip(1).take(kept) {
                 *w = rename_node(w, ports, &prefix);
             }
             if letter == 'B' {
@@ -342,6 +433,108 @@ impl Ctx<'_> {
     }
 }
 
+impl Ctx<'_> {
+    /// An E / G / F / H line as a behavioural (B) source: `VALUE={expr}`, `POLY(n)` (linear terms, or any degree
+    /// with one control) and the current-controlled F / H sources.
+    fn controlled(&self, line: &str, t: &[String], letter: char, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<String, String> {
+        let head = t[0].as_str();
+        let low = line.to_ascii_lowercase();
+        let name = format!("B_{head}{}", if path.is_empty() { String::new() } else { format!(".{path}") });
+        let out_is_voltage = matches!(letter, 'E' | 'H');
+        if t.len() < 4 {
+            return Err(format!("{head}: 引数が足りません"));
+        }
+        let (p, n) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix));
+        let rename_ctl = |s: &str| if path.is_empty() { s.to_string() } else { format!("{s}.{path}") };
+        // TABLE {expr} = (x1,y1) (x2,y2) ...: a piecewise-linear curve of an expression
+        if matches!(letter, 'E' | 'G')
+            && let Some(pos) = low.find("table")
+            && let Some(eq) = low[pos..].find('=').map(|e| e + pos)
+        {
+            let x = rename_expr(line[pos + 5..eq].trim(), ports, prefix, path);
+            let mut pts: Vec<(f64, f64)> = vec![];
+            for chunk in line[eq + 1..].split(')') {
+                if let Some(open) = chunk.find('(') {
+                    let nums: Vec<f64> = chunk[open + 1..].split([',', ' ']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+                    if nums.len() == 2 {
+                        pts.push((nums[0], nums[1]));
+                    }
+                }
+            }
+            if pts.len() < 2 {
+                return Err(format!("{head}: TABLE の点 (x,y) が 2 つ以上ありません"));
+            }
+            pts.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let xs = format!("({x})");
+            let mut expr = format!("({:e})", pts[pts.len() - 1].1);
+            for k in (0..pts.len() - 1).rev() {
+                let ((x0, y0), (x1, y1)) = (pts[k], pts[k + 1]);
+                let seg = if x1 > x0 { format!("({y0:e})+({:e})*({xs}-({x0:e}))", (y1 - y0) / (x1 - x0)) } else { format!("({y0:e})") };
+                expr = format!("if({xs}<({x1:e}),{seg},{expr})");
+            }
+            expr = format!("if({xs}<({:e}),({:e}),{expr})", pts[0].0, pts[0].1);
+            return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
+        }
+        // VALUE=expr
+        if matches!(letter, 'E' | 'G')
+            && let Some(pos) = low.find("value")
+            && low[pos + 5..].trim_start().starts_with('=')
+        {
+            let eq = pos + 5 + low[pos + 5..].find('=').unwrap();
+            let expr = rename_expr(line[eq + 1..].trim(), ports, prefix, path);
+            return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
+        }
+        // the controls: voltage pairs for E / G, source names for F / H
+        let mut idx = 3;
+        let mut poly_n: Option<usize> = None;
+        if t[idx].to_ascii_lowercase().starts_with("poly") {
+            let digits: String = t[idx].chars().filter(|c| c.is_ascii_digit()).collect();
+            poly_n = Some(digits.parse().map_err(|_| format!("{head}: POLY(n) の n を読めません"))?);
+            idx += 1;
+        }
+        let count = poly_n.unwrap_or(1);
+        let mut xs: Vec<String> = vec![];
+        for _ in 0..count {
+            if matches!(letter, 'E' | 'G') {
+                let first = t.get(idx).ok_or_else(|| format!("{head}: 制御するノードが足りません"))?;
+                if first.starts_with('(') {
+                    let inner = first.trim_matches(|c| c == '(' || c == ')');
+                    let mut it = inner.split(',');
+                    let (a, b) = (it.next().unwrap_or("0").trim(), it.next().unwrap_or("0").trim());
+                    xs.push(format!("V({},{})", rename_node(a, ports, prefix), rename_node(b, ports, prefix)));
+                    idx += 1;
+                } else {
+                    let b = t.get(idx + 1).ok_or_else(|| format!("{head}: 制御するノードが足りません"))?;
+                    xs.push(format!("V({},{})", rename_node(first, ports, prefix), rename_node(b, ports, prefix)));
+                    idx += 2;
+                }
+            } else {
+                let ctl = t.get(idx).ok_or_else(|| format!("{head}: 制御する電源の名前がありません"))?;
+                xs.push(format!("I({})", rename_ctl(ctl)));
+                idx += 1;
+            }
+        }
+        let coeffs: Vec<f64> = t[idx..].iter().map(|w| parse_value(w).ok_or_else(|| format!("{head}: 係数「{w}」を数値にできません"))).collect::<Result<_, _>>()?;
+        let expr = if poly_n.is_none() {
+            // plain gain
+            let g = coeffs.first().ok_or_else(|| format!("{head}: 利得がありません"))?;
+            format!("({g:e})*{}", xs[0])
+        } else if count == 1 {
+            // p0 + p1 x + p2 x^2 + ...
+            let x = &xs[0];
+            let terms: Vec<String> = coeffs.iter().enumerate().map(|(k, c)| format!("({c:e})*{}", if k == 0 { "1".to_string() } else { vec![x.as_str(); k].join("*") })).collect();
+            terms.join("+")
+        } else if coeffs.len() == count + 1 {
+            let mut terms = vec![format!("({:e})", coeffs[0])];
+            terms.extend(xs.iter().zip(&coeffs[1..]).map(|(x, c)| format!("({c:e})*{x}")));
+            terms.join("+")
+        } else {
+            return Err(format!("{head}: POLY({count}) の高次の項 (かけ算の項) は未対応です。1 次の係数だけの POLY か、1 つの制御の多項式にしてください"));
+        };
+        Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }))
+    }
+}
+
 /// A flat text for `.subckt sub_name`, or `None` when the text needs no flattening.
 pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<String>, String> {
     if !needs_flatten(text) {
@@ -350,6 +543,7 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     let mut defs: HashMap<String, Def> = HashMap::new();
     let mut global: Env = HashMap::new();
     let mut models = vec![];
+    let mut model_cards = vec![];
     let mut cur: Option<(String, Def)> = None;
     for l in lines {
         let low = l.to_ascii_lowercase();
@@ -361,12 +555,15 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
                 let split = t.iter().skip(2).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:")).map_or(t.len(), |p| p + 2);
                 cur = Some((name, Def { ports: t[2..split].to_vec(), defaults: assignments(&t[split..])?, body: vec![] }));
             }
-            (".ends", Some(_)) => {
+            (".ends" | ".end", Some(_)) => {
                 let (name, d) = cur.take().unwrap();
                 defs.insert(name.to_ascii_lowercase(), d);
             }
             (".model", c) => {
-                models.push(l.clone());
+                model_cards.push(l.clone());
+                if !l.contains(['{', '\'']) {
+                    models.push(l.clone());
+                }
                 if let Some((_, d)) = c {
                     d.body.push(l.clone());
                 }
@@ -383,7 +580,8 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     }
     let top = defs.get(&sub_name.to_ascii_lowercase()).ok_or_else(|| format!(".subckt {sub_name} が見つかりません"))?;
     let ports: HashMap<String, String> = top.ports.iter().map(|p| (p.to_ascii_lowercase(), p.clone())).collect();
-    let body = Ctx { defs: &defs }.expand(top, "", &ports, global, &[], 0)?;
+    let model_names: std::collections::HashSet<String> = model_cards.iter().filter_map(|m| m.split_whitespace().nth(1).map(str::to_ascii_lowercase)).collect();
+    let body = Ctx { defs: &defs, models: &model_names }.expand(top, "", &ports, global, &[], 0)?;
     let mut s = models.join("\n");
     s.push_str(&format!("\n.subckt {sub_name} {}\n{}\n.ends {sub_name}\n", top.ports.join(" "), body.join("\n")));
     Ok(Some(s))

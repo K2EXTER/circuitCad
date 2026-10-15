@@ -78,7 +78,7 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 cgd: get("CGD", 0.0),
             }),
         )),
-        t @ ("NPN" | "PNP") => Ok((
+        t @ ("NPN" | "PNP" | "LPNP") => Ok((
             name,
             Model::Bjt(BjtModel {
                 is: get("IS", 1e-16),
@@ -87,14 +87,23 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 nf: get("NF", 1.0),
                 nr: get("NR", 1.0),
                 rb: get("RB", 0.0),
-                pnp: t == "PNP",
+                pnp: t != "NPN",
             }),
         )),
         "SW" => {
             let d = SwitchModel::default();
             Ok((name, Model::Switch(SwitchModel { ron: get("RON", d.ron), roff: get("ROFF", d.roff), vt: get("VT", d.vt), vw: get("VW", d.vw) })))
         }
-        other => Err(format!("未対応のモデル種別 {other} (D / NPN / PNP / NMOS / PMOS / SW のみ)")),
+        // LTspice's voltage-controlled switch: Von / Voff, or Vt with the hysteresis Vh
+        "VSWITCH" => {
+            let d = SwitchModel::default();
+            let (vt, vw) = match (p.get("VON"), p.get("VOFF")) {
+                (Some(on), Some(off)) => ((on + off) / 2.0, ((on - off).abs() / 2.0).max(1e-3)),
+                _ => (get("VT", d.vt), get("VH", d.vw).abs().max(1e-3)),
+            };
+            Ok((name, Model::Switch(SwitchModel { ron: get("RON", d.ron), roff: get("ROFF", d.roff), vt, vw })))
+        }
+        other => Err(format!("未対応のモデル種別 {other} (D / NPN / PNP / NMOS / PMOS / SW / VSWITCH のみ)")),
     }
 }
 
@@ -103,11 +112,68 @@ pub fn parse_models(text: &str) -> Result<HashMap<String, Model>, String> {
     let mut m = HashMap::new();
     for l in logical_lines(text) {
         if l.to_ascii_lowercase().starts_with(".model") {
-            let (n, model) = parse_model(&l)?;
-            m.insert(n.to_ascii_lowercase(), model);
+            match parse_model(&l) {
+                Ok((n, model)) => {
+                    m.insert(n.to_ascii_lowercase(), model);
+                }
+                // a card of a kind this simulator does not know (JFET, VDMOS ...) matters only if an element uses it
+                Err(e) if e.contains("未対応のモデル種別") => {}
+                Err(e) => return Err(e),
+            }
         }
     }
     Ok(m)
+}
+
+/// The area factor of a diode / transistor line: `AREA=x` or a bare number after the model name (default 1).
+fn area_of(words: &[&str]) -> f64 {
+    words
+        .iter()
+        .find_map(|w| match w.to_ascii_uppercase().strip_prefix("AREA=") {
+            Some(v) => parse_value(v),
+            None => parse_value(w).filter(|_| !w.contains('=')),
+        })
+        .filter(|a| *a > 0.0)
+        .unwrap_or(1.0)
+}
+
+/// Parameters on `.model` cards that this simulator does not use, by model name (the learner is told: the result
+/// is then an approximation of the real part).
+pub fn ignored_model_params(text: &str) -> Vec<(String, Vec<String>)> {
+    let mut out = vec![];
+    for l in logical_lines(text) {
+        let mut it = l.split_whitespace();
+        if !it.next().is_some_and(|d| d.eq_ignore_ascii_case(".model")) {
+            continue;
+        }
+        let name = it.next().unwrap_or("").to_string();
+        let rest: Vec<&str> = it.collect();
+        let rest = rest.join(" ");
+        let (ty, plist) = match rest.find('(') {
+            Some(i) => (rest[..i].trim().to_ascii_uppercase(), rest[i..].to_string()),
+            None => {
+                let mut sp = rest.splitn(2, ' ');
+                (sp.next().unwrap_or("").to_ascii_uppercase(), sp.next().unwrap_or("").to_string())
+            }
+        };
+        let used: &[&str] = match ty.as_str() {
+            "D" => &["IS", "N", "RS", "BV", "IBV"],
+            "NPN" | "PNP" | "LPNP" => &["IS", "BF", "BR", "NF", "NR", "RB"],
+            "NMOS" | "PMOS" => &["KP", "VTO", "LAMBDA", "CGS", "CGD"],
+            "SW" | "VSWITCH" => &["RON", "ROFF", "VT", "VW", "VH", "VON", "VOFF"],
+            _ => continue,
+        };
+        let ignored: Vec<String> = plist
+            .replace(['(', ')', ','], " ")
+            .split_whitespace()
+            .filter_map(|w| w.split_once('=').map(|(k, _)| k.to_ascii_uppercase()))
+            .filter(|k| !used.contains(&k.as_str()))
+            .collect();
+        if !ignored.is_empty() {
+            out.push((name, ignored));
+        }
+    }
+    out
 }
 
 /// Instantiate one `.model` part (a bare diode/transistor model) on `nodes`.
@@ -189,7 +255,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
     for l in &lines[start + 1..] {
         let t: Vec<&str> = l.split_whitespace().collect();
         let head = t[0];
-        if head.eq_ignore_ascii_case(".ends") {
+        if head.eq_ignore_ascii_case(".ends") || head.eq_ignore_ascii_case(".end") {
             return check_current_refs(c, inst);
         }
         if head.starts_with('.') {
@@ -264,16 +330,30 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 need(4)?;
                 let (a, k) = (local(c, t[1]), local(c, t[2]));
                 match models.get(&t[3].to_ascii_lowercase()) {
-                    Some(Model::Diode(m)) => c.add(Element::Diode { name, a, k, model: m.clone() }),
+                    Some(Model::Diode(m)) => {
+                        let mut m = m.clone();
+                        let area = area_of(&t[4..]);
+                        m.is *= area;
+                        m.rs /= area;
+                        c.add(Element::Diode { name, a, k, model: m })
+                    }
                     _ => return Err(format!("{name}: ダイオードモデル {} が見つかりません", t[3])),
                 }
             }
             'Q' => {
                 need(5)?;
                 let (cc, b, e) = (local(c, t[1]), local(c, t[2]), local(c, t[3]));
-                match models.get(&t[4].to_ascii_lowercase()) {
-                    Some(Model::Bjt(m)) => c.add(Element::Bjt { name, c: cc, b, e, model: m.clone() }),
-                    _ => return Err(format!("{name}: トランジスタモデル {} が見つかりません", t[4])),
+                // a fourth node (substrate) is ignored: the model name is then the sixth word
+                let mi = if t.len() >= 6 && !models.contains_key(&t[4].to_ascii_lowercase()) && models.contains_key(&t[5].to_ascii_lowercase()) { 5 } else { 4 };
+                match models.get(&t[mi].to_ascii_lowercase()) {
+                    Some(Model::Bjt(m)) => {
+                        let mut m = m.clone();
+                        let area = area_of(&t[mi + 1..]);
+                        m.is *= area;
+                        m.rb /= area;
+                        c.add(Element::Bjt { name, c: cc, b, e, model: m })
+                    }
+                    _ => return Err(format!("{name}: トランジスタモデル {} が見つかりません (JFET や VDMOS など、未対応の種類のモデルかもしれません)", t[mi])),
                 }
             }
             'M' => {
@@ -296,7 +376,12 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 need(4)?;
                 let (p, n) = (local(c, t[1]), local(c, t[2]));
                 // B1 out 0 V=expression   or   I=expression (the expression may contain spaces)
-                let rest = t[3..].join(" ");
+                // options after the expression (`Rpar=25k tripdt=30n`) are not used: drop them
+                let mut words: Vec<&str> = t[3..].to_vec();
+                while words.len() > 1 && words.last().is_some_and(|w| w.contains('=') && !w.contains(['<', '>', '(', ')', '+', '*', '/']) && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic())) {
+                    words.pop();
+                }
+                let rest = words.join(" ");
                 let (kind, text) = rest
                     .split_once('=')
                     .map(|(k, e)| (k.trim().to_ascii_uppercase(), e.trim().to_string()))
@@ -309,7 +394,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 let expr = Expr::parse(&text, &mut node_of, &branch_of).map_err(|e| format!("{name}: {e}"))?;
                 c.add(Element::BSource { name, p, n, voltage: kind == "V", expr });
             }
-            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G D Q M S B のみ)")),
+            other => return Err(format!("{name}: 素子 {other} は未対応です (R C L V I E G F H D Q M S B と X のみ。A は XSPICE の部品、J は JFET です)")),
         }
     }
     Err(format!(".subckt {sub_name} に .ends がありません"))

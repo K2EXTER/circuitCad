@@ -33,23 +33,33 @@ pub fn unsupported_notes(text: &str) -> Vec<String> {
         } else if low.starts_with(".include") || low.starts_with(".lib") {
             add(format!("「{}」で別ファイルを読む書き方は使えません。そのファイルの中身も貼ってください", l.split_whitespace().next().unwrap_or("")));
         }
-        if low.contains("value=") || low.contains("table(") || low.contains(" table ") {
-            add("VALUE= や TABLE を使う行があります。V=式 / I=式 の B 素子に書き換えてください".into());
-        }
+        // JFET / mutual inductor / transmission line / switches and the like: not read
         if !low.starts_with('.')
-            && let Some(c @ ('J' | 'K' | 'T' | 'F' | 'H' | 'W' | 'O' | 'U' | 'Z')) = l.chars().next().map(|c| c.to_ascii_uppercase())
+            && let Some(c @ ('J' | 'K' | 'T' | 'W' | 'O' | 'U' | 'Z')) = l.chars().next().map(|c| c.to_ascii_uppercase())
         {
-            add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G D Q M S B と、X (入れ子) です", l.split_whitespace().next().unwrap_or("")));
+            add(format!("素子 {c} (「{}」) は未対応です。読めるのは R C L V I E G F H D Q M S B と、X (入れ子) です", l.split_whitespace().next().unwrap_or("")));
         }
     }
     notes
 }
+
+/// Vendor models that are encrypted (LTspice's "Encrypted File", PSpice's "$ENCRYPTED_LIB") cannot be read by anyone but
+/// the simulator they were made for.
+pub fn is_encrypted(text: &str) -> bool {
+    let low = text.to_ascii_lowercase();
+    low.contains("encrypted file") || low.contains("$encrypted_lib") || low.contains("encrypted_lib") || low.contains("begin:encrypted")
+}
+
+pub const ENCRYPTED_MSG: &str = "このモデルは暗号化されていて、ほかのシミュレータでは読めません (メーカーが中身を公開していないモデルです)。メーカーのサイトに、暗号化されていない版 (ngspice 用・LTspice 用の別ファイル) がないか探すか、データシートの数値から作れる部品 (かんたん作成) を使ってください";
 
 impl PartForm {
     /// Read the model into a scratch circuit and try a no-power operating point.
     pub fn trial_read(&self) -> Trial {
         if self.sim == SimChoice::None || self.sim_text.trim().is_empty() {
             return Trial::Err("モデルの文が空です。SPICE モデルを貼ってから押してください".into());
+        }
+        if is_encrypted(&self.sim_text) {
+            return Trial::Err(ENCRYPTED_MSG.into());
         }
         let ports: Vec<&str> = self.sim_pins.split(|c: char| c.is_whitespace() || c == ',').filter(|s| !s.is_empty()).collect();
         if ports.is_empty() {
@@ -75,6 +85,11 @@ impl PartForm {
         }
         let dc = dc_op(&c);
         let mut warn = notes;
+        let ignored = sim_core::ignored_model_params(&self.sim_text);
+        if !ignored.is_empty() {
+            let list: Vec<String> = ignored.iter().take(4).map(|(n, ps)| format!("{n}: {}", ps.iter().take(8).cloned().collect::<Vec<_>>().join(" "))).collect();
+            warn.push(format!("素子モデルのパラメータのうち、使わないものがあります ({})。早期効果・寄生容量・内部抵抗などで、実物とのずれが出ます", list.join(" / ")));
+        }
         if dc.is_err() {
             warn.push("電源をつながない状態の動作点が求まりませんでした。電源が必要なモデルでは普通ですが、回路に置いたら動作点を計算して確かめてください".into());
         }
@@ -127,10 +142,33 @@ R2 out gnd 1k
 
     #[test]
     fn unsupported_elements_and_functions_are_noticed() {
-        let n = unsupported_notes(".func f(x) {x*2}\n.subckt A 1 2\nJ1 1 2 3 JM\nG1 1 2 value={V(1)}\n.ends");
+        let n = unsupported_notes(".func f(x) {x*2}
+.subckt A 1 2
+J1 1 2 3 JM
+G1 1 2 value={V(1)}
+.ends");
         assert!(n.iter().any(|s| s.contains(".func")), "{n:?}");
         assert!(n.iter().any(|s| s.contains("J")), "{n:?}");
-        assert!(n.iter().any(|s| s.contains("VALUE")), "{n:?}");
+        // VALUE= is read now (as a behavioural source), so it is not listed
+        assert!(!n.iter().any(|s| s.contains("VALUE")), "{n:?}");
+    }
+
+    #[test]
+    fn encrypted_models_are_recognised_and_explained() {
+        assert!(is_encrypted("* LTspice Encrypted File
+* Begin:
+ 22 AB 91"));
+        assert!(is_encrypted("* $ENCRYPTED_LIB
+"));
+        assert!(!is_encrypted(".subckt A 1 2
+R1 1 2 1k
+.ends"));
+        let f = form("* LTspice Encrypted File
+ 22 AB", SimChoice::Subckt, "A", "1 2");
+        assert!(matches!(f.trial_read(), Trial::Err(m) if m.contains("暗号化")));
+        let mut f = PartForm { sim_text: "* LTspice Encrypted File
+ 22 AB".into(), ..PartForm::default() };
+        assert!(f.autofill_from_spice().unwrap_err().contains("暗号化"));
     }
 
     #[test]
