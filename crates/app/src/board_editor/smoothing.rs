@@ -13,7 +13,7 @@ impl BoardEditor {
                 .on_hover_text("角の丸みの半径。配線が短いと、入る大きさまで自動で小さくなります");
         });
         ui.checkbox(&mut self.smooth.tapers, "太さの段差をなだらかに").on_hover_text("太い配線と細い配線がつながる所と、配線がパッド・ビアに入る根元に、中間の太さの短い配線を挟みます (パッドより細い配線は、根元がパッドの幅から配線の太さへ徐々に細くなります)。電流が急に絞られず、配線の根元が割れにくくなります");
-        ui.checkbox(&mut self.smooth.forks, "鋭角の分かれ目を丸める").on_hover_text("1つの点から2本の配線が鋭い角度 (8〜60°) で出ている所は、間にできる細いくぼみの先が鋭くとがっています (製造のときにエッチング液がたまりやすい所です)。そのくぼみを先端から銅で埋めて、先を丸くします。配線の経路は変わりません");
+        ui.checkbox(&mut self.smooth.forks, "鋭角の分かれ目を丸める").on_hover_text("1つの点から2本の配線が鋭い角度 (8〜60°) で出ている所は、間にできる細いくぼみの先が鋭くとがっています (製造のときにエッチング液がたまりやすい所です)。そのくぼみを銅で埋めて、先を凹んだ丸い形にします。配線の経路は変わりません");
         let any = self.smooth.corners || self.smooth.tapers || self.smooth.forks;
         if ui.add_enabled(any, egui::Button::new("配線を整える")).on_hover_text("全部の配線に上の設定を適用します。パッドやビアに付いた端は動きません。ルール違反が増える所と、接続が切れる所は変えません。元に戻すで取り消せます").clicked() {
             self.smooth_tracks();

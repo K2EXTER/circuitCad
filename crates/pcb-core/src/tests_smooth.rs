@@ -177,10 +177,22 @@ fn the_notch_between_two_tracks_at_a_sharp_angle_is_filled_and_rounded() {
     assert!(b.tracks[..2].iter().zip(&before).all(|(x, y)| x.a == y.a && x.b == y.b), "the routes are not changed");
     let fill = &b.tracks[2..];
     assert!(fill.len() >= 3);
-    // the fill runs along the line between the two tracks (y = 15), and gets wider away from the pad
-    assert!(fill.iter().all(|t| (t.a.y - 15.0).abs() < 1e-9 && (t.b.y - 15.0).abs() < 1e-9));
-    assert!(fill.windows(2).all(|w| w[1].width >= w[0].width) && fill.last().unwrap().width > fill[0].width);
-    assert!(fill.last().unwrap().width <= 0.26, "ends as wide as a track");
+    // thin tracks side by side along the line between the two tracks (y = 15), none thinner than the rules allow
+    assert!(fill.iter().all(|t| (t.a.y - t.b.y).abs() < 1e-9));
+    assert!(fill.iter().all(|t| t.width >= b.rules.min_track_width - 1e-9));
+    // the fill stops short of a free circle (radius = track width) that touches both tracks' edges: none of it
+    // reaches into that circle, so the gap ends in a round, concave end and not in a bump
+    let theta = 15f64.to_radians();
+    let centre = Point::new(5.0 + (0.25 + 0.125) / theta.sin(), 15.0);
+    let into_circle = fill.iter().any(|t| {
+        let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
+        let u = (((centre.x - t.a.x) * dx + (centre.y - t.a.y) * dy) / (dx * dx + dy * dy).max(1e-12)).clamp(0.0, 1.0);
+        Point::new(t.a.x + dx * u, t.a.y + dy * u).dist(centre) < 0.25 - t.width / 2.0 - 0.01
+    });
+    assert!(!into_circle);
+    // and the fill does reach close to it, on the middle line
+    let nearest = fill.iter().map(|t| t.a.x.max(t.b.x)).fold(0.0, f64::max);
+    assert!(nearest > centre.x - 0.25 - 0.2, "{nearest}");
     assert!(ratsnest(&b).is_empty());
     assert!(drc::check(&b).is_empty());
     // a second run adds nothing

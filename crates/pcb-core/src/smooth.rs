@@ -103,8 +103,12 @@ fn joints(board: &Board) -> Vec<(Point, End, End)> {
 }
 
 /// Two tracks of one width leave `v` at a sharp angle: between them lies a narrow notch whose tip is a sharp
-/// copper corner (an acid trap, and what the acute-angle DRC check looks for). Fill the notch from its tip until it
-/// is as wide as a track, so the gap between the two ends in a round end instead of a point. The routes stay as they are.
+/// copper corner (an acid trap, and what the acute-angle DRC check looks for). Fill the notch from its tip up to a
+/// round, concave end: the gap between the two ends in a circle of free space (radius `w`) that touches both edges,
+/// instead of in a point. The routes stay as they are.
+///
+/// The fill is a row of thin tracks laid along the middle line between the two tracks, side by side across the
+/// notch (it is |y| < x tan(a) - w / (2 cos(a)) for the half angle a); each runs from where the notch is that wide to the circle.
 fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     let (ti, tj) = (&board.tracks[i], &board.tracks[j]);
     let w = ti.width;
@@ -121,30 +125,46 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     let (bx, by) = (u1x + u2x, u1y + u2y);
     let bl = bx.hypot(by);
     let (bx, by) = (bx / bl, by / bl);
-    // along the middle line between the tracks: where the notch begins (the edges of the two tracks cross), and where it is as wide as a track
-    let tip = w / (2.0 * theta.sin());
-    let end = (w / 2.0 + w / (2.0 * theta.cos())) / theta.tan();
-    if end - tip < 0.1 || end > l1.min(l2) / 2.0 {
+    // x runs along the middle line from `v`, y across it. The edges of the notch are y = +-e(x)
+    let (tan, cos, sin) = (theta.tan(), theta.cos(), theta.sin());
+    let edge_x = |y: f64| (y.abs() + w / (2.0 * cos)) / tan; // where the notch is `2 y` wide
+    // the free circle: radius `rho`, touching both edges, centre at `cx` on the middle line
+    let rho = w;
+    let cx = (rho + w / 2.0) / sin;
+    let tip = w / (2.0 * sin);
+    if cx - rho - tip < 0.1 || cx + rho > l1.min(l2) / 2.0 {
         return None;
     }
-    let at = |s: f64| Point::new(v.x + bx * s, v.y + by * s);
-    // done before: a track already ends at the tip
-    if board.tracks.iter().any(|t| t.side == ti.side && (t.a.dist(at(tip)) < 1e-6 || t.b.dist(at(tip)) < 1e-6)) {
+    let at = |x: f64, y: f64| Point::new(v.x + bx * x - by * y, v.y + by * x + bx * y);
+    // the thin tracks: an odd number, the middle one on the middle line
+    let reach = rho * cos; // the circle touches the edges at y = +-reach
+    let min_w = board.rules.min_track_width.max(0.05);
+    // each track is as thin as the rules allow and they overlap, so the round ends trace the circle closely
+    let thick = min_w;
+    let m = ((2.0 * reach / (thick / 3.0)).ceil() as usize).max(3) | 1;
+    let step = 2.0 * reach / m as f64;
+    let end_of = |y: f64| cx - (rho * rho - y * y).max(0.0).sqrt() - thick / 2.0; // short of the circle by the round end
+    // done before: a track already ends where the middle one ends
+    let mark = at(end_of(0.0), 0.0);
+    if board.tracks.iter().any(|t| t.side == ti.side && (t.a.dist(mark) < 1e-6 || t.b.dist(mark) < 1e-6)) {
         return None;
     }
     // the notch lies entirely under a pad: nothing to fill
-    if pinned(board, at(end), ti.side) && pinned(board, at(tip), ti.side) {
+    if pinned(board, at(cx - rho, 0.0), ti.side) && pinned(board, at(tip, 0.0), ti.side) {
         return None;
     }
-    let gap = |s: f64| 2.0 * (s * theta.tan() - w / (2.0 * theta.cos()));
-    const STEPS: usize = 4;
-    let pieces = (0..STEPS)
-        .map(|k| {
-            let (s0, s1) = (tip + (end - tip) * k as f64 / STEPS as f64, tip + (end - tip) * (k + 1) as f64 / STEPS as f64);
-            // never thinner than the rules allow; near the tip the tracks cover more than this anyway
-            Track { side: ti.side, a: at(s0), b: at(s1), width: gap(s1).max(board.rules.min_track_width) }
-        })
-        .collect();
+    let mut pieces = vec![];
+    for k in 0..m {
+        let y = -reach + (k as f64 + 0.5) * step;
+        let (x0, x1) = (edge_x(y) - 0.05, end_of(y));
+        if x1 < x0 {
+            continue;
+        }
+        pieces.push(Track { side: ti.side, a: at(x0, y), b: at(x1, y), width: thick });
+    }
+    if pieces.is_empty() {
+        return None;
+    }
     Some(Edit { trims: vec![], pieces, kind: Kind::Fork, touches: vec![i, j] })
 }
 
