@@ -157,6 +157,7 @@ impl BoardEditor {
                 self.panel_smooth(ui);
                 self.panel_widths(ui);
                 self.panel_pairs(ui);
+                self.panel_lengths(ui);
             });
             egui::CollapsingHeader::new("④ チェックと発注").default_open(true).show(ui, |ui| {
                 if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {

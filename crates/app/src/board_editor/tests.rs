@@ -795,3 +795,29 @@ fn the_automatic_route_goes_round_the_wall_with_the_pad_leads_on_too() {
     assert!(auto.found && !auto.bad, "{auto:?}");
     assert!(auto.tracks.iter().any(|t| t.a.y > 15.7 || t.b.y > 15.7), "{:?}", auto.tracks);
 }
+
+#[test]
+fn lengths_are_matched_with_one_undo_step() {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 60.0, 40.0);
+    for (net, y, x1) in [("A", 10.0, 50.0), ("B", 20.0, 35.0)] {
+        for x in [5.0, x1] {
+            let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 0.8, h: 0.8 }, None, Side::Top);
+            pad.net = net.into();
+            e.board.pads.push(pad);
+        }
+        e.board.tracks.push(Track { side: Side::Top, a: p(5.0, y), b: p(x1, y), width: 0.25 });
+    }
+    let nets = vec!["A".to_string(), "B".to_string()];
+    e.match_lengths(&nets, None);
+    let (la, lb) = (pcb_core::meander::length_of(&e.board, "A"), pcb_core::meander::length_of(&e.board, "B"));
+    assert!((la - lb).abs() < 0.2, "{la} {lb}: {}", e.status);
+    assert!(e.status.contains("長さ合わせ"), "{}", e.status);
+    assert!(drc::check(&e.board).is_empty());
+    e.undo();
+    assert_eq!(e.board.tracks.len(), 2, "one undo step brings back the straight lines");
+    // nothing to do: no undo step is left behind
+    let steps = e.undo.len();
+    e.match_lengths(&["A".to_string()], None);
+    assert_eq!(e.undo.len(), steps);
+}

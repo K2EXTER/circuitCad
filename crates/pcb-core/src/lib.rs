@@ -17,6 +17,7 @@ pub mod fab;
 pub mod footprints;
 pub mod geom;
 pub mod irdrop;
+pub mod meander;
 pub mod gerber;
 pub mod gerber_view;
 pub mod model;
@@ -35,6 +36,8 @@ pub mod zonefill;
 mod tests_autoroute;
 #[cfg(test)]
 mod tests_layers;
+#[cfg(test)]
+mod tests_meander;
 #[cfg(test)]
 mod tests_router;
 #[cfg(test)]

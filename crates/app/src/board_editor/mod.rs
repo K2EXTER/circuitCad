@@ -188,6 +188,10 @@ pub struct BoardEditor {
     hole_drill: f64,
     route_mode: RouteMode,
     bend_flip: bool,
+    /// Length matching (the serpentine panel): the nets chosen, the options and the target length (mm).
+    meander: pcb_core::meander::MeanderOptions,
+    meander_nets: Vec<String>,
+    meander_target: f64,
     /// The Track tool searches a route to the pad under the cursor (round what is in the way), and uses the shove
     /// where there is none. Off: the plain bent line, no shove.
     auto_route: bool,
@@ -277,6 +281,9 @@ impl Default for BoardEditor {
             hole_drill: 3.2,
             route_mode: RouteMode::Angle45,
             bend_flip: false,
+            meander: Default::default(),
+            meander_nets: vec![],
+            meander_target: 0.0,
             auto_route: false,
             router_cache: Default::default(),
             pad_lead: true,
@@ -358,6 +365,7 @@ mod shoving;
 mod smoothing;
 mod padlead;
 mod livepath;
+mod lengths;
 mod pairs;
 mod tools;
 mod file;
