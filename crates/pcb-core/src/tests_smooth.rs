@@ -214,3 +214,30 @@ fn two_tracks_at_a_wide_angle_are_not_a_fork() {
     b.tracks.push(trk((5.0, 15.0), (15.0, 5.0), 0.25)); // 90 degrees apart
     
 }
+
+#[test]
+fn smoothing_one_selected_track_leaves_the_other_alone_even_on_a_shared_pad() {
+    let mut b = fork_board(); // tracks 0 and 1 leave the same pad
+    let lower_end = b.tracks[1].b;
+    let n = b.tracks.len();
+    smooth_selected(&mut b, &SmoothOptions { corners: false, ..Default::default() }, &[0]);
+    assert_eq!(b.tracks[1].a, Point::new(5.0, 15.0), "the other track is untouched");
+    assert_eq!(b.tracks[1].b, lower_end);
+    assert!(b.tracks.len() >= n);
+    // nothing new was added near the other track's far end
+    assert!(b.tracks[n..].iter().all(|t| t.a.dist(lower_end) > 1.0 && t.b.dist(lower_end) > 1.0));
+}
+
+#[test]
+fn two_tracks_from_one_pad_point_do_not_get_overlapping_teardrops() {
+    let mut b = fork_board();
+    for p in &mut b.pads {
+        p.shape = PadShape::Rect { w: 1.0, h: 1.0 };
+    }
+    let n = b.tracks.len();
+    smooth_tracks(&mut b, &SmoothOptions { corners: false, ..Default::default() });
+    // no teardrop at the shared pad (5, 15), only at the two far pads (one each)
+    let near = b.tracks[n..].iter().filter(|t| t.a.dist(Point::new(5.0, 15.0)) < 1.5 || t.b.dist(Point::new(5.0, 15.0)) < 1.5).count();
+    assert_eq!(near, 0);
+    assert!(b.tracks.len() > n, "the far pads still get theirs");
+}

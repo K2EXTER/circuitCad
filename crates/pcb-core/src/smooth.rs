@@ -289,6 +289,11 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     if dw <= MIN_STEP {
         return None;
     }
+    // another track leaves the same place: two teardrops would pile up into a lump
+    let crowded = board.tracks.iter().enumerate().any(|(k, u)| k != i && u.side == t.side && (u.a.dist(v) < top || u.b.dist(v) < top));
+    if crowded {
+        return None;
+    }
     let ramp = dw * 1.5;
     // also what keeps a second run from tapering the same end again: the piece left on the pad is shorter than that
     if exit + ramp > len / 2.0 {
