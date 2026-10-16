@@ -90,7 +90,7 @@ impl PartForm {
 
     fn passive_body(&mut self, ui: &mut egui::Ui) {
         {
-            ui.small("容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます");
+            crate::icons::help_small(ui, "ESR・ESL などを足すと実物に近づきます", "容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます");
             let kind = self.pas_kind;
             egui::Grid::new("pas_grid").num_columns(2).show(ui, |ui| {
                 let row = |ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str, hint: &str| {
@@ -132,7 +132,7 @@ impl PartForm {
                     }
                 }
             });
-            ui.label("インピーダンスの表 (データシートの周波数特性。1行に「周波数 インピーダンス」。周波数の M は MHz)");
+            crate::icons::help_label(ui, "インピーダンスの表", "インピーダンスの表 (データシートの周波数特性。1行に「周波数 インピーダンス」。周波数の M は MHz)");
             ui.add(egui::TextEdit::multiline(&mut self.pas_table).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text(match kind {
                 PassiveKind::Capacitor => "100k 0.2\n1M 0.03\n10M 0.05\n100M 0.4",
                 PassiveKind::Inductor => "100k 6.5\n1M 63\n10M 600\n40M 2.5k\n100M 900",

@@ -128,7 +128,7 @@ impl PartForm {
         let ((la, ha), (lb, hb)) = passive::fit_ranges(kind);
         let fallback = (10f64.powf((la + ha) / 2.0 - 1.0), 10f64.powf((lb + hb) / 2.0 - 1.0));
         let Some(value) = self.pas_number("値", &self.pas_value, false).ok().flatten() else {
-            ui.small("上の「値」を入れると、表の点とモデルの曲線を重ねた絵が出ます");
+            crate::icons::help_small(ui, "「値」を入れるとグラフが出ます", "上の「値」を入れると、表の点とモデルの曲線を重ねた絵が出ます");
             self.pas_sliders(ui);
             return;
         };
@@ -218,7 +218,7 @@ impl PartForm {
             ui.add(egui::TextEdit::singleline(&mut self.pas_tc2).desired_width(70.0));
         });
         if kind != PassiveKind::Resistor || !self.pas_tctable.trim().is_empty() {
-            ui.label("温度特性の表 (グラフから読んだ「温度 変化率(%)」を 1 行ずつ。27℃ を 0% とします)");
+            crate::icons::help_label(ui, "温度特性の表", "温度特性の表 (グラフから読んだ「温度 変化率(%)」を 1 行ずつ。27℃ を 0% とします)");
             ui.add(egui::TextEdit::multiline(&mut self.pas_tctable).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("-55 -3\n85 -4\n125 -9"))
                 .on_hover_text("例: 125 -9 は、125℃ で容量が 9% 減る、という意味です。27℃ に近い点は要りません。点が 1 つなら直線、2 つ以上なら曲がりも合わせます");
             if ui.button("表から温度係数を求める").on_hover_text("表に合うように、TC1 と TC2 を計算して上の欄に入れます").clicked() {
@@ -262,14 +262,14 @@ impl PartForm {
     pub(super) fn pas_saturation(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         ui.label(egui::RichText::new("磁気飽和 (電流が大きいとインダクタンスが下がる)").strong());
-        ui.small("電源用のコイルでは大事な特性です。電流が Isat を超えると、インダクタンスが急に下がり、電流が急に増えます。データシートの Isat (インダクタンスが 30% 下がる電流) か、「インダクタンス - 直流重畳電流」のグラフから読みます。空なら飽和しません");
+        crate::icons::help_small(ui, "電流で下がる特性 (飽和)", "電源用のコイルでは大事な特性です。電流が Isat を超えると、インダクタンスが急に下がり、電流が急に増えます。データシートの Isat (インダクタンスが 30% 下がる電流) か、「インダクタンス - 直流重畳電流」のグラフから読みます。空なら飽和しません");
         ui.horizontal(|ui| {
             ui.label("Isat [A]").on_hover_text("インダクタンスが規定の割合だけ下がる電流 (Saturation Current)。データシートでは 30% 低下が多いです");
             ui.add(egui::TextEdit::singleline(&mut self.pas_isat).desired_width(70.0).hint_text("3"));
             ui.label("そのときの低下 [%]").on_hover_text("Isat で、インダクタンスが何 % 下がるか。30 が多いですが、20 や 10 のデータシートもあります。空なら 30");
             ui.add(egui::TextEdit::singleline(&mut self.pas_ldrop).desired_width(50.0).hint_text("30"));
         });
-        ui.label("インダクタンスと電流の表 (グラフから読んだ「電流 変化率(%)」を 1 行ずつ。マイナスで下がる)");
+        crate::icons::help_label(ui, "インダクタンスと電流の表", "インダクタンスと電流の表 (グラフから読んだ「電流 変化率(%)」を 1 行ずつ。マイナスで下がる)");
         ui.add(egui::TextEdit::multiline(&mut self.pas_sattable).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("1 -5\n3 -30\n6 -60"))
             .on_hover_text("例: 3 -30 は、3A で L が 30% 下がる、という意味です。Isat より少し大きい電流までの点があると確かです");
         if ui.button("表から Isat を求める").on_hover_text("表に合うように、Isat (30% 低下) を計算して上の欄に入れます").clicked() {

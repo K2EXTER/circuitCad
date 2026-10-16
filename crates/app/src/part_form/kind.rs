@@ -55,7 +55,7 @@ impl PartForm {
                         }
                     }
                 });
-                ui.small("名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます");
+                crate::icons::help_small(ui, "名前の付け方", "名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます");
             }
             Some(t @ (PartType::Resistor | PartType::Inductor)) => {
                 ui.horizontal_wrapped(|ui| {

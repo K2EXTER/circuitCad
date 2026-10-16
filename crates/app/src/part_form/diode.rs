@@ -95,7 +95,7 @@ impl PartForm {
 
     pub(super) fn diode_ui(&mut self, ui: &mut egui::Ui) {
         ui.label(egui::RichText::new("かんたん作成: ダイオードをデータシートの数値からつくる").strong());
-        ui.small("メーカーのデータシートには SPICE モデルが載っていないことが多いので、グラフの数字から IS・N・RS を決めて、モデルを作ります");
+        crate::icons::help_small(ui, "グラフの数字からモデルを作ります", "メーカーのデータシートには SPICE モデルが載っていないことが多いので、グラフの数字から IS・N・RS を決めて、モデルを作ります");
         egui::CollapsingHeader::new("考え方: IS・N・RS とは? (はじめての人はここから)").id_salt("dio_howto").show(ui, |ui| {
             for t in [
                 "ダイオードの電圧と電流の関係は、V = N × 26mV × ln(I / IS) + I × RS という式で近似できます。この 3 つの数 (IS・N・RS) を決めれば、実物に近い曲線になります。",
@@ -108,7 +108,7 @@ impl PartForm {
                 ui.label(egui::RichText::new(format!("・{t}")).small());
             }
         });
-        ui.label("① データシートの「順方向特性 (Forward Characteristics)」のグラフから、電流と電圧の点を読みます (1行に「電流 電圧」、電流が離れた 3 点がおすすめ)");
+        crate::icons::help_label(ui, "① 順方向特性の点", "① データシートの「順方向特性 (Forward Characteristics)」のグラフから、電流と電圧の点を読みます (1行に「電流 電圧」、電流が離れた 3 点がおすすめ)");
         ui.add(egui::TextEdit::multiline(&mut self.dio_points).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("10m 0.70\n100m 0.79\n1 0.92"))
             .on_hover_text("グラフの縦軸 (電流) と横軸 (電圧) を読みます。電流は小・中・大の 3 点 (10mA・100mA・定格電流など)。m は 1000 分の 1。例: 100m 0.79 は 100mA のとき 0.79V");
         ui.horizontal(|ui| {
@@ -144,7 +144,7 @@ impl PartForm {
             ui.add(egui::TextEdit::singleline(&mut self.dio_ir).desired_width(80.0).hint_text("5u"));
             ui.end_row();
         });
-        ui.label("④ 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
+        crate::icons::help_label(ui, "④ 高い周波数で効く値", "④ 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
         egui::Grid::new("dio_charge").num_columns(2).show(ui, |ui| {
             ui.label("接合容量 Cj [F]").on_hover_text("データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)");
             ui.horizontal(|ui| {

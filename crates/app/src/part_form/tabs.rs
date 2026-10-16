@@ -8,9 +8,9 @@ impl PartForm {
         let passive = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor));
         let diode = self.ptype == Some(PartType::Diode) && self.glyph != "zener";
         if passive {
-            ui.small("下の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
+            crate::icons::help_small(ui, "名前・値・説明は自動で入ります", "下の「部品を作る」を押すと、名前・値・説明が自動で入ります。直してもかまいません");
         } else if diode {
-            ui.small("部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
+            crate::icons::help_small(ui, "部品名はモデルの名前にも使います", "部品名は、モデルの名前にも使います。先に入れてください (例: 1N4007)");
         }
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
@@ -48,15 +48,15 @@ impl PartForm {
             Some(PartType::Ic) => {
                 ui.label(egui::RichText::new("かんたん作成 (ひな形)").strong());
                 self.template_ui(ui);
-                ui.small("ほかの IC は、② ピン → ③ 基板の形 → ④ シミュレーション の順に入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
+                crate::icons::help_small(ui, "入力の順番", "ほかの IC は、② ピン → ③ 基板の形 → ④ シミュレーション の順に入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
             }
             Some(PartType::Transistor | PartType::Diode | PartType::Connector) if !diode => {
-                ui.small("② ピン → ③ 基板の形 → ④ シミュレーション の順に、データシートを見ながら入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
+                crate::icons::help_small(ui, "入力の順番", "② ピン → ③ 基板の形 → ④ シミュレーション の順に、データシートを見ながら入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
             }
             Some(_) => {}
             None => {
                 ui.label(egui::RichText::new("かんたん作成 (テンプレート)").strong());
-                ui.small("上の「部品の種類」を選ぶと、その種類に合わせた入力欄に変わります。チップ部品や充電IC は、データシートの数字を入れるだけで、下の欄を自動で埋められます");
+                crate::icons::help_small(ui, "種類で入力欄が変わります", "上の「部品の種類」を選ぶと、その種類に合わせた入力欄に変わります。チップ部品や充電IC は、データシートの数字を入れるだけで、下の欄を自動で埋められます");
                 self.passive_ui(ui);
                 self.template_ui(ui);
             }
@@ -65,7 +65,7 @@ impl PartForm {
 
     /// The tab of the data sheet's ratings.
     pub(super) fn tab_ratings(&mut self, ui: &mut egui::Ui) {
-            ui.label("部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
+            crate::icons::help_label(ui, "データシートの調べ方", "部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
             // the kind chosen at the top decides which items to look up; only an IC (op-amp, regulator ...) or no choice
             // at all leaves the question open
             let decided = self.checklist_for_type();
@@ -109,7 +109,7 @@ impl PartForm {
             let polar = self.pas_polar || filled;
             if polar || self.ptype.is_none() {
             egui::CollapsingHeader::new("電解コンデンサの項目 (リップル電流と寿命)").id_salt("rt_electrolytic").default_open(polar).show(ui, |ui| {
-                ui.small("入れると、過渡解析の結果に、このコンデンサに流れたリップル電流が定格を超えていないか、推定寿命がどれくらいかが出ます。データシートの「定格リップル電流」「寿命 (耐久性)」「リップル電流の周波数補正係数」の表から写します");
+                crate::icons::help_small(ui, "リップル電流・寿命の入れ方", "入れると、過渡解析の結果に、このコンデンサに流れたリップル電流が定格を超えていないか、推定寿命がどれくらいかが出ます。データシートの「定格リップル電流」「寿命 (耐久性)」「リップル電流の周波数補正係数」の表から写します");
                 egui::Grid::new("rt_electrolytic_grid").num_columns(2).show(ui, |ui| {
                     ui.label("定格リップル電流 [A rms]").on_hover_text("コンデンサに流してよい、交流分の実効値 (データシートの Rated Ripple Current)。mA rms で書いてあるときは 540m のように入れます。最高温度 (105℃ など) での値です");
                     ui.horizontal(|ui| {
@@ -131,7 +131,7 @@ impl PartForm {
                 });
             });
             }
-            ui.label("そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)");
+            crate::icons::help_label(ui, "そのほかの情報", "そのほかの情報 (1行に1つ。「項目 | 値 | 条件」。値が空の行は、まだ調べていない項目として残ります)");
             ui.add(egui::TextEdit::multiline(&mut self.rt_rows).desired_rows(5).desired_width(f32::INFINITY).hint_text("順方向電圧 | 0.9V | IF = 1A"))
                 .on_hover_text("定格・代表値を、データシートのまま書き写します。条件 (電流や温度) も一緒に書くと、あとで比べやすくなります。部品の一覧でポインタを置いたときに出ます");
             let (max_given, rows_given, rows_open) = self.ratings_progress();
@@ -149,7 +149,7 @@ impl PartForm {
     /// The tab of the simulation model.
     pub(super) fn tab_sim(&mut self, ui: &mut egui::Ui) {
             ui.label("シミュレーションモデル (部品の特性)");
-            ui.small("メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
+            crate::icons::help_small(ui, "SPICE モデルを貼ると自動入力", "メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
                 ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
@@ -222,7 +222,7 @@ impl PartForm {
                     ui.label("ノード順のピン番号");
                     ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
                 });
-                ui.label("このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
+                crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
                 ui.add(
                     egui::TextEdit::multiline(&mut self.sim_limits)
                         .desired_rows(3)
@@ -236,13 +236,13 @@ impl PartForm {
 
     /// The tab of the pins.
     pub(super) fn tab_pins(&mut self, ui: &mut egui::Ui) {
-            ui.label("ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
+            crate::icons::help_label(ui, "ピン (1行に「番号 名前 [向き]」)", "ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
             ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
     }
 
     /// The tab of the board shape: package, thermal pad, body, extra pads and holes.
     pub(super) fn tab_package(&mut self, ui: &mut egui::Ui) {
-            ui.label("パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
+            crate::icons::help_label(ui, "パッケージ", "パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
                 ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
@@ -339,7 +339,7 @@ impl PartForm {
                 });
             }
             egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
-                ui.small("USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
+                crate::icons::help_small(ui, "固定用の脚・穴について", "USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
                 ui.small(EXTRAS_HELP);
                 ui.horizontal_wrapped(|ui| {
                     ui.label("例を足す:");

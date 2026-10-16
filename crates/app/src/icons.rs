@@ -143,3 +143,19 @@ pub fn help(ui: &mut egui::Ui, text: &str) {
         .on_hover_cursor(egui::CursorIcon::Help)
         .on_hover_text(text);
 }
+
+/// A short caption (small text) followed by a "(?)" that holds the long explanation.
+pub fn help_small(ui: &mut egui::Ui, short: &str, long: &str) {
+    ui.horizontal(|ui| {
+        ui.small(short);
+        help(ui, long);
+    });
+}
+
+/// The same with normal-size text (for a heading above an input box).
+pub fn help_label(ui: &mut egui::Ui, short: &str, long: &str) {
+    ui.horizontal(|ui| {
+        ui.label(short);
+        help(ui, long);
+    });
+}

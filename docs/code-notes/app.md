@@ -36,7 +36,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 - 基板が回路図とずれているかは `BoardEditor::schematic_diff`(取込と同じ `netlist_of` で、追加/削除/値・形/つなぎを数える。回路図と基板の `rev` でキャッシュ)で、基板タブの ● と基板パネルの橙の文に出る。
 
 ## ファイル構成の補足 (main.rs まわり)
-- `main.rs` ウィンドウ・メニュー(`App`)、`tips.rs` `TIPS`(豆知識)、`args.rs` 引数処理、`files.rs` 保存・読込・未保存の確認、`screenshot.rs` 画面保存、`startup.rs` クラッシュログ・フォント、`prefs.rs` 表示設定(アイコンのみ・ヒント表示)を `%APPDATA%\circuitCad\settings.json` に保存(設定メニューで変えたとき書く。`--icons-only` はその起動だけ上書き)、`schematic/symbols.rs` の `paint_kind_preview` / `paint_lines_preview` は部品リストの記号プレビュー(基本部品は `symbol`、ライブラリ部品は `symbol_lines`)、`icons.rs` ツールのアイコン(painterで描く。フォント不要)と「アイコン+文字/アイコンのみ」の切替(`icon_button`、設定メニュー、`--icons-only`)。ツールバーに足すときは `Icon` を増やして `icon_button` を使う、`tests/` 統合テスト(`flow.rs`)とサンプル生成(`examples.rs` の `write_*`、`--ignored` で実行)。
+- `main.rs` ウィンドウ・メニュー(`App`)、`tips.rs` `TIPS`(豆知識)、`args.rs` 引数処理、`files.rs` 保存・読込・未保存の確認、`screenshot.rs` 画面保存、`startup.rs` クラッシュログ・フォント、`prefs.rs` 表示設定(アイコンのみ・ヒント表示)を `%APPDATA%\circuitCad\settings.json` に保存(設定メニューで変えたとき書く。`--icons-only` はその起動だけ上書き)、`schematic/symbols.rs` の `paint_kind_preview` / `paint_lines_preview` は部品リストの記号プレビュー(基本部品は `symbol`、ライブラリ部品は `symbol_lines`)、`icons.rs` の `help` / `help_small` / `help_label` は長い説明を「(?)」のホバーにまとめる(短い見出し+(?)。部品作成フォームの説明文はこれ)、ツールのアイコン(painterで描く。フォント不要)と「アイコン+文字/アイコンのみ」の切替(`icon_button`、設定メニュー、`--icons-only`)。ツールバーに足すときは `Icon` を増やして `icon_button` を使う、`tests/` 統合テスト(`flow.rs`)とサンプル生成(`examples.rs` の `write_*`、`--ignored` で実行)。
 - 「ファイル → 画面をPNGで保存」は eframe の Screenshot(`finish_screenshot`)で、起動引数 `--screenshot file.png` は数フレーム後に撮って終了(画面の確認・文書づくり用)。
 
 ## 部品作成フォーム・ライブラリ・電源値フォーム

@@ -37,7 +37,7 @@ impl PartForm {
     pub(super) fn thru_ui(&mut self, ui: &mut egui::Ui) {
         let open = self.ptype == Some(PartType::Diode) || self.ptype == Some(PartType::Resistor);
         egui::CollapsingHeader::new("リード付き部品: 外形寸法から穴とピッチを決める (推奨ランドパターンが無いとき)").id_salt("thru_help").default_open(open).show(ui, |ui| {
-            ui.small("ダイオードや抵抗のデータシートには、推奨ランドパターンが無く、外形寸法 (本体の大きさとリードの太さ) だけが載っていることがよくあります。その数字から、穴径・パッド径・穴の間隔を決めます");
+            crate::icons::help_small(ui, "外形寸法から穴とパッドを決めます", "ダイオードや抵抗のデータシートには、推奨ランドパターンが無く、外形寸法 (本体の大きさとリードの太さ) だけが載っていることがよくあります。その数字から、穴径・パッド径・穴の間隔を決めます");
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.thru_radial, false, "軸方向 (ダイオード・抵抗)").on_hover_text("本体の両端からリードが出ている形。基板に寝かせて、リードを折り曲げて挿します");
                 ui.selectable_value(&mut self.thru_radial, true, "ラジアル (LED・電解コンデンサ)").on_hover_text("リードが本体の同じ側から出ている形。リードの間隔は、データシートにあります");
