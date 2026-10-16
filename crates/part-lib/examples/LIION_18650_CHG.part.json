@@ -3,7 +3,7 @@
   "category": "電池",
   "description": "充電もできるリチウムイオン電池 18650 1セル 3.7V (2600mAh、内部抵抗 0.06Ω)。残量 20% の状態から始まり、充電器をつなぐと残量が増え、満充電 (4.2V) で止まります。保護回路は含みません。ピン 1=+ 2=-",
   "prefix": "BT",
-  "footprint_name": "BatteryHolder_18650",
+  "footprint_name": "Battery_Wire_1x2_P2.54",
   "pins": [
     {
       "number": "1",
@@ -24,18 +24,18 @@
         "x": 0,
         "y": 0,
         "shape": "circle",
-        "w": 2.4,
-        "h": 2.4,
-        "drill": 1.2
+        "w": 2.0,
+        "h": 2.0,
+        "drill": 1.0
       },
       {
         "pin": "2",
-        "x": 77,
+        "x": 2.54,
         "y": 0,
         "shape": "circle",
-        "w": 2.4,
-        "h": 2.4,
-        "drill": 1.2
+        "w": 2.0,
+        "h": 2.0,
+        "drill": 1.0
       }
     ]
   },
