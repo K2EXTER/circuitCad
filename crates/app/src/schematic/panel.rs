@@ -160,7 +160,14 @@ impl SchEditor {
                         Kind::Npn => "トランジスタ".to_string(),
                         _ => k.label(),
                     };
-                    egui::CollapsingHeader::new(title).id_salt(("part_tree", k.label())).default_open(false).show(ui, |ui| {
+                    let id = ui.make_persistent_id(("part_tree", k.label()));
+                    let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+                    let mut toggled = false;
+                    state.show_header(ui, |ui| {
+                        let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 22.0), egui::Sense::click());
+                        super::symbols::paint_kind_preview(ui.painter(), rect, *k, ui.visuals().text_color());
+                        toggled = (pic | ui.add(egui::Label::new(title).sense(egui::Sense::click()))).clicked();
+                    }).body(|ui| {
                         click = kind_row(ui, selected, *k, &format!("{} (基本)", k.label())).on_hover_text(kind_tip(*k)).clicked();
                         for (family, parts) in cap_kinds.iter() {
                             egui::CollapsingHeader::new(*family)
@@ -177,6 +184,11 @@ impl SchEditor {
                                 });
                         }
                     });
+                    if toggled {
+                        let mut st = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
+                        st.toggle(ui);
+                        st.store(ui.ctx());
+                    }
                 } else {
                     click = kind_row(ui, selected, *k, &k.label()).on_hover_text(kind_tip(*k)).clicked();
                 }
@@ -709,6 +721,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
 /// One row of the basic parts list: a small picture of the symbol, then the name.
 fn kind_row(ui: &mut egui::Ui, selected: bool, kind: Kind, text: &str) -> egui::Response {
     ui.horizontal(|ui| {
+        ui.add_space(ui.spacing().icon_width + ui.spacing().item_spacing.x);
         let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 22.0), egui::Sense::click());
         let color = if selected { ui.visuals().selection.stroke.color } else { ui.visuals().text_color() };
         super::symbols::paint_kind_preview(ui.painter(), rect, kind, color);
