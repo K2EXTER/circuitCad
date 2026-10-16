@@ -26,11 +26,14 @@ pub struct RouteOptions {
     /// Run next to this net (of an already routed differential partner), centre to centre `distance` mm away:
     /// cells at that distance are cheaper, so the new line follows the old one.
     pub follow: Option<(String, f64)>,
+    /// Leave and enter rectangular pads at a right angle to their edge for this many mm (the route starts and ends at
+    /// a point that far outside the pad, straight out of one of its four edges). `None`: from anywhere around the pad.
+    pub pad_lead: Option<f64>,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None }
     }
 }
 
@@ -343,14 +346,67 @@ fn pad_cells(grid: &Grid, pad: &Pad, net: i32) -> Vec<(usize, usize, usize)> {
     out
 }
 
+/// Where a search starts or ends at a pad: a grid cell, the cost of getting from the pad to it, and (for a pad that is
+/// left at a right angle) the point outside its edge that the straight lead from the pad ends at.
+#[derive(Clone, Copy)]
+struct EndCell {
+    l: usize,
+    i: usize,
+    j: usize,
+    cost: f32,
+    lead: Option<Point>,
+}
+
+/// The cells a route may start or end in for `pad`. With a lead length, a rectangular or oval pad is left straight
+/// out of one of its four edges (the lead is a clear straight line of cells); where no edge has room, or for other pads,
+/// it is any cell next to the pad.
+fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>) -> Vec<EndCell> {
+    if let Some(len) = lead
+        && !matches!(pad.shape, PadShape::Circle { .. })
+    {
+        let (w, h) = pad.shape.size();
+        let mut out = vec![];
+        for n in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
+            let half = if n.0 != 0.0 { w / 2.0 } else { h / 2.0 };
+            let q = Point::new(pad.pos.x + n.0 * (half + len), pad.pos.y + n.1 * (half + len));
+            let (i, j) = grid_cell(grid, q);
+            let cell_pos = grid.pos(i, j);
+            if cell_pos.dist(q) > grid.g {
+                continue; // outside the grid
+            }
+            for l in pad_layers(pad, grid.layers.len()) {
+                // every cell along the lead, from the pad's edge to the end, is free for this net
+                let steps = ((half + len) / (grid.g * 0.5)).ceil() as usize;
+                let clear = (0..=steps).all(|k| {
+                    let t = (half + len) * k as f64 / steps as f64;
+                    let p = Point::new(pad.pos.x + n.0 * t, pad.pos.y + n.1 * t);
+                    // points inside the pad's own copper are fine: only the cells outside it count
+                    if t <= half {
+                        return true;
+                    }
+                    let (ci, cj) = grid_cell(grid, p);
+                    passable(grid.trk[l][cj * grid.nx + ci], net)
+                });
+                if clear && passable(grid.trk[l][j * grid.nx + i], net) {
+                    out.push(EndCell { l, i, j, cost: (half + len) as f32 + cell_pos.dist(q) as f32, lead: Some(q) });
+                }
+            }
+        }
+        if !out.is_empty() {
+            return out;
+        }
+    }
+    pad_cells(grid, pad, net).into_iter().map(|(l, i, j)| EndCell { l, i, j, cost: grid.pos(i, j).dist(pad.pos) as f32, lead: None }).collect()
+}
+
 fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Track>, Vec<Via>)> {
     let mut nets: Vec<String> = vec![];
     let grid = build_grid(board, opt, &mut nets)?;
     let net = nets.iter().position(|n| *n == w.net)? as i32 + 1;
     let pad_a = board.pads.iter().find(|p| p.pos == w.a && p.net == w.net)?;
     let pad_b = board.pads.iter().find(|p| p.pos == w.b && p.net == w.net)?;
-    let starts = pad_cells(&grid, pad_a, net);
-    let goals = pad_cells(&grid, pad_b, net);
+    let starts = end_cells(&grid, pad_a, net, opt.pad_lead);
+    let goals = end_cells(&grid, pad_b, net, opt.pad_lead);
     if starts.is_empty() || goals.is_empty() {
         return None;
     }
@@ -365,8 +421,8 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
         (cell / (nx * ny), cell % nx, (cell / nx) % ny, d)
     };
     let mut is_goal = vec![false; nl * nx * ny];
-    for &(l, i, j) in &goals {
-        is_goal[(l * ny + j) * nx + i] = true;
+    for g in &goals {
+        is_goal[(g.l * ny + g.j) * nx + g.i] = true;
     }
     let gc = grid_cell(&grid, pad_b.pos);
     let following = !grid.near.is_empty();
@@ -380,12 +436,12 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     let mut cost = vec![f32::INFINITY; n_states];
     let mut parent = vec![u32::MAX; n_states];
     let mut heap = BinaryHeap::new();
-    for &(l, i, j) in &starts {
-        let s = enc(l, i, j, NO_DIR);
-        let c = grid.pos(i, j).dist(pad_a.pos) as f32;
+    for e in &starts {
+        let s = enc(e.l, e.i, e.j, NO_DIR);
+        let c = e.cost;
         if c < cost[s as usize] {
             cost[s as usize] = c;
-            heap.push(Node { f: c + h(i, j), s });
+            heap.push(Node { f: c + h(e.i, e.j), s });
         }
     }
 
@@ -467,6 +523,10 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
         })
         .collect();
 
+    // the leads out of and into the pads (where the search used them)
+    let (first, last_state) = (dec(states[0]), dec(*states.last().unwrap()));
+    let start_lead = starts.iter().find(|e| (e.l, e.i, e.j) == (first.0, first.1, first.2)).and_then(|e| e.lead);
+    let end_lead = goals.iter().find(|e| (e.l, e.i, e.j) == (last_state.0, last_state.1, last_state.2)).and_then(|e| e.lead);
     // straight runs become one track each; a layer change becomes a via
     let mut tracks = vec![];
     let mut vias = vec![];
@@ -475,7 +535,13 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
             tracks.push(Track { side: grid.side(l), a, b, width: opt.track_width });
         }
     };
-    emit(cells[0].0, pad_a.pos, cells[0].1);
+    match start_lead {
+        Some(q) => {
+            emit(cells[0].0, pad_a.pos, q);
+            emit(cells[0].0, q, cells[0].1);
+        }
+        None => emit(cells[0].0, pad_a.pos, cells[0].1),
+    }
     let mut run_from = cells[0].1;
     let mut run_dir: Option<usize> = None;
     for k in 1..cells.len() {
@@ -501,7 +567,13 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     }
     let last = cells[cells.len() - 1];
     emit(last.0, run_from, last.1);
-    emit(last.0, last.1, pad_b.pos);
+    match end_lead {
+        Some(q) => {
+            emit(last.0, last.1, q);
+            emit(last.0, q, pad_b.pos);
+        }
+        None => emit(last.0, last.1, pad_b.pos),
+    }
     Some((tracks, vias))
 }
 

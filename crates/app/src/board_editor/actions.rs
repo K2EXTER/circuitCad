@@ -24,7 +24,7 @@ impl BoardEditor {
         }
         self.checkpoint();
         let tracks_before = self.board.tracks.len();
-        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None };
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
         // differential pairs first, side by side; the rest afterwards
         let mut pair_routed = 0;
         let mut pair_failed = vec![];

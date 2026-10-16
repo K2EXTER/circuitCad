@@ -92,3 +92,41 @@ fn timing_on_a_large_board() {
         println!("path {label:<14} {:?}  found: {}", t.elapsed(), res.is_some());
     }
 }
+
+#[test]
+fn the_autorouter_leaves_and_enters_rectangular_pads_straight_out_of_an_edge_when_asked() {
+    let build = || {
+        let mut b = Board::new("t", 40.0, 30.0);
+        pad(&mut b, 5.0, 5.0, "A");
+        pad(&mut b, 30.0, 22.0, "A");
+        b
+    };
+    let axis_aligned = |t: &Track| (t.a.x - t.b.x).abs() < 1e-9 || (t.a.y - t.b.y).abs() < 1e-9;
+    let mut b = build();
+    let opt = RouteOptions { pad_lead: Some(0.5), ..Default::default() };
+    let r = autoroute(&mut b, &opt, None);
+    assert_eq!(r.routed, 1);
+    assert!(crate::ratsnest::ratsnest(&b).is_empty());
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    for p in [Point::new(5.0, 5.0), Point::new(30.0, 22.0)] {
+        // the track on the pad runs straight out of its edge: the pad's half size 0.5 plus the lead 0.5
+        let t = b.tracks.iter().find(|t| t.a == p || t.b == p).unwrap();
+        assert!(axis_aligned(t) && (t.a.dist(t.b) - 1.0).abs() < 1e-9, "{t:?}");
+    }
+    // without it, the first piece is the router's own: usually a short slanted link
+    let mut c = build();
+    autoroute(&mut c, &RouteOptions::default(), None);
+    assert!(c.tracks.iter().any(|t| (t.a == Point::new(5.0, 5.0) || t.b == Point::new(5.0, 5.0)) && !axis_aligned(t) || t.a.dist(t.b) < 0.95));
+}
+
+#[test]
+fn a_lead_that_does_not_fit_falls_back_to_any_cell_next_to_the_pad() {
+    // two pads 1.5 mm apart: no room for two leads of 0.5 mm plus the pads' half sizes between them, but the route is still found
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 5.0, "A");
+    pad(&mut b, 6.5, 5.0, "A");
+    let opt = RouteOptions { pad_lead: Some(0.5), ..Default::default() };
+    assert_eq!(autoroute(&mut b, &opt, None).routed, 1);
+    assert!(crate::ratsnest::ratsnest(&b).is_empty());
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+}
