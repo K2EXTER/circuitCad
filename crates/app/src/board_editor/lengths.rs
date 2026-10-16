@@ -7,8 +7,7 @@ use pcb_core::meander::{self, MeanderStyle};
 impl BoardEditor {
     pub(super) fn panel_lengths(&mut self, ui: &mut egui::Ui) {
         let nets: Vec<(String, f64)> = self.board_nets().into_iter().map(|n| (n.clone(), meander::length_of(&self.board, &n))).filter(|(_, l)| *l > 0.0).collect();
-        egui::CollapsingHeader::new(format!("長さ合わせ (蛇行) ({})", self.meander_nets.len())).id_salt("meander").default_open(false).show(ui, |ui| {
-            ui.small("同時に届いてほしい線 (バス、クロックとデータなど) の長さを、配線の一部に蛇行を入れてそろえます");
+        egui::CollapsingHeader::new(format!("長さ合わせ (蛇行) ({}) (?)", self.meander_nets.len())).id_salt("meander").default_open(false).show(ui, |ui| {
             if nets.is_empty() {
                 ui.small("配線されたネットがありません");
                 return;
@@ -41,7 +40,7 @@ impl BoardEditor {
                     self.match_lengths(&picked, Some(self.meander_target));
                 }
             });
-        });
+        }).header_response.on_hover_text("同時に届いてほしい線 (バス、クロックとデータなど) の長さを、配線の一部に蛇行を入れてそろえます");
     }
 
     pub(super) fn match_lengths(&mut self, nets: &[String], target: Option<f64>) {

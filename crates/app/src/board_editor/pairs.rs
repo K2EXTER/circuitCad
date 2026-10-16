@@ -5,8 +5,7 @@ use pcb_core::diffpair::{pair_report, suggest_pairs, tune_length, DiffPair};
 
 impl BoardEditor {
     pub(super) fn panel_pairs(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new(format!("差動ペア ({})", self.board.diff_pairs.len())).id_salt("diff_pairs").default_open(false).show(ui, |ui| {
-            ui.small("USB の D+ / D- のように、2本で1つの信号を運ぶ配線です。並べて同じ長さで引くと、ノイズに強くなります。");
+        egui::CollapsingHeader::new(format!("差動ペア ({}) (?)", self.board.diff_pairs.len())).id_salt("diff_pairs").default_open(false).show(ui, |ui| {
             let nets = self.board_nets();
             ui.horizontal(|ui| {
                 if ui.button("名前から探す").on_hover_text("ネット名が USB_DP / USB_DM、TX_P / TX_N、D+ / D- のように対になっているものを、ペアにします").clicked() {
@@ -96,7 +95,7 @@ impl BoardEditor {
                     }
                 }
             }
-        });
+        }).header_response.on_hover_text("USB の D+ / D- のように、2本で1つの信号を運ぶ配線です。並べて同じ長さで引くと、ノイズに強くなります。");
     }
 
     /// Route one pair side by side. One undo step; nothing changes (and no undo step) when nothing could be routed.

@@ -136,3 +136,10 @@ pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, e
     let tip = if icon_only() { format!("{label}\n{tip}") } else { tip.to_owned() };
     resp.on_hover_text(tip)
 }
+
+/// A small "(?)" mark whose hover text carries an explanation that would otherwise take a line of the panel.
+pub fn help(ui: &mut egui::Ui, text: &str) {
+    ui.add(egui::Label::new(egui::RichText::new("(?)").weak()).sense(egui::Sense::hover()))
+        .on_hover_cursor(egui::CursorIcon::Help)
+        .on_hover_text(text);
+}
