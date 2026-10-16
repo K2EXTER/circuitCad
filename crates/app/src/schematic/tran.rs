@@ -213,20 +213,48 @@ impl SchEditor {
                         }
                         egui::CollapsingHeader::new("ステップ応答の指標").show(ui, |ui| {
                             ui.small("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)");
+                            // one column per signal, one row per figure (same layout as the table above)
+                            let mut metrics = vec![];
+                            let mut failed = vec![];
                             for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
                                 let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
                                 match step_metrics(&res.time, &sg.values) {
-                                    Ok(m) => {
-                                        ui.small(format!("{name} (最終値 {})", eng(m.final_value, "V")));
-                                        let dash = "—".to_string();
-                                        ui.small(format!("  立ち上がり {}", m.rise_time.map_or(dash.clone(), |t| eng(t, "s")))).on_hover_text("10% から 90% まで変わる時間");
-                                        ui.small(format!("  行き過ぎ {:.1} %", m.overshoot_pct)).on_hover_text("最終値を超えた量。0% なら滑らかに近づいています");
-                                        ui.small(format!("  整定 {}", m.settling_time.map_or(dash, |t| eng(t, "s")))).on_hover_text("10% に達してから ±2% に収まるまでの時間");
-                                    }
-                                    Err(why) => {
-                                        ui.small(format!("{name}: {why}"));
-                                    }
+                                    Ok(m) => metrics.push((name.to_string(), m)),
+                                    Err(why) => failed.push(format!("{name}: {why}")),
                                 }
+                            }
+                            if !metrics.is_empty() {
+                                egui::Grid::new("step_metrics_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                    let dash = || "—".to_string();
+                                    ui.label("");
+                                    for (name, _) in &metrics {
+                                        ui.strong(name);
+                                    }
+                                    ui.end_row();
+                                    ui.label("最終値").on_hover_text("波形が落ち着いた先の値です");
+                                    for (_, m) in &metrics {
+                                        ui.label(eng(m.final_value, "V"));
+                                    }
+                                    ui.end_row();
+                                    ui.label("立ち上がり").on_hover_text("10% から 90% まで変わる時間");
+                                    for (_, m) in &metrics {
+                                        ui.label(m.rise_time.map_or_else(dash, |t| eng(t, "s")));
+                                    }
+                                    ui.end_row();
+                                    ui.label("行き過ぎ").on_hover_text("最終値を超えた量。0% なら滑らかに近づいています");
+                                    for (_, m) in &metrics {
+                                        ui.label(format!("{:.1} %", m.overshoot_pct));
+                                    }
+                                    ui.end_row();
+                                    ui.label("整定").on_hover_text("10% に達してから ±2% に収まるまでの時間");
+                                    for (_, m) in &metrics {
+                                        ui.label(m.settling_time.map_or_else(dash, |t| eng(t, "s")));
+                                    }
+                                    ui.end_row();
+                                });
+                            }
+                            for why in failed {
+                                ui.small(why);
                             }
                             if !order.iter().any(|n| selected.contains(*n)) {
                                 ui.small("下の一覧で信号を選んでください");
