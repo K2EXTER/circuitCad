@@ -51,10 +51,11 @@ fn far_pos(board: &Board, e: &End) -> Point {
 
 /// What to do at one track end.
 struct Edit {
+    /// The track on the pad (for telling edits apart).
     track: usize,
-    is_a: bool,
-    /// Where the old track now begins (it is cut short there).
-    joint: Point,
+    /// A track that is cut short: (its index, which end, where it now begins). `None` when the way is rerouted up to
+    /// the end of a track that stays as it is.
+    trim: Option<(usize, bool, Point)>,
     /// The new tracks from the pad to the joint.
     new: Vec<Track>,
     /// Short tracks between the pad and the joint that are no longer needed (indices).
@@ -113,7 +114,7 @@ fn chain(board: &Board, e: End, reach: f64) -> Vec<(usize, bool, Point, Point)> 
     let (v, w) = if e.is_a { (t.a, t.b) } else { (t.b, t.a) };
     let mut out = vec![(e.track, e.is_a, v, w)];
     let mut acc = v.dist(w);
-    while acc < reach && out.len() < 6 {
+    while (acc < reach || out.len() < 2) && out.len() < 6 {
         let (cur, _, _, far) = *out.last().unwrap();
         let side = board.tracks[cur].side;
         if crate::shove::pinned(board, far, side) {
@@ -160,7 +161,7 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
     // ones joined to it), beyond the pad
     let s_min = exit_along(pad, v, (ux, uy)) + 0.1;
     let links = chain(board, e, s_min + 2.0 * lead + 1.0);
-    let mut best: Option<(f64, usize, Point)> = None; // (score, index in `links`, joint)
+    let mut best: Option<(f64, usize, Point, f64)> = None; // (score, index in `links`, joint, the sharpest turn)
     for (idx, &(_, _, p0, p1)) in links.iter().enumerate() {
         let (sx, sy, sl) = unit(p0, p1);
         for k in 0..8 {
@@ -188,13 +189,75 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
                 continue; // not back towards the pad
             }
             let score = tt + 0.3 * (turn_q + turn_j);
-            if best.is_none_or(|b| score < b.0) {
-                best = Some((score, idx, j));
+            let sharpest = turn_q.max(turn_j);
+            // a gentler fold wins; among about equally gentle ones, the shorter way
+            if best.is_none_or(|b| sharpest + 0.1 < b.3 || (sharpest < b.3 + 0.1 && score < b.0)) {
+                best = Some((score, idx, j, sharpest));
             }
         }
     }
-    let (_, idx, joint) = best?;
     let (side, width) = (t.side, t.width);
+    // the other way: lead out of the pad, then the plain 45° route to the end of one of the short tracks, so that no
+    // turn is sharper than it has to be (the join above turns 90° when the old route runs at 45°)
+    let mut reroute: Option<(f64, f64, usize, Vec<Point>)> = None; // (sharpest turn, length, link, points after q)
+    for (k, link) in links.iter().enumerate().take(links.len().saturating_sub(1)) {
+        let w_k = link.3;
+        let next = unit(links[k + 1].2, links[k + 1].3);
+        if q.dist(w_k) < 0.3 {
+            continue;
+        }
+        for flip in [false, true] {
+            let pts = bend45(q, w_k, flip);
+            let mut prev = q;
+            let mut dir = n;
+            let mut sharpest = 0.0f64;
+            let mut length = 0.0;
+            let mut ok = true;
+            for &p in &pts {
+                let (dx, dy, l) = unit(prev, p);
+                if l < 0.05 {
+                    ok = false;
+                    break;
+                }
+                sharpest = sharpest.max((dx * dir.0 + dy * dir.1).clamp(-1.0, 1.0).acos());
+                length += l;
+                dir = (dx, dy);
+                prev = p;
+            }
+            if !ok {
+                continue;
+            }
+            sharpest = sharpest.max((dir.0 * next.0 + dir.1 * next.1).clamp(-1.0, 1.0).acos());
+            if sharpest > 1.7 {
+                continue;
+            }
+            if reroute.as_ref().is_none_or(|r| (sharpest, length) < (r.0, r.1)) {
+                reroute = Some((sharpest, length, k, pts));
+            }
+        }
+    }
+    let use_reroute = match (&best, &reroute) {
+        (Some(b), Some(r)) => r.0 + 0.1 < b.3,
+        (None, Some(_)) => true,
+        _ => false,
+    };
+    if use_reroute {
+        let (_, _, k, pts) = reroute?;
+        let mut new = vec![];
+        let first_dir = unit(q, pts[0]);
+        if (first_dir.0 * n.0 + first_dir.1 * n.1) > 0.9999 {
+            new.push(Track { side, a: anchor, b: pts[0], width });
+        } else {
+            new.push(Track { side, a: anchor, b: q, width });
+            new.push(Track { side, a: q, b: pts[0], width });
+        }
+        for w in pts.windows(2) {
+            new.push(Track { side, a: w[0], b: w[1], width });
+        }
+        let remove = links[..=k].iter().map(|l| l.0).collect();
+        return Some(Edit { track: e.track, trim: None, new, remove });
+    }
+    let (_, idx, joint, _) = best?;
     let mid_dir = unit(q, joint);
     let mut new = vec![];
     if (mid_dir.0 * n.0 + mid_dir.1 * n.1) > 0.9999 {
@@ -205,16 +268,33 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
     }
     let (track, is_a, _, _) = links[idx];
     let remove = links[..idx].iter().map(|l| l.0).collect();
-    Some(Edit { track, is_a, joint, new, remove })
+    Some(Edit { track: e.track, trim: Some((track, is_a, joint)), new, remove })
+}
+
+/// The points to visit from `a` to `p` (the last is `p`) with horizontal, vertical and 45° legs; `flip` picks which of
+/// the two bends is used.
+fn bend45(a: Point, p: Point, flip: bool) -> Vec<Point> {
+    let (dx, dy) = (p.x - a.x, p.y - a.y);
+    let eps = 1e-9;
+    if dx.abs() < eps || dy.abs() < eps || (dx.abs() - dy.abs()).abs() < eps {
+        return vec![p];
+    }
+    let d = dx.abs().min(dy.abs());
+    let (sx, sy) = (dx.signum(), dy.signum());
+    let diag_first = Point::new(a.x + sx * d, a.y + sy * d);
+    let straight_first = if dx.abs() > dy.abs() { Point::new(a.x + sx * (dx.abs() - d), a.y) } else { Point::new(a.x, a.y + sy * (dy.abs() - d)) };
+    vec![if flip { diag_first } else { straight_first }, p]
 }
 
 /// Apply the edits to `board`; returns the indices of the tracks that were removed (the later indices move down).
 fn apply(board: &mut Board, edits: &[&Edit]) -> Vec<usize> {
     for e in edits {
-        if e.is_a {
-            board.tracks[e.track].a = e.joint;
-        } else {
-            board.tracks[e.track].b = e.joint;
+        if let Some((i, is_a, joint)) = e.trim {
+            if is_a {
+                board.tracks[i].a = joint;
+            } else {
+                board.tracks[i].b = joint;
+            }
         }
         board.tracks.extend(e.new.iter().cloned());
     }

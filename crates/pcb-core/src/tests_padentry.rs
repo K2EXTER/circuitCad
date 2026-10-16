@@ -96,3 +96,42 @@ fn the_pads_of_a_net_that_is_not_listed_can_be_left_out_and_round_pads_are_skipp
     assert_eq!(align_entries(&mut c, &EntryOptions::default(), Some(&[1])).aligned, 0, "track 1 has no end on the pad at (5, 10)");
     assert_eq!(align_entries(&mut c, &EntryOptions::default(), Some(&[0])).aligned, 1);
 }
+
+/// The tracks as a polyline from `from` (following the joined ends), as points.
+fn polyline(b: &Board, from: Point) -> Vec<Point> {
+    let mut pts = vec![from];
+    let mut used = vec![false; b.tracks.len()];
+    loop {
+        let cur = *pts.last().unwrap();
+        let Some((i, t)) = b.tracks.iter().enumerate().find(|(i, t)| !used[*i] && (t.a.dist(cur) < 1e-9 || t.b.dist(cur) < 1e-9)) else { break };
+        used[i] = true;
+        pts.push(if t.a.dist(cur) < 1e-9 { t.b } else { t.a });
+    }
+    pts
+}
+
+fn sharpest_turn_deg(pts: &[Point]) -> f64 {
+    pts.windows(3)
+        .map(|w| {
+            let (u, v) = ((w[1].x - w[0].x, w[1].y - w[0].y), (w[2].x - w[1].x, w[2].y - w[1].y));
+            let c = (u.0 * v.0 + u.1 * v.1) / (u.0.hypot(u.1) * v.0.hypot(v.1));
+            c.clamp(-1.0, 1.0).acos().to_degrees()
+        })
+        .fold(0.0, f64::max)
+}
+
+#[test]
+fn a_diagonal_that_runs_on_gets_no_sharp_fold_at_the_pad() {
+    let mut b = Board::new("t", 50.0, 40.0);
+    pad(&mut b, 5.0, 10.0, 1.0, 1.0, "A");
+    pad(&mut b, 25.0, 30.0, 1.0, 1.0, "A");
+    // one straight diagonal, in two tracks that meet at (15, 20)
+    b.tracks.push(trk((5.0, 10.0), (15.0, 20.0)));
+    b.tracks.push(trk((15.0, 20.0), (25.0, 30.0)));
+    let r = align_entries(&mut b, &EntryOptions::default(), None);
+    assert!(r.aligned >= 1, "{r:?}");
+    assert!(ratsnest(&b).is_empty() && drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    let pts = polyline(&b, Point::new(5.0, 10.0));
+    let turn = sharpest_turn_deg(&pts);
+    assert!(turn < 50.0, "the sharpest turn is {turn} degrees: {pts:?}");
+}
