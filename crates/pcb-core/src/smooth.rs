@@ -482,9 +482,14 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     if crowded {
         return None;
     }
-    let ramp = dw * 1.5;
-    // also what keeps a second run from tapering the same end again: the piece left on the pad is shorter than that
-    if exit + ramp > len / 2.0 {
+    // a track that runs into another pad at its far end shares its length with the teardrop there (half each: that also
+    // keeps a second run from tapering the same end again). Otherwise the whole length but a little is free, and a
+    // short track (such as the lead the router makes) gets a shorter, steeper teardrop rather than none.
+    let far_on_pad = holder(board, far, t.side, (-ux, -uy)).is_some();
+    let limit = if far_on_pad { len / 2.0 } else { len - 0.05 };
+    let full = dw * 1.5;
+    let ramp = if far_on_pad { full } else { full.min(limit - exit) };
+    if exit + ramp > limit + 1e-9 || ramp < full.min((dw * 0.3).max(0.15)) {
         return None;
     }
     let n = ((dw / (MIN_STEP * 0.8)).ceil() as usize).max(2);
@@ -514,7 +519,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     } else {
         (band(v, (ux, uy), exit - 0.05, exit + ramp + 0.02, (exit, exit + ramp), (top, t.width)), exit + ramp)
     };
-    let live = (stop <= len / 2.0).then(|| Live {
+    let live = (stop <= limit + 1e-9).then(|| Live {
         trims: vec![(i, is_a, at(stop))],
         pieces: vec![Track { side: t.side, a: v, b: at(stop), width: t.width }],
         patch: Patch { side: t.side, outline, track: i },

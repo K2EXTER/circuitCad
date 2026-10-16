@@ -317,3 +317,22 @@ fn a_corner_in_the_live_finish_is_a_band_of_the_exact_arc() {
     assert!(ratsnest(&f.board).is_empty());
     assert!(drc::check_final(&b).is_empty());
 }
+
+#[test]
+fn a_short_lead_that_turns_still_gets_a_shorter_teardrop() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad_sized(&mut b, 5.0, 5.0, "A", 1.0);
+    pad_sized(&mut b, 6.6, 15.0, "A", 1.0);
+    // 1.6 mm out of the pad, then up to the other pad: less than the full teardrop (1.5 x the width step) beside the pad
+    b.tracks.push(trk((5.0, 5.0), (6.6, 5.0), 0.25));
+    b.tracks.push(trk((6.6, 5.0), (6.6, 15.0), 0.25));
+    let before = b.tracks.len();
+    let r = smooth_tracks(&mut b, &SmoothOptions { corners: false, ..Default::default() });
+    assert!(r.tapers >= 1, "{r:?}");
+    assert!(b.tracks.len() > before);
+    assert!(b.tracks.iter().any(|t| t.width > 0.8), "starts as wide as the pad");
+    assert!(ratsnest(&b).is_empty());
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    // the teardrop does not run past the corner
+    assert!(b.tracks.iter().filter(|t| t.width > 0.3).all(|t| t.a.x <= 6.6 + 1e-9 && t.b.x <= 6.6 + 1e-9));
+}
