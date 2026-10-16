@@ -400,14 +400,22 @@ fn ease(t: f64) -> f64 {
 
 /// A band along the line from `v` in direction `(ux, uy)`, from distance `s0` to `s1`, whose width goes from `w0`
 /// (up to `s_from`) to `w1` (from `s_to`) as a smooth curve.
-fn band(v: Point, (ux, uy): (f64, f64), s0: f64, s1: f64, (s_from, s_to): (f64, f64), (w0, w1): (f64, f64)) -> Vec<Point> {
+fn band(v: Point, u: (f64, f64), s0: f64, s1: f64, along: (f64, f64), widths: (f64, f64)) -> Vec<Point> {
+    band_off(v, u, s0, s1, along, widths, (0.0, 0.0))
+}
+
+/// [`band`] whose middle also moves sideways, from the offset `c0` (up to `s_from`) to `c1` (from `s_to`), measured to
+/// the left of the line: a teardrop whose base is centred on the pad while its tip is on the track.
+fn band_off(v: Point, (ux, uy): (f64, f64), s0: f64, s1: f64, (s_from, s_to): (f64, f64), (w0, w1): (f64, f64), (c0, c1): (f64, f64)) -> Vec<Point> {
     const STEPS: usize = 12;
     let (nx, ny) = (-uy, ux);
-    let half = |s: f64| (w0 + (w1 - w0) * ease((s - s_from) / (s_to - s_from).max(1e-9))) / 2.0;
+    let e = |s: f64| ease((s - s_from) / (s_to - s_from).max(1e-9));
+    let half = |s: f64| (w0 + (w1 - w0) * e(s)) / 2.0;
+    let mid = |s: f64| c0 + (c1 - c0) * e(s);
     let pt = |s: f64, y: f64| Point::new(v.x + ux * s + nx * y, v.y + uy * s + ny * y);
     let ss: Vec<f64> = (0..=STEPS).map(|k| s0 + (s1 - s0) * k as f64 / STEPS as f64).collect();
-    let mut out: Vec<Point> = ss.iter().map(|&s| pt(s, -half(s))).collect();
-    out.extend(ss.iter().rev().map(|&s| pt(s, half(s))));
+    let mut out: Vec<Point> = ss.iter().map(|&s| pt(s, mid(s) - half(s))).collect();
+    out.extend(ss.iter().rev().map(|&s| pt(s, mid(s) + half(s))));
     out
 }
 
@@ -447,23 +455,25 @@ fn taper(board: &Board, v: Point, a: End, b: End) -> Option<Edit> {
 
 /// The copper a track end sits on: how wide a track may be where the teardrop starts (the length of the flat edge it
 /// leaves a rectangular pad through; the diameter at the centre of a round end), and how far from the track end that is.
-fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(f64, f64, bool)> {
+fn holder(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<(f64, f64, bool, f64)> {
     for q in &board.pads {
         let (w, h) = q.shape.size();
         if (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6 {
             if !matches!(q.shape, PadShape::Rect { .. }) {
                 // a round end has no flat edge to match: the teardrop starts at the centre, as wide as the pad is
-                return (p.dist(q.pos) < 0.05).then_some((w.min(h), 0.0, true));
+                return (p.dist(q.pos) < 0.05).then_some((w.min(h), 0.0, true, 0.0));
             }
             let exit = |half: f64, off: f64, u: f64| if u.abs() > 1e-9 { (half * u.signum() - off) / u } else { f64::INFINITY };
             let (tx, ty) = (exit(w / 2.0, p.x - q.pos.x, ux), exit(h / 2.0, p.y - q.pos.y, uy));
             // leaving through a side face of the pad: the edge is as long as the pad is tall, and the round end of the
             // track must still fit into the pad's depth
             let (edge, depth) = if tx <= ty { (h, w) } else { (w, h) };
-            return Some((edge.min(2.0 * depth), tx.min(ty).max(0.0), false));
+            // the edge is centred on the pad, the track may leave it a little to the side
+            let off = (q.pos.x - p.x) * -uy + (q.pos.y - p.y) * ux;
+            return Some((edge.min(2.0 * depth), tx.min(ty).max(0.0), false, off));
         }
     }
-    board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).and_then(|v| (p.dist(v.pos) < 0.05).then_some((v.diameter, 0.0, true)))
+    board.vias.iter().find(|v| v.pos.dist(p) <= v.diameter / 2.0 + 1e-6).and_then(|v| (p.dist(v.pos) < 0.05).then_some((v.diameter, 0.0, true, 0.0)))
 }
 
 /// Where a track ends on a pad or via that is wider than the track: from the edge of the pad, a short stretch that
@@ -472,7 +482,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     let t = &board.tracks[i];
     let (v, far) = if is_a { (t.a, t.b) } else { (t.b, t.a) };
     let (ux, uy, len) = unit(v, far);
-    let (top, exit, round) = holder(board, v, t.side, (ux, uy))?;
+    let (top, exit, round, off) = holder(board, v, t.side, (ux, uy))?;
     let dw = top - t.width;
     if dw <= MIN_STEP {
         return None;
@@ -492,7 +502,11 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     if exit + ramp > limit + 1e-9 || ramp < full.min((dw * 0.3).max(0.15)) {
         return None;
     }
-    let n = ((dw / (MIN_STEP * 0.8)).ceil() as usize).max(2);
+    // the pieces that go into the tracks are centred on the track, so their base is only as wide as the pad is on both
+    // sides of the track (the live polygon is centred on the pad)
+    let base = if round { top } else { (top - 2.0 * off.abs()).max(t.width + MIN_STEP) };
+    let dwp = base - t.width;
+    let n = ((dwp / (MIN_STEP * 0.8)).ceil() as usize).max(2);
     let at = |s: f64| Point::new(v.x + ux * s, v.y + uy * s);
     // the track runs on to the pad's edge; there the first piece is exactly as wide as the edge, and each next is narrower
     let mut pieces = vec![];
@@ -503,7 +517,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         side: t.side,
         a: at(exit + ramp * k as f64 / n as f64),
         b: at(exit + ramp * (k + 1) as f64 / n as f64),
-        width: top - dw * k as f64 / n as f64,
+        width: base - dwp * k as f64 / n as f64,
     }));
     // live: the polygon. On a round end the sides are the tangents from the edges of the track to the pad's circle;
     // at a flat edge it is a smooth band from the length of the edge to the track's width.
@@ -517,7 +531,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         let pt = |x: f64, y: f64| Point::new(v.x + ux * x + nx * y, v.y + uy * x + ny * y);
         (vec![pt(0.0, 0.0), pt(tx, -ty), pt(qx, -qy), pt(qx, qy), pt(tx, ty)], lp)
     } else {
-        (band(v, (ux, uy), exit - 0.05, exit + ramp + 0.02, (exit, exit + ramp), (top, t.width)), exit + ramp)
+        (band_off(v, (ux, uy), exit - 0.05, exit + ramp + 0.02, (exit, exit + ramp), (top, t.width), (off, 0.0)), exit + ramp)
     };
     let live = (stop <= limit + 1e-9).then(|| Live {
         trims: vec![(i, is_a, at(stop))],

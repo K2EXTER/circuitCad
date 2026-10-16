@@ -336,3 +336,20 @@ fn a_short_lead_that_turns_still_gets_a_shorter_teardrop() {
     // the teardrop does not run past the corner
     assert!(b.tracks.iter().filter(|t| t.width > 0.3).all(|t| t.a.x <= 6.6 + 1e-9 && t.b.x <= 6.6 + 1e-9));
 }
+
+#[test]
+fn a_teardrop_base_is_centred_on_the_pad_even_when_the_track_leaves_to_the_side() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad_sized(&mut b, 5.0, 5.0, "A", 1.0);
+    pad_sized(&mut b, 5.1, 12.0, "A", 1.0);
+    // the track starts 0.1 mm to the side of the pad's centre
+    b.tracks.push(trk((5.1, 5.0), (5.1, 12.0), 0.25));
+    b.finish.on = true;
+    let f = finished(&b).unwrap();
+    assert!(!f.patches.is_empty(), "a teardrop polygon");
+    // every point of the polygon at the first pad lies within the pad's width (4.5 .. 5.5), and the base reaches both sides
+    let near: Vec<&Point> = f.patches.iter().flat_map(|p| p.outline.iter()).filter(|p| p.y < 8.0).collect();
+    assert!(near.iter().all(|p| p.x >= 4.5 - 1e-6 && p.x <= 5.5 + 1e-6), "{near:?}");
+    let (lo, hi) = near.iter().fold((f64::MAX, f64::MIN), |(l, h), p| (l.min(p.x), h.max(p.x)));
+    assert!((lo - 4.5).abs() < 1e-6 && (hi - 5.5).abs() < 1e-6, "{lo} {hi}");
+}
