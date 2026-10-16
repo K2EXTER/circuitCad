@@ -90,44 +90,100 @@ impl SchEditor {
                                 *ghost = None;
                             }
                         });
-                        for name in order.iter().filter(|n| selected.contains(**n)).take(4) {
-                            if let Some(sg) = res.signal(name).filter(|s| s.unit == "V") {
-                                let txt = match minus_3db(&res.freq, &sg.mag()) {
-                                    Some(f) => eng(f, "Hz"),
-                                    None => "範囲内にありません".into(),
-                                };
-                                ui.small(format!("{name}
-  -3dB点 {txt}")).on_hover_text("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります");
-                            }
+                        // -3dB point: one column per signal
+                        let corner: Vec<(String, String)> = order
+                            .iter()
+                            .filter(|n| selected.contains(**n))
+                            .take(4)
+                            .filter_map(|name| {
+                                let sg = res.signal(name).filter(|s| s.unit == "V")?;
+                                let txt = minus_3db(&res.freq, &sg.mag()).map_or_else(|| "範囲内にありません".to_string(), |f| eng(f, "Hz"));
+                                Some((name.to_string(), txt))
+                            })
+                            .collect();
+                        if !corner.is_empty() {
+                            egui::Grid::new("ac_corner_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                ui.label("");
+                                for (name, _) in &corner {
+                                    ui.strong(name);
+                                }
+                                ui.end_row();
+                                ui.label("-3dB点").on_hover_text("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります");
+                                for (_, txt) in &corner {
+                                    ui.label(txt);
+                                }
+                                ui.end_row();
+                            });
                         }
                         egui::CollapsingHeader::new("安定性の余裕 (位相余裕・ゲイン余裕)").show(ui, |ui| {
-                            for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
-                                let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
-                                let Some(m) = stability_margins(&res.freq, &sg.db(), &sg.phase_deg()) else { continue };
-                                ui.small(egui::RichText::new(*name).strong());
-                                if m.inverted {
-                                    ui.small("  位相が 180° から始まるので、反転増幅として 180° ずらして計算しました").on_hover_text("反転入力に信号を入れて出力を測ると、位相は 180° から始まります。負帰還では反転は織り込み済みなので、ずらして評価します");
+                            let margins: Vec<(String, sim_core::Margins)> = order
+                                .iter()
+                                .filter(|n| selected.contains(**n))
+                                .take(3)
+                                .filter_map(|name| {
+                                    let sg = res.signal(name).filter(|s| s.unit == "V")?;
+                                    Some((name.to_string(), stability_margins(&res.freq, &sg.db(), &sg.phase_deg())?))
+                                })
+                                .collect();
+                            if !margins.is_empty() {
+                                // one column per signal; the colour says whether the margin is enough
+                                let green = Color32::from_rgb(90, 190, 110);
+                                let amber = Color32::from_rgb(220, 160, 40);
+                                let red = Color32::from_rgb(230, 60, 60);
+                                egui::Grid::new("ac_margin_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                    ui.label("");
+                                    for (name, _) in &margins {
+                                        ui.strong(name);
+                                    }
+                                    ui.end_row();
+                                    ui.label("位相余裕").on_hover_text("ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます");
+                                    for (_, m) in &margins {
+                                        match m.phase_margin.filter(|_| m.gain_crossover.is_some()) {
+                                            Some(pm) => {
+                                                let (word, col) = if pm >= 45.0 { ("十分", green) } else if pm >= 30.0 { ("やや不足", amber) } else if pm > 0.0 { ("不足", Color32::from_rgb(230, 90, 70)) } else { ("不安定", red) };
+                                                let cell = ui.label(egui::RichText::new(format!("{pm:.1}° ({word})")).color(col));
+                                                if word == "不足" {
+                                                    cell.on_hover_text("不足: 振動しやすい状態です");
+                                                }
+                                            }
+                                            None => {
+                                                ui.label("—").on_hover_text("ゲイン 0dB の交点がありません (ゲインが最初から 1 未満、または範囲内で下がりきらない)");
+                                            }
+                                        }
+                                    }
+                                    ui.end_row();
+                                    ui.label("  その周波数").on_hover_text("ゲインが 0dB になる周波数 (ゲイン交点)");
+                                    for (_, m) in &margins {
+                                        ui.label(m.gain_crossover.map_or_else(|| "—".to_string(), |f| eng(f, "Hz")));
+                                    }
+                                    ui.end_row();
+                                    ui.label("ゲイン余裕").on_hover_text("位相が -180° になる周波数で、ゲインが 0dB まであと何 dB 残っているか。6dB 以上が目安です");
+                                    for (_, m) in &margins {
+                                        match (m.gain_margin, m.phase_crossover) {
+                                            (Some(gm), Some(_)) => {
+                                                let col = if gm >= 6.0 { green } else if gm > 0.0 { Color32::from_rgb(230, 90, 70) } else { red };
+                                                ui.label(egui::RichText::new(format!("{gm:.1} dB")).color(col));
+                                            }
+                                            _ => {
+                                                ui.label("∞").on_hover_text("位相が -180° に達しません (ゲイン余裕は無限大)");
+                                            }
+                                        }
+                                    }
+                                    ui.end_row();
+                                    ui.label("  その周波数").on_hover_text("位相が -180° になる周波数 (位相交点)");
+                                    for (_, m) in &margins {
+                                        ui.label(m.phase_crossover.map_or_else(|| "—".to_string(), |f| eng(f, "Hz")));
+                                    }
+                                    ui.end_row();
+                                });
+                                if margins.iter().any(|(_, m)| m.inverted) {
+                                    ui.small("位相が 180° から始まる信号は、反転増幅として 180° ずらして計算しました").on_hover_text("反転入力に信号を入れて出力を測ると、位相は 180° から始まります。負帰還では反転は織り込み済みなので、ずらして評価します");
                                 }
-                                match (m.gain_crossover, m.phase_margin) {
-                                    (Some(f), Some(pm)) => {
-                                        let (word, col) = if pm >= 45.0 { ("十分", Color32::from_rgb(90, 190, 110)) } else if pm >= 30.0 { ("やや不足", Color32::from_rgb(220, 160, 40)) } else if pm > 0.0 { ("不足: 振動しやすい", Color32::from_rgb(230, 90, 70)) } else { ("不安定", Color32::from_rgb(230, 60, 60)) };
-                                        ui.small(egui::RichText::new(format!("  位相余裕 {pm:.1}° ({word})  @ {}", eng(f, "Hz"))).color(col)).on_hover_text("ゲインが 0dB になる周波数で、位相が -180° までにあと何度残っているか。45° 以上が目安で、小さいとステップ応答で行き過ぎや振動が出ます");
+                                for (name, m) in margins.iter().filter(|(_, m)| m.gain_crossover.is_some() || m.phase_crossover.is_some()) {
+                                    let label = if margins.iter().filter(|(_, m)| m.gain_crossover.is_some() || m.phase_crossover.is_some()).count() > 1 { format!("{name} の交点にカーソルを置く") } else { "交点にカーソルを置く".to_string() };
+                                    if ui.small_button(label).on_hover_text("波形上のカーソル A をゲイン交点 (0dB)、B を位相交点 (-180°) に置きます").clicked() {
+                                        st.cursors = [m.gain_crossover, m.phase_crossover];
                                     }
-                                    _ => {
-                                        ui.small("  ゲイン 0dB の交点がありません (ゲインが最初から 1 未満、または範囲内で下がりきらない)");
-                                    }
-                                }
-                                match (m.phase_crossover, m.gain_margin) {
-                                    (Some(f), Some(gm)) => {
-                                        let col = if gm >= 6.0 { Color32::from_rgb(90, 190, 110) } else if gm > 0.0 { Color32::from_rgb(230, 90, 70) } else { Color32::from_rgb(230, 60, 60) };
-                                        ui.small(egui::RichText::new(format!("  ゲイン余裕 {gm:.1} dB  @ {}", eng(f, "Hz"))).color(col)).on_hover_text("位相が -180° になる周波数で、ゲインが 0dB まであと何 dB 残っているか。6dB 以上が目安で、負だと発振します");
-                                    }
-                                    _ => {
-                                        ui.small("  位相が -180° に達しません (ゲイン余裕は無限大)");
-                                    }
-                                }
-                                if ui.small_button("交点にカーソルを置く").on_hover_text("波形上のカーソル A をゲイン交点 (0dB)、B を位相交点 (-180°) に置きます").clicked() {
-                                    st.cursors = [m.gain_crossover, m.phase_crossover];
                                 }
                             }
                         });

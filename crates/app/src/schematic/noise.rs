@@ -173,14 +173,17 @@ impl SchEditor {
                             crate::icons::help_small(ui, "グラフの読み方", "縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。");
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {
+                          // name (tick to draw) | rms | share of the total, one row per source
+                          egui::Grid::new("noise_list").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                            ui.label("");
+                            ui.label("rms").on_hover_text("その原因だけが出す雑音の実効値 (1Hz 幅あたりではなく、グラフの帯域全体)");
+                            ui.label("割合").on_hover_text("全体の雑音のうち、この原因が占める割合 (電力で足し算)");
+                            ui.end_row();
                             for (name, rms) in &order {
                                 let mut on = selected.contains(name);
                                 let color = order.iter().filter(|(n, _)| selected.contains(n)).position(|(n, _)| n == name).map(|i| PALETTE[i % PALETTE.len()]);
                                 let share = if name == "合計" || name == "入力換算" { None } else { Some(res.share(name)) };
-                                let label = match share {
-                                    Some(sh) => format!("{name}  {} ({:.0}%)", eng(*rms, "V"), sh * 100.0),
-                                    None => format!("{name}  {}", eng(*rms, "V")),
-                                };
+                                let label = name.clone();
                                 let text = match color {
                                     Some(c) if on => egui::RichText::new(label).color(c),
                                     _ => egui::RichText::new(label),
@@ -199,7 +202,11 @@ impl SchEditor {
                                         selected.remove(name);
                                     }
                                 }
+                                ui.label(eng(*rms, "V"));
+                                ui.label(share.map_or(String::new(), |sh| format!("{:.0}%", sh * 100.0)));
+                                ui.end_row();
                             }
+                          });
                         });
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
