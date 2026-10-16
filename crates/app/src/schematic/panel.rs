@@ -254,7 +254,10 @@ impl SchEditor {
                         toggle_fav = Some(d.name.clone());
                     }
                     let mark = if d.sim.is_some() { " ◎" } else { "" };
-                    if ui.selectable_label(selected, format!("{}{mark}", d.name)).on_hover_text(lib_hover(d)).clicked() {
+                    let (rect, pic) = ui.allocate_exact_size(egui::vec2(34.0, 24.0), egui::Sense::click());
+                    let color = if selected { ui.visuals().selection.stroke.color } else { ui.visuals().text_color() };
+                    super::symbols::paint_lines_preview(ui.painter(), rect, &super::symbol_lines(&d.symbol()), color);
+                    if (pic | ui.selectable_label(selected, format!("{}{mark}", d.name))).on_hover_text(lib_hover(d)).clicked() {
                         chosen = Some(i);
                     }
                 });

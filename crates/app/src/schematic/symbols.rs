@@ -411,3 +411,21 @@ pub(super) fn paint_kind_preview(painter: &egui::Painter, rect: Rect, kind: Kind
         };
     }
 }
+
+/// A small picture of a library part's symbol (line segments in grid units), scaled to fit `rect`.
+pub(super) fn paint_lines_preview(painter: &egui::Painter, rect: Rect, lines: &[([f32; 2], [f32; 2])], color: Color32) {
+    if lines.is_empty() {
+        return;
+    }
+    let (mut x0, mut x1, mut y0, mut y1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for p in lines.iter().flat_map(|(a, b)| [a, b]) {
+        (x0, x1, y0, y1) = (x0.min(p[0]), x1.max(p[0]), y0.min(p[1]), y1.max(p[1]));
+    }
+    let (w, h) = ((x1 - x0).max(0.5), (y1 - y0).max(0.5));
+    let scale = ((rect.width() - 4.0) / w).min((rect.height() - 4.0) / h);
+    let tr = |p: [f32; 2]| Pos2::new(rect.center().x + (p[0] - (x0 + x1) / 2.0) * scale, rect.center().y + (p[1] - (y0 + y1) / 2.0) * scale);
+    let stroke = Stroke::new(1.2, color);
+    for (a, b) in lines {
+        painter.line_segment([tr(*a), tr(*b)], stroke);
+    }
+}
