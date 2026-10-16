@@ -176,7 +176,7 @@ impl SchEditor {
     }
 
     pub(super) fn panel_spec(&mut self, ui: &mut egui::Ui) {
-        ui.small("作りたい回路の目標値を書いておくと、解析の結果が合格か ✓/× で分かります。値を変えて計算し直すと、表も変わります");
+        crate::icons::help_small(ui, "目標値と合否の見方", "作りたい回路の目標値を書いておくと、解析の結果が合格か ✓/× で分かります。値を変えて計算し直すと、表も変わります");
         // names to pick from, taken from the results that are on screen
         let dc = self.dc.as_ref().and_then(|v| v.outcome.as_ref().ok());
         let tran = self.tran.as_ref().and_then(|v| v.outcome.as_ref().ok());

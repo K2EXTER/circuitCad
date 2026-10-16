@@ -24,7 +24,7 @@ fn pick(ui: &mut egui::Ui, id: &str, label: &str, tip: &str, names: &[&str], cur
 pub(super) fn power_ui(ui: &mut egui::Ui, res: &TranResult, order: &[&str], w: (f64, f64), pw: &mut [String; 4]) {
     let volts: Vec<&str> = order.iter().copied().filter(|n| res.signal(n).is_some_and(|s| s.unit == "V")).collect();
     let amps: Vec<&str> = order.iter().copied().filter(|n| res.signal(n).is_some_and(|s| s.unit != "V")).collect();
-    ui.small("入力 (電源) と出力 (負荷) の電圧と電流を選ぶと、表示中の時間範囲での平均電力と効率が出ます");
+    crate::icons::help_small(ui, "電力と効率の出し方", "入力 (電源) と出力 (負荷) の電圧と電流を選ぶと、表示中の時間範囲での平均電力と効率が出ます");
     pick(ui, "pw_iv", "入力の電圧", "電源のプラス側の点の電圧 (V(...))", &volts, &mut pw[0]);
     pick(ui, "pw_ii", "入力の電流", "電源を流れる電流 (I(V1) など)。向きは気にしなくて大丈夫です (大きさで計算します)", &amps, &mut pw[1]);
     pick(ui, "pw_ov", "出力の電圧", "負荷にかかる電圧 (V(...))", &volts, &mut pw[2]);

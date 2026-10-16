@@ -169,12 +169,9 @@ impl SchEditor {
                                 ui.small(format!("対策: {}", info.remedy));
                             }
                         }
-                        egui::CollapsingHeader::new("グラフの読み方").show(ui, |ui| {
-                            ui.small("縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。");
-                            ui.small("rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。");
-                            ui.small("雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。");
-                            ui.small("素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。");
-                        });
+                        {
+                            crate::icons::help_small(ui, "グラフの読み方", "縦軸は雑音の「密度」で、1Hz の幅あたりの電圧 (dB, 0 dB = 1 nV/√Hz)。60 dB で 1 µV/√Hz。rms 値は、グラフの帯域全体で雑音を足し合わせた実効値です。雑音は互いに無関係に出るので、足すときは二乗して足し (電力の和)、最後に √ します。だから一番大きい原因を減らすのが近道です。素子の名前にカーソルを合わせると、その雑音の原因と対策が出ます。");
+                        }
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for (name, rms) in &order {
                                 let mut on = selected.contains(name);
