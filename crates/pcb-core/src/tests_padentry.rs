@@ -135,3 +135,23 @@ fn a_diagonal_that_runs_on_gets_no_sharp_fold_at_the_pad() {
     let turn = sharpest_turn_deg(&pts);
     assert!(turn < 50.0, "the sharpest turn is {turn} degrees: {pts:?}");
 }
+
+#[test]
+fn two_tracks_spread_on_a_wide_pad_are_laid_with_gentle_folds() {
+    let mut b = Board::new("t", 50.0, 30.0);
+    pad(&mut b, 10.0, 15.0, 3.0, 0.8, "A");
+    pad(&mut b, 30.0, 25.0, 1.0, 1.0, "A");
+    pad(&mut b, 30.0, 5.0, 1.0, 1.0, "A");
+    b.tracks.push(trk((10.0, 15.0), (30.0, 25.0)));
+    b.tracks.push(trk((10.0, 15.0), (30.0, 5.0)));
+    let r = align_entries(&mut b, &EntryOptions::default(), None);
+    assert_eq!(r.spread, 1, "{r:?}");
+    assert!(ratsnest(&b).is_empty() && drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    // each track runs from its end of the pad to the far pad, and no fold along the way is sharper than 50 degrees
+    for anchor in [Point::new(8.675, 15.0), Point::new(11.325, 15.0)] {
+        let pts = polyline(&b, anchor);
+        assert!(pts.len() >= 3, "{pts:?}");
+        let turn = sharpest_turn_deg(&pts);
+        assert!(turn < 50.0, "from {anchor:?}: the sharpest turn is {turn} degrees: {pts:?}");
+    }
+}

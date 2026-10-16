@@ -200,9 +200,16 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
     // the other way: lead out of the pad, then the plain 45° route to the end of one of the short tracks, so that no
     // turn is sharper than it has to be (the join above turns 90° when the old route runs at 45°)
     let mut reroute: Option<(f64, f64, usize, Vec<Point>)> = None; // (sharpest turn, length, link, points after q)
-    for (k, link) in links.iter().enumerate().take(links.len().saturating_sub(1)) {
+    for (k, link) in links.iter().enumerate() {
         let w_k = link.3;
-        let next = unit(links[k + 1].2, links[k + 1].3);
+        // the way on from there: the next short track, or (at the last one) nothing when it ends on a pad or via
+        let next = if k + 1 < links.len() {
+            Some(unit(links[k + 1].2, links[k + 1].3))
+        } else if crate::shove::pinned(board, w_k, t.side) {
+            None
+        } else {
+            continue;
+        };
         if q.dist(w_k) < 0.3 {
             continue;
         }
@@ -227,7 +234,9 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
             if !ok {
                 continue;
             }
-            sharpest = sharpest.max((dir.0 * next.0 + dir.1 * next.1).clamp(-1.0, 1.0).acos());
+            if let Some(next) = next {
+                sharpest = sharpest.max((dir.0 * next.0 + dir.1 * next.1).clamp(-1.0, 1.0).acos());
+            }
             if sharpest > 1.7 {
                 continue;
             }
@@ -380,6 +389,10 @@ pub fn align_entries(board: &mut Board, opts: &EntryOptions, only: Option<&[usiz
                 if check(&trial).len() <= before.0 && ratsnest(&trial).len() <= before.1 {
                     *board = trial;
                     shift(&mut only, &gone);
+                    if let Some(list) = only.as_mut() {
+                        let added: usize = edits.iter().map(|e| e.new.len()).sum();
+                        list.extend(board.tracks.len() - added..board.tracks.len());
+                    }
                     report.spread += 1;
                     report.aligned += 2;
                     continue;
@@ -396,6 +409,10 @@ pub fn align_entries(board: &mut Board, opts: &EntryOptions, only: Option<&[usiz
             if check(&trial).len() <= before.0 && ratsnest(&trial).len() <= before.1 {
                 *board = trial;
                 shift(&mut only, &gone);
+                // the tracks that were laid belong to the work too (their other end may be on another pad)
+                if let Some(list) = only.as_mut() {
+                    list.extend(board.tracks.len() - edit.new.len()..board.tracks.len());
+                }
                 // the later ends of this pad are on tracks whose numbers may have moved
                 for later in ends.iter_mut().skip(k + 1) {
                     later.track -= gone.iter().filter(|g| **g < later.track).count();
