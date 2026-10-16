@@ -26,6 +26,9 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--measure-guide") {
         app.measure.open = true;
     }
+    if args.iter().any(|a| a == "--icons-only") {
+        crate::icons::set_icon_only(true);
+    }
     if args.iter().any(|a| a == "--learn") {
         app.learn.open = true;
     }

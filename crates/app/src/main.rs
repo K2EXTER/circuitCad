@@ -11,6 +11,7 @@ mod args;
 mod board_editor;
 mod files;
 mod help;
+mod icons;
 mod measure_guide;
 mod samples;
 mod learn;
@@ -261,6 +262,10 @@ impl eframe::App for App {
                     }
                     ui.separator();
                     ui.checkbox(&mut self.show_hints, "画面下にヒントを出す").on_hover_text("画面下に、いま何をするとよいかのヒントと豆知識を表示します");
+                    let mut only = icons::icon_only();
+                    if ui.checkbox(&mut only, "ツールをアイコンだけで表示").on_hover_text("ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます").changed() {
+                        icons::set_icon_only(only);
+                    }
                 });
             });
         });

@@ -26,24 +26,36 @@ impl BoardEditor {
 
     pub fn side_panel(&mut self, ui: &mut egui::Ui, sch: &SchEditor) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for (t, name) in TOOLS {
-                if ui.selectable_label(self.tool == *t, *name).on_hover_text(tool_tip(*t)).clicked() {
-                    self.tool = *t;
-                    self.pending = None;
-                    self.poly.clear();
-                    // what was selected stays behind: R, B and Delete must not reach it from another tool
-                    if *t != Tool::Select {
-                        self.selected = None;
-                        self.multi.clear();
-                        self.boxsel = None;
+            // icon-only buttons are packed side by side; with labels they stay one per line
+            let wrap = crate::icons::icon_only();
+            ui.scope(|ui| {
+                ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
+                let mut tools = |ui: &mut egui::Ui| {
+                for (t, name, icon) in TOOLS {
+                    if crate::icons::icon_button(ui, *icon, name, self.tool == *t, true, tool_tip(*t)).clicked() {
+                        self.tool = *t;
+                        self.pending = None;
+                        self.poly.clear();
+                        // what was selected stays behind: R, B and Delete must not reach it from another tool
+                        if *t != Tool::Select {
+                            self.selected = None;
+                            self.multi.clear();
+                            self.boxsel = None;
+                        }
                     }
                 }
-            }
+                };
+                if wrap {
+                    ui.horizontal_wrapped(tools);
+                } else {
+                    tools(ui);
+                }
+            });
             ui.horizontal(|ui| {
-                if ui.add_enabled(!self.undo.is_empty(), egui::Button::new("元に戻す")).on_hover_text("直前の操作を取り消します (Ctrl+Z)").clicked() {
+                if crate::icons::icon_button(ui, Icon::Undo, "元に戻す", false, !self.undo.is_empty(), "直前の操作を取り消します (Ctrl+Z)").clicked() {
                     self.undo();
                 }
-                if ui.add_enabled(!self.redo.is_empty(), egui::Button::new("やり直し")).on_hover_text("取り消した操作をやり直します (Ctrl+Y)").clicked() {
+                if crate::icons::icon_button(ui, Icon::Redo, "やり直し", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)").clicked() {
                     self.redo();
                 }
             });

@@ -25,6 +25,8 @@ pub enum Tool {
     Zone,
 }
 
+use crate::icons::Icon;
+
 fn tool_tip(t: Tool) -> &'static str {
     match t {
         Tool::Select => "クリックで選択、部品はドラッグで移動。空いた所を左ドラッグ = 完全に囲んだものを選択、右ドラッグ = 触れたものも選択 (Shiftで追加)",
@@ -40,17 +42,17 @@ fn tool_tip(t: Tool) -> &'static str {
     }
 }
 
-const TOOLS: &[(Tool, &str)] = &[
-    (Tool::Select, "選択 / 部品の移動"),
-    (Tool::Track, "配線"),
-    (Tool::Via, "ビア"),
-    (Tool::Zone, "銅箔ゾーン (ベタ)"),
-    (Tool::OutlineRect, "基板外形 (矩形)"),
-    (Tool::OutlinePoly, "基板外形 (多角形)"),
-    (Tool::PadTh, "パッド(スルーホール)"),
-    (Tool::PadSmd, "パッド(SMD)"),
-    (Tool::Hole, "取付穴"),
-    (Tool::Silk, "シルク線"),
+const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
+    (Tool::Select, "選択 / 部品の移動", Icon::Select),
+    (Tool::Track, "配線", Icon::Wire),
+    (Tool::Via, "ビア", Icon::Via),
+    (Tool::Zone, "銅箔ゾーン (ベタ)", Icon::Zone),
+    (Tool::OutlineRect, "基板外形 (矩形)", Icon::OutlineRect),
+    (Tool::OutlinePoly, "基板外形 (多角形)", Icon::OutlinePoly),
+    (Tool::PadTh, "パッド(スルーホール)", Icon::PadTh),
+    (Tool::PadSmd, "パッド(SMD)", Icon::PadSmd),
+    (Tool::Hole, "取付穴", Icon::Hole),
+    (Tool::Silk, "シルク線", Icon::Silk),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]

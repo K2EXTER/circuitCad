@@ -46,6 +46,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | ファイル | 内容 |
 |---|---|
 | `main.rs` | `App`・ウィンドウ・メニュー |
+| `icons.rs` | ツールのアイコンと「アイコン+文字/アイコンのみ」切替 |
 | `args.rs` / `files.rs` / `screenshot.rs` / `startup.rs` / `tips.rs` | 起動引数 / 保存・読込・未保存の確認 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
 | `tests/` | 統合テスト `flow.rs` と、サンプル回路の生成 `examples.rs` の `write_*` (`--ignored` で実行) |
 | `plot.rs` | 波形描画 (`scale_bar`・`draw_group`・測定カーソル) |

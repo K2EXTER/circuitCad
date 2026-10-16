@@ -119,9 +119,9 @@ impl SchEditor {
 
     pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.tool, Tool::Select, "選択").on_hover_text("部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます");
-            ui.selectable_value(&mut self.tool, Tool::Wire, "配線").on_hover_text("端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります");
-            ui.selectable_value(&mut self.tool, Tool::Label, "ラベル").on_hover_text("同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします");
+            { let tip = "部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます"; if crate::icons::icon_button(ui, crate::icons::Icon::Select, "選択", self.tool == Tool::Select, true, tip).clicked() { self.tool = Tool::Select; } };
+            { let tip = "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"; if crate::icons::icon_button(ui, crate::icons::Icon::Wire, "配線", self.tool == Tool::Wire, true, tip).clicked() { self.tool = Tool::Wire; } };
+            { let tip = "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"; if crate::icons::icon_button(ui, crate::icons::Icon::Label, "ラベル", self.tool == Tool::Label, true, tip).clicked() { self.tool = Tool::Label; } };
         });
         if ui.button("クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
             self.open_quick_add();
