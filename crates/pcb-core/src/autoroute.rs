@@ -45,7 +45,29 @@ pub struct RouteReport {
 }
 
 /// Route every airwire of the board (or only those of `only_net`).
+///
+/// With a pad lead the whole run is made twice when the first one leaves connections open: once with the feet of the
+/// leads slid onto the grid lines (no little steps), once with the leads straight out of the pad's centre. The run
+/// that connects more wins (the first, when equal): the order the connections are made in decides what room is left.
 pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
+    let mut slid = board.clone();
+    let first = autoroute_mode(&mut slid, opt, only_net, true);
+    if first.failed.is_empty() || opt.pad_lead.is_none() {
+        *board = slid;
+        return first;
+    }
+    let mut centred = board.clone();
+    let second = autoroute_mode(&mut centred, opt, only_net, false);
+    if second.failed.len() < first.failed.len() {
+        *board = centred;
+        second
+    } else {
+        *board = slid;
+        first
+    }
+}
+
+fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>, slide: bool) -> RouteReport {
     let mut report = RouteReport::default();
     let mut failed: Vec<Airwire> = vec![];
     loop {
@@ -57,7 +79,7 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
         // short connections first: they are the easiest and leave the long ones room to detour
         wires.sort_by(|a, b| a.a.dist(a.b).total_cmp(&b.a.dist(b.b)));
         let Some(w) = wires.into_iter().next() else { break };
-        if route_airwire(board, &w, opt) {
+        if route_airwire_mode(board, &w, opt, slide) {
             report.routed += 1;
         } else {
             failed.push(w);
@@ -69,8 +91,26 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
 
 /// Route one connection. Returns false (and leaves the board untouched) when there is no
 /// route or the route would break a rule.
+///
+/// With a pad lead it tries the lead slid onto the grid line first, then the plain lead, and last no lead at all, so
+/// asking for tidy pad entries never costs a connection the router could have made.
 pub fn route_airwire(board: &mut Board, w: &Airwire, opt: &RouteOptions) -> bool {
-    let Some((tracks, vias)) = find_route(board, w, opt) else { return false };
+    route_airwire_mode(board, w, opt, true)
+}
+
+/// [`route_airwire`] with the lead's foot slid onto the grid line tried first (`slide`) or not at all.
+fn route_airwire_mode(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> bool {
+    let plain = RouteOptions { pad_lead: None, ..opt.clone() };
+    let attempts: &[(&RouteOptions, bool)] = match (opt.pad_lead.is_some(), slide) {
+        (true, true) => &[(opt, true), (opt, false), (&plain, false)],
+        (true, false) => &[(opt, false), (&plain, false)],
+        _ => &[(opt, false)],
+    };
+    attempts.iter().any(|&(o, slide)| route_airwire_with(board, w, o, slide))
+}
+
+fn route_airwire_with(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> bool {
+    let Some((tracks, vias)) = find_route(board, w, opt, slide) else { return false };
     let before = check(board).len();
     let mut trial = board.clone();
     trial.tracks.extend(tracks);
@@ -363,8 +403,8 @@ struct EndCell {
 ///
 /// A pad that sits a hair off the grid would need a tiny jog from the end of its lead to the grid cell. Where the
 /// track still fits on the pad, the foot of the lead is slid along the pad's edge instead, so that the lead runs
-/// straight to the cell (`width`: the track width).
-fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, width: f64) -> Vec<EndCell> {
+/// straight to the cell (`slide_width`: the track width; `None`: no sliding).
+fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, slide_width: Option<f64>) -> Vec<EndCell> {
     if let Some(len) = lead
         && !matches!(pad.shape, PadShape::Circle { .. })
     {
@@ -382,7 +422,7 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, width: f64) ->
             let perp = (-n.1, n.0);
             let side = (cell_pos.x - pad.pos.x) * perp.0 + (cell_pos.y - pad.pos.y) * perp.1;
             let room = (if n.0 != 0.0 { h } else { w }) / 2.0 - 0.05;
-            let slide = side.abs() > 1e-6 && side.abs() <= room && (cell_pos.x - pad.pos.x) * n.0 + (cell_pos.y - pad.pos.y) * n.1 > half + 0.05;
+            let slide = slide_width.is_some() && side.abs() > 1e-6 && side.abs() <= room && (cell_pos.x - pad.pos.x) * n.0 + (cell_pos.y - pad.pos.y) * n.1 > half + 0.05;
             // the lead stops at the cell's distance when the cell is nearer than `q`: running on to `q` and back would leave
             // a stub sticking out of the corner
             let along = (cell_pos.x - pad.pos.x) * n.0 + (cell_pos.y - pad.pos.y) * n.1;
@@ -393,7 +433,8 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, width: f64) ->
             for l in pad_layers(pad, grid.layers.len()) {
                 // the first way whose cells, from the pad's edge to the end, are all free for this net
                 for &(foot, end) in tries {
-                    let reach = foot.dist(end);
+                    // the cells that must be free: up to the lead's end (the lead's end is where the plain lead stops)
+                    let reach = if foot == pad.pos { (half + len).max(foot.dist(end)) } else { foot.dist(end) };
                     let steps = (reach / (grid.g * 0.5)).ceil() as usize;
                     let clear = (0..=steps).all(|k| {
                         let t = reach * k as f64 / steps as f64;
@@ -406,7 +447,8 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, width: f64) ->
                         passable(grid.trk[l][cj * grid.nx + ci], net)
                     });
                     if clear && passable(grid.trk[l][j * grid.nx + i], net) {
-                        out.push(EndCell { l, i, j, cost: reach as f32 + cell_pos.dist(end) as f32, lead: Some((foot, end)) });
+                        // the same cost whichever way the lead is drawn: the choice of route does not depend on the sliding
+                        out.push(EndCell { l, i, j, cost: (half + len) as f32 + cell_pos.dist(q) as f32, lead: Some((foot, end)) });
                         break;
                     }
                 }
@@ -419,14 +461,14 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, width: f64) ->
     pad_cells(grid, pad, net).into_iter().map(|(l, i, j)| EndCell { l, i, j, cost: grid.pos(i, j).dist(pad.pos) as f32, lead: None }).collect()
 }
 
-fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Track>, Vec<Via>)> {
+fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Option<(Vec<Track>, Vec<Via>)> {
     let mut nets: Vec<String> = vec![];
     let grid = build_grid(board, opt, &mut nets)?;
     let net = nets.iter().position(|n| *n == w.net)? as i32 + 1;
     let pad_a = board.pads.iter().find(|p| p.pos == w.a && p.net == w.net)?;
     let pad_b = board.pads.iter().find(|p| p.pos == w.b && p.net == w.net)?;
-    let starts = end_cells(&grid, pad_a, net, opt.pad_lead, opt.track_width);
-    let goals = end_cells(&grid, pad_b, net, opt.pad_lead, opt.track_width);
+    let starts = end_cells(&grid, pad_a, net, opt.pad_lead, slide.then_some(opt.track_width));
+    let goals = end_cells(&grid, pad_b, net, opt.pad_lead, slide.then_some(opt.track_width));
     if starts.is_empty() || goals.is_empty() {
         return None;
     }

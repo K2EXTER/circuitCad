@@ -319,3 +319,20 @@ fn the_board_notices_a_changed_schematic() {
     app.board_ed.import_from_schematic(&app.sch);
     assert!(app.board_ed.schematic_diff(&app.sch).is_empty(), "{:?}", app.board_ed.schematic_diff(&app.sch));
 }
+
+/// The TP5100 sample is routed completely with the pad leads on, without the tiny diagonal steps that an off-grid pad
+/// used to get between the end of its lead and the grid.
+#[test]
+fn the_tp5100_sample_routes_completely_with_clean_pad_leads() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("tp5100_charger.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    app.board_ed.autoplace();
+    app.board_ed.autoroute(None);
+    let b = &app.board_ed.board;
+    assert!(pcb_core::ratsnest::ratsnest(b).is_empty(), "{}", app.board_ed.status);
+    assert!(pcb_core::drc::check(b).is_empty(), "{:?}", pcb_core::drc::check(b));
+    let steps: Vec<_> = b.tracks.iter().filter(|t| t.a.dist(t.b) < 0.25 && (t.b.x - t.a.x).abs() > 1e-6 && (t.b.y - t.a.y).abs() > 1e-6).collect();
+    assert!(steps.is_empty(), "{steps:?}");
+}
