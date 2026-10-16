@@ -17,6 +17,7 @@ mod samples;
 mod learn;
 mod part_form;
 mod plot;
+mod prefs;
 mod project;
 mod schematic;
 mod screenshot;
@@ -261,10 +262,18 @@ impl eframe::App for App {
                         ui.close();
                     }
                     ui.separator();
-                    ui.checkbox(&mut self.show_hints, "画面下にヒントを出す").on_hover_text("画面下に、いま何をするとよいかのヒントと豆知識を表示します");
+                    let mut changed = ui.checkbox(&mut self.show_hints, "画面下にヒントを出す").on_hover_text("画面下に、いま何をするとよいかのヒントと豆知識を表示します").changed();
                     let mut only = icons::icon_only();
                     if ui.checkbox(&mut only, "ツールをアイコンだけで表示").on_hover_text("ツールボタンの文字を省き、アイコンだけにします。ボタンにカーソルを重ねると名前と説明が出ます。慣れてきたら画面が広く使えます").changed() {
                         icons::set_icon_only(only);
+                        changed = true;
+                    }
+                    // these two survive a restart
+                    if changed {
+                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints }.save(&prefs::Prefs::default_file());
+                        if let Err(e) = saved {
+                            self.sch.status = e;
+                        }
                     }
                 });
             });
@@ -324,6 +333,9 @@ fn main() -> eframe::Result {
             install_japanese_font(&cc.egui_ctx);
             let mut app = App::default();
             app.progress = learn::Progress::load(&learn::Progress::default_file());
+            let prefs = prefs::Prefs::load(&prefs::Prefs::default_file());
+            app.show_hints = prefs.show_hints;
+            icons::set_icon_only(prefs.icon_only);
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
