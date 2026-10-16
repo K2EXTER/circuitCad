@@ -347,20 +347,24 @@ fn pad_cells(grid: &Grid, pad: &Pad, net: i32) -> Vec<(usize, usize, usize)> {
 }
 
 /// Where a search starts or ends at a pad: a grid cell, the cost of getting from the pad to it, and (for a pad that is
-/// left at a right angle) the point outside its edge that the straight lead from the pad ends at.
+/// left at a right angle) where the straight lead starts on the pad and the point outside its edge it ends at.
 #[derive(Clone, Copy)]
 struct EndCell {
     l: usize,
     i: usize,
     j: usize,
     cost: f32,
-    lead: Option<Point>,
+    lead: Option<(Point, Point)>,
 }
 
 /// The cells a route may start or end in for `pad`. With a lead length, a rectangular or oval pad is left straight
 /// out of one of its four edges (the lead is a clear straight line of cells); where no edge has room, or for other pads,
 /// it is any cell next to the pad.
-fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>) -> Vec<EndCell> {
+///
+/// A pad that sits a hair off the grid would need a tiny jog from the end of its lead to the grid cell. Where the
+/// track still fits on the pad, the foot of the lead is slid along the pad's edge instead, so that the lead runs
+/// straight to the cell (`width`: the track width).
+fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, width: f64) -> Vec<EndCell> {
     if let Some(len) = lead
         && !matches!(pad.shape, PadShape::Circle { .. })
     {
@@ -374,21 +378,37 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>) -> Vec<EndCell
             if cell_pos.dist(q) > grid.g {
                 continue; // outside the grid
             }
+            // slide the foot sideways onto the cell's line when the track still fits on the pad
+            let perp = (-n.1, n.0);
+            let side = (cell_pos.x - pad.pos.x) * perp.0 + (cell_pos.y - pad.pos.y) * perp.1;
+            let room = (if n.0 != 0.0 { h } else { w }) / 2.0 - 0.05;
+            let slide = side.abs() > 1e-6 && side.abs() <= room && (cell_pos.x - pad.pos.x) * n.0 + (cell_pos.y - pad.pos.y) * n.1 > half + 0.05;
+            // the lead stops at the cell's distance when the cell is nearer than `q`: running on to `q` and back would leave
+            // a stub sticking out of the corner
+            let along = (cell_pos.x - pad.pos.x) * n.0 + (cell_pos.y - pad.pos.y) * n.1;
+            let stop = if along > half + 0.05 && along < half + len { Point::new(pad.pos.x + n.0 * along, pad.pos.y + n.1 * along) } else { q };
+            let plain = (pad.pos, stop);
+            let slid = (Point::new(pad.pos.x + perp.0 * side, pad.pos.y + perp.1 * side), cell_pos);
+            let tries: &[(Point, Point)] = if slide { &[slid, plain] } else { &[plain] };
             for l in pad_layers(pad, grid.layers.len()) {
-                // every cell along the lead, from the pad's edge to the end, is free for this net
-                let steps = ((half + len) / (grid.g * 0.5)).ceil() as usize;
-                let clear = (0..=steps).all(|k| {
-                    let t = (half + len) * k as f64 / steps as f64;
-                    let p = Point::new(pad.pos.x + n.0 * t, pad.pos.y + n.1 * t);
-                    // points inside the pad's own copper are fine: only the cells outside it count
-                    if t <= half {
-                        return true;
+                // the first way whose cells, from the pad's edge to the end, are all free for this net
+                for &(foot, end) in tries {
+                    let reach = foot.dist(end);
+                    let steps = (reach / (grid.g * 0.5)).ceil() as usize;
+                    let clear = (0..=steps).all(|k| {
+                        let t = reach * k as f64 / steps as f64;
+                        let p = Point::new(foot.x + n.0 * t, foot.y + n.1 * t);
+                        // points inside the pad's own copper are fine: only the cells outside it count
+                        if t <= half {
+                            return true;
+                        }
+                        let (ci, cj) = grid_cell(grid, p);
+                        passable(grid.trk[l][cj * grid.nx + ci], net)
+                    });
+                    if clear && passable(grid.trk[l][j * grid.nx + i], net) {
+                        out.push(EndCell { l, i, j, cost: reach as f32 + cell_pos.dist(end) as f32, lead: Some((foot, end)) });
+                        break;
                     }
-                    let (ci, cj) = grid_cell(grid, p);
-                    passable(grid.trk[l][cj * grid.nx + ci], net)
-                });
-                if clear && passable(grid.trk[l][j * grid.nx + i], net) {
-                    out.push(EndCell { l, i, j, cost: (half + len) as f32 + cell_pos.dist(q) as f32, lead: Some(q) });
                 }
             }
         }
@@ -405,8 +425,8 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     let net = nets.iter().position(|n| *n == w.net)? as i32 + 1;
     let pad_a = board.pads.iter().find(|p| p.pos == w.a && p.net == w.net)?;
     let pad_b = board.pads.iter().find(|p| p.pos == w.b && p.net == w.net)?;
-    let starts = end_cells(&grid, pad_a, net, opt.pad_lead);
-    let goals = end_cells(&grid, pad_b, net, opt.pad_lead);
+    let starts = end_cells(&grid, pad_a, net, opt.pad_lead, opt.track_width);
+    let goals = end_cells(&grid, pad_b, net, opt.pad_lead, opt.track_width);
     if starts.is_empty() || goals.is_empty() {
         return None;
     }
@@ -536,8 +556,8 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
         }
     };
     match start_lead {
-        Some(q) => {
-            emit(cells[0].0, pad_a.pos, q);
+        Some((foot, q)) => {
+            emit(cells[0].0, foot, q);
             emit(cells[0].0, q, cells[0].1);
         }
         None => emit(cells[0].0, pad_a.pos, cells[0].1),
@@ -568,9 +588,9 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions) -> Option<(Vec<Tra
     let last = cells[cells.len() - 1];
     emit(last.0, run_from, last.1);
     match end_lead {
-        Some(q) => {
+        Some((foot, q)) => {
             emit(last.0, last.1, q);
-            emit(last.0, q, pad_b.pos);
+            emit(last.0, q, foot);
         }
         None => emit(last.0, last.1, pad_b.pos),
     }

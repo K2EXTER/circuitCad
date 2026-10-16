@@ -107,3 +107,58 @@ fn vias_are_not_put_on_pads() {
         }
     }
 }
+
+fn lead_options() -> RouteOptions {
+    RouteOptions { grid: 0.25, pad_lead: Some(0.5), ..Default::default() }
+}
+
+/// No two tracks that meet leave their meeting point the same way (a stub that runs out and returns on itself).
+fn no_backtrack(b: &Board) -> bool {
+    b.tracks.iter().enumerate().all(|(i, t)| {
+        b.tracks.iter().skip(i + 1).all(|u| {
+            [(t.a, t.b), (t.b, t.a)].iter().all(|&(v, tw)| {
+                [(u.a, u.b), (u.b, u.a)].iter().all(|&(x, uw)| {
+                    if v.dist(x) > 1e-9 {
+                        return true;
+                    }
+                    let (d1, d2) = ((tw.x - v.x, tw.y - v.y), (uw.x - v.x, uw.y - v.y));
+                    let (l1, l2) = (d1.0.hypot(d1.1), d2.0.hypot(d2.1));
+                    l1 < 1e-9 || l2 < 1e-9 || (d1.0 * d2.0 + d1.1 * d2.1) / (l1 * l2) < 0.999
+                })
+            })
+        })
+    })
+}
+
+#[test]
+fn a_pad_off_the_grid_leaves_with_its_lead_slid_onto_the_grid_line_not_with_a_jog() {
+    let mut b = Board::new("t", 30.0, 20.0);
+    pad(&mut b, 5.0875, 10.0, "A", false); // 0.0875 mm off the 0.25 mm grid column
+    pad(&mut b, 25.0, 14.0, "A", false);
+    let r = autoroute(&mut b, &lead_options(), None);
+    assert_eq!((r.routed, r.failed.len()), (1, 0));
+    assert!(ratsnest(&b).is_empty());
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    let steps: Vec<_> = b.tracks.iter().filter(|t| t.a.dist(t.b) < 0.25 && (t.b.x - t.a.x).abs() > 1e-6 && (t.b.y - t.a.y).abs() > 1e-6).collect();
+    assert!(steps.is_empty(), "no tiny diagonal: {steps:?}");
+    // the track leaves the pad at a right angle
+    let first = b.tracks.iter().find(|t| t.a == Point::new(5.0875, 10.0) || t.b == Point::new(5.0875, 10.0) || (t.a.x - 5.0875).abs() < 0.2 && (t.a.y - 10.0).abs() < 0.2).unwrap();
+    assert!((first.a.x - first.b.x).abs() < 1e-9 || (first.a.y - first.b.y).abs() < 1e-9, "{first:?}");
+}
+
+#[test]
+fn a_lead_does_not_run_past_the_grid_cell_and_back() {
+    let mut b = Board::new("t", 30.0, 30.0);
+    // the lead's end would be at x = 13.105, the nearest grid column is x = 13.0: the route turns there
+    let mut p = Pad::new(Point::new(12.15, 21.0), PadShape::Rect { w: 0.91, h: 1.22 }, None, Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    pad(&mut b, 13.0, 27.0, "A", false);
+    // other nets above and below the pad: the lead can only go sideways
+    pad(&mut b, 12.15, 22.7, "B", false);
+    pad(&mut b, 12.15, 19.3, "B", false);
+    let r = autoroute(&mut b, &lead_options(), Some("A"));
+    assert_eq!((r.routed, r.failed.len()), (1, 0));
+    assert!(no_backtrack(&b), "{:?}", b.tracks);
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+}

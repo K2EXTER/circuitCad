@@ -485,6 +485,19 @@ fn is_original_without_holes(file: &Path, bundled: &str) -> bool {
     has_hole(&new) && !has_hole(&old) && old == PartDef { package: old.package.clone(), height: old.height, ..new }
 }
 
+/// Key recorded in `.bundled` once a part has been offered its wire/connector footprint (not the battery holder's).
+fn wire_key(name: &str) -> String {
+    format!("{name}+wire")
+}
+
+/// Is the file an unmodified copy of a bundled battery from when its pads were those of the 77 mm battery holder?
+/// (Equal to the bundled part in every field except the package and its name.)
+fn is_original_with_holder(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    old.footprint_name.as_deref() == Some("BatteryHolder_18650") && new.footprint_name.as_deref() != old.footprint_name.as_deref() && old == PartDef { package: old.package.clone(), footprint_name: old.footprint_name.clone(), ..new }
+}
+
 /// Key recorded in `.bundled` once a part has been offered its ripple current and life.
 fn ripple_key(name: &str) -> String {
     format!("{name}+ripple")
@@ -564,6 +577,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if file.exists() && is_original_without_holes(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // 18650 cells that came with the battery holder's pads: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = wire_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_with_holder(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

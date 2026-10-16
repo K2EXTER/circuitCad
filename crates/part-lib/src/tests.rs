@@ -557,3 +557,38 @@ fn the_bundled_electrolytic_has_ripple_and_life_and_old_copies_get_them_once() {
     assert!(kept.ratings.unwrap().ripple.is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The bundled 18650 cells have two pads 2.54 mm apart (wire or connector), and an installed copy that is still the
+/// original with the 77 mm battery holder's pads gets them once; an edited copy is left alone.
+#[test]
+fn the_bundled_18650_has_wire_pads_and_old_holder_copies_get_them_once() {
+    let bundled = example("LIION_18650");
+    assert_eq!(bundled.footprint_name(), "Battery_Wire_1x2_P2.54");
+    let fp = bundled.footprint().unwrap();
+    assert_eq!(fp.pads.len(), 2);
+    assert!((fp.pads[0].pos.dist(fp.pads[1].pos) - 2.54).abs() < 1e-9);
+    let dir = std::env::temp_dir().join(format!("cc_wire_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // an installed copy from before: the same part on the battery holder's pads
+    let mut old = bundled.clone();
+    old.footprint_name = Some("BatteryHolder_18650".into());
+    if let PackageSpec::Explicit { pads, .. } = &mut old.package {
+        pads[1].x = 77.0;
+    }
+    let file = dir.join(format!("LIION_18650{}", crate::FILE_SUFFIX));
+    std::fs::write(&file, serde_json::to_string_pretty(&old).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "LIION_18650").unwrap();
+    install_examples(&dir).unwrap();
+    let after: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(after.footprint_name(), "Battery_Wire_1x2_P2.54");
+    // an edited copy stays as the user left it
+    let mut edited = old.clone();
+    edited.description = "my own words".into();
+    std::fs::write(&file, serde_json::to_string_pretty(&edited).unwrap()).unwrap();
+    std::fs::write(dir.join(".bundled"), "LIION_18650").unwrap();
+    install_examples(&dir).unwrap();
+    let kept: PartDef = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    assert_eq!(kept.footprint_name(), "BatteryHolder_18650");
+    let _ = std::fs::remove_dir_all(&dir);
+}
