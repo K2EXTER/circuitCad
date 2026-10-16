@@ -137,7 +137,7 @@ impl SchEditor {
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
-                        ui.set_width(170.0);
+                        ui.set_width(250.0);
                         ui.horizontal(|ui| {
                             if ui.button("選択をクリア").clicked() {
                                 selected.clear();
@@ -166,22 +166,50 @@ impl SchEditor {
                         } else {
                             st.x
                         };
-                        for name in order.iter().filter(|n| selected.contains(**n)).take(6) {
-                            if let Some(sg) = res.signal(name)
-                                && let Some(sx) = signal_stats(&res.time, &sg.values, w0, w1) {
-                                    let u = sg.unit;
-                                    ui.small(format!("{name}\n  平均 {}{u}  AC実効値 {}{u}", plot::axis_label(sx.mean, sx.mean.abs() / 1000.0), plot::axis_label(sx.rms_ac, sx.rms_ac.abs() / 1000.0)));
-                                    if let Some(m) = wave_measure(&res.time, &sg.values, w0, w1) {
-                                        ui.small(format!("  最小 {}  最大 {}
-  振幅(p-p) {}", eng(m.min, u), eng(m.max, u), eng(m.pp, u))).on_hover_text("表示中の範囲での値です。ズームすると、見ている部分だけの値になります");
-                                        if let Some(f) = m.freq {
-                                            ui.small(format!("  周波数 {}  周期 {}", eng(f, "Hz"), eng(1.0 / f, "s"))).on_hover_text("中間の高さを下から上へ横切る間隔から求めています。2周期以上が範囲に入っているときだけ表示されます");
-                                        }
-                                        if let Some(d) = m.duty {
-                                            ui.small(format!("  デューティ比 {:.1} %", d * 100.0)).on_hover_text("1周期のうち、中間の高さより上にいる時間の割合です");
-                                        }
+                        // one column per selected signal, one row per figure (so the narrow panel reads as a table)
+                        let stats: Vec<_> = order
+                            .iter()
+                            .filter(|n| selected.contains(**n))
+                            .take(6)
+                            .filter_map(|name| {
+                                let sg = res.signal(name)?;
+                                let sx = signal_stats(&res.time, &sg.values, w0, w1)?;
+                                Some((name.to_string(), sg.unit, sx, wave_measure(&res.time, &sg.values, w0, w1)))
+                            })
+                            .collect();
+                        if !stats.is_empty() {
+                            egui::ScrollArea::horizontal().id_salt("wave_stats").show(ui, |ui| {
+                                egui::Grid::new("wave_stats_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                    ui.label("");
+                                    for (name, ..) in &stats {
+                                        ui.strong(name);
                                     }
-                                }
+                                    ui.end_row();
+                                    let dash = || "—".to_string();
+                                    let rows: [(&str, &str, Box<dyn Fn(&(String, &str, sim_core::Stats, Option<sim_core::WaveMeasure>)) -> String>); 8] = [
+                                        ("平均", "表示範囲の平均値です", Box::new(|s| format!("{}{}", plot::axis_label(s.2.mean, s.2.mean.abs() / 1000.0), s.1))),
+                                        ("AC実効値", "平均を引いた交流分の実効値 (ノイズ・リップルの大きさ)", Box::new(|s| format!("{}{}", plot::axis_label(s.2.rms_ac, s.2.rms_ac.abs() / 1000.0), s.1))),
+                                        ("最小", "表示中の範囲での最小値です。ズームすると、見ている部分だけの値になります", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.min, s.1)))),
+                                        ("最大", "表示中の範囲での最大値です。ズームすると、見ている部分だけの値になります", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.max, s.1)))),
+                                        ("振幅 (p-p)", "最大と最小の差です", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.pp, s.1)))),
+                                        ("周波数", "中間の高さを下から上へ横切る間隔から求めています。2周期以上が範囲に入っているときだけ出ます", Box::new(|s| s.3.as_ref().and_then(|m| m.freq).map_or_else(dash, |f| eng(f, "Hz")))),
+                                        ("周期", "周波数の逆数です", Box::new(|s| s.3.as_ref().and_then(|m| m.freq).map_or_else(dash, |f| eng(1.0 / f, "s")))),
+                                        ("デューティ比", "1周期のうち、中間の高さより上にいる時間の割合です", Box::new(|s| s.3.as_ref().and_then(|m| m.duty).map_or_else(dash, |d| format!("{:.1} %", d * 100.0)))),
+                                    ];
+                                    for (label, tip, f) in rows.iter() {
+                                        let cells: Vec<String> = stats.iter().map(|s| f(s)).collect();
+                                        // a row with nothing to show for any signal (no frequency, no duty) is left out
+                                        if cells.iter().all(|c| c == "—") {
+                                            continue;
+                                        }
+                                        ui.label(*label).on_hover_text(*tip);
+                                        for c in cells {
+                                            ui.label(c);
+                                        }
+                                        ui.end_row();
+                                    }
+                                });
+                            });
                         }
                         egui::CollapsingHeader::new("ステップ応答の指標").show(ui, |ui| {
                             ui.small("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)");
