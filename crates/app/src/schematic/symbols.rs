@@ -395,3 +395,19 @@ mod tests {
         assert!(leads(source_symbol("SIN(0 1 1k)")) >= 2);
     }
 }
+
+/// A small picture of the plain symbol of `kind`, scaled to fit `rect` (for the parts list).
+pub(super) fn paint_kind_preview(painter: &egui::Painter, rect: Rect, kind: Kind, color: Color32) {
+    let (x0, x1, y0, y1) = extents(kind);
+    let (w, h) = ((x1 - x0).max(0.5), (y1 - y0).max(0.5));
+    let scale = ((rect.width() - 4.0) / w).min((rect.height() - 4.0) / h);
+    let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+    let tr = |x: f32, y: f32| Pos2::new(rect.center().x + (x - cx) * scale, rect.center().y + (y - cy) * scale);
+    let stroke = Stroke::new(1.3, color);
+    for s in symbol(kind) {
+        match s {
+            Sh::L(a, b, c, d) => painter.line_segment([tr(a, b), tr(c, d)], stroke),
+            Sh::C(x, y, r) => painter.circle_stroke(tr(x, y), r * scale, stroke),
+        };
+    }
+}
