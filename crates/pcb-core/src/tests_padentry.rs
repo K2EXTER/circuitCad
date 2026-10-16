@@ -155,3 +155,42 @@ fn two_tracks_spread_on_a_wide_pad_are_laid_with_gentle_folds() {
         assert!(turn < 50.0, "from {anchor:?}: the sharpest turn is {turn} degrees: {pts:?}");
     }
 }
+
+/// No piece of the route near the pad is a tiny diagonal: the little step that a pad a hair off the grid line used to get.
+fn has_tiny_step(b: &Board) -> bool {
+    b.tracks.iter().any(|t| {
+        let (dx, dy) = ((t.b.x - t.a.x).abs(), (t.b.y - t.a.y).abs());
+        t.a.dist(t.b) < 0.25 && dx > 1e-6 && dy > 1e-6
+    })
+}
+
+#[test]
+fn a_pad_a_hair_off_the_grid_line_slides_the_lead_instead_of_making_a_jog() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 21.4125, 7.0, 0.6, 1.0, "A");
+    pad(&mut b, 21.5, 20.0, 1.0, 1.0, "A");
+    // the router came from the grid column x = 21.5 to the pad's centre: a slightly slanted foot, then straight up
+    b.tracks.push(trk((21.4125, 7.0), (21.5, 7.75)));
+    b.tracks.push(trk((21.5, 7.75), (21.5, 20.0)));
+    let r = align_entries(&mut b, &EntryOptions::default(), None);
+    assert_eq!(r.aligned, 1, "{r:?}");
+    assert!(!has_tiny_step(&b), "{:?}", b.tracks);
+    assert!(ratsnest(&b).is_empty(), "still connected");
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    // one straight line up the grid column, starting on the pad
+    assert!(b.tracks.iter().all(|t| (t.a.x - 21.5).abs() < 1e-9 && (t.b.x - 21.5).abs() < 1e-9), "{:?}", b.tracks);
+    assert!(b.tracks.iter().any(|t| (t.a.y - 7.0).abs() < 1e-9 || (t.b.y - 7.0).abs() < 1e-9));
+}
+
+#[test]
+fn a_jog_that_would_be_a_tiny_step_is_not_made_when_the_pad_cannot_slide() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    // a narrow pad: the foot cannot move 0.2 mm sideways and keep the track on the pad
+    pad(&mut b, 21.3, 7.0, 0.3, 1.0, "A");
+    pad(&mut b, 21.5, 20.0, 1.0, 1.0, "A");
+    b.tracks.push(trk((21.3, 7.0), (21.5, 7.75)));
+    b.tracks.push(trk((21.5, 7.75), (21.5, 20.0)));
+    align_entries(&mut b, &EntryOptions::default(), None);
+    assert!(!has_tiny_step(&b), "{:?}", b.tracks);
+    assert!(ratsnest(&b).is_empty(), "still connected");
+}

@@ -65,6 +65,9 @@ struct Edit {
 /// The inset (mm) of the snap points at the ends of a pad besides half a track width (as in the editor).
 const END_INSET: f64 = 0.05;
 
+/// The shortest (mm) piece joining the lead to the old route: shorter than this the bend shows as a step.
+const MIN_LEG: f64 = 0.25;
+
 fn unit(from: Point, to: Point) -> (f64, f64, f64) {
     let l = from.dist(to);
     if l < 1e-9 { (0.0, 0.0, 0.0) } else { ((to.x - from.x) / l, (to.y - from.y) / l, l) }
@@ -161,6 +164,9 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
     // ones joined to it), beyond the pad
     let s_min = exit_along(pad, v, (ux, uy)) + 0.1;
     let links = chain(board, e, s_min + 2.0 * lead + 1.0);
+    if anchor.dist(v) < 1e-6 && let Some(edit) = slide_foot(board, pad, e, anchor, n, exit, lead, &links) {
+        return Some(edit);
+    }
     let mut best: Option<(f64, usize, Point, f64)> = None; // (score, index in `links`, joint, the sharpest turn)
     for (idx, &(_, _, p0, p1)) in links.iter().enumerate() {
         let (sx, sy, sl) = unit(p0, p1);
@@ -177,6 +183,10 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
             let ss = (d.0 * ry - d.1 * rx) / det;
             let s_lo = if idx == 0 { s_min } else { 0.05 };
             if tt < 0.05 || ss < s_lo || ss > sl - 0.2 {
+                continue;
+            }
+            // a short bend would only be a visible little step
+            if tt < MIN_LEG && d.0 * n.0 + d.1 * n.1 < 0.9999 {
                 continue;
             }
             let j = Point::new(p0.x + sx * ss, p0.y + sy * ss);
@@ -222,7 +232,7 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
             let mut ok = true;
             for &p in &pts {
                 let (dx, dy, l) = unit(prev, p);
-                if l < 0.05 {
+                if l < MIN_LEG {
                     ok = false;
                     break;
                 }
@@ -279,6 +289,43 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
     let remove = links[..idx].iter().map(|l| l.0).collect();
     Some(Edit { track: e.track, trim: Some((track, is_a, joint)), new, remove })
 }
+
+/// A pad that sits a hair off the route's grid line (the router comes to the pad's centre from the grid) would get a
+/// tiny 45° jog to join the line. When a track further on already runs straight away from the pad's edge, only a
+/// little to the side, slide the foot of the lead along the pad's edge onto that line instead: one straight track.
+#[allow(clippy::too_many_arguments)]
+fn slide_foot(board: &Board, pad: &Pad, e: End, anchor: Point, n: (f64, f64), exit: f64, lead: f64, links: &[(usize, bool, Point, Point)]) -> Option<Edit> {
+    let t = &board.tracks[e.track];
+    let (pw, ph) = pad.shape.size();
+    let perp = (-n.1, n.0);
+    // how far the foot may move sideways and still keep the whole track width on the pad
+    let room = (if n.0 != 0.0 { ph } else { pw }) / 2.0 - t.width / 2.0 - END_INSET;
+    for (idx, &(track, is_a, p0, p1)) in links.iter().enumerate().skip(1) {
+        let (sx, sy, sl) = unit(p0, p1);
+        if sx * n.0 + sy * n.1 < 0.9999 {
+            continue; // not running straight away from the pad
+        }
+        let lat = (p0.x - anchor.x) * perp.0 + (p0.y - anchor.y) * perp.1;
+        let off = (anchor.x - pad.pos.x) * perp.0 + (anchor.y - pad.pos.y) * perp.1 + lat;
+        if lat.abs() < 1e-6 || lat.abs() > MAX_SLIDE || off.abs() > room {
+            continue;
+        }
+        let foot = Point::new(anchor.x + perp.0 * lat, anchor.y + perp.1 * lat);
+        // the lead is at least `lead` long outside the pad's edge; the link starts further out or is cut there
+        let ahead = (p0.x - foot.x) * n.0 + (p0.y - foot.y) * n.1;
+        let s = (exit + lead - ahead).max(0.0);
+        if ahead < 0.05 + exit || s > sl - 0.2 {
+            continue;
+        }
+        let joint = Point::new(p0.x + sx * s, p0.y + sy * s);
+        let remove = links[..idx].iter().map(|l| l.0).collect();
+        return Some(Edit { track: e.track, trim: Some((track, is_a, joint)), new: vec![Track { side: t.side, a: foot, b: joint, width: t.width }], remove });
+    }
+    None
+}
+
+/// The most (mm) the foot of a lead is slid along the pad's edge to meet a track that runs on beside it.
+const MAX_SLIDE: f64 = 0.3;
 
 /// The points to visit from `a` to `p` (the last is `p`) with horizontal, vertical and 45° legs; `flip` picks which of
 /// the two bends is used.
