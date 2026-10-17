@@ -47,8 +47,8 @@ fn led_board(registers: usize) -> (Board, usize, usize) {
             parts.push(part(&res, "330", "R_0805"));
             parts.push(part(&led, "LED", "LED_0805"));
             net(&format!("Q{n}"), &[(u.clone(), pin), (res.clone(), "1")]);
-            net(&format!("L{n}"), &[(res.clone(), "2"), (led.clone(), "1")]);
-            gnd.push((led.clone(), "2"));
+            net(&format!("L{n}"), &[(res.clone(), "2"), (led.clone(), "A")]);
+            gnd.push((led.clone(), "K"));
         }
     }
     net("VCC", &vcc);
@@ -80,11 +80,11 @@ fn large_led_board() {
     println!("QUALITY parts {parts} nets {nets} airwires {} placed {} board {}x{} (place {:?})", open.len(), placed.placed, placed.width, placed.height, t_place);
     println!("QUALITY routed {} failed {} in {:?}; unrouted left {}; drc {}", r.routed, r.failed.len(), t_route, ratsnest(&b).len(), drc::check(&b).len());
     println!("QUALITY track length {len:.0} mm vs straight-line {ideal:.0} mm (x{:.2}); vias {}; tracks {}; odd-angle {odd}; tiny steps {steps}", len / ideal.max(1e-9), b.vias.len(), b.tracks.len());
+    if let Ok(out) = std::env::var("CIRCUITCAD_QUALITY_OUT") {
+        std::fs::write(out, serde_json::to_string_pretty(&b).unwrap()).unwrap();
+    }
     assert!(r.failed.len() <= 2, "{} connections left open", r.failed.len());
     assert_eq!(odd, 0);
     assert!(steps <= 3, "{steps} tiny steps");
     for w in &r.failed { println!("QUALITY failed {} {:?} -> {:?}", w.net, w.a, w.b); }
-    if let Ok(out) = std::env::var("CIRCUITCAD_QUALITY_OUT") {
-        std::fs::write(out, serde_json::to_string_pretty(&b).unwrap()).unwrap();
-    }
 }

@@ -104,24 +104,125 @@ type NetPins = Vec<(usize, f64, f64)>;
 /// number of connections the net needs.
 fn net_length(items: &[(String, Point, f64, f64)], nets: &[NetPins], order: &[usize], row_w: f64) -> f64 {
     let (spots, ..) = pack(items, order, row_w);
-    let mut at = vec![(0.0, 0.0); items.len()];
-    for (i, x, y) in spots {
+    spots_cost(nets, &spots, items.len())
+}
+
+/// [`net_length`] for given cell corners (`spots`: item, x, y).
+fn spots_cost(nets: &[NetPins], spots: &[(usize, f64, f64)], n: usize) -> f64 {
+    let mut at = vec![(0.0, 0.0); n];
+    for &(i, x, y) in spots {
         at[i] = (x, y);
     }
-    nets.iter()
-        .map(|pins| {
-            let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
-            for &(i, ox, oy) in pins {
-                let (x, y) = (at[i].0 + ox, at[i].1 + oy);
-                x0 = x0.min(x);
-                x1 = x1.max(x);
-                y0 = y0.min(y);
-                y1 = y1.max(y);
-            }
-            // a net with many pins (a supply) says less about who belongs together: its weight is shared among its pins
-            ((x1 - x0) + (y1 - y0)) / (pins.len() as f64 - 1.0).max(1.0)
+    nets.iter().map(|pins| net_hpwl(pins, |i| Some(at[i]))).sum()
+}
+
+/// The half-perimeter of the box around a net's pads (the parts that `at` knows), divided by the number of
+/// connections the net needs.
+fn net_hpwl(pins: &NetPins, at: impl Fn(usize) -> Option<(f64, f64)>) -> f64 {
+    let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    let mut any = false;
+    for &(i, ox, oy) in pins {
+        if let Some((x, y)) = at(i) {
+            x0 = x0.min(x + ox);
+            x1 = x1.max(x + ox);
+            y0 = y0.min(y + oy);
+            y1 = y1.max(y + oy);
+            any = true;
+        }
+    }
+    if !any {
+        return 0.0;
+    }
+    ((x1 - x0) + (y1 - y0)) / (pins.len() as f64 - 1.0).max(1.0)
+}
+
+/// Free placement, part by part in `order` (the most connected part first, then always the one most tied to those
+/// already placed): each part goes as near as it can to where its pins would sit on the pads they connect to, on the
+/// nearest free spot of a 0.5 mm grid, picking from the first few free spots the one with the shortest nets. Parts
+/// gather round the parts they belong to instead of lining up in rows. Returns the cell corners, moved to the origin.
+fn attach_layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], order: &[usize]) -> Vec<(usize, f64, f64)> {
+    const STEP: f64 = 0.5;
+    const WANT: usize = 12;
+    // how much a part's net length may grow to stay closer to the middle of what is placed (mm per mm); measured on a
+    // 73-part LED board: 0.1 left 1 connection open, 0.3 left 1, 1.0 left 3, 3.0 left 4
+    const PULL: f64 = 0.1;
+    let n = items.len();
+    let mut mine: Vec<Vec<(usize, f64, f64)>> = vec![vec![]; n];
+    for (k, pins) in nets.iter().enumerate() {
+        for &(i, ox, oy) in pins {
+            mine[i].push((k, ox, oy));
+        }
+    }
+    let mut at: Vec<Option<(f64, f64)>> = vec![None; n];
+    let mut placed: Vec<usize> = vec![];
+    let free = |at: &[Option<(f64, f64)>], placed: &[usize], i: usize, x: f64, y: f64| {
+        placed.iter().all(|&j| {
+            let (px, py) = at[j].unwrap();
+            !(x < px + items[j].2 - 1e-9 && px < x + items[i].2 - 1e-9 && y < py + items[j].3 - 1e-9 && py < y + items[i].3 - 1e-9)
         })
-        .sum()
+    };
+    for &i in order {
+        // where the part would like to be: its pads on the pads of its nets
+        let (mut sx, mut sy, mut sw) = (0.0, 0.0, 0.0);
+        for &(k, ox, oy) in &mine[i] {
+            let w = 1.0 / (nets[k].len() as f64 - 1.0).max(1.0);
+            for &(j, px, py) in &nets[k] {
+                if let Some((x, y)) = at[j].filter(|_| j != i) {
+                    sx += w * (x + px - ox);
+                    sy += w * (y + py - oy);
+                    sw += w;
+                }
+            }
+        }
+        let (bx0, bx1, by0, by1) = placed.iter().fold((f64::MAX, f64::MIN, f64::MAX, f64::MIN), |b, &j| {
+            let (x, y) = at[j].unwrap();
+            (b.0.min(x), b.1.max(x + items[j].2), b.2.min(y), b.3.max(y + items[j].3))
+        });
+        let ideal = if sw > 0.0 { (sx / sw, sy / sw) } else if placed.is_empty() { (0.0, 0.0) } else { (bx1, by0) };
+        let centre = ((bx0 + bx1) / 2.0, (by0 + by1) / 2.0);
+        let (cx, cy) = ((ideal.0 / STEP).round() * STEP, (ideal.1 / STEP).round() * STEP);
+        // the nearest free spots, ring by ring
+        let mut found: Vec<(f64, f64)> = vec![];
+        let rmax = if placed.is_empty() { 0 } else { 400 };
+        for r in 0..=rmax as i64 {
+            let mut ring: Vec<(f64, f64)> = vec![];
+            if r == 0 {
+                ring.push((cx, cy));
+            } else {
+                for d in -r..=r {
+                    ring.extend([(cx + d as f64 * STEP, cy - r as f64 * STEP), (cx + d as f64 * STEP, cy + r as f64 * STEP)]);
+                    if d.abs() != r {
+                        ring.extend([(cx - r as f64 * STEP, cy + d as f64 * STEP), (cx + r as f64 * STEP, cy + d as f64 * STEP)]);
+                    }
+                }
+            }
+            for (x, y) in ring {
+                if free(&at, &placed, i, x, y) {
+                    found.push((x, y));
+                }
+            }
+            if found.len() >= WANT {
+                break;
+            }
+        }
+        if found.is_empty() {
+            found.push((bx1.max(0.0), by0.min(0.0)));
+        }
+        let cost = |(x, y): (f64, f64)| -> f64 {
+            let mut c = 0.0;
+            for &(k, ..) in &mine[i] {
+                let known = |j: usize| if j == i { Some((x, y)) } else { at[j] };
+                c += net_hpwl(&nets[k], known);
+            }
+            // stay compact: a small pull to the middle of what is placed
+            if placed.is_empty() { c } else { c + PULL * ((x + items[i].2 / 2.0 - centre.0).hypot(y + items[i].3 / 2.0 - centre.1)) }
+        };
+        let best = found.into_iter().min_by(|a, b| cost(*a).total_cmp(&cost(*b))).unwrap();
+        at[i] = Some(best);
+        placed.push(i);
+    }
+    let (x0, y0) = placed.iter().fold((f64::MAX, f64::MAX), |b, &j| (b.0.min(at[j].unwrap().0), b.1.min(at[j].unwrap().1)));
+    order.iter().map(|&i| (i, at[i].unwrap().0 - x0, at[i].unwrap().1 - y0)).collect()
 }
 
 /// Improve the order by swapping and moving parts, keeping what shortens the nets (and, early on, some of what does
@@ -199,18 +300,27 @@ fn place(board: &mut Board, turn: bool, improve: bool) -> Result<PlaceReport, St
     let area: f64 = items.iter().map(|i| i.2 * i.3).sum();
     let widest = items.iter().map(|i| i.2).fold(0.0, f64::max);
     let row_w = (area * 1.5).sqrt().max(widest);
-    if improve {
-        // the nets as pad offsets from each part's cell corner (the parts are all at the origin now)
-        let mut nets: std::collections::BTreeMap<&str, NetPins> = Default::default();
-        for pad in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty()) {
-            if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
-                nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + GAP / 2.0, pad.pos.y - items[i].1.y + GAP / 2.0 + LABEL));
-            }
+    // the nets as pad offsets from each part's cell corner (the parts are all at the origin now)
+    let mut nets: std::collections::BTreeMap<&str, NetPins> = Default::default();
+    for pad in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty()) {
+        if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
+            nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + GAP / 2.0, pad.pos.y - items[i].1.y + GAP / 2.0 + LABEL));
         }
-        let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+    }
+    let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+    let greedy = order.clone();
+    if improve {
         order = improve_order(&items, &nets, order, row_w);
     }
-    let (spots, used_w, used_h) = pack(&items, &order, row_w);
+    let (mut spots, mut used_w, mut used_h) = pack(&items, &order, row_w);
+    // the other way to lay the parts out: free placement round the most connected ones; the one with the shorter nets wins
+    if improve && items.len() >= 4 {
+        let cand = attach_layout(&items, &nets, &greedy);
+        if spots_cost(&nets, &cand, items.len()) < spots_cost(&nets, &spots, items.len()) {
+            (used_w, used_h) = cand.iter().fold((0.0f64, 0.0f64), |b, &(i, x, y)| (b.0.max(x + items[i].2), b.1.max(y + items[i].3)));
+            spots = cand;
+        }
+    }
     for (i, sx, sy) in &spots {
         let (refdes, lo, ..) = &items[*i];
         let rot = board.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
@@ -326,8 +436,8 @@ mod tests {
             parts.push(part(r.clone(), "R_0805"));
             parts.push(part(d.clone(), "LED_0805"));
             nets.push(NetlistNet { name: format!("Q{k}"), pins: vec![("J1".into(), (k + 1).to_string()), (r.clone(), "1".into())] });
-            nets.push(NetlistNet { name: format!("N{k}"), pins: vec![(r, "2".into()), (d.clone(), "1".into())] });
-            gnd.push((d, "2".to_string()));
+            nets.push(NetlistNet { name: format!("N{k}"), pins: vec![(r, "2".into()), (d.clone(), "A".into())] });
+            gnd.push((d, "K".to_string()));
         }
         nets.push(NetlistNet { name: "GND".into(), pins: gnd });
         import(&mut b, &parts, &nets);
@@ -348,6 +458,22 @@ mod tests {
         let mut again = fan(8);
         place(&mut again, false, true).unwrap();
         assert!(again.parts.iter().zip(&improved.parts).all(|(a, b)| a.pos == b.pos));
+    }
+
+    #[test]
+    fn a_hub_with_many_parts_gets_a_compact_board_with_its_parts_round_it() {
+        let mut b = fan(8);
+        let rep = autoplace(&mut b).unwrap();
+        assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+        // not a sprawl: the outline is not much bigger than the parts need
+        let cells: f64 = b.parts.iter().filter_map(|p| extent(&b, &p.refdes)).map(|(lo, hi)| (hi.x - lo.x + GAP) * (hi.y - lo.y + GAP + LABEL)).sum();
+        assert!(rep.width * rep.height <= 3.0 * cells, "{}x{} for {cells}", rep.width, rep.height);
+        // each resistor is next to its LED
+        let at = |r: &str| b.parts.iter().find(|p| p.refdes == r).unwrap().pos;
+        for k in 0..8 {
+            let d = at(&format!("R{k:02}")).dist(at(&format!("D{k:02}")));
+            assert!(d < 10.0, "R{k:02} and D{k:02} are {d} mm apart");
+        }
     }
 
     #[test]
