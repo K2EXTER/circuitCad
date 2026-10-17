@@ -235,3 +235,33 @@ fn frame_cost() {
     let _ = crate::gerber::copper(&b, Side::Bottom);
     println!("gerber bottom {:?}", t.elapsed());
 }
+
+#[test]
+fn a_later_pour_of_another_net_cuts_the_earlier_one_with_a_gap() {
+    use crate::geom::inside_polygon;
+    let mut b = board();
+    let (mut a, mut c) = (Zone::new("A", Side::Top, rect(2.0, 2.0, 20.0, 20.0)), Zone::new("B", Side::Top, rect(12.0, 8.0, 30.0, 25.0)));
+    a.clearance = 0.5;
+    c.clearance = 0.5;
+    b.zones.push(a);
+    b.zones.push(c);
+    let conn = drc::connectivity(&b);
+    let fill_a = crate::zonefill::zone_fill(&b, &b.zones[0], &conn);
+    let fill_b = crate::zonefill::zone_fill(&b, &b.zones[1], &conn);
+    // B keeps its whole rectangle; A is cut back by B's clearance
+    let area = |f: &[crate::zonefill::FillShape]| f.iter().map(|s| crate::geom::signed_area(&s.outer).abs() - s.holes.iter().map(|h| crate::geom::signed_area(h).abs()).sum::<f64>()).sum::<f64>();
+    assert!((area(&fill_b) - 18.0 * 17.0).abs() < 1.0, "{}", area(&fill_b));
+    assert!(area(&fill_a) < 18.0 * 18.0 - 8.0 * 12.0 + 1.0, "the overlap is gone: {}", area(&fill_a));
+    for s in &fill_a {
+        for p in &s.outer {
+            assert!(!inside_polygon(&b.zones[1].polygon, *p), "{p:?} is inside the other pour");
+        }
+    }
+    // a gap of the clearance remains between the two coppers
+    let gap = |p: &Point| ((12.0 - p.x).max(0.0).max(p.x - 30.0)).hypot((8.0 - p.y).max(0.0).max(p.y - 25.0));
+    assert!(fill_a.iter().all(|s| s.outer.iter().all(|p| gap(p) > 0.5 - 1e-3)), "{fill_a:?}");
+    // the same net on both pours is not cut
+    b.zones[1].net = "A".into();
+    let conn = drc::connectivity(&b);
+    assert!(area(&crate::zonefill::zone_fill(&b, &b.zones[0], &conn)) > 18.0 * 18.0 - 1.0);
+}

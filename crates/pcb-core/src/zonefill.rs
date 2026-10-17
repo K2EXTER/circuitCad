@@ -142,6 +142,16 @@ pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillSha
             cuts.push(circle(Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t), h.drill / 2.0 + c));
         }
     }
+    // a later pour of another net on the same layer wins where they overlap; this one keeps its clearance from it
+    if let Some(me) = board.zones.iter().position(|z| std::ptr::eq(z, zone)) {
+        for other in board.zones[me + 1..].iter().filter(|o| o.side == side && o.polygon.len() >= 3 && !same(Some(o.net.as_str()))) {
+            cuts.push(ccw(&other.polygon));
+            let m = other.polygon.len();
+            for i in 0..m {
+                cuts.push(capsule(other.polygon[i], other.polygon[(i + 1) % m], c));
+            }
+        }
+    }
     let n = board.outline.len();
     let edge = c.max(board.rules.edge_clearance);
     if n >= 3 {
