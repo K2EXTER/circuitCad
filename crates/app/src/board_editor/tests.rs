@@ -643,18 +643,33 @@ fn pad_editor() -> BoardEditor {
 }
 
 #[test]
-fn a_long_pad_snaps_at_its_two_ends_and_a_small_one_only_at_its_centre() {
+fn a_big_pad_snaps_at_its_four_corners_flush_with_the_track_and_a_small_one_only_at_its_centre() {
     let e = pad_editor();
     let ends = e.pad_end_points();
-    // 3 mm wide: ends a track's width (and a little) in from the short edges; 0.6 mm tall and the 0.5 mm pad: no room for two tracks
-    assert_eq!(ends.len(), 2, "{ends:?}");
-    assert!(ends.iter().all(|q| (q.y - 10.0).abs() < 1e-9 && (q.x - 10.0).abs() > 1.0 && (q.x - 10.0).abs() < 1.5));
-    let near_end = Point::new(ends[0].x + 0.1, ends[0].y + 0.1);
-    assert_eq!(e.snap_object(near_end), Some(ends[0]));
+    // 3 x 0.6 mm pad, 0.25 mm track: the corner points are where the track's edges are flush with the pad's edges
+    // (half the track's width in from each edge); the 0.5 mm pad has no corner that differs from its centre
+    assert_eq!(ends.len(), 4, "{ends:?}");
+    let want = [(8.625, 9.825), (8.625, 10.175), (11.375, 9.825), (11.375, 10.175)];
+    for (x, y) in want {
+        assert!(ends.iter().any(|q| (q.x - x).abs() < 1e-9 && (q.y - y).abs() < 1e-9), "{ends:?}");
+    }
+    let near_corner = Point::new(ends[0].x + 0.1, ends[0].y + 0.1);
+    assert_eq!(e.snap_object(near_corner), Some(ends[0]));
     // with another tool there is no such snap
     let mut v = pad_editor();
     v.tool = Tool::Via;
-    assert_ne!(v.snap_object(near_end), Some(ends[0]));
+    assert_ne!(v.snap_object(near_corner), Some(ends[0]));
+    // a thinner track moves the corners out (the edges stay flush) ...
+    let mut thin = pad_editor();
+    thin.track_width = 0.2;
+    assert!(thin.pad_end_points().iter().any(|q| (q.x - 11.4).abs() < 1e-9 && (q.y - 10.2).abs() < 1e-9), "{:?}", thin.pad_end_points());
+    // ... a thicker one moves them in, and where the pad is then too thin to tell top and bottom apart (0.4 mm track on
+    // a 0.6 mm pad) the two corners become one point on the middle line
+    let mut thick = pad_editor();
+    thick.track_width = 0.4;
+    let t = thick.pad_end_points();
+    assert_eq!(t.len(), 2, "{t:?}");
+    assert!(t.iter().all(|q| (q.y - 10.0).abs() < 1e-9 && ((q.x - 10.0).abs() - 1.3).abs() < 1e-9), "{t:?}");
 }
 
 /// Fine-pitch pads like the pins of a QFN: three 0.85 x 0.3 mm pads 0.65 mm apart, of three nets, and a far pad of the
@@ -671,16 +686,23 @@ fn fine_pitch_editor() -> BoardEditor {
 }
 
 #[test]
-fn between_fine_pitch_pads_there_is_no_snap_at_the_ends_and_no_lead_out_of_the_long_side() {
+fn between_fine_pitch_pads_the_ends_leave_straight_out_of_the_end_and_never_through_the_long_side() {
     let e = fine_pitch_editor();
     let mid = Point::new(20.0, 10.0);
-    // the ends of the middle pad would leave through a side that is 0.35 mm from the next pad: not offered
+    // a thin pad has two points, its two ends (the track as wide as the pad is thin: one line)
     let ends = e.pad_end_points();
-    assert!(ends.iter().all(|q| (q.y - 10.0).abs() > 0.2 || (q.x - 20.0).abs() < 0.1), "{ends:?}");
-    // the outer pads have a free side: their ends are still there (up for the top pad, down for the bottom one)
-    assert!(ends.iter().any(|q| (q.y - 10.65).abs() < 1e-9), "{ends:?}");
-    // leaving the middle pad with the cursor straight above or below: not up or down into the neighbours, but
-    // through an end or not at all
+    let of_mid: Vec<&Point> = ends.iter().filter(|q| (q.y - 10.0).abs() < 1e-9).collect();
+    assert_eq!(of_mid.len(), 2, "{ends:?}");
+    assert!(of_mid.iter().all(|q| (q.x - 20.0).abs() > 0.25), "{of_mid:?}");
+    // the ends of the middle pad would leave through a side that is 0.35 mm from the next pad: they go straight out of
+    // the end, whichever way the cursor is
+    for q in &of_mid {
+        for target in [Point::new(20.0, 20.0), Point::new(20.0, 1.0), Point::new(q.x, 30.0)] {
+            let lead = e.pad_lead_point(**q, target).expect("a way out");
+            assert!((lead.y - 10.0).abs() < 1e-9 && (lead.x - 20.0).abs() > (q.x - 20.0).abs(), "{lead:?} out of {q:?} towards {target:?}");
+        }
+    }
+    // from the middle of the pad with the cursor straight above or below: not up or down into the neighbours
     for target in [Point::new(20.0, 20.0), Point::new(20.0, 1.0), Point::new(20.1, 20.0)] {
         if let Some(lead) = e.pad_lead_point(mid, target) {
             assert!((lead.y - mid.y).abs() < 1e-9, "a lead {lead:?} out of the long side towards {target:?}");
@@ -695,26 +717,32 @@ fn between_fine_pitch_pads_there_is_no_snap_at_the_ends_and_no_lead_out_of_the_l
 }
 
 #[test]
-fn a_wide_pad_with_room_still_leaves_through_its_long_side_and_a_blocked_side_gives_way_to_the_free_one() {
+fn a_corner_leaves_through_the_side_the_cursor_is_nearer_to_and_a_blocked_side_gives_way_to_the_free_one() {
     let mut e = pad_editor(); // the 3 x 0.6 mm pad at (10, 10) and a small one far away, all of net A
-    let end = e.pad_end_points()[0];
-    let up = e.pad_lead_point(end, Point::new(end.x, end.y + 10.0)).unwrap();
-    assert!((up.y - (end.y + 0.8)).abs() < 1e-9);
-    // a pad of another net just above the end: the lead goes down even though the cursor is up
-    let mut other = Pad::new(Point::new(end.x, end.y + 1.0), PadShape::Rect { w: 1.0, h: 0.6 }, None, Side::Top);
+    let corner = Point::new(11.375, 10.175); // the top right corner: the track flush with the top and right edges
+    assert!(e.pad_end_points().iter().any(|q| q.dist(corner) < 1e-9));
+    // the cursor above: out through the top; the cursor to the right: out through the end
+    let up = e.pad_lead_point(corner, Point::new(corner.x, corner.y + 10.0)).unwrap();
+    assert!((up.x - corner.x).abs() < 1e-9 && (up.y - (corner.y + 0.125 + 0.5)).abs() < 1e-9, "{up:?}");
+    let right = e.pad_lead_point(corner, Point::new(corner.x + 10.0, corner.y)).unwrap();
+    assert!((right.y - corner.y).abs() < 1e-9 && (right.x - (corner.x + 0.125 + 0.5)).abs() < 1e-9, "{right:?}");
+    // the cursor above, but a pad of another net just above the corner: the lead goes out through the end instead
+    let mut other = Pad::new(Point::new(corner.x, corner.y + 1.0), PadShape::Rect { w: 1.0, h: 0.6 }, None, Side::Top);
     other.net = "B".into();
     e.board.pads.push(other);
-    let down = e.pad_lead_point(end, Point::new(end.x, end.y + 10.0)).unwrap();
-    assert!((down.y - (end.y - 0.8)).abs() < 1e-9, "{down:?}");
+    let way = e.pad_lead_point(corner, Point::new(corner.x, corner.y + 10.0)).unwrap();
+    assert!((way.y - corner.y).abs() < 1e-9 && way.x > corner.x, "{way:?}");
 }
 
 #[test]
 fn a_route_leaves_and_enters_a_pad_at_a_right_angle_to_its_edge() {
     let e = pad_editor();
-    let end = e.pad_end_points()[0]; // an end of the wide pad: out through the long side (up or down)
+    // the top right corner of the wide pad, the track flush with its edges: out through the end, towards the target
+    let end = Point::new(11.375, 10.175);
+    assert!(e.pad_end_points().iter().any(|q| q.dist(end) < 1e-9));
     let pts = e.route_points(end, Point::new(30.0, 24.0));
-    // first the lead straight out of the pad's side (3 x 0.6 mm: half the height 0.3 plus 0.5 mm), in the direction of the target
-    assert!((pts[0].x - end.x).abs() < 1e-9 && (pts[0].y - (end.y + 0.8)).abs() < 1e-9, "{pts:?}");
+    // first the lead straight out of the pad's end (the track's half width plus 0.5 mm), in the direction of the target
+    assert!((pts[0].y - end.y).abs() < 1e-9 && (pts[0].x - (end.x + 0.125 + 0.5)).abs() < 1e-9, "{pts:?}");
     // the end: a lead into the small pad, horizontal or vertical, ending on its centre
     let n = pts.len();
     assert_eq!(pts[n - 1], Point::new(30.0, 24.0));

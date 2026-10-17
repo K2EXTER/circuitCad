@@ -5,8 +5,9 @@
 use super::*;
 use std::rc::Rc;
 
-/// How far (mm) from the pad's edge a snap point at its end lies inside the pad (besides half a track width).
-const END_INSET: f64 = 0.05;
+/// The least (mm) a corner snap point lies from the centre of a pad, along an axis; nearer than this the corner and the
+/// centre are one point.
+const MIN_CORNER: f64 = 0.15;
 
 impl BoardEditor {
     /// The pad whose copper holds point `p` on the working layer.
@@ -56,8 +57,19 @@ impl BoardEditor {
         self.stretch_check().clear(self.side, at, lead, self.track_width, pad)
     }
 
-    /// Snap points at the two ends of the pads that are long enough for two tracks side by side (besides the centre):
-    /// along each side that has room for two tracks and the clearance between them, a track's width from the edge.
+    /// How far (mm) from the centre of a pad `len` long a snap point lies along that direction: where a track of the
+    /// working width has its edge flush with the pad's edge. 0 where that is less than `MIN_CORNER` from the centre
+    /// (the point could not be told from the centre).
+    fn flush_offset(&self, len: f64) -> f64 {
+        let o = len / 2.0 - self.track_width / 2.0;
+        if o >= MIN_CORNER { o } else { 0.0 }
+    }
+
+    /// Snap points of the rectangular and oval pads, besides the centre: the four corners, where a track of the working
+    /// width lies flush with the pad's edges (so the tracks and the pad have their edges in line, and two tracks can
+    /// leave one pad side by side). Where the pad is too narrow in one direction to tell the two apart, the two corners
+    /// become one point on the middle line (the two ends of a thin pin). A point is left out where the neighbours leave
+    /// no room for a lead.
     pub(super) fn pad_end_points(&self) -> Vec<Point> {
         let key = self.lead_key();
         if let Some((k, v)) = self.ends_cache.borrow().as_ref()
@@ -65,7 +77,6 @@ impl BoardEditor {
         {
             return v.clone();
         }
-        let need = self.track_width + self.board.rules.min_clearance;
         let leads = self.pad_lead && self.route_mode != RouteMode::Free;
         let mut out = vec![];
         for (n, q) in self.board.pads.iter().enumerate().filter(|(_, q)| q.drill.is_some() || q.side == self.side) {
@@ -73,15 +84,18 @@ impl BoardEditor {
                 continue;
             }
             let (w, h) = q.shape.size();
-            for (len, along_x) in [(w, true), (h, false)] {
-                let off = len / 2.0 - self.track_width / 2.0 - END_INSET;
-                if off > 0.0 && 2.0 * off >= need {
-                    let d = if along_x { Point::new(off, 0.0) } else { Point::new(0.0, off) };
-                    for end in [Point::new(q.pos.x + d.x, q.pos.y + d.y), Point::new(q.pos.x - d.x, q.pos.y - d.y)] {
-                        // an end is for leaving through the side: no use where the neighbours leave no room for the lead
-                        if !leads || self.end_lead(n, end).is_some() {
-                            out.push(end);
-                        }
+            let (ox, oy) = (self.flush_offset(w), self.flush_offset(h));
+            let xs: Vec<f64> = if ox > 0.0 { vec![-ox, ox] } else { vec![0.0] };
+            let ys: Vec<f64> = if oy > 0.0 { vec![-oy, oy] } else { vec![0.0] };
+            for &x in &xs {
+                for &y in &ys {
+                    if x == 0.0 && y == 0.0 {
+                        continue; // the centre
+                    }
+                    let p = Point::new(q.pos.x + x, q.pos.y + y);
+                    // a point is for leaving through a side: no use where the neighbours leave no room for the lead
+                    if !leads || self.end_lead(n, p, None).is_some() {
+                        out.push(p);
                     }
                 }
             }
@@ -108,32 +122,42 @@ impl BoardEditor {
         if dx.hypot(dy) < 1e-9 {
             return None;
         }
-        if ox.abs() > 1e-6 && oy.abs() <= 1e-6 || oy.abs() > 1e-6 && ox.abs() <= 1e-6 {
-            // an end point of the pad
-            return self.end_lead_towards(n, at, other);
+        if ox.abs() > 1e-6 || oy.abs() > 1e-6 {
+            // a corner or an end of the pad
+            return self.end_lead(n, at, Some(other));
         }
         // from the middle: out through the edge the other end lies beyond
         let first = if dx.abs() * h >= dy.abs() * w { (dx.signum(), 0.0) } else { (0.0, dy.signum()) };
         self.first_clear_lead(n, at, other, first)
     }
 
-    /// The lead out of the end point `at` of pad `n` (see [`Self::pad_end_points`]): through the side, at a right angle
-    /// to the line of the ends, the way the other end lies if there is room, else the other way.
-    fn end_lead_towards(&self, n: usize, at: Point, other: Point) -> Option<Point> {
+    /// The ways out of pad `n` from `at`, a corner or an end of the pad (see [`Self::pad_end_points`]), best first. At a
+    /// corner: through either of the two sides that meet there (so the track keeps flush with the other), the one more
+    /// the way of `other` first. At an end of a thin pad: through the long side, at a right angle to the line of the
+    /// ends, the way `other` lies first, then the other way, and last straight out of the end.
+    fn end_directions(&self, n: usize, at: Point, other: Option<Point>) -> Vec<(f64, f64)> {
         let q = &self.board.pads[n];
-        let (ox, dy, dx) = (at.x - q.pos.x, other.y - at.y, other.x - at.x);
-        let first = if ox.abs() > 1e-6 { (0.0, if dy >= 0.0 { 1.0 } else { -1.0 }) } else { (if dx >= 0.0 { 1.0 } else { -1.0 }, 0.0) };
-        let mut dirs = vec![first, (-first.0, -first.1)];
-        dirs.retain(|d| self.lead_point(n, at, *d).is_some_and(|l| self.lead_clear(n, at, l)));
-        dirs.first().and_then(|d| self.lead_point(n, at, *d))
+        let (ox, oy) = (at.x - q.pos.x, at.y - q.pos.y);
+        let (dx, dy) = other.map_or((0.0, 0.0), |o| (o.x - at.x, o.y - at.y));
+        let sign = |v: f64, otherwise: f64| if v > 1e-9 { 1.0 } else if v < -1e-9 { -1.0 } else { otherwise };
+        let (corner_x, corner_y) = (ox.abs() > 1e-6, oy.abs() > 1e-6);
+        if corner_x && corner_y {
+            let mut dirs = vec![(sign(ox, 1.0), 0.0), (0.0, sign(oy, 1.0))];
+            dirs.sort_by(|a, b| (b.0 * dx + b.1 * dy).total_cmp(&(a.0 * dx + a.1 * dy)));
+            dirs
+        } else if corner_x {
+            let first = sign(dy, sign(oy, 1.0));
+            vec![(0.0, first), (0.0, -first), (sign(ox, 1.0), 0.0)]
+        } else {
+            let first = sign(dx, 1.0);
+            vec![(first, 0.0), (-first, 0.0), (0.0, sign(oy, 1.0))]
+        }
     }
 
-    /// A clear lead out of an end of pad `n` whichever way (`None` where there is no room either way).
-    fn end_lead(&self, n: usize, at: Point) -> Option<Point> {
-        let q = &self.board.pads[n];
-        let ends_along_x = (at.x - q.pos.x).abs() > 1e-6;
-        let dirs: [(f64, f64); 2] = if ends_along_x { [(0.0, 1.0), (0.0, -1.0)] } else { [(1.0, 0.0), (-1.0, 0.0)] };
-        dirs.iter().find_map(|d| self.lead_point(n, at, *d).filter(|l| self.lead_clear(n, at, *l)))
+    /// The lead out of the corner or end `at` of pad `n`: the first of [`Self::end_directions`] that has room, `None`
+    /// where there is none. `other`: where the route goes (for the order of the ways out), if known.
+    fn end_lead(&self, n: usize, at: Point, other: Option<Point>) -> Option<Point> {
+        self.end_directions(n, at, other).into_iter().find_map(|d| self.lead_point(n, at, d).filter(|l| self.lead_clear(n, at, *l)))
     }
 
     /// The first of the four ways out of pad `n` from `at` that has room, starting with `first`, then the ones that
