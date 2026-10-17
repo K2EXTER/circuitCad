@@ -166,6 +166,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
     pub(super) fn panel_results(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         let stale = self.dc.as_ref().is_some_and(|d| d.signature != self.signature());
+        let mut go_tran = false;
         if let Some(dc) = &self.dc {
             if stale {
                 ui.colored_label(Color32::from_rgb(220, 160, 40), "回路が変更されました。再度解析してください");
@@ -177,6 +178,10 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                 Err(msgs) => {
                     for m in msgs {
                         ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    }
+                    // an oscillator or latch has no single operating point: its waveform is the answer
+                    if msgs.iter().any(|m| m.contains("過渡解析")) && ui.button("過渡解析を実行").on_hover_text("DCの1点ではなく、時間を追った波形を計算します。発振回路や2つの状態を持つ回路は、ここで動きが見えます (終了時間と刻みは「過渡解析」の設定が使われます)").clicked() {
+                        go_tran = true;
                     }
                 }
                 Ok(res) => {
@@ -218,6 +223,9 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                     });
                 }
             }
+        }
+        if go_tran {
+            self.run_tran();
         }
         ui.collapsing("ネットリスト", |ui| {
             for n in extract(&self.sch) {
