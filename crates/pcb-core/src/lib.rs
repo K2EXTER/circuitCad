@@ -19,6 +19,7 @@ pub mod geom;
 pub mod irdrop;
 pub mod meander;
 pub mod gerber;
+pub mod groundpour;
 pub mod gerber_view;
 pub mod model;
 pub mod model3d;

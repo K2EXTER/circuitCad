@@ -145,6 +145,10 @@ impl BoardEditor {
     2層・45°配線で、ルール違反になる配線は自動的にやめます").clicked() {
                         self.autoroute(None);
                     }
+                    if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
+    部品を並べて基板の外形を決めたあと、「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
+                        self.ground_pour();
+                    }
                     let sel_net = match self.selected {
                         Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
                         _ => None,

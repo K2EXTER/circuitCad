@@ -344,3 +344,28 @@ fn the_tp5100_sample_routes_completely_with_clean_pad_leads() {
         assert!(at_centre.is_empty(), "{} {}: {at_centre:?}", p.refdes, p.pin);
     }
 }
+
+/// The GND pour on the TP5100 sample: the ground needs only the short pieces to its vias, the rest routes as usual.
+#[test]
+fn the_ground_pour_takes_the_ground_wires_off_the_tp5100_sample() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("tp5100_charger.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    app.board_ed.autoplace();
+    app.board_ed.ground_pour();
+    assert!(app.board_ed.status.starts_with("GND ベタ"), "{}", app.board_ed.status);
+    app.board_ed.autoroute(None);
+    let b = &app.board_ed.board;
+    assert!(pcb_core::ratsnest::ratsnest(b).is_empty(), "{}", app.board_ed.status);
+    let mut c = b.clone();
+    c.finish.on = true;
+    assert!(pcb_core::drc::check_final(&c).is_empty(), "{:?}", pcb_core::drc::check_final(&c));
+    let conn = pcb_core::drc::connectivity(b);
+    let gnd: f64 = b.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some("GND")).map(|(_, t)| t.a.dist(t.b)).sum();
+    assert!(gnd < 20.0, "{gnd} mm of ground wire");
+    // one undo takes the pour and its vias back (the routing was a step of its own)
+    app.board_ed.undo();
+    app.board_ed.undo();
+    assert!(app.board_ed.board.zones.is_empty() && app.board_ed.board.vias.is_empty());
+}

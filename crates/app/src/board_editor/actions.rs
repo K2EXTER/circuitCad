@@ -92,6 +92,30 @@ impl BoardEditor {
         }
     }
 
+    /// The GND pour on the bottom layer with a via for every surface ground pad (see `pcb_core::groundpour`). One undo step.
+    pub fn ground_pour(&mut self) {
+        self.checkpoint();
+        let opt = pcb_core::groundpour::PourOptions { net: None, track_width: self.track_width.max(0.3), via_diameter: self.via_dia, via_drill: self.via_drill };
+        match pcb_core::groundpour::ground_pour(&mut self.board, &opt) {
+            Ok(r) if r.zone_added || r.vias > 0 => {
+                self.violations.clear();
+                let left = if r.left > 0 { format!("ビアを置けなかったパッドが {} 個あります (自動配線が線でつなぎます)。", r.left) } else { String::new() };
+                self.status = format!(
+                    "GND ベタ: 裏面を GND の銅箔にして、表面の GND パッド {} 個を短い線とビアでつなぎました ({} 個は元からつながっていました)。{left}このあと「自動配線」で GND 以外の線を引きます",
+                    r.vias, r.already
+                );
+            }
+            Ok(_) => {
+                self.undo.pop(); // nothing changed: no undo step
+                self.status = "GND ベタは、もう置いてあります".into();
+            }
+            Err(e) => {
+                self.undo.pop();
+                self.status = e;
+            }
+        }
+    }
+
     pub fn run_drc(&mut self) {
         self.violations = drc::check_final(&self.board);
         self.violations.extend(pcb_core::diffpair::check_pairs(&self.board));
