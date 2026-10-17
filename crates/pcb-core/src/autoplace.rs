@@ -41,19 +41,6 @@ fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
     any.then_some((lo, hi))
 }
 
-/// Closeness of two parts: shared nets count less the more pins the net has (a ground that
-/// touches everything says little about who belongs together).
-fn closeness(board: &Board, a: &str, b: &str) -> f64 {
-    let mut nets: std::collections::BTreeMap<&str, (bool, bool, usize)> = Default::default();
-    for p in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty()) {
-        let e = nets.entry(p.net.as_str()).or_default();
-        e.2 += 1;
-        e.0 |= p.refdes == a;
-        e.1 |= p.refdes == b;
-    }
-    nets.values().filter(|(x, y, _)| *x && *y).map(|(_, _, n)| 1.0 / (*n as f64 - 1.0).max(1.0)).sum()
-}
-
 /// Lay every part out in rows starting at the origin and replace the outline by a rectangle
 /// around them. Refuses when tracks or vias exist, since moving parts would break them.
 pub fn autoplace(board: &mut Board) -> Result<PlaceReport, String> {
@@ -277,37 +264,60 @@ fn place(board: &mut Board, turn: bool, improve: bool) -> Result<PlaceReport, St
         let Some((lo, hi)) = extent(board, &part.refdes) else { continue };
         items.push((part.refdes, lo, hi.x - lo.x + GAP, hi.y - lo.y + GAP + LABEL));
     }
-    // order: begin with the part that has the most pads, then always the one closest to those placed
-    let degree = |r: &str| board.pads.iter().filter(|p| p.refdes == r && !p.net.is_empty()).count();
+    // the nets as pad offsets from each part's cell corner (the parts are all at the origin now)
+    let mut nets: std::collections::BTreeMap<&str, NetPins> = Default::default();
+    let mut degree = vec![0usize; items.len()];
+    for pad in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty()) {
+        if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
+            nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + GAP / 2.0, pad.pos.y - items[i].1.y + GAP / 2.0 + LABEL));
+            degree[i] += 1;
+        }
+    }
+    let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+    // how closely two parts belong together: the nets they share count less the more pins the net has (a ground that
+    // touches everything says little about who belongs together). Made once, for every pair.
+    let mut tie = vec![vec![0.0f64; items.len()]; items.len()];
+    for pins in &nets {
+        let w = 1.0 / (pins.len() as f64 - 1.0).max(1.0);
+        let mut parts: Vec<usize> = pins.iter().map(|p| p.0).collect();
+        parts.sort_unstable();
+        parts.dedup();
+        for (x, &a) in parts.iter().enumerate() {
+            for &b in &parts[x + 1..] {
+                tie[a][b] += w;
+                tie[b][a] += w;
+            }
+        }
+    }
+    // order: begin with the part that has the most pads, then always the one most tied to those placed
     let mut order: Vec<usize> = vec![];
     let mut left: Vec<usize> = (0..items.len()).collect();
-    left.sort_by(|&a, &b| degree(&items[b].0).cmp(&degree(&items[a].0)).then(items[a].0.cmp(&items[b].0)));
+    left.sort_by(|&a, &b| degree[b].cmp(&degree[a]).then(items[a].0.cmp(&items[b].0)));
     if left.is_empty() {
         return Err("パッドを持つ部品がありません".into());
     }
-    order.push(left.remove(0));
-    while !left.is_empty() {
-        let score = |i: usize| order.iter().map(|&j| closeness(board, &items[i].0, &items[j].0)).sum::<f64>();
-        let mut best = 0;
+    let mut score = vec![0.0f64; items.len()];
+    let mut best = 0;
+    loop {
+        let i = left.remove(best);
+        order.push(i);
+        if left.is_empty() {
+            break;
+        }
+        for &m in &left {
+            score[m] += tie[m][i];
+        }
+        best = 0;
         for k in 1..left.len() {
-            if score(left[k]) > score(left[best]) + 1e-9 {
+            if score[left[k]] > score[left[best]] + 1e-9 {
                 best = k;
             }
         }
-        order.push(left.remove(best));
     }
     // shelf packing into a roughly 3:2 board
     let area: f64 = items.iter().map(|i| i.2 * i.3).sum();
     let widest = items.iter().map(|i| i.2).fold(0.0, f64::max);
     let row_w = (area * 1.5).sqrt().max(widest);
-    // the nets as pad offsets from each part's cell corner (the parts are all at the origin now)
-    let mut nets: std::collections::BTreeMap<&str, NetPins> = Default::default();
-    for pad in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty()) {
-        if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
-            nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + GAP / 2.0, pad.pos.y - items[i].1.y + GAP / 2.0 + LABEL));
-        }
-    }
-    let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
     let greedy = order.clone();
     if improve {
         order = improve_order(&items, &nets, order, row_w);
