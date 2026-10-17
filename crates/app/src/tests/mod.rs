@@ -1,5 +1,6 @@
 mod examples;
 mod flow;
+mod mixed;
 
 use super::*;
 use pcb_core::ratsnest::ratsnest;

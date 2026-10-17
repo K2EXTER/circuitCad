@@ -15,3 +15,4 @@
 - `Lesson.real` は「実機で確かめよう」(用意するもの・配線・測り方・期待値・安全)。
 - MOSFETスイッチは `docs/examples/mosfet_switch.schjson`(2N7000、生成は `write_mosfet_example`、レッスン12、負荷はR_2512で定格内)。
 - サンプルは `docs/examples/bridge_rectifier.schjson`(生成は `write_rectifier_example`)、レッスン9がこれを使う。
+- 総合デモは `mixed_signal.schjson`(生成 `write_mixed_signal_example`、`tests/mixed.rs`。12V→逆接続ショットキー→LM7805→AMS1117、NE555(約680Hz)→74HC04で5Vに整形→74HC74×2の÷4カウンタ+パワーオンリセット+LED、NTC+LM393+2N3904の温度アラーム、LM358の単電源反転アンプ(×10)+RCローパス)。ベンチマーク兼READMEの画像用(`docs/images/mixed-signal-*.png`、`--tran 8m 10u --signals CLK,Q1,Q2,FILT` で撮る)。過渡解析は約20秒かかる。既知の弱点: 全ブロックをつなぐと DC動作点が収束しにくい(部品値を少し変えただけで `Singular`/`NoConvergence` が出入りする。ALARMのプルアップを22kにしてあるのはそのため。過渡解析はDCが求まらず「すべてゼロから」始める)。

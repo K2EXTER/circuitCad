@@ -131,6 +131,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                     && let Some(n) = args.get(j + 1..j + 5) {
                         app.sch.set_power_signals([n[0].clone(), n[1].clone(), n[2].clone(), n[3].clone()]);
                     }
+                if let Some(j) = args.iter().position(|a| a == "--signals")
+                    && let Some(n) = args.get(j + 1) {
+                        app.sch.set_tran_signals(n);
+                    }
                 if args.iter().any(|a| a == "--spectrum") {
                     app.sch.show_spectrum();
                 }

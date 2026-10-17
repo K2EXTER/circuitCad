@@ -21,6 +21,13 @@ impl SchEditor {
         }
     }
 
+    /// Picks the nets whose waveforms are drawn (command line `--signals CLK,Q1,Q2`).
+    pub fn set_tran_signals(&mut self, nets: &str) {
+        if let Some(v) = self.tran.as_mut() {
+            v.selected = nets.split(',').filter(|n| !n.is_empty()).map(|n| format!("V({n})")).collect();
+        }
+    }
+
     pub fn set_tran_settings(&mut self, tstop: &str, tstep: &str) {
         self.tran_tstop = tstop.into();
         self.tran_tstep = tstep.into();
