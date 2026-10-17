@@ -131,6 +131,8 @@ pub fn get(name: &str) -> Option<Footprint> {
         "CP_Radial_D5_P2.0" => tht2(name, 2.0, 1.6, 0.8, ["1", "2"]),
         "D_DO-35_7.62" => tht2(name, 7.62, 1.8, 0.9, ["K", "A"]),
         "LED_5mm" => tht2(name, 2.54, 1.8, 0.9, ["K", "A"]),
+        // the 18650 cells used to come with the pads of a battery holder (77 mm apart); schematics saved then still name it
+        "BatteryHolder_18650" => tht2(name, 77.0, 2.4, 1.2, ["1", "2"]),
         "TO-92" => {
             let s = PadShape::Circle { d: 1.5 };
             Footprint {

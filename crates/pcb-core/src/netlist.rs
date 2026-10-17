@@ -100,6 +100,19 @@ mod tests {
     }
 
     #[test]
+    fn a_schematic_saved_with_the_old_18650_holder_footprint_still_imports() {
+        let mut b = Board::new("t", 100.0, 40.0);
+        let parts = [NetlistPart { refdes: "BT1".into(), value: "LIION_18650".into(), footprint: "BatteryHolder_18650".into() }];
+        let nets = [NetlistNet { name: "BAT".into(), pins: vec![("BT1".into(), "1".into())] }, NetlistNet { name: "GND".into(), pins: vec![("BT1".into(), "2".into())] }];
+        let rep = import(&mut b, &parts, &nets);
+        assert!(rep.warnings.is_empty(), "{:?}", rep.warnings);
+        let pads: Vec<&Pad> = b.pads.iter().filter(|p| p.refdes == "BT1").collect();
+        assert_eq!(pads.len(), 2);
+        assert!((pads[0].pos.dist(pads[1].pos) - 77.0).abs() < 1e-9, "the pads are those of the holder, 77 mm apart");
+        assert!(pads.iter().all(|p| !p.net.is_empty()));
+    }
+
+    #[test]
     fn import_places_parts_outside_board_and_assigns_nets() {
         let mut b = Board::new("t", 30.0, 20.0);
         let rep = import(&mut b, &parts(), &nets());
