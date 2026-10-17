@@ -93,6 +93,8 @@ enum Kind {
     Corner,
     Taper,
     Fork,
+    /// Fillets where a track leaves a pad's face (only in the live finish).
+    Fillet,
 }
 
 /// Width differences up to this are left as they are, and no step of a taper is larger (so a taper is not tapered again).
@@ -541,6 +543,130 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, patch: None, live, kind: Kind::Taper, touches: vec![i] })
 }
 
+/// The face of a rectangular pad that a track leaves straight out of (at a right angle): which pad, how far (mm) along the
+/// track from its end `p` the face is, and where the face's two ends lie to the sides of the track's line (`lo` < 0 <
+/// `hi` when the track leaves between them; measured to the left of the way out, `(-uy, ux)`).
+struct Face {
+    pad: usize,
+    exit: f64,
+    lo: f64,
+    hi: f64,
+}
+
+fn flat_face(board: &Board, p: Point, side: Side, (ux, uy): (f64, f64)) -> Option<Face> {
+    for (n, q) in board.pads.iter().enumerate() {
+        let (w, h) = q.shape.size();
+        if (q.drill.is_some() || q.side == side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6 {
+            if !matches!(q.shape, PadShape::Rect { .. }) {
+                return None;
+            }
+            let exit = |half: f64, off: f64, u: f64| if u.abs() > 1e-9 { (half * u.signum() - off) / u } else { f64::INFINITY };
+            let (tx, ty) = (exit(w / 2.0, p.x - q.pos.x, ux), exit(h / 2.0, p.y - q.pos.y, uy));
+            let x_face = tx <= ty;
+            // only straight out of a face: along x through an end face, along y through a long face
+            if (x_face && uy.abs() > 1e-6) || (!x_face && ux.abs() > 1e-6) {
+                return None;
+            }
+            let (a, b) = if x_face {
+                let x = q.pos.x + ux.signum() * w / 2.0;
+                (Point::new(x, q.pos.y - h / 2.0), Point::new(x, q.pos.y + h / 2.0))
+            } else {
+                let y = q.pos.y + uy.signum() * h / 2.0;
+                (Point::new(q.pos.x - w / 2.0, y), Point::new(q.pos.x + w / 2.0, y))
+            };
+            let (nx, ny) = (-uy, ux);
+            let (ta, tb) = ((a.x - p.x) * nx + (a.y - p.y) * ny, (b.x - p.x) * nx + (b.y - p.y) * ny);
+            return Some(Face { pad: n, exit: tx.min(ty).max(0.0), lo: ta.min(tb), hi: ta.max(tb) });
+        }
+    }
+    None
+}
+
+/// The biggest radius (mm) of the fillets where a track meets the edge of its pad.
+pub(crate) const MAX_FILLET: f64 = 0.4;
+/// Smaller than this a fillet is not made.
+const MIN_FILLET: f64 = 0.1;
+
+/// Where a track leaves a rectangular pad straight out of a face: a fillet on each side, filling the sharp corner
+/// between the track's edge and the pad's edge with a concave arc (a teardrop with a flat base at the pad's edge and sides
+/// that run smoothly into the track). The radius is as big as there is room for: up to the pad's corner, up to half the gap
+/// to a track that leaves the same face beside it (the two fillets then make one round arch between the tracks), and up
+/// to `MAX_FILLET`. Only for the live finish: the track itself is not changed. `None` where there is nothing to do.
+fn pad_fillet(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
+    let t = &board.tracks[i];
+    let (v, far) = if is_a { (t.a, t.b) } else { (t.b, t.a) };
+    let (ux, uy, len) = unit(v, far);
+    let face = flat_face(board, v, t.side, (ux, uy))?;
+    let h = t.width / 2.0;
+    let (nx, ny) = (-uy, ux);
+    // room beside the track on each side, up to the corner of the pad
+    let (mut left, mut right) = (face.hi - h, -face.lo - h);
+    // a track that leaves the same face in the same direction shares the gap with this one
+    for u in board.tracks.iter().enumerate().filter(|(k, u)| *k != i && u.side == t.side).map(|(_, u)| u) {
+        for (w0, w1) in [(u.a, u.b), (u.b, u.a)] {
+            let (vx, vy, _) = unit(w0, w1);
+            if vx * ux + vy * uy < 0.9999 {
+                continue;
+            }
+            let Some(f2) = flat_face(board, w0, u.side, (vx, vy)) else { continue };
+            // the same face of the same pad: its plane is the same
+            let plane = |p: Point, f: &Face| (p.x + vx * f.exit) * ux + (p.y + vy * f.exit) * uy;
+            if f2.pad != face.pad || (plane(w0, &f2) - plane(v, &face)).abs() > 1e-6 {
+                continue;
+            }
+            let lateral = (w0.x - v.x) * nx + (w0.y - v.y) * ny;
+            let gap = lateral.abs() - h - u.width / 2.0;
+            if lateral > 0.0 {
+                left = left.min(gap / 2.0);
+            } else {
+                right = right.min(gap / 2.0);
+            }
+        }
+    }
+    // along the track: a track that runs into another pad shares its length with the fillets there
+    let far_on_pad = holder(board, far, t.side, (-ux, -uy)).is_some();
+    let room = if far_on_pad { (len - face.exit) / 2.0 } else { len - face.exit - 0.05 };
+    let radius = |free: f64| {
+        let r = free.min(MAX_FILLET).min(room);
+        if r >= MIN_FILLET { r } else { 0.0 }
+    };
+    let (rl, rr) = (radius(left), radius(right));
+    if rl == 0.0 && rr == 0.0 {
+        return None;
+    }
+    // in the frame of the track: s along it from the end `v`, t to its left; the pad's edge is at s0
+    let s0 = face.exit;
+    let eps = 0.02;
+    let mut pts: Vec<(f64, f64)> = vec![(s0 - eps, -h - rr)];
+    const STEPS: usize = 10;
+    // the right side (t < 0): from the pad's edge, a concave arc to the track's edge
+    if rr > 0.0 {
+        pts.push((s0, -h - rr));
+        for k in 1..=STEPS {
+            // the circle's centre is at (s0 + rr, -h - rr); the angle goes from 180° to 90°
+            let a = std::f64::consts::PI * (1.0 - 0.5 * k as f64 / STEPS as f64);
+            pts.push((s0 + rr + rr * a.cos(), -h - rr + rr * a.sin()));
+        }
+    } else {
+        pts = vec![(s0 - eps, -h), (s0, -h)];
+    }
+    // the left side (t > 0), from the track's edge out to the pad's edge
+    if rl > 0.0 {
+        for k in 0..=STEPS {
+            // the centre is at (s0 + rl, h + rl); the angle goes from 270° to 180°
+            let a = std::f64::consts::PI * (1.5 - 0.5 * k as f64 / STEPS as f64);
+            pts.push((s0 + rl + rl * a.cos(), h + rl + rl * a.sin()));
+        }
+        pts.push((s0 - eps, h + rl));
+    } else {
+        pts.push((s0, h));
+        pts.push((s0 - eps, h));
+    }
+    let outline = pts.into_iter().map(|(s, l)| Point::new(v.x + ux * s + nx * l, v.y + uy * s + ny * l)).collect();
+    let patch = Patch { side: t.side, outline, track: i };
+    Some(Edit { trims: vec![], pieces: vec![], patch: None, live: Some(Live { trims: vec![], pieces: vec![], patch }), kind: Kind::Fillet, touches: vec![i] })
+}
+
 fn apply(board: &mut Board, e: &Edit) {
     for &(i, is_a, p) in &e.trims {
         if is_a {
@@ -570,7 +696,9 @@ pub fn smooth_selected(board: &mut Board, opts: &SmoothOptions, tracks: &[usize]
 }
 
 /// What the finishing would do on `board`: every edit, the ones for ends that a notch claims left out of the others.
-fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Vec<Edit> {
+/// The edits for the finish. `live`: for the finish that is only drawn and made into files (not baked into the tracks):
+/// where a track leaves a rectangular pad's face the fillets are used instead of the stepped teardrop.
+fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool) -> Vec<Edit> {
     let mut edits = vec![];
     // ends that belong to a notch are left to it: no corner or teardrop there
     let mut used: Vec<End> = vec![];
@@ -596,7 +724,10 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Vec<Edit
         for i in 0..board.tracks.len() {
             for is_a in [true, false] {
                 if !used.contains(&(i, is_a)) {
-                    edits.extend(pad_taper(board, i, is_a));
+                    match live.then(|| pad_fillet(board, i, is_a)).flatten() {
+                        Some(e) => edits.push(e),
+                        None => edits.extend(pad_taper(board, i, is_a)),
+                    }
                 }
             }
         }
@@ -669,7 +800,7 @@ pub(crate) fn smooth_tracks_slow(board: &mut Board, opts: &SmoothOptions) -> Smo
 
 fn smooth_with(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>, fast: bool) -> SmoothReport {
     let opts = SmoothOptions { forks: false, ..*opts };
-    let edits = plan(board, &opts, only);
+    let edits = plan(board, &opts, only, false);
     if edits.is_empty() {
         return SmoothReport::default();
     }
@@ -701,7 +832,7 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
     let mut kept_edits: Vec<Edit> = vec![];
     let mut patches_of: Vec<Option<Patch>> = vec![];
     let copper = crate::drc::PatchCheck::new(board);
-    for e in plan(board, &board.finish, None) {
+    for e in plan(board, &board.finish, None, true) {
         let (edit, patch) = match (&e.live, &e.patch) {
             (Some(l), _) => (Edit { trims: l.trims.clone(), pieces: l.pieces.clone(), patch: None, live: None, ..e.clone() }, Some(l.patch.clone())),
             (None, Some(p)) => (Edit { patch: None, ..e.clone() }, Some(p.clone())),

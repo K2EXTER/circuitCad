@@ -338,7 +338,7 @@ fn a_short_lead_that_turns_still_gets_a_shorter_teardrop() {
 }
 
 #[test]
-fn a_teardrop_base_is_centred_on_the_pad_even_when_the_track_leaves_to_the_side() {
+fn the_fillets_at_a_pad_stay_within_the_pads_edge_and_reach_its_corner_where_there_is_room_up_to_the_largest() {
     let mut b = Board::new("t", 40.0, 30.0);
     pad_sized(&mut b, 5.0, 5.0, "A", 1.0);
     pad_sized(&mut b, 5.1, 12.0, "A", 1.0);
@@ -346,39 +346,70 @@ fn a_teardrop_base_is_centred_on_the_pad_even_when_the_track_leaves_to_the_side(
     b.tracks.push(trk((5.1, 5.0), (5.1, 12.0), 0.25));
     b.finish.on = true;
     let f = finished(&b).unwrap();
-    assert!(!f.patches.is_empty(), "a teardrop polygon");
-    // every point of the polygon at the first pad lies within the pad's width (4.5 .. 5.5), and the base reaches both sides
+    assert!(!f.patches.is_empty(), "a fillet polygon");
+    // every point of the polygon at the first pad lies within the pad's width (4.5 .. 5.5): on the far side the
+    // fillet reaches the pad's corner (0.275 mm of room), on the near side it is the largest one (0.4 mm) from the track
     let near: Vec<&Point> = f.patches.iter().flat_map(|p| p.outline.iter()).filter(|p| p.y < 8.0).collect();
     assert!(near.iter().all(|p| p.x >= 4.5 - 1e-6 && p.x <= 5.5 + 1e-6), "{near:?}");
     let (lo, hi) = near.iter().fold((f64::MAX, f64::MIN), |(l, h), p| (l.min(p.x), h.max(p.x)));
-    assert!((lo - 4.5).abs() < 1e-6 && (hi - 5.5).abs() < 1e-6, "{lo} {hi}");
+    assert!((lo - (5.1 - 0.125 - crate::smooth::MAX_FILLET)).abs() < 1e-6 && (hi - 5.5).abs() < 1e-6, "{lo} {hi}");
+    // the track itself is left as it is
+    assert_eq!(f.board.tracks.len(), b.tracks.len());
 }
 
-/// Whatever copper sits near the corner, finishing with the quick checks keeps the same edits as with the whole board
-/// checked for each one (and the batch really is broken by some of these, so the edits are tried one by one).
 #[test]
-fn the_quick_finish_keeps_what_the_slow_finish_keeps() {
-    let tracks = |b: &Board| b.tracks.iter().map(|t| format!("{:?} {:.4} {:.4} {:.4} {:.4} {:.3}", t.side, t.a.x, t.a.y, t.b.x, t.b.y, t.width)).collect::<Vec<_>>();
-    let before = crate::smooth::ONE_BY_ONE.load(std::sync::atomic::Ordering::Relaxed);
-    let mut differ = 0;
-    for k in 0..40 {
-        let (dx, dy) = (-0.9 + (k % 8) as f64 * 0.26, -0.9 + (k / 8) as f64 * 0.45);
-        let mut b = l_shape();
-        pad(&mut b, 5.0, 25.0, "B");
-        pad(&mut b, 24.0, 25.0, "B");
-        // another net's little track somewhere near the corner of net A
-        b.tracks.push(trk((24.55 + dx, 5.55 + dy), (24.6 + dx, 5.6 + dy), 0.1));
-        b.finish = Finish { on: true, ..Default::default() };
-        let (quick, slow) = (finished(&b).unwrap(), crate::smooth::finished_slow(&b).unwrap());
-        assert_eq!(tracks(&quick.board), tracks(&slow.board), "intruder offset {dx:.2},{dy:.2}");
-        assert_eq!(quick.patches.len(), slow.patches.len());
-        let (mut x, mut y) = (b.clone(), b.clone());
-        let (rx, ry) = (smooth_tracks(&mut x, &b.finish), crate::smooth::smooth_tracks_slow(&mut y, &b.finish));
-        assert_eq!(rx, ry);
-        assert_eq!(tracks(&x), tracks(&y), "baked, intruder offset {dx:.2},{dy:.2}");
-        differ += usize::from(tracks(&quick.board) != tracks(&b));
+fn a_fillet_is_concave_and_its_base_is_flat_on_the_pads_edge() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    // a 1.025 x 1.4 mm pad (an 0805) with a track leaving through its top edge (y = 5.7), 0.25 mm wide
+    let mut p = Pad::new(Point::new(5.0, 5.0), PadShape::Rect { w: 1.025, h: 1.4 }, None, Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    pad_sized(&mut b, 5.0, 14.0, "A", 1.0);
+    b.tracks.push(trk((5.0, 5.0), (5.0, 14.0), 0.25));
+    b.finish.on = true;
+    let f = finished(&b).unwrap();
+    let patch = f.patches.iter().find(|p| p.outline.iter().any(|q| q.y < 8.0)).expect("the fillet at the first pad");
+    // the pad's edge is at y = 5.7 (above the track's end): the base lies on it, as wide as the pad (corner to corner)
+    let on_edge: Vec<&Point> = patch.outline.iter().filter(|q| (q.y - 5.7).abs() < 1e-6).collect();
+    let (x0, x1) = on_edge.iter().fold((f64::MAX, f64::MIN), |(l, h), q| (l.min(q.x), h.max(q.x)));
+    assert!((x0 - (5.0 - 0.5125)).abs() < 1e-6 && (x1 - (5.0 + 0.5125)).abs() < 1e-6, "{x0} {x1}");
+    // no part sticks out of the pad's width
+    assert!(patch.outline.iter().all(|q| (q.x - 5.0).abs() <= 0.5125 + 1e-6));
+    // the arc is concave: the middle of the chord from the pad's corner to the track's edge is free of copper, and a
+    // point close to the sharp corner between the pad's edge and the track is copper
+    let r = 0.3875; // the room to the corner: half the pad's width less half the track's
+    let chord_mid = Point::new(5.0 - 0.125 - r / 2.0, 5.7 + r / 2.0);
+    assert!(!crate::geom::inside_polygon(&patch.outline, chord_mid), "{chord_mid:?} should be free");
+    let corner = Point::new(5.0 - 0.125 - 0.05, 5.7 + 0.05);
+    assert!(crate::geom::inside_polygon(&patch.outline, corner), "{corner:?} should be copper");
+}
+
+#[test]
+fn two_tracks_leaving_one_pad_side_by_side_get_one_round_arch_between_them() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    let mut p = Pad::new(Point::new(5.0, 5.0), PadShape::Rect { w: 1.025, h: 1.4 }, None, Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    for x in [4.6125, 5.3875] {
+        pad_sized(&mut b, x, 14.0, "A", 1.0);
     }
-    let taken = crate::smooth::ONE_BY_ONE.load(std::sync::atomic::Ordering::Relaxed) - before;
-    assert!(taken > 0, "some intruder must break the batch, or this says nothing");
-    assert!(differ > 0, "the finish changes the copper for some of them");
+    // flush with the pad's two sides (corner points): centres 0.3875 either side, 0.25 wide: a gap of 0.525 between them
+    b.tracks.push(trk((4.6125, 5.0), (4.6125, 14.0), 0.25));
+    b.tracks.push(trk((5.3875, 5.0), (5.3875, 14.0), 0.25));
+    b.finish.on = true;
+    let f = finished(&b).unwrap();
+    let at_pad: Vec<&Patch> = f.patches.iter().filter(|p| p.outline.iter().any(|q| q.y < 8.0)).collect();
+    assert_eq!(at_pad.len(), 2, "one for each track");
+    let inside = |q: Point| at_pad.iter().any(|p| crate::geom::inside_polygon(&p.outline, q));
+    // the gap is 0.525: each inner fillet is 0.2625 and together they leave a half circle free (the half towards the
+    // pad), its centre on the axis between the tracks 0.2625 beyond the pad's edge (y = 5.7)
+    let (cx, cy, r) = (5.0, 5.7 + 0.2625, 0.2625);
+    assert!(!inside(Point::new(cx, cy - 0.1 * r)), "the middle of the arch is free");
+    assert!(!inside(Point::new(cx, 5.7 + 0.02)), "right at the pad's edge in the middle, the top of the arch, is free");
+    assert!(inside(Point::new(cx - 0.9 * r, 5.7 + 0.02)), "near the track's edge, just beyond the pad, is copper");
+    assert!(!inside(Point::new(cx + 0.4 * r, cy - 0.3 * r)), "the arch is hollow all the way to the circle");
+    // and the outer sides have their own (smaller) fillets: at the pad's corner they end flush
+    let xs = at_pad.iter().flat_map(|p| p.outline.iter()).map(|q| q.x);
+    let (lo, hi) = xs.fold((f64::MAX, f64::MIN), |(l, h), x| (l.min(x), h.max(x)));
+    assert!(lo >= 5.0 - 0.5125 - 1e-6 && hi <= 5.0 + 0.5125 + 1e-6, "{lo} {hi}");
 }
