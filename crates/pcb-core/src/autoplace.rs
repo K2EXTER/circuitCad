@@ -4,7 +4,8 @@
 use crate::*;
 
 /// Clear space kept around every part's pads (mm), on top of the DRC clearance.
-const GAP: f64 = 1.6;
+/// (2.4: with the shipped examples autorouted, 1.6 left 8 connections open, 2.0 left 6, 2.4 left 2 and 3.0 left 3.)
+const GAP: f64 = 2.4;
 /// Extra room above every part for its reference text (silkscreen), so labels do not run into the neighbours.
 const LABEL: f64 = 2.4;
 /// Space between the parts and the board edge (mm).
