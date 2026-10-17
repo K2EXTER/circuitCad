@@ -329,7 +329,7 @@ const MAX_SLIDE: f64 = 0.3;
 
 /// The points to visit from `a` to `p` (the last is `p`) with horizontal, vertical and 45° legs; `flip` picks which of
 /// the two bends is used.
-fn bend45(a: Point, p: Point, flip: bool) -> Vec<Point> {
+pub(crate) fn bend45(a: Point, p: Point, flip: bool) -> Vec<Point> {
     let (dx, dy) = (p.x - a.x, p.y - a.y);
     let eps = 1e-9;
     if dx.abs() < eps || dy.abs() < eps || (dx.abs() - dy.abs()).abs() < eps {

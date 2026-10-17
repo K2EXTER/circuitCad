@@ -335,4 +335,7 @@ fn the_tp5100_sample_routes_completely_with_clean_pad_leads() {
     assert!(pcb_core::drc::check(b).is_empty(), "{:?}", pcb_core::drc::check(b));
     let steps: Vec<_> = b.tracks.iter().filter(|t| t.a.dist(t.b) < 0.25 && (t.b.x - t.a.x).abs() > 1e-6 && (t.b.y - t.a.y).abs() > 1e-6).collect();
     assert!(steps.is_empty(), "{steps:?}");
+    // every piece is horizontal, vertical or at 45 degrees (also where a pad has no room for a straight lead)
+    let odd: Vec<_> = b.tracks.iter().filter(|t| { let (dx, dy) = ((t.b.x - t.a.x).abs(), (t.b.y - t.a.y).abs()); dx > 1e-6 && dy > 1e-6 && (dx - dy).abs() > 1e-6 }).collect();
+    assert!(odd.is_empty(), "{odd:?}");
 }

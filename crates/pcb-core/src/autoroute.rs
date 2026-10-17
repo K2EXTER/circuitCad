@@ -602,7 +602,15 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Op
             emit(cells[0].0, foot, q);
             emit(cells[0].0, q, cells[0].1);
         }
-        None => emit(cells[0].0, pad_a.pos, cells[0].1),
+        // no lead (no room for one): still only horizontal, vertical and 45° pieces when leads were asked for
+        None => {
+            let pts = if opt.pad_lead.is_some() { crate::padentry::bend45(pad_a.pos, cells[0].1, false) } else { vec![cells[0].1] };
+            let mut prev = pad_a.pos;
+            for p in pts {
+                emit(cells[0].0, prev, p);
+                prev = p;
+            }
+        }
     }
     let mut run_from = cells[0].1;
     let mut run_dir: Option<usize> = None;
@@ -634,7 +642,14 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Op
             emit(last.0, last.1, q);
             emit(last.0, q, foot);
         }
-        None => emit(last.0, last.1, pad_b.pos),
+        None => {
+            let pts = if opt.pad_lead.is_some() { crate::padentry::bend45(pad_b.pos, last.1, false) } else { vec![last.1] };
+            let mut prev = pad_b.pos;
+            for p in pts {
+                emit(last.0, prev, p);
+                prev = p;
+            }
+        }
     }
     Some((tracks, vias))
 }
