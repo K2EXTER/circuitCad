@@ -512,6 +512,97 @@ fn on_pad(pad: &Pad, p: Point) -> bool {
     }
 }
 
+thread_local! {
+    /// The cost and parent tables of the search, kept between searches: they are as big as the board's grid, and a search
+    /// touches only a part of them, so they are put back as they were instead of being made again.
+    static SCRATCH: std::cell::RefCell<(Vec<f32>, Vec<u32>)> = const { std::cell::RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// The tables of one search; they go back clean (and to the next search) when this is dropped.
+struct Scratch {
+    cost: Vec<f32>,
+    parent: Vec<u32>,
+    /// The states whose entries were set.
+    touched: Vec<u32>,
+}
+
+impl Scratch {
+    fn take(n_states: usize) -> Scratch {
+        let (mut cost, mut parent) = SCRATCH.with(|c| std::mem::take(&mut *c.borrow_mut()));
+        if cost.len() != n_states {
+            cost = vec![f32::INFINITY; n_states];
+            parent = vec![u32::MAX; n_states];
+        }
+        Scratch { cost, parent, touched: vec![] }
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        for &s in &self.touched {
+            self.cost[s as usize] = f32::INFINITY;
+            self.parent[s as usize] = u32::MAX;
+        }
+        let tables = (std::mem::take(&mut self.cost), std::mem::take(&mut self.parent));
+        SCRATCH.with(|c| *c.borrow_mut() = tables);
+    }
+}
+
+/// Can any cell of `is_goal` be reached from the `starts` with the moves of the search (eight ways round a free cell,
+/// never cutting a corner between blocked cells; a via to the other layers where the spot is free on all of them)?
+fn reaches_goal(grid: &Grid, net: i32, starts: &[EndCell], is_goal: &[bool]) -> bool {
+    let (nx, ny) = (grid.nx, grid.ny);
+    let nl = grid.layers.len();
+    let mut seen = vec![false; nl * nx * ny];
+    let mut stack: Vec<usize> = vec![];
+    for e in starts {
+        let c = (e.l * ny + e.j) * nx + e.i;
+        if !seen[c] {
+            seen[c] = true;
+            stack.push(c);
+        }
+    }
+    while let Some(c) = stack.pop() {
+        if is_goal[c] {
+            return true;
+        }
+        let (l, rest) = (c / (nx * ny), c % (nx * ny));
+        let (i, j) = (rest % nx, rest / nx);
+        for (dx, dy) in DIRS.iter() {
+            let (ni, nj) = (i as i32 + dx, j as i32 + dy);
+            if ni < 0 || nj < 0 || ni >= nx as i32 || nj >= ny as i32 {
+                continue;
+            }
+            let (ni, nj) = (ni as usize, nj as usize);
+            if !passable(grid.trk[l][nj * nx + ni], net) {
+                continue;
+            }
+            if *dx != 0 && *dy != 0 && !(passable(grid.trk[l][j * nx + ni], net) && passable(grid.trk[l][nj * nx + i], net)) {
+                continue;
+            }
+            let n = (l * ny + nj) * nx + ni;
+            if !seen[n] {
+                seen[n] = true;
+                stack.push(n);
+            }
+        }
+        let idx = j * nx + i;
+        if !grid.no_via[idx] && (0..nl).all(|k| passable(grid.via[k][idx], net)) {
+            for o in (0..nl).filter(|&o| o != l) {
+                if !passable(grid.trk[o][idx], net) {
+                    continue;
+                }
+                let n = (o * ny + j) * nx + i;
+                if !seen[n] {
+                    seen[n] = true;
+                    stack.push(n);
+                }
+            }
+        }
+    }
+    false
+}
+
 fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy: bool) -> Option<(Vec<Track>, Vec<Via>)> {
     let mut nets: Vec<String> = vec![];
     let grid = build_grid(board, opt, &mut nets)?;
@@ -537,6 +628,11 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
     for g in &goals {
         is_goal[(g.l * ny + g.j) * nx + g.i] = true;
     }
+    // when no goal can be reached at all, the search would only walk through everything that can be reached and find
+    // nothing: a plain fill over the cells (the same moves, no costs) says so at once
+    if !reaches_goal(&grid, net, &starts, &is_goal) {
+        return None;
+    }
     let gc = grid_cell(&grid, pad_b.pos);
     let following = !grid.near.is_empty();
     let g = grid.g as f32;
@@ -546,14 +642,14 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
     };
     let via_cost = 3.0f32; // a via costs as much as 3 mm of track
 
-    let mut cost = vec![f32::INFINITY; n_states];
-    let mut parent = vec![u32::MAX; n_states];
+    let mut sc = Scratch::take(n_states);
     let mut heap = BinaryHeap::new();
     for e in &starts {
         let s = enc(e.l, e.i, e.j, NO_DIR);
         let c = e.cost;
-        if c < cost[s as usize] {
-            cost[s as usize] = c;
+        if c < sc.cost[s as usize] {
+            sc.cost[s as usize] = c;
+        sc.touched.push(s);
             heap.push(Node { f: c + h(e.i, e.j), s });
         }
     }
@@ -566,7 +662,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
             return None;
         }
         let (l, i, j, d) = dec(s);
-        let c0 = cost[s as usize];
+        let c0 = sc.cost[s as usize];
         if is_goal[(l * ny + j) * nx + i] {
             end = Some(s);
             break;
@@ -597,9 +693,10 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
             };
             let ns = enc(l, ni, nj, nd);
             let nc = c0 + step + turn;
-            if nc < cost[ns as usize] {
-                cost[ns as usize] = nc;
-                parent[ns as usize] = s;
+            if nc < sc.cost[ns as usize] {
+                sc.cost[ns as usize] = nc;
+        sc.touched.push(ns);
+                sc.parent[ns as usize] = s;
                 heap.push(Node { f: nc + h(ni, nj), s: ns });
             }
         }
@@ -613,9 +710,10 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
                 }
                 let ns = enc(o, i, j, NO_DIR);
                 let nc = c0 + via_cost;
-                if nc < cost[ns as usize] {
-                    cost[ns as usize] = nc;
-                    parent[ns as usize] = s;
+                if nc < sc.cost[ns as usize] {
+                    sc.cost[ns as usize] = nc;
+        sc.touched.push(ns);
+                    sc.parent[ns as usize] = s;
                     heap.push(Node { f: nc + h(i, j), s: ns });
                 }
             }
@@ -624,8 +722,8 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
     let end = end?;
 
     let mut states = vec![end];
-    while parent[*states.last().unwrap() as usize] != u32::MAX {
-        states.push(parent[*states.last().unwrap() as usize]);
+    while sc.parent[*states.last().unwrap() as usize] != u32::MAX {
+        states.push(sc.parent[*states.last().unwrap() as usize]);
     }
     states.reverse();
     let cells: Vec<(usize, Point, usize)> = states

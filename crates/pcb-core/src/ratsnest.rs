@@ -13,9 +13,13 @@ pub struct Airwire {
 }
 
 pub fn ratsnest(board: &Board) -> Vec<Airwire> {
-    let grp = pad_groups(board);
+    ratsnest_in(board, &pad_groups(board))
+}
+
+/// [`ratsnest`] with the copper groups of the pads (`grp[i]` for `board.pads[i]`) already known.
+pub fn ratsnest_in(board: &Board, grp: &[usize]) -> Vec<Airwire> {
     let mut by_net: BTreeMap<&str, Vec<(Point, usize)>> = BTreeMap::new();
-    for (p, g) in board.pads.iter().zip(&grp) {
+    for (p, g) in board.pads.iter().zip(grp) {
         if !p.net.is_empty() {
             by_net.entry(&p.net).or_default().push((p.pos, *g));
         }

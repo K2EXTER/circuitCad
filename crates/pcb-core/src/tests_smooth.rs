@@ -353,3 +353,32 @@ fn a_teardrop_base_is_centred_on_the_pad_even_when_the_track_leaves_to_the_side(
     let (lo, hi) = near.iter().fold((f64::MAX, f64::MIN), |(l, h), p| (l.min(p.x), h.max(p.x)));
     assert!((lo - 4.5).abs() < 1e-6 && (hi - 5.5).abs() < 1e-6, "{lo} {hi}");
 }
+
+/// Whatever copper sits near the corner, finishing with the quick checks keeps the same edits as with the whole board
+/// checked for each one (and the batch really is broken by some of these, so the edits are tried one by one).
+#[test]
+fn the_quick_finish_keeps_what_the_slow_finish_keeps() {
+    let tracks = |b: &Board| b.tracks.iter().map(|t| format!("{:?} {:.4} {:.4} {:.4} {:.4} {:.3}", t.side, t.a.x, t.a.y, t.b.x, t.b.y, t.width)).collect::<Vec<_>>();
+    let before = crate::smooth::ONE_BY_ONE.load(std::sync::atomic::Ordering::Relaxed);
+    let mut differ = 0;
+    for k in 0..40 {
+        let (dx, dy) = (-0.9 + (k % 8) as f64 * 0.26, -0.9 + (k / 8) as f64 * 0.45);
+        let mut b = l_shape();
+        pad(&mut b, 5.0, 25.0, "B");
+        pad(&mut b, 24.0, 25.0, "B");
+        // another net's little track somewhere near the corner of net A
+        b.tracks.push(trk((24.55 + dx, 5.55 + dy), (24.6 + dx, 5.6 + dy), 0.1));
+        b.finish = Finish { on: true, ..Default::default() };
+        let (quick, slow) = (finished(&b).unwrap(), crate::smooth::finished_slow(&b).unwrap());
+        assert_eq!(tracks(&quick.board), tracks(&slow.board), "intruder offset {dx:.2},{dy:.2}");
+        assert_eq!(quick.patches.len(), slow.patches.len());
+        let (mut x, mut y) = (b.clone(), b.clone());
+        let (rx, ry) = (smooth_tracks(&mut x, &b.finish), crate::smooth::smooth_tracks_slow(&mut y, &b.finish));
+        assert_eq!(rx, ry);
+        assert_eq!(tracks(&x), tracks(&y), "baked, intruder offset {dx:.2},{dy:.2}");
+        differ += usize::from(tracks(&quick.board) != tracks(&b));
+    }
+    let taken = crate::smooth::ONE_BY_ONE.load(std::sync::atomic::Ordering::Relaxed) - before;
+    assert!(taken > 0, "some intruder must break the batch, or this says nothing");
+    assert!(differ > 0, "the finish changes the copper for some of them");
+}

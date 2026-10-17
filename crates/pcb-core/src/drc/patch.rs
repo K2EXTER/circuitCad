@@ -1,26 +1,52 @@
 use super::*;
 
-/// May the polygon `outline` (a piece of copper of the same group as track `track`) lie on `side`? Not if copper of
-/// another group comes closer to it than the clearance rule, or lies inside it.
-pub fn patch_clear(board: &Board, conn: &Connectivity, side: Side, outline: &[Point], track: usize) -> bool {
-    let items = copper_items(board);
-    let own = conn.items[track];
-    let n = outline.len();
-    for (k, it) in items.iter().enumerate() {
-        if conn.items[k] == own || !it.on(side) {
-            continue;
-        }
-        if inside_polygon(outline, center(&it.geo)) {
-            return false;
-        }
-        for e in 0..n {
-            let edge = Geo::Cap { a: outline[e], b: outline[(e + 1) % n], r: 0.0 };
-            if dist(&edge, &it.geo) + 1e-9 < board.rules.min_clearance {
+/// The copper of a board as [`patch_clear`] looks at it: made once, for asking about many polygons.
+pub struct PatchCheck {
+    items: Vec<Cu>,
+    boxes: Vec<(f64, f64, f64, f64)>,
+}
+
+impl PatchCheck {
+    pub fn new(board: &Board) -> Self {
+        let items = copper_items(board);
+        let boxes = items.iter().map(|it| bbox(&it.geo)).collect();
+        PatchCheck { items, boxes }
+    }
+
+    /// May the polygon `outline` (a piece of copper of the same group as track `track`) lie on `side`? Not if copper of
+    /// another group comes closer to it than the clearance rule, or lies inside it.
+    pub fn clear(&self, board: &Board, conn: &Connectivity, side: Side, outline: &[Point], track: usize) -> bool {
+        let own = conn.items[track];
+        let n = outline.len();
+        let m = board.rules.min_clearance;
+        // only copper whose box is within the clearance of the polygon's box can be too close to it (or inside it)
+        let (x0, x1, y0, y1) = outline.iter().fold((f64::MAX, f64::MIN, f64::MAX, f64::MIN), |b, p| (b.0.min(p.x), b.1.max(p.x), b.2.min(p.y), b.3.max(p.y)));
+        for (k, it) in self.items.iter().enumerate() {
+            let bx = self.boxes[k];
+            if bx.0 > x1 + m || bx.1 < x0 - m || bx.2 > y1 + m || bx.3 < y0 - m {
+                continue;
+            }
+            if conn.items[k] == own || !it.on(side) {
+                continue;
+            }
+            if inside_polygon(outline, center(&it.geo)) {
                 return false;
             }
+            for e in 0..n {
+                let edge = Geo::Cap { a: outline[e], b: outline[(e + 1) % n], r: 0.0 };
+                if dist(&edge, &it.geo) + 1e-9 < m {
+                    return false;
+                }
+            }
         }
+        true
     }
-    true
+}
+
+/// May the polygon `outline` (a piece of copper of the same group as track `track`) lie on `side`? Not if copper of
+/// another group comes closer to it than the clearance rule, or lies inside it. (For many polygons use [`PatchCheck`].)
+pub fn patch_clear(board: &Board, conn: &Connectivity, side: Side, outline: &[Point], track: usize) -> bool {
+    PatchCheck::new(board).clear(board, conn, side, outline, track)
 }
 
 /// The same check as [`check`], on the copper as it will be made: the board's finish applied (see [`crate::smooth`]).

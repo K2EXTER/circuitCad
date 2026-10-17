@@ -182,15 +182,28 @@ pub fn shorts(board: &Board) -> Vec<Violation> {
 /// items, found without going over every pair of the board again. A board that was clean before has `check(board)`
 /// findings exactly when this is not 0; the router uses it to take a route or not.
 pub fn violations_of_added(board: &Board, tracks_before: usize, vias_before: usize, conn: &Connectivity) -> usize {
+    let tracks: Vec<usize> = (tracks_before..board.tracks.len()).collect();
+    let vias: Vec<usize> = (vias_before..board.vias.len()).collect();
+    violations_of_items(board, &tracks, &vias, conn)
+}
+
+/// How many findings the tracks `changed_tracks` and the vias `changed_vias` (numbers in `board.tracks` and
+/// `board.vias`) are responsible for, `conn` being the [`connectivity`] of `board`: what [`check`] reports about those
+/// items (the width, the ends, the holes and rings, the clearance to other copper and to the edge, a short), found
+/// without going over every pair of the board. On a board that was clean without these changes, `check(board)` has
+/// findings exactly when this is not 0.
+pub fn violations_of_items(board: &Board, changed_tracks: &[usize], changed_vias: &[usize], conn: &Connectivity) -> usize {
     let r = &board.rules;
     let mut n = 0;
-    for t in &board.tracks[tracks_before..] {
+    for &k in changed_tracks {
+        let t = &board.tracks[k];
         if t.width + 1e-9 < r.min_track_width {
             n += 1;
         }
         n += [t.a, t.b].iter().filter(|p| !inside_polygon(&board.outline, **p)).count();
     }
-    for via in &board.vias[vias_before..] {
+    for &k in changed_vias {
+        let via = &board.vias[k];
         if via.drill + 1e-9 < r.min_drill {
             n += 1;
         }
@@ -203,13 +216,19 @@ pub fn violations_of_added(board: &Board, tracks_before: usize, vias_before: usi
     }
     let items = copper_items(board);
     let first_via = conn.n_tracks + conn.n_pads;
-    let is_new = |i: usize| (i >= tracks_before && i < conn.n_tracks) || i >= first_via + vias_before;
-    let new: Vec<usize> = (0..items.len()).filter(|&i| is_new(i)).collect();
+    let mut is_new = vec![false; items.len()];
+    for &k in changed_tracks {
+        is_new[k] = true;
+    }
+    for &k in changed_vias {
+        is_new[first_via + k] = true;
+    }
+    let new: Vec<usize> = (0..items.len()).filter(|&i| is_new[i]).collect();
     // copper of different groups too close
     for side in board.copper_layers() {
         for &i in new.iter().filter(|&&i| items[i].on(side)) {
             for j in (0..items.len()).filter(|&j| j != i && items[j].on(side) && conn.items[i] != conn.items[j]) {
-                if is_new(j) && j < i {
+                if is_new[j] && j < i {
                     continue; // a pair of new items is counted once
                 }
                 if dist(&items[i].geo, &items[j].geo) + 1e-9 < r.min_clearance {

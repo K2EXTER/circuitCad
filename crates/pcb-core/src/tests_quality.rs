@@ -88,3 +88,37 @@ fn large_led_board() {
     assert!(steps <= 3, "{steps} tiny steps");
     for w in &r.failed { println!("QUALITY failed {} {:?} -> {:?}", w.net, w.a, w.b); }
 }
+
+/// The finishing with the quick checks gives the same copper as with the whole board checked for each edit, on a board
+/// of 37 parts (`--ignored`: it routes the board first).
+#[test]
+#[ignore]
+fn the_quick_finish_is_the_slow_finish() {
+    let (mut b, ..) = led_board(2);
+    autoplace::autoplace(&mut b).unwrap();
+    autoroute::autoroute(&mut b, &autoroute::RouteOptions { grid: 0.25, pad_lead: Some(0.5), ..Default::default() }, None);
+    assert!(ratsnest(&b).len() <= 2);
+    b.finish.on = true;
+    let (quick, slow) = (smooth::finished(&b).unwrap(), smooth::finished_slow(&b).unwrap());
+    let key = |f: &smooth::Finished| -> String {
+        let mut out = String::new();
+        for t in &f.board.tracks {
+            out += &format!("T {:?} {:.4} {:.4} {:.4} {:.4} {:.3}
+", t.side, t.a.x, t.a.y, t.b.x, t.b.y, t.width);
+        }
+        for p in &f.patches {
+            out += &format!("P {:?} {}
+", p.side, p.outline.iter().map(|q| format!("{:.4},{:.4}", q.x, q.y)).collect::<Vec<_>>().join(" "));
+        }
+        out
+    };
+    assert_eq!(key(&quick), key(&slow));
+    assert!(!quick.patches.is_empty());
+    // and baked into the tracks
+    let (mut a, mut c) = (b.clone(), b.clone());
+    let (ra, rc) = (smooth::smooth_tracks(&mut a, &b.finish), smooth::smooth_tracks_slow(&mut c, &b.finish));
+    assert_eq!(ra, rc);
+    let tracks = |x: &Board| x.tracks.iter().map(|t| format!("{:?} {:.4} {:.4} {:.4} {:.4} {:.3}", t.side, t.a.x, t.a.y, t.b.x, t.b.y, t.width)).collect::<Vec<_>>();
+    assert_eq!(tracks(&a), tracks(&c));
+    assert!(ra.corners > 0 && ra.tapers > 0, "{ra:?}");
+}

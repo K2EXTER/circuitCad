@@ -538,6 +538,37 @@ mod sweep_tests {
         }
     }
 
+    #[test]
+    fn the_patch_check_is_that_of_trying_all_the_copper() {
+        let b = scattered();
+        let conn = connectivity(&b);
+        let items = copper_items(&b);
+        let check = PatchCheck::new(&b);
+        let (mut clear, mut blocked) = (0, 0);
+        // little squares of copper laid on the board, on both sides
+        for k in 0..400 {
+            let (x, y) = (1.0 + (k % 20) as f64 * 1.4, 1.0 + (k / 20) as f64 * 1.4);
+            let outline = [Point::new(x, y), Point::new(x + 0.6, y), Point::new(x + 0.6, y + 0.6), Point::new(x, y + 0.6)];
+            let side = if k % 3 == 0 { Side::Bottom } else { Side::Top };
+            let track = k % b.tracks.len();
+            // every item
+            let own = conn.items[track];
+            let slow = items.iter().enumerate().all(|(i, it)| {
+                if conn.items[i] == own || !it.on(side) {
+                    return true;
+                }
+                if inside_polygon(&outline, center(&it.geo)) {
+                    return false;
+                }
+                (0..4).all(|e| dist(&Geo::Cap { a: outline[e], b: outline[(e + 1) % 4], r: 0.0 }, &it.geo) + 1e-9 >= b.rules.min_clearance)
+            });
+            assert_eq!(check.clear(&b, &conn, side, &outline, track), slow, "square {k}");
+            assert_eq!(patch_clear(&b, &conn, side, &outline, track), slow, "square {k}");
+            if slow { clear += 1 } else { blocked += 1 }
+        }
+        assert!(clear > 20 && blocked > 20, "{clear} clear, {blocked} blocked: the squares must tell both apart");
+    }
+
     /// The findings about the copper near the board's edge, as `clearance` counts them.
     fn clearance_edge_findings(b: &Board) -> usize {
         let items = copper_items(b);

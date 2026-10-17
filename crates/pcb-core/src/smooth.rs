@@ -614,7 +614,11 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Vec<Edit
 
 /// Apply the track edits to a copy of `board`: all at once if that breaks nothing, else one by one, keeping the
 /// harmless ones. Returns the new board and the edits that were kept.
-fn apply_checked(board: &Board, edits: &[Edit]) -> (Board, Vec<usize>) {
+/// How many times the edits were tried one by one (the batch broke something), counted for the tests.
+#[cfg(test)]
+pub(crate) static ONE_BY_ONE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+fn apply_checked(board: &Board, edits: &[Edit], fast: bool) -> (Board, Vec<usize>) {
     let (base_drc, base_open) = (check(board).len(), ratsnest(board).len());
     let ok = |b: &Board| check(b).len() <= base_drc && ratsnest(b).len() <= base_open;
     let mut all = board.clone();
@@ -624,13 +628,28 @@ fn apply_checked(board: &Board, edits: &[Edit]) -> (Board, Vec<usize>) {
     if ok(&all) {
         return (all, (0..edits.len()).collect());
     }
-    // the batch broke something: keep only the edits that are harmless on their own
+    // the batch broke something: keep only the edits that are harmless on their own. On a board without findings the
+    // copper an edit changes is all that has to be looked at (and one pass for the groups of copper); otherwise the
+    // whole board is checked (`fast` off is the way it was, for the tests).
+    let quick = fast && base_drc == 0;
+    #[cfg(test)]
+    ONE_BY_ONE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let mut cur = board.clone();
     let mut kept = vec![];
     for (k, e) in edits.iter().enumerate() {
+        let before = cur.tracks.len();
         let mut trial = cur.clone();
         apply(&mut trial, e);
-        if ok(&trial) {
+        let good = if quick {
+            let conn = crate::drc::connectivity(&trial);
+            let mut changed: Vec<usize> = e.trims.iter().map(|t| t.0).collect();
+            changed.extend(before..trial.tracks.len());
+            let groups: Vec<usize> = (0..trial.pads.len()).map(|i| conn.pad_group(i)).collect();
+            crate::drc::violations_of_items(&trial, &changed, &[], &conn) == 0 && crate::ratsnest::ratsnest_in(&trial, &groups).len() <= base_open
+        } else {
+            ok(&trial)
+        };
+        if good {
             cur = trial;
             kept.push(k);
         }
@@ -639,12 +658,22 @@ fn apply_checked(board: &Board, edits: &[Edit]) -> (Board, Vec<usize>) {
 }
 
 fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> SmoothReport {
+    smooth_with(board, opts, only, true)
+}
+
+/// [`smooth_tracks`] with the whole board checked for every edit that is tried on its own (what it was before).
+#[cfg(test)]
+pub(crate) fn smooth_tracks_slow(board: &mut Board, opts: &SmoothOptions) -> SmoothReport {
+    smooth_with(board, opts, None, false)
+}
+
+fn smooth_with(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>, fast: bool) -> SmoothReport {
     let opts = SmoothOptions { forks: false, ..*opts };
     let edits = plan(board, &opts, only);
     if edits.is_empty() {
         return SmoothReport::default();
     }
-    let (new, kept) = apply_checked(board, &edits);
+    let (new, kept) = apply_checked(board, &edits, fast);
     *board = new;
     report(&kept.iter().map(|&k| &edits[k]).collect::<Vec<_>>())
 }
@@ -653,6 +682,16 @@ fn smooth(board: &mut Board, opts: &SmoothOptions, only: Option<&[usize]>) -> Sm
 /// stepped, and the polygons for the notches between tracks. `None` when the finish is off (use the board as it is).
 /// The board is not changed, so this is worked out again whenever it is needed.
 pub fn finished(board: &Board) -> Option<Finished> {
+    finished_with(board, true)
+}
+
+/// [`finished`] with the whole board checked for every edit that is tried on its own (what it was before).
+#[cfg(test)]
+pub(crate) fn finished_slow(board: &Board) -> Option<Finished> {
+    finished_with(board, false)
+}
+
+fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
     if !board.finish.on {
         return None;
     }
@@ -661,6 +700,7 @@ pub fn finished(board: &Board) -> Option<Finished> {
     // other copper keeps its distance from it.
     let mut kept_edits: Vec<Edit> = vec![];
     let mut patches_of: Vec<Option<Patch>> = vec![];
+    let copper = crate::drc::PatchCheck::new(board);
     for e in plan(board, &board.finish, None) {
         let (edit, patch) = match (&e.live, &e.patch) {
             (Some(l), _) => (Edit { trims: l.trims.clone(), pieces: l.pieces.clone(), patch: None, live: None, ..e.clone() }, Some(l.patch.clone())),
@@ -668,14 +708,14 @@ pub fn finished(board: &Board) -> Option<Finished> {
             (None, None) => (e, None),
         };
         if let Some(p) = &patch
-            && !crate::drc::patch_clear(board, &conn, p.side, &p.outline, p.track)
+            && !copper.clear(board, &conn, p.side, &p.outline, p.track)
         {
             continue;
         }
         kept_edits.push(edit);
         patches_of.push(patch);
     }
-    let (new, kept) = apply_checked(board, &kept_edits);
+    let (new, kept) = apply_checked(board, &kept_edits, fast);
     let patches = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
     Some(Finished { board: new, patches })
 }
