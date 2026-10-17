@@ -59,4 +59,4 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - 検証: `tests_params.rs`(全効果を入れた BJT の微分が差分と一致、IKF の式、漏れ電流、ISR、EG/XTI/XTB の温度式、CGSO、`.model` の読み込み)。実在モデルの警告は、2N3904 が `XTI EG NE ISE IKF XTB NC ISC` → `ITF VTF XTF` だけに、LM7805 が `EG CCS` → `CCS` だけになった。
 - **過渡解析の刻み制御(2026-10):** 誤差で棄却された刻みのあと、`h_ctrl` を古い大きな値のまま残していたため、毎ステップ「大きい刻みを試す→棄却→縮める」を繰り返していた(総合デモで採用 2464 点に対し棄却 5018 回)。棄却したステップのあとは採用した刻みから出発し、伸びは 1.05 倍までにした(棄却 約360回、時間は半分以下)。1.2 倍以上だと `cmos_inverter` の窓1の最小が ngspice より下がり(3.10V対3.30V、`xcheck_tran` のテストが落ちる)、1.0 倍だとマルチバイブレータの反転で収束しなくなる。
 - 収束の耐久テストは `app/src/tests/converge.rs`(サンプル全部を -40/125℃ と抵抗のランダム倍率で DC。`ne555_blinker` と `mixed_signal` は発振回路なので対象外)。
-
+- `diagnose` は、DCが収束しない回路に 555(内部ノード `Uxx.rcmp` と `Uxx.scmp` が両方ある部品)が入っていれば、「555 の点滅回路はDCで1点に定まらない。過渡解析で見る」という案内を先頭に出す(`converge.rs` の `a_555_blinker_without_an_operating_point...`)。

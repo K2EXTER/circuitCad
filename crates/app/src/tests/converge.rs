@@ -89,3 +89,23 @@ fn shipped_samples_keep_their_operating_point() {
     }
     assert!(bad.is_empty(), "{bad:#?}");
 }
+
+#[test]
+fn a_555_blinker_without_an_operating_point_points_to_the_transient_run() {
+    let (_, s) = samples().into_iter().find(|(n, _)| n == "ne555_blinker.schjson").unwrap();
+    let mut rng = Rng(99);
+    for _ in 0..20 {
+        let mut t = s.clone();
+        for c in t.components.iter_mut().filter(|c| c.kind == Kind::Resistor) {
+            let v = sim_core::parse_value(&c.value).unwrap();
+            c.value = format!("{:e}", v * 10f64.powf(rng.next() * 1.6 - 0.8));
+        }
+        let c = sim_core::from_schematic(&t).unwrap();
+        if let Err(e) = sim_core::dc_op(&c) {
+            let hints = sim_core::diagnose(&c, &e);
+            assert!(hints.iter().any(|h| h.contains("555 タイマー") && h.contains("過渡解析")), "{hints:?}");
+            return;
+        }
+    }
+    panic!("no resistor set without an operating point turned up (the explorer found 8 of 12)");
+}

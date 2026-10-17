@@ -35,6 +35,20 @@ fn voltage_loop(c: &Circuit) -> Option<Vec<String>> {
     None
 }
 
+/// The reference designators of the 555 timers in `c` (found from the names of their internal comparator nodes).
+fn timers_555(c: &Circuit) -> Vec<String> {
+    let mut v: Vec<String> = c
+        .names
+        .iter()
+        .filter_map(|n| n.strip_suffix(".rcmp"))
+        .filter(|u| c.names.iter().any(|n| n.strip_suffix(".scmp") == Some(*u)))
+        .map(str::to_string)
+        .collect();
+    v.sort();
+    v.dedup();
+    v
+}
+
 /// Suggestions for why `err` happened on `c`. Never empty for the errors it knows.
 pub fn diagnose(c: &Circuit, err: &SimError) -> Vec<String> {
     let mut out = vec![];
@@ -53,6 +67,12 @@ pub fn diagnose(c: &Circuit, err: &SimError) -> Vec<String> {
             let has_source = c.elements.iter().any(|e| matches!(e, Element::VSource { .. } | Element::ISource { .. }));
             if !has_source {
                 out.push("電源が1つもありません。電圧源か電流源を置きましょう".into());
+            }
+            // a 555 inside (its comparators are the nodes "U1.rcmp" / "U1.scmp"): say so, the usual hints are too general
+            for u in timers_555(c) {
+                out.push(format!(
+                    "{u} は 555 タイマーです。555 で作る点滅 (無安定) 回路は、出力が High と Low を行き来し続けるので、DC では 1 点に定まりません (これは異常ではありません)。「過渡解析を実行」で、コンデンサの充放電と出力の波形を見ましょう"
+                ));
             }
             let nonlinear = c.elements.iter().any(|e| matches!(e, Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. } | Element::BSource { .. } | Element::Switch { .. }));
             if nonlinear {
@@ -79,6 +99,17 @@ mod tests {
         c.elements.push(Element::vdc("V2", a, 0, 3.0));
         let h = diagnose(&c, &SimError::Singular);
         assert!(h[0].contains("V1") && h[0].contains("V2"), "{h:?}");
+    }
+
+    #[test]
+    fn a_555_that_has_no_operating_point_is_named() {
+        let mut c = Circuit::default();
+        c.node("U3.rcmp");
+        c.node("U3.scmp");
+        c.node("U7.rcmp");
+        let h = diagnose(&c, &SimError::NoConvergence);
+        assert!(h.iter().any(|m| m.starts_with("U3 は 555") && m.contains("過渡解析")), "{h:?}");
+        assert!(!h.iter().any(|m| m.starts_with("U7")), "only a 555 has both comparators: {h:?}");
     }
 
     #[test]
