@@ -109,7 +109,10 @@ fn zones_without_a_net_are_output_but_connect_nothing() {
 #[test]
 fn drc_checks_zone_geometry() {
     let mut b = board();
+    // sticking out is fine (the copper is cut to the outline); sharing nothing with the board is not
     b.zones.push(Zone::new("GND", Side::Top, rect(5.0, 5.0, 60.0, 25.0)));
+    assert!(!drc::check(&b).iter().any(|v| v.message.contains("外")));
+    b.zones.push(Zone::new("GND", Side::Top, rect(50.0, 50.0, 60.0, 60.0)));
     b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(1.0, 1.0), Point::new(2.0, 2.0)]));
     let msgs: Vec<_> = drc::check(&b).into_iter().map(|v| v.message).collect();
     assert!(msgs.iter().any(|m| m.contains("外")), "{msgs:?}");

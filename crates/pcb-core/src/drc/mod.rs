@@ -106,11 +106,12 @@ pub fn check(board: &Board) -> Vec<Violation> {
             out.push(v(format!("ゾーン({})の頂点が3点未満です", z.net), Point::default()));
             continue;
         }
-        for p in &z.polygon {
-            if !inside_polygon(&board.outline, *p) {
-                out.push(v(format!("ゾーン({})が基板外形の外にあります", z.net), *p));
-                break;
-            }
+        // The copper is cut to the outline (zonefill), so sticking out is harmless (e.g. after the
+        // outline was shrunk); only a pour that shares no point with the board is reported.
+        let touches = z.polygon.iter().any(|p| inside_polygon(&board.outline, *p))
+            || board.outline.iter().any(|p| inside_polygon(&z.polygon, *p));
+        if !touches && board.outline.len() >= 3 {
+            out.push(v(format!("ゾーン({})が基板外形の外にあり、銅が残りません。ゾーンを基板の上に描き直すか、外形を広げましょう", z.net), z.polygon[0]));
         }
     }
 
