@@ -51,7 +51,7 @@ impl BoardEditor {
         }
         self.panel_finish_exclude(ui);
         let any = f.corners || f.tapers;
-        if ui.add_enabled(any, egui::Button::new("整えた形を配線に確定する")).on_hover_text("角の丸みと段差を、配線そのものに書き込みます (確定すると、ほかの CAD にも渡せます。あとから配線を動かしても、丸めた角は自動では直りません)。ルール違反が増える所と、接続が切れる所は変えません。分かれ目の丸みは確定できません。元に戻すで取り消せます").clicked() {
+        if ui.add_enabled(any, egui::Button::new("整えた形を配線に確定する")).on_hover_text("角の丸みと段差を、配線そのものに書き込みます (確定すると、ほかの CAD にも渡せます。あとから配線を動かしても、丸めた角は自動では直りません)。ルール違反が増える所と、接続が切れる所は変えません。分かれ目の丸みとパッドの根元の肉づけ (凹んだ円弧) は、線では表せないので確定できません (パッドの根元は段の涙型になります)。これらを残したいときは確定せず、「整えた形で表示・出力」を入れたままにします。元に戻すで取り消せます").clicked() {
             self.smooth_tracks();
         }
         let picked = self.picked_tracks();
@@ -141,7 +141,7 @@ impl BoardEditor {
             self.undo.pop(); // nothing changed: no undo step
             "確定できる所がありませんでした (角がない、短くて入らない、またはルール違反になる所だけです)".into()
         } else {
-            format!("角を {corners} か所丸め、太さの段差を {tapers} か所なだらかにして、配線に確定しました")
+            format!("角を {corners} か所丸め、太さの段差を {tapers} か所なだらかにして、配線に確定しました (分かれ目の丸みとパッドの肉づけは確定できないので、残すなら「整えた形で表示・出力」のままに)")
         };
     }
 }
