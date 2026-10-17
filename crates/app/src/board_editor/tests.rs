@@ -642,6 +642,63 @@ fn pad_editor() -> BoardEditor {
     e
 }
 
+/// The legs of a route from `from` through `pts`: (length, is axis-aligned or 45 degrees).
+fn legs(from: Point, pts: &[Point]) -> Vec<(f64, bool)> {
+    let mut out = vec![];
+    let mut prev = from;
+    for q in pts {
+        let (dx, dy) = ((q.x - prev.x).abs(), (q.y - prev.y).abs());
+        out.push((prev.dist(*q), dx < 1e-9 || dy < 1e-9 || (dx - dy).abs() < 1e-6));
+        prev = *q;
+    }
+    out
+}
+
+#[test]
+fn a_bend_whose_straight_part_would_be_a_hair_is_laid_as_straight_diagonal_straight() {
+    let mut e = pad_editor();
+    e.route_mode = RouteMode::Angle45;
+    let a = Point::new(0.0, 0.0);
+    // the two legs differ by 0.03 mm: a straight piece of 0.03 mm would be a bump, so three pieces, each long enough
+    for (p, flip) in [(Point::new(10.0, 9.97), false), (Point::new(10.0, 9.97), true), (Point::new(-9.97, 10.0), false), (Point::new(-9.97, 10.0), true)] {
+        let pts = e.route_points_plain(a, p, flip);
+        assert_eq!(pts.len(), 3, "{pts:?}");
+        assert_eq!(*pts.last().unwrap(), p);
+        for (len, ok) in legs(a, &pts) {
+            assert!(ok && len >= 0.3 - 1e-9, "{pts:?}: a leg of {len} mm (ok {ok})");
+        }
+    }
+    // a clear difference, a grid point and a point too near for three pieces keep the old two-piece way
+    assert_eq!(e.route_points_plain(a, Point::new(10.0, 4.0), false).len(), 2);
+    assert_eq!(e.route_points_plain(a, Point::new(10.0, 10.0), false).len(), 1);
+    assert_eq!(e.route_points_plain(a, Point::new(0.5, 0.47), false).len(), 2);
+}
+
+#[test]
+fn a_route_from_a_corner_point_off_the_grid_has_no_tiny_piece() {
+    let mut e = pad_editor();
+    e.grid = 0.5;
+    e.route_mode = RouteMode::Angle45;
+    // the corners are off the 0.5 mm grid (11.375, 10.175): routes to grid points
+    let corner = Point::new(11.375, 10.175);
+    assert!(e.pad_end_points().iter().any(|q| q.dist(corner) < 1e-9));
+    let mut checked = 0;
+    for ix in 0..24 {
+        for iy in 0..24 {
+            let target = Point::new(16.0 + ix as f64 * 0.5, 14.0 + iy as f64 * 0.5);
+            if target.dist(corner) < 4.0 {
+                continue;
+            }
+            let pts = e.route_points(corner, target);
+            for (len, ok) in legs(corner, &pts) {
+                assert!(ok && len > 0.28, "to {target:?}: {pts:?} has a leg of {len} mm (axis or 45: {ok})");
+            }
+            checked += 1;
+        }
+    }
+    assert!(checked > 400);
+}
+
 #[test]
 fn a_big_pad_snaps_at_its_four_corners_flush_with_the_track_and_a_small_one_only_at_its_centre() {
     let e = pad_editor();
