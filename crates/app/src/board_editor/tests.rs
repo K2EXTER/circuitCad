@@ -657,6 +657,57 @@ fn a_long_pad_snaps_at_its_two_ends_and_a_small_one_only_at_its_centre() {
     assert_ne!(v.snap_object(near_end), Some(ends[0]));
 }
 
+/// Fine-pitch pads like the pins of a QFN: three 0.85 x 0.3 mm pads 0.65 mm apart, of three nets, and a far pad of the
+/// middle net.
+fn fine_pitch_editor() -> BoardEditor {
+    let mut e = pad_editor();
+    e.board.pads.clear();
+    for (x, y, w, h, net) in [(20.0, 10.65, 0.85, 0.3, "RTRICK"), (20.0, 10.0, 0.85, 0.3, "GND"), (20.0, 9.35, 0.85, 0.3, "VREG"), (30.0, 24.0, 0.5, 0.5, "GND")] {
+        let mut pad = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, None, Side::Top);
+        pad.net = net.into();
+        e.board.pads.push(pad);
+    }
+    e
+}
+
+#[test]
+fn between_fine_pitch_pads_there_is_no_snap_at_the_ends_and_no_lead_out_of_the_long_side() {
+    let e = fine_pitch_editor();
+    let mid = Point::new(20.0, 10.0);
+    // the ends of the middle pad would leave through a side that is 0.35 mm from the next pad: not offered
+    let ends = e.pad_end_points();
+    assert!(ends.iter().all(|q| (q.y - 10.0).abs() > 0.2 || (q.x - 20.0).abs() < 0.1), "{ends:?}");
+    // the outer pads have a free side: their ends are still there (up for the top pad, down for the bottom one)
+    assert!(ends.iter().any(|q| (q.y - 10.65).abs() < 1e-9), "{ends:?}");
+    // leaving the middle pad with the cursor straight above or below: not up or down into the neighbours, but
+    // through an end or not at all
+    for target in [Point::new(20.0, 20.0), Point::new(20.0, 1.0), Point::new(20.1, 20.0)] {
+        if let Some(lead) = e.pad_lead_point(mid, target) {
+            assert!((lead.y - mid.y).abs() < 1e-9, "a lead {lead:?} out of the long side towards {target:?}");
+        }
+        for q in e.route_points(mid, target) {
+            assert!(q.dist(Point::new(20.0, 10.65)) > 0.35 + 0.125 || q.y < 10.65 - 0.3, "{q:?} runs into the pad above");
+        }
+    }
+    // the way out is still there when the cursor is beside the pad
+    let lead = e.pad_lead_point(mid, Point::new(30.0, 10.0)).unwrap();
+    assert!(lead.x > 20.425 + 0.4 && (lead.y - 10.0).abs() < 1e-9, "{lead:?}");
+}
+
+#[test]
+fn a_wide_pad_with_room_still_leaves_through_its_long_side_and_a_blocked_side_gives_way_to_the_free_one() {
+    let mut e = pad_editor(); // the 3 x 0.6 mm pad at (10, 10) and a small one far away, all of net A
+    let end = e.pad_end_points()[0];
+    let up = e.pad_lead_point(end, Point::new(end.x, end.y + 10.0)).unwrap();
+    assert!((up.y - (end.y + 0.8)).abs() < 1e-9);
+    // a pad of another net just above the end: the lead goes down even though the cursor is up
+    let mut other = Pad::new(Point::new(end.x, end.y + 1.0), PadShape::Rect { w: 1.0, h: 0.6 }, None, Side::Top);
+    other.net = "B".into();
+    e.board.pads.push(other);
+    let down = e.pad_lead_point(end, Point::new(end.x, end.y + 10.0)).unwrap();
+    assert!((down.y - (end.y - 0.8)).abs() < 1e-9, "{down:?}");
+}
+
 #[test]
 fn a_route_leaves_and_enters_a_pad_at_a_right_angle_to_its_edge() {
     let e = pad_editor();

@@ -199,6 +199,9 @@ pub struct BoardEditor {
     auto_route: bool,
     /// The obstacle grid of the board, kept until the copper or the settings change.
     router_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::autoroute::Router>)>>,
+    /// The copper as the pad leads see it, and the snap points at the ends of the pads (see `padlead.rs`).
+    stretch_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::drc::StretchCheck>)>>,
+    ends_cache: std::cell::RefCell<Option<(u64, Vec<Point>)>>,
     /// Leave and enter pads at a right angle to their edge, for `pad_lead_len` mm.
     pad_lead: bool,
     pad_lead_len: f64,
@@ -290,6 +293,8 @@ impl Default for BoardEditor {
             meander_target: 0.0,
             auto_route: false,
             router_cache: Default::default(),
+            stretch_cache: Default::default(),
+            ends_cache: Default::default(),
             pad_lead: true,
             pad_lead_len: 0.5,
             pad_spread: true,

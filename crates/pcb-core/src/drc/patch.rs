@@ -49,6 +49,41 @@ pub fn patch_clear(board: &Board, conn: &Connectivity, side: Side, outline: &[Po
     PatchCheck::new(board).clear(board, conn, side, outline, track)
 }
 
+/// The copper of a board as [`StretchCheck::clear`] looks at it: made once, for asking about many stretches.
+pub struct StretchCheck {
+    items: Vec<Cu>,
+    conn: Connectivity,
+    min_clearance: f64,
+}
+
+impl StretchCheck {
+    pub fn new(board: &Board) -> Self {
+        StretchCheck { items: copper_items(board), conn: connectivity(board), min_clearance: board.rules.min_clearance }
+    }
+
+    /// May a track of `width` run straight from `a` to `b` on `side`, leaving the pad number `pad` (`board.pads[pad]`)?
+    /// Not if copper of another net comes closer to it than the clearance rule (copper of the pad's own net is what
+    /// the route is for: it is joined to the pad, or will be).
+    pub fn clear(&self, side: Side, a: Point, b: Point, width: f64, pad: usize) -> bool {
+        let own = self.conn.pad_group(pad);
+        let own_net = self.conn.pad_net(pad);
+        let stretch = Geo::Cap { a, b, r: width / 2.0 };
+        let (x0, x1, y0, y1) = bbox(&stretch);
+        let m = self.min_clearance;
+        self.items.iter().enumerate().all(|(k, it)| {
+            let group = self.conn.items[k];
+            if group == own || !it.on(side) || (own_net.is_some() && self.conn.group_net(group) == own_net) {
+                return true;
+            }
+            let bx = bbox(&it.geo);
+            if bx.0 > x1 + m || bx.1 < x0 - m || bx.2 > y1 + m || bx.3 < y0 - m {
+                return true;
+            }
+            dist(&it.geo, &stretch) + 1e-9 >= m
+        })
+    }
+}
+
 /// The same check as [`check`], on the copper as it will be made: the board's finish applied (see [`crate::smooth`]).
 pub fn check_final(board: &Board) -> Vec<Violation> {
     match crate::smooth::finished(board) {
