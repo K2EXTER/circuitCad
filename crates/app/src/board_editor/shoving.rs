@@ -111,7 +111,7 @@ impl BoardEditor {
         let Some((orig, i, anchor)) = self.seg_drag.clone() else { return };
         let (dx, dy) = (p.x - anchor.x, p.y - anchor.y);
         self.board = orig;
-        if self.shove {
+        if self.auto_route && self.shove {
             let pushed = shove::move_track_shoving(&mut self.board, i, dx, dy);
             if pushed > 0 {
                 self.status = format!("押しのけ配線: 邪魔な配線 {pushed} 本を脇へ寄せています");

@@ -30,25 +30,18 @@ impl BoardEditor {
             let wrap = crate::icons::icon_only();
             ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
-                let mut tools = |ui: &mut egui::Ui| {
-                for (t, name, icon) in TOOLS {
-                    if crate::icons::icon_button(ui, *icon, name, self.tool == *t, true, tool_tip(*t)).clicked() {
-                        self.tool = *t;
-                        self.pending = None;
-                        self.poly.clear();
-                        // what was selected stays behind: R, B and Delete must not reach it from another tool
-                        if *t != Tool::Select {
-                            self.selected = None;
-                            self.multi.clear();
-                            self.boxsel = None;
-                        }
+                // the picked tool's settings open right under its button; the rest of the tools follow below
+                let at = TOOLS.iter().position(|(t, _, _)| *t == self.tool).filter(|_| matches!(self.tool, Tool::Track | Tool::Via));
+                let (head, tail) = TOOLS.split_at(at.map_or(TOOLS.len(), |i| i + 1));
+                for part in [head, tail] {
+                    if wrap {
+                        ui.horizontal_wrapped(|ui| self.tool_buttons(ui, part));
+                    } else {
+                        self.tool_buttons(ui, part);
                     }
-                }
-                };
-                if wrap {
-                    ui.horizontal_wrapped(tools);
-                } else {
-                    tools(ui);
+                    if std::ptr::eq(part, head) {
+                        self.tool_options(ui);
+                    }
                 }
             });
             ui.horizontal(|ui| {
@@ -141,7 +134,7 @@ impl BoardEditor {
             egui::CollapsingHeader::new("② 配線").default_open(true).show(ui, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("全部").on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
-    線幅・ビア径は下の設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
+    線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
     2層・45°配線で、ルール違反になる配線は自動的にやめます").clicked() {
                         self.autoroute(None);
                     }
@@ -159,25 +152,6 @@ impl BoardEditor {
                             self.autoroute(Some(&n));
                         }
                 });
-                ui.separator();
-                ui.label("引き方").on_hover_text("配線ツールで引くときの設定です。線幅・ビアは、自動配線にも使われます");
-                ui.checkbox(&mut self.auto_route, "自動経路 (パッドまで探す)").on_hover_text("入れると、配線ツールで、行き先のパッド・ビア・配線の端にカーソルを合わせたとき、出発点からそこまでの経路を、障害物をよけて自動で探して見せます (水色の線)。クリックで、その経路を配線します。探せないとき・行き先が何もない所のときは、いつもの曲げ方の線になります。切ると、押しのけも使わない、手で決めたとおりの配線になります");
-                ui.checkbox(&mut self.shove, "押しのけ配線").on_hover_text("自動経路で通れないとき・行き先が何もない所のときに、邪魔になる別のネットの配線を脇へ寄せて通します。配線をドラッグで動かすときにも使います。パッドやビアに固定された配線は動かさず、寄せきれないときは普通に引きます。プレビューが橙色なら押しのけ、赤ならルール違反です");
-                ui.horizontal(|ui| {
-                    ui.label("配線");
-                    ui.selectable_value(&mut self.route_mode, RouteMode::Angle45, "45°").on_hover_text("配線を 45° の斜めを使って曲げます。基板の標準的な引き方で、角が鈍くなり、きれいで製造もしやすくなります");
-                    ui.selectable_value(&mut self.route_mode, RouteMode::Orthogonal, "直角").on_hover_text("配線を縦と横だけで曲げます (斜めは使いません)");
-                    ui.selectable_value(&mut self.route_mode, RouteMode::Free, "自由").on_hover_text("クリックした点どうしを、そのまま直線でつなぎます (どんな角度でも)。鋭い角ができやすいので注意しましょう");
-                });
-                ui.horizontal(|ui| {
-                    ui.checkbox(&mut self.pad_lead, "パッドに垂直に出入り").on_hover_text("配線をパッドから出すとき・パッドへ入れるときに、パッドの辺に垂直な短い区間を必ず付けます (そのあとは、いつもの 45° などで行き先へ向かいます)。斜めに入る根元がなくなり、きれいにそろいます。距離が近すぎるときと、丸いパッド、「自由」の配線では何もしません。長いパッドでは、パッドの両端にも吸い付くので、2本を並べて出せます");
-                    ui.add_enabled(self.pad_lead, egui::DragValue::new(&mut self.pad_lead_len).speed(0.05).range(0.1..=3.0).suffix(" mm")).on_hover_text("パッドの縁から、垂直に出す区間の長さ");
-                });
-                ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
-                    .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
-                ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
-                ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
-                    .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
             });
             egui::CollapsingHeader::new("③ 仕上げ (?)").default_open(false).show(ui, |ui| {
                 self.panel_pad_entries(ui);
@@ -250,6 +224,57 @@ impl BoardEditor {
                 self.help_request = Some(crate::help::HelpTab::Board);
             }
         });
+    }
+
+    fn tool_buttons(&mut self, ui: &mut egui::Ui, tools: &[(Tool, &'static str, Icon)]) {
+        for (t, name, icon) in tools {
+            if crate::icons::icon_button(ui, *icon, name, self.tool == *t, true, tool_tip(*t)).clicked() {
+                self.tool = *t;
+                self.pending = None;
+                self.poly.clear();
+                // what was selected stays behind: R, B and Delete must not reach it from another tool
+                if *t != Tool::Select {
+                    self.selected = None;
+                    self.multi.clear();
+                    self.boxsel = None;
+                }
+            }
+        }
+    }
+
+    /// Settings of the tool that is picked, shown right under the toolbar: how a wire is laid for the wire tool,
+    /// the size of a via for the via tool (autoroute uses both).
+    fn tool_options(&mut self, ui: &mut egui::Ui) {
+        match self.tool {
+            Tool::Track => {
+        ui.label("引き方").on_hover_text("配線ツールで引くときの設定です。線幅・ビアは、自動配線にも使われます");
+        ui.checkbox(&mut self.auto_route, "自動経路 (パッドまで探す)").on_hover_text("入れると、配線ツールで、行き先のパッド・ビア・配線の端にカーソルを合わせたとき、出発点からそこまでの経路を、障害物をよけて自動で探して見せます (水色の線)。クリックで、その経路を配線します。探せないとき・行き先が何もない所のときは、いつもの曲げ方の線になります。切ると、押しのけも使わない、手で決めたとおりの配線になります");
+        // shoving only works on top of the automatic path, so it is offered only while that is on
+        if self.auto_route {
+            ui.indent("shove_indent", |ui| {
+                ui.checkbox(&mut self.shove, "押しのけ配線").on_hover_text("自動経路で通れないとき・行き先が何もない所のときに、邪魔になる別のネットの配線を脇へ寄せて通します。パッドやビアに固定された配線は動かさず、寄せきれないときは普通に引きます。プレビューが橙色なら押しのけ、赤ならルール違反です");
+            });
+        }
+        ui.horizontal(|ui| {
+            ui.label("配線");
+            ui.selectable_value(&mut self.route_mode, RouteMode::Angle45, "45°").on_hover_text("配線を 45° の斜めを使って曲げます。基板の標準的な引き方で、角が鈍くなり、きれいで製造もしやすくなります");
+            ui.selectable_value(&mut self.route_mode, RouteMode::Orthogonal, "直角").on_hover_text("配線を縦と横だけで曲げます (斜めは使いません)");
+            ui.selectable_value(&mut self.route_mode, RouteMode::Free, "自由").on_hover_text("クリックした点どうしを、そのまま直線でつなぎます (どんな角度でも)。鋭い角ができやすいので注意しましょう");
+        });
+        ui.horizontal(|ui| {
+            ui.checkbox(&mut self.pad_lead, "パッドに垂直に出入り").on_hover_text("配線をパッドから出すとき・パッドへ入れるときに、パッドの辺に垂直な短い区間を必ず付けます (そのあとは、いつもの 45° などで行き先へ向かいます)。斜めに入る根元がなくなり、きれいにそろいます。距離が近すぎるときと、丸いパッド、「自由」の配線では何もしません。長いパッドでは、パッドの両端にも吸い付くので、2本を並べて出せます");
+            ui.add_enabled(self.pad_lead, egui::DragValue::new(&mut self.pad_lead_len).speed(0.05).range(0.1..=3.0).suffix(" mm")).on_hover_text("パッドの縁から、垂直に出す区間の長さ");
+        });
+        ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
+            .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
+            }
+            Tool::Via => {
+        ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
+        ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
+            .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
+            }
+            _ => {}
+        }
     }
 
     pub(super) fn selection_panel(&mut self, ui: &mut egui::Ui) {
