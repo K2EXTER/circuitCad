@@ -269,8 +269,8 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
                 };
                 return Ok((att, name));
             }
-            // a structurally singular matrix will not be cured by stepping
-            Err(Fail::Singular) => return Err(SimError::Singular),
+            // a circuit that is singular for good fails every strategy at its first iteration, which costs nothing
+            Err(Fail::Singular) => last = SimError::Singular,
             Err(Fail::NoConv) => last = SimError::NoConvergence,
         }
     }

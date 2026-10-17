@@ -917,7 +917,7 @@
     {
       "refdes": "R9",
       "kind": "Resistor",
-      "value": "22k",
+      "value": "10k",
       "pos": [
         68,
         84

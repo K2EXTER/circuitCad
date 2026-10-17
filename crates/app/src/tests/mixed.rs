@@ -100,7 +100,7 @@ pub(super) fn mixed_signal() -> sch_core::Schematic {
     two_pin(&mut s, Kind::Resistor, (28, 100), 1, "4.7k", "TH_REF", "GND");
     let u6 = part_at(&mut s, "LM393", (50, 92), 0);
     pins(&mut s, u6, &[("3", "TH_REF"), ("2", "TEMP"), ("8", "V5"), ("4", "GND"), ("1", "ALARM")]);
-    two_pin(&mut s, Kind::Resistor, (68, 84), 1, "22k", "V5", "ALARM");
+    two_pin(&mut s, Kind::Resistor, (68, 84), 1, "10k", "V5", "ALARM");
     two_pin(&mut s, Kind::Resistor, (80, 92), 0, "10k", "ALARM", "QB");
     let q1 = part_at(&mut s, "2N3904", (96, 96), 0);
     pins(&mut s, q1, &[("2", "QB"), ("1", "GND"), ("3", "QC")]);
@@ -145,6 +145,10 @@ fn mixed_signal_sample_works() {
     assert!((v("VPROT") - 11.7).abs() < 0.3, "12 V minus the Schottky drop");
     assert!(v("TEMP") > v("TH_REF") && v("ALARM") < 0.5, "cold: the alarm stays off");
     assert!((v("VMID") - 2.5).abs() < 0.05);
+    // the same circuit at the temperature extremes (the NTC and every junction move)
+    for temp in [-40.0, 100.0] {
+        sim_core::dc_op(&c.at_temperature(temp)).unwrap_or_else(|e| panic!("dc at {temp}: {e:?}"));
+    }
     let t = sim_core::transient(&c, &sim_core::TranSettings { tstop: 8e-3, tstep: 10e-6, uic: false }).unwrap();
     let swing = |n: &str| {
         let sig = t.signal(&format!("V({n})")).unwrap_or_else(|| panic!("no signal {n}"));

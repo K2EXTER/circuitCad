@@ -132,7 +132,14 @@ impl Compiled {
             }
             let (x_old, vj_old) = if backtrack { (x.clone(), vj.clone()) } else { (vec![], vec![]) };
             let mut xn = m.b;
-            factor(m.n, m.rows).map_err(|_| Fail::Singular)?.solve(&mut xn);
+            // after the first iteration a singular matrix is the iterate's fault, not the circuit's: an overshoot into
+            // a junction at several volts of forward bias puts 1e20 S on the diagonal and the pivots vanish. Report it
+            // as "no convergence" so that the damped retries and the other strategies get their turn.
+            match factor(m.n, m.rows) {
+                Ok(f) => f.solve(&mut xn),
+                Err(_) if it > 1 => return Err(Fail::NoConv),
+                Err(_) => return Err(Fail::Singular),
+            }
             if xn.iter().any(|v| !v.is_finite()) {
                 return Err(Fail::NoConv);
             }
