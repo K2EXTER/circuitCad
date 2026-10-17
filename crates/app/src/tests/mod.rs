@@ -1,4 +1,5 @@
 mod examples;
+mod converge;
 mod flow;
 mod mixed;
 

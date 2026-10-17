@@ -1025,7 +1025,7 @@ fn board_frame_time() {
     e.import_from_schematic(&sch);
     println!("parts {} pads {} outline {}", e.board.parts.len(), e.board.pads.len(), e.board.outline.len());
     let ctx = egui::Context::default();
-    let mut frame = |e: &mut BoardEditor, label: &str| {
+    let frame = |e: &mut BoardEditor, label: &str| {
         let mut worst = 0.0f64;
         let mut total = 0.0;
         for _ in 0..20 {
@@ -1086,7 +1086,7 @@ fn board_interaction_time() {
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
     e.fit_view(screen);
     let ctx = egui::Context::default();
-    let mut frame = |e: &mut BoardEditor, events: Vec<egui::Event>| -> f64 {
+    let frame = |e: &mut BoardEditor, events: Vec<egui::Event>| -> f64 {
         let t = std::time::Instant::now();
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
             e.canvas(ui);
@@ -1105,7 +1105,7 @@ fn board_interaction_time() {
     let at = |e: &BoardEditor, p: Point| e.to_screen(screen, p);
     let u1 = e.board.pads.iter().find(|p| p.refdes == "U1").map(|p| p.pos).unwrap();
     let u3 = e.board.pads.iter().find(|p| p.refdes == "U3").map(|p| p.pos).unwrap();
-    let mut report = |label: &str, times: Vec<f64>| {
+    let report = |label: &str, times: Vec<f64>| {
         let avg = times.iter().sum::<f64>() / times.len() as f64;
         let worst = times.iter().cloned().fold(0.0, f64::max);
         println!("{label}: avg {avg:.1} ms, worst {worst:.1} ms");

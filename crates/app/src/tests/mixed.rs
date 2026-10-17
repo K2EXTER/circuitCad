@@ -193,3 +193,15 @@ fn app_frame_time() {
     let times: Vec<f64> = (0..40).map(|i| run(&mut app, vec![egui::Event::PointerMoved(egui::pos2(600.0 + i as f32 * 5.0, 400.0 + i as f32 * 3.0))])).collect();
     println!("APP schematic hover: avg {:.1} ms, worst {:.1} ms", times.iter().sum::<f64>() / 40.0, times.iter().cloned().fold(0.0, f64::max));
 }
+
+/// How long the transient run of the big sample takes (the step control used to redo two steps in three):
+/// `cargo test -p app tran_speed -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn tran_speed() {
+    let c = sim_core::from_schematic(&mixed_signal()).unwrap();
+    let t = std::time::Instant::now();
+    let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 8e-3, tstep: 10e-6, uic: false }).unwrap();
+    println!("TRAN {:.2} s, {} points, {} rejected steps", t.elapsed().as_secs_f64(), r.time.len(), r.rejected);
+    assert!(r.rejected < r.time.len() / 2, "the step control keeps retrying: {} rejected of {}", r.rejected, r.time.len());
+}

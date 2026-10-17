@@ -364,11 +364,16 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
             h_ctrl = h.max(s.tstep * 1e-3).min(s.tstep);
         } else if retried {
             h_ctrl = h.max(h_min);
-        } else if h >= wanted * 0.999 || ratio.is_some_and(|r| r > 1.0) {
-            let growth = ratio.map_or(2.0, |r| (0.9 * r.max(1e-12).powf(-1.0 / order)).clamp(0.5, 2.0));
+        } else if h >= wanted * 0.999 || rejects > 0 || ratio.is_some_and(|r| r > 1.0) {
+            let mut growth = ratio.map_or(2.0, |r| (0.9 * r.max(1e-12).powf(-1.0 / order)).clamp(0.5, 2.0));
+            // a step that had to be redone has found the size the circuit allows here: trying twice that again
+            // only earns another rejection, but holding the old size for good starves the multivibrator flips
+            if rejects > 0 {
+                growth = growth.min(1.05);
+            }
             h_ctrl = (h * growth).clamp(h_min, s.tstep);
         }
-        // else: the step was cut short by the end of the run; keep the controller's value
+        // else: the step was cut short by the end of the run (not by the error control); keep the controller's value
         hist.push((t, cap_v.clone(), ind_i.clone()));
         if hist.len() > 3 {
             hist.remove(0);
