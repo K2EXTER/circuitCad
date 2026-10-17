@@ -1072,3 +1072,75 @@ fn board_frame_time() {
     let v = pcb_core::drc::check(&e.board);
     println!("drc {} violations {:.1} ms", v.len(), t.elapsed().as_secs_f64() * 1000.0);
 }
+
+/// Frame time while the pointer moves, drags a part and routes: `cargo test -p app board_interaction_time -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn board_interaction_time() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut sch = crate::schematic::SchEditor::default();
+    sch.load_path(root.join("mixed_signal.schjson"));
+    let mut e = BoardEditor::default();
+    e.import_from_schematic(&sch);
+    e.board.set_rect_outline(0.0, 0.0, 80.0, 60.0);
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(screen);
+    let ctx = egui::Context::default();
+    let mut frame = |e: &mut BoardEditor, events: Vec<egui::Event>| -> f64 {
+        let t = std::time::Instant::now();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            e.canvas(ui);
+        });
+        out.textures_delta.clear();
+        let _ = ctx.tessellate(out.shapes, out.pixels_per_point);
+        t.elapsed().as_secs_f64() * 1000.0
+    };
+    frame(&mut e, vec![]);
+    let t0 = std::time::Instant::now();
+    for _ in 0..10 {
+        e.rev += 1;
+        let _ = e.schematic_diff(&sch).nets;
+    }
+    println!("schematic_diff when the board changed: {:.1} ms each", t0.elapsed().as_secs_f64() * 100.0);
+    let at = |e: &BoardEditor, p: Point| e.to_screen(screen, p);
+    let u1 = e.board.pads.iter().find(|p| p.refdes == "U1").map(|p| p.pos).unwrap();
+    let u3 = e.board.pads.iter().find(|p| p.refdes == "U3").map(|p| p.pos).unwrap();
+    let mut report = |label: &str, times: Vec<f64>| {
+        let avg = times.iter().sum::<f64>() / times.len() as f64;
+        let worst = times.iter().cloned().fold(0.0, f64::max);
+        println!("{label}: avg {avg:.1} ms, worst {worst:.1} ms");
+    };
+    // 1: hovering over the board
+    let mut t = vec![];
+    for i in 0..30 {
+        let p = at(&e, Point::new(u1.x + i as f64 * 0.3, u1.y + i as f64 * 0.2));
+        t.push(frame(&mut e, vec![egui::Event::PointerMoved(p)]));
+    }
+    report("hover (select tool)", t);
+    // 2: dragging a part
+    let start = at(&e, u1);
+    let mut t = vec![];
+    t.push(frame(&mut e, vec![egui::Event::PointerMoved(start), egui::Event::PointerButton { pos: start, button: egui::PointerButton::Primary, pressed: true, modifiers: Default::default() }]));
+    for i in 1..30 {
+        let p = start + egui::vec2(i as f32 * 3.0, i as f32 * 2.0);
+        t.push(frame(&mut e, vec![egui::Event::PointerMoved(p)]));
+    }
+    report("drag (select tool)", t);
+    let end = start + egui::vec2(90.0, 60.0);
+    frame(&mut e, vec![egui::Event::PointerButton { pos: end, button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() }]);
+    // 3: routing with the auto path on
+    e.tool = Tool::Track;
+    e.auto_route = true;
+    e.shove = true;
+    let a = at(&e, u1);
+    let b = at(&e, u3);
+    let click = |p: egui::Pos2, pressed| vec![egui::Event::PointerMoved(p), egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() }];
+    frame(&mut e, click(a, true));
+    frame(&mut e, click(a, false));
+    let mut t = vec![];
+    for i in 1..=30 {
+        let p = a + (b - a) * (i as f32 / 30.0);
+        t.push(frame(&mut e, vec![egui::Event::PointerMoved(p)]));
+    }
+    report("routing preview (auto path + shove)", t);
+}

@@ -157,3 +157,39 @@ fn mixed_signal_sample_works() {
     assert!(swing("CLK") > 4.0 && swing("Q1") > 3.0 && swing("Q2") > 3.0, "clock and both counter stages move: {} {} {}", swing("CLK"), swing("Q1"), swing("Q2"));
     assert!(swing("AOUT") > 1.2, "gain of 10 on 0.2 V peak-to-peak");
 }
+
+/// Whole-window frame time (menus, panels, canvas, Japanese font) with the sample on the board:
+/// `cargo test -p app app_frame_time -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn app_frame_time() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("mixed_signal.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    app.mode = Mode::Board;
+    let ctx = egui::Context::default();
+    crate::startup::install_japanese_font(&ctx);
+    let mut frame = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1600.0, 900.0));
+    let mut run = |app: &mut App, events: Vec<egui::Event>| -> f64 {
+        let t = std::time::Instant::now();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+            eframe::App::ui(app, ui, &mut frame);
+        });
+        out.textures_delta.clear();
+        let _ = ctx.tessellate(out.shapes, out.pixels_per_point);
+        t.elapsed().as_secs_f64() * 1000.0
+    };
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    let times: Vec<f64> = (0..40).map(|i| run(&mut app, vec![egui::Event::PointerMoved(egui::pos2(600.0 + i as f32 * 5.0, 400.0 + i as f32 * 3.0))])).collect();
+    println!("APP hover: avg {:.1} ms, worst {:.1} ms", times.iter().sum::<f64>() / 40.0, times.iter().cloned().fold(0.0, f64::max));
+    app.mode = Mode::Schematic;
+    for _ in 0..3 {
+        run(&mut app, vec![]);
+    }
+    let times: Vec<f64> = (0..40).map(|i| run(&mut app, vec![egui::Event::PointerMoved(egui::pos2(600.0 + i as f32 * 5.0, 400.0 + i as f32 * 3.0))])).collect();
+    println!("APP schematic hover: avg {:.1} ms, worst {:.1} ms", times.iter().sum::<f64>() / 40.0, times.iter().cloned().fold(0.0, f64::max));
+}
