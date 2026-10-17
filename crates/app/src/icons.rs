@@ -33,6 +33,8 @@ pub enum Icon {
     Airwire,
     Ruler,
     Layers,
+    Eye,
+    Marquee,
 }
 
 /// Draw `icon` inside `r` (a square) with `c`.
@@ -129,6 +131,20 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
                 p.add(egui::Shape::closed_line(pts, if dy == 0.0 { s } else { Stroke::new(1.0, c) }));
             }
         }
+        Icon::Eye => {
+            let top: Vec<Pos2> = (0..=8).map(|i| { let t = i as f32 / 8.0; q(0.05 + 0.9 * t, 0.5 - 0.32 * (std::f32::consts::PI * t).sin()) }).collect();
+            let bot: Vec<Pos2> = (0..=8).map(|i| { let t = i as f32 / 8.0; q(0.05 + 0.9 * t, 0.5 + 0.32 * (std::f32::consts::PI * t).sin()) }).collect();
+            p.line(top, s);
+            p.line(bot, s);
+            p.circle_filled(q(0.5, 0.5), u * 0.14, c);
+        }
+        Icon::Marquee => {
+            let b = Rect::from_min_max(q(0.1, 0.12), q(0.78, 0.8));
+            for (a, z) in [(b.left_top(), b.right_top()), (b.right_top(), b.right_bottom()), (b.right_bottom(), b.left_bottom()), (b.left_bottom(), b.left_top())] {
+                p.extend(egui::Shape::dashed_line(&[a, z], Stroke::new(1.3, c), 3.0, 2.5));
+            }
+            p.add(egui::Shape::convex_polygon(vec![q(0.5, 0.45), q(0.5, 0.92), q(0.64, 0.8), q(0.76, 0.98), q(0.84, 0.93), q(0.72, 0.75), q(0.9, 0.7)], c.gamma_multiply(0.5), s));
+        }
         Icon::Undo | Icon::Redo => {
             let f = if icon == Icon::Undo { 1.0 } else { -1.0 };
             let x = |v: f32| if f > 0.0 { v } else { 1.0 - v };
@@ -186,6 +202,42 @@ pub fn icon_toggle(ui: &mut egui::Ui, icon: Icon, on: &mut bool, label: &str, ti
         paint(ui.painter(), rect.shrink(4.0), icon, col);
     }
     resp.on_hover_text(format!("{label}\n{tip}"))
+}
+
+/// A fold header for the glass panels: a triangle and the title; a click anywhere on it folds or unfolds.
+/// The state lives in egui's memory under `id`. Returns whether the body is open.
+pub fn fold_header(ui: &mut egui::Ui, id: egui::Id, title: &str, default_open: bool, tip: &str) -> bool {
+    let mut open = ui.ctx().data_mut(|d| *d.get_persisted_mut_or_insert_with(id, || default_open));
+    let col = Color32::from_rgb(25, 35, 45);
+    let g = ui.painter().layout_no_wrap(title.to_owned(), egui::TextStyle::Body.resolve(ui.style()), col);
+    // as wide as the body was the last time it was open, so the empty space beside the title clicks too
+    let wide = if open { ui.ctx().data_mut(|d| d.get_temp::<f32>(id.with("w"))).unwrap_or(0.0) } else { 0.0 };
+    let (rect, resp) = ui.allocate_exact_size(vec2((g.size().x + 26.0).max(wide), g.size().y.max(18.0) + 2.0), egui::Sense::click());
+    if resp.clicked() {
+        open = !open;
+        ui.ctx().data_mut(|d| d.insert_persisted(id, open));
+    }
+    if resp.hovered() {
+        ui.painter().rect_filled(rect, 4.0, Color32::from_black_alpha(20));
+    }
+    let c = pos2(rect.min.x + 10.0, rect.center().y);
+    let tri = if open { vec![c + vec2(-4.0, -2.5), c + vec2(4.0, -2.5), c + vec2(0.0, 3.5)] } else { vec![c + vec2(-2.5, -4.0), c + vec2(-2.5, 4.0), c + vec2(3.5, 0.0)] };
+    ui.painter().add(egui::Shape::convex_polygon(tri, col, Stroke::NONE));
+    ui.painter().galley(pos2(rect.min.x + 20.0, rect.center().y - g.size().y / 2.0), g, col);
+    resp.on_hover_text(tip);
+    open
+}
+
+/// Call with the width of the body drawn under a `fold_header` so that its header can span it next time.
+pub fn fold_remember_width(ui: &egui::Ui, id: egui::Id, width: f32) {
+    ui.ctx().data_mut(|d| d.insert_temp(id.with("w"), width));
+}
+
+/// A row label drawn as an icon (with a tooltip), for the glass panels.
+pub fn icon_label(ui: &mut egui::Ui, icon: Icon, tip: &str) {
+    let (rect, resp) = ui.allocate_exact_size(vec2(24.0, 24.0), egui::Sense::hover());
+    paint(ui.painter(), rect.shrink(3.0), icon, Color32::from_rgb(25, 35, 45));
+    resp.on_hover_text(tip);
 }
 
 /// A small "(?)" mark whose hover text carries an explanation that would otherwise take a line of the panel.

@@ -1,6 +1,7 @@
 //! The number of copper layers of the board (2, 4, 6 ...).
 
 use super::*;
+use crate::icons::fold_header;
 
 impl BoardEditor {
     pub(super) fn layer_count_ui(&mut self, ui: &mut egui::Ui) {
@@ -45,19 +46,15 @@ impl BoardEditor {
     /// What to show and what can be picked, as two rows of icon toggles on a glass strip over the canvas
     /// (under the layer switcher, same Area). Folds down to a small "表示・選択" title.
     fn view_frame(&mut self, ui: &mut egui::Ui) {
-        use crate::icons::{icon_toggle, Icon};
+        use crate::icons::{icon_label, icon_toggle, Icon};
         let id = egui::Id::new("view_overlay_fold");
         {
             egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
-                let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
-                state
-                    .show_header(ui, |ui| {
-                        ui.label("表示・選択").on_hover_text("三角でたたみます / ひらきます。上の段は見える物、下の段は選べる物です。明るい四角が「オン」です");
-                    })
-                    .body(|ui| {
+                if fold_header(ui, id, "表示・選択", true, "クリックでたたみます / ひらきます。目の段は見える物、囲みの段は選べる物です。明るい四角が「オン」です") {
+                    let w = ui.scope(|ui| {
                         ui.horizontal(|ui| {
-                            ui.label("見る").on_hover_text("画面に出す物を選びます (表面・裏面の銅は右上の「層」で切り替えます)");
+                            icon_label(ui, Icon::Eye, "見る: 画面に出す物を選びます (表面・裏面の銅は「層」で切り替えます)");
                             icon_toggle(ui, Icon::Silk, &mut self.vis.silk, "シルク", "シルク (白い印刷の文字と枠) を表示します");
                             icon_toggle(ui, Icon::Zone, &mut self.vis.zones, "ゾーン", "ゾーン (銅を面で塗った所) を表示します");
                             icon_toggle(ui, Icon::Airwire, &mut self.vis.airwires, "未配線", "未配線 (まだつながっていない接続を示す黄色の線) を表示します");
@@ -65,7 +62,7 @@ impl BoardEditor {
                             icon_toggle(ui, Icon::Ruler, &mut self.vis.ruler, "定規 (mm)", "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です");
                         });
                         ui.horizontal(|ui| {
-                            ui.label("選ぶ").on_hover_text("クリックや範囲選択で選べる物を絞ります。部品をオフにすると、ビアや配線を囲んで選ぶときに、部品を巻き込んで動かす心配がなくなります");
+                            icon_label(ui, Icon::Marquee, "選ぶ: クリックや範囲選択で選べる物を絞ります。部品をオフにすると、ビアや配線を囲んで選ぶときに、部品を巻き込んで動かす心配がなくなります");
                             let before = self.pick;
                             icon_toggle(ui, Icon::Part, &mut self.pick.parts, "部品", "部品を選べる・ドラッグで動かせるようにします。オフだと、部品の上でドラッグしても動かず、範囲選択になります");
                             icon_toggle(ui, Icon::Wire, &mut self.pick.tracks, "配線", "配線 (トラック) を選べるようにします");
@@ -80,7 +77,9 @@ impl BoardEditor {
                                 }
                             }
                         });
-                    });
+                    }).response.rect.width();
+                    crate::icons::fold_remember_width(ui, id, w);
+                }
             });
         }
     }
@@ -95,13 +94,10 @@ impl BoardEditor {
             egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 // dark text on the whitish glass
                 ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
-                let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, false);
-                let title = if state.is_open() { "層".to_string() } else { format!("層: {}", self.side.label()) };
-                state
-                    .show_header(ui, |ui| {
-                        ui.label(title).on_hover_text("三角でたたみます / ひらきます。L キーでも作業層を順に切り替えられます");
-                    })
-                    .body(|ui| {
+                let open = ui.ctx().data_mut(|d| *d.get_persisted_mut_or_insert_with(id, || false));
+                let title = if open { "層".to_string() } else { format!("層: {}", self.side.label()) };
+                if fold_header(ui, id, &title, false, "クリックでたたみます / ひらきます。L キーでも作業層を順に切り替えられます") {
+                    let w = ui.scope(|ui| {
                         for l in layers.iter().copied() {
                             ui.horizontal(|ui| {
                                 let mut shown = self.side_visible(l);
@@ -127,7 +123,9 @@ impl BoardEditor {
                                 }
                             });
                         }
-                    });
+                    }).response.rect.width();
+                    crate::icons::fold_remember_width(ui, id, w);
+                }
             });
             self.view_frame(ui);
         }));
