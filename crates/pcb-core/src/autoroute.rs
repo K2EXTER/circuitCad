@@ -9,7 +9,7 @@
 //! It does not rip up and retry: connections it cannot place are reported and stay as airwires
 //! for the user to finish by hand (or after moving parts).
 
-use crate::drc::{check, connectivity, point_rect, point_seg, shape_geo, Geo};
+use crate::drc::{connectivity, point_rect, point_seg, shape_geo, violations_of_added, Geo};
 use crate::geom::inside_polygon;
 use crate::model::*;
 use crate::ratsnest::{ratsnest, Airwire};
@@ -129,16 +129,17 @@ fn route_airwire_mode(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide:
 
 fn route_airwire_with(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy: bool) -> bool {
     let Some((tracks, vias)) = find_route(board, w, opt, slide, tidy) else { return false };
-    let before = check(board).len();
+    let (tracks_before, vias_before) = (board.tracks.len(), board.vias.len());
     let mut trial = board.clone();
     trial.tracks.extend(tracks);
     trial.vias.extend(vias);
-    if check(&trial).len() > before {
+    // one pass for the groups of copper; only what the new copper breaks is looked for (not the whole board again)
+    let conn = connectivity(&trial);
+    if violations_of_added(&trial, tracks_before, vias_before, &conn) > 0 {
         return false;
     }
     let pad_at = |p: Point| trial.pads.iter().position(|q| q.pos == p && q.net == w.net);
     let (Some(ia), Some(ib)) = (pad_at(w.a), pad_at(w.b)) else { return false };
-    let conn = connectivity(&trial);
     if conn.pad_group(ia) != conn.pad_group(ib) {
         return false;
     }

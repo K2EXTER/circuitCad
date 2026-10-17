@@ -388,3 +388,70 @@ mod silk_outline_tests {
         assert_eq!(b.silk.len(), 4);
     }
 }
+
+/// `violations_of_added` finds the same trouble as the whole-board `check` does for a route put on a clean board.
+#[cfg(test)]
+mod added_tests {
+    use super::*;
+
+    fn pad(b: &mut Board, x: f64, y: f64, net: &str, th: bool) {
+        let shape = if th { PadShape::Circle { d: 1.6 } } else { PadShape::Rect { w: 1.0, h: 1.0 } };
+        let mut p = Pad::new(Point::new(x, y), shape, th.then_some(0.8), Side::Top);
+        p.net = net.into();
+        b.pads.push(p);
+    }
+
+    fn base() -> Board {
+        let mut b = Board::new("t", 40.0, 30.0);
+        pad(&mut b, 5.0, 10.0, "A", false);
+        pad(&mut b, 25.0, 10.0, "A", false);
+        pad(&mut b, 15.0, 11.0, "B", false); // another net between them, a little off the straight way
+        pad(&mut b, 15.0, 20.0, "C", true);
+        b.tracks.push(Track { side: Side::Top, a: Point::new(30.0, 25.0), b: Point::new(35.0, 25.0), width: 0.25 });
+        b
+    }
+
+    /// Add `tracks` and `vias` to the board and ask both ways.
+    fn both(tracks: Vec<Track>, vias: Vec<Via>) -> (bool, bool) {
+        let b = base();
+        assert!(check(&b).is_empty(), "{:?}", check(&b));
+        let mut t = b.clone();
+        let (nt, nv) = (t.tracks.len(), t.vias.len());
+        t.tracks.extend(tracks);
+        t.vias.extend(vias);
+        let conn = connectivity(&t);
+        (violations_of_added(&t, nt, nv, &conn) > 0, !check(&t).is_empty())
+    }
+
+    fn tr(a: (f64, f64), z: (f64, f64), w: f64) -> Track {
+        Track { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(z.0, z.1), width: w }
+    }
+
+    #[test]
+    fn the_quick_check_agrees_with_the_full_one() {
+        let via = |x: f64, y: f64, d: f64, drill: f64| Via { pos: Point::new(x, y), diameter: d, drill };
+        let cases: Vec<(&str, Vec<Track>, Vec<Via>)> = vec![
+            ("a clear route", vec![tr((5.0, 10.0), (5.0, 5.0), 0.25), tr((5.0, 5.0), (25.0, 5.0), 0.25), tr((25.0, 5.0), (25.0, 10.0), 0.25)], vec![]),
+            ("through another net's pad", vec![tr((5.0, 10.0), (25.0, 10.0), 0.25), tr((15.0, 10.0), (15.0, 11.0), 0.25)], vec![]),
+            ("too close to another net's pad", vec![tr((10.0, 10.3), (20.0, 10.3), 0.25)], vec![]),
+            ("too close to another net's track", vec![tr((29.0, 25.35), (36.0, 25.35), 0.25)], vec![]),
+            ("joining two nets", vec![tr((5.0, 10.0), (15.0, 11.0), 0.25)], vec![]),
+            ("too narrow", vec![tr((5.0, 5.0), (10.0, 5.0), 0.05)], vec![]),
+            ("end outside the board", vec![tr((5.0, 5.0), (-1.0, 5.0), 0.25)], vec![]),
+            ("too close to the edge", vec![tr((5.0, 0.1), (10.0, 0.1), 0.25)], vec![]),
+            ("a via touching a pad (it joins it)", vec![], vec![via(15.0, 20.0, 0.6, 0.3)]),
+            ("a via too small a drill", vec![], vec![via(20.0, 20.0, 0.6, 0.1)]),
+            ("a via with too thin a ring", vec![], vec![via(20.0, 20.0, 0.4, 0.3)]),
+            ("a via outside the board", vec![], vec![via(41.0, 20.0, 0.6, 0.3)]),
+            ("a clear via and track", vec![tr((20.0, 20.0), (20.0, 25.0), 0.25)], vec![via(20.0, 20.0, 0.6, 0.3)]),
+        ];
+        for (what, tracks, vias) in cases {
+            let (quick, full) = both(tracks, vias);
+            // the cases that must be found are found
+            if what.starts_with("joining") || what.starts_with("through") || what.starts_with("too") || what.starts_with("end") || what.starts_with("a via too") || what.starts_with("a via with") || what.starts_with("a via outside") {
+                assert!(full, "{what}: the full check should find something");
+            }
+            assert_eq!(quick, full, "{what}: the quick check says {quick}, the full one {full}");
+        }
+    }
+}

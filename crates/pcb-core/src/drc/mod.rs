@@ -175,3 +175,65 @@ pub fn shorts(board: &Board) -> Vec<Violation> {
         .map(|(nets, at)| v(format!("ネット短絡: {}", nets.join(" と ")), at))
         .collect()
 }
+
+/// How many findings the copper just added to `board` (the tracks from `tracks_before` and the vias from `vias_before`
+/// on, `conn` being the [`connectivity`] of `board` as it is) is responsible for: what [`check`] reports about those
+/// items, found without going over every pair of the board again. A board that was clean before has `check(board)`
+/// findings exactly when this is not 0; the router uses it to take a route or not.
+pub fn violations_of_added(board: &Board, tracks_before: usize, vias_before: usize, conn: &Connectivity) -> usize {
+    let r = &board.rules;
+    let mut n = 0;
+    for t in &board.tracks[tracks_before..] {
+        if t.width + 1e-9 < r.min_track_width {
+            n += 1;
+        }
+        n += [t.a, t.b].iter().filter(|p| !inside_polygon(&board.outline, **p)).count();
+    }
+    for via in &board.vias[vias_before..] {
+        if via.drill + 1e-9 < r.min_drill {
+            n += 1;
+        }
+        if (via.diameter - via.drill) / 2.0 + 1e-9 < r.min_annular_ring {
+            n += 1;
+        }
+        if !inside_polygon(&board.outline, via.pos) {
+            n += 1;
+        }
+    }
+    let items = copper_items(board);
+    let first_via = conn.n_tracks + conn.n_pads;
+    let is_new = |i: usize| (i >= tracks_before && i < conn.n_tracks) || i >= first_via + vias_before;
+    let new: Vec<usize> = (0..items.len()).filter(|&i| is_new(i)).collect();
+    // copper of different groups too close
+    for side in board.copper_layers() {
+        for &i in new.iter().filter(|&&i| items[i].on(side)) {
+            for j in (0..items.len()).filter(|&j| j != i && items[j].on(side) && conn.items[i] != conn.items[j]) {
+                if is_new(j) && j < i {
+                    continue; // a pair of new items is counted once
+                }
+                if dist(&items[i].geo, &items[j].geo) + 1e-9 < r.min_clearance {
+                    n += 1;
+                }
+            }
+        }
+    }
+    // copper too close to the board's edge
+    let m = board.outline.len();
+    for &i in &new {
+        let near = (0..m).any(|e| dist(&items[i].geo, &Geo::Cap { a: board.outline[e], b: board.outline[(e + 1) % m], r: 0.0 }) + 1e-9 < r.edge_clearance);
+        n += usize::from(near);
+    }
+    // pads of different nets in the groups of the new copper
+    let groups: std::collections::HashSet<usize> = new.iter().map(|&i| conn.items[i]).collect();
+    let mut nets: HashMap<usize, Vec<&str>> = HashMap::new();
+    for (k, p) in board.pads.iter().enumerate().filter(|(_, p)| !p.net.is_empty()) {
+        let g = conn.pad_group(k);
+        if groups.contains(&g) {
+            let e = nets.entry(g).or_default();
+            if !e.contains(&p.net.as_str()) {
+                e.push(&p.net);
+            }
+        }
+    }
+    n + nets.values().filter(|v| v.len() > 1).count()
+}
