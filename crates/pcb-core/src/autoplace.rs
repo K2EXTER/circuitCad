@@ -1,5 +1,7 @@
 //! First-guess placement: pack the parts into rows, strongly connected parts next to each other,
-//! and fit a rectangular outline around them. A starting point to refine by hand, not an optimiser.
+//! and fit a rectangular outline around them. The order of the parts is first made greedily (the part most connected
+//! to those already placed comes next), then improved by a short, repeatable annealing run that shortens the nets
+//! (half-perimeter of each net's box). A starting point to refine by hand.
 
 use crate::*;
 
@@ -55,10 +57,112 @@ fn closeness(board: &Board, a: &str, b: &str) -> f64 {
 /// Lay every part out in rows starting at the origin and replace the outline by a rectangle
 /// around them. Refuses when tracks or vias exist, since moving parts would break them.
 pub fn autoplace(board: &mut Board) -> Result<PlaceReport, String> {
-    place(board, true)
+    place(board, true, true)
 }
 
-fn place(board: &mut Board, turn: bool) -> Result<PlaceReport, String> {
+/// A repeatable stream of numbers (xorshift): the same board always gives the same placement.
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+    fn below(&mut self, n: usize) -> usize {
+        (self.next() % n as u64) as usize
+    }
+    fn unit(&mut self) -> f64 {
+        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+    }
+}
+
+/// Shelf-pack the parts in `order`: each part's cell corner, and the used width and height.
+fn pack(items: &[(String, Point, f64, f64)], order: &[usize], row_w: f64) -> (Vec<(usize, f64, f64)>, f64, f64) {
+    let (mut x, mut y, mut row_h, mut used_w) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let mut spots: Vec<(usize, f64, f64)> = Vec::with_capacity(order.len());
+    for &i in order {
+        let (_, _, w, h) = &items[i];
+        if x > 0.0 && x + w > row_w {
+            y += row_h;
+            x = 0.0;
+            row_h = 0.0;
+        }
+        spots.push((i, x, y));
+        x += w;
+        used_w = used_w.max(x);
+        row_h = row_h.max(*h);
+    }
+    (spots, used_w, y + row_h)
+}
+
+/// A net as the parts' pads on it: (item, pad offset from the cell corner).
+type NetPins = Vec<(usize, f64, f64)>;
+
+/// The sum of the half-perimeters of the boxes around each net's pads for the packing of `order`, each divided by the
+/// number of connections the net needs.
+fn net_length(items: &[(String, Point, f64, f64)], nets: &[NetPins], order: &[usize], row_w: f64) -> f64 {
+    let (spots, ..) = pack(items, order, row_w);
+    let mut at = vec![(0.0, 0.0); items.len()];
+    for (i, x, y) in spots {
+        at[i] = (x, y);
+    }
+    nets.iter()
+        .map(|pins| {
+            let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+            for &(i, ox, oy) in pins {
+                let (x, y) = (at[i].0 + ox, at[i].1 + oy);
+                x0 = x0.min(x);
+                x1 = x1.max(x);
+                y0 = y0.min(y);
+                y1 = y1.max(y);
+            }
+            // a net with many pins (a supply) says less about who belongs together: its weight is shared among its pins
+            ((x1 - x0) + (y1 - y0)) / (pins.len() as f64 - 1.0).max(1.0)
+        })
+        .sum()
+}
+
+/// Improve the order by swapping and moving parts, keeping what shortens the nets (and, early on, some of what does
+/// not, to get out of dead ends).
+fn improve_order(items: &[(String, Point, f64, f64)], nets: &[NetPins], mut order: Vec<usize>, row_w: f64) -> Vec<usize> {
+    let n = order.len();
+    if n < 4 || nets.is_empty() {
+        return order;
+    }
+    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let mut cost = net_length(items, nets, &order, row_w);
+    let (mut best, mut best_cost) = (order.clone(), cost);
+    let steps = (600 * n).clamp(4000, 60_000);
+    let (t0, t1) = (3.0f64, 0.03f64);
+    for k in 0..steps {
+        let temp = t0 * (t1 / t0).powf(k as f64 / steps as f64);
+        let (i, j) = (rng.below(n), rng.below(n));
+        if i == j {
+            continue;
+        }
+        let mut next = order.clone();
+        if rng.below(2) == 0 {
+            next.swap(i, j);
+        } else {
+            let v = next.remove(i);
+            next.insert(j, v);
+        }
+        let c = net_length(items, nets, &next, row_w);
+        if c <= cost || rng.unit() < ((cost - c) / temp).exp() {
+            order = next;
+            cost = c;
+            if cost < best_cost - 1e-9 {
+                best = order.clone();
+                best_cost = cost;
+            }
+        }
+    }
+    best
+}
+
+fn place(board: &mut Board, turn: bool, improve: bool) -> Result<PlaceReport, String> {
     if !board.tracks.is_empty() || !board.vias.is_empty() {
         return Err("配線済みの基板では自動配置できません。先に配線を削除してください (配線は部品の位置に合わせて引かれているため)".into());
     }
@@ -95,21 +199,18 @@ fn place(board: &mut Board, turn: bool) -> Result<PlaceReport, String> {
     let area: f64 = items.iter().map(|i| i.2 * i.3).sum();
     let widest = items.iter().map(|i| i.2).fold(0.0, f64::max);
     let row_w = (area * 1.5).sqrt().max(widest);
-    let (mut x, mut y, mut row_h, mut used_w) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
-    let mut spots: Vec<(usize, f64, f64)> = vec![];
-    for &i in &order {
-        let (_, _, w, h) = &items[i];
-        if x > 0.0 && x + w > row_w {
-            y += row_h;
-            x = 0.0;
-            row_h = 0.0;
+    if improve {
+        // the nets as pad offsets from each part's cell corner (the parts are all at the origin now)
+        let mut nets: std::collections::BTreeMap<&str, NetPins> = Default::default();
+        for pad in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty()) {
+            if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
+                nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + GAP / 2.0, pad.pos.y - items[i].1.y + GAP / 2.0 + LABEL));
+            }
         }
-        spots.push((i, x, y));
-        x += w;
-        used_w = used_w.max(x);
-        row_h = row_h.max(*h);
+        let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+        order = improve_order(&items, &nets, order, row_w);
     }
-    let used_h = y + row_h;
+    let (spots, used_w, used_h) = pack(&items, &order, row_w);
     for (i, sx, sy) in &spots {
         let (refdes, lo, ..) = &items[*i];
         let rot = board.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
@@ -204,12 +305,49 @@ mod tests {
     #[test]
     fn turning_parts_shortens_the_airwires_and_keeps_the_board_clean() {
         let (mut plain, mut turned) = (divider(), divider());
-        place(&mut plain, false).unwrap();
-        place(&mut turned, true).unwrap();
+        place(&mut plain, false, true).unwrap();
+        place(&mut turned, true, true).unwrap();
         let (l0, l1) = (airwire_length(&plain), airwire_length(&turned));
         assert!(l1 < l0, "{l1} vs {l0}");
         assert!(drc::check(&turned).is_empty());
         assert!(turned.parts.iter().any(|p| p.rot == 2));
+    }
+
+    /// A header whose pins each drive a resistor and an LED in series (the LED to ground): the greedy order puts all the
+    /// resistors, then all the LEDs, in rows.
+    fn fan(pairs: usize) -> Board {
+        let part = |r: String, f: &str| NetlistPart { refdes: r, value: "1k".into(), footprint: f.into() };
+        let mut b = Board::new("t", 10.0, 10.0);
+        let mut parts = vec![part("J1".into(), "PinHeader_1x8")];
+        let mut nets: Vec<NetlistNet> = vec![];
+        let mut gnd = vec![];
+        for k in 0..pairs {
+            let (r, d) = (format!("R{k:02}"), format!("D{k:02}"));
+            parts.push(part(r.clone(), "R_0805"));
+            parts.push(part(d.clone(), "LED_0805"));
+            nets.push(NetlistNet { name: format!("Q{k}"), pins: vec![("J1".into(), (k + 1).to_string()), (r.clone(), "1".into())] });
+            nets.push(NetlistNet { name: format!("N{k}"), pins: vec![(r, "2".into()), (d.clone(), "1".into())] });
+            gnd.push((d, "2".to_string()));
+        }
+        nets.push(NetlistNet { name: "GND".into(), pins: gnd });
+        import(&mut b, &parts, &nets);
+        b
+    }
+
+    #[test]
+    fn improving_the_order_puts_the_parts_of_a_net_together() {
+        let (mut plain, mut improved) = (fan(8), fan(8));
+        place(&mut plain, false, false).unwrap();
+        place(&mut improved, false, true).unwrap();
+        // every resistor with its LED
+        let pair_len = |b: &Board| -> f64 { (0..8).map(|k| { let at = |r: String| b.parts.iter().find(|p| p.refdes == r).unwrap().pos; at(format!("R{k:02}")).dist(at(format!("D{k:02}"))) }).sum() };
+        let (l0, l1) = (pair_len(&plain), pair_len(&improved));
+        assert!(l1 < l0 * 0.8, "{l1} vs {l0}");
+        assert!(drc::check(&improved).is_empty());
+        // and the same board always gives the same placement
+        let mut again = fan(8);
+        place(&mut again, false, true).unwrap();
+        assert!(again.parts.iter().zip(&improved.parts).all(|(a, b)| a.pos == b.pos));
     }
 
     #[test]

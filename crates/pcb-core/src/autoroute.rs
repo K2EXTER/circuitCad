@@ -46,28 +46,43 @@ pub struct RouteReport {
 
 /// Route every airwire of the board (or only those of `only_net`).
 ///
-/// With a pad lead the whole run is made twice when the first one leaves connections open: once with the feet of the
-/// leads slid onto the grid lines (no little steps), once with the leads straight out of the pad's centre. The run
-/// that connects more wins (the first, when equal): the order the connections are made in decides what room is left.
+/// The order the connections are made in decides what room is left for the later ones, so when a run leaves
+/// connections open it is made again: the nets that failed are routed first, up to three times, and with a pad lead
+/// also once with the leads straight out of the pad's centre instead of slid onto the grid lines. The run that
+/// connects the most wins (the first, when equal). No new run is started after [`RETRY_BUDGET`].
 pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
-    let mut slid = board.clone();
-    let first = autoroute_mode(&mut slid, opt, only_net, true);
-    if first.failed.is_empty() || opt.pad_lead.is_none() {
-        *board = slid;
-        return first;
+    let start = std::time::Instant::now();
+    let modes: &[bool] = if opt.pad_lead.is_some() { &[true, false] } else { &[true] };
+    let mut best: Option<(Board, RouteReport)> = None;
+    let mut first: Vec<String> = vec![];
+    'search: for &slide in modes {
+        for _ in 0..3 {
+            let mut trial = board.clone();
+            let report = autoroute_mode(&mut trial, opt, only_net, slide, &first);
+            let done = report.failed.is_empty();
+            for w in &report.failed {
+                if !first.contains(&w.net) {
+                    first.push(w.net.clone());
+                }
+            }
+            if best.as_ref().is_none_or(|(_, b)| report.failed.len() < b.failed.len()) {
+                best = Some((trial, report));
+            }
+            if done || start.elapsed() > RETRY_BUDGET {
+                break 'search;
+            }
+        }
     }
-    let mut centred = board.clone();
-    let second = autoroute_mode(&mut centred, opt, only_net, false);
-    if second.failed.len() < first.failed.len() {
-        *board = centred;
-        second
-    } else {
-        *board = slid;
-        first
-    }
+    let (routed, report) = best.expect("at least one run");
+    *board = routed;
+    report
 }
 
-fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>, slide: bool) -> RouteReport {
+/// No further routing run is started once this much time has passed (a run on a big board takes several seconds).
+const RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
+
+/// One run; the nets in `first` are routed before the others (each group shortest connection first).
+fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>, slide: bool, first: &[String]) -> RouteReport {
     let mut report = RouteReport::default();
     let mut failed: Vec<Airwire> = vec![];
     loop {
@@ -76,8 +91,9 @@ fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>,
             .filter(|w| only_net.is_none_or(|n| w.net == n))
             .filter(|w| !failed.contains(w))
             .collect();
-        // short connections first: they are the easiest and leave the long ones room to detour
-        wires.sort_by(|a, b| a.a.dist(a.b).total_cmp(&b.a.dist(b.b)));
+        // the nets that failed before first, then short connections first: they are the easiest and leave the long ones
+        // room to detour
+        wires.sort_by(|a, b| (!first.contains(&a.net)).cmp(&!first.contains(&b.net)).then(a.a.dist(a.b).total_cmp(&b.a.dist(b.b))));
         let Some(w) = wires.into_iter().next() else { break };
         if route_airwire_mode(board, &w, opt, slide) {
             report.routed += 1;
@@ -101,16 +117,18 @@ pub fn route_airwire(board: &mut Board, w: &Airwire, opt: &RouteOptions) -> bool
 /// [`route_airwire`] with the lead's foot slid onto the grid line tried first (`slide`) or not at all.
 fn route_airwire_mode(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> bool {
     let plain = RouteOptions { pad_lead: None, ..opt.clone() };
-    let attempts: &[(&RouteOptions, bool)] = match (opt.pad_lead.is_some(), slide) {
-        (true, true) => &[(opt, true), (opt, false), (&plain, false)],
-        (true, false) => &[(opt, false), (&plain, false)],
-        _ => &[(opt, false)],
+    // (options, slide the lead's foot, tidy: horizontal, vertical and 45° pieces where there is no lead). With a lead
+    // asked for, the last resort is no lead at all, which first still keeps to the tidy pieces and then to a free angle.
+    let attempts: &[(&RouteOptions, bool, bool)] = match (opt.pad_lead.is_some(), slide) {
+        (true, true) => &[(opt, true, true), (opt, false, true), (&plain, false, true), (&plain, false, false)],
+        (true, false) => &[(opt, false, true), (&plain, false, true), (&plain, false, false)],
+        _ => &[(opt, false, false)],
     };
-    attempts.iter().any(|&(o, slide)| route_airwire_with(board, w, o, slide))
+    attempts.iter().any(|&(o, slide, tidy)| route_airwire_with(board, w, o, slide, tidy))
 }
 
-fn route_airwire_with(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> bool {
-    let Some((tracks, vias)) = find_route(board, w, opt, slide) else { return false };
+fn route_airwire_with(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy: bool) -> bool {
+    let Some((tracks, vias)) = find_route(board, w, opt, slide, tidy) else { return false };
     let before = check(board).len();
     let mut trial = board.clone();
     trial.tracks.extend(tracks);
@@ -461,6 +479,29 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, slide_width: O
     pad_cells(grid, pad, net).into_iter().map(|(l, i, j)| EndCell { l, i, j, cost: grid.pos(i, j).dist(pad.pos) as f32, lead: None }).collect()
 }
 
+/// The pieces from the pad to the grid cell `cell` when there is no lead: with only a little sideways offset, the foot
+/// of one straight piece is slid along the pad (while the track's centre stays on it); otherwise a horizontal, vertical or
+/// 45° pair of pieces from the pad's centre. A cell inside the pad needs none. Returns where the first piece starts and
+/// the points it then goes through.
+fn tidy_entry(pad: &Pad, cell: Point) -> (Point, Vec<Point>) {
+    if on_pad(pad, cell) {
+        return (cell, vec![]);
+    }
+    let (w, h) = pad.shape.size();
+    let (dx, dy) = (cell.x - pad.pos.x, cell.y - pad.pos.y);
+    let vertical = dy.abs() >= dx.abs();
+    let (lat, half) = if vertical { (dx, w / 2.0) } else { (dy, h / 2.0) };
+    let room = if matches!(pad.shape, PadShape::Circle { .. }) { w / 2.0 - 0.05 } else { half - 0.05 };
+    if lat.abs() <= room {
+        let foot = if vertical { Point::new(cell.x, pad.pos.y) } else { Point::new(pad.pos.x, cell.y) };
+        // the foot must be on the pad (a corner of a round pad is not)
+        if on_pad(pad, foot) {
+            return (foot, vec![cell]);
+        }
+    }
+    (pad.pos, crate::padentry::bend45(pad.pos, cell, false))
+}
+
 /// Is `p` within the copper of `pad`?
 fn on_pad(pad: &Pad, p: Point) -> bool {
     let (w, h) = pad.shape.size();
@@ -470,7 +511,7 @@ fn on_pad(pad: &Pad, p: Point) -> bool {
     }
 }
 
-fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Option<(Vec<Track>, Vec<Via>)> {
+fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy: bool) -> Option<(Vec<Track>, Vec<Via>)> {
     let mut nets: Vec<String> = vec![];
     let grid = build_grid(board, opt, &mut nets)?;
     let net = nets.iter().position(|n| *n == w.net)? as i32 + 1;
@@ -614,8 +655,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Op
         // no lead (no room for one): still only horizontal, vertical and 45° pieces when leads were asked for
         // (a first cell inside the pad's copper: the track starts there, with no bend out of the pad's centre)
         None => {
-            let pts = if opt.pad_lead.is_none() { vec![cells[0].1] } else if on_pad(pad_a, cells[0].1) { vec![] } else { crate::padentry::bend45(pad_a.pos, cells[0].1, false) };
-            let mut prev = pad_a.pos;
+            let (mut prev, pts) = if tidy { tidy_entry(pad_a, cells[0].1) } else { (pad_a.pos, vec![cells[0].1]) };
             for p in pts {
                 emit(cells[0].0, prev, p);
                 prev = p;
@@ -653,8 +693,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Op
             emit(last.0, q, foot);
         }
         None => {
-            let pts = if opt.pad_lead.is_none() { vec![last.1] } else if on_pad(pad_b, last.1) { vec![] } else { crate::padentry::bend45(pad_b.pos, last.1, false) };
-            let mut prev = pad_b.pos;
+            let (mut prev, pts) = if tidy { tidy_entry(pad_b, last.1) } else { (pad_b.pos, vec![last.1]) };
             for p in pts {
                 emit(last.0, prev, p);
                 prev = p;

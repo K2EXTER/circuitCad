@@ -61,5 +61,7 @@ mod tests_zone;
 mod tests_fab;
 #[cfg(test)]
 mod tests_holes;
+#[cfg(test)]
+mod tests_quality;
 
 pub use model::*;
