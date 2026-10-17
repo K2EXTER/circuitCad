@@ -124,21 +124,22 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
     let grp = connectivity(board).items;
     let mut out = vec![];
 
+    // only the pairs whose boxes come within the clearance of each other can break it; in the order of the item numbers
+    let mut near: Vec<(usize, usize)> = vec![];
+    near_pairs(&items, r.min_clearance, |i, j| near.push((i.min(j), i.max(j))));
+    near.sort_unstable();
     for side in board.copper_layers() {
-        let on: Vec<usize> = (0..items.len()).filter(|&i| items[i].on(side)).collect();
-        for (k, &i) in on.iter().enumerate() {
-            for &j in &on[k + 1..] {
-                if grp[i] == grp[j] {
-                    continue;
-                }
-                let d = dist(&items[i].geo, &items[j].geo);
-                if d + 1e-9 < r.min_clearance {
-                    let (p, q) = (center(&items[i].geo), center(&items[j].geo));
-                    out.push(v(
-                        format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ)", side_name(side), d, r.min_clearance),
-                        Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
-                    ));
-                }
+        for &(i, j) in &near {
+            if !(items[i].on(side) && items[j].on(side)) || grp[i] == grp[j] {
+                continue;
+            }
+            let d = dist(&items[i].geo, &items[j].geo);
+            if d + 1e-9 < r.min_clearance {
+                let (p, q) = (center(&items[i].geo), center(&items[j].geo));
+                out.push(v(
+                    format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ)", side_name(side), d, r.min_clearance),
+                    Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
+                ));
             }
         }
     }

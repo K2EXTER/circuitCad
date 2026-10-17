@@ -42,18 +42,44 @@ pub(super) fn find(parent: &mut [usize], i: usize) -> usize {
     r
 }
 
+/// The box (x0, x1, y0, y1) around a shape.
+pub(super) fn bbox(g: &Geo) -> (f64, f64, f64, f64) {
+    match *g {
+        Geo::Cap { a, b, r } => (a.x.min(b.x) - r, a.x.max(b.x) + r, a.y.min(b.y) - r, a.y.max(b.y) + r),
+        Geo::Rect { c, hw, hh } => (c.x - hw, c.x + hw, c.y - hh, c.y + hh),
+    }
+}
+
+/// Every pair of items whose boxes, each grown by `margin`, overlap (so the pairs that can be within `margin` of each
+/// other, and no others), as (i, j) with i before j in the order of the boxes' left edges. A sweep along x: only the
+/// items whose boxes overlap in x are compared in y.
+pub(super) fn near_pairs(items: &[Cu], margin: f64, mut each: impl FnMut(usize, usize)) {
+    let boxes: Vec<(f64, f64, f64, f64)> = items.iter().map(|it| bbox(&it.geo)).collect();
+    let mut order: Vec<usize> = (0..items.len()).collect();
+    order.sort_by(|&a, &b| boxes[a].0.total_cmp(&boxes[b].0));
+    for (k, &i) in order.iter().enumerate() {
+        for &j in &order[k + 1..] {
+            if boxes[j].0 > boxes[i].1 + margin {
+                break;
+            }
+            if boxes[j].2 > boxes[i].3 + margin || boxes[i].2 > boxes[j].3 + margin {
+                continue;
+            }
+            each(i, j);
+        }
+    }
+}
+
 /// Union-find group id for every copper item.
 pub(super) fn groups(items: &[Cu]) -> Vec<usize> {
     let mut parent: Vec<usize> = (0..items.len()).collect();
-    for i in 0..items.len() {
-        for j in (i + 1)..items.len() {
-            let shared = items[i].layers.iter().any(|&s| items[j].on(s));
-            if shared && dist(&items[i].geo, &items[j].geo) <= 1e-9 {
-                let (a, b) = (find(&mut parent, i), find(&mut parent, j));
-                parent[a] = b;
-            }
+    near_pairs(items, 1e-9, |i, j| {
+        let shared = items[i].layers.iter().any(|&s| items[j].on(s));
+        if shared && dist(&items[i].geo, &items[j].geo) <= 1e-9 {
+            let (a, b) = (find(&mut parent, i), find(&mut parent, j));
+            parent[a] = b;
         }
-    }
+    });
     (0..items.len()).map(|i| find(&mut parent, i)).collect()
 }
 

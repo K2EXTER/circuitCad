@@ -455,3 +455,96 @@ mod added_tests {
         }
     }
 }
+
+/// The sweep that skips far-apart items gives the groups and the clearance findings of trying every pair.
+#[cfg(test)]
+mod sweep_tests {
+    use super::*;
+
+    /// A board of random copper (the same every time).
+    fn scattered() -> Board {
+        let mut seed = 0x1234_5678_9ABC_DEF0u64;
+        let mut next = move |lo: f64, hi: f64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            lo + (seed >> 11) as f64 / (1u64 << 53) as f64 * (hi - lo)
+        };
+        let mut b = Board::new("t", 30.0, 30.0);
+        for k in 0..90 {
+            let shape = if k % 3 == 0 { PadShape::Circle { d: 1.2 } } else { PadShape::Rect { w: 1.0, h: 0.8 } };
+            let mut p = Pad::new(Point::new(next(1.0, 29.0), next(1.0, 29.0)), shape, (k % 3 == 0).then_some(0.6), Side::Top);
+            p.net = format!("N{}", k % 17);
+            b.pads.push(p);
+        }
+        for k in 0..140 {
+            let a = Point::new(next(1.0, 29.0), next(1.0, 29.0));
+            let z = Point::new((a.x + next(-4.0, 4.0)).clamp(0.5, 29.5), (a.y + next(-4.0, 4.0)).clamp(0.5, 29.5));
+            b.tracks.push(Track { side: if k % 4 == 0 { Side::Bottom } else { Side::Top }, a, b: z, width: 0.25 });
+        }
+        for _ in 0..25 {
+            b.vias.push(Via { pos: Point::new(next(1.0, 29.0), next(1.0, 29.0)), diameter: 0.6, drill: 0.3 });
+        }
+        b
+    }
+
+    #[test]
+    fn the_groups_are_those_of_trying_every_pair() {
+        let b = scattered();
+        let items = copper_items(&b);
+        // every pair
+        let mut parent: Vec<usize> = (0..items.len()).collect();
+        for i in 0..items.len() {
+            for j in (i + 1)..items.len() {
+                if items[i].layers.iter().any(|&s| items[j].on(s)) && dist(&items[i].geo, &items[j].geo) <= 1e-9 {
+                    let (x, y) = (find(&mut parent, i), find(&mut parent, j));
+                    parent[x] = y;
+                }
+            }
+        }
+        let slow: Vec<usize> = (0..items.len()).map(|i| find(&mut parent, i)).collect();
+        let fast = groups(&items);
+        // the same partition (the numbers of the groups may differ)
+        for i in 0..items.len() {
+            for j in (i + 1)..items.len() {
+                assert_eq!(slow[i] == slow[j], fast[i] == fast[j], "items {i} and {j}");
+            }
+        }
+        assert!(slow.iter().collect::<std::collections::HashSet<_>>().len() < items.len(), "some copper must touch for this to say anything");
+    }
+
+    #[test]
+    fn the_clearance_findings_are_those_of_trying_every_pair() {
+        for gap in [0.15, 0.5, 1.2] {
+            let mut b = scattered();
+            b.rules.min_clearance = gap;
+            let items = copper_items(&b);
+            let grp = connectivity(&b).items;
+            let mut slow = 0;
+            for side in b.copper_layers() {
+                let on: Vec<usize> = (0..items.len()).filter(|&i| items[i].on(side)).collect();
+                for (k, &i) in on.iter().enumerate() {
+                    for &j in &on[k + 1..] {
+                        if grp[i] != grp[j] && dist(&items[i].geo, &items[j].geo) + 1e-9 < gap {
+                            slow += 1;
+                        }
+                    }
+                }
+            }
+            // clearance() also reports the copper near the edge: count those separately
+            let edge = clearance_edge_findings(&b);
+            assert_eq!(clearance(&b).len(), slow + edge, "clearance {gap}");
+            assert!(slow > 0 || gap < 0.2, "clearance {gap}: the board must have findings to compare");
+        }
+    }
+
+    /// The findings about the copper near the board's edge, as `clearance` counts them.
+    fn clearance_edge_findings(b: &Board) -> usize {
+        let items = copper_items(b);
+        let n = b.outline.len();
+        items
+            .iter()
+            .filter(|it| (0..n).any(|e| dist(&it.geo, &Geo::Cap { a: b.outline[e], b: b.outline[(e + 1) % n], r: 0.0 }) + 1e-9 < b.rules.edge_clearance))
+            .count()
+    }
+}
