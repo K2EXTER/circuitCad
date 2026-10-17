@@ -222,26 +222,8 @@ impl BoardEditor {
                 ui.label("基板名 (出力ファイル名)");
                 ui.text_edit_singleline(&mut self.board.name).on_hover_text("製造ファイル (Gerber など) の名前に使います。半角の英数字がおすすめです");
             });
-            egui::CollapsingHeader::new("表示と選択").default_open(false).show(ui, |ui| {
-                ui.label("表示");
-                ui.horizontal_wrapped(|ui| {
-                    ui.checkbox(&mut self.vis.top, "表面").on_hover_text("表面の銅 (配線とパッド) を表示します");
-                    ui.checkbox(&mut self.vis.bottom, "裏面").on_hover_text("裏面の銅 (配線とパッド) を表示します");
-                    ui.checkbox(&mut self.vis.silk, "シルク").on_hover_text("シルク (白い印刷の文字と枠) を表示します");
-                    ui.checkbox(&mut self.vis.zones, "ゾーン").on_hover_text("ゾーン (銅を面で塗った所) を表示します");
-                    ui.checkbox(&mut self.vis.airwires, "未配線").on_hover_text("未配線 (まだつながっていない接続を示す黄色の線) を表示します");
-                    ui.checkbox(&mut self.vis.nets, "ネット名").on_hover_text("パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
-                    ui.checkbox(&mut self.vis.ruler, "定規 (mm)").on_hover_text("画面の上と左に、実際の寸法 (mm) の目盛りを出します。拡大すると目盛りが細かくなります。オレンジの印がカーソルの位置です");
-                });
-                ui.label("選択できるもの").on_hover_text("クリックや範囲選択で選べる物を絞ります。部品のチェックを外すと、ビアや配線を囲んで選ぶときに、部品を巻き込んで動かす心配がなくなります");
-                ui.horizontal_wrapped(|ui| {
-                    ui.checkbox(&mut self.pick.parts, "部品").on_hover_text("部品を選べる・ドラッグで動かせるようにします。外すと、部品の上でドラッグしても動かず、範囲選択になります");
-                    ui.checkbox(&mut self.pick.tracks, "配線").on_hover_text("配線 (トラック) を選べるようにします");
-                    ui.checkbox(&mut self.pick.vias, "ビア").on_hover_text("ビアを選べるようにします");
-                    ui.checkbox(&mut self.pick.pads, "パッド・穴").on_hover_text("部品に属さないパッドと取付穴を選べるようにします");
-                    ui.checkbox(&mut self.pick.other, "ゾーン・シルク").on_hover_text("ゾーン (ベタ) と、部品に属さないシルク線を選べるようにします");
-                });
-                ui.checkbox(&mut self.pick.active_side_only, "作業中の面だけ").on_hover_text("いま作業している面 (枠の色) にある物だけを選べるようにします。薄く表示している反対の面の配線や部品を、誤って選んだり動かしたりしません。ビアと、基板を貫通するスルーホール部品は、どちらの面でも選べます");
+            egui::CollapsingHeader::new("選択の絞り込みと固定").default_open(false).show(ui, |ui| {
+                ui.label("見る物・選べる物のアイコンは、画面の右上、「層」の下にあります").on_hover_text("画面右上の「表示・選択」で、シルク・ゾーン・未配線などの表示と、選べる物 (部品・配線・ビア…) を切り替えます");
                 ui.horizontal(|ui| {
                     if ui.small_button("配線・ビアだけ").on_hover_text("配線とビアだけを選べるようにします。部品は動きません").clicked() {
                         self.pick = Pickable { parts: false, tracks: true, vias: true, pads: false, other: false, active_side_only: self.pick.active_side_only };

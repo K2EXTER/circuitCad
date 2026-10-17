@@ -42,13 +42,56 @@ impl BoardEditor {
 }
 
 impl BoardEditor {
+    /// What to show and what can be picked, as two rows of icon toggles on a glass strip over the canvas
+    /// (under the layer switcher, same Area). Folds down to a small "表示・選択" title.
+    fn view_frame(&mut self, ui: &mut egui::Ui) {
+        use crate::icons::{icon_toggle, Icon};
+        let id = egui::Id::new("view_overlay_fold");
+        {
+            egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+                ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
+                let state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+                state
+                    .show_header(ui, |ui| {
+                        ui.label("表示・選択").on_hover_text("三角でたたみます / ひらきます。上の段は見える物、下の段は選べる物です。明るい四角が「オン」です");
+                    })
+                    .body(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("見る").on_hover_text("画面に出す物を選びます (表面・裏面の銅は右上の「層」で切り替えます)");
+                            icon_toggle(ui, Icon::Silk, &mut self.vis.silk, "シルク", "シルク (白い印刷の文字と枠) を表示します");
+                            icon_toggle(ui, Icon::Zone, &mut self.vis.zones, "ゾーン", "ゾーン (銅を面で塗った所) を表示します");
+                            icon_toggle(ui, Icon::Airwire, &mut self.vis.airwires, "未配線", "未配線 (まだつながっていない接続を示す黄色の線) を表示します");
+                            icon_toggle(ui, Icon::Label, &mut self.vis.nets, "ネット名", "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
+                            icon_toggle(ui, Icon::Ruler, &mut self.vis.ruler, "定規 (mm)", "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です");
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("選ぶ").on_hover_text("クリックや範囲選択で選べる物を絞ります。部品をオフにすると、ビアや配線を囲んで選ぶときに、部品を巻き込んで動かす心配がなくなります");
+                            let before = self.pick;
+                            icon_toggle(ui, Icon::Part, &mut self.pick.parts, "部品", "部品を選べる・ドラッグで動かせるようにします。オフだと、部品の上でドラッグしても動かず、範囲選択になります");
+                            icon_toggle(ui, Icon::Wire, &mut self.pick.tracks, "配線", "配線 (トラック) を選べるようにします");
+                            icon_toggle(ui, Icon::Via, &mut self.pick.vias, "ビア", "ビアを選べるようにします");
+                            icon_toggle(ui, Icon::PadTh, &mut self.pick.pads, "パッド・穴", "部品に属さないパッドと取付穴を選べるようにします");
+                            icon_toggle(ui, Icon::Zone, &mut self.pick.other, "ゾーン・シルク", "ゾーン (ベタ) と、部品に属さないシルク線を選べるようにします");
+                            icon_toggle(ui, Icon::Layers, &mut self.pick.active_side_only, "作業中の面だけ", "いま作業している面 (枠の色) にある物だけを選べるようにします。薄く表示している反対の面を誤って選ばなくなります。ビアと、貫通するスルーホール部品は、どちらの面でも選べます");
+                            if before.parts != self.pick.parts || before.tracks != self.pick.tracks || before.vias != self.pick.vias || before.pads != self.pick.pads || before.other != self.pick.other {
+                                self.multi.retain(|it| self.pick.allows(it));
+                                if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
+                                    self.selected = None;
+                                }
+                            }
+                        });
+                    });
+            });
+        }
+    }
+
     /// The layer switcher floating over the canvas (top right): folds down to the name of the working layer,
     /// unfolds to one row per copper layer with an eye (show / hide) and a radio (work on this layer).
     pub(super) fn layer_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
         let layers = self.board.copper_layers();
         let pos = rect.right_top() + Vec2::new(-14.0, 30.0);
         let id = egui::Id::new("layer_overlay_fold");
-        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| {
+        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
             egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 // dark text on the whitish glass
                 ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
@@ -86,6 +129,7 @@ impl BoardEditor {
                         }
                     });
             });
-        });
+            self.view_frame(ui);
+        }));
     }
 }

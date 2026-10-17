@@ -29,6 +29,10 @@ pub enum Icon {
     Silk,
     Undo,
     Redo,
+    Part,
+    Airwire,
+    Ruler,
+    Layers,
 }
 
 /// Draw `icon` inside `r` (a square) with `c`.
@@ -98,6 +102,33 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             p.line_segment([q(0.1, 0.8), q(0.9, 0.2)], Stroke::new(1.6, c));
             p.line_segment([q(0.1, 0.8), q(0.2, 0.62)], Stroke::new(1.6, c));
         }
+        Icon::Part => {
+            p.rect_stroke(Rect::from_min_max(q(0.25, 0.2), q(0.75, 0.8)), 1.0, s, egui::StrokeKind::Inside);
+            for y in [0.32, 0.68] {
+                p.line_segment([q(0.08, y), q(0.25, y)], s);
+                p.line_segment([q(0.75, y), q(0.92, y)], s);
+            }
+        }
+        Icon::Airwire => {
+            for (a, b) in [(0.1, 0.3), (0.4, 0.6), (0.7, 0.9)] {
+                p.line_segment([q(a, 0.8 - a * 0.7), q(b, 0.8 - b * 0.7)], s);
+            }
+            p.circle_filled(q(0.1, 0.73), u * 0.08, c);
+            p.circle_filled(q(0.9, 0.17), u * 0.08, c);
+        }
+        Icon::Ruler => {
+            p.rect_stroke(Rect::from_min_max(q(0.08, 0.35), q(0.92, 0.65)), 1.0, s, egui::StrokeKind::Inside);
+            for i in 0..5 {
+                let x = 0.2 + i as f32 * 0.15;
+                p.line_segment([q(x, 0.35), q(x, if i % 2 == 0 { 0.55 } else { 0.48 })], Stroke::new(1.0, c));
+            }
+        }
+        Icon::Layers => {
+            for dy in [0.0, 0.2, 0.4] {
+                let pts = vec![q(0.5, 0.15 + dy), q(0.9, 0.3 + dy), q(0.5, 0.45 + dy), q(0.1, 0.3 + dy)];
+                p.add(egui::Shape::closed_line(pts, if dy == 0.0 { s } else { Stroke::new(1.0, c) }));
+            }
+        }
         Icon::Undo | Icon::Redo => {
             let f = if icon == Icon::Undo { 1.0 } else { -1.0 };
             let x = |v: f32| if f > 0.0 { v } else { 1.0 - v };
@@ -135,6 +166,26 @@ pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, e
     }
     let tip = if icon_only() { format!("{label}\n{tip}") } else { tip.to_owned() };
     resp.on_hover_text(tip)
+}
+
+/// A square on/off icon (always icon only; the label opens the tooltip) for the glass panels over the canvas.
+pub fn icon_toggle(ui: &mut egui::Ui, icon: Icon, on: &mut bool, label: &str, tip: &str) -> egui::Response {
+    let (rect, mut resp) = ui.allocate_exact_size(vec2(24.0, 24.0), egui::Sense::click());
+    if resp.clicked() {
+        *on = !*on;
+        resp.mark_changed();
+    }
+    if ui.is_rect_visible(rect) {
+        let dark = Color32::from_rgb(25, 35, 45);
+        if *on {
+            ui.painter().rect(rect, 4.0, Color32::from_rgba_unmultiplied(70, 130, 200, 90), Stroke::new(1.0, Color32::from_rgb(70, 130, 200)), egui::StrokeKind::Inside);
+        } else if resp.hovered() {
+            ui.painter().rect_filled(rect, 4.0, Color32::from_black_alpha(25));
+        }
+        let col = if *on { dark } else { dark.gamma_multiply(0.45) };
+        paint(ui.painter(), rect.shrink(4.0), icon, col);
+    }
+    resp.on_hover_text(format!("{label}\n{tip}"))
 }
 
 /// A small "(?)" mark whose hover text carries an explanation that would otherwise take a line of the panel.
