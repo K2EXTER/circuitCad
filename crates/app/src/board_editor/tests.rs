@@ -1013,3 +1013,62 @@ fn the_autorouter_leaves_and_enters_pads_at_a_right_angle_when_the_pad_lead_is_o
     let off = build(false);
     assert!(!off.status.contains("垂直"), "{}", off.status);
 }
+
+/// Frame time of the board editor with a big imported board: `cargo test --release -p app board_frame_time -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn board_frame_time() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut sch = crate::schematic::SchEditor::default();
+    sch.load_path(root.join("mixed_signal.schjson"));
+    let mut e = BoardEditor::default();
+    e.import_from_schematic(&sch);
+    println!("parts {} pads {} outline {}", e.board.parts.len(), e.board.pads.len(), e.board.outline.len());
+    let ctx = egui::Context::default();
+    let mut frame = |e: &mut BoardEditor, label: &str| {
+        let mut worst = 0.0f64;
+        let mut total = 0.0;
+        for _ in 0..20 {
+            let t = std::time::Instant::now();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let n_shapes = out.shapes.len();
+            let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+            let tris: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+            if worst == 0.0 {
+                println!("  shapes {n_shapes}, triangles {tris}");
+            }
+            let dt = t.elapsed().as_secs_f64() * 1000.0;
+            worst = worst.max(dt);
+            total += dt;
+        }
+        println!("{label}: avg {:.1} ms, worst {:.1} ms", total / 20.0, worst);
+    };
+    frame(&mut e, "imported");
+    let mut panel_ms = 0.0;
+    for _ in 0..20 {
+        let t = std::time::Instant::now();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+            e.side_panel(ui, &sch);
+        });
+        out.textures_delta.clear();
+        panel_ms += t.elapsed().as_secs_f64() * 1000.0;
+    }
+    println!("side panel avg {:.1} ms", panel_ms / 20.0);
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1000.0, 800.0)));
+    frame(&mut e, "fitted");
+    e.vis.nets = true;
+    frame(&mut e, "with net names");
+    let t = std::time::Instant::now();
+    let r = pcb_core::ratsnest::ratsnest(&e.board);
+    println!("ratsnest {} lines {:.1} ms", r.len(), t.elapsed().as_secs_f64() * 1000.0);
+    let t = std::time::Instant::now();
+    let c = pcb_core::drc::connectivity(&e.board);
+    let _ = c;
+    println!("connectivity {:.1} ms", t.elapsed().as_secs_f64() * 1000.0);
+    let t = std::time::Instant::now();
+    let v = pcb_core::drc::check(&e.board);
+    println!("drc {} violations {:.1} ms", v.len(), t.elapsed().as_secs_f64() * 1000.0);
+}

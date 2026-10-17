@@ -8,11 +8,14 @@ impl SchEditor {
         let tl = self.to_grid(rect, rect.left_top());
         let br = self.to_grid(rect, rect.right_bottom());
         if self.zoom >= 10.0 {
+            // one mesh of little squares instead of a circle shape per dot (a big sheet has thousands)
+            let mut dots = egui::epaint::Mesh::default();
             for x in (tl.0.floor() as i32)..=(br.0.ceil() as i32) {
                 for y in (tl.1.floor() as i32)..=(br.1.ceil() as i32) {
-                    painter.circle_filled(self.to_screen(rect, (x as f32, y as f32)), 0.9, Color32::from_gray(190));
+                    dots.add_colored_rect(Rect::from_center_size(self.to_screen(rect, (x as f32, y as f32)), egui::Vec2::splat(1.8)), Color32::from_gray(190));
                 }
             }
+            painter.add(egui::Shape::mesh(dots));
         }
     }
 

@@ -7,15 +7,22 @@ impl BoardEditor {
         if self.grid > 0.0 && self.grid as f32 * self.zoom >= 6.0 {
             let tl = self.to_world(rect, rect.left_top());
             let br = self.to_world(rect, rect.right_bottom());
-            let (mut x, y_end) = ((tl.x / self.grid).floor() * self.grid, (br.y / self.grid).floor() * self.grid);
+            // a zoomed-out view of a big board would need tens of thousands of dots: show every 2nd, 3rd ... point
+            let (nx, ny) = ((br.x - tl.x) / self.grid, (tl.y - br.y) / self.grid);
+            let m = ((nx * ny / 5000.0).sqrt().ceil().max(1.0)) as f64;
+            let grid = self.grid * m;
+            let (mut x, y_end) = ((tl.x / grid).floor() * grid, (br.y / grid).floor() * grid);
+            // one mesh of little squares: thousands of separate circles cost a frame in tessellation alone
+            let mut dots = egui::epaint::Mesh::default();
             while x <= br.x {
-                let mut y = (tl.y / self.grid).ceil() * self.grid;
+                let mut y = (tl.y / grid).ceil() * grid;
                 while y >= y_end {
-                    painter.circle_filled(self.to_screen(rect, Point::new(x, y)), 0.8, Color32::from_gray(60));
-                    y -= self.grid;
+                    dots.add_colored_rect(Rect::from_center_size(self.to_screen(rect, Point::new(x, y)), egui::Vec2::splat(1.6)), Color32::from_gray(60));
+                    y -= grid;
                 }
-                x += self.grid;
+                x += grid;
             }
+            painter.add(egui::Shape::mesh(dots));
         }
     }
 
