@@ -338,4 +338,9 @@ fn the_tp5100_sample_routes_completely_with_clean_pad_leads() {
     // every piece is horizontal, vertical or at 45 degrees (also where a pad has no room for a straight lead)
     let odd: Vec<_> = b.tracks.iter().filter(|t| { let (dx, dy) = ((t.b.x - t.a.x).abs(), (t.b.y - t.a.y).abs()); dx > 1e-6 && dy > 1e-6 && (dx - dy).abs() > 1e-6 }).collect();
     assert!(odd.is_empty(), "{odd:?}");
+    // a big pad (the IC's exposed pad) is entered where the route meets it, not from its centre with a bend inside the copper
+    for p in b.pads.iter().filter(|p| { let (w, h) = p.shape.size(); w >= 2.0 && h >= 2.0 }) {
+        let at_centre: Vec<_> = b.tracks.iter().filter(|t| t.a == p.pos || t.b == p.pos).collect();
+        assert!(at_centre.is_empty(), "{} {}: {at_centre:?}", p.refdes, p.pin);
+    }
 }

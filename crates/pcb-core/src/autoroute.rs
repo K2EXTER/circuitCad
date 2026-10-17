@@ -461,6 +461,15 @@ fn end_cells(grid: &Grid, pad: &Pad, net: i32, lead: Option<f64>, slide_width: O
     pad_cells(grid, pad, net).into_iter().map(|(l, i, j)| EndCell { l, i, j, cost: grid.pos(i, j).dist(pad.pos) as f32, lead: None }).collect()
 }
 
+/// Is `p` within the copper of `pad`?
+fn on_pad(pad: &Pad, p: Point) -> bool {
+    let (w, h) = pad.shape.size();
+    match pad.shape {
+        PadShape::Circle { d } => p.dist(pad.pos) <= d / 2.0,
+        _ => (p.x - pad.pos.x).abs() <= w / 2.0 && (p.y - pad.pos.y).abs() <= h / 2.0,
+    }
+}
+
 fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Option<(Vec<Track>, Vec<Via>)> {
     let mut nets: Vec<String> = vec![];
     let grid = build_grid(board, opt, &mut nets)?;
@@ -603,8 +612,9 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Op
             emit(cells[0].0, q, cells[0].1);
         }
         // no lead (no room for one): still only horizontal, vertical and 45° pieces when leads were asked for
+        // (a first cell inside the pad's copper: the track starts there, with no bend out of the pad's centre)
         None => {
-            let pts = if opt.pad_lead.is_some() { crate::padentry::bend45(pad_a.pos, cells[0].1, false) } else { vec![cells[0].1] };
+            let pts = if opt.pad_lead.is_none() { vec![cells[0].1] } else if on_pad(pad_a, cells[0].1) { vec![] } else { crate::padentry::bend45(pad_a.pos, cells[0].1, false) };
             let mut prev = pad_a.pos;
             for p in pts {
                 emit(cells[0].0, prev, p);
@@ -643,7 +653,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool) -> Op
             emit(last.0, q, foot);
         }
         None => {
-            let pts = if opt.pad_lead.is_some() { crate::padentry::bend45(pad_b.pos, last.1, false) } else { vec![last.1] };
+            let pts = if opt.pad_lead.is_none() { vec![last.1] } else if on_pad(pad_b, last.1) { vec![] } else { crate::padentry::bend45(pad_b.pos, last.1, false) };
             let mut prev = pad_b.pos;
             for p in pts {
                 emit(last.0, prev, p);
