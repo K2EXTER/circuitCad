@@ -413,3 +413,52 @@ fn two_tracks_leaving_one_pad_side_by_side_get_one_round_arch_between_them() {
     let (lo, hi) = xs.fold((f64::MAX, f64::MIN), |(l, h), x| (l.min(x), h.max(x)));
     assert!(lo >= 5.0 - 0.5125 - 1e-6 && hi <= 5.0 + 0.5125 + 1e-6, "{lo} {hi}");
 }
+
+#[test]
+fn a_thin_track_ending_at_the_edge_of_a_wide_one_gets_the_notches_filled_like_any_t() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    // a wide track (0.5) in one piece, and a thin one (0.25) that comes in at 45 degrees and ends in its copper, off its
+    // centre line (0.25 from it, at its edge): the two touch, but there is no joint at the end of the thin one
+    b.tracks.push(trk((5.0, 10.0), (25.0, 10.0), 0.5));
+    b.tracks.push(trk((4.0, 14.0), (8.0, 14.0), 0.25));
+    b.tracks.push(trk((8.0, 14.0), (11.75, 10.25), 0.25));
+    b.finish.on = true;
+    let f = finished(&b).unwrap();
+    // a fillet in the notch on each side of the branch: one polygon each, near the joint (at about x = 11.5 .. 12)
+    let near: Vec<&Patch> = f.patches.iter().filter(|p| p.outline.iter().any(|q| (q.x - 11.75).abs() < 1.0 && (q.y - 10.0).abs() < 1.0)).collect();
+    assert_eq!(near.len(), 2, "{} patches in all", f.patches.len());
+    // the wide track is as it was (the corner of the branch elsewhere is rounded, which is another matter)
+    assert!(f.board.tracks.iter().any(|t| t.a == Point::new(5.0, 10.0) && t.b == Point::new(25.0, 10.0) && t.width == 0.5));
+    // and every piece of the fillets keeps within the copper of the two tracks' union or the notch: nothing is put on the
+    // other side of the wide track
+    assert!(near.iter().all(|p| p.outline.iter().all(|q| q.y >= 10.0 - 0.25 - 0.05)), "nothing below the wide track's edge");
+    assert!(drc::check_final(&b).is_empty(), "{:?}", drc::check_final(&b));
+}
+
+#[test]
+fn a_branch_that_does_not_touch_the_other_track_gets_no_fillet() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    b.tracks.push(trk((5.0, 10.0), (25.0, 10.0), 0.5));
+    // 0.3 mm from the wide track's edge: a gap, not a joint
+    b.tracks.push(trk((8.0, 14.0), (11.45, 10.55), 0.25));
+    b.finish.on = true;
+    let f = finished(&b).unwrap();
+    assert!(f.patches.is_empty(), "{} patches", f.patches.len());
+}
+
+#[test]
+fn a_baked_width_change_goes_in_steps_too_fine_to_show() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 5.0, "A");
+    pad(&mut b, 25.0, 5.0, "A");
+    b.tracks.push(trk((5.0, 5.0), (15.0, 5.0), 0.5));
+    b.tracks.push(trk((15.0, 5.0), (25.0, 5.0), 0.25));
+    smooth_tracks(&mut b, &SmoothOptions { corners: false, ..Default::default() });
+    let mut widths: Vec<f64> = b.tracks.iter().map(|t| t.width).collect();
+    widths.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    widths.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+    // from 0.25 to 0.5 in steps of 0.02 mm at most
+    let biggest = widths.windows(2).map(|w| w[1] - w[0]).fold(0.0f64, f64::max);
+    assert!(biggest <= 0.02 + 1e-9, "{widths:?}");
+    assert!(ratsnest(&b).is_empty() && drc::check(&b).is_empty());
+}

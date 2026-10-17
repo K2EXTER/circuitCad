@@ -99,6 +99,8 @@ enum Kind {
 
 /// Width differences up to this are left as they are, and no step of a taper is larger (so a taper is not tapered again).
 const MIN_STEP: f64 = 0.1;
+/// The width steps of a taper that is baked into the tracks (mm): fine enough that the round ends of the pieces do not show.
+const BAKE_STEP: f64 = 0.02;
 /// Corners that turn less than this are left as they are (the pieces of an arc turn 22.5° each, so an arc is not rounded again).
 const MIN_TURN: f64 = 30.0;
 const MIN_LEN: f64 = 0.05;
@@ -323,6 +325,63 @@ fn junctions(board: &Board, radius: f64) -> Vec<Edit> {
             }
         }
     }
+    out.extend(edge_junctions(board, radius));
+    out
+}
+
+/// Branches that end inside another track's copper but not on its centre line (a thin track that ends at the edge of a
+/// wide one): the branch is carried on to the centre line, and the notches on both sides of it are filled and rounded
+/// as at any other T. The branch is not changed: the piece that is carried on lies inside the other track's copper.
+fn edge_junctions(board: &Board, radius: f64) -> Vec<Edit> {
+    let mut out = vec![];
+    for (k, t) in board.tracks.iter().enumerate() {
+        for (v, far) in [(t.a, t.b), (t.b, t.a)] {
+            if pinned(board, v, t.side) || junction_rays(board, v, t.side).len() >= 3 {
+                continue; // on a pad or via, or a T that is already found by its point
+            }
+            let (dx, dy, len) = unit(far, v);
+            if len < 1e-9 {
+                continue;
+            }
+            for (m, u) in board.tracks.iter().enumerate().filter(|(m, u)| *m != k && u.side == t.side) {
+                let d = crate::drc::point_seg(v, u.a, u.b);
+                // inside the other track's copper, off its centre line, and not at one of its ends
+                if d < 1e-6 || d > u.width / 2.0 + 1e-6 || u.a.dist(v) < 1e-6 || u.b.dist(v) < 1e-6 {
+                    continue;
+                }
+                let (mx, my, mlen) = unit(u.a, u.b);
+                // where the branch's line crosses the other track's centre line
+                let det = dx * my - dy * mx;
+                if det.abs() < 1e-6 {
+                    continue;
+                }
+                let s_cross = ((u.a.x - v.x) * my - (u.a.y - v.y) * mx) / det;
+                let at = Point::new(v.x + dx * s_cross, v.y + dy * s_cross);
+                if crate::drc::point_seg(at, u.a, u.b) > 1e-6 || mlen < 1e-9 {
+                    continue;
+                }
+                let ray = |to: Point, w: f64, track: usize| {
+                    let (ux, uy, l) = unit(at, to);
+                    Ray { u: (ux, uy), w, len: l, track }
+                };
+                let mut rays = vec![ray(far, t.width, k), ray(u.a, u.width, m), ray(u.b, u.width, m)];
+                if rays.iter().any(|r| r.len < 1e-6) {
+                    continue;
+                }
+                rays.sort_by(|x, y| x.u.1.atan2(x.u.0).total_cmp(&y.u.1.atan2(y.u.0)));
+                let n = rays.len();
+                for a in 0..n {
+                    let (ra, rb) = (&rays[a], &rays[(a + 1) % n]);
+                    if ra.track == rb.track {
+                        continue; // the two halves of the track that runs through
+                    }
+                    let Some(outline) = notch_fill(at, ra, rb, radius) else { continue };
+                    out.push(Edit { trims: vec![], pieces: vec![], patch: Some(Patch { side: t.side, outline, track: ra.track }), live: None, kind: Kind::Fork, touches: vec![k, m] });
+                }
+                break;
+            }
+        }
+    }
     out
 }
 
@@ -434,7 +493,7 @@ fn taper(board: &Board, v: Point, a: End, b: End) -> Option<Edit> {
     if l < 0.1 {
         return None;
     }
-    let n = ((dw / (MIN_STEP * 0.8)).ceil() as usize).max(2);
+    let n = ((dw / BAKE_STEP).ceil() as usize).max(2);
     let at = |s: f64| Point::new(v.x + ux * s, v.y + uy * s);
     // from the far side (wide) to the joint (narrow)
     let pieces = (0..n)
@@ -508,7 +567,7 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     // sides of the track (the live polygon is centred on the pad)
     let base = if round { top } else { (top - 2.0 * off.abs()).max(t.width + MIN_STEP) };
     let dwp = base - t.width;
-    let n = ((dwp / (MIN_STEP * 0.8)).ceil() as usize).max(2);
+    let n = ((dwp / BAKE_STEP).ceil() as usize).max(2);
     let at = |s: f64| Point::new(v.x + ux * s, v.y + uy * s);
     // the track runs on to the pad's edge; there the first piece is exactly as wide as the edge, and each next is narrower
     let mut pieces = vec![];

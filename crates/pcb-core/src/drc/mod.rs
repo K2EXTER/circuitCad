@@ -15,6 +15,7 @@ mod geo;
 mod patch;
 mod pour;
 mod silk;
+mod slit;
 #[cfg(test)]
 mod tests;
 mod thermal;
@@ -26,6 +27,7 @@ pub use geo::*;
 pub use patch::*;
 pub use pour::*;
 pub use silk::*;
+pub use slit::*;
 pub use thermal::*;
 
 #[derive(Clone, Debug, PartialEq)]

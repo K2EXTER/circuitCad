@@ -579,3 +579,65 @@ mod sweep_tests {
             .count()
     }
 }
+
+/// Narrow gaps inside one net: found where a fab's check would find them, and not where the copper is one piece.
+#[cfg(test)]
+mod slit_tests {
+    use super::*;
+
+    fn tr(a: (f64, f64), z: (f64, f64), w: f64) -> Track {
+        Track { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(z.0, z.1), width: w }
+    }
+
+    /// A wide track (0.5) with a thin one (0.25) beside it, joined by a short piece at the right end (so one net), the
+    /// thin one `centres` mm from the wide one's centre line.
+    fn branch(centres: f64) -> Board {
+        let mut b = Board::new("t", 40.0, 30.0);
+        b.tracks.push(tr((5.0, 10.0), (25.0, 10.0), 0.5));
+        b.tracks.push(tr((5.0, 10.0 + centres), (20.0, 10.0 + centres), 0.25));
+        b.tracks.push(tr((20.0, 10.0 + centres), (22.0, 10.25), 0.25));
+        b
+    }
+
+    #[test]
+    fn a_thin_track_beside_a_wide_one_of_its_own_net_too_close_is_a_slit_and_check_does_not_see_it() {
+        // 0.5 mm from centre to centre: the gap between the edges is 0.5 - 0.25 - 0.125 = 0.125 < 0.15
+        let b = branch(0.5);
+        assert!(check(&b).is_empty(), "one group: check has nothing to say");
+        let slits = slit_checks(&b);
+        assert!(!slits.is_empty());
+        assert!(slits[0].message.contains("0.125"), "{}", slits[0].message);
+        // the gap's place is between the two tracks
+        assert!(slits.iter().all(|s| s.at.y > 10.25 && s.at.y < 10.5), "{:?}", slits.iter().map(|s| s.at).collect::<Vec<_>>());
+        // far enough: no slit
+        assert!(slit_checks(&branch(0.6)).is_empty());
+        // touching: no gap at all
+        assert!(slit_checks(&branch(0.375)).is_empty());
+    }
+
+    #[test]
+    fn a_piece_in_the_middle_that_fills_the_gap_makes_no_slit() {
+        // three pieces of one straight run, the middle one short: the first and the last are 0.1 mm from each other
+        // (their round ends), but the middle one fills the way between
+        let mut b = Board::new("t", 40.0, 30.0);
+        b.tracks.push(tr((5.0, 10.0), (10.0, 10.0), 0.25));
+        b.tracks.push(tr((10.0, 10.0), (10.35, 10.0), 0.25));
+        b.tracks.push(tr((10.35, 10.0), (15.0, 10.0), 0.25));
+        assert!(slit_checks(&b).is_empty(), "{:?}", slit_checks(&b));
+    }
+
+    #[test]
+    fn the_two_legs_of_a_hairpin_too_close_are_a_slit_and_other_nets_are_left_to_check() {
+        let mut b = Board::new("t", 40.0, 30.0);
+        b.tracks.push(tr((5.0, 10.0), (15.0, 10.0), 0.25));
+        b.tracks.push(tr((15.0, 10.0), (15.0, 10.35), 0.25));
+        b.tracks.push(tr((15.0, 10.35), (5.0, 10.35), 0.25)); // 0.35 - 0.25 = 0.10 between the legs
+        assert!(!slit_checks(&b).is_empty());
+        // a track of another net (not touching) that close is for `check`, not a slit
+        let mut c = Board::new("t", 40.0, 30.0);
+        c.tracks.push(tr((5.0, 10.0), (15.0, 10.0), 0.25));
+        c.tracks.push(tr((5.0, 10.35), (15.0, 10.35), 0.25));
+        assert!(slit_checks(&c).is_empty());
+        assert_eq!(clearance(&c).len(), 1);
+    }
+}

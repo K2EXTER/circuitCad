@@ -297,6 +297,12 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Warn, format!("ソルダーマスクの帯が細すぎるパッドの間が {} 箇所あります", dams.len()), format!("例: {}", first.message), Some(first.at)).with_also(dams.iter().map(|x| x.at)));
     }
 
+    // narrow gaps inside one net's copper (a thin branch beside a wide track)
+    let slits = drc::slit_checks(board);
+    if let Some(first) = slits.first() {
+        out.push(check(Level::Warn, format!("同じネットの銅箔の間に、最小間隔より狭いすき間が {} 箇所あります", slits.len()), format!("例: {}", first.message), Some(first.at)).with_also(slits.iter().map(|x| x.at)));
+    }
+
     // differential pairs: length and spacing
     let pairs = crate::diffpair::check_pairs(board);
     if let Some(first) = pairs.first() {
