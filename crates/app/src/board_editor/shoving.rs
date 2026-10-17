@@ -13,8 +13,10 @@ pub(super) const PREVIEW_THROTTLE: std::time::Duration = std::time::Duration::fr
 pub(super) struct RoutePreview {
     /// How many existing tracks are pushed aside.
     pub pushed: usize,
-    /// A copper-to-copper rule is still broken after the shove.
+    /// A copper-to-copper rule is still broken after the shove, or two nets would be joined.
     pub bad: bool,
+    /// What is wrong when `bad`, for the message next to the cursor: a short (which nets) or too small a gap.
+    pub why: String,
     /// The pushed tracks: (where it is now, where it would be).
     pub moved: Vec<(Track, Track)>,
     /// The answer is that of an earlier cursor position (the shove is slow on this board).
@@ -79,8 +81,19 @@ impl BoardEditor {
         // only the copper-to-copper rule: the route may start in the middle of a pad, or end on the board edge
         let count = |b: &Board| drc::clearance(b).iter().filter(|v| v.message.contains("銅箔どうし")).count();
         // a route that runs over another net's pad or track joins the two nets: that is a short, not just a small gap
-        let bad = count(&trial) > count(&self.board) || drc::shorts(&trial).len() > drc::shorts(&self.board).len();
-        let result = RoutePreview { pushed, bad, moved, throttled: false, tracks, found };
+        let before: Vec<String> = drc::shorts(&self.board).into_iter().map(|v| v.message).collect();
+        let new_shorts: Vec<String> = drc::shorts(&trial).into_iter().map(|v| v.message).filter(|m| !before.contains(m)).collect();
+        let short = drc::shorts(&trial).len() > before.len() || !new_shorts.is_empty();
+        let gap = count(&trial) > count(&self.board);
+        let bad = gap || short;
+        let why = if short {
+            // "ネット短絡: GND と LX" -> which nets would be joined
+            let nets = new_shorts.first().map(|m| m.trim_start_matches("ネット短絡:").trim().to_string()).unwrap_or_default();
+            format!("ほかのネットにつながってしまいます (ショート: {nets})")
+        } else {
+            "ルール違反になります (間隔が足りません)".to_string()
+        };
+        let result = RoutePreview { pushed, bad, why: if bad { why } else { String::new() }, moved, throttled: false, tracks, found };
         *self.preview_cache.borrow_mut() = Some(PreviewCache { key, result: result.clone(), cost: started.elapsed(), at: std::time::Instant::now() });
         result
     }

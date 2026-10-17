@@ -319,7 +319,7 @@ impl BoardEditor {
                     }
                     if bad || pushed > 0 || preview.throttled {
                         let msg = if bad {
-                            "ルール違反になります (間隔が足りません)".to_string()
+                            preview.why.clone()
                         } else if preview.throttled {
                             "押しのけの計算が重いので、少し遅れて表示します".to_string()
                         } else {

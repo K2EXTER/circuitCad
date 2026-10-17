@@ -686,6 +686,32 @@ fn fine_pitch_editor() -> BoardEditor {
 }
 
 #[test]
+fn the_warning_says_a_short_when_the_route_would_join_two_nets_and_a_gap_only_when_it_is_one() {
+    // pads A1 and A2 of net A, a pad G of net GND to the right, and a track from A1 up to (10, 15)
+    let mut e = pad_editor();
+    e.board.pads.clear();
+    for (x, y, net) in [(10.0, 10.0, "A"), (10.0, 20.0, "A"), (20.0, 15.0, "GND")] {
+        let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        p.net = net.into();
+        e.board.pads.push(p);
+    }
+    e.board.tracks.push(Track { side: Side::Top, a: Point::new(10.0, 10.0), b: Point::new(10.0, 15.0), width: 0.25 });
+    let end = Point::new(10.0, 15.0);
+    // from the track of net A to the pad of net GND: the two nets would be joined, and the warning names them
+    let short = e.route_preview(end, Point::new(20.0, 15.0));
+    assert!(short.bad && short.why.contains("ショート") && short.why.contains('A') && short.why.contains("GND"), "{short:?}");
+    // to the other pad of its own net: fine, and nothing is said
+    let ok = e.route_preview(end, Point::new(10.0, 20.0));
+    assert!(!ok.bad && ok.why.is_empty(), "{ok:?}");
+    // a pad of another net 0.1 mm from the way (not touching it): it is the gap that is too small
+    let mut near = Pad::new(Point::new(10.725, 17.5), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+    near.net = "B".into();
+    e.board.pads.push(near);
+    let gap = e.route_preview(end, Point::new(10.0, 20.0));
+    assert!(gap.bad && gap.why.contains("間隔") && !gap.why.contains("ショート"), "{gap:?}");
+}
+
+#[test]
 fn between_fine_pitch_pads_the_ends_leave_straight_out_of_the_end_and_never_through_the_long_side() {
     let e = fine_pitch_editor();
     let mid = Point::new(20.0, 10.0);
