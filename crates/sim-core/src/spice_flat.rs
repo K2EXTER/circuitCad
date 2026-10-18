@@ -552,9 +552,17 @@ impl Ctx<'_> {
                 u.push(format!("Q={}", rename_expr(&substitute_params(e, &env), ports, &prefix, path)));
             }
             if letter == 'B' {
-                let rest = t[n + 1..].join(" ");
+                // options after the expression (`Rpar=1 Cpar=5n tripdt=5n NoJacob`, `ymax=1e300`) stay as they are: a parameter
+                // that happens to have the name of an option must not be put into it
+                let mut toks: Vec<String> = t[n + 1..].to_vec();
+                let mut opts: Vec<String> = vec![];
+                while toks.len() > 1 && toks.last().is_some_and(|w| is_b_option(w)) {
+                    opts.insert(0, toks.pop().unwrap());
+                }
+                let rest = toks.join(" ");
                 u.truncate(n + 1);
                 u.push(rename_expr(&substitute_params(&rest, &env), ports, &prefix, path));
+                u.extend(opts);
             }
             out.push(u.join(" "));
         }
@@ -1047,8 +1055,17 @@ impl Ctx<'_> {
         {
             // `VALUE={expr}` and `VALUE { expr }` (the braces are gone by now)
             let after = line[pos + 5..].trim_start();
-            let expr = rename_expr(&substitute_params(after.strip_prefix('=').unwrap_or(after).trim(), env), ports, prefix, path);
-            return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
+            let after = after.strip_prefix('=').unwrap_or(after).trim();
+            // options after the expression (`Rpar=1 Cpar=5n NoJacob`) are handed on untouched
+            let mut words: Vec<&str> = after.split_whitespace().collect();
+            let mut opts: Vec<&str> = vec![];
+            while words.len() > 1 && words.last().is_some_and(|w| is_b_option(w)) {
+                opts.insert(0, words.pop().unwrap());
+            }
+            let cut = words.last().map_or(after.len(), |w| w.as_ptr() as usize + w.len() - after.as_ptr() as usize);
+            let expr = rename_expr(&substitute_params(after[..cut].trim(), env), ports, prefix, path);
+            let tail = if opts.is_empty() { String::new() } else { format!(" {}", opts.join(" ")) };
+            return Ok(format!("{name} {p} {n} {}={expr}{tail}", if out_is_voltage { "V" } else { "I" }));
         }
         // the controls: voltage pairs for E / G, source names for F / H
         let mut idx = 3;
@@ -1080,7 +1097,16 @@ impl Ctx<'_> {
                 idx += 1;
             }
         }
-        let coeffs: Vec<f64> = t[idx..].iter().map(|w| parse_value(w).ok_or_else(|| format!("{head}: 係数「{w}」を数値にできません"))).collect::<Result<_, _>>()?;
+        // the coefficients may be in brackets and separated by commas (`POLY(2) V1 V2 (0,7E-5,7E-5)`)
+        let coeffs: Vec<f64> = t[idx..]
+            .iter()
+            .flat_map(|w| w.split([',', '(', ')']).filter(|p| !p.is_empty()))
+            .map(|w| parse_value(w).ok_or_else(|| format!("{head}: 係数「{w}」を数値にできません")))
+            .collect::<Result<_, _>>()?;
+        // several coefficients without the word POLY: the old SPICE2 form, a polynomial in the one control (p0 + p1 x + ...)
+        if poly_n.is_none() && coeffs.len() > 1 {
+            poly_n = Some(1);
+        }
         let expr = if poly_n.is_none() {
             // plain gain
             let g = coeffs.first().ok_or_else(|| format!("{head}: 利得がありません"))?;
@@ -1431,4 +1457,15 @@ fn find_replace_word(text: &str, word: &str, with: &str) -> String {
 /// `a = b` -> `a=b` (the blanks vendors put around `=` in a model card).
 fn squash_eq_text(s: &str) -> String {
     crate::spice_in::squash_equals_pub(s)
+}
+
+/// `name=value` (a single `=`, a plain name that is not `V` / `I`) or the bare word `NoJacob`: an option of a B source.
+fn is_b_option(w: &str) -> bool {
+    if w.eq_ignore_ascii_case("nojacob") {
+        return true;
+    }
+    match w.split_once('=') {
+        Some((k, v)) => !v.starts_with('=') && !k.is_empty() && k.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && !k.eq_ignore_ascii_case("v") && !k.eq_ignore_ascii_case("i"),
+        None => false,
+    }
 }

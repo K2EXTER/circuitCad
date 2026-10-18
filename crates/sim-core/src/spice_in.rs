@@ -666,7 +666,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 // across the source (a node fed only by a current source would float without Rpar); the others are not used
                 let mut words: Vec<&str> = t[3..].to_vec();
                 let mut opts: Vec<&str> = vec![];
-                while words.len() > 1 && words.last().is_some_and(|w| w.contains('=') && !w.contains(['<', '>', '(', ')', '+', '*', '/']) && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic())) {
+                while words.len() > 1 && words.last().is_some_and(|w| w.eq_ignore_ascii_case("nojacob") || (w.contains('=') && !w.contains(['<', '>', '(', ')', '+', '*', '/']) && w.chars().next().is_some_and(|c| c.is_ascii_alphabetic()))) {
                     opts.extend(words.pop());
                 }
                 let rest = words.join(" ");

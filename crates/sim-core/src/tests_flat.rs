@@ -971,3 +971,26 @@ fn ddt_is_the_time_derivative() {
     assert!((at(0.5e-3) - 1000.0).abs() < 20.0, "{}", at(0.5e-3));
     assert!(at(1.5e-3).abs() < 20.0, "{}", at(1.5e-3));
 }
+
+#[test]
+fn b_source_options_are_not_touched_by_parameters_of_the_same_name() {
+    let t = ".subckt T a b gnd\n.param ymax=7\nB1 b 0 V=V(a)*2 ymax=1e300 NoJacob\nR1 b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.0).abs() < 1e-6);
+}
+
+#[test]
+fn value_sources_keep_their_options_apart_from_the_expression() {
+    let t = ".subckt T a b gnd\nG1 0 b VALUE {IF(V(a) > 0.5, 1m, 0)} Rpar=1k Cpar=1n NoJacob\nR1 b gnd 1k\n.ends T";
+    // 1 mA into 1k || 1k = 0.5 V
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn old_spice_polynomial_sources_without_the_word_poly_and_bracketed_coefficients() {
+    // G with p0, p1, p2: I = 1m + 2m x + 3m x^2, x = V(a) = 2 -> 1m + 4m + 12m = 17 mA into 1 ohm
+    let t = ".subckt T a b gnd\nG1 0 b a gnd {1m}, {2m}, {3m}\nR1 b gnd 1\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 0.017).abs() < 1e-6);
+    // bracketed with commas
+    let t = ".subckt T a b gnd\nVs a1 0 0\nE1 b 0 POLY(1) a gnd (0,2,0.5)\nR1 b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 6.0).abs() < 1e-6);
+}
