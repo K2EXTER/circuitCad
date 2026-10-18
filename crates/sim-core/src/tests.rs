@@ -369,7 +369,9 @@ fn library_opamp_subckt_follower() {
 fn unsupported_subckt_element_is_an_error_not_silence() {
     let mut c = Circuit::new();
     let (a, b) = (c.node("a"), c.node("b"));
-    let text = ".subckt X 1 2\nT1 1 0 2 0 Z0=50 TD=1n\n.ends X";
+    let text = ".subckt X 1 2
+O1 1 0 2 0 LOSSY
+.ends X";
     let e = add_subckt_instance(&mut c, "U1", "X", text, &[a, b]).unwrap_err();
     assert!(e.contains("未対応"), "{e}");
 }

@@ -685,3 +685,30 @@ fn pspice_jkff_and_latch_are_read() {
     let t = ".subckt T a q gnd\nU1 dltch(1) $G_DPWR $G_DGND a $D_HI g d q qb D_LATCH IO_STD\nR1 q gnd 10k\n.ends T";
     assert!((run(t, "T", &["a", "q", "gnd"], 0.0, "q") - 5.0).abs() < 0.1);
 }
+
+#[test]
+fn a_transmission_line_passes_dc_and_delays_a_step() {
+    let t = ".subckt T a b gnd\nT1 a gnd b gnd Z0=50 TD=10n\nR1 b gnd 50\n.ends T";
+    // DC: the line is a wire, matched load: half of the source through a 50 ohm source resistor is not used here, so b = a
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.0).abs() < 1e-6);
+    assert!(err(".subckt T a b gnd\nT1 a gnd b gnd Z0=50\n.ends T", "T", &["a", "b", "gnd"]).contains("遅れ時間"));
+}
+
+#[test]
+fn a_matched_transmission_line_delays_a_step_by_td() {
+    let t = ".subckt T a b gnd\nT1 a gnd b gnd Z0=50 TD=20n\n.ends T";
+    let mut c = Circuit::new();
+    let (src, a, b) = (c.node("src"), c.node("a"), c.node("b"));
+    c.add(Element::VSource { name: "Vs".into(), p: src, n: 0, wave: Waveform::Pulse { v1: 0.0, v2: 1.0, td: 5e-9, tr: 1e-9, tf: 1e-9, pw: 1.0, per: 2.0 }, ac: None });
+    c.add(Element::Resistor { name: "Rs".into(), a: src, b: a, r: 50.0 });
+    c.add(Element::Resistor { name: "Rl".into(), a: b, b: 0, r: 50.0 });
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let r = transient(&c, &TranSettings { tstop: 80e-9, tstep: 0.5e-9, uic: false }).unwrap();
+    let vb = r.signal("V(b)").unwrap();
+    let at = |tt: f64| vb.values[r.time.iter().position(|x| *x >= tt).unwrap()];
+    assert!(at(20e-9).abs() < 0.05, "before the delay: {}", at(20e-9));
+    assert!((at(70e-9) - 0.5).abs() < 0.05, "after the delay: {}", at(70e-9));
+    // the front crosses half height about TD after the source's: 5 ns + 20 ns
+    let cross = r.time.iter().zip(&vb.values).find(|(_, v)| **v > 0.25).map(|(t, _)| *t).unwrap();
+    assert!((cross - 25.5e-9).abs() < 6e-9, "front at {cross}");
+}

@@ -22,7 +22,7 @@ pub fn needs_flatten(text: &str) -> bool {
     text.lines().any(|l| {
         let l = l.trim_start();
         let low = l.to_ascii_lowercase();
-        low.starts_with(['x', 'f', 'h', 'a', 'u'])
+        low.starts_with(['x', 'f', 'h', 'a', 'u', 't'])
             || low.starts_with(".param")
             || low.contains("params:")
             || l.contains('{')
@@ -428,6 +428,10 @@ impl Ctx<'_> {
                 out.extend(self.u_device(&t, path, ports, &prefix)?);
                 continue;
             }
+            if letter == 'T' {
+                out.extend(Self::transmission_line(&t, path, ports, &prefix)?);
+                continue;
+            }
             // a source whose value follows the circuit temperature (`V1 a b {temp*0.01}`): kept as an expression, so
             // that a temperature sweep moves it (`temp` is in degrees C)
             if matches!(letter, 'V' | 'I') {
@@ -622,6 +626,44 @@ impl Ctx<'_> {
         let vt = param("vt").or_else(|| param("ref")).unwrap_or((vlow + vhigh) / 2.0);
         let vh = param("vh").unwrap_or(0.0).abs();
         Ok(Some(vec![format!("Z{head}{suffix} {kind} {q} {qb} {vlow:e} {vhigh:e} {vt:e} {vh:e} 0 0 {}", ins.join(" "))]))
+    }
+
+    /// A lossless transmission line `Tname a1 b1 a2 b2 Z0=50 TD=1n` (or `F=` and `NL=`, default 0.25 wavelength: `TD = NL / F`),
+    /// as a ladder of `LINE_SECTIONS` L-C sections. It works in every analysis, but only below about `N / (pi * TD)` (the
+    /// ladder rings and delays slightly differently from a true line); the return nodes `b1` and `b2` are joined.
+    fn transmission_line(t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+        const LINE_SECTIONS: usize = 40;
+        let head = t[0].as_str();
+        if t.len() < 5 {
+            return Err(format!("{head}: 伝送線路は「T名前 入力+ 入力- 出力+ 出力- Z0=特性インピーダンス TD=遅れ時間」の形で書きます"));
+        }
+        let key = |k: &str| t[5..].iter().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{k}=")).and_then(parse_value));
+        let z0 = key("z0").unwrap_or(50.0);
+        let td = match (key("td"), key("f")) {
+            (Some(td), _) => td,
+            (None, Some(f)) if f > 0.0 => key("nl").unwrap_or(0.25) / f,
+            _ => return Err(format!("{head}: 伝送線路の遅れ時間が分かりません。TD=10n のように書くか、F= (周波数) と NL= (波長の何倍か) を書いてください")),
+        };
+        if z0 <= 0.0 || td <= 0.0 {
+            return Err(format!("{head}: 伝送線路の Z0 と TD は正の値にしてください"));
+        }
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let (a1, b1, a2, b2) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix));
+        let n = LINE_SECTIONS;
+        let (l, c) = (z0 * td / n as f64, td / (z0 * n as f64));
+        let node = |i: usize| if i == 0 { a1.clone() } else if i == n { a2.clone() } else { format!("{prefix}{head}_n{i}") };
+        let mut lines = Vec::new();
+        for i in 0..n {
+            lines.push(format!("L{head}_{i}{suffix} {} {} {l:e}", node(i), node(i + 1)));
+        }
+        for i in 0..=n {
+            let cap = if i == 0 || i == n { c / 2.0 } else { c };
+            lines.push(format!("C{head}_{i}{suffix} {} {b1} {cap:e}", node(i)));
+        }
+        if b1 != b2 {
+            lines.push(format!("R{head}_ret{suffix} {b1} {b2} 1e-6"));
+        }
+        Ok(lines)
     }
 
     /// A PSpice flip-flop or latch: `U dff(n) dpwr dgnd preb clrb clk d q qb ...` (`jkff`: `... clk j k q qb`, `dltch`: `... gate d q qb`,

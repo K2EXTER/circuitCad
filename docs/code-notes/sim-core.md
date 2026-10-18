@@ -93,3 +93,6 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 
 ## PSpice の記憶つき U 素子(2026-10-18)
 `spice_flat.rs u_seq_device`: `U dff(n)`(`PREBAR CLRBAR CLK D Q QBAR`)・`jkff(n)`(`… CLK J K Q QBAR`)・`dltch(n)`(`… GATE D Q QBAR`)・`srff(n)`(`… GATE S R Q QBAR`、ゲートつき SR ラッチとして `Srlatch` に)を、既存の `Z` 行(`Element::Seq`)に変換する。プリセット/クリアは負論理(`set_low`/`reset_low`=1)、レベルは 0〜5V。`$D_HI` は 5V の電圧源(`__hi…`)、`$D_LO` は GND。複数ビット(`dff(2)`)は1ビットずつ `Z` 行にする。遅延は無視、カウンタなどは未対応のまま。テストは `tests_flat.rs` の `pspice_*`。
+
+## 伝送線路 T(2026-10-18)
+`spice_flat.rs transmission_line`: 無損失線路 `T名前 a1 b1 a2 b2 Z0= TD=`(または `F=`・`NL=`、既定 0.25 波長、`TD=NL/F`)を、40 区間の L-C はしご(L=Z0·TD/N、C=TD/(Z0·N)、両端は C/2)に置き換える。素子はそのまま使えるので DC(つながった線)・AC・過渡のどれでも動く。近似なので、使える帯域は約 N/(π·TD) まで(それより速い立ち上がりはなまる/揺れる)。戻り側 b1 と b2 が別の網のときは 1µΩ でつなぐ。損失・`IC=`・`LEN=` は未対応(無視)。テストは `tests_flat.rs` の `a_matched_transmission_line_delays_a_step_by_td` ほか。
