@@ -712,3 +712,35 @@ fn a_matched_transmission_line_delays_a_step_by_td() {
     let cross = r.time.iter().zip(&vb.values).find(|(_, v)| **v > 0.25).map(|(t, _)| *t).unwrap();
     assert!((cross - 25.5e-9).abs() < 6e-9, "front at {cross}");
 }
+
+#[test]
+fn a_charge_type_capacitor_is_open_in_dc_and_charges_in_time() {
+    // Q = 1n * v: a plain 1 nF capacitor, written as a charge. RC = 1 us.
+    let t = ".subckt T a o gnd\nR1 a o 1k\nC1 o gnd Q=1n*v(o,gnd)\n.ends T";
+    let mut c = Circuit::new();
+    let (src, a, o) = (c.node("src"), c.node("a"), c.node("o"));
+    c.add(Element::VSource { name: "Vs".into(), p: src, n: 0, wave: Waveform::Pulse { v1: 0.0, v2: 1.0, td: 0.1e-6, tr: 1e-9, tf: 1e-9, pw: 1.0, per: 2.0 }, ac: None });
+    c.add(Element::Resistor { name: "Rs".into(), a: src, b: a, r: 1.0 });
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+    assert!(dc_op(&c).unwrap().voltage("o").unwrap().abs() < 1e-9);
+    let r = transient(&c, &TranSettings { tstop: 5e-6, tstep: 20e-9, uic: false }).unwrap();
+    let vo = r.signal("V(o)").unwrap();
+    let at = |tt: f64| vo.values[r.time.iter().position(|x| *x >= tt).unwrap()];
+    // 1 - exp(-t/RC) with RC = 1.001 us after the step at 0.1 us
+    assert!((at(1.1e-6) - (1.0 - (-1.0f64 / 1.001).exp())).abs() < 0.02, "{}", at(1.1e-6));
+    assert!(at(5e-6) > 0.98);
+}
+
+#[test]
+fn a_nonlinear_charge_capacitor_has_the_small_signal_capacitance_dq_dv() {
+    // Q = 1n*v + 1n*v^2 / 2 ... at 1 V bias: C = 1n + 1n*1 = 2 nF; corner = 1/(2 pi 1k 2n)
+    let t = ".subckt T a o gnd\nR1 a o 1k\nC1 o gnd Q=1n*v(o,gnd)+0.5n*v(o,gnd)*v(o,gnd)\n.ends T";
+    let mut c = Circuit::new();
+    let (a, o) = (c.node("a"), c.node("o"));
+    c.add(Element::VSource { name: "Vs".into(), p: a, n: 0, wave: Waveform::Dc(1.0), ac: Some((1.0, 0.0)) });
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let f = 1.0 / (2.0 * std::f64::consts::PI * 1e3 * 2e-9);
+    let r = ac_analysis(&c, &AcSettings { fstart: f, fstop: f * 1.0001, sweep: AcSweep::Linear(2) }).unwrap();
+    let m = r.signal("V(o)").unwrap().mag()[0];
+    assert!((m - std::f64::consts::FRAC_1_SQRT_2).abs() < 0.01, "{m}");
+}

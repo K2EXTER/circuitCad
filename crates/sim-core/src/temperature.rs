@@ -60,6 +60,7 @@ impl Circuit {
                     model.vto = model.vto.signum() * (model.vto.abs() - shrink).max(0.05);
                 }
                 Element::BSource { expr, .. } => *expr = expr.at_temperature(temp_c),
+                Element::ChargeCap { q, .. } => *q = q.at_temperature(temp_c),
                 _ => {}
             }
         }

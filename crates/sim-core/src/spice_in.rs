@@ -446,6 +446,15 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
         let name = format!("{inst}.{head}");
         let need = |n: usize| if t.len() >= n { Ok(()) } else { Err(format!("{name}: 引数が足りません")) };
         match head.chars().next().unwrap().to_ascii_uppercase() {
+            'C' if t.len() >= 4 && t[3].len() > 2 && t[3][..2].eq_ignore_ascii_case("q=") => {
+                // charge-type capacitor: C1 a b Q=expr  (the whole rest of the line is the expression)
+                let (a, b) = (local(c, t[1]), local(c, t[2]));
+                let text = l.split_once('=').map_or("", |(_, e)| e).trim().to_string();
+                let mut node_of = |nm: &str| local(c, nm);
+                let branch_of = |nm: &str| format!("{inst}.{nm}");
+                let q = Expr::parse(&text, &mut node_of, &branch_of).map_err(|e| format!("{name}: 電荷の式 Q= を読めません: {e}"))?;
+                c.add(Element::ChargeCap { name, a, b, q });
+            }
             'R' | 'C' | 'L' => {
                 need(4)?;
                 // `R1 a b MODEL 1k` (LTspice / PSpice model form): the value is the word after the model name

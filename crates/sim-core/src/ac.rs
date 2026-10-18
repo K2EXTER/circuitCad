@@ -279,6 +279,23 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
                     let l = if *i0 > 0.0 { l / (1.0 + (op.x[*br] / i0).powi(2)) } else { *l };
                     a[*br * n + *br] = a[*br * n + *br] - jw_c(w) * C64::new(l, 0.0);
                 }
+                Ce::Cq { a: na, b: nb, c, .. } => {
+                    // small-signal capacitance: dQ/dx at the operating point, as a current jw * dQ/dx_k from a to b
+                    let (_, grads) = c.eval(&op.x, 0.0);
+                    for (var, g) in c.vars.iter().zip(&grads) {
+                        let col = match var {
+                            crate::expr::Var::Node(k) => *k - 1,
+                            crate::expr::Var::Unknown(i) => *i,
+                        };
+                        let y = jw_c(w) * C64::new(*g, 0.0);
+                        if *na != 0 {
+                            a[(*na - 1) * n + col] = a[(*na - 1) * n + col] + y;
+                        }
+                        if *nb != 0 {
+                            a[(*nb - 1) * n + col] = a[(*nb - 1) * n + col] - y;
+                        }
+                    }
+                }
                 Ce::D { ai, k, nvt, dm, slot, cap: Some(_), .. } => {
                     let y = jw_c(w) * C64::new(crate::dc::diode_q(dm, *nvt, op.vj[*slot]).1, 0.0);
                     add(&mut a, *ai, *ai, y);

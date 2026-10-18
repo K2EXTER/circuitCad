@@ -184,6 +184,8 @@ pub enum Element {
     /// Behavioural source. `voltage`: v(p) - v(n) = expr; otherwise the current expr flows from `p`
     /// through the source to `n`.
     BSource { name: String, p: usize, n: usize, voltage: bool, expr: Expr },
+    /// A capacitor given by its charge `Q(v)` (SPICE `C1 a b Q=expr`): the current is dQ/dt, open in DC.
+    ChargeCap { name: String, a: usize, b: usize, q: Expr },
     /// Coupling of two inductors (SPICE `K`): the mutual inductance is `k * sqrt(L1 * L2)`. No effect at DC.
     Mutual { name: String, l1: String, l2: String, k: f64 },
     /// A digital element with a memory (flip-flop, latch, Schmitt trigger). Its outputs are voltage sources whose level
@@ -236,6 +238,7 @@ impl Element {
             | Element::Vccs { name, .. }
             | Element::Switch { name, .. }
             | Element::BSource { name, .. }
+            | Element::ChargeCap { name, .. }
             | Element::Mutual { name, .. }
             | Element::Seq { name, .. } => name,
         }

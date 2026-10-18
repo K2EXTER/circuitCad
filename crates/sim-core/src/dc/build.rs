@@ -32,6 +32,12 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 ce.push(Ce::C { name: name.clone(), a: *a, b: *b, c: *c, idx: n_caps });
                 n_caps += 1;
             }
+            Element::ChargeCap { name, a, b, q } => {
+                // two slots: the voltage across it (for the step-size control) and its charge (the state)
+                ce.push(Ce::Cq { name: name.clone(), a: *a, b: *b, c: crate::expr::CExpr::empty(), idx: n_caps });
+                n_caps += 2;
+                b_exprs.push((ce.len() - 1, q));
+            }
             Element::Inductor { name, a, b, l } => {
                 let i0 = c.saturations.iter().find(|(n, _)| n == name).map_or(0.0, |(_, i)| *i);
                 ce.push(Ce::L { name: name.clone(), p: *a, n: *b, l: *l, br: br_base + n_br, idx: n_inds, i0 });
@@ -138,11 +144,11 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         .collect();
     for (at, expr) in b_exprs {
         let compiled = expr.compile(&|nm| branch_of.iter().find(|(n, _)| n.eq_ignore_ascii_case(nm)).map(|(_, b)| *b));
-        if let Ce::B { c, .. } = &mut ce[at] {
+        if let Ce::B { c, .. } | Ce::Cq { c, .. } = &mut ce[at] {
             *c = compiled;
         }
     }
-    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
+    let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. } | Ce::Cq { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
     let seq_state = std::cell::RefCell::new(vec![0.0; n_seq]);
     Compiled { seq_state, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), ce }

@@ -91,6 +91,10 @@ fn reactive_state(cm: &crate::dc::Compiled, x: &[f64]) -> (Vec<f64>, Vec<f64>) {
                 cv[*idx + 1] = pol * (v(x, *bi) - v(x, *ci));
             }
             Ce::D { ai, k, cap: Some(idx), .. } => cv[*idx] = v(x, *ai) - v(x, *k),
+            Ce::Cq { a, b, c, idx, .. } => {
+                cv[*idx] = v(x, *a) - v(x, *b);
+                cv[*idx + 1] = c.eval(x, 0.0).0;
+            }
             _ => {}
         }
     }
@@ -203,6 +207,10 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                 cap_v[*idx + 1] = pol * (v(&x, *bi) - v(&x, *ci));
             }
             Ce::D { ai, k, cap: Some(idx), .. } => cap_v[*idx] = v(&x, *ai) - v(&x, *k),
+            Ce::Cq { a, b, c, idx, .. } => {
+                cap_v[*idx] = v(&x, *a) - v(&x, *b);
+                cap_v[*idx + 1] = c.eval(&x, 0.0).0;
+            }
             _ => {}
         }
     }
@@ -350,6 +358,13 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                     let (q_new, q_old) = (crate::dc::diode_q(dm, *nvt, vnew).0, crate::dc::diode_q(dm, *nvt, cap_v[*idx]).0);
                     cap_i[*idx] = kk / h * (q_new - q_old) - if trap { cap_i[*idx] } else { 0.0 };
                     cap_v[*idx] = vnew;
+                }
+                Ce::Cq { a, b, c, idx, .. } => {
+                    let kk = if trap { 2.0 } else { 1.0 };
+                    let q_new = c.eval(&att.x, t + h).0;
+                    cap_i[*idx] = kk / h * (q_new - cap_v[*idx + 1]) - if trap { cap_i[*idx] } else { 0.0 };
+                    cap_v[*idx] = v(&att.x, *a) - v(&att.x, *b);
+                    cap_v[*idx + 1] = q_new;
                 }
                 Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
                     let pol = if m.pnp { -1.0 } else { 1.0 };

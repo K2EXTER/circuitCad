@@ -99,3 +99,6 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 
 ## ダイオードの電流 I(D名)(2026-10-18)
 `spice_in.rs add_flat_subckt`: 式(B 素子など)が `I(D1)` を読むダイオードだけ、アノード側に 0V の電圧源(名前 `D1`)を直列に入れ、ダイオード本体は `D1.d` という名前にする(`current_refs` が本文中の `I(...)` を先に集める)。電流の向きはアノード→カソードが正。読まないダイオードは今まで通り。テストは `tests_bsource.rs the_current_of_a_diode_can_be_read`。
+
+## 電荷型コンデンサ C … Q=式(2026-10-18)
+`C1 a b Q=式`(式は `v(a,b)` などの電圧の関数。電荷 Q(v))を `Element::ChargeCap` → `Ce::Cq` にする(`spice_in.rs` の `'C'` の枝、展開は `spice_flat.rs` が式のノード名を置き換える)。電流は dQ/dt で、DC では開放。状態は `n_caps` を2つ使う(`idx`=両端の電圧=刻みの誤差見積り用、`idx+1`=電荷=状態)。過渡(`dc/mna.rs`)は `Ce::D` の接合容量と同じ電荷の差分(後退オイラー/台形)で、Q(x) を式の微分(`CExpr::eval` の勾配)で今の反復の点に線形化する。AC(`ac.rs`)は動作点での dQ/dx を `jω` 倍して行(a, b)に置く。ノイズなし。`IC=`(初期電圧)は未対応。テストは `tests_flat.rs` の `a_charge_type_capacitor…` `a_nonlinear_charge_capacitor…`。

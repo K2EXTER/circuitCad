@@ -279,6 +279,31 @@ impl Compiled {
                     m.g(*d, *s, gmin);
                     m.g(*g, *s, gmin);
                 }
+                Ce::Cq { a, b, c, idx, .. } => {
+                    // i = dQ/dt with Q(x) linearised around the iterate; open in DC
+                    if let Some(d) = &ctx.dynamic {
+                        let kk = if d.trap { 2.0 } else { 1.0 };
+                        let (q0, grads) = c.eval(x, ctx.t);
+                        let col = |var: &crate::expr::Var| match var {
+                            crate::expr::Var::Node(k) => *k - 1,
+                            crate::expr::Var::Unknown(i) => *i,
+                        };
+                        let value = |var: &crate::expr::Var| match var {
+                            crate::expr::Var::Node(k) => v(x, *k),
+                            crate::expr::Var::Unknown(i) => x[*i],
+                        };
+                        let rest: f64 = q0 - c.vars.iter().zip(&grads).map(|(var, g)| g * value(var)).sum::<f64>();
+                        for (var, g) in c.vars.iter().zip(&grads) {
+                            if *a != 0 {
+                                m.at(*a - 1, col(var), kk / d.h * g);
+                            }
+                            if *b != 0 {
+                                m.at(*b - 1, col(var), -(kk / d.h) * g);
+                            }
+                        }
+                        m.current(*a, *b, kk / d.h * (rest - d.cap_v[*idx + 1]) - if d.trap { d.cap_i[*idx] } else { 0.0 });
+                    }
+                }
                 Ce::B { p, n, voltage, br, c, .. } => {
                     // linearise f(x) around the present solution: f0 + sum g_k (x_k - x0_k)
                     let (f0, grads) = c.eval(x, if ctx.dynamic.is_some() { ctx.t } else { 0.0 });

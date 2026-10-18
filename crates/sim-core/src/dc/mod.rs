@@ -84,6 +84,8 @@ pub(crate) enum Ce {
     Seq { kind: crate::SeqKind, ins: Vec<usize>, q: usize, qb: usize, br_q: usize, br_qb: usize, idx: usize, lv: crate::SeqLevels },
     /// `br` is only meaningful for a voltage-type source.
     B { name: String, p: usize, n: usize, voltage: bool, br: usize, c: crate::expr::CExpr },
+    /// Charge-type capacitor: `c` is Q(x); slots `idx` (voltage) and `idx + 1` (charge) of the capacitor state.
+    Cq { name: String, a: usize, b: usize, c: crate::expr::CExpr, idx: usize },
 }
 
 /// (gmin, (step, trapezoidal) when dynamic)
@@ -171,7 +173,7 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
                 union(*b, *e);
             }
             Element::BSource { p, n, voltage: true, .. } => union(*p, *n),
-            Element::Capacitor { .. } | Element::ISource { .. } | Element::Vccs { .. } | Element::BSource { .. } => {}
+            Element::Capacitor { .. } | Element::ChargeCap { .. } | Element::ISource { .. } | Element::Vccs { .. } | Element::BSource { .. } => {}
         }
     }
     let g = find(&mut parent, 0);
@@ -245,7 +247,7 @@ pub fn dc_op(circuit: &Circuit) -> Result<DcResult, SimError> {
 /// Floating-node warnings are produced by the caller; this only needs a ground reference.
 pub(crate) fn has_ground(circuit: &Circuit) -> bool {
     circuit.elements.iter().any(|e| match e {
-        Element::Resistor { a, b, .. } | Element::Capacitor { a, b, .. } | Element::Inductor { a, b, .. } => *a == 0 || *b == 0,
+        Element::Resistor { a, b, .. } | Element::Capacitor { a, b, .. } | Element::ChargeCap { a, b, .. } | Element::Inductor { a, b, .. } => *a == 0 || *b == 0,
         Element::VSource { p, n, .. } => *p == 0 || *n == 0,
         Element::ISource { from, to, .. } => *from == 0 || *to == 0,
         Element::Diode { a, k, .. } => *a == 0 || *k == 0,
@@ -349,7 +351,7 @@ impl Compiled {
                     let vv = v(x, *a) - v(x, *b);
                     push(name, vv * g, vv, vec![], vv * vv * g);
                 }
-                Ce::C { name, a, b, idx, .. } => {
+                Ce::C { name, a, b, idx, .. } | Ce::Cq { name, a, b, idx, .. } => {
                     let (vv, i) = (v(x, *a) - v(x, *b), cap_i[*idx]);
                     push(name, i, vv, vec![], vv * i);
                 }
