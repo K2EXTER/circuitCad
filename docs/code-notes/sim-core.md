@@ -105,3 +105,8 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 
 ## LTspice の MODULATOR(2026-10-18)
 `A fm am - - - - out common MODULATOR mark= space=`(`spice_flat.rs modulator`)。出力は振幅 `V(am)`(ピンが接地なら 1V)の正弦波で、周波数は `space + (mark-space)*V(fm)`(Web 上の LTspice の説明と、公開モデル `ISO16750-2.lib`・`LM2678xx.lib` の使い方の両方に合う。ピン順の公式資料は確認できていない)。位相 = 周波数の積分を、1F のコンデンサ(`IC=0`)の電圧で持つ(電流源 `I=周波数`)ので、周波数が途中で変わっても位相は飛ばない。DC では位相が定まらないので過渡解析だけ意味がある。刻みは正弦波に合わせて縮まない(刻みは周期よりずっと小さく)。式に `sin`/`cos` を足した(`expr.rs`)。テストは `tests_flat.rs an_ltspice_modulator…`。
+
+## 一括確認の回路の改良とパラメータ式の波かっこ(2026-10-18)
+- `tests_vendor_bulk.rs build_bench`: 呼び出し側が与えるはずのパラメータ(`vcc1={vcc}` の `vcc` など)が無くて読めないとき、`guess_param`(電源 5、抵抗 1k、容量・時間 1n、他 1)で `.param` を足して読み直す(最大12回)。読めて解けた割合 77.9% → 79.6%。
+- 実際の不具合も見つかった: パラメータの式の中の `({vcc1}-0.5)*{speed1}` のような波かっこ(括弧と同じ意味でまとめるだけ)を読めなかった。`spice_flat.rs` の `eval_expr`/`substitute_params` が `{` `}` を `(` `)` として扱う。79.6% → 82.6%(3973/4812)。
+- 新しく読めて DC が収束しないもの: `TC4421`/`TC4422`(MOSFET ドライバ、NoConvergence)・`UCC3803`(発振回路)・`4316RMS_THAT`。

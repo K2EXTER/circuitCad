@@ -769,3 +769,10 @@ fn an_ltspice_modulator_makes_a_sine_with_the_frequency_set_by_the_fm_pin() {
     assert!((rising as i32 - 5).abs() <= 1, "{rising} cycles in 100 us at 50 kHz");
     assert!((hi - 2.0).abs() < 0.05, "amplitude {hi}");
 }
+
+#[test]
+fn braces_inside_a_param_expression_only_group() {
+    let t = ".subckt T a b gnd vcc1=5 sp=2\n.param td=1e3*({vcc1}-1)*{sp}\nR1 a b {td}\nR2 b gnd 8k\n.ends T";
+    // td = 1e3 * 4 * 2 = 8k: a divider of 8k / 8k
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
+}

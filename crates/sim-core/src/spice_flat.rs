@@ -142,7 +142,12 @@ fn eval_expr(s: &str, env: &Env) -> Result<f64, String> {
                 return Err(format!("パラメータ「{id}」の値が分かりません。.param で定義されているか確かめてください"));
             }
         } else {
-            out.push(c);
+            // braces inside an expression (`({vcc1}-0.5)*{speed1}`) only group, like parentheses
+            out.push(match c {
+                '{' => '(',
+                '}' => ')',
+                other => other,
+            });
             i += 1;
         }
     }
@@ -203,7 +208,12 @@ fn substitute_params(s: &str, env: &Env) -> String {
                 out.push_str(&id);
             }
         } else {
-            out.push(c);
+            // braces inside an expression (`({vcc1}-0.5)*{speed1}`) only group, like parentheses
+            out.push(match c {
+                '{' => '(',
+                '}' => ')',
+                other => other,
+            });
             i += 1;
         }
     }

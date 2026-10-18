@@ -68,14 +68,47 @@ enum Outcome {
     Tran(String),
 }
 
+/// A plausible value for a parameter the caller would give: supplies 5, resistances 1k, capacitances 1n, times 1n, else 1.
+fn guess_param(name: &str) -> &'static str {
+    let n = name.to_ascii_lowercase();
+    if n.starts_with('v') && n != "value" {
+        "5"
+    } else if n.starts_with('r') || n.starts_with("dcr") || n.starts_with("zin") || n.starts_with("rf") {
+        "1k"
+    } else if n.starts_with('c') {
+        "1n"
+    } else if n.starts_with('t') {
+        "1n"
+    } else {
+        "1"
+    }
+}
+
 /// The generic bench of `try_one`: the subcircuit wired up by its pin names.
 fn build_bench(text: &str, name: &str, ports: &[String]) -> Result<Circuit, String> {
-    let mut c = Circuit::new();
-    let nodes: Vec<usize> = ports.iter().map(|p| if role(p) == Role::Ground { 0 } else { c.node(&format!("p_{p}")) }).collect();
-    if let Err(e) = crate::spice_in::add_subckt_instance(&mut c, "U1", name, text, &nodes) {
-        let e: String = e.chars().take(90).collect();
-        return Err(e);
-    }
+    // a parameter the caller is meant to define (`vcc1={vcc}` with `.param vcc=5` in the top-level netlist): when the read
+    // fails for want of one, define it with a plausible value and try again
+    let mut text = text.to_string();
+    let mut tries = 0;
+    let (mut c, nodes) = loop {
+        let mut c = Circuit::new();
+        let nodes: Vec<usize> = ports.iter().map(|p| if role(p) == Role::Ground { 0 } else { c.node(&format!("p_{p}")) }).collect();
+        match crate::spice_in::add_subckt_instance(&mut c, "U1", name, &text, &nodes) {
+            Ok(()) => break (c, nodes),
+            Err(e) => {
+                let missing = e.split_once("パラメータ「").and_then(|(_, r)| r.split_once('」')).map(|(n, _)| n.to_string());
+                tries += 1;
+                match missing {
+                    Some(n) if tries <= 12 => text = format!(".param {n}={}
+{text}", guess_param(&n)),
+                    _ => {
+                        let e: String = e.chars().take(90).collect();
+                        return Err(e);
+                    }
+                }
+            }
+        }
+    };
     for (i, p) in ports.iter().enumerate() {
         let n = nodes[i];
         if n == 0 {
