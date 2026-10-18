@@ -47,6 +47,8 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 ce.push(Ce::E { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gain: *gain, br: br_base + n_br });
                 n_br += 1;
             }
+            // coupled inductors are compiled after all the inductors are known (below)
+            Element::Mutual { .. } => {}
             Element::Vccs { name, p, n, cp, cn, gm } => {
                 ce.push(Ce::G { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gm: *gm })
             }
@@ -96,6 +98,18 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
                 });
                 ce.push(Ce::Q { name: name.clone(), c: *c, b: *b, bi, e: *e, ci, ei, m: model.clone(), slot: n_slots, cap });
                 n_slots += 2;
+            }
+        }
+    }
+    // coupled inductors: the mutual inductance is k * sqrt(L1 L2) between the two branches
+    for e in &c.elements {
+        if let Element::Mutual { l1, l2, k, .. } = e {
+            let find = |nm: &str| ce.iter().find_map(|x| match x {
+                Ce::L { name, br, idx, l, .. } if name.eq_ignore_ascii_case(nm) => Some((*br, *idx, *l)),
+                _ => None,
+            });
+            if let (Some((br1, idx1, la)), Some((br2, idx2, lb))) = (find(l1), find(l2)) {
+                ce.push(Ce::K { br1, br2, idx1, idx2, m: k * (la * lb).sqrt() });
             }
         }
     }

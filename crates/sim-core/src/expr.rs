@@ -23,6 +23,8 @@ pub enum Op {
     Gt,
     Le,
     Ge,
+    Eq,
+    Ne,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,6 +36,7 @@ pub enum Func {
     Sqrt,
     Exp,
     Ln,
+    Log10,
     Pow,
     Tanh,
     If,
@@ -50,6 +53,7 @@ impl Func {
             "sqrt" => (Func::Sqrt, 1..=1),
             "exp" => (Func::Exp, 1..=1),
             "ln" | "log" => (Func::Ln, 1..=1),
+            "log10" => (Func::Log10, 1..=1),
             "pow" | "pwr" => (Func::Pow, 2..=2),
             "tanh" => (Func::Tanh, 1..=1),
             "if" => (Func::If, 3..=3),
@@ -149,6 +153,8 @@ impl Parser<'_, '_> {
         let a = self.sum()?;
         self.ws();
         let op = match (self.s.get(self.pos), self.s.get(self.pos + 1)) {
+            (Some(b'='), Some(b'=')) => Some((Op::Eq, 2)),
+            (Some(b'!'), Some(b'=')) => Some((Op::Ne, 2)),
             (Some(b'<'), Some(b'=')) => Some((Op::Le, 2)),
             (Some(b'>'), Some(b'=')) => Some((Op::Ge, 2)),
             (Some(b'<'), _) => Some((Op::Lt, 1)),
@@ -575,6 +581,8 @@ impl CExpr {
                     Op::Gt => D::konst((a.v > b.v) as u8 as f64, n),
                     Op::Le => D::konst((a.v <= b.v) as u8 as f64, n),
                     Op::Ge => D::konst((a.v >= b.v) as u8 as f64, n),
+                    Op::Eq => D::konst((a.v == b.v) as u8 as f64, n),
+                    Op::Ne => D::konst((a.v != b.v) as u8 as f64, n),
                 }
             }
             Tree::Call(f, args) => {
@@ -607,6 +615,10 @@ impl CExpr {
                     Func::Ln => {
                         let v = a[0].v.max(1e-30);
                         a[0].map(v.ln(), if a[0].v > 1e-30 { 1.0 / v } else { 0.0 })
+                    }
+                    Func::Log10 => {
+                        let v = a[0].v.max(1e-30);
+                        a[0].map(v.log10(), if a[0].v > 1e-30 { 1.0 / (v * std::f64::consts::LN_10) } else { 0.0 })
                     }
                     Func::Pow => pow(&a[0], &a[1]),
                     Func::Tanh => {

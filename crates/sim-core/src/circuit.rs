@@ -184,6 +184,8 @@ pub enum Element {
     /// Behavioural source. `voltage`: v(p) - v(n) = expr; otherwise the current expr flows from `p`
     /// through the source to `n`.
     BSource { name: String, p: usize, n: usize, voltage: bool, expr: Expr },
+    /// Coupling of two inductors (SPICE `K`): the mutual inductance is `k * sqrt(L1 * L2)`. No effect at DC.
+    Mutual { name: String, l1: String, l2: String, k: f64 },
 }
 
 impl Element {
@@ -204,7 +206,8 @@ impl Element {
             | Element::Vcvs { name, .. }
             | Element::Vccs { name, .. }
             | Element::Switch { name, .. }
-            | Element::BSource { name, .. } => name,
+            | Element::BSource { name, .. }
+            | Element::Mutual { name, .. } => name,
         }
     }
 }

@@ -164,6 +164,16 @@ impl Compiled {
                         }
                     }
                 }
+                Ce::K { br1, br2, idx1, idx2, m: mutual, .. } => {
+                    // v1 = L1 di1/dt + M di2/dt (and the other way round): the companion terms of the other inductor's current
+                    if let Some(d) = &ctx.dynamic {
+                        let km = if d.trap { 2.0 * mutual / d.h } else { mutual / d.h };
+                        m.at(*br1, *br2, -km);
+                        m.b[*br1] += -km * d.ind_i[*idx2];
+                        m.at(*br2, *br1, -km);
+                        m.b[*br2] += -km * d.ind_i[*idx1];
+                    }
+                }
                 Ce::I { from, to, wave, .. } => m.current(*from, *to, ctx.source(wave) * scale),
                 Ce::E { p, n, cp, cn, gain, br, .. } => {
                     m.branch(*p, *n, *br);

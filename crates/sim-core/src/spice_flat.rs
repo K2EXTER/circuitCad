@@ -79,11 +79,9 @@ fn assignments(tokens: &[String]) -> Result<Vec<(String, String)>, String> {
     tokens
         .iter()
         .filter(|t| !t.eq_ignore_ascii_case("params:"))
-        .map(|t| {
-            t.split_once('=')
-                .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
-                .ok_or_else(|| format!("「{t}」は 名前=値 の形ではありません"))
-        })
+        // a bare word is a flag (`SENS`, `noiseless`); the commas some vendors put between `name=value` pairs are dropped
+        .filter_map(|t| t.split_once('=').map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().trim_end_matches(',').trim().to_string())))
+        .map(Ok)
         .collect()
 }
 
@@ -334,16 +332,13 @@ impl Ctx<'_> {
             return Err("サブサーキットの入れ子が深すぎます (自分自身を呼んでいませんか)".into());
         }
         let outer = env.clone();
-        for (k, v) in &def.defaults {
-            let val = eval_expr(v, &env)?;
-            env.insert(k.clone(), val);
-        }
         for (k, v) in call_args {
             let val = eval_expr(v, &outer)?;
             env.insert(k.clone(), val);
         }
-        // the subcircuit's own .param lines, in any order (a name may be used before the line that defines it)
-        let mut pending: Vec<(String, String)> = vec![];
+        // the header defaults and the subcircuit's own .param lines, in any order (a name may be used before the line that
+        // defines it, and vendors write `vcc1={vcc}` in the header with `.param vcc=5` in the body)
+        let mut pending: Vec<(String, String)> = def.defaults.iter().filter(|(k, _)| !call_args.iter().any(|(a, _)| a == k)).cloned().collect();
         for raw in def.body.iter().filter(|l| l.to_ascii_lowercase().starts_with(".param")) {
             for (k, v) in assignments(&split_top(&raw[6..]))? {
                 if !call_args.iter().any(|(a, _)| *a == k) {
@@ -422,6 +417,12 @@ impl Ctx<'_> {
                     continue;
                 }
             }
+            if letter == 'K' && t.len() >= 4 {
+                // the inductors it couples get the same instance path as the inductors themselves
+                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                out.push(format!("{head}{suffix} {}{suffix} {}{suffix} {}", t[1], t[2], t[3..].join(" ")));
+                continue;
+            }
             if matches!(letter, 'E' | 'G' | 'F' | 'H') {
                 out.push(self.controlled(raw, &env, &line, &t, letter, path, ports, &prefix)?);
                 continue;
@@ -453,7 +454,7 @@ impl Ctx<'_> {
             if letter == 'B' {
                 let rest = t[n + 1..].join(" ");
                 u.truncate(n + 1);
-                u.push(rename_expr(&rest, ports, &prefix, path));
+                u.push(rename_expr(&substitute_params(&rest, &env), ports, &prefix, path));
             }
             out.push(u.join(" "));
         }
@@ -553,6 +554,11 @@ impl Ctx<'_> {
                     }
                 }
             }
+            if pts.is_empty() && !rest.contains('(') {
+                // the points without parentheses: `x y x y ...` (one pair per continuation line)
+                let nums: Vec<f64> = rest.split([',', ' ']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+                pts = nums.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+            }
             if pts.len() < 2 {
                 return Err(format!("{head}: TABLE の点 (x,y) が 2 つ以上ありません"));
             }
@@ -609,12 +615,36 @@ impl Ctx<'_> {
             let x = &xs[0];
             let terms: Vec<String> = coeffs.iter().enumerate().map(|(k, c)| format!("({c:e})*{}", if k == 0 { "1".to_string() } else { vec![x.as_str(); k].join("*") })).collect();
             terms.join("+")
-        } else if coeffs.len() == count + 1 {
-            let mut terms = vec![format!("({:e})", coeffs[0])];
-            terms.extend(xs.iter().zip(&coeffs[1..]).map(|(x, c)| format!("({c:e})*{x}")));
-            terms.join("+")
         } else {
-            return Err(format!("{head}: POLY({count}) の高次の項 (かけ算の項) は未対応です。1 次の係数だけの POLY か、1 つの制御の多項式にしてください"));
+            // c0 + c1 x1 + .. + cn xn + the second-order terms x1x1, x1x2, .. x2x2 ... (monomials of one degree in
+            // non-decreasing order of the variable numbers), then the third order, and so on
+            let mut terms = vec![format!("({:e})", coeffs[0])];
+            let mut k = 1;
+            let mut degree = 1;
+            while k < coeffs.len() && degree <= 6 {
+                let mut tuple = vec![0usize; degree];
+                loop {
+                    if k >= coeffs.len() {
+                        break;
+                    }
+                    terms.push(format!("({:e})*{}", coeffs[k], tuple.iter().map(|i| xs[*i].as_str()).collect::<Vec<_>>().join("*")));
+                    k += 1;
+                    // next non-decreasing tuple
+                    let mut pos = degree;
+                    while pos > 0 && tuple[pos - 1] == count - 1 {
+                        pos -= 1;
+                    }
+                    if pos == 0 {
+                        break;
+                    }
+                    let v = tuple[pos - 1] + 1;
+                    for t in tuple.iter_mut().skip(pos - 1) {
+                        *t = v;
+                    }
+                }
+                degree += 1;
+            }
+            terms.join("+")
         };
         Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }))
     }

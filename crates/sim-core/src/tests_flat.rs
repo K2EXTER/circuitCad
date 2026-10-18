@@ -419,3 +419,96 @@ fn rpar_and_cpar_on_a_b_source_become_a_resistor_and_a_capacitor() {
     let t = ".subckt T a b gnd\nB1 gnd b I=1m*V(a) Rpar=2k Cpar=1p\n.ends T";
     assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.0).abs() < 1e-6);
 }
+
+#[test]
+fn blanks_around_a_parameter_equals_sign_are_squeezed_but_comparisons_stay() {
+    use crate::spice_in::logical_lines;
+    let l = logical_lines(".MODEL DMOS NMOS ( KP= {MOS_KP}  VTO = 3  W =1u)\nB1 o 0 V = IF(V(a) >= 1 & V(b) == 2, 1, 0)");
+    assert_eq!(l[0], ".MODEL DMOS NMOS ( KP={MOS_KP} VTO=3 W=1u)");
+    assert_eq!(l[1], "B1 o 0 V=IF(V(a) >= 1 & V(b) == 2, 1, 0)");
+}
+
+/// A transformer from two coupled inductors (`K`): the voltage ratio follows the turns ratio sqrt(L2/L1).
+#[test]
+fn coupled_inductors_make_a_transformer_in_ac_and_in_the_time_domain() {
+    let t = ".subckt TR a b gnd
+L1 a gnd 1m
+L2 b gnd 4m
+K1 L1 L2 0.999
+.ends TR";
+    let build = |wave: Waveform| {
+        let mut c = Circuit::new();
+        let (vin, a, b) = (c.node("vin"), c.node("a"), c.node("b"));
+        c.add(Element::VSource { name: "V1".into(), p: vin, n: 0, wave, ac: Some((1.0, 0.0)) });
+        c.add(Element::Resistor { name: "Rs".into(), a: vin, b: a, r: 1.0 });
+        add_subckt_instance(&mut c, "T1", "TR", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
+        c.add(Element::Resistor { name: "Rl".into(), a: b, b: 0, r: 100e3 });
+        c
+    };
+    // AC at 100 kHz (the inductances are far above the source resistance): ratio 2
+    let ac = crate::ac_analysis(&build(Waveform::Dc(0.0)), &crate::AcSettings { fstart: 1e5, fstop: 2e5, sweep: crate::AcSweep::Linear(2) }).unwrap_or_else(|e| panic!("{e:?}"));
+    let gain = ac.signals.iter().find(|s| s.name == "V(b)").map(|s| s.mag()[0]).unwrap();
+    assert!((gain - 2.0).abs() < 0.05, "AC gain {gain}");
+    // transient: a 1 V, 100 kHz sine comes out about 2 V in amplitude
+    let sine = Waveform::Sin { vo: 0.0, va: 1.0, freq: 1e5, td: 0.0, theta: 0.0, phase: 0.0 };
+    let r = transient(&build(sine), &TranSettings { tstop: 60e-6, tstep: 0.1e-6, uic: false }).unwrap();
+    let out = r.signal("V(b)").unwrap();
+    let late = &out.values[out.values.len() / 2..];
+    let peak = late.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    assert!((peak - 2.0).abs() < 0.15, "transient peak {peak}");
+}
+
+/// `POLY(2)` with second-order terms: E = 1 + 2 x + 3 y + 4 x^2 + 5 x y + 6 y^2.
+#[test]
+fn poly_with_product_terms_follows_the_spice_term_order() {
+    let t = ".subckt T x y out gnd
+E1 out gnd POLY(2) x gnd y gnd 1 2 3 4 5 6
+.ends T";
+    let mut c = Circuit::new();
+    let (x, y, out) = (c.node("x"), c.node("y"), c.node("out"));
+    c.add(Element::vdc("Vx", x, 0, 2.0));
+    c.add(Element::vdc("Vy", y, 0, 3.0));
+    add_subckt_instance(&mut c, "U1", "T", t, &[x, y, out, 0]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Rl".into(), a: out, b: 0, r: 1e3 });
+    let r = dc_op(&c).unwrap();
+    // 1 + 4 + 9 + 16 + 30 + 54 = 114
+    assert!((r.voltage("out").unwrap() - 114.0).abs() < 1e-6, "{}", r.voltage("out").unwrap());
+}
+
+/// Vendor-file habits that used to stop the whole read: one unreadable `.model` card among many, `.params`, blanks around
+/// `=`, `DC 0 PULSE(..)`, a value-less probe source, `POLY 2` without parentheses, `TABLE` points without parentheses and a
+/// comma after a header parameter.
+#[test]
+fn vendor_file_habits_are_read() {
+    let t = ".param unused=1
+.model BAD D(IS=)
+.model DREV D(IS=1e-14 RS=1)
+.subckt T a b gnd params: gain=2, off=0.5,
+.params k=3
+Vsense a n 
+Vp p 0 DC 0 PULSE(0 1 0 1n 1n 1m 2m)
+R1 n gnd 1k
+D1 b gnd DREV
+E1 b2 gnd POLY 1 n gnd 0 {gain}
+E2 b3 gnd TABLE {V(n)}
++ 0 0
++ 1 10
+R2 b2 gnd 1k
+R3 b3 gnd 1k
+R4 b gnd 1k
+.ends T";
+    let mut c = Circuit::new();
+    let (a, b) = (c.node("a"), c.node("b"));
+    c.add(Element::vdc("V1", a, 0, 1.0));
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let r = dc_op(&c).unwrap();
+    // the probe is 0 V, so n follows a; E1 = gain * V(n) = 2; E2 = 10 * V(n)
+    assert!((r.voltage("U1.b2").unwrap() - 2.0).abs() < 1e-6, "{:?}", r.voltage("U1.b2"));
+    assert!((r.voltage("U1.b3").unwrap() - 10.0).abs() < 1e-6, "{:?}", r.voltage("U1.b3"));
+    // an element that does use the unreadable card says so instead of "not found"
+    let bad = ".model BAD D(IS=)\n.subckt X a gnd\nD1 a gnd BAD\n.ends X";
+    let mut c2 = Circuit::new();
+    let n = c2.node("n");
+    let e = add_subckt_instance(&mut c2, "U1", "X", bad, &[n, 0]).unwrap_err();
+    assert!(e.contains("読めません"), "{e}");
+}

@@ -270,6 +270,10 @@ pub fn ac_analysis(circuit: &Circuit, s: &AcSettings) -> Result<AcResult, SimErr
                     add(&mut a, *na, *nb, -y);
                     add(&mut a, *nb, *na, -y);
                 }
+                Ce::K { br1, br2, m: mutual, .. } => {
+                    a[*br1 * n + *br2] = a[*br1 * n + *br2] - jw_c(w) * C64::new(*mutual, 0.0);
+                    a[*br2 * n + *br1] = a[*br2 * n + *br1] - jw_c(w) * C64::new(*mutual, 0.0);
+                }
                 Ce::L { l, br, i0, .. } => {
                     // a saturating inductor has less inductance at the operating current
                     let l = if *i0 > 0.0 { l / (1.0 + (op.x[*br] / i0).powi(2)) } else { *l };

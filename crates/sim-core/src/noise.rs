@@ -189,7 +189,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 let g = m.eval(v(&op.x, *cp) - v(&op.x, *cn)).0;
                 srcs.push(Src { name: name.clone(), p: *a, n: *b, s: kt4 * g });
             }
-            Ce::C { .. } | Ce::L { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } | Ce::B { .. } => {}
+            Ce::C { .. } | Ce::L { .. } | Ce::K { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } | Ce::B { .. } => {}
         }
     }
 
@@ -225,6 +225,10 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 }
                 Ce::L { l, br, .. } => {
                     a[*br * n + *br] = a[*br * n + *br] - C64::new(0.0, w * l);
+                }
+                Ce::K { br1, br2, m: mutual, .. } => {
+                    a[*br1 * n + *br2] = a[*br1 * n + *br2] - C64::new(0.0, w * mutual);
+                    a[*br2 * n + *br1] = a[*br2 * n + *br1] - C64::new(0.0, w * mutual);
                 }
                 Ce::D { ai, k, nvt, dm, slot, cap: Some(_), .. } => {
                     let y = C64::new(0.0, w * crate::dc::diode_q(dm, *nvt, op.vj[*slot]).1);

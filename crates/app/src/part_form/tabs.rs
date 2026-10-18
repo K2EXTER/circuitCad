@@ -177,12 +177,12 @@ impl PartForm {
                 if ui.button("SPICEファイルを読む…").on_hover_text("メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します").clicked()
                     && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
                 {
-                    match std::fs::read_to_string(&p) {
+                    match std::fs::read(&p).map(|b| sim_core::decode_spice_text(&b)) {
                         Ok(t) => {
                             self.sim_text = t;
                             autofill = true;
                         }
-                        Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。文字コードが UTF-8 でないときは、テキストエディタで開いて貼り付けてください"))),
+                        Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。読めないときは、テキストエディタで開いて貼り付けてください"))),
                     }
                 }
             });

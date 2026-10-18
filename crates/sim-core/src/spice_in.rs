@@ -15,6 +15,15 @@ pub enum Model {
     Switch(SwitchModel),
 }
 
+/// The text of a SPICE file: UTF-8 when it is, otherwise Latin-1 / Windows-1252 (vendor files write the micro sign and
+/// the ohm sign as single bytes, which would turn `10µ` into an unreadable number).
+pub fn decode_spice_text(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(s) => s.to_string(),
+        Err(_) => bytes.iter().map(|&b| if b == 0xB5 { 'u' } else { b as char }).collect(),
+    }
+}
+
 /// Join continuation lines (`+`), drop comments and blank lines.
 pub(crate) fn logical_lines(text: &str) -> Vec<String> {
     let mut out: Vec<String> = vec![];
@@ -29,7 +38,77 @@ pub(crate) fn logical_lines(text: &str) -> Vec<String> {
                 last.push_str(rest.trim());
                 continue;
             }
-        out.push(line.to_string());
+        // `.params` is accepted by LTspice as `.param`
+        let line = match line.get(..8) {
+            Some(h) if h.eq_ignore_ascii_case(".params ") => format!(".param {}", &line[8..]),
+            _ => line.to_string(),
+        };
+        out.push(squash_equals(&space_before_paren(&line)));
+    }
+    out
+}
+
+/// `POLY (2)` and `TABLE (` are written with a blank before the parenthesis by some vendors.
+fn space_before_paren(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let low = line.to_ascii_lowercase();
+    let mut i = 0;
+    while i < line.len() {
+        let rest = &low[i..];
+        // `POLY 3 a b ...` (no parentheses): the count is the number after the word
+        if rest.starts_with("poly") && rest[4..].starts_with(char::is_whitespace) && !line[..i].ends_with(|c: char| c.is_ascii_alphanumeric() || c == '_') {
+            let after = rest[4..].trim_start();
+            let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !digits.is_empty() && after[digits.len()..].starts_with(char::is_whitespace) {
+                out.push_str(&format!("{}({digits})", &line[i..i + 4]));
+                i += 4 + (rest[4..].len() - after.len()) + digits.len();
+                continue;
+            }
+        }
+        let word = ["poly", "table"].iter().find(|w| rest.starts_with(**w) && rest[w.len()..].starts_with(char::is_whitespace));
+        match word {
+            Some(w) if rest[w.len()..].trim_start().starts_with('(') && !line[..i].ends_with(|c: char| c.is_ascii_alphanumeric() || c == '_') => {
+                out.push_str(&line[i..i + w.len()]);
+                i += w.len() + (rest[w.len()..].len() - rest[w.len()..].trim_start().len());
+            }
+            _ => {
+                let ch = line[i..].chars().next().unwrap();
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+    }
+    out
+}
+
+/// `KP= {X}` and `W = 1u` become `KP={X}` and `W=1u` (vendors put blanks around the `=` of a parameter); comparison
+/// operators (`==`, `<=`, `>=`, `!=`) are left alone.
+fn squash_equals(line: &str) -> String {
+    let ch: Vec<char> = line.chars().collect();
+    let mut out = String::with_capacity(line.len());
+    let mut i = 0;
+    while i < ch.len() {
+        let c = ch[i];
+        if c.is_whitespace() {
+            let mut j = i;
+            while j < ch.len() && ch[j].is_whitespace() {
+                j += 1;
+            }
+            let single_eq = |k: usize| ch.get(k) == Some(&'=') && ch.get(k + 1) != Some(&'=') && !matches!(out.chars().last(), Some('<' | '>' | '!' | '='));
+            if !single_eq(j) {
+                out.push(' ');
+            }
+            i = j;
+        } else if c == '=' && ch.get(i + 1) != Some(&'=') && !matches!(out.chars().last(), Some('<' | '>' | '!' | '=')) {
+            out.push('=');
+            i += 1;
+            while i < ch.len() && ch[i].is_whitespace() {
+                i += 1;
+            }
+        } else {
+            out.push(c);
+            i += 1;
+        }
     }
     out
 }
@@ -147,6 +226,22 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 jfet: true,
             }),
         )),
+        // a power MOSFET (ngspice / LTspice VDMOS): the square law with the whole-device Kp; the series resistances and the
+        // body diode of the card are not modelled
+        "VDMOS" => Ok((
+            name,
+            Model::Mos(MosModel {
+                kp: get("KP", 1.0),
+                vto: get("VTO", 0.0),
+                lambda: get("LAMBDA", 0.0),
+                pmos: plist.to_ascii_lowercase().split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "pchan"),
+                cgs: get("CGS", 0.0),
+                cgd: p.get("CGDMAX").or(p.get("CGD")).copied().unwrap_or(0.0),
+                cgso: 0.0,
+                cgdo: 0.0,
+                jfet: false,
+            }),
+        )),
         "SW" => {
             let d = SwitchModel::default();
             Ok((name, Model::Switch(SwitchModel { ron: get("RON", d.ron), roff: get("ROFF", d.roff), vt: get("VT", d.vt), vw: get("VW", d.vw) })))
@@ -180,6 +275,28 @@ pub fn parse_models(text: &str) -> Result<HashMap<String, Model>, String> {
         }
     }
     Ok(m)
+}
+
+/// Like `parse_models`, but a `.model` card that cannot be read does not stop the others: a library file holds
+/// dozens of unrelated cards, and only the ones an element uses matter. The unreadable ones come back with their error.
+pub fn parse_models_lenient(text: &str) -> (HashMap<String, Model>, HashMap<String, String>) {
+    let (mut m, mut bad) = (HashMap::new(), HashMap::new());
+    for l in logical_lines(text) {
+        if l.to_ascii_lowercase().starts_with(".model") {
+            match parse_model(&l) {
+                Ok((n, model)) => {
+                    m.insert(n.to_ascii_lowercase(), model);
+                }
+                Err(e) if e.contains("未対応のモデル種別") => {}
+                Err(e) => {
+                    if let Some(n) = l.split_whitespace().nth(1) {
+                        bad.insert(n.to_ascii_lowercase(), e);
+                    }
+                }
+            }
+        }
+    }
+    (m, bad)
 }
 
 /// The area factor of a diode / transistor line: `AREA=x` or a bare number after the model name (default 1).
@@ -287,7 +404,7 @@ pub fn add_subckt_instance(c: &mut Circuit, inst: &str, sub_name: &str, text: &s
 
 fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, nodes: &[usize]) -> Result<(), String> {
     let lines = logical_lines(text);
-    let models = parse_models(text)?;
+    let (models, bad_models) = parse_models_lenient(text);
     let start = lines
         .iter()
         .position(|l| {
@@ -373,10 +490,23 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     _ => Element::Inductor { name, a, b, l: x },
                 });
             }
-            'V' | 'I' => {
+            'K' => {
+                // K name L1 L2 k  (two coupled inductors; the names are those of this subcircuit)
                 need(4)?;
+                if t.len() > 4 && parse_value(t[4]).is_none() && !t[4].contains('=') {
+                    return Err(format!("{name}: 3 つ以上のインダクタの結合 (K) は未対応です。2 つずつの K に分けてください"));
+                }
+                let k = val(t[3])?;
+                if !(k > 0.0 && k <= 1.0) {
+                    return Err(format!("{name}: 結合係数 {k} は 0 より大きく 1 以下にしてください"));
+                }
+                c.add(Element::Mutual { name, l1: format!("{inst}.{}", t[1]), l2: format!("{inst}.{}", t[2]), k });
+            }
+            'V' | 'I' => {
+                need(3)?;
                 let (p, n) = (local(c, t[1]), local(c, t[2]));
-                let src = parse_source_full(&t[3..].join(" ")).map_err(|e| format!("{name}: {e}"))?;
+                // `Vsense a b` with no value is a 0 V source (a current probe)
+                let src = parse_source_full(&if t.len() > 3 { t[3..].join(" ") } else { "0".to_string() }).map_err(|e| format!("{name}: {e}"))?;
                 c.add(if head.to_ascii_uppercase().starts_with('V') {
                     Element::VSource { name, p, n, wave: src.wave, ac: src.ac }
                 } else {
@@ -404,7 +534,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         m.cj0 *= area;
                         c.add(Element::Diode { name, a, k, model: m })
                     }
-                    _ => return Err(format!("{name}: ダイオードモデル {} が見つかりません", t[3])),
+                    _ => return Err(bad_models.get(&t[3].to_ascii_lowercase()).map_or_else(|| format!("{name}: ダイオードモデル {} が見つかりません", t[3]), |e| format!("{name}: モデル {} を読めません: {e}", t[3]))),
                 }
             }
             'Q' => {
@@ -420,7 +550,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         m.rb /= area;
                         c.add(Element::Bjt { name, c: cc, b, e, model: m })
                     }
-                    _ => return Err(format!("{name}: トランジスタモデル {} が見つかりません (JFET や VDMOS など、未対応の種類のモデルかもしれません)", t[mi])),
+                    _ => return Err(bad_models.get(&t[mi].to_ascii_lowercase()).map_or_else(|| format!("{name}: トランジスタモデル {} が見つかりません (JFET や VDMOS など、未対応の種類のモデルかもしれません)", t[mi]), |e| format!("{name}: モデル {} を読めません: {e}", t[mi]))),
                 }
             }
             'J' => {
@@ -432,24 +562,26 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         m.kp *= area_of(&t[5..]);
                         c.add_mosfet(&name, d, g, s, m);
                     }
-                    _ => return Err(format!("{name}: JFET モデル {} が見つかりません (NJF / PJF の .model が要ります)", t[4])),
+                    _ => return Err(bad_models.get(&t[4].to_ascii_lowercase()).map_or_else(|| format!("{name}: JFET モデル {} が見つかりません (NJF / PJF の .model が要ります)", t[4]), |e| format!("{name}: モデル {} を読めません: {e}", t[4]))),
                 }
             }
             'M' => {
-                need(6)?;
+                need(5)?;
                 let (d, g, s) = (local(c, t[1]), local(c, t[2]), local(c, t[3]));
-                match models.get(&t[5].to_ascii_lowercase()) {
+                // D G S model (no bulk: power MOSFET cards) or D G S B model
+                let mi = if models.contains_key(&t[4].to_ascii_lowercase()) || bad_models.contains_key(&t[4].to_ascii_lowercase()) || t.len() < 6 { 4 } else { 5 };
+                match models.get(&t[mi].to_ascii_lowercase()) {
                     Some(Model::Mos(m)) => {
                         // level-1 transconductance is KP * W / L (and M parallel devices); W and L default to 100 um
                         let mut m = m.clone();
-                        let (w, l, mult) = mos_dims(&t[6..]);
+                        let (w, l, mult) = mos_dims(&t[(mi + 1).min(t.len())..]);
                         m.kp *= mult * w / l;
                         // the overlap capacitances per metre of width become fixed gate capacitances
                         m.cgs = (m.cgs + m.cgso * w) * mult;
                         m.cgd = (m.cgd + m.cgdo * w) * mult;
                         c.add_mosfet(&name, d, g, s, m);
                     }
-                    _ => return Err(format!("{name}: MOSFETモデル {} が見つかりません", t[5])),
+                    _ => return Err(bad_models.get(&t[mi].to_ascii_lowercase()).map_or_else(|| format!("{name}: MOSFETモデル {} が見つかりません", t[mi]), |e| format!("{name}: モデル {} を読めません: {e}", t[mi]))),
                 }
             }
             'S' => {
@@ -457,7 +589,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 let (a, b, cp, cn) = (local(c, t[1]), local(c, t[2]), local(c, t[3]), local(c, t[4]));
                 match models.get(&t[5].to_ascii_lowercase()) {
                     Some(Model::Switch(m)) => c.add(Element::Switch { name, a, b, cp, cn, model: m.clone() }),
-                    _ => return Err(format!("{name}: スイッチモデル {} が見つかりません", t[5])),
+                    _ => return Err(bad_models.get(&t[5].to_ascii_lowercase()).map_or_else(|| format!("{name}: スイッチモデル {} が見つかりません", t[5]), |e| format!("{name}: モデル {} を読めません: {e}", t[5]))),
                 }
             }
             'B' => {
@@ -502,6 +634,13 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
 fn check_current_refs(c: &Circuit, inst: &str) -> Result<(), String> {
     let prefix = format!("{inst}.");
     for e in c.elements.iter().filter(|e| e.name().starts_with(&prefix)) {
+        if let Element::Mutual { name, l1, l2, .. } = e {
+            for l in [l1, l2] {
+                if !c.elements.iter().any(|x| matches!(x, Element::Inductor { name, .. } if name.eq_ignore_ascii_case(l))) {
+                    return Err(format!("{name}: 結合するインダクタ {} がありません (K は同じ .subckt の中の L を 2 つ指します)", l.strip_prefix(&prefix).unwrap_or(l)));
+                }
+            }
+        }
         let Element::BSource { name, expr, .. } = e else { continue };
         let mut refs = vec![];
         expr.branches(&mut refs);

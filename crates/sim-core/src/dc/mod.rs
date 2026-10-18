@@ -70,6 +70,8 @@ pub(crate) enum Ce {
     C { name: String, a: usize, b: usize, c: f64, idx: usize },
     V { name: String, p: usize, n: usize, wave: Waveform, ac: Option<(f64, f64)>, br: usize },
     L { name: String, p: usize, n: usize, l: f64, br: usize, idx: usize, i0: f64 },
+    /// Mutual inductance `m` (H) between the inductors with branches `br1` / `br2` and history slots `idx1` / `idx2`.
+    K { br1: usize, br2: usize, idx1: usize, idx2: usize, m: f64 },
     I { name: String, from: usize, to: usize, wave: Waveform, ac: Option<(f64, f64)> },
     E { name: String, p: usize, n: usize, cp: usize, cn: usize, gain: f64, br: usize },
     G { name: String, p: usize, n: usize, cp: usize, cn: usize, gm: f64 },
@@ -153,6 +155,7 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
             Element::Diode { a, k, .. } => union(*a, *k),
             Element::Mosfet { d, s, .. } => union(*d, *s),
             Element::Switch { a, b, .. } => union(*a, *b),
+            Element::Mutual { .. } => {}
             Element::Bjt { c, b, e, .. } => {
                 union(*c, *e);
                 union(*b, *e);
@@ -238,6 +241,7 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::Diode { a, k, .. } => *a == 0 || *k == 0,
         Element::Mosfet { d, g, s, .. } => *d == 0 || *g == 0 || *s == 0,
         Element::Switch { a, b, cp, cn, .. } => *a == 0 || *b == 0 || *cp == 0 || *cn == 0,
+        Element::Mutual { .. } => false,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } | Element::BSource { p, n, .. } => *p == 0 || *n == 0,
     })
@@ -329,6 +333,7 @@ impl Compiled {
                     let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
+                Ce::K { .. } => {}
                 Ce::I { name, from, to, wave, .. } => {
                     let (i, vv) = (src(wave), v(x, *from) - v(x, *to));
                     push(name, i, vv, vec![], vv * i);
