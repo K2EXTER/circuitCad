@@ -22,7 +22,7 @@ pub fn needs_flatten(text: &str) -> bool {
     text.lines().any(|l| {
         let l = l.trim_start();
         let low = l.to_ascii_lowercase();
-        low.starts_with(['x', 'f', 'h', 'a', 'u', 't', 'o'])
+        low.starts_with(['x', 'f', 'h', 'a', 'u', 't', 'o', 'w'])
             || low.starts_with(".param")
             || low.starts_with(".func")
             || low.contains("params:")
@@ -508,6 +508,19 @@ impl Ctx<'_> {
                 let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
                 let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
                 out.push(format!("B_{head}{suffix} {a} {b} I={}", pwl_expr(&format!("V({a},{b})"), &mut pts)));
+                continue;
+            }
+            if letter == 'W' && t.len() == 5 && self.model_kinds.get(&t[4].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "csw") {
+                // `W1 n+ n- Vctl MODEL` with `.model MODEL CSW(Ron= Roff= It= Ih=)`: a switch closed by the current through Vctl
+                let rest = &self.model_kinds[&t[4].to_ascii_lowercase()].1;
+                let (ron, roff) = (model_scalar(rest, "ron", 1.0), model_scalar(rest, "roff", 1e6));
+                let (it, ih) = (model_scalar(rest, "it", 0.0), model_scalar(rest, "ih", 0.0));
+                let width = ih.abs().max(it.abs() * 0.02).max(1e-12);
+                let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
+                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                let ctl = if path.is_empty() { t[3].clone() } else { format!("{}.{path}", t[3]) };
+                let (gon, goff) = (1.0 / ron.max(1e-9), 1.0 / roff.max(1e-9));
+                out.push(format!("B_{head}{suffix} {a} {b} I=V({a},{b})*(({goff:e})+(({gon:e})-({goff:e}))*(0.5+0.5*tanh((I({ctl})-({it:e}))/({width:e}))))"));
                 continue;
             }
             if letter == 'O' {
@@ -1549,4 +1562,19 @@ fn is_b_option(w: &str) -> bool {
         Some((k, v)) => !v.starts_with('=') && !k.is_empty() && k.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && !k.eq_ignore_ascii_case("v") && !k.eq_ignore_ascii_case("i"),
         None => false,
     }
+}
+
+/// The number after `key=` in a model card's text (`CSW(Ron=0.1 Roff=1MEG It=1m)`), or `default`.
+fn model_scalar(rest: &str, key: &str, default: f64) -> f64 {
+    let low = rest.to_ascii_lowercase().replace(" =", "=").replace("= ", "=");
+    let mut from = 0;
+    while let Some(p) = low[from..].find(&format!("{key}=")) {
+        let at = from + p;
+        let boundary = low[..at].chars().next_back().is_none_or(|c| !(c.is_alphanumeric() || c == '_'));
+        if boundary {
+            return low[at + key.len() + 1..].split(|c: char| c.is_whitespace() || c == ')' || c == ',').next().and_then(parse_value).unwrap_or(default);
+        }
+        from = at + key.len();
+    }
+    default
 }

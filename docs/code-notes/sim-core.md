@@ -178,3 +178,7 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - **`I1 p n TBL(v0 i0 v1 i1 …)`**: 電源の両端の電圧に対する電流の折れ線(電源電流の特性。`LM2902_AB.sub` の `icc VCC VSS TBL(0 0 2 180u 100V 185u)`)。B 電流源 `I = pwl(V(p,n))`。
 - **XSPICE `s_xfer`** (`A in out MODEL`、`num_coeff=[…] den_coeff=[…] gain in_offset denorm_freq`、係数は最高次から): `spice_flat.rs s_xfer`。積分器の鎖(可制御正準形): 状態 X0..X(n-1) は 1F のコンデンサ(`IC=0`)で、電流源 `X(k)' = X(k+1)` で充電する。X(n) は den(s)·X = u から求め、出力は X(k) の重みつき和なので伝達関数は厳密。1GΩ の漏れ抵抗で DC も定まる(純積分器 `1/s` だけは DC に解がない)。`s → s/denorm_freq` の置き換えつき。
 - 効果: 93.1% → 93.3%(4479 → 4490 / 4812)。`SPICE_BULK_TRAN=1` で調べると `4316RMS_THAT` が 20 秒を超える(DC は通るが過渡が遅い。未調査)。
+
+## 電流制御スイッチ W(2026-10-19)
+`W1 n+ n- Vctl MODEL` + `.model MODEL CSW(Ron= Roff= It= Ih=)` (`spice_flat.rs`): B 電流源 `I = V(n+,n-)·g`、`g` は `1/Roff` から `1/Ron` へ、`I(Vctl)` が `It` を超えるところで `tanh` でなめらかに変わる(幅は `Ih` と `It` の2% の大きいほう。ヒステリシスは持たない)。幅が広すぎると開いたときに漏れる(幅 `It/5` では `g` の 5e-5 が残り、テストが落ちた)。
+- 4316RMS_THAT の過渡が遅い件(調査中): どんな `tstop` でも約 19.5 万点で終わる(`tstop=1e-10` でも)ので、最初から刻みが最小に張りついている。1fF の容量に 7.2µA の電流源がつながる(0.1ns の時間尺度)翻訳トランジスタ回路。`tran_debug`(`SPICE_TSTOPS=1e-10,…` で `tstop` を指定、点数・再試行・棄却を出す)で調べられる。原因は未特定。

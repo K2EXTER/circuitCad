@@ -268,8 +268,8 @@ fn tran_debug() {
             }
         }
     }
-    for tstop in [1e-9, 1e-8, 1e-7, 5e-7, 2e-6] {
-        println!("TRAN {tstop:e}: {:?}", crate::transient(&c, &crate::TranSettings { tstop, tstep: tstop / 20.0, uic: false }).map(|r| r.time.len()));
+    for tstop in std::env::var("SPICE_TSTOPS").ok().map_or(vec![1e-9, 1e-8, 1e-7, 5e-7, 2e-6], |v| v.split(',').filter_map(|x| x.parse().ok()).collect()) {
+        println!("TRAN {tstop:e}: {:?}", crate::transient(&c, &crate::TranSettings { tstop, tstep: tstop / 20.0, uic: false }).map(|r| (r.time.len(), r.retries, r.rejected)));
     }
 }
 

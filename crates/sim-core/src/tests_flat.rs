@@ -1060,3 +1060,14 @@ fn s_xfer_is_a_laplace_transfer_function() {
     let vo = r.signal("V(o)").unwrap();
     assert!((vo.values.last().unwrap() - 0.5).abs() < 0.01, "{}", vo.values.last().unwrap());
 }
+
+#[test]
+fn a_current_controlled_switch_closes_when_the_control_current_passes_it() {
+    // W closes (Ron 1) when 2 mA flows through Vc (It 1 mA), and stays open (Roff 1G) with 0
+    let t = |v: f64| format!(".subckt T a b gnd\nVc c gnd 0\nRc cs c 1k\nV9 cs gnd {v}\nW1 a b Vc CSW1\nRl b gnd 1k\n.model CSW1 CSW(Ron=1 Roff=1G It=1m Ih=0.1m)\n.ends T");
+    // (the control source Vc is the 0 V link in series with Rc; v volts across 1 k gives v mA)
+    let closed = run(&t(2.0), "T", &["a", "b", "gnd"], 1.0, "b");
+    let open = run(&t(0.0), "T", &["a", "b", "gnd"], 1.0, "b");
+    assert!(closed > 0.99 * (1000.0 / 1001.0), "{closed}");
+    assert!(open < 1e-3, "{open}");
+}
