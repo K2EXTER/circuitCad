@@ -141,3 +141,10 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - 式に `floor` `tan` `asin/arcsin` `acos/arccos` `atan/arctan` `sinh` `cosh` `asinh` と、三項演算子 `a ? b : c`(最も優先順位が低い)、`~`(`!` と同じ論理否定)を足した(`expr.rs`)。
 - `.model` の続きの行(`+ IS = 9.79E-015`)の `=` の前後の空白を詰める(つないだあとで詰めていなかった)。`.model` の `mfg=` `type=` `source=` などの文字の値は読み飛ばす。結合係数 `K` は負の値も可(巻き方向が逆になるだけ。0 と絶対値 1 超が誤り)。
 - 効果: 85.8% → 89.1%(4127 → 4286 / 4812)。上位に残る: 周波数依存の抵抗 `R = {式} … Freq`、損失線路 `O`/`LTRA`、`d_osc`・`s_xfer` などの XSPICE、`TABLE` の変則形、`T` の遅れ時間が式。
+
+## EXP 電源・pwrs/sgn・pulldn・複数ビットの dff(2026-10-18)
+- **`EXP(v1 v2 td1 tau1 td2 tau2)`** 電源 (`waveform.rs Waveform::Exp`): `td1` から `v2` に向かって `tau1` で上がり、`td2` から `v1` に向かって `tau2` で戻る。省略時は td1=0、tau=1µ、td2=td1+1µ。LTspice の7つ目の数は読み飛ばす。角(`td1` `td2`)に刻みを合わせる。
+- 式に `sgn`/`sign` と `pwrs(x, y)`(= sgn(x)|x|^y)を足した。
+- **PSpice の `U pullup(n)` / `pulldn(n)`**: ピンごとに 1kΩ で 5V / 0V へ。
+- **複数ビットの `dff(n)` `jkff(n)` `dltch(n)` `srff(n)`**: ピンの並びは「PREBAR CLRBAR CLK(GATE)、全ビットのデータ(D…、または J… K…)、全ビットの Q、全ビットの QBAR」(ビットごとの繰り返しではない。最初の実装は誤っていて、`dff(1)` だけ偶然合っていた)。
+- 効果: 89.1% → 90.1%(4286 → 4335 / 4812)。

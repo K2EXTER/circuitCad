@@ -42,6 +42,8 @@ pub enum Func {
     Sin,
     Cos,
     Floor,
+    Sgn,
+    Pwrs,
     Tan,
     Asin,
     Acos,
@@ -69,6 +71,8 @@ impl Func {
             "sin" => (Func::Sin, 1..=1),
             "cos" => (Func::Cos, 1..=1),
             "floor" => (Func::Floor, 1..=1),
+            "sgn" | "sign" => (Func::Sgn, 1..=1),
+            "pwrs" => (Func::Pwrs, 2..=2),
             "tan" => (Func::Tan, 1..=1),
             "asin" | "arcsin" => (Func::Asin, 1..=1),
             "acos" | "arccos" => (Func::Acos, 1..=1),
@@ -661,6 +665,13 @@ impl CExpr {
                     }
                     Func::Sin => a[0].map(a[0].v.sin(), a[0].v.cos()),
                     Func::Floor => a[0].map(a[0].v.floor(), 0.0),
+                    Func::Sgn => a[0].map(if a[0].v > 0.0 { 1.0 } else if a[0].v < 0.0 { -1.0 } else { 0.0 }, 0.0),
+                    Func::Pwrs => {
+                        // sgn(x) * |x|^y
+                        let s = if a[0].v < 0.0 { -1.0 } else { 1.0 };
+                        let r = pow(&a[0].map(a[0].v.abs(), s), &a[1]);
+                        r.map(s * r.v, s)
+                    }
                     Func::Tan => {
                         let r = a[0].v.tan();
                         a[0].map(r, 1.0 + r * r)

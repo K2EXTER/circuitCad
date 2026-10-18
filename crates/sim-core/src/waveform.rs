@@ -9,6 +9,8 @@ pub enum Waveform {
     Sin { vo: f64, va: f64, freq: f64, td: f64, theta: f64, phase: f64 },
     /// `pw` and `per` are infinite when omitted.
     Pulse { v1: f64, v2: f64, td: f64, tr: f64, tf: f64, pw: f64, per: f64 },
+    /// EXP(v1 v2 td1 tau1 td2 tau2): rises towards v2 from td1, falls back towards v1 from td2.
+    Exp { v1: f64, v2: f64, td1: f64, tau1: f64, td2: f64, tau2: f64 },
     Pwl(Vec<(f64, f64)>),
     /// Band-limited pseudo-random Gaussian noise: independent samples every `1/(2*fmax)`,
     /// linearly interpolated, scaled so that the RMS value is `vrms`. Deterministic for a
@@ -41,7 +43,7 @@ impl Waveform {
         match self {
             Waveform::Dc(v) => *v,
             Waveform::Sin { vo, .. } => *vo,
-            Waveform::Pulse { v1, .. } => *v1,
+            Waveform::Pulse { v1, .. } | Waveform::Exp { v1, .. } => *v1,
             Waveform::Pwl(p) => p.first().map_or(0.0, |x| x.1),
             Waveform::Noise { offset, .. } => *offset,
             Waveform::Sum(parts) => parts.iter().map(|w| w.dc_value()).sum(),
@@ -87,6 +89,16 @@ impl Waveform {
                     *v1
                 }
             }
+            Waveform::Exp { v1, v2, td1, tau1, td2, tau2 } => {
+                let mut v = *v1;
+                if t > *td1 {
+                    v += (v2 - v1) * (1.0 - (-(t - td1) / tau1).exp());
+                }
+                if t > *td2 {
+                    v += (v1 - v2) * (1.0 - (-(t - td2) / tau2).exp());
+                }
+                v
+            }
             Waveform::Pwl(p) => {
                 let (first, last) = match (p.first(), p.last()) {
                     (Some(f), Some(l)) => (f, l),
@@ -124,6 +136,7 @@ impl Waveform {
                     v.push(*td);
                 }
             }
+            Waveform::Exp { td1, td2, .. } => v.extend([*td1, *td2].into_iter().filter(|t| *t > 0.0 && *t <= tstop)),
             Waveform::Pulse { td, tr, tf, pw, per, .. } => {
                 let periodic = per.is_finite() && *per > 0.0;
                 let mut k = 0usize;
@@ -313,6 +326,20 @@ fn parse_single(s: &str) -> Result<Waveform, String> {
             }
             Ok(Waveform::Noise { vrms: n[0], fmax: n[1], seed: n.get(2).map_or(1, |s| *s as u64), offset: n.get(3).copied().unwrap_or(0.0) })
         }
+        "exp" => {
+            let n = nums(rest)?;
+            // LTspice accepts a seventh number (ignored here)
+            if n.len() < 2 || n.len() > 7 {
+                return Err("EXP(初期値 最終値 [上昇の開始 時定数 下降の開始 時定数]) の形式で指定してください".into());
+            }
+            let g = |i: usize, d: f64| n.get(i).copied().unwrap_or(d);
+            let (td1, tau1) = (g(2, 0.0), g(3, 1e-6));
+            let (td2, tau2) = (g(4, td1 + 1e-6), g(5, 1e-6));
+            if tau1 <= 0.0 || tau2 <= 0.0 {
+                return Err("EXP の時定数は正の値にしてください".into());
+            }
+            Ok(Waveform::Exp { v1: n[0], v2: n[1], td1, tau1, td2, tau2 })
+        }
         "pwl" => {
             let n = nums(rest)?;
             if n.len() < 2 || n.len() % 2 != 0 {
@@ -360,7 +387,8 @@ mod tests {
         assert!(parse_source("SIN(0 1 0)").is_err());
         assert!(parse_source("PWL(0 0 1m)").is_err());
         assert!(parse_source("PWL(1m 0 0 5)").is_err());
-        assert!(parse_source("EXP(1 2)").is_err());
+        assert!(parse_source("EXP(1)").is_err());
+        assert!(parse_source("EXP(1 2 0 0)").is_err());
         assert!(parse_source("abc").is_err());
         assert!(parse_source("5 6").is_err());
     }

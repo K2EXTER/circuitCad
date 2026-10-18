@@ -726,16 +726,17 @@ impl Ctx<'_> {
         let head = t[0].as_str();
         let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
         // (kind, data pins before q / qb, SeqKind input order as indices into [preb clrb clk a b])
-        let (kind, n_data) = match name {
-            "dff" => ("dff", 2),
-            "jkff" => ("jkff", 3),
-            "dltch" => ("dlatch", 2),
-            _ => ("srlatch", 3),
+        let (kind, n_dat) = match name {
+            "dff" => ("dff", 1),
+            "jkff" => ("jkff", 2),
+            "dltch" => ("dlatch", 1),
+            _ => ("srlatch", 2),
         };
-        let per_bit = 2 + n_data + 2;
+        // the pins: PREBAR CLRBAR CLK/GATE, then the data pins (D, or J K, or S R) of every bit, then Q of every bit, then QBAR of every bit
         let bits = count.max(1);
-        if t.len() < 4 + per_bit * bits {
-            return Err(format!("{head}: {name}({bits}) は「電源 GND と、1 ビットごとに PREBAR CLRBAR {} Q QBAR」の形で書きます", if n_data == 2 { if kind == "dff" { "CLK D" } else { "GATE D" } } else if kind == "jkff" { "CLK J K" } else { "GATE S R" }));
+        let total = 3 + n_dat * bits + 2 * bits;
+        if t.len() < 4 + total {
+            return Err(format!("{head}: {name}({bits}) は「電源 GND PREBAR CLRBAR {} とビットごとの Q QBAR」の形で書きます", if kind == "dff" { "CLK D…" } else if kind == "jkff" { "CLK J… K…" } else if kind == "dlatch" { "GATE D…" } else { "GATE S… R…" }));
         }
         let mut lines = Vec::new();
         let hi = format!("__hi{suffix}_{head}");
@@ -750,16 +751,16 @@ impl Ctx<'_> {
                 _ => rename_node(n, ports, prefix),
             }
         };
+        let p = &t[4..4 + total];
+        let (preb, clrb, clk) = (node(&p[0]), node(&p[1]), node(&p[2]));
         for b in 0..bits {
-            let p = &t[4 + per_bit * b..4 + per_bit * (b + 1)];
-            let (preb, clrb, clk) = (node(&p[0]), node(&p[1]), node(&p[2]));
-            let data: Vec<String> = p[3..2 + n_data].iter().map(|n| node(n)).collect();
-            let (q, qb) = (rename_node(&p[2 + n_data], ports, prefix), rename_node(&p[3 + n_data], ports, prefix));
+            let d = |k: usize| node(&p[3 + k * bits + b]);
+            let ins_data: Vec<String> = (0..n_dat).map(d).collect();
+            let q = rename_node(&p[3 + n_dat * bits + b], ports, prefix);
+            let qb = rename_node(&p[3 + n_dat * bits + bits + b], ports, prefix);
             let ins = match kind {
-                "dff" => vec![data[0].clone(), clk, preb, clrb],
-                "jkff" => vec![data[0].clone(), data[1].clone(), clk, preb, clrb],
-                "dlatch" => vec![data[0].clone(), clk, preb, clrb],
-                _ => vec![data[0].clone(), data[1].clone(), clk, preb, clrb],
+                "dff" | "dlatch" => vec![ins_data[0].clone(), clk.clone(), preb.clone(), clrb.clone()],
+                _ => vec![ins_data[0].clone(), ins_data[1].clone(), clk.clone(), preb.clone(), clrb.clone()],
             };
             let bit = if bits > 1 { format!("_{b}") } else { String::new() };
             lines.push(format!("Z{head}{bit}{suffix} {kind} {q} {qb} 0 5 2.5 0 1 1 {}", ins.join(" ")));
@@ -786,6 +787,19 @@ impl Ctx<'_> {
             "bufa" => "buf",
             "inva" => "inv",
             "dff" | "jkff" | "dltch" | "srff" => return self.u_seq_device(t, &name, count, path, ports, prefix),
+            "pullup" | "pulldn" => {
+                // `U pulldn(n) dpwr dgnd pin1 .. pinN`: a 1 k resistor from every pin to 0 V (or to 5 V for a pull-up)
+                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                let pins = t.get(4..).unwrap_or(&[]);
+                let mut lines: Vec<String> = pins.iter().take(count.max(1)).enumerate().map(|(i, p)| {
+                    let rail = if name == "pullup" { format!("__hi{suffix}_{head}") } else { "0".to_string() };
+                    format!("R{head}_{i}{suffix} {} {rail} 1k", rename_node(p, ports, prefix))
+                }).collect();
+                if name == "pullup" && !lines.is_empty() {
+                    lines.push(format!("V__hi{suffix}_{head} __hi{suffix}_{head} 0 DC 5"));
+                }
+                return Ok(lines);
+            }
             _ => return Err(format!("{head}: PSpice のデジタル部品「{ty}」は未対応です (AND / OR / バッファ / インバータ / フリップフロップ / ラッチだけ読めます。カウンタなどは、アナログ回路としては表せません)")),
         };
         let n_in = if matches!(kind, "buf" | "inv") { 1 } else { count };

@@ -891,3 +891,25 @@ fn model_text_params_and_negative_coupling_are_read() {
     let (a, b) = (c.node("a"), c.node("b"));
     add_subckt_instance(&mut c, "U1", "T", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
 }
+
+#[test]
+fn exp_source_pwrs_sgn_pulldn_and_multibit_dff() {
+    // EXP rises towards v2 with the time constant tau1
+    let w = crate::waveform::parse_source("exp(0 1 0 1m 10m 1m)").unwrap();
+    assert!((w.eval(1e-3) - (1.0 - (-1.0f64).exp())).abs() < 1e-9);
+    assert!(w.eval(5e-3) > 0.99 && w.eval(30e-3) < 0.01);
+    // pwrs(x, y) = sgn(x) |x|^y
+    let t = ".subckt T a b gnd\nB1 b 0 V=pwrs(V(a), 2) + sgn(V(a))\nR1 b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], -2.0, "b") - (-4.0 - 1.0)).abs() < 1e-9);
+    // a pull-down on a floating pin
+    let t = ".subckt T a b gnd\nR1 a b 1k\nUp pulldn(1) $G_DPWR $G_DGND b\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 2.0 / 2.0).abs() < 1e-6);
+    // dff(2): preb clrb clk d1 d2 q1 q2 qb1 qb2, preset low sets both
+    let t = ".subckt T a q1 q2 gnd\nU1 dff(2) $G_DPWR $G_DGND a $D_HI clk d1 d2 q1 q2 qb1 qb2 D_DFF IO_STD\nR1 q1 gnd 10k\nR2 q2 gnd 10k\n.ends T";
+    let mut c = Circuit::new();
+    let (a, q1, q2) = (c.node("a"), c.node("q1"), c.node("q2"));
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, q1, q2, 0]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::vdc("Va", a, 0, 0.0));
+    let r = dc_op(&c).unwrap();
+    assert!((r.voltage("q1").unwrap() - 5.0).abs() < 0.1 && (r.voltage("q2").unwrap() - 5.0).abs() < 0.1);
+}
