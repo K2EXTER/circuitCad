@@ -341,7 +341,16 @@ fn parse_single(s: &str) -> Result<Waveform, String> {
             Ok(Waveform::Exp { v1: n[0], v2: n[1], td1, tau1, td2, tau2 })
         }
         "pwl" => {
-            let n = nums(rest)?;
+            let mut n = nums(rest)?;
+            // LTspice: a time written with a leading `+` that would not come after the previous one is relative to it (`pwl(0 0 1m 0 +1u 5)`)
+            let words: Vec<&str> = rest.split(|c: char| c.is_whitespace() || c == '(' || c == ')' || c == ',').filter(|w| !w.is_empty()).collect();
+            if words.len() == n.len() {
+                for i in (2..n.len()).step_by(2) {
+                    if words[i].starts_with('+') && n[i] <= n[i - 2] {
+                        n[i] += n[i - 2];
+                    }
+                }
+            }
             if n.len() < 2 || n.len() % 2 != 0 {
                 return Err("PWL(時間 値 時間 値 ...) は時間と値の組で指定してください".into());
             }

@@ -63,7 +63,7 @@ impl Func {
             "max" => (Func::Max, 2..=2),
             "limit" => (Func::Limit, 3..=3),
             "sqrt" => (Func::Sqrt, 1..=1),
-            "exp" => (Func::Exp, 1..=1),
+            "exp" | "expl" => (Func::Exp, 1..=1),
             "ln" | "log" => (Func::Ln, 1..=1),
             "log10" => (Func::Log10, 1..=1),
             "pow" | "pwr" => (Func::Pow, 2..=2),

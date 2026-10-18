@@ -28,7 +28,7 @@ pub fn needs_flatten(text: &str) -> bool {
             || low.contains("params:")
             || l.contains('{')
             || (!l.starts_with('*') && l.contains('\''))
-            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table") || low.contains("idt")))
+            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table") || low.contains("idt") || low.contains("ddt")))
     })
 }
 
@@ -889,6 +889,20 @@ impl Ctx<'_> {
         if let Some(lines) = self.seq_device(line, t, path, ports, prefix)? {
             return Ok(lines);
         }
+        // `A in out MODEL` with `.model MODEL PWL2 xy_array=[x0 y0 x1 y1 ...]` (the XSPICE piecewise-linear block): V(out) = f(V(in))
+        if t.len() == 4
+            && let Some((ty, rest)) = self.model_kinds.get(&t[3].to_ascii_lowercase())
+            && (ty == "pwl2" || ty == "pwl")
+            && let Some((_, arr)) = rest.split_once('[')
+        {
+            let nums: Vec<f64> = arr.split(']').next().unwrap_or("").split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+            if nums.len() >= 4 && nums.len() % 2 == 0 {
+                let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
+                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                let x = format!("V({})", rename_node(&t[1], ports, prefix));
+                return Ok(vec![format!("B_{head}{suffix} {} 0 V={}", rename_node(&t[2], ports, prefix), pwl_expr(&x, &mut pts))]);
+            }
+        }
         // `A a b cp cn VSWITCHMODEL`: an ngspice-style switch written with an A name (it is an S switch)
         if t.len() == 6
             && self.model_kinds.get(&t[5].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "vswitch" || ty == "sw")
@@ -1013,6 +1027,11 @@ impl Ctx<'_> {
             if pts.is_empty() && !rest.contains('(') {
                 // the points without parentheses: `x y x y ...` (one pair per continuation line)
                 let nums: Vec<f64> = rest.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+                pts = nums.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+            }
+            if pts.len() < 2 {
+                // unbalanced or odd brackets (`(0 0 (1 10)`): take the numbers in order, two by two
+                let nums: Vec<f64> = rest.split(|c: char| c == ',' || c == '(' || c == ')' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
                 pts = nums.chunks_exact(2).map(|c| (c[0], c[1])).collect();
             }
             if pts.len() < 2 {
@@ -1314,7 +1333,7 @@ fn extract_integrals(lines: Vec<String>) -> Vec<String> {
     let mut out = Vec::with_capacity(lines.len());
     for line in lines {
         let low = line.to_ascii_lowercase();
-        if !(low.starts_with(['b']) && low.contains("idt")) {
+        if !(low.starts_with(['b']) && (low.contains("idt") || low.contains("ddt"))) {
             out.push(line);
             continue;
         }
@@ -1325,7 +1344,7 @@ fn extract_integrals(lines: Vec<String>) -> Vec<String> {
         loop {
             let low = text.to_ascii_lowercase();
             // the first call of idt( or idtmod( that starts a word
-            let Some((at, wlen)) = ["idtmod(", "idt("].iter().filter_map(|w| find_word(&low, 0, w).map(|p| (p, w.len()))).min_by_key(|(p, _)| *p) else { break };
+            let Some((at, wlen)) = ["idtmod(", "idt(", "ddt(", "sdt("].iter().filter_map(|w| find_word(&low, 0, w).map(|p| (p, w.len()))).min_by_key(|(p, _)| *p) else { break };
             let open = at + wlen - 1;
             let mut depth = 0;
             let mut args: Vec<String> = vec![];
@@ -1354,6 +1373,15 @@ fn extract_integrals(lines: Vec<String>) -> Vec<String> {
             let Some(end) = end else { break };
             args.push(cur);
             let is_mod = wlen == 7;
+            if text[at..].starts_with("ddt(") || text[at..].starts_with("DDT(") || text[at..].to_ascii_lowercase().starts_with("ddt(") {
+                // ddt(x): the current of a capacitor whose charge is x, read through a 0 V source that holds its node at 0
+                let node = format!("{name}_ddt{k}");
+                extra.push(format!("V_{node} {node} 0 DC 0"));
+                extra.push(format!("C_{node} {node} 0 Q={}", args[0].trim()));
+                text.replace_range(at..=end, &format!("(-I(V_{node}))"));
+                k += 1;
+                continue;
+            }
             let node = format!("{name}_idt{k}");
             let ic = args.get(1).and_then(|a| eval_expr(a, &Env::new()).ok()).unwrap_or(0.0);
             extra.push(format!("B_{node} 0 {node} I={}", args[0].trim()));

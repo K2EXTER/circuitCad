@@ -936,3 +936,38 @@ fn a_lossy_line_has_a_series_resistance() {
     let v = run(t, "T", &["a", "b", "gnd"], 2.0, "b");
     assert!((v - 1.0).abs() < 1e-3, "{v}");
 }
+
+#[test]
+fn pwl_plus_times_are_relative_and_load_is_ignored() {
+    let w = crate::waveform::parse_source("pwl(0 0 1m 0 +1u 5 +1m 5)").unwrap();
+    assert!((w.eval(1e-3 + 1e-6) - 5.0).abs() < 1e-9 && (w.eval(2e-3) - 5.0).abs() < 1e-9);
+    // an ordinary positive number that does come later stays as it is
+    let w = crate::waveform::parse_source("pwl(0 0 +1m 5)").unwrap();
+    assert!((w.eval(1e-3) - 5.0).abs() < 1e-9);
+    let t = ".subckt T a b gnd\nI1 gnd b 1m load\nR1 b gnd 1k\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 0.0, "b") - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn an_xspice_pwl_block_and_a_table_with_a_stray_bracket() {
+    let t = ".subckt T a b gnd\nAx a b PW\n.model PW PWL2 xy_array=[-1k -1e-14 0 0 10 100]\nRl b gnd 1meg\n.ends T";
+    // 10 V input maps to 100 V; 5 V to 50 V
+    assert!((run(t, "T", &["a", "b", "gnd"], 5.0, "b") - 50.0).abs() < 1e-6);
+    let t = ".subckt T a b gnd\nEx b 0 TABLE {V(a)} (0 0 (1 10)\nRl b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 0.5, "b") - 5.0).abs() < 1e-6);
+}
+
+#[test]
+fn ddt_is_the_time_derivative() {
+    // v(a) rises 1 V in 1 ms (a ramp), so ddt(V(a)) = 1000 V/s
+    let t = ".subckt T a o gnd\nB1 o 0 V=ddt(V(a))\nR1 o gnd 1meg\n.ends T";
+    let mut c = Circuit::new();
+    let (a, o) = (c.node("a"), c.node("o"));
+    c.add(Element::VSource { name: "Vr".into(), p: a, n: 0, wave: Waveform::Pwl(vec![(0.0, 0.0), (1e-3, 1.0), (2e-3, 1.0)]), ac: None });
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let r = transient(&c, &TranSettings { tstop: 1.5e-3, tstep: 2e-5, uic: false }).unwrap();
+    let vo = r.signal("V(o)").unwrap();
+    let at = |tt: f64| vo.values[r.time.iter().position(|x| *x >= tt).unwrap()];
+    assert!((at(0.5e-3) - 1000.0).abs() < 20.0, "{}", at(0.5e-3));
+    assert!(at(1.5e-3).abs() < 20.0, "{}", at(1.5e-3));
+}

@@ -551,7 +551,8 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     let l = w.to_ascii_lowercase();
                     l.starts_with("rser=") || l.starts_with("rpar=") || l.starts_with("cpar=")
                 };
-                let words: Vec<&str> = t[3.min(t.len())..].iter().filter(|w| !is_opt(w)).copied().collect();
+                // (`load` after the value of an I source is an LTspice flag that changes nothing here)
+                let words: Vec<&str> = t[3.min(t.len())..].iter().filter(|w| !is_opt(w) && !w.eq_ignore_ascii_case("load")).copied().collect();
                 // `Vsense a b` with no value is a 0 V source (a current probe)
                 let src = parse_source_full(&if !words.is_empty() { words.join(" ") } else { "0".to_string() }).map_err(|e| format!("{name}: {e}"))?;
                 if head.to_ascii_uppercase().starts_with('V') {
