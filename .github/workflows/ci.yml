@@ -1,6 +1,11 @@
 name: CI
 on: [push, pull_request]
+# a newer push to the same branch makes the older run pointless
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
+  # clippy and the test build do not share build products, so they run as separate jobs side by side
   check:
     runs-on: windows-latest
     steps:
@@ -12,6 +17,12 @@ jobs:
       - run: cargo clippy --workspace --all-targets
       # the third-party license list must match Cargo.lock (regenerate: python tools/gen_third_party_licenses.py)
       - run: python tools/gen_third_party_licenses.py --check
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
   # Linux has never been run by the author: build and test it here before claiming support.
   linux:
