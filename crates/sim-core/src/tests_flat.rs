@@ -994,3 +994,37 @@ fn old_spice_polynomial_sources_without_the_word_poly_and_bracketed_coefficients
     let t = ".subckt T a b gnd\nVs a1 0 0\nE1 b 0 POLY(1) a gnd (0,2,0.5)\nR1 b gnd 1meg\n.ends T";
     assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 6.0).abs() < 1e-6);
 }
+
+#[test]
+fn k_with_three_inductors_table_with_a_stray_equals_and_a_ternary_without_else() {
+    // three coupled inductors read without error
+    let t = ".subckt T a b c gnd\nL1 a gnd 1m\nL2 b gnd 1m\nL3 c gnd 1m\nK1 L1 L2 L3 0.9\n.ends T";
+    let mut cir = Circuit::new();
+    let (a, b, c) = (cir.node("a"), cir.node("b"), cir.node("c"));
+    add_subckt_instance(&mut cir, "U1", "T", t, &[a, b, c, 0]).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(cir.elements.iter().filter(|e| matches!(e, Element::Mutual { .. })).count(), 3);
+    // TABLE = {expr} (points)
+    let t = ".subckt T a b gnd\nEx b 0 TABLE = {V(a, 0)} ((0 0) (2 1))\nRl b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-6);
+    // `cond ? x` with no else is 0
+    let t = ".subckt T a b gnd\nB1 b 0 V=V(a) > 0.5 ? 3\nR1 b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 3.0).abs() < 1e-9);
+    assert!(run(t, "T", &["a", "b", "gnd"], 0.0, "b").abs() < 1e-9);
+}
+
+#[test]
+fn pulse_with_a_cycle_count_makes_only_that_many_pulses() {
+    let w = crate::waveform::parse_source("pulse(0 1 1u 1n 1n 4u 10u 3)").unwrap();
+    let count = |t0: f64, t1: f64| (0..2000).map(|i| t0 + (t1 - t0) * i as f64 / 2000.0).filter(|t| w.eval(*t) > 0.5).count();
+    assert!(count(1.5e-6, 4.5e-6) > 1000, "first pulse");
+    assert!(count(21.5e-6, 24.5e-6) > 1000, "third pulse");
+    assert_eq!(count(31.5e-6, 80e-6), 0, "no fourth pulse");
+}
+
+#[test]
+fn control_nodes_written_as_one_word() {
+    let t = ".param z=1\n.subckt T a b gnd\nECVS b 0 a,gnd 0.5\nRl b gnd 1meg\nS1 a c (b,gnd) SWM\nR2 c gnd 1k\n.model SWM VSWITCH(RON=1 ROFF=1e9 VON=0.4 VOFF=0.2)\n.ends T";
+    // E: 0.5 * 2 V = 1 V; and that closes the switch (control 1 V > 0.4 V)
+    let v = run(t, "T", &["a", "b", "gnd"], 2.0, "b");
+    assert!((v - 1.0).abs() < 1e-6, "{v}");
+}

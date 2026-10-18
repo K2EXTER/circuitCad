@@ -151,10 +151,8 @@ impl Parser<'_, '_> {
             return Ok(cond);
         }
         let yes = self.expr()?;
-        if !self.eat(b':') {
-            return self.err("「? :」の「:」がありません");
-        }
-        let no = self.expr()?;
+        // a missing `: else` (some vendors leave it out) means 0
+        let no = if self.eat(b':') { self.expr()? } else { Expr::Num(0.0) };
         Ok(Expr::Call(Func::If, vec![cond, yes, no]))
     }
 

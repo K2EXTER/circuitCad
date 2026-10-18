@@ -301,11 +301,32 @@ fn parse_single(s: &str) -> Result<Waveform, String> {
         }
         "pulse" => {
             let n = nums(rest)?;
-            if n.len() < 2 || n.len() > 7 {
-                return Err("PULSE(初期値 パルス値 [遅延 立上り 立下り 幅 周期]) の形式で指定してください".into());
+            if n.len() < 2 || n.len() > 8 {
+                return Err("PULSE(初期値 パルス値 [遅延 立上り 立下り 幅 周期 回数]) の形式で指定してください".into());
             }
             let tr = n.get(3).copied().unwrap_or(1e-9).max(1e-12);
             let tf = n.get(4).copied().unwrap_or(1e-9).max(1e-12);
+            // the eighth number (LTspice) is how many cycles to make: written out as the corners of a piecewise-linear wave
+            if let (Some(&cycles), Some(&per), Some(&pw)) = (n.get(7), n.get(6), n.get(5))
+                && cycles >= 1.0
+                && cycles <= 5000.0
+                && per > tr + pw + tf
+            {
+                let td = n[2];
+                let mut pts = vec![(0.0, n[0])];
+                if td > 0.0 {
+                    pts.push((td, n[0]));
+                }
+                for k in 0..cycles as usize {
+                    let b = td + k as f64 * per;
+                    pts.extend([(b + tr, n[1]), (b + tr + pw, n[1]), (b + tr + pw + tf, n[0])]);
+                }
+                if td <= 0.0 {
+                    pts[0] = (0.0, n[0]);
+                }
+                pts.dedup_by(|a, b| a.0 <= b.0);
+                return Ok(Waveform::Pwl(pts));
+            }
             Ok(Waveform::Pulse {
                 v1: n[0],
                 v2: n[1],

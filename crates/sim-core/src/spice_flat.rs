@@ -444,7 +444,16 @@ impl Ctx<'_> {
                 raw
             };
             let line = subst_braces(raw, &env)?;
-            let t = split_top(&line);
+            let mut t = split_top(&line);
+            // the control nodes as one word, `(cp,cn)` or `cp,cn` (E / G / S): split into two
+            if t.len() >= 5 && matches!(t[0].chars().next().map(|c| c.to_ascii_uppercase()), Some('E' | 'G' | 'S')) {
+                let w = t[3].trim_matches(|c| c == '(' || c == ')').to_string();
+                if let Some((a, b)) = w.split_once(',').filter(|(a, b)| !a.is_empty() && !b.is_empty() && !b.contains(',')) {
+                    let (a, b) = (a.trim().to_string(), b.trim().to_string());
+                    t.splice(3..4, [a, b]);
+                }
+            }
+            let line = if t.len() > 0 { t.join(" ") } else { line };
             let head = t[0].as_str();
             let letter = head.chars().next().unwrap().to_ascii_uppercase();
             if letter == 'X' {
@@ -513,7 +522,8 @@ impl Ctx<'_> {
             if letter == 'K' && t.len() >= 4 {
                 // the inductors it couples get the same instance path as the inductors themselves
                 let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-                out.push(format!("{head}{suffix} {}{suffix} {}{suffix} {}", t[1], t[2], t[3..].join(" ")));
+                let rest: Vec<String> = t[1..].iter().map(|w| if parse_value(w).is_none() && !w.contains('=') { format!("{w}{suffix}") } else { w.clone() }).collect();
+                out.push(format!("{head}{suffix} {}", rest.join(" ")));
                 continue;
             }
             if matches!(letter, 'E' | 'G' | 'F' | 'H') {
@@ -775,7 +785,7 @@ impl Ctx<'_> {
             return Err(format!("{head}: 線路のモデル {} は LTRA / TRN ではありません", t[5]));
         }
         let inner = rest.split_once('(').map_or(rest.as_str(), |(_, r)| r.trim_end().trim_end_matches(')'));
-        let mut val = |k: &str| -> Result<f64, String> {
+        let val = |k: &str| -> Result<f64, String> {
             let found = split_top(&squash_eq_text(inner)).into_iter().find_map(|w| w.split_once('=').filter(|(n, _)| n.eq_ignore_ascii_case(k)).map(|(_, v)| v.to_string()));
             match found {
                 Some(v) => eval_expr(&v, env),
@@ -1000,6 +1010,11 @@ impl Ctx<'_> {
         {
             // `TABLE {expr} = (x,y) ...`, `TABLE {expr} ((x,y)(x,y))` or `TABLE expr = ...`
             let after = raw[pos + 5..].trim_start();
+            // `TABLE = {expr} (…)`: a stray = before the braces
+            let after = match after.strip_prefix('=') {
+                Some(r) if r.trim_start().starts_with('{') => r.trim_start(),
+                _ => after,
+            };
             let (expr_raw, rest) = if let Some(inner) = after.strip_prefix('{') {
                 let (mut depth, mut end) = (1, None);
                 for (i, c) in inner.char_indices() {

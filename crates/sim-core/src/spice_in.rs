@@ -532,8 +532,19 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
             'K' => {
                 // K name L1 L2 k  (two coupled inductors; the names are those of this subcircuit)
                 need(4)?;
-                if t.len() > 4 && parse_value(t[4]).is_none() && !t[4].contains('=') {
-                    return Err(format!("{name}: 3 つ以上のインダクタの結合 (K) は未対応です。2 つずつの K に分けてください"));
+                // `K1 L1 L2 L3 k`: every pair of the listed inductors is coupled with k
+                let names: Vec<&str> = t[1..].iter().take_while(|w| parse_value(w).is_none() || w.chars().next().is_some_and(|c| c.is_ascii_alphabetic())).copied().collect();
+                if names.len() > 2 {
+                    let k = val(t[1 + names.len()])?;
+                    if !(k != 0.0 && k.abs() <= 1.0) {
+                        return Err(format!("{name}: 結合係数 {k} は 0 ではなく、絶対値が 1 以下にしてください"));
+                    }
+                    for i in 0..names.len() {
+                        for j in i + 1..names.len() {
+                            c.add(Element::Mutual { name: format!("{name}.{i}_{j}"), l1: format!("{inst}.{}", names[i]), l2: format!("{inst}.{}", names[j]), k });
+                        }
+                    }
+                    continue;
                 }
                 let k = val(t[3])?;
                 // a negative k only reverses the winding sense
