@@ -96,3 +96,6 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 
 ## 伝送線路 T(2026-10-18)
 `spice_flat.rs transmission_line`: 無損失線路 `T名前 a1 b1 a2 b2 Z0= TD=`(または `F=`・`NL=`、既定 0.25 波長、`TD=NL/F`)を、40 区間の L-C はしご(L=Z0·TD/N、C=TD/(Z0·N)、両端は C/2)に置き換える。素子はそのまま使えるので DC(つながった線)・AC・過渡のどれでも動く。近似なので、使える帯域は約 N/(π·TD) まで(それより速い立ち上がりはなまる/揺れる)。戻り側 b1 と b2 が別の網のときは 1µΩ でつなぐ。損失・`IC=`・`LEN=` は未対応(無視)。テストは `tests_flat.rs` の `a_matched_transmission_line_delays_a_step_by_td` ほか。
+
+## ダイオードの電流 I(D名)(2026-10-18)
+`spice_in.rs add_flat_subckt`: 式(B 素子など)が `I(D1)` を読むダイオードだけ、アノード側に 0V の電圧源(名前 `D1`)を直列に入れ、ダイオード本体は `D1.d` という名前にする(`current_refs` が本文中の `I(...)` を先に集める)。電流の向きはアノード→カソードが正。読まないダイオードは今まで通り。テストは `tests_bsource.rs the_current_of_a_diode_can_be_read`。

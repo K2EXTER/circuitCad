@@ -432,6 +432,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
         }
     };
     let val = |s: &str| parse_value(s).ok_or_else(|| format!("{inst}: 値 {s} を数値にできません"));
+    let read_currents = current_refs(&lines[start + 1..]);
 
     for l in &lines[start + 1..] {
         let t: Vec<&str> = l.split_whitespace().collect();
@@ -551,7 +552,14 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         m.is *= area;
                         m.rs /= area;
                         m.cj0 *= area;
-                        c.add(Element::Diode { name, a, k, model: m })
+                        if read_currents.contains(&t[0].to_ascii_lowercase()) {
+                            // an expression reads I(D..): a 0 V source in series carries (and names) that current
+                            let mid = c.node(&format!("{name}.i"));
+                            c.add(Element::vdc(&name, a, mid, 0.0));
+                            c.add(Element::Diode { name: format!("{name}.d"), a: mid, k, model: m })
+                        } else {
+                            c.add(Element::Diode { name, a, k, model: m })
+                        }
                     }
                     _ => return Err(bad_models.get(&t[3].to_ascii_lowercase()).map_or_else(|| format!("{name}: ダイオードモデル {} が見つかりません", t[3]), |e| format!("{name}: モデル {} を読めません: {e}", t[3]))),
                 }
@@ -646,6 +654,27 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
         }
     }
     Err(format!(".subckt {sub_name} に .ends がありません"))
+}
+
+/// Lower-case names inside `I( ... )` anywhere in `lines` (the elements whose current an expression reads).
+fn current_refs(lines: &[String]) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for l in lines {
+        let low = l.to_ascii_lowercase();
+        let b = low.as_bytes();
+        let mut i = 0;
+        while let Some(p) = low[i..].find("i(") {
+            let at = i + p;
+            i = at + 2;
+            if at > 0 && (b[at - 1].is_ascii_alphanumeric() || b[at - 1] == b'_') {
+                continue;
+            }
+            if let Some(end) = low[i..].find(')') {
+                out.insert(low[i..i + end].trim().to_string());
+            }
+        }
+    }
+    out
 }
 
 /// Every `I(name)` read by a B source of instance `inst` must name a V source, an inductor, an E

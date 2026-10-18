@@ -133,3 +133,15 @@ fn a_zero_division_does_not_break_the_solver() {
         assert!(r.voltage("o").unwrap().is_finite());
     }
 }
+
+#[test]
+fn the_current_of_a_diode_can_be_read() {
+    // 5 V -> 1k -> diode -> ground; B1 copies the diode current (about 4.3 mA) as a voltage
+    let mut c = sub(".subckt T a o\nR1 a m 1k\nD1 m 0 DX\nB1 o 0 V=I(D1)*1000\n.model DX D(IS=1e-14)\n.ends T", &["a", "o"]);
+    vdc(&mut c, "Va", "a", 5.0);
+    res(&mut c, "Rl", "o", "0", 1e6);
+    let r = dc_op(&c).unwrap();
+    let (vo, vm) = (r.voltage("o").unwrap(), r.voltage("X1.m").unwrap());
+    assert!((vo / 1000.0 - (5.0 - vm) / 1000.0).abs() < 1e-6, "I(D1) {} vs resistor {}", vo / 1000.0, (5.0 - vm) / 1000.0);
+    assert!(vo > 3.5 && vo < 4.8, "{vo}");
+}
