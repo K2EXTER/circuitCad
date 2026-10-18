@@ -85,6 +85,10 @@ fn space_before_paren(line: &str) -> String {
 
 /// `KP= {X}` and `W = 1u` become `KP={X}` and `W=1u` (vendors put blanks around the `=` of a parameter); comparison
 /// operators (`==`, `<=`, `>=`, `!=`) are left alone.
+pub(crate) fn squash_equals_pub(line: &str) -> String {
+    squash_equals(line)
+}
+
 fn squash_equals(line: &str) -> String {
     let ch: Vec<char> = line.chars().collect();
     let mut out = String::with_capacity(line.len());
@@ -728,7 +732,7 @@ fn check_current_refs(c: &Circuit, inst: &str) -> Result<(), String> {
         expr.branches(&mut refs);
         for r in refs {
             let ok = c.elements.iter().any(|x| {
-                x.name().eq_ignore_ascii_case(&r)
+                crate::expr::canon_branch(x.name()) == crate::expr::canon_branch(&r)
                     && matches!(x, Element::VSource { .. } | Element::Inductor { .. } | Element::Vcvs { .. } | Element::BSource { voltage: true, .. })
             });
             if !ok {

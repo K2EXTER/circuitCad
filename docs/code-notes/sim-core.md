@@ -148,3 +148,9 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - **PSpice の `U pullup(n)` / `pulldn(n)`**: ピンごとに 1kΩ で 5V / 0V へ。
 - **複数ビットの `dff(n)` `jkff(n)` `dltch(n)` `srff(n)`**: ピンの並びは「PREBAR CLRBAR CLK(GATE)、全ビットのデータ(D…、または J… K…)、全ビットの Q、全ビットの QBAR」(ビットごとの繰り返しではない。最初の実装は誤っていて、`dff(1)` だけ偶然合っていた)。
 - 効果: 89.1% → 90.1%(4286 → 4335 / 4812)。
+
+## 損失のある線路・式の抵抗・E 素子の電流(2026-10-18)
+- **損失のある線路** `O名前 a1 b1 a2 b2 モデル` (`.model … LTRA(R= L= C= G= LEN=)`)と、PSpice の `T名前 a1 b1 a2 b2 モデル` (`.model … TRN(len= r= l= c=)`): `spice_flat.rs lossy_line`。無損失の `T` と同じ 40 区間のはしご(`ladder`)に、区間ごとの直列抵抗 R(全長 R·LEN)と並列コンダクタンス G を足す。値は単位長さあたりで、全長 LEN を掛けて分ける。モデルの値の `{式}` は評価する。
+- **式で書いた抵抗** `R1 a b R = {式}`: B 電流源 `I = V(a,b) / (式)` にする。式の中の `Freq` は 0(AC 解析の外ではそう)。
+- **`I(E名)`**: フラット化が `VALUE=` の E/G 素子を `B_名` という B 電圧源にするので、`I(名)` が見つからなかった。`expr.rs canon_branch` が名前の `B_` を外して比べる(`dc/build.rs` と `spice_in.rs check_current_refs`)。
+- 効果: 90.1% → 91.4%(4335 → 4396 / 4812)。残る上位: `A` 素子の別の形(CM2.LIB の `d_osc`・`s_xfer` など)、`TABLE` の変則形(Triac)、XICOR の `A` カウンタ、`.lib` で外のファイルを読むもの。

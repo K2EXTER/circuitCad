@@ -22,7 +22,7 @@ pub fn needs_flatten(text: &str) -> bool {
     text.lines().any(|l| {
         let l = l.trim_start();
         let low = l.to_ascii_lowercase();
-        low.starts_with(['x', 'f', 'h', 'a', 'u', 't'])
+        low.starts_with(['x', 'f', 'h', 'a', 'u', 't', 'o'])
             || low.starts_with(".param")
             || low.starts_with(".func")
             || low.contains("params:")
@@ -474,6 +474,27 @@ impl Ctx<'_> {
                 out.extend(self.u_device(&t, path, ports, &prefix)?);
                 continue;
             }
+            if letter == 'R' && t.len() >= 4 && t[3].get(..2).is_some_and(|p| p.eq_ignore_ascii_case("r=")) {
+                // `R1 a b R = {expr}`: a resistance given by an expression (may read V() / I(); `Freq` is 0 outside an AC run)
+                let rest = t[3..].join(" ");
+                let e = rest.split_once('=').map_or("", |(_, e)| e);
+                let e = substitute_params(e, &env);
+                let e = rename_expr(&e, ports, &prefix, path);
+                let e = find_replace_word(&e, "freq", "0");
+                let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
+                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                out.push(format!("B_{head}{suffix} {a} {b} I=V({a},{b})/({e})"));
+                continue;
+            }
+            if letter == 'O' {
+                out.extend(self.lossy_line(&t, path, ports, &prefix, &env)?);
+                continue;
+            }
+            if letter == 'T' && t.len() == 6 && self.model_kinds.get(&t[5].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "trn" || ty == "ltra") {
+                // `T1 a1 b1 a2 b2 MODEL` with `.model MODEL TRN(len= r= l= c=)` (PSpice): the lossy line
+                out.extend(self.lossy_line(&t, path, ports, &prefix, &env)?);
+                continue;
+            }
             if letter == 'T' {
                 out.extend(Self::transmission_line(&t, path, ports, &prefix)?);
                 continue;
@@ -685,7 +706,6 @@ impl Ctx<'_> {
     /// as a ladder of `LINE_SECTIONS` L-C sections. It works in every analysis, but only below about `N / (pi * TD)` (the
     /// ladder rings and delays slightly differently from a true line); the return nodes `b1` and `b2` are joined.
     fn transmission_line(t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
-        const LINE_SECTIONS: usize = 40;
         let head = t[0].as_str();
         if t.len() < 5 {
             return Err(format!("{head}: 伝送線路は「T名前 入力+ 入力- 出力+ 出力- Z0=特性インピーダンス TD=遅れ時間」の形で書きます"));
@@ -701,22 +721,66 @@ impl Ctx<'_> {
             return Err(format!("{head}: 伝送線路の Z0 と TD は正の値にしてください"));
         }
         let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let (a1, b1, a2, b2) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix));
+        let nodes = [rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix)];
+        Ok(Self::ladder(head, &nodes, &suffix, prefix, z0 * td, td / z0, 0.0, 0.0))
+    }
+
+    /// A transmission line as `LINE_SECTIONS` sections of series `r` + `l` and shunt `c` + `g` (the totals over the line).
+    #[allow(clippy::too_many_arguments)]
+    fn ladder(head: &str, nodes: &[String; 4], suffix: &str, prefix: &str, l: f64, c: f64, r: f64, g: f64) -> Vec<String> {
+        const LINE_SECTIONS: usize = 40;
+        let [a1, b1, a2, b2] = nodes;
         let n = LINE_SECTIONS;
-        let (l, c) = (z0 * td / n as f64, td / (z0 * n as f64));
+        let (l, c, r, g) = (l / n as f64, c / n as f64, r / n as f64, g / n as f64);
         let node = |i: usize| if i == 0 { a1.clone() } else if i == n { a2.clone() } else { format!("{prefix}{head}_n{i}") };
         let mut lines = Vec::new();
         for i in 0..n {
-            lines.push(format!("L{head}_{i}{suffix} {} {} {l:e}", node(i), node(i + 1)));
+            if r > 0.0 {
+                let mid = format!("{prefix}{head}_m{i}");
+                lines.push(format!("R{head}_{i}{suffix} {} {mid} {r:e}", node(i)));
+                lines.push(format!("L{head}_{i}{suffix} {mid} {} {l:e}", node(i + 1)));
+            } else {
+                lines.push(format!("L{head}_{i}{suffix} {} {} {l:e}", node(i), node(i + 1)));
+            }
         }
         for i in 0..=n {
-            let cap = if i == 0 || i == n { c / 2.0 } else { c };
-            lines.push(format!("C{head}_{i}{suffix} {} {b1} {cap:e}", node(i)));
+            let k = if i == 0 || i == n { 0.5 } else { 1.0 };
+            lines.push(format!("C{head}_{i}{suffix} {} {b1} {:e}", node(i), c * k));
+            if g > 0.0 {
+                lines.push(format!("R{head}_g{i}{suffix} {} {b1} {:e}", node(i), 1.0 / (g * k)));
+            }
         }
         if b1 != b2 {
             lines.push(format!("R{head}_ret{suffix} {b1} {b2} 1e-6"));
         }
-        Ok(lines)
+        lines
+    }
+
+    /// A lossy line `O name a1 b1 a2 b2 MODEL` with `.model MODEL LTRA(R= L= C= G= LEN=)` (per unit length), as the same ladder.
+    fn lossy_line(&self, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str, env: &Env) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        if t.len() < 6 {
+            return Err(format!("{head}: 損失のある線路は「O名前 入力+ 入力- 出力+ 出力- モデル名」の形で書きます"));
+        }
+        let (ty, rest) = self.model_kinds.get(&t[5].to_ascii_lowercase()).ok_or_else(|| format!("{head}: 線路のモデル {} が見つかりません", t[5]))?;
+        if ty != "ltra" && ty != "trn" {
+            return Err(format!("{head}: 線路のモデル {} は LTRA / TRN ではありません", t[5]));
+        }
+        let inner = rest.split_once('(').map_or(rest.as_str(), |(_, r)| r.trim_end().trim_end_matches(')'));
+        let mut val = |k: &str| -> Result<f64, String> {
+            let found = split_top(&squash_eq_text(inner)).into_iter().find_map(|w| w.split_once('=').filter(|(n, _)| n.eq_ignore_ascii_case(k)).map(|(_, v)| v.to_string()));
+            match found {
+                Some(v) => eval_expr(&v, env),
+                None => Ok(0.0),
+            }
+        };
+        let (r, l, c, g, len) = (val("r")?, val("l")?, val("c")?, val("g")?, val("len")?);
+        if l <= 0.0 || c <= 0.0 || len <= 0.0 {
+            return Err(format!("{head}: 線路のモデルには L と C と LEN (正の値) が必要です"));
+        }
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let nodes = [rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix), rename_node(&t[3], ports, prefix), rename_node(&t[4], ports, prefix)];
+        Ok(Self::ladder(head, &nodes, &suffix, prefix, l * len, c * len, r * len, g * len))
     }
 
     /// A PSpice flip-flop or latch: `U dff(n) dpwr dgnd preb clrb clk d q qb ...` (`jkff`: `... clk j k q qb`, `dltch`: `... gate d q qb`,
@@ -1309,4 +1373,34 @@ fn extract_integrals(lines: Vec<String>) -> Vec<String> {
         out.extend(extra);
     }
     out
+}
+
+/// `text` with every whole word `word` (case-insensitive) replaced by `with`.
+fn find_replace_word(text: &str, word: &str, with: &str) -> String {
+    let b: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i].is_alphabetic() || b[i] == '_' {
+            let st = i;
+            while i < b.len() && (b[i].is_alphanumeric() || b[i] == '_') {
+                i += 1;
+            }
+            let id: String = b[st..i].iter().collect();
+            if id.eq_ignore_ascii_case(word) {
+                out.push_str(with);
+            } else {
+                out.push_str(&id);
+            }
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// `a = b` -> `a=b` (the blanks vendors put around `=` in a model card).
+fn squash_eq_text(s: &str) -> String {
+    crate::spice_in::squash_equals_pub(s)
 }

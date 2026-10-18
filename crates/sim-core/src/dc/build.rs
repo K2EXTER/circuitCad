@@ -143,7 +143,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         })
         .collect();
     for (at, expr) in b_exprs {
-        let compiled = expr.compile(&|nm| branch_of.iter().find(|(n, _)| n.eq_ignore_ascii_case(nm)).map(|(_, b)| *b));
+        let compiled = expr.compile(&|nm| branch_of.iter().find(|(n, _)| crate::expr::canon_branch(n) == crate::expr::canon_branch(nm)).map(|(_, b)| *b));
         if let Ce::B { c, .. } | Ce::Cq { c, .. } = &mut ce[at] {
             *c = compiled;
         }

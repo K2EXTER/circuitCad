@@ -370,7 +370,7 @@ fn unsupported_subckt_element_is_an_error_not_silence() {
     let mut c = Circuit::new();
     let (a, b) = (c.node("a"), c.node("b"));
     let text = ".subckt X 1 2
-O1 1 0 2 0 LOSSY
+W1 1 0 V1 SW1
 .ends X";
     let e = add_subckt_instance(&mut c, "U1", "X", text, &[a, b]).unwrap_err();
     assert!(e.contains("未対応"), "{e}");

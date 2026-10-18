@@ -506,6 +506,12 @@ impl CExpr {
     }
 }
 
+/// An element name with the `B_` that the flattener puts before a controlled source it turns into a behavioural one
+/// (`U1.B_E_Edg1` -> `u1.e_edg1`), so that `I(E_Edg1)` finds it.
+pub fn canon_branch(s: &str) -> String {
+    s.to_ascii_lowercase().split('.').map(|seg| seg.strip_prefix("b_").unwrap_or(seg)).collect::<Vec<_>>().join(".")
+}
+
 impl Expr {
     /// The same expression with `temp` replaced by `temp_c` (°C).
     pub fn at_temperature(&self, temp_c: f64) -> Expr {

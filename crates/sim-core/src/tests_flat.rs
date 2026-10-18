@@ -913,3 +913,26 @@ fn exp_source_pwrs_sgn_pulldn_and_multibit_dff() {
     let r = dc_op(&c).unwrap();
     assert!((r.voltage("q1").unwrap() - 5.0).abs() < 0.1 && (r.voltage("q2").unwrap() - 5.0).abs() < 0.1);
 }
+
+#[test]
+fn an_expression_may_read_the_current_of_an_e_source_given_by_value() {
+    let t = ".subckt T a b gnd\nE_Ed c 0 value = {V(a)}\nR1 c gnd 1k\nB1 b 0 V=I(E_Ed)*1000\nR2 b gnd 1meg\n.ends T";
+    // E_Ed drives 1 V into 1 k: 1 mA out of the + node; SPICE counts the current flowing through the source from + to -
+    let v = run(t, "T", &["a", "b", "gnd"], 1.0, "b");
+    assert!((v.abs() - 1.0).abs() < 1e-6, "{v}");
+}
+
+#[test]
+fn a_resistance_given_by_an_expression() {
+    let t = ".subckt T a b gnd {Rn=500}\nR1 a b R = {Rn} * 2 + Freq\nR2 b gnd 1k\n.ends T";
+    // 1k + 1k divider
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn a_lossy_line_has_a_series_resistance() {
+    // 100 ohm per metre over 1 m with L = 250 nH/m and C = 100 pF/m (Z0 = 50): 100 ohm in series at DC
+    let t = ".subckt T a b gnd\nO1 a gnd b gnd LOSSY\n.model LOSSY LTRA(R=100 G=0 L=250n C=100p LEN=1)\nRl b gnd 100\n.ends T";
+    let v = run(t, "T", &["a", "b", "gnd"], 2.0, "b");
+    assert!((v - 1.0).abs() < 1e-3, "{v}");
+}
