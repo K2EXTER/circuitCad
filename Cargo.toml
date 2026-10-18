@@ -3,9 +3,11 @@ resolver = "2"
 members = ["crates/pcb-core", "crates/sch-core", "crates/part-lib", "crates/sim-core", "crates/app"]
 
 # Debug builds of egui and the solver are very slow (a frame of a busy board took 15 ms, a transient run 20 s).
-# Optimise the dependencies fully and our own crates lightly; debug info and overflow checks stay.
+# Optimise the dependencies fully and our own crates lightly; overflow checks stay, debug info is reduced to line tables.
 [profile.dev]
 opt-level = 1
+# backtraces keep line numbers; full debug info made cold builds ~18% slower and target/ ~60% larger
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
