@@ -205,3 +205,17 @@ fn tran_speed() {
     println!("TRAN {:.2} s, {} points, {} rejected steps", t.elapsed().as_secs_f64(), r.time.len(), r.rejected);
     assert!(r.rejected < r.time.len() / 2, "the step control keeps retrying: {} rejected of {}", r.rejected, r.time.len());
 }
+
+/// The hand-routed board of the sample (docs/examples/mixed_signal.ccproj) opens with its schematic and passes the DRC.
+#[test]
+fn mixed_signal_project_opens_with_its_routed_board() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("mixed_signal.ccproj"));
+    assert_eq!(app.sch.sch.components.len(), mixed_signal().components.len(), "the project carries the same schematic as the sample");
+    let b = &app.board_ed.board;
+    assert_eq!(b.parts.len(), 41);
+    assert!(b.tracks.len() > 200 && !b.zones.is_empty());
+    let v = pcb_core::drc::check(b);
+    assert!(v.is_empty(), "{:?}", v.iter().map(|x| &x.message).collect::<Vec<_>>());
+}

@@ -1,6 +1,6 @@
 use super::*;
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
 /// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -50,6 +50,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         }
     if let Some(p) = args.iter().find(|a| a.ends_with(".ccproj")) {
         app.load_project(p.into());
+        if ["--drc", "--finish", "--smooth", "--3d", "--order", "--export", "--ir", "--select-track"].iter().any(|f| args.iter().any(|a| a == f)) {
+            app.mode = Mode::Board;
+            apply_board_args(app, args);
+        }
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
@@ -143,44 +147,50 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(p) = args.iter().find(|a| a.ends_with(".pcbjson")) {
         app.mode = Mode::Board;
         app.board_ed.load_path(p.into());
-        if args.iter().any(|a| a == "--drc") {
-            app.board_ed.run_drc();
-        }
-        if let Some(i) = args.iter().position(|a| a == "--select-track")
-            && let Some(n) = args.get(i + 1).and_then(|n| n.parse::<usize>().ok()) {
-                app.board_ed.select_track(n);
-            }
-        if args.iter().any(|a| a == "--finish") {
-            app.board_ed.set_finish(true);
-        }
-        if args.iter().any(|a| a == "--smooth") {
-            app.board_ed.smooth_tracks();
-        }
-        if args.iter().any(|a| a == "--autoplace") {
-            app.board_ed.autoplace();
-        }
-        if let Some(i) = args.iter().position(|a| a == "--round")
-            && let Some(r) = args.get(i + 1).and_then(|r| r.parse::<f64>().ok()) {
-                app.board_ed.round_outline(r);
-            }
-        for (i, _) in args.iter().enumerate().filter(|(_, a)| *a == "--ir") {
-            // --ir <net> <amps>  (repeatable): declare the net's current and show the voltage drop of its copper
-            if let (Some(net), Some(a)) = (args.get(i + 1), args.get(i + 2).and_then(|a| a.parse::<f64>().ok())) {
-                app.board_ed.show_ir_drop(net, a);
-            }
-        }
-        if args.iter().any(|a| a == "--3d") {
-            app.board_ed.open_view3d();
-        }
-        if args.iter().any(|a| a == "--order") {
-            app.board_ed.open_order();
-        }
-        if let Some(i) = args.iter().position(|a| a == "--export")
-            && let Some(dir) = args.get(i + 1) {
-                app.board_ed.status = match app.board_ed.write_fab_files(std::path::Path::new(dir)) {
-                    Ok(n) => format!("書き出し完了: {dir} ({n} ファイル + zip)"),
-                    Err(e) => format!("書き出し失敗: {e}"),
-                };
-            }
+        apply_board_args(app, args);
     }
+}
+
+/// The options that act on the board (`--drc`, `--finish`, `--3d`, `--order` ...): after a `.pcbjson` is opened, and after a
+/// `.ccproj` (a project with the board in it) when one of them is given.
+fn apply_board_args(app: &mut App, args: &[String]) {
+    if args.iter().any(|a| a == "--drc") {
+        app.board_ed.run_drc();
+    }
+    if let Some(i) = args.iter().position(|a| a == "--select-track")
+        && let Some(n) = args.get(i + 1).and_then(|n| n.parse::<usize>().ok()) {
+            app.board_ed.select_track(n);
+        }
+    if args.iter().any(|a| a == "--finish") {
+        app.board_ed.set_finish(true);
+    }
+    if args.iter().any(|a| a == "--smooth") {
+        app.board_ed.smooth_tracks();
+    }
+    if args.iter().any(|a| a == "--autoplace") {
+        app.board_ed.autoplace();
+    }
+    if let Some(i) = args.iter().position(|a| a == "--round")
+        && let Some(r) = args.get(i + 1).and_then(|r| r.parse::<f64>().ok()) {
+            app.board_ed.round_outline(r);
+        }
+    for (i, _) in args.iter().enumerate().filter(|(_, a)| *a == "--ir") {
+        // --ir <net> <amps>  (repeatable): declare the net's current and show the voltage drop of its copper
+        if let (Some(net), Some(a)) = (args.get(i + 1), args.get(i + 2).and_then(|a| a.parse::<f64>().ok())) {
+            app.board_ed.show_ir_drop(net, a);
+        }
+    }
+    if args.iter().any(|a| a == "--3d") {
+        app.board_ed.open_view3d();
+    }
+    if args.iter().any(|a| a == "--order") {
+        app.board_ed.open_order();
+    }
+    if let Some(i) = args.iter().position(|a| a == "--export")
+        && let Some(dir) = args.get(i + 1) {
+            app.board_ed.status = match app.board_ed.write_fab_files(std::path::Path::new(dir)) {
+                Ok(n) => format!("書き出し完了: {dir} ({n} ファイル + zip)"),
+                Err(e) => format!("書き出し失敗: {e}"),
+            };
+        }
 }
