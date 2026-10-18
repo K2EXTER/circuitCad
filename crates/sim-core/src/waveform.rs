@@ -318,9 +318,15 @@ fn parse_single(s: &str) -> Result<Waveform, String> {
             if n.len() < 2 || n.len() % 2 != 0 {
                 return Err("PWL(時間 値 時間 値 ...) は時間と値の組で指定してください".into());
             }
-            let pts: Vec<(f64, f64)> = n.chunks(2).map(|c| (c[0], c[1])).collect();
-            if pts.windows(2).any(|w| w[1].0 <= w[0].0) {
+            let mut pts: Vec<(f64, f64)> = n.chunks(2).map(|c| (c[0], c[1])).collect();
+            if pts.windows(2).any(|w| w[1].0 < w[0].0) {
                 return Err("PWL の時間は増加させてください".into());
+            }
+            // two points at the same time are a vertical step (`pwl(0 0 0 1 ...)`): make the edge 1 ps long
+            for i in 1..pts.len() {
+                if pts[i].0 <= pts[i - 1].0 {
+                    pts[i].0 = pts[i - 1].0 + 1e-12;
+                }
             }
             Ok(Waveform::Pwl(pts))
         }

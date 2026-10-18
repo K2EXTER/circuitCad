@@ -534,13 +534,31 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
             'V' | 'I' => {
                 need(3)?;
                 let (p, n) = (local(c, t[1]), local(c, t[2]));
+                // `Rser=` (series resistance of a V source), `Rpar=` / `Cpar=` (parallel R / C of a source): LTspice options
+                let opt_of = |key: &str| t[3.min(t.len())..].iter().find_map(|w| w.to_ascii_lowercase().strip_prefix(key).and_then(parse_value)).filter(|v| *v > 0.0);
+                let is_opt = |w: &&str| {
+                    let l = w.to_ascii_lowercase();
+                    l.starts_with("rser=") || l.starts_with("rpar=") || l.starts_with("cpar=")
+                };
+                let words: Vec<&str> = t[3.min(t.len())..].iter().filter(|w| !is_opt(w)).copied().collect();
                 // `Vsense a b` with no value is a 0 V source (a current probe)
-                let src = parse_source_full(&if t.len() > 3 { t[3..].join(" ") } else { "0".to_string() }).map_err(|e| format!("{name}: {e}"))?;
-                c.add(if head.to_ascii_uppercase().starts_with('V') {
-                    Element::VSource { name, p, n, wave: src.wave, ac: src.ac }
+                let src = parse_source_full(&if !words.is_empty() { words.join(" ") } else { "0".to_string() }).map_err(|e| format!("{name}: {e}"))?;
+                if head.to_ascii_uppercase().starts_with('V') {
+                    let rser = opt_of("rser=");
+                    let top = if rser.is_some() { c.node(&format!("{name}.ser")) } else { p };
+                    if let Some(r) = rser {
+                        c.add(Element::Resistor { name: format!("{name}.Rser"), a: top, b: p, r });
+                    }
+                    c.add(Element::VSource { name: name.clone(), p: top, n, wave: src.wave, ac: src.ac });
                 } else {
-                    Element::ISource { name, from: p, to: n, wave: src.wave, ac: src.ac }
-                });
+                    c.add(Element::ISource { name: name.clone(), from: p, to: n, wave: src.wave, ac: src.ac });
+                }
+                if let Some(r) = opt_of("rpar=") {
+                    c.add(Element::Resistor { name: format!("{name}.Rpar"), a: p, b: n, r });
+                }
+                if let Some(cp) = opt_of("cpar=") {
+                    c.add(Element::Capacitor { name: format!("{name}.Cpar"), a: p, b: n, c: cp });
+                }
             }
             'E' | 'G' => {
                 need(6)?;

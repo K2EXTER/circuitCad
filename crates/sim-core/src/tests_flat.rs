@@ -794,3 +794,34 @@ fn a_question_mark_default_means_the_caller_must_give_the_parameter() {
     let t = ".subckt T a b gnd {Rx=???}\nR1 a b {Rx}\nR2 b gnd 1k\n.ends T";
     assert!(err(t, "T", &["a", "b", "gnd"]).contains("Rx"));
 }
+
+#[test]
+fn table_sources_read_tabs_element_names_with_table_in_them_and_table_equals() {
+    // points separated by tabs, and an element called E_Table
+    let t = ".subckt T a b gnd\nE_Table b 0 TABLE {V(a)}\n+ 0\t0\n+ 2\t1\nRl b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-6);
+    // TABLE=(x0,y0,x1,y1) after the control nodes
+    let t = ".subckt T a b gnd\nG1 b 0 a 0 TABLE=(-1,-1m,1,1m)\nRl b gnd 1k\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 0.5, "b").abs() - 0.5).abs() < 1e-6);
+}
+
+#[test]
+fn a_table_keyword_is_found_as_a_word_and_a_pwl_may_repeat_a_time() {
+    // the node name VAKTABLE must not be taken for the keyword
+    let t = ".subckt T a b gnd\nE_Vak b 0 TABLE { V(a) } ( (0,0) (2,1) )\nRl b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-6);
+    assert!(matches!(crate::waveform::parse_source("pwl(0 0 0 1 1m 1)"), Ok(Waveform::Pwl(p)) if p.len() == 3 && p[1].0 > 0.0));
+    assert!(crate::waveform::parse_source("pwl(1m 0 0 1)").is_err());
+}
+
+#[test]
+fn a_source_may_have_a_series_resistance_rser() {
+    // 2 V behind 1k into 1k: 1 V
+    let t = ".subckt T a b gnd\nV1 b gnd 2 Rser=1k\nR1 b a 1\n.ends T";
+    let mut c = Circuit::new();
+    let (a, b) = (c.node("a"), c.node("b"));
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Rl".into(), a, b: 0, r: 1e3 });
+    let v = dc_op(&c).unwrap().voltage("a").unwrap();
+    assert!((v - 1.0).abs() < 2e-3, "{v}");
+}

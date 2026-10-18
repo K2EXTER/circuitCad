@@ -75,6 +75,19 @@ fn split_top(s: &str) -> Vec<String> {
     out
 }
 
+/// Position of `word` in `text` (from `from` on) where it starts a word: `TABLE` but not `VAKTABLE`.
+fn find_word(text: &str, from: usize, word: &str) -> Option<usize> {
+    let mut at = from;
+    while let Some(p) = text.get(at..)?.find(word) {
+        let pos = at + p;
+        if text[..pos].chars().next_back().is_none_or(|c| !(c.is_alphanumeric() || c == '_')) {
+            return Some(pos);
+        }
+        at = pos + word.len();
+    }
+    None
+}
+
 /// Old PSpice writes the parameters of a `.subckt` header (and of an `X` call) as one braced group:
 /// `.subckt CAP 1 2 {TTest=27 Cnom=.1U}`. Opens such a group into separate `name=value` words.
 fn unbrace(tokens: Vec<String>) -> Vec<String> {
@@ -861,11 +874,11 @@ impl Ctx<'_> {
         let raw_low = raw.to_ascii_lowercase();
         // `G n+ n- cp cn table(x0 y0 x1 y1 ...)`: the curve of the control voltage
         if matches!(letter, 'E' | 'G')
-            && let Some(pos) = low.find("table(")
+            && let Some((pos, skip)) = [("table(", 6), ("table=(", 7)].iter().find_map(|(k, n)| find_word(&low, head.len(), k).map(|p| (p, *n)))
             && t.len() >= 6
         {
-            let list = &line[pos + 6..];
-            let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split([' ', ',']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+            let list = &line[pos + skip..];
+            let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
             if nums.len() < 4 || !nums.len().is_multiple_of(2) {
                 return Err(format!("{head}: table(x0 y0 x1 y1 ...) は、点 (x y) を 2 つ以上並べます"));
             }
@@ -874,7 +887,7 @@ impl Ctx<'_> {
             return Ok(format!("{name} {p} {n} {}={}", if out_is_voltage { "V" } else { "I" }, pwl_expr(&x, &mut pts)));
         }
         if matches!(letter, 'E' | 'G')
-            && let Some(pos) = raw_low.find("table")
+            && let Some(pos) = find_word(&raw_low, head.len(), "table")
         {
             // `TABLE {expr} = (x,y) ...`, `TABLE {expr} ((x,y)(x,y))` or `TABLE expr = ...`
             let after = raw[pos + 5..].trim_start();
@@ -904,7 +917,7 @@ impl Ctx<'_> {
             let mut pts: Vec<(f64, f64)> = vec![];
             for chunk in rest.split(')') {
                 if let Some(open) = chunk.rfind('(') {
-                    let nums: Vec<f64> = chunk[open + 1..].split([',', ' ']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+                    let nums: Vec<f64> = chunk[open + 1..].split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
                     if nums.len() == 2 {
                         pts.push((nums[0], nums[1]));
                     }
@@ -912,7 +925,7 @@ impl Ctx<'_> {
             }
             if pts.is_empty() && !rest.contains('(') {
                 // the points without parentheses: `x y x y ...` (one pair per continuation line)
-                let nums: Vec<f64> = rest.split([',', ' ']).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
+                let nums: Vec<f64> = rest.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
                 pts = nums.chunks_exact(2).map(|c| (c[0], c[1])).collect();
             }
             if pts.len() < 2 {
