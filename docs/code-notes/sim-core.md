@@ -90,3 +90,6 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - **`4316RMS_THAT`(RMS-DC 変換): ** DC は収束しない。過渡は通る(入力 0V の簡易回路では RMS の式が 0 割りに近い)。
 - この調べで分かった LTspice の `A` 素子のピン: **入力は 1〜5 番、真の出力は 7 番、反転出力は 6 番**(`A a b 0 0 0 y 0 0 AND` は NAND、`A a 0 0 0 0 y 0 0 BUF` は反転)。スイッチングレベルは `Ref=`(ゲート)・`Vt=`(シュミット)。`gate_device` と `seq_device` はこの規約で読む(以前は出力を 7 番だけとしていたので、6 番の出力を持つゲートが読めなかった)。出力抵抗 `Rout=`・容量 `Cout=`・遅延 `Td=` はまだ無視。
 
+
+## PSpice の記憶つき U 素子(2026-10-18)
+`spice_flat.rs u_seq_device`: `U dff(n)`(`PREBAR CLRBAR CLK D Q QBAR`)・`jkff(n)`(`… CLK J K Q QBAR`)・`dltch(n)`(`… GATE D Q QBAR`)・`srff(n)`(`… GATE S R Q QBAR`、ゲートつき SR ラッチとして `Srlatch` に)を、既存の `Z` 行(`Element::Seq`)に変換する。プリセット/クリアは負論理(`set_low`/`reset_low`=1)、レベルは 0〜5V。`$D_HI` は 5V の電圧源(`__hi…`)、`$D_LO` は GND。複数ビット(`dff(2)`)は1ビットずつ `Z` 行にする。遅延は無視、カウンタなどは未対応のまま。テストは `tests_flat.rs` の `pspice_*`。

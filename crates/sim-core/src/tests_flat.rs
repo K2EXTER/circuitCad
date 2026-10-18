@@ -667,3 +667,21 @@ A3 a 0 0 0 0 0 0 0 BUF
     let (y1, _) = run(1.0, 0.0);
     assert!(y1 > 0.98, "NAND(1,0) {y1}");
 }
+
+#[test]
+fn pspice_dff_preset_and_clear_are_active_low() {
+    // preb comes from the port `a` (driven by the test), clrb is the constant $D_HI (inactive)
+    let t = ".subckt T a q gnd\nU1 dff(1) $G_DPWR $G_DGND a $D_HI clk d q qb D_DFF IO_STD\nR1 q gnd 10k\n.ends T";
+    assert!((run(t, "T", &["a", "q", "gnd"], 0.0, "q") - 5.0).abs() < 0.1, "preset low sets Q");
+    assert!(run(t, "T", &["a", "q", "gnd"], 5.0, "q").abs() < 0.1, "preset high leaves the initial 0");
+    let t = ".subckt T a q gnd\nU1 dff(1) $G_DPWR $G_DGND $D_HI a clk d q qb D_DFF IO_STD\nR1 q gnd 10k\n.ends T";
+    assert!(run(t, "T", &["a", "q", "gnd"], 0.0, "q").abs() < 0.1, "clear low resets Q");
+}
+
+#[test]
+fn pspice_jkff_and_latch_are_read() {
+    let t = ".subckt T a q gnd\nU1 jkff(1) $G_DPWR $G_DGND a $D_HI clk j k q qb D_JK IO_STD\nR1 q gnd 10k\n.ends T";
+    assert!((run(t, "T", &["a", "q", "gnd"], 0.0, "q") - 5.0).abs() < 0.1);
+    let t = ".subckt T a q gnd\nU1 dltch(1) $G_DPWR $G_DGND a $D_HI g d q qb D_LATCH IO_STD\nR1 q gnd 10k\n.ends T";
+    assert!((run(t, "T", &["a", "q", "gnd"], 0.0, "q") - 5.0).abs() < 0.1);
+}

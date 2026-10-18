@@ -624,6 +624,57 @@ impl Ctx<'_> {
         Ok(Some(vec![format!("Z{head}{suffix} {kind} {q} {qb} {vlow:e} {vhigh:e} {vt:e} {vh:e} 0 0 {}", ins.join(" "))]))
     }
 
+    /// A PSpice flip-flop or latch: `U dff(n) dpwr dgnd preb clrb clk d q qb ...` (`jkff`: `... clk j k q qb`, `dltch`: `... gate d q qb`,
+    /// `srff`: `... gate s r q qb`, a gated SR latch). Preset / clear are active low; the pins are repeated once per bit.
+    /// `$D_HI` (inactive) and `$D_LO` (active) are the digital constants. Delays are ignored.
+    fn u_seq_device(&self, t: &[String], name: &str, count: usize, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        // (kind, data pins before q / qb, SeqKind input order as indices into [preb clrb clk a b])
+        let (kind, n_data) = match name {
+            "dff" => ("dff", 2),
+            "jkff" => ("jkff", 3),
+            "dltch" => ("dlatch", 2),
+            _ => ("srlatch", 3),
+        };
+        let per_bit = 2 + n_data + 2;
+        let bits = count.max(1);
+        if t.len() < 4 + per_bit * bits {
+            return Err(format!("{head}: {name}({bits}) は「電源 GND と、1 ビットごとに PREBAR CLRBAR {} Q QBAR」の形で書きます", if n_data == 2 { if kind == "dff" { "CLK D" } else { "GATE D" } } else if kind == "jkff" { "CLK J K" } else { "GATE S R" }));
+        }
+        let mut lines = Vec::new();
+        let hi = format!("__hi{suffix}_{head}");
+        let mut need_hi = false;
+        let mut node = |n: &str| -> String {
+            match n.to_ascii_lowercase().as_str() {
+                "$d_hi" => {
+                    need_hi = true;
+                    hi.clone()
+                }
+                "$d_lo" => "0".to_string(),
+                _ => rename_node(n, ports, prefix),
+            }
+        };
+        for b in 0..bits {
+            let p = &t[4 + per_bit * b..4 + per_bit * (b + 1)];
+            let (preb, clrb, clk) = (node(&p[0]), node(&p[1]), node(&p[2]));
+            let data: Vec<String> = p[3..2 + n_data].iter().map(|n| node(n)).collect();
+            let (q, qb) = (rename_node(&p[2 + n_data], ports, prefix), rename_node(&p[3 + n_data], ports, prefix));
+            let ins = match kind {
+                "dff" => vec![data[0].clone(), clk, preb, clrb],
+                "jkff" => vec![data[0].clone(), data[1].clone(), clk, preb, clrb],
+                "dlatch" => vec![data[0].clone(), clk, preb, clrb],
+                _ => vec![data[0].clone(), data[1].clone(), clk, preb, clrb],
+            };
+            let bit = if bits > 1 { format!("_{b}") } else { String::new() };
+            lines.push(format!("Z{head}{bit}{suffix} {kind} {q} {qb} 0 5 2.5 0 1 1 {}", ins.join(" ")));
+        }
+        if need_hi {
+            lines.push(format!("V{hi} {hi} 0 DC 5"));
+        }
+        Ok(lines)
+    }
+
     /// A PSpice digital gate: `Uname type(n) dpwr dgnd in1 .. inN out delay-model io-model ...` (`nand(2)`, `inv`, `buf` ...). The
     /// supply pins are ignored: the levels are 0 and 5 V (true above 2.5 V), like `gate_device` otherwise. Anything with a
     /// memory (flip-flops, latches, counters) is reported.
@@ -639,7 +690,8 @@ impl Ctx<'_> {
             "nxor" => "xnor",
             "bufa" => "buf",
             "inva" => "inv",
-            _ => return Err(format!("{head}: PSpice のデジタル部品「{ty}」は未対応です (AND / OR / バッファ / インバータ などの組合せ回路だけ読めます。記憶や遅れを持つ部品は、アナログ回路としては表せません)")),
+            "dff" | "jkff" | "dltch" | "srff" => return self.u_seq_device(t, &name, count, path, ports, prefix),
+            _ => return Err(format!("{head}: PSpice のデジタル部品「{ty}」は未対応です (AND / OR / バッファ / インバータ / フリップフロップ / ラッチだけ読めます。カウンタなどは、アナログ回路としては表せません)")),
         };
         let n_in = if matches!(kind, "buf" | "inv") { 1 } else { count };
         if t.len() < 4 + n_in + 1 {
