@@ -243,6 +243,10 @@ fn split_sum(t: &str) -> Vec<&str> {
 fn parse_single(s: &str) -> Result<Waveform, String> {
     let t = s.trim();
     let lower = t.to_ascii_lowercase();
+    // `DC=1.21` is `DC 1.21`
+    if let Some(rest) = lower.strip_prefix("dc=") {
+        return parse_value(rest.trim()).map(Waveform::Dc).ok_or_else(|| format!("値「{t}」を数値にできません"));
+    }
     // `DC 0 PULSE(...)`: the DC value is only the level before the waveform starts; the waveform is what runs
     if lower.starts_with("dc ")
         && let Some((first, after)) = t[3..].trim_start().split_once(char::is_whitespace)

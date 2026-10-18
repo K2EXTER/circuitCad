@@ -175,6 +175,14 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         }
     };
 
+    // memory elements start from the levels of the initial point (solve_op settles them itself, a start with held capacitor
+    // voltages or from zero needs this)
+    for _ in 0..4 {
+        if !(cm.has_seq() && cm.seq_update(None, &x)) {
+            break;
+        }
+    }
+
     let mut cap_v = vec![0.0; cm.n_caps];
     let mut cap_i = vec![0.0; cm.n_caps];
     let mut ind_i = vec![0.0; cm.n_inds];
@@ -351,14 +359,16 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
             }
         }
         t = if lands_on_bp { bps[bp_idx] } else { t + h };
+        // a flip-flop or latch that changed: its outputs jump at the next step, so restart like at a source corner
+        let seq_changed = cm.has_seq() && cm.seq_update(Some(&x), &att.x);
         x = att.x;
         vj = att.vj;
         // the step after a retry has no reliable current history either
-        force_be = lands_on_bp || retried;
+        force_be = lands_on_bp || retried || seq_changed;
         record(&mut result, t, &x, &cap_i, &cm);
 
         // the next step: grow while the error estimate leaves room, never beyond `tstep`
-        if lands_on_bp {
+        if lands_on_bp || seq_changed {
             hist.clear();
             // restart from about the length of the step that reached the corner
             h_ctrl = h.max(s.tstep * 1e-3).min(s.tstep);

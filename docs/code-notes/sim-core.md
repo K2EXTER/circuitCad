@@ -74,3 +74,11 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - 読めないもの(段階2以降): SCHMITT・SRFLOP・DFLOP・カウンタなど記憶のある部品と、遅延。遅延は無視する(`td`、`rise_delay` など)。接地につないだ入力は「使っていないピン」として無視する(LTspice と同じ)。
 - 効果(公開モデル集での一括確認): 読めて解けた割合 73% → 75.5%(3507 → 3632 / 4812)。
 
+## デジタル部品(段階2: 記憶のある部品、2026-10-18)
+フリップフロップ・ラッチ・シュミットトリガは `Element::Seq`(`SeqKind`: Dff/Tff/Jkff/Srff/Dlatch/Srlatch/Schmitt、`SeqLevels`: vlow/vhigh/vt/vh と set/reset の極性)。**状態(0か1)は回路方程式の未知数にしない**: 出力 q・qb は「状態のレベルを出す電圧源」(接地に対して、`Ce::Seq`、`dc/mna.rs`)で、状態は解と解の間に `dc/seq.rs` の `seq_update` が更新する。だからニュートン法はラッチの帰還ループを解かずに済み、DC の収束と起動時の中間電圧での居座りが起きない。
+- 更新の規則(`seq_update`): セット/リセットは即時(同時のときは今の状態を保つ)。クロックの立ち上がり(前の採用点では閾値より下、今は上)で、データは**エッジの前の採用点の値**を取り込む。ラッチ(`Dlatch`/`Srlatch`)は許可が真の間ずっと追従。シュミットは `vt±vh` を超えたときだけ反転。DC(`solve_op`)は、状態を更新してはもう一度解く、を最大16回(状態が電圧と合うまで)。過渡は、採用した刻みのあとに更新し、状態が変わったら電源の角と同じ扱い(次は後退オイラー、履歴を捨てる)。
+- 精度の限界: 状態の変化は次の刻みから効く(遅れは最大で1刻み。エッジの時刻を刻みの途中に合わせる処理はまだ)。遅延(`td`、`clk_delay` など)は無視。
+- 読める書き方: LTspice の `A` 素子 `DFLOP`/`SRFLOP`/`JKFLOP`/`SCHMITT`(ピンは `in1 in2 clk set reset qbar q`、set/reset は正論理、`Vt`/`Vh`/`vlow`/`vhigh`。使いかたからの推定で、LTspice の資料では確認していない)と、ngspice の `d_dff d_tff d_jkff d_srff d_dlatch d_srlatch`(使わない端子は `NULL`)。フラット化後は内部の `Z` 行(`Z名 種類 q qb vlow vhigh vt vh set_low reset_low 入力…`)になる。
+- 読めないまま: PSpice の `U dff(1)` などの記憶つき部品、`ONESHOT`/`PHASEDET`/`MODULATOR` などの `A` 素子。
+- 効果(一括確認): 読めて解けた割合 75.5% → 76.1%(3632 → 3660 / 4812)。DC が収束しなかったのは 11 個(いずれも電源のピン名が曖昧か、電圧源だけのサブサーキットなど。`OPA170`・`OPA1662` は DC は通るが過渡で `Singular`: 調査中)。
+

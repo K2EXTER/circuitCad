@@ -10,7 +10,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     let mut n_nodes = c.names.len();
     let mut n_br = 0;
     let mut n_slots = 0;
-    let (mut n_caps, mut n_inds) = (0, 0);
+    let (mut n_caps, mut n_inds, mut n_seq) = (0, 0, 0);
     let mut ce = vec![];
     let mut b_exprs: Vec<(usize, &crate::expr::Expr)> = vec![];
     // branch unknowns are numbered after all node unknowns; node count is fixed after the loop,
@@ -49,6 +49,20 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
             // coupled inductors are compiled after all the inductors are known (below)
             Element::Mutual { .. } => {}
+            Element::Seq { kind, ins, q, qb, levels, .. } => {
+                // one branch per used output; `usize::MAX` marks an output left unconnected
+                let mut take = |node: usize| {
+                    if node == 0 {
+                        usize::MAX
+                    } else {
+                        n_br += 1;
+                        br_base + n_br - 1
+                    }
+                };
+                let (br_q, br_qb) = (take(*q), take(*qb));
+                ce.push(Ce::Seq { kind: *kind, ins: ins.clone(), q: *q, qb: *qb, br_q, br_qb, idx: n_seq, lv: *levels });
+                n_seq += 1;
+            }
             Element::Vccs { name, p, n, cp, cn, gm } => {
                 ce.push(Ce::G { name: name.clone(), p: *p, n: *n, cp: *cp, cn: *cn, gm: *gm })
             }
@@ -130,7 +144,8 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     }
     let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
-    Compiled { node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), ce }
+    let seq_state = std::cell::RefCell::new(vec![0.0; n_seq]);
+    Compiled { seq_state, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

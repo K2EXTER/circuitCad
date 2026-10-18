@@ -381,8 +381,9 @@ fn the_ota_a_device_is_a_transconductance_and_the_other_a_devices_are_explained(
     let t = ".subckt T inp out gnd\nA1 out inp 0 0 0 0 out 0 OTA G=1 Cout=1p Iout=1\nR1 out gnd 1k\n.ends T";
     let v = run(t, "T", &["inp", "out", "gnd"], 1.0, "out");
     assert!((v - 1000.0 / 1001.0).abs() < 1e-6, "{v}");
-    let e = err(".subckt T a b gnd\nA1 a 0 0 0 0 0 b 0 SCHMITT Vt=0 Vh=1m\n.ends T", "T", &["a", "b"]);
-    assert!(e.contains("SCHMITT") && e.contains("未対応"), "{e}");
+    // a device with no meaning here (not a gate, flip-flop or Schmitt trigger) is named in the error
+    let e = err(".subckt T a b gnd\nA1 a 0 0 0 0 0 b 0 MODULATOR Vt=0 Vh=1m\n.ends T", "T", &["a", "b"]);
+    assert!(e.contains("MODULATOR") && e.contains("未対応"), "{e}");
 }
 
 /// Developer helper: for a subcircuit that does not solve, list the elements whose removal makes the DC point solvable.
@@ -577,4 +578,48 @@ aoc in out oc
         let v = dc_op(&c).unwrap().voltage("o").unwrap();
         assert!((v - want).abs() < 0.6, "open collector in {vin}: {v}");
     }
+}
+
+/// Flip-flops and latches keep a stored state: a toggling D flip-flop (D tied to its own Q-bar) divides the clock by two, a
+/// Schmitt trigger has hysteresis, and an S-R latch holds what was set.
+#[test]
+fn flip_flops_latches_and_schmitt_triggers_have_a_memory() {
+    // ripple stage: q toggles on every rising clock edge
+    let tff = ".subckt T clk q qb gnd
+.model ff d_dff
+a1 qb clk NULL NULL q qb ff
+.ends T";
+    let mut c = Circuit::new();
+    let (clk, q, qb) = (c.node("clk"), c.node("q"), c.node("qb"));
+    c.add(Element::VSource { name: "Vc".into(), p: clk, n: 0, wave: Waveform::Pulse { v1: 0.0, v2: 1.0, td: 0.5e-6, tr: 10e-9, tf: 10e-9, pw: 1e-6, per: 2e-6 }, ac: None });
+    add_subckt_instance(&mut c, "U1", "T", tff, &[clk, q, qb, 0]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Rq".into(), a: q, b: 0, r: 10e3 });
+    c.add(Element::Resistor { name: "Rqb".into(), a: qb, b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 9e-6, tstep: 20e-9, uic: false }).unwrap();
+    let vq = r.signal("V(q)").unwrap();
+    let rising = vq.values.windows(2).filter(|w| w[0] < 0.5 && w[1] >= 0.5).count();
+    let (lo, hi) = vq.values.iter().fold((f64::MAX, f64::MIN), |a, v| (a.0.min(*v), a.1.max(*v)));
+    // 4 clock edges (at 0.5, 2.5, 4.5, 6.5, 8.5 µs = 5): q rises on edges 1, 3, 5
+    assert!(lo < 0.05 && hi > 0.95, "swing {lo} {hi}");
+    assert_eq!(rising, 3, "q rose {rising} times in 5 clock edges");
+    // Schmitt trigger (LTspice A device): trips at Vt + Vh going up, back at Vt - Vh going down
+    let sch = ".subckt S in out gnd
+A1 in 0 0 0 0 0 out 0 SCHMITT Vt=0.5 Vh=0.1
+.ends S";
+    let mut c = Circuit::new();
+    let (i, o) = (c.node("i"), c.node("o"));
+    let ramp = Waveform::Pwl(vec![(0.0, 0.0), (1e-3, 1.0), (2e-3, 0.0)]);
+    c.add(Element::VSource { name: "Vi".into(), p: i, n: 0, wave: ramp, ac: None });
+    add_subckt_instance(&mut c, "U1", "S", sch, &[i, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Ro".into(), a: o, b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 2e-3, tstep: 5e-6, uic: false }).unwrap();
+    let (vi, vo) = (r.signal("V(i)").unwrap(), r.signal("V(o)").unwrap());
+    let level_at = |lo: f64, hi: f64, up: bool| {
+        // the input voltage at the first point where the output is high (rising ramp) / low again (falling ramp)
+        let n = r.time.len();
+        let range: Vec<usize> = (0..n).filter(|&k| (r.time[k] < 1e-3) == up).collect();
+        range.iter().copied().find(|&k| if up { vo.values[k] > 0.5 } else { vo.values[k] < 0.5 }).map(|k| vi.values[k]).filter(|v| *v > lo && *v < hi)
+    };
+    assert!(level_at(0.55, 0.7, true).is_some(), "rising trip near 0.6 V");
+    assert!(level_at(0.3, 0.45, false).is_some(), "falling trip near 0.4 V");
 }

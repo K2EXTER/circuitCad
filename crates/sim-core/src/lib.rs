@@ -35,7 +35,7 @@ mod waveform;
 
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use expr::Expr;
-pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
+pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SeqKind, SeqLevels, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};

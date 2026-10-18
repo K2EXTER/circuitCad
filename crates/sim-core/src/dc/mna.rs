@@ -164,6 +164,18 @@ impl Compiled {
                         }
                     }
                 }
+                Ce::Seq { q, qb, br_q, br_qb, idx, lv, .. } => {
+                    // the outputs sit at the level of the stored state: the state itself is not an unknown, so nothing loops
+                    let s = self.seq_state.borrow().get(*idx).copied().unwrap_or(0.0);
+                    if *br_q != usize::MAX {
+                        m.branch(*q, 0, *br_q);
+                        m.b[*br_q] = lv.vlow + (lv.vhigh - lv.vlow) * s;
+                    }
+                    if *br_qb != usize::MAX {
+                        m.branch(*qb, 0, *br_qb);
+                        m.b[*br_qb] = lv.vlow + (lv.vhigh - lv.vlow) * (1.0 - s);
+                    }
+                }
                 Ce::K { br1, br2, idx1, idx2, m: mutual, .. } => {
                     // v1 = L1 di1/dt + M di2/dt (and the other way round): the companion terms of the other inductor's current
                     if let Some(d) = &ctx.dynamic {

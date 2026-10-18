@@ -189,7 +189,7 @@ pub fn noise_analysis(circuit: &Circuit, st: &NoiseSettings) -> Result<NoiseResu
                 let g = m.eval(v(&op.x, *cp) - v(&op.x, *cn)).0;
                 srcs.push(Src { name: name.clone(), p: *a, n: *b, s: kt4 * g });
             }
-            Ce::C { .. } | Ce::L { .. } | Ce::K { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } | Ce::B { .. } => {}
+            Ce::C { .. } | Ce::L { .. } | Ce::K { .. } | Ce::Seq { .. } | Ce::V { .. } | Ce::I { .. } | Ce::E { .. } | Ce::G { .. } | Ce::B { .. } => {}
         }
     }
 

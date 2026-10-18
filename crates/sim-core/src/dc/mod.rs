@@ -80,6 +80,8 @@ pub(crate) enum Ce {
     Q { name: String, c: usize, b: usize, bi: usize, e: usize, ci: usize, ei: usize, m: BjtModel, slot: usize, cap: Option<usize> },
     M { name: String, d: usize, g: usize, s: usize, m: MosModel },
     S { name: String, a: usize, b: usize, cp: usize, cn: usize, m: SwitchModel },
+    /// A flip-flop / latch / Schmitt trigger: two voltage-source outputs (`br_q`, `br_qb`; node 0 = unused) at the level of state `idx`.
+    Seq { kind: crate::SeqKind, ins: Vec<usize>, q: usize, qb: usize, br_q: usize, br_qb: usize, idx: usize, lv: crate::SeqLevels },
     /// `br` is only meaningful for a voltage-type source.
     B { name: String, p: usize, n: usize, voltage: bool, br: usize, c: crate::expr::CExpr },
 }
@@ -103,6 +105,8 @@ pub(crate) struct Compiled {
     /// the step shrinks to land on source corners and then returns to the nominal value.
     cache: std::cell::RefCell<Vec<(FactorKey, std::rc::Rc<Factor>)>>,
     pub(crate) ce: Vec<Ce>,
+    /// The stored state (0 or 1) of every `Ce::Seq`, changed only between solves.
+    pub(crate) seq_state: std::cell::RefCell<Vec<f64>>,
 }
 
 
@@ -111,6 +115,7 @@ mod devices;
 mod linalg;
 mod mna;
 mod newton;
+mod seq;
 
 // the pieces see each other through the parent; the rest of the crate gets what it needs from here
 use build::*;
@@ -156,6 +161,11 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
             Element::Mosfet { d, s, .. } => union(*d, *s),
             Element::Switch { a, b, .. } => union(*a, *b),
             Element::Mutual { .. } => {}
+            // the outputs are voltage sources against ground
+            Element::Seq { q, qb, .. } => {
+                union(*q, 0);
+                union(*qb, 0);
+            }
             Element::Bjt { c, b, e, .. } => {
                 union(*c, *e);
                 union(*b, *e);
@@ -242,6 +252,7 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::Mosfet { d, g, s, .. } => *d == 0 || *g == 0 || *s == 0,
         Element::Switch { a, b, cp, cn, .. } => *a == 0 || *b == 0 || *cp == 0 || *cn == 0,
         Element::Mutual { .. } => false,
+        Element::Seq { .. } => true,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } | Element::BSource { p, n, .. } => *p == 0 || *n == 0,
     })
@@ -264,7 +275,20 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
     let mut last = SimError::NoConvergence;
     for &which in order {
         match cm.run(which) {
-            Ok(att) => {
+            Ok(mut att) => {
+                // the stored states of flip-flops and latches follow the operating point: update them and solve again until
+                // they agree with the voltages (a few rounds at most; a ring of them can chase its own tail)
+                if cm.has_seq() {
+                    for _ in 0..16 {
+                        if !cm.seq_update(None, &att.x) {
+                            break;
+                        }
+                        match cm.run(which) {
+                            Ok(a) => att = a,
+                            Err(_) => break,
+                        }
+                    }
+                }
                 let name = match which {
                     Strategy::Direct => "direct",
                     Strategy::Gmin => "gmin stepping",
@@ -333,7 +357,7 @@ impl Compiled {
                     let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::K { .. } => {}
+                Ce::K { .. } | Ce::Seq { .. } => {}
                 Ce::I { name, from, to, wave, .. } => {
                     let (i, vv) = (src(wave), v(x, *from) - v(x, *to));
                     push(name, i, vv, vec![], vv * i);

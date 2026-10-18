@@ -186,6 +186,35 @@ pub enum Element {
     BSource { name: String, p: usize, n: usize, voltage: bool, expr: Expr },
     /// Coupling of two inductors (SPICE `K`): the mutual inductance is `k * sqrt(L1 * L2)`. No effect at DC.
     Mutual { name: String, l1: String, l2: String, k: f64 },
+    /// A digital element with a memory (flip-flop, latch, Schmitt trigger). Its outputs are voltage sources whose level
+    /// follows a stored state that changes only between time steps, never inside a Newton iteration. See `SeqKind`.
+    Seq { name: String, kind: SeqKind, ins: Vec<usize>, q: usize, qb: usize, levels: SeqLevels },
+}
+
+/// What a `Element::Seq` is, with the order of its inputs in `ins` (node 0 = tied low):
+/// `Dff` d clk set reset, `Tff` t clk set reset, `Jkff` j k clk set reset, `Srff` s r clk set reset (clk tied low: level
+/// sensitive), `Dlatch` d en set reset, `Srlatch` s r en set reset, `Schmitt` in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeqKind {
+    Dff,
+    Tff,
+    Jkff,
+    Srff,
+    Dlatch,
+    Srlatch,
+    Schmitt,
+}
+
+/// Logic levels of a `Seq`: the output voltages, the input threshold and (Schmitt) the half-width of the hysteresis.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SeqLevels {
+    pub vlow: f64,
+    pub vhigh: f64,
+    pub vt: f64,
+    pub vh: f64,
+    /// Set / reset are active when low (PSpice and 74xx flip-flops) instead of when high.
+    pub set_low: bool,
+    pub reset_low: bool,
 }
 
 impl Element {
@@ -207,7 +236,8 @@ impl Element {
             | Element::Vccs { name, .. }
             | Element::Switch { name, .. }
             | Element::BSource { name, .. }
-            | Element::Mutual { name, .. } => name,
+            | Element::Mutual { name, .. }
+            | Element::Seq { name, .. } => name,
         }
     }
 }

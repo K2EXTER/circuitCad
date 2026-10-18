@@ -490,6 +490,25 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     _ => Element::Inductor { name, a, b, l: x },
                 });
             }
+            'Z' => {
+                // internal line written by the flattener: Z<name> kind q qb vlow vhigh vt vh set_low reset_low in...
+                need(11)?;
+                let kind = match t[1] {
+                    "dff" => crate::SeqKind::Dff,
+                    "tff" => crate::SeqKind::Tff,
+                    "jkff" => crate::SeqKind::Jkff,
+                    "srff" => crate::SeqKind::Srff,
+                    "dlatch" => crate::SeqKind::Dlatch,
+                    "srlatch" => crate::SeqKind::Srlatch,
+                    "schmitt" => crate::SeqKind::Schmitt,
+                    other => return Err(format!("{name}: 記憶つき部品の種類 {other} が分かりません")),
+                };
+                let (q, qb) = (local(c, t[2]), local(c, t[3]));
+                let (vlow, vhigh, vt, vh) = (val(t[4])?, val(t[5])?, val(t[6])?, val(t[7])?);
+                let levels = crate::SeqLevels { vlow, vhigh, vt, vh, set_low: t[8] == "1", reset_low: t[9] == "1" };
+                let ins: Vec<usize> = t[10..].iter().map(|n| local(c, n)).collect();
+                c.add(Element::Seq { name, kind, ins, q, qb, levels });
+            }
             'K' => {
                 // K name L1 L2 k  (two coupled inductors; the names are those of this subcircuit)
                 need(4)?;

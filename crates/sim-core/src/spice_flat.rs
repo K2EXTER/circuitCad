@@ -570,6 +570,49 @@ impl Ctx<'_> {
         Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 V={vlow:e}+({:e})*{logic}", vhigh - vlow)]))
     }
 
+    /// A flip-flop, latch or Schmitt trigger written as an `A` device (LTspice `DFLOP` / `SRFLOP` / `JKFLOP` / `SCHMITT` with
+    /// pins `in1 in2 clk set reset qbar q`, ngspice `d_dff` / `d_tff` / `d_jkff` / `d_srff` / `d_dlatch` / `d_srlatch`). It becomes
+    /// a `Z` line (see `Element::Seq`): the stored state is updated between time steps, set / reset are active high.
+    fn seq_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Option<Vec<String>>, String> {
+        let head = t[0].as_str();
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let nd = |n: &str| if n.eq_ignore_ascii_case("null") { "0".to_string() } else { rename_node(n, ports, prefix) };
+        // (kind, input nodes in the order of SeqKind, q, qb, level parameters)
+        let (kind, ins, q, qb, params): (&str, Vec<String>, String, String, String) = if t.len() >= 10 {
+            let ty = t[9].to_ascii_uppercase();
+            let (kind, pins): (&str, Vec<usize>) = match ty.as_str() {
+                "DFLOP" => ("dff", vec![1, 3, 4, 5]),
+                "SRFLOP" => ("srff", vec![1, 2, 3, 4, 5]),
+                "JKFLOP" => ("jkff", vec![1, 2, 3, 4, 5]),
+                "SCHMITT" => ("schmitt", vec![1]),
+                _ => return Ok(None),
+            };
+            (kind, pins.iter().map(|p| nd(&t[*p])).collect(), nd(&t[7]), nd(&t[6]), t[10..].join(" "))
+        } else {
+            let rest: Vec<&str> = line[head.len()..].split_whitespace().collect();
+            let Some(model) = rest.last() else { return Ok(None) };
+            let Some((ty, _)) = self.model_kinds.get(&model.to_ascii_lowercase()) else { return Ok(None) };
+            let (kind, n_in) = match ty.as_str() {
+                "d_dff" => ("dff", 4),
+                "d_tff" => ("tff", 4),
+                "d_jkff" => ("jkff", 5),
+                "d_srff" => ("srff", 5),
+                "d_dlatch" => ("dlatch", 4),
+                "d_srlatch" => ("srlatch", 5),
+                _ => return Ok(None),
+            };
+            if rest.len() != n_in + 2 + 1 {
+                return Err(format!("{head}: {ty} は「入力 {n_in} 本、出力 q と qb」の形で書きます (使わない端子は NULL)"));
+            }
+            (kind, rest[..n_in].iter().map(|n| nd(n)).collect(), nd(rest[n_in]), nd(rest[n_in + 1]), String::new())
+        };
+        let param = |key: &str| params.split_whitespace().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
+        let (vlow, vhigh) = (param("vlow").unwrap_or(0.0), param("vhigh").unwrap_or(1.0));
+        let vt = param("vt").unwrap_or((vlow + vhigh) / 2.0);
+        let vh = param("vh").unwrap_or(0.0).abs();
+        Ok(Some(vec![format!("Z{head}{suffix} {kind} {q} {qb} {vlow:e} {vhigh:e} {vt:e} {vh:e} 0 0 {}", ins.join(" "))]))
+    }
+
     /// A PSpice digital gate: `Uname type(n) dpwr dgnd in1 .. inN out delay-model io-model ...` (`nand(2)`, `inv`, `buf` ...). The
     /// supply pins are ignored: the levels are 0 and 5 V (true above 2.5 V), like `gate_device` otherwise. Anything with a
     /// memory (flip-flops, latches, counters) is reported.
@@ -605,6 +648,9 @@ impl Ctx<'_> {
     fn a_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
         if let Some(lines) = self.gate_device(line, t, path, ports, prefix, None)? {
+            return Ok(lines);
+        }
+        if let Some(lines) = self.seq_device(line, t, path, ports, prefix)? {
             return Ok(lines);
         }
         // A name n1 ... n8 MODEL key=value ...
