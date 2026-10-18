@@ -173,3 +173,8 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - **制御ノードが1語**: E/G/S で `(cp,cn)` や `cp,cn` と書かれたものを2つに分ける(`spice_flat.rs expand`)。
 - **`TABLE = {式} (…)`**(式の前の余分な `=`)と、`cond ? x`(`: else` が無い。0 とする)を読む。
 - 効果: 92.8% → 93.1%(4464 → 4479 / 4812)。新しく読めた `LM2675-ADJ_TRANS`(スイッチングレギュレータ)は DC が収束しない(発振回路なので過渡で見る)。
+
+## TBL 電流源と s_xfer(2026-10-19)
+- **`I1 p n TBL(v0 i0 v1 i1 …)`**: 電源の両端の電圧に対する電流の折れ線(電源電流の特性。`LM2902_AB.sub` の `icc VCC VSS TBL(0 0 2 180u 100V 185u)`)。B 電流源 `I = pwl(V(p,n))`。
+- **XSPICE `s_xfer`** (`A in out MODEL`、`num_coeff=[…] den_coeff=[…] gain in_offset denorm_freq`、係数は最高次から): `spice_flat.rs s_xfer`。積分器の鎖(可制御正準形): 状態 X0..X(n-1) は 1F のコンデンサ(`IC=0`)で、電流源 `X(k)' = X(k+1)` で充電する。X(n) は den(s)·X = u から求め、出力は X(k) の重みつき和なので伝達関数は厳密。1GΩ の漏れ抵抗で DC も定まる(純積分器 `1/s` だけは DC に解がない)。`s → s/denorm_freq` の置き換えつき。
+- 効果: 93.1% → 93.3%(4479 → 4490 / 4812)。`SPICE_BULK_TRAN=1` で調べると `4316RMS_THAT` が 20 秒を超える(DC は通るが過渡が遅い。未調査)。

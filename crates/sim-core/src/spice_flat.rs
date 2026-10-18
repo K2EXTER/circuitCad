@@ -28,7 +28,7 @@ pub fn needs_flatten(text: &str) -> bool {
             || low.contains("params:")
             || l.contains('{')
             || (!l.starts_with('*') && l.contains('\''))
-            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table") || low.contains("idt") || low.contains("ddt")))
+            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table") || low.contains("idt") || low.contains("ddt") || low.contains("tbl(")))
     })
 }
 
@@ -495,6 +495,21 @@ impl Ctx<'_> {
                 out.push(format!("B_{head}{suffix} {a} {b} I=V({a},{b})/({e})"));
                 continue;
             }
+            if letter == 'I' && t.len() >= 4 && line.to_ascii_lowercase().contains("tbl(") {
+                // `I1 p n TBL(v0 i0 v1 i1 ...)`: a current that depends on the voltage across the source (a supply-current curve)
+                let low = line.to_ascii_lowercase();
+                let at = low.find("tbl(").unwrap_or(0) + 4;
+                let list = &line[at..];
+                let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|w| !w.is_empty()).filter_map(parse_value).collect();
+                if nums.len() < 4 || nums.len() % 2 != 0 {
+                    return Err(format!("{head}: TBL(電圧 電流 電圧 電流 …) は、点 (電圧, 電流) を 2 つ以上並べます"));
+                }
+                let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
+                let (a, b) = (rename_node(&t[1], ports, &prefix), rename_node(&t[2], ports, &prefix));
+                let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+                out.push(format!("B_{head}{suffix} {a} {b} I={}", pwl_expr(&format!("V({a},{b})"), &mut pts)));
+                continue;
+            }
             if letter == 'O' {
                 out.extend(self.lossy_line(&t, path, ports, &prefix, &env)?);
                 continue;
@@ -907,6 +922,13 @@ impl Ctx<'_> {
         if let Some(lines) = self.seq_device(line, t, path, ports, prefix)? {
             return Ok(lines);
         }
+        // `A in out MODEL` with `.model MODEL s_xfer(num_coeff=[..] den_coeff=[..])`: a Laplace transfer function
+        if t.len() == 4
+            && let Some((ty, rest)) = self.model_kinds.get(&t[3].to_ascii_lowercase())
+            && ty == "s_xfer"
+        {
+            return Self::s_xfer(t, rest, path, ports, prefix);
+        }
         // `A in out MODEL` with `.model MODEL PWL2 xy_array=[x0 y0 x1 y1 ...]` (the XSPICE piecewise-linear block): V(out) = f(V(in))
         if t.len() == 4
             && let Some((ty, rest)) = self.model_kinds.get(&t[3].to_ascii_lowercase())
@@ -974,6 +996,50 @@ impl Ctx<'_> {
             format!("R_{head}_ph{suffix} {ph} 0 1e9"),
             format!("B_{head}{suffix} {out} {common} V={amp}*sin(6.283185307179586*V({ph}))"),
         ])
+    }
+
+    /// XSPICE `s_xfer`: H(s) = num(s) / den(s), the coefficients highest power first, with `gain`, `in_offset` and `denorm_freq`.
+    /// Built as a chain of integrators (controllable canonical form): the nodes X0..X(n-1) are 1 F capacitors charged by the
+    /// next one (X(k)' = X(k+1)), X(n) is solved from den(s) X = u, and the output is the weighted sum of the X(k) (so the
+    /// transfer function is exact). A 1 GΩ leak keeps a DC analysis well defined (a pure integrator has no DC solution).
+    fn s_xfer(t: &[String], rest: &str, path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        let low = rest.to_ascii_lowercase();
+        let array = |key: &str| -> Option<Vec<f64>> {
+            let at = low.find(&format!("{key}="))? + key.len() + 1;
+            let r = &low[at..];
+            let inner = r.trim_start().strip_prefix('[')?;
+            Some(inner.split(']').next()?.split(|c: char| c == ',' || c.is_whitespace()).filter(|w| !w.is_empty()).filter_map(parse_value).collect())
+        };
+        let scalar = |key: &str, d: f64| -> f64 {
+            low.find(&format!("{key}=")).and_then(|a| low[a + key.len() + 1..].split(|c: char| c.is_whitespace() || c == ')').next().and_then(parse_value)).unwrap_or(d)
+        };
+        let (Some(num), Some(den)) = (array("num_coeff"), array("den_coeff")) else {
+            return Err(format!("{head}: s_xfer には num_coeff=[…] と den_coeff=[…] が必要です"));
+        };
+        let (gain, offset, denorm) = (scalar("gain", 1.0), scalar("in_offset", 0.0), scalar("denorm_freq", 1.0));
+        let n = den.len().saturating_sub(1);
+        if n < 1 || num.is_empty() || num.len() > den.len() || den[0] == 0.0 || denorm <= 0.0 {
+            return Err(format!("{head}: s_xfer の分子は分母より高い次数にできません (分母は 1 次以上で、最高次の係数が 0 でないこと)"));
+        }
+        // coefficients by power of s (ascending), with s -> s / denorm
+        let asc = |c: &[f64]| -> Vec<f64> { c.iter().rev().enumerate().map(|(k, v)| v / denorm.powi(k as i32)).collect() };
+        let (d, nu) = (asc(&den), asc(&num));
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let (inp, out) = (rename_node(&t[1], ports, prefix), rename_node(&t[2], ports, prefix));
+        let x = |k: usize| format!("{prefix}{head}_x{k}");
+        let mut lines = vec![];
+        for k in 0..n {
+            lines.push(format!("B_{head}_i{k}{suffix} 0 {} I=V({})", x(k), x(k + 1)));
+            lines.push(format!("C_{head}_c{k}{suffix} {} 0 1 IC=0", x(k)));
+            lines.push(format!("R_{head}_r{k}{suffix} {} 0 1e9", x(k)));
+        }
+        let dn = d[n];
+        let sum: Vec<String> = (0..n).map(|k| format!("({:e})*V({})", d[k], x(k))).collect();
+        lines.push(format!("B_{head}_n{suffix} {} 0 V=((V({inp})+({offset:e})){})/({dn:e})", x(n), if sum.is_empty() { String::new() } else { format!("-({})", sum.join("+")) }));
+        let y: Vec<String> = nu.iter().enumerate().map(|(k, c)| format!("({c:e})*V({})", x(k))).collect();
+        lines.push(format!("B_{head}_y{suffix} {out} 0 V=({gain:e})*({})", y.join("+")));
+        Ok(lines)
     }
 
     /// An E / G / F / H line as a behavioural (B) source: `VALUE={expr}`, `POLY(n)` (linear terms, or any degree

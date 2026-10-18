@@ -1028,3 +1028,35 @@ fn control_nodes_written_as_one_word() {
     let v = run(t, "T", &["a", "b", "gnd"], 2.0, "b");
     assert!((v - 1.0).abs() < 1e-6, "{v}");
 }
+
+#[test]
+fn a_tbl_current_source_follows_the_voltage_across_it() {
+    // 0 A at 0 V, 2 mA at 2 V, 2 mA above: a supply drawing 2 mA through 1 k with 5 V in -> the node sits at 5 - 2 = 3 V
+    let t = ".subckt T a b gnd\nR1 a b 1k\nIq b gnd TBL(0 0 2 2m 100 2m)\n.ends T";
+    let v = run(t, "T", &["a", "b", "gnd"], 5.0, "b");
+    assert!((v - 3.0).abs() < 1e-3, "{v}");
+}
+
+#[test]
+fn s_xfer_is_a_laplace_transfer_function() {
+    // H(s) = 1 / (s/1000 + 1): a low-pass with a corner at 1000 rad/s; DC gain 1, step response 1 - exp(-t/1ms)
+    let t = ".subckt T a o gnd\nA1 a o S1\n.model S1 s_xfer(num_coeff=[1] den_coeff=[1m 1])\nRl o gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "o", "gnd"], 2.0, "o") - 2.0).abs() < 1e-3);
+    let mut c = Circuit::new();
+    let (a, o) = (c.node("a"), c.node("o"));
+    c.add(Element::VSource { name: "Vs".into(), p: a, n: 0, wave: Waveform::Pulse { v1: 0.0, v2: 1.0, td: 0.0, tr: 1e-9, tf: 1e-9, pw: 1.0, per: 2.0 }, ac: None });
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let r = transient(&c, &TranSettings { tstop: 3e-3, tstep: 2e-5, uic: false }).unwrap();
+    let vo = r.signal("V(o)").unwrap();
+    let at = |tt: f64| vo.values[r.time.iter().position(|x| *x >= tt).unwrap()];
+    assert!((at(1e-3) - (1.0 - (-1.0f64).exp())).abs() < 0.01, "{}", at(1e-3));
+    // a pure integrator 1/s: the ramp rate is 1 V/s per volt in
+    let t = ".subckt T a o gnd\nA1 a o S1\n.model S1 s_xfer(num_coeff=[1] den_coeff=[1 0])\nRl o gnd 1meg\n.ends T";
+    let mut c = Circuit::new();
+    let (a, o) = (c.node("a"), c.node("o"));
+    c.add(Element::vdc("Vs", a, 0, 1.0));
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let r = transient(&c, &TranSettings { tstop: 0.5, tstep: 1e-3, uic: true }).unwrap();
+    let vo = r.signal("V(o)").unwrap();
+    assert!((vo.values.last().unwrap() - 0.5).abs() < 0.01, "{}", vo.values.last().unwrap());
+}
