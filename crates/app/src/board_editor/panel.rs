@@ -341,6 +341,18 @@ impl BoardEditor {
                 let rt = ui.checkbox(&mut th, "サーマルリリーフ").on_hover_text("スルーホールのパッドを、細い十字の足でゾーンにつなぎます (はんだ付けしやすくなります)");
                 let mut ri = self.board.zones[i].remove_islands;
                 let rr = ui.checkbox(&mut ri, "孤立した銅の破片を消す").on_hover_text("ゾーンのネットのパッド・ビア・配線のどれにもつながっていない銅の島を作らないようにします (ノイズを拾う・製造中にはがれるのを防ぐ)");
+                // where pours of other nets overlap, the one in front keeps its copper and the other gives way
+                let (mut front, mut back) = (false, false);
+                ui.horizontal(|ui| {
+                    front = ui.button("最前面へ").on_hover_text("別のネットのゾーンと重なったとき、このゾーンの銅を優先します (相手が引き下がり、クリアランスの隙間があきます)").clicked();
+                    back = ui.button("最背面へ").on_hover_text("別のネットのゾーンと重なったとき、相手を優先します (このゾーンが引き下がります)").clicked();
+                });
+                if front || back {
+                    self.checkpoint();
+                    let at = self.board.move_zone(i, front);
+                    self.selected = Some(Item::Zone(at));
+                    return;
+                }
                 if net != before || r.drag_started() || r.gained_focus() || rt.changed() || rr.changed() {
                     self.checkpoint();
                 }

@@ -82,6 +82,8 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## 配布
 依存クレートを変えたら `python tools/gen_third_party_licenses.py` で `THIRD_PARTY_LICENSES.txt` を作り直す(CIが `--check` で古さを検査、リリースのzipに同梱)。`.github/workflows/release.yml` がタグ `v*` でWindows用のzipを作り、プレリリースとして公開する(macOS/Linuxは動作確認ができるまでmatrixでコメントアウト中)。日本語フォントは `startup.rs` の `install_japanese_font` がOSごとの候補パスから読み、無ければ `assets/fonts/BIZUDGothic-Regular.ttf`(OFL)を使う。
 
+READMEの画像(`docs/images/*.png`)は `powershell -File tools/gen_screenshots.ps1` で作り直す(`cargo build -p app` のあと。1枚だけなら `-Only waveform`。画像を増やすときはスクリプトの `$shots` に1行)。
+
 ## 規約
 - ボタン・入力欄には `on_hover_text` で説明を付ける。エラーメッセージは原因と対処が分かる日本語で。
 - 回路図の変更はフレームごとの比較(`schematic/history.rs`)でUndoに入る。`self.sch` を直接変えれば自動で履歴になる。基板は変更前に `checkpoint()` を呼ぶ。

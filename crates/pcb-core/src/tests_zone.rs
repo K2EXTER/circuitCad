@@ -260,6 +260,15 @@ fn a_later_pour_of_another_net_cuts_the_earlier_one_with_a_gap() {
     // a gap of the clearance remains between the two coppers
     let gap = |p: &Point| ((12.0 - p.x).max(0.0).max(p.x - 30.0)).hypot((8.0 - p.y).max(0.0).max(p.y - 25.0));
     assert!(fill_a.iter().all(|s| s.outer.iter().all(|p| gap(p) > 0.5 - 1e-3)), "{fill_a:?}");
+    // bringing A to the front turns it around: A keeps its whole rectangle, B gives way
+    let at = b.move_zone(0, true);
+    assert_eq!(at, 1);
+    assert_eq!(b.zones[1].net, "A");
+    let conn = drc::connectivity(&b);
+    assert!((area(&crate::zonefill::zone_fill(&b, &b.zones[1], &conn)) - 18.0 * 18.0).abs() < 1.0);
+    assert!(area(&crate::zonefill::zone_fill(&b, &b.zones[0], &conn)) < 18.0 * 17.0 - 1.0);
+    b.move_zone(1, false);
+    assert_eq!(b.zones[0].net, "A");
     // the same net on both pours is not cut
     b.zones[1].net = "A".into();
     let conn = drc::connectivity(&b);

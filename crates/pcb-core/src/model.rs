@@ -360,6 +360,22 @@ impl Board {
         self.outline = vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)];
     }
 
+    /// Moves pour `i` to the front (drawn last, so it wins where pours of other nets overlap) or to the back.
+    /// Returns its new index.
+    pub fn move_zone(&mut self, i: usize, to_front: bool) -> usize {
+        if i >= self.zones.len() {
+            return i;
+        }
+        let z = self.zones.remove(i);
+        if to_front {
+            self.zones.push(z);
+            self.zones.len() - 1
+        } else {
+            self.zones.insert(0, z);
+            0
+        }
+    }
+
     pub fn bounds(&self) -> Option<(Point, Point)> {
         let mut it = self.outline.iter();
         let first = *it.next()?;
