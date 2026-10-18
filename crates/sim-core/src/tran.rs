@@ -67,9 +67,15 @@ fn start_point(circuit: &Circuit, cm: &crate::dc::Compiled) -> Result<(Vec<f64>,
     });
     held.elements.extend(sources);
     let cm_held = compile(&held);
-    let (att, _) = solve_op(&cm_held, &order)?;
     let n = cm.n_unknowns;
-    Ok((att.x[..n].to_vec(), att.vj))
+    match solve_op(&cm_held, &order) {
+        Ok((att, _)) => Ok((att.x[..n].to_vec(), att.vj)),
+        // an initial voltage across two points that voltage sources already fix (a vendor model's `C1 V+ V- 10p IC=0` with
+        // the supply connected) cannot be held: it contradicts the circuit. Start from the plain operating point instead,
+        // as SPICE does without UIC.
+        Err(SimError::Singular) => solve_op(cm, &order).map(|(att, _)| (att.x, att.vj)),
+        Err(e) => Err(e),
+    }
 }
 
 /// The capacitor voltages and inductor currents of a solution (the integrator's state variables).

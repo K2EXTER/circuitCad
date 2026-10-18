@@ -623,3 +623,21 @@ A1 in 0 0 0 0 0 out 0 SCHMITT Vt=0.5 Vh=0.1
     assert!(level_at(0.55, 0.7, true).is_some(), "rising trip near 0.6 V");
     assert!(level_at(0.3, 0.45, false).is_some(), "falling trip near 0.4 V");
 }
+
+/// A vendor model's `C1 V+ V- 10p IC=0` with the supply connected: the initial voltage contradicts the voltage sources, so it
+/// is not held (SPICE ignores `IC` without UIC) and the transient starts from the ordinary operating point.
+#[test]
+fn an_initial_voltage_across_fixed_nodes_is_dropped_not_singular() {
+    let t = ".subckt M vp gnd out
+C1 vp gnd 10p IC=0
+R1 vp out 1k
+.ends M";
+    let mut c = Circuit::new();
+    let (vp, out) = (c.node("vp"), c.node("out"));
+    c.add(Element::vdc("Vs", vp, 0, 5.0));
+    add_subckt_instance(&mut c, "U1", "M", t, &[vp, 0, out]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Rl".into(), a: out, b: 0, r: 1e3 });
+    let r = transient(&c, &TranSettings { tstop: 1e-6, tstep: 1e-8, uic: false }).unwrap_or_else(|e| panic!("{e:?}"));
+    let v = r.signal("V(out)").unwrap();
+    assert!((v.values[v.values.len() - 1] - 2.5).abs() < 1e-3, "{}", v.values[v.values.len() - 1]);
+}

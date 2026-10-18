@@ -68,12 +68,13 @@ enum Outcome {
     Tran(String),
 }
 
-fn try_one(text: String, name: String, ports: Vec<String>) -> Outcome {
+/// The generic bench of `try_one`: the subcircuit wired up by its pin names.
+fn build_bench(text: &str, name: &str, ports: &[String]) -> Result<Circuit, String> {
     let mut c = Circuit::new();
     let nodes: Vec<usize> = ports.iter().map(|p| if role(p) == Role::Ground { 0 } else { c.node(&format!("p_{p}")) }).collect();
-    if let Err(e) = crate::spice_in::add_subckt_instance(&mut c, "U1", &name, &text, &nodes) {
+    if let Err(e) = crate::spice_in::add_subckt_instance(&mut c, "U1", name, text, &nodes) {
         let e: String = e.chars().take(90).collect();
-        return Outcome::Read(e);
+        return Err(e);
     }
     for (i, p) in ports.iter().enumerate() {
         let n = nodes[i];
@@ -90,6 +91,14 @@ fn try_one(text: String, name: String, ports: Vec<String>) -> Outcome {
             _ => c.add(Element::Resistor { name: format!("Rl{i}"), a: n, b: 0, r: 10e3 }),
         }
     }
+    Ok(c)
+}
+
+fn try_one(text: String, name: String, ports: Vec<String>) -> Outcome {
+    let c = match build_bench(&text, &name, &ports) {
+        Ok(c) => c,
+        Err(e) => return Outcome::Read(e),
+    };
     let known = ports.iter().any(|p| role(p) == Role::Supply) && ports.iter().any(|p| role(p) == Role::Ground);
     match dc_op(&c) {
         Ok(_) if known && std::env::var("SPICE_BULK_TRAN").is_ok() => match crate::transient(&c, &crate::TranSettings { tstop: 2e-6, tstep: 1e-7, uic: false }) {
@@ -185,5 +194,43 @@ fn bisect_read() {
         if read(&t).is_ok() {
             println!("REMOVING line {} lets it read: {}", i + 1, lines[i]);
         }
+    }
+}
+
+/// Run the transient of one model with the generic bench and say what fails:
+/// `SPICE_MODEL_DIR=<dir> SPICE_DUMP_FILE=<file> SPICE_DUMP_TOP=<name> cargo test -p sim-core tran_debug -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn tran_debug() {
+    let (Ok(dir), Ok(file), Ok(top)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP")) else { return };
+    let text = crate::decode_spice_text(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap());
+    let ports = subckts(&text).into_iter().find(|(n, _)| *n == top).map(|(_, p)| p).unwrap_or_default();
+    println!("PORTS {ports:?} roles {:?}", ports.iter().map(|p| match role(p) { Role::Ground => "gnd", Role::Supply => "sup", Role::Input => "in", Role::Other => "other" }).collect::<Vec<_>>());
+    let c = build_bench(&text, &top, &ports).unwrap();
+    println!("elements {} nodes {}", c.elements.len(), c.names.len());
+    println!("DC {:?}", dc_op(&c).map(|r| r.strategy));
+    if let Ok(idx) = std::env::var("SPICE_UNKNOWNS") {
+        let cm = crate::dc::compile(&c);
+        for i in idx.split(',').filter_map(|x| x.trim().parse::<usize>().ok()) {
+            if i < cm.n_unknowns && i < c.names.len() - 1 && i < cm.node_names.len() - 1 {
+                println!("UNKNOWN {i}: node {}", cm.node_names[i + 1]);
+            }
+            for e in &cm.ce {
+                let br = match e {
+                    crate::dc::Ce::V { br, .. } | crate::dc::Ce::L { br, .. } | crate::dc::Ce::E { br, .. } | crate::dc::Ce::B { br, .. } => Some(*br),
+                    _ => None,
+                };
+                if br == Some(i) {
+                    let name = match e {
+                        crate::dc::Ce::V { name, .. } | crate::dc::Ce::L { name, .. } | crate::dc::Ce::E { name, .. } | crate::dc::Ce::B { name, .. } => name.clone(),
+                        _ => String::new(),
+                    };
+                    println!("UNKNOWN {i}: branch of {name}");
+                }
+            }
+        }
+    }
+    for tstop in [1e-9, 1e-8, 1e-7, 5e-7, 2e-6] {
+        println!("TRAN {tstop:e}: {:?}", crate::transient(&c, &crate::TranSettings { tstop, tstep: tstop / 20.0, uic: false }).map(|r| r.time.len()));
     }
 }

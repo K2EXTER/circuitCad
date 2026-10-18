@@ -81,4 +81,5 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - 読める書き方: LTspice の `A` 素子 `DFLOP`/`SRFLOP`/`JKFLOP`/`SCHMITT`(ピンは `in1 in2 clk set reset qbar q`、set/reset は正論理、`Vt`/`Vh`/`vlow`/`vhigh`。使いかたからの推定で、LTspice の資料では確認していない)と、ngspice の `d_dff d_tff d_jkff d_srff d_dlatch d_srlatch`(使わない端子は `NULL`)。フラット化後は内部の `Z` 行(`Z名 種類 q qb vlow vhigh vt vh set_low reset_low 入力…`)になる。
 - 読めないまま: PSpice の `U dff(1)` などの記憶つき部品、`ONESHOT`/`PHASEDET`/`MODULATOR` などの `A` 素子。
 - 効果(一括確認): 読めて解けた割合 75.5% → 76.1%(3632 → 3660 / 4812)。DC が収束しなかったのは 11 個(いずれも電源のピン名が曖昧か、電圧源だけのサブサーキットなど。`OPA170`・`OPA1662` は DC は通るが過渡で `Singular`: 調査中)。
+- **OPA170・OPA1662 の過渡解析が `Singular` だった原因(2026-10-18):** 一括確認の簡易回路では電源ピン `V+` に 5V をつなぐが、モデルの中に `C15 V+ V- 10P IC=0` がある。過渡解析の開始点は、コンデンサの初期電圧 `IC=` を電圧源で固定して求める(`tran.rs start_point`)ので、`V+`〜`V-` を 0V に固定する源と 5V の電源が並列になり、行列が構造的に特異になっていた(行列の構造的ランクを調べて、`V+` の列に行が2つしか無いこと=電圧源2本が同じ点を固定、と特定)。DC は IC を使わないので解けていた。SPICE は UIC なしでは IC を無視する。直し: IC を固定した解が `Singular` のときは、IC なしの普通の動作点から始める。調べ方は `tests_vendor_bulk.rs` の `tran_debug`(`SPICE_UNKNOWNS=番号,...` で未知数の名前も出る)。
 
