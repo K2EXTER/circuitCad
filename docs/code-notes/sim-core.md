@@ -30,7 +30,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。
 - 入れ子の中の素子名は `R1.X1`(頭文字は保つ)、内部ノードは `X1.n`、端子は呼び出し側のノードに置き換える。B素子の式の `V(...)` `I(...)` も同じ規則で書き換える。深さ12まで(自分自身を呼ぶとエラー)。
 - 実在のメーカーモデル(KiCad-Spice-Library の TI・IR・コミュニティ版)で試して足したもの(2026-10-15): `.param` の順序に依存しない評価、`.model` カードの `{param}`(インスタンスごとに展開)、`{式}` が `V()`/`I()` を含むときは式のまま(パラメータ名だけ置換)、`E`/`G` の `VALUE={式}`・`TABLE {式} = (x,y)…`(折れ線を `if` の入れ子に)・`POLY(n)`(1制御は多項式、複数制御は1次項のみ)、`F`/`H`(電流制御源を `I(Vsrc)` を使う B素子に)、4ノードの `Q`(基板ノードは捨てる)、`AREA`(IS倍・RB/RS割り)、`LPNP`→PNP、`VSWITCH`(Von/Voff か Vt/Vh)、`.end` で終わる `.subckt`、B素子の末尾の `Rpar=…` 等の捨てる、式に `& | ! buf inv u pwr tbl()`。未対応の種類の `.model`(JFET等)は、使う素子が出たときだけエラー。使われないモデルパラメータは `ignored_model_params` が返す(VAF・CJE・RC など。試し読みが警告する)。
-- 未対応のまま: `.func`、`.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の基板容量(CJS・CCS)・バイアスで変わる TF(ITF/VTF/XTF)・BE降伏(BVBE)・雑音(KF/AF)、MOSFET の LEVEL 2 以上の式(体効果・移動度低下など)、JFET のゲート接合(IS)。
+- 未対応のまま: `.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の基板容量(CJS・CCS)・バイアスで変わる TF(ITF/VTF/XTF)・BE降伏(BVBE)・雑音(KF/AF)、MOSFET の LEVEL 2 以上の式(体効果・移動度低下など)、JFET のゲート接合(IS)。
 - テスト: `tests_flat.rs`。
 
 ## BJT の早期効果と直列抵抗 (VAF/VAR/RC/RE)
@@ -128,3 +128,10 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - **PWL**: 同じ時刻の2点(`pwl(0 0 0 1 …)`、縦の段差)を許し、後の点を 1ps ずらす(戻る向きの時刻は今まで通り誤り)。
 - **電源の `Rser=`/`Rpar=`/`Cpar=`**(LTspice の書き方): V 電源の直列抵抗、V/I 電源に並列の抵抗・容量(`spice_in.rs` の `'V' | 'I'` の枝)。
 - 効果: 4052 → 4070(84.6%)。LM2678/LM2596 の次の壁は `P(V(Freq))`(PSpice の周期関数)。他に `LOGICEXP` の `~`、`R = {式} … Freq`、損失線路 `O`/`LTRA`、`R1(I(V1))`(`R1` という名の関数)が上位に残る。
+
+## `.func`・VALUE の中の波かっこ・A 形式のスイッチ(2026-10-18)
+- **`.func 名前(引数) {本体}`** (`spice_flat.rs expand_funcs`): 他の行の `名前(式, ...)` を、引数を括弧つきで入れた本体の文字列に置き換える(本体が別の `.func` を呼んでもよい。6回まで繰り返す)。引数なし(`VP()`)も可。本体が `table(...)` などのものは、置き換えたあと各素子の読み込みで扱う。
+- `VALUE = {({SENS} * V(10,6) + …) …}` のように `VALUE` の式の中に `{名前}` があるとき、パラメータを置き換える(`controlled` の VALUE の枝が `substitute_params` を通していなかった)。
+- `A a b cp cn モデル` でモデルが `VSWITCH`(ngspice 風に A の名前で書かれたスイッチ)は `S` スイッチとして読む。
+- 一括確認の回路: 式の中の「未定義の名前」(`「sens」は使えません。電圧は…`)も、足りないパラメータとして `guess_param` で補う。
+- 効果: 4070 → 4127(85.8%)。上位に残る: `LOGICEXP` の `~`、`R = {式} … Freq`、損失線路 `O`/`LTRA`、`idtmod`(積分して折り返す関数。LM2678 の鋸歯状波)、`d_osc`、`s_xfer`。

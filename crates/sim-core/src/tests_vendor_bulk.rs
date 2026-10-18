@@ -96,13 +96,18 @@ fn build_bench(text: &str, name: &str, ports: &[String]) -> Result<Circuit, Stri
         match crate::spice_in::add_subckt_instance(&mut c, "U1", name, &text, &nodes) {
             Ok(()) => break (c, nodes),
             Err(e) => {
-                let missing = e.split_once("パラメータ「").and_then(|(_, r)| r.split_once('」')).map(|(n, _)| n.to_string());
+                let missing = e
+                    .split_once("パラメータ「")
+                    .and_then(|(_, r)| r.split_once('」'))
+                    // an expression that uses a name nobody defined (`{SENS}` inside a `VALUE={...}`)
+                    .or_else(|| e.split_once("」は使えません。電圧は").and_then(|(l, _)| l.rsplit_once('「')).map(|(_, n)| (n, "")))
+                    .map(|(n, _)| n.to_string());
                 tries += 1;
                 match missing {
                     Some(n) if tries <= 12 => text = format!(".param {n}={}
 {text}", guess_param(&n)),
                     _ => {
-                        let e: String = e.chars().take(90).collect();
+                        let e: String = e.chars().take(std::env::var("SPICE_BULK_LONG").ok().and_then(|v| v.parse().ok()).unwrap_or(90)).collect();
                         return Err(e);
                     }
                 }

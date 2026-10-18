@@ -24,6 +24,7 @@ pub fn needs_flatten(text: &str) -> bool {
         let low = l.to_ascii_lowercase();
         low.starts_with(['x', 'f', 'h', 'a', 'u', 't'])
             || low.starts_with(".param")
+            || low.starts_with(".func")
             || low.contains("params:")
             || l.contains('{')
             || (!l.starts_with('*') && l.contains('\''))
@@ -810,6 +811,14 @@ impl Ctx<'_> {
         if let Some(lines) = self.seq_device(line, t, path, ports, prefix)? {
             return Ok(lines);
         }
+        // `A a b cp cn VSWITCHMODEL`: an ngspice-style switch written with an A name (it is an S switch)
+        if t.len() == 6
+            && self.model_kinds.get(&t[5].to_ascii_lowercase()).is_some_and(|(ty, _)| ty == "vswitch" || ty == "sw")
+        {
+            let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+            let n = |i: usize| rename_node(&t[i], ports, prefix);
+            return Ok(vec![format!("S_{head}{suffix} {} {} {} {} {}", n(1), n(2), n(3), n(4), t[5])]);
+        }
         // A name n1 ... n8 MODEL key=value ...
         let kind = t.get(9).map(|k| k.to_ascii_uppercase()).unwrap_or_default();
         if t.len() < 10 {
@@ -941,7 +950,7 @@ impl Ctx<'_> {
         {
             // `VALUE={expr}` and `VALUE { expr }` (the braces are gone by now)
             let after = line[pos + 5..].trim_start();
-            let expr = rename_expr(after.strip_prefix('=').unwrap_or(after).trim(), ports, prefix, path);
+            let expr = rename_expr(&substitute_params(after.strip_prefix('=').unwrap_or(after).trim(), env), ports, prefix, path);
             return Ok(format!("{name} {p} {n} {}={expr}", if out_is_voltage { "V" } else { "I" }));
         }
         // the controls: voltage pairs for E / G, source names for F / H
@@ -1024,6 +1033,8 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     if !needs_flatten(text) {
         return Ok(None);
     }
+    let expanded = expand_funcs(lines);
+    let lines = &expanded[..];
     let mut defs: HashMap<String, Def> = HashMap::new();
     let mut global: Env = HashMap::new();
     let mut models = vec![];
@@ -1084,4 +1095,135 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     let mut s = models.join("\n");
     s.push_str(&format!("\n.subckt {sub_name} {}\n{}\n.ends {sub_name}\n", top.ports.join(" "), body.join("\n")));
     Ok(Some(s))
+}
+
+/// `.func name(a, b) {body}` user functions: every call `name(x, y)` in the other lines is replaced by the body with the
+/// arguments put in (in parentheses). A function may call another one; the expansion repeats a few times for that.
+fn expand_funcs(lines: &[String]) -> Vec<String> {
+    let mut funcs: Vec<(String, Vec<String>, String)> = vec![];
+    for l in lines {
+        let t = l.trim_start();
+        if !t.get(..5).is_some_and(|p| p.eq_ignore_ascii_case(".func")) {
+            continue;
+        }
+        let rest = t[5..].trim_start();
+        let Some(open) = rest.find('(') else { continue };
+        let Some(close) = rest[open..].find(')').map(|c| c + open) else { continue };
+        let name = rest[..open].trim().to_ascii_lowercase();
+        let args: Vec<String> = rest[open + 1..close].split(',').map(|a| a.trim().to_ascii_lowercase()).filter(|a| !a.is_empty()).collect();
+        let mut body = rest[close + 1..].trim();
+        body = body.strip_prefix('=').unwrap_or(body).trim();
+        if let Some(inner) = body.strip_prefix('{').and_then(|b| b.strip_suffix('}')) {
+            body = inner.trim();
+        }
+        if !name.is_empty() && !body.is_empty() {
+            funcs.push((name, args, body.to_string()));
+        }
+    }
+    if funcs.is_empty() {
+        return lines.to_vec();
+    }
+    lines
+        .iter()
+        .map(|l| {
+            let t = l.trim_start();
+            if t.starts_with('*') || t.get(..5).is_some_and(|p| p.eq_ignore_ascii_case(".func")) {
+                return l.clone();
+            }
+            let mut text = l.clone();
+            for _ in 0..6 {
+                let next = expand_calls(&text, &funcs);
+                if next == text {
+                    break;
+                }
+                text = next;
+            }
+            text
+        })
+        .collect()
+}
+
+fn expand_calls(text: &str, funcs: &[(String, Vec<String>, String)]) -> String {
+    let b: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i].is_alphabetic() || b[i] == '_' {
+            let st = i;
+            while i < b.len() && (b[i].is_alphanumeric() || b[i] == '_') {
+                i += 1;
+            }
+            let id: String = b[st..i].iter().collect();
+            let mut j = i;
+            while j < b.len() && b[j] == ' ' {
+                j += 1;
+            }
+            let func = funcs.iter().find(|f| f.0 == id.to_ascii_lowercase());
+            if let (Some((_, params, body)), true) = (func, j < b.len() && b[j] == '(') {
+                // the argument list up to the matching parenthesis
+                let (mut depth, mut k, mut args, mut cur) = (0, j, vec![], String::new());
+                while k < b.len() {
+                    match b[k] {
+                        '(' => {
+                            depth += 1;
+                            if depth > 1 {
+                                cur.push('(');
+                            }
+                        }
+                        ')' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                            cur.push(')');
+                        }
+                        ',' if depth == 1 => args.push(std::mem::take(&mut cur)),
+                        c => cur.push(c),
+                    }
+                    k += 1;
+                }
+                if depth == 0 && k < b.len() {
+                    if !cur.trim().is_empty() || !args.is_empty() {
+                        args.push(cur);
+                    }
+                    if args.len() == params.len() {
+                        out.push('(');
+                        out.push_str(&put_args(body, params, &args));
+                        out.push(')');
+                        i = k + 1;
+                        continue;
+                    }
+                }
+            }
+            out.push_str(&id);
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// `body` with each parameter name replaced by its argument (in parentheses).
+fn put_args(body: &str, params: &[String], args: &[String]) -> String {
+    let b: Vec<char> = body.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i].is_alphabetic() || b[i] == '_' {
+            let st = i;
+            while i < b.len() && (b[i].is_alphanumeric() || b[i] == '_') {
+                i += 1;
+            }
+            let id: String = b[st..i].iter().collect();
+            match params.iter().position(|p| *p == id.to_ascii_lowercase()) {
+                Some(k) => out.push_str(&format!("({})", args[k].trim())),
+                None => out.push_str(&id),
+            }
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    out
 }

@@ -825,3 +825,30 @@ fn a_source_may_have_a_series_resistance_rser() {
     let v = dc_op(&c).unwrap().voltage("a").unwrap();
     assert!((v - 1.0).abs() < 2e-3, "{v}");
 }
+
+#[test]
+fn a_value_expression_may_name_parameters_inside_its_braces() {
+    let t = ".subckt T a b gnd\n.param Gn=2\nEx b 0 value = {({Gn} * V(a) +\n+ 1) / 2}\nRl b gnd 1meg\n.ends T";
+    // (2 * 1 + 1) / 2 = 1.5
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.5).abs() < 1e-6);
+}
+
+#[test]
+fn a_vswitch_written_with_an_a_name_is_a_switch() {
+    let t = ".subckt T a b gnd\nV1 c gnd 5\nAS1 a b c gnd SW1\n.model SW1 VSWITCH(RON=1 ROFF=1e9 VON=4 VOFF=1)\n.ends T";
+    // closed (control 5 V > VON): 1 ohm in series with the 1k load
+    let mut c = Circuit::new();
+    let (a, b) = (c.node("a"), c.node("b"));
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::vdc("Va", a, 0, 1.0));
+    c.add(Element::Resistor { name: "Rl".into(), a: b, b: 0, r: 1e3 });
+    let v = dc_op(&c).unwrap().voltage("b").unwrap();
+    assert!((v - 1000.0 / 1001.0).abs() < 1e-3, "{v}");
+}
+
+#[test]
+fn func_defines_a_function_that_other_lines_can_call() {
+    let t = ".func P (F) {1/F}\n.func Twice(a, b) {2*(a+b)}\n.subckt T a b gnd\nE1 b 0 value = {Twice(V(a), P(4))}\nRl b gnd 1meg\n.ends T";
+    // 2 * (1 + 0.25) = 2.5
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.5).abs() < 1e-6);
+}
