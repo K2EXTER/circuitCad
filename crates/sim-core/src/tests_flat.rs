@@ -512,3 +512,69 @@ R4 b gnd 1k
     let e = add_subckt_instance(&mut c2, "U1", "X", bad, &[n, 0]).unwrap_err();
     assert!(e.contains("読めません"), "{e}");
 }
+
+/// Combinational gates written as `A` devices: ngspice's XSPICE form (with `d_and` / `d_inverter` models) and LTspice's
+/// eight-pin form. The levels are LTspice's 0 and 1 V.
+#[test]
+fn combinational_a_devices_are_logic_gates() {
+    let xspice = ".subckt G a b y gnd
+.model and d_and
+.model inv d_inverter
+aand1 [a b] p and
+ainv p y inv
+.ends G";
+    let lt = ".subckt H a b y gnd
+A1 a b 0 0 0 0 y 0 NAND
+.ends H";
+    let run = |text: &str, name: &str, va: f64, vb: f64| {
+        let mut c = Circuit::new();
+        let (a, b, y) = (c.node("a"), c.node("b"), c.node("y"));
+        c.add(Element::vdc("Va", a, 0, va));
+        c.add(Element::vdc("Vb", b, 0, vb));
+        add_subckt_instance(&mut c, "U1", name, text, &[a, b, y, 0]).unwrap_or_else(|e| panic!("{e}"));
+        c.add(Element::Resistor { name: "Rl".into(), a: y, b: 0, r: 10e3 });
+        dc_op(&c).unwrap().voltage("y").unwrap()
+    };
+    // AND then inverter = NAND: low only when both inputs are high
+    for (text, name) in [(xspice, "G"), (lt, "H")] {
+        assert!(run(text, name, 1.0, 1.0) < 0.02, "{name} 1,1");
+        assert!(run(text, name, 1.0, 0.0) > 0.98, "{name} 1,0");
+        assert!(run(text, name, 0.0, 0.0) > 0.98, "{name} 0,0");
+    }
+}
+
+/// A PSpice 7400 (`optional:` supply pins, `U nand(2)`), an open-collector output and a tri-state buffer.
+#[test]
+fn pspice_u_gates_open_collector_and_tristate_read() {
+    let nand = ".subckt 7400 1A 1B 1Y
++     optional: DPWR=$G_DPWR DGND=$G_DGND
++     params: MNTYMXDLY=0 IO_LEVEL=0
+U1 nand(2) DPWR DGND
++     1A 1B 1Y
++     DLY_00 IO_STD MNTYMXDLY={MNTYMXDLY} IO_LEVEL={IO_LEVEL}
+.model DLY_00 ugate (tplhTY=11ns)
+.ends 7400";
+    let mut c = Circuit::new();
+    let (a, b, y) = (c.node("a"), c.node("b"), c.node("y"));
+    c.add(Element::vdc("Va", a, 0, 5.0));
+    c.add(Element::vdc("Vb", b, 0, 5.0));
+    add_subckt_instance(&mut c, "U1", "7400", nand, &[a, b, y]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Rl".into(), a: y, b: 0, r: 10e3 });
+    let low = dc_op(&c).unwrap().voltage("y").unwrap();
+    assert!(low < 0.1, "NAND(1,1) {low}");
+    // open collector (pulled up by 1 k to 5 V): low when the input is false, the pull-up level when it is true
+    let oc = ".subckt OC in out gnd
+.model oc d_open_c
+aoc in out oc
+.ends OC";
+    for (vin, want) in [(0.0, 0.0), (1.0, 5.0)] {
+        let mut c = Circuit::new();
+        let (i, o, vcc) = (c.node("i"), c.node("o"), c.node("vcc"));
+        c.add(Element::vdc("Vi", i, 0, vin));
+        c.add(Element::vdc("Vcc", vcc, 0, 5.0));
+        c.add(Element::Resistor { name: "Rp".into(), a: vcc, b: o, r: 1e3 });
+        add_subckt_instance(&mut c, "U1", "OC", oc, &[i, o, 0]).unwrap_or_else(|e| panic!("{e}"));
+        let v = dc_op(&c).unwrap().voltage("o").unwrap();
+        assert!((v - want).abs() < 0.6, "open collector in {vin}: {v}");
+    }
+}

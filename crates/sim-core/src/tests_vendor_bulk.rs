@@ -26,7 +26,7 @@ fn subckts(text: &str) -> Vec<(String, Vec<String>)> {
         let mut it = l.split_whitespace();
         if it.next().is_some_and(|w| w.eq_ignore_ascii_case(".subckt")) {
             let name = it.next().unwrap_or("").to_string();
-            let ports: Vec<String> = it.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).map(str::to_string).collect();
+            let ports: Vec<String> = it.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:") && !w.eq_ignore_ascii_case("optional:")).map(str::to_string).collect();
             if !name.is_empty() && !ports.is_empty() {
                 v.push((name, ports));
             }

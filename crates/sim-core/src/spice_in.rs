@@ -415,7 +415,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
     let ports: Vec<&str> = lines[start]
         .split_whitespace()
         .skip(2)
-        .take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:"))
+        .take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:") && !w.eq_ignore_ascii_case("optional:"))
         .collect();
     if ports.len() != nodes.len() {
         return Err(format!("{inst}: ポート数 {} と接続数 {} が一致しません", ports.len(), nodes.len()));

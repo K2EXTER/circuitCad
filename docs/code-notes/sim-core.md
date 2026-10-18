@@ -68,3 +68,9 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - 効いた直し: ①`.model` が1枚読めないだけで、同じファイルの全モデルが読めなかった(1ファイルに数十枚あるライブラリで最大。使う素子の分だけ読めれば足りるように)。②パラメータの `=` の前後の空白(`KP= {X}`)、`.params`、`PARAMS: A=1, B=2,` のカンマ、`POLY (2)`/`POLY 3 …`、`TABLE` の点が括弧なし、`DC 0 PULSE(..)`、値のない電源(`Vsense a b`、電流の測り役)。③`K`(結合インダクタ、`Element::Mutual`、DC/過渡/AC/ノイズ)。④`POLY` の積の項(SPICE の項の並び順)。⑤`log10`、`==`/`!=`。⑥VDMOS モデルと3端子の `M`。⑦`.subckt` の見出しの既定値が本体の `.param` を指す書き方(`vcc1={vcc}`)。⑧B 素子の式の中のパラメータ名の置き換え。⑨UTF-8 でないファイル(`µ` が1バイト)の読み込み(`decode_spice_text`、部品作成フォームの「SPICEファイルを読む」も)。
 - まだ読めない主なもの(約27%): PSpice/XSPICE のデジタル部品(`A` 素子の `[in] out model` 形・`U` 素子・SCHMITT/SRFLOP/DFLOP、計 約300)、伝送線路 `T`(33)、電荷型コンデンサ `C … Q=式`(21)、拡散・ラプラス・`?:` を使う式、`I(D名)`(ダイオードの電流を式で読む)、呼び出し側が与えるはずのパラメータ(`RON`・`Cnom`・`DCR` など。モデルの不具合ではない)。
 
+## デジタル部品(段階1: 組合せ回路、2026-10-18)
+アナログ解析器の中に、デジタル用の別エンジン(イベント駆動)を足す前の第1段階。ゲートを**1つの B 電圧源**として表す(`spice_flat.rs` の `gate_device` / `u_device`)。入力は `0.5+0.5*tanh((V(x)-vt)/w)`(なめらかな0〜1、`w` は振幅の5%)にして、AND は積、OR は `1-Π(1-x)`、XOR は `a+b-2ab` の畳み込み、反転は `1-x`。出力は `vlow + (vhigh-vlow)*式`。滑らかにしてあるのは、段差だと傾きがゼロでニュートン法が進めないから。
+- 読めるもの: LTspice の8ピンの `A`(`AND/NAND/OR/NOR/XOR/XNOR/BUF/INV`、入力は1〜4ピン・出力は7ピン、`vlow`/`vhigh`/`vt` を読む。既定は LTspice と同じ 0 V と 1 V)、ngspice の XSPICE 形(`aX [a b] y model` と `aX in out model`、モデルは `d_and d_nand d_or d_nor d_xor d_xnor d_buffer d_inverter`)、オープンコレクタ `d_open_c`(入力が偽のとき100Ωで低レベルへ引く)、`d_tristate`(許可されたとき100Ω越しに入力のレベルを出す)、PSpice の `U nand(2) DPWR DGND in.. out ...`(電源ピンは無視して 0 V と 5 V)と、見出しの `optional: DPWR=$G_DPWR`(`$` で始まる値は大域ノードで、パラメータではない)。
+- 読めないもの(段階2以降): SCHMITT・SRFLOP・DFLOP・カウンタなど記憶のある部品と、遅延。遅延は無視する(`td`、`rise_delay` など)。接地につないだ入力は「使っていないピン」として無視する(LTspice と同じ)。
+- 効果(公開モデル集での一括確認): 読めて解けた割合 73% → 75.5%(3507 → 3632 / 4812)。
+

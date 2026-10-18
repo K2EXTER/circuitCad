@@ -22,7 +22,7 @@ pub fn needs_flatten(text: &str) -> bool {
     text.lines().any(|l| {
         let l = l.trim_start();
         let low = l.to_ascii_lowercase();
-        low.starts_with(['x', 'f', 'h', 'a'])
+        low.starts_with(['x', 'f', 'h', 'a', 'u'])
             || low.starts_with(".param")
             || low.contains("params:")
             || l.contains('{')
@@ -78,9 +78,11 @@ fn split_top(s: &str) -> Vec<String> {
 fn assignments(tokens: &[String]) -> Result<Vec<(String, String)>, String> {
     tokens
         .iter()
-        .filter(|t| !t.eq_ignore_ascii_case("params:"))
+        .filter(|t| !t.eq_ignore_ascii_case("params:") && !t.eq_ignore_ascii_case("optional:"))
         // a bare word is a flag (`SENS`, `noiseless`); the commas some vendors put between `name=value` pairs are dropped
         .filter_map(|t| t.split_once('=').map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().trim_end_matches(',').trim().to_string())))
+        // `DPWR=$G_DPWR`: a global net (PSpice's digital supply), not a parameter
+        .filter(|(_, v)| !v.starts_with('$'))
         .map(Ok)
         .collect()
 }
@@ -321,8 +323,24 @@ fn node_count(letter: char) -> Option<usize> {
 
 struct Ctx<'a> {
     defs: &'a HashMap<String, Def>,
+    /// Lower-case model name -> (lower-case type, the rest of the card): to tell what an XSPICE `a` device is.
+    model_kinds: &'a HashMap<String, (String, String)>,
     /// Lower-case names of the `.model` cards (to tell a transistor's substrate node from its model name).
     models: &'a std::collections::HashSet<String>,
+}
+
+/// The XSPICE model type that `gate_device` reads for a PSpice gate kind.
+fn kind_to_model(kind: &str) -> &'static str {
+    match kind {
+        "and" => "d_and",
+        "nand" => "d_nand",
+        "or" => "d_or",
+        "nor" => "d_nor",
+        "xor" => "d_xor",
+        "xnor" => "d_xnor",
+        "buf" => "d_buffer",
+        _ => "d_inverter",
+    }
 }
 
 impl Ctx<'_> {
@@ -403,7 +421,11 @@ impl Ctx<'_> {
                 continue;
             }
             if letter == 'A' {
-                out.extend(self.a_device(&t, path, ports, &prefix)?);
+                out.extend(self.a_device(&line, &t, path, ports, &prefix)?);
+                continue;
+            }
+            if letter == 'U' {
+                out.extend(self.u_device(&t, path, ports, &prefix)?);
                 continue;
             }
             // a source whose value follows the circuit temperature (`V1 a b {temp*0.01}`): kept as an expression, so
@@ -463,11 +485,128 @@ impl Ctx<'_> {
 }
 
 impl Ctx<'_> {
+    /// A combinational logic gate written as an `A` device, in LTspice's form (`A in1 in2 in3 in4 vp vm out out2 AND ...`) or
+    /// ngspice's XSPICE form (`a1 [in1 in2] out model` with a `d_and` ... `.model`). The gate becomes one behavioural
+    /// voltage source: logic levels are `vlow`..`vhigh` (default 0 and 1 V, like LTspice), true above `vt` (their middle),
+    /// with a smooth transition so that Newton's iteration has a slope to follow. Delays are not modelled; inputs tied to
+    /// ground are ignored (an unused pin). `None` when the device is not a gate of these kinds.
+    fn gate_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str, levels: Option<(f64, f64)>) -> Result<Option<Vec<String>>, String> {
+        let head = t[0].as_str();
+        let gate_of = |w: &str| match w.to_ascii_lowercase().as_str() {
+            "and" | "d_and" => Some("and"),
+            "nand" | "d_nand" => Some("nand"),
+            "or" | "d_or" => Some("or"),
+            "nor" | "d_nor" => Some("nor"),
+            "xor" | "d_xor" => Some("xor"),
+            "xnor" | "d_xnor" => Some("xnor"),
+            "buf" | "d_buffer" => Some("buf"),
+            "inv" | "d_inverter" => Some("inv"),
+            _ => None,
+        };
+        let (kind, inputs, out, params): (&str, Vec<String>, String, String) = if t.len() >= 10 && gate_of(&t[9]).is_some() {
+            (gate_of(&t[9]).unwrap(), t[1..=4].to_vec(), t[7].clone(), t[10..].join(" "))
+        } else {
+            // XSPICE: the words after the name; the last one is the model, whose type says what the others are
+            let rest = line[head.len()..].trim();
+            let words: Vec<&str> = rest.split_whitespace().collect();
+            let Some(model) = words.last() else { return Ok(None) };
+            let Some((ty, _)) = self.model_kinds.get(&model.to_ascii_lowercase()) else { return Ok(None) };
+            let kind = match ty.as_str() {
+                "d_open_c" => "openc",
+                "d_tristate" => "tri",
+                other => match gate_of(other) {
+                    Some(k) => k,
+                    None => return Ok(None),
+                },
+            };
+            let (ins, out): (Vec<String>, String) = match (kind, rest.find('['), rest.find(']')) {
+                // [in1 in2 ..] out model
+                (_, Some(0), Some(b)) if b > 0 => {
+                    let tail: Vec<&str> = rest[b + 1..].split_whitespace().collect();
+                    if tail.len() != 2 {
+                        return Ok(None);
+                    }
+                    (rest[1..b].split_whitespace().map(str::to_string).collect(), tail[0].to_string())
+                }
+                ("tri", _, _) if words.len() == 4 => (vec![words[0].to_string(), words[1].to_string()], words[2].to_string()),
+                (_, _, _) if words.len() == 3 && !rest.contains('[') => (vec![words[0].to_string()], words[1].to_string()),
+                _ => return Ok(None),
+            };
+            (kind, ins, out, String::new())
+        };
+        let param = |key: &str| params.split_whitespace().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
+        let (vlow, vhigh) = levels.unwrap_or((param("vlow").unwrap_or(0.0), param("vhigh").unwrap_or(1.0)));
+        let vt = param("vt").unwrap_or((vlow + vhigh) / 2.0);
+        let w = ((vhigh - vlow).abs() * 0.05).max(1e-6);
+        let ins: Vec<String> = inputs.iter().filter(|n| n.as_str() != "0").map(|n| rename_node(n, ports, prefix)).collect();
+        let s = |n: &str| format!("(0.5+0.5*tanh((V({n})-({vt:e}))/({w:e})))");
+        let terms: Vec<String> = ins.iter().map(|n| s(n)).collect();
+        let and = || if terms.is_empty() { "0".to_string() } else { terms.join("*") };
+        let or = || if terms.is_empty() { "0".to_string() } else { format!("(1-{})", terms.iter().map(|x| format!("(1-{x})")).collect::<Vec<_>>().join("*")) };
+        let xor = || terms.iter().skip(1).fold(terms.first().cloned().unwrap_or_else(|| "0".into()), |acc, x| format!("(({acc})+({x})-2*({acc})*({x}))"));
+        let logic = match kind {
+            "and" => and(),
+            "nand" => format!("(1-{})", and()),
+            "or" => or(),
+            "nor" => format!("(1-{})", or()),
+            "xor" => xor(),
+            "xnor" => format!("(1-{})", xor()),
+            "buf" => terms.first().cloned().unwrap_or_else(|| "0".into()),
+            "inv" => format!("(1-{})", terms.first().cloned().unwrap_or_else(|| "0".into())),
+            _ => String::new(),
+        };
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let outn = rename_node(&out, ports, prefix);
+        // open collector: pulls the output to the low level (through 100 ohm) when the input is false, floats when true
+        if kind == "openc" {
+            let t0 = terms.first().cloned().unwrap_or_else(|| "0".into());
+            return Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 I=(1-{t0})*(V({outn})-({vlow:e}))/100")]));
+        }
+        // tri-state buffer: drives the input's level through 100 ohm while enabled, floats otherwise
+        if kind == "tri" {
+            let (d, en) = (terms.first().cloned().unwrap_or_else(|| "0".into()), terms.get(1).cloned().unwrap_or_else(|| "1".into()));
+            return Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 I={en}*(V({outn})-({vlow:e}+({:e})*{d}))/100", vhigh - vlow)]));
+        }
+        Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 V={vlow:e}+({:e})*{logic}", vhigh - vlow)]))
+    }
+
+    /// A PSpice digital gate: `Uname type(n) dpwr dgnd in1 .. inN out delay-model io-model ...` (`nand(2)`, `inv`, `buf` ...). The
+    /// supply pins are ignored: the levels are 0 and 5 V (true above 2.5 V), like `gate_device` otherwise. Anything with a
+    /// memory (flip-flops, latches, counters) is reported.
+    fn u_device(&self, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        let ty = t.get(1).map(|s| s.to_ascii_lowercase()).unwrap_or_default();
+        let (name, count) = match ty.split_once('(') {
+            Some((n, c)) => (n.to_string(), c.trim_end_matches(')').parse::<usize>().unwrap_or(1)),
+            None => (ty.clone(), 1),
+        };
+        let kind = match name.as_str() {
+            "and" | "nand" | "or" | "nor" | "xor" | "buf" | "inv" => name.as_str(),
+            "nxor" => "xnor",
+            "bufa" => "buf",
+            "inva" => "inv",
+            _ => return Err(format!("{head}: PSpice のデジタル部品「{ty}」は未対応です (AND / OR / バッファ / インバータ などの組合せ回路だけ読めます。記憶や遅れを持つ部品は、アナログ回路としては表せません)")),
+        };
+        let n_in = if matches!(kind, "buf" | "inv") { 1 } else { count };
+        if t.len() < 4 + n_in + 1 {
+            return Err(format!("{head}: U 素子は「U名前 種類(入力数) 電源 GND 入力… 出力 …」の形で書きます"));
+        }
+        let (ins, out) = (&t[4..4 + n_in], &t[4 + n_in]);
+        let line = format!("{head} [{}] {out} __gate", ins.join(" "));
+        let mut tmp: HashMap<String, (String, String)> = HashMap::new();
+        tmp.insert("__gate".into(), (kind_to_model(kind).into(), String::new()));
+        let helper = Ctx { defs: self.defs, model_kinds: &tmp, models: self.models };
+        helper.gate_device(&line, &[head.to_string()], path, ports, prefix, Some((0.0, 5.0)))?.ok_or_else(|| format!("{head}: ゲートを読めません"))
+    }
+
     /// An LTspice `A` (XSPICE) device. Only the OTA of the "universal op-amp" is read: a transconductance with a
     /// current limit and an output capacitance. The others (SCHMITT, SRFLOP, DFLOP, AND ... have a memory or a
     /// time delay) are reported.
-    fn a_device(&self, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+    fn a_device(&self, line: &str, t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
         let head = t[0].as_str();
+        if let Some(lines) = self.gate_device(line, t, path, ports, prefix, None)? {
+            return Ok(lines);
+        }
         // A name n1 ... n8 MODEL key=value ...
         let kind = t.get(9).map(|k| k.to_ascii_uppercase()).unwrap_or_default();
         if t.len() < 10 {
@@ -668,7 +807,7 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
             ".subckt" => {
                 let t = split_top(l);
                 let name = t.get(1).ok_or(".subckt に名前がありません")?.clone();
-                let split = t.iter().skip(2).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:")).map_or(t.len(), |p| p + 2);
+                let split = t.iter().skip(2).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:") || w.eq_ignore_ascii_case("optional:")).map_or(t.len(), |p| p + 2);
                 stack.push((name, Def { ports: t[2..split].to_vec(), defaults: assignments(&t[split..])?, body: vec![] }));
             }
             ".ends" | ".end" if !stack.is_empty() => {
@@ -700,7 +839,18 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     let top = defs.get(&sub_name.to_ascii_lowercase()).ok_or_else(|| format!(".subckt {sub_name} が見つかりません"))?;
     let ports: HashMap<String, String> = top.ports.iter().map(|p| (p.to_ascii_lowercase(), p.clone())).collect();
     let model_names: std::collections::HashSet<String> = model_cards.iter().filter_map(|m| m.split_whitespace().nth(1).map(str::to_ascii_lowercase)).collect();
-    let body = Ctx { defs: &defs, models: &model_names }.expand(top, "", &ports, global, &[], 0)?;
+    let model_kinds: HashMap<String, (String, String)> = model_cards
+        .iter()
+        .filter_map(|m| {
+            let mut it = m.split_whitespace();
+            it.next()?;
+            let name = it.next()?.to_ascii_lowercase();
+            let rest = m.splitn(3, char::is_whitespace).nth(2).unwrap_or("").trim().to_string();
+            let ty: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect::<String>().to_ascii_lowercase();
+            Some((name, (ty, rest)))
+        })
+        .collect();
+    let body = Ctx { defs: &defs, model_kinds: &model_kinds, models: &model_names }.expand(top, "", &ports, global, &[], 0)?;
     let mut s = models.join("\n");
     s.push_str(&format!("\n.subckt {sub_name} {}\n{}\n.ends {sub_name}\n", top.ports.join(" "), body.join("\n")));
     Ok(Some(s))
