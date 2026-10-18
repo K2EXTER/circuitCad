@@ -382,8 +382,8 @@ fn the_ota_a_device_is_a_transconductance_and_the_other_a_devices_are_explained(
     let v = run(t, "T", &["inp", "out", "gnd"], 1.0, "out");
     assert!((v - 1000.0 / 1001.0).abs() < 1e-6, "{v}");
     // a device with no meaning here (not a gate, flip-flop or Schmitt trigger) is named in the error
-    let e = err(".subckt T a b gnd\nA1 a 0 0 0 0 0 b 0 MODULATOR Vt=0 Vh=1m\n.ends T", "T", &["a", "b"]);
-    assert!(e.contains("MODULATOR") && e.contains("未対応"), "{e}");
+    let e = err(".subckt T a b gnd\nA1 a 0 0 0 0 0 b 0 ONESHOT Vt=0 Vh=1m\n.ends T", "T", &["a", "b"]);
+    assert!(e.contains("ONESHOT") && e.contains("未対応"), "{e}");
 }
 
 /// Developer helper: for a subcircuit that does not solve, list the elements whose removal makes the DC point solvable.
@@ -750,4 +750,22 @@ fn a_capacitor_value_with_a_micro_sign_is_not_mistaken_for_a_charge() {
     // "1µ" has a multi-byte character where "Q=" would be looked for
     let t = ".subckt T a b gnd\nR1 a b 1k\nC1 b gnd 1µ\n.ends T";
     assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn an_ltspice_modulator_makes_a_sine_with_the_frequency_set_by_the_fm_pin() {
+    // fm = 0.5 V between space = 0 and mark = 100 kHz -> 50 kHz; am = 2 V
+    let t = ".subckt T fm am o\nA1 fm am 0 0 0 0 o 0 MODULATOR mark=100k space=0\n.ends T";
+    let mut c = Circuit::new();
+    let (fm, am, o) = (c.node("fm"), c.node("am"), c.node("o"));
+    c.add(Element::vdc("Vfm", fm, 0, 0.5));
+    c.add(Element::vdc("Vam", am, 0, 2.0));
+    add_subckt_instance(&mut c, "U1", "T", t, &[fm, am, o]).unwrap_or_else(|e| panic!("{e}"));
+    c.add(Element::Resistor { name: "Rl".into(), a: o, b: 0, r: 1e3 });
+    let r = transient(&c, &TranSettings { tstop: 100e-6, tstep: 0.2e-6, uic: false }).unwrap();
+    let vo = r.signal("V(o)").unwrap();
+    let rising = vo.values.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
+    let hi = vo.values.iter().cloned().fold(f64::MIN, f64::max);
+    assert!((rising as i32 - 5).abs() <= 1, "{rising} cycles in 100 us at 50 kHz");
+    assert!((hi - 2.0).abs() < 0.05, "amplitude {hi}");
 }

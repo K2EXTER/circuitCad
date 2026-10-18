@@ -770,6 +770,9 @@ impl Ctx<'_> {
         if t.len() < 10 {
             return Err(format!("{head}: A 素子は「A名前 ノード × 8 種類 パラメータ…」の形で書きます"));
         }
+        if kind == "MODULATOR" {
+            return Self::modulator(t, path, ports, prefix);
+        }
         if kind != "OTA" {
             return Err(format!("{head}: XSPICE の部品「{kind}」は未対応です (SCHMITT・SRFLOP・DFLOP・AND・OR のように、記憶や遅れを持つ部品は、1 つの式にできません)。回路図用の別のモデルを探すか、部品作成フォームの「かんたん作成」を使ってください"));
         }
@@ -783,6 +786,30 @@ impl Ctx<'_> {
             lines.push(format!("C_{head}{suffix} {out} 0 {cout:e}"));
         }
         Ok(lines)
+    }
+
+    /// An LTspice `MODULATOR`: `A fm am - - - - out common MODULATOR mark=Hz space=Hz`. The output is a sine of amplitude `V(am)`
+    /// (1 V when the pin is grounded) whose frequency is `space + (mark - space) * V(fm)`. The phase is the integral of the
+    /// frequency, kept as the voltage of a 1 F capacitor (so the frequency may change over time without a phase jump); that
+    /// capacitor starts at 0 (`IC=0`), so only a transient analysis gives a meaningful output. Steps are not shortened to follow the
+    /// sine: use a time step well below the period.
+    fn modulator(t: &[String], path: &str, ports: &HashMap<String, String>, prefix: &str) -> Result<Vec<String>, String> {
+        let head = t[0].as_str();
+        let param = |key: &str| t[10..].iter().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
+        let (Some(mark), space) = (param("mark"), param("space").unwrap_or(0.0)) else {
+            return Err(format!("{head}: MODULATOR には mark=周波数 (と space=周波数) が必要です"));
+        };
+        let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
+        let node = |i: usize| rename_node(&t[i], ports, prefix);
+        let (fm, am, out, common) = (node(1), node(2), node(7), node(8));
+        let ph = format!("{prefix}{head}_ph");
+        let amp = if am == "0" { "1".to_string() } else { format!("V({am})") };
+        Ok(vec![
+            format!("B_{head}_f{suffix} 0 {ph} I={space:e}+({:e})*V({fm})", mark - space),
+            format!("C_{head}_ph{suffix} {ph} 0 1 IC=0"),
+            format!("R_{head}_ph{suffix} {ph} 0 1e9"),
+            format!("B_{head}{suffix} {out} {common} V={amp}*sin(6.283185307179586*V({ph}))"),
+        ])
     }
 
     /// An E / G / F / H line as a behavioural (B) source: `VALUE={expr}`, `POLY(n)` (linear terms, or any degree

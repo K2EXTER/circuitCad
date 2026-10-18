@@ -39,6 +39,8 @@ pub enum Func {
     Log10,
     Pow,
     Tanh,
+    Sin,
+    Cos,
     If,
     Step,
 }
@@ -56,6 +58,8 @@ impl Func {
             "log10" => (Func::Log10, 1..=1),
             "pow" | "pwr" => (Func::Pow, 2..=2),
             "tanh" => (Func::Tanh, 1..=1),
+            "sin" => (Func::Sin, 1..=1),
+            "cos" => (Func::Cos, 1..=1),
             "if" => (Func::If, 3..=3),
             "step" | "u" => (Func::Step, 1..=2),
             _ => return None,
@@ -625,6 +629,8 @@ impl CExpr {
                         let r = a[0].v.tanh();
                         a[0].map(r, 1.0 - r * r)
                     }
+                    Func::Sin => a[0].map(a[0].v.sin(), a[0].v.cos()),
+                    Func::Cos => a[0].map(a[0].v.cos(), -a[0].v.sin()),
                     Func::If => if a[0].v != 0.0 { a[1].clone() } else { a[2].clone() },
                     Func::Step => {
                         // smooth 0 -> 1 across [-w, w] (w = 1 mV when omitted)

@@ -79,7 +79,7 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 - 更新の規則(`seq_update`): セット/リセットは即時(同時のときは今の状態を保つ)。クロックの立ち上がり(前の採用点では閾値より下、今は上)で、データは**エッジの前の採用点の値**を取り込む。ラッチ(`Dlatch`/`Srlatch`)は許可が真の間ずっと追従。シュミットは `vt±vh` を超えたときだけ反転。DC(`solve_op`)は、状態を更新してはもう一度解く、を最大16回(状態が電圧と合うまで)。過渡は、採用した刻みのあとに更新し、状態が変わったら電源の角と同じ扱い(次は後退オイラー、履歴を捨てる)。
 - 精度の限界: 状態の変化は次の刻みから効く(遅れは最大で1刻み。エッジの時刻を刻みの途中に合わせる処理はまだ)。遅延(`td`、`clk_delay` など)は無視。
 - 読める書き方: LTspice の `A` 素子 `DFLOP`/`SRFLOP`/`JKFLOP`/`SCHMITT`(ピンは `in1 in2 clk set reset qbar q`、set/reset は正論理、`Vt`/`Vh`/`vlow`/`vhigh`。使いかたからの推定で、LTspice の資料では確認していない)と、ngspice の `d_dff d_tff d_jkff d_srff d_dlatch d_srlatch`(使わない端子は `NULL`)。フラット化後は内部の `Z` 行(`Z名 種類 q qb vlow vhigh vt vh set_low reset_low 入力…`)になる。
-- 読めないまま: PSpice の `U dff(1)` などの記憶つき部品、`ONESHOT`/`PHASEDET`/`MODULATOR` などの `A` 素子。
+- 読めないまま: PSpice の `U dff(1)` などの記憶つき部品、`ONESHOT`/`PHASEDET` などの `A` 素子(`MODULATOR` は読める。下記)。
 - 効果(一括確認): 読めて解けた割合 75.5% → 76.1%(3632 → 3660 / 4812)。DC が収束しなかったのは 11 個(いずれも電源のピン名が曖昧か、電圧源だけのサブサーキットなど。`OPA170`・`OPA1662` は DC は通るが過渡で `Singular`: 調査中)。
 - **OPA170・OPA1662 の過渡解析が `Singular` だった原因(2026-10-18):** 一括確認の簡易回路では電源ピン `V+` に 5V をつなぐが、モデルの中に `C15 V+ V- 10P IC=0` がある。過渡解析の開始点は、コンデンサの初期電圧 `IC=` を電圧源で固定して求める(`tran.rs start_point`)ので、`V+`〜`V-` を 0V に固定する源と 5V の電源が並列になり、行列が構造的に特異になっていた(行列の構造的ランクを調べて、`V+` の列に行が2つしか無いこと=電圧源2本が同じ点を固定、と特定)。DC は IC を使わないので解けていた。SPICE は UIC なしでは IC を無視する。直し: IC を固定した解が `Singular` のときは、IC なしの普通の動作点から始める。調べ方は `tests_vendor_bulk.rs` の `tran_debug`(`SPICE_UNKNOWNS=番号,...` で未知数の名前も出る)。
 
@@ -102,3 +102,6 @@ KiCad-Spice-Library の11個(TI の ua741・tl082、2n3904、OPA197/OPA211、MCP
 
 ## 電荷型コンデンサ C … Q=式(2026-10-18)
 `C1 a b Q=式`(式は `v(a,b)` などの電圧の関数。電荷 Q(v))を `Element::ChargeCap` → `Ce::Cq` にする(`spice_in.rs` の `'C'` の枝、展開は `spice_flat.rs` が式のノード名を置き換える)。電流は dQ/dt で、DC では開放。状態は `n_caps` を2つ使う(`idx`=両端の電圧=刻みの誤差見積り用、`idx+1`=電荷=状態)。過渡(`dc/mna.rs`)は `Ce::D` の接合容量と同じ電荷の差分(後退オイラー/台形)で、Q(x) を式の微分(`CExpr::eval` の勾配)で今の反復の点に線形化する。AC(`ac.rs`)は動作点での dQ/dx を `jω` 倍して行(a, b)に置く。ノイズなし。`IC=`(初期電圧)は未対応。テストは `tests_flat.rs` の `a_charge_type_capacitor…` `a_nonlinear_charge_capacitor…`。
+
+## LTspice の MODULATOR(2026-10-18)
+`A fm am - - - - out common MODULATOR mark= space=`(`spice_flat.rs modulator`)。出力は振幅 `V(am)`(ピンが接地なら 1V)の正弦波で、周波数は `space + (mark-space)*V(fm)`(Web 上の LTspice の説明と、公開モデル `ISO16750-2.lib`・`LM2678xx.lib` の使い方の両方に合う。ピン順の公式資料は確認できていない)。位相 = 周波数の積分を、1F のコンデンサ(`IC=0`)の電圧で持つ(電流源 `I=周波数`)ので、周波数が途中で変わっても位相は飛ばない。DC では位相が定まらないので過渡解析だけ意味がある。刻みは正弦波に合わせて縮まない(刻みは周期よりずっと小さく)。式に `sin`/`cos` を足した(`expr.rs`)。テストは `tests_flat.rs an_ltspice_modulator…`。
