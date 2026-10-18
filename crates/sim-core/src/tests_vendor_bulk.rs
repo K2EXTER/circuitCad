@@ -267,3 +267,57 @@ fn tran_debug() {
         println!("TRAN {tstop:e}: {:?}", crate::transient(&c, &crate::TranSettings { tstop, tstep: tstop / 20.0, uic: false }).map(|r| r.time.len()));
     }
 }
+
+/// Which DC strategies solve one subcircuit of the bench. Temporary debugging aid:
+/// `SPICE_MODEL_DIR=<dir> SPICE_DUMP_FILE=<file> SPICE_DUMP_TOP=<name> [SPICE_VIN=<volts>] cargo test -p sim-core strategy_debug -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn strategy_debug() {
+    let (Ok(dir), Ok(file), Ok(top)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP")) else { return };
+    let text = crate::decode_spice_text(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap());
+    let ports = subckts(&text).into_iter().find(|(n, _)| *n == top).map(|(_, p)| p).unwrap_or_default();
+    let mut c = build_bench(&text, &top, &ports).unwrap();
+    if let Some(v) = std::env::var("SPICE_VIN").ok().and_then(|v| v.parse::<f64>().ok()) {
+        for e in c.elements.iter_mut() {
+            if let Element::VSource { name, wave, .. } = e
+                && name.starts_with("Vi")
+            {
+                *wave = Waveform::Dc(v);
+            }
+        }
+    }
+    if let Some(n) = std::env::var("SPICE_ITERS").ok().and_then(|v| v.parse::<usize>().ok()) {
+        let mut o = crate::options::options();
+        o.max_iter = n;
+        crate::options::set_options(o);
+    }
+    use crate::dc::Strategy::*;
+    for (label, s) in [("direct", Direct), ("gmin", Gmin), ("source", Source), ("widen", Widen)] {
+        let r = crate::dc::dc_op_with(&c, &[s]);
+        println!("{label}: {:?}", r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}")));
+    }
+}
+
+/// Which single line of the subcircuit, when removed, lets the DC converge (`SPICE_DUMP_*` as in `strategy_debug`).
+#[test]
+#[ignore]
+fn dc_bisect() {
+    let (Ok(dir), Ok(file), Ok(top)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP")) else { return };
+    let text = crate::decode_spice_text(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap());
+    let ports = subckts(&text).into_iter().find(|(n, _)| *n == top).map(|(_, p)| p).unwrap_or_default();
+    let lines = crate::spice_in::logical_lines(&text);
+    let start = lines.iter().position(|l| l.to_ascii_lowercase().starts_with(".subckt") && l.split_whitespace().nth(1).is_some_and(|n| n.eq_ignore_ascii_case(&top))).unwrap();
+    let end = start + lines[start..].iter().position(|l| l.to_ascii_lowercase().starts_with(".end")).unwrap();
+    for i in start + 1..end {
+        if lines[i].starts_with('.') {
+            continue;
+        }
+        let kept: Vec<&str> = lines.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, l)| l.as_str()).collect();
+        let t = kept.join("\n");
+        if let Ok(c) = build_bench(&t, &top, &ports)
+            && dc_op(&c).is_ok()
+        {
+            println!("REMOVING makes DC converge: {}", lines[i]);
+        }
+    }
+}

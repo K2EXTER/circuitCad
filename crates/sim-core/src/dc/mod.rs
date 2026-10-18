@@ -204,13 +204,34 @@ impl Compiled {
         match which {
             Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(crate::options::options().gmin, 1.0)),
             Strategy::Gmin => {
-                // gmin from 1e-2 down to 1e-12, each step starting from the previous solution
-                let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
-                for g in (2..=12).map(|e| 10f64.powi(-e)) {
-                    let a = self.newton(x, vj, &Ctx::dc(g, 1.0))?;
-                    iters += a.iterations;
-                    x = a.x;
-                    vj = a.vj;
+                // gmin from 1e-2 down to 1e-12 (a decade at a time), each step starting from the previous solution. A step
+                // that does not converge is split into smaller ones: a latch or a current-limited output stage can need
+                // hundreds of iterations for a decade, but only a few for a third of it.
+                let first = self.newton(zero_x, zero_vj, &Ctx::dc(1e-2, 1.0))?;
+                let (mut x, mut vj, mut iters) = (first.x, first.vj, first.iterations);
+                let (mut e, mut de) = (2.0f64, 1.0f64);
+                while e < 12.0 - 1e-9 {
+                    let target = (e + de).min(12.0);
+                    let ctx = Ctx::dc(10f64.powf(-target), 1.0);
+                    match self.newton(x.clone(), vj.clone(), &ctx) {
+                        Ok(a) => {
+                            iters += a.iterations;
+                            x = a.x;
+                            vj = a.vj;
+                            de = (de * 2.0).min(1.0);
+                            e = target;
+                        }
+                        Err(_) if de >= 1.0 / 8.0 => de /= 2.0,
+                        // already a small step: a circuit with saturating gates (current-limited output stages, latches built
+                        // from them) can crawl towards the solution for hundreds of iterations, so give it forty times as many
+                        Err(f) => {
+                            let a = self.newton_long(x.clone(), vj.clone(), &ctx).map_err(|_| f)?;
+                            iters += a.iterations;
+                            x = a.x;
+                            vj = a.vj;
+                            e = target;
+                        }
+                    }
                 }
                 Ok(Attempt { x, vj, iterations: iters })
             }

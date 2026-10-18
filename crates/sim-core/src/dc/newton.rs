@@ -10,6 +10,11 @@ pub(super) fn converged(x: &[f64], xn: &[f64], n_node_unknowns: usize) -> bool {
     })
 }
 
+thread_local! {
+    /// When set, `newton_with` gives up (no convergence) once this moment has passed.
+    static DEADLINE: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+}
+
 pub(crate) enum Fail {
     Singular,
     NoConv,
@@ -42,6 +47,18 @@ impl Compiled {
             }
             other => other,
         }
+    }
+
+    /// `newton` with forty times the iteration limit (for a solution the iteration only crawls towards).
+    pub(crate) fn newton_long(&self, x0: Vec<f64>, vj0: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
+        let saved = crate::options::options();
+        crate::options::set_options(crate::options::SimOptions { max_iter: saved.max_iter.saturating_mul(40), ..saved });
+        // a circuit that really has no solution must not keep the caller waiting: give up after a few seconds
+        DEADLINE.with(|d| d.set(Some(std::time::Instant::now() + std::time::Duration::from_secs(4))));
+        let r = self.newton(x0, vj0, ctx);
+        DEADLINE.with(|d| d.set(None));
+        crate::options::set_options(saved);
+        r
     }
 
     /// `newton`, then shorter steps if it fails: close to the point where a latch splits into two
@@ -99,6 +116,9 @@ impl Compiled {
         // the previous point, its Newton step, its residual, its junction state and the fraction taken
         let mut prev: Option<(Vec<f64>, Vec<f64>, f64, Vec<f64>, f64)> = None;
         for it in 1..=crate::options::options().max_iter {
+            if DEADLINE.with(|d| d.get()).is_some_and(|d| std::time::Instant::now() > d) {
+                return Err(Fail::NoConv);
+            }
             let (m, limited) = self.assemble(&mut vj, &x, ctx);
             let n = m.n;
             let mut r2 = f64::NAN;
