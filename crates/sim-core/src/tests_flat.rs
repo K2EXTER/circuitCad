@@ -776,3 +776,21 @@ fn braces_inside_a_param_expression_only_group() {
     // td = 1e3 * 4 * 2 = 8k: a divider of 8k / 8k
     assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
 }
+
+#[test]
+fn old_pspice_headers_put_their_parameters_in_one_brace_group() {
+    let t = ".subckt T a b gnd {Rx=2k Ry=2k}\nR1 a b {Rx}\nR2 b gnd {Ry}\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn an_x_call_may_pass_its_parameters_in_one_brace_group() {
+    let t = ".subckt DIV in out gnd {r=1k k=2}\nR1 in out {r}\nR2 out gnd {r*k}\n.ends\n.subckt T a b gnd\nX1 a b gnd DIV {r=1k k=3}\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 0.75).abs() < 1e-6);
+}
+
+#[test]
+fn a_question_mark_default_means_the_caller_must_give_the_parameter() {
+    let t = ".subckt T a b gnd {Rx=???}\nR1 a b {Rx}\nR2 b gnd 1k\n.ends T";
+    assert!(err(t, "T", &["a", "b", "gnd"]).contains("Rx"));
+}

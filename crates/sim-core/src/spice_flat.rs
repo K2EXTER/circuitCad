@@ -75,6 +75,18 @@ fn split_top(s: &str) -> Vec<String> {
     out
 }
 
+/// Old PSpice writes the parameters of a `.subckt` header (and of an `X` call) as one braced group:
+/// `.subckt CAP 1 2 {TTest=27 Cnom=.1U}`. Opens such a group into separate `name=value` words.
+fn unbrace(tokens: Vec<String>) -> Vec<String> {
+    tokens
+        .into_iter()
+        .flat_map(|t| match t.strip_prefix('{').and_then(|r| r.strip_suffix('}')) {
+            Some(inner) if inner.contains('=') && inner.split_once('=').is_some_and(|(k, _)| !k.is_empty() && k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) => split_top(inner),
+            _ => vec![t],
+        })
+        .collect()
+}
+
 fn assignments(tokens: &[String]) -> Result<Vec<(String, String)>, String> {
     tokens
         .iter()
@@ -83,6 +95,8 @@ fn assignments(tokens: &[String]) -> Result<Vec<(String, String)>, String> {
         .filter_map(|t| t.split_once('=').map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().trim_end_matches(',').trim().to_string())))
         // `DPWR=$G_DPWR`: a global net (PSpice's digital supply), not a parameter
         .filter(|(_, v)| !v.starts_with('$'))
+        // `{LEN=???}`: a placeholder for "the caller must give this one" (no default)
+        .filter(|(_, v)| v != "???")
         .map(Ok)
         .collect()
 }
@@ -407,6 +421,14 @@ impl Ctx<'_> {
             if raw.starts_with('.') {
                 continue;
             }
+            let opened;
+            let raw = if raw.trim_start().starts_with(['X', 'x']) && raw.contains("{") {
+                // `X1 a b SUB {P=1 Q=2}`: the parameters of the call in one brace group
+                opened = unbrace(split_top(raw)).join(" ");
+                opened.as_str()
+            } else {
+                raw
+            };
             let line = subst_braces(raw, &env)?;
             let t = split_top(&line);
             let head = t[0].as_str();
@@ -1000,7 +1022,7 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
         let word = low.split_whitespace().next().unwrap_or("");
         match word {
             ".subckt" => {
-                let t = split_top(l);
+                let t = unbrace(split_top(l));
                 let name = t.get(1).ok_or(".subckt に名前がありません")?.clone();
                 let split = t.iter().skip(2).position(|w| w.contains('=') || w.eq_ignore_ascii_case("params:") || w.eq_ignore_ascii_case("optional:")).map_or(t.len(), |p| p + 2);
                 stack.push((name, Def { ports: t[2..split].to_vec(), defaults: assignments(&t[split..])?, body: vec![] }));
