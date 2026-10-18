@@ -41,6 +41,14 @@ pub enum Func {
     Tanh,
     Sin,
     Cos,
+    Floor,
+    Tan,
+    Asin,
+    Acos,
+    Atan,
+    Sinh,
+    Cosh,
+    Asinh,
     If,
     Step,
 }
@@ -60,6 +68,14 @@ impl Func {
             "tanh" => (Func::Tanh, 1..=1),
             "sin" => (Func::Sin, 1..=1),
             "cos" => (Func::Cos, 1..=1),
+            "floor" => (Func::Floor, 1..=1),
+            "tan" => (Func::Tan, 1..=1),
+            "asin" | "arcsin" => (Func::Asin, 1..=1),
+            "acos" | "arccos" => (Func::Acos, 1..=1),
+            "atan" | "arctan" => (Func::Atan, 1..=1),
+            "sinh" => (Func::Sinh, 1..=1),
+            "cosh" => (Func::Cosh, 1..=1),
+            "asinh" => (Func::Asinh, 1..=1),
             "if" => (Func::If, 3..=3),
             "step" | "u" => (Func::Step, 1..=2),
             _ => return None,
@@ -124,8 +140,22 @@ impl Parser<'_, '_> {
         Expr::Call(Func::If, vec![cond, Expr::Num(yes), Expr::Num(no)])
     }
 
-    /// `a | b`: true if either is.
+    /// `cond ? a : b` (the lowest precedence).
     fn expr(&mut self) -> PResult<Expr> {
+        let cond = self.or_expr()?;
+        if !self.eat(b'?') {
+            return Ok(cond);
+        }
+        let yes = self.expr()?;
+        if !self.eat(b':') {
+            return self.err("「? :」の「:」がありません");
+        }
+        let no = self.expr()?;
+        Ok(Expr::Call(Func::If, vec![cond, yes, no]))
+    }
+
+    /// `a | b`: true if either is.
+    fn or_expr(&mut self) -> PResult<Expr> {
         let mut a = self.and_expr()?;
         loop {
             self.ws();
@@ -205,7 +235,7 @@ impl Parser<'_, '_> {
 
     fn unary(&mut self) -> PResult<Expr> {
         self.ws();
-        if self.s.get(self.pos) == Some(&b'!') && self.s.get(self.pos + 1) != Some(&b'=') {
+        if (self.s.get(self.pos) == Some(&b'!') && self.s.get(self.pos + 1) != Some(&b'=')) || self.s.get(self.pos) == Some(&b'~') {
             self.pos += 1;
             let e = self.unary()?;
             return Ok(Self::logic(Self::truth(e), 0.0, 1.0));
@@ -630,6 +660,21 @@ impl CExpr {
                         a[0].map(r, 1.0 - r * r)
                     }
                     Func::Sin => a[0].map(a[0].v.sin(), a[0].v.cos()),
+                    Func::Floor => a[0].map(a[0].v.floor(), 0.0),
+                    Func::Tan => {
+                        let r = a[0].v.tan();
+                        a[0].map(r, 1.0 + r * r)
+                    }
+                    Func::Asin | Func::Acos => {
+                        // clamped at +-1, where the slope would be infinite
+                        let x = a[0].v.clamp(-1.0 + 1e-9, 1.0 - 1e-9);
+                        let d = 1.0 / (1.0 - x * x).sqrt();
+                        if *f == Func::Asin { a[0].map(x.asin(), d) } else { a[0].map(x.acos(), -d) }
+                    }
+                    Func::Atan => a[0].map(a[0].v.atan(), 1.0 / (1.0 + a[0].v * a[0].v)),
+                    Func::Sinh => a[0].map(a[0].v.clamp(-80.0, 80.0).sinh(), a[0].v.clamp(-80.0, 80.0).cosh()),
+                    Func::Cosh => a[0].map(a[0].v.clamp(-80.0, 80.0).cosh(), a[0].v.clamp(-80.0, 80.0).sinh()),
+                    Func::Asinh => a[0].map(a[0].v.asinh(), 1.0 / (a[0].v * a[0].v + 1.0).sqrt()),
                     Func::Cos => a[0].map(a[0].v.cos(), -a[0].v.sin()),
                     Func::If => if a[0].v != 0.0 { a[1].clone() } else { a[2].clone() },
                     Func::Step => {

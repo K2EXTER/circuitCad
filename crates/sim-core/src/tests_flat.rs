@@ -852,3 +852,42 @@ fn func_defines_a_function_that_other_lines_can_call() {
     // 2 * (1 + 0.25) = 2.5
     assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 2.5).abs() < 1e-6);
 }
+
+#[test]
+fn idt_and_idtmod_integrate_in_a_transient() {
+    // d/dt of the integral of 1000 (V) is 1000 V/s: after 1 ms, 1 V; idtmod wraps it into [0, 0.4)
+    let t = ".subckt T o w gnd\nB1 o 0 V=idt(1000, 0)\nB2 w 0 V=idtmod(1000, 0, 0.4)\nR1 o gnd 1meg\nR2 w gnd 1meg\n.ends T";
+    let mut c = Circuit::new();
+    let (o, w) = (c.node("o"), c.node("w"));
+    add_subckt_instance(&mut c, "U1", "T", t, &[o, w, 0]).unwrap_or_else(|e| panic!("{e}"));
+    let r = transient(&c, &TranSettings { tstop: 1e-3, tstep: 1e-5, uic: false }).unwrap();
+    let last = |name: &str| *r.signal(name).unwrap().values.last().unwrap();
+    assert!((last("V(o)") - 1.0).abs() < 0.01, "{}", last("V(o)"));
+    assert!((last("V(w)") - 0.2).abs() < 0.01, "{}", last("V(w)"));
+}
+
+#[test]
+fn ternary_and_inverse_trig_in_expressions() {
+    let t = ".subckt T a b gnd\nB1 b 0 V=V(a) > 0.5 ? asin(0.5) + sinh(0) : 7\nR1 b gnd 1meg\n.ends T";
+    let want = 0.5f64.asin();
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - want).abs() < 1e-9);
+    assert!((run(t, "T", &["a", "b", "gnd"], 0.0, "b") - 7.0).abs() < 1e-9);
+}
+
+#[test]
+fn model_cards_with_spaces_around_equals_and_continuations() {
+    let m = parse_models(".MODEL DFMOD D N = 1.82488 IS = 5.01399E-008 RS = 0.00763893\n+ EG = 1.11 XTI = 3\n+ CJO = 4E-010 VJ = 1.43005 M = 0.35 FC = 0.5\n+ TT = 1E-008 TNOM=25\n").unwrap();
+    assert!(m.contains_key("dfmod"));
+    let m = parse_models(".MODEL DIODE1 D\n+ IS = 9.79E-015\n+ N = 1.101\n+ BV = 18\n+ IBV = 0.005\n+ RS = 0.3363\n").unwrap();
+    assert!(m.contains_key("diode1"));
+}
+
+#[test]
+fn model_text_params_and_negative_coupling_are_read() {
+    let m = parse_models(".model DX D(IS=1e-14 mfg=Rohm type=LED)").unwrap();
+    assert!(m.contains_key("dx"));
+    let t = ".subckt T a b gnd\nL1 a gnd 1m\nL2 b gnd 1m\nK1 L1 L2 -0.5\n.ends T";
+    let mut c = Circuit::new();
+    let (a, b) = (c.node("a"), c.node("b"));
+    add_subckt_instance(&mut c, "U1", "T", t, &[a, b, 0]).unwrap_or_else(|e| panic!("{e}"));
+}

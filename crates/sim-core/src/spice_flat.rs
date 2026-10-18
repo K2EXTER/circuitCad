@@ -28,7 +28,7 @@ pub fn needs_flatten(text: &str) -> bool {
             || low.contains("params:")
             || l.contains('{')
             || (!l.starts_with('*') && l.contains('\''))
-            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table")))
+            || (!l.starts_with(['*', '.']) && (low.contains("poly") || low.contains("value") || low.contains("table") || low.contains("idt")))
     })
 }
 
@@ -537,7 +537,7 @@ impl Ctx<'_> {
             }
             out.push(u.join(" "));
         }
-        Ok(out)
+        Ok(extract_integrals(out))
     }
 }
 
@@ -1224,6 +1224,75 @@ fn put_args(body: &str, params: &[String], args: &[String]) -> String {
             out.push(b[i]);
             i += 1;
         }
+    }
+    out
+}
+
+/// `idt(x, ic)` and `idtmod(x, ic, m [, offset])` (time integrals, LTspice) inside a B source: each one becomes a 1 F capacitor
+/// charged by a current source `x` (starting at `ic`), and the call is replaced by the capacitor voltage (for `idtmod` wrapped
+/// into `[offset, offset + m)`). A leak resistor of 1 GΩ keeps the node from floating in a DC analysis (where the integral is
+/// meaningless; a transient analysis starts from `ic`).
+fn extract_integrals(lines: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(lines.len());
+    for line in lines {
+        let low = line.to_ascii_lowercase();
+        if !(low.starts_with(['b']) && low.contains("idt")) {
+            out.push(line);
+            continue;
+        }
+        let name = line.split_whitespace().next().unwrap_or("B").to_string();
+        let mut text = line.clone();
+        let mut extra = vec![];
+        let mut k = 0;
+        loop {
+            let low = text.to_ascii_lowercase();
+            // the first call of idt( or idtmod( that starts a word
+            let Some((at, wlen)) = ["idtmod(", "idt("].iter().filter_map(|w| find_word(&low, 0, w).map(|p| (p, w.len()))).min_by_key(|(p, _)| *p) else { break };
+            let open = at + wlen - 1;
+            let mut depth = 0;
+            let mut args: Vec<String> = vec![];
+            let mut cur = String::new();
+            let mut end = None;
+            for (i, c) in text[open..].char_indices() {
+                match c {
+                    '(' => {
+                        depth += 1;
+                        if depth > 1 {
+                            cur.push(c);
+                        }
+                    }
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = Some(open + i);
+                            break;
+                        }
+                        cur.push(c);
+                    }
+                    ',' if depth == 1 => args.push(std::mem::take(&mut cur)),
+                    _ => cur.push(c),
+                }
+            }
+            let Some(end) = end else { break };
+            args.push(cur);
+            let is_mod = wlen == 7;
+            let node = format!("{name}_idt{k}");
+            let ic = args.get(1).and_then(|a| eval_expr(a, &Env::new()).ok()).unwrap_or(0.0);
+            extra.push(format!("B_{node} 0 {node} I={}", args[0].trim()));
+            extra.push(format!("C_{node} {node} 0 1 IC={ic:e}"));
+            extra.push(format!("R_{node} {node} 0 1e9"));
+            let repl = if is_mod && args.len() >= 3 {
+                let m = args[2].trim();
+                let off = args.get(3).map_or("0", |a| a.trim());
+                format!("(V({node})-({m})*floor((V({node})-({off}))/({m})))")
+            } else {
+                format!("V({node})")
+            };
+            text.replace_range(at..=end, &repl);
+            k += 1;
+        }
+        out.push(text);
+        out.extend(extra);
     }
     out
 }

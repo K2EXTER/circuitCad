@@ -135,3 +135,9 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - `A a b cp cn モデル` でモデルが `VSWITCH`(ngspice 風に A の名前で書かれたスイッチ)は `S` スイッチとして読む。
 - 一括確認の回路: 式の中の「未定義の名前」(`「sens」は使えません。電圧は…`)も、足りないパラメータとして `guess_param` で補う。
 - 効果: 4070 → 4127(85.8%)。上位に残る: `LOGICEXP` の `~`、`R = {式} … Freq`、損失線路 `O`/`LTRA`、`idtmod`(積分して折り返す関数。LM2678 の鋸歯状波)、`d_osc`、`s_xfer`。
+
+## idt/idtmod・三項演算子・逆三角関数ほか(2026-10-18)
+- **`idt(x, ic)` / `idtmod(x, ic, m [, offset])`** (`spice_flat.rs extract_integrals`): B 素子の式の中の時間積分。1F のコンデンサ(`IC=ic`)に電流源 `x` で充電し、呼び出しをコンデンサの電圧に置き換える(`idtmod` は `[offset, offset+m)` に折り返す: `v - m*floor((v-offset)/m)`)。DC で浮かないよう 1GΩ の漏れ抵抗つき。DC の値は意味がなく、過渡解析が `ic` から始まる。`MODULATOR` と同じ「積分 = コンデンサ」の方法。
+- 式に `floor` `tan` `asin/arcsin` `acos/arccos` `atan/arctan` `sinh` `cosh` `asinh` と、三項演算子 `a ? b : c`(最も優先順位が低い)、`~`(`!` と同じ論理否定)を足した(`expr.rs`)。
+- `.model` の続きの行(`+ IS = 9.79E-015`)の `=` の前後の空白を詰める(つないだあとで詰めていなかった)。`.model` の `mfg=` `type=` `source=` などの文字の値は読み飛ばす。結合係数 `K` は負の値も可(巻き方向が逆になるだけ。0 と絶対値 1 超が誤り)。
+- 効果: 85.8% → 89.1%(4127 → 4286 / 4812)。上位に残る: 周波数依存の抵抗 `R = {式} … Freq`、損失線路 `O`/`LTRA`、`d_osc`・`s_xfer` などの XSPICE、`TABLE` の変則形、`T` の遅れ時間が式。

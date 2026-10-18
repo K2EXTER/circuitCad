@@ -36,6 +36,8 @@ pub(crate) fn logical_lines(text: &str) -> Vec<String> {
             && let Some(last) = out.last_mut() {
                 last.push(' ');
                 last.push_str(rest.trim());
+                // `+ IS = 9.79E-015` on a continuation line: the blanks around the `=` go as well
+                *last = squash_equals(last);
                 continue;
             }
         // `.params` is accepted by LTspice as `.param`
@@ -120,6 +122,10 @@ fn params(s: &str) -> Result<HashMap<String, f64>, String> {
     for tok in cleaned.split_whitespace() {
         // a bare word is a flag (`noiseless`): not used
         let Some((k, val)) = tok.split_once('=') else { continue };
+        // descriptive text some vendors put in a model card (`mfg=Rohm type=LED`): not a number, not used
+        if matches!(k.to_ascii_lowercase().as_str(), "mfg" | "type" | "source" | "vendor" | "manufacturer" | "package" | "desc" | "description") {
+            continue;
+        }
         let x = parse_value(val).ok_or_else(|| format!("パラメータ値 {val} を数値にできません"))?;
         m.insert(k.to_ascii_uppercase(), x);
     }
@@ -526,8 +532,9 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     return Err(format!("{name}: 3 つ以上のインダクタの結合 (K) は未対応です。2 つずつの K に分けてください"));
                 }
                 let k = val(t[3])?;
-                if !(k > 0.0 && k <= 1.0) {
-                    return Err(format!("{name}: 結合係数 {k} は 0 より大きく 1 以下にしてください"));
+                // a negative k only reverses the winding sense
+                if !(k != 0.0 && k.abs() <= 1.0) {
+                    return Err(format!("{name}: 結合係数 {k} は 0 ではなく、絶対値が 1 以下にしてください (負の値は巻き方向が逆)"));
                 }
                 c.add(Element::Mutual { name, l1: format!("{inst}.{}", t[1]), l2: format!("{inst}.{}", t[2]), k });
             }
