@@ -503,8 +503,10 @@ impl Ctx<'_> {
             "inv" | "d_inverter" => Some("inv"),
             _ => None,
         };
-        let (kind, inputs, out, params): (&str, Vec<String>, String, String) = if t.len() >= 10 && gate_of(&t[9]).is_some() {
-            (gate_of(&t[9]).unwrap(), t[1..=4].to_vec(), t[7].clone(), t[10..].join(" "))
+        // the outputs: (node, inverted?). An LTspice device has the true output on pin 7 and the inverted one on pin 6
+        // (`A a b 0 0 0 y 0 0 AND` is a NAND); the other forms have the one output they name
+        let (kind, inputs, outs, params): (&str, Vec<String>, Vec<(String, bool)>, String) = if t.len() >= 10 && gate_of(&t[9]).is_some() {
+            (gate_of(&t[9]).unwrap(), t[1..=5].to_vec(), vec![(t[7].clone(), false), (t[6].clone(), true)], t[10..].join(" "))
         } else {
             // XSPICE: the words after the name; the last one is the model, whose type says what the others are
             let rest = line[head.len()..].trim();
@@ -532,11 +534,12 @@ impl Ctx<'_> {
                 (_, _, _) if words.len() == 3 && !rest.contains('[') => (vec![words[0].to_string()], words[1].to_string()),
                 _ => return Ok(None),
             };
-            (kind, ins, out, String::new())
+            (kind, ins, vec![(out, false)], String::new())
         };
         let param = |key: &str| params.split_whitespace().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
         let (vlow, vhigh) = levels.unwrap_or((param("vlow").unwrap_or(0.0), param("vhigh").unwrap_or(1.0)));
-        let vt = param("vt").unwrap_or((vlow + vhigh) / 2.0);
+        // LTspice names the switching level `Ref` (gates) or `Vt`
+        let vt = param("vt").or_else(|| param("ref")).unwrap_or((vlow + vhigh) / 2.0);
         let w = ((vhigh - vlow).abs() * 0.05).max(1e-6);
         let ins: Vec<String> = inputs.iter().filter(|n| n.as_str() != "0").map(|n| rename_node(n, ports, prefix)).collect();
         let s = |n: &str| format!("(0.5+0.5*tanh((V({n})-({vt:e}))/({w:e})))");
@@ -556,18 +559,26 @@ impl Ctx<'_> {
             _ => String::new(),
         };
         let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
-        let outn = rename_node(&out, ports, prefix);
-        // open collector: pulls the output to the low level (through 100 ohm) when the input is false, floats when true
-        if kind == "openc" {
-            let t0 = terms.first().cloned().unwrap_or_else(|| "0".into());
-            return Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 I=(1-{t0})*(V({outn})-({vlow:e}))/100")]));
+        let mut lines = vec![];
+        for (k, (out, inverted)) in outs.iter().filter(|(o, _)| o != "0").enumerate() {
+            let outn = rename_node(out, ports, prefix);
+            let nm = if k == 0 { format!("B_{head}{suffix}") } else { format!("B_{head}_{k}{suffix}") };
+            // open collector: pulls the output to the low level (through 100 ohm) when the input is false, floats when true
+            if kind == "openc" {
+                let t0 = terms.first().cloned().unwrap_or_else(|| "0".into());
+                lines.push(format!("{nm} {outn} 0 I=(1-{t0})*(V({outn})-({vlow:e}))/100"));
+                continue;
+            }
+            // tri-state buffer: drives the input's level through 100 ohm while enabled, floats otherwise
+            if kind == "tri" {
+                let (d, en) = (terms.first().cloned().unwrap_or_else(|| "0".into()), terms.get(1).cloned().unwrap_or_else(|| "1".into()));
+                lines.push(format!("{nm} {outn} 0 I={en}*(V({outn})-({vlow:e}+({:e})*{d}))/100", vhigh - vlow));
+                continue;
+            }
+            let logic = if *inverted { format!("(1-{logic})") } else { logic.clone() };
+            lines.push(format!("{nm} {outn} 0 V={vlow:e}+({:e})*{logic}", vhigh - vlow));
         }
-        // tri-state buffer: drives the input's level through 100 ohm while enabled, floats otherwise
-        if kind == "tri" {
-            let (d, en) = (terms.first().cloned().unwrap_or_else(|| "0".into()), terms.get(1).cloned().unwrap_or_else(|| "1".into()));
-            return Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 I={en}*(V({outn})-({vlow:e}+({:e})*{d}))/100", vhigh - vlow)]));
-        }
-        Ok(Some(vec![format!("B_{head}{suffix} {outn} 0 V={vlow:e}+({:e})*{logic}", vhigh - vlow)]))
+        Ok(Some(lines))
     }
 
     /// A flip-flop, latch or Schmitt trigger written as an `A` device (LTspice `DFLOP` / `SRFLOP` / `JKFLOP` / `SCHMITT` with
@@ -608,7 +619,7 @@ impl Ctx<'_> {
         };
         let param = |key: &str| params.split_whitespace().find_map(|w| w.to_ascii_lowercase().strip_prefix(&format!("{key}=")).and_then(parse_value));
         let (vlow, vhigh) = (param("vlow").unwrap_or(0.0), param("vhigh").unwrap_or(1.0));
-        let vt = param("vt").unwrap_or((vlow + vhigh) / 2.0);
+        let vt = param("vt").or_else(|| param("ref")).unwrap_or((vlow + vhigh) / 2.0);
         let vh = param("vh").unwrap_or(0.0).abs();
         Ok(Some(vec![format!("Z{head}{suffix} {kind} {q} {qb} {vlow:e} {vhigh:e} {vt:e} {vh:e} 0 0 {}", ins.join(" "))]))
     }

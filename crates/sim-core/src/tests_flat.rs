@@ -641,3 +641,29 @@ R1 vp out 1k
     let v = r.signal("V(out)").unwrap();
     assert!((v.values[v.values.len() - 1] - 2.5).abs() < 1e-3, "{}", v.values[v.values.len() - 1]);
 }
+
+/// LTspice's gate pins: inputs 1-5, the true output on pin 7 and the inverted one on pin 6, so `A a b 0 0 0 y 0 0 AND` is a
+/// NAND and `A a 0 0 0 0 y 0 0 BUF` an inverter; `Ref` is the switching level and an output pin tied to 0 is unused.
+#[test]
+fn ltspice_gate_outputs_on_pin_six_are_inverted() {
+    let t = ".subckt G a b y1 y2 gnd
+A1 a b 0 0 0 y1 0 0 AND Ref=0.5 Vhigh=1 Vlow=0
+A2 a 0 0 0 0 0 y2 0 BUF Ref=0.5 Vhigh=1 Vlow=0
+A3 a 0 0 0 0 0 0 0 BUF
+.ends G";
+    let run = |va: f64, vb: f64| {
+        let mut c = Circuit::new();
+        let (a, b, y1, y2) = (c.node("a"), c.node("b"), c.node("y1"), c.node("y2"));
+        c.add(Element::vdc("Va", a, 0, va));
+        c.add(Element::vdc("Vb", b, 0, vb));
+        add_subckt_instance(&mut c, "U1", "G", t, &[a, b, y1, y2, 0]).unwrap_or_else(|e| panic!("{e}"));
+        c.add(Element::Resistor { name: "R1".into(), a: y1, b: 0, r: 10e3 });
+        c.add(Element::Resistor { name: "R2".into(), a: y2, b: 0, r: 10e3 });
+        let r = dc_op(&c).unwrap();
+        (r.voltage("y1").unwrap(), r.voltage("y2").unwrap())
+    };
+    let (y1, y2) = run(1.0, 1.0);
+    assert!(y1 < 0.02 && y2 > 0.98, "NAND(1,1) {y1}, BUF {y2}");
+    let (y1, _) = run(1.0, 0.0);
+    assert!(y1 > 0.98, "NAND(1,0) {y1}");
+}
