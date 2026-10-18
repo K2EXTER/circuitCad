@@ -477,7 +477,7 @@ impl Ctx<'_> {
             for w in u.iter_mut().skip(1).take(kept) {
                 *w = rename_node(w, ports, &prefix);
             }
-            if letter == 'C' && t.get(3).is_some_and(|w| w.len() > 2 && w[..2].eq_ignore_ascii_case("q=")) {
+            if letter == 'C' && t.get(3).is_some_and(|w| w.len() > 2 && w.get(..2).is_some_and(|p| p.eq_ignore_ascii_case("q="))) {
                 // charge-type capacitor: the expression after Q= names nodes of this subcircuit
                 let rest = t[3..].join(" ");
                 u.truncate(3);

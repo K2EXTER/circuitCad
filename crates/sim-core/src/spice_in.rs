@@ -446,7 +446,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
         let name = format!("{inst}.{head}");
         let need = |n: usize| if t.len() >= n { Ok(()) } else { Err(format!("{name}: 引数が足りません")) };
         match head.chars().next().unwrap().to_ascii_uppercase() {
-            'C' if t.len() >= 4 && t[3].len() > 2 && t[3][..2].eq_ignore_ascii_case("q=") => {
+            'C' if t.len() >= 4 && t[3].len() > 2 && t[3].get(..2).is_some_and(|p| p.eq_ignore_ascii_case("q=")) => {
                 // charge-type capacitor: C1 a b Q=expr  (the whole rest of the line is the expression)
                 let (a, b) = (local(c, t[1]), local(c, t[2]));
                 let text = l.split_once('=').map_or("", |(_, e)| e).trim().to_string();

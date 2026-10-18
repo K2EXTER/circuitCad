@@ -744,3 +744,10 @@ fn a_nonlinear_charge_capacitor_has_the_small_signal_capacitance_dq_dv() {
     let m = r.signal("V(o)").unwrap().mag()[0];
     assert!((m - std::f64::consts::FRAC_1_SQRT_2).abs() < 0.01, "{m}");
 }
+
+#[test]
+fn a_capacitor_value_with_a_micro_sign_is_not_mistaken_for_a_charge() {
+    // "1µ" has a multi-byte character where "Q=" would be looked for
+    let t = ".subckt T a b gnd\nR1 a b 1k\nC1 b gnd 1µ\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.0).abs() < 1e-6);
+}
