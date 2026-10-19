@@ -4,6 +4,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -24,6 +26,8 @@
   "kind": "self",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -44,6 +48,8 @@
   "kind": "self",
   "w": 3.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -64,6 +70,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -84,6 +92,8 @@
   "kind": "self",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -104,6 +114,8 @@
   "kind": "self",
   "w": 3.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -124,6 +136,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -144,6 +158,8 @@
   "kind": "self",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -164,6 +180,8 @@
   "kind": "self",
   "w": 3.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -184,6 +202,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -216,6 +236,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -248,6 +270,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -280,6 +304,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -312,6 +338,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -344,6 +372,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -376,6 +406,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -408,6 +440,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -440,6 +474,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -472,6 +508,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -504,6 +542,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -536,6 +576,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -568,6 +610,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -600,6 +644,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -632,6 +678,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -664,6 +712,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -696,6 +746,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -721,6 +773,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -746,6 +800,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -771,6 +827,8 @@
   "kind": "self",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -796,6 +854,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -821,6 +881,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -846,6 +908,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -871,6 +935,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -901,6 +967,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -946,6 +1014,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -978,6 +1048,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1010,6 +1082,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1042,6 +1116,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1074,6 +1150,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1106,6 +1184,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1148,6 +1228,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1190,6 +1272,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1232,6 +1316,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1274,6 +1360,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1316,6 +1404,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1346,6 +1436,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.6,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1376,6 +1468,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 1.0,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1406,6 +1500,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1436,6 +1532,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1466,6 +1564,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1501,6 +1601,8 @@
   "kind": "self",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1531,6 +1633,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1563,6 +1667,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1595,6 +1701,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1627,6 +1735,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1659,6 +1769,8 @@
   "kind": "mutual",
   "w": 0.25,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1691,6 +1803,8 @@
   "kind": "mutual",
   "w": 1.0,
   "drill": 0.3,
+  "layers": 2,
+  "freq": 1000.0,
   "paths": [
    [
     [
@@ -1717,5 +1831,254 @@
     ]
    ]
   ]
+ },
+ {
+  "name": "loop over plane l=50 h=1.6",
+  "kind": "loop",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 2,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
+ },
+ {
+  "name": "loop over plane l=50 w=1 h=1.6",
+  "kind": "loop",
+  "w": 1.0,
+  "drill": 0.3,
+  "layers": 2,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
+ },
+ {
+  "name": "loop over plane l=50 h=0.53",
+  "kind": "loop",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 4,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
+ },
+ {
+  "name": "loop over plane l=50 h=1.07",
+  "kind": "loop",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 4,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 2,
+   "margin": 20
+  }
+ },
+ {
+  "name": "L loop over plane 30+30 h=1.6",
+  "kind": "loop",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 2,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     30.0,
+     0.0,
+     0
+    ],
+    [
+     30.0,
+     30.0,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
+ },
+ {
+  "name": "pair over plane l=50 s=2.5 h=1.6",
+  "kind": "mutual",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 2,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ],
+   [
+    [
+     0,
+     2.5,
+     0
+    ],
+    [
+     50,
+     2.5,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
+ },
+ {
+  "name": "pair over plane l=50 s=10 h=1.6",
+  "kind": "mutual",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 2,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ],
+   [
+    [
+     0,
+     10,
+     0
+    ],
+    [
+     50,
+     10,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
+ },
+ {
+  "name": "pair over inner plane l=50 s=2.5 h=0.53",
+  "kind": "mutual",
+  "w": 0.25,
+  "drill": 0.3,
+  "layers": 4,
+  "freq": 10000000.0,
+  "paths": [
+   [
+    [
+     0,
+     0,
+     0
+    ],
+    [
+     50,
+     0,
+     0
+    ]
+   ],
+   [
+    [
+     0,
+     2.5,
+     0
+    ],
+    [
+     50,
+     2.5,
+     0
+    ]
+   ]
+  ],
+  "plane": {
+   "layer": 1,
+   "margin": 20
+  }
  }
 ]

@@ -1,0 +1,6 @@
+case,hammerstad_nH
+loop over plane l=50 h=1.6,39.392
+loop over plane l=50 w=1 h=1.6,25.634
+loop over plane l=50 h=0.53,28.459
+loop over plane l=50 h=1.07,35.344
+L loop over plane 30+30 h=1.6,47.271

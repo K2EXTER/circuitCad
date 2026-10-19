@@ -98,6 +98,9 @@ pub struct PathSeg {
     /// Height of the layer above the top copper (mm).
     pub z: f64,
     pub width: f64,
+    /// Height of a copper pour of another net on another layer that lies under (or over) this piece: the return current of
+    /// the trace runs in it, which is worked out with an image of the trace in the pour (see `image_of`).
+    pub plane: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -146,7 +149,7 @@ struct Graph {
 
 #[derive(Clone, Copy)]
 enum Link {
-    Track { len: f64, width: f64 },
+    Track { width: f64 },
     Via(f64),
     Pour,
 }
@@ -222,6 +225,13 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
 
     let mut g = Graph::default();
     let layers = board.copper_layers();
+    // copper pours of other nets: (height, polygon), which act as the return plane of the traces of this net
+    let planes: Vec<(f64, &[Point])> = board
+        .zones
+        .iter()
+        .filter(|z| z.net != net && z.polygon.len() >= 3)
+        .filter_map(|z| layers.iter().position(|&x| x == z.side).map(|i| (layer_z(&layers, i), z.polygon.as_slice())))
+        .collect();
     // pads: a through-hole pad is on both layers, joined by its barrel
     let mut pad_node: HashMap<usize, usize> = HashMap::new();
     for &i in &pad_ids {
@@ -285,7 +295,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         on.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
         for k in 0..on.len() - 1 {
             let r = track_resistance(on[k + 1].0 - on[k].0, w, spec);
-            g.edge(on[k].1, on[k + 1].1, r, Link::Track { len: on[k + 1].0 - on[k].0, width: w });
+            g.edge(on[k].1, on[k + 1].1, r, Link::Track { width: w });
         }
     }
     // copper pours: every node under the pour reaches a hub through a short resistance
@@ -365,7 +375,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         let ohm = res.get(&i).copied();
         let (henry, path) = match ohm {
             Some(_) => {
-                let (h, path) = path_inductance(&g, src, pad_node[&i], spec, &layers);
+                let (h, path) = path_inductance(&g, src, pad_node[&i], spec, &layers, &planes);
                 (Some(h), path)
             }
             None => (None, vec![]),
@@ -379,7 +389,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
 /// segments that go the same way on the same layer); each run is one trace of its length and length-weighted width, and the runs
 /// couple to each other (`mutual`), so a corner counts as it does on a real board: nothing at a right angle, a lot at a sharp
 /// turn. Plus a via inductance for each hole and a little for each pour.
-fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side]) -> (f64, Vec<PathSeg>) {
+fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side], planes: &[(f64, &[Point])]) -> (f64, Vec<PathSeg>) {
     let n = g.pos.len();
     let mut adj: Vec<Vec<(usize, usize)>> = vec![vec![]; n];
     for (k, &(a, b, _)) in g.edges.iter().enumerate() {
@@ -410,8 +420,12 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
             Link::Track { .. } => {
                 let width = if let Link::Track { width, .. } = g.links[k] { width } else { 0.0 };
                 let side = g.pos[u].0;
-                let z = layers.iter().position(|&x| x == side).map_or(0.0, |i| BOARD_MM * i as f64 / (layers.len().max(2) - 1) as f64);
-                segs.push(PathSeg { a: g.pos[u].1, b: g.pos[at].1, z, width });
+                let z = layers.iter().position(|&x| x == side).map_or(0.0, |i| layer_z(layers, i));
+                let (a, b) = (g.pos[u].1, g.pos[at].1);
+                let mid = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+                // the nearest pour on another layer that covers the middle of the piece
+                let plane = planes.iter().filter(|(pz, poly)| (pz - z).abs() > 1e-9 && in_polygon(poly, mid)).map(|(pz, _)| *pz).min_by(|x, y| (x - z).abs().total_cmp(&(y - z).abs()));
+                segs.push(PathSeg { a, b, z, width, plane });
             }
             Link::Via(d) => extra += via_inductance(d),
             Link::Pour => extra += POUR_HENRY,
@@ -431,7 +445,25 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
             henry += 2.0 * mutual(runs[i], runs[j], spec);
         }
     }
+    // the return current in a pour under the trace: the loop is the trace minus its image in the pour
+    let image = image_of(&segs);
+    if !image.is_empty() {
+        henry -= mutual(&segs, &image, spec);
+    }
     (henry, segs)
+}
+
+/// Height (mm) of copper layer number `i` of `layers` below the top face: the board thickness split evenly.
+fn layer_z(layers: &[Side], i: usize) -> f64 {
+    BOARD_MM * i as f64 / (layers.len().max(2) - 1) as f64
+}
+
+/// The images of the pieces of a path that have a pour (`PathSeg::plane`) under or over them: each piece mirrored in the plane of
+/// the pour. A trace over a (perfect) plane drives a return current in it that is the mirror image of the trace with the
+/// opposite sign, so the loop inductance is `L - M(trace, image)`: 100 mm of 0.25 mm trace 1.6 mm over a plane is 78 nH, not
+/// 141 nH, and two traces over the same plane couple with `M(a, b) - M(a, image of b)`.
+fn image_of(path: &[PathSeg]) -> Vec<PathSeg> {
+    path.iter().filter_map(|s| s.plane.map(|pz| PathSeg { z: 2.0 * pz - s.z, plane: None, ..*s })).collect()
 }
 
 /// The runs of a path: maximal stretches of consecutive segments that go the same way (within about a degree) on one layer.
@@ -633,7 +665,8 @@ pub fn wiring_couplings(series: &[PadSeries], spec: &IrSpec) -> Vec<Coupling> {
             if pads[i].net == pads[j].net {
                 continue;
             }
-            let m = mutual(&pads[i].path, &pads[j].path, spec);
+            let image = image_of(&pads[j].path);
+            let m = mutual(&pads[i].path, &pads[j].path, spec) - if image.is_empty() { 0.0 } else { mutual(&pads[i].path, &image, spec) };
             let k = (m / (pads[i].henry * pads[j].henry).sqrt()).clamp(-0.9, 0.9);
             if k.abs() >= MIN_K {
                 out.push(Coupling { a: (pads[i].refdes.clone(), pads[i].pin.clone()), b: (pads[j].refdes.clone(), pads[j].pin.clone()), k });
@@ -790,7 +823,7 @@ mod tests {
 
     /// One case of `tools/inductance_cases.json`: (name, "self" or "mutual", width, via drill, polylines of (x, y, layer) from
     /// the supply end; two points at the same place on different layers are a via).
-    type Case = (String, String, f64, f64, Vec<Vec<(f64, f64, u8)>>);
+    type Case = (String, String, f64, f64, Vec<Vec<(f64, f64, u8)>>, u8, Option<(u8, f64)>);
 
     fn cases() -> Vec<Case> {
         let v: serde_json::Value = serde_json::from_str(include_str!("../../../tools/inductance_cases.json")).unwrap();
@@ -799,7 +832,8 @@ mod tests {
             .iter()
             .map(|c| {
                 let paths = c["paths"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap(), q[2].as_u64().unwrap() as u8)).collect()).collect();
-                (c["name"].as_str().unwrap().to_string(), c["kind"].as_str().unwrap().to_string(), c["w"].as_f64().unwrap(), c["drill"].as_f64().unwrap(), paths)
+                let plane = c.get("plane").map(|p| (p["layer"].as_u64().unwrap() as u8, p["margin"].as_f64().unwrap()));
+                (c["name"].as_str().unwrap().to_string(), c["kind"].as_str().unwrap().to_string(), c["w"].as_f64().unwrap(), c["drill"].as_f64().unwrap(), paths, c["layers"].as_u64().unwrap() as u8, plane)
             })
             .collect()
     }
@@ -807,8 +841,9 @@ mod tests {
     /// The program's inductance for a case, in nH: the self inductance of the first trace, or the mutual inductance of the
     /// pair (0 when the program finds no coupling). Each polyline is one net with a connector pad at its start and a part pad at
     /// its end, and a track per segment.
-    fn ours_case(kind: &str, w: f64, drill: f64, paths: &[Vec<(f64, f64, u8)>]) -> f64 {
-        let side = |l: u8| if l == 0 { Side::Top } else { Side::Bottom };
+    fn ours_case(c: &Case) -> f64 {
+        let (_, kind, w, drill, paths, layers, plane) = (&c.0, c.1.as_str(), c.2, c.3, &c.4, c.5, &c.6);
+        let side = |l: u8| if l == 0 { Side::Top } else if l + 1 == layers { Side::Bottom } else { Side::Inner(l) };
         let mut pads = vec![];
         let mut tracks = vec![];
         let mut vias = vec![];
@@ -831,9 +866,18 @@ mod tests {
         }
         let mut b = board(pads, tracks);
         b.vias = vias;
+        b.inner_layers = layers - 2;
+        if let Some((layer, margin)) = plane {
+            // a pour of net GND over the traces and `margin` beyond them
+            let xs: Vec<f64> = paths.iter().flatten().map(|p| p.0).collect();
+            let ys: Vec<f64> = paths.iter().flatten().map(|p| p.1).collect();
+            let (x0, x1) = (xs.iter().cloned().fold(f64::MAX, f64::min) - margin, xs.iter().cloned().fold(f64::MIN, f64::max) + margin);
+            let (y0, y1) = (ys.iter().cloned().fold(f64::MAX, f64::min) - margin, ys.iter().cloned().fold(f64::MIN, f64::max) + margin);
+            b.zones.push(Zone::new("GND", side(*layer), vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)]));
+        }
         let series = wiring_resistances(&b, &IrSpec::default());
         let of = |net: &str| series.iter().find(|s| s.net == net).unwrap_or_else(|| panic!("{net} not wired: {series:?}")).henry;
-        if kind == "self" {
+        if kind == "self" || kind == "loop" {
             return of("N0") * 1e9;
         }
         let k = wiring_couplings(&series, &IrSpec::default());
@@ -846,34 +890,67 @@ mod tests {
     #[ignore]
     fn inductance_cases_table() {
         println!("case,value_nH");
-        for (name, kind, w, drill, paths) in cases() {
-            println!("{name},{:.3}", ours_case(&kind, w, drill, &paths));
+        for (name, kind, w, drill, paths, layers, plane) in cases() {
+            println!("{name},{:.3}", ours_case(&(name.clone(), kind, w, drill, paths, layers, plane)));
         }
     }
 
-    /// Against FastHenry2 3.6 over every case of `tools/inductance_cases.json` (parallel traces, corners of 45, 90 and 135
-    /// degrees, a dogleg and a staircase, traces at an angle and antiparallel, a pair going round a corner, vias, and traces on
-    /// the two layers). The FastHenry figures are in `tools/fasthenry_results.csv` (1 kHz, 12 x 4 filaments; see
+    /// Against FastHenry2 3.6 over every case of `tools/inductance_cases.json` without a plane (parallel traces, corners of 45, 90
+    /// and 135 degrees, a dogleg and a staircase, traces at an angle and antiparallel, a pair going round a corner, vias, and traces
+    /// on the two layers). The FastHenry figures are in `tools/fasthenry_results.csv` (1 kHz, 12 x 4 filaments; see
     /// `tools/fasthenry_cases.py`): the self inductance of a trace must be within 1.5 % (or 0.1 nH, for the short via cases) and the
-    /// mutual inductance of a pair within 1 % (or 0.3 nH when it is nearly zero).
+    /// mutual inductance of a pair within 1 % (or 0.3 nH when it is nearly zero). The `loop` cases (a trace over a copper pour that
+    /// carries the return current) are checked against the textbook microstrip formula in `tools/plane_reference.csv`
+    /// (`tools/ref_microstrip.py`) within 6 %: FastHenry2 3.6 did not run planes here, and the formula is for an infinitely long
+    /// line, so a 50 mm trace differs by its end effects.
     #[test]
-    fn inductance_agrees_with_fasthenry() {
-        let table: std::collections::HashMap<String, f64> = include_str!("../../../tools/fasthenry_results.csv")
-            .lines()
-            .skip(1)
-            .map(|l| {
-                let f: Vec<&str> = l.split(',').collect();
-                (f[0].to_string(), f[1].parse().unwrap())
-            })
-            .collect();
+    fn inductance_agrees_with_fasthenry_and_the_microstrip_formula() {
+        let read = |text: &str| -> std::collections::HashMap<String, f64> {
+            text.lines()
+                .skip(1)
+                .map(|l| {
+                    let f: Vec<&str> = l.split(',').collect();
+                    (f[0].to_string(), f[1].parse().unwrap())
+                })
+                .collect()
+        };
+        let fasthenry = read(include_str!("../../../tools/fasthenry_results.csv"));
+        let microstrip = read(include_str!("../../../tools/plane_reference.csv"));
         let all = cases();
-        assert_eq!(table.len(), all.len(), "the FastHenry table and the case list must have the same cases");
-        for (name, kind, w, drill, paths) in all {
-            let fh = table[&name];
-            let ours = ours_case(&kind, w, drill, &paths);
-            let tol = if kind == "self" { (0.015 * fh).max(0.1) } else { (0.01 * fh.abs()).max(0.3) };
+        let (mut with_plane, mut without) = (0, 0);
+        for c in all {
+            let name = c.0.clone();
+            let ours = ours_case(&c);
+            if c.6.is_some() {
+                // a pour under the traces: only the loop cases have an independent reference
+                if c.1 == "loop" {
+                    let r = microstrip[&name];
+                    assert!((ours / r - 1.0).abs() < 0.06, "{name}: {ours} nH vs microstrip formula {r} nH");
+                    with_plane += 1;
+                }
+                continue;
+            }
+            let fh = fasthenry[&name];
+            let tol = if c.1 == "self" { (0.015 * fh).max(0.1) } else { (0.01 * fh.abs()).max(0.3) };
             assert!((ours - fh).abs() <= tol, "{name}: {ours} nH vs FastHenry {fh} nH");
+            without += 1;
         }
+        assert_eq!(fasthenry.len(), without, "the FastHenry table and the plane-free cases must match");
+        assert_eq!(microstrip.len(), with_plane, "the microstrip table and the loop cases must match");
+    }
+
+    /// Two traces over the same plane couple with M(a, b) - M(a, image of b) (Grover's formula for two filaments, 50 mm long,
+    /// 2.5 mm apart and 3.2 mm apart from the image: 27.4 - 22.8 = 4.6 nH), far less than the 27 nH they have without the pour.
+    #[test]
+    fn a_pour_under_two_traces_weakens_their_coupling_by_the_image() {
+        let grover = |l: f64, d: f64| 0.2 * l * ((l / d).asinh() - (1.0 + (d / l).powi(2)).sqrt() + d / l);
+        let c = cases().into_iter().find(|c| c.0 == "pair over plane l=50 s=2.5 h=1.6").unwrap();
+        let with = ours_case(&c);
+        let expect = grover(50.0, 2.5) - grover(50.0, (2.5f64 * 2.5 + 3.2 * 3.2).sqrt());
+        assert!((with - expect).abs() < 0.3, "{with} vs {expect}");
+        let mut bare = c.clone();
+        bare.6 = None;
+        assert!(ours_case(&bare) > 5.0 * with, "without the pour the traces couple at {}", ours_case(&bare));
     }
 
     #[test]

@@ -22,6 +22,8 @@ def read_mat(path):
 ours = {r[0]: float(r[1]) for r in csv.reader(open(os.path.join(S, ours_file))) if len(r) == 2 and re.match(r"^-?[0-9.]+$", r[1])}
 rows = []
 for c in fc.cases():
+    if "plane" in c:
+        continue  # FastHenry2 3.6 did not run plane inputs here; see ref_microstrip.py
     p = os.path.join(S, "fh2", fc.fname(c["name"]) + ".mat")
     mat = read_mat(p)
     fh = mat[0][0][1] / w * 1e9 if c["kind"] == "self" else 0.5 * (mat[0][1][1] + mat[1][0][1]) / w * 1e9
