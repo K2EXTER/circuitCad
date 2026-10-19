@@ -17,7 +17,7 @@ impl BoardEditor {
     }
 
     /// Widens every track of `net` to the width its declared current needs. Returns how many were changed.
-    pub(super) fn widen_net_to_need(&mut self, net: &str) -> usize {
+    pub(crate) fn widen_net_to_need(&mut self, net: &str) -> usize {
         let Some(&amps) = self.board.net_currents.get(net) else { return 0 };
         let width = round_up_width(pcb_core::current::width_for_current(amps, &CopperSpec::default()));
         let conn = drc::connectivity(&self.board);

@@ -369,3 +369,35 @@ fn the_ground_pour_takes_the_ground_wires_off_the_tp5100_sample() {
     app.board_ed.undo();
     assert!(app.board_ed.board.zones.is_empty() && app.board_ed.board.vias.is_empty());
 }
+
+/// The thin-power-line sample (docs/examples/thin_power_line.ccproj): the copper eats about 0.4 V of the 5 V,
+/// the simulated current says the tracks are too thin, and widening them brings the load back near 5 V.
+#[test]
+fn thin_power_line_project_shows_the_copper_drop_and_the_fix() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("thin_power_line.ccproj"));
+    assert!(pcb_core::drc::check(&app.board_ed.board).is_empty());
+    let load = |app: &mut App| {
+        app.sch.analyze_dc();
+        app.sch.pin_voltage("R1", "1").unwrap() - app.sch.pin_voltage("R1", "2").unwrap()
+    };
+    let ideal = load(&mut app);
+    assert!((ideal - 5.0).abs() < 1e-3, "{ideal}");
+
+    app.apply_post_layout(true);
+    let thin = load(&mut app);
+    assert!((4.3..4.8).contains(&thin), "thin copper: {thin}");
+
+    let currents = app.sch.dc_net_currents();
+    app.board_ed.use_simulated_currents(currents);
+    let conn = pcb_core::drc::connectivity(&app.board_ed.board);
+    let report = pcb_core::current::net_widths(&app.board_ed.board, &conn, &pcb_core::current::CopperSpec::default());
+    assert!(report.iter().all(|w| w.too_thin()), "{report:?}");
+    for net in ["VIN", "GND"] {
+        app.board_ed.widen_net_to_need(net);
+    }
+    app.apply_post_layout(true);
+    let wide = load(&mut app);
+    assert!(wide > 4.9 && wide > thin + 0.3, "widened: {wide}");
+}

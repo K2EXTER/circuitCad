@@ -1,0 +1,463 @@
+{
+  "version": 1,
+  "schematic": {
+    "components": [
+      {
+        "refdes": "V1",
+        "kind": "VSource",
+        "value": "5",
+        "pos": [
+          8,
+          10
+        ],
+        "rot": 0,
+        "footprint": "PinHeader_1x2_PM",
+        "custom": null
+      },
+      {
+        "refdes": "R1",
+        "kind": "Resistor",
+        "value": "2.2",
+        "pos": [
+          20,
+          8
+        ],
+        "rot": 0,
+        "footprint": "R_0805",
+        "custom": null
+      },
+      {
+        "refdes": "#PWR01",
+        "kind": "Ground",
+        "value": "GND",
+        "pos": [
+          8,
+          12
+        ],
+        "rot": 0,
+        "footprint": "",
+        "custom": null
+      }
+    ],
+    "wires": [],
+    "labels": [
+      {
+        "pos": [
+          8,
+          8
+        ],
+        "text": "VIN"
+      },
+      {
+        "pos": [
+          18,
+          8
+        ],
+        "text": "VIN"
+      },
+      {
+        "pos": [
+          8,
+          12
+        ],
+        "text": "GND"
+      },
+      {
+        "pos": [
+          22,
+          8
+        ],
+        "text": "GND"
+      }
+    ],
+    "layout_version": 1
+  },
+  "board": {
+    "name": "thin_power_line",
+    "outline": [
+      {
+        "x": 0.0,
+        "y": 0.0
+      },
+      {
+        "x": 70.4125,
+        "y": 0.0
+      },
+      {
+        "x": 70.4125,
+        "y": 24.0
+      },
+      {
+        "x": 0.0,
+        "y": 24.0
+      }
+    ],
+    "tracks": [
+      {
+        "side": "Top",
+        "a": {
+          "x": 10.5,
+          "y": 10.0
+        },
+        "b": {
+          "x": 11.4,
+          "y": 9.600000000000001
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 11.4,
+          "y": 9.600000000000001
+        },
+        "b": {
+          "x": 12.8,
+          "y": 8.200000000000001
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 12.8,
+          "y": 8.200000000000001
+        },
+        "b": {
+          "x": 62.0,
+          "y": 8.200000000000001
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 62.5875,
+          "y": 7.5
+        },
+        "b": {
+          "x": 62.0,
+          "y": 8.200000000000001
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 10.5,
+          "y": 7.46
+        },
+        "b": {
+          "x": 11.4,
+          "y": 7.0
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 11.4,
+          "y": 7.0
+        },
+        "b": {
+          "x": 12.0,
+          "y": 6.4
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 12.0,
+          "y": 6.4
+        },
+        "b": {
+          "x": 63.400000000000006,
+          "y": 6.4
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 63.400000000000006,
+          "y": 6.4
+        },
+        "b": {
+          "x": 63.800000000000004,
+          "y": 6.800000000000001
+        },
+        "width": 0.25
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 64.4125,
+          "y": 7.5
+        },
+        "b": {
+          "x": 63.800000000000004,
+          "y": 6.800000000000001
+        },
+        "width": 0.25
+      }
+    ],
+    "pads": [
+      {
+        "pos": {
+          "x": 10.5,
+          "y": 10.0
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.7,
+            "h": 1.7
+          }
+        },
+        "drill": 1.0,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "V1",
+        "pin": "+",
+        "net": "VIN"
+      },
+      {
+        "pos": {
+          "x": 10.5,
+          "y": 7.46
+        },
+        "shape": {
+          "Circle": {
+            "d": 1.7
+          }
+        },
+        "drill": 1.0,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "V1",
+        "pin": "-",
+        "net": "GND"
+      },
+      {
+        "pos": {
+          "x": 62.5875,
+          "y": 7.5
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.025,
+            "h": 1.4
+          }
+        },
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "R1",
+        "pin": "1",
+        "net": "VIN"
+      },
+      {
+        "pos": {
+          "x": 64.4125,
+          "y": 7.5
+        },
+        "shape": {
+          "Rect": {
+            "w": 1.025,
+            "h": 1.4
+          }
+        },
+        "drill": null,
+        "slot": 0.0,
+        "slot_v": false,
+        "side": "Top",
+        "refdes": "R1",
+        "pin": "2",
+        "net": "GND"
+      }
+    ],
+    "vias": [],
+    "holes": [],
+    "silk": [
+      {
+        "side": "Top",
+        "a": {
+          "x": 9.35,
+          "y": 6.3100000000000005
+        },
+        "b": {
+          "x": 11.65,
+          "y": 6.3100000000000005
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 11.65,
+          "y": 6.3100000000000005
+        },
+        "b": {
+          "x": 11.65,
+          "y": 11.15
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 11.65,
+          "y": 11.15
+        },
+        "b": {
+          "x": 9.35,
+          "y": 11.15
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 9.35,
+          "y": 11.15
+        },
+        "b": {
+          "x": 9.35,
+          "y": 6.3100000000000005
+        },
+        "width": 0.15,
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 61.775,
+          "y": 6.5
+        },
+        "b": {
+          "x": 65.225,
+          "y": 6.5
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 65.225,
+          "y": 6.5
+        },
+        "b": {
+          "x": 65.225,
+          "y": 8.5
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 65.225,
+          "y": 8.5
+        },
+        "b": {
+          "x": 61.775,
+          "y": 8.5
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      },
+      {
+        "side": "Top",
+        "a": {
+          "x": 61.775,
+          "y": 8.5
+        },
+        "b": {
+          "x": 61.775,
+          "y": 6.5
+        },
+        "width": 0.15,
+        "refdes": "R1"
+      }
+    ],
+    "parts": [
+      {
+        "refdes": "V1",
+        "value": "5",
+        "footprint": "PinHeader_1x2_PM",
+        "pos": {
+          "x": 10.5,
+          "y": 10.0
+        },
+        "rot": 0,
+        "side": "Top"
+      },
+      {
+        "refdes": "R1",
+        "value": "2.2",
+        "footprint": "R_0805",
+        "pos": {
+          "x": 63.5,
+          "y": 7.5
+        },
+        "rot": 0,
+        "side": "Top"
+      }
+    ],
+    "texts": [
+      {
+        "side": "Top",
+        "pos": {
+          "x": 10.5,
+          "y": 11.85
+        },
+        "height": 1.0,
+        "text": "V1",
+        "refdes": "V1"
+      },
+      {
+        "side": "Top",
+        "pos": {
+          "x": 63.5,
+          "y": 9.2
+        },
+        "height": 1.0,
+        "text": "R1",
+        "refdes": "R1"
+      }
+    ],
+    "zones": [],
+    "footprints": [],
+    "net_currents": {
+      "GND": 2.2727272727297727,
+      "VIN": 2.2727272727297727
+    },
+    "locked_parts": [],
+    "inner_layers": 0,
+    "diff_pairs": [],
+    "finish": {
+      "on": false,
+      "corners": true,
+      "radius": 0.5,
+      "tapers": true,
+      "forks": true
+    },
+    "finish_exclude": [],
+    "rules": {
+      "min_track_width": 0.15,
+      "min_clearance": 0.15,
+      "edge_clearance": 0.3,
+      "min_drill": 0.3,
+      "min_annular_ring": 0.13,
+      "mask_expansion": 0.05,
+      "outline_width": 0.1
+    }
+  }
+}
