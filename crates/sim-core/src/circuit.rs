@@ -131,7 +131,7 @@ pub struct SwitchModel {
     pub roff: f64,
     /// Control voltage at which the switch is half way.
     pub vt: f64,
-    /// Half the width of the transition.
+    /// Half the width of the transition. Negative: the switch is closed *below* the threshold (SPICE `VON < VOFF`).
     pub vw: f64,
 }
 
@@ -151,9 +151,13 @@ impl SwitchModel {
     pub fn eval_widened(&self, vc: f64, widen: f64) -> (f64, f64) {
         let (gon, goff) = (1.0 / self.ron.max(1e-9), 1.0 / self.roff.max(1e-9));
         let w = self.vw.abs().max(1e-6) * widen;
-        let s = ((vc - (self.vt - w)) / (2.0 * w)).clamp(0.0, 1.0);
+        let mut s = ((vc - (self.vt - w)) / (2.0 * w)).clamp(0.0, 1.0);
+        let reverse = self.vw < 0.0;
+        if reverse {
+            s = 1.0 - s;
+        }
         let smooth = s * s * (3.0 - 2.0 * s);
-        let dsmooth = if s > 0.0 && s < 1.0 { 6.0 * s * (1.0 - s) / (2.0 * w) } else { 0.0 };
+        let dsmooth = if s > 0.0 && s < 1.0 { 6.0 * s * (1.0 - s) / (2.0 * w) * if reverse { -1.0 } else { 1.0 } } else { 0.0 };
         let span = gon.ln() - goff.ln();
         let g = (goff.ln() + span * smooth).exp();
         (g, g * span * dsmooth)

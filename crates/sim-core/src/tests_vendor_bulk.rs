@@ -84,6 +84,13 @@ fn guess_param(name: &str) -> &'static str {
     }
 }
 
+/// The voltage on an input pin of the bench: 2 V, but 2.1 V on a pin that looks like a non-inverting input (`IN+`, `INP`, `IP`),
+/// so that an op-amp has a definite sign of its input difference instead of two equal inputs.
+fn input_level(port: &str) -> f64 {
+    let p = port.to_ascii_lowercase();
+    if p.ends_with('+') || p.starts_with('+') || matches!(p.as_str(), "inp" | "ip" | "inplus" | "in_p" | "vip" | "inp1" | "in1+" | "vinp" | "vin+" | "pos" | "ina" | "vp") { 2.1 } else { 2.0 }
+}
+
 /// The generic bench of `try_one`: the subcircuit wired up by its pin names.
 fn build_bench(text: &str, name: &str, ports: &[String]) -> Result<Circuit, String> {
     build_bench_text(text, name, ports).map(|(c, _)| c)
@@ -128,7 +135,7 @@ fn build_bench_text(text: &str, name: &str, ports: &[String]) -> Result<(Circuit
             Role::Supply => c.add(Element::vdc(&format!("Vp{i}"), n, 0, 5.0)),
             Role::Input => {
                 let src = c.node(&format!("src_{i}"));
-                c.add(Element::vdc(&format!("Vi{i}"), src, 0, 2.0));
+                c.add(Element::vdc(&format!("Vi{i}"), src, 0, input_level(p)));
                 c.add(Element::Resistor { name: format!("Ri{i}"), a: src, b: n, r: 1e3 });
             }
             _ => c.add(Element::Resistor { name: format!("Rl{i}"), a: n, b: 0, r: 10e3 }),
@@ -414,7 +421,7 @@ fn vendor_xcheck() {
         let tag = format!("m{tried}");
         let lib = work.join(format!("{tag}_lib.cir"));
         std::fs::write(&lib, &final_text).unwrap();
-        let clean = |p: &str| -> String { p.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect::<String>().to_ascii_lowercase() };
+        let clean = |p: &str| -> String { p.chars().map(|c| match c { '+' => 'p', '-' => 'm', c if c.is_ascii_alphanumeric() => c, _ => '_' }).collect::<String>().to_ascii_lowercase() };
         let node = |p: &str| if role(p) == Role::Ground { "0".to_string() } else { format!("p_{}", clean(p)) };
         let mut deck = format!("* xcheck {name}\n.include \"{}\"\n", lib.display().to_string().replace('\\', "/"));
         for (i, p) in ports.iter().enumerate() {
@@ -424,7 +431,7 @@ fn vendor_xcheck() {
             }
             match role(p) {
                 Role::Supply => deck.push_str(&format!("Vp{i} {n} 0 5\n")),
-                Role::Input => deck.push_str(&format!("Vi{i} src_{i} 0 2\nRi{i} src_{i} {n} 1k\n")),
+                Role::Input => deck.push_str(&format!("Vi{i} src_{i} 0 {}\nRi{i} src_{i} {n} 1k\n", input_level(p))),
                 _ => deck.push_str(&format!("Rl{i} {n} 0 10k\n")),
             }
         }

@@ -260,7 +260,7 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
         "VSWITCH" => {
             let d = SwitchModel::default();
             let (vt, vw) = match (p.get("VON"), p.get("VOFF")) {
-                (Some(on), Some(off)) => ((on + off) / 2.0, ((on - off).abs() / 2.0).max(1e-3)),
+                (Some(on), Some(off)) => ((on + off) / 2.0, ((on - off).abs() / 2.0).max(1e-3) * if on < off { -1.0 } else { 1.0 }),
                 _ => (get("VT", d.vt), get("VH", d.vw).abs().max(1e-3)),
             };
             Ok((name, Model::Switch(SwitchModel { ron: get("RON", d.ron), roff: get("ROFF", d.roff), vt, vw })))

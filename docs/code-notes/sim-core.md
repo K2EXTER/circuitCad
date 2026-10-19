@@ -185,6 +185,13 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 
 ## 公開モデル集での ngspice との検算(2026-10-19)
 `tests_vendor_bulk.rs vendor_xcheck`(`SPICE_MODEL_DIR=<dir> [NGSPICE=<exe>] [SPICE_XCHECK_N=件数] [SPICE_XCHECK_OUT=<csv>] [SPICE_XCHECK_ONLY=<サブサーキット名>] [NGBEHAVIOR=ltpsa] cargo test -p sim-core vendor_xcheck --release -- --ignored --nocapture`)。一括確認と同じ簡易回路(`build_bench_text`: 補った `.param` ごとの本文を返す)を、自前と ngspice(`.spiceinit` で `set ngbehavior=ltpsa` = LTspice/PSpice 互換)で解き、端子の電圧を比べる(許容: 絶対 1mV + 相対 1%)。自前で解けたもののうち、電源と GND のピンがはっきりしているものを、名前のハッシュ順に取り出す。`SPICE_XCHECK_ONLY` を指定すると、1つのサブサーキットの全ノードを差の大きい順に出す。
-- 結果(150個): 一致 47、ズレ 30、ngspice が読めない 73(互換モードでも読めない書き方。`ltpsa` なしだと `if` 関数などで 31/40 が読めなかった)。
+- 結果(150個、最初): 一致 47、ズレ 30、ngspice が読めない 73(互換モードでも読めない書き方。`ltpsa` なしだと `if` 関数などで 31/40 が読めなかった)。
 - **見つかった不具合**: `limit(x, lo, hi)` の上限と下限が逆順に書かれたとき(`limit(v*gm, +IL*e, -IL*e)`)、LTspice は3つの中央値なのに、自前は「下限、上限」の順を仮定して誤った。`expr.rs` で中央値にした(一致 42 → 47。LM4562 の出力が -420V になっていたのも同じ原因)。
 - **残るズレの原因(調べた範囲)**: ①モデルの式の差 — CMOS ゲートの MOSFET が LEVEL 3(`74HCU04`: 出力 4.67V 対 4.32V。MOSFET の LEVEL 2 以上は未対応)、PSpice のダイオードの `Vfwd=`/`Ron=`/`Roff=`(`TC4421` の OUT)。②簡易回路の問題 — 差動入力に同じ電圧をつなぐオペアンプ(出力が入力のわずかな差で決まる)、比較器の同値判定(`IR21xx` のゲートドライバ。`C … IC=-5V` と `IF(V(1)>V(2),…)` のにらみ合い)。これらは互いの解がどちらも正しい可能性がある。
+
+### ngspice との検算の続き(2026-10-19)
+検算の回路を直したら、一致が増えた(150個中、最初 42 → 62、ズレ 35 → 12、ngspice が読めない 74)。直したのは回路と、自前の不具合2つ。
+- 回路: ①非反転入力らしい端子(`IN+`・`INP`・`IP` など)は 2.1V、ほかの入力は 2V(同じ電圧だと、オペアンプの出力が入力のごくわずかな差で決まって比べられない)。②ngspice へ渡す節点名で `+` と `-` がどちらも `_` になり、`IN+` と `IN-` が同じ節点になっていた(`p`/`m` にした)。
+- **不具合: VSWITCH の `VON < VOFF`**(`spice_in.rs` と `circuit.rs`): 制御電圧が低いと閉じる向きの逆スイッチを、普通の向きとして読んでいた。`SwitchModel.vw` を負にして「逆向き」を表す(`eval_widened`)。`IR21xx` などのゲートドライバの出力が合うようになった。
+- **不具合: パラメータつき `.model` の名前の衝突**(`spice_flat.rs expand`): 1つのサブサーキットを値を変えて2回呼ぶ(`VSW_BASIC_GEN` を RON=2 と RON=0.857)と、中の `.model _VSWITCH …{RON}…` が同じ名前で2枚できて、片方の値が使われていた。2つ目以降の呼び出しでは、パラメータつきの `.model` の名前に経路をつけて区別する(1つ目は元の名前のまま: 内側のサブサーキットがその外側のモデルを使うことがあるため)。`LM5112` が合った。
+- 残るズレ12: MOSFET の LEVEL 3(`74HCU04`)、PSpice のダイオード(`TC4421`)、にらみ合いの比較器(`UCC28C42`、`LM5122`)など。

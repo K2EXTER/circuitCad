@@ -1079,3 +1079,31 @@ fn limit_takes_the_middle_value_whatever_the_order_of_the_limits() {
     assert!((run(t, "T", &["a", "b", "gnd"], 5.0, "b") - 1.0).abs() < 1e-9);
     assert!((run(t, "T", &["a", "b", "gnd"], -5.0, "b") + 1.0).abs() < 1e-9);
 }
+
+#[test]
+fn a_vswitch_with_von_below_voff_is_closed_below_the_threshold() {
+    // control 14 V: VON=6 VOFF=0.1 is on; VON=0.1 VOFF=6 (reversed) is off. Control 0 V: the other way round.
+    let probe = |von: f64, voff: f64, vc: f64| {
+        let t = format!(".subckt T a b gnd
+V1 c gnd {vc}
+S1 a b c gnd SM
+Rl b gnd 1k
+.model SM VSWITCH(RON=1 ROFF=1MEG VON={von} VOFF={voff})
+.ends T");
+        run(&t, "T", &["a", "b", "gnd"], 1.0, "b")
+    };
+    assert!(probe(6.0, 0.1, 14.0) > 0.99);
+    assert!(probe(0.1, 6.0, 14.0) < 0.01);
+    assert!(probe(6.0, 0.1, 0.0) < 0.01);
+    assert!(probe(0.1, 6.0, 0.0) > 0.99);
+}
+
+#[test]
+fn instances_with_different_model_parameters_do_not_share_a_model() {
+    // two switches from one subcircuit: Ron 1 ohm and Ron 1 kohm in series with a 1k load, both closed
+    let t = ".subckt SW1 a b c params: ron=1\nS1 a b c 0 M1\n.model M1 VSWITCH(RON={ron} ROFF=1G VON=1 VOFF=0)\n.ends\n\
+             .subckt T a b gnd\nV1 c gnd 5\nX1 a m c SW1 ron=1\nX2 m b c SW1 ron=1k\nRl b gnd 1k\n.ends T";
+    // 1 + 1000 in series with 1k: b = 1 * 1000 / 2001
+    let v = run(t, "T", &["a", "b", "gnd"], 1.0, "b");
+    assert!((v - 1000.0 / 2001.0).abs() < 1e-3, "{v}");
+}

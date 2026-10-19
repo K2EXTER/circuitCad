@@ -360,6 +360,8 @@ fn node_count(letter: char) -> Option<usize> {
 }
 
 struct Ctx<'a> {
+    /// Subcircuit bodies (by address) that have been instantiated once already: see `expand`.
+    seen: std::cell::RefCell<std::collections::HashSet<usize>>,
     defs: &'a HashMap<String, Def>,
     /// Lower-case model name -> (lower-case type, the rest of the card): to tell what an XSPICE `a` device is.
     model_kinds: &'a HashMap<String, (String, String)>,
@@ -420,7 +422,36 @@ impl Ctx<'_> {
         }
         let prefix = if path.is_empty() { String::new() } else { format!("{path}.") };
         let mut out = vec![];
-        for raw in &def.body {
+        // A `.model` card with parameters is this instance's own: two instances of one subcircuit with different values
+        // (`VSW_BASIC_GEN` with RON=2 and with RON=0.857) must not share a model name, so the name gets the instance path.
+        let mut renamed_body: Option<Vec<String>> = None;
+        // (the first instance keeps the original names, so that a nested subcircuit that uses the model still finds it)
+        let first_instance = self.seen.borrow_mut().insert(def.body.as_ptr() as usize);
+        if !path.is_empty() && !first_instance {
+            let local: Vec<String> = def
+                .body
+                .iter()
+                .filter(|l| l.to_ascii_lowercase().starts_with(".model") && l.contains(['{', '\'']))
+                // (a card that cannot be worked out here is left out below, and a same-named model elsewhere stays in use)
+                .filter(|l| subst_braces(l, &env).is_ok())
+                .filter_map(|l| l.split_whitespace().nth(1).map(str::to_string))
+                .collect();
+            if !local.is_empty() {
+                let tag: String = path.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+                renamed_body = Some(
+                    def.body
+                        .iter()
+                        .map(|l| {
+                            if l.trim_start().starts_with(['*', ';']) || l.to_ascii_lowercase().starts_with(".param") {
+                                return l.clone();
+                            }
+                            local.iter().fold(l.clone(), |acc, m| find_replace_word(&acc, m, &format!("{m}__{tag}")))
+                        })
+                        .collect(),
+                );
+            }
+        }
+        for raw in renamed_body.as_ref().unwrap_or(&def.body) {
             let low = raw.to_ascii_lowercase();
             if low.starts_with(".param") {
                 continue;
@@ -920,7 +951,7 @@ impl Ctx<'_> {
         let line = format!("{head} [{}] {out} __gate", ins.join(" "));
         let mut tmp: HashMap<String, (String, String)> = HashMap::new();
         tmp.insert("__gate".into(), (kind_to_model(kind).into(), String::new()));
-        let helper = Ctx { defs: self.defs, model_kinds: &tmp, models: self.models };
+        let helper = Ctx { seen: Default::default(), defs: self.defs, model_kinds: &tmp, models: self.models };
         helper.gate_device(&line, &[head.to_string()], path, ports, prefix, Some((0.0, 5.0)))?.ok_or_else(|| format!("{head}: ゲートを読めません"))
     }
 
@@ -1308,7 +1339,7 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
             Some((name, (ty, rest)))
         })
         .collect();
-    let body = Ctx { defs: &defs, model_kinds: &model_kinds, models: &model_names }.expand(top, "", &ports, global, &[], 0)?;
+    let body = Ctx { seen: Default::default(), defs: &defs, model_kinds: &model_kinds, models: &model_names }.expand(top, "", &ports, global, &[], 0)?;
     let mut s = models.join("\n");
     s.push_str(&format!("\n.subckt {sub_name} {}\n{}\n.ends {sub_name}\n", top.ports.join(" "), body.join("\n")));
     Ok(Some(s))
