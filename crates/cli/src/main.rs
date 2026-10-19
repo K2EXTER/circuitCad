@@ -16,18 +16,20 @@ use std::io::Read;
 pub type Out = Map<String, Value>;
 pub type Res = Result<Out, String>;
 
-const USAGE: &str = "ccad [--lib DIR] [--keep-going] <script-file | - | -c \"line\\nline\">\n  ccad help        list the commands\n  '-' reads the script from standard input";
+const USAGE: &str = "ccad [--lib DIR] [--keep-going] [--strict] <script-file | - | -c \"line\\nline\">\n  ccad help        list the commands\n  '-' reads the script from standard input";
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let mut lib: Option<std::path::PathBuf> = None;
     let mut keep_going = false;
+    let mut strict = false;
     let mut script: Option<String> = None;
     while !args.is_empty() {
         let a = args.remove(0);
         match a.as_str() {
             "--lib" if !args.is_empty() => lib = Some(args.remove(0).into()),
             "--keep-going" => keep_going = true,
+            "--strict" => strict = true,
             "-c" if !args.is_empty() => script = Some(args.remove(0).replace(r"\n", "\n")),
             "-" => {
                 let mut s = String::new();
@@ -55,6 +57,7 @@ fn main() {
         std::process::exit(2);
     };
     let mut session = Session::new(lib);
+    session.strict = strict;
     let mut failed = false;
     for (i, raw) in script.lines().enumerate() {
         let line = raw.trim();

@@ -61,6 +61,15 @@ fn periodicity(t: &[f64], v: &[f64], mn: f64, mx: f64) -> Option<(f64, f64)> {
     Some((period, if total > 0.0 { high / total } else { 0.0 }))
 }
 
+/// The simulator's errors are written for the GUI; where the fix differs in ccad, say it.
+fn cli_sim_error(e: String) -> String {
+    if e.contains("GNDにつながる") {
+        format!("{e} (in ccad, name one net GND, for example 'net GND V1.- R1.2'; run 'erc' for the full list)")
+    } else {
+        e
+    }
+}
+
 fn bad_number(v: &str) -> String {
     format!("'{v}' is not a number (write 4.7k, 100n, 10u, 1Meg ...)")
 }
@@ -86,6 +95,10 @@ impl Session {
 
     pub fn part(&self, args: &[String]) -> Res {
         let name = args.first().ok_or("part NAME")?;
+        if let Some(k) = basic_kind(name) {
+            let pins: Vec<Value> = k.pins().iter().map(|(n, _)| json!({"pin": n, "name": n})).collect();
+            return Ok(obj(json!({"name": k.label(), "basic": true, "prefix": k.prefix(), "default_value": k.default_value(), "footprint": k.default_footprint(), "pins": pins, "simulates": true})));
+        }
         let d = self.find_part(name)?;
         let pins: Vec<Value> = d.pins.iter().map(|p| json!({"pin": p.number, "name": p.name})).collect();
         Ok(obj(json!({
@@ -280,26 +293,64 @@ impl Session {
         obj(json!({"parts": parts, "nets": nets_out}))
     }
 
-    pub fn erc(&self) -> crate::Out {
+    fn erc_errors(&self) -> usize {
+        sch_core::erc(&self.sch).iter().filter(|p| p.severity == sch_core::Severity::Error).count()
+    }
+
+    /// `--strict` refuses to go on with ERC errors; otherwise the caller adds a warning to its answer.
+    pub(crate) fn erc_gate(&self) -> Result<Option<String>, String> {
+        let n = self.erc_errors();
+        if n == 0 {
+            return Ok(None);
+        }
+        let msg = format!("ERC reports {n} error(s); run 'erc' and fix them first");
+        if self.strict { Err(msg) } else { Ok(Some(msg)) }
+    }
+
+    pub fn erc(&self) -> Res {
         let probs = sch_core::erc(&self.sch);
         let errors = probs.iter().filter(|p| p.severity == sch_core::Severity::Error).count();
+        if self.strict && errors > 0 {
+            let first = probs.iter().find(|p| p.severity == sch_core::Severity::Error).map(|p| p.message.clone()).unwrap_or_default();
+            return Err(format!("ERC reports {errors} error(s), for example: {first} (run 'erc' without --strict for the full list and hints)"));
+        }
         let list: Vec<Value> =
             probs.iter().map(|p| json!({"severity": format!("{:?}", p.severity).to_lowercase(), "message": p.message, "hint": p.hint})).collect();
-        obj(json!({"errors": errors, "warnings": probs.len() - errors, "problems": list}))
+        let mut tips: Vec<&str> = vec![];
+        if probs.iter().any(|p| p.message.contains("GND")) {
+            tips.push("In ccad the 0 V reference is the net named GND, for example 'net GND V1.- R2.2'. The first net called GND also places the ground symbol; do not place one by hand.");
+        }
+        if probs.iter().any(|p| p.message.contains("未接続")) {
+            tips.push("A pin with no net: connect it with 'net NAME REF.PIN', or give it a net of its own if it is meant to float.");
+        }
+        Ok(obj(json!({"errors": errors, "warnings": probs.len() - errors, "circuit_ok": errors == 0, "problems": list, "tips": tips, "note": "'ok' only says the command ran; the circuit has no ERC error when errors is 0"})))
     }
 
     fn circuit(&self) -> Result<sim_core::Circuit, String> {
         sim_core::from_schematic(&self.sch).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
     }
 
-    pub fn dc(&self) -> Res {
+    pub fn dc(&self, args: &[String]) -> Res {
+        let gate = self.erc_gate()?;
+        let circuit_ok = gate.is_none();
+        let full = args.iter().any(|a| a.eq_ignore_ascii_case("full"));
         let c = self.circuit()?;
-        let r = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
-        let volts: Map<String, Value> = r.voltages.iter().map(|(n, v)| (n.clone(), json!(v))).collect();
-        let elems: Map<String, Value> = r.elements.iter().map(|e| (e.name.clone(), json!({"current": e.current, "voltage": e.voltage, "power": e.power}))).collect();
+        let r = sim_core::dc_op(&c).map_err(|e| cli_sim_error(e.to_string()))?;
+        let volts: Map<String, Value> = r.voltages.iter().filter(|(n, _)| full || !n.contains('.')).map(|(n, v)| (n.clone(), json!(v))).collect();
+        let internal_nodes = r.voltages.iter().filter(|(n, _)| n.contains('.')).count();
+        // elements inside a library part's macro model are named 'U1.Ex': their values are model internals, not parts of the circuit
+        let internal = r.elements.iter().filter(|e| e.name.contains('.')).count();
+        let elems: Map<String, Value> = r
+            .elements
+            .iter()
+            .filter(|e| full || !e.name.contains('.'))
+            .map(|e| (e.name.clone(), json!({"current": e.current, "voltage": e.voltage, "power": e.power})))
+            .collect();
         let mut warnings = c.warnings.clone();
         warnings.extend(r.warnings.iter().cloned());
-        Ok(obj(json!({"voltages": volts, "elements": elems, "warnings": warnings})))
+        warnings.extend(gate);
+        let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
+        Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "warnings": warnings})))
     }
 
     pub fn tran(&self, args: &[String]) -> Res {
@@ -312,8 +363,10 @@ impl Session {
         let uic = pos.iter().skip(2).any(|w| w.eq_ignore_ascii_case("uic"));
         let samples: usize = opt(&kv, "samples").and_then(|s| s.parse().ok()).unwrap_or(6).clamp(0, 200);
         let probes: Vec<String> = opt(&kv, "probe").map(|p| p.split(',').map(lower).collect()).unwrap_or_default();
+        let gate = self.erc_gate()?;
+        let circuit_ok = gate.is_none();
         let c = self.circuit()?;
-        let r = sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| e.to_string())?;
+        let r = sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
         let n = r.time.len();
         let pick = |v: &[f64]| -> Vec<Value> {
             (0..samples).map(|k| if samples == 1 { n - 1 } else { k * (n - 1) / (samples - 1) }).map(|i| json!([r.time[i], v[i]])).collect()
@@ -337,6 +390,6 @@ impl Session {
                 (s.name.clone(), o)
             })
             .collect();
-        Ok(obj(json!({"points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "warnings": r.warnings})))
+        Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
     }
 }

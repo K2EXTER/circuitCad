@@ -13,19 +13,24 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   new                                   empty schematic
   open FILE.schjson / save FILE.schjson
   parts [WORDS]                         search the part library (name, category, description)
-  part NAME                             pins (number + name) and whether it has a simulation model
+  part NAME                             pins (number + name) of a library part or a basic type (R C L D LED V NPN)
   add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
         TYPE: R C L D LED V NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
   value REF VALUE                       change the value
-  net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name
+  net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name (any case)
                                         (GND pins of a part that share a name are all connected)
+                                        The net named GND is the 0 V reference: every circuit needs one.
   remove REF
   list                                  parts, pins and the net of every pin
-  erc                                   electrical rule check (message + hint)
+  erc                                   electrical rule check (message + hint). 'ok' only says the command ran:
+                                        read 'errors' (or run with --strict, which fails the script on an ERC error)
   spice                                 the SPICE netlist text
  Simulation
-  dc                                    operating point: node voltages, element currents
+  dc [full]                             operating point: node voltages, element currents
+                                        (elements inside a library part's macro model are hidden unless 'full')
   tran TSTOP TSTEP [probe=V(out),I(R1)] [samples=6] [uic]
+                                        starts from the DC operating point (a capacitor starts charged);
+                                        add 'uic' to start from zero instead (step responses, oscillators)
  Board
   board new [W H]                       empty board (mm), default 60 40
   board import                          parts and nets from the schematic (creates the board if needed)
@@ -44,6 +49,8 @@ pub struct Session {
     /// Where the next part goes: (x, y, tallest part of the row).
     pub cursor: (i32, i32, i32),
     pub lib_errors: Vec<String>,
+    /// `--strict`: an ERC error stops the script (and `dc`, `tran`, `board import` refuse to run on a sheet with ERC errors).
+    pub strict: bool,
 }
 
 pub fn split_words(line: &str) -> Vec<String> {
@@ -102,7 +109,7 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors }
+        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors, strict: false }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
@@ -138,9 +145,9 @@ impl Session {
             "net" => self.net(args),
             "remove" => self.remove(args),
             "list" => Ok(self.list()),
-            "erc" => Ok(self.erc()),
+            "erc" => self.erc(),
             "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
-            "dc" => self.dc(),
+            "dc" => self.dc(args),
             "tran" => self.tran(args),
             "board" => self.board_cmd(args),
             "help" => Ok(obj(json!({"text": HELP}))),

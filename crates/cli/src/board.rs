@@ -24,6 +24,8 @@ impl Session {
                 Ok(obj(json!({"width": size.0, "height": size.1})))
             }
             "import" => {
+                let gate = self.erc_gate()?;
+                let circuit_ok = gate.is_none();
                 let (parts, nets) = self.netlist_of();
                 if parts.is_empty() {
                     return Err("the schematic has no parts to import".into());
@@ -38,7 +40,7 @@ impl Session {
                     }
                 }
                 let rep = netlist::import(board, &parts, &nets);
-                Ok(obj(json!({"added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings})))
+                Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
             }
             "autoplace" => {
                 let board = self.board_mut()?;

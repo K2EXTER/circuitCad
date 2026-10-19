@@ -74,3 +74,103 @@ fn astable_555_runs_near_the_textbook_period_and_goes_to_fab_files() {
     assert!(dir.join("board_gerber.zip").exists() && dir.join("board.GTL").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+fn run_strict(script: &str) -> (Vec<Value>, bool) {
+    let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))
+        .args(["--strict", "--lib", lib.to_str().unwrap(), "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    use std::io::Write;
+    child.stdin.take().unwrap().write_all(script.as_bytes()).unwrap();
+    let out = child.wait_with_output().unwrap();
+    let answers = String::from_utf8(out.stdout).unwrap().lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    (answers, out.status.success())
+}
+
+const NO_GROUND: &str = "new\nadd V 5 as=V1\nadd R 1k as=R1\nnet VIN V1.+ R1.1\nnet X V1.- R1.2\n";
+
+#[test]
+fn erc_errors_are_visible_in_the_answer_and_dc_warns() {
+    let (a, ok) = run(&format!("{NO_GROUND}erc\ndc\n"));
+    assert!(ok || a.last().unwrap()["cmd"] == "dc", "{a:?}");
+    let erc = last(&a, "erc");
+    assert_eq!(erc["ok"], true, "ok only says the command ran");
+    assert_eq!(erc["circuit_ok"], false);
+    assert!(erc["errors"].as_i64().unwrap() >= 1);
+    assert!(erc["tips"].to_string().contains("named GND"), "{erc}");
+    let dc = last(&a, "dc");
+    if dc["ok"] == true {
+        assert!(dc["warnings"].to_string().contains("ERC reports"), "{dc}");
+    }
+}
+
+#[test]
+fn strict_stops_on_an_erc_error() {
+    let (a, ok) = run_strict(&format!("{NO_GROUND}erc\ndc\n"));
+    assert!(!ok);
+    let bad = a.last().unwrap();
+    assert_eq!(bad["cmd"], "erc");
+    assert_eq!(bad["ok"], false);
+    assert!(bad["error"].as_str().unwrap().contains("ERC reports"), "{bad}");
+    // a clean circuit still passes
+    let (a, ok) = run_strict("new\nadd V 5 as=V1\nadd R 1k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nerc\ndc\n");
+    assert!(ok, "{a:?}");
+}
+
+#[test]
+fn macro_model_internals_are_hidden_from_dc_unless_asked() {
+    let script = "new\nadd V 9 as=V1\nadd LM7805 as=U1\nadd R 1k as=R1\nnet IN V1.+ U1.IN\nnet GND V1.- U1.GND R1.2\nnet OUT U1.OUT R1.1\ndc\ndc full\n";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let dcs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "dc").collect();
+    let names = |v: &Value| v["elements"].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    assert!(names(dcs[0]).iter().all(|n| !n.contains('.')), "{:?}", names(dcs[0]));
+    assert!(dcs[0]["internal_elements_hidden"].as_i64().unwrap() > 0);
+    assert!(names(dcs[1]).iter().any(|n| n.contains('.')));
+}
+
+#[test]
+fn basic_types_have_pins_in_part() {
+    let (a, ok) = run("part LED\npart R\n");
+    assert!(ok, "{a:?}");
+    assert_eq!(a[0]["pins"][0]["pin"], "A");
+    assert_eq!(a[1]["pins"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn internal_nodes_are_hidden_and_circuit_ok_is_in_every_analysis_answer() {
+    let script = "new\nadd V 9 as=V1\nadd LM7805 as=U1\nadd R 1k as=R1\nnet IN V1.+ U1.IN\nnet GND V1.- U1.GND R1.2\nnet OUT U1.OUT R1.1\ndc\ndc full\n";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let dcs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "dc").collect();
+    assert!(dcs[0]["voltages"].as_object().unwrap().keys().all(|n| !n.contains('.')));
+    assert!(dcs[0]["internal_nodes_hidden"].as_i64().unwrap() > 0);
+    assert!(dcs[1]["voltages"].as_object().unwrap().keys().any(|n| n.contains('.')));
+    assert_eq!(dcs[0]["circuit_ok"], true);
+}
+
+#[test]
+fn missing_ground_says_how_to_fix_it_in_dc_and_tran_and_marks_circuit_ok_false() {
+    for (cmd, line) in [("dc", "dc"), ("tran", "tran 1m 10u")] {
+        // the run stops at the first failure, so each analysis gets its own run
+        let (a, _) = run(&format!("{NO_GROUND}{line}\n"));
+        let v = last(&a, cmd);
+        let text = v.to_string();
+        assert!(v["ok"] == false && text.contains("name one net GND"), "{cmd}: {text}");
+    }
+}
+
+#[test]
+fn rc_step_needs_uic_and_reaches_63_percent() {
+    let base = "new\nadd V 1 as=V1\nadd R 1.6k as=R1\nadd C 100n as=C1\nnet IN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\n";
+    let (a, ok) = run(&format!("{base}tran 160u 1u probe=V(OUT) samples=2 uic\ntran 160u 1u probe=V(OUT) samples=2\n"));
+    assert!(ok, "{a:?}");
+    let trans: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "tran").collect();
+    let fin = |v: &Value| v["signals"]["V(OUT)"]["final"].as_f64().unwrap();
+    assert!((fin(trans[0]) - 0.63212).abs() < 1e-3, "{}", fin(trans[0]));
+    assert!(fin(trans[1]) > 0.999, "without uic the capacitor starts charged");
+    assert_eq!(trans[0]["circuit_ok"], true);
+}
