@@ -372,8 +372,10 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
     out
 }
 
-/// Inductance of the lowest-resistance way from `src` to `dst`: the tracks on it as one trace of their total length
-/// and their length-weighted width, plus a via inductance for each hole and a little for each pour.
+/// Inductance of the lowest-resistance way from `src` to `dst`: the tracks on it are cut into straight runs (consecutive
+/// segments that go the same way on the same layer); each run is one trace of its length and length-weighted width, and the runs
+/// couple to each other (`mutual`), so a corner counts as it does on a real board: nothing at a right angle, a lot at a sharp
+/// turn. Plus a via inductance for each hole and a little for each pour.
 fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side]) -> (f64, Vec<PathSeg>) {
     let n = g.pos.len();
     let mut adj: Vec<Vec<(usize, usize)>> = vec![vec![]; n];
@@ -397,14 +399,13 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
             }
         }
     }
-    let (mut len, mut len_over_w, mut extra) = (0.0, 0.0, 0.0);
+    let mut extra = 0.0;
     let mut segs: Vec<PathSeg> = vec![];
     let mut at = dst;
     while let Some((u, k)) = prev[at] {
         match g.links[k] {
-            Link::Track { len: l, width } => {
-                len += l;
-                len_over_w += l / width.max(0.01);
+            Link::Track { .. } => {
+                let width = if let Link::Track { width, .. } = g.links[k] { width } else { 0.0 };
                 let side = g.pos[u].0;
                 let z = layers.iter().position(|&x| x == side).map_or(0.0, |i| BOARD_MM * i as f64 / (layers.len().max(2) - 1) as f64);
                 segs.push(PathSeg { a: g.pos[u].1, b: g.pos[at].1, z, width });
@@ -414,9 +415,39 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
         }
         at = u;
     }
-    let width = if len_over_w > 0.0 { len / len_over_w } else { 1.0 };
     segs.reverse();
-    (track_inductance(len, width, spec) + extra, segs)
+    let runs = straight_runs(&segs);
+    let mut henry = extra;
+    for r in &runs {
+        let len: f64 = r.iter().map(|s| s.a.dist(s.b)).sum();
+        let len_over_w: f64 = r.iter().map(|s| s.a.dist(s.b) / s.width.max(0.01)).sum();
+        henry += track_inductance(len, if len_over_w > 0.0 { len / len_over_w } else { 1.0 }, spec);
+    }
+    for i in 0..runs.len() {
+        for j in i + 1..runs.len() {
+            henry += 2.0 * mutual(runs[i], runs[j], spec);
+        }
+    }
+    (henry, segs)
+}
+
+/// The runs of a path: maximal stretches of consecutive segments that go the same way (within about a degree) on one layer.
+fn straight_runs(segs: &[PathSeg]) -> Vec<&[PathSeg]> {
+    let mut out = vec![];
+    let mut from = 0;
+    for i in 1..=segs.len() {
+        let same = i < segs.len() && {
+            let (a, b) = (&segs[i - 1], &segs[i]);
+            let (va, vb) = ((a.b.x - a.a.x, a.b.y - a.a.y), (b.b.x - b.a.x, b.b.y - b.a.y));
+            let (la, lb) = ((va.0 * va.0 + va.1 * va.1).sqrt(), (vb.0 * vb.0 + vb.1 * vb.1).sqrt());
+            la > 1e-12 && lb > 1e-12 && (va.0 * vb.1 - va.1 * vb.0).abs() / (la * lb) < 0.02 && va.0 * vb.0 + va.1 * vb.1 > 0.0 && (a.z - b.z).abs() < 1e-9
+        };
+        if !same {
+            out.push(&segs[from..i]);
+            from = i;
+        }
+    }
+    out
 }
 
 /// Gaussian elimination with partial pivoting: solves `a x = b` for `k` right-hand sides in place (`b` is m x k).
@@ -754,69 +785,82 @@ mod tests {
         assert!(far.is_empty() || far[0].k < k[0].k, "{far:?}");
     }
 
-    /// Two parallel traces of length `l` and width `w`, `s` between centres, read from the left: (self inductance of the supply
-    /// trace, mutual inductance of the pair), both in nH.
-    fn ours(l: f64, w: f64, s: f64) -> (f64, f64) {
-        let d = (0.8 * s).min(1.6);
-        let mk = |x: f64, y: f64, r: &str, pin: &str, net: &str| {
-            let mut p = Pad::new(Point::new(x, y), PadShape::Circle { d }, None, Side::Top);
-            p.refdes = r.into();
-            p.pin = pin.into();
-            p.net = net.into();
-            p
-        };
-        let b = board(
-            vec![mk(0.0, 0.0, "J1", "1", "VCC"), mk(l, 0.0, "U1", "1", "VCC"), mk(0.0, s, "J1", "2", "GND"), mk(l, s, "U1", "2", "GND")],
-            vec![track(Side::Top, (0.0, 0.0), (l, 0.0), w), track(Side::Top, (0.0, s), (l, s), w)],
-        );
-        let series = wiring_resistances(&b, &IrSpec::default());
-        let k = wiring_couplings(&series, &IrSpec::default());
-        let m = k.first().map_or(0.0, |c| c.k * (series[0].henry * series[1].henry).sqrt());
-        (series[0].henry * 1e9, m * 1e9)
+    /// One case of `tools/inductance_cases.json`: (name, "self" or "mutual", width, polylines from the supply end).
+    type Case = (String, String, f64, Vec<Vec<(f64, f64)>>);
+
+    fn cases() -> Vec<Case> {
+        let v: serde_json::Value = serde_json::from_str(include_str!("../../../tools/inductance_cases.json")).unwrap();
+        v.as_array()
+            .unwrap()
+            .iter()
+            .map(|c| {
+                let paths = c["paths"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect()).collect();
+                (c["name"].as_str().unwrap().to_string(), c["kind"].as_str().unwrap().to_string(), c["w"].as_f64().unwrap(), paths)
+            })
+            .collect()
     }
 
-    /// `cargo test -p pcb-core inductance_table -- --ignored --nocapture`: the program's figures for the cases of
-    /// `ref_inductance.py` (an independent volume-filament reference), as `case,value_nH` lines.
+    /// The program's inductance for a case, in nH: the self inductance of the first trace, or the mutual inductance of the
+    /// pair (0 when the program finds no coupling). Each polyline is one net with a connector pad at its start and a part pad at
+    /// its end, and a track per segment.
+    fn ours_case(kind: &str, w: f64, paths: &[Vec<(f64, f64)>]) -> f64 {
+        let mut pads = vec![];
+        let mut tracks = vec![];
+        for (k, path) in paths.iter().enumerate() {
+            let net = format!("N{k}");
+            for (i, (end, r)) in [(path[0], "J"), (path[path.len() - 1], "U")].into_iter().enumerate() {
+                let mut p = Pad::new(Point::new(end.0, end.1), PadShape::Circle { d: 0.1 }, None, Side::Top);
+                p.refdes = format!("{r}{k}");
+                p.pin = format!("{}", i + 1);
+                p.net = net.clone();
+                pads.push(p);
+            }
+            for q in path.windows(2) {
+                tracks.push(track(Side::Top, q[0], q[1], w));
+            }
+        }
+        let b = board(pads, tracks);
+        let series = wiring_resistances(&b, &IrSpec::default());
+        let of = |net: &str| series.iter().find(|s| s.net == net).unwrap_or_else(|| panic!("{net} not wired: {series:?}")).henry;
+        if kind == "self" {
+            return of("N0") * 1e9;
+        }
+        let k = wiring_couplings(&series, &IrSpec::default());
+        k.first().map_or(0.0, |c| c.k * (of("N0") * of("N1")).sqrt() * 1e9)
+    }
+
+    /// `cargo test -p pcb-core inductance_cases_table -- --ignored --nocapture`: `case,value_nH` for every case of
+    /// `tools/inductance_cases.json` (to compare with FastHenry, see `tools/fasthenry_cases.py`).
     #[test]
     #[ignore]
-    fn inductance_table() {
+    fn inductance_cases_table() {
         println!("case,value_nH");
-        for l in [10.0, 30.0, 100.0] {
-            for w in [0.25, 1.0, 3.0] {
-                println!("self l={l} w={w},{:.3}", ours(l, w, 6.0).0);
-            }
-        }
-        for l in [30.0, 100.0] {
-            for w in [0.25, 1.0] {
-                for s in [0.5, 1.0, 2.5, 5.0, 10.0] {
-                    if s > w {
-                        println!("mutual l={l} w={w} s={s},{:.3}", ours(l, w, s).1);
-                    }
-                }
-            }
+        for (name, kind, w, paths) in cases() {
+            println!("{name},{:.3}", ours_case(&kind, w, &paths));
         }
     }
 
-    /// Against FastHenry2 3.6 (`tools/fasthenry_cases.py` inputs, 1 kHz, 12 x 4 filaments; values copied from `tools/fasthenry_results.csv`):
-    /// the self inductance of a trace within 1.5 % and the mutual inductance of a pair within 1 % over the cases below.
+    /// Against FastHenry2 3.6 over every case of `tools/inductance_cases.json` (parallel traces, corners of 45, 90 and 135
+    /// degrees, a dogleg and a staircase, traces at an angle and antiparallel, a pair going round a corner). The FastHenry
+    /// figures are in `tools/fasthenry_results.csv` (1 kHz, 12 x 4 filaments; see `tools/fasthenry_cases.py`): the self inductance
+    /// of a trace must be within 1.5 % and the mutual inductance of a pair within 1 % (or 0.3 nH when it is nearly zero).
     #[test]
     fn inductance_agrees_with_fasthenry() {
-        // (length, width, spacing, self nH, mutual nH)
-        let cases = [
-            (100.0, 0.25, 2.5, 141.002, 68.095),
-            (100.0, 0.25, 1.0, 141.002, 86.221),
-            (100.0, 0.25, 0.5, 141.002, 100.315),
-            (100.0, 1.0, 5.0, 115.276, 54.759),
-            (30.0, 0.25, 5.0, 35.087, 9.851),
-            (30.0, 1.0, 2.5, 27.400, 13.616),
-            (10.0, 3.0, 6.0, 4.957, 0.0),
-        ];
-        for (l, w, s, l_ref, m_ref) in cases {
-            let (l_ours, m_ours) = ours(l, w, s);
-            assert!((l_ours / l_ref - 1.0).abs() < 0.015, "self l={l} w={w}: {l_ours} vs {l_ref}");
-            if m_ref > 0.0 {
-                assert!((m_ours / m_ref - 1.0).abs() < 0.01, "mutual l={l} w={w} s={s}: {m_ours} vs {m_ref}");
-            }
+        let table: std::collections::HashMap<String, f64> = include_str!("../../../tools/fasthenry_results.csv")
+            .lines()
+            .skip(1)
+            .map(|l| {
+                let f: Vec<&str> = l.split(',').collect();
+                (f[0].to_string(), f[1].parse().unwrap())
+            })
+            .collect();
+        let all = cases();
+        assert_eq!(table.len(), all.len(), "the FastHenry table and the case list must have the same cases");
+        for (name, kind, w, paths) in all {
+            let fh = table[&name];
+            let ours = ours_case(&kind, w, &paths);
+            let tol = if kind == "self" { 0.015 * fh } else { (0.01 * fh.abs()).max(0.3) };
+            assert!((ours - fh).abs() <= tol, "{name}: {ours} nH vs FastHenry {fh} nH");
         }
     }
 
