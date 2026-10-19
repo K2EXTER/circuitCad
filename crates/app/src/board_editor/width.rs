@@ -27,6 +27,7 @@ impl BoardEditor {
         }
         self.checkpoint();
         let n = widen_net(&mut self.board, &conn, net, width);
+        self.post_layout_fresh = false;
         self.status = format!("{net}: 配線 {n} 本を {width:.2} mm に太くしました。DRC で間隔が足りているか確かめましょう");
         n
     }

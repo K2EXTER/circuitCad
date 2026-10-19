@@ -1,13 +1,17 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
         && let Some(n) = schematic::lesson_ids().iter().position(|l| l == id) {
             app.sch.start_lesson(n);
         }
+    if let Some(i) = args.iter().position(|a| a == "--board-lesson") {
+        // --board-lesson [0|1]: 0 = schematic to order files, 1 = copper width and voltage drop
+        app.start_board_lesson(args.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(0));
+    }
     if let Some(i) = args.iter().position(|a| a == "--challenge")
         && let Some(id) = args.get(i + 1) {
             app.sch.start_challenge(id, args.get(i + 2).and_then(|l| l.parse().ok()).unwrap_or(0));

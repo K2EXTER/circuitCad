@@ -6,7 +6,14 @@ use super::*;
 pub const TITLE: &str = "基板編. 回路図から基板をつくる";
 const CIRCUIT: &str = include_str!("../../../../docs/examples/regulator_led.schjson");
 
+/// The second lesson: copper that is too thin, from a finished sample project (`docs/examples/thin_power_line.ccproj`).
+pub const COPPER_TITLE: &str = "基板編2. 配線の電圧降下";
+pub const COPPER_ID: &str = "board_copper";
+const COPPER_PROJECT: &str = include_str!("../../../../docs/examples/thin_power_line.ccproj");
+
 pub(super) struct BoardLesson {
+    /// 0 = from a schematic to the files to order, 1 = the copper lesson.
+    which: usize,
     done: Vec<bool>,
 }
 
@@ -44,6 +51,43 @@ const BOARD_LIMITS: &[&str] = &[
     "発注先ごとの最小の線幅・穴径などは目安です。発注の前に、必ず発注先のページで最新の条件を確かめてください。",
 ];
 
+fn copper_applied(e: &BoardEditor) -> bool {
+    e.post_layout_fresh
+}
+
+fn currents_declared(e: &BoardEditor) -> bool {
+    !e.board.net_currents.is_empty()
+}
+
+fn copper_wide_enough(e: &BoardEditor) -> bool {
+    let conn = drc::connectivity(&e.board);
+    let report = pcb_core::current::net_widths(&e.board, &conn, &pcb_core::current::CopperSpec::default());
+    !report.is_empty() && report.iter().all(|w| !w.too_thin())
+}
+
+const COPPER_STEPS: &[Step] = &[
+    Step {
+        title: "配線の抵抗を入れて、電圧が落ちるのを見る",
+        detail: "左パネルの「高度な配線」→「配線の太さ (電流から)」を開き、「配線の電圧降下」の「シミュレーションに反映」を押します。そのあと上の「回路図」タブで「解析」→「DC動作点を解析」を押すと、負荷 R1 の + 側が 5 V ではなく約 4.5 V になります。細い配線 (0.25 mm、長さ 60 mm) の抵抗で、電圧が落ちたのです",
+        done: copper_applied,
+    },
+    Step {
+        title: "シミュレーションの電流を入れる",
+        detail: "基板に戻り、「配線の太さ (電流から)」の「シミュレーションの電流を入れる」を押します。DC解析で求めた電流 (約 2.3 A) が、VIN と GND の欄に入ります。必要な線幅 (約 1.1 mm) と、今の線幅 (0.25 mm) が赤く出ます",
+        done: currents_declared,
+    },
+    Step {
+        title: "足りない配線を太くする",
+        detail: "「足りないネットをすべて推奨幅にする」を押します。配線が必要な太さになります。太くしたら、間隔が足りているか、「DRC を実行」でも確かめましょう",
+        done: copper_wide_enough,
+    },
+    Step {
+        title: "もう一度反映して、電圧が戻るのを確かめる",
+        detail: "もう一度「シミュレーションに反映」を押し、回路図で「DC動作点を解析」を押します。R1 の + 側が約 4.9 V に戻ります。残りの差は、まだ配線にある抵抗です。もっと太く・短くすれば、さらに小さくなります",
+        done: copper_applied,
+    },
+];
+
 const STEPS: &[Step] = &[
     Step {
         title: "回路図から取り込む",
@@ -76,8 +120,26 @@ impl BoardEditor {
     pub fn start_lesson(&mut self) {
         self.new_file();
         self.drc_ran = false;
-        self.lesson = Some(BoardLesson { done: vec![false; STEPS.len()] });
+        self.lesson = Some(BoardLesson { which: 0, done: vec![false; STEPS.len()] });
         self.status = format!("レッスン「{TITLE}」を始めました。右の案内に沿って操作してみましょう");
+    }
+
+    /// The project (schematic and board) the copper lesson works on.
+    pub fn copper_lesson_project() -> &'static str {
+        COPPER_PROJECT
+    }
+
+    /// Starts the copper lesson on the board that was just opened (the app loads the project first).
+    pub fn start_copper_lesson(&mut self) {
+        self.board.net_currents.clear();
+        self.post_layout_fresh = false;
+        self.drc_ran = false;
+        self.lesson = Some(BoardLesson { which: 1, done: vec![false; COPPER_STEPS.len()] });
+        self.status = format!("レッスン「{COPPER_TITLE}」を始めました。右の案内に沿って操作してみましょう");
+    }
+
+    fn lesson_steps(&self) -> &'static [Step] {
+        if self.lesson.as_ref().is_some_and(|l| l.which == 1) { COPPER_STEPS } else { STEPS }
     }
 
     /// The sample circuit this lesson imports.
@@ -85,9 +147,10 @@ impl BoardEditor {
         CIRCUIT
     }
 
-    /// True once every step of the running board lesson is ticked (for the progress record).
-    pub fn lesson_finished(&self) -> bool {
-        self.lesson.as_ref().is_some_and(|l| l.done.iter().all(|d| *d))
+    /// The progress key of the running board lesson once every step is ticked.
+    pub fn finished_board_lesson(&self) -> Option<&'static str> {
+        let l = self.lesson.as_ref().filter(|l| l.done.iter().all(|d| *d))?;
+        Some(if l.which == 1 { COPPER_ID } else { "board" })
     }
 
     #[cfg(test)]
@@ -99,7 +162,7 @@ impl BoardEditor {
     fn update_lesson(&mut self) {
         let Some(l) = self.lesson.as_ref() else { return };
         let Some(cur) = l.done.iter().position(|d| !d) else { return };
-        if (STEPS[cur].done)(self)
+        if (self.lesson_steps()[cur].done)(self)
             && let Some(l) = self.lesson.as_mut() {
                 l.done[cur] = true;
             }
@@ -109,13 +172,19 @@ impl BoardEditor {
         self.update_lesson();
         let Some(l) = self.lesson.as_ref() else { return };
         let done = l.done.clone();
+        let copper = l.which == 1;
+        let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {TITLE}")).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
-            ui.label("回路図で描いた回路を、基板のパターンにして、発注用のデータを作るところまでを一通り体験します");
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+            ui.label(if copper {
+                "電源と負荷が遠く、配線が細い基板です。配線の抵抗で電圧がどれだけ落ちるかを、シミュレーションで見て、電流から必要な太さを決めて直します"
+            } else {
+                "回路図で描いた回路を、基板のパターンにして、発注用のデータを作るところまでを一通り体験します"
+            });
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();
-            for (k, step) in STEPS.iter().enumerate() {
+            for (k, step) in steps.iter().enumerate() {
                 let (mark, color) = if done[k] {
                     ("✔", Color32::from_rgb(60, 160, 90))
                 } else if Some(k) == cur {
@@ -134,6 +203,7 @@ impl BoardEditor {
                 }
             }
             ui.separator();
+            if !copper {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
@@ -146,7 +216,12 @@ impl BoardEditor {
                         });
                     }
                 });
-            if cur.is_none() {
+            }
+            if cur.is_none() && copper {
+                ui.separator();
+                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.label("配線は銅の抵抗を持ち、電流が大きいほど、細く長いほど、電圧が落ちます。流れる電流から必要な太さを決め (IPC-2221)、シミュレーションで確かめる、という順で考えます。この見積もりはDCの電流だけで、スイッチングの瞬間の大きな電流や、配線のインダクタンスは入っていません。余裕を見て、実機でも測りましょう。");
+            } else if cur.is_none() {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
                 ui.label("基板づくりの流れは「回路図 → 取り込み → 配置 → 配線 → DRC → 発注データ」です。DRC に通らないと発注データは書き出せないので、配線のあとは必ず DRC を実行する習慣をつけましょう。実際に注文するときは、発注先のページで最新の条件を確かめてください。");

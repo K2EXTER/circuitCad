@@ -194,6 +194,29 @@ fn the_board_lesson_walks_from_schematic_to_the_order_window() {
     assert_eq!(progress(&mut app), 5);
 }
 
+/// The copper lesson ticks its four steps in order, and finishing it is recorded under its own key.
+#[test]
+fn the_copper_lesson_walks_from_the_drop_to_the_fixed_copper() {
+    let mut app = App::default();
+    app.start_board_lesson(1);
+    assert_eq!(app.board_ed.board.name, "thin_power_line");
+    let progress = |a: &mut App| a.board_ed.lesson_progress();
+    assert_eq!(progress(&mut app), 0, "the sample starts without declared currents");
+    app.apply_post_layout(true);
+    assert_eq!(progress(&mut app), 1);
+    let currents = app.sch.dc_net_currents();
+    app.board_ed.use_simulated_currents(currents);
+    assert_eq!(progress(&mut app), 2);
+    for net in ["VIN", "GND"] {
+        app.board_ed.widen_net_to_need(net);
+    }
+    assert_eq!(progress(&mut app), 3, "{}", app.board_ed.status);
+    assert!(app.board_ed.finished_board_lesson().is_none());
+    app.apply_post_layout(true);
+    assert_eq!(progress(&mut app), 4);
+    assert_eq!(app.board_ed.finished_board_lesson(), Some("board_copper"));
+}
+
 /// End-to-end trial: schematic -> board -> autoplace -> autoroute -> GND pour -> DRC -> preflight -> fab files.
 /// `CIRCUITCAD_TRIAL=power_supply cargo test -p app fab_trial -- --ignored --nocapture`
 /// Writes to `target/fab_trial/<name>/`.

@@ -92,7 +92,7 @@ pub enum Kind {
     /// A schematic lesson (by lesson id).
     Lesson(&'static str),
     /// The board lesson.
-    Board,
+    Board(usize),
     /// Only a "作ってみよう" challenge (by the item's id); done when the challenge is passed.
     Build,
     /// The bench step: build it, measure it, compare with the simulation (`measure_guide.rs`); done when
@@ -182,7 +182,8 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             about: "設計した電源を、基板にして、組み立てて、性能を測ります",
             items: &[
                 Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, build: true, real: None },
-                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board, build: false, real: Some("発注するなら、少量・少額で試します") },
+                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), build: false, real: Some("発注するなら、少量・少額で試します") },
+                Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
                 Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
             ],
         },
@@ -220,7 +221,7 @@ pub enum Action {
     Lesson(&'static str),
     /// The "作ってみよう" challenge of a lesson (by the lesson's id).
     Build(&'static str),
-    Board,
+    Board(usize),
     /// The guide of the bench step.
     Measure,
 }
@@ -238,7 +239,7 @@ fn item_action(item: &Item) -> Option<Action> {
     match item.kind {
         Kind::Lesson(id) => Some(Action::Lesson(id)),
         Kind::Build => Some(Action::Build(item.id)),
-        Kind::Board => Some(Action::Board),
+        Kind::Board(n) => Some(Action::Board(n)),
         Kind::Measure => Some(Action::Measure),
         Kind::Planned => None,
     }
@@ -336,7 +337,8 @@ impl LearnWindow {
                             action = Some(match item.kind {
                                 Kind::Lesson(id) => Action::Lesson(id),
                                 Kind::Measure => Action::Measure,
-                                _ => Action::Board,
+                                Kind::Board(n) => Action::Board(n),
+                                _ => Action::Measure,
                             });
                         }
                         if item.build {

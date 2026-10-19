@@ -121,9 +121,23 @@ impl App {
         self.board_ed.status = msg;
     }
 
-    /// Opens the board lesson with its sample circuit.
-    pub(super) fn start_board_lesson(&mut self) {
+    /// Opens a board lesson: 0 = schematic to order files (with its sample circuit), 1 = copper width and voltage drop
+    /// (with its sample project).
+    pub(super) fn start_board_lesson(&mut self, which: usize) {
         self.mode = Mode::Board;
+        if which == 1 {
+            match project::parse(board_editor::BoardEditor::copper_lesson_project()) {
+                Ok(pr) => {
+                    self.sch.adopt(pr.schematic, None);
+                    self.sch.wiring.clear();
+                    self.board_ed.adopt(pr.board, None);
+                    self.project = None;
+                    self.board_ed.start_copper_lesson();
+                }
+                Err(e) => self.board_ed.status = format!("レッスンのプロジェクトを読み込めませんでした: {e}"),
+            }
+            return;
+        }
         if !self.sch.load_sample(board_editor::BoardEditor::lesson_circuit()) {
             self.board_ed.status = "レッスンの回路を読み込めませんでした".into();
         } else {

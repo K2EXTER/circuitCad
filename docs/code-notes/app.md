@@ -27,6 +27,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 - 足すときは `CHALLENGES` に1件とテスト(答えが通る)。
 - いまは zener・divider・led・rc_lowpass・emitter_follower・opamp_inv・series_regulator・regulator_78xx と、最終課題 draw_psu(lesson は protection、学習パスの `Kind::Build` の項目から id で開く。部品の個数を調べる `Check::Has` あり、答えは `power_supply.schjson`)。
 - `--challenge <id> [0|1] [--judge]`、通過は進み具合に `<id>+build`、レッスン窓の「チャレンジを始める」と学習パスの「作ってみよう」から開く。
+- 基板のレッスンは2つ(`board_editor/lesson.rs`。`BoardLesson.which` 0=回路図から発注まで、1=配線の電圧降下。学習パスの `Kind::Board(n)`/`Action::Board(n)`、完了の記録は `finished_board_lesson`(`board` / `board_copper`)。2つ目は `docs/examples/thin_power_line.ccproj` をプログラムに埋め込み(`project::parse`)、`App::start_board_lesson(1)` が回路図と基板を差し替えて始める。手順の完了は `post_layout_fresh`(反映した直後 true、配線を太くすると false)と `net_currents` と `net_widths` で判定。`--board-lesson 0|1` は撮影用)。
 - `learn.rs` は学習パス(`PATHS` に段階と項目を書く。レッスンは `id` で指定、準備中は `planned`)と完了の記録(`%APPDATA%\circuitCad\progress.json`)と「学習パス」窓(`--learn`)。初回起動だけ `welcome_card`(引数なし・進捗なし・未回答のとき、`progress.json` の `"welcomed"` で一度きり)。学習パス窓の説明文は `spaced`(行の高さ)と `NOTE`(灰色)で読みやすくしてある。回路図のライブラリ部品の欄は初期状態で閉じている。
 - 設計は `docs/learning-path.md`。
 - `help.rs` は「操作ガイド」窓(ヘルプメニュー・F1・各パネルの「操作」ボタン、`--guide`。操作の説明は小さい文字で各所に書かず、ここの `SCHEMATIC`/`WAVEFORM`/`BOARD`/`VIEW3D` に足す)。

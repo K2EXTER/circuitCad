@@ -27,7 +27,12 @@ pub fn save(path: &Path, schematic: &Schematic, board: &Board, specs: &[SpecItem
 
 pub fn load(path: &Path) -> Result<Project, String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let mut value: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("プロジェクトの形式が読めません ({e})"))?;
+    parse(&text)
+}
+
+/// A project from its JSON text (the lessons carry one inside the program).
+pub fn parse(text: &str) -> Result<Project, String> {
+    let mut value: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("プロジェクトの形式が読めません ({e})"))?;
     if value.get("version").and_then(|v| v.as_u64()).is_some_and(|v| v > VERSION) {
         return Err("新しい版の circuitCad で作られたプロジェクトです。circuitCad を更新してから開いてください".into());
     }

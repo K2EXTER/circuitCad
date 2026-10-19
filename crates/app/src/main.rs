@@ -69,6 +69,7 @@ impl App {
     fn apply_post_layout(&mut self, on: bool) {
         if !on {
             self.sch.wiring.clear();
+            self.board_ed.post_layout_fresh = false;
             self.board_ed.status = "配線の抵抗を外しました。回路図のシミュレーションは理想の配線に戻ります".into();
             return;
         }
@@ -76,6 +77,7 @@ impl App {
             .into_iter()
             .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm })
             .collect();
+        self.board_ed.post_layout_fresh = !self.sch.wiring.is_empty();
         self.board_ed.status = if self.sch.wiring.is_empty() {
             "配線されたネットがないので、反映するものがありません。先に配線してください".into()
         } else {
@@ -121,8 +123,8 @@ impl eframe::App for App {
         if let Some(id) = self.sch.finished_lesson() {
             self.progress.mark(id);
         }
-        if self.board_ed.lesson_finished() {
-            self.progress.mark("board");
+        if let Some(id) = self.board_ed.finished_board_lesson() {
+            self.progress.mark(id);
         }
         if let Some(key) = self.sch.finished_challenge() {
             self.progress.mark(&key);
@@ -151,7 +153,7 @@ impl eframe::App for App {
                     self.mode = Mode::Schematic;
                     self.sch.start_challenge(id, 0);
                 }
-                learn::Action::Board => self.start_board_lesson(),
+                learn::Action::Board(n) => self.start_board_lesson(n),
                 learn::Action::Measure => self.measure.open = true,
             }
         }
@@ -257,7 +259,12 @@ impl eframe::App for App {
                     ui.separator();
                     let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
                     if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
-                        self.start_board_lesson();
+                        self.start_board_lesson(0);
+                        ui.close();
+                    }
+                    let copper_mark = if self.progress.is_done(board_editor::lesson::COPPER_ID) { "✔ " } else { "　 " };
+                    if ui.button(format!("{copper_mark}{}", board_editor::lesson::COPPER_TITLE)).on_hover_text("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します").clicked() {
+                        self.start_board_lesson(1);
                         ui.close();
                     }
                 });

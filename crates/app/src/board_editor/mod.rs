@@ -233,6 +233,8 @@ pub struct BoardEditor {
     pub post_layout_request: Option<bool>,
     /// Set by the width panel: ask `App` for the schematic's DC net currents (it answers with `use_simulated_currents`).
     pub currents_request: bool,
+    /// The copper resistance of the current copper is in the schematic's analyses (set by `App`, cleared when the copper is widened).
+    pub post_layout_fresh: bool,
     violations: Vec<drc::Violation>,
     import_notes: Vec<String>,
     /// Counts changes (one per `checkpoint`) and replaced boards; `saved_rev` is its value when the board was last saved or opened.
@@ -319,6 +321,7 @@ impl Default for BoardEditor {
             help_request: None,
             post_layout_request: None,
             currents_request: false,
+            post_layout_fresh: false,
             violations: vec![],
             import_notes: vec![],
             rev: 0,
