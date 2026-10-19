@@ -30,13 +30,15 @@ pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
     build(s, None, &[])
 }
 
-/// Resistance of the copper between a net's supply pad and one pin, measured on the board
-/// (`pcb_core::irdrop::wiring_resistances`). The pin gets a node of its own behind this resistor.
+/// Resistance and inductance of the copper between a net's supply pad and one pin, measured on the board
+/// (`pcb_core::irdrop::wiring_resistances`). The pin gets a node of its own behind this resistor and inductor.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WiringR {
     pub refdes: String,
     pub pin: String,
     pub ohm: f64,
+    /// Inductance of the same copper (H); 0 = none. Matters for AC and fast transients, not for DC.
+    pub henry: f64,
 }
 
 /// The circuit of `s` with the board's wiring resistance added in series with the listed pins
@@ -87,11 +89,20 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR]) -> Res
         };
         pin_node.insert((f.refdes.clone(), f.pin.clone()), node);
     }
-    for w in wiring.iter().filter(|w| w.ohm > 0.0) {
+    // net --R-- --L-- pin
+    for w in wiring.iter().filter(|w| w.ohm > 0.0 || w.henry > 0.0) {
         let key = (w.refdes.clone(), w.pin.clone());
         if let Some(&net_node) = pin_node.get(&key) {
             let m = c.node(&format!("{}.{}.wire", w.refdes, w.pin));
-            c.add(Element::Resistor { name: format!("{}.{}.RW", w.refdes, w.pin), a: net_node, b: m, r: w.ohm });
+            let mut from = net_node;
+            if w.ohm > 0.0 {
+                let mid = if w.henry > 0.0 { c.node(&format!("{}.{}.wirel", w.refdes, w.pin)) } else { m };
+                c.add(Element::Resistor { name: format!("{}.{}.RW", w.refdes, w.pin), a: from, b: mid, r: w.ohm });
+                from = mid;
+            }
+            if w.henry > 0.0 {
+                c.add(Element::Inductor { name: format!("{}.{}.LW", w.refdes, w.pin), a: from, b: m, l: w.henry });
+            }
             pin_node.insert(key, m);
         }
     }

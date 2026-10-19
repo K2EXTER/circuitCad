@@ -119,13 +119,13 @@ impl Session {
                 let board = self.board_mut()?;
                 let mut w = pcb_core::irdrop::wiring_resistances(board, &pcb_core::irdrop::IrSpec::default());
                 w.sort_by(|a, b| b.ohm.partial_cmp(&a.ohm).unwrap());
-                let list: Vec<Value> = w.iter().take(10).map(|x| json!({"net": x.net, "pad": format!("{}.{}", x.refdes, x.pin), "milliohm": (x.ohm * 1e6).round() / 1e3})).collect();
+                let list: Vec<Value> = w.iter().take(10).map(|x| json!({"net": x.net, "pad": format!("{}.{}", x.refdes, x.pin), "milliohm": (x.ohm * 1e6).round() / 1e3, "nanohenry": (x.henry * 1e10).round() / 10.0})).collect();
                 self.post_layout = on;
                 self.last_dc = None;
                 self.last_tran = None;
                 self.last_ac = None;
                 Ok(obj(json!({"postlayout": on, "pads_with_resistance": w.len(), "largest": list,
-                    "note": "Resistance is measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first."})))
+                    "note": "Resistance and inductance are measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first. The inductance is per pad and ignores the coupling between supply and return traces, so it is an upper bound; it shows in ac and fast tran, not in dc."})))
             }
             "save" => {
                 let f = rest.first().ok_or("board save FILE.pcbjson")?;

@@ -75,7 +75,7 @@ impl App {
         }
         self.sch.wiring = pcb_core::irdrop::wiring_resistances(&self.board_ed.board, &pcb_core::irdrop::IrSpec::default())
             .into_iter()
-            .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm })
+            .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry })
             .collect();
         self.board_ed.post_layout_fresh = !self.sch.wiring.is_empty();
         self.board_ed.status = if self.sch.wiring.is_empty() {

@@ -46,6 +46,26 @@ pub fn track_resistance(len: f64, width: f64, spec: &IrSpec) -> f64 {
     (spec.sheet() * len / width.max(0.01)).max(1e-6)
 }
 
+/// Partial self-inductance (H) of a straight trace of `len` and `width` (mm) on the copper of `spec`
+/// (Terman: 0.2 nH/mm * len * (ln(2 len / (w + t)) + 0.5 + 0.2235 (w + t) / len)). The return path is not considered,
+/// so a pair of close traces (supply and ground) is overestimated: the real loop is smaller because their fields cancel.
+pub fn track_inductance(len: f64, width: f64, spec: &IrSpec) -> f64 {
+    if len <= 1e-6 {
+        return 0.0;
+    }
+    let wt = width.max(0.01) + spec.thickness_um / 1000.0;
+    (0.2e-9 * len * ((2.0 * len / wt).ln() + 0.5 + 0.2235 * wt / len)).max(0.0)
+}
+
+/// Inductance of a plated hole through the board (H), about 1 nH for a 0.3 mm hole in 1.6 mm.
+pub fn via_inductance(drill: f64) -> f64 {
+    let (h, d) = (BOARD_MM / 25.4, drill.max(0.1) / 25.4);
+    5.08e-9 * h * ((4.0 * h / d).ln() + 1.0)
+}
+
+/// Inductance charged for a current that goes through a copper pour (H): the plane is wide, so only a little.
+const POUR_HENRY: f64 = 0.3e-9;
+
 /// Resistance of a plated hole of `drill` (mm) from the top to the bottom layer.
 pub fn via_resistance(drill: f64) -> f64 {
     let area = std::f64::consts::PI * (drill + PLATING_MM) * PLATING_MM;
@@ -61,6 +81,8 @@ pub struct PadDrop {
     pub ohm: Option<f64>,
     /// Voltage lost on the way at the net's current (V).
     pub drop_v: Option<f64>,
+    /// Inductance of the copper on the lowest-resistance way from the supply pad (H); `None` when not reached.
+    pub henry: Option<f64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,6 +125,15 @@ struct Graph {
     nodes: HashMap<Key, usize>,
     pos: Vec<(Side, Point)>,
     edges: Vec<(usize, usize, f64)>,
+    /// What each edge is, in the order of `edges` (for the inductance of a path).
+    links: Vec<Link>,
+}
+
+#[derive(Clone, Copy)]
+enum Link {
+    Track { len: f64, width: f64 },
+    Via(f64),
+    Pour,
 }
 
 impl Graph {
@@ -117,9 +148,10 @@ impl Graph {
         i
     }
 
-    fn edge(&mut self, a: usize, b: usize, r: f64) {
+    fn edge(&mut self, a: usize, b: usize, r: f64, link: Link) {
         if a != b {
             self.edges.push((a, b, r.max(1e-6)));
+            self.links.push(link);
         }
     }
 }
@@ -185,7 +217,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             // the barrel joins every copper layer, one edge per step between neighbouring layers
             for w in layers.windows(2) {
                 let (x, y) = (g.node(w[0], p.pos), g.node(w[1], p.pos));
-                g.edge(x, y, via_resistance(d));
+                g.edge(x, y, via_resistance(d), Link::Via(d));
             }
         }
     }
@@ -202,7 +234,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
                 for w in layers.windows(2) {
                     let (x, y) = (g.node(w[0], v.pos), g.node(w[1], v.pos));
                     if !g.edges.iter().any(|&(e, f, _)| (e == x && f == y) || (e == y && f == x)) {
-                        g.edge(x, y, via_resistance(v.drill));
+                        g.edge(x, y, via_resistance(v.drill), Link::Via(v.drill));
                     }
                 }
                 return g.node(side, v.pos);
@@ -238,7 +270,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         on.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
         for k in 0..on.len() - 1 {
             let r = track_resistance(on[k + 1].0 - on[k].0, w, spec);
-            g.edge(on[k].1, on[k + 1].1, r);
+            g.edge(on[k].1, on[k + 1].1, r, Link::Track { len: on[k + 1].0 - on[k].0, width: w });
         }
     }
     // copper pours: every node under the pour reaches a hub through a short resistance
@@ -250,7 +282,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         let mut used = false;
         for (n, s, p) in all.iter().copied() {
             if s == z.side && in_polygon(&z.polygon, p) {
-                g.edge(n, hub, spec.sheet() * (p.dist(c) / a.sqrt() + 0.15));
+                g.edge(n, hub, spec.sheet() * (p.dist(c) / a.sqrt() + 0.15), Link::Pour);
                 used = true;
             }
         }
@@ -316,9 +348,52 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         }
         let p = &board.pads[i];
         let ohm = res.get(&i).copied();
-        out.pads.push(PadDrop { refdes: p.refdes.clone(), pin: p.pin.clone(), pos: p.pos, ohm, drop_v: ohm.map(|r| r * amps) });
+        let henry = ohm.map(|_| path_inductance(&g, src, pad_node[&i], spec));
+        out.pads.push(PadDrop { refdes: p.refdes.clone(), pin: p.pin.clone(), pos: p.pos, ohm, drop_v: ohm.map(|r| r * amps), henry });
     }
     out
+}
+
+/// Inductance of the lowest-resistance way from `src` to `dst`: the tracks on it as one trace of their total length
+/// and their length-weighted width, plus a via inductance for each hole and a little for each pour.
+fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec) -> f64 {
+    let n = g.pos.len();
+    let mut adj: Vec<Vec<(usize, usize)>> = vec![vec![]; n];
+    for (k, &(a, b, _)) in g.edges.iter().enumerate() {
+        adj[a].push((b, k));
+        adj[b].push((a, k));
+    }
+    let mut dist = vec![f64::INFINITY; n];
+    let mut prev: Vec<Option<(usize, usize)>> = vec![None; n];
+    let mut done = vec![false; n];
+    dist[src] = 0.0;
+    // the nets are small (at most MAX_NODES), so a plain O(n^2) Dijkstra is fine
+    for _ in 0..n {
+        let Some(u) = (0..n).filter(|&i| !done[i] && dist[i].is_finite()).min_by(|&a, &b| dist[a].total_cmp(&dist[b])) else { break };
+        done[u] = true;
+        for &(v, k) in &adj[u] {
+            let d = dist[u] + g.edges[k].2;
+            if d < dist[v] {
+                dist[v] = d;
+                prev[v] = Some((u, k));
+            }
+        }
+    }
+    let (mut len, mut len_over_w, mut extra) = (0.0, 0.0, 0.0);
+    let mut at = dst;
+    while let Some((u, k)) = prev[at] {
+        match g.links[k] {
+            Link::Track { len: l, width } => {
+                len += l;
+                len_over_w += l / width.max(0.01);
+            }
+            Link::Via(d) => extra += via_inductance(d),
+            Link::Pour => extra += POUR_HENRY,
+        }
+        at = u;
+    }
+    let width = if len_over_w > 0.0 { len / len_over_w } else { 1.0 };
+    track_inductance(len, width, spec) + extra
 }
 
 /// Gaussian elimination with partial pivoting: solves `a x = b` for `k` right-hand sides in place (`b` is m x k).
@@ -374,6 +449,8 @@ pub struct PadSeries {
     pub refdes: String,
     pub pin: String,
     pub ohm: f64,
+    /// Inductance of the same copper (H); see `track_inductance`.
+    pub henry: f64,
 }
 
 /// For every net with two or more pads: the resistance from its supply pad to each other pad, as a
@@ -390,7 +467,7 @@ pub fn wiring_resistances(board: &Board, spec: &IrSpec) -> Vec<PadSeries> {
         let d = net_drop(board, &conn, net, 0.0, spec, None);
         for p in d.pads {
             if let Some(ohm) = p.ohm.filter(|o| *o > 1e-6) {
-                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm });
+                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm, henry: p.henry.unwrap_or(0.0) });
             }
         }
     }
@@ -496,6 +573,27 @@ mod tests {
         assert_eq!(w.len(), 1, "{w:?}");
         assert_eq!((w[0].net.as_str(), w[0].refdes.as_str(), w[0].pin.as_str()), ("VCC", "U1", "1"));
         assert!((w[0].ohm - 0.1966).abs() < 0.002);
+    }
+
+    #[test]
+    fn a_long_thin_track_has_over_a_hundred_nanohenry_and_a_wide_one_less() {
+        let b = board(vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(100.0, 0.0, "U1", "1", "VCC", None)], vec![track(Side::Top, (0.0, 0.0), (100.0, 0.0), 0.25)]);
+        let w = wiring_resistances(&b, &IrSpec::default());
+        // 0.2 nH/mm * 100 mm * (ln(200 / 0.285) + 0.5) = 141 nH
+        assert!((w[0].henry * 1e9 - 141.0).abs() < 8.0, "{}", w[0].henry);
+        let wide = board(vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(100.0, 0.0, "U1", "1", "VCC", None)], vec![track(Side::Top, (0.0, 0.0), (100.0, 0.0), 2.0)]);
+        let ww = wiring_resistances(&wide, &IrSpec::default());
+        assert!(ww[0].henry < w[0].henry && ww[0].henry > 0.6 * w[0].henry, "width matters only a little: {} vs {}", ww[0].henry, w[0].henry);
+        // two half-length tracks end to end are one trace of the total length, not two short ones
+        let split = board(vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(100.0, 0.0, "U1", "1", "VCC", None)], vec![track(Side::Top, (0.0, 0.0), (50.0, 0.0), 0.25), track(Side::Top, (50.0, 0.0), (100.0, 0.0), 0.25)]);
+        let sp = wiring_resistances(&split, &IrSpec::default());
+        assert!((sp[0].henry - w[0].henry).abs() < 1e-12, "{} vs {}", sp[0].henry, w[0].henry);
+    }
+
+    #[test]
+    fn a_via_adds_about_a_nanohenry() {
+        let h = via_inductance(0.3);
+        assert!((0.8e-9..1.8e-9).contains(&h), "{h}");
     }
 
     #[test]

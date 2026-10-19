@@ -53,7 +53,7 @@ impl SchEditor {
     pub(super) fn signature(&self) -> String {
         let mut s = serde_json::to_string(&self.sch).unwrap_or_default();
         for w in &self.wiring {
-            s += &format!("|{}.{}={}", w.refdes, w.pin, w.ohm);
+            s += &format!("|{}.{}={}/{}", w.refdes, w.pin, w.ohm, w.henry);
         }
         s
     }

@@ -169,7 +169,7 @@ impl BoardEditor {
             }
         });
         ui.horizontal(|ui| {
-            if ui.button("シミュレーションに反映").on_hover_text("この基板の配線の抵抗を、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです").clicked() {
+            if ui.button("シミュレーションに反映").on_hover_text("この基板の配線の抵抗とインダクタンスを、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗 (DCから効く) とインダクタンス (ACや速い変化で効く。細く長い配線で約 1 nH/mm) が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです").clicked() {
                 self.post_layout_request = Some(true);
             }
             if ui.small_button("やめる").on_hover_text("配線の抵抗を入れない理想の回路に戻します").clicked() {
@@ -197,7 +197,7 @@ impl BoardEditor {
                 Some(w) => {
                     let v = w.drop_v.unwrap_or(0.0);
                     let col = if v >= 0.1 { egui::Color32::from_rgb(230, 70, 60) } else if v >= 0.03 { egui::Color32::from_rgb(220, 160, 40) } else { egui::Color32::from_rgb(90, 190, 110) };
-                    let line = format!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ)", nd.net, v * 1000.0, format_args!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0);
+                    let line = format!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ, {:.0} nH)", nd.net, v * 1000.0, format_args!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0, w.henry.unwrap_or(0.0) * 1e9);
                     let r = ui.colored_label(col, line);
                     r.on_hover_text(self.ir_detail(nd, &src));
                 }
@@ -218,8 +218,8 @@ impl BoardEditor {
 ", nd.amps, if nd.source_auto { " (自動で選んだ入口: コネクタがあればそこ、なければ最初のピン)" } else { "" });
         for p in &nd.pads {
             match p.ohm {
-                Some(r) => s += &format!("  {}.{}  {:.1} mΩ  {:.1} mV
-", p.refdes, p.pin, r * 1000.0, r * nd.amps * 1000.0),
+                Some(r) => s += &format!("  {}.{}  {:.1} mΩ  {:.1} mV  {:.1} nH
+", p.refdes, p.pin, r * 1000.0, r * nd.amps * 1000.0, p.henry.unwrap_or(0.0) * 1e9),
                 None => s += &format!("  {}.{}  つながっていません
 ", p.refdes, p.pin),
             }

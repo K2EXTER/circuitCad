@@ -155,6 +155,29 @@ board currents tran
     assert!((declared - vin["rms"].as_f64().unwrap()).abs() < 1e-3, "the RMS is what gets declared");
 }
 
+#[test]
+fn postlayout_adds_the_trace_inductance_to_ac() {
+    let head = "new
+add V 5 as=V1
+add R 2.2 as=R1
+net VIN V1.+ R1.1
+net GND V1.- R1.2
+value V1 \"0 AC 1\"
+board import
+board autoplace
+board route
+";
+    let (a, ok) = run(&format!("{head}board postlayout on
+ac 100k 100Meg ppd=4 probe=V(R1.1.wire)
+"));
+    assert!(ok, "{a:?}");
+    let pl = a.iter().find(|v| v["cmd"] == "board" && v.get("postlayout").is_some()).unwrap();
+    assert!(pl["largest"][0]["nanohenry"].as_f64().unwrap() > 3.0, "{pl}");
+    let per = &last(&a, "ac")["signals"]["V(R1.1.wire)"]["per_decade"];
+    let (lo, hi) = (per[0]["db"].as_f64().unwrap(), per[3]["db"].as_f64().unwrap());
+    assert!(hi < lo - 2.0, "the load pin loses gain at 100 MHz behind the trace: {lo} dB -> {hi} dB");
+}
+
 fn run_strict(script: &str) -> (Vec<Value>, bool) {
     let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
     let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))

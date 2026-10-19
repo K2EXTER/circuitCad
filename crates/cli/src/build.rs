@@ -330,7 +330,7 @@ impl Session {
         let wiring: Vec<sim_core::WiringR> = match (&self.board, self.post_layout) {
             (Some(b), true) => pcb_core::irdrop::wiring_resistances(b, &pcb_core::irdrop::IrSpec::default())
                 .into_iter()
-                .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm })
+                .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry })
                 .collect(),
             _ => vec![],
         };

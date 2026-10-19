@@ -317,14 +317,44 @@ fn wiring_resistance_sits_in_series_with_the_pin() {
     wire(&mut s, (12, 6), (0, 6));
     wire(&mut s, (0, 2), (0, 6));
     let w = [
-        WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 2200.0 },
-        WiringR { refdes: "R9".into(), pin: "1".into(), ohm: 1.0 }, // not in the schematic: ignored
+        WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 2200.0, henry: 0.0 },
+        WiringR { refdes: "R9".into(), pin: "1".into(), ohm: 1.0, henry: 0.0 }, // not in the schematic: ignored
     ];
     let res = dc_op(&from_schematic_with_wiring(&s, &w).unwrap()).unwrap();
     close(res.element("R2").unwrap().voltage, 12.0 * 2200.0 / (4700.0 + 2200.0 + 2200.0), 1e-9);
     // no wiring list: the same as from_schematic
     let plain = dc_op(&from_schematic_with_wiring(&s, &[]).unwrap()).unwrap();
     close(plain.element("R2").unwrap().voltage, 12.0 * 2200.0 / 6900.0, 1e-9);
+}
+
+#[test]
+fn wiring_inductance_matters_for_ac_and_not_for_dc() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "0 AC 1".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (12, 0), 1);
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), r2[0].1);
+    wire(&mut s, r2[1].1, (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    let w = |henry: f64| [WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 0.1, henry }];
+    let (flat, coil) = (from_schematic_with_wiring(&s, &w(0.0)).unwrap(), from_schematic_with_wiring(&s, &w(0.1)).unwrap());
+    assert!(coil.elements.iter().any(|e| e.name() == "R2.1.LW") && !flat.elements.iter().any(|e| e.name() == "R2.1.LW"));
+    let (d0, d1) = (dc_op(&flat).unwrap(), dc_op(&coil).unwrap());
+    close(d0.element("R2").unwrap().voltage, d1.element("R2").unwrap().voltage, 1e-9);
+    let at = |c: &Circuit| {
+        let r = ac_analysis(c, &AcSettings { fstart: 100e3, fstop: 100e3, sweep: AcSweep::Linear(2) }).unwrap();
+        r.signal("I(R2)").unwrap().mag()[0]
+    };
+    // R2 is 10 kohm; 0.1 H is 63 kohm at 100 kHz, so the current through R2 falls to about a third
+    let (m0, m1) = (at(&flat), at(&coil));
+    assert!(m1 < 0.5 * m0, "0.1 H in front of R2 cuts 100 kHz: {m0} -> {m1}");
 }
 
 #[test]
