@@ -219,3 +219,71 @@ fn mixed_signal_project_opens_with_its_routed_board() {
     let v = pcb_core::drc::check(b);
     assert!(v.is_empty(), "{:?}", v.iter().map(|x| &x.message).collect::<Vec<_>>());
 }
+
+/// Speed of the combined demo's transient (8 ms, 10 us steps): `cargo test -p app --release mixed_signal_speed -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn mixed_signal_speed() {
+    let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/mixed_signal.schjson")).unwrap();
+    let s: sch_core::Schematic = serde_json::from_str(&text).unwrap();
+    let c = sim_core::from_schematic(&s).unwrap();
+    let t0 = std::time::Instant::now();
+    let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 8e-3, tstep: 10e-6, uic: false });
+    let secs = t0.elapsed().as_secs_f64();
+    match r {
+        Ok(r) => println!("MIXED transient: {secs:.3} s, {} points, {} retries, {} rejected", r.time.len(), r.retries, r.rejected),
+        Err(e) => println!("MIXED transient failed after {secs:.3} s: {e:?}"),
+    }
+}
+
+/// The 555 oscillator of the combined demo against ngspice and against theory (T = 0.693 (R1 + 2 R2) C).
+/// `cargo test -p app --release mixed_signal_oscillator -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn mixed_signal_oscillator() {
+    let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/mixed_signal.schjson")).unwrap();
+    let s: sch_core::Schematic = serde_json::from_str(&text).unwrap();
+    let c = sim_core::from_schematic(&s).unwrap();
+    let t0 = std::time::Instant::now();
+    let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 8e-3, tstep: 10e-6, uic: false }).unwrap();
+    let ours_secs = t0.elapsed().as_secs_f64();
+    let osc = r.signal("V(OSC)").unwrap();
+    let hi = osc.values.iter().cloned().fold(f64::MIN, f64::max);
+    let lo = osc.values.iter().cloned().fold(f64::MAX, f64::min);
+    let mid = (hi + lo) / 2.0;
+    let cross = |t: &[f64], v: &[f64]| -> Vec<f64> {
+        let mut up = vec![];
+        for i in 1..v.len() {
+            if v[i - 1] < mid && v[i] >= mid {
+                up.push(t[i - 1] + (mid - v[i - 1]) / (v[i] - v[i - 1]) * (t[i] - t[i - 1]));
+            }
+        }
+        up
+    };
+    let periods = |u: &[f64]| -> Vec<f64> { u.windows(2).map(|w| w[1] - w[0]).collect() };
+    let up = cross(&r.time, &osc.values);
+    let p = periods(&up);
+    println!("OSC ours: swing {lo:.3}..{hi:.3}, {} rising edges, mean period {:.4} ms (first {:.4}, last {:.4}), {ours_secs:.2} s", up.len(), p.iter().sum::<f64>() / p.len().max(1) as f64 * 1e3, p.first().copied().unwrap_or(0.0) * 1e3, p.last().copied().unwrap_or(0.0) * 1e3);
+    // ngspice
+    let body = sch_core::to_spice_for(&s, "mixed", sch_core::Dialect::Ngspice);
+    let body = body.strip_suffix(".end\n").unwrap_or(&body).to_string();
+    let work = std::env::temp_dir().join("circuitcad_mixed_osc");
+    let _ = std::fs::create_dir_all(&work);
+    let data = work.join("osc.dat");
+    let deck = format!("{body}.options reltol=1e-4\n.control\nset noaskquit\nset wr_vecnames\ntran 10u 8m\nwrdata {} v(osc)\n.endc\n.end\n", data.display().to_string().replace('\\', "/"));
+    let cir = work.join("mixed.cir");
+    std::fs::write(&cir, deck).unwrap();
+    let exe = r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe";
+    let t1 = std::time::Instant::now();
+    let _ = std::process::Command::new(exe).arg("-b").arg(&cir).output().unwrap();
+    let ng_secs = t1.elapsed().as_secs_f64();
+    let Some((t, cols)) = crate::xcheck_tran::parse_wrdata(&std::fs::read_to_string(&data).unwrap_or_default()) else {
+        println!("ngspice gave no data");
+        return;
+    };
+    let v = &cols[0].1;
+    println!("OSC ngspice: swing {:.3}..{:.3}", v.iter().cloned().fold(f64::MAX, f64::min), v.iter().cloned().fold(f64::MIN, f64::max));
+    let up = cross(&t, v);
+    let p = periods(&up);
+    println!("OSC ngspice: {} rising edges, mean period {:.4} ms (first {:.4}, last {:.4}), {ng_secs:.2} s, {} points", up.len(), p.iter().sum::<f64>() / p.len().max(1) as f64 * 1e3, p.first().copied().unwrap_or(0.0) * 1e3, p.last().copied().unwrap_or(0.0) * 1e3, t.len());
+}

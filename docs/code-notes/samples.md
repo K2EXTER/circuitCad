@@ -17,3 +17,8 @@
 - サンプルは `docs/examples/bridge_rectifier.schjson`(生成は `write_rectifier_example`)、レッスン9がこれを使う。
 - 総合デモは `mixed_signal.schjson`(生成 `write_mixed_signal_example`、`tests/mixed.rs`。12V→逆接続ショットキー→LM7805→AMS1117、NE555(約680Hz)→74HC04で5Vに整形→74HC74×2の÷4カウンタ+パワーオンリセット+LED、NTC+LM393+2N3904の温度アラーム、LM358の単電源反転アンプ(×10)+RCローパス)。ベンチマーク兼READMEの画像用(`docs/images/mixed-signal-*.png`、`--tran 8m 10u --signals CLK,Q1,Q2,FILT` で撮る)。過渡解析(8ms・10µs刻み)は開発ビルドで約1.4秒。DC動作点はスイッチ幅の拡大(Widen)で求まり、-40〜100℃でも通る(テストで確認)。過渡解析はDCが求まらず「すべてゼロから」始める(555とカウンタは普通のこと)。構成を変えると 555+カウンタ+アラーム+アンプ をつなぐ組み合わせで DC が `Singular`/`NoConvergence` になることがあった(原因は「ニュートンの途中の反復で行列が特異になる」。`dc/newton.rs` の2回目以降の反復の特異は収束失敗として扱い、`solve_op` は他の戦略も試す)。
 - 総合デモの基板は `mixed_signal.ccproj`(回路図と、手で配線した基板のプロジェクト。部品41個・配線249本・表面のGNDベタ。`--drc`/`--3d`/`--order` などの基板用オプションは `.ccproj` にも効く)。READMEの基板・3D・発注の画像はこれから撮る(`tools/gen_screenshots.ps1`)。開けること・DRC違反が無いことは `tests/mixed.rs` が確かめる。
+
+### 総合デモの速さと発振周期(2026-10-19)
+`tests/mixed.rs` の `mixed_signal_speed`(過渡 8ms・10µs 刻みの所要時間と点数)と `mixed_signal_oscillator`(555 の発振周期を自前・ngspice・理論 `0.693(R1+2R2)C` で比べる)。どちらも `--ignored`。
+- 速さ: 解析の高速化(因数分解の使い回しなど)の前 2.75 秒 → 後 **1.6 秒**(2617 点、棄却 365 回、`cargo test -p app --release`)。同じ回路を ngspice(`reltol=1e-4`)で走らせた時間とほぼ同じ(1.65 秒)。
+- 555 の周期: 自前は **1.47 ms**(立ち上がり6回のうち最後の周期。理論 1.455 ms と 1% 以内、最初の周期は起動のぶん 1.92 ms)。素の ngspice 書き出し(`tran 10u 8m`、`uic` つきも)では発振が始まらず `OSC` が 0V のまま(起動の違い)。アプリの検算(`--xcheck … --tran`)では 33 ノード中 9 ノードがズレ(エッジのずれが周期の 5.4%、TH は自前11・ngspice1 とエッジの数が違う)。どちらの周期が正しいかは決めていない。
