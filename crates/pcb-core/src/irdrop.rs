@@ -797,25 +797,25 @@ mod tests {
         }
     }
 
-    /// Against the volume-filament reference (`tools/ref_inductance.py`; values copied from its output): the self inductance of a
-    /// trace within 5 % and the mutual inductance of a pair within 1.5 % over the cases below.
+    /// Against FastHenry2 3.6 (`tools/fasthenry_cases.py` inputs, 1 kHz, 12 x 4 filaments; values copied from `tools/fasthenry_results.csv`):
+    /// the self inductance of a trace within 1.5 % and the mutual inductance of a pair within 1 % over the cases below.
     #[test]
-    fn inductance_agrees_with_a_volume_filament_reference() {
+    fn inductance_agrees_with_fasthenry() {
         // (length, width, spacing, self nH, mutual nH)
         let cases = [
-            (100.0, 0.25, 2.5, 141.050, 68.154),
-            (100.0, 0.25, 1.0, 141.050, 86.269),
-            (100.0, 0.25, 0.5, 141.050, 100.357),
-            (100.0, 1.0, 5.0, 115.897, 54.832),
-            (30.0, 0.25, 5.0, 35.103, 9.869),
-            (30.0, 1.0, 2.5, 27.592, 13.640),
-            (10.0, 3.0, 6.0, 5.118, 0.0),
+            (100.0, 0.25, 2.5, 141.002, 68.095),
+            (100.0, 0.25, 1.0, 141.002, 86.221),
+            (100.0, 0.25, 0.5, 141.002, 100.315),
+            (100.0, 1.0, 5.0, 115.276, 54.759),
+            (30.0, 0.25, 5.0, 35.087, 9.851),
+            (30.0, 1.0, 2.5, 27.400, 13.616),
+            (10.0, 3.0, 6.0, 4.957, 0.0),
         ];
         for (l, w, s, l_ref, m_ref) in cases {
             let (l_ours, m_ours) = ours(l, w, s);
-            assert!((l_ours / l_ref - 1.0).abs() < 0.05, "self l={l} w={w}: {l_ours} vs {l_ref}");
+            assert!((l_ours / l_ref - 1.0).abs() < 0.015, "self l={l} w={w}: {l_ours} vs {l_ref}");
             if m_ref > 0.0 {
-                assert!((m_ours / m_ref - 1.0).abs() < 0.015, "mutual l={l} w={w} s={s}: {m_ours} vs {m_ref}");
+                assert!((m_ours / m_ref - 1.0).abs() < 0.01, "mutual l={l} w={w} s={s}: {m_ours} vs {m_ref}");
             }
         }
     }
