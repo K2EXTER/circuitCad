@@ -520,3 +520,188 @@ fn vendor_xcheck() {
 fn clean_name(n: &str) -> String {
     n.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '_' { c } else { '_' }).collect::<String>().to_ascii_lowercase()
 }
+
+/// Linear interpolation of a sampled signal at time `t`.
+fn interp(times: &[f64], values: &[f64], t: f64) -> f64 {
+    let i = times.partition_point(|x| *x <= t);
+    if i == 0 {
+        return values[0];
+    }
+    if i >= times.len() {
+        return *values.last().unwrap();
+    }
+    let (t0, t1) = (times[i - 1], times[i]);
+    if t1 <= t0 {
+        return values[i];
+    }
+    values[i - 1] + (values[i] - values[i - 1]) * (t - t0) / (t1 - t0)
+}
+
+/// Compare a transient run with ngspice's on the vendor bench: the first input pin gets a pulse (0 -> its level, 1 us delay, 6 us wide,
+/// 14 us period), the answer is every other non-supply pin over 20 us. A pin agrees when the largest difference is under 3 % of the
+/// signal's swing (at least 50 mV) plus 20 mV.
+/// `SPICE_MODEL_DIR=<dir> [NGSPICE=<exe>] [SPICE_XCHECK_N=<count>] [SPICE_XCHECK_ONLY=<name>] [SPICE_XCHECK_OUT=<csv>] cargo test -p sim-core vendor_xcheck_tran --release -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn vendor_xcheck_tran() {
+    let Ok(dir) = std::env::var("SPICE_MODEL_DIR") else { return };
+    let exe = std::env::var("NGSPICE").unwrap_or_else(|_| r"F:\Tools\ngspice\Spice64\bin\ngspice_con.exe".into());
+    let want: usize = std::env::var("SPICE_XCHECK_N").ok().and_then(|v| v.parse().ok()).unwrap_or(80);
+    let work = std::env::temp_dir().join("circuitcad_vendor_xcheck_tran");
+    let _ = std::fs::create_dir_all(&work);
+    let _ = std::fs::write(work.join(".spiceinit"), format!("set ngbehavior={}\n", std::env::var("NGBEHAVIOR").unwrap_or_else(|_| "ltpsa".into())));
+    let mut list = vec![];
+    files(std::path::Path::new(&dir), &mut list);
+    list.sort();
+    let mut cands: Vec<(u64, std::path::PathBuf, String, Vec<String>)> = vec![];
+    for f in &list {
+        let text = crate::decode_spice_text(&std::fs::read(f).unwrap_or_default());
+        for (name, ports) in subckts(&text).into_iter().take(6) {
+            if ports.iter().any(|p| role(p) == Role::Supply) && ports.iter().any(|p| role(p) == Role::Ground) && ports.iter().any(|p| role(p) == Role::Input) {
+                cands.push((fnv(&format!("{}{name}", f.display())), f.clone(), name, ports));
+            }
+        }
+    }
+    cands.sort_by_key(|c| c.0);
+    let only = std::env::var("SPICE_XCHECK_ONLY").ok();
+    let (mut matched, mut differ, mut ng_fail, mut tried) = (0, 0, 0, 0);
+    let mut csv = String::from("file,subckt,outcome,detail\n");
+    for (_, f, name, ports) in cands {
+        if tried >= want {
+            break;
+        }
+        if only.as_ref().is_some_and(|o| !o.eq_ignore_ascii_case(&name)) {
+            continue;
+        }
+        let rel = f.strip_prefix(&dir).unwrap_or(&f).to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+        let text = crate::decode_spice_text(&std::fs::read(&f).unwrap_or_default());
+        let first_in = ports.iter().position(|p| role(p) == Role::Input).unwrap();
+        let level = input_level(&ports[first_in]);
+        // our side
+        let (tx, rx) = mpsc::channel();
+        let (t2, n2, p2) = (text.clone(), name.clone(), ports.clone());
+        std::thread::spawn(move || {
+            let r = build_bench_text(&t2, &n2, &p2).and_then(|(mut c, final_text)| {
+                for e in c.elements.iter_mut() {
+                    if let Element::VSource { name, wave, .. } = e
+                        && *name == format!("Vi{first_in}")
+                    {
+                        *wave = Waveform::Pulse { v1: 0.0, v2: level, td: 1e-6, tr: 20e-9, tf: 20e-9, pw: 6e-6, per: 14e-6 };
+                    }
+                }
+                let r = crate::transient(&c, &crate::TranSettings { tstop: 20e-6, tstep: 40e-9, uic: false }).map_err(|e| format!("tran {e:?}"))?;
+                let sigs: Vec<(String, Vec<f64>)> = p2.iter().filter_map(|p| r.signal(&format!("V(p_{p})")).map(|s| (p.clone(), s.values.clone()))).collect();
+                Ok((final_text, r.time.clone(), sigs))
+            });
+            let _ = tx.send(r);
+        });
+        let Ok(ours) = rx.recv_timeout(Duration::from_secs(30)) else { continue };
+        let Ok((final_text, times, sigs)) = ours else { continue };
+        tried += 1;
+        let tag = format!("t{tried}");
+        let lib = work.join(format!("{tag}_lib.cir"));
+        std::fs::write(&lib, &final_text).unwrap();
+        let clean = |p: &str| -> String { p.chars().map(|c| match c { '+' => 'p', '-' => 'm', c if c.is_ascii_alphanumeric() => c, _ => '_' }).collect::<String>().to_ascii_lowercase() };
+        let node = |p: &str| if role(p) == Role::Ground { "0".to_string() } else { format!("p_{}", clean(p)) };
+        let mut deck = format!("* tran {name}\n.include \"{}\"\n", lib.display().to_string().replace('\\', "/"));
+        for (i, p) in ports.iter().enumerate() {
+            let n = node(p);
+            if n == "0" {
+                continue;
+            }
+            match role(p) {
+                Role::Supply => deck.push_str(&format!("Vp{i} {n} 0 5\n")),
+                Role::Input if i == first_in => deck.push_str(&format!("Vi{i} src_{i} 0 PULSE(0 {level} 1u 20n 20n 6u 14u)\nRi{i} src_{i} {n} 1k\n")),
+                Role::Input => deck.push_str(&format!("Vi{i} src_{i} 0 {}\nRi{i} src_{i} {n} 1k\n", input_level(p))),
+                _ => deck.push_str(&format!("Rl{i} {n} 0 10k\n")),
+            }
+        }
+        let outs: Vec<&String> = ports.iter().filter(|p| role(p) != Role::Ground).collect();
+        let data = work.join(format!("{tag}.dat"));
+        let _ = std::fs::remove_file(&data);
+        deck.push_str(&format!(
+            "X1 {} {name}\n.options reltol=1e-4\n.control\nset noaskquit\ntran 20n 20u\nwrdata {} {}\n.endc\n.end\n",
+            ports.iter().map(|p| node(p)).collect::<Vec<_>>().join(" "),
+            data.display().to_string().replace('\\', "/"),
+            outs.iter().map(|p| format!("v({})", node(p))).collect::<Vec<_>>().join(" ")
+        ));
+        let cir = work.join(format!("{tag}.cir"));
+        std::fs::write(&cir, deck).unwrap();
+        let mut child = std::process::Command::new(&exe)
+            .current_dir(&work)
+            .arg("-b")
+            .arg(&cir)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|e| panic!("ngspice を起動できません: {e}"));
+        let start = std::time::Instant::now();
+        let finished = loop {
+            match child.try_wait() {
+                Ok(Some(_)) => break true,
+                Ok(None) if start.elapsed() > Duration::from_secs(60) => {
+                    let _ = child.kill();
+                    break false;
+                }
+                _ => std::thread::sleep(Duration::from_millis(20)),
+            }
+        };
+        let log = child.wait_with_output().ok().map(|o| String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr)).unwrap_or_default();
+        let table: Vec<Vec<f64>> = std::fs::read_to_string(&data)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.split_whitespace().filter_map(|x| x.parse::<f64>().ok()).collect::<Vec<f64>>())
+            .filter(|r| r.len() >= 2 * outs.len())
+            .collect();
+        let (kind, detail) = if !finished || table.len() < 20 {
+            ng_fail += 1;
+            let why = log.lines().find(|l| l.to_ascii_lowercase().contains("error")).unwrap_or("no result").trim().to_string();
+            ("ngspice-fail", why.chars().take(100).collect::<String>())
+        } else {
+            let mut bad = vec![];
+            let mut worst = (0.0f64, String::new());
+            for (k, p) in outs.iter().enumerate() {
+                if role(p) == Role::Supply || (role(p) == Role::Input) {
+                    continue;
+                }
+                let Some((_, vals)) = sigs.iter().find(|(n, _)| n == *p) else { continue };
+                let (mut lo, mut hi) = (f64::MAX, f64::MIN);
+                let mut maxerr = 0.0f64;
+                for row in &table {
+                    let (t, b) = (row[2 * k], row[2 * k + 1]);
+                    // an edge a few tens of ns earlier or later is not a different answer: the best match within +-60 ns counts
+                    let a = (-12..=12).map(|j| interp(&times, vals, t + j as f64 * 5e-9)).min_by(|x, y| (x - b).abs().total_cmp(&(y - b).abs())).unwrap();
+                    lo = lo.min(b);
+                    hi = hi.max(b);
+                    maxerr = maxerr.max((a - b).abs());
+                }
+                if only.is_some() {
+                    let step = (table.len() / 14).max(1);
+                    for row in table.iter().step_by(step) {
+                        println!("SAMPLE {p:8} t={:9.3e} ours={:11.4e} ngspice={:11.4e}", row[2 * k], interp(&times, vals, row[2 * k]), row[2 * k + 1]);
+                    }
+                }
+                let tol = 0.03 * (hi - lo).max(0.05) + 0.02;
+                if maxerr > tol {
+                    bad.push(p.to_string());
+                }
+                if maxerr / tol > worst.0 {
+                    worst = (maxerr / tol, format!("{p} err={maxerr:.3e} swing={:.3e}", hi - lo));
+                }
+            }
+            if bad.is_empty() {
+                matched += 1;
+                ("match", String::new())
+            } else {
+                differ += 1;
+                ("differ", format!("{} of {} pins; worst {}", bad.len(), outs.len(), worst.1))
+            }
+        };
+        println!("{kind:16} {rel}:{name} {detail}");
+        csv.push_str(&format!("{rel},{name},{kind},{}\n", detail.replace(',', ";")));
+    }
+    println!("XCHECK-TRAN tried {tried}: match {matched}, differ {differ}, ngspice could not run {ng_fail}");
+    if let Ok(p) = std::env::var("SPICE_XCHECK_OUT") {
+        std::fs::write(p, csv).unwrap();
+    }
+}

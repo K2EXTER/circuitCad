@@ -26,6 +26,22 @@ pub struct DiodeModel {
     /// model says otherwise: a Schottky diode has about 0.69 and 2).
     pub eg: f64,
     pub xti: f64,
+    /// LTspice's piecewise-linear diode (`D(Ron= Roff= Vfwd= ...)`), used instead of the exponential junction when the card
+    /// gives `Vfwd` or `Ron`.
+    pub ideal: Option<IdealDiode>,
+}
+
+/// `I(v) = v/roff + soft(v - vfwd)/ron - soft(-v - vrev)/rrev`, where `soft(x) = (x + sqrt(x^2 + eps^2)) / 2` (a rounded ramp).
+#[derive(Clone, Debug, PartialEq)]
+pub struct IdealDiode {
+    pub ron: f64,
+    pub roff: f64,
+    pub vfwd: f64,
+    pub epsilon: f64,
+    /// Reverse breakdown voltage (positive; infinite = none), its resistance and the width of its knee.
+    pub vrev: f64,
+    pub rrev: f64,
+    pub revepsilon: f64,
 }
 
 impl DiodeModel {
@@ -37,7 +53,7 @@ impl DiodeModel {
 
 impl Default for DiodeModel {
     fn default() -> Self {
-        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0, isr: 0.0, nr: 2.0, eg: 1.11, xti: 3.0 }
+        Self { is: 1e-14, n: 1.0, rs: 0.0, bv: f64::INFINITY, ibv: 1e-3, cj0: 0.0, vj: 1.0, m: 0.5, fc: 0.5, tt: 0.0, isr: 0.0, nr: 2.0, eg: 1.11, xti: 3.0, ideal: None }
     }
 }
 

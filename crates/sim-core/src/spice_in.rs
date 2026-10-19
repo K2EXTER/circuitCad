@@ -2,7 +2,7 @@
 //! Supported elements: R C L V I E G D Q M S B. Anything else is reported, never silently ignored.
 
 use crate::expr::Expr;
-use crate::circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SwitchModel};
+use crate::circuit::{BjtModel, Circuit, DiodeModel, Element, IdealDiode, MosModel, SwitchModel};
 use crate::value::parse_value;
 use crate::waveform::parse_source_full;
 use std::collections::HashMap;
@@ -170,6 +170,18 @@ pub fn parse_model(line: &str) -> Result<(String, Model), String> {
                 nr: get("NR", 2.0),
                 eg: p.get("EG").copied().filter(|v| *v > 0.0).unwrap_or(1.11),
                 xti: get("XTI", 3.0),
+                ideal: (p.contains_key("VFWD") || p.contains_key("RON")).then(|| {
+                    let ron = get("RON", 1.0).max(1e-9);
+                    IdealDiode {
+                        ron,
+                        roff: get("ROFF", 1e12).max(1e-9),
+                        vfwd: get("VFWD", 0.0),
+                        epsilon: get("EPSILON", 0.0).max(1e-3),
+                        vrev: p.get("VREV").copied().filter(|v| *v > 0.0).unwrap_or(f64::INFINITY),
+                        rrev: get("RREV", ron).max(1e-9),
+                        revepsilon: get("REVEPSILON", 0.0).max(1e-3),
+                    }
+                }),
             }),
         )),
         t @ ("NMOS" | "PMOS") => Ok((
@@ -602,6 +614,25 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                         m.is *= area;
                         m.rs /= area;
                         m.cj0 *= area;
+                        if let Some(id) = &m.ideal {
+                            // LTspice's piecewise-linear diode as a behavioural current from the anode to the cathode
+                            let top = if read_currents.contains(&t[0].to_ascii_lowercase()) {
+                                let mid = c.node(&format!("{name}.i"));
+                                c.add(Element::vdc(&name, a, mid, 0.0));
+                                mid
+                            } else {
+                                a
+                            };
+                            let soft = |x: String, eps: f64| format!("(({x})+sqrt(({x})*({x})+{:e}))/2", eps * eps);
+                            let mut text = format!("V(na,nk)/({:e})+{}/({:e})", id.roff, soft(format!("V(na,nk)-({:e})", id.vfwd), id.epsilon), id.ron);
+                            if id.vrev.is_finite() {
+                                text.push_str(&format!("-{}/({:e})", soft(format!("-V(na,nk)-({:e})", id.vrev), id.revepsilon), id.rrev));
+                            }
+                            let mut node_of = |nm: &str| if nm.eq_ignore_ascii_case("na") { top } else { k };
+                            let expr = Expr::parse(&text, &mut node_of, &|nm| nm.to_string()).map_err(|e| format!("{name}: {e}"))?;
+                            c.add(Element::BSource { name: format!("{name}.d"), p: top, n: k, voltage: false, expr });
+                            continue;
+                        }
                         if read_currents.contains(&t[0].to_ascii_lowercase()) {
                             // an expression reads I(D..): a 0 V source in series carries (and names) that current
                             let mid = c.node(&format!("{name}.i"));

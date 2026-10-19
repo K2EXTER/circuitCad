@@ -196,3 +196,7 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 - **不具合: パラメータつき `.model` の名前の衝突**(`spice_flat.rs expand`): 1つのサブサーキットを値を変えて2回呼ぶ(`VSW_BASIC_GEN` を RON=2 と RON=0.857)と、中の `.model _VSWITCH …{RON}…` が同じ名前で2枚できて、片方の値が使われていた。2つ目以降の呼び出しでは、パラメータつきの `.model` の名前に経路をつけて区別する(1つ目は元の名前のまま: 内側のサブサーキットがその外側のモデルを使うことがあるため)。`LM5112` が合った。
 - 残るズレ12: MOSFET の LEVEL 3(`74HCU04`)、PSpice のダイオード(`TC4421`)、にらみ合いの比較器(`UCC28C42`、`LM5122`)など。
 - **不具合: 節点名の大文字小文字**(`circuit.rs Circuit::node`): SPICE の節点名は大文字小文字を区別しない(`VCC` と `vcc` は同じ)のに、自前は別々の節点にしていた(`TSZ181` で `VAL_VDEP_SINK` と `val_vdep_sink` が別の節点になり、片方が宙に浮いて 632V、もう片方が 0V)。名前の表を小文字の鍵にした(表示は最初の綴り)。`DcResult::voltage` も大文字小文字を無視して探す。一致 62 → 64(150個中)、ズレ 10。
+
+### 過渡の検算と LTspice の理想ダイオード(2026-10-19)
+- `tests_vendor_bulk.rs vendor_xcheck_tran`(環境変数は `vendor_xcheck` と同じ。`SPICE_XCHECK_ONLY` で1つ指定すると波形を14点ずつ並べる): 最初の入力ピンに 0→レベルのパルス(1µs 遅れ、幅 6µs、周期 14µs)を入れて 20µs の過渡を ngspice と比べる。ngspice は `wrdata` で書き出す。ピンごとに、差の最大が「波形の振れ幅の 3%(最小 50mV)+20mV」以内なら一致。エッジが数十 ns ずれるのは別の答えではないので、±60ns の範囲でいちばん近い点と比べる。結果(98個): 一致 33、ズレ 14、ngspice が読めない 51(60個では一致 26/ズレ 8)。
+- **LTspice の区分線形ダイオード** `D(Ron= Roff= Vfwd= [epsilon= Vrev= Rrev= revepsilon=])` (`DiodeModel.ideal`、`spice_in.rs` の `'D'` の枝): `Vfwd` か `Ron` があるカードは、指数関数の接合ではなく、B 電流源 `I = V/Roff + soft(V−Vfwd)/Ron − soft(−V−Vrev)/Rrev`(`soft(x) = (x+√(x²+ε²))/2`、ε は最小 1mV)にする。これまで `Vfwd=25 Ron=0.65` の TVS ダイオードも 0.7V で導通する普通のダイオードとして読んでいた。公開モデル集に 169 枚ある。ピークの定格(`Vpk` など)は見ない。結果: 検算の一致 64 → 65(`TC4421`)。

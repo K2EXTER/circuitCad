@@ -1114,3 +1114,18 @@ fn node_names_are_not_case_sensitive() {
     // Mid, MID and mid are one node: a divider
     assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
 }
+
+#[test]
+fn an_ltspice_ideal_diode_model_conducts_from_vfwd_with_resistance_ron() {
+    // Vfwd = 5, Ron = 1: 10 V through 1k into the diode and a 1 k load... the diode drops 5 V + a little: current ~ (10-5)/(1k+1k+1)
+    let t = |model: &str| format!(".subckt T a b gnd\nR1 a m 1k\nD1 m b DX\nRl b gnd 1k\n.model DX D({model})\n.ends T");
+    let v = run(&t("Ron=1 Roff=10Meg Vfwd=5"), "T", &["a", "b", "gnd"], 10.0, "b");
+    assert!((v - 2.5).abs() < 0.01, "{v}");
+    // below Vfwd nothing flows (only the 10 Meg leak)
+    let v = run(&t("Ron=1 Roff=10Meg Vfwd=5"), "T", &["a", "b", "gnd"], 4.0, "b");
+    assert!(v < 0.001, "{v}");
+    // reverse breakdown at Vrev = 20 V: a -30 V supply conducts back through the diode
+    let v = run(&t("Ron=1 Roff=10Meg Vfwd=5 Vrev=20"), "T", &["a", "b", "gnd"], -30.0, "b");
+    // -30 - 2 Vb = -20 (the diode clamps its reverse voltage at about Vrev): Vb = -5
+    assert!((v + 5.0).abs() < 0.05, "{v}");
+}
