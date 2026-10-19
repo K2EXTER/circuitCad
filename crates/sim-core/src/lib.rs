@@ -29,6 +29,9 @@ mod spice_in;
 mod spice_flat;
 mod stepmetrics;
 mod temperature;
+#[cfg(test)]
+pub(crate) mod tran;
+#[cfg(not(test))]
 mod tran;
 mod value;
 mod waveform;

@@ -131,7 +131,9 @@ pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, diode_q, diode_recomb, exp_
 #[cfg(test)]
 pub(crate) use devices::depletion;
 pub(crate) use mna::{Ctx, Dyn};
-pub(crate) use newton::{Attempt, Fail, REFAC};
+pub(crate) use newton::{Attempt, Fail};
+#[cfg(test)]
+pub(crate) use newton::REFAC;
 
 // ------------------------------------------------------------------ public entry
 

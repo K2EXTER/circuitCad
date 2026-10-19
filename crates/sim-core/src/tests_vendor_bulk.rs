@@ -741,9 +741,48 @@ fn tran_profile() {
             }
         }
     }
+    if let Some(x) = std::env::var("SPICE_LTE").ok().and_then(|v| v.parse::<f64>().ok()) {
+        let mut o = crate::options::options();
+        o.lte_reltol = x;
+        crate::options::set_options(o);
+    }
     let t0 = std::time::Instant::now();
     let r = crate::transient(&c, &crate::TranSettings { tstop: 20e-6, tstep: 40e-9, uic: false });
     let total = t0.elapsed().as_secs_f64();
     let rf = crate::dc::REFAC.with(|c| c.get());
+    // why the steps are as small as they are
+    let stats = crate::tran::STATS.with(|st| st.borrow().clone());
+    let cm = crate::dc::compile(&c);
+    let cap_name = |idx: usize, ind: bool| -> String {
+        for e in &cm.ce {
+            match e {
+                crate::dc::Ce::C { name, idx: i, .. } if !ind && *i == idx => return name.clone(),
+                crate::dc::Ce::L { name, idx: i, .. } if ind && *i == idx => return name.clone(),
+                crate::dc::Ce::D { name, cap: Some(i), .. } if !ind && *i == idx => return format!("{name}(junction)"),
+                crate::dc::Ce::Q { name, cap: Some(i), .. } if !ind && (*i == idx || *i + 1 == idx) => return format!("{name}(junction)"),
+                _ => {}
+            }
+        }
+        format!("#{idx}")
+    };
+    let mut by: std::collections::BTreeMap<u8, (usize, f64)> = Default::default();
+    let mut who: std::collections::BTreeMap<String, usize> = Default::default();
+    for (_, h, why, idx, ind) in &stats {
+        let e = by.entry(*why).or_insert((0, 0.0));
+        e.0 += 1;
+        e.1 += h;
+        if *why == 0 {
+            *who.entry(cap_name(*idx, *ind)).or_insert(0) += 1;
+        }
+    }
+    println!("STEPS by limit (1 breakpoint, 2 after rejection, 3 backward Euler retry, 4 at the largest step, 0 error control): {by:?}");
+    let mut who: Vec<_> = who.into_iter().collect();
+    who.sort_by(|a, b| b.1.cmp(&a.1));
+    println!("ERROR CONTROL worst element: {:?}", &who[..who.len().min(8)]);
+    let mut hs: Vec<f64> = stats.iter().map(|x| x.1).collect();
+    hs.sort_by(|a, b| a.total_cmp(b));
+    if !hs.is_empty() {
+        println!("STEP SIZES min {:.2e} median {:.2e} 90% {:.2e} max {:.2e}", hs[0], hs[hs.len() / 2], hs[hs.len() * 9 / 10], hs[hs.len() - 1]);
+    }
     println!("PROFILE {top}: {:?} total {total:.3} s, refactor {} / full {}", r.map(|r| (r.time.len(), r.retries, r.rejected)), rf[0], rf[1]);
 }

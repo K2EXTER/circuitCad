@@ -811,14 +811,19 @@ impl Ctx<'_> {
         let (l, c, r, g) = (l / n as f64, c / n as f64, r / n as f64, g / n as f64);
         let node = |i: usize| if i == 0 { a1.clone() } else if i == n { a2.clone() } else { format!("{prefix}{head}_n{i}") };
         let mut lines = Vec::new();
+        // A resistor of 20 Z0 across every inductor damps the ringing of the lumped ladder at its highest modes (they would otherwise
+        // never die away, and the step control spends its time resolving them) and leaves DC and the signal band alone.
+        let damp = 20.0 * (l / c).sqrt();
         for i in 0..n {
-            if r > 0.0 {
+            let from = if r > 0.0 {
                 let mid = format!("{prefix}{head}_m{i}");
                 lines.push(format!("R{head}_{i}{suffix} {} {mid} {r:e}", node(i)));
-                lines.push(format!("L{head}_{i}{suffix} {mid} {} {l:e}", node(i + 1)));
+                mid
             } else {
-                lines.push(format!("L{head}_{i}{suffix} {} {} {l:e}", node(i), node(i + 1)));
-            }
+                node(i)
+            };
+            lines.push(format!("L{head}_{i}{suffix} {from} {} {l:e}", node(i + 1)));
+            lines.push(format!("R{head}_d{i}{suffix} {from} {} {damp:e}", node(i + 1)));
         }
         for i in 0..=n {
             let k = if i == 0 || i == n { 0.5 } else { 1.0 };

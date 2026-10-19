@@ -112,6 +112,13 @@ fn divided_difference(pts: &[(f64, f64)]) -> f64 {
     d[0]
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Test-only diagnostics: which capacitor / inductor limited the last step, and why each step was as long as it was.
+    pub(crate) static WORST: std::cell::Cell<(usize, bool)> = const { std::cell::Cell::new((0, false)) };
+    pub(crate) static STATS: std::cell::RefCell<Vec<(f64, f64, u8, usize, bool)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 /// One earlier accepted point: time, capacitor voltages, inductor currents.
 type Sample = (f64, Vec<f64>, Vec<f64>);
 
@@ -126,20 +133,28 @@ fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], il: &[f64], trap: b
     let past = &hist[hist.len() - need..];
     let h = t_new - past[need - 1].0;
     let mut worst: f64 = 0.0;
-    let mut check = |get: &dyn Fn(&Sample) -> f64, new: f64, abs: f64| {
+    let mut worst_at: (usize, bool) = (0, false);
+    let mut check = |get: &dyn Fn(&Sample) -> f64, new: f64, abs: f64, cur_at: (usize, bool)| {
         let mut pts: Vec<(f64, f64)> = past.iter().map(|p| (p.0, get(p))).collect();
         pts.push((t_new, new));
         let dd = divided_difference(&pts).abs();
         let err = if trap { h.powi(3) * dd / 2.0 } else { h * h * dd };
         let old = pts[need - 1].1;
-        worst = worst.max(err / (rel * new.abs().max(old.abs()) + abs));
+        let r = err / (rel * new.abs().max(old.abs()) + abs);
+        if r > worst {
+            worst = r;
+            worst_at = cur_at;
+        }
     };
     for (k, &new) in cv.iter().enumerate() {
-        check(&|p| p.1[k], new, LTE_ABS_V);
+        check(&|p| p.1[k], new, LTE_ABS_V, (k, false));
     }
     for (k, &new) in il.iter().enumerate() {
-        check(&|p| p.2[k], new, LTE_ABS_I);
+        check(&|p| p.2[k], new, LTE_ABS_I, (k, true));
     }
+    #[cfg(test)]
+    WORST.with(|w| w.set(worst_at));
+    let _ = worst_at;
     Some(worst)
 }
 
@@ -379,6 +394,8 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                 _ => {}
             }
         }
+        #[cfg(test)]
+        STATS.with(|st| st.borrow_mut().push((t, h, if lands_on_bp { 1 } else if rejects > 0 { 2 } else if retried { 3 } else if h >= s.tstep * 0.999 { 4 } else { 0 }, WORST.with(|w| w.get()).0, WORST.with(|w| w.get()).1)));
         t = if lands_on_bp { bps[bp_idx] } else { t + h };
         // a flip-flop or latch that changed: its outputs jump at the next step, so restart like at a source corner
         let seq_changed = cm.has_seq() && cm.seq_update(Some(&x), &att.x);
