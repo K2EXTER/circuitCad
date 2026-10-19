@@ -1,0 +1,138 @@
+//! Board commands: new, import, autoplace, route, drc, status, save, open, fab.
+
+use crate::session::{obj, opt, options, Session};
+use crate::Res;
+use pcb_core::autoroute::{autoroute, RouteOptions};
+use pcb_core::model::Board;
+use pcb_core::netlist::{self, NetlistNet, NetlistPart};
+use serde_json::{json, Value};
+
+const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
+
+impl Session {
+    pub fn board_cmd(&mut self, args: &[String]) -> Res {
+        let Some(sub) = args.first() else { return Err("board new|import|autoplace|route|drc|status|save|open|fab".into()) };
+        let rest = &args[1..];
+        match sub.to_ascii_lowercase().as_str() {
+            "new" => {
+                let size = match rest {
+                    [] => DEFAULT_SIZE,
+                    [w, h] => (num(w)?, num(h)?),
+                    _ => return Err("board new [WIDTH HEIGHT]  (mm)".into()),
+                };
+                self.board = Some(Board::new("board", size.0, size.1));
+                Ok(obj(json!({"width": size.0, "height": size.1})))
+            }
+            "import" => {
+                let (parts, nets) = self.netlist_of();
+                if parts.is_empty() {
+                    return Err("the schematic has no parts to import".into());
+                }
+                let board = self.board.get_or_insert_with(|| Board::new("board", DEFAULT_SIZE.0, DEFAULT_SIZE.1));
+                // library parts bring their own footprint
+                for c in self.sch.components.iter().filter(|c| c.custom.is_some()) {
+                    if let Some(def) = self.lib.iter().find(|d| d.footprint_name() == c.footprint)
+                        && let Ok(fp) = def.footprint()
+                    {
+                        board.add_footprint(fp);
+                    }
+                }
+                let rep = netlist::import(board, &parts, &nets);
+                Ok(obj(json!({"added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings})))
+            }
+            "autoplace" => {
+                let board = self.board_mut()?;
+                let r = pcb_core::autoplace::autoplace(board)?;
+                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height})))
+            }
+            "route" => {
+                let (_, kv) = options(rest);
+                let only = opt(&kv, "net").map(str::to_string);
+                let board = self.board_mut()?;
+                let rep = autoroute(board, &RouteOptions::default(), only.as_deref());
+                let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
+                Ok(obj(json!({"routed": rep.routed, "failed": failed, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+            }
+            "drc" => {
+                let board = self.board_mut()?;
+                let v = pcb_core::drc::check(board);
+                let list: Vec<Value> = v.iter().take(60).map(|x| json!({"message": x.message, "at": [x.at.x, x.at.y]})).collect();
+                Ok(obj(json!({"violations": v.len(), "shown": list.len(), "list": list})))
+            }
+            "status" => {
+                let board = self.board_mut()?;
+                let unrouted = pcb_core::ratsnest::ratsnest(board).len();
+                let drc = pcb_core::drc::check(board).len();
+                Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "drc_violations": drc})))
+            }
+            "save" => {
+                let f = rest.first().ok_or("board save FILE.pcbjson")?;
+                let board = self.board_mut()?;
+                let text = serde_json::to_string_pretty(&*board).map_err(|e| e.to_string())?;
+                std::fs::write(f, text).map_err(|e| format!("{f}: {e}"))?;
+                Ok(obj(json!({"file": f})))
+            }
+            "open" => {
+                let f = rest.first().ok_or("board open FILE.pcbjson")?;
+                let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+                self.board = Some(serde_json::from_str::<Board>(&text).map_err(|e| format!("{f}: {e}"))?);
+                Ok(obj(json!({"file": f})))
+            }
+            "fab" => {
+                let dir = std::path::Path::new(rest.first().ok_or("board fab DIR")?);
+                let board = self.board_mut()?;
+                std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+                let mut files = vec![];
+                for (name, data) in pcb_core::export::fab_files(board).into_iter().chain(pcb_core::assembly::assembly_files(board)) {
+                    std::fs::write(dir.join(&name), data).map_err(|e| e.to_string())?;
+                    files.push(name);
+                }
+                let zip = pcb_core::export::zip_bytes(board).map_err(|e| e.to_string())?;
+                let zip_name = format!("{}_gerber.zip", board.name);
+                std::fs::write(dir.join(&zip_name), zip).map_err(|e| e.to_string())?;
+                files.push(zip_name);
+                Ok(obj(json!({"dir": dir.display().to_string(), "files": files})))
+            }
+            other => Err(format!("unknown board command '{other}'")),
+        }
+    }
+
+    fn board_mut(&mut self) -> Result<&mut Board, String> {
+        self.board.as_mut().ok_or_else(|| "there is no board yet (use 'board import' or 'board new' first)".to_string())
+    }
+
+    /// The parts and nets of the schematic as the board import sees them (same rules as the app).
+    fn netlist_of(&self) -> (Vec<NetlistPart>, Vec<NetlistNet>) {
+        let sch = &self.sch;
+        let parts = sch
+            .components
+            .iter()
+            .filter(|c| !c.kind.is_power_symbol())
+            .map(|c| NetlistPart { refdes: c.refdes.clone(), value: c.value.clone(), footprint: c.footprint_name() })
+            .collect();
+        let nets = sch_core::extract(sch)
+            .into_iter()
+            .map(|n| NetlistNet {
+                name: n.name,
+                // simulation-only pins (sensor stimulus inputs) have no pad
+                pins: n
+                    .pins
+                    .into_iter()
+                    .filter(|p| {
+                        !sch.components
+                            .iter()
+                            .find(|c| c.refdes == p.refdes)
+                            .and_then(|c| c.custom.as_ref())
+                            .is_some_and(|s| s.pins.iter().any(|sp| sp.sim_only && sp.number == p.pin))
+                    })
+                    .map(|p| (p.refdes, p.pin))
+                    .collect(),
+            })
+            .collect();
+        (parts, nets)
+    }
+}
+
+fn num(s: &str) -> Result<f64, String> {
+    s.parse::<f64>().ok().filter(|v| *v > 0.0 && v.is_finite()).ok_or_else(|| format!("'{s}' is not a positive size in mm"))
+}

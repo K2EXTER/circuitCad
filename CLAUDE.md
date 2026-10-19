@@ -8,6 +8,7 @@
 ```
 cargo test --workspace        # 全テスト (CIと同じ)
 cargo clippy --workspace --all-targets   # CIはエラーを禁止 (警告は可)
+cargo run -p cli -- script.ccad   # 画面なしで実行 (docs/cli.md)
 cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj を開ける: args.rs apply_args)
 ```
 
@@ -20,6 +21,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON (`*.part.json`: 記号+パッケージ+SPICEモデル)。`examples/` が同梱部品。`kicad.rs` はKiCadの `.kicad_sym`/`.kicad_mod` を `PartDef` に変換、`passive.rs` はチップ部品のテンプレート、`diode.rs` はダイオードの IS/N/RS をグラフの点から決める計算、`thru_hole.rs` はリード付き部品の穴・パッド・ピッチの目安、`passive.rs` にはコイル・抵抗のインピーダンス当てはめと温度係数の当てはめも |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
+| `cli` | `ccad`: 画面なしの操作窓口。1行1コマンドのスクリプトで、名前ベースの回路作成・ERC・解析・基板・製造データを実行し、答えを1行1個のJSONで返す (AIエージェント・自動化向け。使い方 `docs/cli.md`、詳細 `docs/code-notes/cli.md`) |
 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`
 - `dc/` 動作点 (`build.rs` 回路→コンパイル済み形 / `devices.rs` 素子の式 / `mna.rs` 行列 / `newton.rs` ニュートン反復 / `linalg.rs` 疎LU)

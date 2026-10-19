@@ -1,0 +1,156 @@
+//! Script state and the command table.
+
+use crate::{Out, Res};
+use part_lib::PartDef;
+use pcb_core::model::Board;
+use sch_core::Schematic;
+use serde_json::{json, Value};
+
+pub const HELP: &str = "\
+Commands (one per line, '#' starts a comment; every answer is one JSON line)
+
+ Schematic
+  new                                   empty schematic
+  open FILE.schjson / save FILE.schjson
+  parts [WORDS]                         search the part library (name, category, description)
+  part NAME                             pins (number + name) and whether it has a simulation model
+  add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
+        TYPE: R C L D LED V NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
+  value REF VALUE                       change the value
+  net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name
+                                        (GND pins of a part that share a name are all connected)
+  remove REF
+  list                                  parts, pins and the net of every pin
+  erc                                   electrical rule check (message + hint)
+  spice                                 the SPICE netlist text
+ Simulation
+  dc                                    operating point: node voltages, element currents
+  tran TSTOP TSTEP [probe=V(out),I(R1)] [samples=6] [uic]
+ Board
+  board new [W H]                       empty board (mm), default 60 40
+  board import                          parts and nets from the schematic (creates the board if needed)
+  board autoplace
+  board route [net=NAME]
+  board drc
+  board status
+  board save FILE.pcbjson / board open FILE.pcbjson
+  board fab DIR                         Gerber, drill, BOM, placement and the zip
+";
+
+pub struct Session {
+    pub sch: Schematic,
+    pub lib: Vec<PartDef>,
+    pub board: Option<Board>,
+    /// Where the next part goes: (x, y, tallest part of the row).
+    pub cursor: (i32, i32, i32),
+    pub lib_errors: Vec<String>,
+}
+
+pub fn split_words(line: &str) -> Vec<String> {
+    let mut out = vec![];
+    let mut cur = String::new();
+    let mut quoted = false;
+    let mut any = false;
+    for c in line.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                any = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if any || !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                    any = false;
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if any || !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Split `key=value` words from the positional ones.
+pub fn options(words: &[String]) -> (Vec<String>, Vec<(String, String)>) {
+    let mut pos = vec![];
+    let mut kv = vec![];
+    for w in words {
+        match w.split_once('=') {
+            Some((k, v)) if !k.is_empty() && k.chars().all(|c| c.is_ascii_alphabetic()) => kv.push((k.to_ascii_lowercase(), v.to_string())),
+            _ => pos.push(w.clone()),
+        }
+    }
+    (pos, kv)
+}
+
+pub fn opt<'a>(kv: &'a [(String, String)], key: &str) -> Option<&'a str> {
+    kv.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+}
+
+pub fn obj(v: Value) -> Out {
+    match v {
+        Value::Object(m) => m,
+        _ => Out::new(),
+    }
+}
+
+impl Session {
+    pub fn new(lib_dir: Option<std::path::PathBuf>) -> Self {
+        let dir = lib_dir.unwrap_or_else(part_lib::default_dir);
+        // like the app: the bundled parts are copied to the library folder the first time
+        let _ = part_lib::install_examples(&dir);
+        let (lib, lib_errors) = part_lib::load_dir(&dir);
+        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors }
+    }
+
+    pub fn run(&mut self, w: &[String]) -> Res {
+        let args = &w[1..];
+        match w[0].to_ascii_lowercase().as_str() {
+            "new" => {
+                self.sch = Schematic::default();
+                self.cursor = (8, 8, 0);
+                Ok(obj(json!({})))
+            }
+            "open" => {
+                let f = args.first().ok_or("open FILE.schjson")?;
+                let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+                let mut v: Value = serde_json::from_str(&text).map_err(|e| format!("{f}: {e}"))?;
+                // the app keeps its spec table in the same file; this tool does not use it
+                if let Value::Object(m) = &mut v {
+                    m.remove("specs");
+                }
+                self.sch = serde_json::from_value(v).map_err(|e| format!("{f}: {e}"))?;
+                self.cursor = self.cursor_below();
+                Ok(obj(json!({"parts": self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count()})))
+            }
+            "save" => {
+                let f = args.first().ok_or("save FILE.schjson")?;
+                let text = serde_json::to_string_pretty(&self.sch).map_err(|e| e.to_string())?;
+                std::fs::write(f, text).map_err(|e| format!("{f}: {e}"))?;
+                Ok(obj(json!({"file": f})))
+            }
+            "parts" => Ok(self.parts(args)),
+            "part" => self.part(args),
+            "add" => self.add(args),
+            "value" => self.set_value(args),
+            "net" => self.net(args),
+            "remove" => self.remove(args),
+            "list" => Ok(self.list()),
+            "erc" => Ok(self.erc()),
+            "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
+            "dc" => self.dc(),
+            "tran" => self.tran(args),
+            "board" => self.board_cmd(args),
+            "help" => Ok(obj(json!({"text": HELP}))),
+            other => Err(format!("unknown command '{other}' (try 'help')")),
+        }
+    }
+
+    /// A cursor below everything already on the sheet (after `open`).
+    fn cursor_below(&self) -> (i32, i32, i32) {
+        let y = self.sch.components.iter().flat_map(|c| c.pins()).map(|(_, p)| p.1).max().unwrap_or(0);
+        (8, y + 14, 0)
+    }
+}
