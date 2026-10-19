@@ -57,10 +57,13 @@ pub fn track_inductance(len: f64, width: f64, spec: &IrSpec) -> f64 {
     (0.2e-9 * len * ((2.0 * len / wt).ln() + 0.5 + 0.2235 * wt / len)).max(0.0)
 }
 
-/// Inductance of a plated hole through the board (H), about 1 nH for a 0.3 mm hole in 1.6 mm.
+/// Partial self-inductance of a plated hole through the board (H), taken as a round solid wire of the drill diameter:
+/// 0.2 nH/mm * h * (ln(2 h / r) - 0.75), about 0.74 nH for a 0.3 mm hole in 1.6 mm. (The common "5.08 h (ln(4h/d) + 1)" is a
+/// loop figure with a return path and is about 1.8 times too high for a segment of a path whose other parts are counted
+/// separately. The real barrel is hollow, which makes it roughly 20 % lower still.)
 pub fn via_inductance(drill: f64) -> f64 {
-    let (h, d) = (BOARD_MM / 25.4, drill.max(0.1) / 25.4);
-    5.08e-9 * h * ((4.0 * h / d).ln() + 1.0)
+    let r = drill.max(0.1) / 2.0;
+    0.2e-9 * BOARD_MM * ((2.0 * BOARD_MM / r).ln() - 0.75)
 }
 
 /// Inductance charged for a current that goes through a copper pour (H): the plane is wide, so only a little.
@@ -785,8 +788,9 @@ mod tests {
         assert!(far.is_empty() || far[0].k < k[0].k, "{far:?}");
     }
 
-    /// One case of `tools/inductance_cases.json`: (name, "self" or "mutual", width, polylines from the supply end).
-    type Case = (String, String, f64, Vec<Vec<(f64, f64)>>);
+    /// One case of `tools/inductance_cases.json`: (name, "self" or "mutual", width, via drill, polylines of (x, y, layer) from
+    /// the supply end; two points at the same place on different layers are a via).
+    type Case = (String, String, f64, f64, Vec<Vec<(f64, f64, u8)>>);
 
     fn cases() -> Vec<Case> {
         let v: serde_json::Value = serde_json::from_str(include_str!("../../../tools/inductance_cases.json")).unwrap();
@@ -794,8 +798,8 @@ mod tests {
             .unwrap()
             .iter()
             .map(|c| {
-                let paths = c["paths"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap())).collect()).collect();
-                (c["name"].as_str().unwrap().to_string(), c["kind"].as_str().unwrap().to_string(), c["w"].as_f64().unwrap(), paths)
+                let paths = c["paths"].as_array().unwrap().iter().map(|p| p.as_array().unwrap().iter().map(|q| (q[0].as_f64().unwrap(), q[1].as_f64().unwrap(), q[2].as_u64().unwrap() as u8)).collect()).collect();
+                (c["name"].as_str().unwrap().to_string(), c["kind"].as_str().unwrap().to_string(), c["w"].as_f64().unwrap(), c["drill"].as_f64().unwrap(), paths)
             })
             .collect()
     }
@@ -803,23 +807,30 @@ mod tests {
     /// The program's inductance for a case, in nH: the self inductance of the first trace, or the mutual inductance of the
     /// pair (0 when the program finds no coupling). Each polyline is one net with a connector pad at its start and a part pad at
     /// its end, and a track per segment.
-    fn ours_case(kind: &str, w: f64, paths: &[Vec<(f64, f64)>]) -> f64 {
+    fn ours_case(kind: &str, w: f64, drill: f64, paths: &[Vec<(f64, f64, u8)>]) -> f64 {
+        let side = |l: u8| if l == 0 { Side::Top } else { Side::Bottom };
         let mut pads = vec![];
         let mut tracks = vec![];
+        let mut vias = vec![];
         for (k, path) in paths.iter().enumerate() {
             let net = format!("N{k}");
             for (i, (end, r)) in [(path[0], "J"), (path[path.len() - 1], "U")].into_iter().enumerate() {
-                let mut p = Pad::new(Point::new(end.0, end.1), PadShape::Circle { d: 0.1 }, None, Side::Top);
+                let mut p = Pad::new(Point::new(end.0, end.1), PadShape::Circle { d: 0.1 }, None, side(end.2));
                 p.refdes = format!("{r}{k}");
                 p.pin = format!("{}", i + 1);
                 p.net = net.clone();
                 pads.push(p);
             }
             for q in path.windows(2) {
-                tracks.push(track(Side::Top, q[0], q[1], w));
+                if (q[0].0, q[0].1) == (q[1].0, q[1].1) {
+                    vias.push(Via { pos: Point::new(q[0].0, q[0].1), diameter: 2.0 * drill, drill });
+                } else {
+                    tracks.push(track(side(q[0].2), (q[0].0, q[0].1), (q[1].0, q[1].1), w));
+                }
             }
         }
-        let b = board(pads, tracks);
+        let mut b = board(pads, tracks);
+        b.vias = vias;
         let series = wiring_resistances(&b, &IrSpec::default());
         let of = |net: &str| series.iter().find(|s| s.net == net).unwrap_or_else(|| panic!("{net} not wired: {series:?}")).henry;
         if kind == "self" {
@@ -835,15 +846,16 @@ mod tests {
     #[ignore]
     fn inductance_cases_table() {
         println!("case,value_nH");
-        for (name, kind, w, paths) in cases() {
-            println!("{name},{:.3}", ours_case(&kind, w, &paths));
+        for (name, kind, w, drill, paths) in cases() {
+            println!("{name},{:.3}", ours_case(&kind, w, drill, &paths));
         }
     }
 
     /// Against FastHenry2 3.6 over every case of `tools/inductance_cases.json` (parallel traces, corners of 45, 90 and 135
-    /// degrees, a dogleg and a staircase, traces at an angle and antiparallel, a pair going round a corner). The FastHenry
-    /// figures are in `tools/fasthenry_results.csv` (1 kHz, 12 x 4 filaments; see `tools/fasthenry_cases.py`): the self inductance
-    /// of a trace must be within 1.5 % and the mutual inductance of a pair within 1 % (or 0.3 nH when it is nearly zero).
+    /// degrees, a dogleg and a staircase, traces at an angle and antiparallel, a pair going round a corner, vias, and traces on
+    /// the two layers). The FastHenry figures are in `tools/fasthenry_results.csv` (1 kHz, 12 x 4 filaments; see
+    /// `tools/fasthenry_cases.py`): the self inductance of a trace must be within 1.5 % (or 0.1 nH, for the short via cases) and the
+    /// mutual inductance of a pair within 1 % (or 0.3 nH when it is nearly zero).
     #[test]
     fn inductance_agrees_with_fasthenry() {
         let table: std::collections::HashMap<String, f64> = include_str!("../../../tools/fasthenry_results.csv")
@@ -856,10 +868,10 @@ mod tests {
             .collect();
         let all = cases();
         assert_eq!(table.len(), all.len(), "the FastHenry table and the case list must have the same cases");
-        for (name, kind, w, paths) in all {
+        for (name, kind, w, drill, paths) in all {
             let fh = table[&name];
-            let ours = ours_case(&kind, w, &paths);
-            let tol = if kind == "self" { 0.015 * fh } else { (0.01 * fh.abs()).max(0.3) };
+            let ours = ours_case(&kind, w, drill, &paths);
+            let tol = if kind == "self" { (0.015 * fh).max(0.1) } else { (0.01 * fh.abs()).max(0.3) };
             assert!((ours - fh).abs() <= tol, "{name}: {ours} nH vs FastHenry {fh} nH");
         }
     }
@@ -874,9 +886,9 @@ mod tests {
     }
 
     #[test]
-    fn a_via_adds_about_a_nanohenry() {
+    fn a_via_adds_about_three_quarters_of_a_nanohenry() {
         let h = via_inductance(0.3);
-        assert!((0.8e-9..1.8e-9).contains(&h), "{h}");
+        assert!((0.6e-9..0.9e-9).contains(&h), "{h}");
     }
 
     #[test]

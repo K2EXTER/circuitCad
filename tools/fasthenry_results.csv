@@ -43,3 +43,16 @@ L pair outside s=2.5,56.328,56.382
 L pair inside s=0.5,85.962,85.432
 L pair outside s=0.5,87.026,86.490
 two L pair far s=10,24.458,24.503
+via d=0.3 with 1 mm stubs,1.883,1.850
+via d=0.6 with 1 mm stubs,1.686,1.628
+via d=1 with 1 mm stubs,1.554,1.464
+top 30 + via + bottom 30 straight,78.936,78.964
+top 50 + via + bottom 50 back (U-turn),64.664,64.651
+top 50 + via + bottom 50 back with 2.5 mm jog,78.137,78.159
+top 50 + via + bottom 50 sideways,127.892,127.973
+stacked pair l=100,76.793,76.869
+stacked pair l=100 s=2.5,64.732,64.792
+stacked pair l=100 s=10,41.556,41.636
+stacked antiparallel l=100,-76.793,-76.869
+stacked crossing 90deg,0.000,0.000
+stacked w=1 l=30,15.864,16.003
