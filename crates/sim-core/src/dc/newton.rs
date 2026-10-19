@@ -15,6 +15,13 @@ thread_local! {
     static DEADLINE: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
 }
 
+thread_local! {
+    pub(crate) static REFAC: std::cell::Cell<[u64; 2]> = const { std::cell::Cell::new([0; 2]) };
+}
+
+/// Systems below this many unknowns are always factored from scratch.
+const REFACTOR_MIN_SIZE: usize = 60;
+
 pub(crate) enum Fail {
     Singular,
     NoConv,
@@ -78,6 +85,31 @@ impl Compiled {
         Err(Fail::NoConv)
     }
 
+    /// Solve `rows * x = b`: with the pivot order of the last factorisation when the matrix has the same pattern and the answer
+    /// is accurate (`linalg::residual_ok`); otherwise by a full factorisation, which also makes the next plan.
+    fn solve_reusing(&self, n: usize, rows: Vec<Vec<(usize, f64)>>, b: Vec<f64>) -> Result<Vec<f64>, SimError> {
+        // Only for the large systems, where the factorisation is most of the time: in a small circuit a bistable flip (a multivibrator)
+        // has an almost singular matrix, and what Newton's iteration does there depends on the pivots chosen at that moment.
+        let plan = if n >= REFACTOR_MIN_SIZE { self.plan.borrow().clone() } else { None };
+        let rf = plan.as_ref().and_then(|sym| linalg::refactor(sym, &rows));
+        if let Some(f) = rf {
+            let mut x = b.clone();
+            f.solve(&mut x);
+            if x.iter().all(|v| v.is_finite()) && linalg::residual_ok(&rows, &x, &b) {
+                REFAC.with(|c| c.set([c.get()[0] + 1, c.get()[1]]));
+                return Ok(x);
+            }
+        }
+        REFAC.with(|c| c.set([c.get()[0], c.get()[1] + 1]));
+        let (f, sym) = linalg::factor_sym(n, rows)?;
+        if n >= REFACTOR_MIN_SIZE {
+            *self.plan.borrow_mut() = Some(std::rc::Rc::new(sym));
+        }
+        let mut x = b;
+        f.solve(&mut x);
+        Ok(x)
+    }
+
     /// One solve is exact for a linear circuit. The matrix depends only on gmin and the
     /// integration step, so its factorisation is reused while those stay the same.
     pub(super) fn solve_linear(&self, x0: Vec<f64>, mut vj: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
@@ -115,7 +147,12 @@ impl Compiled {
         let n_node_unknowns = self.n_nodes - 1;
         // the previous point, its Newton step, its residual, its junction state and the fraction taken
         let mut prev: Option<(Vec<f64>, Vec<f64>, f64, Vec<f64>, f64)> = None;
-        for it in 1..=crate::options::options().max_iter {
+        // The plain iteration of a transient step that has not converged after a few dozen iterations is not going to: the
+        // caller shrinks the step (or tries the line search below, which keeps the full limit). Running it on to the DC limit of
+        // 150 was most of the iterations of a transient with many failing steps.
+        let plain = !backtrack && damp == 1.0 && max_dx.is_infinite();
+        let limit = if ctx.dynamic.is_some() && plain { crate::options::options().max_iter.min(40) } else { crate::options::options().max_iter };
+        for it in 1..=limit {
             if DEADLINE.with(|d| d.get()).is_some_and(|d| std::time::Instant::now() > d) {
                 return Err(Fail::NoConv);
             }
@@ -155,8 +192,8 @@ impl Compiled {
             // after the first iteration a singular matrix is the iterate's fault, not the circuit's: an overshoot into
             // a junction at several volts of forward bias puts 1e20 S on the diagonal and the pivots vanish. Report it
             // as "no convergence" so that the damped retries and the other strategies get their turn.
-            match factor(m.n, m.rows) {
-                Ok(f) => f.solve(&mut xn),
+            match self.solve_reusing(m.n, m.rows, xn.clone()) {
+                Ok(x) => xn = x,
                 Err(_) if it > 1 => return Err(Fail::NoConv),
                 Err(_) => return Err(Fail::Singular),
             }

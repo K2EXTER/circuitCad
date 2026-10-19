@@ -151,7 +151,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. } | Ce::Cq { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
     let seq_state = std::cell::RefCell::new(vec![0.0; n_seq]);
-    Compiled { seq_state, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), ce }
+    Compiled { seq_state, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

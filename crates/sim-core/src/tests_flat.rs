@@ -1129,3 +1129,34 @@ fn an_ltspice_ideal_diode_model_conducts_from_vfwd_with_resistance_ron() {
     // -30 - 2 Vb = -20 (the diode clamps its reverse voltage at about Vrev): Vb = -5
     assert!((v + 5.0).abs() < 0.05, "{v}");
 }
+
+#[test]
+fn a_large_nonlinear_ladder_solves_with_the_reused_factorisation() {
+    // 90 sections (more than the size above which the pivot order is reused): R from node to node, C to ground, a diode at the end.
+    let mut c = Circuit::new();
+    let first = c.node("n0");
+    c.add(Element::VSource { name: "Vs".into(), p: first, n: 0, wave: Waveform::Pulse { v1: 0.0, v2: 3.0, td: 1e-6, tr: 1e-6, tf: 1e-6, pw: 1.0, per: 2.0 }, ac: None });
+    let mut prev = first;
+    for i in 1..=90 {
+        let n = c.node(&format!("n{i}"));
+        c.add(Element::Resistor { name: format!("R{i}"), a: prev, b: n, r: 100.0 });
+        c.add(Element::Capacitor { name: format!("C{i}"), a: n, b: 0, c: 1e-9 });
+        prev = n;
+    }
+    c.add(Element::Diode { name: "D1".into(), a: prev, k: 0, model: DiodeModel::default() });
+    c.add(Element::Resistor { name: "Rl".into(), a: prev, b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 400e-6, tstep: 2e-6, uic: false }).unwrap();
+    // settled: the diode and the 10 k load share what is left after the 9 k of series resistance
+    let last = *r.signal("V(n90)").unwrap().values.last().unwrap();
+    let dc = {
+        let mut c2 = c.clone();
+        for e in c2.elements.iter_mut() {
+            if let Element::VSource { wave, .. } = e {
+                *wave = Waveform::Dc(3.0);
+            }
+        }
+        dc_op(&c2).unwrap().voltage("n90").unwrap()
+    };
+    assert!((last - dc).abs() < 2e-3, "transient end {last} vs DC {dc}");
+    assert!(dc > 0.4 && dc < 0.8, "the diode clamps the end near its forward voltage: {dc}");
+}

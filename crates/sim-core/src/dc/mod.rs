@@ -106,6 +106,8 @@ pub(crate) struct Compiled {
     /// Factorisations of the linear system keyed by (gmin, dynamic step); a few are kept because
     /// the step shrinks to land on source corners and then returns to the nominal value.
     cache: std::cell::RefCell<Vec<(FactorKey, std::rc::Rc<Factor>)>>,
+    /// The pivot order and fill pattern of the last full factorisation (see `linalg::refactor`).
+    plan: std::cell::RefCell<Option<std::rc::Rc<linalg::Symbolic>>>,
     pub(crate) ce: Vec<Ce>,
     /// The stored state (0 or 1) of every `Ce::Seq`, changed only between solves.
     pub(crate) seq_state: std::cell::RefCell<Vec<f64>>,
@@ -129,7 +131,7 @@ pub(crate) use devices::{bjt_eval, bjt_qbc, bjt_qbe, diode_q, diode_recomb, exp_
 #[cfg(test)]
 pub(crate) use devices::depletion;
 pub(crate) use mna::{Ctx, Dyn};
-pub(crate) use newton::{Attempt, Fail};
+pub(crate) use newton::{Attempt, Fail, REFAC};
 
 // ------------------------------------------------------------------ public entry
 

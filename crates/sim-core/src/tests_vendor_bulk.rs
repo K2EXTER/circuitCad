@@ -565,6 +565,7 @@ fn vendor_xcheck_tran() {
     cands.sort_by_key(|c| c.0);
     let only = std::env::var("SPICE_XCHECK_ONLY").ok();
     let (mut matched, mut differ, mut ng_fail, mut tried) = (0, 0, 0, 0);
+    let mut times_log: Vec<(f64, f64)> = vec![];
     let mut csv = String::from("file,subckt,outcome,detail\n");
     for (_, f, name, ports) in cands {
         if tried >= want {
@@ -589,14 +590,16 @@ fn vendor_xcheck_tran() {
                         *wave = Waveform::Pulse { v1: 0.0, v2: level, td: 1e-6, tr: 20e-9, tf: 20e-9, pw: 6e-6, per: 14e-6 };
                     }
                 }
+                let t0 = std::time::Instant::now();
                 let r = crate::transient(&c, &crate::TranSettings { tstop: 20e-6, tstep: 40e-9, uic: false }).map_err(|e| format!("tran {e:?}"))?;
+                let ours_secs = t0.elapsed().as_secs_f64();
                 let sigs: Vec<(String, Vec<f64>)> = p2.iter().filter_map(|p| r.signal(&format!("V(p_{p})")).map(|s| (p.clone(), s.values.clone()))).collect();
-                Ok((final_text, r.time.clone(), sigs))
+                Ok((final_text, r.time.clone(), sigs, ours_secs, r.time.len()))
             });
             let _ = tx.send(r);
         });
         let Ok(ours) = rx.recv_timeout(Duration::from_secs(30)) else { continue };
-        let Ok((final_text, times, sigs)) = ours else { continue };
+        let Ok((final_text, times, sigs, ours_secs, our_points)) = ours else { continue };
         tried += 1;
         let tag = format!("t{tried}");
         let lib = work.join(format!("{tag}_lib.cir"));
@@ -646,6 +649,7 @@ fn vendor_xcheck_tran() {
                 _ => std::thread::sleep(Duration::from_millis(20)),
             }
         };
+        let ng_secs = start.elapsed().as_secs_f64();
         let log = child.wait_with_output().ok().map(|o| String::from_utf8_lossy(&o.stdout).into_owned() + &String::from_utf8_lossy(&o.stderr)).unwrap_or_default();
         let table: Vec<Vec<f64>> = std::fs::read_to_string(&data)
             .unwrap_or_default()
@@ -701,11 +705,45 @@ fn vendor_xcheck_tran() {
                 ("differ", format!("{} of {} pins; worst {}", bad.len(), outs.len(), worst.1))
             }
         };
+        if kind == "match" || kind == "differ" {
+            println!("TIME {name:30} ours {ours_secs:8.4} s ({our_points} points)   ngspice {ng_secs:8.4} s (process incl. start-up)");
+            times_log.push((ours_secs, ng_secs));
+        }
         println!("{kind:16} {rel}:{name} {detail}");
         csv.push_str(&format!("{rel},{name},{kind},{}\n", detail.replace(',', ";")));
+    }
+    if !times_log.is_empty() {
+        let mut o: Vec<f64> = times_log.iter().map(|x| x.0).collect();
+        let mut g: Vec<f64> = times_log.iter().map(|x| x.1).collect();
+        o.sort_by(|a, b| a.total_cmp(b));
+        g.sort_by(|a, b| a.total_cmp(b));
+        println!("TIMES median ours {:.4} s, ngspice {:.4} s; slowest ours {:.3} s, ngspice {:.3} s; total ours {:.2} s, ngspice {:.2} s", o[o.len() / 2], g[g.len() / 2], o.last().unwrap(), g.last().unwrap(), o.iter().sum::<f64>(), g.iter().sum::<f64>());
     }
     println!("XCHECK-TRAN tried {tried}: match {matched}, differ {differ}, ngspice could not run {ng_fail}");
     if let Ok(p) = std::env::var("SPICE_XCHECK_OUT") {
         std::fs::write(p, csv).unwrap();
     }
+}
+
+#[test]
+#[ignore]
+fn tran_profile() {
+    let (Ok(dir), Ok(file), Ok(top)) = (std::env::var("SPICE_MODEL_DIR"), std::env::var("SPICE_DUMP_FILE"), std::env::var("SPICE_DUMP_TOP")) else { return };
+    let text = crate::decode_spice_text(&std::fs::read(std::path::Path::new(&dir).join(file)).unwrap());
+    let ports = subckts(&text).into_iter().find(|(n, _)| *n == top).map(|(_, p)| p).unwrap_or_default();
+    let mut c = build_bench(&text, &top, &ports).unwrap();
+    if let Some(first) = ports.iter().position(|p| role(p) == Role::Input) {
+        for e in c.elements.iter_mut() {
+            if let Element::VSource { name, wave, .. } = e
+                && *name == format!("Vi{first}")
+            {
+                *wave = Waveform::Pulse { v1: 0.0, v2: input_level(&ports[first]), td: 1e-6, tr: 20e-9, tf: 20e-9, pw: 6e-6, per: 14e-6 };
+            }
+        }
+    }
+    let t0 = std::time::Instant::now();
+    let r = crate::transient(&c, &crate::TranSettings { tstop: 20e-6, tstep: 40e-9, uic: false });
+    let total = t0.elapsed().as_secs_f64();
+    let rf = crate::dc::REFAC.with(|c| c.get());
+    println!("PROFILE {top}: {:?} total {total:.3} s, refactor {} / full {}", r.map(|r| (r.time.len(), r.retries, r.rejected)), rf[0], rf[1]);
 }
