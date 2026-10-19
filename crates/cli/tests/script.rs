@@ -214,3 +214,11 @@ fn spec_needs_a_fresh_analysis_of_the_current_circuit() {
     assert_eq!(specs[1]["target"], "A");
     assert!(specs[2]["pass"].is_null(), "an edit clears the answer: {}", specs[2]);
 }
+
+#[test]
+fn calc_refuses_an_si_suffix_on_an_input_that_is_already_in_milli_or_kilo_units() {
+    let (a, ok) = run("calc led 9 2 10m\n");
+    assert!(!ok && a[0]["error"].as_str().unwrap().contains("plain number"), "{a:?}");
+    let (_, ok) = run("calc rc 1k 100n\ncalc led 9 2 10\n");
+    assert!(ok);
+}

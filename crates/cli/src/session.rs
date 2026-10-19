@@ -39,6 +39,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         gain and phase per decade, -3 dB frequency, phase margin
   spec KIND TARGET LO HI [at=Hz]        pass / fail of the last dc / tran / ac answer against a range ('-' = no limit).
                                         'spec' alone lists the kinds (dc_voltage, tran_pp, ac_cutoff, ...)
+                                        TARGET: dc_voltage = net name (MID); dc_current = part (D1, amps: 8m 12m);
+                                        tran_* / ac_* = signal name as the answer shows it (V(OUT)); at= takes 1k, 10k ...
  Board
   board new [W H]                       empty board (mm), default 60 40
   board import                          parts and nets from the schematic (creates the board if needed)

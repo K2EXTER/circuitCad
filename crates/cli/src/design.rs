@@ -13,10 +13,10 @@ const CALCS: &[(&str, &str, &[&str], Run)] = &[
     ("led", "series resistor for an LED", &["supply_V", "led_forward_V", "current_mA"], |v| sim_core::led_resistor(v[0], v[1], v[2])),
     ("divider", "two-resistor voltage divider (R1 on top, R2 below)", &["vin_V", "vout_V", "r2_ohm"], |v| sim_core::divider(v[0], v[1], v[2])),
     ("rc", "resistor of an RC filter for a cut-off frequency", &["cutoff_Hz", "capacitor_F"], |v| sim_core::rc_filter(v[0], v[1])),
-    ("regulator", "around a 78xx linear regulator (capacitors, dissipation)", &["vin_V", "vout_V", "current_mA"], |v| sim_core::regulator(v[0], v[1], v[2])),
+    ("regulator", "around a 78xx linear regulator: capacitors, power lost as heat and efficiency (use 'heat' for temperature and heat sink)", &["vin_V", "vout_V", "current_mA"], |v| sim_core::regulator(v[0], v[1], v[2])),
     (
         "heat",
-        "temperature of a linear regulator and the heat sink it needs",
+        "junction temperature of a linear regulator and the heat sink it needs (needs the thermal data sheet numbers)",
         &["vin_V", "vout_V", "current_mA", "theta_ja_C_per_W", "theta_jc_C_per_W", "ambient_C", "tj_max_C"],
         |v| sim_core::heat_design(v[0], v[1], v[2], v[3], v[4], v[5], v[6]),
     ),
@@ -46,6 +46,10 @@ const CALCS: &[(&str, &str, &[&str], Run)] = &[
     ("zener", "series resistor of a zener regulator", &["vin_V", "vz_V", "load_mA", "iz_min_mA"], |v| sim_core::zener_regulator(v[0], v[1], v[2], v[3])),
 ];
 
+fn round6(x: f64) -> f64 {
+    format!("{x:.6e}").parse().unwrap_or(x)
+}
+
 fn lower(s: &str) -> String {
     s.to_ascii_lowercase()
 }
@@ -66,6 +70,11 @@ impl Session {
         }
         let mut v = vec![];
         for (name, w) in inputs.iter().zip(&args[1..]) {
+            // current_mA, gbw_kHz, rds_on_mohm ...: the number is already in the prefixed unit, so '10m' would silently mean 0.01 mA
+            let unit = name.rsplit('_').next().unwrap_or("");
+            if unit.len() > 1 && (unit.starts_with('m') || unit.starts_with('k')) && w.chars().last().is_some_and(|c| c.is_ascii_alphabetic()) {
+                return Err(format!("{name} is a plain number already in {unit} (write {} for 10 {unit}), not a value with an SI suffix: '{w}' was refused", "10"));
+            }
             v.push(sim_core::parse_value(w).ok_or_else(|| format!("{name}: '{w}' is not a number (write 5, 3.3, 10k, 100n ...)"))?);
         }
         let out = run(&v)?;
@@ -88,7 +97,7 @@ impl Session {
         let r = sim_core::ac_analysis(&c, &sim_core::AcSettings { fstart: f0, fstop: f1, sweep: sim_core::AcSweep::Decade(ppd) }).map_err(|e| e.to_string())?;
         let at = |f: f64, db: &[f64], ph: &[f64]| {
             let i = r.freq.iter().enumerate().min_by(|a, b| (a.1 / f).ln().abs().total_cmp(&(b.1 / f).ln().abs())).map(|(i, _)| i).unwrap_or(0);
-            json!({"hz": r.freq[i], "db": db[i], "phase_deg": ph[i]})
+            json!({"hz": round6(r.freq[i]), "db": db[i], "phase_deg": ph[i]})
         };
         let mut sigs = serde_json::Map::new();
         for s in r.signals.iter().filter(|s| !probes.is_empty() && probes.iter().any(|p| lower(&s.name) == *p)) {
