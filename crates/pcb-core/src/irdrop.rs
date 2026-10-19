@@ -517,42 +517,73 @@ const MAX_COUPLINGS: usize = 200;
 /// Smaller couplings are left out.
 const MIN_K: f64 = 0.03;
 
-/// The pieces of a path: midpoint (x, y, z), direction vector (mm) and the width.
-fn pieces(path: &[PathSeg]) -> Vec<([f64; 3], [f64; 2], f64)> {
+/// A short straight piece of a path: where it starts, its vector (mm), its height and the trace width.
+struct Piece {
+    from: [f64; 2],
+    v: [f64; 2],
+    z: f64,
+    width: f64,
+}
+
+fn pieces(path: &[PathSeg]) -> Vec<Piece> {
     let total: f64 = path.iter().map(|s| s.a.dist(s.b)).sum();
     let step = (total / 60.0).clamp(0.3, 2.0);
     let mut out = vec![];
     for s in path {
         let len = s.a.dist(s.b);
         let n = (len / step).ceil().max(1.0) as usize;
-        let (dx, dy) = ((s.b.x - s.a.x) / n as f64, (s.b.y - s.a.y) / n as f64);
+        let v = [(s.b.x - s.a.x) / n as f64, (s.b.y - s.a.y) / n as f64];
         for i in 0..n {
-            let t = (i as f64 + 0.5) / n as f64;
-            out.push(([s.a.x + (s.b.x - s.a.x) * t, s.a.y + (s.b.y - s.a.y) * t, s.z], [dx, dy], s.width));
+            out.push(Piece { from: [s.a.x + v[0] * i as f64, s.a.y + v[1] * i as f64], v, z: s.z, width: s.width });
         }
     }
     out
 }
 
-/// Mutual inductance (H) of two paths: 1e-7 H/m * sum of dl1 . dl2 / r over pairs of pieces. The distance is softened by
-/// the geometric mean distance of a trace cross-section (0.2235 (w + t)), which also keeps the sum finite.
+/// Mutual inductance (H) of two straight, parallel filaments `d` apart that cover the axial ranges [0, a] and [lo, hi] (mm):
+/// 0.1 nH * (F(hi) - F(hi - a) - F(lo) + F(lo - a)) with F(z) = z asinh(z / d) - sqrt(z^2 + d^2) (Grover).
+fn parallel_mutual(a: f64, lo: f64, hi: f64, d: f64) -> f64 {
+    let f = |z: f64| z * (z / d).asinh() - (z * z + d * d).sqrt();
+    0.1e-9 * (f(hi) - f(hi - a) - f(lo) + f(lo - a))
+}
+
+/// Mutual inductance (H) of two paths, summed over pairs of their pieces. Parallel pieces use the exact formula for two
+/// filaments at the distance of the traces (softened by the geometric mean distance of a cross-section, 0.2235 (w + t),
+/// which also keeps it finite); pieces at an angle use 1e-7 H/m * dl1 . dl2 / r between their midpoints.
 fn mutual(a: &[PathSeg], b: &[PathSeg], spec: &IrSpec) -> f64 {
     let (pa, pb) = (pieces(a), pieces(b));
     let t = spec.thickness_um / 1000.0;
-    let mut sum = 0.0;
-    for (ma, da, wa) in &pa {
-        for (mb, db, wb) in &pb {
-            let dot = da[0] * db[0] + da[1] * db[1];
-            if dot == 0.0 {
+    let mut total = 0.0;
+    for x in &pa {
+        let la = (x.v[0] * x.v[0] + x.v[1] * x.v[1]).sqrt();
+        if la < 1e-12 {
+            continue;
+        }
+        let u = [x.v[0] / la, x.v[1] / la];
+        for y in &pb {
+            let lb = (y.v[0] * y.v[0] + y.v[1] * y.v[1]).sqrt();
+            if lb < 1e-12 {
                 continue;
             }
-            let g = 0.2235 * (0.5 * (wa + wb) + t);
-            let d2 = (ma[0] - mb[0]).powi(2) + (ma[1] - mb[1]).powi(2) + (ma[2] - mb[2]).powi(2);
-            sum += dot / (d2 + g * g).sqrt();
+            let g = 0.2235 * (0.5 * (x.width + y.width) + t);
+            let (rx, ry) = (y.from[0] - x.from[0], y.from[1] - x.from[1]);
+            let cross = (x.v[0] * y.v[1] - x.v[1] * y.v[0]) / (la * lb);
+            let dz = x.z - y.z;
+            if cross.abs() < 1e-6 {
+                let (p0, p1) = (rx * u[0] + ry * u[1], (rx + y.v[0]) * u[0] + (ry + y.v[1]) * u[1]);
+                let perp = rx * u[1] - ry * u[0];
+                let d = (perp * perp + dz * dz + g * g).sqrt();
+                let sign = if x.v[0] * y.v[0] + x.v[1] * y.v[1] >= 0.0 { 1.0 } else { -1.0 };
+                total += sign * parallel_mutual(la, p0.min(p1), p0.max(p1), d);
+            } else {
+                let (mx, my) = (rx + 0.5 * y.v[0] - 0.5 * x.v[0], ry + 0.5 * y.v[1] - 0.5 * x.v[1]);
+                let dot = x.v[0] * y.v[0] + x.v[1] * y.v[1];
+                // mm * mm / mm = mm; 1e-7 H/m = 1e-10 H per mm
+                total += 1e-10 * dot / (mx * mx + my * my + dz * dz + g * g).sqrt();
+            }
         }
     }
-    // mm * mm / mm = mm, and 1e-7 H/m = 1e-10 H per mm of that sum
-    1e-10 * sum
+    total
 }
 
 /// The couplings between the pads of `series` (from `wiring_resistances`). Pads of the same net are not coupled: their
@@ -721,6 +752,72 @@ mod tests {
         assert!(k[0].k > 0.4 && k[0].k < 0.9, "{k:?}");
         let far = wiring_couplings(&pair(20.0), &IrSpec::default());
         assert!(far.is_empty() || far[0].k < k[0].k, "{far:?}");
+    }
+
+    /// Two parallel traces of length `l` and width `w`, `s` between centres, read from the left: (self inductance of the supply
+    /// trace, mutual inductance of the pair), both in nH.
+    fn ours(l: f64, w: f64, s: f64) -> (f64, f64) {
+        let d = (0.8 * s).min(1.6);
+        let mk = |x: f64, y: f64, r: &str, pin: &str, net: &str| {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Circle { d }, None, Side::Top);
+            p.refdes = r.into();
+            p.pin = pin.into();
+            p.net = net.into();
+            p
+        };
+        let b = board(
+            vec![mk(0.0, 0.0, "J1", "1", "VCC"), mk(l, 0.0, "U1", "1", "VCC"), mk(0.0, s, "J1", "2", "GND"), mk(l, s, "U1", "2", "GND")],
+            vec![track(Side::Top, (0.0, 0.0), (l, 0.0), w), track(Side::Top, (0.0, s), (l, s), w)],
+        );
+        let series = wiring_resistances(&b, &IrSpec::default());
+        let k = wiring_couplings(&series, &IrSpec::default());
+        let m = k.first().map_or(0.0, |c| c.k * (series[0].henry * series[1].henry).sqrt());
+        (series[0].henry * 1e9, m * 1e9)
+    }
+
+    /// `cargo test -p pcb-core inductance_table -- --ignored --nocapture`: the program's figures for the cases of
+    /// `ref_inductance.py` (an independent volume-filament reference), as `case,value_nH` lines.
+    #[test]
+    #[ignore]
+    fn inductance_table() {
+        println!("case,value_nH");
+        for l in [10.0, 30.0, 100.0] {
+            for w in [0.25, 1.0, 3.0] {
+                println!("self l={l} w={w},{:.3}", ours(l, w, 6.0).0);
+            }
+        }
+        for l in [30.0, 100.0] {
+            for w in [0.25, 1.0] {
+                for s in [0.5, 1.0, 2.5, 5.0, 10.0] {
+                    if s > w {
+                        println!("mutual l={l} w={w} s={s},{:.3}", ours(l, w, s).1);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Against the volume-filament reference (`tools/ref_inductance.py`; values copied from its output): the self inductance of a
+    /// trace within 5 % and the mutual inductance of a pair within 1.5 % over the cases below.
+    #[test]
+    fn inductance_agrees_with_a_volume_filament_reference() {
+        // (length, width, spacing, self nH, mutual nH)
+        let cases = [
+            (100.0, 0.25, 2.5, 141.050, 68.154),
+            (100.0, 0.25, 1.0, 141.050, 86.269),
+            (100.0, 0.25, 0.5, 141.050, 100.357),
+            (100.0, 1.0, 5.0, 115.897, 54.832),
+            (30.0, 0.25, 5.0, 35.103, 9.869),
+            (30.0, 1.0, 2.5, 27.592, 13.640),
+            (10.0, 3.0, 6.0, 5.118, 0.0),
+        ];
+        for (l, w, s, l_ref, m_ref) in cases {
+            let (l_ours, m_ours) = ours(l, w, s);
+            assert!((l_ours / l_ref - 1.0).abs() < 0.05, "self l={l} w={w}: {l_ours} vs {l_ref}");
+            if m_ref > 0.0 {
+                assert!((m_ours / m_ref - 1.0).abs() < 0.015, "mutual l={l} w={w} s={s}: {m_ours} vs {m_ref}");
+            }
+        }
     }
 
     #[test]
