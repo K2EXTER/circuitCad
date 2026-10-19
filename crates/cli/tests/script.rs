@@ -179,6 +179,29 @@ ac 100k 100Meg ppd=4 probe=V(R1.1.wire)
     assert!(hi < lo - 2.0, "the load pin loses gain at 100 MHz behind the trace: {lo} dB -> {hi} dB");
 }
 
+#[test]
+fn ac_with_postlayout_warns_above_1_mhz_about_the_skin_effect() {
+    let head = "new
+add V 5 as=V1
+add R 2.2 as=R1
+net VIN V1.+ R1.1
+net GND V1.- R1.2
+value V1 \"0 AC 1\"
+board import
+board autoplace
+board route
+board postlayout on
+";
+    let warned = |f1: &str| {
+        let (a, ok) = run(&format!("{head}ac 1k {f1} ppd=2 probe=V(R1.1.wire)
+"));
+        assert!(ok, "{a:?}");
+        last(&a, "ac")["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("skin effect"))
+    };
+    assert!(warned("100Meg"));
+    assert!(!warned("100k"));
+}
+
 fn run_strict(script: &str) -> (Vec<Value>, bool) {
     let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
     let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))

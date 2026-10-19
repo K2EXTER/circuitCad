@@ -121,7 +121,7 @@ impl Session {
         let names: Vec<&str> = r.signals.iter().map(|s| s.name.as_str()).filter(|n| n.starts_with("V(")).take(30).collect();
         let hint = if probes.is_empty() { "add probe=V(out) to see a signal; these are the voltage signals" } else { "" };
         self.last_ac = Some(r.clone());
-        Ok(obj(json!({"circuit_ok": gate.is_none(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
+        Ok(obj(json!({"circuit_ok": gate.is_none(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).chain(self.skin_warning(f1)).collect::<Vec<_>>()})))
     }
 
     /// `spec KIND TARGET LO HI [at=Hz]`: a pass / fail check of the last `dc` / `tran` / `ac` answer.
@@ -157,5 +157,14 @@ impl Session {
             SpecKind::TranMean | SpecKind::TranPp | SpecKind::TranMax | SpecKind::TranMin => self.last_tran.as_ref().map_or(t.to_string(), |r| pick(r.signals.iter().map(|s| &s.name).collect())),
             _ => self.last_ac.as_ref().map_or(t.to_string(), |r| pick(r.signals.iter().map(|s| &s.name).collect())),
         }
+    }
+}
+
+impl Session {
+    /// With the board's copper in the circuit, a sweep above 1 MHz goes beyond what the wiring model knows: its resistance is the DC value.
+    pub(crate) fn skin_warning(&self, fmax: f64) -> Option<String> {
+        (self.post_layout && self.board.is_some() && fmax > 1e6).then(|| {
+            "post-layout wiring: the copper resistance is the DC value. Above about 300 kHz the skin effect raises it (x1.4 at 10 MHz, x3.5-4 at 100 MHz for 35 um copper, FastHenry2) and above about 10 MHz the inductance of close traces is up to 10 % lower, so results above 1 MHz are optimistic for the resistance".to_string()
+        })
     }
 }
