@@ -11,9 +11,10 @@ circuitCad のシミュレータは自前のエンジンです (`crates/sim-core
 | 比べるもの | 件数 | 合格の基準 | 確かめる場所 |
 |---|---|---|---|
 | DC 動作点 (各節点の電圧と電源の電流) | サンプル 41 本のうち 38 本 | 電圧: 絶対 10µV + 相対 0.1%、電流: 絶対 1nA + 相対 0.1% | CI のテスト `dc_points_still_match_the_stored_ngspice_answers` |
+| AC 解析 (周波数応答、10Hz〜10MHz、1デケード5点) | AC電源のあるサンプル 9 本のうち 6 本 | 複素数の差が 相対 0.1% + そのノードの最大値の 1ppm 以内 | CI のテスト `ac_sweeps_still_match_the_stored_ngspice_answers` |
 | 過渡解析 (時間波形) | サンプル 32 本 | 10 個に分けた時間の窓ごとの平均は振れ幅の 1%、最小・最大は 3%、リップルは 10% | CI のテスト `transient_runs_still_match_the_stored_ngspice_statistics` |
 
-- ngspice の答えは `docs/xcheck/ngspice_dc.json`、`docs/xcheck/ngspice_tran.json` に保存してあります。CI に ngspice は要りません。
+- ngspice の答えは `docs/xcheck/ngspice_dc.json`、`docs/xcheck/ngspice_tran.json`、`docs/xcheck/ngspice_ac.json` に保存してあります。CI に ngspice は要りません。
 - 保存してあるのは、**一致した回路だけ**です。外してある回路と理由は、下の「合わないもの」にあります。
 - 過渡を波形そのものではなく「窓ごとの統計」で比べるのは、スイッチング波形は点の取り方でエッジの形が変わるためです。
 - 比べるときは、ngspice の許容を厳しくして (`reltol=1e-6`)、ngspice 自身の誤差が混ざらないようにしています。
@@ -45,6 +46,8 @@ KiCad-Spice-Library (約 4800 個の `.subckt`) を使って、実在の部品�
 |---|---|---|
 | `logic_blinker`、`variable_supply` の浮いた 2 次側 | 一致しない | 電源投入直後の双安定回路は、自前が釣り合い点にとどまり、ngspice は片側に倒れる。どちらが「正しい」と言えない |
 | `ip2332_charger` | 設定しだいで一致 | `gmin` (収束を助ける微小な電導) の値に答えが依存する |
+| `bridge_rectifier`、`variable_supply` の AC 解析 | 一致しない | 2 次側が浮いていて、共通電位が整流ダイオードの微小な漏れだけで決まる。差 (AC1−AC2) は 0.1450 対 0.1449 で合う |
+| `mixed_signal` の AC 解析 | 比べられない | 自前の動作点が収束しない (フリップフロップを含む大きな混在回路) |
 | トランス、`led_blinker` | 比べられない | ngspice のほうが止まる |
 | MOSFET の LEVEL 2 以上 (`74HCU04` など) | ズレる | 未対応 (LEVEL 2 以上の式は実装していない) |
 | PSpice 独自のダイオード記述の一部 | ズレる | 一部だけ対応 |
@@ -69,9 +72,13 @@ circuitCad --xcheck docs/examples
 # 過渡解析を比べる (結果は xcheck_tran_report.txt)
 circuitCad --xcheck docs/examples --tran
 
+# AC 解析を比べる (結果は xcheck_ac_report.txt。--golden <json> で一致した答えを保存)
+circuitCad --xcheck docs/examples --ac
+
 # 保存した答えとの比較だけなら ngspice は要らない
 cargo test -p app dc_points_still_match_the_stored_ngspice_answers
 cargo test -p app transient_runs_still_match_the_stored_ngspice_statistics
+cargo test -p app ac_sweeps_still_match_the_stored_ngspice_answers
 ```
 
 公開モデルとの比較の手順 (環境変数など) は [docs/code-notes/sim-core.md](code-notes/sim-core.md) の「公開モデル集での ngspice との検算」にあります。比較の仕組みは [docs/code-notes/app.md](code-notes/app.md) の「開発用の検算 (xcheck)」にあります。

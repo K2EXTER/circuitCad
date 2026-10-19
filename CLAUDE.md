@@ -57,7 +57,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `learn.rs` / `measure_guide.rs` / `help.rs` / `project.rs` | 学習パス(ウェルカムカードも) / 学習パス最後の「組み立てて測る」の窓 / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
 | `samples.rs` | 「ファイル → サンプル回路を開く」の一覧 (`docs/examples` を埋め込む) |
 | `source_form.rs` | 電源値フォーム |
-| `xcheck.rs` / `xcheck_tran.rs` | 開発用: ngspice との検算 (`--xcheck`) |
+| `xcheck.rs` / `xcheck_tran.rs` / `xcheck_ac.rs` | 開発用: ngspice との検算 (`--xcheck`) |
 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
 

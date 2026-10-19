@@ -381,6 +381,18 @@ pub fn run_cli(args: &[String]) -> bool {
     let Some(i) = args.iter().position(|a| a == "--xcheck") else { return false };
     let val = |flag: &str| args.iter().position(|a| a == flag).and_then(|j| args.get(j + 1)).map(|s| s.as_str());
     let tran = args.iter().any(|a| a == "--tran");
+    if args.iter().any(|a| a == "--ac") {
+        let report = match (args.get(i + 1).filter(|a| !a.starts_with("--")), find_ngspice(val("--ngspice"))) {
+            (None, _) => "使い方: circuitCad --xcheck <file.schjson | フォルダ> --ac [--golden <保存先.json>] [--ngspice <exe>] [--out report.txt]
+".to_string(),
+            (_, None) => "ngspice が見つかりません。--ngspice <exe> か環境変数 NGSPICE で指定してください
+".to_string(),
+            (Some(p), Some(exe)) => crate::xcheck_ac::run_path(Path::new(p), &exe, val("--golden").map(Path::new)),
+        };
+        let _ = std::fs::write(val("--out").unwrap_or("xcheck_ac_report.txt"), &report);
+        print!("{report}");
+        return true;
+    }
     if let (Some(dir), Some(out), Some(exe)) = (args.get(i + 1).filter(|a| !a.starts_with("--")), val("--golden"), find_ngspice(val("--ngspice"))) {
         let report = if tran { crate::xcheck_tran::write_golden(Path::new(dir), &exe, Path::new(out)) } else { write_golden(Path::new(dir), &exe, Path::new(out)) };
         let _ = std::fs::write("xcheck_golden_report.txt", &report);

@@ -25,6 +25,7 @@ mod source_form;
 mod startup;
 mod tips;
 mod xcheck;
+mod xcheck_ac;
 mod xcheck_tran;
 #[cfg(test)]
 mod tests;
