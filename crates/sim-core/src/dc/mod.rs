@@ -226,6 +226,10 @@ impl Compiled {
                         // from them) can crawl towards the solution for hundreds of iterations, so give it forty times as many
                         Err(f) => {
                             let a = self.newton_long(x.clone(), vj.clone(), &ctx).map_err(|_| f)?;
+                            // a "solution" with a node at a million volts is a runaway that only looks converged (relative tolerances)
+                            if a.x.iter().take(self.n_nodes - 1).any(|v| v.abs() > 1e6) {
+                                return Err(Fail::NoConv);
+                            }
                             iters += a.iterations;
                             x = a.x;
                             vj = a.vj;
