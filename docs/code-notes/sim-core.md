@@ -182,3 +182,9 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 ## 電流制御スイッチ W(2026-10-19)
 `W1 n+ n- Vctl MODEL` + `.model MODEL CSW(Ron= Roff= It= Ih=)` (`spice_flat.rs`): B 電流源 `I = V(n+,n-)·g`、`g` は `1/Roff` から `1/Ron` へ、`I(Vctl)` が `It` を超えるところで `tanh` でなめらかに変わる(幅は `Ih` と `It` の2% の大きいほう。ヒステリシスは持たない)。幅が広すぎると開いたときに漏れる(幅 `It/5` では `g` の 5e-5 が残り、テストが落ちた)。
 - **4316RMS_THAT の過渡が遅かった原因(解決)**: DC が「収束」した点の中身が、節点電圧 −4.8e11 V のような暴走だった。相対許容(`reltol`)だと、1e11 V の点は前の反復との差が相対的に小さくて「収束」と判定される。電流源が容量にしかつながらない節点(1fF に 7.2µA)と BJT の指数関数が組んで暴走し、その暴走した点から過渡を始めると、容量の電圧が 5 fs で 1e9 V 動き、刻みが最小(`tstep` の 1e-4)に張りつく(`tstop` に関係なく約 19.5 万点)。直し: `dc/mod.rs` の gmin 追跡で、`newton_long`(40 倍の反復)が返した解に、絶対値が 1e6 V を超える節点があれば失敗として扱う。DC は正直に `NoConvergence` になり、過渡は走らない。
+
+## 公開モデル集での ngspice との検算(2026-10-19)
+`tests_vendor_bulk.rs vendor_xcheck`(`SPICE_MODEL_DIR=<dir> [NGSPICE=<exe>] [SPICE_XCHECK_N=件数] [SPICE_XCHECK_OUT=<csv>] [SPICE_XCHECK_ONLY=<サブサーキット名>] [NGBEHAVIOR=ltpsa] cargo test -p sim-core vendor_xcheck --release -- --ignored --nocapture`)。一括確認と同じ簡易回路(`build_bench_text`: 補った `.param` ごとの本文を返す)を、自前と ngspice(`.spiceinit` で `set ngbehavior=ltpsa` = LTspice/PSpice 互換)で解き、端子の電圧を比べる(許容: 絶対 1mV + 相対 1%)。自前で解けたもののうち、電源と GND のピンがはっきりしているものを、名前のハッシュ順に取り出す。`SPICE_XCHECK_ONLY` を指定すると、1つのサブサーキットの全ノードを差の大きい順に出す。
+- 結果(150個): 一致 47、ズレ 30、ngspice が読めない 73(互換モードでも読めない書き方。`ltpsa` なしだと `if` 関数などで 31/40 が読めなかった)。
+- **見つかった不具合**: `limit(x, lo, hi)` の上限と下限が逆順に書かれたとき(`limit(v*gm, +IL*e, -IL*e)`)、LTspice は3つの中央値なのに、自前は「下限、上限」の順を仮定して誤った。`expr.rs` で中央値にした(一致 42 → 47。LM4562 の出力が -420V になっていたのも同じ原因)。
+- **残るズレの原因(調べた範囲)**: ①モデルの式の差 — CMOS ゲートの MOSFET が LEVEL 3(`74HCU04`: 出力 4.67V 対 4.32V。MOSFET の LEVEL 2 以上は未対応)、PSpice のダイオードの `Vfwd=`/`Ron=`/`Roff=`(`TC4421` の OUT)。②簡易回路の問題 — 差動入力に同じ電圧をつなぐオペアンプ(出力が入力のわずかな差で決まる)、比較器の同値判定(`IR21xx` のゲートドライバ。`C … IC=-5V` と `IF(V(1)>V(2),…)` のにらみ合い)。これらは互いの解がどちらも正しい可能性がある。

@@ -634,10 +634,12 @@ impl CExpr {
                     Func::Min => if a[0].v <= a[1].v { a[0].clone() } else { a[1].clone() },
                     Func::Max => if a[0].v >= a[1].v { a[0].clone() } else { a[1].clone() },
                     Func::Limit => {
-                        if a[0].v < a[1].v {
-                            a[1].clone()
-                        } else if a[0].v > a[2].v {
-                            a[2].clone()
+                        // LTspice: the middle one of the three, so the two limits may be written in either order
+                        let (lo, hi) = if a[1].v <= a[2].v { (&a[1], &a[2]) } else { (&a[2], &a[1]) };
+                        if a[0].v < lo.v {
+                            lo.clone()
+                        } else if a[0].v > hi.v {
+                            hi.clone()
                         } else {
                             a[0].clone()
                         }

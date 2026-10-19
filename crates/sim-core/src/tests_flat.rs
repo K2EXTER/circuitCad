@@ -1071,3 +1071,11 @@ fn a_current_controlled_switch_closes_when_the_control_current_passes_it() {
     assert!(closed > 0.99 * (1000.0 / 1001.0), "{closed}");
     assert!(open < 1e-3, "{open}");
 }
+
+#[test]
+fn limit_takes_the_middle_value_whatever_the_order_of_the_limits() {
+    let t = ".subckt T a b gnd\nB1 b 0 V=limit(V(a), 1, -1)\nR1 b gnd 1meg\n.ends T";
+    assert!((run(t, "T", &["a", "b", "gnd"], 0.3, "b") - 0.3).abs() < 1e-9);
+    assert!((run(t, "T", &["a", "b", "gnd"], 5.0, "b") - 1.0).abs() < 1e-9);
+    assert!((run(t, "T", &["a", "b", "gnd"], -5.0, "b") + 1.0).abs() < 1e-9);
+}
