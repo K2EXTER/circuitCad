@@ -118,6 +118,26 @@ board fab out/
 | `board new [幅 高さ]` / `import` / `autoplace` / `route [net=名]` / `drc` / `status` | 基板(mm)。取り込み・配置・自動配線・DRC。 |
 | `board save F` / `open F` / `fab DIR` | `.pcbjson` の保存・読込、ガーバー・ドリル・BOM・部品位置・zip の書き出し。 |
 
+## MCPサーバーとして使う (Claude Code などから)
+
+`ccad mcp` は、同じコマンドを [MCP](https://modelcontextprotocol.io/) のサーバーとして出します(標準入出力、依存の追加なし)。回路図と基板は**サーバーが動いている間、呼び出しをまたいで残る**ので、AIが1コマンドずつ答えを見ながら組めます。
+
+| ツール | 内容 |
+|---|---|
+| `ccad_run` | `script`(1行1コマンド)を実行して、1行1個のJSONを返す。最初に失敗した行で止まり、`isError` が true になる(`keep_going: true` で続ける)。 |
+| `ccad_help` | コマンドの一覧と約束事(GND、ピン名、`ok` の意味、`uic`)。最初に読ませる。 |
+
+登録の例 (Claude Code。パスは自分の場所に直す):
+```bash
+cargo build -p cli --release
+claude mcp add ccad -- /path/to/target/release/ccad --strict mcp
+```
+他のクライアントは、`command` に `ccad`、`args` に `["--strict", "mcp"]` を設定します (`--lib DIR` で部品ライブラリの場所も変えられます)。
+
+- 手元で試すだけなら、`target/debug/ccad` でも動きます。
+- **このサーバーは、AIが指定したパスにファイルを書きます**(`save`、`board save`、`board fab DIR`)。信頼できるクライアントだけにつなぎ、書き込み先に気をつけてください。
+- `--strict` は、ERCにエラーがあるあいだ `dc`・`tran`・`board import` を拒みます。AIには勧めます。ただし `erc` 自身も失敗扱いになり、答えには最初のエラーだけが出ます。一覧とヒントが見たいときは、`--strict` なしの実行で `erc` を見てください。
+
 ## 注意
 - 答えの数値は、アプリと同じエンジンの結果です。精度と限界は [accuracy.md](accuracy.md) にあります(実物との一致は未確認です)。
 - AIが作った回路は、**`erc` と、`dc`/`tran` の答えを必ず確かめてください。** 部品のピン配置・モデルは概算です。

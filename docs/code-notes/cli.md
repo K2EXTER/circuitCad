@@ -7,6 +7,9 @@
 - `session.rs` `Session`(回路図・部品ライブラリ・基板・部品を置く位置のカーソル)、コマンド表 `run`、`HELP`、語の分割(`"` で囲める)、`key=value` の分離。
 - `build.rs` 回路図側: `parts`/`part`/`add`/`value`/`net`/`remove`/`list`/`erc`/`dc`/`tran`。
 - `board.rs` 基板側: `board new|import|autoplace|route|drc|status|save|open|fab`。回路図→基板の取り込み(`netlist_of`)はアプリの `board_editor/file.rs` と同じ規則(シミュレーション専用ピンは除く)。
+- `runner.rs` 1行ずつの実行(`run_script`: 失敗で止まる/`keep_going`)。コマンドラインと MCP が共有する。
+- `mcp.rs` `ccad mcp`: MCP サーバー(JSON-RPC 2.0、1メッセージ1行の標準入出力。`initialize`・`ping`・`tools/list`・`tools/call`。通知には返事をしない)。ツールは `ccad_run`(スクリプトを実行、失敗で `isError`)と `ccad_help`。`Session` はサーバーの間ずっと生きるので、回路図と基板が呼び出しをまたぐ。依存は増やしていない(`serde_json` のみ)。
+- `tests/mcp.rs` 実際の `ccad mcp` と JSON-RPC で話すテスト(握手・ツール一覧・未知のメソッドの -32601、回路が呼び出しをまたぐこと、壊れた入力や未知のツールでも落ちないこと)。
 - `tests/script.rs` 実際の `ccad` を走らせるテスト(分圧の理論値、名前の衝突で止まること、誤りの文言、555の周期が理論値の5%以内 + 配線完了 + DRC 0 + ガーバー出力)。
 
 ## 設計判断
