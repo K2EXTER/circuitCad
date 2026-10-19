@@ -56,7 +56,7 @@ pub struct DcResult {
 
 impl DcResult {
     pub fn voltage(&self, node: &str) -> Option<f64> {
-        self.voltages.iter().find(|(n, _)| n == node).map(|(_, v)| *v)
+        self.voltages.iter().find(|(n, _)| n == node).or_else(|| self.voltages.iter().find(|(n, _)| n.eq_ignore_ascii_case(node))).map(|(_, v)| *v)
     }
     pub fn element(&self, name: &str) -> Option<&ElementResult> {
         self.elements.iter().find(|e| e.name == name)

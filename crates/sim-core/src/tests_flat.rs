@@ -1107,3 +1107,10 @@ fn instances_with_different_model_parameters_do_not_share_a_model() {
     let v = run(t, "T", &["a", "b", "gnd"], 1.0, "b");
     assert!((v - 1000.0 / 2001.0).abs() < 1e-3, "{v}");
 }
+
+#[test]
+fn node_names_are_not_case_sensitive() {
+    let t = ".subckt T a b gnd\nR1 a Mid 1k\nR2 MID gnd 1k\nB1 b 0 V=V(mid)\nR3 b gnd 1meg\n.ends T";
+    // Mid, MID and mid are one node: a divider
+    assert!((run(t, "T", &["a", "b", "gnd"], 2.0, "b") - 1.0).abs() < 1e-6);
+}

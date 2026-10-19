@@ -282,11 +282,13 @@ impl Circuit {
         if name == "0" || name.eq_ignore_ascii_case("gnd") {
             return 0;
         }
-        if let Some(&i) = self.index.get(name) {
+        // SPICE node names are not case sensitive (`VCC` and `vcc` are one node); the first spelling is the one shown
+        let key = name.to_ascii_lowercase();
+        if let Some(&i) = self.index.get(&key) {
             return i;
         }
         self.names.push(name.to_string());
-        self.index.insert(name.to_string(), self.names.len() - 1);
+        self.index.insert(key, self.names.len() - 1);
         self.names.len() - 1
     }
 
