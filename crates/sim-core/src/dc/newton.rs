@@ -151,7 +151,7 @@ impl Compiled {
         // caller shrinks the step (or tries the line search below, which keeps the full limit). Running it on to the DC limit of
         // 150 was most of the iterations of a transient with many failing steps.
         let plain = !backtrack && damp == 1.0 && max_dx.is_infinite();
-        let limit = if ctx.dynamic.is_some() && plain { crate::options::options().max_iter.min(40) } else { crate::options::options().max_iter };
+        let limit = if ctx.dynamic.as_ref().is_some_and(|d| d.capped) && plain { crate::options::options().max_iter.min(40) } else { crate::options::options().max_iter };
         for it in 1..=limit {
             if DEADLINE.with(|d| d.get()).is_some_and(|d| std::time::Instant::now() > d) {
                 return Err(Fail::NoConv);

@@ -91,6 +91,9 @@ pub(crate) struct Dyn<'a> {
     pub cap_i: &'a [f64],
     pub ind_i: &'a [f64],
     pub ind_v: &'a [f64],
+    /// The plain Newton iteration may give up after a few dozen iterations (the caller shrinks the step and tries again); false on the
+    /// last tries, which have no smaller step left to fall back on and keep the full iteration limit.
+    pub capped: bool,
 }
 
 /// Everything that varies between Newton solves.

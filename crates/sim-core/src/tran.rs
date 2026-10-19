@@ -125,6 +125,11 @@ type Sample = (f64, Vec<f64>, Vec<f64>);
 /// Local truncation error of the step to `t_new` relative to what is allowed (> 1: too big).
 /// Trapezoidal: h^3/12 times the third derivative (= 6 DD3); backward Euler: h^2/2 times the second (= 2 DD2).
 /// `None` while there are not enough smooth earlier points.
+/// Tries of one time step (after the first) whose plain Newton iteration is cut at 40 iterations; the later tries, of which
+/// there are few left, run to the full limit. Cutting every try made a bistable logic circuit fail to converge when a last-bit
+/// difference of the platform's maths put one step just past 40 iterations.
+const CAPPED_TRIES: usize = 6;
+
 fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], il: &[f64], trap: bool, rel: f64) -> Option<f64> {
     let need = if trap { 3 } else { 2 };
     if hist.len() < need {
@@ -302,7 +307,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                     gmin: crate::options::options().gmin,
                     scale: 1.0,
                     t: t + h,
-                    dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v }),
+                    dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v, capped: tries < CAPPED_TRIES }),
                     sw_widen: 1.0,
                 };
                 match cm.newton(x.clone(), vj.clone(), &ctx) {
