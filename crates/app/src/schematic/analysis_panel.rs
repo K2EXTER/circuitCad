@@ -24,6 +24,15 @@ impl SchEditor {
 抵抗・コンデンサ・コイルは、ライブラリ部品の温度係数 (TC1・TC2) を入れたものだけ、温度で値が変わります (基本部品は変わりません)");
             ui.label("℃");
         });
+        if !self.wiring.is_empty() {
+            ui.horizontal(|ui| {
+                ui.colored_label(egui::Color32::from_rgb(90, 190, 110), format!("基板の配線抵抗を反映中 ({} ピン)", self.wiring.len()))
+                    .on_hover_text("基板の銅箔 (配線・ビア・ベタ) の抵抗を、電源の入口から各ピンの手前に直列に入れて解析しています。配線を変えたら、基板の「配線の電圧降下」から反映し直してください。ネットの電圧は入口側の値で、部品のピンの電圧は少し低くなります");
+                if ui.small_button("解除").on_hover_text("配線の抵抗を入れない理想の回路に戻します").clicked() {
+                    self.wiring.clear();
+                }
+            });
+        }
     }
 
     pub(super) fn panel_tran(&mut self, ui: &mut egui::Ui) {

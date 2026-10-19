@@ -229,6 +229,10 @@ pub struct BoardEditor {
     pub status: String,
     /// Set by the small "操作" buttons; the app opens the guide on that page.
     pub help_request: Option<crate::help::HelpTab>,
+    /// Set by the voltage-drop panel: `Some(true)` = simulate with this board's copper resistance, `Some(false)` = back to ideal wires. `App` carries it to the schematic.
+    pub post_layout_request: Option<bool>,
+    /// Set by the width panel: ask `App` for the schematic's DC net currents (it answers with `use_simulated_currents`).
+    pub currents_request: bool,
     violations: Vec<drc::Violation>,
     import_notes: Vec<String>,
     /// Counts changes (one per `checkpoint`) and replaced boards; `saved_rev` is its value when the board was last saved or opened.
@@ -313,6 +317,8 @@ impl Default for BoardEditor {
             preview_cache: Default::default(),
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,
+            post_layout_request: None,
+            currents_request: false,
             violations: vec![],
             import_notes: vec![],
             rev: 0,

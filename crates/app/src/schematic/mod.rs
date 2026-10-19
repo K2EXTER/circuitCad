@@ -154,6 +154,8 @@ pub struct SchEditor {
     sweep: Option<SweepView>,
     /// Circuit temperature (℃) used by the DC / transient / AC / sweep analyses.
     temp_c: String,
+    /// Copper resistance of the routed board in series with pads (post-layout simulation); empty = ideal wires.
+    pub wiring: Vec<sim_core::WiringR>,
     temp_from: String,
     temp_to: String,
     temp_step: String,
@@ -435,6 +437,7 @@ impl Default for SchEditor {
             src_form: None,
             sweep: None,
             temp_c: "27".into(),
+            wiring: vec![],
             temp_from: "-20".into(),
             temp_to: "80".into(),
             temp_step: "5".into(),

@@ -299,6 +299,35 @@ fn schematic_divider_end_to_end() {
 }
 
 #[test]
+fn wiring_resistance_sits_in_series_with_the_pin() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "12".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (12, 0), 1);
+    s.components[1].value = "4.7k".into();
+    s.components[2].value = "2.2k".into();
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), r2[0].1);
+    wire(&mut s, r2[1].1, (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    let w = [
+        WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 2200.0 },
+        WiringR { refdes: "R9".into(), pin: "1".into(), ohm: 1.0 }, // not in the schematic: ignored
+    ];
+    let res = dc_op(&from_schematic_with_wiring(&s, &w).unwrap()).unwrap();
+    close(res.element("R2").unwrap().voltage, 12.0 * 2200.0 / (4700.0 + 2200.0 + 2200.0), 1e-9);
+    // no wiring list: the same as from_schematic
+    let plain = dc_op(&from_schematic_with_wiring(&s, &[]).unwrap()).unwrap();
+    close(plain.element("R2").unwrap().voltage, 12.0 * 2200.0 / 6900.0, 1e-9);
+}
+
+#[test]
 fn schematic_reports_bad_values() {
     let mut s = Schematic::default();
     s.add(Kind::Resistor, (0, 0), 0);

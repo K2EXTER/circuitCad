@@ -23,7 +23,7 @@ impl SchEditor {
         let outcome = match self.sim_circuit() {
             Err(errs) => Err(errs),
             // the sweep sets the temperature itself: start from the 27 °C circuit
-            Ok(_) => match from_schematic(&self.sch) {
+            Ok(_) => match sim_core::from_schematic_with_wiring(&self.sch, &self.wiring) {
                 Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
                 Ok(c) => temp_sweep(&c, a, b, st).map_err(|e| vec![e.to_string()]),
             },

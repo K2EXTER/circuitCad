@@ -27,7 +27,22 @@ fn err(r: &str, m: impl Into<String>) -> ConvertError {
 /// Parts with an explicit failure are reported as errors; parts that simply have nothing to
 /// simulate (headers, parts without a model) become warnings on the circuit.
 pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, None)
+    build(s, None, &[])
+}
+
+/// Resistance of the copper between a net's supply pad and one pin, measured on the board
+/// (`pcb_core::irdrop::wiring_resistances`). The pin gets a node of its own behind this resistor.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WiringR {
+    pub refdes: String,
+    pub pin: String,
+    pub ohm: f64,
+}
+
+/// The circuit of `s` with the board's wiring resistance added in series with the listed pins
+/// ("post-layout" simulation). Pins that are not in the schematic are ignored.
+pub fn from_schematic_with_wiring(s: &Schematic, wiring: &[WiringR]) -> Result<Circuit, Vec<ConvertError>> {
+    build(s, None, wiring)
 }
 
 /// What happens to one pin in a pin fault.
@@ -52,10 +67,10 @@ pub struct PinFaultSpec {
 /// The circuit of `s` with one pin of one part disconnected, grounded or bridged to another net.
 /// The rest of the part keeps its connections, so the fault is faithful for library ICs as well.
 pub fn from_schematic_with_pin_fault(s: &Schematic, f: &PinFaultSpec) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, Some(f))
+    build(s, Some(f), &[])
 }
 
-fn build(s: &Schematic, fault: Option<&PinFaultSpec>) -> Result<Circuit, Vec<ConvertError>> {
+fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR]) -> Result<Circuit, Vec<ConvertError>> {
     let mut c = Circuit::new();
     let mut pin_node: HashMap<(String, String), usize> = HashMap::new();
     for net in extract(s) {
@@ -71,6 +86,14 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>) -> Result<Circuit, Vec<Con
             PinHow::Join(net) => c.node(net),
         };
         pin_node.insert((f.refdes.clone(), f.pin.clone()), node);
+    }
+    for w in wiring.iter().filter(|w| w.ohm > 0.0) {
+        let key = (w.refdes.clone(), w.pin.clone());
+        if let Some(&net_node) = pin_node.get(&key) {
+            let m = c.node(&format!("{}.{}.wire", w.refdes, w.pin));
+            c.add(Element::Resistor { name: format!("{}.{}.RW", w.refdes, w.pin), a: net_node, b: m, r: w.ohm });
+            pin_node.insert(key, m);
+        }
     }
     // pins on no net at all get a private node so elements can still be built
     let mut lone = 0;

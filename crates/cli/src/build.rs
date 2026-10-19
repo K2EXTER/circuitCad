@@ -327,7 +327,14 @@ impl Session {
     }
 
     pub(crate) fn circuit(&self) -> Result<sim_core::Circuit, String> {
-        sim_core::from_schematic(&self.sch).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
+        let wiring: Vec<sim_core::WiringR> = match (&self.board, self.post_layout) {
+            (Some(b), true) => pcb_core::irdrop::wiring_resistances(b, &pcb_core::irdrop::IrSpec::default())
+                .into_iter()
+                .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm })
+                .collect(),
+            _ => vec![],
+        };
+        sim_core::from_schematic_with_wiring(&self.sch, &wiring).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
     }
 
     pub fn dc(&mut self, args: &[String]) -> Res {
@@ -351,7 +358,7 @@ impl Session {
         warnings.extend(r.warnings.iter().cloned());
         warnings.extend(gate);
         let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
-        Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "warnings": warnings})))
+        Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings})))
     }
 
     pub fn tran(&mut self, args: &[String]) -> Res {
@@ -392,6 +399,6 @@ impl Session {
                 (s.name.clone(), o)
             })
             .collect();
-        Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
+        Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
     }
 }

@@ -94,6 +94,19 @@ pub fn net_widths(board: &Board, conn: &Connectivity, spec: &CopperSpec) -> Vec<
         .collect()
 }
 
+/// Declares the given `(net, amps)` as the board's net currents, for the nets that have pads on the board
+/// (the simulation's current of every other net is dropped). The old declarations are replaced.
+/// Returns how many nets got a current.
+pub fn set_net_currents(board: &mut Board, currents: &[(String, f64)]) -> usize {
+    let on_board: std::collections::HashSet<&str> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.as_str()).collect();
+    let new: Vec<(String, f64)> = currents.iter().filter(|(n, a)| *a > 0.0 && on_board.contains(n.as_str())).cloned().collect();
+    board.net_currents.clear();
+    for (n, a) in &new {
+        board.net_currents.insert(n.clone(), *a);
+    }
+    new.len()
+}
+
 /// Sets every track of `net` to at least `width` (never thinner than it is). Returns how many tracks were widened.
 pub fn widen_net(board: &mut Board, conn: &Connectivity, net: &str, width: f64) -> usize {
     let mut n = 0;
@@ -185,5 +198,18 @@ mod tests {
         widen_net(&mut b, &conn, "VIN", round_up_width(width_for_current(2.0, &CopperSpec::default())));
         assert!(!has(&b, crate::fab::Level::Warn));
         assert!(crate::fab::preflight(&b, None).iter().any(|c| c.level == crate::fab::Level::Ok && c.title.contains("電流を設定したネット")));
+    }
+
+    #[test]
+    fn simulated_currents_replace_the_old_ones_and_skip_nets_not_on_the_board() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        let mut p = Pad::new(Point::new(1.0, 1.0), PadShape::Circle { d: 1.6 }, None, Side::Top);
+        p.net = "VIN".into();
+        b.pads.push(p);
+        b.net_currents.insert("OLD".into(), 9.0);
+        let n = set_net_currents(&mut b, &[("VIN".into(), 1.5), ("GHOST".into(), 2.0), ("VIN2".into(), 0.0)]);
+        assert_eq!(n, 1);
+        assert_eq!(b.net_currents.len(), 1);
+        assert_eq!(b.net_currents["VIN"], 1.5);
     }
 }

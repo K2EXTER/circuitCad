@@ -31,6 +31,23 @@ impl BoardEditor {
         n
     }
 
+    /// Declares the simulated net currents (from the schematic's DC analysis) and opens the panel.
+    pub fn use_simulated_currents(&mut self, currents: Result<Vec<(String, f64)>, String>) {
+        match currents {
+            Err(e) => self.status = format!("シミュレーションの電流を取れませんでした: {e}"),
+            Ok(list) => {
+                self.checkpoint();
+                let n = pcb_core::current::set_net_currents(&mut self.board, &list);
+                self.widths_open = Some(true);
+                self.status = if n == 0 {
+                    "基板のネットに合う電流がありません。回路図から部品を取り込んだあとで試してください".into()
+                } else {
+                    format!("{n} 個のネットに、DC解析の電流を入れました。「必要 ○ mm」を見て、足りないネットは「推奨幅にする」で太くできます")
+                };
+            }
+        }
+    }
+
     pub(super) fn panel_widths(&mut self, ui: &mut egui::Ui) {
         egui::CollapsingHeader::new("配線の太さ (電流から)").default_open(false).open(self.widths_open.take()).show(ui, |ui| {
             let nets = self.board_nets();
@@ -79,6 +96,9 @@ impl BoardEditor {
                     ui.end_row();
                 }
             });
+            if ui.button("シミュレーションの電流を入れる").on_hover_text("回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、上の欄に入れます。ネットにつながる部品の電流を足して半分にした値で、電源とGNDには全体の電流が出ます。電流を自分で調べなくても、必要な線幅がすぐ分かります。ピーク電流 (起動時やスイッチング) は入らないので、余裕を見てください").clicked() {
+                self.currents_request = true;
+            }
             self.ir_drop_ui(ui);
             if let Some(w) = use_width {
                 self.track_width = w;
@@ -134,6 +154,14 @@ impl BoardEditor {
             if ui.button("計算する").on_hover_text("上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください").clicked() {
                 let fp = copper_fingerprint(&self.board);
                 self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));
+            }
+        });
+        ui.horizontal(|ui| {
+            if ui.button("シミュレーションに反映").on_hover_text("この基板の配線の抵抗を、回路図のシミュレーション (DC・過渡・AC・ノイズ) に入れます。電源の入口から各ピンまでの銅箔の抵抗が、ピンの手前に直列に入ります。「配線を細くしたら電圧が落ちた」を波形で確かめられます。配線していないネットは理想の線のままです").clicked() {
+                self.post_layout_request = Some(true);
+            }
+            if ui.small_button("やめる").on_hover_text("配線の抵抗を入れない理想の回路に戻します").clicked() {
+                self.post_layout_request = Some(false);
             }
         });
         let fp = copper_fingerprint(&self.board);

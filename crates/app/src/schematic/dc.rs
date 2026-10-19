@@ -26,8 +26,15 @@ impl SchEditor {
                 _ => return Err(vec![format!("温度「{t}」を数値(℃)で入力してください (例: 27)")]),
             },
         };
-        let c = from_schematic(&self.sch).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+        let c = sim_core::from_schematic_with_wiring(&self.sch, &self.wiring).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
         Ok(c.at_temperature(temp))
+    }
+
+    /// The current each net carries at the DC operating point (for sizing the board's copper).
+    pub fn dc_net_currents(&self) -> Result<Vec<(String, f64)>, String> {
+        let c = self.sim_circuit().map_err(|e| e.join(" / "))?;
+        let r = dc_op(&c).map_err(|e| format!("DC解析ができませんでした: {e}"))?;
+        Ok(sim_core::net_currents(&c, &r))
     }
 
     pub(super) fn signature_cached(&self) -> &str {
@@ -35,7 +42,11 @@ impl SchEditor {
     }
 
     pub(super) fn signature(&self) -> String {
-        serde_json::to_string(&self.sch).unwrap_or_default()
+        let mut s = serde_json::to_string(&self.sch).unwrap_or_default();
+        for w in &self.wiring {
+            s += &format!("|{}.{}={}", w.refdes, w.pin, w.ohm);
+        }
+        s
     }
 
     pub(super) fn run_dc(&mut self) {
@@ -61,6 +72,8 @@ impl SchEditor {
             for net in extract(&self.sch) {
                 let Some(v) = res.voltage(&net.name) else { continue };
                 for p in &net.pins {
+                    // with the board's copper resistance in front of the pin, show the voltage that reaches the pin
+                    let v = res.voltage(&format!("{}.{}.wire", p.refdes, p.pin)).unwrap_or(v);
                     if let Some(c) = self.sch.components.iter().find(|c| c.refdes == p.refdes)
                         && let Some((_, pt)) = c.pins().into_iter().find(|(n, _)| *n == p.pin) {
                             pin_v.push((pt, v));

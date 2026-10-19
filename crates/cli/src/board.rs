@@ -1,4 +1,4 @@
-//! Board commands: new, import, autoplace, route, drc, status, save, open, fab.
+//! Board commands: new, import, autoplace, route, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|autoplace|route|drc|status|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|autoplace|route|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -66,6 +66,49 @@ impl Session {
                 let unrouted = pcb_core::ratsnest::ratsnest(board).len();
                 let drc = pcb_core::drc::check(board).len();
                 Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "drc_violations": drc})))
+            }
+            "currents" => {
+                let widen = rest.first().is_some_and(|w| w.eq_ignore_ascii_case("widen"));
+                let c = self.circuit()?;
+                let dc = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
+                let currents = sim_core::net_currents(&c, &dc);
+                let board = self.board_mut()?;
+                let n = pcb_core::current::set_net_currents(board, &currents);
+                let spec = pcb_core::current::CopperSpec::default();
+                let conn = pcb_core::drc::connectivity(board);
+                let mut widened = 0;
+                if widen {
+                    let thin: Vec<(String, f64)> = pcb_core::current::net_widths(board, &conn, &spec).into_iter().filter(|w| w.too_thin()).map(|w| (w.net, pcb_core::current::round_up_width(w.needed))).collect();
+                    for (net, width) in thin {
+                        widened += pcb_core::current::widen_net(board, &conn, &net, width);
+                    }
+                }
+                let conn = pcb_core::drc::connectivity(board);
+                let mut widths = pcb_core::current::net_widths(board, &conn, &spec);
+                widths.sort_by(|a, b| b.amps.partial_cmp(&a.amps).unwrap());
+                let list: Vec<Value> = widths
+                    .iter()
+                    .map(|w| json!({"net": w.net, "amps": (w.amps * 1e4).round() / 1e4, "needed_mm": pcb_core::current::round_up_width(w.needed), "thinnest_mm": w.thinnest, "too_thin": w.too_thin()}))
+                    .collect();
+                Ok(obj(json!({"nets": n, "widened_tracks": widened, "list": list,
+                    "note": "Currents are from the DC operating point (half the sum of the terminal currents on each net), widths from IPC-2221 at +10 C on 35 um outer copper. 'board currents widen' thickens the thin tracks; run 'board drc' after, then 'board postlayout on' to see the effect."})))
+            }
+            "postlayout" => {
+                let on = match rest.first().map(|w| w.to_ascii_lowercase()).as_deref() {
+                    Some("on") => true,
+                    Some("off") => false,
+                    _ => return Err("board postlayout on|off  (on: dc/tran/ac/noise add the copper resistance of the routed board in series with each pad)".into()),
+                };
+                let board = self.board_mut()?;
+                let mut w = pcb_core::irdrop::wiring_resistances(board, &pcb_core::irdrop::IrSpec::default());
+                w.sort_by(|a, b| b.ohm.partial_cmp(&a.ohm).unwrap());
+                let list: Vec<Value> = w.iter().take(10).map(|x| json!({"net": x.net, "pad": format!("{}.{}", x.refdes, x.pin), "milliohm": (x.ohm * 1e6).round() / 1e3})).collect();
+                self.post_layout = on;
+                self.last_dc = None;
+                self.last_tran = None;
+                self.last_ac = None;
+                Ok(obj(json!({"postlayout": on, "pads_with_resistance": w.len(), "largest": list,
+                    "note": "Resistance is measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first."})))
             }
             "save" => {
                 let f = rest.first().ok_or("board save FILE.pcbjson")?;

@@ -367,6 +367,36 @@ pub fn net_drops(board: &Board, spec: &IrSpec) -> Vec<NetDrop> {
     board.net_currents.iter().filter(|(_, a)| **a > 0.0).map(|(net, a)| net_drop(board, &conn, net, *a, spec, None)).collect()
 }
 
+/// Series resistance of the board's copper in front of one pad.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PadSeries {
+    pub net: String,
+    pub refdes: String,
+    pub pin: String,
+    pub ohm: f64,
+}
+
+/// For every net with two or more pads: the resistance from its supply pad to each other pad, as a
+/// star around the supply pad (exact for a tree of copper, the same worst case as `net_drop` otherwise).
+/// Nets the copper does not connect, and nets too large to solve, are left out.
+/// Used to simulate the circuit as it is wired on the board.
+pub fn wiring_resistances(board: &Board, spec: &IrSpec) -> Vec<PadSeries> {
+    let conn = drc::connectivity(board);
+    let mut nets: Vec<&str> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.as_str()).collect();
+    nets.sort_unstable();
+    nets.dedup();
+    let mut out = vec![];
+    for net in nets {
+        let d = net_drop(board, &conn, net, 0.0, spec, None);
+        for p in d.pads {
+            if let Some(ohm) = p.ohm.filter(|o| *o > 1e-6) {
+                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm });
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -453,6 +483,19 @@ mod tests {
         let d = drops(&b, 1.0);
         assert!(d.has_zone);
         assert!(d.pads[0].ohm.unwrap() < before / 3.0, "{} vs {before}", d.pads[0].ohm.unwrap());
+    }
+
+    #[test]
+    fn wiring_resistances_list_every_pad_but_the_supply_pad() {
+        let b = board(
+            vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(100.0, 0.0, "U1", "1", "VCC", None), pad(0.0, 20.0, "J1", "2", "GND", None), pad(100.0, 20.0, "U1", "2", "GND", None)],
+            vec![track(Side::Top, (0.0, 0.0), (100.0, 0.0), 0.25)],
+        );
+        let w = wiring_resistances(&b, &IrSpec::default());
+        // VCC is wired; GND has no copper, so it is left out instead of getting a made-up value
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert_eq!((w[0].net.as_str(), w[0].refdes.as_str(), w[0].pin.as_str()), ("VCC", "U1", "1"));
+        assert!((w[0].ohm - 0.1966).abs() < 0.002);
     }
 
     #[test]

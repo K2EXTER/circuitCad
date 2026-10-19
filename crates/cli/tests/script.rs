@@ -75,6 +75,59 @@ fn astable_555_runs_near_the_textbook_period_and_goes_to_fab_files() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn postlayout_makes_the_copper_resistance_lower_the_current() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 1 as=R1
+add R 1 as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+        board import
+board autoplace
+board route
+dc
+board postlayout on
+dc
+board postlayout off
+dc
+");
+    assert!(ok, "{a:?}");
+    let dcs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "dc").collect();
+    let amps = |v: &Value| v["elements"]["R1"]["current"].as_f64().unwrap();
+    assert!((amps(dcs[0]) - 2.5).abs() < 1e-6 && dcs[0]["post_layout"] == false);
+    // tens of milliohm of copper in a 2 ohm loop: about 2% less current
+    assert!(dcs[1]["post_layout"] == true && amps(dcs[1]) < 2.49 && amps(dcs[1]) > 2.3, "{}", amps(dcs[1]));
+    assert!((amps(dcs[2]) - 2.5).abs() < 1e-6, "off restores ideal wires");
+}
+
+#[test]
+fn board_currents_take_the_simulated_current_and_widen_thin_tracks() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 1 as=R1
+add R 1 as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+        board import
+board autoplace
+board route
+board currents
+board currents widen
+board currents
+");
+    assert!(ok, "{a:?}");
+    let runs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "board" && v.get("list").is_some_and(|l| l.is_array() && v.get("nets").is_some())).collect();
+    assert_eq!(runs.len(), 3, "{a:?}");
+    let vin = |r: &Value| r["list"].as_array().unwrap().iter().find(|n| n["net"] == "VIN").unwrap().clone();
+    assert!((vin(runs[0])["amps"].as_f64().unwrap() - 2.5).abs() < 1e-3);
+    assert_eq!(vin(runs[0])["too_thin"], true, "2.5 A needs more than the default track");
+    assert!(runs[1]["widened_tracks"].as_u64().unwrap() > 0);
+    assert_eq!(vin(runs[2])["too_thin"], false);
+}
+
 fn run_strict(script: &str) -> (Vec<Value>, bool) {
     let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
     let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))

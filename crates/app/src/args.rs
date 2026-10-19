@@ -1,6 +1,6 @@
 use super::*;
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
 /// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -148,6 +148,16 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         app.mode = Mode::Board;
         app.board_ed.load_path(p.into());
         apply_board_args(app, args);
+        if args.iter().any(|a| a == "--post-layout") {
+            // the board's copper resistance goes into the schematic's analyses; show the schematic (with --dc, solved again)
+            app.apply_post_layout(true);
+            if args.iter().any(|a| a == "--dc") {
+                app.sch.analyze_dc();
+            }
+            if args.iter().any(|a| a == "--schematic") {
+                app.mode = Mode::Schematic;
+            }
+        }
     }
 }
 

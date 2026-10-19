@@ -814,3 +814,18 @@ fn the_electrolytic_capacitor_of_the_buck_sample_reports_ripple_current_and_life
     assert!(r.allowed.is_some() && r.life_hours.is_some() && r.core_temp_c >= 27.0);
     assert!(r.message().contains("C1") && r.life_text().is_some());
 }
+
+/// With the board's copper resistance in front of a pin, the pin shows the voltage that reaches it, not the net's.
+#[test]
+fn pin_voltage_is_taken_behind_the_wiring_resistance() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "divider_tolerance.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.run_dc();
+    let before = e.pin_voltage("R1", "2").unwrap();
+    e.wiring = vec![sim_core::WiringR { refdes: "R1".into(), pin: "2".into(), ohm: 1000.0 }];
+    e.run_dc();
+    let after = e.pin_voltage("R1", "2").unwrap();
+    assert!((before - after).abs() > 1e-3, "{before} {after}");
+    assert!(e.pin_voltage("R1", "1").is_some());
+}

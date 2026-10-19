@@ -64,6 +64,26 @@ struct App {
     welcome: bool,
 }
 
+impl App {
+    /// Carry the board's copper resistance to the schematic's simulations, or take it away.
+    fn apply_post_layout(&mut self, on: bool) {
+        if !on {
+            self.sch.wiring.clear();
+            self.board_ed.status = "配線の抵抗を外しました。回路図のシミュレーションは理想の配線に戻ります".into();
+            return;
+        }
+        self.sch.wiring = pcb_core::irdrop::wiring_resistances(&self.board_ed.board, &pcb_core::irdrop::IrSpec::default())
+            .into_iter()
+            .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm })
+            .collect();
+        self.board_ed.status = if self.sch.wiring.is_empty() {
+            "配線されたネットがないので、反映するものがありません。先に配線してください".into()
+        } else {
+            format!("{} ピンの配線の抵抗を回路図のシミュレーションに反映しました。回路図に戻って解析を実行してください", self.sch.wiring.len())
+        };
+    }
+}
+
 impl Default for App {
     fn default() -> Self {
         Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), auto_shot: None, project: None, closing_ok: false }
@@ -85,6 +105,13 @@ impl eframe::App for App {
         // F1, and the small "操作" buttons of the panels, open the guide
         if ui.input(|i| i.key_pressed(egui::Key::F1)) {
             self.help.show(if self.mode == Mode::Schematic { help::HelpTab::Schematic } else { help::HelpTab::Board });
+        }
+        if std::mem::take(&mut self.board_ed.currents_request) {
+            let currents = self.sch.dc_net_currents();
+            self.board_ed.use_simulated_currents(currents);
+        }
+        if let Some(on) = self.board_ed.post_layout_request.take() {
+            self.apply_post_layout(on);
         }
         if let Some(t) = self.sch.help_request.take().or_else(|| self.board_ed.help_request.take()) {
             self.help.show(t);

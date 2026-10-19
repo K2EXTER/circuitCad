@@ -48,6 +48,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board route [net=NAME]
   board drc
   board status
+  board currents [widen]               take the DC currents of the nets, show the track width each needs, optionally thicken thin tracks
+  board postlayout on|off               dc/tran/ac/noise also see the copper resistance of the board (post-layout simulation)
   board save FILE.pcbjson / board open FILE.pcbjson
   board fab DIR                         Gerber, drill, BOM, placement and the zip
 ";
@@ -65,6 +67,8 @@ pub struct Session {
     pub last_dc: Option<sim_core::DcResult>,
     pub last_tran: Option<sim_core::TranResult>,
     pub last_ac: Option<sim_core::AcResult>,
+    /// `board postlayout on`: analyses add the board's copper resistance in series with the pads.
+    pub post_layout: bool,
 }
 
 pub fn split_words(line: &str) -> Vec<String> {
@@ -123,7 +127,7 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None }
+        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
