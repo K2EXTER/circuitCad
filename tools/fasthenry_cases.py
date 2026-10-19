@@ -86,6 +86,21 @@ def cases():
     add("stacked antiparallel l=100", "mutual", 0.25, [[(0, 0, 0), (100, 0, 0)], [(100, 0, 1), (0, 0, 1)]])
     add("stacked crossing 90deg", "mutual", 0.25, [[(0, 0, 0), (100, 0, 0)], [(50, -25, 1), (50, 25, 1)]])
     add("stacked w=1 l=30", "mutual", 1.0, [[(0, 0, 0), (30, 0, 0)], [(0, 0, 1), (30, 0, 1)]])
+    # vias beside each other: two top-via-bottom paths (1 mm stubs), the second one `d` away, going the same way or back
+    stub = [(0, 0, 0), (1, 0, 0), (1, 0, 1), (2, 0, 1)]
+    for d in (1.27, 2.54, 5.0, 10.0):
+        other = [(x, y + d, layer) for x, y, layer in stub]
+        add(f"via pair d={d:g} same way", "mutual", 0.25, [stub, other])
+    add("via pair d=2.54 back (supply and return)", "mutual", 0.25, [stub, [(x, y + 2.54, layer) for x, y, layer in reversed(stub)]])
+    add("via pair d=2.54 drill 0.6", "mutual", 0.25, [stub, [(x, y + 2.54, layer) for x, y, layer in stub]], drill=0.6)
+    # one path with two vias (down, along, up): they couple, with opposite currents
+    for d in (1.27, 2.54, 5.0):
+        add(f"path with two vias {d:g} apart", "self", 0.25, [[(0, 0, 0), (1, 0, 0), (1, 0, 1), (1 + d, 0, 1), (1 + d, 0, 0), (2 + d, 0, 0)]])
+    # a hole through several layers of a 4-layer board, and a part of it
+    add("via through 4 layers", "self", 0.25, [[(0, 0, 0), (1, 0, 0), (1, 0, 3), (2, 0, 3)]], layers=4)
+    add("via from layer 0 to 1 of 4", "self", 0.25, [[(0, 0, 0), (1, 0, 0), (1, 0, 1), (2, 0, 1)]], layers=4)
+    add("via from layer 1 to 3 of 4", "self", 0.25, [[(0, 0, 1), (1, 0, 1), (1, 0, 3), (2, 0, 3)]], layers=4)
+    add("via pair d=2.54 through 4 layers", "mutual", 0.25, [[(0, 0, 0), (1, 0, 0), (1, 0, 3), (2, 0, 3)], [(0, 2.54, 0), (1, 2.54, 0), (1, 2.54, 3), (2, 2.54, 3)]], layers=4)
     # traces over a copper pour (the pour carries the return current): 2 layers (pour 1.6 mm below), 4 layers (0.53 / 1.07 mm below)
     f = 1e7
     add("loop over plane l=50 h=1.6", "loop", 0.25, [[(0, 0, 0), (50, 0, 0)]], plane={"layer": 1, "margin": 20}, freq=f)

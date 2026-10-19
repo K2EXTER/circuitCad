@@ -63,22 +63,23 @@ pub fn track_inductance(len: f64, width: f64, spec: &IrSpec) -> f64 {
     (0.2e-9 * len * ((2.0 * len / wt).ln() + 0.5 + 0.2235 * wt / len)).max(0.0)
 }
 
-/// Partial self-inductance of a plated hole through the board (H), taken as a round solid wire of the drill diameter:
-/// 0.2 nH/mm * h * (ln(2 h / r) - 0.75), about 0.74 nH for a 0.3 mm hole in 1.6 mm. (The common "5.08 h (ln(4h/d) + 1)" is a
-/// loop figure with a return path and is about 1.8 times too high for a segment of a path whose other parts are counted
-/// separately. The real barrel is hollow, which makes it roughly 20 % lower still.)
-pub fn via_inductance(drill: f64) -> f64 {
+/// Partial self-inductance of `height` mm (the stretch of the barrel a current crosses) of a plated hole, taken as a round solid wire
+/// of the drill diameter: 0.2 nH/mm * h * (ln(2 h / r) - 0.75), about 0.74 nH for a 0.3 mm hole through 1.6 mm. (The common
+/// "5.08 h (ln(4h/d) + 1)" is a loop figure with a return path and is about 1.8 times too high for a segment of a path whose other
+/// parts are counted separately. The real barrel is hollow, which makes it roughly 20 % lower still.)
+pub fn via_inductance(drill: f64, height: f64) -> f64 {
     let r = drill.max(0.1) / 2.0;
-    0.2e-9 * BOARD_MM * ((2.0 * BOARD_MM / r).ln() - 0.75)
+    let h = height.max(0.01);
+    (0.2e-9 * h * ((2.0 * h / r).ln() - 0.75)).max(0.0)
 }
 
 /// Inductance charged for a current that goes through a copper pour (H): the plane is wide, so only a little.
 const POUR_HENRY: f64 = 0.3e-9;
 
-/// Resistance of a plated hole of `drill` (mm) from the top to the bottom layer.
-pub fn via_resistance(drill: f64) -> f64 {
+/// Resistance of `height` mm (the stretch between two layers) of the barrel of a plated hole of `drill` (mm).
+pub fn via_resistance(drill: f64, height: f64) -> f64 {
     let area = std::f64::consts::PI * (drill + PLATING_MM) * PLATING_MM;
-    RHO_MM * BOARD_MM / area
+    RHO_MM * height / area
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -101,8 +102,10 @@ pub struct PadDrop {
 pub struct PathSeg {
     pub a: Point,
     pub b: Point,
-    /// Height of the layer above the top copper (mm).
+    /// Height of the layer above the top copper (mm), at `a`; `z2` is the height at `b` (different for a stretch of a via, where
+    /// `a` and `b` are the same point and `width` is the drill).
     pub z: f64,
+    pub z2: f64,
     pub width: f64,
     /// Height of a copper pour of another net on another layer that lies under (or over) this piece: the return current of
     /// the trace runs in it, which is worked out with an image of the trace in the pour (see `image_of`).
@@ -271,6 +274,8 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         .filter_map(|z| layers.iter().position(|&x| x == z.side).map(|i| (layer_z(&layers, i), z.polygon.as_slice())))
         .collect();
     // pads: a through-hole pad is on both layers, joined by its barrel
+    // one step of a barrel, between neighbouring copper layers
+    let layer_h = BOARD_MM / (layers.len().max(2) - 1) as f64;
     let mut pad_node: HashMap<usize, usize> = HashMap::new();
     for &i in &pad_ids {
         let p = &board.pads[i];
@@ -280,7 +285,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             // the barrel joins every copper layer, one edge per step between neighbouring layers
             for w in layers.windows(2) {
                 let (x, y) = (g.node(w[0], p.pos), g.node(w[1], p.pos));
-                g.edge(x, y, via_resistance(d), Link::Via(d));
+                g.edge(x, y, via_resistance(d, layer_h), Link::Via(d));
             }
         }
     }
@@ -297,7 +302,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
                 for w in layers.windows(2) {
                     let (x, y) = (g.node(w[0], v.pos), g.node(w[1], v.pos));
                     if !g.edges.iter().any(|&(e, f, _)| (e == x && f == y) || (e == y && f == x)) {
-                        g.edge(x, y, via_resistance(v.drill), Link::Via(v.drill));
+                        g.edge(x, y, via_resistance(v.drill, layer_h), Link::Via(v.drill));
                     }
                 }
                 return g.node(side, v.pos);
@@ -537,9 +542,12 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
                 let mid = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
                 // the nearest pour on another layer that covers the middle of the piece
                 let plane = planes.iter().filter(|(pz, poly)| (pz - z).abs() > 1e-9 && in_polygon(poly, mid)).map(|(pz, _)| *pz).min_by(|x, y| (x - z).abs().total_cmp(&(y - z).abs()));
-                segs.push(PathSeg { a, b, z, width, plane });
+                segs.push(PathSeg { a, b, z, z2: z, width, plane });
             }
-            Link::Via(d) => extra += via_inductance(d),
+            Link::Via(d) => {
+                let zl = |side: Side| layers.iter().position(|&x| x == side).map_or(0.0, |i| layer_z(layers, i));
+                segs.push(PathSeg { a: g.pos[u].1, b: g.pos[at].1, z: zl(g.pos[u].0), z2: zl(g.pos[at].0), width: d, plane: None });
+            }
             Link::Pour => extra += POUR_HENRY,
             Link::Cell => {}
         }
@@ -549,6 +557,11 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
     let runs = straight_runs(&segs);
     let mut henry = extra;
     for r in &runs {
+        if r.iter().all(is_via_piece) {
+            // consecutive steps of one barrel: one hole as high as they are together
+            henry += via_inductance(r[0].width, r.iter().map(|s| (s.z2 - s.z).abs()).sum());
+            continue;
+        }
         let len: f64 = r.iter().map(|s| s.a.dist(s.b)).sum();
         let len_over_w: f64 = r.iter().map(|s| s.a.dist(s.b) / s.width.max(0.01)).sum();
         henry += track_inductance(len, if len_over_w > 0.0 { len / len_over_w } else { 1.0 }, spec);
@@ -566,6 +579,11 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
     (henry, segs)
 }
 
+/// A stretch of a plated hole: it goes up or down at one place.
+fn is_via_piece(s: &PathSeg) -> bool {
+    s.a.dist(s.b) < 1e-9 && (s.z2 - s.z).abs() > 1e-9
+}
+
 /// Height (mm) of copper layer number `i` of `layers` below the top face: the board thickness split evenly.
 fn layer_z(layers: &[Side], i: usize) -> f64 {
     BOARD_MM * i as f64 / (layers.len().max(2) - 1) as f64
@@ -576,19 +594,23 @@ fn layer_z(layers: &[Side], i: usize) -> f64 {
 /// opposite sign, so the loop inductance is `L - M(trace, image)`: 100 mm of 0.25 mm trace 1.6 mm over a plane is 78 nH, not
 /// 141 nH, and two traces over the same plane couple with `M(a, b) - M(a, image of b)`.
 fn image_of(path: &[PathSeg]) -> Vec<PathSeg> {
-    path.iter().filter_map(|s| s.plane.map(|pz| PathSeg { z: 2.0 * pz - s.z, plane: None, ..*s })).collect()
+    path.iter().filter_map(|s| s.plane.map(|pz| PathSeg { z: 2.0 * pz - s.z, z2: 2.0 * pz - s.z2, plane: None, ..*s })).collect()
 }
 
-/// The runs of a path: maximal stretches of consecutive segments that go the same way (within about a degree) on one layer.
+/// The runs of a path: maximal stretches of consecutive segments that go the same way (within about a degree) on one layer (or
+/// steps of one hole).
 fn straight_runs(segs: &[PathSeg]) -> Vec<&[PathSeg]> {
     let mut out = vec![];
     let mut from = 0;
     for i in 1..=segs.len() {
         let same = i < segs.len() && {
             let (a, b) = (&segs[i - 1], &segs[i]);
-            let (va, vb) = ((a.b.x - a.a.x, a.b.y - a.a.y), (b.b.x - b.a.x, b.b.y - b.a.y));
-            let (la, lb) = ((va.0 * va.0 + va.1 * va.1).sqrt(), (vb.0 * vb.0 + vb.1 * vb.1).sqrt());
-            la > 1e-12 && lb > 1e-12 && (va.0 * vb.1 - va.1 * vb.0).abs() / (la * lb) < 0.02 && va.0 * vb.0 + va.1 * vb.1 > 0.0 && (a.z - b.z).abs() < 1e-9
+            let vec3 = |s: &PathSeg| [s.b.x - s.a.x, s.b.y - s.a.y, s.z2 - s.z];
+            let (va, vb) = (vec3(a), vec3(b));
+            let norm = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            let cross = [va[1] * vb[2] - va[2] * vb[1], va[2] * vb[0] - va[0] * vb[2], va[0] * vb[1] - va[1] * vb[0]];
+            let (la, lb) = (norm(va), norm(vb));
+            la > 1e-12 && lb > 1e-12 && norm(cross) / (la * lb) < 0.02 && va[0] * vb[0] + va[1] * vb[1] + va[2] * vb[2] > 0.0 && (a.z - b.z).abs() < 1e-9 + (a.z2 - a.z).abs().max((b.z2 - b.z).abs())
         };
         if !same {
             out.push(&segs[from..i]);
@@ -733,24 +755,28 @@ const MAX_COUPLINGS: usize = 200;
 /// Smaller couplings are left out.
 const MIN_K: f64 = 0.03;
 
-/// A short straight piece of a path: where it starts, its vector (mm), its height and the trace width.
+/// A short straight piece of a path: where it starts and its vector (mm) in x, y and height, and the trace width (the drill for a
+/// stretch of a via).
 struct Piece {
-    from: [f64; 2],
-    v: [f64; 2],
-    z: f64,
+    from: [f64; 3],
+    v: [f64; 3],
     width: f64,
 }
 
+fn len3(s: &PathSeg) -> f64 {
+    ((s.b.x - s.a.x).powi(2) + (s.b.y - s.a.y).powi(2) + (s.z2 - s.z).powi(2)).sqrt()
+}
+
 fn pieces(path: &[PathSeg]) -> Vec<Piece> {
-    let total: f64 = path.iter().map(|s| s.a.dist(s.b)).sum();
+    let total: f64 = path.iter().map(len3).sum();
     let step = (total / 60.0).clamp(0.3, 2.0);
     let mut out = vec![];
     for s in path {
-        let len = s.a.dist(s.b);
+        let len = len3(s);
         let n = (len / step).ceil().max(1.0) as usize;
-        let v = [(s.b.x - s.a.x) / n as f64, (s.b.y - s.a.y) / n as f64];
+        let v = [(s.b.x - s.a.x) / n as f64, (s.b.y - s.a.y) / n as f64, (s.z2 - s.z) / n as f64];
         for i in 0..n {
-            out.push(Piece { from: [s.a.x + v[0] * i as f64, s.a.y + v[1] * i as f64], v, z: s.z, width: s.width });
+            out.push(Piece { from: [s.a.x + v[0] * i as f64, s.a.y + v[1] * i as f64, s.z + v[2] * i as f64], v, width: s.width });
         }
     }
     out
@@ -763,39 +789,41 @@ fn parallel_mutual(a: f64, lo: f64, hi: f64, d: f64) -> f64 {
     0.1e-9 * (f(hi) - f(hi - a) - f(lo) + f(lo - a))
 }
 
-/// Mutual inductance (H) of two paths, summed over pairs of their pieces. Parallel pieces use the exact formula for two
-/// filaments at the distance of the traces (softened by the geometric mean distance of a cross-section, 0.2235 (w + t),
-/// which also keeps it finite); pieces at an angle use 1e-7 H/m * dl1 . dl2 / r between their midpoints.
+/// Mutual inductance (H) of two paths, summed over pairs of their pieces. Parallel pieces (horizontal traces, or two holes) use the
+/// exact formula for two filaments at the distance of the conductors (softened by the geometric mean distance of a cross-section:
+/// 0.2235 (w + t) for a trace, 0.39 d for a round hole, which also keeps it finite); pieces at an angle use 1e-7 H/m * dl1 . dl2 / r
+/// between their midpoints, which is nothing between a hole and a trace (they are at a right angle).
 fn mutual(a: &[PathSeg], b: &[PathSeg], spec: &IrSpec) -> f64 {
     let (pa, pb) = (pieces(a), pieces(b));
     let t = spec.thickness_um / 1000.0;
+    let norm = |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    let gmd = |p: &Piece| if p.v[0].abs() + p.v[1].abs() < 1e-12 { 0.389 * p.width } else { 0.2235 * (p.width + t) };
     let mut total = 0.0;
     for x in &pa {
-        let la = (x.v[0] * x.v[0] + x.v[1] * x.v[1]).sqrt();
+        let la = norm(x.v);
         if la < 1e-12 {
             continue;
         }
-        let u = [x.v[0] / la, x.v[1] / la];
+        let u = [x.v[0] / la, x.v[1] / la, x.v[2] / la];
         for y in &pb {
-            let lb = (y.v[0] * y.v[0] + y.v[1] * y.v[1]).sqrt();
+            let lb = norm(y.v);
             if lb < 1e-12 {
                 continue;
             }
-            let g = 0.2235 * (0.5 * (x.width + y.width) + t);
-            let (rx, ry) = (y.from[0] - x.from[0], y.from[1] - x.from[1]);
-            let cross = (x.v[0] * y.v[1] - x.v[1] * y.v[0]) / (la * lb);
-            let dz = x.z - y.z;
-            if cross.abs() < 1e-6 {
-                let (p0, p1) = (rx * u[0] + ry * u[1], (rx + y.v[0]) * u[0] + (ry + y.v[1]) * u[1]);
-                let perp = rx * u[1] - ry * u[0];
-                let d = (perp * perp + dz * dz + g * g).sqrt();
-                let sign = if x.v[0] * y.v[0] + x.v[1] * y.v[1] >= 0.0 { 1.0 } else { -1.0 };
-                total += sign * parallel_mutual(la, p0.min(p1), p0.max(p1), d);
-            } else {
-                let (mx, my) = (rx + 0.5 * y.v[0] - 0.5 * x.v[0], ry + 0.5 * y.v[1] - 0.5 * x.v[1]);
-                let dot = x.v[0] * y.v[0] + x.v[1] * y.v[1];
+            let g = 0.5 * (gmd(x) + gmd(y));
+            let r = [y.from[0] - x.from[0], y.from[1] - x.from[1], y.from[2] - x.from[2]];
+            let dot = x.v[0] * y.v[0] + x.v[1] * y.v[1] + x.v[2] * y.v[2];
+            let cross = [x.v[1] * y.v[2] - x.v[2] * y.v[1], x.v[2] * y.v[0] - x.v[0] * y.v[2], x.v[0] * y.v[1] - x.v[1] * y.v[0]];
+            if norm(cross) / (la * lb) < 1e-6 {
+                let p0 = r[0] * u[0] + r[1] * u[1] + r[2] * u[2];
+                let p1 = p0 + (y.v[0] * u[0] + y.v[1] * u[1] + y.v[2] * u[2]);
+                let perp2 = (r[0] * r[0] + r[1] * r[1] + r[2] * r[2] - p0 * p0).max(0.0);
+                let sign = if dot >= 0.0 { 1.0 } else { -1.0 };
+                total += sign * parallel_mutual(la, p0.min(p1), p0.max(p1), (perp2 + g * g).sqrt());
+            } else if dot.abs() > 1e-12 {
+                let m = [r[0] + 0.5 * (y.v[0] - x.v[0]), r[1] + 0.5 * (y.v[1] - x.v[1]), r[2] + 0.5 * (y.v[2] - x.v[2])];
                 // mm * mm / mm = mm; 1e-7 H/m = 1e-10 H per mm
-                total += 1e-10 * dot / (mx * mx + my * my + dz * dz + g * g).sqrt();
+                total += 1e-10 * dot / (m[0] * m[0] + m[1] * m[1] + m[2] * m[2] + g * g).sqrt();
             }
         }
     }
@@ -1148,6 +1176,34 @@ mod tests {
         }
     }
 
+    /// A hole through four layers is one barrel, not three: its resistance and inductance are those of 1.6 mm, as through two layers
+    /// (each step between neighbouring layers used to be charged as the whole board).
+    #[test]
+    fn a_hole_through_four_layers_counts_the_barrel_once() {
+        let spec = IrSpec::default();
+        let find = |name: &str| cases().into_iter().find(|c| c.0 == name).unwrap();
+        let four = find("via through 4 layers");
+        let want = 2.0 * track_resistance(1.0, 0.25, &spec) + via_resistance(0.3, BOARD_MM);
+        assert!((ours_ohm(&four) / want - 1.0).abs() < 0.01, "{} vs {}", ours_ohm(&four), want);
+        // the same stubs and barrel on two layers
+        let via2 = find("via d=0.3 with 1 mm stubs");
+        assert!((ours_ohm(&via2) - ours_ohm(&four)).abs() < 1e-6);
+        assert!((ours_case(&via2) - ours_case(&four)).abs() < 0.01, "{} vs {}", ours_case(&via2), ours_case(&four));
+        // a part of the barrel is a part of the height
+        let part = find("via from layer 0 to 1 of 4");
+        assert!(ours_case(&part) < ours_case(&four) && ours_case(&part) > 0.6 * ours_case(&four));
+    }
+
+    /// Two holes side by side couple: with the same current direction `M` is 0.42 nH at 1.27 mm and 0.24 nH at 2.54 mm, and with
+    /// opposite directions (supply and return) it lowers the loop (FastHenry: 0.422 and 0.239 nH). Without the coupling the pair
+    /// would have shown only what its 1 mm stubs couple.
+    #[test]
+    fn holes_side_by_side_couple() {
+        let find = |name: &str| cases().into_iter().find(|c| c.0 == name).unwrap();
+        let (near, far, back) = (ours_case(&find("via pair d=1.27 same way")), ours_case(&find("via pair d=2.54 same way")), ours_case(&find("via pair d=2.54 back (supply and return)")));
+        assert!(near > far && far > 0.2 && (back + far).abs() < 0.01, "{near} {far} {back}");
+    }
+
     /// `cargo test -p pcb-core resistance_cases_table -- --ignored --nocapture`: `case,ohm` of the first trace of every plane-free
     /// `self` case without a via (to compare with FastHenry's Re(Z), see `tools/compare_fasthenry.py`).
     #[test]
@@ -1241,13 +1297,13 @@ mod tests {
 
     #[test]
     fn a_via_adds_about_three_quarters_of_a_nanohenry() {
-        let h = via_inductance(0.3);
+        let h = via_inductance(0.3, BOARD_MM);
         assert!((0.6e-9..0.9e-9).contains(&h), "{h}");
     }
 
     #[test]
     fn via_resistance_is_about_a_milliohm() {
-        let r = via_resistance(0.3);
+        let r = via_resistance(0.3, BOARD_MM);
         assert!((0.0008..0.0015).contains(&r), "{r}");
     }
 }
