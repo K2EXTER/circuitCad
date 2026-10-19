@@ -16,3 +16,7 @@ pour 100x50 pads 10 apart in a corner,5.153577e-04
 pour 100x5 strip pads at the ends,9.019312e-03
 pour 60x10 strip pads at the ends,2.665183e-03
 pour 100x20 strip pads at the ends,2.496548e-03
+pour 100x50 a wall of pads at 2.54 mm between the contacts,9.328111e-04
+pour 100x50 the same wall with a gap of 12 mm,8.976432e-04
+pour 100x50 a block of 3x3 pads between the contacts,8.780015e-04
+pour 30x10 strip with five pads cut into it,1.609260e-03

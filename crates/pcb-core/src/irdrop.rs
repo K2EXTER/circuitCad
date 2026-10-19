@@ -7,12 +7,14 @@
 //!   pad is looked at as if it alone drew the whole current, which is the worst case for that pad;
 //! * a copper pour is a grid of square cells (the sheet resistance between neighbours), each pad, via or track end under it touching
 //!   the cells around it through the spreading resistance of a contact of its size, so the pour's shape counts: a narrow strip has
-//!   as many squares between two pads as its length over its width.
+//!   as many squares between two pads as its length over its width. The copper is the pour as it is filled (`zonefill`): the
+//!   clearance around the copper of other nets is cut out, and a through-hole pad with thermal relief is tied by its four spokes.
 
 use std::collections::HashMap;
 
 use crate::drc::{self, Connectivity};
 use crate::model::*;
+use crate::zonefill;
 
 /// Resistivity of copper at about 25 C, in ohm * mm.
 const RHO_MM: f64 = 1.72e-5;
@@ -181,6 +183,35 @@ impl Graph {
     }
 }
 
+/// Point-in-copper tests for the pieces of a pour (outer contour minus holes), with a bounding box in front of every contour.
+struct FillIndex {
+    shapes: Vec<FillBox>,
+}
+
+struct FillBox {
+    outer: (Point, Point, Vec<Point>),
+    holes: Vec<(Point, Point, Vec<Point>)>,
+}
+
+fn bounds_of(poly: &[Point]) -> (Point, Point) {
+    poly.iter().fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(l, h), p| (Point::new(l.x.min(p.x), l.y.min(p.y)), Point::new(h.x.max(p.x), h.y.max(p.y))))
+}
+
+impl FillIndex {
+    fn new(shapes: &[zonefill::FillShape]) -> Self {
+        let boxed = |poly: &Vec<Point>| {
+            let (lo, hi) = bounds_of(poly);
+            (lo, hi, poly.clone())
+        };
+        Self { shapes: shapes.iter().map(|s| FillBox { outer: boxed(&s.outer), holes: s.holes.iter().map(boxed).collect() }).collect() }
+    }
+
+    fn contains(&self, p: Point) -> bool {
+        let inside = |b: &(Point, Point, Vec<Point>)| p.x >= b.0.x && p.x <= b.1.x && p.y >= b.0.y && p.y <= b.1.y && in_polygon(&b.2, p);
+        self.shapes.iter().any(|s| inside(&s.outer) && !s.holes.iter().any(inside))
+    }
+}
+
 fn pad_contains(p: &Pad, q: Point, slack: f64) -> bool {
     let (w, h) = p.shape.size();
     (q.x - p.pos.x).abs() <= w / 2.0 + slack && (q.y - p.pos.y).abs() <= h / 2.0 + slack
@@ -307,6 +338,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
     }
     // copper pours: a grid of square cells (the sheet resistance between neighbours); every pad, via or track end that is under a
     // pour touches the cells around it, through the spreading resistance of a contact of its size
+    let pad_of_node: HashMap<usize, usize> = pad_node.iter().map(|(&pi, &n)| (n, pi)).collect();
     let contact_radius: HashMap<usize, f64> = pad_node.iter().map(|(&pi, &n)| (n, board.pads[pi].shape.size().0.min(board.pads[pi].shape.size().1) / 2.0)).collect();
     for z in board.zones.iter().filter(|z| z.net == net && z.polygon.len() >= 3) {
         let a = area(&z.polygon).max(1.0);
@@ -318,24 +350,32 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             return out;
         }
         let centre = |ix: usize, iy: usize| Point::new(lo.x + (ix as f64 + 0.5) * step, lo.y + (iy as f64 + 0.5) * step);
+        // the copper that is really there: the polygon clipped to the board, without the clearance around the copper of other nets
+        let fill = FillIndex::new(&zonefill::zone_fill(board, z, conn));
         let mut cell: Vec<Option<usize>> = vec![None; nx * ny];
+        let mut cover = vec![0.0f64; nx * ny];
         for ix in 0..nx {
             for iy in 0..ny {
+                // the share of the cell that is copper, from nine sample points; a cell with less than a fifth is not there
                 let c = centre(ix, iy);
-                if in_polygon(&z.polygon, c) {
+                let hit = (0..9).filter(|k| fill.contains(Point::new(c.x + ((k % 3) as f64 - 1.0) * step / 3.0, c.y + ((k / 3) as f64 - 1.0) * step / 3.0))).count();
+                if hit >= 2 {
+                    cover[ix * ny + iy] = hit as f64 / 9.0;
                     cell[ix * ny + iy] = Some(g.pos.len());
                     g.pos.push((z.side, c));
                 }
             }
         }
+        // a link between two cells has the sheet resistance of a square when both are full, and more when copper covers only part of them
+        let link = |a: usize, b: usize| spec.sheet() / (0.5 * (cover[a] + cover[b])).clamp(0.2, 1.0);
         for ix in 0..nx {
             for iy in 0..ny {
                 let Some(me) = cell[ix * ny + iy] else { continue };
                 if ix + 1 < nx && let Some(r) = cell[(ix + 1) * ny + iy] {
-                    g.edge(me, r, spec.sheet(), Link::Cell);
+                    g.edge(me, r, link(ix * ny + iy, (ix + 1) * ny + iy), Link::Cell);
                 }
                 if iy + 1 < ny && let Some(u) = cell[ix * ny + iy + 1] {
-                    g.edge(me, u, spec.sheet(), Link::Cell);
+                    g.edge(me, u, link(ix * ny + iy, ix * ny + iy + 1), Link::Cell);
                 }
             }
         }
@@ -377,8 +417,10 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             let corr = spec.sheet() / (2.0 * std::f64::consts::PI) * (r_eq / r).ln();
             // a negative correction (cells smaller than the pad would give) is not taken back out of the cell links
             let corr = corr.max(0.0);
+            // a through-hole pad of a pour with thermal relief is tied by four spokes across the gap, not by solid copper
+            let relief = if z.thermal && pad_of_node.get(&n).is_some_and(|&pi| board.pads[pi].drill.is_some()) { spec.sheet() * z.thermal_gap / (4.0 * z.spoke_width.max(0.05)) } else { 0.0 };
             for (_, c) in near {
-                g.edge(n, c, n_c * corr + spec.sheet() * 0.1, Link::Pour);
+                g.edge(n, c, n_c * (corr + relief) + spec.sheet() * 0.1, Link::Pour);
             }
             out.has_zone = true;
         }
@@ -1004,17 +1046,25 @@ mod tests {
     /// The program's resistance (ohm) between two pads of a pour of `tools/pour_cases.json` (a rectangle of `w` x `h`, round pads
     /// of 1.6 mm at `p1` and `p2`).
     fn ours_pour(c: &serde_json::Value) -> f64 {
+        // the whole case is moved 5 mm in from the corner of the board so that the pour's edge is not cut back by the board outline
+        let off = 5.0;
         let (w, h) = (c["w"].as_f64().unwrap(), c["h"].as_f64().unwrap());
-        let pt = |k: &str| (c[k][0].as_f64().unwrap(), c[k][1].as_f64().unwrap());
-        let mk = |p: (f64, f64), r: &str| {
+        let pt = |k: &str| (c[k][0].as_f64().unwrap() + off, c[k][1].as_f64().unwrap() + off);
+        let mk = |p: (f64, f64), r: &str, net: &str| {
             let mut pad = Pad::new(Point::new(p.0, p.1), PadShape::Circle { d: 1.6 }, None, Side::Top);
             pad.refdes = r.into();
             pad.pin = "1".into();
-            pad.net = "N0".into();
+            pad.net = net.into();
             pad
         };
-        let mut b = board(vec![mk(pt("p1"), "J0"), mk(pt("p2"), "U0")], vec![]);
-        b.zones.push(Zone::new("N0", Side::Top, vec![Point::new(0.0, 0.0), Point::new(w, 0.0), Point::new(w, h), Point::new(0.0, h)]));
+        let mut pads = vec![mk(pt("p1"), "J0", "N0"), mk(pt("p2"), "U0", "N0")];
+        for (k, o) in c.get("others").and_then(|o| o.as_array()).into_iter().flatten().enumerate() {
+            pads.push(mk((o[0].as_f64().unwrap() + off, o[1].as_f64().unwrap() + off), &format!("X{k}"), "X"));
+        }
+        let mut b = board(pads, vec![]);
+        let mut zone = Zone::new("N0", Side::Top, vec![Point::new(off, off), Point::new(off + w, off), Point::new(off + w, off + h), Point::new(off, off + h)]);
+        zone.clearance = c.get("clear").and_then(|v| v.as_f64()).unwrap_or(0.3);
+        b.zones.push(zone);
         wiring_resistances(&b, &IrSpec::default()).iter().find(|s| s.refdes == "U0").expect("U0 not reached").ohm
     }
 
@@ -1043,6 +1093,28 @@ mod tests {
             let (ours, fd) = (ours_pour(&c), table[name]);
             assert!((ours / fd - 1.0).abs() < 0.06, "{name}: {:.3} mohm vs {:.3} mohm", ours * 1e3, fd * 1e3);
         }
+    }
+
+    /// A through-hole pad of a pour with thermal relief is tied by four spokes across the gap (0.3 mm gap, 0.3 mm spokes: a quarter
+    /// of a square each way, about 0.12 mohm per pad at 35 um copper), which solid connection does not add.
+    #[test]
+    fn thermal_relief_adds_the_resistance_of_its_spokes() {
+        let r = |thermal: bool| {
+            let mk = |x: f64, name: &str| {
+                let mut p = Pad::new(Point::new(x, 25.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+                p.refdes = name.into();
+                p.pin = "1".into();
+                p.net = "N0".into();
+                p
+            };
+            let mut b = board(vec![mk(30.0, "J0"), mk(70.0, "U0")], vec![]);
+            let mut z = Zone::new("N0", Side::Top, vec![Point::new(5.0, 5.0), Point::new(105.0, 5.0), Point::new(105.0, 55.0), Point::new(5.0, 55.0)]);
+            z.thermal = thermal;
+            b.zones.push(z);
+            wiring_resistances(&b, &IrSpec::default()).iter().find(|s| s.refdes == "U0").unwrap().ohm
+        };
+        let extra = r(true) - r(false);
+        assert!((extra - 2.0 * 0.123e-3).abs() < 0.03e-3, "{} mohm", extra * 1e3);
     }
 
     /// `cargo test -p pcb-core pour_resistance_table -- --ignored --nocapture`: `case,ohm` of every case of `tools/pour_cases.json`.
