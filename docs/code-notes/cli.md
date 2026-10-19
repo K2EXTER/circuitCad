@@ -5,6 +5,7 @@
 ## ファイル
 - `main.rs` 引数(`--lib DIR`、`--keep-going`、`-c`、`-`、ファイル)・1行ずつの実行・1コマンド=1行のJSON出力。最初の失敗で止まる(終了コード1)。
 - `session.rs` `Session`(回路図・部品ライブラリ・基板・部品を置く位置のカーソル)、コマンド表 `run`、`HELP`、語の分割(`"` で囲める)、`key=value` の分離。
+- `design.rs` 設計の手助け: `calc`(`sim-core/designcalc.rs` の14種。アプリの `wizard.rs` の `CALCS` とは別の表なので、計算を足したらどちらにも。基板の配線の太さはアプリだけ)/`ac`(`ac_analysis`。1デケードごとの値と -3dB・位相余裕)/`spec`(`sim-core/spec.rs` の `evaluate_spec`。対象の名前は大文字小文字を問わず結果の綴りに直す)。`dc`/`tran`/`ac` の結果は `Session.last_*` に残り、`new/open/add/value/net/remove` で消える(古い答えを新しい回路の合否にしないため)。
 - `build.rs` 回路図側: `parts`/`part`/`add`/`value`/`net`/`remove`/`list`/`erc`/`dc`/`tran`。
 - `board.rs` 基板側: `board new|import|autoplace|route|drc|status|save|open|fab`。回路図→基板の取り込み(`netlist_of`)はアプリの `board_editor/file.rs` と同じ規則(シミュレーション専用ピンは除く)。
 - `runner.rs` 1行ずつの実行(`run_script`: 失敗で止まる/`keep_going`)。コマンドラインと MCP が共有する。
@@ -30,4 +31,4 @@
 `docs/cli.md` だけを渡した別のエージェントが、LED 10mA、RC低域通過(160µs で 0.63212V)、LM7805 + 基板 + ガーバー(未配線0、DRC 0)を、1〜2回で成功させた。指摘を直した(上の3項目、`part LED` が基本部品のピンを出す、約束事の節を `cli.md` に)。直していないもの: ネットの切り離し・改名(`unnet`)、`tran` の時刻指定、`parts` の英語検索。
 
 ## 今はできないこと(足すなら)
-AC・ノイズ・スイープ・故障の解析、波形の全点の出力、ベタ・多層・差動ペアなど基板の細かい設定、回路図の `.ccproj`、配線の座標指定、MCPサーバー(`ccad` を包めば作れる)。
+ノイズ・スイープ・故障の解析、波形の全点の出力、ベタ・多層・差動ペアなど基板の細かい設定、回路図の `.ccproj`、配線の座標指定、MCPサーバー(`ccad` を包めば作れる)。

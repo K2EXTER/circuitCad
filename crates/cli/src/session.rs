@@ -31,6 +31,14 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   tran TSTOP TSTEP [probe=V(out),I(R1)] [samples=6] [uic]
                                         starts from the DC operating point (a capacitor starts charged);
                                         add 'uic' to start from zero instead (step responses, oscillators)
+ Design help
+  calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no
+                                        arguments lists them with their inputs; the answer has the value, steps, cautions
+  ac FSTART FSTOP [ppd=10] [probe=V(out)]
+                                        frequency response (needs a source with an AC magnitude, e.g. value V1 \"0 AC 1\"):
+                                        gain and phase per decade, -3 dB frequency, phase margin
+  spec KIND TARGET LO HI [at=Hz]        pass / fail of the last dc / tran / ac answer against a range ('-' = no limit).
+                                        'spec' alone lists the kinds (dc_voltage, tran_pp, ac_cutoff, ...)
  Board
   board new [W H]                       empty board (mm), default 60 40
   board import                          parts and nets from the schematic (creates the board if needed)
@@ -51,6 +59,10 @@ pub struct Session {
     pub lib_errors: Vec<String>,
     /// `--strict`: an ERC error stops the script (and `dc`, `tran`, `board import` refuse to run on a sheet with ERC errors).
     pub strict: bool,
+    /// The latest analysis answers, which `spec` reads. Any edit of the schematic clears them.
+    pub last_dc: Option<sim_core::DcResult>,
+    pub last_tran: Option<sim_core::TranResult>,
+    pub last_ac: Option<sim_core::AcResult>,
 }
 
 pub fn split_words(line: &str) -> Vec<String> {
@@ -109,11 +121,15 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors, strict: false }
+        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
         let args = &w[1..];
+        // an answer about the old circuit must not be judged against a new target
+        if matches!(w[0].to_ascii_lowercase().as_str(), "new" | "open" | "add" | "value" | "net" | "remove") {
+            (self.last_dc, self.last_tran, self.last_ac) = (None, None, None);
+        }
         match w[0].to_ascii_lowercase().as_str() {
             "new" => {
                 self.sch = Schematic::default();
@@ -149,6 +165,9 @@ impl Session {
             "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
             "dc" => self.dc(args),
             "tran" => self.tran(args),
+            "ac" => self.ac(args),
+            "calc" => self.calc(args),
+            "spec" => self.spec(args),
             "board" => self.board_cmd(args),
             "help" => Ok(obj(json!({"text": HELP}))),
             other => Err(format!("unknown command '{other}' (try 'help')")),

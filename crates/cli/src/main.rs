@@ -7,6 +7,7 @@
 
 mod board;
 mod build;
+mod design;
 mod mcp;
 mod runner;
 mod session;

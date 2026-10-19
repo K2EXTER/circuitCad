@@ -326,16 +326,17 @@ impl Session {
         Ok(obj(json!({"errors": errors, "warnings": probs.len() - errors, "circuit_ok": errors == 0, "problems": list, "tips": tips, "note": "'ok' only says the command ran; the circuit has no ERC error when errors is 0"})))
     }
 
-    fn circuit(&self) -> Result<sim_core::Circuit, String> {
+    pub(crate) fn circuit(&self) -> Result<sim_core::Circuit, String> {
         sim_core::from_schematic(&self.sch).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
     }
 
-    pub fn dc(&self, args: &[String]) -> Res {
+    pub fn dc(&mut self, args: &[String]) -> Res {
         let gate = self.erc_gate()?;
         let circuit_ok = gate.is_none();
         let full = args.iter().any(|a| a.eq_ignore_ascii_case("full"));
         let c = self.circuit()?;
         let r = sim_core::dc_op(&c).map_err(|e| cli_sim_error(e.to_string()))?;
+        self.last_dc = Some(r.clone());
         let volts: Map<String, Value> = r.voltages.iter().filter(|(n, _)| full || !n.contains('.')).map(|(n, v)| (n.clone(), json!(v))).collect();
         let internal_nodes = r.voltages.iter().filter(|(n, _)| n.contains('.')).count();
         // elements inside a library part's macro model are named 'U1.Ex': their values are model internals, not parts of the circuit
@@ -353,7 +354,7 @@ impl Session {
         Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "warnings": warnings})))
     }
 
-    pub fn tran(&self, args: &[String]) -> Res {
+    pub fn tran(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
         if pos.len() < 2 {
             return Err("tran TSTOP TSTEP [probe=V(out),I(R1)] [samples=6] [uic]   (TSTEP is the largest step; the solver refines it)".into());
@@ -367,6 +368,7 @@ impl Session {
         let circuit_ok = gate.is_none();
         let c = self.circuit()?;
         let r = sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
+        self.last_tran = Some(r.clone());
         let n = r.time.len();
         let pick = |v: &[f64]| -> Vec<Value> {
             (0..samples).map(|k| if samples == 1 { n - 1 } else { k * (n - 1) / (samples - 1) }).map(|i| json!([r.time[i], v[i]])).collect()

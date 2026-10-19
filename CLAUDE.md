@@ -31,7 +31,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標 / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
 - `ratings.rs` 定格チェック / `ripple.rs` 電解コンデンサのリップルと寿命
 - `fault.rs` 故障シミュレーション / `chain.rs` 連鎖故障
-- `designcalc.rs` 初学者向けの値の計算 (足すときは `schematic/wizard.rs` の `CALCS` にも)
+- `designcalc.rs` 初学者向けの値の計算 (足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
 ## pcb-core (`crates/pcb-core/src`) — 詳細: `docs/code-notes/pcb-core.md`

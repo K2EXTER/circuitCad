@@ -174,3 +174,43 @@ fn rc_step_needs_uic_and_reaches_63_percent() {
     assert!(fin(trans[1]) > 0.999, "without uic the capacitor starts charged");
     assert_eq!(trans[0]["circuit_ok"], true);
 }
+
+#[test]
+fn calc_lists_runs_and_refuses_wrong_arguments() {
+    let (a, ok) = run("calc\ncalc led 5 2 10\n");
+    assert!(ok, "{a:?}");
+    assert!(a[0]["calculators"].as_array().unwrap().len() >= 14);
+    // 3 V across the resistor at 10 mA is 300 ohm; the E24 neighbour is 300 itself or 330
+    let v = a[1]["value"].as_str().unwrap();
+    assert!(v.starts_with("300") || v.starts_with("330"), "{v}");
+    let (a, ok) = run("calc led 5 2\n");
+    assert!(!ok && a[0]["error"].as_str().unwrap().contains("needs 3 numbers"), "{a:?}");
+    let (a, _) = run("calc nope\n");
+    assert!(a[0]["error"].as_str().unwrap().contains("one of:"));
+}
+
+#[test]
+fn ac_and_spec_judge_an_rc_filter_against_the_designed_cutoff() {
+    let build = "new\nadd V as=V1\nadd R 1.6k as=R1\nadd C 100n as=C1\nvalue V1 \"0 AC 1\"\nnet IN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\n";
+    // 1 / (2 pi 1.6k 100n) = 995 Hz
+    let (a, ok) = run(&format!("{build}ac 10 100k probe=V(out)\nspec ac_cutoff v(out) 950 1050\nspec ac_cutoff V(OUT) 2k 3k\nspec ac_gain_at V(out) -4 -2 at=1k\n"));
+    assert!(ok, "{a:?}");
+    let specs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "spec").collect();
+    assert_eq!(specs[0]["pass"], true, "{}", specs[0]);
+    assert_eq!(specs[1]["pass"], false);
+    assert!(specs[1]["note"].as_str().unwrap().contains("下限"));
+    assert_eq!(specs[2]["pass"], true);
+    let f3 = last(&a, "ac")["signals"]["V(OUT)"]["minus_3db_hz"].as_f64().unwrap();
+    assert!((f3 / 994.7 - 1.0).abs() < 0.01, "{f3}");
+}
+
+#[test]
+fn spec_needs_a_fresh_analysis_of_the_current_circuit() {
+    let (a, ok) = run("new\nadd V 5 as=V1\nadd R 1k as=R1\nnet A V1.+ R1.1\nnet GND V1.- R1.2\nspec dc_voltage A 4.9 5.1\ndc\nspec dc_voltage a 4.9 5.1\nvalue V1 3\nspec dc_voltage A 4.9 5.1\n");
+    assert!(ok, "{a:?}");
+    let specs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "spec").collect();
+    assert!(specs[0]["pass"].is_null() && !specs[0]["note"].as_str().unwrap().is_empty(), "no analysis yet: {}", specs[0]);
+    assert_eq!(specs[1]["pass"], true);
+    assert_eq!(specs[1]["target"], "A");
+    assert!(specs[2]["pass"].is_null(), "an edit clears the answer: {}", specs[2]);
+}

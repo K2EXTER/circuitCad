@@ -24,7 +24,7 @@ fn tools() -> Value {
     json!([
         {
             "name": "ccad_run",
-            "description": "Run ccad script lines (one command per line) in the persistent circuit session and return one JSON answer per line. Build a circuit by name: new, add TYPE [VALUE] [as=REF], net NAME REF.PIN ..., then erc, dc, tran, list, and for a board: board import / autoplace / route / drc / fab DIR. Call ccad_help first for the full command list and conventions.",
+            "description": "Run ccad script lines (one command per line) in the persistent circuit session and return one JSON answer per line. Build a circuit by name: new, add TYPE [VALUE] [as=REF], net NAME REF.PIN ..., then erc, dc, tran, ac, list, calc (value calculators), spec (pass/fail of the last analysis), and for a board: board import / autoplace / route / drc / fab DIR. Call ccad_help first for the full command list and conventions.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -78,7 +78,7 @@ fn handle(session: &mut Session, msg: &Value) -> Option<Value> {
                 "protocolVersion": version,
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "ccad", "version": env!("CARGO_PKG_VERSION")},
-                "instructions": "Build circuits with ccad_run (by part and pin names), check them with erc, simulate with dc / tran, and make a board. Call ccad_help first."
+                "instructions": "Build circuits with ccad_run (by part and pin names), check them with erc, simulate with dc / tran / ac, size parts with calc, judge results with spec, and make a board. Call ccad_help first."
             })))
         }
         "ping" => reply(Ok(json!({}))),
