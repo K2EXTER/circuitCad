@@ -120,7 +120,7 @@ board fab out/
 | `spec 種類 対象 下限 上限 [at=Hz]` | 直前の `dc`/`tran`/`ac` の答えが範囲に入っているか(`pass`)。`-` は制限なし。引数なしで種類の一覧。回路を編集すると答えは消える。TARGET は `dc_voltage` がネット名(`MID`)、`dc_current` が部品名(`D1`、単位はA: `8m 12m`)、`tran_*`/`ac_*` が信号名(`V(OUT)`)。`at=` は `1k` のように書ける。`pass:false` でもコマンドは `ok:true`(実行できたという意味)。 |
 | `board new [幅 高さ]` / `import` / `autoplace` / `route [net=名]` / `drc` / `status` | 基板(mm)。取り込み・配置・自動配線・DRC。 |
 | `board currents [tran] [from=F] [widen]` | `dc` と同じ動作点(`tran` を付けると、直前の `tran` の後半 F 以降(既定0.5)の実効値。スイッチング電源など DC で電流が決まらない回路用。ピークは `stats` に出すが太さには使わない。`spiky:true` はピークが実効の10倍超=起動サージやスパイクの可能性)から各ネットの電流を求め、基板のネット電流に入れて、必要な配線の太さ(IPC-2221、温度上昇10℃・35µm)と今の最細の太さを返す。`widen` で細い配線を必要な太さに太くする(あとで `board drc`)。 |
-| `board postlayout on\|off` | `on` にすると以後の `dc`/`tran`/`ac` に、配線した基板の銅の抵抗とインダクタンス(電源の入口パッドから各パッドまで)がパッドの手前に直列に入る(レイアウト後シミュレーション)。答えに `largest`(抵抗の大きいパッド。`nanohenry` も。行き帰りの結合は無視するので上限寄り)。ピンの電圧は `ac`/`tran` の probe に `V(R1.1.wire)` と書く。`dc`/`tran` の答えの `post_layout` で効いているか分かる。ネットの電圧は入口側の値。 |
+| `board postlayout on\|off` | `on` にすると以後の `dc`/`tran`/`ac` に、配線した基板の銅の抵抗とインダクタンス(電源の入口パッドから各パッドまで)がパッドの手前に直列に入る(レイアウト後シミュレーション)。答えに `largest`(抵抗の大きいパッド。`nanohenry` も。`couplings`/`strongest_couplings` は別ネットの配線どうしの磁気結合 k。行きと帰りが近いほどループのインダクタンスが小さくなる)。ピンの電圧は `ac`/`tran` の probe に `V(R1.1.wire)` と書く。`dc`/`tran` の答えの `post_layout` で効いているか分かる。ネットの電圧は入口側の値。 |
 | `board save F` / `open F` / `fab DIR` | `.pcbjson` の保存・読込、ガーバー・ドリル・BOM・部品位置・zip の書き出し。 |
 
 ## MCPサーバーとして使う (Claude Code などから)

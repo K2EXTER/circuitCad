@@ -117,15 +117,18 @@ impl Session {
                     _ => return Err("board postlayout on|off  (on: dc/tran/ac/noise add the copper resistance of the routed board in series with each pad)".into()),
                 };
                 let board = self.board_mut()?;
-                let mut w = pcb_core::irdrop::wiring_resistances(board, &pcb_core::irdrop::IrSpec::default());
+                let spec = pcb_core::irdrop::IrSpec::default();
+                let mut w = pcb_core::irdrop::wiring_resistances(board, &spec);
+                let couplings = pcb_core::irdrop::wiring_couplings(&w, &spec);
+                let strongest: Vec<Value> = couplings.iter().take(5).map(|c| json!({"pads": [format!("{}.{}", c.a.0, c.a.1), format!("{}.{}", c.b.0, c.b.1)], "k": (c.k * 1e3).round() / 1e3})).collect();
                 w.sort_by(|a, b| b.ohm.partial_cmp(&a.ohm).unwrap());
                 let list: Vec<Value> = w.iter().take(10).map(|x| json!({"net": x.net, "pad": format!("{}.{}", x.refdes, x.pin), "milliohm": (x.ohm * 1e6).round() / 1e3, "nanohenry": (x.henry * 1e10).round() / 10.0})).collect();
                 self.post_layout = on;
                 self.last_dc = None;
                 self.last_tran = None;
                 self.last_ac = None;
-                Ok(obj(json!({"postlayout": on, "pads_with_resistance": w.len(), "largest": list,
-                    "note": "Resistance and inductance are measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first. The inductance is per pad and ignores the coupling between supply and return traces, so it is an upper bound; it shows in ac and fast tran, not in dc."})))
+                Ok(obj(json!({"postlayout": on, "pads_with_resistance": w.len(), "largest": list, "couplings": couplings.len(), "strongest_couplings": strongest,
+                    "note": "Resistance and inductance are measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first. The inductance is per pad; 'couplings' counts the magnetic coupling (k) between wires of different nets, which lowers the loop inductance of a supply trace and its close return (V(REF.PIN.wire) probes the pin). Both show in ac and fast tran, not in dc."})))
             }
             "save" => {
                 let f = rest.first().ok_or("board save FILE.pcbjson")?;

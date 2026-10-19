@@ -83,6 +83,18 @@ pub struct PadDrop {
     pub drop_v: Option<f64>,
     /// Inductance of the copper on the lowest-resistance way from the supply pad (H); `None` when not reached.
     pub henry: Option<f64>,
+    /// The tracks of that way, in order from the supply pad (for the coupling between wires).
+    pub path: Vec<PathSeg>,
+}
+
+/// One straight piece of a copper path.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PathSeg {
+    pub a: Point,
+    pub b: Point,
+    /// Height of the layer above the top copper (mm).
+    pub z: f64,
+    pub width: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -348,15 +360,21 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
         }
         let p = &board.pads[i];
         let ohm = res.get(&i).copied();
-        let henry = ohm.map(|_| path_inductance(&g, src, pad_node[&i], spec));
-        out.pads.push(PadDrop { refdes: p.refdes.clone(), pin: p.pin.clone(), pos: p.pos, ohm, drop_v: ohm.map(|r| r * amps), henry });
+        let (henry, path) = match ohm {
+            Some(_) => {
+                let (h, path) = path_inductance(&g, src, pad_node[&i], spec, &layers);
+                (Some(h), path)
+            }
+            None => (None, vec![]),
+        };
+        out.pads.push(PadDrop { refdes: p.refdes.clone(), pin: p.pin.clone(), pos: p.pos, ohm, drop_v: ohm.map(|r| r * amps), henry, path });
     }
     out
 }
 
 /// Inductance of the lowest-resistance way from `src` to `dst`: the tracks on it as one trace of their total length
 /// and their length-weighted width, plus a via inductance for each hole and a little for each pour.
-fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec) -> f64 {
+fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side]) -> (f64, Vec<PathSeg>) {
     let n = g.pos.len();
     let mut adj: Vec<Vec<(usize, usize)>> = vec![vec![]; n];
     for (k, &(a, b, _)) in g.edges.iter().enumerate() {
@@ -380,12 +398,16 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec) -> f64 {
         }
     }
     let (mut len, mut len_over_w, mut extra) = (0.0, 0.0, 0.0);
+    let mut segs: Vec<PathSeg> = vec![];
     let mut at = dst;
     while let Some((u, k)) = prev[at] {
         match g.links[k] {
             Link::Track { len: l, width } => {
                 len += l;
                 len_over_w += l / width.max(0.01);
+                let side = g.pos[u].0;
+                let z = layers.iter().position(|&x| x == side).map_or(0.0, |i| BOARD_MM * i as f64 / (layers.len().max(2) - 1) as f64);
+                segs.push(PathSeg { a: g.pos[u].1, b: g.pos[at].1, z, width });
             }
             Link::Via(d) => extra += via_inductance(d),
             Link::Pour => extra += POUR_HENRY,
@@ -393,7 +415,8 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec) -> f64 {
         at = u;
     }
     let width = if len_over_w > 0.0 { len / len_over_w } else { 1.0 };
-    track_inductance(len, width, spec) + extra
+    segs.reverse();
+    (track_inductance(len, width, spec) + extra, segs)
 }
 
 /// Gaussian elimination with partial pivoting: solves `a x = b` for `k` right-hand sides in place (`b` is m x k).
@@ -451,6 +474,8 @@ pub struct PadSeries {
     pub ohm: f64,
     /// Inductance of the same copper (H); see `track_inductance`.
     pub henry: f64,
+    /// The tracks of the way from the supply pad to this pad, in order (see `wiring_couplings`).
+    pub path: Vec<PathSeg>,
 }
 
 /// For every net with two or more pads: the resistance from its supply pad to each other pad, as a
@@ -467,10 +492,91 @@ pub fn wiring_resistances(board: &Board, spec: &IrSpec) -> Vec<PadSeries> {
         let d = net_drop(board, &conn, net, 0.0, spec, None);
         for p in d.pads {
             if let Some(ohm) = p.ohm.filter(|o| *o > 1e-6) {
-                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm, henry: p.henry.unwrap_or(0.0) });
+                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm, henry: p.henry.unwrap_or(0.0), path: p.path });
             }
         }
     }
+    out
+}
+
+/// Magnetic coupling between the copper of two pads that are on different nets, as the coupling factor `k = M / sqrt(L1 L2)`
+/// of the two inductors `wiring_resistances` lists. The mutual inductance comes from the Neumann integral over the two
+/// paths cut into short pieces (parallel, close traces couple most). With both paths read from the supply pad outward, a
+/// supply trace and its return trace have a positive `k`, which makes the loop inductance `L1 + L2 - 2M` smaller than
+/// the sum, as on a real board.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Coupling {
+    pub a: (String, String),
+    pub b: (String, String),
+    pub k: f64,
+}
+
+/// Most pads for which couplings are worked out (the number of pairs grows with the square), and most couplings kept.
+const MAX_COUPLED_PADS: usize = 200;
+const MAX_COUPLINGS: usize = 200;
+/// Smaller couplings are left out.
+const MIN_K: f64 = 0.03;
+
+/// The pieces of a path: midpoint (x, y, z), direction vector (mm) and the width.
+fn pieces(path: &[PathSeg]) -> Vec<([f64; 3], [f64; 2], f64)> {
+    let total: f64 = path.iter().map(|s| s.a.dist(s.b)).sum();
+    let step = (total / 60.0).clamp(0.3, 2.0);
+    let mut out = vec![];
+    for s in path {
+        let len = s.a.dist(s.b);
+        let n = (len / step).ceil().max(1.0) as usize;
+        let (dx, dy) = ((s.b.x - s.a.x) / n as f64, (s.b.y - s.a.y) / n as f64);
+        for i in 0..n {
+            let t = (i as f64 + 0.5) / n as f64;
+            out.push(([s.a.x + (s.b.x - s.a.x) * t, s.a.y + (s.b.y - s.a.y) * t, s.z], [dx, dy], s.width));
+        }
+    }
+    out
+}
+
+/// Mutual inductance (H) of two paths: 1e-7 H/m * sum of dl1 . dl2 / r over pairs of pieces. The distance is softened by
+/// the geometric mean distance of a trace cross-section (0.2235 (w + t)), which also keeps the sum finite.
+fn mutual(a: &[PathSeg], b: &[PathSeg], spec: &IrSpec) -> f64 {
+    let (pa, pb) = (pieces(a), pieces(b));
+    let t = spec.thickness_um / 1000.0;
+    let mut sum = 0.0;
+    for (ma, da, wa) in &pa {
+        for (mb, db, wb) in &pb {
+            let dot = da[0] * db[0] + da[1] * db[1];
+            if dot == 0.0 {
+                continue;
+            }
+            let g = 0.2235 * (0.5 * (wa + wb) + t);
+            let d2 = (ma[0] - mb[0]).powi(2) + (ma[1] - mb[1]).powi(2) + (ma[2] - mb[2]).powi(2);
+            sum += dot / (d2 + g * g).sqrt();
+        }
+    }
+    // mm * mm / mm = mm, and 1e-7 H/m = 1e-10 H per mm of that sum
+    1e-10 * sum
+}
+
+/// The couplings between the pads of `series` (from `wiring_resistances`). Pads of the same net are not coupled: their
+/// shared stretch is already counted once per pad. Returns nothing for more than `MAX_COUPLED_PADS` pads.
+pub fn wiring_couplings(series: &[PadSeries], spec: &IrSpec) -> Vec<Coupling> {
+    let pads: Vec<&PadSeries> = series.iter().filter(|p| p.henry > 0.0 && !p.path.is_empty()).collect();
+    if pads.len() > MAX_COUPLED_PADS {
+        return vec![];
+    }
+    let mut out = vec![];
+    for i in 0..pads.len() {
+        for j in i + 1..pads.len() {
+            if pads[i].net == pads[j].net {
+                continue;
+            }
+            let m = mutual(&pads[i].path, &pads[j].path, spec);
+            let k = (m / (pads[i].henry * pads[j].henry).sqrt()).clamp(-0.9, 0.9);
+            if k.abs() >= MIN_K {
+                out.push(Coupling { a: (pads[i].refdes.clone(), pads[i].pin.clone()), b: (pads[j].refdes.clone(), pads[j].pin.clone()), k });
+            }
+        }
+    }
+    out.sort_by(|a, b| b.k.abs().total_cmp(&a.k.abs()));
+    out.truncate(MAX_COUPLINGS);
     out
 }
 
@@ -588,6 +694,42 @@ mod tests {
         let split = board(vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(100.0, 0.0, "U1", "1", "VCC", None)], vec![track(Side::Top, (0.0, 0.0), (50.0, 0.0), 0.25), track(Side::Top, (50.0, 0.0), (100.0, 0.0), 0.25)]);
         let sp = wiring_resistances(&split, &IrSpec::default());
         assert!((sp[0].henry - w[0].henry).abs() < 1e-12, "{} vs {}", sp[0].henry, w[0].henry);
+    }
+
+    /// Two 100 mm traces `gap` apart (a supply pad and a return pad, both read from the connector outward).
+    fn pair(gap: f64) -> Vec<PadSeries> {
+        let b = board(
+            vec![
+                pad(0.0, 0.0, "J1", "1", "VCC", None),
+                pad(100.0, 0.0, "U1", "1", "VCC", None),
+                pad(0.0, gap, "J1", "2", "GND", None),
+                pad(100.0, gap, "U1", "2", "GND", None),
+            ],
+            vec![track(Side::Top, (0.0, 0.0), (100.0, 0.0), 0.25), track(Side::Top, (0.0, gap), (100.0, gap), 0.25)],
+        );
+        wiring_resistances(&b, &IrSpec::default())
+    }
+
+    #[test]
+    fn close_supply_and_return_traces_couple_and_the_loop_gets_smaller() {
+        let s = pair(2.5);
+        let k = wiring_couplings(&s, &IrSpec::default());
+        assert_eq!(k.len(), 1, "{k:?}");
+        // Grover: M = 0.2 nH/mm * l * (ln(l/d + sqrt(1 + (l/d)^2)) - sqrt(1 + (d/l)^2) + d/l) = 68 nH at l = 100 mm, d = 2.5 mm
+        let m = k[0].k * (s[0].henry * s[1].henry).sqrt();
+        assert!((m * 1e9 - 68.0).abs() < 5.0, "{} nH", m * 1e9);
+        assert!(k[0].k > 0.4 && k[0].k < 0.9, "{k:?}");
+        let far = wiring_couplings(&pair(20.0), &IrSpec::default());
+        assert!(far.is_empty() || far[0].k < k[0].k, "{far:?}");
+    }
+
+    #[test]
+    fn a_trace_going_away_at_right_angles_does_not_couple() {
+        let b = board(
+            vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(50.0, 0.0, "U1", "1", "VCC", None), pad(0.0, 5.0, "J2", "1", "SIG", None), pad(0.0, 55.0, "U2", "1", "SIG", None)],
+            vec![track(Side::Top, (0.0, 0.0), (50.0, 0.0), 0.25), track(Side::Top, (0.0, 5.0), (0.0, 55.0), 0.25)],
+        );
+        assert!(wiring_couplings(&wiring_resistances(&b, &IrSpec::default()), &IrSpec::default()).is_empty());
     }
 
     #[test]

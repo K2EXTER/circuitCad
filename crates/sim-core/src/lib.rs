@@ -54,7 +54,7 @@ pub use dc::{dc_op, DcResult, ElementResult, SimError};
 pub use measure::{stability_margins, wave_measure, Margins, WaveMeasure};
 pub use montecarlo::{minus_3db, monte_carlo, McMeasure, McResult, McSettings, McStats, TranMetric};
 pub use noise::{describe_source, integrate_psd, noise_analysis, source_element, NoiseContribution, NoiseKind, NoiseResult, NoiseSettings, SourceInfo};
-pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, from_schematic_with_wiring, ConvertError, PinFaultSpec, PinHow, WiringR};
+pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, from_schematic_with_wiring, from_schematic_with_layout, ConvertError, PinFaultSpec, PinHow, WiringK, WiringR};
 pub use spice_in::{add_model_instance, add_subckt_instance, decode_spice_text, ignored_model_params, parse_models};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{transient, Signal, TranResult, TranSettings};

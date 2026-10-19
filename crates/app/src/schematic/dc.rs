@@ -26,7 +26,7 @@ impl SchEditor {
                 _ => return Err(vec![format!("温度「{t}」を数値(℃)で入力してください (例: 27)")]),
             },
         };
-        let c = sim_core::from_schematic_with_wiring(&self.sch, &self.wiring).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
+        let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|errs| errs.iter().map(|e| e.to_string()).collect::<Vec<_>>())?;
         Ok(c.at_temperature(temp))
     }
 
@@ -54,6 +54,9 @@ impl SchEditor {
         let mut s = serde_json::to_string(&self.sch).unwrap_or_default();
         for w in &self.wiring {
             s += &format!("|{}.{}={}/{}", w.refdes, w.pin, w.ohm, w.henry);
+        }
+        for k in &self.couplings {
+            s += &format!("|{}.{}~{}.{}={}", k.a.0, k.a.1, k.b.0, k.b.1, k.k);
         }
         s
     }

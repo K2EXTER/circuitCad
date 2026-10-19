@@ -327,14 +327,11 @@ impl Session {
     }
 
     pub(crate) fn circuit(&self) -> Result<sim_core::Circuit, String> {
-        let wiring: Vec<sim_core::WiringR> = match (&self.board, self.post_layout) {
-            (Some(b), true) => pcb_core::irdrop::wiring_resistances(b, &pcb_core::irdrop::IrSpec::default())
-                .into_iter()
-                .map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry })
-                .collect(),
-            _ => vec![],
+        let (wiring, couplings) = match (&self.board, self.post_layout) {
+            (Some(b), true) => post_layout_parts(b),
+            _ => (vec![], vec![]),
         };
-        sim_core::from_schematic_with_wiring(&self.sch, &wiring).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
+        sim_core::from_schematic_with_layout(&self.sch, &wiring, &couplings).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
     }
 
     pub fn dc(&mut self, args: &[String]) -> Res {
@@ -401,4 +398,13 @@ impl Session {
             .collect();
         Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
     }
+}
+
+/// The board's copper as the simulator wants it: series resistance and inductance per pad, and the coupling between wires.
+pub(crate) fn post_layout_parts(b: &pcb_core::Board) -> (Vec<sim_core::WiringR>, Vec<sim_core::WiringK>) {
+    let spec = pcb_core::irdrop::IrSpec::default();
+    let series = pcb_core::irdrop::wiring_resistances(b, &spec);
+    let couplings = pcb_core::irdrop::wiring_couplings(&series, &spec).into_iter().map(|c| sim_core::WiringK { a: c.a, b: c.b, k: c.k }).collect();
+    let wiring = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry }).collect();
+    (wiring, couplings)
 }

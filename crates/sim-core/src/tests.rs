@@ -358,6 +358,41 @@ fn wiring_inductance_matters_for_ac_and_not_for_dc() {
 }
 
 #[test]
+fn coupled_supply_and_return_wiring_lowers_the_loop_inductance() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "0 AC 1".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (12, 0), 1);
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), r2[0].1);
+    wire(&mut s, r2[1].1, (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    // the supply stretch in front of R1 and the return stretch behind R2 are in one loop, 1 H each
+    let w = [
+        WiringR { refdes: "R1".into(), pin: "1".into(), ohm: 0.0, henry: 1.0 },
+        WiringR { refdes: "R2".into(), pin: "2".into(), ohm: 0.0, henry: 1.0 },
+    ];
+    let k = |k: f64| [WiringK { a: ("R1".into(), "1".into()), b: ("R2".into(), "2".into()), k }];
+    let at = |ks: &[WiringK]| {
+        let c = from_schematic_with_layout(&s, &w, ks).unwrap();
+        let r = ac_analysis(&c, &AcSettings { fstart: 2e3, fstop: 2e3, sweep: AcSweep::Linear(2) }).unwrap();
+        r.signal("I(R1)").unwrap().mag()[0]
+    };
+    // |Z| = 20k + j25k alone; with k = 0.9 the loop L is 0.2 H: 20k + j2.5k
+    let (alone, coupled) = (at(&[]), at(&k(0.9)));
+    assert!(coupled > 1.4 * alone, "{alone} -> {coupled}");
+    assert!((at(&k(0.0)) - alone).abs() < 1e-12, "k = 0 changes nothing");
+    let c = from_schematic_with_layout(&s, &w, &[WiringK { a: ("R1".into(), "1".into()), b: ("R9".into(), "1".into()), k: 0.5 }]).unwrap();
+    assert!(!c.elements.iter().any(|e| matches!(e, Element::Mutual { .. })), "a coupling to a missing inductor is ignored");
+}
+
+#[test]
 fn schematic_reports_bad_values() {
     let mut s = Schematic::default();
     s.add(Kind::Resistor, (0, 0), 0);

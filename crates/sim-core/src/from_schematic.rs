@@ -27,7 +27,7 @@ fn err(r: &str, m: impl Into<String>) -> ConvertError {
 /// Parts with an explicit failure are reported as errors; parts that simply have nothing to
 /// simulate (headers, parts without a model) become warnings on the circuit.
 pub fn from_schematic(s: &Schematic) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, None, &[])
+    build(s, None, &[], &[])
 }
 
 /// Resistance and inductance of the copper between a net's supply pad and one pin, measured on the board
@@ -41,10 +41,26 @@ pub struct WiringR {
     pub henry: f64,
 }
 
+/// Magnetic coupling between the wiring inductors of two pins (`pcb_core::irdrop::wiring_couplings`): the coupling
+/// factor of `REF.PIN.LW` and `REF.PIN.LW`. Positive when both pins are read from their supply pad outward and the
+/// copper runs the same way, which makes a supply trace and its return trace lower the loop inductance.
+#[derive(Clone, Debug, PartialEq)]
+pub struct WiringK {
+    pub a: (String, String),
+    pub b: (String, String),
+    pub k: f64,
+}
+
 /// The circuit of `s` with the board's wiring resistance added in series with the listed pins
 /// ("post-layout" simulation). Pins that are not in the schematic are ignored.
 pub fn from_schematic_with_wiring(s: &Schematic, wiring: &[WiringR]) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, None, wiring)
+    build(s, None, wiring, &[])
+}
+
+/// Like `from_schematic_with_wiring`, and the wiring inductors that `couplings` name are coupled (`Mutual`).
+/// A coupling whose inductors are not both in the circuit is ignored.
+pub fn from_schematic_with_layout(s: &Schematic, wiring: &[WiringR], couplings: &[WiringK]) -> Result<Circuit, Vec<ConvertError>> {
+    build(s, None, wiring, couplings)
 }
 
 /// What happens to one pin in a pin fault.
@@ -69,10 +85,10 @@ pub struct PinFaultSpec {
 /// The circuit of `s` with one pin of one part disconnected, grounded or bridged to another net.
 /// The rest of the part keeps its connections, so the fault is faithful for library ICs as well.
 pub fn from_schematic_with_pin_fault(s: &Schematic, f: &PinFaultSpec) -> Result<Circuit, Vec<ConvertError>> {
-    build(s, Some(f), &[])
+    build(s, Some(f), &[], &[])
 }
 
-fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR]) -> Result<Circuit, Vec<ConvertError>> {
+fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], couplings: &[WiringK]) -> Result<Circuit, Vec<ConvertError>> {
     let mut c = Circuit::new();
     let mut pin_node: HashMap<(String, String), usize> = HashMap::new();
     for net in extract(s) {
@@ -104,6 +120,14 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR]) -> Res
                 c.add(Element::Inductor { name: format!("{}.{}.LW", w.refdes, w.pin), a: from, b: m, l: w.henry });
             }
             pin_node.insert(key, m);
+        }
+    }
+    for (n, w) in couplings.iter().enumerate() {
+        let name = |p: &(String, String)| format!("{}.{}.LW", p.0, p.1);
+        let have = |n: &str| c.elements.iter().any(|e| e.name() == n);
+        let (l1, l2) = (name(&w.a), name(&w.b));
+        if w.k != 0.0 && have(&l1) && have(&l2) {
+            c.add(Element::Mutual { name: format!("K{}.{}.{}", n, w.a.0, w.b.0), l1, l2, k: w.k.clamp(-0.99, 0.99) });
         }
     }
     // pins on no net at all get a private node so elements can still be built

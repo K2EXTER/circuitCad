@@ -130,6 +130,7 @@ impl App {
                 Ok(pr) => {
                     self.sch.adopt(pr.schematic, None);
                     self.sch.wiring.clear();
+                    self.sch.couplings.clear();
                     self.board_ed.adopt(pr.board, None);
                     self.project = None;
                     self.board_ed.start_copper_lesson();

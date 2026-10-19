@@ -100,7 +100,7 @@ impl SchEditor {
         let outcome = if out.is_empty() {
             Err(vec!["出力ノードの名前を入力してください (ネットラベル名など。差動は A,B)".to_string()])
         } else {
-            match sim_core::from_schematic_with_wiring(&self.sch, &self.wiring) {
+            match sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings) {
                 Err(errs) => Err(errs.iter().map(|e| e.to_string()).collect()),
                 Ok(c) => {
                     let (out_p, out_n) = match out.split_once(',') {

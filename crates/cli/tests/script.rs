@@ -173,6 +173,7 @@ ac 100k 100Meg ppd=4 probe=V(R1.1.wire)
     assert!(ok, "{a:?}");
     let pl = a.iter().find(|v| v["cmd"] == "board" && v.get("postlayout").is_some()).unwrap();
     assert!(pl["largest"][0]["nanohenry"].as_f64().unwrap() > 3.0, "{pl}");
+    assert!(pl["couplings"].as_u64().unwrap() >= 1 && pl["strongest_couplings"][0]["k"].as_f64().unwrap() > 0.0, "supply and return run side by side: {pl}");
     let per = &last(&a, "ac")["signals"]["V(R1.1.wire)"]["per_decade"];
     let (lo, hi) = (per[0]["db"].as_f64().unwrap(), per[3]["db"].as_f64().unwrap());
     assert!(hi < lo - 2.0, "the load pin loses gain at 100 MHz behind the trace: {lo} dB -> {hi} dB");

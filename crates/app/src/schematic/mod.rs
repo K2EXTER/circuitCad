@@ -156,6 +156,8 @@ pub struct SchEditor {
     temp_c: String,
     /// Copper resistance of the routed board in series with pads (post-layout simulation); empty = ideal wires.
     pub wiring: Vec<sim_core::WiringR>,
+    /// Magnetic coupling between the wiring inductors (with `wiring`).
+    pub couplings: Vec<sim_core::WiringK>,
     temp_from: String,
     temp_to: String,
     temp_step: String,
@@ -438,6 +440,7 @@ impl Default for SchEditor {
             sweep: None,
             temp_c: "27".into(),
             wiring: vec![],
+            couplings: vec![],
             temp_from: "-20".into(),
             temp_to: "80".into(),
             temp_step: "5".into(),
