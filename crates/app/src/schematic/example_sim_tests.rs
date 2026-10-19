@@ -829,3 +829,30 @@ fn pin_voltage_is_taken_behind_the_wiring_resistance() {
     assert!((before - after).abs() > 1e-3, "{before} {after}");
     assert!(e.pin_voltage("R1", "1").is_some());
 }
+
+/// Behind the wiring resistance, the wire that ends at the pin is coloured with the pin's voltage, not the net's.
+#[test]
+fn wire_colours_follow_the_pin_voltage_behind_the_wiring_resistance() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "divider_tolerance.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.run_dc();
+    let pt = {
+        let c = e.sch.components.iter().find(|c| c.refdes == "R1").unwrap();
+        c.pins().into_iter().find(|(n, _)| n == "2").unwrap().1
+    };
+    let wire = e.sch.wires.iter().position(|w| w.a == pt || w.b == pt).expect("a wire ends at R1.2");
+    let net_v = e.dc.as_ref().unwrap().wire_v[wire].unwrap();
+    e.wiring = vec![sim_core::WiringR { refdes: "R1".into(), pin: "2".into(), ohm: 1000.0, henry: 0.0 }];
+    e.run_dc();
+    let dc = e.dc.as_ref().unwrap();
+    let pin_v = dc.pin_v.iter().find(|(p, _)| *p == pt).unwrap().1;
+    let w = &e.sch.wires[wire];
+    let other = if w.a == pt { w.b } else { w.a };
+    let expect = match dc.pin_v.iter().find(|(p, _)| *p == other) {
+        Some((_, v)) => (pin_v + v) / 2.0,
+        None => pin_v,
+    };
+    assert!((dc.wire_v[wire].unwrap() - expect).abs() < 1e-9);
+    assert!((pin_v - net_v).abs() > 1e-3, "the pin is behind a resistor, so it differs from the net: {pin_v} {net_v}");
+}

@@ -102,6 +102,14 @@ impl SchEditor {
         if let Ok(res) = &outcome {
             for (k, w) in self.sch.wires.iter().enumerate() {
                 wire_v[k] = net_at(&self.sch, w.a).and_then(|n| res.voltage(&n));
+                // behind the board's copper resistance the wire that ends at a pin takes that pin's voltage
+                // (the mean of the two ends when both are pins), so the colours show the drop along the wiring
+                if !self.wiring.is_empty() {
+                    let ends: Vec<f64> = [w.a, w.b].iter().filter_map(|e| pin_v.iter().find(|(pt, _)| pt == e).map(|(_, v)| *v)).collect();
+                    if !ends.is_empty() {
+                        wire_v[k] = Some(ends.iter().sum::<f64>() / ends.len() as f64);
+                    }
+                }
             }
             let vs = res.voltages.iter().map(|(_, v)| *v);
             v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
