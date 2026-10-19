@@ -1,0 +1,90 @@
+"""Reference resistance between two pads of a copper pour, by an independent numerical solution (finite differences).
+
+    python tools/ref_pour.py > tools/pour_reference.csv     (also writes tools/pour_cases.json)
+
+The pour is a rectangle of sheet resistance rho / t (copper 1.72e-5 ohm mm over 35 um); every pad is a disc of radius r that
+is held at one potential (one pad at 1 V, the other at 0 V), the rest is a square grid of resistors. The current that leaves the
+first pad gives R = 1 V / I. The grid disc is not exactly a disc, so each contact is corrected by the resistance of the ring between its equivalent radius and
+the nominal one; the grid is 0.125 mm and the result is good to about 3 % (the
+steps 0.125 and 0.083 mm differ by 1.4 %, still converging slowly because of the logarithmic singularity at each contact).
+"""
+import json
+import math
+import os
+import sys
+
+import numpy as np
+import scipy.sparse as sp
+import scipy.sparse.linalg as sla
+
+RHO = 1.72e-5  # ohm mm
+T = 0.035  # mm
+RS = RHO / T
+PAD_R = 0.8  # mm
+
+
+def cases():
+    out = []
+    # (name, width, height, pad1, pad2)
+    for w, h in ((100.0, 50.0), (50.0, 50.0), (30.0, 10.0)):
+        cx, cy = w / 2, h / 2
+        for d in (5.0, 10.0, 25.0, 50.0, 80.0):
+            if d + 4 < w:
+                out.append({"name": f"pour {w:g}x{h:g} pads {d:g} apart centred", "w": w, "h": h, "p1": [cx - d / 2, cy], "p2": [cx + d / 2, cy]})
+    out.append({"name": "pour 100x50 pads 50 apart near the edge", "w": 100.0, "h": 50.0, "p1": [5.0, 3.0], "p2": [55.0, 3.0]})
+    out.append({"name": "pour 100x50 pads in opposite corners", "w": 100.0, "h": 50.0, "p1": [4.0, 4.0], "p2": [96.0, 46.0]})
+    out.append({"name": "pour 100x50 pads 10 apart in a corner", "w": 100.0, "h": 50.0, "p1": [4.0, 4.0], "p2": [14.0, 4.0]})
+    # narrow strips (a pour used as a power route): the number of squares between the pads decides
+    out.append({"name": "pour 100x5 strip pads at the ends", "w": 100.0, "h": 5.0, "p1": [4.0, 2.5], "p2": [96.0, 2.5]})
+    out.append({"name": "pour 60x10 strip pads at the ends", "w": 60.0, "h": 10.0, "p1": [4.0, 5.0], "p2": [56.0, 5.0]})
+    out.append({"name": "pour 100x20 strip pads at the ends", "w": 100.0, "h": 20.0, "p1": [4.0, 10.0], "p2": [96.0, 10.0]})
+    return out
+
+
+def solve(c, step=0.125):
+    nx, ny = int(round(c["w"] / step)), int(round(c["h"] / step))
+    xs = (np.arange(nx) + 0.5) * step
+    ys = (np.arange(ny) + 0.5) * step
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    idx = np.arange(nx * ny).reshape(nx, ny)
+    g = 1.0 / RS  # conductance of the link between two neighbouring square cells
+    rows, cols = [], []
+    for a, b in ((idx[:-1, :], idx[1:, :]), (idx[:, :-1], idx[:, 1:])):
+        rows += [a.ravel(), b.ravel()]
+        cols += [b.ravel(), a.ravel()]
+    r, cc = np.concatenate(rows), np.concatenate(cols)
+    n = nx * ny
+    A = sp.coo_matrix((np.full(r.size, -g), (r, cc)), shape=(n, n)).tocsr()
+    A = A + sp.diags(-np.asarray(A.sum(axis=1)).ravel())
+    p1 = (X - c["p1"][0]) ** 2 + (Y - c["p1"][1]) ** 2 <= PAD_R**2
+    p2 = (X - c["p2"][0]) ** 2 + (Y - c["p2"][1]) ** 2 <= PAD_R**2
+    fixed = (p1 | p2).ravel()
+    v = np.zeros(n)
+    v[p1.ravel()] = 1.0
+    free = ~fixed
+    rhs = -(A[free][:, fixed] @ v[fixed])
+    v[free] = sla.spsolve(A[free][:, free].tocsc(), rhs)
+    current = (A @ v)[p1.ravel()].sum()  # current leaving pad 1
+    r_fd = 1.0 / abs(current)
+    # the staircase disc of the grid is not the disc of radius PAD_R: correct each contact by the resistance of the ring between
+    # the equivalent radius (same area) and the nominal one, RS / (2 pi) * ln(r_eq / r)
+    corr = 0.0
+    for m in (p1, p2):
+        r_eq = math.sqrt(m.sum() * step * step / math.pi)
+        corr += RS / (2 * math.pi) * math.log(r_eq / PAD_R)
+    return r_fd + corr
+
+
+def main():
+    cs = cases()
+    here = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(here, "pour_cases.json"), "w", encoding="ascii", newline="\n") as f:
+        json.dump(cs, f, indent=1)
+        f.write("\n")
+    print("case,fd_ohm")
+    for c in cs:
+        print(f"{c['name']},{solve(c):.6e}")
+
+
+if __name__ == "__main__":
+    main()

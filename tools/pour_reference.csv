@@ -1,0 +1,18 @@
+case,fd_ohm
+pour 100x50 pads 5 apart centred,2.951045e-04
+pour 100x50 pads 10 apart centred,4.137760e-04
+pour 100x50 pads 25 apart centred,6.073894e-04
+pour 100x50 pads 50 apart centred,8.600604e-04
+pour 100x50 pads 80 apart centred,1.168001e-03
+pour 50x50 pads 5 apart centred,2.952127e-04
+pour 50x50 pads 10 apart centred,4.142876e-04
+pour 50x50 pads 25 apart centred,6.136362e-04
+pour 30x10 pads 5 apart centred,3.460437e-04
+pour 30x10 pads 10 apart centred,5.999969e-04
+pour 30x10 pads 25 apart centred,1.342970e-03
+pour 100x50 pads 50 apart near the edge,1.205851e-03
+pour 100x50 pads in opposite corners,1.725294e-03
+pour 100x50 pads 10 apart in a corner,5.153577e-04
+pour 100x5 strip pads at the ends,9.019312e-03
+pour 60x10 strip pads at the ends,2.665183e-03
+pour 100x20 strip pads at the ends,2.496548e-03

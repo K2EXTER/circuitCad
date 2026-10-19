@@ -5,7 +5,9 @@
 //! Assumptions (kept simple on purpose, shown to the user):
 //! * the current enters at one pad (a connector if there is one, else the first pad of the net) and every other
 //!   pad is looked at as if it alone drew the whole current, which is the worst case for that pad;
-//! * a copper pour is a hub reached through a short resistance per pad, so a pour lowers the drop a lot but not to zero.
+//! * a copper pour is a grid of square cells (the sheet resistance between neighbours), each pad, via or track end under it touching
+//!   the cells around it through the spreading resistance of a contact of its size, so the pour's shape counts: a narrow strip has
+//!   as many squares between two pads as its length over its width.
 
 use std::collections::HashMap;
 
@@ -18,8 +20,10 @@ const RHO_MM: f64 = 1.72e-5;
 const BOARD_MM: f64 = 1.6;
 /// Plating thickness of a via barrel (mm).
 const PLATING_MM: f64 = 0.025;
-/// Largest network that is solved (dense solve); bigger nets are reported as too large.
-const MAX_NODES: usize = 900;
+/// Largest network that is solved; bigger nets are reported as too large. A pour adds up to `POUR_CELLS` cells.
+const MAX_NODES: usize = 9000;
+/// Cells of the grid a copper pour is cut into (the pitch is chosen from its area; 0.3 to 1.5 mm).
+const POUR_CELLS: f64 = 4000.0;
 
 /// Copper conditions for the resistance.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -151,7 +155,10 @@ struct Graph {
 enum Link {
     Track { width: f64 },
     Via(f64),
+    /// A pad, via or track end touching a pour: counted as a little inductance (the current goes into the plane).
     Pour,
+    /// A link between two cells of a pour's grid: no inductance of its own (the pour is wide; see `image_of`).
+    Cell,
 }
 
 impl Graph {
@@ -298,23 +305,86 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             g.edge(on[k].1, on[k + 1].1, r, Link::Track { width: w });
         }
     }
-    // copper pours: every node under the pour reaches a hub through a short resistance
+    // copper pours: a grid of square cells (the sheet resistance between neighbours); every pad, via or track end that is under a
+    // pour touches the cells around it, through the spreading resistance of a contact of its size
+    let contact_radius: HashMap<usize, f64> = pad_node.iter().map(|(&pi, &n)| (n, board.pads[pi].shape.size().0.min(board.pads[pi].shape.size().1) / 2.0)).collect();
     for z in board.zones.iter().filter(|z| z.net == net && z.polygon.len() >= 3) {
         let a = area(&z.polygon).max(1.0);
-        let c = Point::new(z.polygon.iter().map(|p| p.x).sum::<f64>() / z.polygon.len() as f64, z.polygon.iter().map(|p| p.y).sum::<f64>() / z.polygon.len() as f64);
-        let hub = g.pos.len();
-        g.pos.push((z.side, c));
-        let mut used = false;
-        for (n, s, p) in all.iter().copied() {
-            if s == z.side && in_polygon(&z.polygon, p) {
-                g.edge(n, hub, spec.sheet() * (p.dist(c) / a.sqrt() + 0.15), Link::Pour);
-                used = true;
+        let step = (a / POUR_CELLS).sqrt().clamp(0.3, 1.5);
+        let (lo, hi) = z.polygon.iter().fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(l, h), p| (Point::new(l.x.min(p.x), l.y.min(p.y)), Point::new(h.x.max(p.x), h.y.max(p.y))));
+        let (nx, ny) = (((hi.x - lo.x) / step).ceil().max(1.0) as usize, ((hi.y - lo.y) / step).ceil().max(1.0) as usize);
+        if nx * ny > 4 * POUR_CELLS as usize {
+            out.note = Some("ベタが大きすぎて、電圧降下は調べられません".into());
+            return out;
+        }
+        let centre = |ix: usize, iy: usize| Point::new(lo.x + (ix as f64 + 0.5) * step, lo.y + (iy as f64 + 0.5) * step);
+        let mut cell: Vec<Option<usize>> = vec![None; nx * ny];
+        for ix in 0..nx {
+            for iy in 0..ny {
+                let c = centre(ix, iy);
+                if in_polygon(&z.polygon, c) {
+                    cell[ix * ny + iy] = Some(g.pos.len());
+                    g.pos.push((z.side, c));
+                }
             }
         }
-        out.has_zone |= used;
+        for ix in 0..nx {
+            for iy in 0..ny {
+                let Some(me) = cell[ix * ny + iy] else { continue };
+                if ix + 1 < nx && let Some(r) = cell[(ix + 1) * ny + iy] {
+                    g.edge(me, r, spec.sheet(), Link::Cell);
+                }
+                if iy + 1 < ny && let Some(u) = cell[ix * ny + iy + 1] {
+                    g.edge(me, u, spec.sheet(), Link::Cell);
+                }
+            }
+        }
+        for (n, sd, p) in all.iter().copied() {
+            if sd != z.side || !in_polygon(&z.polygon, p) {
+                continue;
+            }
+            // the nearest cells, as many as it takes for them (tied together by short links) to spread the current like a disc of
+            // the contact's radius; no fewer than one
+            let r = contact_radius.get(&n).copied().unwrap_or(0.5).max(0.05);
+            let (cx, cy) = (((p.x - lo.x) / step) as isize, ((p.y - lo.y) / step) as isize);
+            let span = ((r / step).ceil() as isize + 2).min(60);
+            let mut cand: Vec<(f64, usize)> = vec![];
+            for ix in (cx - span).max(0)..=(cx + span).min(nx as isize - 1) {
+                for iy in (cy - span).max(0)..=(cy + span).min(ny as isize - 1) {
+                    if let Some(c) = cell[ix as usize * ny + iy as usize] {
+                        cand.push((centre(ix as usize, iy as usize).dist(p), c));
+                    }
+                }
+            }
+            if cand.is_empty() {
+                // a node in a thin spur of the pour that holds no cell centre near it: take the nearest cell
+                let best = (0..nx).flat_map(|ix| (0..ny).map(move |iy| (ix, iy))).filter_map(|(ix, iy)| cell[ix * ny + iy].map(|c| (centre(ix, iy).dist(p), c))).min_by(|a, b| a.0.total_cmp(&b.0));
+                cand.extend(best);
+            }
+            cand.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let mut take = 1;
+            while take < cand.len() && step * cell_blob_radius(take) < r && cand[take].0 <= r + 1.5 * step {
+                take += 1;
+            }
+            let near: Vec<(f64, usize)> = cand.into_iter().take(take).collect();
+            if near.is_empty() {
+                continue;
+            }
+            // a contact of radius r on a plane spreads like RS / (2 pi) ln(r_eq / r) from the equivalent radius of the cells it is
+            // tied to up to r, which the grid cannot see (or minus that, when the cells are wider than the pad)
+            let n_c = near.len() as f64;
+            let r_eq = step * cell_blob_radius(near.len());
+            let corr = spec.sheet() / (2.0 * std::f64::consts::PI) * (r_eq / r).ln();
+            // a negative correction (cells smaller than the pad would give) is not taken back out of the cell links
+            let corr = corr.max(0.0);
+            for (_, c) in near {
+                g.edge(n, c, n_c * corr + spec.sheet() * 0.1, Link::Pour);
+            }
+            out.has_zone = true;
+        }
     }
     if g.pos.len() > MAX_NODES {
-        out.note = Some(format!("配線が細かすぎて ({} 点) 調べられません", g.pos.len()));
+        out.note = Some(format!("配線やベタが細かすぎて ({} 点) 調べられません", g.pos.len()));
         return out;
     }
 
@@ -337,35 +407,35 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             }
         }
     }
-    let idx: Vec<usize> = (0..n).filter(|&i| seen[i] && i != src).collect();
-    let mut at = vec![usize::MAX; n];
-    for (k, &i) in idx.iter().enumerate() {
-        at[i] = k;
-    }
-    let m = idx.len();
     let targets: Vec<usize> = pad_ids.iter().copied().filter(|&i| i != src_id && seen[pad_node[&i]] && pad_node[&i] != src).collect();
-    // reduced Laplacian [m x m] and one right-hand side per target
-    let mut a = vec![0.0f64; m * m];
+    // the Laplacian of the network with the supply node grounded, as lists of (neighbour, conductance); one solve per target
+    let mut nbr: Vec<Vec<(usize, f64)>> = vec![vec![]; n];
+    let mut diag = vec![0.0f64; n];
     for &(x, y, r) in &g.edges {
         if !(seen[x] && seen[y]) {
             continue;
         }
         let c = 1.0 / r;
-        for (p, q) in [(x, y), (y, x)] {
-            if p != src {
-                a[at[p] * m + at[p]] += c;
-                if q != src {
-                    a[at[p] * m + at[q]] -= c;
-                }
+        diag[x] += c;
+        diag[y] += c;
+        nbr[x].push((y, c));
+        nbr[y].push((x, c));
+    }
+    let mut res: HashMap<usize, f64> = HashMap::new();
+    let mut x = vec![0.0f64; n];
+    for &t in &targets {
+        // push 1 A into the target; its voltage is the resistance from the supply pad
+        let tn = pad_node[&t];
+        match cg_resistance(&nbr, &diag, src, tn, &mut x) {
+            Some(v) => {
+                res.insert(t, v);
+            }
+            None => {
+                out.note = Some("電圧降下の計算が収束しませんでした (配線かベタの形が極端です)".into());
+                return out;
             }
         }
     }
-    let mut rhs = vec![0.0f64; m * targets.len()];
-    for (k, &t) in targets.iter().enumerate() {
-        rhs[at[pad_node[&t]] * targets.len() + k] = 1.0;
-    }
-    solve(&mut a, &mut rhs, m, targets.len());
-    let res: HashMap<usize, f64> = targets.iter().enumerate().map(|(k, &t)| (t, rhs[at[pad_node[&t]] * targets.len() + k])).collect();
 
     for &i in &pad_ids {
         if i == src_id {
@@ -429,6 +499,7 @@ fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[S
             }
             Link::Via(d) => extra += via_inductance(d),
             Link::Pour => extra += POUR_HENRY,
+            Link::Cell => {}
         }
         at = u;
     }
@@ -485,44 +556,81 @@ fn straight_runs(segs: &[PathSeg]) -> Vec<&[PathSeg]> {
     out
 }
 
-/// Gaussian elimination with partial pivoting: solves `a x = b` for `k` right-hand sides in place (`b` is m x k).
-fn solve(a: &mut [f64], b: &mut [f64], m: usize, k: usize) {
-    for c in 0..m {
-        let piv = (c..m).max_by(|&x, &y| a[x * m + c].abs().partial_cmp(&a[y * m + c].abs()).unwrap()).unwrap_or(c);
-        if piv != c {
-            for j in 0..m {
-                a.swap(c * m + j, piv * m + j);
-            }
-            for j in 0..k {
-                b.swap(c * k + j, piv * k + j);
-            }
-        }
-        let d = a[c * m + c];
-        if d.abs() < 1e-300 {
-            continue;
-        }
-        for r in c + 1..m {
-            let f = a[r * m + c] / d;
-            if f != 0.0 {
-                for j in c..m {
-                    a[r * m + j] -= f * a[c * m + j];
-                }
-                for j in 0..k {
-                    b[r * k + j] -= f * b[c * k + j];
-                }
-            }
+/// Equivalent radius (in cells) of a blob of `n` neighbouring nodes of a square resistor grid held at one potential: the radius
+/// of the disc that spreads the current the same way far away. A single node is 0.198 cells (the lattice Green's function), a
+/// large blob tends to sqrt(n / pi); in between, from numerical solutions of the lattice (n = 1, 4, 5, 9, 13, 21, 29, 49).
+fn cell_blob_radius(n: usize) -> f64 {
+    const TABLE: [(f64, f64); 8] = [(1.0, 0.198), (4.0, 0.716), (5.0, 0.953), (9.0, 1.282), (13.0, 1.763), (21.0, 2.179), (29.0, 2.752), (49.0, 3.648)];
+    let n = n as f64;
+    if n <= 1.0 {
+        return TABLE[0].1;
+    }
+    for w in TABLE.windows(2) {
+        if n <= w[1].0 {
+            let t = (n - w[0].0) / (w[1].0 - w[0].0);
+            return w[0].1 + t * (w[1].1 - w[0].1);
         }
     }
-    for c in (0..m).rev() {
-        let d = a[c * m + c];
-        for j in 0..k {
-            let mut s = b[c * k + j];
-            for q in c + 1..m {
-                s -= a[c * m + q] * b[q * k + j];
+    0.92 * (n / std::f64::consts::PI).sqrt()
+}
+
+/// Resistance between `src` and `target` of a network given as Laplacian lists: ground `src`, push 1 A into `target`, and solve for
+/// the potentials by conjugate gradients with a Jacobi preconditioner (`x` is a work vector of the size of the network). The
+/// potential of `target` is the resistance. `None` when it does not converge.
+fn cg_resistance(nbr: &[Vec<(usize, f64)>], diag: &[f64], src: usize, target: usize, x: &mut [f64]) -> Option<f64> {
+    let n = diag.len();
+    let live: Vec<usize> = (0..n).filter(|&i| diag[i] > 0.0 && i != src).collect();
+    for &i in &live {
+        x[i] = 0.0;
+    }
+    x[src] = 0.0;
+    let mut r = vec![0.0f64; n];
+    r[target] = 1.0;
+    let precond = |v: f64, i: usize| v / diag[i];
+    let mut z = vec![0.0f64; n];
+    for &i in &live {
+        z[i] = precond(r[i], i);
+    }
+    let mut pdir = z.clone();
+    let mut rz: f64 = live.iter().map(|&i| r[i] * z[i]).sum();
+    let norm0 = 1.0f64;
+    let mut ap = vec![0.0f64; n];
+    for _ in 0..20_000 {
+        for &i in &live {
+            let mut v = diag[i] * pdir[i];
+            for &(j, c) in &nbr[i] {
+                if j != src {
+                    v -= c * pdir[j];
+                }
             }
-            b[c * k + j] = if d.abs() < 1e-300 { 0.0 } else { s / d };
+            ap[i] = v;
+        }
+        let pap: f64 = live.iter().map(|&i| pdir[i] * ap[i]).sum();
+        if pap <= 0.0 {
+            return None;
+        }
+        let alpha = rz / pap;
+        let mut rnorm = 0.0;
+        for &i in &live {
+            x[i] += alpha * pdir[i];
+            r[i] -= alpha * ap[i];
+            rnorm += r[i] * r[i];
+        }
+        if rnorm.sqrt() <= 1e-10 * norm0 {
+            return Some(x[target]);
+        }
+        let mut rz_new = 0.0;
+        for &i in &live {
+            z[i] = precond(r[i], i);
+            rz_new += r[i] * z[i];
+        }
+        let beta = rz_new / rz;
+        rz = rz_new;
+        for &i in &live {
+            pdir[i] = z[i] + beta * pdir[i];
         }
     }
+    None
 }
 
 /// The drop of every net that has a declared current.
@@ -842,7 +950,22 @@ mod tests {
     /// pair (0 when the program finds no coupling). Each polyline is one net with a connector pad at its start and a part pad at
     /// its end, and a track per segment.
     fn ours_case(c: &Case) -> f64 {
-        let (_, kind, w, drill, paths, layers, plane) = (&c.0, c.1.as_str(), c.2, c.3, &c.4, c.5, &c.6);
+        let series = ours_series(c);
+        let of = |net: &str| series.iter().find(|s| s.net == net).unwrap_or_else(|| panic!("{net} not wired: {series:?}")).henry;
+        if c.1 == "self" || c.1 == "loop" {
+            return of("N0") * 1e9;
+        }
+        let k = wiring_couplings(&series, &IrSpec::default());
+        k.first().map_or(0.0, |c| c.k * (of("N0") * of("N1")).sqrt() * 1e9)
+    }
+
+    /// The program's resistance (ohm) of the first trace of a case, supply end to far end.
+    fn ours_ohm(c: &Case) -> f64 {
+        ours_series(c).iter().find(|s| s.net == "N0").expect("N0 not wired").ohm
+    }
+
+    fn ours_series(c: &Case) -> Vec<PadSeries> {
+        let (_, _kind, w, drill, paths, layers, plane) = (&c.0, c.1.as_str(), c.2, c.3, &c.4, c.5, &c.6);
         let side = |l: u8| if l == 0 { Side::Top } else if l + 1 == layers { Side::Bottom } else { Side::Inner(l) };
         let mut pads = vec![];
         let mut tracks = vec![];
@@ -875,13 +998,95 @@ mod tests {
             let (y0, y1) = (ys.iter().cloned().fold(f64::MAX, f64::min) - margin, ys.iter().cloned().fold(f64::MIN, f64::max) + margin);
             b.zones.push(Zone::new("GND", side(*layer), vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)]));
         }
-        let series = wiring_resistances(&b, &IrSpec::default());
-        let of = |net: &str| series.iter().find(|s| s.net == net).unwrap_or_else(|| panic!("{net} not wired: {series:?}")).henry;
-        if kind == "self" || kind == "loop" {
-            return of("N0") * 1e9;
+        wiring_resistances(&b, &IrSpec::default())
+    }
+
+    /// The program's resistance (ohm) between two pads of a pour of `tools/pour_cases.json` (a rectangle of `w` x `h`, round pads
+    /// of 1.6 mm at `p1` and `p2`).
+    fn ours_pour(c: &serde_json::Value) -> f64 {
+        let (w, h) = (c["w"].as_f64().unwrap(), c["h"].as_f64().unwrap());
+        let pt = |k: &str| (c[k][0].as_f64().unwrap(), c[k][1].as_f64().unwrap());
+        let mk = |p: (f64, f64), r: &str| {
+            let mut pad = Pad::new(Point::new(p.0, p.1), PadShape::Circle { d: 1.6 }, None, Side::Top);
+            pad.refdes = r.into();
+            pad.pin = "1".into();
+            pad.net = "N0".into();
+            pad
+        };
+        let mut b = board(vec![mk(pt("p1"), "J0"), mk(pt("p2"), "U0")], vec![]);
+        b.zones.push(Zone::new("N0", Side::Top, vec![Point::new(0.0, 0.0), Point::new(w, 0.0), Point::new(w, h), Point::new(0.0, h)]));
+        wiring_resistances(&b, &IrSpec::default()).iter().find(|s| s.refdes == "U0").expect("U0 not reached").ohm
+    }
+
+    fn pour_cases() -> Vec<serde_json::Value> {
+        serde_json::from_str::<serde_json::Value>(include_str!("../../../tools/pour_cases.json")).unwrap().as_array().unwrap().clone()
+    }
+
+    /// The resistance between two pads of a pour against a finite-difference solution of the same plate (`tools/ref_pour.py`, a
+    /// 0.125 mm grid, good to about 3 %): compact plates, pads near an edge or in a corner, and narrow strips used as a power route
+    /// (where the number of squares between the pads decides) must agree within 6 %. The first version of the program put every pad
+    /// behind a "hub" and was 17 to 76 % low (more than a factor of four on a strip) and 53 % high in a corner.
+    #[test]
+    fn pour_resistance_agrees_with_a_finite_difference_solution() {
+        let table: std::collections::HashMap<String, f64> = include_str!("../../../tools/pour_reference.csv")
+            .lines()
+            .skip(1)
+            .map(|l| {
+                let f: Vec<&str> = l.split(',').collect();
+                (f[0].to_string(), f[1].parse().unwrap())
+            })
+            .collect();
+        let cases = pour_cases();
+        assert_eq!(table.len(), cases.len());
+        for c in cases {
+            let name = c["name"].as_str().unwrap();
+            let (ours, fd) = (ours_pour(&c), table[name]);
+            assert!((ours / fd - 1.0).abs() < 0.06, "{name}: {:.3} mohm vs {:.3} mohm", ours * 1e3, fd * 1e3);
         }
-        let k = wiring_couplings(&series, &IrSpec::default());
-        k.first().map_or(0.0, |c| c.k * (of("N0") * of("N1")).sqrt() * 1e9)
+    }
+
+    /// `cargo test -p pcb-core pour_resistance_table -- --ignored --nocapture`: `case,ohm` of every case of `tools/pour_cases.json`.
+    #[test]
+    #[ignore]
+    fn pour_resistance_table() {
+        println!("case,ohm");
+        for c in pour_cases() {
+            println!("{},{:.6e}", c["name"].as_str().unwrap(), ours_pour(&c));
+        }
+    }
+
+    /// The resistance of a trace against FastHenry2 (Re Z at 1 kHz, `tools/fasthenry_resistance.csv`) for the straight, corner,
+    /// dogleg and staircase cases: within 0.5 % (the program's copper is 1.72e-5 ohm mm, FastHenry's 1.724e-5, which is the 0.24 %
+    /// it is low by; corners and angles change nothing because both count squares along the centre line).
+    #[test]
+    fn trace_resistance_agrees_with_fasthenry() {
+        let table: Vec<(String, f64)> = include_str!("../../../tools/fasthenry_resistance.csv")
+            .lines()
+            .skip(1)
+            .map(|l| {
+                let f: Vec<&str> = l.split(',').collect();
+                (f[0].to_string(), f[1].parse().unwrap())
+            })
+            .collect();
+        assert!(table.len() >= 15);
+        for (name, fh) in table {
+            let c = cases().into_iter().find(|c| c.0 == name).unwrap();
+            let ours = ours_ohm(&c);
+            assert!((ours / fh - 1.0).abs() < 0.005, "{name}: {:.3} mohm vs FastHenry {:.3} mohm", ours * 1e3, fh * 1e3);
+        }
+    }
+
+    /// `cargo test -p pcb-core resistance_cases_table -- --ignored --nocapture`: `case,ohm` of the first trace of every plane-free
+    /// `self` case without a via (to compare with FastHenry's Re(Z), see `tools/compare_fasthenry.py`).
+    #[test]
+    #[ignore]
+    fn resistance_cases_table() {
+        println!("case,ohm");
+        for c in cases() {
+            if c.1 == "self" && c.6.is_none() && !c.0.contains("via") {
+                println!("{},{:.6}", c.0, ours_ohm(&c));
+            }
+        }
     }
 
     /// `cargo test -p pcb-core inductance_cases_table -- --ignored --nocapture`: `case,value_nH` for every case of
