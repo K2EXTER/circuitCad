@@ -68,10 +68,26 @@ impl Session {
                 Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "drc_violations": drc})))
             }
             "currents" => {
-                let widen = rest.first().is_some_and(|w| w.eq_ignore_ascii_case("widen"));
+                let (words, kv) = options(rest);
+                let widen = words.iter().any(|w| w.eq_ignore_ascii_case("widen"));
+                let use_tran = words.iter().any(|w| w.eq_ignore_ascii_case("tran"));
                 let c = self.circuit()?;
-                let dc = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
-                let currents = sim_core::net_currents(&c, &dc);
+                let mut stats: Vec<Value> = vec![];
+                let currents = if use_tran {
+                    let tr = self.last_tran.as_ref().ok_or("board currents tran: run 'tran' first (the current is read from its result)")?;
+                    let from = opt(&kv, "from").map(|f| f.parse::<f64>().ok().filter(|v| (0.0..0.95).contains(v)).ok_or("from=F is the part of the run to skip, 0 to 0.9 (default 0.5: the second half, without the start-up)")).transpose()?.unwrap_or(0.5);
+                    let st = sim_core::net_currents_tran(&c, tr, from);
+                    let r3 = |x: f64| (x * 1e3).round() / 1e3;
+                    stats = st
+                        .iter()
+                        .map(|s| json!({"net": s.net, "rms": r3(s.rms), "burst_rms_10ms": r3(s.burst_rms), "peak": r3(s.peak), "spiky": s.spiky()}))
+                        .collect();
+                    // the RMS of the settled part is what the copper heats with; the peak is only shown
+                    st.iter().map(|s| (s.net.clone(), s.rms)).collect::<Vec<_>>()
+                } else {
+                    let dc = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
+                    sim_core::net_currents(&c, &dc)
+                };
                 let board = self.board_mut()?;
                 let n = pcb_core::current::set_net_currents(board, &currents);
                 let spec = pcb_core::current::CopperSpec::default();
@@ -90,8 +106,9 @@ impl Session {
                     .iter()
                     .map(|w| json!({"net": w.net, "amps": (w.amps * 1e4).round() / 1e4, "needed_mm": pcb_core::current::round_up_width(w.needed), "thinnest_mm": w.thinnest, "too_thin": w.too_thin()}))
                     .collect();
-                Ok(obj(json!({"nets": n, "widened_tracks": widened, "list": list,
-                    "note": "Currents are from the DC operating point (half the sum of the terminal currents on each net), widths from IPC-2221 at +10 C on 35 um outer copper. 'board currents widen' thickens the thin tracks; run 'board drc' after, then 'board postlayout on' to see the effect."})))
+                let source = if use_tran { "RMS of the settled part of the last 'tran' (time-weighted); 'stats' also has the largest 10 ms burst RMS and the peak, which are not used. spiky:true = peak above 10x RMS, a start-up surge or a spike that a real source would limit" } else { "the DC operating point" };
+                Ok(obj(json!({"nets": n, "widened_tracks": widened, "list": list, "stats": stats,
+                    "note": format!("Currents are from {source} (half the sum of the terminal currents on each net), widths from IPC-2221 at +10 C on 35 um outer copper. 'board currents [tran] widen' thickens the thin tracks; run 'board drc' after, then 'board postlayout on' to see the effect.")})))
             }
             "postlayout" => {
                 let on = match rest.first().map(|w| w.to_ascii_lowercase()).as_deref() {

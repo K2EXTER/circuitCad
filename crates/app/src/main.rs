@@ -108,9 +108,16 @@ impl eframe::App for App {
         if ui.input(|i| i.key_pressed(egui::Key::F1)) {
             self.help.show(if self.mode == Mode::Schematic { help::HelpTab::Schematic } else { help::HelpTab::Board });
         }
-        if std::mem::take(&mut self.board_ed.currents_request) {
-            let currents = self.sch.dc_net_currents();
-            self.board_ed.use_simulated_currents(currents);
+        match self.board_ed.currents_request.take() {
+            Some(board_editor::CurrentSource::Dc) => {
+                let currents = self.sch.dc_net_currents();
+                self.board_ed.use_simulated_currents(currents, vec![]);
+            }
+            Some(board_editor::CurrentSource::Tran) => match self.sch.tran_net_currents() {
+                Ok((currents, stats)) => self.board_ed.use_simulated_currents(Ok(currents), stats),
+                Err(e) => self.board_ed.use_simulated_currents(Err(e), vec![]),
+            },
+            None => {}
         }
         if let Some(on) = self.board_ed.post_layout_request.take() {
             self.apply_post_layout(on);

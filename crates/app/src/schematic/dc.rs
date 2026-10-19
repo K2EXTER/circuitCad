@@ -37,6 +37,15 @@ impl SchEditor {
         Ok(sim_core::net_currents(&c, &r))
     }
 
+    /// The RMS current of every net over the settled part of the last transient run (the second half), with the
+    /// burst and peak figures for the warning. For circuits whose current only exists in time.
+    pub fn tran_net_currents(&self) -> Result<(Vec<(String, f64)>, Vec<sim_core::NetStat>), String> {
+        let Some(Ok(tr)) = self.tran.as_ref().map(|t| &t.outcome) else { return Err("先に回路図で「過渡解析を実行」してください (電流は、その結果の後半から求めます)".into()) };
+        let c = self.sim_circuit().map_err(|e| e.join(" / "))?;
+        let stats = sim_core::net_currents_tran(&c, tr, 0.5);
+        Ok((stats.iter().map(|s| (s.net.clone(), s.rms)).collect(), stats))
+    }
+
     pub(super) fn signature_cached(&self) -> &str {
         &self.sig_cache
     }

@@ -48,7 +48,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board route [net=NAME]
   board drc
   board status
-  board currents [widen]               take the DC currents of the nets, show the track width each needs, optionally thicken thin tracks
+  board currents [tran] [from=F] [widen]  take the net currents (DC point, or with tran the RMS of the settled part of the last tran), show the track width each needs, optionally thicken thin tracks
   board postlayout on|off               dc/tran/ac/noise also see the copper resistance of the board (post-layout simulation)
   board save FILE.pcbjson / board open FILE.pcbjson
   board fab DIR                         Gerber, drill, BOM, placement and the zip

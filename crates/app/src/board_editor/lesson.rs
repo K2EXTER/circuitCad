@@ -72,8 +72,8 @@ const COPPER_STEPS: &[Step] = &[
         done: copper_applied,
     },
     Step {
-        title: "シミュレーションの電流を入れる",
-        detail: "基板に戻り、「配線の太さ (電流から)」の「シミュレーションの電流を入れる」を押します。DC解析で求めた電流 (約 2.3 A) が、VIN と GND の欄に入ります。必要な線幅 (約 1.1 mm) と、今の線幅 (0.25 mm) が赤く出ます",
+        title: "DC解析の電流を入れる",
+        detail: "基板に戻り、「配線の太さ (電流から)」の「DC解析の電流を入れる」を押します。DC解析で求めた電流 (約 2.3 A) が、VIN と GND の欄に入ります。必要な線幅 (約 1.1 mm) と、今の線幅 (0.25 mm) が赤く出ます",
         done: currents_declared,
     },
     Step {

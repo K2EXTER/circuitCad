@@ -170,6 +170,15 @@ struct Visible {
     ruler: bool,
 }
 
+/// Where the declared net currents come from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CurrentSource {
+    /// The DC operating point.
+    Dc,
+    /// The RMS of the settled part of the last transient run.
+    Tran,
+}
+
 pub struct BoardEditor {
     pub board: Board,
     pub path: Option<PathBuf>,
@@ -232,7 +241,9 @@ pub struct BoardEditor {
     /// Set by the voltage-drop panel: `Some(true)` = simulate with this board's copper resistance, `Some(false)` = back to ideal wires. `App` carries it to the schematic.
     pub post_layout_request: Option<bool>,
     /// Set by the width panel: ask `App` for the schematic's DC net currents (it answers with `use_simulated_currents`).
-    pub currents_request: bool,
+    pub currents_request: Option<CurrentSource>,
+    /// What the last transient run said about each net's current (RMS, burst, peak), shown under the width table.
+    pub current_stats: Vec<sim_core::NetStat>,
     /// The copper resistance of the current copper is in the schematic's analyses (set by `App`, cleared when the copper is widened).
     pub post_layout_fresh: bool,
     violations: Vec<drc::Violation>,
@@ -320,7 +331,8 @@ impl Default for BoardEditor {
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,
             post_layout_request: None,
-            currents_request: false,
+            currents_request: None,
+            current_stats: vec![],
             post_layout_fresh: false,
             violations: vec![],
             import_notes: vec![],

@@ -205,7 +205,7 @@ fn the_copper_lesson_walks_from_the_drop_to_the_fixed_copper() {
     app.apply_post_layout(true);
     assert_eq!(progress(&mut app), 1);
     let currents = app.sch.dc_net_currents();
-    app.board_ed.use_simulated_currents(currents);
+    app.board_ed.use_simulated_currents(currents, vec![]);
     assert_eq!(progress(&mut app), 2);
     for net in ["VIN", "GND"] {
         app.board_ed.widen_net_to_need(net);
@@ -215,6 +215,24 @@ fn the_copper_lesson_walks_from_the_drop_to_the_fixed_copper() {
     app.apply_post_layout(true);
     assert_eq!(progress(&mut app), 4);
     assert_eq!(app.board_ed.finished_board_lesson(), Some("board_copper"));
+}
+
+/// A pulsed load has no DC current; the width panel's transient button takes the RMS of the settled part of the run.
+#[test]
+fn transient_currents_come_from_the_last_run_and_flag_a_surge() {
+    let mut app = App::default();
+    app.start_board_lesson(1);
+    assert!(app.sch.tran_net_currents().is_err(), "no transient run yet");
+    app.sch.sch.components.iter_mut().find(|c| c.refdes == "V1").unwrap().value = "PULSE(0 5 0 1n 1n 1m 2m)".into();
+    app.sch.set_tran_settings("40m", "20u");
+    app.sch.analyze_tran();
+    let (currents, stats) = app.sch.tran_net_currents().unwrap();
+    let vin = stats.iter().find(|s| s.net == "VIN").unwrap();
+    // 5 V into 2.2 ohm for half of the time: peak 2.27 A, RMS 1.61 A
+    assert!((vin.peak - 2.27).abs() < 0.05 && (vin.rms - 1.61).abs() < 0.08 && !vin.spiky(), "{vin:?}");
+    app.board_ed.use_simulated_currents(Ok(currents), stats);
+    assert!((app.board_ed.board.net_currents["VIN"] - 1.61).abs() < 0.08);
+    assert!(!app.board_ed.current_stats.is_empty());
 }
 
 /// End-to-end trial: schematic -> board -> autoplace -> autoroute -> GND pour -> DRC -> preflight -> fab files.
@@ -413,7 +431,7 @@ fn thin_power_line_project_shows_the_copper_drop_and_the_fix() {
     assert!((4.3..4.8).contains(&thin), "thin copper: {thin}");
 
     let currents = app.sch.dc_net_currents();
-    app.board_ed.use_simulated_currents(currents);
+    app.board_ed.use_simulated_currents(currents, vec![]);
     let conn = pcb_core::drc::connectivity(&app.board_ed.board);
     let report = pcb_core::current::net_widths(&app.board_ed.board, &conn, &pcb_core::current::CopperSpec::default());
     assert!(report.iter().all(|w| w.too_thin()), "{report:?}");

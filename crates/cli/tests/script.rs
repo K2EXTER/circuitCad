@@ -128,6 +128,33 @@ board currents
     assert_eq!(vin(runs[2])["too_thin"], false);
 }
 
+#[test]
+fn board_currents_tran_uses_the_rms_of_the_run_and_needs_a_tran() {
+    // a pulsed 10 V / 10 ohm load: 1 A peak, 0.707 A RMS
+    let head = "new
+add V \"PULSE(0 10 0 1n 1n 1m 2m)\" as=V1
+add R 10 as=R1
+net VIN V1.+ R1.1
+net GND V1.- R1.2
+board import
+board autoplace
+board route
+";
+    let (a, _) = run(&format!("{head}board currents tran
+"));
+    assert!(last(&a, "board")["error"].as_str().unwrap().contains("run 'tran' first"), "{a:?}");
+    let (a, ok) = run(&format!("{head}tran 40m 20u probe=V(VIN)
+board currents tran
+"));
+    assert!(ok, "{a:?}");
+    let r = last(&a, "board");
+    let vin = r["stats"].as_array().unwrap().iter().find(|s| s["net"] == "VIN").unwrap();
+    assert!((vin["rms"].as_f64().unwrap() - 0.707).abs() < 0.03, "{vin}");
+    assert!((vin["peak"].as_f64().unwrap() - 1.0).abs() < 0.01 && vin["spiky"] == false, "{vin}");
+    let declared = r["list"].as_array().unwrap().iter().find(|n| n["net"] == "VIN").unwrap()["amps"].as_f64().unwrap();
+    assert!((declared - vin["rms"].as_f64().unwrap()).abs() < 1e-3, "the RMS is what gets declared");
+}
+
 fn run_strict(script: &str) -> (Vec<Value>, bool) {
     let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
     let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))

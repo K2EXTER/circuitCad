@@ -33,7 +33,8 @@ impl BoardEditor {
     }
 
     /// Declares the simulated net currents (from the schematic's DC analysis) and opens the panel.
-    pub fn use_simulated_currents(&mut self, currents: Result<Vec<(String, f64)>, String>) {
+    pub fn use_simulated_currents(&mut self, currents: Result<Vec<(String, f64)>, String>, stats: Vec<sim_core::NetStat>) {
+        self.current_stats = stats;
         match currents {
             Err(e) => self.status = format!("シミュレーションの電流を取れませんでした: {e}"),
             Ok(list) => {
@@ -43,7 +44,7 @@ impl BoardEditor {
                 self.status = if n == 0 {
                     "基板のネットに合う電流がありません。回路図から部品を取り込んだあとで試してください".into()
                 } else {
-                    format!("{n} 個のネットに、DC解析の電流を入れました。「必要 ○ mm」を見て、足りないネットは「推奨幅にする」で太くできます")
+                    format!("{n} 個のネットに、シミュレーションの電流を入れました。「必要 ○ mm」を見て、足りないネットは「推奨幅にする」で太くできます")
                 };
             }
         }
@@ -97,8 +98,18 @@ impl BoardEditor {
                     ui.end_row();
                 }
             });
-            if ui.button("シミュレーションの電流を入れる").on_hover_text("回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、上の欄に入れます。ネットにつながる部品の電流を足して半分にした値で、電源とGNDには全体の電流が出ます。電流を自分で調べなくても、必要な線幅がすぐ分かります。ピーク電流 (起動時やスイッチング) は入らないので、余裕を見てください").clicked() {
-                self.currents_request = true;
+            ui.horizontal(|ui| {
+            if ui.button("DC解析の電流を入れる").on_hover_text("回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、上の欄に入れます。ネットにつながる部品の電流を足して半分にした値で、電源とGNDには全体の電流が出ます。電流を自分で調べなくても、必要な線幅がすぐ分かります。ピーク電流 (起動時やスイッチング) は入らないので、余裕を見てください").clicked() {
+                self.currents_request = Some(CurrentSource::Dc);
+            }
+            if ui.button("過渡解析の電流を入れる").on_hover_text("回路図で最後に実行した過渡解析の、後半 (起動のあとの落ち着いた部分) の電流の実効値 (RMS) を、各ネットに入れます。スイッチング電源やパルスの負荷のように、DCでは電流が決まらない回路用です。銅は数秒かけて温まるので、短いスパイクではなく実効値で太さを決めます。起動時のサージは含めません。先に回路図で過渡解析を実行してください").clicked() {
+                self.currents_request = Some(CurrentSource::Tran);
+            }
+            });
+            for s in &self.current_stats {
+                let txt = format!("{}: 実効 {:.2} A / 10 ms の最大 {:.2} A / ピーク {:.2} A{}", s.net, s.rms, s.burst_rms, s.peak, if s.spiky() { "  ⚠ ピークが実効値の10倍以上" } else { "" });
+                let r = if s.spiky() { ui.colored_label(egui::Color32::from_rgb(220, 160, 40), txt) } else { ui.small(txt) };
+                r.on_hover_text("太さに使うのは「実効」です。「10 ms の最大」は短くても繰り返す山の熱、「ピーク」は一瞬の最大値で、参考です。⚠ は、起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります");
             }
             self.ir_drop_ui(ui);
             if let Some(w) = use_width {
