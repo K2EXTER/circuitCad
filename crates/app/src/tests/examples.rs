@@ -864,6 +864,56 @@ fn write_pwm_example() {
     std::fs::write(root.join("pwm_filter.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/ldo_compare.schjson: two 3.3 V low-dropout regulators on one input (V1 = 5 V): U1 = AMS1117-3.3 (dropout
+/// 1.1 V, up to 15 V in), U2 = MCP1700-3302 (dropout 0.2 V, up to 6 V in), each with a 33 ohm load (100 mA) and its capacitors:
+/// `cargo test -p app write_ldo_example -- --ignored`
+#[test]
+#[ignore]
+fn write_ldo_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+    let (ams, mcp) = (find("AMS1117-3.3"), find("MCP1700-3302"));
+    let pin = |d: &part_lib::PartDef, name: &str| d.pins.iter().find(|p| p.name == name).unwrap().number.clone();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VIN");
+    label(&mut s, v1, "-", "GND");
+    let u1 = s.add_custom(ams.symbol(), &ams.default_value(), &ams.footprint_name(), (20, 0), 0);
+    label(&mut s, u1, &pin(&ams, "IN"), "VIN");
+    label(&mut s, u1, &pin(&ams, "GND"), "GND");
+    label(&mut s, u1, &pin(&ams, "OUT"), "OUT1");
+    let u2 = s.add_custom(mcp.symbol(), &mcp.default_value(), &mcp.footprint_name(), (20, 16), 0);
+    label(&mut s, u2, &pin(&mcp, "VIN"), "VIN");
+    label(&mut s, u2, &pin(&mcp, "GND"), "GND");
+    label(&mut s, u2, &pin(&mcp, "VOUT"), "OUT2");
+    // loads (33 ohm = 100 mA) and the capacitors the data sheets ask for
+    for (k, (net, x)) in [("OUT1", 40), ("OUT2", 52)].into_iter().enumerate() {
+        let r = s.add(Kind::Resistor, (x, 0), 1);
+        s.components[r].value = "33".into();
+        s.components[r].footprint = "R_2512".into();
+        label(&mut s, r, "1", net);
+        label(&mut s, r, "2", "GND");
+        let c = s.add(Kind::Capacitor, (x, 14), 1);
+        s.components[c].value = if k == 0 { "10u" } else { "1u" }.into();
+        label(&mut s, c, "1", net);
+        label(&mut s, c, "2", "GND");
+    }
+    let c = s.add(Kind::Capacitor, (64, 0), 1);
+    s.components[c].value = "1u".into();
+    label(&mut s, c, "1", "VIN");
+    label(&mut s, c, "2", "GND");
+    std::fs::write(root.join("ldo_compare.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

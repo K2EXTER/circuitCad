@@ -291,6 +291,26 @@ pub(super) fn pwm_loaded(e: &SchEditor) -> bool {
     pwm_c1_between(e, 0.5e-6, 2e-6) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|r| r <= 20e3)
 }
 
+/// The LDO lesson: the input V1 is between `lo` and `hi` volt and the DC result is fresh.
+fn ldo_input_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    dc_fresh(e) && value_of(&e.sch, "V1").and_then(parse_value).is_some_and(|v| (lo..=hi).contains(&v))
+}
+
+/// Step 2: the input is about 4 V (the 1.1 V dropout part cannot hold 3.3 V any more).
+pub(super) fn ldo_input_4v(e: &SchEditor) -> bool {
+    ldo_input_between(e, 3.8, 4.2)
+}
+
+/// Step 3: the input is down at the output voltage (3.4 V or less).
+pub(super) fn ldo_input_low(e: &SchEditor) -> bool {
+    ldo_input_between(e, 0.0, 3.4)
+}
+
+/// Step 4: a 12 V input (10 V or more).
+pub(super) fn ldo_input_high(e: &SchEditor) -> bool {
+    ldo_input_between(e, 10.0, 60.0)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

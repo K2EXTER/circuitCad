@@ -958,3 +958,41 @@ fn the_pwm_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     let (mean, _, _) = look(&e);
     assert!((1.15..1.3).contains(&mean), "10k load: {mean}");
 }
+
+#[test]
+fn the_ldo_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "ldo").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let outs = |e: &SchEditor| {
+        let d = e.dc.as_ref().unwrap().outcome.as_ref().unwrap();
+        (d.voltage("OUT1").unwrap(), d.voltage("OUT2").unwrap())
+    };
+    let issues = |e: &SchEditor| sim_core::check_ratings(&e.sch, e.dc.as_ref().unwrap().outcome.as_ref().unwrap()).into_iter().filter(|i| i.refdes.starts_with('U')).map(|i| format!("{} {:?}", i.refdes, i.level)).collect::<Vec<_>>();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    let (a, m) = outs(&e);
+    assert!((3.25..3.35).contains(&a) && (3.2..3.35).contains(&m), "5 V: {a} {m}");
+    assert!(issues(&e).is_empty(), "inside the ratings at 5 V: {:?}", issues(&e));
+    set_value(&mut e, "V1", "4");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (a, m) = outs(&e);
+    assert!((2.85..2.95).contains(&a) && (3.2..3.35).contains(&m), "4 V: {a} {m}");
+    set_value(&mut e, "V1", "3.3");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (a, m) = outs(&e);
+    assert!((2.1..2.3).contains(&a) && (3.0..3.15).contains(&m), "3.3 V: {a} {m}");
+    set_value(&mut e, "V1", "12");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    let i = issues(&e);
+    assert!(i.contains(&"U2 Over".to_string()) && i.contains(&"U1 Caution".to_string()), "12 V: {i:?}");
+}

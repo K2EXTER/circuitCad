@@ -178,6 +178,7 @@ const POWER_PATH: LearningPath = LearningPath {
                 Item { build: true, requires: Some(&["opamp_noninv"]), ..lesson("opamp_inv", "オペアンプの反転増幅 (仮想接地)", "反転入力が 0V に保たれる仕組み", None) },
                 Item { build: true, requires: Some(&["opamp_inv", "emitter_follower"]), ..lesson("series_regulator", "基準電圧と帰還で安定化する (直列レギュレータ)", "オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む", Some("負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります")) },
                 Item { build: true, requires: Some(&["emitter_follower"]), ..lesson("regulator_78xx", "三端子レギュレータ (78xx / LDO) を使う", "入出力のコンデンサ、ドロップアウト電圧、使い方と選び方", Some("7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります")) },
+                Item { requires: Some(&["regulator_78xx"]), ..lesson("ldo", "LDO (低ドロップアウト) レギュレータ", "入力の余裕 (ドロップアウト電圧) が小さくても動く。USB の 5V や電池から 3.3V を作る。電圧差は熱になる", Some("入力を下げながら出力を測り、出力が落ち始める入力を、データシートと比べます")) },
                 Item { requires: Some(&["regulator_78xx"]), ..lesson("heat", "熱と定格を考える", "電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方", Some("負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます")) },
                 Item { requires: Some(&["diode_curve", "regulator_78xx"]), ..lesson("protection", "電源を守る (逆接続・過電流・ヒューズ)", "壊れ方を知って、守る部品を足す", Some("ヒューズや逆接続保護ダイオードの働きを、安全な条件 (低電圧・電流制限つき) で確かめます")) },
                 Item { requires: Some(&["protection"]), ..lesson("coil_layer_short", "コイルのレアショート (連鎖して壊れる)", "1つの故障が次の部品の故障を呼ぶ連鎖。ヒューズで止められる場合と、止められない場合", Some("リレーのコイル抵抗をテスタで測り、定格電流の内側か確かめます。コイルを実際にショートさせる実験はしません")) },
