@@ -496,14 +496,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     let mut poured = poured;
     poured.sort();
     poured.dedup();
-    // a pour on the top joins every pad by itself, so the vias are made again with the top zone taken off, and the top
-    // zone comes back (at the new size) afterwards
-    let top_nets: Vec<String> = repour.iter().filter_map(|(n, _)| board.zones.iter().any(|z| &z.net == n && z.side == Side::Top).then(|| n.clone())).collect();
-    board.zones.retain(|z| !(z.side == Side::Top && top_nets.contains(&z.net)));
     let repoured = repour.iter().map(|(_, o)| groundpour::ground_pour(board, o).map_or(0, |r| r.vias)).sum();
-    for n in &top_nets {
-        let _ = groundpour::top_pour(board, Some(n));
-    }
     Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil(), poured, repoured })
 }
 
@@ -822,7 +815,7 @@ mod tests {
         // not placed with the plain tuning: the pour is there now, so the poured net drops out
         let rep = autoplace(&mut b).unwrap();
         assert_eq!(rep.poured, vec!["GND".to_string()]);
-        assert_eq!(rep.repoured, vias, "every pad is joined to the pour again");
+        assert_eq!(rep.repoured, vias, "the pour is joined through the board again");
         assert!(!b.vias.is_empty());
         assert!(b.zones.iter().any(|z| z.side == Side::Top), "the top pour comes back at the new size");
         assert!(ratsnest::ratsnest(&b).iter().all(|w| w.net != "GND"), "ground is joined");

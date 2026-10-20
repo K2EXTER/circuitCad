@@ -1,6 +1,8 @@
 //! A ground pour for a two-layer board: a zone of the ground net over the whole bottom layer, and for every surface
 //! mount ground pad on top a short straight track to a via, which joins the pad to the pour. Through-hole ground pads
 //! and ground pads on the bottom meet the pour by themselves. After that the ground needs no wires on top.
+//! When the free copper of the top is poured too (`PourOptions.top`), the surface pads sit on that pour, so one way
+//! through the board (a through-hole pad or a single via) is all that is added.
 //!
 //! The vias go where the DRC finds nothing wrong, the nearest first. A pad that has no such place is counted and left
 //! for the router.
@@ -102,6 +104,12 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
         work.zones.push(zone);
         report.zone_added = true;
     }
+    // with the top filled too, every surface pad is on the pour already: the pour needs only one way through the board
+    // (a through-hole pad or one via) and no via for each pad. A top pour that would break something is left out, and the
+    // pads get their vias one by one.
+    if opt.top {
+        report.top_added = top_pour(&mut work, Some(&net)) == Ok(true);
+    }
     let ground_pads: Vec<usize> = (0..work.pads.len()).filter(|&i| work.pads[i].net == net).collect();
     // the pads on the pour: in a group with a via of the net or a through-hole pad (both meet the bottom zone)
     let on_pour = |b: &Board| -> HashSet<usize> {
@@ -146,10 +154,6 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
             report.left += 1;
         }
     }
-    if opt.top {
-        // a top pour that would break something is left out; the bottom pour and its vias stay
-        report.top_added = top_pour(&mut work, Some(&net)) == Ok(true);
-    }
     *board = work;
     Ok(report)
 }
@@ -182,15 +186,32 @@ mod tests {
     fn the_ground_pads_join_the_bottom_pour_through_vias() {
         let mut b = board();
         assert!(ratsnest(&b).iter().any(|w| w.net == "GND"));
-        let r = ground_pour(&mut b, &PourOptions::default()).unwrap();
-        assert!(r.zone_added);
-        assert!(r.top_added, "{r:?}");
+        let r = ground_pour(&mut b, &PourOptions { top: false, ..Default::default() }).unwrap();
+        assert!(r.zone_added && !r.top_added);
         assert_eq!((r.vias, r.already, r.left), (3, 1, 0), "{r:?}");
         assert!(ratsnest(&b).iter().all(|w| w.net != "GND"), "the ground needs no wires");
         assert_eq!(b.vias.len(), 3);
         assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
         // the pour keeps off the board's edge
         assert!(drc::check_final(&b).is_empty(), "{:?}", drc::check_final(&b));
+    }
+
+    #[test]
+    fn with_the_top_poured_too_no_via_is_put_for_each_pad() {
+        // a through-hole ground pad is the way through the board: no via at all
+        let mut b = board();
+        let r = ground_pour(&mut b, &PourOptions::default()).unwrap();
+        assert!(r.zone_added && r.top_added, "{r:?}");
+        assert_eq!((r.vias, r.left), (0, 0), "{r:?}");
+        assert!(b.vias.is_empty() && b.tracks.is_empty());
+        assert!(ratsnest(&b).iter().all(|w| w.net != "GND"), "ground is joined");
+        // without one, a single via joins the two sides
+        let mut c = board();
+        c.pads.retain(|p| p.drill.is_none());
+        let r = ground_pour(&mut c, &PourOptions::default()).unwrap();
+        assert_eq!((r.top_added, r.vias, r.left), (true, 1, 0), "{r:?}");
+        assert!(ratsnest(&c).iter().all(|w| w.net != "GND"), "ground is joined");
+        assert!(drc::check_final(&c).is_empty(), "{:?}", drc::check_final(&c));
     }
 
     #[test]
