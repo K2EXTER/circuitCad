@@ -45,10 +45,10 @@ impl BoardEditor {
                 }
             });
             ui.horizontal(|ui| {
-                if crate::icons::icon_button(ui, Icon::Undo, "元に戻す", false, !self.undo.is_empty(), "直前の操作を取り消します (Ctrl+Z)").clicked() {
+                if crate::icons::icon_button_key(ui, Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.undo.is_empty(), "直前の操作を取り消します (Ctrl+Z)").clicked() {
                     self.undo();
                 }
-                if crate::icons::icon_button(ui, Icon::Redo, "やり直し", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)").clicked() {
+                if crate::icons::icon_button_key(ui, Icon::Redo, "やり直し", "Ctrl+Y", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)").clicked() {
                     self.redo();
                 }
             });
@@ -222,17 +222,22 @@ impl BoardEditor {
 
     fn tool_buttons(&mut self, ui: &mut egui::Ui, tools: &[(Tool, &'static str, Icon)]) {
         for (t, name, icon) in tools {
-            if crate::icons::icon_button(ui, *icon, name, self.tool == *t, true, tool_tip(*t)).clicked() {
-                self.tool = *t;
-                self.pending = None;
-                self.poly.clear();
-                // what was selected stays behind: R, B and Delete must not reach it from another tool
-                if *t != Tool::Select {
-                    self.selected = None;
-                    self.multi.clear();
-                    self.boxsel = None;
-                }
+            let key = tool_key(*t).map(|k| k.to_string()).unwrap_or_default();
+            if crate::icons::icon_button_key(ui, *icon, name, &key, self.tool == *t, true, tool_tip(*t)).clicked() {
+                self.set_tool(*t);
             }
+        }
+    }
+
+    pub(super) fn set_tool(&mut self, t: Tool) {
+        self.tool = t;
+        self.pending = None;
+        self.poly.clear();
+        // what was selected stays behind: R, B and Delete must not reach it from another tool
+        if t != Tool::Select {
+            self.selected = None;
+            self.multi.clear();
+            self.boxsel = None;
         }
     }
 

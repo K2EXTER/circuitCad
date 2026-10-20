@@ -167,13 +167,20 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
 /// A toolbar button. With text: icon + label. Icon only: a square button whose tooltip starts with the label.
 /// `selected` highlights it like a selectable label; `enabled` greys it out.
 pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, enabled: bool, tip: &str) -> egui::Response {
+    icon_button_key(ui, icon, label, "", selected, enabled, tip)
+}
+
+/// `icon_button` that also shows its keyboard shortcut (`key`, e.g. "Ctrl+Z"; empty for none): dim text after the
+/// label, and a line in the tooltip (also when only the icon is shown).
+pub fn icon_button_key(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, selected: bool, enabled: bool, tip: &str) -> egui::Response {
     let side = ui.spacing().interact_size.y.max(22.0);
     let pad = ui.spacing().button_padding;
     let (size, galley) = if icon_only() {
         (vec2(side, side), None)
     } else {
         let g = ui.painter().layout_no_wrap(label.to_owned(), egui::TextStyle::Button.resolve(ui.style()), Color32::PLACEHOLDER);
-        (vec2(side + 2.0 * pad.x + g.size().x, side), Some(g))
+        let kw = if key.is_empty() { 0.0 } else { ui.painter().layout_no_wrap(key.to_owned(), egui::TextStyle::Button.resolve(ui.style()), Color32::PLACEHOLDER).size().x + 10.0 };
+        (vec2(side + 2.0 * pad.x + g.size().x + kw, side), Some(g))
     };
     let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(size, sense);
@@ -188,9 +195,16 @@ pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, e
         if let Some(g) = galley {
             let pos = pos2(rect.min.x + pad.x + side - 2.0, rect.center().y - g.size().y / 2.0);
             ui.painter().galley(pos, g, col);
+            if !key.is_empty() {
+                // the shortcut sits at the right end, dimmer than the label
+                let dim = col.gamma_multiply(0.55);
+                let kg = ui.painter().layout_no_wrap(key.to_owned(), egui::TextStyle::Button.resolve(ui.style()), dim);
+                ui.painter().galley(pos2(rect.max.x - pad.x - kg.size().x, rect.center().y - kg.size().y / 2.0), kg, dim);
+            }
         }
     }
     let tip = if icon_only() { format!("{label}\n{tip}") } else { tip.to_owned() };
+    let tip = if key.is_empty() { tip } else { format!("{tip}\nショートカット: {key}") };
     resp.on_hover_text(tip)
 }
 

@@ -42,6 +42,11 @@ fn tool_tip(t: Tool) -> &'static str {
     }
 }
 
+/// The number key that picks a tool: 1-9 and 0 in the order of `TOOLS`.
+fn tool_key(t: Tool) -> Option<char> {
+    TOOLS.iter().position(|(x, _, _)| *x == t).and_then(|i| char::from_digit(((i + 1) % 10) as u32, 10))
+}
+
 const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::Select, "選択 / 部品の移動", Icon::Select),
     (Tool::Track, "配線", Icon::Wire),

@@ -76,6 +76,16 @@ impl BoardEditor {
             self.redo();
             return;
         }
+        // number keys pick a tool (1-9, 0), in the order of the toolbar
+        if !cmd && !shift && !ui.input(|i| i.modifiers.alt) {
+            let digits = [Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9, Key::Num0];
+            if let Some(k) = digits.iter().position(|k| pressed(*k))
+                && let Some((t, _, _)) = TOOLS.get(k)
+            {
+                self.set_tool(*t);
+                return;
+            }
+        }
         // R, B and Delete act on what is selected, and only the Select tool selects: in another tool they do nothing
         // to a part or a track picked earlier
         let selecting = self.tool == Tool::Select;
@@ -162,6 +172,19 @@ mod tests {
         e.board = pcb_core::Board::new("t", 40.0, 30.0);
         e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: pcb_core::Point::new(10.0, 10.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
         e
+    }
+
+    /// The number keys pick the tools in the order of the toolbar (1 = select ... 0 = silk), and the toolbar shows them.
+    #[test]
+    fn number_keys_pick_tools() {
+        let mut e = editor();
+        press(&mut e, egui::Key::Num2);
+        assert!(e.tool == Tool::Track);
+        press(&mut e, egui::Key::Num0);
+        assert!(e.tool == Tool::Silk);
+        press(&mut e, egui::Key::Num1);
+        assert!(e.tool == Tool::Select);
+        assert_eq!((tool_key(Tool::Select), tool_key(Tool::Silk)), (Some('1'), Some('0')));
     }
 
     /// R, B and Delete reach a selected part or track only from the Select tool, so a part picked earlier is
