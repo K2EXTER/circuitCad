@@ -564,6 +564,66 @@ fn write_pin_led_example() {
     std::fs::write(root.join("pin_led.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/level_shift.schjson: a 5 V logic signal (V3, 0 - 5 V, 10 kHz, behind 100 ohm) brought down to 3.3 V
+/// two ways: a divider (R1 1k + R2 2k, net D33) and a BSS138 shifter (gate on 3.3 V, 10k pull-ups to 5 V on net H and to
+/// 3.3 V on net L): `cargo test -p app write_level_shift_example -- --ignored`
+#[test]
+#[ignore]
+fn write_level_shift_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "BSS138").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    // supplies and the 5 V side signal: V1 = 5 V, V2 = 3.3 V, V3 = the signal
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "V5");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (10, 0), 0);
+    s.components[v2].value = "3.3".into();
+    label(&mut s, v2, "+", "V33");
+    label(&mut s, v2, "-", "GND");
+    let v3 = s.add(Kind::VSource, (24, 0), 0);
+    s.components[v3].value = "PULSE(0 5 10u 20n 20n 40u 100u)".into();
+    label(&mut s, v3, "+", "SIG");
+    label(&mut s, v3, "-", "GND");
+    // the signal's output resistance, then the two ways down
+    let rs = s.add(Kind::Resistor, (34, 0), 1);
+    s.components[rs].value = "100".into();
+    label(&mut s, rs, "1", "SIG");
+    label(&mut s, rs, "2", "H");
+    // divider: R1 from H to D33, R2 from D33 to GND
+    let r1 = s.add(Kind::Resistor, (44, 0), 1);
+    s.components[r1].value = "1k".into();
+    label(&mut s, r1, "1", "H");
+    label(&mut s, r1, "2", "D33");
+    let r2 = s.add(Kind::Resistor, (54, 0), 1);
+    s.components[r2].value = "2k".into();
+    label(&mut s, r2, "1", "D33");
+    label(&mut s, r2, "2", "GND");
+    // BSS138 shifter (pins: 1 = G, 3 = D, 2 = S): drain on H (5 V side), source on L (3.3 V side), gate on 3.3 V; pull-ups on both sides
+    let q = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (66, 0), 0);
+    label(&mut s, q, "1", "V33");
+    label(&mut s, q, "3", "H");
+    label(&mut s, q, "2", "L");
+    let rh = s.add(Kind::Resistor, (78, 0), 1);
+    s.components[rh].value = "10k".into();
+    label(&mut s, rh, "1", "V5");
+    label(&mut s, rh, "2", "H");
+    let rl = s.add(Kind::Resistor, (88, 0), 1);
+    s.components[rl].value = "10k".into();
+    label(&mut s, rl, "1", "V33");
+    label(&mut s, rl, "2", "L");
+    std::fs::write(root.join("level_shift.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

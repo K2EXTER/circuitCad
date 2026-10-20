@@ -675,3 +675,43 @@ fn the_pin_led_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     e.update_lesson();
     assert_eq!(progress(&e), 4);
 }
+
+#[test]
+fn the_level_shift_lesson_ticks_its_three_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "levels").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (lowest, highest) of a signal in the second half, and its 10 - 90 % rise time
+    let look = |e: &SchEditor, n: &str| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal(n).unwrap().values;
+        let i0 = t.time.iter().position(|x| *x >= 100e-6).unwrap();
+        let (lo, hi) = v[i0..].iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)));
+        let (a, b) = (lo + 0.1 * (hi - lo), lo + 0.9 * (hi - lo));
+        let j0 = t.time.iter().position(|x| *x >= 110e-6).unwrap();
+        let ia = (j0..v.len()).find(|&i| v[i] >= a).unwrap();
+        let ib = (j0..v.len()).find(|&i| v[i] >= b).unwrap();
+        (lo, hi, t.time[ib] - t.time[ia])
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (_, d_hi, d_rise) = look(&e, "V(D33)");
+    let (l_lo, l_hi, l_rise) = look(&e, "V(L)");
+    assert!((3.1..3.35).contains(&d_hi) && d_rise < 50e-9, "divider {d_hi} {d_rise}");
+    assert!(l_lo < 0.1 && (3.25..3.35).contains(&l_hi) && (300e-9..700e-9).contains(&l_rise), "BSS138 {l_lo} {l_hi} {l_rise}");
+    set_value(&mut e, "R3", "10k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(look(&e, "V(D33)").1 > 4.3, "wrong ratio {}", look(&e, "V(D33)").1);
+    set_value(&mut e, "R3", "2k");
+    set_value(&mut e, "R5", "100k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (_, _, slow) = look(&e, "V(L)");
+    assert!(slow > 8.0 * l_rise, "{slow} vs {l_rise}");
+}

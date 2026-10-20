@@ -180,6 +180,17 @@ pub(super) fn led_calc_open(e: &SchEditor) -> bool {
     e.wiz_open && super::wizard::CALCS.get(e.wiz_kind).is_some_and(|c| c.title.starts_with("LED"))
 }
 
+/// The level-shift lesson, step 2: the divider's lower resistor R3 is 8k or more (a wrong ratio) and the run is fresh.
+pub(super) fn divider_ratio_wrong(e: &SchEditor) -> bool {
+    tran_fresh(e) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r >= 8e3)
+}
+
+/// The level-shift lesson, step 3: the divider is right again (3k or less) and the 3.3 V side pull-up R5 is weak (50k or more).
+pub(super) fn level_pullup_weak(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    tran_fresh(e) && v("R3").is_some_and(|r| r <= 3e3) && v("R5").is_some_and(|r| r >= 50e3)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

@@ -1,0 +1,495 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "3.3",
+      "pos": [
+        10,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "PULSE(0 5 10u 20n 20n 40u 100u)",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        34,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        44,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "2k",
+      "pos": [
+        54,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "BSS138",
+      "pos": [
+        66,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SOT-23_MOS",
+      "custom": {
+        "name": "BSS138",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "1",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "M",
+          "name": "BSS138",
+          "text": ".model BSS138 NMOS(VTO=1.3 KP=0.35 LAMBDA=0.02 CGS=30p CGD=5p)",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+            "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+            "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 50.0,
+          "i_max": 0.22,
+          "p_max": 0.36,
+          "rows": [
+            {
+              "name": "しきい値電圧",
+              "value": "0.8〜1.5V",
+              "condition": "ID = 1mA"
+            },
+            {
+              "name": "オン抵抗",
+              "value": "3.5Ω (最大)",
+              "condition": "VGS = 10V, ID = 0.22A"
+            }
+          ]
+        },
+        "glyph": "nmos"
+      }
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        78,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R5",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        88,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        10,
+        -2
+      ],
+      "b": [
+        10,
+        -5
+      ]
+    },
+    {
+      "a": [
+        10,
+        2
+      ],
+      "b": [
+        10,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        -2
+      ],
+      "b": [
+        24,
+        -5
+      ]
+    },
+    {
+      "a": [
+        24,
+        2
+      ],
+      "b": [
+        24,
+        5
+      ]
+    },
+    {
+      "a": [
+        34,
+        -2
+      ],
+      "b": [
+        34,
+        -5
+      ]
+    },
+    {
+      "a": [
+        34,
+        2
+      ],
+      "b": [
+        34,
+        5
+      ]
+    },
+    {
+      "a": [
+        44,
+        -2
+      ],
+      "b": [
+        44,
+        -5
+      ]
+    },
+    {
+      "a": [
+        44,
+        2
+      ],
+      "b": [
+        44,
+        5
+      ]
+    },
+    {
+      "a": [
+        54,
+        -2
+      ],
+      "b": [
+        54,
+        -5
+      ]
+    },
+    {
+      "a": [
+        54,
+        2
+      ],
+      "b": [
+        54,
+        5
+      ]
+    },
+    {
+      "a": [
+        64,
+        0
+      ],
+      "b": [
+        61,
+        0
+      ]
+    },
+    {
+      "a": [
+        66,
+        -2
+      ],
+      "b": [
+        66,
+        -5
+      ]
+    },
+    {
+      "a": [
+        66,
+        2
+      ],
+      "b": [
+        66,
+        5
+      ]
+    },
+    {
+      "a": [
+        78,
+        -2
+      ],
+      "b": [
+        78,
+        -5
+      ]
+    },
+    {
+      "a": [
+        78,
+        2
+      ],
+      "b": [
+        78,
+        5
+      ]
+    },
+    {
+      "a": [
+        88,
+        -2
+      ],
+      "b": [
+        88,
+        -5
+      ]
+    },
+    {
+      "a": [
+        88,
+        2
+      ],
+      "b": [
+        88,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "V5"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        10,
+        -5
+      ],
+      "text": "V33"
+    },
+    {
+      "pos": [
+        10,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        24,
+        -5
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        24,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        34,
+        -5
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        34,
+        5
+      ],
+      "text": "H"
+    },
+    {
+      "pos": [
+        44,
+        -5
+      ],
+      "text": "H"
+    },
+    {
+      "pos": [
+        44,
+        5
+      ],
+      "text": "D33"
+    },
+    {
+      "pos": [
+        54,
+        -5
+      ],
+      "text": "D33"
+    },
+    {
+      "pos": [
+        54,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        61,
+        0
+      ],
+      "text": "V33"
+    },
+    {
+      "pos": [
+        66,
+        -5
+      ],
+      "text": "H"
+    },
+    {
+      "pos": [
+        66,
+        5
+      ],
+      "text": "L"
+    },
+    {
+      "pos": [
+        78,
+        -5
+      ],
+      "text": "V5"
+    },
+    {
+      "pos": [
+        78,
+        5
+      ],
+      "text": "H"
+    },
+    {
+      "pos": [
+        88,
+        -5
+      ],
+      "text": "V33"
+    },
+    {
+      "pos": [
+        88,
+        5
+      ],
+      "text": "L"
+    }
+  ],
+  "layout_version": 1
+}
