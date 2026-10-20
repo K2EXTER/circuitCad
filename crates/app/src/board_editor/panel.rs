@@ -31,7 +31,7 @@ impl BoardEditor {
             ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
                 // the picked tool's settings open right under its button; the rest of the tools follow below
-                let at = TOOLS.iter().position(|(t, _, _)| *t == self.tool).filter(|_| matches!(self.tool, Tool::Track | Tool::Via));
+                let at = TOOLS.iter().position(|(t, _, _)| *t == self.tool).filter(|_| matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone));
                 let (head, tail) = TOOLS.split_at(at.map_or(TOOLS.len(), |i| i + 1));
                 for part in [head, tail] {
                     if wrap {
@@ -60,29 +60,6 @@ impl BoardEditor {
                 });
                 self.layer_count_ui(ui);
                 ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm")).on_hover_text("カーソルが吸い付く間隔。0 なら吸い付きません。小さいほど細かく置けます (部品の足の間隔は 2.54mm や 1.27mm が多いです)");
-                if matches!(self.tool, Tool::PadTh | Tool::PadSmd) {
-                    ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");
-                    ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
-                }
-                if self.tool == Tool::Hole {
-                    ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
-                }
-                if self.tool == Tool::Zone {
-                    ui.separator();
-                    ui.label("ゾーンの設定 (多角形を描き、ダブルクリックか Enter で確定)");
-                    let nets = self.nets();
-                    egui::ComboBox::from_label("ネット").selected_text(self.zone_net.clone()).show_ui(ui, |ui| {
-                        for n in &nets {
-                            ui.selectable_value(&mut self.zone_net, n.clone(), n);
-                        }
-                        if !nets.iter().any(|n| n == "GND") {
-                            ui.selectable_value(&mut self.zone_net, "GND".to_string(), "GND");
-                        }
-                    }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
-                    ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
-                    ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
-                    ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
-                }
             });
             self.selection_panel(ui);
             // open while the board is still being set up (no parts or no outline yet), then folded away
@@ -247,6 +224,10 @@ impl BoardEditor {
         let title = match self.tool {
             Tool::Track => "配線ツールの設定",
             Tool::Via => "ビアツールの設定",
+            Tool::PadTh => "パッド(スルーホール)の設定",
+            Tool::PadSmd => "パッド(SMD)の設定",
+            Tool::Hole => "取付穴の設定",
+            Tool::Zone => "銅箔ゾーンの設定",
             _ => return,
         };
         // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
@@ -293,6 +274,28 @@ impl BoardEditor {
         ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
         ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
             .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
+            }
+            Tool::PadTh | Tool::PadSmd => {
+                ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");
+                ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
+            }
+            Tool::Hole => {
+                ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
+            }
+            Tool::Zone => {
+                ui.label("多角形を描き、ダブルクリックか Enter で確定");
+                let nets = self.nets();
+                egui::ComboBox::from_label("ネット").selected_text(self.zone_net.clone()).show_ui(ui, |ui| {
+                    for n in &nets {
+                        ui.selectable_value(&mut self.zone_net, n.clone(), n);
+                    }
+                    if !nets.iter().any(|n| n == "GND") {
+                        ui.selectable_value(&mut self.zone_net, "GND".to_string(), "GND");
+                    }
+                }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
+                ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
+                ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
+                ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
             }
             _ => {}
         }
