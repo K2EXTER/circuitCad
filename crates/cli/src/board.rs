@@ -113,13 +113,16 @@ impl Session {
                     0
                 };
                 let joined = pcb_core::merge::merge_collinear(board, before);
+                let aligned = aligned + if lead > 0.0 && rep.routed > 0 { pcb_core::padentry::align_entries(board, &pcb_core::padentry::EntryOptions { lead, spread: true }, Some(&(before..board.tracks.len()).collect::<Vec<_>>())).aligned } else { 0 };
+                let joined = joined + pcb_core::merge::merge_collinear(board, before);
+                let slits_filled = if rep.routed > 0 { pcb_core::drc::fill_slits(board) } else { 0 };
                 // `improve=1`: then shorten the routes that detour and drop vias that are not needed. Off by default: right after
                 // the router the gain is small (43 samples: 2 vias fewer in all); `board improve` is for hand-drawn routes
                 let improved = if opt(&kv, "improve") == Some("1") && rep.failed.is_empty() { pcb_core::reroute::improve_routes(board, &ro, Some(before), None) } else { Default::default() };
                 // the bottom has the GND pour: fill the top with ground too (`top=0` leaves it out)
                 let top_pour = opt(&kv, "top") != Some("0") && rep.routed > 0 && board.zones.iter().any(|z| z.net == "GND" && z.side == pcb_core::model::Side::Bottom) && pcb_core::groundpour::top_pour(board, None) == Ok(true);
                 let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
-                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "top_pour": top_pour, "currents_declared": auto_nets, "wide_nets": rep.wide.iter().map(|(n, w)| json!({"net": n, "width_mm": w})).collect::<Vec<_>>(), "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "slits_filled": slits_filled, "top_pour": top_pour, "currents_declared": auto_nets, "wide_nets": rep.wide.iter().map(|(n, w)| json!({"net": n, "width_mm": w})).collect::<Vec<_>>(), "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
             }
             "drc" => {
                 let board = self.board_mut()?;

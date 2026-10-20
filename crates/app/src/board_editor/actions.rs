@@ -61,6 +61,11 @@ impl BoardEditor {
         let aligned = if self.pad_lead && report.routed > 0 { self.align_pad_entries(Some((tracks_before..self.board.tracks.len()).collect())) } else { 0 };
         // the router and the pad leads cut a route into short pieces: join the ones that run in a line
         let joined = if report.routed > 0 { pcb_core::merge::merge_collinear(&mut self.board, tracks_before) } else { 0 };
+        // joined into longer runs, more pad ends have room for a lead (and for the move onto the pad's centre line)
+        let aligned = aligned + if self.pad_lead && report.routed > 0 { self.align_pad_entries(Some((tracks_before..self.board.tracks.len()).collect())) } else { 0 };
+        let joined = joined + if report.routed > 0 { pcb_core::merge::merge_collinear(&mut self.board, tracks_before) } else { 0 };
+        // a via or a track end left a hair from a pad of its own net makes a slit the fab may flag: fill it
+        let filled = if report.routed > 0 { drc::fill_slits(&mut self.board) } else { 0 };
         // the GND pour of the bottom is there: fill the top between the wires with ground as well
         let top_note = if self.pour_top && report.routed > 0 && self.board.zones.iter().any(|z| z.net == "GND" && z.side == Side::Bottom) {
             match pcb_core::groundpour::top_pour(&mut self.board, None) {
@@ -74,6 +79,9 @@ impl BoardEditor {
         self.status = if report.failed.is_empty() {
             let mut tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
             tail += top_note;
+            if filled > 0 {
+                tail += &format!("同じネットの銅どうしの狭いすき間 {filled} か所を、銅で埋めました。");
+            }
             if !report.wide.is_empty() {
                 let list: Vec<String> = report.wide.iter().map(|(n, w)| format!("{n} {w:.2} mm")).collect();
                 tail += &format!("電流が大きいネットは、必要な太さで引きました ({})。", list.join("、"));

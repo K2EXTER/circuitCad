@@ -194,3 +194,37 @@ fn a_jog_that_would_be_a_tiny_step_is_not_made_when_the_pad_cannot_slide() {
     assert!(!has_tiny_step(&b), "{:?}", b.tracks);
     assert!(ratsnest(&b).is_empty(), "still connected");
 }
+
+#[test]
+fn a_track_that_sticks_out_over_the_pad_edge_is_moved_onto_the_pad() {
+    // a 0.3 mm wide pin with a 0.25 mm track that ends 0.075 mm off its centre line: one edge of the track is outside the pad
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 10.0, 10.0, 0.3, 0.85, "A");
+    pad(&mut b, 20.0, 18.0, 1.0, 1.0, "A");
+    b.tracks.push(trk((9.925, 10.0), (9.925, 14.0)));
+    b.tracks.push(trk((9.925, 14.0), (13.925, 18.0)));
+    b.tracks.push(trk((13.925, 18.0), (20.0, 18.0)));
+    let overhang = |b: &Board| b.tracks.iter().flat_map(|t| [t.a, t.b]).filter(|p| (p.y - 10.0).abs() < 0.43).map(|p| (p.x - 10.0).abs() + 0.125 - 0.15).fold(f64::MIN, f64::max);
+    assert!(overhang(&b) > 0.04);
+    let r = align_entries(&mut b, &EntryOptions::default(), None);
+    assert!(r.aligned >= 1, "{r:?}");
+    assert!(overhang(&b) < 1e-6, "{:?}", b.tracks);
+    assert!(ratsnest(&b).is_empty());
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+}
+
+#[test]
+fn a_via_a_hair_from_its_own_pad_gets_the_gap_filled() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 10.0, 10.0, 0.3, 0.85, "A");
+    pad(&mut b, 10.0, 20.0, 1.0, 1.0, "A");
+    b.tracks.push(trk((10.0, 10.0), (10.0, 20.0)));
+    // a via of the same net beside the pad's corner, 0.07 mm from it
+    b.vias.push(Via { pos: Point::new(10.545, 10.9), diameter: 0.6, drill: 0.3 });
+    b.tracks.push(trk((10.0, 11.5), (10.545, 10.9)));
+    assert!(!drc::slit_checks(&b).is_empty());
+    let n = drc::fill_slits(&mut b);
+    assert!(n >= 1);
+    assert!(drc::slit_checks(&b).is_empty(), "{:?}", drc::slit_checks(&b));
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+}

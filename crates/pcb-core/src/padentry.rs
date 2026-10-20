@@ -160,10 +160,17 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
         return None;
     }
     let q = Point::new(anchor.x + n.0 * (exit + lead), anchor.y + n.1 * (exit + lead));
+    // an end that was moved onto the centre line may not leave a track after the joint that is only a little step
+    let tail = if anchor.dist(v) > 1e-6 { MIN_LEG } else { 0.2 };
     // the joint: where a horizontal, vertical or 45° line from `q` meets the old route (the track on the pad, or the
     // ones joined to it), beyond the pad
     let s_min = exit_along(pad, v, (ux, uy)) + 0.1;
     let links = chain(board, e, s_min + 2.0 * lead + 1.0);
+    // the end sticks out over the pad's edge: move the whole straight run onto the pad's centre line, the next track
+    // keeps its line and only begins a little further along it (no jog)
+    if anchor.dist(v) > 1e-6 && let Some(edit) = shift_run(board, pad, e, anchor, n, exit, lead, &links) {
+        return Some(edit);
+    }
     if anchor.dist(v) < 1e-6 && let Some(edit) = slide_foot(board, pad, e, anchor, n, exit, lead, &links) {
         return Some(edit);
     }
@@ -182,7 +189,7 @@ fn plan_end(board: &Board, pad: &Pad, e: End, anchor: Point, lead: f64) -> Optio
             let tt = (rx * (-sy) - ry * (-sx)) / det;
             let ss = (d.0 * ry - d.1 * rx) / det;
             let s_lo = if idx == 0 { s_min } else { 0.05 };
-            if tt < 0.05 || ss < s_lo || ss > sl - 0.2 {
+            if tt < 0.05 || ss < s_lo || ss > sl - tail {
                 continue;
             }
             // a short bend would only be a visible little step
@@ -324,6 +331,38 @@ fn slide_foot(board: &Board, pad: &Pad, e: End, anchor: Point, n: (f64, f64), ex
     None
 }
 
+/// The straight track on the pad (running straight away from its edge, `links[0]`) is laid again on the pad's centre line
+/// from `anchor`; the track that follows keeps its line and begins where that line meets the centre line. `None` when the
+/// run does not leave straight, the next track is parallel to it, or the lead would be shorter than `lead`.
+#[allow(clippy::too_many_arguments)]
+fn shift_run(board: &Board, pad: &Pad, e: End, anchor: Point, n: (f64, f64), exit: f64, lead: f64, links: &[(usize, bool, Point, Point)]) -> Option<Edit> {
+    let t = &board.tracks[e.track];
+    let (_, _, p0, p1) = *links.first()?;
+    let (sx, sy, _) = unit(p0, p1);
+    if sx * n.0 + sy * n.1 < 0.9999 {
+        return None;
+    }
+    let &(next, is_a, q0, q1) = links.get(1)?;
+    let (dx, dy, dl) = unit(q0, q1);
+    // anchor + s n = q0 + u d
+    let det = n.0 * (-dy) - n.1 * (-dx);
+    if det.abs() < 1e-6 {
+        return None;
+    }
+    let (rx, ry) = (q0.x - anchor.x, q0.y - anchor.y);
+    let s = (rx * (-dy) - ry * (-dx)) / det;
+    let u = (n.0 * ry - n.1 * rx) / det;
+    // the track that follows keeps at least `MIN_LEG`, so that it does not become a little step
+    if s < exit + lead || u < 0.05 || u > dl - MIN_LEG {
+        return None;
+    }
+    let joint = Point::new(q0.x + dx * u, q0.y + dy * u);
+    if pad_holds(pad, joint, t.side) {
+        return None;
+    }
+    Some(Edit { track: e.track, trim: Some((next, is_a, joint)), new: vec![Track { side: t.side, a: anchor, b: joint, width: t.width }], remove: vec![links[0].0] })
+}
+
 /// The most (mm) the foot of a lead is slid along the pad's edge to meet a track that runs on beside it.
 const MAX_SLIDE: f64 = 0.3;
 
@@ -389,6 +428,23 @@ fn end_anchors(board: &Board, pad: &Pad, w: f64) -> Option<(Point, Point, (f64, 
     Some((Point::new(pad.pos.x - axis.0 * off, pad.pos.y - axis.1 * off), Point::new(pad.pos.x + axis.0 * off, pad.pos.y + axis.1 * off), axis))
 }
 
+/// A track that ends on its pad off to one side (the router comes to the grid line, which may miss the pad's centre by a
+/// little) can stick out over the pad's edge: the copper then crowds the next pad or track. For such an end, the point on the
+/// pad's centre line where the lead should start; `None` when the whole track width is on the pad already.
+fn recentred(board: &Board, pad: &Pad, e: &End) -> Option<Point> {
+    let t = &board.tracks[e.track];
+    let (v, w) = (end_pos(board, e), far_pos(board, e));
+    let n = face_normal(pad, v, w);
+    let perp = (-n.1, n.0);
+    let (pw, ph) = pad.shape.size();
+    let half = (if n.0 != 0.0 { ph } else { pw }) / 2.0;
+    let off = (v.x - pad.pos.x) * perp.0 + (v.y - pad.pos.y) * perp.1;
+    if off.abs() + t.width / 2.0 <= half + 1e-6 {
+        return None;
+    }
+    Some(Point::new(v.x - perp.0 * off, v.y - perp.1 * off))
+}
+
 /// Make the tracks of `board` leave their rectangular pads at a right angle (see the module). Only the track ends
 /// listed in `only` (indices of tracks), when given, are handled. Returns what was done.
 pub fn align_entries(board: &mut Board, opts: &EntryOptions, only: Option<&[usize]>) -> EntryReport {
@@ -448,7 +504,7 @@ pub fn align_entries(board: &mut Board, opts: &EntryOptions, only: Option<&[usiz
         }
         for k in 0..ends.len() {
             let e = ends[k];
-            let anchor = end_pos(board, &e);
+            let anchor = recentred(board, &pad, &e).unwrap_or_else(|| end_pos(board, &e));
             let Some(edit) = plan_end(board, &pad, e, anchor, opts.lead) else { continue };
             let before = (check(board).len(), ratsnest(board).len());
             let mut trial = board.clone();

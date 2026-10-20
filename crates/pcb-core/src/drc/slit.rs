@@ -60,7 +60,58 @@ fn all_closest(a: Point, b: Point, c: Point, d: Point) -> Vec<(Point, Point)> {
 /// is free to run beside its own net), but the fab's check goes by shapes alone and sees a slit that the etching may
 /// close or trap acid in. Gaps that another piece of the same net fills are not slits (the two pieces of a straight
 /// run with a short piece between them). Pads of one part are left to the footprint.
+/// A gap narrower than the clearance rule between two pieces of copper of one net.
+struct Slit {
+    side: Side,
+    gap: f64,
+    /// The closest points, one on the edge of each piece.
+    p: Point,
+    q: Point,
+}
+
 pub fn slit_checks(board: &Board) -> Vec<Violation> {
+    slit_gaps(board)
+        .into_iter()
+        .map(|s| {
+            v(
+                format!("{} 同じネットの銅箔どうしの間に、間隔 {:.3}mm (最小 {:.3}mm より狭い) のすき間があります。細いすき間は、エッチングでつぶれたり、酸が溜まったりします。離すか、つないで埋めましょう", side_name(s.side), s.gap, board.rules.min_clearance),
+                Point::new((s.p.x + s.q.x) / 2.0, (s.p.y + s.q.y) / 2.0),
+            )
+        })
+        .collect()
+}
+
+/// Fill the slits of `slit_checks` with a short piece of copper across each gap (the "つないで埋める" way out: the two
+/// pieces are one net, so joining them changes no connection). A piece is kept only when the DRC finds nothing new.
+/// Returns how many were put in.
+pub fn fill_slits(board: &mut Board) -> usize {
+    let mut put = 0;
+    for _ in 0..3 {
+        let slits = slit_gaps(board);
+        if slits.is_empty() {
+            break;
+        }
+        let mut progress = false;
+        for s in slits {
+            let before = check(board).len();
+            let mut trial = board.clone();
+            // a short horizontal blob that covers the gap and a little of both edges
+            let m = Point::new((s.p.x + s.q.x) / 2.0, (s.p.y + s.q.y) / 2.0);
+            trial.tracks.push(Track { side: s.side, a: Point::new(m.x - 0.05, m.y), b: Point::new(m.x + 0.05, m.y), width: (s.gap + 0.12).max(board.rules.min_track_width) });
+            if check(&trial).len() <= before && slit_gaps(&trial).len() < slit_gaps(board).len() {
+                *board = trial;
+                put += 1;
+                progress = true;
+            }
+        }
+        if !progress {
+            break;
+        }
+    }
+    put
+}
+
+fn slit_gaps(board: &Board) -> Vec<Slit> {
     let r = &board.rules;
     let items = copper_items(board);
     let conn = connectivity(board);
@@ -70,7 +121,7 @@ pub fn slit_checks(board: &Board) -> Vec<Violation> {
     near_pairs(&items, r.min_clearance, |i, j| near.push((i.min(j), i.max(j))));
     near.sort_unstable();
     let boxes: Vec<(f64, f64, f64, f64)> = items.iter().map(|it| bbox(&it.geo)).collect();
-    let mut out = vec![];
+    let mut out: Vec<Slit> = vec![];
     for side in board.copper_layers() {
         for &(i, j) in &near {
             if grp[i] != grp[j] || !(items[i].on(side) && items[j].on(side)) || (is_pad(i) && is_pad(j)) {
@@ -93,10 +144,7 @@ pub fn slit_checks(board: &Board) -> Vec<Violation> {
                 })
             });
             let Some((p, q)) = empty else { continue };
-            out.push(v(
-                format!("{} 同じネットの銅箔どうしの間に、間隔 {:.3}mm (最小 {:.3}mm より狭い) のすき間があります。細いすき間は、エッチングでつぶれたり、酸が溜まったりします。離すか、つないで埋めましょう", side_name(side), d, r.min_clearance),
-                Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
-            ));
+            out.push(Slit { side, gap: d, p: *p, q: *q });
         }
     }
     out
