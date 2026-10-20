@@ -35,6 +35,10 @@ impl BoardEditor {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // icon-only buttons are packed side by side; with labels they stay one per line
             let wrap = crate::icons::icon_only();
+            // the width panel lives under the wire tool's settings: show it when something asks for it (simulated currents, --ir)
+            if self.widths_open.is_some() && self.tool != Tool::Track {
+                self.set_tool(Tool::Track);
+            }
             group_heading(ui, "手で描く (ツール)", "ここで選んだツールで、基板の上に自分で描き込みます (数字キー 1〜0 でも選べます)");
             ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
@@ -155,11 +159,6 @@ impl BoardEditor {
                             self.shorten_routes(Some(n));
                         }
                 });
-                egui::CollapsingHeader::new("高度な配線 (?)").default_open(false).show(ui, |ui| {
-                    self.panel_widths(ui);
-                    self.panel_pairs(ui);
-                    self.panel_lengths(ui);
-                }).header_response.on_hover_text("配線の太さ (電流から)・差動ペア・長さ合わせ");
             });
             egui::CollapsingHeader::new("③ 整える (?)").default_open(false).show(ui, |ui| {
                 self.panel_pad_entries(ui);
@@ -278,6 +277,11 @@ impl BoardEditor {
         });
         ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
             .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
+        egui::CollapsingHeader::new("高度な配線 (中級者向け)").default_open(false).open(self.widths_open.map(|_| true)).show(ui, |ui| {
+                self.panel_widths(ui);
+                self.panel_pairs(ui);
+                self.panel_lengths(ui);
+        }).header_response.on_hover_text("中級者向け: 配線の太さ (電流から)・差動ペア・長さ合わせ");
             }
             Tool::Via => {
         ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
