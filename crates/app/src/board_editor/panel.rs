@@ -152,6 +152,7 @@ impl BoardEditor {
                             self.autoroute(Some(n));
                         }
                 });
+                ui.checkbox(&mut self.pour_top, "表面も GND のベタで埋める").on_hover_text("「GND ベタ」を押したとき、裏面に加えて、表面の空いた所も GND の銅で埋めます (自動配線は、その上を通る形で配線します。配線のあとに表面のベタを足すこともできます)。配線から隙間をあけて塗るので、配線は変わりません。表面の GND パッドは直接つながり、ノイズに強く、銅の量が表裏でそろって基板が反りにくくなります。ルール違反が増えるときは置きません");
                 ui.separator();
                 ui.label(egui::RichText::new("引いた配線の手直し").strong());
                 ui.horizontal_wrapped(|ui| {

@@ -17,11 +17,14 @@ pub struct PourOptions {
     pub track_width: f64,
     pub via_diameter: f64,
     pub via_drill: f64,
+    /// Also fill the free copper of the top with the net (`top_pour`), so that the router works on a board that has the
+    /// pour on both sides.
+    pub top: bool,
 }
 
 impl Default for PourOptions {
     fn default() -> Self {
-        Self { net: None, track_width: 0.3, via_diameter: 0.6, via_drill: 0.3 }
+        Self { net: None, track_width: 0.3, via_diameter: 0.6, via_drill: 0.3, top: true }
     }
 }
 
@@ -29,12 +32,54 @@ impl Default for PourOptions {
 pub struct PourReport {
     /// A zone was added (it was not there yet).
     pub zone_added: bool,
+    /// The zone on the top layer was added too.
+    pub top_added: bool,
     /// Surface pads joined to the pour with a new via.
     pub vias: usize,
     /// Pads that were on the pour already.
     pub already: usize,
     /// Surface pads that found no place for a via.
     pub left: usize,
+}
+
+/// The four corners of a pour over a rectangular board, kept off the edge by the edge clearance and a little more.
+fn pour_corners(board: &Board) -> Result<Vec<Point>, String> {
+    let Some((lo, hi)) = board.bounds().filter(|_| board.outline.len() >= 3) else {
+        return Err("先に基板の外形を決めてください (ベタは基板の外形いっぱいに置きます)".into());
+    };
+    let inset = board.rules.edge_clearance + 0.2;
+    let is_rect = board.outline.len() == 4 && board.outline.iter().all(|p| (p.x == lo.x || p.x == hi.x) && (p.y == lo.y || p.y == hi.y));
+    if !is_rect {
+        return Err("四角い外形の基板にだけ、自動でベタを置けます。ほかの形は「銅箔ゾーン」ツールで、外形の内側に多角形を描いてください".into());
+    }
+    if hi.x - lo.x <= 2.0 * inset + 1.0 || hi.y - lo.y <= 2.0 * inset + 1.0 {
+        return Err("基板が小さすぎて、ベタを置けません".into());
+    }
+    Ok(vec![Point::new(lo.x + inset, lo.y + inset), Point::new(hi.x - inset, lo.y + inset), Point::new(hi.x - inset, hi.y - inset), Point::new(lo.x + inset, hi.y - inset)])
+}
+
+/// Fill the unused copper of the top layer with the pour net (after the routing: the zone keeps its clearance from
+/// every wire, so the wires stay as they are). Surface pads of the net on the zone join it by themselves. `Ok(false)`:
+/// the top has such a zone already. Nothing changes (and the reason is returned) when the DRC would find more
+/// problems than before or a ground connection would be lost.
+pub fn top_pour(board: &mut Board, net: Option<&str>) -> Result<bool, String> {
+    let net = net.unwrap_or("GND");
+    if !board.pads.iter().any(|p| p.net == net) {
+        return Err(format!("{net} につながるパッドがありません"));
+    }
+    if board.zones.iter().any(|z| z.net == net && z.side == Side::Top) {
+        return Ok(false);
+    }
+    let mut zone = Zone::new(net, Side::Top, pour_corners(board)?);
+    zone.remove_islands = true;
+    let mut work = board.clone();
+    work.zones.push(zone);
+    let open = |b: &Board| crate::ratsnest::ratsnest(b).iter().filter(|w| w.net == net).count();
+    if check(&work).len() > check(board).len() || open(&work) > open(board) {
+        return Err("表面のベタを置くと、ルール違反が増えるか、つながりが切れるので、置きませんでした".into());
+    }
+    *board = work;
+    Ok(true)
 }
 
 /// How far (mm) from a pad's centre a via may be put, at most.
@@ -48,22 +93,10 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
     if !board.pads.iter().any(|p| p.net == net) {
         return Err(format!("{net} につながるパッドがありません。先に回路図から取り込んで、ネット名を確かめてください"));
     }
-    let Some((lo, hi)) = board.bounds().filter(|_| board.outline.len() >= 3) else {
-        return Err("先に基板の外形を決めてください (ベタは基板の外形いっぱいに置きます)".into());
-    };
-    // the pour stops short of the board's edge by the edge clearance and a little more
-    let inset = board.rules.edge_clearance + 0.2;
-    let is_rect = board.outline.len() == 4 && board.outline.iter().all(|p| (p.x == lo.x || p.x == hi.x) && (p.y == lo.y || p.y == hi.y));
-    if !is_rect {
-        return Err("四角い外形の基板にだけ、自動でベタを置けます。ほかの形は「銅箔ゾーン」ツールで、外形の内側に多角形を描いてください".into());
-    }
-    if hi.x - lo.x <= 2.0 * inset + 1.0 || hi.y - lo.y <= 2.0 * inset + 1.0 {
-        return Err("基板が小さすぎて、ベタを置けません".into());
-    }
+    let corners = pour_corners(board)?;
     let mut work = board.clone();
     let mut report = PourReport::default();
     if !work.zones.iter().any(|z| z.net == net && z.side == Side::Bottom) {
-        let corners = vec![Point::new(lo.x + inset, lo.y + inset), Point::new(hi.x - inset, lo.y + inset), Point::new(hi.x - inset, hi.y - inset), Point::new(lo.x + inset, hi.y - inset)];
         let mut zone = Zone::new(&net, Side::Bottom, corners);
         zone.remove_islands = true;
         work.zones.push(zone);
@@ -113,6 +146,10 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
             report.left += 1;
         }
     }
+    if opt.top {
+        // a top pour that would break something is left out; the bottom pour and its vias stay
+        report.top_added = top_pour(&mut work, Some(&net)) == Ok(true);
+    }
     *board = work;
     Ok(report)
 }
@@ -147,6 +184,7 @@ mod tests {
         assert!(ratsnest(&b).iter().any(|w| w.net == "GND"));
         let r = ground_pour(&mut b, &PourOptions::default()).unwrap();
         assert!(r.zone_added);
+        assert!(r.top_added, "{r:?}");
         assert_eq!((r.vias, r.already, r.left), (3, 1, 0), "{r:?}");
         assert!(ratsnest(&b).iter().all(|w| w.net != "GND"), "the ground needs no wires");
         assert_eq!(b.vias.len(), 3);
@@ -162,6 +200,7 @@ mod tests {
         let (vias, tracks, zones) = (b.vias.len(), b.tracks.len(), b.zones.len());
         let r = ground_pour(&mut b, &PourOptions::default()).unwrap();
         assert_eq!((r.zone_added, r.vias), (false, 0));
+        assert!(!r.top_added);
         assert_eq!((b.vias.len(), b.tracks.len(), b.zones.len()), (vias, tracks, zones));
     }
 
@@ -178,6 +217,17 @@ mod tests {
     }
 
     #[test]
+    fn the_signal_nets_route_over_a_board_poured_on_both_sides() {
+        let mut b = board();
+        let r = ground_pour(&mut b, &PourOptions::default()).unwrap();
+        assert!(r.top_added);
+        let r = crate::autoroute::autoroute(&mut b, &Default::default(), None);
+        assert!(r.failed.is_empty(), "{:?}", r.failed);
+        assert!(ratsnest(&b).is_empty());
+        assert!(drc::check_final(&b).is_empty(), "{:?}", drc::check_final(&b));
+    }
+
+    #[test]
     fn the_signal_nets_route_round_the_pour_vias() {
         let mut b = board();
         ground_pour(&mut b, &PourOptions::default()).unwrap();
@@ -185,5 +235,29 @@ mod tests {
         assert!(r.failed.is_empty(), "{:?}", r.failed);
         assert!(ratsnest(&b).is_empty());
         assert!(drc::check_final(&b).is_empty(), "{:?}", drc::check_final(&b));
+    }
+
+    #[test]
+    fn the_top_is_filled_with_ground_after_the_routing_and_stays_clean() {
+        let mut b = board();
+        ground_pour(&mut b, &PourOptions { top: false, ..Default::default() }).unwrap();
+        crate::autoroute::autoroute(&mut b, &Default::default(), None);
+        assert_eq!(top_pour(&mut b, None), Ok(true));
+        assert!(b.zones.iter().any(|z| z.net == "GND" && z.side == Side::Top));
+        assert!(ratsnest(&b).is_empty());
+        assert!(drc::check_final(&b).is_empty(), "{:?}", drc::check_final(&b));
+        // a second time there is nothing to add
+        assert_eq!(top_pour(&mut b, None), Ok(false));
+    }
+
+    #[test]
+    fn the_top_pour_is_refused_for_a_missing_net_or_a_round_outline() {
+        let mut b = Board::new("t", 40.0, 30.0);
+        pad(&mut b, 8.0, 8.0, "SIG", None);
+        assert!(top_pour(&mut b, None).is_err());
+        let mut c = board();
+        c.outline = vec![Point::new(0.0, 0.0), Point::new(40.0, 0.0), Point::new(40.0, 30.0), Point::new(20.0, 35.0), Point::new(0.0, 30.0)];
+        assert!(top_pour(&mut c, None).is_err());
+        assert!(c.zones.is_empty());
     }
 }

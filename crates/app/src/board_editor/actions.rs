@@ -61,8 +61,19 @@ impl BoardEditor {
         let aligned = if self.pad_lead && report.routed > 0 { self.align_pad_entries(Some((tracks_before..self.board.tracks.len()).collect())) } else { 0 };
         // the router and the pad leads cut a route into short pieces: join the ones that run in a line
         let joined = if report.routed > 0 { pcb_core::merge::merge_collinear(&mut self.board, tracks_before) } else { 0 };
+        // the GND pour of the bottom is there: fill the top between the wires with ground as well
+        let top_note = if self.pour_top && report.routed > 0 && self.board.zones.iter().any(|z| z.net == "GND" && z.side == Side::Bottom) {
+            match pcb_core::groundpour::top_pour(&mut self.board, None) {
+                Ok(true) => "表面も GND のベタで埋めました。",
+                Ok(false) => "",
+                Err(_) => "表面の GND ベタは、ルール違反が増えるので置きませんでした。",
+            }
+        } else {
+            ""
+        };
         self.status = if report.failed.is_empty() {
             let mut tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
+            tail += top_note;
             if !report.wide.is_empty() {
                 let list: Vec<String> = report.wide.iter().map(|(n, w)| format!("{n} {w:.2} mm")).collect();
                 tail += &format!("電流が大きいネットは、必要な太さで引きました ({})。", list.join("、"));
@@ -133,14 +144,14 @@ impl BoardEditor {
     /// The GND pour on the bottom layer with a via for every surface ground pad (see `pcb_core::groundpour`). One undo step.
     pub fn ground_pour(&mut self) {
         self.checkpoint();
-        let opt = pcb_core::groundpour::PourOptions { net: None, track_width: self.track_width.max(0.3), via_diameter: self.via_dia, via_drill: self.via_drill };
+        let opt = pcb_core::groundpour::PourOptions { net: None, track_width: self.track_width.max(0.3), via_diameter: self.via_dia, via_drill: self.via_drill, top: self.pour_top };
         match pcb_core::groundpour::ground_pour(&mut self.board, &opt) {
             Ok(r) if r.zone_added || r.vias > 0 => {
                 self.violations.clear();
                 let left = if r.left > 0 { format!("ビアを置けなかったパッドが {} 個あります (自動配線が線でつなぎます)。", r.left) } else { String::new() };
                 self.status = format!(
-                    "GND ベタ: 裏面を GND の銅箔にして、表面の GND パッド {} 個を短い線とビアでつなぎました ({} 個は元からつながっていました)。{left}このあと「自動配線」で GND 以外の線を引きます",
-                    r.vias, r.already
+                    "GND ベタ: 裏面{}を GND の銅箔にして、表面の GND パッド {} 個を短い線とビアでつなぎました ({} 個は元からつながっていました)。{left}このあと「自動配線」で GND 以外の線を引きます",
+                    if r.top_added { "と表面の空いた所" } else { "" }, r.vias, r.already
                 );
             }
             Ok(_) => {

@@ -199,6 +199,8 @@ pub struct BoardEditor {
     /// Voltage drop along the nets' copper, with a fingerprint of the board it was computed for.
     /// Open the width panel on the next frame (command line `--ir`).
     widths_open: Option<bool>,
+    /// After the auto-router, fill the top with GND too (only when the bottom has the GND pour).
+    pour_top: bool,
     /// The two nets picked in the diff-pair panel for a new pair.
     pair_new: (String, String),
     ir_drop: Option<(f64, Vec<pcb_core::irdrop::NetDrop>)>,
@@ -311,6 +313,7 @@ impl Default for BoardEditor {
             track_width: 0.25,
             ir_drop: None,
             widths_open: None,
+            pour_top: true,
             pair_new: Default::default(),
             pad_size: 1.6,
             pad_drill: 0.8,
