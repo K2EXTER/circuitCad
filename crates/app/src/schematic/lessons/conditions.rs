@@ -144,6 +144,11 @@ pub(super) fn reset_clamped(e: &SchEditor) -> bool {
     diode && tran_fresh(e) && tran_peak(e, "V(RESET)").is_some_and(|p| p < 6.5)
 }
 
+/// The decoupling lesson: the parallel pair V(ZP) is on the AC graph and the run is fresh.
+pub(super) fn zp_shown(e: &SchEditor) -> bool {
+    ac_fresh(e) && e.ac.as_ref().is_some_and(|a| a.selected.contains("V(ZP)"))
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

@@ -214,7 +214,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             items: &[
                 plan("a_datasheet", "データシートの読み方", "絶対最大定格と推奨動作条件の違い、ピン表、代表的なグラフ。部品を選ぶときの出発点", &[], Some("手元の部品のデータシートで、電源電圧の範囲・1ピンの電流の上限を探します")),
                 plan("a_pullup", "プルアップとプルダウン (ピンを浮かせない)", "入力ピンが何にもつながっていないと、電圧が定まらない。10kΩ で電源か GND に引く理由と値の決め方", &["divider"], Some("入力ピンをプルアップあり・なしで、テスタで測り比べます")),
-                plan("a_decoupling", "電源のバイパスコンデンサ", "ICの電源ピンのそばに 0.1µF を置く理由。インピーダンスのグラフで、電解とセラミックの分担を見る", &["divider"], Some("IC の電源ピンの電圧を、オシロで見て、コンデンサの有無で比べます")),
+                Item { requires: Some(&["divider"]), ..lesson("decoupling", "電源のバイパスコンデンサ", "IC の電源ピンのそばに 0.1µF を置く理由。インピーダンスのグラフで、電解とセラミックの分担と、自己共振を見る", Some("IC の電源ピンの電圧を、オシロで見て、コンデンサの有無で比べます")) },
             ],
         },
         Stage {
@@ -238,7 +238,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "4. 設計して基板に",
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
-                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["a_decoupling", "crystal", "reset", "a_pin_led"], None),
+                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["decoupling", "crystal", "reset", "a_pin_led"], None),
                 plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["a_draw"], None),
                 plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
             ],

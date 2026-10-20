@@ -72,6 +72,7 @@ const LESSONS: &[Lesson] = &[
     supply::VARIABLE_SUPPLY,
     micro::CRYSTAL,
     micro::RESET,
+    micro::DECOUPLING,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

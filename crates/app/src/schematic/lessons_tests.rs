@@ -574,3 +574,28 @@ fn the_reset_lesson_ticks_its_four_steps() {
     e.update_lesson();
     assert_eq!(progress(&e), 4, "{}", e.status);
 }
+
+#[test]
+fn the_decoupling_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "decoupling").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let at = |e: &SchEditor, name: &str, f: f64| {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        r.signal(name).unwrap().mag()[r.freq.iter().position(|&x| x >= f * 0.999).unwrap()]
+    };
+    // the numbers of the lesson text: the electrolytic wins at 10 kHz, the ceramic at 1 MHz, the pair at both
+    assert!(at(&e, "V(ZE)", 1e4) < 0.3 && at(&e, "V(ZC)", 1e4) > 0.9, "10k {} {}", at(&e, "V(ZE)", 1e4), at(&e, "V(ZC)", 1e4));
+    assert!(at(&e, "V(ZC)", 1e6) < 0.03 && at(&e, "V(ZE)", 1e6) > 0.2, "1M");
+    assert!(at(&e, "V(ZP)", 1e5) < at(&e, "V(ZE)", 1e5) && at(&e, "V(ZP)", 1e6) <= at(&e, "V(ZC)", 1e6) * 1.05);
+    // and the electrolytic rises again toward 100 MHz (its ESL)
+    assert!(at(&e, "V(ZE)", 1e7) > 2.0 * at(&e, "V(ZE)", 1e5));
+    e.ac.as_mut().unwrap().selected.insert("V(ZP)".into());
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+}
