@@ -32,3 +32,4 @@
 
 ## 今はできないこと(足すなら)
 ノイズ・スイープ・故障の解析、波形の全点の出力、ベタ・多層・差動ペアなど基板の細かい設定、回路図の `.ccproj`、配線の座標指定、MCPサーバー(`ccad` を包めば作れる)。
+- `board check [fab=ID]`(`board.rs`): アプリの発注前チェック `pcb_core::fab::preflight` をそのまま返す(`ready`・各レベルの数・ok 以外の `list`)。回路図との食い違いは `pcb_core::netlist::diff`(アプリの `SchDiff` と共通。`NetlistDiff::blocking()` で Error/Warn を分ける)を `schematic_sync_check` にして先頭に入れる。取り込み前(基板に部品が無い)や回路図が空のときは比べない。テスト `board_check_says_ready_after_routing_and_notices_a_schematic_change`

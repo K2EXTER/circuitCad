@@ -50,6 +50,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board status
   board currents [tran] [from=F] [widen]  take the net currents (DC point, or with tran the RMS of the settled part of the last tran), show the track width each needs, optionally thicken thin tracks
   board postlayout on|off               dc/tran/ac/noise also see the copper resistance of the board (post-layout simulation)
+  board check [fab=jlcpcb|pcbway|oshpark|standard]
+                                        the pre-order check of the app: ready true/false, and every error / warning / note with the reason
+                                        and the place (also: board no longer matches the schematic, copper drop, price tier of the fab)
   board save FILE.pcbjson / board open FILE.pcbjson
   board fab DIR                         Gerber, drill, BOM, placement and the zip
 ";

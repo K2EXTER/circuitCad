@@ -134,24 +134,7 @@ impl BoardEditor {
 
     fn diff_against(&self, sch: &sch_core::Schematic) -> SchDiff {
         let (parts, nets) = Self::netlist_of(sch);
-        let mut d = SchDiff::default();
-        for p in &parts {
-            match self.board.parts.iter().find(|b| b.refdes == p.refdes) {
-                None => d.added.push(p.refdes.clone()),
-                Some(b) if b.value != p.value || b.footprint != p.footprint => d.changed.push(p.refdes.clone()),
-                Some(_) => {}
-            }
-        }
-        d.removed = self.board.parts.iter().filter(|b| !parts.iter().any(|p| p.refdes == b.refdes)).map(|b| b.refdes.clone()).collect();
-        let expected: std::collections::HashMap<(&str, &str), &str> = nets.iter().flat_map(|n| n.pins.iter().map(move |(r, p)| ((r.as_str(), p.as_str()), n.name.as_str()))).collect();
-        d.nets = self
-            .board
-            .pads
-            .iter()
-            .filter(|p| !p.refdes.is_empty() && parts.iter().any(|q| q.refdes == p.refdes))
-            .filter(|p| p.net != expected.get(&(p.refdes.as_str(), p.pin.as_str())).copied().unwrap_or(""))
-            .count();
-        d
+        netlist::diff(&self.board, &parts, &nets)
     }
 
     pub fn import_from_schematic(&mut self, sch_ed: &SchEditor) {
@@ -174,42 +157,4 @@ impl BoardEditor {
 }
 
 /// What differs between the schematic and the board (see `BoardEditor::schematic_diff`).
-#[derive(Default, Clone, Debug)]
-pub struct SchDiff {
-    /// Parts only the schematic has.
-    pub added: Vec<String>,
-    /// Parts only the board has.
-    pub removed: Vec<String>,
-    /// Parts whose value or footprint differs.
-    pub changed: Vec<String>,
-    /// Pads whose net differs from the schematic's.
-    pub nets: usize,
-}
-
-impl SchDiff {
-    pub fn is_empty(&self) -> bool {
-        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty() && self.nets == 0
-    }
-
-    /// "追加 2 (R3 C4) / 削除 1 …", for the status line and the tooltip.
-    pub fn summary(&self) -> String {
-        let list = |v: &Vec<String>| {
-            let shown: Vec<&str> = v.iter().take(4).map(|s| s.as_str()).collect();
-            format!("{} ({}{})", v.len(), shown.join(" "), if v.len() > 4 { " …" } else { "" })
-        };
-        let mut t = vec![];
-        if !self.added.is_empty() {
-            t.push(format!("追加 {}", list(&self.added)));
-        }
-        if !self.removed.is_empty() {
-            t.push(format!("削除 {}", list(&self.removed)));
-        }
-        if !self.changed.is_empty() {
-            t.push(format!("値・形が違う {}", list(&self.changed)));
-        }
-        if self.nets > 0 {
-            t.push(format!("つなぎが違うパッド {}", self.nets));
-        }
-        t.join(" / ")
-    }
-}
+pub type SchDiff = pcb_core::netlist::NetlistDiff;

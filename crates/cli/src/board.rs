@@ -143,6 +143,48 @@ impl Session {
                 self.board = Some(serde_json::from_str::<Board>(&text).map_err(|e| format!("{f}: {e}"))?);
                 Ok(obj(json!({"file": f})))
             }
+            "check" => {
+                // the same pre-order check as the app's "発注の準備"
+                let (_, kv) = options(rest);
+                let fab = match opt(&kv, "fab") {
+                    Some(id) => Some(pcb_core::fab::preset(id).ok_or_else(|| format!("unknown fab '{id}' (use one of: {})", pcb_core::fab::PRESETS.iter().map(|p| p.id).collect::<Vec<_>>().join(", ")))?),
+                    None => None,
+                };
+                let (parts, nets) = self.netlist_of();
+                let board = self.board_mut()?;
+                let mut checks = pcb_core::fab::preflight(board, fab);
+                // a board that no longer matches the schematic (nothing to compare before the first import or without a schematic)
+                if !board.parts.is_empty() && !parts.is_empty() {
+                    let d = pcb_core::netlist::diff(board, &parts, &nets);
+                    if !d.is_empty() {
+                        checks.insert(0, pcb_core::fab::schematic_sync_check(&d.summary(), d.blocking()));
+                    }
+                }
+                use pcb_core::fab::Level;
+                let count = |l: Level| checks.iter().filter(|c| c.level == l).count();
+                let name = |l: Level| match l {
+                    Level::Ok => "ok",
+                    Level::Info => "info",
+                    Level::Warn => "warn",
+                    Level::Error => "error",
+                };
+                // what is fine is only counted; the rest comes with its reason and where it is
+                let list: Vec<Value> = checks
+                    .iter()
+                    .filter(|c| c.level != Level::Ok)
+                    .map(|c| {
+                        let mut v = json!({"level": name(c.level), "title": c.title, "detail": c.detail});
+                        if let Some(at) = c.at {
+                            v["at"] = json!([(at.x * 100.0).round() / 100.0, (at.y * 100.0).round() / 100.0]);
+                            v["places"] = json!(1 + c.also.len());
+                        }
+                        v
+                    })
+                    .collect();
+                let (errors, warnings) = (count(Level::Error), count(Level::Warn));
+                Ok(obj(json!({"ready": pcb_core::fab::ready(&checks), "fab": fab.map(|f| f.id), "ok": count(Level::Ok), "info": count(Level::Info), "warnings": warnings, "errors": errors, "list": list,
+                    "note": "ready:false means at least one error; fix those first (warnings can be ordered but are probably not what was meant). The numbers of the fab presets are a guide: look at the fab's own page before ordering. Add fab=jlcpcb|pcbway|oshpark|standard to also check that fab's minimums and price tier."})))
+            }
             "fab" => {
                 let dir = std::path::Path::new(rest.first().ok_or("board fab DIR")?);
                 let board = self.board_mut()?;

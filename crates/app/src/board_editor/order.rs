@@ -60,7 +60,7 @@ impl BoardEditor {
     /// Remember how the board differs from the schematic, for the order window's checks (call every frame the window is up).
     pub fn note_schematic_diff(&mut self, sch: &SchEditor) {
         let d = self.schematic_diff(sch);
-        self.order.sync = (!d.is_empty()).then(|| (!d.added.is_empty() || !d.removed.is_empty() || d.nets > 0, d.summary()));
+        self.order.sync = (!d.is_empty()).then(|| (d.blocking(), d.summary()));
     }
 
     #[cfg(test)]

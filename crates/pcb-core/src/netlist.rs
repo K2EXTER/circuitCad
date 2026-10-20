@@ -78,6 +78,73 @@ pub fn import(board: &mut Board, parts: &[NetlistPart], nets: &[NetlistNet]) -> 
     rep
 }
 
+/// What differs between a netlist and the board (what `import` would change).
+#[derive(Default, Clone, Debug)]
+pub struct NetlistDiff {
+    /// Parts only the schematic has.
+    pub added: Vec<String>,
+    /// Parts only the board has.
+    pub removed: Vec<String>,
+    /// Parts whose value or footprint differs.
+    pub changed: Vec<String>,
+    /// Pads whose net differs from the schematic's.
+    pub nets: usize,
+}
+
+impl NetlistDiff {
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty() && self.nets == 0
+    }
+
+    /// A different net or a part on one side only makes the board another circuit; a value or footprint alone does not.
+    pub fn blocking(&self) -> bool {
+        !self.added.is_empty() || !self.removed.is_empty() || self.nets > 0
+    }
+
+    /// "追加 2 (R3 C4) / 削除 1 …", for the status line and the tooltip.
+    pub fn summary(&self) -> String {
+        let list = |v: &Vec<String>| {
+            let shown: Vec<&str> = v.iter().take(4).map(|s| s.as_str()).collect();
+            format!("{} ({}{})", v.len(), shown.join(" "), if v.len() > 4 { " …" } else { "" })
+        };
+        let mut t = vec![];
+        if !self.added.is_empty() {
+            t.push(format!("追加 {}", list(&self.added)));
+        }
+        if !self.removed.is_empty() {
+            t.push(format!("削除 {}", list(&self.removed)));
+        }
+        if !self.changed.is_empty() {
+            t.push(format!("値・形が違う {}", list(&self.changed)));
+        }
+        if self.nets > 0 {
+            t.push(format!("つなぎが違うパッド {}", self.nets));
+        }
+        t.join(" / ")
+    }
+}
+
+/// How the board differs from the netlist, without changing it.
+pub fn diff(board: &Board, parts: &[NetlistPart], nets: &[NetlistNet]) -> NetlistDiff {
+    let mut d = NetlistDiff::default();
+    for p in parts {
+        match board.parts.iter().find(|b| b.refdes == p.refdes) {
+            None => d.added.push(p.refdes.clone()),
+            Some(b) if b.value != p.value || b.footprint != p.footprint => d.changed.push(p.refdes.clone()),
+            Some(_) => {}
+        }
+    }
+    d.removed = board.parts.iter().filter(|b| !parts.iter().any(|p| p.refdes == b.refdes)).map(|b| b.refdes.clone()).collect();
+    let expected: std::collections::HashMap<(&str, &str), &str> = nets.iter().flat_map(|n| n.pins.iter().map(move |(r, p)| ((r.as_str(), p.as_str()), n.name.as_str()))).collect();
+    d.nets = board
+        .pads
+        .iter()
+        .filter(|p| !p.refdes.is_empty() && parts.iter().any(|q| q.refdes == p.refdes))
+        .filter(|p| p.net != expected.get(&(p.refdes.as_str(), p.pin.as_str())).copied().unwrap_or(""))
+        .count();
+    d
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

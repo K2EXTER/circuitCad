@@ -349,3 +349,23 @@ fn calc_refuses_an_si_suffix_on_an_input_that_is_already_in_milli_or_kilo_units(
     let (_, ok) = run("calc rc 1k 100n\ncalc led 9 2 10\n");
     assert!(ok);
 }
+
+#[test]
+fn board_check_says_ready_after_routing_and_notices_a_schematic_change() {
+    let base = "new\nadd V 5 as=V1\nadd R 1k as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\nboard import\nboard autoplace\nboard route\n";
+    let (a, ok) = run(&format!("{base}board check fab=jlcpcb\n"));
+    assert!(ok, "{a:?}");
+    let c = last(&a, "board");
+    assert_eq!(c["ready"], true, "{c}");
+    assert_eq!(c["fab"], "jlcpcb");
+    assert_eq!(c["errors"], 0);
+    // a part added to the schematic after the import: the board is another circuit, so it is not ready
+    let (a, _) = run(&format!("{base}add R 2k as=R2\nnet X R2.1 R2.2\nboard check\n"));
+    let c = last(&a, "board");
+    assert_eq!(c["ready"], false, "{c}");
+    assert!(c["list"].as_array().unwrap().iter().any(|x| x["level"] == "error" && x["title"].as_str().unwrap().contains("回路図と基板")), "{c}");
+    // an unknown fab is refused with the choices
+    let (a, ok) = run(&format!("{base}board check fab=nowhere\n"));
+    assert!(!ok);
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("jlcpcb"));
+}
