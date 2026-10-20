@@ -4,14 +4,16 @@ use super::*;
 /// trace between them adds inductance that the fast current spikes cannot get through.
 pub const MAX_DECOUPLING_DISTANCE: f64 = 8.0;
 
-pub(super) fn is_ground_net(net: &str) -> bool {
+pub fn is_ground_net(net: &str) -> bool {
     let n = net.to_ascii_uppercase();
     n.starts_with("GND") || n.ends_with("GND") || n == "VSS" || n == "0"
 }
 
-pub(super) fn is_supply_net(net: &str) -> bool {
+pub fn is_supply_net(net: &str) -> bool {
     let n = net.to_ascii_uppercase();
-    n.starts_with("VCC") || n.starts_with("VDD") || n.starts_with("VBUS") || n.starts_with('+') || n == "V+" || (n.contains('V') && n.chars().next().is_some_and(|c| c.is_ascii_digit()))
+    // "V5", "V12", "V3V3" (a V and a digit), as well as "3V3" / "5V" and the VCC family
+    let v_digit = n.strip_prefix('V').is_some_and(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()));
+    n.starts_with("VCC") || n.starts_with("VDD") || n.starts_with("VBUS") || n.starts_with('+') || n == "V+" || v_digit || (n.contains('V') && n.chars().next().is_some_and(|c| c.is_ascii_digit()))
 }
 
 /// ICs (refdes `U…` with 5+ pads) whose supply pin has no bypass capacitor (a `C…` part joining the

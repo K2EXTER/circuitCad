@@ -66,6 +66,8 @@ pub struct Tuning {
     pub skip_poured: bool,
     /// Line the parts up afterwards (see `align_parts`).
     pub align: bool,
+    /// Pull each bypass capacitor to the supply pin it serves (see `bypass_nets`).
+    pub bypass: bool,
 }
 
 impl Tuning {
@@ -73,9 +75,9 @@ impl Tuning {
     /// parts can sit closer.
     pub fn for_board(board: &Board) -> Self {
         if board.zones.iter().any(|z| !z.net.is_empty()) {
-            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true }
+            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true }
         } else {
-            Self { gap: GAP, label: LABEL, skip_poured: false, align: true }
+            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true }
         }
     }
 }
@@ -100,6 +102,39 @@ fn refit_pours(board: &mut Board, lo: Point, hi: Point) {
             z.polygon = vec![Point::new(nlo.x + inset[0], nlo.y + inset[1]), Point::new(nlo.x + inset[0], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nlo.y + inset[1])];
         }
     }
+}
+
+/// A bypass capacitor belongs right next to the supply pin it serves: a `C` part with one pad on a supply net and
+/// another on ground, and an IC (`U`, 5+ pads) with a pad on that net. Each such pair is a two-pad net of its own, three
+/// times over (the placement adds up the lengths of nets, so it counts three times as much as an ordinary connection),
+/// pulling the capacitor to the pin and not just somewhere in the supply's box.
+fn bypass_nets(board: &Board, items: &[(String, Point, f64, f64)], gap: f64, label: f64) -> Vec<NetPins> {
+    use crate::drc::{is_ground_net, is_supply_net};
+    let index = |r: &str| items.iter().position(|it| it.0 == r);
+    let offset = |pad: &Pad, i: usize| (i, pad.pos.x - items[i].1.x + gap / 2.0, pad.pos.y - items[i].1.y + gap / 2.0 + label);
+    let mut out: Vec<NetPins> = vec![];
+    for cap in board.parts.iter().filter(|p| p.refdes.starts_with('C')) {
+        let cap_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == cap.refdes).collect();
+        if !cap_pads.iter().any(|p| is_ground_net(&p.net)) {
+            continue;
+        }
+        let Some(ci) = index(&cap.refdes) else { continue };
+        for cp in cap_pads.iter().filter(|p| is_supply_net(&p.net)) {
+            for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U')) {
+                let ic_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == ic.refdes).collect();
+                if ic_pads.len() < 5 {
+                    continue;
+                }
+                let Some(ii) = index(&ic.refdes) else { continue };
+                for sp in ic_pads.iter().filter(|p| p.net == cp.net) {
+                    for _ in 0..3 {
+                        out.push(vec![offset(cp, ci), offset(sp, ii)]);
+                    }
+                }
+            }
+        }
+    }
+    out
 }
 
 /// When every track and via of `board` belongs to a net that a pour carries, they are what `groundpour` made: the
@@ -379,6 +414,10 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         }
     }
     let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+    let mut nets = nets;
+    if tuning.bypass {
+        nets.extend(bypass_nets(board, &items, gap, label));
+    }
     // how closely two parts belong together: the nets they share count less the more pins the net has (a ground that
     // touches everything says little about who belongs together). Made once, for every pair.
     let mut tie = vec![vec![0.0f64; items.len()]; items.len()];
@@ -600,8 +639,8 @@ mod tests {
     #[test]
     fn turning_parts_shortens_the_airwires_and_keeps_the_board_clean() {
         let (mut plain, mut turned) = (divider(), divider());
-        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false }).unwrap();
-        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false }).unwrap();
+        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true }).unwrap();
+        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true }).unwrap();
         let (l0, l1) = (airwire_length(&plain), airwire_length(&turned));
         assert!(l1 < l0, "{l1} vs {l0}");
         assert!(drc::check(&turned).is_empty());
@@ -632,8 +671,8 @@ mod tests {
     #[test]
     fn improving_the_order_puts_the_parts_of_a_net_together() {
         let (mut plain, mut improved) = (fan(8), fan(8));
-        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false }).unwrap();
-        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false }).unwrap();
+        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true }).unwrap();
+        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true }).unwrap();
         // every resistor with its LED
         let pair_len = |b: &Board| -> f64 { (0..8).map(|k| { let at = |r: String| b.parts.iter().find(|p| p.refdes == r).unwrap().pos; at(format!("R{k:02}")).dist(at(format!("D{k:02}"))) }).sum() };
         let (l0, l1) = (pair_len(&plain), pair_len(&improved));
@@ -641,7 +680,7 @@ mod tests {
         assert!(drc::check(&improved).is_empty());
         // and the same board always gives the same placement
         let mut again = fan(8);
-        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false }).unwrap();
+        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true }).unwrap();
         assert!(again.parts.iter().zip(&improved.parts).all(|(a, b)| a.pos == b.pos));
     }
 
@@ -757,7 +796,7 @@ mod tests {
     fn alignment_does_not_add_centre_lines() {
         let rows = |align: bool| {
             let mut b = divider();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true }).unwrap();
             let mut ys: Vec<i64> = b.parts.iter().map(|p| (centre(&b, &p.refdes).y * 100.0).round() as i64).collect();
             ys.sort_unstable();
             ys.dedup();
@@ -791,5 +830,43 @@ mod tests {
         let before = (b.tracks.len(), b.vias.len(), b.parts.iter().map(|p| p.pos).collect::<Vec<_>>());
         assert!(autoplace(&mut b).is_err());
         assert_eq!(before, (b.tracks.len(), b.vias.len(), b.parts.iter().map(|p| p.pos).collect::<Vec<_>>()));
+    }
+
+    /// Two ICs with their own bypass capacitors, and some other parts for the capacitors to drift off to.
+    fn ics_with_caps() -> Board {
+        let part = |r: &str, f: &str| NetlistPart { refdes: r.into(), value: "1k".into(), footprint: f.into() };
+        let net = |n: &str, pins: &[(&str, &str)]| NetlistNet { name: n.into(), pins: pins.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() };
+        let mut b = Board::new("t", 10.0, 10.0);
+        b.add_footprint(package::PackageSpec::Dual { pins: 14, pitch: 2.54, row_spacing: 7.62, pad_len: 1.6, pad_width: 1.6, drill: Some(0.8) }.build("DIP-14_W7.62").unwrap());
+        let mut parts = vec![part("U1", "DIP-14_W7.62"), part("U2", "DIP-14_W7.62"), part("C1", "C_0805"), part("C2", "C_0805")];
+        let mut nets = vec![net("VCC", &[("U1", "14"), ("U2", "14"), ("C1", "1"), ("C2", "1")]), net("GND", &[("U1", "7"), ("U2", "7"), ("C1", "2"), ("C2", "2")])];
+        for k in 0..6 {
+            parts.push(part(&format!("R{k}"), "R_0805"));
+            nets.push(net(&format!("S{k}"), &[("U1", &(k + 1).to_string()), (&format!("R{k}"), "1")]));
+            nets.push(net(&format!("T{k}"), &[("U2", &(k + 1).to_string()), (&format!("R{k}"), "2")]));
+        }
+        import(&mut b, &parts, &nets);
+        b
+    }
+
+    /// The least distance from any pad of `cap` on `net` to a pad of `ic` on that net.
+    fn gap_to_pin(b: &Board, cap: &str, ic: &str, net: &str) -> f64 {
+        let (cp, ip): (Vec<&Pad>, Vec<&Pad>) = (b.pads.iter().filter(|p| p.refdes == cap && p.net == net).collect(), b.pads.iter().filter(|p| p.refdes == ic && p.net == net).collect());
+        cp.iter().flat_map(|c| ip.iter().map(move |i| c.pos.dist(i.pos))).fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn bypass_capacitors_sit_by_their_ic_supply_pin() {
+        let place_with = |bypass: bool| {
+            let mut b = ics_with_caps();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass }).unwrap();
+            b
+        };
+        let (with, without) = (place_with(true), place_with(false));
+        let d = |b: &Board| (gap_to_pin(b, "C1", "U1", "VCC") + gap_to_pin(b, "C2", "U2", "VCC")).min(gap_to_pin(b, "C1", "U2", "VCC") + gap_to_pin(b, "C2", "U1", "VCC"));
+        assert!(d(&with) <= d(&without) + 1e-9, "{} {}", d(&with), d(&without));
+        assert!(d(&with) < 2.0 * crate::drc::MAX_DECOUPLING_DISTANCE, "each capacitor within the limit of the check: {}", d(&with));
+        assert!(d(&with) < d(&without) / 2.0, "much closer than without the pull: {} {}", d(&with), d(&without));
+        assert!(drc::decoupling_checks(&with).is_empty(), "{:?}", drc::decoupling_checks(&with));
     }
 }

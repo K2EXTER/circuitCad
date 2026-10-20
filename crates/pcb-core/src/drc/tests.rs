@@ -278,6 +278,19 @@ mod drc_tests {
         assert!(acute_angle_checks(&b).is_empty());
     }
 
+    #[test]
+    fn supply_and_ground_net_names_are_recognised() {
+        for n in ["VCC", "VDD", "VBUS", "+5V", "V+", "5V", "3V3", "V5", "V12", "V3V3", "vcc"] {
+            assert!(is_supply_net(n), "{n}");
+        }
+        for n in ["GND", "VIN", "VOUT", "CLK", "N$1", ""] {
+            assert!(!is_supply_net(n), "{n}");
+        }
+        for n in ["GND", "AGND", "VSS", "0"] {
+            assert!(is_ground_net(n), "{n}");
+        }
+    }
+
     fn ic_board(cap_x: Option<f64>) -> Board {
         let mut b = Board::new("t", 40.0, 40.0);
         b.parts.push(Part { refdes: "U1".into(), value: "74HC00".into(), footprint: "x".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top });
