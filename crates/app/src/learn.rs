@@ -234,6 +234,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます",
             items: &[
                 Item { requires: Some(&["led", "datasheet"]), ..lesson("pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", Some("D13 の LED の電流を測って、データシートの上限と比べます")) },
+                Item { requires: Some(&["pin_led"]), ..lesson("pwm", "PWM とフィルタ (analogWrite でアナログ電圧を作る)", "High と Low の割合 (デューティ) と RC フィルタで、途中の電圧を作る。揺れと反応の速さは引き換え。重い負荷には使えない", Some("analogWrite の値を変えて、フィルタの出力をテスタで測ります")) },
                 Item { requires: Some(&["pullup"]), ..lesson("levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換と、プルアップによる波形の遅れ", Some("5V のピンの出力を、分圧してから 3.3V の部品に入れる前に、テスタで測って確かめます")) },
                 Item { requires: Some(&["levels", "reset"]), ..lesson("serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレートと 1 ビットの長さ、配線の抵抗と容量でなまると文字化けする", Some("端末ソフトで 9600bps と別のボーレートを比べて、文字化けを見ます")) },
             ],

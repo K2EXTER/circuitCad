@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM.
 
 use super::conditions::*;
 use super::*;
@@ -477,6 +477,56 @@ pub(super) const USB_SIGNAL: Lesson = Lesson {
             title: "C2 を 500p にして、ビットが読めなくなるのを見る",
             detail: "C2 を 500p に変えて「過渡解析を実行」。立ち上がりは約 47ns になり、1 ビット (83ns) の半分以上かかります。ビットの真ん中 (60ns) でも、電圧が約 2.7V までしか上がらず、ビットの終わり (100ns 付近) でも 3.2V に届きません。受信側が、High と Low を見分けられなくなります。USB の信号線には、容量が数 pF の ESD 保護部品を使います。",
             done: esd_far_too_big,
+        },
+    ],
+};
+
+pub(super) const PWM: Lesson = Lesson {
+    id: "pwm",
+    title: "35. PWM とフィルタ (analogWrite でアナログ電圧を作る)",
+    goal: "マイコンのピンは、High か Low しか出せませんが、High の時間の割合 (デューティ) を変えて素早く切り替える PWM と、抵抗とコンデンサのフィルタで、途中の電圧を作れます。フィルタの値を変えると、電圧の揺れ (リップル) と反応の速さが、どう変わるかを見ます",
+    summary: "Arduino の analogWrite は、ピンを約 490Hz (ピンによっては 980Hz) で、High と Low に切り替え、High の時間の割合を 0〜100% で決めます。これが PWM です。50% なら、5V の半分、約 2.5V が平均です。PWM を、抵抗 R とコンデンサ C のローパスフィルタ (カットオフ = 1 ÷ (2π × R × C)) に通すと、速い切り替えがならされて、平均の電圧が出ます。この回路は、R1 = 10kΩ、C1 = 1µF で、カットオフは約 16Hz、時定数は 10ms です。出力 OUT は、約 2.47V の平均のまわりを、約 0.26V の幅で揺れます。コンデンサを小さくすると (100nF)、ならし方が足りなくて、揺れが 2.3V に増えます。大きくすると (10µF)、揺れは 0.035V に減りますが、電圧が落ち着くまでに 200ms 以上かかります。揺れの小ささと、反応の速さは、引き換えです。また、この出力は、負荷が軽いときだけ、そのままの電圧が出ます。負荷が 10kΩ だと、R1 との分圧で、平均が約 1.25V と半分に下がります。負荷が重いときは、オペアンプなどのバッファを入れます。",
+    limits: &[
+        "PWM は、立ち上がり 20ns の理想的な 0〜5V の方形波 (周波数 490Hz) です。実際のピンには、出力抵抗 (約 25Ω) があり、High の電圧は 5V よりやや低くなります。ピンによっては 980Hz で、ほかの周波数に変えることもできます。",
+        "デューティは 50% だけを見ています。デューティを変えると、平均の電圧と、揺れの大きさ (50% のときが最も大きい) が変わります。デューティの変更は、電源 V1 の値 (パルス幅) を書き換えて試せます。",
+        "フィルタは 1 段の RC だけです。実際のアナログ出力には、2 段のフィルタや、オペアンプのバッファを使い、揺れをさらに小さくします。コンデンサは、理想の容量だけで、ESR や DC バイアスによる容量の低下は含みません。",
+        "ここで作るアナログ電圧は、あまり正確ではありません。電源電圧の変動、部品の誤差、負荷で変わります。精度が必要なときは、専用の DAC (D/A コンバータ) の IC を使います。",
+    ],
+    real: &[
+        "まずデータシートを見よう: ATmega328P のデータシートで、タイマ (Timer/Counter) の章の「PWM の周波数」と、ピンの出力電圧 (VOH) を探します。Arduino Uno の analogWrite は、ピン 5・6 が約 980Hz、ほかは約 490Hz です。",
+        "用意するもの: Arduino 互換ボード、抵抗 10kΩ、コンデンサ 1µF (セラミックか電解)、LED と抵抗、ブレッドボード、テスタ (オシロがあれば、なお良い)。",
+        "測り方: PWM のピンに、10kΩ と 1µF の RC フィルタをつなぎ、出力 (抵抗とコンデンサの間) の電圧を、テスタで測ります。analogWrite(ピン, 127) (約 50%) で、約 2.5V のはずです。値を 0〜255 に変えて、電圧が比例して変わることを確かめます。オシロで見ると、揺れが見えます。",
+        "気づいてほしいこと: フィルタの出力に、軽い負荷 (テスタの入力など) をつなぐのは問題ありませんが、LED などの重い負荷をつなぐと、電圧が下がります。LED の明るさを PWM で変えたいときは、フィルタを使わず、PWM をそのままつなぎます (LED は、速い切り替えを、明るさの平均として感じます)。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/pwm_filter.schjson"),
+    setup: |e| {
+        e.set_tran_settings("100m", "");
+        e.tran_uic = true;
+    },
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "過渡解析で、PWM がならされて電圧になるのを見る",
+            detail: "「過渡解析を実行」を押し、PWM と OUT を選びます (100ms、ゼロ状態から)。PWM は 0V と 5V を 490Hz で切り替え、OUT は、10ms の時定数でゆっくり上がって、約 2.47V の平均のまわりに落ち着きます。揺れ (リップル) は、約 0.26V の幅です。50% のデューティの平均 2.5V から、負荷 R2 (1MΩ) の分だけ、わずかに低くなっています。",
+            done: tran_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "C1 を 100n にして、ならし方が足りないのを見る",
+            detail: "C1 を 1u から 100n に変えて「過渡解析を実行」。時定数が 1ms と、PWM の周期 (2.04ms) に近くなり、OUT は約 2.3V の幅で大きく揺れます。ほとんど平らになっていません。反応は速く (0.6ms)、電圧は素早く追いつきますが、アナログ電圧としては使えません。",
+            done: pwm_small_capacitor,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "C1 を 10u にして、揺れが小さくなる代わりに遅くなるのを見る",
+            detail: "C1 を 10u に変えて「過渡解析を実行」。1 周期あたりの揺れは約 0.035V (35mV) とほとんど見えなくなります (100ms の間は、全体がまだ上昇中です)。ところが、時定数が 100ms と長く、100ms の時点では、まだ平均の 2.5V に届きません (2.5V の 90% に届くまで約 217ms)。デューティを変えても、電圧が追いつくのが遅くなります。揺れの小ささと、反応の速さは、引き換えです。",
+            done: pwm_big_capacitor,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "負荷をつなぐ: C1 を 1u に戻し、R2 を 10k にする",
+            detail: "C1 を 1u に戻し、R2 (負荷) を 1Meg から 10k に変えて「過渡解析を実行」。OUT の平均は約 1.25V に下がります。フィルタの抵抗 R1 (10kΩ) と、負荷 (10kΩ) の分圧で、半分になるからです。RC フィルタの出力は、重い負荷には使えません。負荷が重いときは、オペアンプのバッファを間に入れて、負荷の影響を断ち切ります。",
+            done: pwm_loaded,
         },
     ],
 };

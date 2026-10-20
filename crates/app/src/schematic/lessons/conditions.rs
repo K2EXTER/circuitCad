@@ -271,6 +271,26 @@ pub(super) fn esd_far_too_big(e: &SchEditor) -> bool {
     c2_between(e, 400e-12, 1e-6)
 }
 
+/// The PWM lesson: C1 is between `lo` and `hi` farad and the run is fresh.
+fn pwm_c1_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    tran_fresh(e) && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| (lo..=hi).contains(&c))
+}
+
+/// Step 2: a small filter capacitor (200 nF or less): the ripple stays big.
+pub(super) fn pwm_small_capacitor(e: &SchEditor) -> bool {
+    pwm_c1_between(e, 1e-12, 200e-9)
+}
+
+/// Step 3: a big filter capacitor (5 uF or more): quiet but slow.
+pub(super) fn pwm_big_capacitor(e: &SchEditor) -> bool {
+    pwm_c1_between(e, 5e-6, 1.0)
+}
+
+/// Step 4: the 1 uF filter again, with a load of 20k or less on the output: the level falls.
+pub(super) fn pwm_loaded(e: &SchEditor) -> bool {
+    pwm_c1_between(e, 0.5e-6, 2e-6) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|r| r <= 20e3)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

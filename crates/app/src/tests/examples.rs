@@ -830,6 +830,40 @@ fn write_usb_signal_example() {
     std::fs::write(root.join("usb_signal.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/pwm_filter.schjson: an Arduino PWM pin (V1: 0 / 5 V, 490 Hz, 50 % duty) through an RC low-pass filter
+/// (R1 10k, C1 1 uF) to an analog output OUT with the load R2 (1 Meg): `cargo test -p app write_pwm_example -- --ignored`
+#[test]
+#[ignore]
+fn write_pwm_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "PULSE(0 5 0 20n 20n 1.02m 2.04m)".into();
+    label(&mut s, v1, "+", "PWM");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (12, 0), 1);
+    s.components[r1].value = "10k".into();
+    label(&mut s, r1, "1", "PWM");
+    label(&mut s, r1, "2", "OUT");
+    let c1 = s.add(Kind::Capacitor, (24, 0), 1);
+    s.components[c1].value = "1u".into();
+    label(&mut s, c1, "1", "OUT");
+    label(&mut s, c1, "2", "GND");
+    let r2 = s.add(Kind::Resistor, (36, 0), 1);
+    s.components[r2].value = "1Meg".into();
+    label(&mut s, r2, "1", "OUT");
+    label(&mut s, r2, "2", "GND");
+    std::fs::write(root.join("pwm_filter.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

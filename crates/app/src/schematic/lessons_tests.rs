@@ -910,3 +910,51 @@ fn the_usb_signal_lesson_ticks_its_three_steps_and_a_big_esd_part_slows_the_edge
     let (rise, mid) = edge(&e);
     assert!((40.0..55.0).contains(&rise) && mid < 2.9, "500 pF: {rise} ns, mid {mid} V: the bit does not settle");
 }
+
+#[test]
+fn the_pwm_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "pwm").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (mean over the last tenth of the run, ripple over the last two PWM periods, time to reach 90 % of the mean)
+    let look = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal("V(OUT)").unwrap().values;
+        let tend = *t.time.last().unwrap();
+        let i0 = t.time.iter().position(|x| *x >= tend * 0.9).unwrap();
+        // the ripple is read over the last two PWM periods (a slow filter is still rising over a longer window)
+        let ir = t.time.iter().position(|x| *x >= tend - 4.08e-3).unwrap();
+        let (mn, mx) = v[ir..].iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)));
+        let mean = v[i0..].iter().sum::<f64>() / (v.len() - i0) as f64;
+        let t90 = t.time.iter().zip(v).find(|(_, x)| **x >= 0.9 * mean).map(|(tt, _)| *tt).unwrap_or(f64::MAX);
+        (mean, mx - mn, t90)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (mean, ripple, t90) = look(&e);
+    assert!((2.4..2.52).contains(&mean) && (0.2..0.32).contains(&ripple) && (0.012..0.026).contains(&t90), "1u: mean {mean} ripple {ripple} t90 {t90}");
+    set_value(&mut e, "C1", "100n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (_, ripple, t90) = look(&e);
+    assert!(ripple > 2.0 && t90 < 0.002, "100n: ripple {ripple} t90 {t90}");
+    set_value(&mut e, "C1", "10u");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (_, ripple, _) = look(&e);
+    assert!(ripple < 0.1, "10u: ripple {ripple}");
+    // the 100 ms of the run end before the 10 uF filter has settled: the last tenth is still rising, so the level is below the final one
+    assert!(e.tran.as_ref().unwrap().outcome.as_ref().unwrap().signal("V(OUT)").unwrap().values.last().unwrap() < &2.0);
+    set_value(&mut e, "C1", "1u");
+    set_value(&mut e, "R2", "10k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    let (mean, _, _) = look(&e);
+    assert!((1.15..1.3).contains(&mean), "10k load: {mean}");
+}

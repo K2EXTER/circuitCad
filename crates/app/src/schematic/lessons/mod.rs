@@ -81,6 +81,7 @@ const LESSONS: &[Lesson] = &[
     micro::USB_POWER,
     micro::USB_SPEED,
     micro::USB_SIGNAL,
+    micro::PWM,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.
