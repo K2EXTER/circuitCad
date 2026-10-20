@@ -80,15 +80,25 @@ impl SchEditor {
                     let (arrows_up, arrows_down) = (c.kind == Kind::Led && c.rot % 4 == 0, c.kind == Kind::Led && c.rot % 4 == 2);
                     let name_y = by0 - if arrows_up { 1.2 } else { 0.3 };
                     let value_y = by1 + if arrows_down { 1.2 } else { 0.3 };
-                    if wire_at(by0) {
+                    // a four-pin crystal has its two case pins (and their wires) on one side: name and value both go on the other
+                    let case_pins = c.custom.as_ref().is_some_and(|s| s.pins.len() == 4 && super::glyphs::body_glyph(s) == Some("crystal")) && c.rot % 2 == 0;
+                    if case_pins {
+                        let up = c.rot % 4 == 0;
+                        let y = if up { name_y } else { value_y };
+                        let (left, right) = if up { (Align2::RIGHT_BOTTOM, Align2::LEFT_BOTTOM) } else { (Align2::RIGHT_TOP, Align2::LEFT_TOP) };
+                        painter.text(self.to_screen(rect, (cx - 0.3, y)), left, &c.refdes, f.clone(), name_col);
+                        painter.text(self.to_screen(rect, (cx + 0.3, y)), right, &c.value, f.clone(), Color32::from_gray(60));
+                    } else if wire_at(by0) {
                         painter.text(self.to_screen(rect, (cx - 0.4, name_y)), Align2::RIGHT_BOTTOM, &c.refdes, f.clone(), name_col);
                     } else {
                         painter.text(self.to_screen(rect, (cx, name_y)), Align2::CENTER_BOTTOM, &c.refdes, f.clone(), name_col);
                     }
-                    if wire_at(by1) {
-                        painter.text(self.to_screen(rect, (cx - 0.4, value_y)), Align2::RIGHT_TOP, &c.value, f, Color32::from_gray(60));
-                    } else {
-                        painter.text(self.to_screen(rect, (cx, value_y)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+                    if !case_pins {
+                        if wire_at(by1) {
+                            painter.text(self.to_screen(rect, (cx - 0.4, value_y)), Align2::RIGHT_TOP, &c.value, f, Color32::from_gray(60));
+                        } else {
+                            painter.text(self.to_screen(rect, (cx, value_y)), Align2::CENTER_TOP, &c.value, f, Color32::from_gray(60));
+                        }
                     }
                 } else {
                     // name and value go left of the body, level with its middle, so they stay clear of the pin

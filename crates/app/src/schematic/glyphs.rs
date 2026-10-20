@@ -12,8 +12,8 @@ type P = (f32, f32);
 /// Which body a part gets: the `glyph` of the part when it names one, else a guess from the part
 /// name and pin names (so parts installed before the glyphs existed look right too).
 pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 16] = [
-        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p",
+    const KNOWN: [&str; 17] = [
+        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal",
     ];
     if let Some(g) = KNOWN.iter().find(|g| **g == sym.glyph) {
         return Some(g);
@@ -260,6 +260,35 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
             v.push(L(0.15, -1.3, 0.15, 1.3));
             Some(v)
         }
+        "crystal" => {
+            // two parallel plates with a long rectangle between them (JIS C 0617 / IEC 60617); the leads are X1/X2 (or 1/2 of a
+            // two-pin crystal); the case pins of a four-pin part (named GND) hang below on a bar
+            let two = l.pins.len() == 2;
+            let (a, b) = if two { (pt(find(l, &["1"])?), pt(find(l, &["2"])?)) } else { (pt(find(l, &["X1"])?), pt(find(l, &["X2"])?)) };
+            let s = if b.0 >= a.0 { 1.0 } else { -1.0 };
+            let mut v = vec![
+                L(a.0, a.1, -0.5 * s, 0.0),
+                L(b.0, b.1, 0.5 * s, 0.0),
+                // the plates
+                L(-0.5 * s, -0.9, -0.5 * s, 0.9),
+                L(0.5 * s, -0.9, 0.5 * s, 0.9),
+                // the crystal between them
+                L(-0.25, -0.7, 0.25, -0.7),
+                L(0.25, -0.7, 0.25, 0.7),
+                L(0.25, 0.7, -0.25, 0.7),
+                L(-0.25, 0.7, -0.25, -0.7),
+            ];
+            let case: Vec<P> = l.pins.iter().filter(|p| p.name.eq_ignore_ascii_case("GND")).map(pt).collect();
+            if !two && !case.is_empty() {
+                let bar = 1.5f32;
+                for c in &case {
+                    v.push(L(c.0, c.1, c.0, bar));
+                }
+                let (x0, x1) = case.iter().fold((f32::MAX, f32::MIN), |m, c| (m.0.min(c.0), m.1.max(c.0)));
+                v.push(L(x0, bar, x1, bar));
+            }
+            Some(v)
+        }
         "battery" => {
             let (plus, minus) = (pt(find(l, &["+"])?), pt(find(l, &["-"])?));
             let s = if plus.0 >= minus.0 { 1.0 } else { -1.0 };
@@ -391,6 +420,33 @@ mod tests {
             }
         }
         assert!(n >= 45, "only {n} parts got a standard symbol");
+    }
+
+    /// The crystal is drawn as two plates with a rectangle between them (also for a circuit saved before the glyph existed),
+    /// with its leads on the real pin tips and the case pins on a bar below.
+    #[test]
+    fn the_crystal_gets_plates_a_rectangle_and_a_case_bar() {
+        let text = part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with("XTAL_16MHz")).unwrap().1;
+        let d: part_lib::PartDef = serde_json::from_str(text).unwrap();
+        let mut sym = d.symbol();
+        assert_eq!(body_glyph(&sym), Some("crystal"));
+        let l = sym.layout();
+        // a sheet saved without the glyph keeps its old box layout (so its wires stay), but is still drawn as a crystal
+        sym.glyph = String::new();
+        assert_eq!(body_glyph(&sym), Some("crystal"), "recognised by the name");
+        let shapes = body("crystal", &l).unwrap();
+        let lines: Vec<(f32, f32, f32, f32)> = shapes.iter().filter_map(|s| if let L(a, b, c, d) = s { Some((*a, *b, *c, *d)) } else { None }).collect();
+        // every pin tip is the end of a lead
+        for p in &l.pins {
+            let t = (p.tip.0 as f32, p.tip.1 as f32);
+            assert!(lines.iter().any(|s| (s.0, s.1) == t || (s.2, s.3) == t), "no lead ends on pin {}", p.number);
+        }
+        // two tall plates and the four sides of the rectangle
+        assert_eq!(lines.iter().filter(|s| s.0 == s.2 && s.1.abs() < 1.0 && (s.3 - s.1).abs() > 1.7).count(), 2);
+        // compact: the leads end 2 steps from the centre and the case pins 3 steps below it
+        assert_eq!(l.pins.iter().map(|p| p.tip).max_by_key(|t| t.0).unwrap().0, 2);
+        assert_eq!(l.pins.iter().map(|p| p.tip.1).max().unwrap(), 3);
+        assert_eq!(lines.iter().filter(|s| (s.0 - s.2).abs() == 0.5 || (s.1 - s.3).abs() == 1.4).count(), 4);
     }
 }
 

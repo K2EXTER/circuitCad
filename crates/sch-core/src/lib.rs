@@ -563,6 +563,9 @@ impl CustomSymbol {
         if let Some((_, g)) = by_name.iter().find(|(names, _)| names.contains(&self.name.as_str())) {
             return g;
         }
+        if self.name.starts_with("XTAL") {
+            return "crystal";
+        }
         let has = |n: &str| self.pins.iter().any(|p| p.name == n);
         if self.pins.len() == 4 && has("P1") && has("P2") && has("S1") && has("S2") {
             return "transformer";
@@ -574,11 +577,13 @@ impl CustomSymbol {
     }
 
     /// Body half-extents of a standard symbol drawn small: diodes and batteries (two leads, left and
-    /// right) and transistors (left lead, top and bottom leads) take the room of a chip part.
+    /// right), crystals and transistors (left lead, top and bottom leads) take the room of a chip part.
     fn compact_size(&self) -> Option<(i32, i32)> {
         let on = |s: PinSide| self.pins.iter().filter(|p| p.side == s).count();
         match self.glyph.as_str() {
             "diode" | "zener" | "schottky" | "tvs" | "battery" if self.pins.len() == 2 && on(PinSide::Left) == 1 && on(PinSide::Right) == 1 => Some((0, 1)),
+            // a crystal: leads left and right like a capacitor, the case pins (four-pin part) just below
+            "crystal" if on(PinSide::Left) == 1 && on(PinSide::Right) == 1 && (self.pins.len() == 2 || (self.pins.len() == 4 && on(PinSide::Bottom) == 2)) => Some((0, 1)),
             "npn" | "pnp" | "nmos" | "pmos" if self.pins.len() == 3 && on(PinSide::Left) == 1 && on(PinSide::Top) == 1 && on(PinSide::Bottom) == 1 => Some((0, 0)),
             _ => None,
         }

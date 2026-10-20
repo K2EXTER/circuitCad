@@ -3,7 +3,9 @@
   "category": "水晶",
   "description": "16MHz 水晶振動子 (3.2x2.5mm 4パッド、負荷容量 18pF 程度)。ピン1と3が水晶の両端、2と4は金属ケースでGNDへつなぐ。等価回路 (直列の R-L-C に並列容量 C0) で、AC解析をすると直列共振 16MHz と少し上の並列共振が見える。発振そのもの(マイコンの発振回路)は扱わない。数値は代表値。ランドパターンは必ずデータシートで確認",
   "prefix": "Y",
+  "value": "16MHz",
   "footprint_name": "XTAL_3225",
+  "glyph": "crystal",
   "height": 0.8,
   "pins": [
     { "number": "1", "name": "X1", "side": "left" },
