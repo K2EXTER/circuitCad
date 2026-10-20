@@ -122,9 +122,17 @@ impl App {
     }
 
     /// Opens a board lesson: 0 = schematic to order files (with its sample circuit), 1 = copper width and voltage drop,
-    /// 2 = the pre-order check challenge (each with its sample project), 3 = the placement lesson of the Arduino-compatible board.
+    /// 2 = the pre-order check challenge (each with its sample project), 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson.
     pub(super) fn start_board_lesson(&mut self, which: usize) {
         self.mode = Mode::Board;
+        if which == 4 {
+            if !self.sch.load_sample(board_editor::BoardEditor::usb_lesson_circuit()) {
+                self.board_ed.status = "レッスンの回路を読み込めませんでした".into();
+            } else {
+                self.board_ed.start_usb_lesson();
+            }
+            return;
+        }
         if which == 3 {
             if !self.sch.load_sample(board_editor::BoardEditor::arduino_lesson_circuit()) {
                 self.board_ed.status = "レッスンの回路を読み込めませんでした".into();

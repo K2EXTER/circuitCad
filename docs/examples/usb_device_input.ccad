@@ -1,0 +1,16 @@
+# The USB input of a device: connector, 22 ohm series resistors on D+ / D-, a 10 uF bulk capacitor and a header that stands for the
+# microcontroller. For the USB board lesson (differential pair routing).
+# Build: cargo run -p cli -- docs/examples/usb_device_input.ccad   (then: save docs/examples/usb_device_input.schjson)
+new
+add USB_DEMO_TH as=J1
+add R 22 as=R1
+add R 22 as=R2
+add C 10u as=C1
+add HEADER4 as=J2
+
+net VBUS J1.1 C1.1 J2.1
+net GND J1.4 J1.SH C1.2 J2.4
+net USB_DP J1.3 R1.1
+net USB_DM J1.2 R2.1
+net MCU_DP R1.2 J2.3
+net MCU_DM R2.2 J2.2

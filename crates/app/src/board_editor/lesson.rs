@@ -22,9 +22,15 @@ pub const ARDUINO_TITLE: &str = "基板編4. 置き方の勘所 (Arduino 互換�
 pub const ARDUINO_ID: &str = "board_arduino";
 const ARDUINO_CIRCUIT: &str = include_str!("../../../../docs/examples/arduino_minimal.schjson");
 
+/// The fifth lesson: the USB input of a device (connector, series resistors, a header for the microcontroller): find the
+/// differential pairs, route D+ / D- side by side with the same length (`docs/examples/usb_device_input.schjson`).
+pub const USB_TITLE: &str = "基板編5. USB の配線 (差動ペア)";
+pub const USB_ID: &str = "board_usb";
+const USB_CIRCUIT: &str = include_str!("../../../../docs/examples/usb_device_input.schjson");
+
 pub(super) struct BoardLesson {
     /// 0 = from a schematic to the files to order, 1 = the copper lesson, 2 = the pre-order check challenge,
-    /// 3 = the placement lesson of the Arduino-compatible board.
+    /// 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson.
     which: usize,
     done: Vec<bool>,
 }
@@ -53,6 +59,43 @@ fn drc_clean(e: &BoardEditor) -> bool {
 
 fn order_opened(e: &BoardEditor) -> bool {
     drc_clean(e) && e.order.open
+}
+
+/// At least two differential pairs are set (D+ / D- at the connector and at the microcontroller side).
+fn pairs_found(e: &BoardEditor) -> bool {
+    parts_on_board(e) && e.board.diff_pairs.len() >= 2
+}
+
+/// Both lines of the pair are routed, run side by side for some length, and their lengths differ by no more than the pair allows.
+fn pair_routed_together(e: &BoardEditor, d: &pcb_core::diffpair::DiffPair) -> bool {
+    let r = pcb_core::diffpair::pair_report(&e.board, d);
+    ratsnest(&e.board).iter().all(|w| w.net != d.p && w.net != d.n) && r.len_p > 0.0 && r.len_n > 0.0 && r.coupled > 0.5 && r.skew <= d.max_skew + 1e-9
+}
+
+/// The straight lines of the two nets of a pair (before routing) have about the same length and run in the same direction: the
+/// parts are placed so that the pair can run side by side. A pair that is already routed counts as placed.
+fn pair_airwires_alike(e: &BoardEditor, d: &pcb_core::diffpair::DiffPair) -> bool {
+    let wires = ratsnest(&e.board);
+    let of = |net: &str| wires.iter().filter(|a| a.net == net).collect::<Vec<_>>();
+    let (p, n) = (of(&d.p), of(&d.n));
+    if p.is_empty() && n.is_empty() {
+        return true;
+    }
+    if p.len() != 1 || n.len() != 1 {
+        return false;
+    }
+    let v = |a: &pcb_core::ratsnest::Airwire| (a.b.x - a.a.x, a.b.y - a.a.y);
+    let (u, t) = (v(p[0]), v(n[0]));
+    let (lu, lt) = (u.0.hypot(u.1), t.0.hypot(t.1));
+    lu > 1e-9 && lt > 1e-9 && (lu - lt).abs() <= 1.0 && (u.0 * t.1 - u.1 * t.0).abs() / (lu * lt) < 0.2 && (u.0 * t.0 + u.1 * t.1).abs() / (lu * lt) > 0.9
+}
+
+fn pairs_placed_alike(e: &BoardEditor) -> bool {
+    pairs_found(e) && e.board.diff_pairs.iter().all(|d| pair_airwires_alike(e, d))
+}
+
+fn pairs_routed(e: &BoardEditor) -> bool {
+    pairs_found(e) && e.board.diff_pairs.iter().all(|d| pair_routed_together(e, d))
 }
 
 /// Distance in mm between the pad `pin` of `refdes` and the pad `pin2` of `refdes2` (None if either is missing).
@@ -198,6 +241,49 @@ const ARDUINO_STEPS: &[Step] = &[
     },
 ];
 
+const USB_STEPS: &[Step] = &[
+    Step {
+        title: "回路図から取り込む",
+        detail: "左パネルの「回路図から取り込み」を押します。USB コネクタ (J1)・直列抵抗 (R1・R2、22Ω)・コンデンサ (C1)・マイコンの代わりのヘッダ (J2) が並びます。D+ と D− には、USB_DP / USB_DM (コネクタ側) と MCU_DP / MCU_DM (マイコン側) という名前がついています。",
+        done: parts_imported,
+    },
+    Step {
+        title: "部品を並べて、基板の外形を決める",
+        detail: "「自動配置 → 部品を並べて外形を決める」を押します。USB の基板では、コネクタを基板の端に置き、マイコンの近くに D+ / D− の直列抵抗を置きます。自動配置は、そこまでは考えてくれないので、気になる部品はドラッグで動かします (R キーで回転)。",
+        done: parts_on_board,
+    },
+    Step {
+        title: "差動ペアを作る",
+        detail: "左パネルの「差動ペア」を開き、「名前から探す」を押します。USB_DP / USB_DM と MCU_DP / MCU_DM が、2 組のペアとして見つかります。USB の D+ と D− は、逆の向きに動く 1 組の信号なので、ペアとして扱います。",
+        done: pairs_found,
+    },
+    Step {
+        title: "D+ と D− が並んで走れるように、部品を並べ直す",
+        detail: "2 本を並べて引くには、2 本の「つなぐ線」(黄色の線) が、同じ向きで、同じ長さになるように、部品を置きます。自動配置は、そこまで考えてくれないので、人が直します。やり方: コネクタ J1 の D− (2 番)・D+ (3 番) の真下に、R2 と R1 を、縦向きに (R キーで回転) 並べます。その下に、ヘッダ J2 を、横向きに、2 番・3 番ピンが R2・R1 の下に来るように置きます。黄色の線が、ペアの 2 本で、平行で同じ長さになれば、次に進めます (「並走できる」と判定されます)。",
+        done: pairs_placed_alike,
+    },
+    Step {
+        title: "ペアで配線する",
+        detail: "差動ペアの 1 組ごとに、「ペアで配線」を押します。＋側 (D+) を引いてから、− 側 (D−) が、そのすぐ隣を並んで引かれます (並べ方が悪いと、並走 0% のままになります。その場合は、前の手順に戻って、部品の置き方を直します)。2 本の長さの差 (「長さの差」の表示) が、許容値 (0.5mm) 以内で、「✔ 長さが合っています」と出るまで確かめます。差が大きいときは、「長さを合わせる」で、短いほうに蛇行を足します。USB のフルスピードは、数 mm の差なら問題になりませんが、2 本を並べて同じ長さで引くのが、基本です。",
+        done: pairs_routed,
+    },
+    Step {
+        title: "残りの配線をする",
+        detail: "「自動配線 → 全部」を押して、VBUS と GND を引きます。D+ / D− のペアは、すでに引いてあるので、そのままです。通らない線が残ったら、部品の位置を動かします。",
+        done: routed,
+    },
+    Step {
+        title: "DRC で配線のルール違反を調べる",
+        detail: "「DRC を実行」を押します。差動ペアも調べられ、「2 本の間隔が、目標の 0.20mm からずれています」と出ます。コネクタのパッドは 2mm 離れているので、パッドを出たあとも、線の間隔が約 1.75mm のままだからです。理想は、パッドを出たらすぐに、0.2〜0.3mm まで 2 本を寄せることです (「配線」ツールで手で引き直せます)。ここでは、差動ペアの「間隔」欄を、実際の間隔 (1.75mm) に合わせて、違反をなくします。間隔が広いと、差動インピーダンスは 90Ω より高くなりますが、フルスピード (12Mbit/s) の USB は、短い配線なら動くことが多いです。ハイスピードでは、寄せる必要があります。違反が 0 件になるまで直します。",
+        done: drc_clean,
+    },
+    Step {
+        title: "発注の準備を開く",
+        detail: "「発注の準備…」を押します。実際の USB 機器では、D+ / D− の差動インピーダンス (90Ω が目安) は、基板の厚み・銅の層・線幅・2 本の間隔で決まります。2 層の標準の基板で、これを合わせるのは難しいので、発注先の「インピーダンスの計算ツール」で、線幅と間隔を確かめます。低速 (フルスピード以下) の USB なら、ここまでの「並べて、同じ長さで、短く」で、ほとんどの場合動きます。",
+        done: order_opened,
+    },
+];
+
 const STEPS: &[Step] = &[
     Step {
         title: "回路図から取り込む",
@@ -242,6 +328,19 @@ impl BoardEditor {
         self.status = format!("レッスン「{ARDUINO_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
+    /// Starts the USB differential pair lesson (the app loads its circuit first).
+    pub fn start_usb_lesson(&mut self) {
+        self.new_file();
+        self.drc_ran = false;
+        self.lesson = Some(BoardLesson { which: 4, done: vec![false; USB_STEPS.len()] });
+        self.status = format!("レッスン「{USB_TITLE}」を始めました。右の案内に沿って操作してみましょう");
+    }
+
+    /// The sample circuit of the USB lesson.
+    pub fn usb_lesson_circuit() -> &'static str {
+        USB_CIRCUIT
+    }
+
     /// The sample circuit of the placement lesson.
     pub fn arduino_lesson_circuit() -> &'static str {
         ARDUINO_CIRCUIT
@@ -280,6 +379,7 @@ impl BoardEditor {
             Some(1) => COPPER_STEPS,
             Some(2) => FIX_STEPS,
             Some(3) => ARDUINO_STEPS,
+            Some(4) => USB_STEPS,
             _ => STEPS,
         }
     }
@@ -296,6 +396,7 @@ impl BoardEditor {
             1 => COPPER_ID,
             2 => FIX_ID,
             3 => ARDUINO_ID,
+            4 => USB_ID,
             _ => "board",
         })
     }
@@ -332,11 +433,14 @@ impl BoardEditor {
         let copper = l.which == 1;
         let fix = l.which == 2;
         let arduino = l.which == 3;
+        let usb = l.which == 4;
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
-            ui.label(if arduino {
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+            ui.label(if usb {
+                "USB の D+ と D− は、2 本で 1 つの信号を運ぶ「差動ペア」です。並べて、同じ長さで、短く引きます。差動ペアの機能で、2 本を並べて配線し、長さの差を確かめます"
+            } else if arduino {
                 "ATmega328P の Arduino 互換ボードを基板にします。自動配置は叩き台なので、水晶とバイパスコンデンサを、人が正しい場所へ寄せます。そのあと配線し、通らない線が残ったときの直し方も身につけます"
             } else if fix {
                 "発注前チェックに引っかかる基板です。部品が基板の外にある、配線が切れている、電流に対して配線が細い、発注先のルールに合っていない、という4つを、チェックの表示を頼りに自分で直します"
@@ -366,7 +470,7 @@ impl BoardEditor {
                 }
             }
             ui.separator();
-            if !copper && !fix && !arduino {
+            if !copper && !fix && !arduino && !usb {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
@@ -388,6 +492,10 @@ impl BoardEditor {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "チャレンジ達成!");
                 ui.label("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。");
+            } else if cur.is_none() && usb {
+                ui.separator();
+                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.label("USB の配線の基本は、「D+ と D− を並べて、同じ長さで、短く」「ビアや枝分かれを避ける」「ESD 保護部品はコネクタのそば」「下の層を GND のベタにする」です。高速 (ハイスピード 480Mbit/s) では、差動インピーダンス 90Ω の設計が必須で、基板の積層を決めてから配線します。");
             } else if cur.is_none() && arduino {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");

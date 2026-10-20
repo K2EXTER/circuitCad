@@ -1,0 +1,218 @@
+{
+  "components": [
+    {
+      "refdes": "J1",
+      "kind": "Custom",
+      "value": "USB_DEMO_TH",
+      "pos": [
+        12,
+        12
+      ],
+      "rot": 0,
+      "footprint": "USB_DEMO_TH",
+      "custom": {
+        "name": "USB_DEMO_TH",
+        "prefix": "J",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VBUS",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "D-",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D+",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "GND",
+            "side": "left"
+          },
+          {
+            "number": "SH",
+            "name": "SHIELD",
+            "side": "right"
+          }
+        ],
+        "sim": null
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "22",
+      "pos": [
+        28,
+        8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "22",
+      "pos": [
+        42,
+        8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        56,
+        8
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "J2",
+      "kind": {
+        "Header": 4
+      },
+      "value": "Conn",
+      "pos": [
+        66,
+        8
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x4",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        8,
+        15
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        8,
+        9
+      ],
+      "text": "VBUS"
+    },
+    {
+      "pos": [
+        54,
+        8
+      ],
+      "text": "VBUS"
+    },
+    {
+      "pos": [
+        68,
+        8
+      ],
+      "text": "VBUS"
+    },
+    {
+      "pos": [
+        8,
+        15
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        58,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        68,
+        14
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        8,
+        13
+      ],
+      "text": "USB_DP"
+    },
+    {
+      "pos": [
+        26,
+        8
+      ],
+      "text": "USB_DP"
+    },
+    {
+      "pos": [
+        8,
+        11
+      ],
+      "text": "USB_DM"
+    },
+    {
+      "pos": [
+        40,
+        8
+      ],
+      "text": "USB_DM"
+    },
+    {
+      "pos": [
+        30,
+        8
+      ],
+      "text": "MCU_DP"
+    },
+    {
+      "pos": [
+        68,
+        12
+      ],
+      "text": "MCU_DP"
+    },
+    {
+      "pos": [
+        44,
+        8
+      ],
+      "text": "MCU_DM"
+    },
+    {
+      "pos": [
+        68,
+        10
+      ],
+      "text": "MCU_DM"
+    }
+  ],
+  "layout_version": 1
+}

@@ -1283,3 +1283,51 @@ fn the_arduino_board_lesson_walks_from_import_to_the_order_window() {
     assert_eq!(e.lesson_progress(), 7);
     assert_eq!(e.finished_board_lesson(), Some("board_arduino"));
 }
+
+/// The USB lesson: the two pairs are found by name, routed side by side (D+ first, then D- next to it), the rest is auto-routed.
+#[test]
+fn the_usb_board_lesson_walks_from_import_to_the_order_window() {
+    let mut sch = crate::schematic::SchEditor::default();
+    assert!(sch.load_sample(BoardEditor::usb_lesson_circuit()));
+    let mut e = BoardEditor::default();
+    e.start_usb_lesson();
+    assert_eq!(e.lesson_progress(), 0);
+    e.import_from_schematic(&sch);
+    assert_eq!(e.lesson_progress(), 1);
+    e.autoplace();
+    assert_eq!(e.lesson_progress(), 2);
+    // "名前から探す"
+    let found = pcb_core::diffpair::suggest_pairs(&e.board_nets());
+    assert_eq!(found.iter().map(|d| d.p.as_str()).collect::<Vec<_>>().len(), 2, "USB_DP/USB_DM and MCU_DP/MCU_DM: {found:?}");
+    e.board.diff_pairs.extend(found);
+    assert_eq!(e.lesson_progress(), 3);
+    // the automatic placement puts the resistors beside each other: the two lines of a pair do not run the same way, so the step
+    // that asks for a placement fit for a pair is not done yet (this is what the learner fixes by dragging)
+    assert_eq!(e.lesson_progress(), 3, "the auto placement does not fit the pairs");
+    e.board.place_part("J1", Point::new(14.0, 6.0), 0);
+    e.board.place_part("R2", Point::new(13.0, 11.0), 1);
+    e.board.place_part("R1", Point::new(15.0, 11.0), 1);
+    e.board.place_part("J2", Point::new(9.9, 19.0), 1);
+    e.board.place_part("C1", Point::new(22.0, 12.0), 0);
+    assert_eq!(e.lesson_progress(), 4, "D+ and D- can now run side by side");
+    for i in 0..e.board.diff_pairs.len() {
+        e.route_pair_at(i);
+    }
+    assert_eq!(e.lesson_progress(), 5, "{}", e.status);
+    e.autoroute_now(None);
+    assert_eq!(e.lesson_progress(), 6, "{}", e.status);
+    // the DRC checks the pairs too: the connector's pads are 2 mm apart, so the lines keep about 1.75 mm between them, far from the
+    // 0.2 mm the pair is asked for; the learner either routes them closer by hand or sets the gap the pair really has
+    e.run_drc();
+    assert!(e.violations.iter().any(|v| v.message.contains("間隔")), "{:?}", e.violations.iter().map(|v| v.message.clone()).collect::<Vec<_>>());
+    assert_eq!(e.lesson_progress(), 6, "the DRC is not clean yet");
+    for i in 0..e.board.diff_pairs.len() {
+        let r = pcb_core::diffpair::pair_report(&e.board, &e.board.diff_pairs[i].clone());
+        e.board.diff_pairs[i].gap = r.gap_min.unwrap();
+    }
+    e.run_drc();
+    assert_eq!(e.lesson_progress(), 7, "{:?}", e.violations.iter().map(|v| v.message.clone()).collect::<Vec<_>>());
+    e.open_order();
+    assert_eq!(e.lesson_progress(), 8);
+    assert_eq!(e.finished_board_lesson(), Some("board_usb"));
+}

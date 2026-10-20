@@ -99,4 +99,4 @@
 - 設計して基板に: 回路図を描く(最終課題) / 基板の置き方の勘所 / 基板にして発注の準備
 - 作って動かす: 表面実装のはんだ付け / ブートローダと LED の点滅
 
-レッスン24 水晶 `crystal`(USB の電気の基本は、段階「3b. 発展: USB につなぐ」の 32 `usb_power`・33 `usb_speed`・34 `usb_signal`)、25 リセット `reset`、26 バイパスコンデンサ `decoupling`、27 プルアップ `pullup`、28 ピンの LED `pin_led`、29 レベル変換 `levels`、30 シリアル `serial`、31 データシート `datasheet`、最終課題 `draw_arduino`(「作ってみよう」)、基板レッスン4 `board_arduino`(置き方の勘所と配線)があり、はんだ付け以降は道すじだけ(`plan` = 準備中)。レッスンを書いたら、`plan(...)` を `lesson(...)` に替え、`requires` を `Item { requires: Some(&[...]), ..lesson(...) }` で付ける。サンプル回路は `docs/examples/arduino_minimal.schjson`(水晶の部品 `XTAL_16MHz_3225` つき)。
+レッスン24 水晶 `crystal`(USB の電気の基本は、段階「3b. 発展: USB につなぐ」の 32 `usb_power`・33 `usb_speed`・34 `usb_signal`、基板レッスン5 `board_usb`)、25 リセット `reset`、26 バイパスコンデンサ `decoupling`、27 プルアップ `pullup`、28 ピンの LED `pin_led`、29 レベル変換 `levels`、30 シリアル `serial`、31 データシート `datasheet`、最終課題 `draw_arduino`(「作ってみよう」)、基板レッスン4 `board_arduino`(置き方の勘所と配線)があり、はんだ付け以降は道すじだけ(`plan` = 準備中)。レッスンを書いたら、`plan(...)` を `lesson(...)` に替え、`requires` を `Item { requires: Some(&[...]), ..lesson(...) }` で付ける。サンプル回路は `docs/examples/arduino_minimal.schjson`(水晶の部品 `XTAL_16MHz_3225` つき)。

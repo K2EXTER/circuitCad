@@ -296,6 +296,11 @@ impl eframe::App for App {
                         self.start_board_lesson(3);
                         ui.close();
                     }
+                    let usb_mark = if self.progress.is_done(board_editor::lesson::USB_ID) { "✔ " } else { "　 " };
+                    if ui.button(format!("{usb_mark}{}", board_editor::lesson::USB_TITLE)).on_hover_text("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します").clicked() {
+                        self.start_board_lesson(4);
+                        ui.close();
+                    }
                 });
                 ui.menu_button("編集", |ui| {
                     if ui.button("元に戻す (Ctrl+Z)").on_hover_text("直前の操作を取り消します").clicked() {
