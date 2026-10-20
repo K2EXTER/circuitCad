@@ -304,45 +304,55 @@ impl SchEditor {
             (severity, assess_safety(&sch, r).level)
         };
         let mut rows = vec![];
-        // the healthy circuit is solved once for the whole scan (it used to be solved again for every fault)
+        // the healthy circuit is solved once for the whole scan (it used to be solved again for every fault); the broken circuits are
+        // independent of each other, so they are solved on all the cores
         let baseline = dc_op(&c);
+        let mut jobs: Vec<(String, usize, sim_core::Broken)> = vec![];
         for part in breakable(&c) {
-            for fault in ALL_FAULTS {
-                let Some(b) = break_part(&c, &part, fault) else { continue };
-                let Ok(r) = (match &baseline {
-                    Ok(base) => simulate_broken_with(&c, &b, base),
-                    Err(_) => simulate_broken(&c, &b),
-                }) else {
-                    continue;
-                };
-                let (severity, danger) = rate(&r);
-                rows.push(ScanRow { part: part.clone(), pin: String::new(), fault_kind: ALL_FAULTS.iter().position(|f| *f == fault).unwrap_or(0), label: b.label, severity, danger });
+            for (kind, fault) in ALL_FAULTS.iter().enumerate() {
+                if let Some(b) = break_part(&c, &part, *fault) {
+                    jobs.push((part.clone(), kind, b));
+                }
+            }
+        }
+        let solved = sim_core::par_map(&jobs, |(_, _, b)| {
+            match &baseline {
+                Ok(base) => simulate_broken_with(&c, b, base),
+                Err(_) => simulate_broken(&c, b),
+            }
+            .ok()
+            .map(|r| rate(&r))
+        });
+        for ((part, kind, b), result) in jobs.into_iter().zip(solved) {
+            if let Some((severity, danger)) = result {
+                rows.push(ScanRow { part, pin: String::new(), fault_kind: kind, label: b.label, severity, danger });
             }
         }
         // ICs and transistors: every pin disconnected in turn (the usual solder / contact failure)
         let temp = self.fault_temp().unwrap_or(T_NOM_C);
-        let mut pin_baseline: Option<sim_core::DcResult> = None;
         let pin_parts: Vec<String> = self.sch.components.iter().filter(|x| matches!(x.kind, Kind::Custom | Kind::Npn)).map(|x| x.refdes.clone()).collect();
+        let mut pin_jobs: Vec<(String, String, String)> = vec![];
         for part in pin_parts {
             for (pin, _) in self.pin_choices(&part) {
-                let how = PinHow::Open;
-                let label = self.pin_fault_label(&part, &pin, &how);
-                let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how };
-                let Ok((healthy, b)) = break_pin(&self.sch, temp, &spec, &label) else { continue };
-                // every pin fault has the same healthy circuit: solve it on the first one only
-                let base = match &pin_baseline {
-                    Some(base) => base.clone(),
-                    None => match dc_op(&healthy) {
-                        Ok(base) => {
-                            pin_baseline = Some(base.clone());
-                            base
-                        }
-                        Err(_) => continue,
-                    },
-                };
-                let Ok(r) = simulate_broken_with(&healthy, &b, &base) else { continue };
-                let (severity, danger) = rate(&r);
-                rows.push(ScanRow { part: part.clone(), pin, fault_kind: 0, label, severity, danger });
+                let label = self.pin_fault_label(&part, &pin, &PinHow::Open);
+                pin_jobs.push((part.clone(), pin, label));
+            }
+        }
+        // every pin fault has the same healthy circuit: solve it once, from the first pin fault that can be built
+        let pin_base = pin_jobs.iter().find_map(|(part, pin, label)| {
+            let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how: PinHow::Open };
+            break_pin(&sch, temp, &spec, label).ok().and_then(|(healthy, _)| dc_op(&healthy).ok())
+        });
+        if let Some(base) = &pin_base {
+            let solved = sim_core::par_map(&pin_jobs, |(part, pin, label)| {
+                let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how: PinHow::Open };
+                let (healthy, b) = break_pin(&sch, temp, &spec, label).ok()?;
+                simulate_broken_with(&healthy, &b, base).ok().map(|r| rate(&r))
+            });
+            for ((part, pin, label), result) in pin_jobs.into_iter().zip(solved) {
+                if let Some((severity, danger)) = result {
+                    rows.push(ScanRow { part, pin, fault_kind: 0, label, severity, danger });
+                }
             }
         }
         rows.sort_by(|a, b| b.danger.cmp(&a.danger).then(b.severity.total_cmp(&a.severity)));
