@@ -274,3 +274,49 @@ fn a_later_pour_of_another_net_cuts_the_earlier_one_with_a_gap() {
     let conn = drc::connectivity(&b);
     assert!(area(&crate::zonefill::zone_fill(&b, &b.zones[0], &conn)) > 18.0 * 18.0 - 1.0);
 }
+
+fn fill_area(b: &Board, i: usize) -> f64 {
+    let fill = crate::zonefill::zone_fill(b, &b.zones[i], &drc::connectivity(b));
+    fill.iter().map(|s| crate::geom::signed_area(&s.outer).abs() - s.holes.iter().map(|h| crate::geom::signed_area(h).abs()).sum::<f64>()).sum()
+}
+
+/// A second pour of the same net next to (or over) the first one is copper that joins the first: it must not be dropped as an
+/// "island" because no pad of the net lies inside it.
+#[test]
+fn a_pour_of_the_same_net_beside_another_is_not_an_island() {
+    let mut b = board();
+    pad(&mut b, 8.0, 10.0, "GND", true);
+    let mut a = Zone::new("GND", Side::Top, rect(5.0, 5.0, 15.0, 15.0));
+    a.remove_islands = true;
+    let mut next = Zone::new("GND", Side::Top, rect(15.0, 5.0, 25.0, 15.0));
+    next.remove_islands = true;
+    b.zones.push(a);
+    b.zones.push(next);
+    assert!(fill_area(&b, 1) > 80.0, "the pour next to the first one stays: {}", fill_area(&b, 1));
+    // over it, and reaching out of it
+    b.zones[1].polygon = rect(10.0, 5.0, 25.0, 15.0);
+    assert!(fill_area(&b, 1) > 120.0, "the overlapping pour stays: {}", fill_area(&b, 1));
+    // still an island when it touches nothing of the net
+    b.zones[1].polygon = rect(30.0, 5.0, 38.0, 15.0);
+    assert!(fill_area(&b, 1) < 1e-6, "a pour that touches nothing of the net is removed");
+}
+
+/// Drawn, pours of one net on one layer are one piece of copper: where they overlap it is not there twice, and where they touch
+/// the seam is gone.
+#[test]
+fn merged_fills_join_overlapping_and_touching_pours_of_one_net() {
+    let mut b = board();
+    pad(&mut b, 8.0, 10.0, "GND", true);
+    b.zones.push(Zone::new("GND", Side::Top, rect(5.0, 5.0, 15.0, 15.0)));
+    b.zones.push(Zone::new("GND", Side::Top, rect(10.0, 5.0, 20.0, 15.0)));
+    b.zones.push(Zone::new("GND", Side::Top, rect(20.0, 5.0, 30.0, 15.0)));
+    b.zones.push(Zone::new("GND", Side::Bottom, rect(5.0, 5.0, 15.0, 15.0)));
+    b.zones.push(Zone::new("SIG", Side::Top, rect(5.0, 18.0, 15.0, 25.0)));
+    let merged = crate::zonefill::merged_fills(&b, &drc::connectivity(&b));
+    assert_eq!(merged.len(), 3, "GND top, GND bottom, SIG top");
+    let (side, top) = &merged[0];
+    assert_eq!(*side, Side::Top);
+    assert_eq!(top.len(), 1, "one piece: {top:?}");
+    let area = crate::geom::signed_area(&top[0].outer).abs();
+    assert!((area - 25.0 * 10.0).abs() < 2.0, "5..30 x 5..15, not counted twice where they overlap: {area}");
+}

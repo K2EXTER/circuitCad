@@ -111,6 +111,75 @@ fn to_points(path: &[[f64; 2]]) -> Vec<Point> {
 
 /// The copper of `zone` (without thermal spokes, which the Gerber writer adds).
 pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
+    let mut out = raw_fill(board, zone, conn);
+    if zone.remove_islands && !zone.net.is_empty() {
+        // Pours of the same net on the same layer that touch or overlap are one piece of copper: a pour beside another one is not an
+        // island because the pad is in the other one.
+        let mut all: Vec<FillShape> = out.clone();
+        for other in board.zones.iter().filter(|o| !std::ptr::eq(*o, zone) && o.side == zone.side && o.net == zone.net) {
+            all.extend(raw_fill(board, other, conn));
+        }
+        let joined = union(&all);
+        out.retain(|shape| match inner_point(shape) {
+            Some(p) => joined.iter().find(|j| inside_shape(j, p)).is_none_or(|j| touches_net(board, zone, conn, j)),
+            None => true,
+        });
+    }
+    out
+}
+
+/// A point well inside a piece (the middle of its first triangle).
+fn inner_point(shape: &FillShape) -> Option<Point> {
+    let t = shape.triangles().into_iter().max_by(|a, b| signed_area(a).abs().total_cmp(&signed_area(b).abs()))?;
+    Some(Point::new((t[0].x + t[1].x + t[2].x) / 3.0, (t[0].y + t[1].y + t[2].y) / 3.0))
+}
+
+fn inside_shape(shape: &FillShape, p: Point) -> bool {
+    use crate::geom::inside_polygon;
+    inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p))
+}
+
+/// The pieces merged where they touch or overlap.
+fn union(shapes: &[FillShape]) -> Vec<FillShape> {
+    // outer contours counter-clockwise, holes clockwise, so the holes are subtracted
+    let mut contours: Vec<Path> = vec![];
+    for s in shapes {
+        contours.push(ccw(&s.outer));
+        for h in &s.holes {
+            let mut p = ccw(h);
+            p.reverse();
+            contours.push(p);
+        }
+    }
+    let none: Vec<Path> = vec![];
+    contours
+        .overlay(&none, OverlayRule::Union, FillRule::NonZero)
+        .into_iter()
+        .filter_map(|shape| {
+            let mut it = shape.into_iter();
+            let outer = to_points(&it.next()?);
+            (signed_area(&outer).abs() >= 1e-6).then(|| FillShape { outer, holes: it.map(|h| to_points(&h)).collect() })
+        })
+        .collect()
+}
+
+/// The pours as they are drawn: pours of the same net on one layer that overlap or touch are one piece of copper, so they are
+/// merged (drawn separately, the overlap would be painted twice). One entry per layer and net (pours without a net stay apart),
+/// with the pieces; the entries come in the order of the first pour of each.
+pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, Vec<FillShape>)> {
+    let mut out: Vec<(Side, Option<String>, Vec<FillShape>)> = vec![];
+    for z in &board.zones {
+        let fill = zone_fill(board, z, conn);
+        let key = (!z.net.is_empty()).then(|| z.net.clone());
+        match key.as_ref().and_then(|_| out.iter_mut().find(|(s, k, _)| *s == z.side && *k == key)) {
+            Some((_, _, shapes)) => shapes.extend(fill),
+            None => out.push((z.side, key, fill)),
+        }
+    }
+    out.into_iter().map(|(s, k, shapes)| (s, if k.is_some() { union(&shapes) } else { shapes })).collect()
+}
+
+fn raw_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
     if zone.polygon.len() < 3 {
         return vec![];
     }
@@ -173,9 +242,6 @@ pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillSha
             }
             out.push(FillShape { outer, holes: it.map(|h| to_points(&h)).collect() });
         }
-    }
-    if zone.remove_islands && !zone.net.is_empty() {
-        out.retain(|shape| touches_net(board, zone, conn, shape));
     }
     out
 }

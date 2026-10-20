@@ -43,7 +43,7 @@ impl BoardEditor {
                     &*fresh
                 }
             };
-            *cache = Some((key, self.board.zones.iter().map(|zn| pcb_core::zonefill::zone_fill(&self.board, zn, conn)).collect()));
+            *cache = Some((key, pcb_core::zonefill::merged_fills(&self.board, conn)));
         }
         let Some((_, fills)) = cache.as_ref() else { return };
         for s in self.layer_order() {
@@ -53,8 +53,7 @@ impl BoardEditor {
             let alpha = if s == self.side { 90 } else { 40 };
             let fill = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
             let edge = self.side_color(s).gamma_multiply(if s == self.side { 0.8 } else { 0.35 });
-            for (zone, shapes) in self.board.zones.iter().zip(fills.iter()).filter(|(zn, _)| zn.side == s) {
-                let _ = zone;
+            for (_, shapes) in fills.iter().filter(|(side, _)| *side == s) {
                 for shape in shapes {
                     let mut mesh = egui::Mesh::default();
                     for t in shape.triangles() {
