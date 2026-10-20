@@ -229,7 +229,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "3. つなぐ: 入出力と通信",
             about: "ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます",
             items: &[
-                plan("a_pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", &["led", "a_datasheet"], Some("D13 の LED の電流を測って、データシートの上限と比べます")),
+                Item { requires: Some(&["led", "a_datasheet"]), ..lesson("pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", Some("D13 の LED の電流を測って、データシートの上限と比べます")) },
                 plan("a_levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換", &["pullup"], None),
                 plan("a_serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレート、FTDI ヘッダと USB-シリアル IC の違い", &["a_levels", "reset"], None),
             ],
@@ -238,7 +238,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "4. 設計して基板に",
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
-                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["decoupling", "crystal", "reset", "a_pin_led"], None),
+                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["decoupling", "crystal", "reset", "pin_led"], None),
                 plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["a_draw"], None),
                 plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
             ],
@@ -696,7 +696,7 @@ mod tests {
         progress.mark("divider");
         assert_eq!(recommended(line, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["led"]);
         // the Arduino items name power-path items from another path
-        let pin_led = find_item("a_pin_led").unwrap();
+        let pin_led = find_item("pin_led").unwrap();
         assert!(requirements(&ARDUINO_PATH, pin_led).iter().any(|i| i.id == "led"));
         // roots sit on row 0, the final tasks below everything they need
         assert_eq!(level(&ARDUINO_PATH, find_item("a_datasheet").unwrap(), 0), 0);

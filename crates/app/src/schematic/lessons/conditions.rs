@@ -165,6 +165,21 @@ pub(super) fn pullup_removed(e: &SchEditor) -> bool {
     tran_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r >= 10e6)
 }
 
+/// The pin-LED lesson, step 2: the series resistor is 100 ohm or less and the result is fresh.
+pub(super) fn pin_overdriven(e: &SchEditor) -> bool {
+    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r <= 100.0)
+}
+
+/// The pin-LED lesson, step 3: the series resistor is 800 ohm or more and the result is fresh.
+pub(super) fn pin_gentle(e: &SchEditor) -> bool {
+    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r >= 800.0)
+}
+
+/// The "LEDの電流制限抵抗" calculator is open.
+pub(super) fn led_calc_open(e: &SchEditor) -> bool {
+    e.wiz_open && super::wizard::CALCS.get(e.wiz_kind).is_some_and(|c| c.title.starts_with("LED"))
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

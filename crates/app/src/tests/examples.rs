@@ -530,6 +530,40 @@ fn write_pullup_example() {
     std::fs::write(root.join("pullup_input.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/pin_led.schjson: an output pin (High = V1 5 V behind R2 = 25 ohm, the pin's output resistance)
+/// driving a LED through R1: `cargo test -p app write_pin_led_example -- --ignored`
+#[test]
+#[ignore]
+fn write_pin_led_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "HIGH");
+    label(&mut s, v1, "-", "GND");
+    // R1 = the series resistor (added first, so it gets the number 1), R2 = the pin's output resistance
+    let r1 = s.add(Kind::Resistor, (22, 0), 1);
+    s.components[r1].value = "330".into();
+    label(&mut s, r1, "1", "PIN");
+    label(&mut s, r1, "2", "LED");
+    let r2 = s.add(Kind::Resistor, (12, 0), 1);
+    s.components[r2].value = "25".into();
+    label(&mut s, r2, "1", "HIGH");
+    label(&mut s, r2, "2", "PIN");
+    let d1 = s.add(Kind::Led, (32, 0), 1);
+    label(&mut s, d1, "A", "LED");
+    label(&mut s, d1, "K", "GND");
+    std::fs::write(root.join("pin_led.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin.
 
 use super::conditions::*;
 use super::*;
@@ -169,6 +169,53 @@ pub(super) const PULLUP: Lesson = Lesson {
             title: "プルアップをはずして、浮いたピンを見る",
             detail: "R1 を 100Meg にして (プルアップが無い状態)「過渡解析を実行」。IN は、漏れ電流だけで決まる 2.5V のまわりを、約 1.1V から 3.9V まで大きく揺れます。電源の半分 (2.5V) をまたぐので、マイコンは High と Low のどちらか決められません。浮いたピンは、プルアップ (またはプルダウン) で必ず電圧を決めておきます。",
             done: pullup_removed,
+        },
+    ],
+};
+
+pub(super) const PIN_LED: Lesson = Lesson {
+    id: "pin_led",
+    title: "28. ピンで LED を光らせる (ピンから流せる電流)",
+    goal: "マイコンのピンから LED に流してよい電流には上限があることを見ます。抵抗を小さくすると明るくなる一方、ピンの電流が定格を超えて、マイコンを傷めること、抵抗の決め方を確かめます",
+    summary: "マイコンのピンは、High にすると約 5V を出し、LED をつなげば電流が流れます。電流は (ピンの電圧 − LED の電圧 約 2V) ÷ 抵抗 で決まります。ピンから流せる電流には上限があり、ATmega328P では、1 ピンあたり 20mA 程度までを目安に使い、絶対最大定格は 40mA です。ピンには出力抵抗 (ここでは約 25Ω) があるので、電流が増えるほど、ピンの電圧が下がります。330Ω の抵抗なら約 8.6mA で、ふつうの LED が十分に光ります。抵抗を 100Ω にすると約 23mA、47Ω では約 39mA と、定格に近づきます。0Ω (直結) では、このモデルでは 99mA にもなり、実物のピンは壊れます。抵抗の決め方は、まず光らせたい電流 (たとえば 5〜10mA) を決め、(5V − 2V) ÷ その電流、で計算して、近い値を選びます。ピン全体の合計にも上限 (200mA) があるので、LED をたくさん使うときは注意します。",
+    limits: &[
+        "ピンは、5V の電圧源と約 25Ω の出力抵抗で表しています。実物のピンの出力電圧は、電流が増えると、直線ではなく、もっと下がります。値は、データシートの「出力電圧と電流のグラフ」で確かめてください。",
+        "LED は、順方向電圧が約 2V (20mA のとき) の簡単なモデルです。色や個体で 1.8V〜3.3V と違います (青・白は 3V 前後)。明るさは、電流におおよそ比例しますが、このモデルは明るさを出しません。",
+        "20mA や 40mA、200mA の値は ATmega328P の目安です。ほかのマイコンでは、ずっと小さいこともあります (3.3V のマイコンで 8mA など)。使うマイコンのデータシートで必ず確かめてください。",
+        "ピンの発熱や、電源電圧が下がったときの電流の変化は含みません。",
+    ],
+    real: &[
+        "まずデータシートを見よう: ATmega328P のデータシートで、「DC Current per I/O Pin」(絶対最大定格)、「DC Current VCC and GND Pins」と、出力電圧 (VOH) と電流のグラフを探します。",
+        "用意するもの: マイコンのボード、LED (赤)、抵抗 330Ω と 1kΩ、ブレッドボード、テスタ。",
+        "測り方: ピンから LED と抵抗を直列につなぎ、LED と抵抗の間の電流を、テスタの電流レンジ (直列にはさんで) で測ります。330Ω で約 8〜9mA のはずです。1kΩ に替えて、明るさと電流を比べます。",
+        "気づいてほしいこと: 抵抗を小さくしすぎないこと。47Ω や 0Ω は試さないでください (ピンの傷みの原因になります)。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/pin_led.schjson"),
+    setup: |_| {},
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "DC動作点で、ピンの電圧と LED の電流を見る",
+            detail: "「DC動作点を解析」を押します。V1 (5V) が、ピンの High の電圧で、R2 (25Ω) はピンの出力抵抗です。LED の電流は約 8.6mA、LED の電圧は約 1.94V、ピン (PIN) の電圧は約 4.79V です。電流が流れる分だけ、ピンの電圧が 5V から下がっています。",
+            done: dc_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "R1 を 100 にして、電流がふえすぎるのを見る",
+            detail: "R1 を 330 から 100 に変えて「DC動作点を解析」。LED の電流は約 23mA に増えます。ピンの目安 (20mA 程度) を超えました。47 まで下げると約 39mA で、絶対最大定格 (40mA) の目前です。LED は明るくなりますが、ピンには負担になります。",
+            done: pin_overdriven,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "R1 を 1k にして、やさしく光らせる",
+            detail: "R1 を 1k に変えて「DC動作点を解析」。電流は約 3mA に減り、ピンの電圧は約 4.92V と、ほとんど下がりません。LED は暗めですが、屋内の表示には十分です。ピンに優しく、電池も長持ちします。明るさと電流のバランスで、抵抗を選びます。",
+            done: pin_gentle,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "「値の決め方」の「LEDの電流制限抵抗」で、抵抗を決める",
+            detail: "メニューの「学ぶ」→「値の決め方」を開き、「LEDの電流制限抵抗」を選びます。電源電圧 5V、LED の電圧 2V、電流 5〜10mA を入れると、必要な抵抗が出ます。(5V − 2V) ÷ 10mA = 300Ω なので、手元の 330Ω が近い値です。",
+            done: led_calc_open,
         },
     ],
 };

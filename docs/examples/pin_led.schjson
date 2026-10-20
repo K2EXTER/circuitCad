@@ -1,0 +1,193 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        22,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "25",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        32,
+        0
+      ],
+      "rot": 1,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        22,
+        -2
+      ],
+      "b": [
+        22,
+        -5
+      ]
+    },
+    {
+      "a": [
+        22,
+        2
+      ],
+      "b": [
+        22,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -2
+      ],
+      "b": [
+        12,
+        -5
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        5
+      ]
+    },
+    {
+      "a": [
+        32,
+        -2
+      ],
+      "b": [
+        32,
+        -5
+      ]
+    },
+    {
+      "a": [
+        32,
+        2
+      ],
+      "b": [
+        32,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "HIGH"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        22,
+        -5
+      ],
+      "text": "PIN"
+    },
+    {
+      "pos": [
+        22,
+        5
+      ],
+      "text": "LED"
+    },
+    {
+      "pos": [
+        12,
+        -5
+      ],
+      "text": "HIGH"
+    },
+    {
+      "pos": [
+        12,
+        5
+      ],
+      "text": "PIN"
+    },
+    {
+      "pos": [
+        32,
+        -5
+      ],
+      "text": "LED"
+    },
+    {
+      "pos": [
+        32,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

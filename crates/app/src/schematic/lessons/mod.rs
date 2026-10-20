@@ -74,6 +74,7 @@ const LESSONS: &[Lesson] = &[
     micro::RESET,
     micro::DECOUPLING,
     micro::PULLUP,
+    micro::PIN_LED,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

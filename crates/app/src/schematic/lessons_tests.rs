@@ -640,3 +640,38 @@ fn the_pullup_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     let (lo, hi) = swing(&e);
     assert!(lo < 1.5 && hi > 3.5, "floating: {lo} {hi}");
 }
+
+#[test]
+fn the_pin_led_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "pin_led").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let led = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().elements.iter().find(|x| x.name == "D1").unwrap().current.abs() * 1e3;
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((8.0..9.2).contains(&led(&e)), "330: {} mA", led(&e));
+    let vpin = e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("PIN").unwrap();
+    assert!((4.7..4.9).contains(&vpin), "{vpin}");
+    set_value(&mut e, "R1", "100");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((22.0..25.0).contains(&led(&e)), "100: {} mA", led(&e));
+    set_value(&mut e, "R1", "47");
+    e.run_dc();
+    assert!((37.0..41.0).contains(&led(&e)), "47: {} mA", led(&e));
+    set_value(&mut e, "R1", "1k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((2.5..3.5).contains(&led(&e)), "1k: {} mA", led(&e));
+    // the calculator step: open the LED resistor calculator
+    assert_eq!(progress(&e), 3);
+    e.wiz_open = true;
+    e.wiz_kind = super::wizard::CALCS.iter().position(|c| c.title.starts_with("LED")).unwrap();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+}
