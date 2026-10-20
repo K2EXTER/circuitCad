@@ -139,7 +139,7 @@ impl BoardEditor {
                         self.autoroute(None);
                     }
                     if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
-    部品を並べて基板の外形を決めたあと、「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
+    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
                         self.ground_pour();
                     }
                     let sel_net = match self.selected {
@@ -150,6 +150,20 @@ impl BoardEditor {
                     if ui.add_enabled(sel_net.is_some(), egui::Button::new(label)).on_hover_text("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます").clicked()
                         && let Some(n) = sel_net {
                             self.autoroute(Some(&n));
+                        }
+                });
+                ui.horizontal(|ui| {
+                    if ui.button("配線を短くする").on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます").clicked() {
+                        self.shorten_routes(None);
+                    }
+                    let sel_net = match self.selected {
+                        Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
+                        _ => None,
+                    };
+                    let label = sel_net.as_ref().map_or("選択したネットだけ".to_string(), |n| format!("{n} だけ"));
+                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(label)).on_hover_text("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります)").clicked()
+                        && let Some(n) = sel_net {
+                            self.shorten_routes(Some(&n));
                         }
                 });
             });

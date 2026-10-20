@@ -435,3 +435,32 @@ board status
     let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
     assert_eq!((st["drc_violations"].as_u64(), st["unrouted"].as_u64()), (Some(0), Some(0)), "{st}");
 }
+
+#[test]
+fn improve_keeps_the_board_complete_and_clean() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add R 270 as=R2
+add LED as=D1
+add LED as=D2
+net VCC V1.+ R1.1 R2.1
+net A R1.2 D1.A
+net B R2.2 D2.A
+net GND V1.- D1.K D2.K
+board import
+board autoplace
+board route
+board improve
+board drc
+board status
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let imp = a.iter().find(|v| v.get("length_mm").is_some()).expect("improve answer");
+    let (before, after) = (imp["length_mm"][0].as_f64().unwrap(), imp["length_mm"][1].as_f64().unwrap());
+    assert!(after <= before + 1e-6, "{imp}");
+    assert_eq!(imp["unrouted_left"], 0);
+    let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
+    assert_eq!((st["drc_violations"].as_u64(), st["unrouted"].as_u64()), (Some(0), Some(0)), "{st}");
+}

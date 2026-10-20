@@ -1,4 +1,4 @@
-//! Board commands: new, import, pour, autoplace, route, drc, status, postlayout, currents, save, open, fab.
+//! Board commands: new, import, pour, autoplace, route, improve, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|route|drc|status|postlayout|currents|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|route|improve|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -56,6 +56,18 @@ impl Session {
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
+            "improve" => {
+                // make the routes of the whole board shorter and its vias fewer: nets that detour (or carry a via) are ripped up
+                // and routed again, alone or with a neighbour in the way; a change is kept only when it is better and clean
+                let (_, kv) = options(rest);
+                let only = opt(&kv, "net").map(str::to_string);
+                let board = self.board_mut()?;
+                let ro = RouteOptions { pad_lead: Some(0.5), ..RouteOptions::default() };
+                let (tracks, vias, len) = (board.tracks.len(), board.vias.len(), board.tracks.iter().map(|t| t.a.dist(t.b)).sum::<f64>());
+                let r = pcb_core::reroute::improve_routes(board, &ro, None, only.as_deref());
+                let len_after: f64 = board.tracks.iter().map(|t| t.a.dist(t.b)).sum();
+                Ok(obj(json!({"rerouted_nets": r.improved, "saved_mm": (r.saved * 10.0).round() / 10.0, "tracks": [tracks, board.tracks.len()], "vias": [vias, board.vias.len()], "length_mm": [(len * 10.0).round() / 10.0, (len_after * 10.0).round() / 10.0], "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+            }
             "route" => {
                 let (_, kv) = options(rest);
                 let only = opt(&kv, "net").map(str::to_string);
@@ -75,8 +87,11 @@ impl Session {
                     0
                 };
                 let joined = pcb_core::merge::merge_collinear(board, before);
+                // `improve=1`: then shorten the routes that detour and drop vias that are not needed. Off by default: right after
+                // the router the gain is small (43 samples: 2 vias fewer in all); `board improve` is for hand-drawn routes
+                let improved = if opt(&kv, "improve") == Some("1") && rep.failed.is_empty() { pcb_core::reroute::improve_routes(board, &ro, Some(before), None) } else { Default::default() };
                 let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
-                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
             }
             "drc" => {
                 let board = self.board_mut()?;

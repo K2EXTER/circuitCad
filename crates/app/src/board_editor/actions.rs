@@ -101,6 +101,34 @@ impl BoardEditor {
         }
     }
 
+    /// Rip up and route again the nets that detour or carry vias that are not needed (`pcb_core::reroute`), among all the
+    /// wiring or just `net`. One undo step; nothing changes when nothing gets better.
+    pub fn shorten_routes(&mut self, net: Option<&str>) {
+        if self.board.tracks.is_empty() {
+            self.status = "配線がまだありません。先に配線してください".into();
+            return;
+        }
+        self.checkpoint();
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
+        let (len, vias) = (self.board.tracks.iter().map(|t| t.a.dist(t.b)).sum::<f64>(), self.board.vias.len());
+        let r = pcb_core::reroute::improve_routes(&mut self.board, &opt, None, net);
+        if r.improved == 0 {
+            self.undo.pop();
+            self.status = "配線を短くする: これ以上短くできる配線は見つかりませんでした (引き直して、短く・きれいになるものだけ採用します)".into();
+            return;
+        }
+        self.violations.clear();
+        let after = self.board.tracks.iter().map(|t| t.a.dist(t.b)).sum::<f64>();
+        self.status = format!(
+            "配線を短くする: {} 本を引き直しました。配線の長さ {:.0} → {:.0} mm、ビア {} → {} 個。DRC で確認しましょう (気に入らなければ「元に戻す」)",
+            r.improved,
+            len,
+            after,
+            vias,
+            self.board.vias.len()
+        );
+    }
+
     /// The GND pour on the bottom layer with a via for every surface ground pad (see `pcb_core::groundpour`). One undo step.
     pub fn ground_pour(&mut self) {
         self.checkpoint();

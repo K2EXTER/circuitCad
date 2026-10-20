@@ -31,6 +31,7 @@ pub mod padentry;
 pub mod package;
 pub mod parts;
 pub mod ratsnest;
+pub mod reroute;
 pub mod shove;
 pub mod smooth;
 pub mod strokefont;

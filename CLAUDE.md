@@ -38,6 +38,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `model.rs` 全データ型 (層は `Side`、内層は `Board.inner_layers`) / `footprints.rs`・`package.rs` フットプリント / `parts.rs` `place_part` / `netlist.rs` 回路図→基板の取込
 - `drc/` DRC (`mod.rs`=`check`・`clearance`・`shorts` / `connectivity.rs` 銅の接続グループ / `geo.rs` 距離計算 / `silk.rs` シルクとマスク帯 / `thermal.rs` サーマルビア / `pour.rs` ベタ / `decoupling.rs` バイパスコンデンサ / `acute.rs` 鋭角 / `tests.rs`) / `current.rs` 配線の太さと電流 / `irdrop.rs` 電圧降下 + レイアウト後シミュレーション用の配線抵抗 (`wiring_resistances` → `sim-core::from_schematic_with_wiring`) / `diffpair.rs` 差動ペア
 - `align.rs` 選んだ部品の整列(左右上下・中心・等間隔)。`autoplace.rs` の配置のあとの整列とベタ先の配置も
+- `reroute.rs` 遠回りした配線・余分なビアの引き直し(手で引いた配線向け。「配線を短くする」ボタンと `ccad board improve`)
 - `merge.rs` 一直線の配線を1本にまとめる(自動配線の後。銅の形は変えない)
 - `padentry.rs` パッドの根元をそろえる(垂直な出入り・2本は両端寄せ。自動配線の直後と全部の配線に)
 - `meander.rs` 長さ合わせ(蛇行配線。ネットを目標の長さに)
