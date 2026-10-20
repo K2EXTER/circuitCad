@@ -301,6 +301,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         let (att, ratio, order) = 'step: loop {
             let mut tries = 0;
             let mut h_back = 0.0;
+            let h_first = h;
             let att: Attempt = loop {
                 let trap = !(force_be || retried);
                 let ctx = Ctx {
@@ -331,12 +332,18 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                                 lands_on_bp = true;
                             }
                         } else if h_back > 0.0 {
-                            h = h_back;
-                            h_back = 0.0;
+                            // the largest step did not land either: try a few sizes between it and the step that was failing, since the
+                            // state after the flip may only be reachable from a step of a certain size
+                            if h > 64.0 * h_first {
+                                h /= 16.0;
+                            } else {
+                                h = h_back;
+                                h_back = 0.0;
+                            }
                         } else {
                             h /= 4.0;
                         }
-                        if tries > 12 || h < 1e-18 {
+                        if tries > 16 || h < 1e-18 {
                             return Err(SimError::NoConvergence);
                         }
                     }
