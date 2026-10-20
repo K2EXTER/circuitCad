@@ -239,6 +239,28 @@ impl BoardEditor {
     /// Settings of the tool that is picked, shown right under the toolbar: how a wire is laid for the wire tool,
     /// the size of a via for the via tool (autoroute uses both).
     fn tool_options(&mut self, ui: &mut egui::Ui) {
+        let title = match self.tool {
+            Tool::Track => "配線ツールの設定",
+            Tool::Via => "ビアツールの設定",
+            _ => return,
+        };
+        // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
+        let accent = Color32::from_rgb(90, 160, 230);
+        let inner = egui::Frame::NONE
+            .fill(Color32::from_rgba_unmultiplied(90, 160, 230, 28))
+            .corner_radius(4.0)
+            .inner_margin(egui::Margin { left: 10, right: 6, top: 4, bottom: 6 })
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(egui::RichText::new(title).strong().color(accent));
+                self.tool_options_body(ui);
+            });
+        let r = inner.response.rect;
+        ui.painter().rect_filled(Rect::from_min_max(r.min, egui::pos2(r.min.x + 3.0, r.max.y)), 2.0, accent);
+        ui.add_space(4.0);
+    }
+
+    fn tool_options_body(&mut self, ui: &mut egui::Ui) {
         match self.tool {
             Tool::Track => {
         ui.label("引き方").on_hover_text("配線ツールで引くときの設定です。線幅・ビアは、自動配線にも使われます");
