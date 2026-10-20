@@ -146,16 +146,16 @@ impl BoardEditor {
                             self.shorten_routes(Some(n));
                         }
                 });
+                egui::CollapsingHeader::new("高度な配線 (?)").default_open(false).show(ui, |ui| {
+                    self.panel_widths(ui);
+                    self.panel_pairs(ui);
+                    self.panel_lengths(ui);
+                }).header_response.on_hover_text("配線の太さ (電流から)・差動ペア・長さ合わせ");
             });
             egui::CollapsingHeader::new("③ 仕上げ (?)").default_open(false).show(ui, |ui| {
                 self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
             }).header_response.on_hover_text("パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです");
-            egui::CollapsingHeader::new("高度な配線 (?)").default_open(false).show(ui, |ui| {
-                self.panel_widths(ui);
-                self.panel_pairs(ui);
-                self.panel_lengths(ui);
-            }).header_response.on_hover_text("配線の太さ (電流から)・差動ペア・長さ合わせ");
             egui::CollapsingHeader::new("④ チェックと発注").default_open(true).show(ui, |ui| {
                 if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                     self.run_drc();
