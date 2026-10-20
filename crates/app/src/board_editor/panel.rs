@@ -2,6 +2,13 @@
 
 use super::*;
 
+/// A heading that splits the left panel into its two halves: the tools drawn by hand and the steps to follow.
+fn group_heading(ui: &mut egui::Ui, text: &str, tip: &str) {
+    ui.add_space(2.0);
+    ui.label(egui::RichText::new(text).strong().color(Color32::from_rgb(120, 180, 240))).on_hover_text(tip);
+    ui.separator();
+}
+
 impl BoardEditor {
     /// A tip for what to do next on the board.
     pub fn hint(&self) -> String {
@@ -28,6 +35,7 @@ impl BoardEditor {
         egui::ScrollArea::vertical().show(ui, |ui| {
             // icon-only buttons are packed side by side; with labels they stay one per line
             let wrap = crate::icons::icon_only();
+            group_heading(ui, "手で描く (ツール)", "ここで選んだツールで、基板の上に自分で描き込みます (数字キー 1〜0 でも選べます)");
             ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
                 // the picked tool's settings open right under its button; the rest of the tools follow below
@@ -62,9 +70,10 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm")).on_hover_text("カーソルが吸い付く間隔。0 なら吸い付きません。小さいほど細かく置けます (部品の足の間隔は 2.54mm や 1.27mm が多いです)");
             });
             self.selection_panel(ui);
+            group_heading(ui, "手順 (上から順に)", "基板づくりの流れです。①から順に進めると、発注用のデータまで作れます。いつでも途中に戻れます");
             // open while the board is still being set up (no parts or no outline yet), then folded away
             let setup_open = self.board.parts.is_empty() || self.board.outline.len() < 3;
-            egui::CollapsingHeader::new("① 配置と外形").default_open(setup_open).show(ui, |ui| {
+            egui::CollapsingHeader::new("① 部品を並べる").default_open(setup_open).show(ui, |ui| {
                 if ui.button("回路図から取り込み").on_hover_text("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します").clicked() {
                     self.import_from_schematic(sch);
                 }
@@ -108,7 +117,7 @@ impl BoardEditor {
                     ui.small(format!("現在 {:.1} × {:.1} mm ({}点)", hi.x - lo.x, hi.y - lo.y, self.board.outline.len()));
                 }
             });
-            egui::CollapsingHeader::new("② 配線").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new("② 自動で配線").default_open(true).show(ui, |ui| {
                 let sel_net = match self.selected {
                     Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
                     _ => None,
@@ -136,7 +145,7 @@ impl BoardEditor {
                         }
                 });
                 ui.separator();
-                ui.label(egui::RichText::new("引いた配線を整える").strong());
+                ui.label(egui::RichText::new("引いた配線の手直し").strong());
                 ui.horizontal_wrapped(|ui| {
                     if ui.button("配線を短くする").on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます").clicked() {
                         self.shorten_routes(None);
@@ -152,11 +161,11 @@ impl BoardEditor {
                     self.panel_lengths(ui);
                 }).header_response.on_hover_text("配線の太さ (電流から)・差動ペア・長さ合わせ");
             });
-            egui::CollapsingHeader::new("③ 仕上げ (?)").default_open(false).show(ui, |ui| {
+            egui::CollapsingHeader::new("③ 整える (?)").default_open(false).show(ui, |ui| {
                 self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
             }).header_response.on_hover_text("パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです");
-            egui::CollapsingHeader::new("④ チェックと発注").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new("④ 確認して発注").default_open(true).show(ui, |ui| {
                 if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                     self.run_drc();
                 }
