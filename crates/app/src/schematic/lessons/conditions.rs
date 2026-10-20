@@ -103,6 +103,22 @@ pub(super) fn ac_fresh(e: &SchEditor) -> bool {
     e.ac.as_ref().is_some_and(|a| a.outcome.is_ok() && a.signature == e.signature())
 }
 
+/// (lowest frequency, highest frequency, number of points) of the sweep the last AC run really used.
+fn ac_run_range(e: &SchEditor) -> Option<(f64, f64, usize)> {
+    let r = e.ac.as_ref()?.outcome.as_ref().ok()?;
+    Some((*r.freq.first()?, *r.freq.last()?, r.freq.len()))
+}
+
+/// The crystal lesson: a fresh run over 1 MHz - 100 MHz with few points (the narrow peak falls between them).
+pub(super) fn wide_ac_fresh(e: &SchEditor) -> bool {
+    ac_fresh(e) && ac_run_range(e).is_some_and(|(f0, f1, n)| f0 <= 2e6 && f1 >= 50e6 && n <= 1000)
+}
+
+/// The crystal lesson: R1 is changed and a fresh run covers the narrow range around 16 MHz finely.
+pub(super) fn r1_changed_and_narrow_ac(e: &SchEditor) -> bool {
+    changed(e, "R1") && ac_fresh(e) && ac_run_range(e).is_some_and(|(f0, f1, n)| f0 >= 15e6 && f1 <= 17e6 && n >= 300)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

@@ -460,3 +460,37 @@ fn the_coil_layer_short_lesson_walks_its_steps() {
     assert_eq!(progress(&e), 4);
     assert!(!super::lessons::lesson_real(idx).is_empty());
 }
+
+/// The crystal lesson: the three steps tick as the learner runs the narrow sweep, widens it, and changes the load.
+#[test]
+fn the_crystal_lesson_ticks_its_steps_and_the_wide_sweep_misses_the_peak() {
+    let idx = lesson_ids().iter().position(|l| *l == "crystal").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // the narrow run shows the peak: about 0.5 at 16 MHz
+    let peak = |e: &SchEditor| e.ac.as_ref().unwrap().outcome.as_ref().unwrap().signal("V(OUT)").unwrap().mag().iter().copied().fold(0.0, f64::max);
+    assert!((0.5..0.6).contains(&peak(&e)), "{}", peak(&e));
+    // widening without running again does not count; running the wide sweep does, and it misses the peak
+    e.set_ac_settings("1Meg", "100Meg", "100");
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(peak(&e) < 0.15, "{}", peak(&e));
+    // changing R1 while the sweep is still wide does not finish the last step
+    set_value(&mut e, "R1", "5k");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    e.set_ac_settings("15.9Meg", "16.1Meg", "100000");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!(peak(&e) > 0.95, "{}", peak(&e));
+}

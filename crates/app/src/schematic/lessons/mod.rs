@@ -40,6 +40,7 @@ mod analog;
 mod basics;
 mod conditions;
 mod devices;
+mod micro;
 mod supply;
 
 #[cfg(test)]
@@ -69,6 +70,7 @@ const LESSONS: &[Lesson] = &[
     supply::PROTECTION,
     supply::COIL_LAYER_SHORT,
     supply::VARIABLE_SUPPLY,
+    micro::CRYSTAL,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

@@ -221,7 +221,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "2. マイコンが動く条件: クロックとリセット",
             about: "電源が入っても、クロックとリセットが整っていないとマイコンは動きません",
             items: &[
-                plan("a_crystal", "水晶とクロック", "16MHz 水晶の共振と、両端の 22pF コンデンサの役割。AC解析で共振が見える", &["a_datasheet"], Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")),
+                Item { requires: Some(&["a_datasheet"]), ..lesson("crystal", "水晶とクロック", "16MHz 水晶の共振の細い山と、すぐ上の深い谷を、AC解析で見る。細い山は刻みが粗いと見落とす", Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")) },
                 plan("a_reset", "リセット回路", "10k のプルアップと 100n のコンデンサで、電源投入と書き込み時のリセットパルスを作る。時定数を過渡解析で見る", &["a_pullup"], None),
             ],
         },
@@ -238,7 +238,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "4. 設計して基板に",
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
-                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["a_decoupling", "a_crystal", "a_reset", "a_pin_led"], None),
+                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["a_decoupling", "crystal", "a_reset", "a_pin_led"], None),
                 plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["a_draw"], None),
                 plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
             ],
@@ -676,8 +676,9 @@ mod tests {
     #[test]
     fn a_tree_path_recommends_several_independent_items_and_waits_for_all_prerequisites() {
         let mut progress = Progress::default();
-        // nothing planned is ever recommended: the Arduino path has no lesson written yet
-        assert!(recommended(&ARDUINO_PATH, &progress).is_empty());
+        // planned items are never recommended, and a planned prerequisite holds nothing back: of the Arduino path only the
+        // crystal lesson is written, and it can be started
+        assert_eq!(recommended(&ARDUINO_PATH, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["crystal"]);
         assert!(is_tree(&ARDUINO_PATH) && !is_tree(&POWER_PATH));
         // a straight line (no `requires`) needs just the item before it
         let line = &POWER_PATH;

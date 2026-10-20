@@ -202,7 +202,7 @@ pub(crate) fn check_sweep(s: &AcSettings) -> Result<(), SimError> {
         return Err(SimError::Invalid("終了周波数は開始周波数以上にしてください".into()));
     }
     match s.sweep {
-        AcSweep::Decade(p) if p == 0 || p > 1000 => return Err(SimError::Invalid("1デケードあたりの点数は 1〜1000 にしてください".into())),
+        AcSweep::Decade(p) if p == 0 || p > 100_000 => return Err(SimError::Invalid("1デケードあたりの点数は 1〜100000 にしてください".into())),
         AcSweep::Linear(n) if !(2..=100_000).contains(&n) => return Err(SimError::Invalid("点数は 2〜100000 にしてください".into())),
         _ => {}
     }

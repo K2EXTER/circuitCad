@@ -420,6 +420,38 @@ fn write_cap_impedance_example() {
     std::fs::write(root.join("cap_impedance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
+/// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
+#[test]
+#[ignore]
+fn write_crystal_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "XTAL_16MHz_3225").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "SIN(0 1 16Meg) AC 1".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    let y = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 0), 0);
+    label(&mut s, y, "1", "IN");
+    label(&mut s, y, "3", "OUT");
+    label(&mut s, y, "2", "GND");
+    label(&mut s, y, "4", "GND");
+    let r = s.add(Kind::Resistor, (40, 0), 1);
+    s.components[r].value = "50".into();
+    label(&mut s, r, "1", "OUT");
+    label(&mut s, r, "2", "GND");
+    std::fs::write(root.join("crystal_response.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

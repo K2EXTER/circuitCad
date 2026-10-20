@@ -99,4 +99,4 @@
 - 設計して基板に: 回路図を描く(最終課題) / 基板の置き方の勘所 / 基板にして発注の準備
 - 作って動かす: 表面実装のはんだ付け / ブートローダと LED の点滅
 
-いまは道すじだけ(`plan` = 準備中)。レッスンを書いたら、`plan(...)` を `lesson(...)` に替え、`requires` を `Item { requires: Some(&[...]), ..lesson(...) }` で付ける。サンプル回路は `docs/examples/arduino_minimal.schjson`(水晶の部品 `XTAL_16MHz_3225` つき)。
+いまは「水晶とクロック」(レッスン24 `crystal`)だけレッスンがあり、ほかは道すじだけ(`plan` = 準備中)。レッスンを書いたら、`plan(...)` を `lesson(...)` に替え、`requires` を `Item { requires: Some(&[...]), ..lesson(...) }` で付ける。サンプル回路は `docs/examples/arduino_minimal.schjson`(水晶の部品 `XTAL_16MHz_3225` つき)。

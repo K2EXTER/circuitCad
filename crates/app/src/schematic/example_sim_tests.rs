@@ -484,43 +484,38 @@ fn cap_impedance_sample_electrolytic_wins_low_ceramic_wins_high() {
     }
 }
 
-/// The bundled 16 MHz crystal in a 50 ohm line (source -> crystal -> 50 ohm to GND): it passes only around its series
-/// resonance, and the response peaks at 16 MHz (the Arduino board's clock).
+/// The crystal sample (source -> crystal -> 50 ohm to GND): it passes only around its series resonance, which sits at
+/// 16 MHz (the Arduino board's clock), and a deep notch follows just above it (the parallel resonance).
 #[test]
-fn crystal_part_passes_only_near_16mhz_in_the_ac_analysis() {
-    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "XTAL_16MHz_3225").unwrap();
-    let mut s = Schematic::default();
-    let label = |s: &mut Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+fn crystal_sample_passes_only_near_16mhz_and_has_a_notch_just_above() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "crystal_response.schjson").unwrap().1;
+    let run = |rl: &str, f0: f64, f1: f64, ppd: usize| {
+        let mut s = sch.clone();
+        s.components.iter_mut().find(|c| c.refdes == "R1").unwrap().value = rl.into();
+        let ac = ac_analysis(&from_schematic(&s).unwrap(), &AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd) }).unwrap();
+        let mag = ac.signal("V(OUT)").unwrap().mag();
+        (ac.freq.clone(), mag)
     };
-    let v = s.add(Kind::VSource, (0, 0), 0);
-    s.components[v].value = "SIN(0 1 1k) AC 1".into();
-    label(&mut s, v, "+", "IN");
-    label(&mut s, v, "-", "GND");
-    let y = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 0), 0);
-    label(&mut s, y, "1", "IN");
-    label(&mut s, y, "3", "OUT");
-    label(&mut s, y, "2", "GND");
-    label(&mut s, y, "4", "GND");
-    let r = s.add(Kind::Resistor, (40, 0), 1);
-    s.components[r].value = "50".into();
-    label(&mut s, r, "1", "OUT");
-    label(&mut s, r, "2", "GND");
-    let ac = ac_analysis(&from_schematic(&s).unwrap(), &AcSettings { fstart: 15e6, fstop: 17e6, sweep: AcSweep::Linear(2001) }).unwrap();
-    let mag = ac.signal("V(OUT)").unwrap().mag();
-    let (peak_i, peak) = mag.iter().copied().enumerate().fold((0, 0.0), |a, (i, m)| if m > a.1 { (i, m) } else { a });
-    let f_peak = ac.freq[peak_i];
-    // series resonance 1 / (2 pi sqrt(Lm Cm)) = 16.0 MHz; at resonance only Rm = 40 ohm is left: 50 / (50 + 40) = 0.556
-    assert!((f_peak - 16e6).abs() < 20e3, "peak at {f_peak} Hz");
-    assert!((0.5..0.6).contains(&peak), "peak gain {peak}");
-    // 0.2 MHz away the motional arm is reactive and only the 3 pF C0 leaks through: about 50 ohm over |Zc0| (~3.3 kohm) or less
-    let at = |f: f64| mag[ac.freq.iter().position(|&x| x >= f).unwrap()];
-    assert!(at(15.8e6) < 0.1 * peak && at(16.2e6) < 0.1 * peak, "{} {}", at(15.8e6), at(16.2e6));
+    let peak = |f: &[f64], m: &[f64]| m.iter().copied().enumerate().fold((f[0], 0.0), |a, (i, x)| if x > a.1 { (f[i], x) } else { a });
+    // narrow range, fine steps: series resonance 1 / (2 pi sqrt(Lm Cm)) = 16.0 MHz; only Rm = 40 ohm is left, so 50 / (50 + 40) = 0.556
+    let (f, m) = run("50", 15.9e6, 16.1e6, 100_000);
+    let (f_peak, g_peak) = peak(&f, &m);
+    assert!((f_peak - 16e6).abs() < 2e3, "peak at {f_peak} Hz");
+    assert!((0.5..0.6).contains(&g_peak), "peak gain {g_peak}");
+    // the notch above it: the parallel resonance (a little higher, 16.027 MHz) blocks the line almost completely
+    let (i_min, g_min) = m.iter().copied().enumerate().filter(|(i, _)| f[*i] > f_peak).fold((0, f64::MAX), |a, (i, x)| if x < a.1 { (i, x) } else { a });
+    assert!((16.01e6..16.05e6).contains(&f[i_min]) && g_min < 0.01 * g_peak, "notch {g_min} at {}", f[i_min]);
+    // the peak is about 1 kHz wide: 20 kHz away nothing passes
+    let at = |f: &[f64], m: &[f64], hz: f64| m[f.iter().position(|&x| x >= hz).unwrap()];
+    assert!(at(&f, &m, 15.98e6) < 0.05 && at(&f, &m, 16.0e6) > 0.4);
+    // the wide view (1 MHz - 100 MHz, 100 points per decade) steps over it: nothing near 0.5 shows, only the small leak of the 3 pF
+    let (fw, mw) = run("50", 1e6, 100e6, 100);
+    assert!(mw.iter().all(|g| *g < 0.15), "wide max {}", mw.iter().copied().fold(0.0, f64::max));
+    // a 5 kohm load makes the peak about 80 kHz wide and nearly 1 (the load, not the crystal, then sets the loss)
+    let (f5, m5) = run("5k", 15.9e6, 16.1e6, 100_000);
+    let (_, g5) = peak(&f5, &m5);
+    assert!(g5 > 0.95 && at(&f5, &m5, 15.96e6) > 0.7 * g5, "5k: peak {g5}, 40 kHz below {}", at(&f5, &m5, 15.96e6));
+    let _ = fw;
 }
 
 #[test]
