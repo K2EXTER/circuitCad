@@ -2,7 +2,7 @@
 # Build: cargo run -p cli -- docs/examples/arduino_minimal.ccad
 new
 add ATmega328P-AU as=U1
-add XTAL_16MHz_3225 as=Y1
+add XTAL_16MHz_3225 16MHz as=Y1
 add C 22p as=C1
 add C 22p as=C2
 add C 100n as=C3

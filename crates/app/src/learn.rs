@@ -238,8 +238,8 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "4. 設計して基板に",
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
-                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["decoupling", "crystal", "reset", "pin_led"], None),
-                plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["a_draw"], None),
+                Item { id: "draw_arduino", title: "Arduino 互換ボードの回路図を自分で描く (最終課題)", about: "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する。つなぎ方と部品の値を判定する", kind: Kind::Build, build: true, requires: Some(&["decoupling", "crystal", "reset", "pin_led", "serial"]), real: None },
+                plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["draw_arduino"], None),
                 plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
             ],
         },
@@ -707,7 +707,7 @@ mod tests {
         assert!(requirements(&ARDUINO_PATH, pin_led).iter().any(|i| i.id == "led"));
         // roots sit on row 0, the final tasks below everything they need
         assert_eq!(level(&ARDUINO_PATH, find_item("datasheet").unwrap(), 0), 0);
-        assert!(level(&ARDUINO_PATH, find_item("a_draw").unwrap(), 0) > level(&ARDUINO_PATH, find_item("reset").unwrap(), 0));
+        assert!(level(&ARDUINO_PATH, find_item("draw_arduino").unwrap(), 0) > level(&ARDUINO_PATH, find_item("reset").unwrap(), 0));
     }
 
     #[test]

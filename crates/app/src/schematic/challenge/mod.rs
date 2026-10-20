@@ -49,8 +49,23 @@ enum Check {
     Gain { label: &'static str, freq: f64, lo: f64, hi: f64, explain: &'static [(f64, f64, &'static str)] },
     /// The sheet has at least `min` parts of this kind (e.g. the two capacitors a regulator needs).
     Has { label: &'static str, kind: Kind, min: usize, hint: &'static str },
+    /// Every group of pins (part, pin) is on one net: the wiring of a board that has nothing to simulate (a microcontroller).
+    Joined { label: &'static str, groups: &'static [&'static [(&'static str, &'static str)]], hint: &'static str },
+    /// For each link, at least `min` parts of `kind` stand between the net of pin `a` and the net of pin `b`, each with a
+    /// value inside [lo, hi]. Parts are found by kind, so the learner may number them as she likes.
+    Between { label: &'static str, kind: Kind, links: &'static [Link], hint: &'static str },
     /// No part is past its rating (judged with the given load / settings).
     Ratings { label: &'static str, load: Option<&'static str>, set: &'static [(&'static str, &'static str)] },
+}
+
+/// One required connection of `Check::Between`: `name` says what it is for (shown when it is missing).
+struct Link {
+    name: &'static str,
+    a: (&'static str, &'static str),
+    b: (&'static str, &'static str),
+    min: usize,
+    lo: f64,
+    hi: f64,
 }
 
 struct Challenge {
@@ -78,6 +93,7 @@ struct Challenge {
     checks: &'static [Check],
 }
 
+mod arduino;
 mod basic;
 mod judge;
 mod power;
@@ -99,6 +115,7 @@ const CHALLENGES: &[Challenge] = &[
     power::SERIES_REGULATOR,
     power::REGULATOR_78XX,
     power::DRAW_PSU,
+    arduino::DRAW_ARDUINO,
 ];
 
 fn challenge(id: &str) -> Option<&'static Challenge> {

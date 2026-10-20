@@ -22,7 +22,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 - `PlotState.cursors` が測定カーソルA/B(クリックで置く、`cursor_report` が差・周期を出す)。
 
 ## 作ってみよう・学習パス・操作ガイド
-- `schematic/challenge/` は「作ってみよう」(`mod.rs`=型・`CHALLENGES` の並び・開始/判定の入口、`basic.rs`/`power.rs`=チャレンジ1件ずつの `const`、`judge.rs`=模範解答・開始シート・判定、`window.rs`=窓)(目標だけ示して自分で部品を置き・配線し、「判定する」でシミュレーションして判定する。1つの模範解答とは比べない)。
+- `schematic/challenge/` は「作ってみよう」(`mod.rs`=型・`CHALLENGES` の並び・開始/判定の入口、`basic.rs`/`power.rs`=チャレンジ1件ずつの `const`、`judge.rs`=模範解答・開始シート・判定、`window.rs`=窓)(目標だけ示して自分で部品を置き・配線し、「判定する」でシミュレーションして判定する。1つの模範解答とは比べない)。 **シミュレーションできない回路(マイコンの基板)は、`Check::Joined`(このピンたちが同じネット)と `Check::Between`(この2つのネットの間に、この種類の部品が min 個あり、値が範囲内)で、つなぎ方と値を判定する。部品は種類で探す(基本の C/R も、ライブラリのチップ部品 `C_100n_0603` も同じ種類)ので、番号を振りなおしても通る。`arduino.rs` の `DRAW_ARDUINO` が例(答えは `docs/examples/arduino_minimal.schjson`、開始は部品13個を置いたものと、U1・J1・V1 だけのもの)。**
 - チャレンジは `CHALLENGES` のデータ(開始シート `parts0/parts1/grounds*/start_values`、答え=サンプルの `drop/values/labels/rename`、判定 `checks`: `Erc`/`Named`(出力ネット `VOUT`)/`Voltage`(負荷・入力を足して測る、値の範囲ごとの助言 `explain`)/`Stay`(入力を2点に振る)/`Current`/`Gain`(AC)/`Ratings`)。
 - 足すときは `CHALLENGES` に1件とテスト(答えが通る)。
 - いまは zener・divider・led・rc_lowpass・emitter_follower・opamp_inv・series_regulator・regulator_78xx と、最終課題 draw_psu(lesson は protection、学習パスの `Kind::Build` の項目から id で開く。部品の個数を調べる `Check::Has` あり、答えは `power_supply.schjson`)。

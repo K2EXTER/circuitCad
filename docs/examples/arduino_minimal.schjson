@@ -181,7 +181,7 @@
     {
       "refdes": "Y1",
       "kind": "Custom",
-      "value": "XTAL_16MHz_3225",
+      "value": "16MHz",
       "pos": [
         32,
         9

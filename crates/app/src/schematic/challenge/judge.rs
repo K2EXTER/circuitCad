@@ -101,6 +101,70 @@ pub(super) fn advice(explain: &[(f64, f64, &str)], v: f64) -> String {
         .unwrap_or_default()
 }
 
+/// The index (in `nets`) of the net that has this pin of this part.
+fn net_of(nets: &[sch_core::Net], refdes: &str, pin: &str) -> Option<usize> {
+    nets.iter().position(|n| n.pins.iter().any(|p| p.refdes == refdes && p.pin == pin))
+}
+
+fn pin_name(p: (&str, &str)) -> String {
+    format!("{} の {} 番ピン", p.0, p.1)
+}
+
+/// Why the pins of a group are not all on one net, if they are not.
+fn joined_problem(nets: &[sch_core::Net], group: &[(&str, &str)]) -> Option<String> {
+    let first = group.first()?;
+    let Some(n0) = net_of(nets, first.0, first.1) else { return Some(format!("{} が、どこにもつながっていません", pin_name(*first))) };
+    for p in &group[1..] {
+        match net_of(nets, p.0, p.1) {
+            None => return Some(format!("{} が、どこにもつながっていません", pin_name(*p))),
+            Some(n) if n != n0 => return Some(format!("{} が、{} とつながっていません", pin_name(*p), pin_name(*first))),
+            _ => {}
+        }
+    }
+    None
+}
+
+/// A part of this kind: the basic part, or a library chip part drawn as one (a `C_100n_0603` is a capacitor too).
+fn is_kind(c: &Component, kind: Kind) -> bool {
+    if c.kind == kind {
+        return true;
+    }
+    let glyph = c.custom.as_ref().map(|s| s.glyph.as_str()).unwrap_or("");
+    c.kind == Kind::Custom && match kind {
+        Kind::Capacitor => matches!(glyph, "capacitor" | "electrolytic"),
+        Kind::Resistor => glyph == "resistor",
+        Kind::Inductor => glyph == "inductor",
+        _ => false,
+    }
+}
+
+/// Why a `Link` is not met: too few parts of `kind` between the two nets, or their values are off.
+fn between_problem(sch: &Schematic, nets: &[sch_core::Net], kind: Kind, l: &Link) -> Option<String> {
+    let (Some(na), Some(nb)) = (net_of(nets, l.a.0, l.a.1), net_of(nets, l.b.0, l.b.1)) else {
+        return Some(format!("{}: {} か {} が、どこにもつながっていません", l.name, pin_name(l.a), pin_name(l.b)));
+    };
+    if na == nb {
+        return Some(format!("{}: {} と {} が、同じネットになっています (間に部品を入れるには、つなぎません)", l.name, pin_name(l.a), pin_name(l.b)));
+    }
+    let mut across = vec![];
+    for c in sch.components.iter().filter(|c| is_kind(c, kind)) {
+        let pins = c.pins();
+        let ends: Vec<Option<usize>> = pins.iter().map(|(n, _)| net_of(nets, &c.refdes, n)).collect();
+        if ends.len() == 2 && ((ends[0] == Some(na) && ends[1] == Some(nb)) || (ends[0] == Some(nb) && ends[1] == Some(na))) {
+            across.push(c);
+        }
+    }
+    let fine: Vec<&&Component> = across.iter().filter(|c| parse_value(&c.value).is_some_and(|v| v >= l.lo && v <= l.hi)).collect();
+    if fine.len() >= l.min {
+        return None;
+    }
+    if across.len() >= l.min {
+        let c = across.iter().find(|c| !parse_value(&c.value).is_some_and(|v| v >= l.lo && v <= l.hi))?;
+        return Some(format!("{}: {} の値 {} が、目安の範囲 ({} 〜 {}) から外れています", l.name, c.refdes, c.value, format_value(l.lo), format_value(l.hi)));
+    }
+    Some(format!("{}: {} 個必要ですが、{} 個しか見つかりません", l.name, l.min, across.len()))
+}
+
 impl SchEditor {
     /// Judges the circuit on the sheet by simulating it.
     pub(super) fn judge_challenge(&self) -> Vec<CheckResult> {
@@ -112,7 +176,7 @@ impl SchEditor {
             let label = match check {
                 Check::Erc => "配線ミスの点検 (ERC) にエラーがない".to_string(),
                 Check::Named { net } => format!("出力のネットに「{net}」のラベルがある"),
-                Check::Voltage { label, .. } | Check::Stay { label, .. } | Check::Current { label, .. } | Check::Gain { label, .. } | Check::Has { label, .. } | Check::Ratings { label, .. } => label.to_string(),
+                Check::Voltage { label, .. } | Check::Stay { label, .. } | Check::Current { label, .. } | Check::Gain { label, .. } | Check::Has { label, .. } | Check::Joined { label, .. } | Check::Between { label, .. } | Check::Ratings { label, .. } => label.to_string(),
             };
             if let Some(why) = &waiting {
                 out.push(CheckResult { label, ok: None, detail: why.clone() });
@@ -180,6 +244,22 @@ impl SchEditor {
                 Check::Has { kind, min, hint, .. } => {
                     let n = self.sch.components.iter().filter(|c| c.kind == *kind).count();
                     (n >= *min, if n >= *min { format!("{n} 個あります") } else { format!("{n} 個しかありません。{hint}") }, None)
+                }
+                Check::Joined { groups, hint, .. } => {
+                    let nets = extract(&self.sch);
+                    let bad = groups.iter().find_map(|g| joined_problem(&nets, g));
+                    match bad {
+                        None => (true, String::new(), None),
+                        Some(why) => (false, format!("{why}。{hint}"), None),
+                    }
+                }
+                Check::Between { kind, links, hint, .. } => {
+                    let nets = extract(&self.sch);
+                    let bad = links.iter().find_map(|l| between_problem(&self.sch, &nets, *kind, l));
+                    match bad {
+                        None => (true, String::new(), None),
+                        Some(why) => (false, format!("{why}。{hint}"), None),
+                    }
                 }
                 Check::Ratings { load, set, .. } => {
                     let worst = self.with_ratings_of(&prepared(&self.sch, *load, set));

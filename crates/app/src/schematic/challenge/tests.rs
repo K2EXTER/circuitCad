@@ -249,4 +249,100 @@ mod challenge_tests {
         e.start_challenge("opamp_inv", 1);
         assert_eq!(names(&e), 3, "the three sources: signal, +5 V and -5 V");
     }
+
+    /// The label that sits on this pin of this part (the solution is wired with labels).
+    fn label_on(s: &Schematic, refdes: &str, pin: &str) -> usize {
+        let at = s.components.iter().find(|c| c.refdes == refdes).unwrap().pins().into_iter().find(|(n, _)| n == pin).unwrap().1;
+        s.labels.iter().position(|l| l.pos == at).unwrap_or_else(|| panic!("no label on {refdes}.{pin}"))
+    }
+
+    /// Which checks of the Arduino challenge fail (by position in the list; 0 is the ERC).
+    fn arduino_failures(s: Schematic) -> Vec<usize> {
+        verdict("draw_arduino", s).iter().enumerate().filter(|(_, (ok, _))| *ok != Some(true)).map(|(i, _)| i).collect()
+    }
+
+    #[test]
+    fn the_arduino_challenge_judges_the_wiring_and_the_values() {
+        let ok = solution("draw_arduino");
+        assert!(arduino_failures(ok.clone()).is_empty());
+        let names: Vec<String> = verdict("draw_arduino", ok.clone()).into_iter().map(|(_, d)| d).collect();
+        assert!(names.iter().all(|d| d.is_empty()), "{names:?}");
+
+        // TXD / RXD not crossed: J1.4 and J1.5 swap their nets
+        let mut s = ok.clone();
+        let (a, b) = (label_on(&s, "J1", "4"), label_on(&s, "J1", "5"));
+        let (ta, tb) = (s.labels[a].text.clone(), s.labels[b].text.clone());
+        s.labels[a].text = tb;
+        s.labels[b].text = ta;
+        let r = verdict("draw_arduino", s);
+        let failed: Vec<usize> = r.iter().enumerate().filter(|(_, (ok, _))| *ok != Some(true)).map(|(i, _)| i).collect();
+        assert_eq!(failed, vec![10], "{r:#?}");
+        assert!(r[10].1.contains("交差") || r[10].1.contains("同じ名前"), "{}", r[10].1);
+
+        // the load capacitor of XTAL2 is the wrong kind of value (100 uF), and the message names the part and the range
+        let mut s = ok.clone();
+        set(&mut s, "C2", "100u");
+        let r = verdict("draw_arduino", s);
+        assert_eq!(r.iter().enumerate().filter(|(_, (ok, _))| *ok != Some(true)).map(|(i, _)| i).collect::<Vec<_>>(), vec![4]);
+        assert!(r[4].1.contains("C2") && r[4].1.contains("目安の範囲"), "{}", r[4].1);
+
+        // no pull-up on RESET: a 1 Meg resistor is out of range; no resistor at all is "not found"
+        let mut s = ok.clone();
+        set(&mut s, "R1", "1Meg");
+        assert_eq!(arduino_failures(s), vec![5]);
+        let mut s = ok.clone();
+        s.components.retain(|c| c.refdes != "R1");
+        assert_eq!(arduino_failures(s), vec![5]);
+
+        // AREF without its capacitor, and only one bypass capacitor on the supply
+        let mut s = ok.clone();
+        s.components.retain(|c| c.refdes != "C5");
+        let r = verdict("draw_arduino", s);
+        assert_eq!(r.iter().enumerate().filter(|(_, (ok, _))| *ok != Some(true)).map(|(i, _)| i).collect::<Vec<_>>(), vec![7]);
+        assert!(r[7].1.contains("AREF"), "{}", r[7].1);
+        let mut s = ok.clone();
+        s.components.retain(|c| c.refdes != "C4");
+        let r = verdict("draw_arduino", s);
+        assert_eq!(r.iter().enumerate().filter(|(_, (ok, _))| *ok != Some(true)).map(|(i, _)| i).collect::<Vec<_>>(), vec![7]);
+        assert!(r[7].1.contains("2 個必要"), "{}", r[7].1);
+
+        // AVCC forgotten: the power check says which pin
+        let mut s = ok.clone();
+        let i = label_on(&s, "U1", "18");
+        s.labels[i].text = "AVCC_FLOATING".into();
+        let r = verdict("draw_arduino", s);
+        assert_eq!(r.iter().enumerate().filter(|(_, (ok, _))| *ok != Some(true)).map(|(i, _)| i).collect::<Vec<_>>(), vec![1]);
+        assert!(r[1].1.contains("U1 の 18 番ピン"), "{}", r[1].1);
+
+        // a board with nothing built fails everything but the ERC; the parts the learner numbers differently are still found by kind
+        let mut s = ok.clone();
+        for (old, new) in [("C1", "C11"), ("C2", "C12"), ("R2", "R12")] {
+            s.components.iter_mut().find(|c| c.refdes == old).unwrap().refdes = new.into();
+        }
+        assert!(arduino_failures(s).is_empty(), "renumbered capacitors and resistors still count");
+
+        // a library chip capacitor (C_100n_0603) and chip resistor (R_10k_0603) count as a capacitor / resistor
+        let lib = |name: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == name).unwrap();
+        let (cap, res) = (lib("C_100n_0603"), lib("R_10k_0603"));
+        let mut s = ok.clone();
+        for (refdes, def) in [("C3", &cap), ("R1", &res)] {
+            let c = s.components.iter_mut().find(|c| c.refdes == refdes).unwrap();
+            c.kind = Kind::Custom;
+            c.custom = Some(def.symbol());
+            c.value = if refdes == "C3" { "100n".into() } else { "10k".into() };
+        }
+        // (a chip part's pins are named 1 and 2 like the basic part's, so the labels on the solution still sit on them)
+        assert!(arduino_failures(s).is_empty(), "library chip parts count too");
+    }
+
+    #[test]
+    fn the_arduino_challenge_starts_with_the_board_parts_or_only_the_microcontroller() {
+        let mut e = SchEditor::default();
+        e.start_challenge("draw_arduino", 0);
+        let on_sheet = |e: &SchEditor| e.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect::<Vec<_>>();
+        assert_eq!(on_sheet(&e).len(), 13);
+        e.start_challenge("draw_arduino", 1);
+        assert_eq!(on_sheet(&e), ["U1", "J1", "V1"]);
+        assert_eq!(challenge_of_lesson("reset"), Some("draw_arduino"));
+    }
 }
