@@ -45,7 +45,7 @@ impl BoardEditor {
 impl BoardEditor {
     /// What to show and what can be picked, as two rows of icon toggles on a glass strip over the canvas
     /// (under the layer switcher, same Area). Folds down to a small "表示・選択" title.
-    fn view_frame(&mut self, ui: &mut egui::Ui) {
+    fn view_frame(&mut self, ui: &mut egui::Ui) -> f32 {
         use crate::icons::{icon_label, icon_toggle, Icon};
         let id = egui::Id::new("view_overlay_fold");
         {
@@ -80,7 +80,10 @@ impl BoardEditor {
                     }).response.rect.width();
                     crate::icons::fold_remember_width(ui, id, w);
                 }
-            });
+            })
+            .response
+            .rect
+            .width()
         }
     }
 
@@ -90,8 +93,19 @@ impl BoardEditor {
         let layers = self.board.copper_layers();
         let pos = rect.right_top() + Vec2::new(-14.0, 30.0);
         let id = egui::Id::new("layer_overlay_fold");
-        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
-            egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
+        egui::Area::new(egui::Id::new("layer_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| ui.vertical(|ui| {
+            // Both panels hug the right edge. The Area must be exactly as wide as the wider panel: a right-aligned
+            // layout would make it as wide as the free space, and that empty strip would take the canvas's clicks.
+            let (wl_id, wv_id) = (egui::Id::new("layer_overlay_w"), egui::Id::new("view_overlay_w"));
+            let (wl, wv) = ui.ctx().data_mut(|d| (d.get_temp::<f32>(wl_id).unwrap_or(0.0), d.get_temp::<f32>(wv_id).unwrap_or(0.0)));
+            let widest = wl.max(wv);
+            let gap = ui.spacing().item_spacing.x;
+            let drawn_l = ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space((widest - wl).max(0.0));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 // dark text on the whitish glass
                 ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
                 let open = ui.ctx().data_mut(|d| *d.get_persisted_mut_or_insert_with(id, || false));
@@ -126,8 +140,24 @@ impl BoardEditor {
                     }).response.rect.width();
                     crate::icons::fold_remember_width(ui, id, w);
                 }
+            }).response.rect.width()
+                }).inner
+            }).inner;
+            let drawn_v = ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.add_space((widest - wv).max(0.0));
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.x = gap;
+                    self.view_frame(ui)
+                }).inner
+            }).inner;
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(wl_id, drawn_l);
+                d.insert_temp(wv_id, drawn_v);
             });
-            self.view_frame(ui);
+            if (drawn_l - wl).abs() > 0.5 || (drawn_v - wv).abs() > 0.5 {
+                ui.ctx().request_repaint(); // the padding follows the new widths
+            }
         }));
     }
 }
