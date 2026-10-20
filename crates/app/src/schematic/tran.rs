@@ -28,6 +28,12 @@ impl SchEditor {
         }
     }
 
+    /// Largest value of a signal (`V(R2.1.wire)`) in the last transient run.
+    pub fn tran_signal_max(&self, name: &str) -> Option<f64> {
+        let r = self.tran.as_ref()?.outcome.as_ref().ok()?;
+        r.signal(name).map(|s| s.values.iter().copied().fold(f64::NEG_INFINITY, f64::max))
+    }
+
     pub fn set_tran_settings(&mut self, tstop: &str, tstep: &str) {
         self.tran_tstop = tstop.into();
         self.tran_tstep = tstep.into();

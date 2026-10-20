@@ -217,6 +217,25 @@ fn the_copper_lesson_walks_from_the_drop_to_the_fixed_copper() {
     assert_eq!(app.board_ed.finished_board_lesson(), Some("board_copper"));
 }
 
+/// The ringing-trace sample (docs/examples/ringing_trace.ccproj): a 3.3 V edge through 22 ohm into a load at the end of a
+/// 90 mm trace over a ground pour. Ideal wiring gives a clean step; the copper's inductance and capacitance make the load pin ring.
+#[test]
+fn ringing_trace_project_overshoots_only_with_the_copper() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.load_project(root.join("ringing_trace.ccproj"));
+    assert!(pcb_core::drc::check(&app.board_ed.board).is_empty());
+    app.sch.set_tran_settings("100n", "0.1n");
+    app.sch.analyze_tran();
+    let ideal = app.sch.tran_signal_max("V(SIG)").unwrap();
+    assert!((3.2..3.4).contains(&ideal), "ideal wiring: {ideal}");
+    app.apply_post_layout(true);
+    assert!(app.sch.wiring.iter().any(|w| w.refdes == "R2" && w.pin == "1" && w.farad > 3e-12 && w.henry > 50e-9), "{:?}", app.sch.wiring);
+    app.sch.analyze_tran();
+    let ring = app.sch.tran_signal_max("V(R2.1.wire)").unwrap();
+    assert!(ring > 1.4 * 3.3, "the load pin should overshoot: {ring}");
+}
+
 /// A pulsed load has no DC current; the width panel's transient button takes the RMS of the settled part of the run.
 #[test]
 fn transient_currents_come_from_the_last_run_and_flag_a_surge() {

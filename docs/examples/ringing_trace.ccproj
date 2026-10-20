@@ -1,0 +1,637 @@
+{
+ "version": 1,
+ "schematic": {
+  "components": [
+   {
+    "refdes": "V1",
+    "kind": "VSource",
+    "value": "PULSE(0 3.3 10n 0.5n 0.5n 100n 200n)",
+    "pos": [
+     8,
+     10
+    ],
+    "rot": 0,
+    "footprint": "PinHeader_1x2_PM",
+    "custom": null
+   },
+   {
+    "refdes": "R1",
+    "kind": "Resistor",
+    "value": "22",
+    "pos": [
+     20,
+     8
+    ],
+    "rot": 0,
+    "footprint": "R_0805",
+    "custom": null
+   },
+   {
+    "refdes": "R2",
+    "kind": "Resistor",
+    "value": "100k",
+    "pos": [
+     34,
+     8
+    ],
+    "rot": 0,
+    "footprint": "R_0805",
+    "custom": null
+   },
+   {
+    "refdes": "#PWR01",
+    "kind": "Ground",
+    "value": "GND",
+    "pos": [
+     8,
+     12
+    ],
+    "rot": 0,
+    "footprint": "",
+    "custom": null
+   }
+  ],
+  "wires": [],
+  "labels": [
+   {
+    "pos": [
+     8,
+     8
+    ],
+    "text": "IN"
+   },
+   {
+    "pos": [
+     18,
+     8
+    ],
+    "text": "IN"
+   },
+   {
+    "pos": [
+     22,
+     8
+    ],
+    "text": "SIG"
+   },
+   {
+    "pos": [
+     32,
+     8
+    ],
+    "text": "SIG"
+   },
+   {
+    "pos": [
+     8,
+     12
+    ],
+    "text": "GND"
+   },
+   {
+    "pos": [
+     36,
+     8
+    ],
+    "text": "GND"
+   }
+  ],
+  "layout_version": 1
+ },
+ "board": {
+  "name": "ringing_trace",
+  "outline": [
+   {
+    "x": 0.0,
+    "y": 0.0
+   },
+   {
+    "x": 110.0,
+    "y": 0.0
+   },
+   {
+    "x": 110.0,
+    "y": 22.0
+   },
+   {
+    "x": 0.0,
+    "y": 22.0
+   }
+  ],
+  "tracks": [
+   {
+    "side": "Top",
+    "a": {
+     "x": 5.0,
+     "y": 13.5
+    },
+    "b": {
+     "x": 4.6000000000000005,
+     "y": 12.600000000000001
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 4.6000000000000005,
+     "y": 12.600000000000001
+    },
+    "b": {
+     "x": 4.6000000000000005,
+     "y": 8.200000000000001
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 4.5875,
+     "y": 7.5
+    },
+    "b": {
+     "x": 4.6000000000000005,
+     "y": 8.200000000000001
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 6.4125,
+     "y": 7.5
+    },
+    "b": {
+     "x": 7.0,
+     "y": 7.6000000000000005
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 7.0,
+     "y": 7.6000000000000005
+    },
+    "b": {
+     "x": 99.4,
+     "y": 7.6000000000000005
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 100.0875,
+     "y": 7.5
+    },
+    "b": {
+     "x": 99.4,
+     "y": 7.6000000000000005
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 5.0,
+     "y": 16.04
+    },
+    "b": {
+     "x": 6.0,
+     "y": 15.8
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 6.0,
+     "y": 15.8
+    },
+    "b": {
+     "x": 93.80000000000001,
+     "y": 15.8
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 93.80000000000001,
+     "y": 15.8
+    },
+    "b": {
+     "x": 101.4,
+     "y": 8.200000000000001
+    },
+    "width": 0.25
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 101.9125,
+     "y": 7.5
+    },
+    "b": {
+     "x": 101.4,
+     "y": 8.200000000000001
+    },
+    "width": 0.25
+   }
+  ],
+  "pads": [
+   {
+    "pos": {
+     "x": 5.0,
+     "y": 13.5
+    },
+    "shape": {
+     "Rect": {
+      "w": 1.7,
+      "h": 1.7
+     }
+    },
+    "drill": 1.0,
+    "slot": 0.0,
+    "slot_v": false,
+    "side": "Top",
+    "refdes": "V1",
+    "pin": "+",
+    "net": "IN"
+   },
+   {
+    "pos": {
+     "x": 5.0,
+     "y": 16.04
+    },
+    "shape": {
+     "Circle": {
+      "d": 1.7
+     }
+    },
+    "drill": 1.0,
+    "slot": 0.0,
+    "slot_v": false,
+    "side": "Top",
+    "refdes": "V1",
+    "pin": "-",
+    "net": "GND"
+   },
+   {
+    "pos": {
+     "x": 4.5875,
+     "y": 7.5
+    },
+    "shape": {
+     "Rect": {
+      "w": 1.025,
+      "h": 1.4
+     }
+    },
+    "drill": null,
+    "slot": 0.0,
+    "slot_v": false,
+    "side": "Top",
+    "refdes": "R1",
+    "pin": "1",
+    "net": "IN"
+   },
+   {
+    "pos": {
+     "x": 6.4125,
+     "y": 7.5
+    },
+    "shape": {
+     "Rect": {
+      "w": 1.025,
+      "h": 1.4
+     }
+    },
+    "drill": null,
+    "slot": 0.0,
+    "slot_v": false,
+    "side": "Top",
+    "refdes": "R1",
+    "pin": "2",
+    "net": "SIG"
+   },
+   {
+    "pos": {
+     "x": 100.0875,
+     "y": 7.5
+    },
+    "shape": {
+     "Rect": {
+      "w": 1.025,
+      "h": 1.4
+     }
+    },
+    "drill": null,
+    "slot": 0.0,
+    "slot_v": false,
+    "side": "Top",
+    "refdes": "R2",
+    "pin": "1",
+    "net": "SIG"
+   },
+   {
+    "pos": {
+     "x": 101.9125,
+     "y": 7.5
+    },
+    "shape": {
+     "Rect": {
+      "w": 1.025,
+      "h": 1.4
+     }
+    },
+    "drill": null,
+    "slot": 0.0,
+    "slot_v": false,
+    "side": "Top",
+    "refdes": "R2",
+    "pin": "2",
+    "net": "GND"
+   }
+  ],
+  "vias": [],
+  "holes": [],
+  "silk": [
+   {
+    "side": "Top",
+    "a": {
+     "x": 3.850000000000001,
+     "y": 12.35
+    },
+    "b": {
+     "x": 6.1499999999999995,
+     "y": 12.35
+    },
+    "width": 0.15,
+    "refdes": "V1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 6.1499999999999995,
+     "y": 12.35
+    },
+    "b": {
+     "x": 6.1499999999999995,
+     "y": 17.19
+    },
+    "width": 0.15,
+    "refdes": "V1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 6.1499999999999995,
+     "y": 17.19
+    },
+    "b": {
+     "x": 3.850000000000001,
+     "y": 17.19
+    },
+    "width": 0.15,
+    "refdes": "V1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 3.850000000000001,
+     "y": 17.19
+    },
+    "b": {
+     "x": 3.850000000000001,
+     "y": 12.35
+    },
+    "width": 0.15,
+    "refdes": "V1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 3.775,
+     "y": 6.5
+    },
+    "b": {
+     "x": 7.225,
+     "y": 6.5
+    },
+    "width": 0.15,
+    "refdes": "R1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 7.225,
+     "y": 6.5
+    },
+    "b": {
+     "x": 7.225,
+     "y": 8.5
+    },
+    "width": 0.15,
+    "refdes": "R1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 7.225,
+     "y": 8.5
+    },
+    "b": {
+     "x": 3.775,
+     "y": 8.5
+    },
+    "width": 0.15,
+    "refdes": "R1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 3.775,
+     "y": 8.5
+    },
+    "b": {
+     "x": 3.775,
+     "y": 6.5
+    },
+    "width": 0.15,
+    "refdes": "R1"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 9.275,
+     "y": 6.5
+    },
+    "b": {
+     "x": 12.725,
+     "y": 6.5
+    },
+    "width": 0.15,
+    "refdes": "R2"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 12.725,
+     "y": 6.5
+    },
+    "b": {
+     "x": 12.725,
+     "y": 8.5
+    },
+    "width": 0.15,
+    "refdes": "R2"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 12.725,
+     "y": 8.5
+    },
+    "b": {
+     "x": 9.275,
+     "y": 8.5
+    },
+    "width": 0.15,
+    "refdes": "R2"
+   },
+   {
+    "side": "Top",
+    "a": {
+     "x": 9.275,
+     "y": 8.5
+    },
+    "b": {
+     "x": 9.275,
+     "y": 6.5
+    },
+    "width": 0.15,
+    "refdes": "R2"
+   }
+  ],
+  "parts": [
+   {
+    "refdes": "V1",
+    "value": "PULSE(0 3.3 10n 0.5n 0.5n 100n 200n)",
+    "footprint": "PinHeader_1x2_PM",
+    "pos": {
+     "x": 5.0,
+     "y": 13.5
+    },
+    "rot": 2,
+    "side": "Top"
+   },
+   {
+    "refdes": "R1",
+    "value": "22",
+    "footprint": "R_0805",
+    "pos": {
+     "x": 5.5,
+     "y": 7.5
+    },
+    "rot": 0,
+    "side": "Top"
+   },
+   {
+    "refdes": "R2",
+    "value": "100k",
+    "footprint": "R_0805",
+    "pos": {
+     "x": 101.0,
+     "y": 7.5
+    },
+    "rot": 0,
+    "side": "Top"
+   }
+  ],
+  "texts": [
+   {
+    "side": "Top",
+    "pos": {
+     "x": 5.0,
+     "y": 17.89
+    },
+    "height": 1.0,
+    "text": "V1",
+    "refdes": "V1"
+   },
+   {
+    "side": "Top",
+    "pos": {
+     "x": 5.5,
+     "y": 9.2
+    },
+    "height": 1.0,
+    "text": "R1",
+    "refdes": "R1"
+   },
+   {
+    "side": "Top",
+    "pos": {
+     "x": 11.0,
+     "y": 9.2
+    },
+    "height": 1.0,
+    "text": "R2",
+    "refdes": "R2"
+   }
+  ],
+  "zones": [
+   {
+    "net": "GND",
+    "side": "Bottom",
+    "polygon": [
+     {
+      "x": 1.0,
+      "y": 1.0
+     },
+     {
+      "x": 109.0,
+      "y": 1.0
+     },
+     {
+      "x": 109.0,
+      "y": 21.0
+     },
+     {
+      "x": 1.0,
+      "y": 21.0
+     }
+    ],
+    "clearance": 0.3,
+    "thermal": true,
+    "thermal_gap": 0.3,
+    "spoke_width": 0.3,
+    "remove_islands": false
+   }
+  ],
+  "footprints": [],
+  "net_currents": {},
+  "locked_parts": [],
+  "inner_layers": 0,
+  "diff_pairs": [],
+  "finish": {
+   "on": false,
+   "corners": true,
+   "radius": 0.5,
+   "tapers": true,
+   "forks": true
+  },
+  "finish_exclude": [],
+  "rules": {
+   "min_track_width": 0.15,
+   "min_clearance": 0.15,
+   "edge_clearance": 0.3,
+   "min_drill": 0.3,
+   "min_annular_ring": 0.13,
+   "mask_expansion": 0.05,
+   "outline_width": 0.1
+  }
+ }
+}
