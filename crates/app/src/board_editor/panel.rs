@@ -43,7 +43,8 @@ impl BoardEditor {
             ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
                 // the picked tool's settings open right under its button; the rest of the tools follow below
-                let at = TOOLS.iter().position(|(t, _, _)| *t == self.tool).filter(|_| matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone));
+                // (icon-only: the icons are one wrapped block, so the settings go under the whole block, not into the middle of it)
+                let at = TOOLS.iter().position(|(t, _, _)| *t == self.tool).filter(|_| !wrap && matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone));
                 let (head, tail) = TOOLS.split_at(at.map_or(TOOLS.len(), |i| i + 1));
                 for part in [head, tail] {
                     if wrap {
@@ -51,9 +52,12 @@ impl BoardEditor {
                     } else {
                         self.tool_buttons(ui, part);
                     }
-                    if std::ptr::eq(part, head) {
+                    if std::ptr::eq(part, head) && !wrap {
                         self.tool_options(ui);
                     }
+                }
+                if wrap {
+                    self.tool_options(ui);
                 }
             });
             ui.horizontal(|ui| {
