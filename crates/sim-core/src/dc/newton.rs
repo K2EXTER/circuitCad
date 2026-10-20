@@ -19,7 +19,10 @@ thread_local! {
     pub(crate) static REFAC: std::cell::Cell<[u64; 2]> = const { std::cell::Cell::new([0; 2]) };
 }
 
-/// Systems below this many unknowns are always factored from scratch.
+/// The plain Newton iteration of a transient step is cut after this many iterations (large systems, first tries only).
+const PLAIN_CAP: usize = 40;
+
+/// Systems below this many unknowns are always factored from scratch (and their plain iteration is never cut short).
 const REFACTOR_MIN_SIZE: usize = 60;
 
 pub(crate) enum Fail {
@@ -151,13 +154,20 @@ impl Compiled {
         // caller shrinks the step (or tries the line search below, which keeps the full limit). Running it on to the DC limit of
         // 150 was most of the iterations of a transient with many failing steps.
         let plain = !backtrack && damp == 1.0 && max_dx.is_infinite();
-        let limit = if ctx.dynamic.as_ref().is_some_and(|d| d.capped) && plain { crate::options::options().max_iter.min(40) } else { crate::options::options().max_iter };
+        // Only for large systems, like the reuse of the pivot order: in a small circuit a bistable flip (a latch, a logic gate, a
+        // multivibrator) needs a few dozen iterations that depend on the last bits of the maths, and the logic blinker example
+        // reached 39 of the 40 on Windows and did not converge on Linux and macOS with a cap of 40.
+        let capped = ctx.dynamic.as_ref().is_some_and(|d| d.capped) && plain;
+        let limit = crate::options::options().max_iter;
         for it in 1..=limit {
             if DEADLINE.with(|d| d.get()).is_some_and(|d| std::time::Instant::now() > d) {
                 return Err(Fail::NoConv);
             }
             let (m, limited) = self.assemble(&mut vj, &x, ctx);
             let n = m.n;
+            if capped && it > PLAIN_CAP && n >= REFACTOR_MIN_SIZE {
+                return Err(Fail::NoConv);
+            }
             let mut r2 = f64::NAN;
             // every equation balances to rounding level (relative to its largest term)
             let mut balanced = false;
