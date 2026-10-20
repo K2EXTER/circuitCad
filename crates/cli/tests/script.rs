@@ -406,3 +406,32 @@ board save {}
         assert!(len < 1e-6 || dx < 1e-6 || dy < 1e-6 || (dx - dy).abs() < 1e-6, "odd angle: {t}");
     }
 }
+
+#[test]
+fn pour_first_then_autoplace_keeps_ground_joined_and_the_board_clean() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add R 270 as=R2
+add LED as=D1
+add LED as=D2
+net VCC V1.+ R1.1 R2.1
+net A R1.2 D1.A
+net B R2.2 D2.A
+net GND V1.- D1.K D2.K
+board import
+board pour
+board autoplace
+board route
+board drc
+board status
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let pour = a.iter().find(|v| v.get("zone_added").is_some()).expect("pour answer");
+    assert_eq!(pour["zone_added"], true);
+    let place = a.iter().find(|v| v.get("poured_nets_ignored").is_some()).expect("autoplace answer");
+    assert_eq!(place["poured_nets_ignored"][0], "GND", "{place}");
+    let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
+    assert_eq!((st["drc_violations"].as_u64(), st["unrouted"].as_u64()), (Some(0), Some(0)), "{st}");
+}

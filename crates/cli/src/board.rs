@@ -1,4 +1,4 @@
-//! Board commands: new, import, autoplace, route, drc, status, postlayout, currents, save, open, fab.
+//! Board commands: new, import, pour, autoplace, route, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|autoplace|route|drc|status|postlayout|currents|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|route|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -45,7 +45,16 @@ impl Session {
             "autoplace" => {
                 let board = self.board_mut()?;
                 let r = pcb_core::autoplace::autoplace(board)?;
-                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured})))
+                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured})))
+            }
+            "pour" => {
+                // the GND pour of the editor: the bottom copper as a pour, with a via for every surface pad of the net
+                let (_, kv) = options(rest);
+                let net = opt(&kv, "net").map(str::to_string);
+                let board = self.board_mut()?;
+                let o = pcb_core::groundpour::PourOptions { net, ..Default::default() };
+                let r = pcb_core::groundpour::ground_pour(board, &o)?;
+                Ok(obj(json!({"zone_added": r.zone_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
             "route" => {
                 let (_, kv) = options(rest);

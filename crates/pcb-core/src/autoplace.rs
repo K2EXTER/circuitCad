@@ -29,6 +29,8 @@ pub struct PlaceReport {
     pub height: f64,
     /// Nets left out of the placement because a pour carries them (see `Tuning::skip_poured`).
     pub poured: Vec<String>,
+    /// Vias of the pour that were put again (see `pour_wiring`).
+    pub repoured: usize,
 }
 
 pub(crate) fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
@@ -98,6 +100,36 @@ fn refit_pours(board: &mut Board, lo: Point, hi: Point) {
             z.polygon = vec![Point::new(nlo.x + inset[0], nlo.y + inset[1]), Point::new(nlo.x + inset[0], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nlo.y + inset[1])];
         }
     }
+}
+
+/// When every track and via of `board` belongs to a net that a pour carries, they are what `groundpour` made: the
+/// options to make them again, one per net, with the width and via size they had. `None` when anything else is wired.
+fn pour_wiring(board: &Board) -> Option<Vec<(String, groundpour::PourOptions)>> {
+    let conn = crate::drc::connectivity(board);
+    let poured: Vec<&str> = board.zones.iter().map(|z| z.net.as_str()).filter(|n| !n.is_empty()).collect();
+    let mut out: Vec<(String, groundpour::PourOptions)> = vec![];
+    let mut note = |net: &str, width: Option<f64>, via: Option<(f64, f64)>| {
+        let i = out.iter().position(|(n, _)| n == net).unwrap_or_else(|| {
+            out.push((net.to_string(), groundpour::PourOptions { net: Some(net.to_string()), ..Default::default() }));
+            out.len() - 1
+        });
+        if let Some(w) = width {
+            out[i].1.track_width = w;
+        }
+        if let Some((d, h)) = via {
+            out[i].1.via_diameter = d;
+            out[i].1.via_drill = h;
+        }
+    };
+    for (i, t) in board.tracks.iter().enumerate() {
+        let net = conn.track_net(i).filter(|n| poured.contains(n))?;
+        note(net, Some(t.width), None);
+    }
+    for (i, v) in board.vias.iter().enumerate() {
+        let net = conn.via_net(i).filter(|n| poured.contains(n))?;
+        note(net, None, Some((v.diameter, v.drill)));
+    }
+    Some(out)
 }
 
 /// A repeatable stream of numbers (xorshift): the same board always gives the same placement.
@@ -304,9 +336,27 @@ fn improve_order(items: &[(String, Point, f64, f64)], nets: &[NetPins], mut orde
 }
 
 fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
+    // a refusal must leave the board as it was (the pour wiring is taken out on the way)
+    let backup = (!board.tracks.is_empty() || !board.vias.is_empty()).then(|| board.clone());
+    let r = place_inner(board, turn, improve, tuning);
+    if let (Err(_), Some(b)) = (&r, backup) {
+        *board = b;
+    }
+    r
+}
+
+fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
     let (gap, label) = (tuning.gap, tuning.label);
+    // The only wiring that may be there is what the GND pour put in (short tracks and vias that join pads to a poured
+    // net): it is taken out now and made again once the parts have their new places.
+    let mut repour: Vec<(String, groundpour::PourOptions)> = vec![];
     if !board.tracks.is_empty() || !board.vias.is_empty() {
-        return Err("配線済みの基板では自動配置できません。先に配線を削除してください (配線は部品の位置に合わせて引かれているため)".into());
+        let Some(found) = pour_wiring(board) else {
+            return Err("配線済みの基板では自動配置できません。先に配線を削除してください (配線は部品の位置に合わせて引かれているため)".into());
+        };
+        repour = found;
+        board.tracks.clear();
+        board.vias.clear();
     }
     if board.parts.is_empty() {
         return Err("部品がありません。先に「回路図から取り込み」をしてください".into());
@@ -407,7 +457,8 @@ fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Resul
     let mut poured = poured;
     poured.sort();
     poured.dedup();
-    Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil(), poured })
+    let repoured = repour.iter().map(|(_, o)| groundpour::ground_pour(board, o).map_or(0, |r| r.vias)).sum();
+    Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil(), poured, repoured })
 }
 
 fn airwire_length(board: &Board) -> f64 {
@@ -713,5 +764,32 @@ mod tests {
             ys.len()
         };
         assert!(rows(true) <= rows(false), "{} {}", rows(true), rows(false));
+    }
+
+    #[test]
+    fn a_board_with_only_the_pour_wiring_can_be_placed_again() {
+        let mut b = divider();
+        autoplace(&mut b).unwrap();
+        let r = groundpour::ground_pour(&mut b, &groundpour::PourOptions::default()).unwrap();
+        assert!(r.zone_added && r.vias > 0, "{r:?}");
+        let vias = b.vias.len();
+        // not placed with the plain tuning: the pour is there now, so the poured net drops out
+        let rep = autoplace(&mut b).unwrap();
+        assert_eq!(rep.poured, vec!["GND".to_string()]);
+        assert_eq!(rep.repoured, vias, "every pad is joined to the pour again");
+        assert!(!b.vias.is_empty());
+        assert!(ratsnest::ratsnest(&b).iter().all(|w| w.net != "GND"), "ground is joined");
+        let v = drc::check(&b);
+        assert!(v.is_empty(), "{v:?}");
+    }
+
+    #[test]
+    fn other_wiring_still_stops_the_placement_and_changes_nothing() {
+        let mut b = divider();
+        autoplace(&mut b).unwrap();
+        autoroute::autoroute(&mut b, &autoroute::RouteOptions::default(), None);
+        let before = (b.tracks.len(), b.vias.len(), b.parts.iter().map(|p| p.pos).collect::<Vec<_>>());
+        assert!(autoplace(&mut b).is_err());
+        assert_eq!(before, (b.tracks.len(), b.vias.len(), b.parts.iter().map(|p| p.pos).collect::<Vec<_>>()));
     }
 }

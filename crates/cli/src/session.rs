@@ -44,8 +44,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
  Board
   board new [W H]                       empty board (mm), default 60 40
   board import                          parts and nets from the schematic (creates the board if needed)
+  board pour [net=GND]                  the GND pour of the editor (bottom copper + a via per surface pad); do it BEFORE autoplace: the poured net then drops out of the placement and the parts sit closer
   board autoplace
-  board route [net=NAME]
+  board route [net=NAME] [lead=MM]
   board drc
   board status
   board currents [tran] [from=F] [widen]  take the net currents (DC point, or with tran the RMS of the settled part of the last tran), show the track width each needs, optionally thicken thin tracks
