@@ -54,6 +54,19 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         }
     if let Some(p) = args.iter().find(|a| a.ends_with(".ccproj")) {
         app.load_project(p.into());
+        // a project has both halves: the board's copper can go into the schematic's transient run (`--post-layout --tran stop step`)
+        if args.iter().any(|a| a == "--post-layout") {
+            app.apply_post_layout(true);
+        }
+        if let Some(i) = args.iter().position(|a| a == "--tran")
+            && let (Some(stop), Some(step)) = (args.get(i + 1), args.get(i + 2)) {
+                app.sch.set_tran_settings(stop, step);
+                app.sch.analyze_tran();
+                if let Some(j) = args.iter().position(|a| a == "--signals")
+                    && let Some(n) = args.get(j + 1) {
+                        app.sch.set_tran_signals(n);
+                    }
+            }
         if ["--drc", "--finish", "--smooth", "--3d", "--order", "--export", "--ir", "--select-track"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);

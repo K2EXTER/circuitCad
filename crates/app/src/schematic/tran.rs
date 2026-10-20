@@ -2,6 +2,12 @@
 
 use super::*;
 
+/// Signals the viewer lists: the nets and currents, and the pins' wire nodes `V(REF.PIN.wire)` of a post-layout run (the copper's
+/// inductance and capacitance act between the net and that node). Other names with a dot are the insides of parts.
+fn shown_signal(name: &str) -> bool {
+    !name.contains('.') || name.ends_with(".wire)")
+}
+
 impl SchEditor {
     /// Switch the waveform viewer to the amplitude spectrum (command line `--spectrum`).
     pub fn show_spectrum(&mut self) {
@@ -28,6 +34,7 @@ impl SchEditor {
         }
     }
 
+    #[cfg(test)]
     /// Largest value of a signal (`V(R2.1.wire)`) in the last transient run.
     pub fn tran_signal_max(&self, name: &str) -> Option<f64> {
         let r = self.tran.as_ref()?.outcome.as_ref().ok()?;
@@ -137,7 +144,7 @@ impl SchEditor {
                 }
                 if !*spectrum {
                     // scale controls for the groups that are on screen (voltage, current)
-                    let units: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.') && selected.contains(&s.name)).map(|s| s.unit).collect();
+                    let units: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name) && selected.contains(&s.name)).map(|s| s.unit).collect();
                     let mut groups: Vec<(usize, &str)> = vec![];
                     if units.contains(&"V") {
                         groups.push((0, "V"));
@@ -148,7 +155,7 @@ impl SchEditor {
                     plot::scale_bar(ui, st, "s", &groups);
                 }
                 ui.horizontal_top(|ui| {
-                    let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
+                    let order: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name)).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
                         ui.set_width(250.0);
                         ui.horizontal(|ui| {
