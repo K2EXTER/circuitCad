@@ -60,6 +60,29 @@ fn library_part_reaches_the_board() {
     assert_eq!(ratsnest(board).len(), 1);
 }
 
+/// The 3-phase source of the rectifier sample reaches the board as a 4-pad terminal row, one net per pin.
+#[test]
+fn three_phase_source_reaches_the_board() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("three_phase_rectifier.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    let board = &app.board_ed.board;
+    assert!(board.footprints.iter().any(|f| f.name == "TerminalBlock_4P_5.08"));
+    let mut pads: Vec<_> = board.pads.iter().filter(|p| p.refdes == "V1").collect();
+    pads.sort_by(|a, b| a.pin.cmp(&b.pin));
+    assert_eq!(pads.iter().map(|p| p.pin.as_str()).collect::<Vec<_>>(), ["1", "2", "3", "4"]);
+    assert_eq!(pads.iter().map(|p| p.net.as_str()).collect::<Vec<_>>(), ["A", "B", "C", "N"]);
+    // one row, 5.08 mm apart, with holes (through-hole terminals)
+    for w in pads.windows(2) {
+        let (dx, dy) = ((w[1].pos.x - w[0].pos.x).abs(), (w[1].pos.y - w[0].pos.y).abs());
+        assert!((dx - 5.08).abs() < 1e-6 && dy < 1e-6 || (dy - 5.08).abs() < 1e-6 && dx < 1e-6, "{dx} {dy}");
+    }
+    assert!(pads.iter().all(|p| p.drill.is_some_and(|d| d > 0.0)));
+    // the diodes' pads carry the same nets, so the ratsnest has something to connect
+    assert!(!ratsnest(board).is_empty());
+}
+
 #[test]
 fn dc_analysis_from_the_editor() {
     let mut app = App::default();

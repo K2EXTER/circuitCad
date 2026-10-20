@@ -12,8 +12,8 @@ type P = (f32, f32);
 /// Which body a part gets: the `glyph` of the part when it names one, else a guess from the part
 /// name and pin names (so parts installed before the glyphs existed look right too).
 pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 15] = [
-        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs",
+    const KNOWN: [&str; 16] = [
+        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p",
     ];
     if let Some(g) = KNOWN.iter().find(|g| **g == sym.glyph) {
         return Some(g);
@@ -273,6 +273,32 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
                 L(0.9 * s, -0.8, 1.5 * s, -0.8),
                 L(1.2 * s, -1.1, 1.2 * s, -0.5),
             ])
+        }
+        "ac3p" => {
+            // three AC sources (circles with a sine wave, 120 degrees apart) joined at the neutral N: one per phase pin
+            let (a, b, c, n) = (pt(find(l, &["A"])?), pt(find(l, &["B"])?), pt(find(l, &["C"])?), pt(find(l, &["N"])?));
+            let (cx, r, bus) = (1.0f32, 0.9f32, -1.5f32);
+            let mut v = vec![];
+            for (tip, phase) in [(a, 0.0f32), (b, -120.0), (c, -240.0)] {
+                let y = tip.1;
+                v.push(C(cx, y, r));
+                v.push(L(tip.0, y, cx + r, y));
+                v.push(L(cx - r, y, bus, y));
+                let m = 12;
+                let at = |j: usize| {
+                    let t = j as f32 / m as f32;
+                    (cx - 0.6 + 1.2 * t, y - 0.35 * (std::f32::consts::TAU * t + phase.to_radians()).sin())
+                };
+                for j in 0..m {
+                    let (p, q) = (at(j), at(j + 1));
+                    v.push(L(p.0, p.1, q.0, q.1));
+                }
+            }
+            // neutral: a bus joining the three sources, and the N lead down from its lower end
+            v.push(L(bus, a.1, bus, c.1 + 1.0));
+            v.push(L(n.0, n.1, n.0, c.1 + 1.0));
+            v.push(L(n.0, c.1 + 1.0, bus, c.1 + 1.0));
+            Some(v)
         }
         "ldr" => {
             let (a, b) = (pt(find(l, &["A"])?), pt(find(l, &["B"])?));
