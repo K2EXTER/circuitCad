@@ -265,10 +265,13 @@ fn area(poly: &[Point]) -> f64 {
     s.abs() / 2.0
 }
 
-/// Is this reference designator a connector / battery / switch, i.e. where power usually comes in?
+/// Is this reference designator a connector / battery / switch / voltage source, i.e. where power usually comes in?
 fn looks_like_supply(refdes: &str) -> bool {
     let up = refdes.to_ascii_uppercase();
-    ["J", "P", "CN", "X", "BT", "SW"].iter().any(|p| up.starts_with(p)) && up.chars().last().is_some_and(|c| c.is_ascii_digit())
+    // a voltage source ("V1"), too: without a connector the first pad of the net used to be taken, and that follows
+    // the order of the pad list, which moving a part changes
+    let source = up.strip_prefix('V').is_some_and(|rest| rest.chars().next().is_some_and(|c| c.is_ascii_digit()));
+    (source || ["J", "P", "CN", "X", "BT", "SW"].iter().any(|p| up.starts_with(p))) && up.chars().last().is_some_and(|c| c.is_ascii_digit())
 }
 
 /// Voltage drop of one net. `source` = (refdes, pin) forces the supply pad.

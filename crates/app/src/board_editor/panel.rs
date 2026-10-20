@@ -100,7 +100,7 @@ impl BoardEditor {
                     ui.colored_label(Color32::from_rgb(255, 180, 60), n);
                 }
                 ui.label(format!("未配線: {} 本 (黄色の線)", self.cached_airwires().len()));
-                if ui.button("部品を並べて外形を決める").on_hover_text("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。配線済みの基板では使えません (部品を動かすと配線が合わなくなるため)").clicked() {
+                if ui.button("部品を並べて外形を決める").on_hover_text("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。配線済みの基板では使えません (部品を動かすと配線が合わなくなるため)").clicked() {
                     self.autoplace();
                 }
                 ui.separator();
@@ -284,6 +284,7 @@ impl BoardEditor {
             if ui.button("選択を解除 (Esc)").on_hover_text("選択をやめます (Esc キーでも同じです)").clicked() {
                 self.multi.clear();
             }
+            self.panel_align(ui);
             return;
         }
         let Some(sel) = self.selected else { return };

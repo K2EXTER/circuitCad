@@ -45,7 +45,7 @@ impl Session {
             "autoplace" => {
                 let board = self.board_mut()?;
                 let r = pcb_core::autoplace::autoplace(board)?;
-                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height})))
+                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured})))
             }
             "route" => {
                 let (_, kv) = options(rest);

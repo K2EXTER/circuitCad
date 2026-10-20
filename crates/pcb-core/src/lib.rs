@@ -4,6 +4,7 @@
 // `!(x > 0.0)` is deliberate: it is also true for NaN, which `x <= 0.0` is not.
 #![allow(clippy::neg_cmp_op_on_partial_ord)]
 
+pub mod align;
 pub mod assembly;
 pub mod autoplace;
 pub mod autoroute;

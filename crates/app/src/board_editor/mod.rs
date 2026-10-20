@@ -398,6 +398,7 @@ mod padlead;
 mod livepath;
 mod lengths;
 mod pairs;
+mod align;
 mod tools;
 mod file;
 mod actions;
