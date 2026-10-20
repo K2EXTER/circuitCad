@@ -149,6 +149,22 @@ pub(super) fn zp_shown(e: &SchEditor) -> bool {
     ac_fresh(e) && e.ac.as_ref().is_some_and(|a| a.selected.contains("V(ZP)"))
 }
 
+/// The pull-up lesson, step 2: the button (R2) is pressed (a few ohms) and the result is fresh.
+pub(super) fn button_pressed(e: &SchEditor) -> bool {
+    dc_fresh(e) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|r| r <= 100.0)
+}
+
+/// The pull-up lesson, step 3: the button is open again, the pull-up is a normal one (100k or less), a fresh transient.
+pub(super) fn pullup_with_noise(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    tran_fresh(e) && v("R2").is_some_and(|r| r >= 1e6) && v("R1").is_some_and(|r| r <= 100e3)
+}
+
+/// The pull-up lesson, step 4: the pull-up is taken away (10 Meg or more) and the transient is fresh.
+pub(super) fn pullup_removed(e: &SchEditor) -> bool {
+    tran_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r >= 10e6)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

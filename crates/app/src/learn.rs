@@ -213,7 +213,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "どのマイコン回路でも使う基本の技です。順番は自由です",
             items: &[
                 plan("a_datasheet", "データシートの読み方", "絶対最大定格と推奨動作条件の違い、ピン表、代表的なグラフ。部品を選ぶときの出発点", &[], Some("手元の部品のデータシートで、電源電圧の範囲・1ピンの電流の上限を探します")),
-                plan("a_pullup", "プルアップとプルダウン (ピンを浮かせない)", "入力ピンが何にもつながっていないと、電圧が定まらない。10kΩ で電源か GND に引く理由と値の決め方", &["divider"], Some("入力ピンをプルアップあり・なしで、テスタで測り比べます")),
+                Item { requires: Some(&["divider"]), ..lesson("pullup", "プルアップ (ピンを浮かせない)", "入力ピンが何にもつながっていないと、電圧が定まらず、ノイズで揺れる。10kΩ で電源に引く理由と、値の決め方", Some("入力ピンをプルアップあり・なしで、テスタで測り比べます")) },
                 Item { requires: Some(&["divider"]), ..lesson("decoupling", "電源のバイパスコンデンサ", "IC の電源ピンのそばに 0.1µF を置く理由。インピーダンスのグラフで、電解とセラミックの分担と、自己共振を見る", Some("IC の電源ピンの電圧を、オシロで見て、コンデンサの有無で比べます")) },
             ],
         },
@@ -222,7 +222,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "電源が入っても、クロックとリセットが整っていないとマイコンは動きません",
             items: &[
                 Item { requires: Some(&["a_datasheet"]), ..lesson("crystal", "水晶とクロック", "16MHz 水晶の共振の細い山と、すぐ上の深い谷を、AC解析で見る。細い山は刻みが粗いと見落とす", Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")) },
-                Item { requires: Some(&["a_pullup"]), ..lesson("reset", "リセット回路", "DTR・100n のコンデンサ・10k のプルアップで、自動リセットのパルスを作る。値を変えるとかからなくなる。跳ね上がりをダイオードで抑える", Some("シリアルモニタを開く瞬間のリセットを、LED (D13) の点滅や、オシロの波形で確かめます")) },
+                Item { requires: Some(&["pullup"]), ..lesson("reset", "リセット回路", "DTR・100n のコンデンサ・10k のプルアップで、自動リセットのパルスを作る。値を変えるとかからなくなる。跳ね上がりをダイオードで抑える", Some("シリアルモニタを開く瞬間のリセットを、LED (D13) の点滅や、オシロの波形で確かめます")) },
             ],
         },
         Stage {
@@ -230,7 +230,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます",
             items: &[
                 plan("a_pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", &["led", "a_datasheet"], Some("D13 の LED の電流を測って、データシートの上限と比べます")),
-                plan("a_levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換", &["a_pullup"], None),
+                plan("a_levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換", &["pullup"], None),
                 plan("a_serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレート、FTDI ヘッダと USB-シリアル IC の違い", &["a_levels", "reset"], None),
             ],
         },

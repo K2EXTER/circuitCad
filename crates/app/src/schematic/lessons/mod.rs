@@ -73,6 +73,7 @@ const LESSONS: &[Lesson] = &[
     micro::CRYSTAL,
     micro::RESET,
     micro::DECOUPLING,
+    micro::PULLUP,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

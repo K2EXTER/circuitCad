@@ -599,3 +599,44 @@ fn the_decoupling_lesson_ticks_and_its_numbers_hold() {
     e.update_lesson();
     assert_eq!(progress(&e), 2);
 }
+
+#[test]
+fn the_pullup_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "pullup").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let vin = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("IN").unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((4.9..5.01).contains(&vin(&e)), "open: {}", vin(&e));
+    set_value(&mut e, "R2", "10");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(vin(&e) < 0.01, "pressed: {}", vin(&e));
+    // the wasted current: 5 V / 10 k
+    let i = e.dc.as_ref().unwrap().outcome.as_ref().unwrap().elements.iter().find(|x| x.name == "R1").unwrap().current.abs();
+    assert!((0.45e-3..0.55e-3).contains(&i), "{i}");
+    // with the pull-up the noise moves IN by well under 0.1 V; without it IN swings across half the supply
+    let swing = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal("V(IN)").unwrap().values;
+        let i0 = t.time.iter().position(|x| *x >= 50e-6).unwrap();
+        v[i0..].iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)))
+    };
+    set_value(&mut e, "R2", "100Meg");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let (lo, hi) = swing(&e);
+    assert!(lo > 4.8 && hi < 5.2 && hi - lo < 0.2, "{lo} {hi}");
+    set_value(&mut e, "R1", "100Meg");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    let (lo, hi) = swing(&e);
+    assert!(lo < 1.5 && hi > 3.5, "floating: {lo} {hi}");
+}

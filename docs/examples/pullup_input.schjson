@@ -1,0 +1,285 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "SIN(0 5 100k)",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "100Meg",
+      "pos": [
+        34,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "5p",
+      "pos": [
+        44,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "2p",
+      "pos": [
+        54,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -2
+      ],
+      "b": [
+        12,
+        -5
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        -2
+      ],
+      "b": [
+        24,
+        -5
+      ]
+    },
+    {
+      "a": [
+        24,
+        2
+      ],
+      "b": [
+        24,
+        5
+      ]
+    },
+    {
+      "a": [
+        34,
+        -2
+      ],
+      "b": [
+        34,
+        -5
+      ]
+    },
+    {
+      "a": [
+        34,
+        2
+      ],
+      "b": [
+        34,
+        5
+      ]
+    },
+    {
+      "a": [
+        44,
+        -2
+      ],
+      "b": [
+        44,
+        -5
+      ]
+    },
+    {
+      "a": [
+        44,
+        2
+      ],
+      "b": [
+        44,
+        5
+      ]
+    },
+    {
+      "a": [
+        54,
+        -2
+      ],
+      "b": [
+        54,
+        -5
+      ]
+    },
+    {
+      "a": [
+        54,
+        2
+      ],
+      "b": [
+        54,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        -5
+      ],
+      "text": "NOISE"
+    },
+    {
+      "pos": [
+        12,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        24,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        24,
+        5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        34,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        34,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        44,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        44,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        54,
+        -5
+      ],
+      "text": "NOISE"
+    },
+    {
+      "pos": [
+        54,
+        5
+      ],
+      "text": "IN"
+    }
+  ],
+  "layout_version": 1
+}
