@@ -676,11 +676,17 @@ mod tests {
     #[test]
     fn a_tree_path_recommends_several_independent_items_and_waits_for_all_prerequisites() {
         let mut progress = Progress::default();
-        // planned items are never recommended, and a planned prerequisite holds nothing back: the written lessons whose
-        // prerequisites are all planned (or done) can be started at once
-        let ready: Vec<&str> = recommended(&ARDUINO_PATH, &progress).iter().map(|i| i.id).collect();
-        assert!(ready.contains(&"crystal") && ready.contains(&"reset"), "{ready:?}");
+        // planned items are never recommended, and a planned prerequisite holds nothing back: the crystal lesson (it needs
+        // only the planned datasheet item) can be started at once, the reset lesson only after the pull-up
+        let ready = |p: &Progress| recommended(&ARDUINO_PATH, p).iter().map(|i| i.id).collect::<Vec<_>>();
+        assert!(ready(&progress).contains(&"crystal") && !ready(&progress).contains(&"reset"), "{:?}", ready(&progress));
         assert!(recommended(&ARDUINO_PATH, &progress).iter().all(|i| i.kind != Kind::Planned));
+        // the divider (a lesson of the power path) opens the two that need only it; the pull-up opens the reset
+        progress.mark("divider");
+        assert!(ready(&progress).contains(&"pullup") && ready(&progress).contains(&"decoupling"));
+        progress.mark("pullup");
+        assert!(ready(&progress).contains(&"reset"));
+        let mut progress = Progress::default();
         assert!(is_tree(&ARDUINO_PATH) && !is_tree(&POWER_PATH));
         // a straight line (no `requires`) needs just the item before it
         let line = &POWER_PATH;
