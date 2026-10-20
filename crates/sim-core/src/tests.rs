@@ -317,8 +317,8 @@ fn wiring_resistance_sits_in_series_with_the_pin() {
     wire(&mut s, (12, 6), (0, 6));
     wire(&mut s, (0, 2), (0, 6));
     let w = [
-        WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 2200.0, henry: 0.0 },
-        WiringR { refdes: "R9".into(), pin: "1".into(), ohm: 1.0, henry: 0.0 }, // not in the schematic: ignored
+        WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 2200.0, henry: 0.0, farad: 0.0 },
+        WiringR { refdes: "R9".into(), pin: "1".into(), ohm: 1.0, henry: 0.0, farad: 0.0 }, // not in the schematic: ignored
     ];
     let res = dc_op(&from_schematic_with_wiring(&s, &w).unwrap()).unwrap();
     close(res.element("R2").unwrap().voltage, 12.0 * 2200.0 / (4700.0 + 2200.0 + 2200.0), 1e-9);
@@ -343,7 +343,7 @@ fn wiring_inductance_matters_for_ac_and_not_for_dc() {
     wire(&mut s, r2[1].1, (12, 6));
     wire(&mut s, (12, 6), (0, 6));
     wire(&mut s, (0, 2), (0, 6));
-    let w = |henry: f64| [WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 0.1, henry }];
+    let w = |henry: f64| [WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 0.1, henry, farad: 0.0 }];
     let (flat, coil) = (from_schematic_with_wiring(&s, &w(0.0)).unwrap(), from_schematic_with_wiring(&s, &w(0.1)).unwrap());
     assert!(coil.elements.iter().any(|e| e.name() == "R2.1.LW") && !flat.elements.iter().any(|e| e.name() == "R2.1.LW"));
     let (d0, d1) = (dc_op(&flat).unwrap(), dc_op(&coil).unwrap());
@@ -355,6 +355,35 @@ fn wiring_inductance_matters_for_ac_and_not_for_dc() {
     // R2 is 10 kohm; 0.1 H is 63 kohm at 100 kHz, so the current through R2 falls to about a third
     let (m0, m1) = (at(&flat), at(&coil));
     assert!(m1 < 0.5 * m0, "0.1 H in front of R2 cuts 100 kHz: {m0} -> {m1}");
+}
+
+#[test]
+fn wiring_capacitance_to_the_plane_shunts_the_pin_at_high_frequency() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "0 AC 1".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (12, 0), 1);
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), r2[0].1);
+    wire(&mut s, r2[1].1, (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    let w = |farad: f64| [WiringR { refdes: "R2".into(), pin: "1".into(), ohm: 0.1, henry: 0.0, farad }];
+    let (bare, shunted) = (from_schematic_with_wiring(&s, &w(0.0)).unwrap(), from_schematic_with_wiring(&s, &w(1e-6)).unwrap());
+    assert!(shunted.elements.iter().any(|e| e.name() == "R2.1.CW") && !bare.elements.iter().any(|e| e.name() == "R2.1.CW"));
+    // DC is untouched: a capacitor passes nothing
+    close(dc_op(&bare).unwrap().element("R2").unwrap().voltage, dc_op(&shunted).unwrap().element("R2").unwrap().voltage, 1e-9);
+    let at = |c: &Circuit| {
+        let r = ac_analysis(c, &AcSettings { fstart: 100e3, fstop: 100e3, sweep: AcSweep::Linear(2) }).unwrap();
+        r.signal("I(R2)").unwrap().mag()[0]
+    };
+    // 1 uF is 1.6 ohm at 100 kHz, against R2's 10 kohm in series with the pin: most of the current goes to the plane
+    assert!(at(&shunted) < 0.1 * at(&bare), "{} -> {}", at(&bare), at(&shunted));
 }
 
 #[test]
@@ -375,8 +404,8 @@ fn coupled_supply_and_return_wiring_lowers_the_loop_inductance() {
     wire(&mut s, (0, 2), (0, 6));
     // the supply stretch in front of R1 and the return stretch behind R2 are in one loop, 1 H each
     let w = [
-        WiringR { refdes: "R1".into(), pin: "1".into(), ohm: 0.0, henry: 1.0 },
-        WiringR { refdes: "R2".into(), pin: "2".into(), ohm: 0.0, henry: 1.0 },
+        WiringR { refdes: "R1".into(), pin: "1".into(), ohm: 0.0, henry: 1.0, farad: 0.0 },
+        WiringR { refdes: "R2".into(), pin: "2".into(), ohm: 0.0, henry: 1.0, farad: 0.0 },
     ];
     let k = |k: f64| [WiringK { a: ("R1".into(), "1".into()), b: ("R2".into(), "2".into()), k }];
     let at = |ks: &[WiringK]| {

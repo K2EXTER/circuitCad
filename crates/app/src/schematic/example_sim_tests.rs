@@ -823,7 +823,7 @@ fn pin_voltage_is_taken_behind_the_wiring_resistance() {
     e.sch = sch;
     e.run_dc();
     let before = e.pin_voltage("R1", "2").unwrap();
-    e.wiring = vec![sim_core::WiringR { refdes: "R1".into(), pin: "2".into(), ohm: 1000.0, henry: 0.0 }];
+    e.wiring = vec![sim_core::WiringR { refdes: "R1".into(), pin: "2".into(), ohm: 1000.0, henry: 0.0, farad: 0.0 }];
     e.run_dc();
     let after = e.pin_voltage("R1", "2").unwrap();
     assert!((before - after).abs() > 1e-3, "{before} {after}");
@@ -843,7 +843,7 @@ fn wire_colours_follow_the_pin_voltage_behind_the_wiring_resistance() {
     };
     let wire = e.sch.wires.iter().position(|w| w.a == pt || w.b == pt).expect("a wire ends at R1.2");
     let net_v = e.dc.as_ref().unwrap().wire_v[wire].unwrap();
-    e.wiring = vec![sim_core::WiringR { refdes: "R1".into(), pin: "2".into(), ohm: 1000.0, henry: 0.0 }];
+    e.wiring = vec![sim_core::WiringR { refdes: "R1".into(), pin: "2".into(), ohm: 1000.0, henry: 0.0, farad: 0.0 }];
     e.run_dc();
     let dc = e.dc.as_ref().unwrap();
     let pin_v = dc.pin_v.iter().find(|(p, _)| *p == pt).unwrap().1;

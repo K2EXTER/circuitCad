@@ -39,6 +39,9 @@ pub struct WiringR {
     pub ohm: f64,
     /// Inductance of the same copper (H); 0 = none. Matters for AC and fast transients, not for DC.
     pub henry: f64,
+    /// Capacitance (F) of the same copper to the ground plane under it; 0 = none. Joins the pin's wire node to ground,
+    /// which with the inductor makes the ringing of a long trace.
+    pub farad: f64,
 }
 
 /// Magnetic coupling between the wiring inductors of two pins (`pcb_core::irdrop::wiring_couplings`): the coupling
@@ -118,6 +121,9 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
             }
             if w.henry > 0.0 {
                 c.add(Element::Inductor { name: format!("{}.{}.LW", w.refdes, w.pin), a: from, b: m, l: w.henry });
+            }
+            if w.farad > 0.0 {
+                c.add(Element::Capacitor { name: format!("{}.{}.CW", w.refdes, w.pin), a: m, b: 0, c: w.farad });
             }
             pin_node.insert(key, m);
         }

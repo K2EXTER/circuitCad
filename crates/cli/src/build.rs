@@ -405,6 +405,6 @@ pub(crate) fn post_layout_parts(b: &pcb_core::Board) -> (Vec<sim_core::WiringR>,
     let spec = pcb_core::irdrop::IrSpec::default();
     let series = pcb_core::irdrop::wiring_resistances(b, &spec);
     let couplings = pcb_core::irdrop::wiring_couplings(&series, &spec).into_iter().map(|c| sim_core::WiringK { a: c.a, b: c.b, k: c.k }).collect();
-    let wiring = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry }).collect();
+    let wiring = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry, farad: w.farad }).collect();
     (wiring, couplings)
 }

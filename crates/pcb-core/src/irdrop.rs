@@ -73,6 +73,29 @@ pub fn via_inductance(drill: f64, height: f64) -> f64 {
     (0.2e-9 * h * ((2.0 * h / r).ln() - 0.75)).max(0.0)
 }
 
+/// Relative permittivity of the board (FR-4).
+const EPS_R: f64 = 4.5;
+/// Vacuum permittivity (F/mm).
+const EPS0_PER_MM: f64 = 8.854e-15;
+
+/// Capacitance (F) of a trace of `len` and `width` (mm), `height` mm over a plane: Sakurai-Tamaru,
+/// `C / (eps len) = 1.15 w/h + 2.80 (t/h)^0.222` (the first term is the parallel plate with a little fringe, the second the
+/// edges). Within about 6 % of a field solver for w/h from 0.3 to 30; outside that it is a rough figure, which is what a
+/// first look at ringing needs. Neighbouring traces are not counted, only the plane.
+pub fn track_capacitance(len: f64, width: f64, height: f64, spec: &IrSpec) -> f64 {
+    if len <= 1e-6 || height <= 1e-6 {
+        return 0.0;
+    }
+    let t = spec.thickness_um / 1000.0;
+    EPS_R * EPS0_PER_MM * len * (1.15 * width.max(0.01) / height + 2.80 * (t / height).powf(0.222))
+}
+
+/// Capacitance (F) of the copper of a path to the pours under or over it (`PathSeg::plane`); the pour is taken as the circuit's
+/// ground. Stretches of vias and of tracks with no pour near them count nothing.
+fn path_capacitance(path: &[PathSeg], spec: &IrSpec) -> f64 {
+    path.iter().filter_map(|s| s.plane.map(|pz| track_capacitance(s.a.dist(s.b), s.width, (pz - s.z).abs(), spec))).sum()
+}
+
 /// Inductance charged for a current that goes through a copper pour (H): the plane is wide, so only a little.
 const POUR_HENRY: f64 = 0.3e-9;
 
@@ -712,6 +735,8 @@ pub struct PadSeries {
     pub ohm: f64,
     /// Inductance of the same copper (H); see `track_inductance`.
     pub henry: f64,
+    /// Capacitance (F) of the same copper to the pours under it; see `track_capacitance`.
+    pub farad: f64,
     /// The tracks of the way from the supply pad to this pad, in order (see `wiring_couplings`).
     pub path: Vec<PathSeg>,
 }
@@ -730,7 +755,8 @@ pub fn wiring_resistances(board: &Board, spec: &IrSpec) -> Vec<PadSeries> {
         let d = net_drop(board, &conn, net, 0.0, spec, None);
         for p in d.pads {
             if let Some(ohm) = p.ohm.filter(|o| *o > 1e-6) {
-                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm, henry: p.henry.unwrap_or(0.0), path: p.path });
+                let farad = path_capacitance(&p.path, spec);
+                out.push(PadSeries { net: net.to_string(), refdes: p.refdes, pin: p.pin, ohm, henry: p.henry.unwrap_or(0.0), farad, path: p.path });
             }
         }
     }
@@ -932,6 +958,19 @@ mod tests {
         let tracks_only = 2.0 * track_resistance(10.0, 0.5, &IrSpec::default());
         assert!(r > tracks_only && r < tracks_only + 0.01, "{r} vs {tracks_only}");
         assert!(d.pads.iter().find(|p| p.refdes == "U2").unwrap().ohm.is_none(), "not wired");
+    }
+
+    /// Sakurai-Tamaru by hand: 100 mm of 0.25 mm trace, 1.6 mm over FR-4 (4.5): (1.15 * 0.15625 + 2.8 * (0.035 / 1.6)^0.222) = 1.378
+    /// times 4.5 * 8.854 pF/m * 0.1 m = 5.49 pF. A trace with no pour near it has no capacitance, and a wider one has more.
+    #[test]
+    fn a_trace_over_a_pour_has_capacitance_to_it() {
+        let mut b = board(vec![pad(0.0, 0.0, "J1", "1", "SIG", None), pad(100.0, 0.0, "U1", "1", "SIG", None)], vec![track(Side::Top, (0.0, 0.0), (100.0, 0.0), 0.25)]);
+        assert_eq!(wiring_resistances(&b, &IrSpec::default())[0].farad, 0.0);
+        b.zones.push(Zone::new("GND", Side::Bottom, vec![Point::new(-5.0, -20.0), Point::new(105.0, -20.0), Point::new(105.0, 20.0), Point::new(-5.0, 20.0)]));
+        let c = wiring_resistances(&b, &IrSpec::default())[0].farad;
+        assert!((c * 1e12 - 5.49).abs() < 0.3, "{} pF", c * 1e12);
+        assert!(track_capacitance(100.0, 1.0, 1.6, &IrSpec::default()) > track_capacitance(100.0, 0.25, 1.6, &IrSpec::default()));
+        assert!(track_capacitance(100.0, 0.25, 0.2, &IrSpec::default()) > 2.0 * track_capacitance(100.0, 0.25, 1.6, &IrSpec::default()), "closer plane, more capacitance");
     }
 
     #[test]
