@@ -90,7 +90,7 @@ impl BoardEditor {
             }
             let alpha = if s == self.side { 255 } else { 60 };
             let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
-            for t in finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice()).iter().filter(|t| t.side == s) {
+            for t in finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice()).iter().filter(|t| t.side == s && self.vis.tracks) {
                 painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0), col));
                 // round ends, like the Gerber aperture
                 for e in [t.a, t.b] {
@@ -153,7 +153,7 @@ impl BoardEditor {
             painter.rect_filled(Rect::from_center_size(c + Vec2::new(0.0, 2.0), Vec2::new(9.0, 7.0)), 1.5, col);
             painter.circle_stroke(c + Vec2::new(0.0, -2.0), 3.0, Stroke::new(1.5, col));
         }
-        for v in &self.board.vias {
+        for v in self.board.vias.iter().filter(|_| self.vis.vias) {
             let c = self.to_screen(rect, v.pos);
             painter.circle_filled(c, v.diameter as f32 * z / 2.0, Color32::from_rgb(60, 170, 90));
             painter.circle_filled(c, v.drill as f32 * z / 2.0, BG);

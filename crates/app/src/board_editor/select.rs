@@ -9,7 +9,7 @@ impl BoardEditor {
         // what is on the other layer is out of reach while "作業中の面だけ" is on
         let side_ok = |s: Side| !pick.active_side_only || s == self.side;
         for (i, v) in self.board.vias.iter().enumerate() {
-            if pick.vias && p.dist(v.pos) <= v.diameter / 2.0 + tol {
+            if pick.vias && self.vis.vias && p.dist(v.pos) <= v.diameter / 2.0 + tol {
                 return Some(Item::Via(i));
             }
         }
@@ -37,17 +37,17 @@ impl BoardEditor {
             }
         }
         for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
-            if pick.tracks && side_ok(t.side) && seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
+            if pick.tracks && self.vis.tracks && side_ok(t.side) && seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
                 return Some(Item::Track(i));
             }
         }
         for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty()) {
-            if pick.other && side_ok(l.side) && seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
+            if pick.silk && self.vis.silk && side_ok(l.side) && seg_dist(p, l.a, l.b) <= l.width / 2.0 + tol {
                 return Some(Item::Silk(i));
             }
         }
         for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
-            if pick.other && side_ok(z.side) && (polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p)) {
+            if pick.zones && side_ok(z.side) && (polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p)) {
                 return Some(Item::Zone(i));
             }
         }
@@ -102,7 +102,7 @@ impl BoardEditor {
                 out.push(Item::Pad(i));
             }
         }
-        for (i, v) in self.board.vias.iter().enumerate() {
+        for (i, v) in self.board.vias.iter().enumerate().filter(|_| self.vis.vias) {
             if rect_hit(v.pos, v.diameter, v.diameter) {
                 out.push(Item::Via(i));
             }
@@ -112,12 +112,12 @@ impl BoardEditor {
                 out.push(Item::Hole(i));
             }
         }
-        for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
+        for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.vis.tracks && self.side_visible(t.side)) {
             if seg_hit(t.a, t.b, t.width) {
                 out.push(Item::Track(i));
             }
         }
-        for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty() && self.side_visible(l.side)) {
+        for (i, l) in self.board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty() && self.vis.silk && self.side_visible(l.side)) {
             if seg_hit(l.a, l.b, l.width) {
                 out.push(Item::Silk(i));
             }

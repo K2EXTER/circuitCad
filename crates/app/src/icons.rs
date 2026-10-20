@@ -34,7 +34,9 @@ pub enum Icon {
     Ruler,
     Layers,
     Eye,
-    Marquee,
+    EyeOff,
+    Lock,
+    Unlock,
 }
 
 /// Draw `icon` inside `r` (a square) with `c`.
@@ -138,12 +140,20 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             p.line(bot, s);
             p.circle_filled(q(0.5, 0.5), u * 0.14, c);
         }
-        Icon::Marquee => {
-            let b = Rect::from_min_max(q(0.1, 0.12), q(0.78, 0.8));
-            for (a, z) in [(b.left_top(), b.right_top()), (b.right_top(), b.right_bottom()), (b.right_bottom(), b.left_bottom()), (b.left_bottom(), b.left_top())] {
-                p.extend(egui::Shape::dashed_line(&[a, z], Stroke::new(1.3, c), 3.0, 2.5));
+        Icon::EyeOff => {
+            paint(p, r, Icon::Eye, c);
+            p.line_segment([q(0.12, 0.88), q(0.88, 0.12)], Stroke::new(2.0, c));
+        }
+        Icon::Lock | Icon::Unlock => {
+            p.rect(Rect::from_min_max(q(0.2, 0.45), q(0.8, 0.9)), 1.5, c.gamma_multiply(0.45), s, egui::StrokeKind::Inside);
+            // the shackle: closed, or swung open on one side
+            let arc: Vec<Pos2> = (0..=8).map(|i| { let a = std::f32::consts::PI * i as f32 / 8.0; q(0.5 - 0.2 * a.cos(), 0.45 - 0.22 * a.sin()) }).collect();
+            if icon == Icon::Lock {
+                p.line(arc, s);
+            } else {
+                p.line(arc[..=5].to_vec(), s);
+                p.line_segment([arc[5], q(0.3, 0.3)], s);
             }
-            p.add(egui::Shape::convex_polygon(vec![q(0.5, 0.45), q(0.5, 0.92), q(0.64, 0.8), q(0.76, 0.98), q(0.84, 0.93), q(0.72, 0.75), q(0.9, 0.7)], c.gamma_multiply(0.5), s));
         }
         Icon::Undo | Icon::Redo => {
             let f = if icon == Icon::Undo { 1.0 } else { -1.0 };
@@ -184,8 +194,8 @@ pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, e
     resp.on_hover_text(tip)
 }
 
-/// A square on/off icon (always icon only; the label opens the tooltip) for the glass panels over the canvas.
-pub fn icon_toggle(ui: &mut egui::Ui, icon: Icon, on: &mut bool, label: &str, tip: &str) -> egui::Response {
+/// An on/off icon whose picture changes with the state (eye / crossed eye, closed / open lock). `on` is lit.
+pub fn icon_switch(ui: &mut egui::Ui, on_icon: Icon, off_icon: Icon, on: &mut bool, tip: &str) -> egui::Response {
     let (rect, mut resp) = ui.allocate_exact_size(vec2(24.0, 24.0), egui::Sense::click());
     if resp.clicked() {
         *on = !*on;
@@ -198,10 +208,9 @@ pub fn icon_toggle(ui: &mut egui::Ui, icon: Icon, on: &mut bool, label: &str, ti
         } else if resp.hovered() {
             ui.painter().rect_filled(rect, 4.0, Color32::from_black_alpha(25));
         }
-        let col = if *on { dark } else { dark.gamma_multiply(0.45) };
-        paint(ui.painter(), rect.shrink(4.0), icon, col);
+        paint(ui.painter(), rect.shrink(4.0), if *on { on_icon } else { off_icon }, if *on { dark } else { dark.gamma_multiply(0.45) });
     }
-    resp.on_hover_text(format!("{label}\n{tip}"))
+    resp.on_hover_text(tip)
 }
 
 /// A fold header for the glass panels: a triangle and the title; a click anywhere on it folds or unfolds.

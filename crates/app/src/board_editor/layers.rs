@@ -43,40 +43,99 @@ impl BoardEditor {
 }
 
 impl BoardEditor {
-    /// What to show and what can be picked, as two rows of icon toggles on a glass strip over the canvas
-    /// (under the layer switcher, same Area). Folds down to a small "表示・選択" title.
+    /// What to show and what can be picked, as a table (one row per kind of thing: an eye and a lock) on a glass strip over the canvas
+    /// (under the layer switcher, same Area). Folds down to a small title.
     fn view_frame(&mut self, ui: &mut egui::Ui) -> f32 {
-        use crate::icons::{icon_label, icon_toggle, Icon};
+        use crate::icons::{icon_label, icon_switch, Icon};
         let id = egui::Id::new("view_overlay_fold");
         {
             egui::Frame::NONE.fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150)).stroke(Stroke::new(1.0, Color32::from_white_alpha(70))).corner_radius(6.0).inner_margin(egui::Margin::same(6)).show(ui, |ui| {
                 ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
-                if fold_header(ui, id, "表示・選択", true, "クリックでたたみます / ひらきます。目の段は見える物、囲みの段は選べる物です。明るい四角が「オン」です") {
+                if fold_header(ui, id, "物の表示とロック", true, "クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」、鍵は「選べないようにロックするか」です。明るい四角が「オン」(見えている / ロック中)です") {
                     let w = ui.scope(|ui| {
-                        ui.horizontal(|ui| {
-                            icon_label(ui, Icon::Eye, "見る: 画面に出す物を選びます (表面・裏面の銅は「層」で切り替えます)");
-                            icon_toggle(ui, Icon::Silk, &mut self.vis.silk, "シルク", "シルク (白い印刷の文字と枠) を表示します");
-                            icon_toggle(ui, Icon::Zone, &mut self.vis.zones, "ゾーン", "ゾーン (銅を面で塗った所) を表示します");
-                            icon_toggle(ui, Icon::Airwire, &mut self.vis.airwires, "未配線", "未配線 (まだつながっていない接続を示す黄色の線) を表示します");
-                            icon_toggle(ui, Icon::Label, &mut self.vis.nets, "ネット名", "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
-                            icon_toggle(ui, Icon::Ruler, &mut self.vis.ruler, "定規 (mm)", "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です");
-                        });
-                        ui.horizontal(|ui| {
-                            icon_label(ui, Icon::Marquee, "選ぶ: クリックや範囲選択で選べる物を絞ります。部品をオフにすると、ビアや配線を囲んで選ぶときに、部品を巻き込んで動かす心配がなくなります");
-                            let before = self.pick;
-                            icon_toggle(ui, Icon::Part, &mut self.pick.parts, "部品", "部品を選べる・ドラッグで動かせるようにします。オフだと、部品の上でドラッグしても動かず、範囲選択になります");
-                            icon_toggle(ui, Icon::Wire, &mut self.pick.tracks, "配線", "配線 (トラック) を選べるようにします");
-                            icon_toggle(ui, Icon::Via, &mut self.pick.vias, "ビア", "ビアを選べるようにします");
-                            icon_toggle(ui, Icon::PadTh, &mut self.pick.pads, "パッド・穴", "部品に属さないパッドと取付穴を選べるようにします");
-                            icon_toggle(ui, Icon::Zone, &mut self.pick.other, "ゾーン・シルク", "ゾーン (ベタ) と、部品に属さないシルク線を選べるようにします");
-                            icon_toggle(ui, Icon::Layers, &mut self.pick.active_side_only, "作業中の面だけ", "いま作業している面 (枠の色) にある物だけを選べるようにします。薄く表示している反対の面を誤って選ばなくなります。ビアと、貫通するスルーホール部品は、どちらの面でも選べます");
-                            if before.parts != self.pick.parts || before.tracks != self.pick.tracks || before.vias != self.pick.vias || before.pads != self.pick.pads || before.other != self.pick.other {
-                                self.multi.retain(|it| self.pick.allows(it));
-                                if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
-                                    self.selected = None;
-                                }
+                        let before = self.pick;
+                        // (icon, name, tip, eye, lock): None where a kind has no such switch
+                        egui::Grid::new("view_lock_grid").spacing(Vec2::new(4.0, 2.0)).show(ui, |ui| {
+                            let v = self.vis;
+                            let mut all_shown = v.tracks && v.vias && v.zones && v.silk && v.airwires && v.nets && v.ruler;
+                            if icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut all_shown, "すべての表示を、まとめて出す / 隠す (下の目の一括操作)。いまは全部が出ているときだけ明るくなります").changed() {
+                                (self.vis.tracks, self.vis.vias, self.vis.zones, self.vis.silk) = (all_shown, all_shown, all_shown, all_shown);
+                                (self.vis.airwires, self.vis.nets, self.vis.ruler) = (all_shown, all_shown, all_shown);
                             }
+                            ui.label("すべて");
+                            let p = self.pick;
+                            let mut all_locked = !(p.parts || p.pads || p.tracks || p.vias || p.zones || p.silk);
+                            if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut all_locked, "すべての種類を、まとめてロック / 解除します (「反対の面」は別です)。ロックすると、クリックや範囲選択で選べず、ドラッグでも動きません。部品をロックすると、ビアや配線を囲んで選ぶときに部品を巻き込みません").changed() {
+                                (self.pick.parts, self.pick.pads, self.pick.tracks) = (!all_locked, !all_locked, !all_locked);
+                                (self.pick.vias, self.pick.zones, self.pick.silk) = (!all_locked, !all_locked, !all_locked);
+                            }
+                            ui.end_row();
+                            let lock = |ui: &mut egui::Ui, pick: &mut bool, tip: &str| {
+                                let mut locked = !*pick;
+                                if icon_switch(ui, Icon::Lock, Icon::Unlock, &mut locked, tip).changed() {
+                                    *pick = !locked;
+                                }
+                            };
+                            let eye = |ui: &mut egui::Ui, shown: &mut bool, tip: &str| {
+                                icon_switch(ui, Icon::Eye, Icon::EyeOff, shown, tip);
+                            };
+                            let none = |ui: &mut egui::Ui| {
+                                ui.allocate_exact_size(Vec2::splat(24.0), Sense::hover());
+                            };
+                            let kind = |ui: &mut egui::Ui, icon: Icon, name: &str| {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 2.0;
+                                    icon_label(ui, icon, name);
+                                    ui.label(name);
+                                });
+                            };
+                            none(ui);
+                            kind(ui, Icon::Part, "部品");
+                            lock(ui, &mut self.pick.parts, "部品をロックします。選べず、ドラッグでも動きません (範囲選択になります)");
+                            ui.end_row();
+                            none(ui);
+                            kind(ui, Icon::PadTh, "パッド・穴");
+                            lock(ui, &mut self.pick.pads, "部品に属さないパッドと取付穴をロックします");
+                            ui.end_row();
+                            eye(ui, &mut self.vis.tracks, "配線 (トラック) を表示します");
+                            kind(ui, Icon::Wire, "配線");
+                            lock(ui, &mut self.pick.tracks, "配線をロックします。選べず、動かせません");
+                            ui.end_row();
+                            eye(ui, &mut self.vis.vias, "ビアを表示します");
+                            kind(ui, Icon::Via, "ビア");
+                            lock(ui, &mut self.pick.vias, "ビアをロックします。選べず、動かせません");
+                            ui.end_row();
+                            eye(ui, &mut self.vis.zones, "ゾーン (銅を面で塗った所) を表示します");
+                            kind(ui, Icon::Zone, "ゾーン");
+                            lock(ui, &mut self.pick.zones, "ゾーン (ベタ) をロックします");
+                            ui.end_row();
+                            eye(ui, &mut self.vis.silk, "シルク (白い印刷の文字と枠) を表示します");
+                            kind(ui, Icon::Silk, "シルク");
+                            lock(ui, &mut self.pick.silk, "部品に属さないシルク線をロックします");
+                            ui.end_row();
+                            eye(ui, &mut self.vis.airwires, "未配線 (まだつながっていない接続を示す黄色の線) を表示します");
+                            kind(ui, Icon::Airwire, "未配線");
+                            none(ui);
+                            ui.end_row();
+                            eye(ui, &mut self.vis.nets, "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
+                            kind(ui, Icon::Label, "ネット名");
+                            none(ui);
+                            ui.end_row();
+                            eye(ui, &mut self.vis.ruler, "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です");
+                            kind(ui, Icon::Ruler, "定規 (mm)");
+                            none(ui);
+                            ui.end_row();
+                            none(ui);
+                            kind(ui, Icon::Layers, "反対の面");
+                            icon_switch(ui, Icon::Lock, Icon::Unlock, &mut self.pick.active_side_only, "いま作業している面 (枠の色) と反対の面にある物をロックします。薄く表示している反対の面を誤って選ばなくなります。ビアと、貫通するスルーホール部品は、どちらの面でも選べます");
+                            ui.end_row();
                         });
+                        if before.parts != self.pick.parts || before.tracks != self.pick.tracks || before.vias != self.pick.vias || before.pads != self.pick.pads || before.zones != self.pick.zones || before.silk != self.pick.silk {
+                            self.multi.retain(|it| self.pick.allows(it));
+                            if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
+                                self.selected = None;
+                            }
+                        }
                     }).response.rect.width();
                     crate::icons::fold_remember_width(ui, id, w);
                 }

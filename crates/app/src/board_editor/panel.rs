@@ -132,39 +132,41 @@ impl BoardEditor {
                 }
             });
             egui::CollapsingHeader::new("② 配線").default_open(true).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("全部").on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
+                let sel_net = match self.selected {
+                    Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
+                    _ => None,
+                };
+                let only_label = sel_net.as_ref().map_or("選んだネットだけ".to_string(), |n| format!("{n} だけ"));
+                let only_tip = if sel_net.is_some() { "" } else { "
+
+(いまは使えません: 先に基板の上のパッドを1つクリックして選んでください)" };
+                ui.label(egui::RichText::new("自動で引く").strong());
+                ui.label(egui::RichText::new("上から順に押します (GND ベタは使うときだけ)").weak());
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
+    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
+                        self.ground_pour();
+                    }
+                    if ui.button("未配線を全部つなぐ").on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
     線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
     電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「配線の太さ (電流から)」で見直せます)。
     2層・45°配線で、ルール違反になる配線は自動的にやめます").clicked() {
                         self.autoroute(None);
                     }
-                    if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
-    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
-                        self.ground_pour();
-                    }
-                    let sel_net = match self.selected {
-                        Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
-                        _ => None,
-                    };
-                    let label = sel_net.as_ref().map_or("選択したネットだけ".to_string(), |n| format!("{n} だけ"));
-                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(label)).on_hover_text("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます").clicked()
-                        && let Some(n) = sel_net {
-                            self.autoroute(Some(&n));
+                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(&only_label)).on_hover_text(format!("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}")).clicked()
+                        && let Some(n) = &sel_net {
+                            self.autoroute(Some(n));
                         }
                 });
-                ui.horizontal(|ui| {
+                ui.separator();
+                ui.label(egui::RichText::new("引いた配線を整える").strong());
+                ui.horizontal_wrapped(|ui| {
                     if ui.button("配線を短くする").on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます").clicked() {
                         self.shorten_routes(None);
                     }
-                    let sel_net = match self.selected {
-                        Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
-                        _ => None,
-                    };
-                    let label = sel_net.as_ref().map_or("選択したネットだけ".to_string(), |n| format!("{n} だけ"));
-                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(label)).on_hover_text("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります)").clicked()
-                        && let Some(n) = sel_net {
-                            self.shorten_routes(Some(&n));
+                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(&only_label)).on_hover_text(format!("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります){only_tip}")).clicked()
+                        && let Some(n) = &sel_net {
+                            self.shorten_routes(Some(n));
                         }
                 });
             });
@@ -210,29 +212,6 @@ impl BoardEditor {
                 }
                 ui.label("基板名 (出力ファイル名)");
                 ui.text_edit_singleline(&mut self.board.name).on_hover_text("製造ファイル (Gerber など) の名前に使います。半角の英数字がおすすめです");
-            });
-            egui::CollapsingHeader::new("選択の絞り込みと固定").default_open(false).show(ui, |ui| {
-                ui.label("見る物・選べる物のアイコンは、画面の右上、「層」の下にあります").on_hover_text("画面右上の「表示・選択」で、シルク・ゾーン・未配線などの表示と、選べる物 (部品・配線・ビア…) を切り替えます");
-                ui.horizontal(|ui| {
-                    if ui.small_button("配線・ビアだけ").on_hover_text("配線とビアだけを選べるようにします。部品は動きません").clicked() {
-                        self.pick = Pickable { parts: false, tracks: true, vias: true, pads: false, other: false, active_side_only: self.pick.active_side_only };
-                        self.multi.retain(|it| matches!(it, Item::Track(_) | Item::Via(_)));
-                        if self.selected.is_some_and(|it| !self.pick.allows(&it)) {
-                            self.selected = None;
-                        }
-                    }
-                    if ui.small_button("すべて").on_hover_text("すべての物を選べるようにします").clicked() {
-                        self.pick = Pickable { active_side_only: self.pick.active_side_only, ..Pickable::ALL };
-                    }
-                    if ui.small_button("部品を全部固定").on_hover_text("いま基板にあるすべての部品を固定します。配置が終わって、配線に進むときに押します").clicked() {
-                        self.board.locked_parts = self.board.parts.iter().map(|p| p.refdes.clone()).collect();
-                        self.status = format!("部品 {} 個を固定しました", self.board.parts.len());
-                    }
-                    if ui.small_button("固定をすべて外す").on_hover_text("固定した部品をすべて動かせるようにします").clicked() {
-                        self.board.locked_parts.clear();
-                        self.status = "部品の固定をすべて外しました".into();
-                    }
-                });
             });
             ui.separator();
             if ui.small_button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {

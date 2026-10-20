@@ -137,14 +137,16 @@ struct Pickable {
     vias: bool,
     /// Loose pads and mounting holes.
     pads: bool,
-    /// Copper pours, silk lines.
-    other: bool,
+    /// Copper pours.
+    zones: bool,
+    /// Silk lines that belong to no part.
+    silk: bool,
     /// Only what is on the layer being worked on (and what goes through the board: vias, through-hole parts).
     active_side_only: bool,
 }
 
 impl Pickable {
-    const ALL: Pickable = Pickable { parts: true, tracks: true, vias: true, pads: true, other: true, active_side_only: true };
+    const ALL: Pickable = Pickable { parts: true, tracks: true, vias: true, pads: true, zones: true, silk: true, active_side_only: true };
 
     fn allows(&self, it: &Item) -> bool {
         match it {
@@ -152,7 +154,8 @@ impl Pickable {
             Item::Track(_) => self.tracks,
             Item::Via(_) => self.vias,
             Item::Pad(_) | Item::Hole(_) => self.pads,
-            Item::Silk(_) | Item::Zone(_) => self.other,
+            Item::Silk(_) => self.silk,
+            Item::Zone(_) => self.zones,
         }
     }
 }
@@ -168,6 +171,8 @@ struct Visible {
     nets: bool,
     zones: bool,
     ruler: bool,
+    tracks: bool,
+    vias: bool,
 }
 
 /// Where the declared net currents come from.
@@ -349,7 +354,7 @@ impl Default for BoardEditor {
             redo: vec![],
             pick: Pickable::ALL,
             check_focus: None,
-            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true, inner_hidden: 0 },
+            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true, tracks: true, vias: true, inner_hidden: 0 },
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
