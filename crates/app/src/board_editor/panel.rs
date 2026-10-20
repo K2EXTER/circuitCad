@@ -118,7 +118,7 @@ impl BoardEditor {
 
 (いまは使えません: 先に基板の上のパッドを1つクリックして選んでください)" };
                 ui.label(egui::RichText::new("自動で引く").strong());
-                ui.label(egui::RichText::new("上から順に押します (GND ベタは使うときだけ)").weak());
+                ui.label(egui::RichText::new("上から順に押します").weak());
                 ui.horizontal_wrapped(|ui| {
                     if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
     部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
