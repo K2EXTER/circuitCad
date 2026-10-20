@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -33,8 +33,12 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--icons-only") {
         crate::icons::set_icon_only(true);
     }
-    if args.iter().any(|a| a == "--learn") {
+    if let Some(i) = args.iter().position(|a| a == "--learn") {
         app.learn.open = true;
+        // `--learn arduino_board` opens that learning path
+        if let Some(id) = args.get(i + 1).filter(|a| !a.starts_with("--")) {
+            app.learn.select(id);
+        }
     }
     if let Some(i) = args.iter().position(|a| a == "--quick") {
         // open the quick-add box (key A) with a word already typed, for screenshots

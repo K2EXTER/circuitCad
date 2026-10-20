@@ -110,6 +110,9 @@ pub struct Item {
     pub kind: Kind,
     /// The lesson has a "作ってみよう" challenge of the same id (build it yourself, judged by what it does).
     pub build: bool,
+    /// What it is best to finish first, by item id (items of any path). `None` = the item just before it in its path
+    /// (the original straight line); `Some(&[])` = a root with no prerequisite. Never a lock: a learner can open any item.
+    pub requires: Option<&'static [&'static str]>,
     /// A hands-on experiment on a real board / breadboard belongs to this step (a note, until the cards exist).
     pub real: Option<&'static str>,
 }
@@ -128,16 +131,18 @@ pub struct LearningPath {
 }
 
 const fn lesson(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
-    Item { id, title, about, kind: Kind::Lesson(id), build: false, real }
+    Item { id, title, about, kind: Kind::Lesson(id), build: false, requires: None, real }
 }
 
 // no step is "planned" right now; kept for the next one that is shown before it is written
 #[allow(dead_code)]
 const fn planned(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
-    Item { id, title, about, kind: Kind::Planned, build: false, real }
+    Item { id, title, about, kind: Kind::Planned, build: false, requires: None, real }
 }
 
-pub const PATHS: &[LearningPath] = &[LearningPath {
+pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH];
+
+const POWER_PATH: LearningPath = LearningPath {
     id: "power_supply",
     title: "安定化電源を作ろう",
     goal: "ACアダプタや電池の電圧を、負荷が変わっても一定の 5V にする電源を、原理から理解して、回路図・基板・実機まで自分で作ります。実験は、安全のため 12V 以下の低い電圧だけで行います",
@@ -181,15 +186,73 @@ pub const PATHS: &[LearningPath] = &[LearningPath {
             name: "4. 製作: 回路図から基板、実機まで",
             about: "設計した電源を、基板にして、組み立てて、性能を測ります",
             items: &[
-                Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, build: true, real: None },
-                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), build: false, real: Some("発注するなら、少量・少額で試します") },
-                Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
-                Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") },
-                Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
+                Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, requires: None, build: true, real: None },
+                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: None, build: false, real: Some("発注するなら、少量・少額で試します") },
+                Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), requires: None, build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
+                Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), requires: None, build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") },
+                Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, requires: None, build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
             ],
         },
     ],
-}];
+};
+
+/// A planned item of a tree path: shown on the map, not yet written.
+const fn plan(id: &'static str, title: &'static str, about: &'static str, requires: &'static [&'static str], real: Option<&'static str>) -> Item {
+    Item { requires: Some(requires), ..planned(id, title, about, real) }
+}
+
+/// The second path: a tree. Each item says what to finish first (`requires`), so the independent branches (power,
+/// clock, reset, pins) can be learned in any order and meet at the schematic. Items without a lesson yet are `plan`.
+const ARDUINO_PATH: LearningPath = LearningPath {
+    id: "arduino_board",
+    title: "Arduino 互換ボードを作ろう",
+    goal: "ATmega328P に水晶・リセット・電源まわりをつけた、Arduino 互換のボードを、原理から理解して、回路図・基板・実機まで自分で作ります。マイコンの中身はシミュレーションできないので、周りの回路 (電源・水晶・リセット・LED) を確かめます。先に電源の学習パスの「電圧を分ける」「LED と電流制限抵抗」を済ませておくと進めやすいです",
+    stages: &[
+        Stage {
+            name: "1. 土台: 読む・浮かせない・安定させる",
+            about: "どのマイコン回路でも使う基本の技です。順番は自由です",
+            items: &[
+                plan("a_datasheet", "データシートの読み方", "絶対最大定格と推奨動作条件の違い、ピン表、代表的なグラフ。部品を選ぶときの出発点", &[], Some("手元の部品のデータシートで、電源電圧の範囲・1ピンの電流の上限を探します")),
+                plan("a_pullup", "プルアップとプルダウン (ピンを浮かせない)", "入力ピンが何にもつながっていないと、電圧が定まらない。10kΩ で電源か GND に引く理由と値の決め方", &["divider"], Some("入力ピンをプルアップあり・なしで、テスタで測り比べます")),
+                plan("a_decoupling", "電源のバイパスコンデンサ", "ICの電源ピンのそばに 0.1µF を置く理由。インピーダンスのグラフで、電解とセラミックの分担を見る", &["divider"], Some("IC の電源ピンの電圧を、オシロで見て、コンデンサの有無で比べます")),
+            ],
+        },
+        Stage {
+            name: "2. マイコンが動く条件: クロックとリセット",
+            about: "電源が入っても、クロックとリセットが整っていないとマイコンは動きません",
+            items: &[
+                plan("a_crystal", "水晶とクロック", "16MHz 水晶の共振と、両端の 22pF コンデンサの役割。AC解析で共振が見える", &["a_datasheet"], Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")),
+                plan("a_reset", "リセット回路", "10k のプルアップと 100n のコンデンサで、電源投入と書き込み時のリセットパルスを作る。時定数を過渡解析で見る", &["a_pullup"], None),
+            ],
+        },
+        Stage {
+            name: "3. つなぐ: 入出力と通信",
+            about: "ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます",
+            items: &[
+                plan("a_pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", &["led", "a_datasheet"], Some("D13 の LED の電流を測って、データシートの上限と比べます")),
+                plan("a_levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換", &["a_pullup"], None),
+                plan("a_serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレート、FTDI ヘッダと USB-シリアル IC の違い", &["a_levels", "a_reset"], None),
+            ],
+        },
+        Stage {
+            name: "4. 設計して基板に",
+            about: "ここまでの部品を1枚にまとめて、基板にします",
+            items: &[
+                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["a_decoupling", "a_crystal", "a_reset", "a_pin_led"], None),
+                plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["a_draw"], None),
+                plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
+            ],
+        },
+        Stage {
+            name: "5. 作って動かす",
+            about: "はんだ付けして、ブートローダを書き込み、LED を点滅させます",
+            items: &[
+                plan("a_solder", "表面実装のはんだ付け", "TQFP-32 (0.8mm ピッチ) や 0805 のはんだ付けのコツ。ブリッジの直し方", &["a_board"], Some("まず練習用の基板で、0805 のチップ部品から始めます")),
+                plan("a_bootload", "ブートローダを書き込んで LED を点滅させる", "ICSP ヘッダでの書き込み、ヒューズ (水晶の選択)、シリアルでのスケッチの書き込み", &["a_solder"], None),
+            ],
+        },
+    ],
+};
 
 /// Every item of a path, in order.
 pub fn items(path: &LearningPath) -> impl Iterator<Item = &'static Item> + '_ {
@@ -209,9 +272,53 @@ pub fn summary(path: &LearningPath, progress: &Progress) -> (usize, usize, usize
     (finished, available, all)
 }
 
-/// The next item to do: the first available one that is not finished.
+/// Every item of every path (a prerequisite may point into another path).
+fn all_items() -> impl Iterator<Item = &'static Item> {
+    PATHS.iter().flat_map(items)
+}
+
+/// The item with this id, in any path.
+pub fn find_item(id: &str) -> Option<&'static Item> {
+    all_items().find(|i| i.id == id)
+}
+
+/// What is best finished before `item`: its `requires`, or the item just before it in `path` (planned ones included,
+/// for drawing the map).
+pub fn requirements(path: &LearningPath, item: &Item) -> Vec<&'static Item> {
+    let ids: Vec<&str> = match item.requires {
+        Some(r) => r.to_vec(),
+        None => items(path).take_while(|i| i.id != item.id).last().map(|i| vec![i.id]).unwrap_or_default(),
+    };
+    ids.into_iter().filter_map(find_item).collect()
+}
+
+/// `requirements` without the planned items: they cannot be learned yet, so they never hold anything back.
+pub fn prerequisites(path: &LearningPath, item: &Item) -> Vec<&'static Item> {
+    requirements(path, item).into_iter().filter(|i| i.kind != Kind::Planned).collect()
+}
+
+/// A path is drawn as a map when its items name their prerequisites (a straight line is just a list).
+pub fn is_tree(path: &LearningPath) -> bool {
+    items(path).any(|i| i.requires.is_some())
+}
+
+/// Rows below the roots: 0 for an item with no prerequisite inside the path, else one more than its deepest one.
+fn level(path: &LearningPath, item: &Item, guard: usize) -> usize {
+    if guard > 200 {
+        return 0;
+    }
+    requirements(path, item).iter().filter(|p| items(path).any(|i| i.id == p.id)).map(|p| level(path, p, guard + 1) + 1).max().unwrap_or(0)
+}
+
+/// The items to do now, in path order: available, not finished, and every prerequisite finished. A tree has several
+/// at once; a straight line has one.
+pub fn recommended(path: &LearningPath, progress: &Progress) -> Vec<&'static Item> {
+    items(path).filter(|i| i.kind != Kind::Planned && !item_done(progress, i) && prerequisites(path, i).iter().all(|p| item_done(progress, p))).collect()
+}
+
+/// The first of `recommended`.
 pub fn next_item(path: &LearningPath, progress: &Progress) -> Option<&'static Item> {
-    items(path).find(|i| i.kind != Kind::Planned && !item_done(progress, i))
+    recommended(path, progress).into_iter().next()
 }
 
 // ------------------------------------------------------------------ the window
@@ -292,30 +399,66 @@ pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome>
 #[derive(Default)]
 pub struct LearnWindow {
     pub open: bool,
+    /// Which of `PATHS` is shown.
+    selected: usize,
 }
 
 impl LearnWindow {
+    /// Shows the path with this id (command line `--learn <id>`); an unknown id leaves the choice alone.
+    pub fn select(&mut self, id: &str) {
+        if let Some(k) = PATHS.iter().position(|p| p.id == id) {
+            self.selected = k;
+        }
+    }
+
     pub fn show(&mut self, ctx: &egui::Context, progress: &mut Progress) -> Option<Action> {
         if !self.open {
             return None;
         }
         let mut open = true;
         let mut action = None;
-        let path = &PATHS[0];
-        egui::Window::new("学習パス").open(&mut open).default_width(600.0).default_height(720.0).vscroll(true).show(ctx, |ui| {
+        let mut chosen = self.selected.min(PATHS.len() - 1);
+        let path = &PATHS[chosen];
+        egui::Window::new("学習パス").open(&mut open).default_width(if is_tree(path) { 760.0 } else { 600.0 }).default_height(720.0).vscroll(true).show(ctx, |ui| {
+            if PATHS.len() > 1 {
+                ui.horizontal_wrapped(|ui| {
+                    for (k, p) in PATHS.iter().enumerate() {
+                        ui.selectable_value(&mut chosen, k, p.title).on_hover_text("この学習パスに切り替えます (進み具合は、どのパスでも同じレッスンなら共通です)");
+                    }
+                });
+                ui.separator();
+            }
             ui.heading(path.title);
             ui.label(spaced(path.goal));
             let (finished, available, all) = summary(path, progress);
             ui.add(egui::ProgressBar::new(finished as f32 / available.max(1) as f32).text(format!("完了 {finished} / いま学べる {available} (全体 {all})")));
+            let next_ids: Vec<&str> = recommended(path, progress).iter().map(|i| i.id).collect();
             if let Some(next) = next_item(path, progress) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label("次のおすすめ:");
                     ui.colored_label(Color32::from_rgb(220, 150, 40), next.title);
+                    if next_ids.len() > 1 {
+                        ui.label(format!("(ほかに {} 件、すぐ学べます)", next_ids.len() - 1));
+                    }
                 });
             } else {
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "いま学べるレッスンは、すべて完了しました。残りは準備中です");
+                if available == 0 {
+                    ui.label(spaced("このパスのレッスンは準備中です。道すじ (地図) だけ先に見られます").color(NOTE));
+                } else {
+                    ui.colored_label(Color32::from_rgb(60, 160, 90), "いま学べるレッスンは、すべて完了しました。残りは準備中です");
+                }
             }
-            let next_id = next_item(path, progress).map(|i| i.id);
+            if is_tree(path) {
+                ui.add_space(6.0);
+                egui::CollapsingHeader::new("学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)").default_open(true).show(ui, |ui| {
+                    egui::ScrollArea::horizontal().show(ui, |ui| {
+                        if let Some(a) = tree_map(ui, path, progress, &next_ids) {
+                            action = Some(a);
+                        }
+                    });
+                    ui.label(spaced("緑 = 完了、橙の枠 = いますぐ学べる、灰 = 準備中。順番は強制ではなく、どれからでも始められます").color(NOTE));
+                });
+            }
             for stage in path.stages {
                 ui.add_space(8.0);
                 ui.strong(stage.name);
@@ -325,7 +468,7 @@ impl LearnWindow {
                     let (mark, color) = match item.kind {
                         Kind::Planned => ("…", Color32::from_gray(120)),
                         _ if done => ("✔", Color32::from_rgb(60, 160, 90)),
-                        _ if Some(item.id) == next_id => ("▶", Color32::from_rgb(220, 150, 40)),
+                        _ if next_ids.contains(&item.id) => ("▶", Color32::from_rgb(220, 150, 40)),
                         _ => ("○", Color32::from_gray(150)),
                     };
                     ui.horizontal_wrapped(|ui| {
@@ -354,6 +497,10 @@ impl LearnWindow {
                     });
                     ui.indent(("path_item", path.id, item.id), |ui| {
                         ui.label(spaced(item.about).color(NOTE));
+                        if item.requires.is_some_and(|r| !r.is_empty()) {
+                            let names: Vec<&str> = requirements(path, item).iter().map(|p| p.title).collect();
+                            ui.label(spaced(&format!("先に済ませると分かりやすい: {}", names.join("、"))).color(NOTE));
+                        }
                     });
                     ui.add_space(6.0);
                 }
@@ -368,11 +515,66 @@ impl LearnWindow {
                 progress.reset();
             }
         });
+        self.selected = chosen;
         if !open {
             self.open = false;
         }
         action
     }
+}
+
+/// The map of a tree path: one row per level, an item per box, a line from each prerequisite down to what needs it.
+fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_ids: &[&str]) -> Option<Action> {
+    const W: f32 = 160.0;
+    const H: f32 = 54.0;
+    const GX: f32 = 12.0;
+    const GY: f32 = 26.0;
+    let all: Vec<&'static Item> = items(path).collect();
+    let levels: Vec<usize> = all.iter().map(|i| level(path, i, 0)).collect();
+    let rows = levels.iter().max().copied().unwrap_or(0) + 1;
+    let mut in_row = vec![0usize; rows];
+    let slot: Vec<usize> = levels.iter().map(|&l| { in_row[l] += 1; in_row[l] - 1 }).collect();
+    let widest = in_row.iter().max().copied().unwrap_or(1);
+    let size = egui::vec2(widest as f32 * (W + GX) - GX, rows as f32 * (H + GY) - GY);
+    let (area, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let boxes: Vec<egui::Rect> = (0..all.len())
+        .map(|k| {
+            let left = (widest - in_row[levels[k]]) as f32 * (W + GX) / 2.0 + slot[k] as f32 * (W + GX);
+            egui::Rect::from_min_size(area.min + egui::vec2(left, levels[k] as f32 * (H + GY)), egui::vec2(W, H))
+        })
+        .collect();
+    let line = ui.visuals().widgets.noninteractive.fg_stroke.color;
+    for (k, item) in all.iter().enumerate() {
+        for p in requirements(path, item) {
+            if let Some(j) = all.iter().position(|i| i.id == p.id) {
+                ui.painter().line_segment([boxes[j].center_bottom(), boxes[k].center_top()], egui::Stroke::new(1.0, line));
+            }
+        }
+    }
+    let mut action = None;
+    for (k, item) in all.iter().enumerate() {
+        let (fill, stroke, text) = if item.kind == Kind::Planned {
+            (Color32::from_gray(60), Color32::from_gray(90), Color32::from_gray(150))
+        } else if item_done(progress, item) {
+            (Color32::from_rgb(40, 100, 60), Color32::from_rgb(60, 160, 90), Color32::WHITE)
+        } else if next_ids.contains(&item.id) {
+            (Color32::from_gray(45), Color32::from_rgb(220, 150, 40), Color32::WHITE)
+        } else {
+            (Color32::from_gray(45), Color32::from_gray(120), Color32::from_gray(210))
+        };
+        let response = ui.interact(boxes[k], ui.id().with(("tree_item", item.id)), egui::Sense::click());
+        let painter = ui.painter().with_clip_rect(boxes[k]);
+        painter.rect_filled(boxes[k], 4.0, fill);
+        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(if next_ids.contains(&item.id) { 2.0 } else { 1.0 }, stroke), egui::StrokeKind::Inside);
+        let galley = painter.layout(item.title.to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
+        painter.galley(boxes[k].min + egui::vec2(5.0, 4.0), galley, text);
+        let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}
+(準備中)", item.about) } else { item.about.to_string() });
+        if response.clicked() {
+            action = item_action(item);
+        }
+    }
+    action
 }
 
 #[cfg(test)]
@@ -454,6 +656,42 @@ mod tests {
             assert!(crate::schematic::challenge_of_lesson(item.id).is_some() || crate::schematic::challenge_exists(item.id), "{} has no challenge", item.title);
         }
         assert!(with >= 5, "{with} items offer a challenge");
+    }
+
+    /// Every `requires` names an existing item, nothing needs itself through a loop, and the tree has several roots.
+    #[test]
+    fn the_prerequisites_of_every_path_exist_and_never_loop() {
+        for path in PATHS {
+            for item in items(path) {
+                for id in item.requires.unwrap_or_default() {
+                    assert!(find_item(id).is_some(), "{} needs the missing item {id}", item.title);
+                    assert_ne!(*id, item.id, "{} needs itself", item.title);
+                }
+                // with no loop the depth is below the number of items; a loop would run into the guard
+                assert!(level(path, item, 0) < items(path).count(), "{} is too deep (a loop?)", item.title);
+            }
+        }
+    }
+
+    #[test]
+    fn a_tree_path_recommends_several_independent_items_and_waits_for_all_prerequisites() {
+        let mut progress = Progress::default();
+        // nothing planned is ever recommended: the Arduino path has no lesson written yet
+        assert!(recommended(&ARDUINO_PATH, &progress).is_empty());
+        assert!(is_tree(&ARDUINO_PATH) && !is_tree(&POWER_PATH));
+        // a straight line (no `requires`) needs just the item before it
+        let line = &POWER_PATH;
+        let led = find_item("led").unwrap();
+        assert_eq!(prerequisites(line, led).iter().map(|i| i.id).collect::<Vec<_>>(), ["divider"], "a straight line needs the item before it");
+        assert_eq!(recommended(line, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["divider"]);
+        progress.mark("divider");
+        assert_eq!(recommended(line, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["led"]);
+        // the Arduino items name power-path items from another path
+        let pin_led = find_item("a_pin_led").unwrap();
+        assert!(requirements(&ARDUINO_PATH, pin_led).iter().any(|i| i.id == "led"));
+        // roots sit on row 0, the final tasks below everything they need
+        assert_eq!(level(&ARDUINO_PATH, find_item("a_datasheet").unwrap(), 0), 0);
+        assert!(level(&ARDUINO_PATH, find_item("a_draw").unwrap(), 0) > level(&ARDUINO_PATH, find_item("a_reset").unwrap(), 0));
     }
 
     #[test]
