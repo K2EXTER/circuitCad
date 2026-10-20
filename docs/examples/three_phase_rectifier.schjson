@@ -1,0 +1,549 @@
+{
+  "components": [
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1Meg",
+      "pos": [
+        20,
+        16
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        40,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        40,
+        8
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        52,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D4",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        52,
+        8
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D5",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        64,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "D6",
+      "kind": "Diode",
+      "value": "1N4007",
+      "pos": [
+        64,
+        8
+      ],
+      "rot": 0,
+      "footprint": "D_SOD-123",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "470u",
+      "pos": [
+        84,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        96,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "V1",
+      "kind": "Custom",
+      "value": "AC3P_10V_50Hz",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TerminalBlock_4P_5.08",
+      "custom": {
+        "name": "AC3P_10V_50Hz",
+        "prefix": "V",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "B",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "C",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "N",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "AC3P_10V_50Hz",
+          "text": "* Three-phase source, wye connected, 0.2 ohm per phase (an ideal source charging a bare capacitor makes the start ring): 10 Vrms (14.142 V peak) per phase, 50 Hz, B lags A by 120 deg, C by 240 deg.\n.subckt AC3P_10V_50Hz a b c n\nVa a n SIN(0 14.142 50 0 0 0) AC 1 0 Rser=0.2\nVb b n SIN(0 14.142 50 0 0 -120) AC 1 -120 Rser=0.2\nVc c n SIN(0 14.142 50 0 0 -240) AC 1 -240 Rser=0.2\n.ends AC3P_10V_50Hz",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {
+            "freq_hz": 50.0,
+            "vphase_rms": 10.0
+          },
+          "limits": [
+            "ほぼ理想の3相電源です。内部抵抗は各相 0.2Ω だけで、巻線のインダクタンス・電圧の変動・相のずれは入っていません。3相が完全にそろった (平衡した) 状態だけを扱います。",
+            "電圧と周波数は部品の中に固定されています (相電圧 10Vrms・50Hz)。ほかの値にしたいときは、部品を複製して、サブサーキットの中の SIN(...) の 14.142 (ピーク電圧) と 50 (周波数) を書き換えてください。",
+            "実際の3相電源 (三相200Vなど) は、人が触れると危険です。この部品は学習用の低い電圧で、実機の代わりにはなりません。"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        20,
+        14
+      ],
+      "b": [
+        20,
+        11
+      ]
+    },
+    {
+      "a": [
+        20,
+        18
+      ],
+      "b": [
+        20,
+        21
+      ]
+    },
+    {
+      "a": [
+        38,
+        -8
+      ],
+      "b": [
+        35,
+        -8
+      ]
+    },
+    {
+      "a": [
+        42,
+        -8
+      ],
+      "b": [
+        45,
+        -8
+      ]
+    },
+    {
+      "a": [
+        38,
+        8
+      ],
+      "b": [
+        35,
+        8
+      ]
+    },
+    {
+      "a": [
+        42,
+        8
+      ],
+      "b": [
+        45,
+        8
+      ]
+    },
+    {
+      "a": [
+        50,
+        -8
+      ],
+      "b": [
+        47,
+        -8
+      ]
+    },
+    {
+      "a": [
+        54,
+        -8
+      ],
+      "b": [
+        57,
+        -8
+      ]
+    },
+    {
+      "a": [
+        50,
+        8
+      ],
+      "b": [
+        47,
+        8
+      ]
+    },
+    {
+      "a": [
+        54,
+        8
+      ],
+      "b": [
+        57,
+        8
+      ]
+    },
+    {
+      "a": [
+        62,
+        -8
+      ],
+      "b": [
+        59,
+        -8
+      ]
+    },
+    {
+      "a": [
+        66,
+        -8
+      ],
+      "b": [
+        69,
+        -8
+      ]
+    },
+    {
+      "a": [
+        62,
+        8
+      ],
+      "b": [
+        59,
+        8
+      ]
+    },
+    {
+      "a": [
+        66,
+        8
+      ],
+      "b": [
+        69,
+        8
+      ]
+    },
+    {
+      "a": [
+        84,
+        -2
+      ],
+      "b": [
+        84,
+        -5
+      ]
+    },
+    {
+      "a": [
+        84,
+        2
+      ],
+      "b": [
+        84,
+        5
+      ]
+    },
+    {
+      "a": [
+        96,
+        -2
+      ],
+      "b": [
+        96,
+        -5
+      ]
+    },
+    {
+      "a": [
+        96,
+        2
+      ],
+      "b": [
+        96,
+        5
+      ]
+    },
+    {
+      "a": [
+        4,
+        -2
+      ],
+      "b": [
+        7,
+        -2
+      ]
+    },
+    {
+      "a": [
+        4,
+        0
+      ],
+      "b": [
+        7,
+        0
+      ]
+    },
+    {
+      "a": [
+        4,
+        2
+      ],
+      "b": [
+        7,
+        2
+      ]
+    },
+    {
+      "a": [
+        0,
+        5
+      ],
+      "b": [
+        0,
+        8
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        20,
+        11
+      ],
+      "text": "N"
+    },
+    {
+      "pos": [
+        20,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        35,
+        -8
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        45,
+        -8
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        35,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        45,
+        8
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        47,
+        -8
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        57,
+        -8
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        47,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        57,
+        8
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        59,
+        -8
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        69,
+        -8
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        59,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        69,
+        8
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        84,
+        -5
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        84,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        96,
+        -5
+      ],
+      "text": "VDC"
+    },
+    {
+      "pos": [
+        96,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        7,
+        -2
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        7,
+        0
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        7,
+        2
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        0,
+        8
+      ],
+      "text": "N"
+    }
+  ],
+  "layout_version": 1
+}

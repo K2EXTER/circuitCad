@@ -1015,3 +1015,61 @@ fn write_footprint_sheet() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("sheet.pcbjson"), serde_json::to_string_pretty(&b).unwrap()).unwrap();
 }
+
+/// Generates docs/examples/three_phase_wye.schjson (3-phase source -> three 100 ohm loads, wye) and
+/// docs/examples/three_phase_rectifier.schjson (3-phase source -> 6-diode bridge -> 470 uF + 100 ohm):
+/// `cargo test -p app write_three_phase_examples -- --ignored`
+#[test]
+#[ignore]
+fn write_three_phase_examples() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let src = library_part("AC3P_10V_50Hz");
+
+    // wye load: the source's N is ground, each phase drives its own resistor
+    let mut s = sch_core::Schematic::default();
+    let u = s.add_custom(src.symbol(), &src.default_value(), &src.footprint_name(), (0, 0), 0);
+    for (pin, net) in [("1", "A"), ("2", "B"), ("3", "C"), ("4", "GND")] {
+        label_pin(&mut s, u, pin, net);
+    }
+    for (x, net) in [(30, "A"), (42, "B"), (54, "C")] {
+        let r = s.add(Kind::Resistor, (x, 0), 1);
+        s.components[r].value = "100".into();
+        label_pin(&mut s, r, "1", net);
+        label_pin(&mut s, r, "2", "GND");
+    }
+    std::fs::write(root.join("three_phase_wye.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+
+    // 6-pulse bridge: upper diodes feed VDC, lower diodes return from GND (N is tied to GND only through 1 Mohm,
+    // so the source has a voltage reference without carrying load current)
+    let mut s = sch_core::Schematic::default();
+    let rn = s.add(Kind::Resistor, (20, 16), 1);
+    s.components[rn].value = "1Meg".into();
+    label_pin(&mut s, rn, "1", "N");
+    label_pin(&mut s, rn, "2", "GND");
+    for (k, phase) in ["A", "B", "C"].iter().enumerate() {
+        let x = 40 + 12 * k as i32;
+        let up = s.add(Kind::Diode, (x, -8), 0);
+        s.components[up].value = "1N4007".into();
+        // pins of a diode: 0 = anode, 1 = cathode
+        label_pin(&mut s, up, "A", phase);
+        label_pin(&mut s, up, "K", "VDC");
+        let low = s.add(Kind::Diode, (x, 8), 0);
+        s.components[low].value = "1N4007".into();
+        label_pin(&mut s, low, "A", "GND");
+        label_pin(&mut s, low, "K", phase);
+    }
+    let c = s.add(Kind::Capacitor, (84, 0), 1);
+    s.components[c].value = "470u".into();
+    let r = s.add(Kind::Resistor, (96, 0), 1);
+    s.components[r].value = "100".into();
+    for comp in [c, r] {
+        label_pin(&mut s, comp, "1", "VDC");
+        label_pin(&mut s, comp, "2", "GND");
+    }
+    // the source goes in last so that VDC comes first in the signal list (the transient view shows the first four)
+    let u = s.add_custom(src.symbol(), &src.default_value(), &src.footprint_name(), (0, 0), 0);
+    for (pin, net) in [("1", "A"), ("2", "B"), ("3", "C"), ("4", "N")] {
+        label_pin(&mut s, u, pin, net);
+    }
+    std::fs::write(root.join("three_phase_rectifier.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}

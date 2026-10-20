@@ -118,6 +118,43 @@ fn loop_gain_sample_shows_the_phase_margin_falling_with_a_capacitive_load() {
 }
 
 #[test]
+fn three_phase_wye_sample_has_three_phases_120_degrees_apart() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "three_phase_wye.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let r = transient(&c, &TranSettings { tstop: 0.1, tstep: 100e-6, uic: false }).unwrap();
+    let (a, b, cc) = (r.signal("V(A)").unwrap(), r.signal("V(B)").unwrap(), r.signal("V(C)").unwrap());
+    for s in [a, b, cc] {
+        let m = wave_measure(&r.time, &s.values, 0.02, 0.1).unwrap();
+        assert!((m.max - 14.142).abs() < 0.2 && (m.freq.unwrap() - 50.0).abs() < 2.0, "{m:?}");
+    }
+    // a balanced set sums to zero at every instant (so no current would flow in N)
+    for i in 0..r.time.len() {
+        assert!((a.values[i] + b.values[i] + cc.values[i]).abs() < 1e-6, "t={}", r.time[i]);
+    }
+    // B follows A by a third of a period (6.67 ms): B(t) = A(t - T/3)
+    let k = r.time.iter().position(|t| *t >= 0.02 + 20e-3 / 3.0).unwrap();
+    let j = r.time.iter().position(|t| *t >= 0.02).unwrap();
+    assert!((b.values[k] - a.values[j]).abs() < 0.5, "{} vs {}", b.values[k], a.values[j]);
+}
+
+#[test]
+fn three_phase_rectifier_sample_ripples_at_six_times_the_line_frequency() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "three_phase_rectifier.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let r = transient(&c, &TranSettings { tstop: 0.2, tstep: 50e-6, uic: false }).unwrap();
+    let m = wave_measure(&r.time, &r.signal("V(VDC)").unwrap().values, 0.1, 0.2).unwrap();
+    // line-to-line peak 24.5 V minus two diode drops
+    assert!(m.max > 21.0 && m.max < 24.5 && m.min > 19.0, "{m:?}");
+    // from a cold start the capacitor charges smoothly: the output never rises above the line-to-line peak
+    // (an ideal source with no series resistance made the first step ring up to 44 V)
+    let all = wave_measure(&r.time, &r.signal("V(VDC)").unwrap().values, 0.0, 0.2).unwrap();
+    assert!(all.max < 24.5, "{all:?}");
+    // much smoother than the single-phase bridge: ripple is 6 humps per cycle
+    assert!(m.pp > 0.1 && m.pp < 2.0, "ripple {:?}", m.pp);
+    assert!((m.freq.unwrap() - 300.0).abs() < 20.0, "{m:?}");
+}
+
+#[test]
 fn bridge_rectifier_sample_gives_a_smoothed_dc_with_ripple() {
     let sch = example_schematics().into_iter().find(|(n, _)| n == "bridge_rectifier.schjson").unwrap().1;
     let c = from_schematic(&sch).unwrap();
