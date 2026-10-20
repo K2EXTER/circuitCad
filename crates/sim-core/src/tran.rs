@@ -9,6 +9,12 @@ const MAX_POINTS: f64 = 1_000_000.0;
 const LTE_ABS_V: f64 = 1e-6;
 const LTE_ABS_I: f64 = 1e-9;
 
+/// The largest time step used when the user leaves it blank: 1/1000 of the stop time. The error control still shrinks
+/// the step where the waveform bends faster, so this is only the ceiling.
+pub fn auto_tstep(tstop: f64) -> f64 {
+    tstop / 1000.0
+}
+
 #[derive(Clone, Debug)]
 pub struct TranSettings {
     pub tstop: f64,

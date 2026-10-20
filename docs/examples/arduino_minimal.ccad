@@ -1,0 +1,65 @@
+# Minimal Arduino-compatible board (ATmega328P + 16 MHz crystal + FTDI header + ICSP + pin-13 LED).
+# Build: cargo run -p cli -- docs/examples/arduino_minimal.ccad
+new
+add ATmega328P-AU as=U1
+add XTAL_16MHz_3225 as=Y1
+add C 22p as=C1
+add C 22p as=C2
+add C 100n as=C3
+add C 100n as=C4
+add C 100n as=C5
+add C 100n as=C6
+add R 10k as=R1
+add R 1k as=R2
+add LED as=D1
+add HEADER6 as=J1
+add HEADER6 as=J2
+add HEADER9 as=J3
+add HEADER8 as=J4
+add V 5 as=V1
+
+# power: USB 5 V comes in on the FTDI header (pin 3) and feeds VCC, AVCC and the sources below
+net 5V V1.+ J1.3 U1.4 U1.6 U1.18 R1.1 C3.1 C4.1 J2.2
+net GND V1.- J1.1 J1.2 U1.3 U1.5 U1.21 Y1.2 Y1.4 C1.2 C2.2 C3.2 C4.2 C5.2 J2.6 D1.K
+
+# crystal and its two load capacitors
+net XTAL1 U1.7 Y1.1 C1.1
+net XTAL2 U1.8 Y1.3 C2.1
+
+# reference decoupling
+net AREF U1.20 C5.1
+
+# reset: pull-up + DTR through a capacitor (auto-reset when the PC opens the port)
+net RESET U1.29 R1.2 C6.1 J2.5
+net DTR J1.6 C6.2
+
+# serial: FTDI TXD -> MCU RXD (PD0), MCU TXD (PD1) -> FTDI RXD
+net RXD U1.30 J1.4
+net TXD U1.31 J1.5
+
+# pin 13 LED (PB5 is also SCK)
+net D13 U1.17 R2.1 J2.3
+net LED R2.2 D1.A
+
+# the remaining I/O pins go out to headers (J3 = D2..D10, J4 = A0..A7)
+net D2 U1.32 J3.1
+net D3 U1.1 J3.2
+net D4 U1.2 J3.3
+net D5 U1.9 J3.4
+net D6 U1.10 J3.5
+net D7 U1.11 J3.6
+net D8 U1.12 J3.7
+net D9 U1.13 J3.8
+net D10 U1.14 J3.9
+net A0 U1.23 J4.1
+net A1 U1.24 J4.2
+net A2 U1.25 J4.3
+net A3 U1.26 J4.4
+net A4 U1.27 J4.5
+net A5 U1.28 J4.6
+net A6 U1.19 J4.7
+net A7 U1.22 J4.8
+
+# ICSP: MISO / MOSI
+net MISO U1.16 J2.1
+net MOSI U1.15 J2.4

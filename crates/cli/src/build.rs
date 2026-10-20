@@ -360,12 +360,15 @@ impl Session {
 
     pub fn tran(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
-        if pos.len() < 2 {
-            return Err("tran TSTOP TSTEP [probe=V(out),I(R1)] [samples=6] [uic]   (TSTEP is the largest step; the solver refines it)".into());
+        if pos.is_empty() {
+            return Err("tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic]   (TSTEP is the largest step, default TSTOP/1000; the solver refines it)".into());
         }
         let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("'{s}' is not a positive number (write 10m, 20u ...)"));
-        let (tstop, tstep) = (num(&pos[0])?, num(&pos[1])?);
-        let uic = pos.iter().skip(2).any(|w| w.eq_ignore_ascii_case("uic"));
+        let tstop = num(&pos[0])?;
+        // TSTEP is optional: a second word that is "uic" is the flag, not a step
+        let has_step = pos.get(1).is_some_and(|w| !w.eq_ignore_ascii_case("uic"));
+        let tstep = if has_step { num(&pos[1])? } else { sim_core::auto_tstep(tstop) };
+        let uic = pos.iter().skip(1).any(|w| w.eq_ignore_ascii_case("uic"));
         let samples: usize = opt(&kv, "samples").and_then(|s| s.parse().ok()).unwrap_or(6).clamp(0, 200);
         let probes: Vec<String> = opt(&kv, "probe").map(|p| p.split(',').map(lower).collect()).unwrap_or_default();
         let gate = self.erc_gate()?;

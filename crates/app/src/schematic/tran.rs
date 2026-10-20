@@ -46,9 +46,16 @@ impl SchEditor {
         self.tran_tstep = tstep.into();
     }
 
+    /// (end time, largest step) from the two fields; a blank step is chosen from the end time (`sim_core::auto_tstep`).
+    pub(super) fn tran_times(&self) -> Option<(f64, f64)> {
+        let tstop = parse_value(&self.tran_tstop)?;
+        let tstep = if self.tran_tstep.trim().is_empty() { sim_core::auto_tstep(tstop) } else { parse_value(&self.tran_tstep)? };
+        Some((tstop, tstep))
+    }
+
     pub(super) fn run_tran(&mut self) {
-        let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
-            self.status = "終了時間と時間刻みを数値で入力してください (例: 10m, 10u)".into();
+        let Some((tstop, tstep)) = self.tran_times() else {
+            self.status = "終了時間を数値で入力してください (例: 10m)。刻みは空欄なら自動で、入れるなら数値で (例: 10u)".into();
             return;
         };
         let outcome = match self.sim_circuit() {

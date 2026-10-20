@@ -2,6 +2,7 @@
 
 `docs/examples/*.schjson` と `part-lib/examples` の同梱部品について。生成は `crates/app/src/tests/examples.rs` の `write_*` テスト(`cargo test -p app <名前> -- --ignored`)。
 
+- Arduino 互換の最小ボードは `arduino_minimal.schjson`(ATmega328P + 16MHz水晶 `XTAL_16MHz_3225` + FTDIヘッダ + ICSP + D13のLED + 余ったI/Oを出すヘッダ2つ、部品16個・パッド85)。**`write_*` テストではなく名前ベースのスクリプト `arduino_minimal.ccad` から作る**: `cargo run -p cli -- docs/examples/arduino_minimal.ccad` のあとに `save` / `board ...` を足す。マイコンはシミュレーションモデルなしなので、DCで見えるのは電源(5V)とリセットのプルアップ程度。水晶は R-L-C + C0 の等価回路(AC解析で直列共振16MHz)。基板の品質ベンチマークの「大きめの実戦の題材」(`tools/quality_bench.py` が自動で拾う)。学習パスの題材にもする予定。
 - トランス部品は `part-lib/examples/TRANS_*.part.json`(理想変圧器をBソースで作った`.subckt`: `Bs`=電圧源、`Bp`=`-n*I(Bs)`の電流源、巻線抵抗と励磁L)。
 - 出力コンデンサの置き換え比較は `buck_cout_electrolytic.schjson` / `buck_cout_ceramic.schjson`(`buck_converter` のC1だけを電解 `CE_100u_16V` / セラミック `C_10u_0805` に替えたもの、生成 `write_buck_cout_examples`。ESRが効いてリップルは電解の方が大きい)。
 - インピーダンス比較は `cap_impedance.schjson`(1Ωの直列抵抗ごとに電解/セラミック/並列をつなぎ、AC解析で V(ZE/ZC/ZP)≒|Z|。低域は電解、1MHz以上はセラミックが低い。生成 `write_cap_impedance_example`)。

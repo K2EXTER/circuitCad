@@ -28,7 +28,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
  Simulation
   dc [full]                             operating point: node voltages, element currents
                                         (elements inside a library part's macro model are hidden unless 'full')
-  tran TSTOP TSTEP [probe=V(out),I(R1)] [samples=6] [uic]
+  tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic]
                                         starts from the DC operating point (a capacitor starts charged);
                                         add 'uic' to start from zero instead (step responses, oscillators)
  Design help

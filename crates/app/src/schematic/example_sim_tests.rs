@@ -267,6 +267,25 @@ fn editor_with(example: &str) -> SchEditor {
 }
 
 #[test]
+fn a_blank_time_step_is_chosen_from_the_end_time() {
+    let mut e = editor_with("rlc_pulse.schjson");
+    assert_eq!(e.tran_tstep, "", "the step is automatic by default");
+    e.tran_tstop = "10m".into();
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-9 * b.abs();
+    let (tstop, tstep) = e.tran_times().unwrap();
+    assert!(close(tstop, 0.01) && close(tstep, 0.01 / 1000.0), "{tstop} {tstep}");
+    e.analyze_tran();
+    assert!(e.status.contains("完了"), "{}", e.status);
+    // a typed step still wins, and a typo is reported instead of silently falling back to the automatic one
+    e.tran_tstep = "5u".into();
+    assert!(close(e.tran_times().unwrap().1, 5e-6));
+    e.tran_tstep = "abc".into();
+    assert_eq!(e.tran_times(), None);
+    e.analyze_tran();
+    assert!(e.status.contains("数値"), "{}", e.status);
+}
+
+#[test]
 fn pin_faults_break_one_pin_of_an_ic_and_of_a_transistor() {
     // op-amp amplifier: the gain network hangs on IN-; opening that pin of the LM358 changes the output
     let mut e = editor_with("opamp_amp.schjson");
@@ -463,6 +482,45 @@ fn cap_impedance_sample_electrolytic_wins_low_ceramic_wins_high() {
     for f in [1e3, 1e4, 1e5, 1e6, 1e7] {
         assert!(z("V(ZP)", f) < z("V(ZE)", f).min(z("V(ZC)", f)) * 1.1, "{f}");
     }
+}
+
+/// The bundled 16 MHz crystal in a 50 ohm line (source -> crystal -> 50 ohm to GND): it passes only around its series
+/// resonance, and the response peaks at 16 MHz (the Arduino board's clock).
+#[test]
+fn crystal_part_passes_only_near_16mhz_in_the_ac_analysis() {
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "XTAL_16MHz_3225").unwrap();
+    let mut s = Schematic::default();
+    let label = |s: &mut Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "SIN(0 1 1k) AC 1".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    let y = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 0), 0);
+    label(&mut s, y, "1", "IN");
+    label(&mut s, y, "3", "OUT");
+    label(&mut s, y, "2", "GND");
+    label(&mut s, y, "4", "GND");
+    let r = s.add(Kind::Resistor, (40, 0), 1);
+    s.components[r].value = "50".into();
+    label(&mut s, r, "1", "OUT");
+    label(&mut s, r, "2", "GND");
+    let ac = ac_analysis(&from_schematic(&s).unwrap(), &AcSettings { fstart: 15e6, fstop: 17e6, sweep: AcSweep::Linear(2001) }).unwrap();
+    let mag = ac.signal("V(OUT)").unwrap().mag();
+    let (peak_i, peak) = mag.iter().copied().enumerate().fold((0, 0.0), |a, (i, m)| if m > a.1 { (i, m) } else { a });
+    let f_peak = ac.freq[peak_i];
+    // series resonance 1 / (2 pi sqrt(Lm Cm)) = 16.0 MHz; at resonance only Rm = 40 ohm is left: 50 / (50 + 40) = 0.556
+    assert!((f_peak - 16e6).abs() < 20e3, "peak at {f_peak} Hz");
+    assert!((0.5..0.6).contains(&peak), "peak gain {peak}");
+    // 0.2 MHz away the motional arm is reactive and only the 3 pF C0 leaks through: about 50 ohm over |Zc0| (~3.3 kohm) or less
+    let at = |f: f64| mag[ac.freq.iter().position(|&x| x >= f).unwrap()];
+    assert!(at(15.8e6) < 0.1 * peak && at(16.2e6) < 0.1 * peak, "{} {}", at(15.8e6), at(16.2e6));
 }
 
 #[test]

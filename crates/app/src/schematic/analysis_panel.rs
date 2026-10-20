@@ -41,7 +41,7 @@ impl SchEditor {
             ui.label("終了");
             ui.add(egui::TextEdit::singleline(&mut self.tran_tstop).desired_width(56.0)).on_hover_text("どこまで時間を進めるか。例: 10m = 10ミリ秒。見たい波形が数周期入る長さにします");
             ui.label("刻み");
-            ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).desired_width(56.0)).on_hover_text("計算の最大の時間刻み。波形が角ばって見えるときは小さくします (終了時間の 1/1000 くらいが目安)");
+            ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).hint_text("自動").desired_width(56.0)).on_hover_text("計算の最大の時間刻み。空欄なら自動で、終了時間の 1/1000 になります (波形の変化が速い所では、自動でもっと細かくします)。波形が角ばって見えるときは、小さい値を入れます");
         });
         ui.horizontal(|ui| {
             if ui.button("過渡解析を実行").on_hover_text("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います").clicked() {

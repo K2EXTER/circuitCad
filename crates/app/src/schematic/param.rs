@@ -153,9 +153,9 @@ impl SchEditor {
                 _ => return Err(vec!["AC解析の周波数の設定を数値で入力してください".into()]),
             }
         } else {
-            match (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) {
-                (Some(tstop), Some(tstep)) => ParamAnalysis::Tran { tstop, tstep, uic: self.tran_uic },
-                _ => return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください".into()]),
+            match self.tran_times() {
+                Some((tstop, tstep)) => ParamAnalysis::Tran { tstop, tstep, uic: self.tran_uic },
+                None => return Err(vec!["過渡解析の終了時間を数値で入力してください (刻みは空欄なら自動、入れるなら数値で)".into()]),
             }
         };
         let values = sweep_values(a, b, n.round().max(1.0) as usize, self.param_log);

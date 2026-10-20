@@ -70,7 +70,7 @@ impl SchEditor {
                 McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
             }
             McKind::Tran => {
-                let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+                let Some((tstop, tstep)) = self.tran_times() else {
                     self.status = "過渡解析の欄の終了時間と刻みを数値で入力してください (例: 10m, 10u)".into();
                     return;
                 };

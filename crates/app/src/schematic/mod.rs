@@ -428,7 +428,7 @@ impl Default for SchEditor {
             sig_cache: String::new(),
             tran: None,
             tran_tstop: "10m".into(),
-            tran_tstep: "10u".into(),
+            tran_tstep: String::new(),
             tran_uic: false,
             ac: None,
             ac_fstart: "10".into(),

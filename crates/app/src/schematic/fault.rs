@@ -242,7 +242,7 @@ impl SchEditor {
                 let set = AcSettings { fstart: f0, fstop: f1, sweep: AcSweep::Decade(ppd.max(0.0) as usize) };
                 simulate_broken_ac(&c, &b, &set, &node).map(FaultWave::Ac).map_err(|e| vec![e.to_string()])
             } else {
-                let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+                let Some((tstop, tstep)) = self.tran_times() else {
                     return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
                 };
                 simulate_broken_tran(&c, &b, &TranSettings { tstop, tstep, uic: self.tran_uic }, &node).map(FaultWave::Tran).map_err(|e| vec![e.to_string()])
@@ -360,7 +360,7 @@ impl SchEditor {
                 return Err(vec!["壊す部品を選んでください".to_string()]);
             }
             let fault = ALL_FAULTS[self.fault_kind.min(ALL_FAULTS.len() - 1)];
-            let (Some(tstop), Some(tstep)) = (parse_value(&self.tran_tstop), parse_value(&self.tran_tstep)) else {
+            let Some((tstop, tstep)) = self.tran_times() else {
                 return Err(vec!["過渡解析の終了時間と刻みを数値で入力してください (例: 10m, 10u)".to_string()]);
             };
             let c = self.sim_circuit()?;

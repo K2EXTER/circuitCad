@@ -333,6 +333,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("L78L05_TO-92", include_str!("../examples/L78L05_TO-92.part.json")),
     ("AMS1117-3.3_SOT-223", include_str!("../examples/AMS1117-3.3_SOT-223.part.json")),
     ("ATmega328P-AU_TQFP-32", include_str!("../examples/ATmega328P-AU_TQFP-32.part.json")),
+    ("XTAL_16MHz_3225", include_str!("../examples/XTAL_16MHz_3225.part.json")),
     ("74HC04_DIP-14", include_str!("../examples/74HC04_DIP-14.part.json")),
     ("74HC14_DIP-14", include_str!("../examples/74HC14_DIP-14.part.json")),
     ("74HC00_DIP-14", include_str!("../examples/74HC00_DIP-14.part.json")),
