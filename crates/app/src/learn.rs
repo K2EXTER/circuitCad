@@ -98,6 +98,9 @@ pub enum Kind {
     /// The bench step: build it, measure it, compare with the simulation (`measure_guide.rs`); done when
     /// three measurements have been compared (the app marks the item's id).
     Measure,
+    /// A hands-on task on the bench that the program cannot judge (soldering, flashing): a checklist the learner ticks herself
+    /// (`bench_guide.rs`, by the item's id).
+    Hands,
     /// Not written yet: shown so the whole route is visible.
     Planned,
 }
@@ -196,7 +199,8 @@ const POWER_PATH: LearningPath = LearningPath {
     ],
 };
 
-/// A planned item of a tree path: shown on the map, not yet written.
+/// A planned item of a tree path: shown on the map, not yet written (no item of the Arduino path is planned any more).
+#[allow(dead_code)]
 const fn plan(id: &'static str, title: &'static str, about: &'static str, requires: &'static [&'static str], real: Option<&'static str>) -> Item {
     Item { requires: Some(requires), ..planned(id, title, about, real) }
 }
@@ -246,8 +250,8 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "5. 作って動かす",
             about: "はんだ付けして、ブートローダを書き込み、LED を点滅させます",
             items: &[
-                plan("a_solder", "表面実装のはんだ付け", "TQFP-32 (0.8mm ピッチ) や 0805 のはんだ付けのコツ。ブリッジの直し方", &["board_arduino"], Some("まず練習用の基板で、0805 のチップ部品から始めます")),
-                plan("a_bootload", "ブートローダを書き込んで LED を点滅させる", "ICSP ヘッダでの書き込み、ヒューズ (水晶の選択)、シリアルでのスケッチの書き込み", &["a_solder"], None),
+                Item { id: "solder", title: "表面実装のはんだ付け", about: "0805 のチップ部品と TQFP-32 (0.8mm ピッチ) のはんだ付けのコツ。ブリッジの直し方と、電源を入れる前の点検", kind: Kind::Hands, build: false, requires: Some(&["board_arduino"]), real: Some("まず練習用の基板で、0805 のチップ部品から始めます") },
+                Item { id: "bootload", title: "ブートローダを書き込んで LED を点滅させる", about: "ICSP ヘッダでの書き込み、Arduino IDE の設定、シリアルでのスケッチの書き込み。うまくいかないときの見方", kind: Kind::Hands, build: false, requires: Some(&["solder", "serial"]), real: None },
             ],
         },
     ],
@@ -331,6 +335,8 @@ pub enum Action {
     Board(usize),
     /// The guide of the bench step.
     Measure,
+    /// The checklist of a hands-on item (by the item's id).
+    Hands(&'static str),
 }
 
 /// Colour of the grey explanation lines (`weak()` was too faint on the dark background).
@@ -348,6 +354,7 @@ fn item_action(item: &Item) -> Option<Action> {
         Kind::Build => Some(Action::Build(item.id)),
         Kind::Board(n) => Some(Action::Board(n)),
         Kind::Measure => Some(Action::Measure),
+        Kind::Hands => Some(Action::Hands(item.id)),
         Kind::Planned => None,
     }
 }
@@ -480,6 +487,7 @@ impl LearnWindow {
                             action = Some(match item.kind {
                                 Kind::Lesson(id) => Action::Lesson(id),
                                 Kind::Measure => Action::Measure,
+                                Kind::Hands => Action::Hands(item.id),
                                 Kind::Board(n) => Action::Board(n),
                                 _ => Action::Measure,
                             });
@@ -641,6 +649,9 @@ mod tests {
                 if let Kind::Lesson(id) = item.kind {
                     assert!(known.contains(&id), "{} refers to the missing lesson {id}", item.title);
                     assert_eq!(item.id, id);
+                }
+                if item.kind == Kind::Hands {
+                    assert!(crate::bench_guide::guide(item.id).is_some(), "{} has no hands-on guide", item.title);
                 }
             }
         }
