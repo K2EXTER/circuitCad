@@ -996,3 +996,38 @@ fn the_ldo_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     let i = issues(&e);
     assert!(i.contains(&"U2 Over".to_string()) && i.contains(&"U1 Caution".to_string()), "12 V: {i:?}");
 }
+
+#[test]
+fn the_tl431_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "tl431_ref").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let vout = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("VOUT").unwrap();
+    let vref = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("REF").unwrap();
+    // the current that flows through the TL431 itself (its internal current source `Bk`)
+    let ik = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().elements.iter().find(|x| x.name == "U1.Bk").unwrap().current * 1e3;
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((4.95..5.1).contains(&vout(&e)) && (2.49..2.5).contains(&vref(&e)), "5 V: {} {}", vout(&e), vref(&e));
+    assert!((15.0..20.0).contains(&ik(&e)), "light load: the TL431 takes nearly all: {}", ik(&e));
+    set_value(&mut e, "R2", "15k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((6.2..6.35).contains(&vout(&e)) && (2.49..2.5).contains(&vref(&e)), "15k: {} {}", vout(&e), vref(&e));
+    set_value(&mut e, "R2", "10k");
+    set_value(&mut e, "R4", "330");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((4.95..5.1).contains(&vout(&e)), "330 ohm: {}", vout(&e));
+    assert!((1.5..3.5).contains(&ik(&e)), "the load takes 15 mA: {}", ik(&e));
+    set_value(&mut e, "R4", "100");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!(vout(&e) < 3.0 && ik(&e) < 0.1, "100 ohm: {} {}", vout(&e), ik(&e));
+}

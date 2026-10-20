@@ -1,0 +1,362 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "390",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "TL431",
+      "pos": [
+        26,
+        4
+      ],
+      "rot": 0,
+      "footprint": "SOT-23",
+      "custom": {
+        "name": "TL431",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "CATHODE",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "REF",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "ANODE",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TL431",
+          "text": ".subckt TL431 cat ref an\n* reference input current about 2 uA\nRref ref an 1.25Meg\n* the cathode current rises steeply once REF is above 2.495 V (and the cathode is above ~1.2 V)\nBk cat an I=limit(200*(V(ref,an)-2.495),0,0.1)*step(V(cat,an)-1.2,0.2)\nRleak cat an 10Meg\n.ends TL431",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {},
+          "limits": [
+            "基準電圧は 2.495V で一定です。温度による変化・初期誤差(±0.5〜2%)は扱いません。",
+            "カソード電流は 0〜100mA の範囲で制御します。最小動作電流(約 1mA)を下回ると実物は regulation しなくなりますが、このモデルは小さな電流でも regulation します。",
+            "出力インピーダンスの周波数特性(AC)・位相の遅れは扱いません。大きな容量負荷での発振は再現しません。",
+            "耐圧(36V)・最大電流を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 36.0,
+          "i_max": 0.1,
+          "p_max": 0.4,
+          "rows": [
+            {
+              "name": "基準電圧",
+              "value": "2.495V (代表)",
+              "condition": "TL431, 25℃"
+            },
+            {
+              "name": "最小カソード電流",
+              "value": "1mA",
+              "condition": "regulation に必要"
+            },
+            {
+              "name": "REF 入力電流",
+              "value": "2µA (代表)"
+            }
+          ]
+        },
+        "glyph": "shunt_reg"
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        62,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_1206",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -2
+      ],
+      "b": [
+        12,
+        -5
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        5
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        26,
+        -3
+      ]
+    },
+    {
+      "a": [
+        22,
+        4
+      ],
+      "b": [
+        19,
+        4
+      ]
+    },
+    {
+      "a": [
+        26,
+        8
+      ],
+      "b": [
+        26,
+        11
+      ]
+    },
+    {
+      "a": [
+        40,
+        -2
+      ],
+      "b": [
+        40,
+        -5
+      ]
+    },
+    {
+      "a": [
+        40,
+        2
+      ],
+      "b": [
+        40,
+        5
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    },
+    {
+      "a": [
+        62,
+        -2
+      ],
+      "b": [
+        62,
+        -5
+      ]
+    },
+    {
+      "a": [
+        62,
+        2
+      ],
+      "b": [
+        62,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        12,
+        5
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        26,
+        -3
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        19,
+        4
+      ],
+      "text": "REF"
+    },
+    {
+      "pos": [
+        26,
+        11
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        -5
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        40,
+        5
+      ],
+      "text": "REF"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "REF"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        62,
+        -5
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        62,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

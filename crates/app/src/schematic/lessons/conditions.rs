@@ -311,6 +311,27 @@ pub(super) fn ldo_input_high(e: &SchEditor) -> bool {
     ldo_input_between(e, 10.0, 60.0)
 }
 
+/// The TL431 lesson: the DC result is fresh and R2 is between `lo2` and `hi2`, R4 between `lo4` and `hi4` (ohm).
+fn tl431_values(e: &SchEditor, (lo2, hi2): (f64, f64), (lo4, hi4): (f64, f64)) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    dc_fresh(e) && v("R2").is_some_and(|r| (lo2..=hi2).contains(&r)) && v("R4").is_some_and(|r| (lo4..=hi4).contains(&r))
+}
+
+/// Step 2: the upper divider resistor is about 15k (a 6.2 V output), the load stays light.
+pub(super) fn tl431_six_volts(e: &SchEditor) -> bool {
+    tl431_values(e, (12e3, 20e3), (10e3, 1e9))
+}
+
+/// Step 3: the divider is back at 10k and the load is about 330 ohm (15 mA).
+pub(super) fn tl431_loaded(e: &SchEditor) -> bool {
+    tl431_values(e, (9e3, 11e3), (200.0, 500.0))
+}
+
+/// Step 4: a load of 150 ohm or less (more than the bias resistor can supply).
+pub(super) fn tl431_overloaded(e: &SchEditor) -> bool {
+    tl431_values(e, (9e3, 11e3), (1.0, 150.0))
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

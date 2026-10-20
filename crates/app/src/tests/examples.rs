@@ -914,6 +914,53 @@ fn write_ldo_example() {
     std::fs::write(root.join("ldo_compare.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/tl431_reference.schjson: a shunt regulator. V1 = 12 V, R1 = 390 ohm (from VIN to VOUT), U1 = TL431 (cathode on
+/// VOUT, anode on GND, REF on the divider R2 = 10k from VOUT and R3 = 10k to GND: VOUT = 2.495 V x (1 + R2 / R3) = 5 V), R4 = the load (100k):
+/// `cargo test -p app write_tl431_example -- --ignored`
+#[test]
+#[ignore]
+fn write_tl431_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "TL431").unwrap();
+    let pin = |name: &str| def.pins.iter().find(|p| p.name == name).unwrap().number.clone();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "VIN");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (12, 0), 1);
+    s.components[r1].value = "390".into();
+    s.components[r1].footprint = "R_2512".into();
+    label(&mut s, r1, "1", "VIN");
+    label(&mut s, r1, "2", "VOUT");
+    let u1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (26, 4), 0);
+    label(&mut s, u1, &pin("CATHODE"), "VOUT");
+    label(&mut s, u1, &pin("REF"), "REF");
+    label(&mut s, u1, &pin("ANODE"), "GND");
+    let r2 = s.add(Kind::Resistor, (40, 0), 1);
+    s.components[r2].value = "10k".into();
+    label(&mut s, r2, "1", "VOUT");
+    label(&mut s, r2, "2", "REF");
+    let r3 = s.add(Kind::Resistor, (50, 0), 1);
+    s.components[r3].value = "10k".into();
+    label(&mut s, r3, "1", "REF");
+    label(&mut s, r3, "2", "GND");
+    let r4 = s.add(Kind::Resistor, (62, 0), 1);
+    s.components[r4].value = "100k".into();
+    s.components[r4].footprint = "R_1206".into();
+    label(&mut s, r4, "1", "VOUT");
+    label(&mut s, r4, "2", "GND");
+    std::fs::write(root.join("tl431_reference.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]
