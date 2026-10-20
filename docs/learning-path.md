@@ -100,3 +100,16 @@
 - 作って動かす: 表面実装のはんだ付け / ブートローダと LED の点滅
 
 レッスン24 水晶 `crystal`(USB の電気の基本は、段階「3b. 発展: USB につなぐ」の 32 `usb_power`・33 `usb_speed`・34 `usb_signal`、基板レッスン5 `board_usb`)、25 リセット `reset`、26 バイパスコンデンサ `decoupling`、27 プルアップ `pullup`、28 ピンの LED `pin_led`、29 レベル変換 `levels`、30 シリアル `serial`、31 データシート `datasheet`、最終課題 `draw_arduino`(「作ってみよう」)、基板レッスン4 `board_arduino`(置き方の勘所と配線)があり、はんだ付け以降は道すじだけ(`plan` = 準備中)。レッスンを書いたら、`plan(...)` を `lesson(...)` に替え、`requires` を `Item { requires: Some(&[...]), ..lesson(...) }` で付ける。サンプル回路は `docs/examples/arduino_minimal.schjson`(水晶の部品 `XTAL_16MHz_3225` つき)。
+
+## 安定化電源のパスも樹形図 (`POWER_PATH`)
+
+安定化電源のパスも、各項目の `requires` で前提を書いた樹形図です(もとは 25 項目の直線)。段階 (1〜4) は見出しとして残り、順番は強制しません。
+
+- 根: `divider`(電圧を分ける)と `led`。この2つは、並行して学べます。
+- 入門の枝: `divider` → `coin_cell`・`opamp_noninv` → `opamp_inv`。
+- 部品の枝: `led` → `diode_curve` → `rectifier`・`zener`、`led` → `bjt_switch`。`zener` と `bjt_switch` が揃うと `emitter_follower`。
+- 合流: `opamp_inv` と `emitter_follower` が揃うと `series_regulator`。`emitter_follower` の先に `regulator_78xx` → `heat`・`protection` → `coil_layer_short`、`rectifier` と合わせて `variable_supply`、`regulator_78xx` と `heat` で `buck`。
+- 最終課題 `draw_psu` は、`series_regulator`・`regulator_78xx`・`protection` が前提。そのあと `board` → `board_copper`・`board_fix` → `build_psu`。
+- Arduino のパスの「LED と抵抗」「電圧を分ける」「基板」は、この木の項目を前提にしています(別のパスの項目も指せる)。
+- 進み具合の記録は項目の id のままなので、直線のときの記録がそのまま使えます。`requires` を書かない項目は、従来どおり「直前の項目が前提」になります(テストは小さな直線のパスで確かめる)。
+

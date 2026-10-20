@@ -154,46 +154,46 @@ const POWER_PATH: LearningPath = LearningPath {
             name: "1. 入門: 電圧・電流と測り方",
             about: "電圧を分ける、電流を制限する、電池が負荷で電圧を下げる。安定化電源が「何を一定にするのか」の土台です",
             items: &[
-                Item { build: true, ..lesson("divider", "電圧を分ける (分圧回路)", "抵抗2本で好きな電圧を作る。出力が負荷で変わる理由の入口", Some("テスタで電圧を測る。抵抗2本をブレッドボードにつなぎ、計算値と測定値を比べます")) },
-                Item { build: true, ..lesson("led", "LED と電流制限抵抗", "電流を決めるのは抵抗。電流を測る方法も", Some("LED の電流をテスタの電流レンジで測り、抵抗を変えて明るさと電流を比べます")) },
-                lesson("coin_cell", "電池の内部抵抗 (負荷で電圧が下がる)", "電源の電圧が、電流を流すと下がる。これを小さくするのが安定化電源の役目", Some("電池に抵抗をつないで、つなぐ前後の端子電圧を測り、内部抵抗を求めます")),
+                Item { build: true, requires: Some(&[]), ..lesson("divider", "電圧を分ける (分圧回路)", "抵抗2本で好きな電圧を作る。出力が負荷で変わる理由の入口", Some("テスタで電圧を測る。抵抗2本をブレッドボードにつなぎ、計算値と測定値を比べます")) },
+                Item { build: true, requires: Some(&[]), ..lesson("led", "LED と電流制限抵抗", "電流を決めるのは抵抗。電流を測る方法も", Some("LED の電流をテスタの電流レンジで測り、抵抗を変えて明るさと電流を比べます")) },
+                Item { requires: Some(&["divider"]), ..lesson("coin_cell", "電池の内部抵抗 (負荷で電圧が下がる)", "電源の電圧が、電流を流すと下がる。これを小さくするのが安定化電源の役目", Some("電池に抵抗をつないで、つなぐ前後の端子電圧を測り、内部抵抗を求めます")) },
             ],
         },
         Stage {
             name: "2. 基礎: 電源をつくる部品",
             about: "ダイオード・コンデンサ・ツェナー・トランジスタ。電圧を整え、ならし、一定にし、電流を増やす部品の働きです",
             items: &[
-                lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")),
-                lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")),
-                Item { build: true, ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },
-                lesson("bjt_switch", "トランジスタのスイッチ", "ベース電流でコレクタ電流を制御する。電流を増やす部品の入口", Some("トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります")),
-                Item { build: true, ..lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")) },
+                Item { requires: Some(&["led"]), ..lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")) },
+                Item { requires: Some(&["diode_curve"]), ..lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")) },
+                Item { build: true, requires: Some(&["diode_curve", "divider"]), ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },
+                Item { requires: Some(&["led"]), ..lesson("bjt_switch", "トランジスタのスイッチ", "ベース電流でコレクタ電流を制御する。電流を増やす部品の入口", Some("トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります")) },
+                Item { build: true, requires: Some(&["zener", "bjt_switch"]), ..lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")) },
             ],
         },
         Stage {
             name: "3. 応用: 安定化のしくみ",
             about: "出力の電圧を測って、ずれたら直す (帰還)。これが安定化電源の本質です",
             items: &[
-                lesson("opamp_noninv", "オペアンプで信号を大きくする (非反転増幅)", "帰還の考え方。抵抗の比がゲインを決める", Some("オペアンプの増幅回路を作り、入力と出力をテスタやオシロで測ります")),
-                Item { build: true, ..lesson("opamp_inv", "オペアンプの反転増幅 (仮想接地)", "反転入力が 0V に保たれる仕組み", None) },
-                Item { build: true, ..lesson("series_regulator", "基準電圧と帰還で安定化する (直列レギュレータ)", "オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む", Some("負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります")) },
-                Item { build: true, ..lesson("regulator_78xx", "三端子レギュレータ (78xx / LDO) を使う", "入出力のコンデンサ、ドロップアウト電圧、使い方と選び方", Some("7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります")) },
-                lesson("heat", "熱と定格を考える", "電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方", Some("負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます")),
-                lesson("protection", "電源を守る (逆接続・過電流・ヒューズ)", "壊れ方を知って、守る部品を足す", Some("ヒューズや逆接続保護ダイオードの働きを、安全な条件 (低電圧・電流制限つき) で確かめます")),
-                lesson("coil_layer_short", "コイルのレアショート (連鎖して壊れる)", "1つの故障が次の部品の故障を呼ぶ連鎖。ヒューズで止められる場合と、止められない場合", Some("リレーのコイル抵抗をテスタで測り、定格電流の内側か確かめます。コイルを実際にショートさせる実験はしません")),
-                lesson("variable_supply", "ダイヤルで電圧を変える電源 (トランス + LM317)", "100V → トランス → 整流 → 可変レギュレータ。ダイヤル(ボリューム)で出力が変わる式と、出せない電圧の理由", Some("低電圧の電源 (15〜18V の AC アダプタ) で LM317 を組み、ボリュームを回して出力を測ります。100V は実験に使いません")),
-                lesson("buck","降圧コンバータ (スイッチング電源)", "発展: 熱にしない電源。リニアとの効率の違い", None),
+                Item { requires: Some(&["divider"]), ..lesson("opamp_noninv", "オペアンプで信号を大きくする (非反転増幅)", "帰還の考え方。抵抗の比がゲインを決める", Some("オペアンプの増幅回路を作り、入力と出力をテスタやオシロで測ります")) },
+                Item { build: true, requires: Some(&["opamp_noninv"]), ..lesson("opamp_inv", "オペアンプの反転増幅 (仮想接地)", "反転入力が 0V に保たれる仕組み", None) },
+                Item { build: true, requires: Some(&["opamp_inv", "emitter_follower"]), ..lesson("series_regulator", "基準電圧と帰還で安定化する (直列レギュレータ)", "オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む", Some("負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります")) },
+                Item { build: true, requires: Some(&["emitter_follower"]), ..lesson("regulator_78xx", "三端子レギュレータ (78xx / LDO) を使う", "入出力のコンデンサ、ドロップアウト電圧、使い方と選び方", Some("7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります")) },
+                Item { requires: Some(&["regulator_78xx"]), ..lesson("heat", "熱と定格を考える", "電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方", Some("負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます")) },
+                Item { requires: Some(&["diode_curve", "regulator_78xx"]), ..lesson("protection", "電源を守る (逆接続・過電流・ヒューズ)", "壊れ方を知って、守る部品を足す", Some("ヒューズや逆接続保護ダイオードの働きを、安全な条件 (低電圧・電流制限つき) で確かめます")) },
+                Item { requires: Some(&["protection"]), ..lesson("coil_layer_short", "コイルのレアショート (連鎖して壊れる)", "1つの故障が次の部品の故障を呼ぶ連鎖。ヒューズで止められる場合と、止められない場合", Some("リレーのコイル抵抗をテスタで測り、定格電流の内側か確かめます。コイルを実際にショートさせる実験はしません")) },
+                Item { requires: Some(&["rectifier", "regulator_78xx"]), ..lesson("variable_supply", "ダイヤルで電圧を変える電源 (トランス + LM317)", "100V → トランス → 整流 → 可変レギュレータ。ダイヤル(ボリューム)で出力が変わる式と、出せない電圧の理由", Some("低電圧の電源 (15〜18V の AC アダプタ) で LM317 を組み、ボリュームを回して出力を測ります。100V は実験に使いません")) },
+                Item { requires: Some(&["regulator_78xx", "heat"]), ..lesson("buck","降圧コンバータ (スイッチング電源)", "発展: 熱にしない電源。リニアとの効率の違い", None) },
             ],
         },
         Stage {
             name: "4. 製作: 回路図から基板、実機まで",
             about: "設計した電源を、基板にして、組み立てて、性能を測ります",
             items: &[
-                Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, requires: None, build: true, real: None },
-                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: None, build: false, real: Some("発注するなら、少量・少額で試します") },
-                Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), requires: None, build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
-                Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), requires: None, build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") },
-                Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, requires: None, build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
+                Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, requires: Some(&["series_regulator", "regulator_78xx", "protection"]), build: true, real: None },
+                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: Some(&["draw_psu"]), build: false, real: Some("発注するなら、少量・少額で試します") },
+                Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), requires: Some(&["board"]), build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
+                Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), requires: Some(&["board"]), build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") },
+                Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, requires: Some(&["board_fix", "board_copper"]), build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
             ],
         },
     ],
@@ -715,14 +715,20 @@ mod tests {
         progress.mark("led");
         assert!(ready(&progress).contains(&"pin_led"));
         let mut progress = Progress::default();
-        assert!(is_tree(&ARDUINO_PATH) && !is_tree(&POWER_PATH));
-        // a straight line (no `requires`) needs just the item before it
-        let line = &POWER_PATH;
-        let led = find_item("led").unwrap();
-        assert_eq!(prerequisites(line, led).iter().map(|i| i.id).collect::<Vec<_>>(), ["divider"], "a straight line needs the item before it");
-        assert_eq!(recommended(line, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["divider"]);
+        assert!(is_tree(&ARDUINO_PATH) && is_tree(&POWER_PATH));
+        // a straight line (items without `requires`) needs just the item before it: a two-item test path that reuses real ids
+        const LINE: LearningPath = LearningPath {
+            id: "test_line",
+            title: "",
+            goal: "",
+            stages: &[Stage { name: "", about: "", items: &[lesson("divider", "", "", None), lesson("led", "", "", None)] }],
+        };
+        assert!(!is_tree(&LINE));
+        let led_in_line = items(&LINE).nth(1).unwrap();
+        assert_eq!(prerequisites(&LINE, led_in_line).iter().map(|i| i.id).collect::<Vec<_>>(), ["divider"], "a straight line needs the item before it");
+        assert_eq!(recommended(&LINE, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["divider"]);
         progress.mark("divider");
-        assert_eq!(recommended(line, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["led"]);
+        assert_eq!(recommended(&LINE, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["led"]);
         // the Arduino items name power-path items from another path
         let pin_led = find_item("pin_led").unwrap();
         assert!(requirements(&ARDUINO_PATH, pin_led).iter().any(|i| i.id == "led"));
@@ -739,10 +745,22 @@ mod tests {
         let (done, available, all) = summary(p, &progress);
         assert_eq!(done, 0);
         assert!(available >= 12 && all >= available);
-        // the first thing to do is the first lesson; finishing it moves the recommendation on
+        // a tree: the two roots (the divider and the LED) can both be started; what finishing one opens depends on the branch
+        let ready = |p: &Progress| recommended(&PATHS[0], p).iter().map(|i| i.id).collect::<Vec<_>>();
+        assert_eq!(ready(&progress), ["divider", "led"]);
         assert_eq!(next_item(p, &progress).unwrap().id, "divider");
         progress.mark("divider");
-        assert_eq!(next_item(p, &progress).unwrap().id, "led");
+        assert_eq!(ready(&progress), ["led", "coin_cell", "opamp_noninv"], "the divider opens the battery and the amplifier");
+        progress.mark("led");
+        assert!(ready(&progress).contains(&"diode_curve") && ready(&progress).contains(&"bjt_switch"), "{:?}", ready(&progress));
+        // a lesson whose prerequisites are not all done is not recommended: the follower needs both the zener and the switch
+        progress.mark("diode_curve");
+        progress.mark("zener");
+        assert!(!ready(&progress).contains(&"emitter_follower"));
+        progress.mark("bjt_switch");
+        assert!(ready(&progress).contains(&"emitter_follower"));
+        // the last steps wait for the branches they join
+        assert!(!ready(&progress).contains(&"draw_psu") && !ready(&progress).contains(&"build_psu"));
         // planned items are never recommended, however far the learner is
         for it in items(p).filter(|i| i.kind != Kind::Planned) {
             let key = if it.kind == Kind::Build { crate::schematic::challenge_progress_key(it.id) } else { it.id.to_string() };
