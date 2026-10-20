@@ -386,6 +386,32 @@ fn wiring_capacitance_to_the_plane_shunts_the_pin_at_high_frequency() {
     assert!(at(&shunted) < 0.1 * at(&bare), "{} -> {}", at(&bare), at(&shunted));
 }
 
+/// A pad's wiring inductor and capacitor (4 nH, 0.3 pF: a 4.5 GHz resonance with only milliohms of loss) used to ring for ever, and
+/// the transient took picosecond steps for the whole run. The `.RD` resistor across the inductor caps Q, so the run stays short.
+#[test]
+fn wiring_resonance_far_above_the_signal_does_not_make_the_transient_crawl() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "PULSE(0 3.3 5n 0.5n 0.5n 50n 100n)".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (12, 0), 1);
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), r2[0].1);
+    wire(&mut s, r2[1].1, (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    let w = [WiringR { refdes: "R1".into(), pin: "1".into(), ohm: 0.01, henry: 4e-9, farad: 0.3e-12 }];
+    let c = from_schematic_with_wiring(&s, &w).unwrap();
+    assert!(c.elements.iter().any(|e| e.name() == "R1.1.RD"));
+    let r = transient(&c, &TranSettings { tstop: 1e-6, tstep: 1e-9, uic: false }).unwrap();
+    let n = r.time.len();
+    assert!(n < 20_000, "{n} points for 1 us");
+}
+
 #[test]
 fn coupled_supply_and_return_wiring_lowers_the_loop_inductance() {
     let mut s = Schematic::default();

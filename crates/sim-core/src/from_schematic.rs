@@ -44,6 +44,9 @@ pub struct WiringR {
     pub farad: f64,
 }
 
+/// Highest quality factor of a pad's wiring L-C resonance (see the `.RD` resistor in `build`).
+const WIRING_Q_MAX: f64 = 8.0;
+
 /// Magnetic coupling between the wiring inductors of two pins (`pcb_core::irdrop::wiring_couplings`): the coupling
 /// factor of `REF.PIN.LW` and `REF.PIN.LW`. Positive when both pins are read from their supply pad outward and the
 /// copper runs the same way, which makes a supply trace and its return trace lower the loop inductance.
@@ -121,6 +124,12 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
             }
             if w.henry > 0.0 {
                 c.add(Element::Inductor { name: format!("{}.{}.LW", w.refdes, w.pin), a: from, b: m, l: w.henry });
+                // The copper's own loss (skin effect, dielectric, radiation) keeps a real trace's resonance from ringing for ever,
+                // but the lumped R is only milliohms: Q in the thousands, a GHz ring that no step size can settle and the
+                // transient crawls at picosecond steps. A resistor across the inductor caps Q at `WIRING_Q_MAX`; DC is unchanged.
+                if w.farad > 0.0 {
+                    c.add(Element::Resistor { name: format!("{}.{}.RD", w.refdes, w.pin), a: from, b: m, r: WIRING_Q_MAX * (w.henry / w.farad).sqrt() });
+                }
             }
             if w.farad > 0.0 {
                 c.add(Element::Capacitor { name: format!("{}.{}.CW", w.refdes, w.pin), a: m, b: 0, c: w.farad });
