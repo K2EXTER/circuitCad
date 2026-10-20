@@ -1196,3 +1196,90 @@ fn a_route_without_a_circuit_goes_ahead_after_one_try() {
     e.autoroute(None);
     assert!(e.currents_request.is_none() && !e.board.tracks.is_empty());
 }
+
+/// Drags part `refdes` so that each of its pads is between 2 mm and `max` mm from the pad it should be near (`ends`: own pin, target
+/// part, target pin): tries the valid spots (inside the
+/// outline, no rule violation) one after another, spread over the ring, and keeps the first one where the fine-grid auto routing of the
+/// whole board still leaves nothing open (a learner tries and undoes the same way). Panics if there is none.
+fn drag_next_to(e: &mut BoardEditor, refdes: &str, ends: &[(&str, (&str, &str))], max: f64) {
+    let pad = |b: &Board, r: &str, p: &str| b.pads.iter().find(|x| x.refdes == r && x.pin == p).map(|x| x.pos).unwrap();
+    let dist = |a: Point, c: Point| ((a.x - c.x).powi(2) + (a.y - c.y).powi(2)).sqrt();
+    let goal = pad(&e.board, (ends[0].1).0, (ends[0].1).1);
+    let rot = e.board.parts.iter().find(|p| p.refdes == refdes).unwrap().rot;
+    let mut valid = vec![];
+    for dx in -9..=9 {
+        for dy in -9..=9 {
+            let at = Point::new(goal.x + dx as f64, goal.y + dy as f64);
+            let mut t = e.board.clone();
+            t.place_part(refdes, at, rot);
+            let ds: Vec<f64> = ends.iter().map(|(own, tgt)| dist(pad(&t, refdes, own), pad(&t, tgt.0, tgt.1))).collect();
+            let fits = ds.iter().all(|d| *d >= 2.0 && *d <= max);
+            let inside = t.pads.iter().filter(|p| p.refdes == refdes).all(|p| inside_polygon(&t.outline, p.pos));
+            let clean = pcb_core::drc::check(&t).iter().all(|v| !v.message.contains(refdes));
+            if fits && inside && clean {
+                valid.push(at);
+            }
+        }
+    }
+    assert!(!valid.is_empty(), "no free spot for {refdes} near {ends:?}");
+    for at in valid.iter().step_by((valid.len() / 8).max(1)) {
+        let mut t = e.board.clone();
+        t.place_part(refdes, *at, rot);
+        let mut probe = BoardEditor::default();
+        probe.board = t.clone();
+        probe.grid = 0.1;
+        probe.autoroute_now(None);
+        if ratsnest(&probe.board).is_empty() {
+            e.checkpoint();
+            e.board = t;
+            return;
+        }
+    }
+    panic!("every spot for {refdes} near {ends:?} makes the board unroutable");
+}
+
+/// The placement lesson of the Arduino-compatible board: the auto placement leaves the crystal and the bypass capacitors far from
+/// the microcontroller (14 - 16 mm), so two steps are the learner's own; the default grid leaves connections open, a finer one routes them.
+#[test]
+fn the_arduino_board_lesson_walks_from_import_to_the_order_window() {
+    let mut sch = crate::schematic::SchEditor::default();
+    assert!(sch.load_sample(BoardEditor::arduino_lesson_circuit()));
+    let mut e = BoardEditor::default();
+    e.start_arduino_lesson();
+    assert_eq!(e.lesson_progress(), 0);
+    e.import_from_schematic(&sch);
+    assert_eq!(e.lesson_progress(), 1);
+    e.autoplace();
+    assert_eq!(e.lesson_progress(), 2);
+    // the auto placement is only a first draft: the crystal and the bypass capacitors are not near their pins yet
+    let far = |e: &BoardEditor, a: (&str, &str), b: (&str, &str)| {
+        let at = |r: &str, p: &str| e.board.pads.iter().find(|x| x.refdes == r && x.pin == p).map(|x| x.pos).unwrap();
+        let (p, q) = (at(a.0, a.1), at(b.0, b.1));
+        ((p.x - q.x).powi(2) + (p.y - q.y).powi(2)).sqrt()
+    };
+    assert!(far(&e, ("Y1", "1"), ("U1", "7")) > 9.0, "the crystal starts {} mm from XTAL1", far(&e, ("Y1", "1"), ("U1", "7")));
+    drag_next_to(&mut e, "Y1", &[("1", ("U1", "7")), ("3", ("U1", "8"))], 8.0);
+    assert!(far(&e, ("Y1", "3"), ("U1", "8")) <= 9.0, "the other end follows: {}", far(&e, ("Y1", "3"), ("U1", "8")));
+    assert_eq!(e.lesson_progress(), 3, "the crystal is near");
+    drag_next_to(&mut e, "C3", &[("1", ("U1", "4"))], 5.0);
+    assert_eq!(e.lesson_progress(), 3, "only the VCC capacitor is near: the AVCC pin has none yet");
+    drag_next_to(&mut e, "C4", &[("1", ("U1", "18"))], 5.0);
+    assert_eq!(e.lesson_progress(), 4, "the bypass capacitors are near");
+    // the default grid (0.5 mm) may leave connections of this dense board open (on the plain auto placement it leaves two); the
+    // tracks it did lay then get in the way of a second try, so the learner takes them back (Ctrl+Z) and routes with a finer grid
+    e.autoroute_now(None);
+    if !ratsnest(&e.board).is_empty() {
+        assert_eq!(e.lesson_progress(), 4, "{}", e.status);
+        e.undo();
+        assert!(e.board.tracks.is_empty(), "Ctrl+Z took the coarse routing back");
+        e.grid = 0.1;
+        e.autoroute_now(None);
+    }
+    assert!(ratsnest(&e.board).is_empty(), "{}", e.status);
+    assert_eq!(e.lesson_progress(), 5, "{}", e.status);
+    e.run_drc();
+    assert_eq!(e.lesson_progress(), 6, "{}", e.status);
+    e.open_order();
+    assert_eq!(e.lesson_progress(), 7);
+    assert_eq!(e.finished_board_lesson(), Some("board_arduino"));
+}

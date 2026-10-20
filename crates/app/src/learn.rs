@@ -239,15 +239,14 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
                 Item { id: "draw_arduino", title: "Arduino 互換ボードの回路図を自分で描く (最終課題)", about: "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する。つなぎ方と部品の値を判定する", kind: Kind::Build, build: true, requires: Some(&["decoupling", "crystal", "reset", "pin_led", "serial"]), real: None },
-                plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["draw_arduino"], None),
-                plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
+                Item { id: "board_arduino", title: "基板にする: 置き方の勘所と配線", about: "水晶はマイコンのそば・バイパスコンデンサは電源ピンのそば。通らない線は、グリッドを細かくして直す。DRC と発注の準備まで", kind: Kind::Board(3), build: false, requires: Some(&["draw_arduino", "board"]), real: Some("発注するなら、少量・少額で試します") },
             ],
         },
         Stage {
             name: "5. 作って動かす",
             about: "はんだ付けして、ブートローダを書き込み、LED を点滅させます",
             items: &[
-                plan("a_solder", "表面実装のはんだ付け", "TQFP-32 (0.8mm ピッチ) や 0805 のはんだ付けのコツ。ブリッジの直し方", &["a_board"], Some("まず練習用の基板で、0805 のチップ部品から始めます")),
+                plan("a_solder", "表面実装のはんだ付け", "TQFP-32 (0.8mm ピッチ) や 0805 のはんだ付けのコツ。ブリッジの直し方", &["board_arduino"], Some("まず練習用の基板で、0805 のチップ部品から始めます")),
                 plan("a_bootload", "ブートローダを書き込んで LED を点滅させる", "ICSP ヘッダでの書き込み、ヒューズ (水晶の選択)、シリアルでのスケッチの書き込み", &["a_solder"], None),
             ],
         },

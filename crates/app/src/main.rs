@@ -284,6 +284,11 @@ impl eframe::App for App {
                         self.start_board_lesson(2);
                         ui.close();
                     }
+                    let arduino_mark = if self.progress.is_done(board_editor::lesson::ARDUINO_ID) { "✔ " } else { "　 " };
+                    if ui.button(format!("{arduino_mark}{}", board_editor::lesson::ARDUINO_TITLE)).on_hover_text("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します").clicked() {
+                        self.start_board_lesson(3);
+                        ui.close();
+                    }
                 });
                 ui.menu_button("編集", |ui| {
                     if ui.button("元に戻す (Ctrl+Z)").on_hover_text("直前の操作を取り消します").clicked() {
