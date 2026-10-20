@@ -84,6 +84,8 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             // --fault <part> <0 open | 1 short | 2 x10 | 3 /10>   or   --fault scan
             match args.get(i + 1).map(|s| s.as_str()) {
                 Some("scan") => app.sch.analyze_fault_scan(),
+                // the scan on its own thread (the screenshot is taken while it runs)
+                Some("scan-bg") => app.sch.start_fault_scan_bg(),
                 Some(part) => {
                     app.sch.set_fault(part, args.get(i + 2).and_then(|k| k.parse().ok()).unwrap_or(0));
                     let mut chain = false;

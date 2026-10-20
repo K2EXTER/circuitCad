@@ -67,6 +67,7 @@ impl SchEditor {
     }
 
     pub(super) fn side_panel_body(&mut self, ui: &mut egui::Ui) {
+        self.poll_fault_scan(ui.ctx());
         ui.horizontal(|ui| {
             ui.selectable_value(&mut self.panel_tab, PanelTab::Draw, "作図")
                 .on_hover_text("部品を置く、配線する、部品の値を変える、配線ミスを点検する (ERC)");

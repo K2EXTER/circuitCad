@@ -1,35 +1,54 @@
 //! Running independent jobs on several threads, in the order they were given.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 /// `items.iter().map(f).collect()`, with the items shared out over the machine's cores. The results come back in the order of `items`
 /// whatever order the threads finish in. The simulation options (a per-thread setting) are copied to every worker. With one core, or
 /// fewer than two items, it runs on the calling thread.
 pub fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> {
+    par_map_progress(items, f, &AtomicUsize::new(0), &AtomicBool::new(false)).into_iter().map(|r| r.expect("not cancelled")).collect()
+}
+
+/// `par_map` that counts the finished items in `done` (a progress bar can read it while the jobs run) and stops handing out items once
+/// `cancel` is set. Items that were not started come back as `None`; the ones that were started finish.
+pub fn par_map_progress<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync, done: &AtomicUsize, cancel: &AtomicBool) -> Vec<Option<R>> {
     let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(items.len());
     if workers < 2 {
-        return items.iter().map(f).collect();
+        return items
+            .iter()
+            .map(|item| {
+                if cancel.load(Ordering::Relaxed) {
+                    return None;
+                }
+                let r = f(item);
+                done.fetch_add(1, Ordering::Relaxed);
+                Some(r)
+            })
+            .collect();
     }
     let options = crate::options::options();
     let next = AtomicUsize::new(0);
-    let done: Mutex<Vec<(usize, R)>> = Mutex::new(Vec::with_capacity(items.len()));
+    let finished: Mutex<Vec<(usize, R)>> = Mutex::new(Vec::with_capacity(items.len()));
     std::thread::scope(|scope| {
         for _ in 0..workers {
             scope.spawn(|| {
                 crate::options::set_options(options);
-                loop {
+                while !cancel.load(Ordering::Relaxed) {
                     let i = next.fetch_add(1, Ordering::Relaxed);
                     let Some(item) = items.get(i) else { break };
                     let r = f(item);
-                    done.lock().unwrap().push((i, r));
+                    finished.lock().unwrap().push((i, r));
+                    done.fetch_add(1, Ordering::Relaxed);
                 }
             });
         }
     });
-    let mut done = done.into_inner().unwrap();
-    done.sort_by_key(|(i, _)| *i);
-    done.into_iter().map(|(_, r)| r).collect()
+    let mut out: Vec<Option<R>> = (0..items.len()).map(|_| None).collect();
+    for (i, r) in finished.into_inner().unwrap() {
+        out[i] = Some(r);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -44,6 +63,32 @@ mod tests {
         assert_eq!(par_map(&items, f), items.iter().map(f).collect::<Vec<_>>());
         assert_eq!(par_map(&items[..1], f), vec![f(&0)]);
         assert!(par_map(&Vec::<u64>::new(), f).is_empty());
+    }
+
+    #[test]
+    fn progress_is_counted_and_a_cancel_stops_new_items() {
+        let items: Vec<u32> = (0..200).collect();
+        let (done, cancel) = (AtomicUsize::new(0), AtomicBool::new(false));
+        let all = par_map_progress(&items, |x| x + 1, &done, &cancel);
+        assert_eq!(done.load(Ordering::Relaxed), 200);
+        assert!(all.iter().all(Option::is_some));
+        // cancelled after ten items: the rest are not started, the finished ones keep their values
+        let (done, cancel) = (AtomicUsize::new(0), AtomicBool::new(false));
+        let some = par_map_progress(
+            &items,
+            |x| {
+                if done.load(Ordering::Relaxed) >= 10 {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(2));
+                x + 1
+            },
+            &done,
+            &cancel,
+        );
+        let finished = some.iter().flatten().count();
+        assert!((10..200).contains(&finished), "{finished}");
+        assert!(some.iter().enumerate().all(|(i, r)| r.is_none_or(|v| v == i as u32 + 1)));
     }
 
     #[test]

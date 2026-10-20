@@ -856,3 +856,37 @@ fn wire_colours_follow_the_pin_voltage_behind_the_wiring_resistance() {
     assert!((dc.wire_v[wire].unwrap() - expect).abs() < 1e-9);
     assert!((pin_v - net_v).abs() > 1e-3, "the pin is behind a resistor, so it differs from the net: {pin_v} {net_v}");
 }
+
+/// The scan on its own thread gives the rows of the scan on the calling thread, in the same order, and can be cancelled.
+#[test]
+fn the_fault_scan_on_its_own_thread_gives_the_same_rows_and_can_be_cancelled() {
+    use std::sync::atomic::Ordering;
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "series_regulator.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.analyze_fault_scan();
+    let rows = |e: &SchEditor| e.fault_scan.iter().map(|r| (r.part.clone(), r.pin.clone(), r.label.clone(), r.severity.to_bits(), r.danger)).collect::<Vec<_>>();
+    let blocking = rows(&e);
+    assert!(blocking.len() >= 4);
+    // on a thread
+    e.fault_scan.clear();
+    e.start_fault_scan();
+    assert!(e.scan_run.is_some());
+    let ctx = egui::Context::default();
+    let t0 = std::time::Instant::now();
+    while e.scan_run.is_some() {
+        e.poll_fault_scan(&ctx);
+        assert!(t0.elapsed().as_secs() < 60, "the scan did not finish");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(rows(&e), blocking);
+    // cancelled at once: nothing is taken over, and the old rows stay
+    e.start_fault_scan();
+    e.scan_run.as_ref().unwrap().cancel.store(true, Ordering::Relaxed);
+    while e.scan_run.is_some() {
+        e.poll_fault_scan(&ctx);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(e.status.contains("中止"), "{}", e.status);
+    assert_eq!(rows(&e), blocking);
+}

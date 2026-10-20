@@ -1,6 +1,8 @@
 //! Fault simulation panel: break one part and see what changes at DC.
 
 use super::*;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 use sim_core::{assess_safety, chain_failure, dc_op, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
 
 /// The last fault run.
@@ -27,6 +29,87 @@ pub(super) struct FaultWaveView {
     plot: PlotState,
 }
 
+/// A scan running on another thread: how far it is, how to stop it, and where the rows will come from (`None` = cancelled).
+pub(super) struct ScanRun {
+    pub(super) done: Arc<AtomicUsize>,
+    pub(super) total: usize,
+    pub(super) cancel: Arc<AtomicBool>,
+    rx: std::sync::mpsc::Receiver<Option<Vec<ScanRow>>>,
+}
+
+/// The work of a scan, as owned data: the healthy circuit, the broken ones, and the pin faults to build and solve.
+struct ScanPlan {
+    c: Circuit,
+    sch: Schematic,
+    temp: f64,
+    jobs: Vec<(String, usize, Broken)>,
+    pin_jobs: Vec<(String, String, String)>,
+}
+
+impl ScanPlan {
+    /// Solves every fault on all the cores, in the order given (so the rows do not depend on which thread finished first). `done` counts the
+    /// faults finished; once `cancel` is set no new ones are started and the result is `None`.
+    fn run(self, done: &AtomicUsize, cancel: &AtomicBool) -> Option<Vec<ScanRow>> {
+        let ScanPlan { c, sch, temp, jobs, pin_jobs } = self;
+        let rate = |r: &FaultReport| {
+            let severity = match &r.faulted {
+                Err(_) => f64::INFINITY,
+                Ok(_) => r.node_changes.iter().map(|(_, a, b)| (b - a).abs()).fold(0.0, f64::max),
+            };
+            (severity, assess_safety(&sch, r).level)
+        };
+        let mut rows = vec![];
+        // the healthy circuit is solved once for the whole scan (it used to be solved again for every fault); the broken circuits are
+        // independent of each other, so they are solved on all the cores
+        let baseline = dc_op(&c);
+        let solved = sim_core::par_map_progress(
+            &jobs,
+            |(_, _, b)| {
+                match &baseline {
+                    Ok(base) => simulate_broken_with(&c, b, base),
+                    Err(_) => simulate_broken(&c, b),
+                }
+                .ok()
+                .map(|r| rate(&r))
+            },
+            done,
+            cancel,
+        );
+        for ((part, kind, b), result) in jobs.into_iter().zip(solved) {
+            if let Some(Some((severity, danger))) = result {
+                rows.push(ScanRow { part, pin: String::new(), fault_kind: kind, label: b.label, severity, danger });
+            }
+        }
+        // every pin fault has the same healthy circuit: solve it once, from the first pin fault that can be built
+        let pin_base = pin_jobs.iter().find_map(|(part, pin, label)| {
+            let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how: PinHow::Open };
+            break_pin(&sch, temp, &spec, label).ok().and_then(|(healthy, _)| dc_op(&healthy).ok())
+        });
+        if let Some(base) = &pin_base {
+            let solved = sim_core::par_map_progress(
+                &pin_jobs,
+                |(part, pin, label)| {
+                    let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how: PinHow::Open };
+                    let (healthy, b) = break_pin(&sch, temp, &spec, label).ok()?;
+                    simulate_broken_with(&healthy, &b, base).ok().map(|r| rate(&r))
+                },
+                done,
+                cancel,
+            );
+            for ((part, pin, label), result) in pin_jobs.into_iter().zip(solved) {
+                if let Some(Some((severity, danger))) = result {
+                    rows.push(ScanRow { part, pin, fault_kind: 0, label, severity, danger });
+                }
+            }
+        }
+        if cancel.load(Ordering::Relaxed) {
+            return None;
+        }
+        rows.sort_by(|a, b| b.danger.cmp(&a.danger).then(b.severity.total_cmp(&a.severity)));
+        Some(rows)
+    }
+}
+
 /// One line of the "break every part" table.
 pub(super) struct ScanRow {
     pub(super) part: String,
@@ -34,7 +117,7 @@ pub(super) struct ScanRow {
     pub(super) pin: String,
     /// Index into `ALL_FAULTS` for whole-part rows.
     fault_kind: usize,
-    label: String,
+    pub(super) label: String,
     /// Largest voltage change at any node (V); `f64::INFINITY` when the broken circuit cannot be solved.
     pub(super) severity: f64,
     /// Whether a part ends up past its rating (see `sim_core::assess_safety`).
@@ -290,24 +373,12 @@ impl SchEditor {
         self.fault_chain = Some(report);
     }
 
-    pub(super) fn run_fault_scan(&mut self) {
+    /// Everything the "break every part" scan needs, copied out of the editor so that it can run on another thread.
+    fn scan_plan(&self) -> Option<ScanPlan> {
         let Ok(c) = self.sim_circuit() else {
-            self.status = "回路を計算できないため、故障を試せません。先に DC動作点を解析してエラーを直してください".into();
-            return;
+            return None;
         };
-        let sch = self.sch.clone();
-        let rate = |r: &FaultReport| {
-            let severity = match &r.faulted {
-                Err(_) => f64::INFINITY,
-                Ok(_) => r.node_changes.iter().map(|(_, a, b)| (b - a).abs()).fold(0.0, f64::max),
-            };
-            (severity, assess_safety(&sch, r).level)
-        };
-        let mut rows = vec![];
-        // the healthy circuit is solved once for the whole scan (it used to be solved again for every fault); the broken circuits are
-        // independent of each other, so they are solved on all the cores
-        let baseline = dc_op(&c);
-        let mut jobs: Vec<(String, usize, sim_core::Broken)> = vec![];
+        let mut jobs = vec![];
         for part in breakable(&c) {
             for (kind, fault) in ALL_FAULTS.iter().enumerate() {
                 if let Some(b) = break_part(&c, &part, *fault) {
@@ -315,49 +386,77 @@ impl SchEditor {
                 }
             }
         }
-        let solved = sim_core::par_map(&jobs, |(_, _, b)| {
-            match &baseline {
-                Ok(base) => simulate_broken_with(&c, b, base),
-                Err(_) => simulate_broken(&c, b),
-            }
-            .ok()
-            .map(|r| rate(&r))
-        });
-        for ((part, kind, b), result) in jobs.into_iter().zip(solved) {
-            if let Some((severity, danger)) = result {
-                rows.push(ScanRow { part, pin: String::new(), fault_kind: kind, label: b.label, severity, danger });
-            }
-        }
         // ICs and transistors: every pin disconnected in turn (the usual solder / contact failure)
-        let temp = self.fault_temp().unwrap_or(T_NOM_C);
         let pin_parts: Vec<String> = self.sch.components.iter().filter(|x| matches!(x.kind, Kind::Custom | Kind::Npn)).map(|x| x.refdes.clone()).collect();
-        let mut pin_jobs: Vec<(String, String, String)> = vec![];
+        let mut pin_jobs = vec![];
         for part in pin_parts {
             for (pin, _) in self.pin_choices(&part) {
                 let label = self.pin_fault_label(&part, &pin, &PinHow::Open);
                 pin_jobs.push((part.clone(), pin, label));
             }
         }
-        // every pin fault has the same healthy circuit: solve it once, from the first pin fault that can be built
-        let pin_base = pin_jobs.iter().find_map(|(part, pin, label)| {
-            let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how: PinHow::Open };
-            break_pin(&sch, temp, &spec, label).ok().and_then(|(healthy, _)| dc_op(&healthy).ok())
-        });
-        if let Some(base) = &pin_base {
-            let solved = sim_core::par_map(&pin_jobs, |(part, pin, label)| {
-                let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how: PinHow::Open };
-                let (healthy, b) = break_pin(&sch, temp, &spec, label).ok()?;
-                simulate_broken_with(&healthy, &b, base).ok().map(|r| rate(&r))
-            });
-            for ((part, pin, label), result) in pin_jobs.into_iter().zip(solved) {
-                if let Some((severity, danger)) = result {
-                    rows.push(ScanRow { part, pin, fault_kind: 0, label, severity, danger });
-                }
-            }
-        }
-        rows.sort_by(|a, b| b.danger.cmp(&a.danger).then(b.severity.total_cmp(&a.severity)));
+        Some(ScanPlan { c, sch: self.sch.clone(), temp: self.fault_temp().unwrap_or(T_NOM_C), jobs, pin_jobs })
+    }
+
+    /// The scan, to the end, on the calling thread (command line, tests).
+    pub(super) fn run_fault_scan(&mut self) {
+        let Some(plan) = self.scan_plan() else {
+            self.status = "回路を計算できないため、故障を試せません。先に DC動作点を解析してエラーを直してください".into();
+            return;
+        };
+        let rows = plan.run(&AtomicUsize::new(0), &AtomicBool::new(false)).unwrap_or_default();
         self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
         self.fault_scan = rows;
+    }
+
+    /// For the command line: the scan on its own thread, and the fault panel open.
+    pub fn start_fault_scan_bg(&mut self) {
+        self.panel_tab = PanelTab::Analyze;
+        self.sec_mode = 1;
+        self.start_fault_scan();
+    }
+
+    /// The scan on its own thread, with a progress bar and a cancel button (the panel's button).
+    pub(super) fn start_fault_scan(&mut self) {
+        if self.scan_run.is_some() {
+            return;
+        }
+        let Some(plan) = self.scan_plan() else {
+            self.status = "回路を計算できないため、故障を試せません。先に DC動作点を解析してエラーを直してください".into();
+            return;
+        };
+        let (done, cancel) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicBool::new(false)));
+        let total = plan.jobs.len() + plan.pin_jobs.len();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (d, c, options) = (done.clone(), cancel.clone(), sim_core::options());
+        std::thread::spawn(move || {
+            // the simulation options are a per-thread setting
+            sim_core::set_options(options);
+            let _ = tx.send(plan.run(&d, &c));
+        });
+        self.scan_run = Some(ScanRun { done, total, cancel, rx });
+        self.status = format!("故障シミュレーション: {total} 通りを試しています…");
+    }
+
+    /// Called every frame: takes the finished scan, and keeps the window redrawing while it runs.
+    pub(super) fn poll_fault_scan(&mut self, ctx: &egui::Context) {
+        let Some(run) = &self.scan_run else { return };
+        match run.rx.try_recv() {
+            Ok(Some(rows)) => {
+                self.status = format!("故障シミュレーション: {} 通りを試しました", rows.len());
+                self.fault_scan = rows;
+                self.scan_run = None;
+            }
+            Ok(None) => {
+                self.status = "故障シミュレーションを中止しました".into();
+                self.scan_run = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(100)),
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.status = "故障シミュレーションが途中で止まりました".into();
+                self.scan_run = None;
+            }
+        }
     }
 
     /// Shows the broken circuit's voltages on the sheet.
@@ -499,10 +598,20 @@ impl SchEditor {
             if ui.button("連鎖故障を追う").on_hover_text("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)").clicked() {
                 self.run_fault_chain();
             }
-            if ui.button("全部品を順に壊す").on_hover_text("すべての部品を、断線・ショート・逆向き・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。クリックで詳しく見られます").clicked() {
-                self.run_fault_scan();
+            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new("全部品を順に壊す")).on_hover_text("すべての部品を、断線・ショート・逆向き・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます").clicked() {
+                self.start_fault_scan();
             }
         });
+        if let Some(run) = &self.scan_run {
+            let done = run.done.load(Ordering::Relaxed);
+            ui.horizontal(|ui| {
+                let text = if done == 0 { "正常な回路を計算しています…".to_string() } else { format!("故障を試しています: {done} / {}", run.total) };
+                ui.add(egui::ProgressBar::new(done as f32 / run.total.max(1) as f32).text(text).desired_width(220.0));
+                if ui.button("中止").on_hover_text("まだ始めていない故障は試さずにやめます。すでに解いている途中のものは、終わるまで待ちます").clicked() {
+                    run.cancel.store(true, Ordering::Relaxed);
+                }
+            });
+        }
         match &self.fault_chain {
             Some(Err(msgs)) => {
                 for m in msgs {
