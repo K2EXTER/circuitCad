@@ -222,7 +222,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "電源が入っても、クロックとリセットが整っていないとマイコンは動きません",
             items: &[
                 Item { requires: Some(&["a_datasheet"]), ..lesson("crystal", "水晶とクロック", "16MHz 水晶の共振の細い山と、すぐ上の深い谷を、AC解析で見る。細い山は刻みが粗いと見落とす", Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")) },
-                plan("a_reset", "リセット回路", "10k のプルアップと 100n のコンデンサで、電源投入と書き込み時のリセットパルスを作る。時定数を過渡解析で見る", &["a_pullup"], None),
+                Item { requires: Some(&["a_pullup"]), ..lesson("reset", "リセット回路", "DTR・100n のコンデンサ・10k のプルアップで、自動リセットのパルスを作る。値を変えるとかからなくなる。跳ね上がりをダイオードで抑える", Some("シリアルモニタを開く瞬間のリセットを、LED (D13) の点滅や、オシロの波形で確かめます")) },
             ],
         },
         Stage {
@@ -231,14 +231,14 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             items: &[
                 plan("a_pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", &["led", "a_datasheet"], Some("D13 の LED の電流を測って、データシートの上限と比べます")),
                 plan("a_levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換", &["a_pullup"], None),
-                plan("a_serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレート、FTDI ヘッダと USB-シリアル IC の違い", &["a_levels", "a_reset"], None),
+                plan("a_serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレート、FTDI ヘッダと USB-シリアル IC の違い", &["a_levels", "reset"], None),
             ],
         },
         Stage {
             name: "4. 設計して基板に",
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
-                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["a_decoupling", "crystal", "a_reset", "a_pin_led"], None),
+                plan("a_draw", "Arduino 互換ボードの回路図を描く (最終課題)", "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する", &["a_decoupling", "crystal", "reset", "a_pin_led"], None),
                 plan("a_layout", "基板の置き方の勘所", "バイパスコンデンサは電源ピンの近く、水晶はマイコンの近くで短く、GND はベタで。自動配置の結果を直す練習", &["a_draw"], None),
                 plan("a_board", "基板にして、配線・チェック・発注の準備", "取り込み・配置・配線・DRC・発注前チェック。自動配線の結果 (ビアの数・配線の長さ) の見方", &["a_layout", "board"], None),
             ],
@@ -676,9 +676,11 @@ mod tests {
     #[test]
     fn a_tree_path_recommends_several_independent_items_and_waits_for_all_prerequisites() {
         let mut progress = Progress::default();
-        // planned items are never recommended, and a planned prerequisite holds nothing back: of the Arduino path only the
-        // crystal lesson is written, and it can be started
-        assert_eq!(recommended(&ARDUINO_PATH, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["crystal"]);
+        // planned items are never recommended, and a planned prerequisite holds nothing back: the written lessons whose
+        // prerequisites are all planned (or done) can be started at once
+        let ready: Vec<&str> = recommended(&ARDUINO_PATH, &progress).iter().map(|i| i.id).collect();
+        assert!(ready.contains(&"crystal") && ready.contains(&"reset"), "{ready:?}");
+        assert!(recommended(&ARDUINO_PATH, &progress).iter().all(|i| i.kind != Kind::Planned));
         assert!(is_tree(&ARDUINO_PATH) && !is_tree(&POWER_PATH));
         // a straight line (no `requires`) needs just the item before it
         let line = &POWER_PATH;
@@ -692,7 +694,7 @@ mod tests {
         assert!(requirements(&ARDUINO_PATH, pin_led).iter().any(|i| i.id == "led"));
         // roots sit on row 0, the final tasks below everything they need
         assert_eq!(level(&ARDUINO_PATH, find_item("a_datasheet").unwrap(), 0), 0);
-        assert!(level(&ARDUINO_PATH, find_item("a_draw").unwrap(), 0) > level(&ARDUINO_PATH, find_item("a_reset").unwrap(), 0));
+        assert!(level(&ARDUINO_PATH, find_item("a_draw").unwrap(), 0) > level(&ARDUINO_PATH, find_item("reset").unwrap(), 0));
     }
 
     #[test]

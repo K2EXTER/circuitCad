@@ -71,6 +71,7 @@ const LESSONS: &[Lesson] = &[
     supply::COIL_LAYER_SHORT,
     supply::VARIABLE_SUPPLY,
     micro::CRYSTAL,
+    micro::RESET,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

@@ -119,6 +119,31 @@ pub(super) fn r1_changed_and_narrow_ac(e: &SchEditor) -> bool {
     changed(e, "R1") && ac_fresh(e) && ac_run_range(e).is_some_and(|(f0, f1, n)| f0 >= 15e6 && f1 <= 17e6 && n >= 300)
 }
 
+/// Largest value of a signal in the last transient run.
+fn tran_peak(e: &SchEditor, name: &str) -> Option<f64> {
+    let r = e.tran.as_ref()?.outcome.as_ref().ok()?;
+    r.signal(name).map(|s| s.values.iter().copied().fold(f64::MIN, f64::max))
+}
+
+/// The reset lesson: C1 is a small capacitor (500 pF or less) and the run is fresh.
+pub(super) fn c1_small_and_tran(e: &SchEditor) -> bool {
+    tran_fresh(e) && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| c <= 500e-12)
+}
+
+/// The reset lesson: C1 is back at 100 nF or more, R1 is a weak pull-up (50k or more) and the run is fresh.
+pub(super) fn r1_weak_and_tran(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    tran_fresh(e) && v("C1").is_some_and(|c| c >= 50e-9) && v("R1").is_some_and(|r| r >= 50e3)
+}
+
+/// The reset lesson: a diode with its anode on RESET and its cathode on VCC, and a fresh run whose RESET stays below 6.5 V.
+pub(super) fn reset_clamped(e: &SchEditor) -> bool {
+    let nets = sch_core::extract(&e.sch);
+    let on = |net: &str, refdes: &str, pin: &str| nets.iter().any(|n| n.name == net && n.pins.iter().any(|p| p.refdes == refdes && p.pin == pin));
+    let diode = e.sch.components.iter().any(|c| c.refdes.starts_with('D') && on("RESET", &c.refdes, "A") && on("VCC", &c.refdes, "K"));
+    diode && tran_fresh(e) && tran_peak(e, "V(RESET)").is_some_and(|p| p < 6.5)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

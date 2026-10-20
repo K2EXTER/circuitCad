@@ -1,5 +1,9 @@
 use super::*;
 
+pub(super) fn example_schematics_for_tests() -> Vec<(String, Schematic)> {
+    example_schematics()
+}
+
 fn example_schematics() -> Vec<(String, Schematic)> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut v: Vec<_> = std::fs::read_dir(dir)

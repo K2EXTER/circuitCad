@@ -494,3 +494,83 @@ fn the_crystal_lesson_ticks_its_steps_and_the_wide_sweep_misses_the_peak() {
     assert_eq!(progress(&e), 3);
     assert!(peak(&e) > 0.95, "{}", peak(&e));
 }
+
+/// Adds the clamp diode of the reset lesson: anode on RESET, cathode on VCC (labels, like the sample's own wiring).
+fn add_reset_clamp(s: &mut Schematic) {
+    let d = s.add(sch_core::Kind::Diode, (44, 0), 1);
+    for (pin, net) in [("A", "RESET"), ("K", "VCC")] {
+        let (_, pt) = s.components[d].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+        let c = s.components[d].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(sch_core::Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: net.into() });
+    }
+}
+
+/// The numbers the reset lesson quotes, from the sample itself.
+#[test]
+fn the_reset_sample_gives_the_numbers_of_its_lesson() {
+    let sch = super::example_sim_tests::example_schematics_for_tests().into_iter().find(|(n, _)| n == "reset_circuit.schjson").unwrap().1;
+    // (R1, C1, with the clamp diode) -> (lowest RESET, time below 1 V in us, highest RESET)
+    let run = |r: &str, c: &str, clamp: bool| {
+        let mut s = sch.clone();
+        set_comp(&mut s, "R1", r);
+        set_comp(&mut s, "C1", c);
+        if clamp {
+            add_reset_clamp(&mut s);
+        }
+        let t = sim_core::transient(&sim_core::from_schematic(&s).unwrap(), &sim_core::TranSettings { tstop: 15e-3, tstep: 15e-6, uic: false }).unwrap();
+        let v = &t.signal("V(RESET)").unwrap().values;
+        let below: f64 = (1..v.len()).filter(|&i| v[i - 1] < 1.0 || v[i] < 1.0).map(|i| t.time[i] - t.time[i - 1]).sum();
+        (v.iter().copied().fold(f64::MAX, f64::min), below * 1e6, v.iter().copied().fold(f64::MIN, f64::max))
+    };
+    let (lo, us, hi) = run("10k", "100n", false);
+    assert!(lo < 0.05 && (180.0..280.0).contains(&us) && (9.5..10.5).contains(&hi), "{lo} {us} {hi}");
+    // 220 pF: RESET only falls to about 1.6 V and never goes below 1 V
+    let (lo, us, _) = run("10k", "220p", false);
+    assert!((1.3..1.9).contains(&lo) && us == 0.0, "{lo} {us}");
+    // 100k pull-up: about ten times longer below 1 V
+    let (_, us, _) = run("100k", "100n", false);
+    assert!((1800.0..2700.0).contains(&us), "{us}");
+    // the diode holds the jump at about VCC + 0.6 V
+    let (_, _, hi) = run("10k", "100n", true);
+    assert!((5.3..6.2).contains(&hi), "{hi}");
+}
+
+fn set_comp(s: &mut Schematic, refdes: &str, v: &str) {
+    s.components.iter_mut().find(|c| c.refdes == refdes).unwrap().value = v.into();
+}
+
+#[test]
+fn the_reset_lesson_ticks_its_four_steps() {
+    let idx = lesson_ids().iter().position(|l| *l == "reset").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // step 2: a small C1, run again
+    set_value(&mut e, "C1", "220p");
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "not run yet");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    // step 3: C1 back, R1 weak
+    set_value(&mut e, "C1", "100n");
+    set_value(&mut e, "R1", "100k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    // step 4: the clamp diode is wired and the run is fresh; a diode alone, without a run, does not count
+    set_value(&mut e, "R1", "10k");
+    add_reset_clamp(&mut e.sch);
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4, "{}", e.status);
+}

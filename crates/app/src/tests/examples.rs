@@ -452,6 +452,41 @@ fn write_crystal_example() {
     std::fs::write(root.join("crystal_response.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/reset_circuit.schjson: the auto-reset of an Arduino board. V1 = 5 V supply, V2 = the DTR line of
+/// the USB-serial adapter (high, then low for good at 1 ms), R1 = 10k pull-up of RESET, C1 = 100n coupling DTR to RESET:
+/// `cargo test -p app write_reset_example -- --ignored`
+#[test]
+#[ignore]
+fn write_reset_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (12, 0), 0);
+    s.components[v2].value = "PULSE(5 0 1m 1u 1u 8m 20m)".into();
+    label(&mut s, v2, "+", "DTR");
+    label(&mut s, v2, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (24, 0), 1);
+    s.components[r1].value = "10k".into();
+    label(&mut s, r1, "1", "VCC");
+    label(&mut s, r1, "2", "RESET");
+    let c1 = s.add(Kind::Capacitor, (34, 0), 1);
+    s.components[c1].value = "100n".into();
+    label(&mut s, c1, "1", "DTR");
+    label(&mut s, c1, "2", "RESET");
+    std::fs::write(root.join("reset_circuit.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]
