@@ -228,6 +228,49 @@ pub(super) fn diode_over_the_limit(e: &SchEditor) -> bool {
     r1_between(e, 0.1, 16.0)
 }
 
+/// The USB power lesson, step 2: the device draws nearly an ampere (R3 = 6 ohm or less) and the result is fresh.
+pub(super) fn vbus_heavy_load(e: &SchEditor) -> bool {
+    dc_fresh(e) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r <= 6.0)
+}
+
+/// The USB power lesson, step 3: a thin cable (R2 = 1 ohm or more) with a half-ampere load (R3 between 8 and 12 ohm), fresh.
+pub(super) fn vbus_thin_cable(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    dc_fresh(e) && v("R2").is_some_and(|r| r >= 1.0) && v("R3").is_some_and(|r| (8.0..=12.0).contains(&r))
+}
+
+/// The USB power lesson, step 4: a big bulk capacitor (C1 = 50 uF or more) plugged in from zero (the transient starts from zero).
+pub(super) fn vbus_big_capacitor_plugged(e: &SchEditor) -> bool {
+    tran_fresh(e) && e.tran_uic && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| c >= 50e-6)
+}
+
+/// The USB speed lesson, step 2: the 1.5k pull-up is on D- (R2) and none on D+ (R1 100Meg or more), fresh.
+pub(super) fn usb_low_speed(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    dc_fresh(e) && v("R1").is_some_and(|r| r >= 1e6) && v("R2").is_some_and(|r| r <= 3e3)
+}
+
+/// The USB speed lesson, step 3: no pull-up on either line (nothing is plugged in), fresh.
+pub(super) fn usb_nothing_plugged(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    dc_fresh(e) && v("R1").is_some_and(|r| r >= 1e6) && v("R2").is_some_and(|r| r >= 1e6)
+}
+
+/// The USB signal lesson: C2 (the ESD protection's capacitance) is between `lo` and `hi` and the run is fresh.
+fn c2_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    tran_fresh(e) && value_of(&e.sch, "C2").and_then(parse_value).is_some_and(|c| (lo..=hi).contains(&c))
+}
+
+/// Step 2: an ESD part of about 200 pF (the edge is out of the full-speed range).
+pub(super) fn esd_too_big(e: &SchEditor) -> bool {
+    c2_between(e, 150e-12, 300e-12)
+}
+
+/// Step 3: an ESD part of 400 pF or more (the bit no longer settles).
+pub(super) fn esd_far_too_big(e: &SchEditor) -> bool {
+    c2_between(e, 400e-12, 1e-6)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

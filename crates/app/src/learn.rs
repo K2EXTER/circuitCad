@@ -239,6 +239,15 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             ],
         },
         Stage {
+            name: "3b. 発展: USB につなぐ (電気の基本)",
+            about: "USB の電源 (VBUS)、速度の見分け、信号線の波形。USB のプロトコルそのものは扱わず、電気の面を確かめます",
+            items: &[
+                Item { requires: Some(&["decoupling"]), ..lesson("usb_power", "USB の電源 (VBUS)", "ケーブルの抵抗で電圧が下がること、差し込んだ瞬間の突入電流と、VBUS の容量の目安 (10µF 程度)", Some("USB テスターなどで、機器の端の VBUS の電圧と電流を測ります")) },
+                Item { requires: Some(&["pullup"]), ..lesson("usb_speed", "USB の速度の見分け", "D+ か D− を 1.5kΩ で引くと、ホストが機器の速度を知る。プルアップがないと認識されない", Some("機器をつなぐ前後の D+ / D− の電圧を測ります (止まった状態で)")) },
+                Item { requires: Some(&["usb_speed"]), ..lesson("usb_signal", "USB の信号線と ESD 保護の容量", "12Mbit/s の 1 ビットは約 83ns。ESD 保護部品の容量が大きいと、立ち上がりが遅れて読めなくなる", None) },
+            ],
+        },
+        Stage {
             name: "4. 設計して基板に",
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[

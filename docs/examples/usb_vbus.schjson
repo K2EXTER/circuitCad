@@ -1,0 +1,285 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "0.5",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "500n",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "0.25",
+      "pos": [
+        36,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        48,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "50",
+      "pos": [
+        60,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -2
+      ],
+      "b": [
+        12,
+        -5
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        -2
+      ],
+      "b": [
+        24,
+        -5
+      ]
+    },
+    {
+      "a": [
+        24,
+        2
+      ],
+      "b": [
+        24,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        -2
+      ],
+      "b": [
+        36,
+        -5
+      ]
+    },
+    {
+      "a": [
+        36,
+        2
+      ],
+      "b": [
+        36,
+        5
+      ]
+    },
+    {
+      "a": [
+        48,
+        -2
+      ],
+      "b": [
+        48,
+        -5
+      ]
+    },
+    {
+      "a": [
+        48,
+        2
+      ],
+      "b": [
+        48,
+        5
+      ]
+    },
+    {
+      "a": [
+        60,
+        -2
+      ],
+      "b": [
+        60,
+        -5
+      ]
+    },
+    {
+      "a": [
+        60,
+        2
+      ],
+      "b": [
+        60,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "HOST"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        -5
+      ],
+      "text": "HOST"
+    },
+    {
+      "pos": [
+        12,
+        5
+      ],
+      "text": "PORT"
+    },
+    {
+      "pos": [
+        24,
+        -5
+      ],
+      "text": "PORT"
+    },
+    {
+      "pos": [
+        24,
+        5
+      ],
+      "text": "CABLE"
+    },
+    {
+      "pos": [
+        36,
+        -5
+      ],
+      "text": "CABLE"
+    },
+    {
+      "pos": [
+        36,
+        5
+      ],
+      "text": "VBUS"
+    },
+    {
+      "pos": [
+        48,
+        -5
+      ],
+      "text": "VBUS"
+    },
+    {
+      "pos": [
+        48,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        -5
+      ],
+      "text": "VBUS"
+    },
+    {
+      "pos": [
+        60,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

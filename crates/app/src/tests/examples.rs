@@ -708,6 +708,128 @@ fn write_datasheet_example() {
     std::fs::write(root.join("datasheet_diode.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/usb_vbus.schjson: the 5 V of a USB port (V1) behind the host's port switch (R1 0.5 ohm), a cable
+/// (L1 0.5 uH, R2 0.25 ohm), the device end VBUS with the bulk capacitor C1 (10 uF) and the device's load R3 (50 ohm = 100 mA); the
+/// resistors are R_2512 so that the default stays inside their power rating:
+/// `cargo test -p app write_usb_vbus_example -- --ignored`
+#[test]
+#[ignore]
+fn write_usb_vbus_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "HOST");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (12, 0), 1);
+    s.components[r1].value = "0.5".into();
+    s.components[r1].footprint = "R_2512".into();
+    label(&mut s, r1, "1", "HOST");
+    label(&mut s, r1, "2", "PORT");
+    let l1 = s.add(Kind::Inductor, (24, 0), 1);
+    s.components[l1].value = "500n".into();
+    label(&mut s, l1, "1", "PORT");
+    label(&mut s, l1, "2", "CABLE");
+    let r2 = s.add(Kind::Resistor, (36, 0), 1);
+    s.components[r2].value = "0.25".into();
+    s.components[r2].footprint = "R_2512".into();
+    label(&mut s, r2, "1", "CABLE");
+    label(&mut s, r2, "2", "VBUS");
+    let c1 = s.add(Kind::Capacitor, (48, 0), 1);
+    s.components[c1].value = "10u".into();
+    label(&mut s, c1, "1", "VBUS");
+    label(&mut s, c1, "2", "GND");
+    let r3 = s.add(Kind::Resistor, (60, 0), 1);
+    s.components[r3].value = "50".into();
+    s.components[r3].footprint = "R_2512".into();
+    label(&mut s, r3, "1", "VBUS");
+    label(&mut s, r3, "2", "GND");
+    std::fs::write(root.join("usb_vbus.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/usb_speed.schjson: how a USB host tells the speed of a device. V1 = 3.3 V (the device's supply), R1 = the
+/// 1.5k pull-up on D+ (a full-speed device; R2 = 100Meg on D- is "no pull-up"), R3 and R4 = the host's 15k pull-downs on D+ / D-:
+/// `cargo test -p app write_usb_speed_example -- --ignored`
+#[test]
+#[ignore]
+fn write_usb_speed_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "3.3".into();
+    label(&mut s, v1, "+", "V33");
+    label(&mut s, v1, "-", "GND");
+    // the device: pull-ups (R1 on D+, R2 on D-)
+    let r1 = s.add(Kind::Resistor, (14, 0), 1);
+    s.components[r1].value = "1.5k".into();
+    label(&mut s, r1, "1", "V33");
+    label(&mut s, r1, "2", "DP");
+    let r2 = s.add(Kind::Resistor, (26, 0), 1);
+    s.components[r2].value = "100Meg".into();
+    label(&mut s, r2, "1", "V33");
+    label(&mut s, r2, "2", "DM");
+    // the host: pull-downs (R3 on D+, R4 on D-)
+    let r3 = s.add(Kind::Resistor, (38, 0), 1);
+    s.components[r3].value = "15k".into();
+    label(&mut s, r3, "1", "DP");
+    label(&mut s, r3, "2", "GND");
+    let r4 = s.add(Kind::Resistor, (50, 0), 1);
+    s.components[r4].value = "15k".into();
+    label(&mut s, r4, "1", "DM");
+    label(&mut s, r4, "2", "GND");
+    std::fs::write(root.join("usb_speed.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/usb_signal.schjson: a full-speed D+ driver (V1 0 - 3.3 V, 12 Mbit/s bits: 83 ns) behind R1 = 40 ohm,
+/// a cable (C1 = 100 pF) and the ESD protection (C2 = 5 pF), seen at the receiver pin DP: `cargo test -p app write_usb_signal_example -- --ignored`
+#[test]
+#[ignore]
+fn write_usb_signal_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "PULSE(0 3.3 20n 1n 1n 82n 166n)".into();
+    label(&mut s, v1, "+", "DRV");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (12, 0), 1);
+    s.components[r1].value = "40".into();
+    label(&mut s, r1, "1", "DRV");
+    label(&mut s, r1, "2", "DP");
+    let c1 = s.add(Kind::Capacitor, (24, 0), 1);
+    s.components[c1].value = "100p".into();
+    label(&mut s, c1, "1", "DP");
+    label(&mut s, c1, "2", "GND");
+    let c2 = s.add(Kind::Capacitor, (34, 0), 1);
+    s.components[c2].value = "5p".into();
+    label(&mut s, c2, "1", "DP");
+    label(&mut s, c2, "2", "GND");
+    std::fs::write(root.join("usb_signal.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

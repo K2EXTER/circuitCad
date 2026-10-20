@@ -795,3 +795,118 @@ fn the_datasheet_lesson_ticks_its_four_steps_and_the_ratings_are_judged_as_it_sa
     assert_eq!(progress(&e), 4);
     assert!(current(&e) > 200.0 && issues(&e).contains(&"Over".to_string()), "15: {} mA {:?}", current(&e), issues(&e));
 }
+
+#[test]
+fn the_usb_power_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "usb_power").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    assert!(e.tran_uic, "the lesson starts the transient from zero (a plug-in)");
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let vbus = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("VBUS").unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((4.9..4.96).contains(&vbus(&e)), "100 mA: {}", vbus(&e));
+    set_value(&mut e, "R3", "5");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((4.30..4.40).contains(&vbus(&e)), "0.9 A: {}", vbus(&e));
+    set_value(&mut e, "R2", "1.2");
+    set_value(&mut e, "R3", "10");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((4.2..4.35).contains(&vbus(&e)), "thin cable: {}", vbus(&e));
+    // the plug-in: the peak of I(C1) hardly changes with the capacitor, the time it lasts does
+    set_value(&mut e, "R2", "0.25");
+    set_value(&mut e, "R3", "50");
+    let inrush = |e: &mut SchEditor| {
+        e.run_tran();
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let i = &t.signal("I(C1)").unwrap().values;
+        let pk = i.iter().fold(0.0f64, |a, x| a.max(x.abs()));
+        let tp = t.time[i.iter().position(|x| x.abs() >= pk * 0.999).unwrap()];
+        let t10 = t.time.iter().zip(i).find(|(tt, x)| **tt > tp && x.abs() < pk * 0.1).map(|(tt, _)| *tt).unwrap_or(f64::MAX);
+        (pk, t10)
+    };
+    let (pk10, t10) = inrush(&mut e);
+    assert!((4.5..6.5).contains(&pk10) && t10 < 40e-6, "10u: {pk10} A, {t10} s");
+    assert_eq!(progress(&e), 3, "a 10 uF capacitor is not the big one");
+    set_value(&mut e, "C1", "100u");
+    let (pk100, t100) = inrush(&mut e);
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!((pk100 / pk10 - 1.0).abs() < 0.3 && t100 > 8.0 * t10, "100u: {pk100} A {t100} s vs {pk10} A {t10} s");
+}
+
+#[test]
+fn the_usb_speed_lesson_ticks_its_three_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "usb_speed").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let lines = |e: &SchEditor| {
+        let d = e.dc.as_ref().unwrap().outcome.as_ref().unwrap();
+        (d.voltage("DP").unwrap(), d.voltage("DM").unwrap())
+    };
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    let (dp, dm) = lines(&e);
+    assert!((2.95..3.05).contains(&dp) && dm < 0.05, "full speed: D+ {dp} D- {dm}");
+    set_value(&mut e, "R1", "100Meg");
+    set_value(&mut e, "R2", "1.5k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (dp, dm) = lines(&e);
+    assert!((2.95..3.05).contains(&dm) && dp < 0.05, "low speed: D+ {dp} D- {dm}");
+    set_value(&mut e, "R2", "100Meg");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (dp, dm) = lines(&e);
+    assert!(dp < 0.1 && dm < 0.1, "nothing plugged: {dp} {dm}");
+}
+
+#[test]
+fn the_usb_signal_lesson_ticks_its_three_steps_and_a_big_esd_part_slows_the_edge() {
+    let idx = lesson_ids().iter().position(|l| *l == "usb_signal").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (10 - 90 % rise time in ns, the level in the middle of the first high bit)
+    let edge = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal("V(DP)").unwrap().values;
+        let i0 = t.time.iter().position(|x| *x >= 15e-9).unwrap();
+        let (lo, hi) = v[i0..].iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)));
+        let (a, b) = (lo + 0.1 * (hi - lo), lo + 0.9 * (hi - lo));
+        let ia = (i0..v.len()).find(|&i| v[i] >= a).unwrap();
+        let ib = (i0..v.len()).find(|&i| v[i] >= b).unwrap();
+        let mid = v[t.time.iter().position(|x| *x >= 60e-9).unwrap()];
+        ((t.time[ib] - t.time[ia]) * 1e9, mid)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (rise, _) = edge(&e);
+    assert!((8.0..11.0).contains(&rise), "5 pF: {rise} ns, inside the 4 - 20 ns range");
+    set_value(&mut e, "C2", "200p");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (rise, mid) = edge(&e);
+    assert!((22.0..30.0).contains(&rise) && mid > 3.1, "200 pF: {rise} ns, mid {mid} V: out of range but still readable");
+    set_value(&mut e, "C2", "500p");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (rise, mid) = edge(&e);
+    assert!((40.0..55.0).contains(&rise) && mid < 2.9, "500 pF: {rise} ns, mid {mid} V: the bit does not settle");
+}
