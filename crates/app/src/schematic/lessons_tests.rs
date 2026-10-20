@@ -754,3 +754,44 @@ fn the_serial_lesson_ticks_its_three_steps_and_the_receiver_misreads_the_slow_ca
     assert_eq!(progress(&e), 3);
     assert_eq!(read(&e, "V(RX)"), 0x41, "a smaller resistance reads right again");
 }
+
+#[test]
+fn the_datasheet_lesson_ticks_its_four_steps_and_the_ratings_are_judged_as_it_says() {
+    let idx = lesson_ids().iter().position(|l| *l == "datasheet").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let d1 = e.sch.components.iter().position(|c| c.refdes == "D1").unwrap();
+    let current = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().elements.iter().find(|x| x.name == "D1").unwrap().current.abs() * 1e3;
+    let issues = |e: &SchEditor| sim_core::check_ratings(&e.sch, e.dc.as_ref().unwrap().outcome.as_ref().unwrap()).into_iter().filter(|i| i.refdes == "D1").map(|i| format!("{:?}", i.level)).collect::<Vec<_>>();
+    // a fresh run alone is not enough: D1 has to be selected
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.selected = Some(super::Sel::Comp(d1));
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((38.0..46.0).contains(&current(&e)) && issues(&e).is_empty(), "100: {} mA {:?}", current(&e), issues(&e));
+    // 33 ohm: 125 mA, inside 200 mA, no warning, but short of the margin of 2 (250 mA)
+    set_value(&mut e, "R1", "33");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((120.0..130.0).contains(&current(&e)) && issues(&e).is_empty(), "33: {} mA {:?}", current(&e), issues(&e));
+    let res = e.dc.as_ref().unwrap().outcome.as_ref().unwrap();
+    let st = sim_core::stress(res, "D1");
+    let req = sim_core::requirement(&st, 2.0);
+    let ratings = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "1N4148").unwrap().ratings.unwrap();
+    assert!(!sim_core::meets(&req, &ratings, true), "no margin of 2 at 33 ohm");
+    set_value(&mut e, "R1", "22");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((180.0..190.0).contains(&current(&e)) && issues(&e) == ["Caution"], "22: {} mA {:?}", current(&e), issues(&e));
+    set_value(&mut e, "R1", "15");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!(current(&e) > 200.0 && issues(&e).contains(&"Over".to_string()), "15: {} mA {:?}", current(&e), issues(&e));
+}

@@ -203,6 +203,31 @@ pub(super) fn uart_cable_fast(e: &SchEditor) -> bool {
     tran_fresh(e) && v("C1").is_some_and(|c| c >= 50e-9) && v("R2").is_some_and(|r| r <= 200.0)
 }
 
+/// The data sheet lesson, step 1: the diode D1 is selected and the DC result is fresh (the "部品選びのヒント" has numbers).
+pub(super) fn d1_selected_and_measured(e: &SchEditor) -> bool {
+    dc_fresh(e) && matches!(e.selected, Some(Sel::Comp(i)) if e.sch.components.get(i).is_some_and(|c| c.refdes == "D1"))
+}
+
+/// The data sheet lesson: R1 is between `lo` and `hi` ohm and the DC result is fresh.
+fn r1_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| (lo..=hi).contains(&r))
+}
+
+/// Step 2: about 33 ohm (125 mA: inside the absolute maximum, short of the margin of 2).
+pub(super) fn diode_inside_but_no_margin(e: &SchEditor) -> bool {
+    r1_between(e, 28.0, 40.0)
+}
+
+/// Step 3: about 22 ohm (185 mA: 93 % of the maximum).
+pub(super) fn diode_near_the_limit(e: &SchEditor) -> bool {
+    r1_between(e, 18.0, 26.0)
+}
+
+/// Step 4: 16 ohm or less (above the maximum).
+pub(super) fn diode_over_the_limit(e: &SchEditor) -> bool {
+    r1_between(e, 0.1, 16.0)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

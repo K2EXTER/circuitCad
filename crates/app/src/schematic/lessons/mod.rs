@@ -77,6 +77,7 @@ const LESSONS: &[Lesson] = &[
     micro::PIN_LED,
     micro::LEVELS,
     micro::SERIAL,
+    micro::DATASHEET,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

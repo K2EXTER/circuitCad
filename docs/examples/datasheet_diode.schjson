@@ -1,0 +1,204 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N4148",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 1,
+      "footprint": "D_DO-35_P7.62",
+      "custom": {
+        "name": "1N4148",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N4148",
+          "text": ".model 1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=100 IBV=100u)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {
+            "if_max": 0.2,
+            "vf_typ": 0.72,
+            "vr_max": 100.0
+          },
+          "limits": [
+            "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+            "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+            "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 100.0,
+          "i_max": 0.2,
+          "p_max": 0.5,
+          "rows": [
+            {
+              "name": "順方向電圧",
+              "value": "1V (最大)",
+              "condition": "IF = 10mA"
+            },
+            {
+              "name": "逆回復時間",
+              "value": "4ns"
+            },
+            {
+              "name": "接合容量",
+              "value": "4pF",
+              "condition": "VR = 0V"
+            }
+          ]
+        },
+        "glyph": "diode"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -2
+      ],
+      "b": [
+        12,
+        -5
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        5
+      ]
+    },
+    {
+      "a": [
+        24,
+        -2
+      ],
+      "b": [
+        24,
+        -5
+      ]
+    },
+    {
+      "a": [
+        24,
+        2
+      ],
+      "b": [
+        24,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        12,
+        5
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        24,
+        -5
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        24,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -212,7 +212,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "1. 土台: 読む・浮かせない・安定させる",
             about: "どのマイコン回路でも使う基本の技です。順番は自由です",
             items: &[
-                plan("a_datasheet", "データシートの読み方", "絶対最大定格と推奨動作条件の違い、ピン表、代表的なグラフ。部品を選ぶときの出発点", &[], Some("手元の部品のデータシートで、電源電圧の範囲・1ピンの電流の上限を探します")),
+                Item { requires: Some(&[]), ..lesson("datasheet", "データシートの読み方", "絶対最大定格と推奨動作条件の違い。回路の電流・電力と比べて、2 倍の余裕で部品を選ぶ", Some("手元の部品のデータシートで、電源電圧の範囲・1ピンの電流の上限を探します")) },
                 Item { requires: Some(&["divider"]), ..lesson("pullup", "プルアップ (ピンを浮かせない)", "入力ピンが何にもつながっていないと、電圧が定まらず、ノイズで揺れる。10kΩ で電源に引く理由と、値の決め方", Some("入力ピンをプルアップあり・なしで、テスタで測り比べます")) },
                 Item { requires: Some(&["divider"]), ..lesson("decoupling", "電源のバイパスコンデンサ", "IC の電源ピンのそばに 0.1µF を置く理由。インピーダンスのグラフで、電解とセラミックの分担と、自己共振を見る", Some("IC の電源ピンの電圧を、オシロで見て、コンデンサの有無で比べます")) },
             ],
@@ -221,7 +221,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "2. マイコンが動く条件: クロックとリセット",
             about: "電源が入っても、クロックとリセットが整っていないとマイコンは動きません",
             items: &[
-                Item { requires: Some(&["a_datasheet"]), ..lesson("crystal", "水晶とクロック", "16MHz 水晶の共振の細い山と、すぐ上の深い谷を、AC解析で見る。細い山は刻みが粗いと見落とす", Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")) },
+                Item { requires: Some(&["datasheet"]), ..lesson("crystal", "水晶とクロック", "16MHz 水晶の共振の細い山と、すぐ上の深い谷を、AC解析で見る。細い山は刻みが粗いと見落とす", Some("水晶の発振波形をオシロで見ます (プローブの容量で止まることがあります)")) },
                 Item { requires: Some(&["pullup"]), ..lesson("reset", "リセット回路", "DTR・100n のコンデンサ・10k のプルアップで、自動リセットのパルスを作る。値を変えるとかからなくなる。跳ね上がりをダイオードで抑える", Some("シリアルモニタを開く瞬間のリセットを、LED (D13) の点滅や、オシロの波形で確かめます")) },
             ],
         },
@@ -229,7 +229,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             name: "3. つなぐ: 入出力と通信",
             about: "ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます",
             items: &[
-                Item { requires: Some(&["led", "a_datasheet"]), ..lesson("pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", Some("D13 の LED の電流を測って、データシートの上限と比べます")) },
+                Item { requires: Some(&["led", "datasheet"]), ..lesson("pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", Some("D13 の LED の電流を測って、データシートの上限と比べます")) },
                 Item { requires: Some(&["pullup"]), ..lesson("levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換と、プルアップによる波形の遅れ", Some("5V のピンの出力を、分圧してから 3.3V の部品に入れる前に、テスタで測って確かめます")) },
                 Item { requires: Some(&["levels", "reset"]), ..lesson("serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレートと 1 ビットの長さ、配線の抵抗と容量でなまると文字化けする", Some("端末ソフトで 9600bps と別のボーレートを比べて、文字化けを見ます")) },
             ],
@@ -676,16 +676,23 @@ mod tests {
     #[test]
     fn a_tree_path_recommends_several_independent_items_and_waits_for_all_prerequisites() {
         let mut progress = Progress::default();
-        // planned items are never recommended, and a planned prerequisite holds nothing back: the crystal lesson (it needs
-        // only the planned datasheet item) can be started at once, the reset lesson only after the pull-up
+        // planned items are never recommended, and a planned prerequisite holds nothing back. At the start only the root can
+        // be done: the data sheet lesson (the others need it, or the divider of the power path)
         let ready = |p: &Progress| recommended(&ARDUINO_PATH, p).iter().map(|i| i.id).collect::<Vec<_>>();
-        assert!(ready(&progress).contains(&"crystal") && !ready(&progress).contains(&"reset"), "{:?}", ready(&progress));
+        assert_eq!(ready(&progress), ["datasheet"]);
         assert!(recommended(&ARDUINO_PATH, &progress).iter().all(|i| i.kind != Kind::Planned));
-        // the divider (a lesson of the power path) opens the two that need only it; the pull-up opens the reset
+        // the divider (a lesson of the power path) opens the two that need only it; the pull-up opens the reset; the data
+        // sheet opens the crystal and the pin LED (which also needs the LED lesson of the power path)
         progress.mark("divider");
         assert!(ready(&progress).contains(&"pullup") && ready(&progress).contains(&"decoupling"));
         progress.mark("pullup");
-        assert!(ready(&progress).contains(&"reset"));
+        assert!(ready(&progress).contains(&"reset") && ready(&progress).contains(&"levels"));
+        assert!(!ready(&progress).contains(&"crystal"));
+        progress.mark("datasheet");
+        assert!(ready(&progress).contains(&"crystal"));
+        assert!(!ready(&progress).contains(&"pin_led"), "the pin LED also needs the LED lesson");
+        progress.mark("led");
+        assert!(ready(&progress).contains(&"pin_led"));
         let mut progress = Progress::default();
         assert!(is_tree(&ARDUINO_PATH) && !is_tree(&POWER_PATH));
         // a straight line (no `requires`) needs just the item before it
@@ -699,7 +706,7 @@ mod tests {
         let pin_led = find_item("pin_led").unwrap();
         assert!(requirements(&ARDUINO_PATH, pin_led).iter().any(|i| i.id == "led"));
         // roots sit on row 0, the final tasks below everything they need
-        assert_eq!(level(&ARDUINO_PATH, find_item("a_datasheet").unwrap(), 0), 0);
+        assert_eq!(level(&ARDUINO_PATH, find_item("datasheet").unwrap(), 0), 0);
         assert!(level(&ARDUINO_PATH, find_item("a_draw").unwrap(), 0) > level(&ARDUINO_PATH, find_item("reset").unwrap(), 0));
     }
 
