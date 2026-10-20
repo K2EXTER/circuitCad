@@ -45,7 +45,7 @@ pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
 pub use designcalc::{boost_design, mosfet_switch, opamp_gain, buck_design, battery_life, zener_regulator, divider, e24, fuse_design, heat_design, led_resistor, rc_filter, regulator, smoothing_cap, transistor_switch, CalcOut};
 pub use chain::{chain_failure, ChainEnd, ChainReport, ChainStep};
-pub use fault::{TURN_SHORTS, assess_safety, Danger, FaultSafety, describe_fault, break_pin, break_part, simulate_broken, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
+pub use fault::{TURN_SHORTS, assess_safety, Danger, FaultSafety, describe_fault, break_pin, break_part, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, Broken, applicable as fault_applicable, breakable, simulate_fault, simulate_fault_ac, simulate_fault_tran, with_fault, AcFaultReport, Fault, FaultReport, PartChange, TranFaultReport};
 pub use diagnose::diagnose;
 pub use ratings::{check_ratings, meets, package_power_limit, requirement, stress, RatingIssue, RatingLevel, Requirement, Stress};
 pub use ripple::{ripple_reports, RippleReport, MAX_LIFE_HOURS, RIPPLE_HEATING_AT_RATED_C};

@@ -1,7 +1,7 @@
 //! Fault simulation panel: break one part and see what changes at DC.
 
 use super::*;
-use sim_core::{assess_safety, chain_failure, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
+use sim_core::{assess_safety, chain_failure, dc_op, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
 
 /// The last fault run.
 pub(super) struct FaultView {
@@ -304,16 +304,24 @@ impl SchEditor {
             (severity, assess_safety(&sch, r).level)
         };
         let mut rows = vec![];
+        // the healthy circuit is solved once for the whole scan (it used to be solved again for every fault)
+        let baseline = dc_op(&c);
         for part in breakable(&c) {
             for fault in ALL_FAULTS {
                 let Some(b) = break_part(&c, &part, fault) else { continue };
-                let Ok(r) = simulate_broken(&c, &b) else { continue };
+                let Ok(r) = (match &baseline {
+                    Ok(base) => simulate_broken_with(&c, &b, base),
+                    Err(_) => simulate_broken(&c, &b),
+                }) else {
+                    continue;
+                };
                 let (severity, danger) = rate(&r);
                 rows.push(ScanRow { part: part.clone(), pin: String::new(), fault_kind: ALL_FAULTS.iter().position(|f| *f == fault).unwrap_or(0), label: b.label, severity, danger });
             }
         }
         // ICs and transistors: every pin disconnected in turn (the usual solder / contact failure)
         let temp = self.fault_temp().unwrap_or(T_NOM_C);
+        let mut pin_baseline: Option<sim_core::DcResult> = None;
         let pin_parts: Vec<String> = self.sch.components.iter().filter(|x| matches!(x.kind, Kind::Custom | Kind::Npn)).map(|x| x.refdes.clone()).collect();
         for part in pin_parts {
             for (pin, _) in self.pin_choices(&part) {
@@ -321,7 +329,18 @@ impl SchEditor {
                 let label = self.pin_fault_label(&part, &pin, &how);
                 let spec = PinFaultSpec { refdes: part.clone(), pin: pin.clone(), how };
                 let Ok((healthy, b)) = break_pin(&self.sch, temp, &spec, &label) else { continue };
-                let Ok(r) = simulate_broken(&healthy, &b) else { continue };
+                // every pin fault has the same healthy circuit: solve it on the first one only
+                let base = match &pin_baseline {
+                    Some(base) => base.clone(),
+                    None => match dc_op(&healthy) {
+                        Ok(base) => {
+                            pin_baseline = Some(base.clone());
+                            base
+                        }
+                        Err(_) => continue,
+                    },
+                };
+                let Ok(r) = simulate_broken_with(&healthy, &b, &base) else { continue };
                 let (severity, danger) = rate(&r);
                 rows.push(ScanRow { part: part.clone(), pin, fault_kind: 0, label, severity, danger });
             }

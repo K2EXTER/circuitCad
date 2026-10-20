@@ -211,8 +211,14 @@ pub fn simulate_fault(c: &Circuit, element: &str, fault: Fault) -> Result<FaultR
 
 /// Compares the DC operating points of `c` and of the broken circuit.
 pub fn simulate_broken(c: &Circuit, b: &Broken) -> Result<FaultReport, SimError> {
+    simulate_broken_with(c, b, &dc_op(c)?)
+}
+
+/// `simulate_broken` with the operating point of the healthy circuit `c` already solved (a scan of every fault solves it once, not
+/// once per fault).
+pub fn simulate_broken_with(_c: &Circuit, b: &Broken, baseline: &DcResult) -> Result<FaultReport, SimError> {
     let (element, broken) = (b.element.as_str(), &b.circuit);
-    let baseline = dc_op(c)?;
+    let baseline = baseline.clone();
     let faulted = dc_op(broken);
     let mut node_changes = vec![];
     let mut part_changes = vec![];
@@ -669,6 +675,27 @@ mod tests {
         assert!(simulate_fault_ac(&c, "C1", Fault::Open, &set, "NOPE").is_err());
         // a part that does not matter leaves the response alone
         assert!(simulate_fault_ac(&c, "R1", Fault::Scale(1.0), &set, "OUT").is_err());
+    }
+
+    #[test]
+    fn a_scan_with_the_healthy_circuit_solved_once_gives_the_same_reports() {
+        use crate::circuit::DiodeModel;
+        let mut c = Circuit::new();
+        let (vin, mid) = (c.node("IN"), c.node("MID"));
+        c.add(Element::vdc("V1", vin, 0, 5.0));
+        c.add(Element::Resistor { name: "R1".into(), a: vin, b: mid, r: 1e3 });
+        c.add(Element::Diode { name: "D1".into(), a: mid, k: 0, model: DiodeModel::default() });
+        let base = dc_op(&c).unwrap();
+        for part in breakable(&c) {
+            let e = c.elements.iter().find(|e| e.name() == part).unwrap();
+            for f in applicable(e) {
+                let b = break_part(&c, &part, f).unwrap();
+                let (once, again) = (simulate_broken_with(&c, &b, &base).unwrap(), simulate_broken(&c, &b).unwrap());
+                assert_eq!(once.node_changes, again.node_changes, "{part} {f:?}");
+                assert_eq!(once.part_changes.len(), again.part_changes.len(), "{part} {f:?}");
+                assert_eq!(once.summary(), again.summary(), "{part} {f:?}");
+            }
+        }
     }
 
     #[test]
