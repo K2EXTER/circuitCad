@@ -355,6 +355,29 @@ fn unsaved_changes_are_tracked() {
     assert!(!app.dirty());
 }
 
+/// The order window's checks list a board that no longer matches the schematic (a value only warns, a new part blocks).
+#[test]
+fn the_order_checks_list_a_board_that_differs_from_the_schematic() {
+    let mut app = App::default();
+    assert!(app.sch.load_sample(board_editor::BoardEditor::lesson_circuit()));
+    app.board_ed.import_from_schematic(&app.sch);
+    let sync = |app: &mut App| {
+        app.board_ed.note_schematic_diff(&app.sch);
+        app.board_ed.open_order();
+        app.board_ed.order_checks().iter().find(|c| c.title.contains("回路図と基板")).map(|c| c.level)
+    };
+    assert_eq!(sync(&mut app), None);
+    let first = app.sch.sch.components.iter().position(|c| matches!(c.kind, Kind::Resistor)).unwrap();
+    app.sch.sch.components[first].value = "123k".into();
+    app.sch.commit_history_for_test();
+    assert_eq!(sync(&mut app), Some(pcb_core::fab::Level::Warn));
+    app.sch.sch.add(Kind::Resistor, (60, 60), 0);
+    app.sch.commit_history_for_test();
+    assert_eq!(sync(&mut app), Some(pcb_core::fab::Level::Error));
+    app.board_ed.import_from_schematic(&app.sch);
+    assert_eq!(sync(&mut app), None);
+}
+
 /// The board notices when the schematic changed after the import, and stops noticing after a new import.
 #[test]
 fn the_board_notices_a_changed_schematic() {

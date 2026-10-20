@@ -21,6 +21,8 @@ pub struct FabPreset {
     pub edge_clearance: f64,
     pub min_drill: f64,
     pub min_annular_ring: f64,
+    /// The size (mm, either way round) up to which the cheapest price tier applies; `None` when the price does not step with it.
+    pub cheap_size: Option<(f64, f64)>,
     /// Suggested defaults when drawing (track width, via diameter, via drill).
     pub track_width: f64,
     pub via_diameter: f64,
@@ -42,6 +44,7 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.3,
         min_drill: 0.3,
         min_annular_ring: 0.13,
+        cheap_size: None,
         track_width: 0.25,
         via_diameter: 0.6,
         via_drill: 0.3,
@@ -58,6 +61,7 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.3,
         min_drill: 0.3,
         min_annular_ring: 0.15,
+        cheap_size: Some((100.0, 100.0)),
         track_width: 0.25,
         via_diameter: 0.6,
         via_drill: 0.3,
@@ -83,6 +87,7 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.3,
         min_drill: 0.3,
         min_annular_ring: 0.15,
+        cheap_size: Some((100.0, 100.0)),
         track_width: 0.25,
         via_diameter: 0.6,
         via_drill: 0.3,
@@ -107,6 +112,7 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.381,
         min_drill: 0.254,
         min_annular_ring: 0.127,
+        cheap_size: None,
         track_width: 0.25,
         via_diameter: 0.6,
         via_drill: 0.3,
@@ -177,6 +183,20 @@ impl Check {
         self.also = places.into_iter().filter(|p| Some(*p) != at).collect();
         self
     }
+}
+
+/// A copper drop above this (V) at a declared current is worth a look before ordering.
+const MAX_DROP_V: f64 = 0.1;
+
+/// The check for a board that no longer matches its schematic (`summary` says how). A different net, or a part that is only on one side, makes
+/// the ordered board a different circuit from the one simulated, so it blocks; a changed value or footprint only warns.
+pub fn schematic_sync_check(summary: &str, blocking: bool) -> Check {
+    check(
+        if blocking { Level::Error } else { Level::Warn },
+        "回路図と基板が合っていません",
+        format!("{summary}。回路図を直したあと、基板で「回路図から取り込み」を押していないようです。このまま発注すると、シミュレーションした回路と違う基板が届きます。基板の画面の左パネルで「回路図から取り込み」を押し、必要なら配線をやり直しましょう"),
+        None,
+    )
 }
 
 /// Everything a beginner should look at before sending the files.
@@ -334,6 +354,35 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
     if drc::missing_ground_fill(board) {
         out.push(check(Level::Info, "GND のベタ (銅箔ゾーン) がありません", "2層基板では、裏面などを GND のゾーンで塗ると、信号の戻り道が短くなってノイズが減り、配線もしやすくなります。ツール「ゾーン」でネット GND を選んで囲みましょう", None));
+    }
+
+    // the price tier of the fab
+    if let Some((cw, ch)) = fab.and_then(|f| f.cheap_size) {
+        let (w, h) = (hi.x - lo.x, hi.y - lo.y);
+        let fits = (w <= cw && h <= ch) || (w <= ch && h <= cw);
+        let name = fab.map_or("", |f| f.name);
+        if fits {
+            out.push(check(Level::Ok, format!("{name} の最も安い料金の枠 ({cw:.0}×{ch:.0} mm 以内) に入っています"), "", None));
+        } else {
+            out.push(check(Level::Info, format!("基板が {cw:.0}×{ch:.0} mm より大きいので、{name} では料金の枠が上がります"), format!("いまの大きさは {w:.1}×{h:.1} mm です。{cw:.0}×{ch:.0} mm に収まるように部品を詰めるか、外形を小さくすると安くなります。大きいままでよければ、このまま進めて構いません"), None));
+        }
+    }
+
+    // the copper's voltage drop, for the nets whose current was declared
+    let drops = crate::irdrop::net_drops(board, &crate::irdrop::IrSpec::default());
+    let bad: Vec<(&crate::irdrop::NetDrop, &crate::irdrop::PadDrop)> = drops.iter().filter_map(|d| d.worst().map(|w| (d, w))).filter(|(_, w)| w.drop_v.is_some_and(|v| v > MAX_DROP_V)).collect();
+    if let Some((d, w)) = bad.first() {
+        out.push(check(
+            Level::Warn,
+            format!("配線の電圧降下が大きいネットがあります: {}", bad.iter().take(4).map(|(d, _)| d.net.as_str()).collect::<Vec<_>>().join(", ")),
+            format!(
+                "例: {} は {:.1} A を流すと、{} の {} ピンで {:.2} V 落ちます (目安 {} V 以下)。電源が足りなくなり、動作が不安定になります。配線を太く・短くするか、ベタ (ゾーン) で塗りましょう。左の「配線の太さ」で確かめられます",
+                d.net, d.amps, w.refdes, w.pin, w.drop_v.unwrap_or(0.0), MAX_DROP_V
+            ),
+            Some(w.pos),
+        ));
+    } else if !drops.is_empty() && drops.iter().all(|d| d.worst().is_some()) {
+        out.push(check(Level::Ok, format!("配線の電圧降下は、どのネットも {MAX_DROP_V} V 以下です"), "", None));
     }
 
     // BOM

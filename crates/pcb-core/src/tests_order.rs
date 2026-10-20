@@ -101,3 +101,44 @@ fn a_fab_with_stricter_minimums_finds_what_the_loose_rules_let_through() {
     let c = preflight(&ok, preset("pcbway"));
     assert!(ready(&c) && !c.iter().any(|x| x.level == Level::Warn), "{:?}", c.iter().map(|x| &x.title).collect::<Vec<_>>());
 }
+
+#[test]
+fn a_board_over_the_cheap_size_of_the_fab_gets_a_note_and_nothing_else_changes() {
+    let small = preflight(&routed(), preset("jlcpcb"));
+    assert!(small.iter().any(|c| c.level == Level::Ok && c.title.contains("料金の枠")), "{:?}", small.iter().map(|c| &c.title).collect::<Vec<_>>());
+    let mut big = routed();
+    big.outline = vec![Point::new(0.0, 0.0), Point::new(150.0, 0.0), Point::new(150.0, 40.0), Point::new(0.0, 40.0)];
+    let c = preflight(&big, preset("jlcpcb"));
+    assert!(c.iter().any(|c| c.level == Level::Info && c.title.contains("料金の枠")));
+    assert!(ready(&c) == ready(&preflight(&routed(), preset("jlcpcb"))), "a size note never blocks");
+    // 90 x 100 is inside
+    big.outline = vec![Point::new(0.0, 0.0), Point::new(90.0, 0.0), Point::new(90.0, 100.0), Point::new(0.0, 100.0)];
+    assert!(preflight(&big, preset("pcbway")).iter().any(|c| c.level == Level::Ok && c.title.contains("料金の枠")));
+    assert!(!preflight(&big, preset("oshpark")).iter().any(|c| c.title.contains("料金の枠")), "OSH Park prices by area");
+}
+
+#[test]
+fn a_loaded_net_with_a_big_copper_drop_is_a_warning_and_a_wide_track_is_not() {
+    let mut b = Board::new("t", 100.0, 20.0);
+    for x in [5.0, 85.0] {
+        let mut p = Pad::new(Point::new(x, 10.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+        p.net = "VIN".into();
+        p.refdes = if x < 10.0 { "J1".into() } else { "U1".into() };
+        p.pin = "1".into();
+        b.pads.push(p);
+    }
+    b.tracks.push(Track { side: Side::Top, a: Point::new(5.0, 10.0), b: Point::new(85.0, 10.0), width: 0.25 });
+    let has = |b: &Board, level: Level| preflight(b, None).iter().any(|c| c.level == level && c.title.contains("電圧降下"));
+    assert!(!has(&b, Level::Warn) && !has(&b, Level::Ok), "no current declared, nothing to say");
+    // 80 mm of 0.25 mm copper is 0.16 ohm: 1 A drops 0.16 V
+    b.net_currents.insert("VIN".into(), 1.0);
+    assert!(has(&b, Level::Warn));
+    b.tracks[0].width = 2.0;
+    assert!(has(&b, Level::Ok) && !has(&b, Level::Warn));
+}
+
+#[test]
+fn the_schematic_check_blocks_only_when_the_circuit_differs() {
+    assert_eq!(schematic_sync_check("追加 1 (R3)", true).level, Level::Error);
+    assert_eq!(schematic_sync_check("値・形が違う 1 (R1)", false).level, Level::Warn);
+}

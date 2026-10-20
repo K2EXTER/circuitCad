@@ -14,11 +14,13 @@ pub(super) struct OrderState {
     pub(super) preview: Option<PreviewView>,
     /// Where the files were last written.
     pub(super) exported_to: Option<PathBuf>,
+    /// How the board differs from the schematic (blocks the order or only warns), as last seen by `note_schematic_diff`.
+    pub(super) sync: Option<(bool, String)>,
 }
 
 impl Default for OrderState {
     fn default() -> Self {
-        Self { open: false, fab_id: "standard".into(), checks: vec![], ran: false, preview: None, exported_to: None }
+        Self { open: false, fab_id: "standard".into(), checks: vec![], ran: false, preview: None, exported_to: None, sync: None }
     }
 }
 
@@ -55,12 +57,26 @@ impl BoardEditor {
         self.run_checks();
     }
 
+    /// Remember how the board differs from the schematic, for the order window's checks (call every frame the window is up).
+    pub fn note_schematic_diff(&mut self, sch: &SchEditor) {
+        let d = self.schematic_diff(sch);
+        self.order.sync = (!d.is_empty()).then(|| (!d.added.is_empty() || !d.removed.is_empty() || d.nets > 0, d.summary()));
+    }
+
+    #[cfg(test)]
+    pub fn order_checks(&self) -> &[Check] {
+        &self.order.checks
+    }
+
     pub(super) fn selected_fab(&self) -> Option<&'static FabPreset> {
         fab::preset(&self.order.fab_id)
     }
 
     pub(super) fn run_checks(&mut self) {
         self.order.checks = fab::preflight(&self.board, self.selected_fab());
+        if let Some((blocking, summary)) = &self.order.sync {
+            self.order.checks.insert(0, fab::schematic_sync_check(summary, *blocking));
+        }
         self.order.ran = true;
     }
 

@@ -352,6 +352,7 @@ impl eframe::App for App {
             self.sch.part_popup_window(ui.ctx());
             return;
         }
+        self.board_ed.note_schematic_diff(&self.sch);
         self.board_ed.order_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
