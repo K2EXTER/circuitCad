@@ -1031,3 +1031,50 @@ fn the_tl431_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     assert_eq!(progress(&e), 4);
     assert!(vout(&e) < 3.0 && ik(&e) < 0.1, "100 ohm: {} {}", vout(&e), ik(&e));
 }
+
+#[test]
+fn the_flyback_lesson_ticks_its_three_steps_and_the_diode_holds_the_drain() {
+    let idx = lesson_ids().iter().position(|l| *l == "flyback").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let peak = |e: &SchEditor, name: &str| e.tran.as_ref().unwrap().outcome.as_ref().unwrap().signal(name).unwrap().values.iter().copied().fold(f64::MIN, f64::max);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // without a diode the drain goes far above the 12 V supply (the model has no breakdown: the size is only a hint)
+    assert!(peak(&e, "V(DRAIN)") > 100.0, "no diode: {} V", peak(&e, "V(DRAIN)"));
+    // a diode in the wrong direction does not count (anode on VCC, cathode on DRAIN)
+    let add = |e: &mut SchEditor, anode: &str, cathode: &str| {
+        let d = e.sch.add(sch_core::Kind::Diode, (70, 0), 1);
+        for (pin, net) in [("A", anode), ("K", cathode)] {
+            let (_, pt) = e.sch.components[d].pins().into_iter().find(|(n, _)| n == pin).unwrap();
+            let c = e.sch.components[d].pos;
+            let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+            let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+            e.sch.wires.push(sch_core::Wire { a: pt, b: end });
+            e.sch.labels.push(sch_core::Label { pos: end, text: net.into() });
+        }
+        d
+    };
+    add(&mut e, "VCC", "DRAIN");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "a backwards diode is no flyback diode");
+    // a fresh sheet with the diode the right way round: anode on DRAIN, cathode on VCC
+    let mut e2 = SchEditor::default();
+    e2.start_lesson(idx);
+    e2.run_tran();
+    e2.update_lesson();
+    assert_eq!(progress(&e2), 1);
+    add(&mut e2, "DRAIN", "VCC");
+    e2.run_tran();
+    e2.update_lesson();
+    assert!(peak(&e2, "V(DRAIN)") < 14.0 && peak(&e2, "V(DRAIN)") > 12.0, "with the diode: {} V", peak(&e2, "V(DRAIN)"));
+    assert_eq!(progress(&e2), 2, "the diode, wired the right way, holds the drain");
+    set_value(&mut e2, "L1", "1");
+    e2.run_tran();
+    e2.update_lesson();
+    assert_eq!(progress(&e2), 3);
+}

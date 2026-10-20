@@ -332,6 +332,19 @@ pub(super) fn tl431_overloaded(e: &SchEditor) -> bool {
     tl431_values(e, (9e3, 11e3), (1.0, 150.0))
 }
 
+/// The flyback lesson, step 2: a diode with its anode on DRAIN and its cathode on VCC, a fresh run whose DRAIN stays below 20 V.
+pub(super) fn flyback_diode_added(e: &SchEditor) -> bool {
+    let nets = sch_core::extract(&e.sch);
+    let on = |net: &str, refdes: &str, pin: &str| nets.iter().any(|n| n.name == net && n.pins.iter().any(|p| p.refdes == refdes && p.pin == pin));
+    let diode = e.sch.components.iter().any(|c| c.refdes.starts_with('D') && on("DRAIN", &c.refdes, "A") && on("VCC", &c.refdes, "K"));
+    diode && tran_fresh(e) && tran_peak(e, "V(DRAIN)").is_some_and(|p| p < 20.0)
+}
+
+/// Step 3: the diode is there and the coil is a big one (L1 500 mH or more); a fresh run.
+pub(super) fn flyback_big_coil(e: &SchEditor) -> bool {
+    flyback_diode_added(e) && value_of(&e.sch, "L1").and_then(parse_value).is_some_and(|l| l >= 0.5)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

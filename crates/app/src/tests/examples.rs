@@ -961,6 +961,48 @@ fn write_tl431_example() {
     std::fs::write(root.join("tl431_reference.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/flyback_coil.schjson: a relay coil (L1 100 mH + R1 100 ohm) switched on the low side by a 2N7000 (Q1) from
+/// 12 V (V1); the gate is driven by a 5 V pin (V2, on at 1 ms for 3 ms). No flyback diode yet: the learner adds one (anode on DRAIN,
+/// cathode on VCC): `cargo test -p app write_flyback_example -- --ignored`
+#[test]
+#[ignore]
+fn write_flyback_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "2N7000").unwrap();
+    let pin = |name: &str| def.pins.iter().find(|p| p.name == name).unwrap().number.clone();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (12, 0), 0);
+    s.components[v2].value = "PULSE(0 5 1m 1u 1u 3m 10m)".into();
+    label(&mut s, v2, "+", "GATE");
+    label(&mut s, v2, "-", "GND");
+    let l1 = s.add(Kind::Inductor, (26, 0), 1);
+    s.components[l1].value = "100m".into();
+    label(&mut s, l1, "1", "VCC");
+    label(&mut s, l1, "2", "COIL");
+    let r1 = s.add(Kind::Resistor, (38, 0), 1);
+    s.components[r1].value = "100".into();
+    s.components[r1].footprint = "R_2512".into();
+    label(&mut s, r1, "1", "COIL");
+    label(&mut s, r1, "2", "DRAIN");
+    let q1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (52, 0), 0);
+    label(&mut s, q1, &pin("G"), "GATE");
+    label(&mut s, q1, &pin("D"), "DRAIN");
+    label(&mut s, q1, &pin("S"), "GND");
+    std::fs::write(root.join("flyback_coil.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

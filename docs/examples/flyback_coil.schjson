@@ -1,0 +1,311 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 1m 1u 1u 3m 10m)",
+      "pos": [
+        12,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "100m",
+      "pos": [
+        26,
+        0
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        38,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N7000",
+      "pos": [
+        52,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-92_2N7000",
+      "custom": {
+        "name": "2N7000",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "M",
+          "name": "2N7000",
+          "text": ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ],
+          "params": {},
+          "limits": [
+            "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+            "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+            "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 60.0,
+          "i_max": 0.2,
+          "p_max": 0.4,
+          "rows": [
+            {
+              "name": "しきい値電圧",
+              "value": "0.8〜3V",
+              "condition": "ID = 1mA"
+            },
+            {
+              "name": "オン抵抗",
+              "value": "5Ω (最大)",
+              "condition": "VGS = 10V, ID = 0.5A"
+            }
+          ]
+        },
+        "glyph": "nmos"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -2
+      ],
+      "b": [
+        12,
+        -5
+      ]
+    },
+    {
+      "a": [
+        12,
+        2
+      ],
+      "b": [
+        12,
+        5
+      ]
+    },
+    {
+      "a": [
+        26,
+        -2
+      ],
+      "b": [
+        26,
+        -5
+      ]
+    },
+    {
+      "a": [
+        26,
+        2
+      ],
+      "b": [
+        26,
+        5
+      ]
+    },
+    {
+      "a": [
+        38,
+        -2
+      ],
+      "b": [
+        38,
+        -5
+      ]
+    },
+    {
+      "a": [
+        38,
+        2
+      ],
+      "b": [
+        38,
+        5
+      ]
+    },
+    {
+      "a": [
+        50,
+        0
+      ],
+      "b": [
+        47,
+        0
+      ]
+    },
+    {
+      "a": [
+        52,
+        -2
+      ],
+      "b": [
+        52,
+        -5
+      ]
+    },
+    {
+      "a": [
+        52,
+        2
+      ],
+      "b": [
+        52,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        12,
+        -5
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        12,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        26,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        26,
+        5
+      ],
+      "text": "COIL"
+    },
+    {
+      "pos": [
+        38,
+        -5
+      ],
+      "text": "COIL"
+    },
+    {
+      "pos": [
+        38,
+        5
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        47,
+        0
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        52,
+        -5
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        52,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}
