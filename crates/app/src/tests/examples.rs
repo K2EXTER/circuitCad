@@ -624,6 +624,57 @@ fn write_level_shift_example() {
     std::fs::write(root.join("level_shift.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/uart_line.schjson: the serial frame of the letter 'A' (0x41, 9600 baud, 8N1) from a 5 V pin
+/// (V1, PWL), 100 ohm output resistance (R1), a cable (R2 1k + C1 100p) down to the receiver's pin RX:
+/// `cargo test -p app write_uart_example -- --ignored`
+#[test]
+#[ignore]
+fn write_uart_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    // the frame: idle high, start bit (low), 8 data bits LSB first, stop bit (high)
+    let bit_us = 1e6 / 9600.0;
+    let t0 = 100.0;
+    let mut levels = vec![0.0]; // start
+    levels.extend((0..8).map(|i| if (0x41u32 >> i) & 1 == 1 { 5.0 } else { 0.0 }));
+    levels.push(5.0); // stop
+    let mut pwl = String::from("PWL(0 5");
+    let mut prev = 5.0;
+    for (k, lv) in levels.iter().enumerate() {
+        let t = t0 + k as f64 * bit_us;
+        if *lv != prev {
+            pwl += &format!(" {:.3}u {prev} {:.3}u {lv}", t, t + 0.02);
+            prev = *lv;
+        }
+    }
+    pwl += ")";
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = pwl;
+    label(&mut s, v1, "+", "TX");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (12, 0), 1);
+    s.components[r1].value = "100".into();
+    label(&mut s, r1, "1", "TX");
+    label(&mut s, r1, "2", "LINE");
+    let r2 = s.add(Kind::Resistor, (22, 0), 1);
+    s.components[r2].value = "1k".into();
+    label(&mut s, r2, "1", "LINE");
+    label(&mut s, r2, "2", "RX");
+    let c1 = s.add(Kind::Capacitor, (32, 0), 1);
+    s.components[c1].value = "100p".into();
+    label(&mut s, c1, "1", "RX");
+    label(&mut s, c1, "2", "GND");
+    std::fs::write(root.join("uart_line.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

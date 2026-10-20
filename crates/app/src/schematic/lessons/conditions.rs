@@ -191,6 +191,18 @@ pub(super) fn level_pullup_weak(e: &SchEditor) -> bool {
     tran_fresh(e) && v("R3").is_some_and(|r| r <= 3e3) && v("R5").is_some_and(|r| r >= 50e3)
 }
 
+/// The serial lesson, step 2: a big cable capacitance (50n or more) with the 1k cable resistance, a fresh run.
+pub(super) fn uart_cable_slow(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    tran_fresh(e) && v("C1").is_some_and(|c| c >= 50e-9) && v("R2").is_some_and(|r| r >= 500.0)
+}
+
+/// The serial lesson, step 3: the same capacitance, but the cable resistance is 200 ohm or less, a fresh run.
+pub(super) fn uart_cable_fast(e: &SchEditor) -> bool {
+    let v = |r: &str| value_of(&e.sch, r).and_then(parse_value);
+    tran_fresh(e) && v("C1").is_some_and(|c| c >= 50e-9) && v("R2").is_some_and(|r| r <= 200.0)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

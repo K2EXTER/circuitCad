@@ -715,3 +715,42 @@ fn the_level_shift_lesson_ticks_its_three_steps_and_its_numbers_hold() {
     let (_, _, slow) = look(&e, "V(L)");
     assert!(slow > 8.0 * l_rise, "{slow} vs {l_rise}");
 }
+
+#[test]
+fn the_serial_lesson_ticks_its_three_steps_and_the_receiver_misreads_the_slow_cable() {
+    let idx = lesson_ids().iter().position(|l| *l == "serial").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // what a receiver reads: the level in the middle of each bit against half the supply
+    let read = |e: &SchEditor, net: &str| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal(net).unwrap().values;
+        let bit = 1.0 / 9600.0;
+        let at = |tt: f64| v[t.time.iter().position(|x| *x >= tt).unwrap()];
+        let mut byte = 0u32;
+        for k in 1..=8 {
+            if at(100e-6 + (k as f64 + 0.5) * bit) > 2.5 {
+                byte |= 1 << (k - 1);
+            }
+        }
+        byte
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert_eq!(read(&e, "V(TX)"), 0x41, "the sent byte is 'A'");
+    assert_eq!(read(&e, "V(RX)"), 0x41, "a short cable keeps the byte");
+    set_value(&mut e, "C1", "100n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert_ne!(read(&e, "V(RX)"), 0x41, "a slow cable garbles it");
+    assert_eq!(read(&e, "V(RX)"), 0x01);
+    set_value(&mut e, "R2", "100");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert_eq!(read(&e, "V(RX)"), 0x41, "a smaller resistance reads right again");
+}
