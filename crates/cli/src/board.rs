@@ -51,9 +51,23 @@ impl Session {
                 let (_, kv) = options(rest);
                 let only = opt(&kv, "net").map(str::to_string);
                 let board = self.board_mut()?;
-                let rep = autoroute(board, &RouteOptions::default(), only.as_deref());
+                // like the editor: leave and enter pads at a right angle (`lead=0` turns it off)
+                let lead = match opt(&kv, "lead") {
+                    Some(v) => num(v)?,
+                    None => 0.5,
+                };
+                let before = board.tracks.len();
+                let ro = RouteOptions { pad_lead: (lead > 0.0).then_some(lead), ..RouteOptions::default() };
+                let rep = autoroute(board, &ro, only.as_deref());
+                let aligned = if lead > 0.0 && rep.routed > 0 {
+                    let new: Vec<usize> = (before..board.tracks.len()).collect();
+                    pcb_core::padentry::align_entries(board, &pcb_core::padentry::EntryOptions { lead, spread: true }, Some(&new)).aligned
+                } else {
+                    0
+                };
+                let joined = pcb_core::merge::merge_collinear(board, before);
                 let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
-                Ok(obj(json!({"routed": rep.routed, "failed": failed, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
             }
             "drc" => {
                 let board = self.board_mut()?;

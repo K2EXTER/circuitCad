@@ -369,3 +369,40 @@ fn board_check_says_ready_after_routing_and_notices_a_schematic_change() {
     assert!(!ok);
     assert!(a.last().unwrap()["error"].as_str().unwrap().contains("jlcpcb"));
 }
+
+#[test]
+fn route_joins_straight_pieces_and_keeps_to_45_degrees() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add R 270 as=R2
+add LED as=D1
+add LED as=D2
+net VCC V1.+ R1.1 R2.1
+net A R1.2 D1.A
+net B R2.2 D2.A
+net GND V1.- D1.K D2.K
+board import
+board autoplace
+board route
+board drc
+board status
+board save {}
+";
+    let file = std::env::temp_dir().join(format!("ccad-route-{}.pcbjson", std::process::id()));
+    let (a, ok) = run(&script.replace("{}", file.to_str().unwrap()));
+    assert!(ok, "{a:?}");
+    let r = a.iter().find(|v| v["cmd"] == "board" && v.get("joined_tracks").is_some()).expect("route answer");
+    assert_eq!(r["unrouted_left"], 0);
+    assert!(r["joined_tracks"].as_u64().is_some() && r["aligned_pads"].as_u64().is_some(), "{r}");
+    let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
+    assert_eq!((st["drc_violations"].as_u64(), st["unrouted"].as_u64()), (Some(0), Some(0)));
+    // every piece runs at 0, 45 or 90 degrees
+    let board: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    let _ = std::fs::remove_file(&file);
+    for t in board["tracks"].as_array().unwrap() {
+        let (dx, dy) = ((t["b"]["x"].as_f64().unwrap() - t["a"]["x"].as_f64().unwrap()).abs(), (t["b"]["y"].as_f64().unwrap() - t["a"]["y"].as_f64().unwrap()).abs());
+        let len = dx.hypot(dy);
+        assert!(len < 1e-6 || dx < 1e-6 || dy < 1e-6 || (dx - dy).abs() < 1e-6, "odd angle: {t}");
+    }
+}

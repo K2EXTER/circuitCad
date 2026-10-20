@@ -18,6 +18,7 @@ pub mod footprints;
 pub mod geom;
 pub mod irdrop;
 pub mod meander;
+pub mod merge;
 pub mod gerber;
 pub mod groundpour;
 pub mod gerber_view;
@@ -40,6 +41,8 @@ mod tests_autoroute;
 mod tests_layers;
 #[cfg(test)]
 mod tests_meander;
+#[cfg(test)]
+mod tests_merge;
 #[cfg(test)]
 mod tests_padentry;
 #[cfg(test)]

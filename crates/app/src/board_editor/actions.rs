@@ -62,8 +62,13 @@ impl BoardEditor {
         }
         // the new tracks leave and enter the pads at a right angle, like those drawn by hand
         let aligned = if self.pad_lead && report.routed > 0 { self.align_pad_entries(Some((tracks_before..self.board.tracks.len()).collect())) } else { 0 };
+        // the router and the pad leads cut a route into short pieces: join the ones that run in a line
+        let joined = if report.routed > 0 { pcb_core::merge::merge_collinear(&mut self.board, tracks_before) } else { 0 };
         self.status = if report.failed.is_empty() {
-            let tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
+            let mut tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
+            if joined > 0 {
+                tail += &format!("一直線につながる配線 {joined} か所を1本にまとめました。");
+            }
             format!("自動配線: {} 本を配線しました。{tail}(格子 {:.3} mm。手で足すときは、配線や端の点に吸い付きます)。DRC で確認しましょう", report.routed, opt.grid)
         } else {
             format!(
