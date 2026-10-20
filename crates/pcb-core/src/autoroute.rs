@@ -42,6 +42,8 @@ pub struct RouteReport {
     pub routed: usize,
     /// Connections that could not be routed.
     pub failed: Vec<Airwire>,
+    /// Nets routed with a width of their own because of the current they carry: (net, width in mm). See `autoroute_sized`.
+    pub wide: Vec<(String, f64)>,
 }
 
 /// Route every airwire of the board (or only those of `only_net`).
@@ -75,6 +77,47 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
     }
     let (routed, report) = best.expect("at least one run");
     *board = routed;
+    report
+}
+
+/// [`autoroute`] that gives every net with a declared current (`Board::net_currents`) the width that current needs
+/// (`current::width_for_current`, rounded up to 0.05 mm), when that is wider than `opt.track_width`. Those nets are
+/// routed first, each with its own width, and the rest after them. A wide net that fails is tried again with the
+/// normal width by the last run (the width check then warns about it). When the wide tracks leave more connections open
+/// than a plain run does, the plain run is kept. With `only_net`, only that net is routed.
+pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
+    let mut report = RouteReport::default();
+    let mut wide: Vec<(String, f64)> = vec![];
+    for (n, amps) in board.net_currents.clone() {
+        let need = crate::current::round_up_width(crate::current::width_for_current(amps, &Default::default()));
+        if need > opt.track_width + 1e-9 && only_net.is_none_or(|x| x == n) {
+            wide.push((n, need));
+        }
+    }
+    wide.sort_by(|a, b| a.0.cmp(&b.0));
+    // the plain run, to fall back on when the wide tracks take room that other connections needed
+    let plain = (!wide.is_empty()).then(|| {
+        let mut b = board.clone();
+        let r = autoroute(&mut b, opt, only_net);
+        (b, r)
+    });
+    for (n, w) in &wide {
+        let r = autoroute(board, &RouteOptions { track_width: *w, ..opt.clone() }, Some(n));
+        report.routed += r.routed;
+        if r.routed > 0 {
+            report.wide.push((n.clone(), *w));
+        }
+    }
+    let rest = autoroute(board, opt, only_net);
+    report.routed += rest.routed;
+    report.failed = rest.failed;
+    // wide tracks that cost connections: the plain run wins when it connects more
+    if let Some((plain_board, plain_report)) = plain {
+        if plain_report.failed.len() < report.failed.len() {
+            *board = plain_board;
+            return plain_report;
+        }
+    }
     report
 }
 

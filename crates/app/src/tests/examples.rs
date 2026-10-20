@@ -282,7 +282,7 @@ fn write_3d_demos() {
         app.sch.load_path(root.join(format!("{name}.schjson")));
         app.board_ed.import_from_schematic(&app.sch);
         app.board_ed.autoplace();
-        app.board_ed.autoroute(None);
+        app.board_ed.autoroute_now(None);
         std::fs::write(dir.join(format!("3d_{name}.pcbjson")), serde_json::to_string_pretty(&app.board_ed.board).unwrap()).unwrap();
         println!("{name}: {} parts", app.board_ed.board.parts.len());
     }

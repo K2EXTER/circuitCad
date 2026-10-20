@@ -12,8 +12,21 @@ pub(super) fn route_pitch(grid: f64) -> f64 {
 }
 
 impl BoardEditor {
-    /// Route the airwires of every net, or only of `net`. One undo step.
+    /// Route the airwires of every net, or only of `net`. One undo step. When no currents are declared yet, the schematic's
+    /// DC currents are asked for first (so that the nets that carry a lot of current get a track width that fits) and the
+    /// route is made when `App` has answered (`route_after_currents`); not during a guided lesson.
     pub fn autoroute(&mut self, net: Option<&str>) {
+        if self.board.outline.len() >= 3 && self.board.net_currents.is_empty() && !self.currents_tried && self.lesson.is_none() && !ratsnest(&self.board).is_empty() {
+            self.currents_tried = true;
+            self.route_after_currents = Some(net.map(str::to_string));
+            self.currents_request = Some(CurrentSource::Dc);
+            return;
+        }
+        self.autoroute_now(net);
+    }
+
+    /// [`Self::autoroute`] without asking for the currents first.
+    pub fn autoroute_now(&mut self, net: Option<&str>) {
         if self.board.outline.len() < 3 {
             self.status = "先に基板の外形を決めてください".into();
             return;
@@ -36,23 +49,7 @@ impl BoardEditor {
             }
         }
         // nets with a declared current ("配線の太さ (電流から)") are routed with the width that current needs
-        let mut report = autoroute::RouteReport::default();
-        let mut wide: Vec<(String, f64)> = vec![];
-        for (n, amps) in self.board.net_currents.clone() {
-            let need = pcb_core::current::round_up_width(pcb_core::current::width_for_current(amps, &Default::default()));
-            if need > opt.track_width + 1e-9 && net.is_none_or(|x| x == n) {
-                wide.push((n, need));
-            }
-        }
-        for (n, w) in &wide {
-            let r = autoroute::autoroute(&mut self.board, &RouteOptions { track_width: *w, ..opt.clone() }, Some(n));
-            report.routed += r.routed;
-            report.failed.extend(r.failed);
-        }
-        let rest = autoroute::autoroute(&mut self.board, &opt, net);
-        report.routed += rest.routed;
-        // a wide net that failed may still go through with the normal width (the width check then warns)
-        report.failed = rest.failed;
+        let mut report = autoroute::autoroute_sized(&mut self.board, &opt, net);
         report.routed += pair_routed;
         // a pair connection that failed is tried again by the plain router above; count only what is still open
         let _ = pair_failed;
@@ -66,6 +63,10 @@ impl BoardEditor {
         let joined = if report.routed > 0 { pcb_core::merge::merge_collinear(&mut self.board, tracks_before) } else { 0 };
         self.status = if report.failed.is_empty() {
             let mut tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
+            if !report.wide.is_empty() {
+                let list: Vec<String> = report.wide.iter().map(|(n, w)| format!("{n} {w:.2} mm")).collect();
+                tail += &format!("電流が大きいネットは、必要な太さで引きました ({})。", list.join("、"));
+            }
             if joined > 0 {
                 tail += &format!("一直線につながる配線 {joined} か所を1本にまとめました。");
             }

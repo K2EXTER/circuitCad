@@ -242,6 +242,10 @@ pub struct BoardEditor {
     pub post_layout_request: Option<bool>,
     /// Set by the width panel: ask `App` for the schematic's DC net currents (it answers with `use_simulated_currents`).
     pub currents_request: Option<CurrentSource>,
+    /// Set when "全部" found no declared currents and asked for the schematic's DC currents first: the route (all nets, or
+    /// the named one) is made when `App` has answered. `currents_tried` stops it from asking twice.
+    pub route_after_currents: Option<Option<String>>,
+    currents_tried: bool,
     /// What the last transient run said about each net's current (RMS, burst, peak), shown under the width table.
     pub current_stats: Vec<sim_core::NetStat>,
     /// The copper resistance of the current copper is in the schematic's analyses (set by `App`, cleared when the copper is widened).
@@ -332,6 +336,8 @@ impl Default for BoardEditor {
             help_request: None,
             post_layout_request: None,
             currents_request: None,
+            route_after_currents: None,
+            currents_tried: false,
             current_stats: vec![],
             post_layout_fresh: false,
             violations: vec![],

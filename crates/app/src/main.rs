@@ -120,6 +120,10 @@ impl eframe::App for App {
             },
             None => {}
         }
+        // "全部" was pressed with no currents declared: the currents are in now (or could not be had), so route
+        if let Some(net) = self.board_ed.route_after_currents.take() {
+            self.board_ed.autoroute_now(net.as_deref());
+        }
         if let Some(on) = self.board_ed.post_layout_request.take() {
             self.apply_post_layout(on);
         }

@@ -46,6 +46,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board import                          parts and nets from the schematic (creates the board if needed)
   board pour [net=GND]                  the GND pour of the editor (bottom copper + a via per surface pad); do it BEFORE autoplace: the poured net then drops out of the placement and the parts sit closer
   board autoplace
+  board move REF X Y [rot=0..3]        put one part at X Y mm (its origin; wiring is not moved)
   board route [net=NAME] [lead=MM]
   board drc
   board status

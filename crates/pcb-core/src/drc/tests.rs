@@ -291,6 +291,15 @@ mod drc_tests {
         }
     }
 
+    #[test]
+    fn an_input_tied_to_the_supply_is_not_a_supply_pin() {
+        // U1's pin 1 is VCC (the cap is next to it); pin 3 (a preset input) is tied to VCC as well, far from the cap
+        let mut b = ic_board(Some(12.0));
+        b.pads[2].net = "VCC".into();
+        b.pads[2].pos = Point::new(30.0, 30.0);
+        assert!(decoupling_checks(&b).is_empty(), "{:?}", decoupling_checks(&b));
+    }
+
     fn ic_board(cap_x: Option<f64>) -> Board {
         let mut b = Board::new("t", 40.0, 40.0);
         b.parts.push(Part { refdes: "U1".into(), value: "74HC00".into(), footprint: "x".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top });

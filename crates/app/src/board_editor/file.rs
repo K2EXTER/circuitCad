@@ -151,6 +151,7 @@ impl BoardEditor {
         let rep = netlist::import(&mut self.board, &parts, &nets);
         self.selected = None;
         self.multi.clear();
+        self.currents_tried = false; // the circuit may have changed: the next route asks for the currents again if none are declared
         self.import_notes = rep.warnings.clone();
         self.status = format!("取り込み完了: 追加 {} / 更新 {} / 削除 {} / 警告 {}", rep.added.len(), rep.updated, rep.removed.len(), rep.warnings.len());
     }

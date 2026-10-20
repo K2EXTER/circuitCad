@@ -1,6 +1,7 @@
 //! A big mixed-signal sample (for the README picture and as a benchmark): one 12 V input feeds a protected
 //! 5 V / 3.3 V supply, a 555 clock with a divide-by-4 counter and LEDs, an over-temperature alarm
-//! (NTC + comparator + transistor) and a single-supply audio amplifier with a low-pass filter.
+//! (NTC + comparator + transistor) and a single-supply audio amplifier with a low-pass filter. Every IC has its own
+//! 100 nF bypass capacitor.
 //! `cargo test -p app write_mixed_signal_example -- --ignored`
 
 use super::*;
@@ -122,6 +123,12 @@ pub(super) fn mixed_signal() -> sch_core::Schematic {
     pins(&mut s, u5, &[("3", "VMID"), ("2", "INV"), ("1", "AOUT"), ("8", "V5"), ("4", "GND")]);
     two_pin(&mut s, Kind::Resistor, (130, 120), 0, "1.6k", "AOUT", "FILT");
     two_pin(&mut s, Kind::Capacitor, (146, 132), 1, "100n", "FILT", "GND");
+
+    // ---- one 100 nF bypass capacitor per IC (555, inverter, flip-flops, comparator, op-amp). On the board each sits next to
+    // the supply pin of its IC; the one beside the 5 V regulator above only smooths the regulator's output.
+    for i in 0..5 {
+        two_pin(&mut s, Kind::Capacitor, (122 + 12 * i, 4), 1, "100n", "V5", "GND");
+    }
     s
 }
 
@@ -214,10 +221,13 @@ fn mixed_signal_project_opens_with_its_routed_board() {
     app.load_project(root.join("mixed_signal.ccproj"));
     assert_eq!(app.sch.sch.components.len(), mixed_signal().components.len(), "the project carries the same schematic as the sample");
     let b = &app.board_ed.board;
-    assert_eq!(b.parts.len(), 41);
+    assert_eq!(b.parts.len(), 46);
     assert!(b.tracks.len() > 200 && !b.zones.is_empty());
     let v = pcb_core::drc::check(b);
     assert!(v.is_empty(), "{:?}", v.iter().map(|x| &x.message).collect::<Vec<_>>());
+    // every IC has a bypass capacitor within the distance the check asks for
+    let d = pcb_core::drc::decoupling_checks(b);
+    assert!(d.is_empty(), "{:?}", d.iter().map(|x| &x.message).collect::<Vec<_>>());
 }
 
 /// Speed of the combined demo's transient (8 ms, 10 us steps): `cargo test -p app --release mixed_signal_speed -- --ignored --nocapture`.

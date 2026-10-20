@@ -147,7 +147,7 @@ fn autoroute_handles_the_ne555_blinker() {
     }
     let before = ratsnest(b).len();
     assert!(before > 0);
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     let left = ratsnest(&app.board_ed.board);
     println!("{} -> {} unrouted; {}", before, left.len(), app.board_ed.status);
     assert!(left.len() < before, "{}", app.board_ed.status);
@@ -171,7 +171,7 @@ fn autoplace_then_autoroute_on_the_shipped_examples() {
         assert!(app.board_ed.status.starts_with("自動配置"), "{name}: {}", app.board_ed.status);
         assert!(pcb_core::drc::check(&app.board_ed.board).is_empty(), "{name}: {:?}", pcb_core::drc::check(&app.board_ed.board));
         let before = ratsnest(&app.board_ed.board).len();
-        app.board_ed.autoroute(None);
+        app.board_ed.autoroute_now(None);
         let left = ratsnest(&app.board_ed.board).len();
         println!("{name}: {before} -> {left} unrouted");
         assert!(left * 2 <= before, "{name}: {before} -> {left}");
@@ -209,7 +209,7 @@ fn the_board_lesson_walks_from_schematic_to_the_order_window() {
     assert_eq!(progress(&mut app), 1);
     app.board_ed.autoplace();
     assert_eq!(progress(&mut app), 2);
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     assert_eq!(progress(&mut app), 3, "{}", app.board_ed.status);
     app.board_ed.run_drc();
     assert_eq!(progress(&mut app), 4, "{}", app.board_ed.status);
@@ -261,7 +261,7 @@ fn the_order_challenge_ticks_off_as_the_faults_are_fixed() {
     assert!(bad.contains(&Level::Error) && bad.contains(&Level::Warn));
     app.board_ed.board.place_part("D1", pcb_core::Point::new(14.5, 14.0), 0);
     assert_eq!(progress(&mut app), 2, "D1 is back on the board");
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     assert_eq!(progress(&mut app), 3, "{}", app.board_ed.status);
     for net in ["N$1", "GND"] {
         app.board_ed.widen_net_to_need(net);
@@ -337,7 +337,7 @@ fn fab_trial() {
             app.board_ed.board.net_currents.insert(n.into(), 1.0);
         }
     }
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     println!("{}", app.board_ed.status);
     let b = &mut app.board_ed.board;
     b.name = name.clone();
@@ -377,7 +377,7 @@ fn autoroute_uses_the_width_a_declared_net_current_needs() {
     }
     b.net_currents.insert("P".into(), 2.0);
     let need = pcb_core::current::round_up_width(pcb_core::current::width_for_current(2.0, &Default::default()));
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     let b = &app.board_ed.board;
     let conn = pcb_core::drc::connectivity(b);
     for (i, t) in b.tracks.iter().enumerate() {
@@ -468,7 +468,7 @@ fn the_tp5100_sample_routes_completely_with_clean_pad_leads() {
     app.sch.load_path(root.join("tp5100_charger.schjson"));
     app.board_ed.import_from_schematic(&app.sch);
     app.board_ed.autoplace();
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     let b = &app.board_ed.board;
     assert!(pcb_core::ratsnest::ratsnest(b).is_empty(), "{}", app.board_ed.status);
     assert!(pcb_core::drc::check(b).is_empty(), "{:?}", pcb_core::drc::check(b));
@@ -494,7 +494,7 @@ fn the_ground_pour_takes_the_ground_wires_off_the_tp5100_sample() {
     app.board_ed.autoplace();
     app.board_ed.ground_pour();
     assert!(app.board_ed.status.starts_with("GND ベタ"), "{}", app.board_ed.status);
-    app.board_ed.autoroute(None);
+    app.board_ed.autoroute_now(None);
     let b = &app.board_ed.board;
     assert!(pcb_core::ratsnest::ratsnest(b).is_empty(), "{}", app.board_ed.status);
     let mut c = b.clone();

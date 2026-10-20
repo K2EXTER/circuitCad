@@ -162,3 +162,33 @@ fn a_lead_does_not_run_past_the_grid_cell_and_back() {
     assert!(no_backtrack(&b), "{:?}", b.tracks);
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
 }
+
+#[test]
+fn a_net_that_cannot_be_routed_wide_falls_back_to_the_plain_run() {
+    let mut b = Board::new("t", 50.0, 30.0);
+    pad(&mut b, 5.0, 14.5, "A", false);
+    pad(&mut b, 45.0, 14.5, "A", false);
+    // two big pads of other nets (from the board's edge to 1.5 mm off the line) leave a 3 mm channel: 5 A needs a 2.8 mm track
+    // plus clearances, which does not fit, and there is no way round
+    for (y, net) in [(6.5, "C"), (22.5, "D")] {
+        // through-hole: they block both layers, so the wide track cannot go under them on the bottom
+        let mut p = Pad::new(Point::new(25.0, y), PadShape::Rect { w: 10.0, h: 13.0 }, Some(1.0), Side::Top);
+        p.net = net.into();
+        b.pads.push(p);
+    }
+    b.net_currents.insert("A".into(), 5.0);
+    let opt = RouteOptions::default();
+    let r = autoroute_sized(&mut b, &opt, None);
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert!(ratsnest(&b).is_empty());
+    assert!(r.wide.is_empty(), "the plain run was kept: {:?}", r.wide);
+    assert!(b.tracks.iter().all(|t| (t.width - opt.track_width).abs() < 1e-9));
+    // with room, the same net is routed wide
+    let mut c = Board::new("t", 50.0, 30.0);
+    pad(&mut c, 5.0, 14.5, "A", false);
+    pad(&mut c, 45.0, 14.5, "A", false);
+    c.net_currents.insert("A".into(), 5.0);
+    let r = autoroute_sized(&mut c, &opt, None);
+    assert!(r.failed.is_empty() && r.wide.len() == 1 && r.wide[0].1 >= 2.5, "{:?}", r.wide);
+    assert!(c.tracks.iter().all(|t| t.width >= 2.5));
+}

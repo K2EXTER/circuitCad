@@ -1,0 +1,62 @@
+# 配置・配線の質を測る
+
+自動配置・自動配線・配線の太さなどを変えたときに、**変更の前後を同じ物差しで比べる**ための道具です。
+
+## 1. 同梱サンプルを一括で測る (`tools/quality_bench.py`)
+
+`docs/examples/*.schjson` の全サンプルで、利用者と同じ手順(`ccad` で「回路図から取り込み → GND ベタ → 自動配置 → 自動配線 → DRC・発注前チェック」)を実行し、基板の面積・配線の長さ・ビア・配線の本数・DRC違反と未配線の合計・バイパスコンデンサの警告・かかった時間を足し合わせます。
+
+```bash
+cargo build --release -p cli                  # debug でも数値は同じ (遅いだけ)
+python tools/quality_bench.py --save before.json
+# ... コードを変えて、ビルドし直す ...
+python tools/quality_bench.py --compare before.json
+```
+
+- `--no-pour`: ベタを使わない(昔の流れ。GND も配線する)
+- `--route-args "improve=1"`: `board route` に足す語
+- `--only led_blinker mixed_signal`: 一部のサンプルだけ
+- `--compare` は両方にあるサンプルだけを比べ、配線長がいちばん変わったサンプルも出す
+
+**`problems`(DRC違反+未配線)は 0 でなければなりません。** 0 でないサンプルがあれば、その変更は配線を壊しています(例: 電流から太さを決めたとき、太い配線が場所を取って1本通らなくなった → 通る本数が多いほうを採用する処理を足した)。
+
+### 今の値 (43サンプル、2026-10-21)
+
+| | 面積 mm² | 配線長 mm | ビア | 配線の本数 | problems |
+|---|---|---|---|---|---|
+| ベタ先 (既定) | 27538 | 2770 | 63 | 1466 | 0 |
+| ベタなし (`--no-pour`) | 36565 | 4007 | 103 | 1707 | 0 |
+
+(`bypass_warnings` の 7 件は、サンプル回路にバイパスコンデンサが無いことへの指摘です。総合デモ `mixed_signal` だけは、ICごとに 100n を足してあります。)
+
+### これまでの変更が出した効果
+
+| 変更 | 測ったもの | 結果 |
+|---|---|---|
+| ベタ先 + 隙間を詰める | 同じ43サンプル、ベタを無視した配置と比べる | 面積 -23%、配線長 -27%、ビア 37→23 |
+| 配置のあとの整列 | 同上 | 配線長 1751→1737 mm、ビア 23→22 (全部つながる) |
+| パッドの根元そろえ + 一直線の配線のまとめ | 総合デモ | 線分 245→167 本 (Freerouting は 163 本) |
+| バイパスコンデンサを電源ピンの隣へ | IC2個+コンデンサ2個 | 距離 約20 mm → 約5 mm |
+| 配線を短くする (`board improve`) | 手で引いた総合デモの配線 | 配線長 389→349 mm、線分 242→192 本、ビア 2→3 個 |
+
+## 2. Freerouting と比べる (`tools/freerouting_compare.py`)
+
+同じ部品配置で、いまの配線と Freerouting の配線を比べます。Freerouting は Java のプログラムで、リポジトリには入っていません(約65 MB。https://github.com/freerouting/freerouting から入手)。
+
+```bash
+ccad -c 'board open board.pcbjson\nboard save out.pcbjson'      # 配線済みの基板を用意
+python tools/freerouting_compare.py --pcb out.pcbjson --jar freerouting-2.5.0.jar --skip-nets GND
+```
+
+基板のパッドとルールを Specctra DSN にして(配線は含めない)Freerouting に引かせ、できた SES を読み戻して、配線の長さ・本数・ビア・半端な角度の線を表示します。Freerouting の結果も `.freerouting.pcbjson` に保存するので、`ccad` の `board open` と `board drc` で、同じDRCで調べられます。ベタで済ませるネット(GND)は `--skip-nets` で外します。
+
+### 比べた結果 (2026-10-20、同じ配置から)
+
+- 同梱サンプル10個(アプリと同じ設定の自動配線): 配線長は circuitCad が約 5% 短く、ビアは Freerouting が約 3 割少なく、線分は Freerouting が約 3 割少なかった(この差は、一直線の配線のまとめで 163 本と並んだ)。両方とも全接続・DRC違反0。
+- 総合デモの手動配線の配置: 手動 389 mm・ビア 2 個、circuitCad の自動 342 mm・ビア 3 個、Freerouting 371 mm・ビア 3 個。
+
+## 3. 比べるときの注意
+
+- 配置を変える変更は、必ず配線までして測ります(配置だけの指標だと、配線が通らなくなる悪化を見逃す)。
+- 数値は**合計**で見ます。1つのサンプルの増減は、配置の小さな違いで簡単にひっくり返ります。
+- `--compare` の相手は、同じ引数(`--no-pour` や `--route-args`)で取ったものにします(違うと表示に出ます)。

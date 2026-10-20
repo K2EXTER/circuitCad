@@ -997,7 +997,7 @@ fn the_autorouter_leaves_and_enters_pads_at_a_right_angle_when_the_pad_lead_is_o
         e.track_width = 0.25;
         e.grid = 0.5;
         e.pad_lead = lead;
-        e.autoroute(None);
+        e.autoroute_now(None);
         e
     };
     let axis_aligned = |t: &Track| (t.a.x - t.b.x).abs() < 1e-9 || (t.a.y - t.b.y).abs() < 1e-9;
@@ -1143,4 +1143,56 @@ fn board_interaction_time() {
         t.push(frame(&mut e, vec![egui::Event::PointerMoved(p)]));
     }
     report("routing preview (auto path + shove)", t);
+}
+
+#[test]
+fn the_first_route_asks_for_the_currents_and_routes_a_heavy_net_wide() {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 60.0, 40.0);
+    for (x, y) in [(10.0, 10.0), (45.0, 25.0)] {
+        let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 3.0, h: 3.0 }, None, Side::Top);
+        pad.net = "A".into();
+        e.board.pads.push(pad);
+    }
+    e.track_width = 0.25;
+    e.grid = 0.5;
+    e.autoroute(None);
+    // nothing is drawn yet: the editor asked `App` for the schematic's DC currents and will route when they are in
+    assert_eq!(e.currents_request, Some(CurrentSource::Dc));
+    assert_eq!(e.route_after_currents, Some(None));
+    assert!(e.board.tracks.is_empty());
+    // App answers: 5 A on net A
+    e.currents_request = None;
+    e.use_simulated_currents(Ok(vec![("A".into(), 5.0)]), vec![]);
+    let net = e.route_after_currents.take().unwrap();
+    e.autoroute_now(net.as_deref());
+    assert!(pcb_core::ratsnest::ratsnest(&e.board).is_empty(), "{}", e.status);
+    assert!(e.board.tracks.iter().all(|t| t.width >= 2.0), "5 A needs a wide track: {:?}", e.board.tracks.iter().map(|t| t.width).collect::<Vec<_>>());
+    assert!(e.status.contains("必要な太さ"), "{}", e.status);
+    // once currents are declared (or tried), the next route does not ask again
+    e.board.tracks.clear();
+    e.autoroute(None);
+    assert!(e.currents_request.is_none() && !e.board.tracks.is_empty());
+}
+
+#[test]
+fn a_route_without_a_circuit_goes_ahead_after_one_try() {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 40.0, 30.0);
+    for (x, y) in [(5.0, 5.0), (30.0, 20.0)] {
+        let mut pad = Pad::new(p(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        pad.net = "A".into();
+        e.board.pads.push(pad);
+    }
+    e.autoroute(None);
+    assert_eq!(e.currents_request, Some(CurrentSource::Dc));
+    // App could not get currents (no solvable circuit): the route is made anyway, and the next press goes straight to it
+    e.currents_request = None;
+    e.use_simulated_currents(Err("no circuit".into()), vec![]);
+    let net = e.route_after_currents.take().unwrap();
+    e.autoroute_now(net.as_deref());
+    assert!(!e.board.tracks.is_empty());
+    e.board.tracks.clear();
+    e.autoroute(None);
+    assert!(e.currents_request.is_none() && !e.board.tracks.is_empty());
 }

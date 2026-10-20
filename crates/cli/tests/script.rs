@@ -113,7 +113,7 @@ net MID R1.2 R2.1
 net GND V1.- R2.2
         board import
 board autoplace
-board route
+board route currents=0
 board currents
 board currents widen
 board currents
@@ -463,4 +463,34 @@ board status
     assert_eq!(imp["unrouted_left"], 0);
     let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
     assert_eq!((st["drc_violations"].as_u64(), st["unrouted"].as_u64()), (Some(0), Some(0)), "{st}");
+}
+
+#[test]
+fn route_takes_the_dc_currents_and_gives_a_heavy_net_a_wide_track() {
+    let script = "new
+add V 5 as=V1
+add R 1 as=R1
+net VIN V1.+ R1.1
+net GND V1.- R1.2
+erc
+board import
+board autoplace
+board route
+board drc
+board status
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let r = a.iter().find(|v| v.get("currents_declared").is_some()).expect("route answer");
+    assert!(r["currents_declared"].as_u64().unwrap() >= 1, "{r}");
+    let vin = r["wide_nets"].as_array().unwrap().iter().find(|w| w["net"] == "VIN").expect("VIN is routed wide: 5 A through 1 ohm");
+    assert!(vin["width_mm"].as_f64().unwrap() >= 2.0, "{vin}");
+    let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
+    assert_eq!(st["drc_violations"], 0, "{st}");
+    // and with currents=0 nothing is declared
+    let (b, ok) = run(&script.replace("board route", "board route currents=0"));
+    assert!(ok, "{b:?}");
+    let r0 = b.iter().find(|v| v.get("currents_declared").is_some()).unwrap();
+    assert_eq!(r0["currents_declared"], 0);
+    assert!(r0["wide_nets"].as_array().unwrap().is_empty());
 }

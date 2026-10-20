@@ -1,8 +1,8 @@
-//! Board commands: new, import, pour, autoplace, route, improve, drc, status, postlayout, currents, save, open, fab.
+//! Board commands: new, import, pour, autoplace, move, route, improve, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
-use pcb_core::autoroute::{autoroute, RouteOptions};
+use pcb_core::autoroute::RouteOptions;
 use pcb_core::model::Board;
 use pcb_core::netlist::{self, NetlistNet, NetlistPart};
 use serde_json::{json, Value};
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|route|improve|drc|status|postlayout|currents|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -56,6 +56,23 @@ impl Session {
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
+            "move" => {
+                // board move REF X Y [rot=0..3]: put a part (its origin) at X, Y mm; tracks are not moved
+                let (words, kv) = options(rest);
+                let [refdes, x, y] = words.as_slice() else { return Err("board move REF X Y [rot=0..3]  (mm; the part's origin; wiring is not moved)".into()) };
+                let (x, y) = (num(x)?, num(y)?);
+                let board = self.board_mut()?;
+                let Some(part) = board.parts.iter().find(|p| p.refdes.eq_ignore_ascii_case(refdes)).cloned() else {
+                    let known: Vec<&str> = board.parts.iter().map(|p| p.refdes.as_str()).collect();
+                    return Err(format!("no part {refdes} on the board (parts: {})", known.join(" ")));
+                };
+                let rot = match opt(&kv, "rot") {
+                    Some(r) => r.parse::<u8>().map_err(|_| format!("rot={r}: use 0, 1, 2 or 3 (quarter turns)"))? % 4,
+                    None => part.rot,
+                };
+                board.place_part(&part.refdes, pcb_core::model::Point::new(x, y), rot);
+                Ok(obj(json!({"part": part.refdes, "x": x, "y": y, "rot": rot})))
+            }
             "improve" => {
                 // make the routes of the whole board shorter and its vias fewer: nets that detour (or carry a via) are ripped up
                 // and routed again, alone or with a neighbour in the way; a change is kept only when it is better and clean
@@ -71,7 +88,16 @@ impl Session {
             "route" => {
                 let (_, kv) = options(rest);
                 let only = opt(&kv, "net").map(str::to_string);
+                // like the editor: when no currents are declared, the circuit's DC currents are taken first, so that the nets that
+                // carry a lot of current get a track width that fits (`currents=0` turns it off; a circuit that does not solve is skipped)
+                let none_declared = self.board_mut()?.net_currents.is_empty();
+                let auto = if none_declared && opt(&kv, "currents") != Some("0") {
+                    self.circuit().ok().and_then(|c| sim_core::dc_op(&c).ok().map(|dc| sim_core::net_currents(&c, &dc)))
+                } else {
+                    None
+                };
                 let board = self.board_mut()?;
+                let auto_nets = auto.map_or(0, |list| pcb_core::current::set_net_currents(board, &list));
                 // like the editor: leave and enter pads at a right angle (`lead=0` turns it off)
                 let lead = match opt(&kv, "lead") {
                     Some(v) => num(v)?,
@@ -79,7 +105,7 @@ impl Session {
                 };
                 let before = board.tracks.len();
                 let ro = RouteOptions { pad_lead: (lead > 0.0).then_some(lead), ..RouteOptions::default() };
-                let rep = autoroute(board, &ro, only.as_deref());
+                let rep = pcb_core::autoroute::autoroute_sized(board, &ro, only.as_deref());
                 let aligned = if lead > 0.0 && rep.routed > 0 {
                     let new: Vec<usize> = (before..board.tracks.len()).collect();
                     pcb_core::padentry::align_entries(board, &pcb_core::padentry::EntryOptions { lead, spread: true }, Some(&new)).aligned
@@ -91,7 +117,7 @@ impl Session {
                 // the router the gain is small (43 samples: 2 vias fewer in all); `board improve` is for hand-drawn routes
                 let improved = if opt(&kv, "improve") == Some("1") && rep.failed.is_empty() { pcb_core::reroute::improve_routes(board, &ro, Some(before), None) } else { Default::default() };
                 let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
-                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "currents_declared": auto_nets, "wide_nets": rep.wide.iter().map(|(n, w)| json!({"net": n, "width_mm": w})).collect::<Vec<_>>(), "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
             }
             "drc" => {
                 let board = self.board_mut()?;

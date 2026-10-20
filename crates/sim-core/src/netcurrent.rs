@@ -13,38 +13,46 @@ use crate::circuit::{Circuit, Element};
 use crate::dc::DcResult;
 use crate::tran::TranResult;
 
-/// The terminals of `e` and the current that flows in or out of each, given the main current and the
-/// base / emitter currents of a transistor (`None` when the result has no figure).
+/// The terminals of `e` and the current that flows INTO the net at each (the sign matters; with the main current of the
+/// element taken from its first terminal to its second, and the base / emitter currents of a transistor, `None` when the
+/// result has no figure).
 fn terminals(e: &Element, main: f64, ib: Option<f64>, ie: Option<f64>, mut add: impl FnMut(usize, f64)) {
     match e {
         Element::Resistor { a, b, .. } | Element::Inductor { a, b, .. } | Element::Switch { a, b, .. } | Element::Capacitor { a, b, .. } | Element::ChargeCap { a, b, .. } => {
-            add(*a, main);
+            add(*a, -main);
             add(*b, main);
         }
         Element::VSource { p, n, .. } | Element::BSource { p, n, .. } | Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } => {
-            add(*p, main);
+            add(*p, -main);
             add(*n, main);
         }
         Element::ISource { from, to, .. } => {
-            add(*from, main);
+            add(*from, -main);
             add(*to, main);
         }
         Element::Diode { a, k, .. } => {
-            add(*a, main);
+            add(*a, -main);
             add(*k, main);
         }
         // the emitter carries the collector current plus the base current; without the base figure it is the collector current
         Element::Bjt { c, b, e, .. } => {
-            add(*c, main);
-            add(*b, ib.unwrap_or(0.0));
+            add(*c, -main);
+            add(*b, -ib.unwrap_or(0.0));
             add(*e, ie.unwrap_or(main));
         }
         Element::Mosfet { d, s, .. } => {
-            add(*d, main);
+            add(*d, -main);
             add(*s, main);
         }
         Element::Mutual { .. } | Element::Seq { .. } => {}
     }
+}
+
+/// The part an element belongs to: the elements of a library part's model are named `U1.Rin`, `U1.Ex`, ..., and
+/// what a part takes from a net is the signed sum over all of them (a model's inner loops, a current that goes in
+/// through one element and out through another, are not current through the net).
+fn group_of(name: &str) -> &str {
+    name.split('.').next().unwrap_or(name)
 }
 
 fn visible(name: &str) -> bool {
@@ -54,11 +62,19 @@ fn visible(name: &str) -> bool {
 /// `(net name, amps)` for every net with a current above 1 uA, largest first. Nodes inside a library
 /// part (names with a `.`) are left out.
 pub fn net_currents(c: &Circuit, dc: &DcResult) -> Vec<(String, f64)> {
-    let mut sum = vec![0.0f64; c.names.len()];
+    // per part: what it puts into each node (signed); the current through a node is half the sum of those, in absolute value
+    let mut parts: std::collections::BTreeMap<&str, Vec<f64>> = Default::default();
     for e in &c.elements {
         let Some(r) = dc.element(e.name()) else { continue };
         let extra = |k: &str| r.extra.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
-        terminals(e, r.current, extra("Ib"), extra("Ie"), |node, i| sum[node] += i.abs());
+        let into = parts.entry(group_of(e.name())).or_insert_with(|| vec![0.0; c.names.len()]);
+        terminals(e, r.current, extra("Ib"), extra("Ie"), |node, i| into[node] += i);
+    }
+    let mut sum = vec![0.0f64; c.names.len()];
+    for into in parts.values() {
+        for (node, i) in into.iter().enumerate() {
+            sum[node] += i.abs();
+        }
     }
     let mut out: Vec<(String, f64)> = c.names.iter().zip(sum).filter(|(n, s)| visible(n) && *s / 2.0 > 1e-6).map(|(n, s)| (n.clone(), s / 2.0)).collect();
     out.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -99,10 +115,20 @@ pub fn net_currents_tran(c: &Circuit, tr: &TranResult, from_frac: f64) -> Vec<Ne
     let first = tr.time.partition_point(|&t| t < t0).min(n - 2);
     // current of every node at every sample: half the sum of the absolute terminal currents
     let mut node_i = vec![vec![0.0f64; n]; c.names.len()];
+    // per part: what it puts into each node over time (signed), then half the absolute value of each part's figure
+    let mut parts: std::collections::BTreeMap<&str, std::collections::BTreeMap<usize, Vec<f64>>> = Default::default();
     for e in &c.elements {
         let Some(sig) = tr.signal(&format!("I({})", e.name())) else { continue };
+        let into = parts.entry(group_of(e.name())).or_default();
         for k in first..n {
-            terminals(e, sig.values[k], None, None, |node, i| node_i[node][k] += i.abs() / 2.0);
+            terminals(e, sig.values[k], None, None, |node, i| into.entry(node).or_insert_with(|| vec![0.0; n])[k] += i);
+        }
+    }
+    for into in parts.values() {
+        for (node, series) in into {
+            for k in first..n {
+                node_i[*node][k] += series[k].abs() / 2.0;
+            }
         }
     }
     let mut out = vec![];
@@ -211,5 +237,22 @@ mod tests {
         let settled = net_currents_tran(&c, &tr, 0.5);
         let s = stat(&settled, "VIN");
         assert!((s.rms - 0.05).abs() < 0.005 && !s.spiky(), "after the surge the load takes 50 mA: {s:?}");
+    }
+
+    #[test]
+    fn a_models_inner_loop_is_not_current_through_the_net() {
+        // R1 carries 1 A from VIN to GND. A part "U1" has two current sources that push 5 A into GND and take 5 A out
+        // again (a macro-model does this inside): that is not current through GND.
+        let mut c = Circuit::new();
+        let (vin, inner) = (c.node("VIN"), c.node("U1.x"));
+        c.add(Element::vdc("V1", vin, 0, 1.0));
+        c.add(Element::Resistor { name: "R1".into(), a: vin, b: 0, r: 1.0 });
+        let dc = |a: f64| crate::waveform::Waveform::Dc(a);
+        c.add(Element::ISource { name: "U1.Ia".into(), from: 0, to: inner, wave: dc(5.0), ac: None });
+        c.add(Element::ISource { name: "U1.Ib".into(), from: inner, to: 0, wave: dc(5.0), ac: None });
+        c.add(Element::Resistor { name: "U1.Rleak".into(), a: inner, b: 0, r: 1e6 });
+        let n = net_currents(&c, &dc_op(&c).unwrap());
+        let get = |k: &str| n.iter().find(|(m, _)| m == k).map_or(0.0, |x| x.1);
+        assert!((get("GND") - 1.0).abs() < 1e-3, "{n:?}");
     }
 }
