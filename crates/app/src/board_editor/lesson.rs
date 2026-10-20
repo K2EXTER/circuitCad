@@ -11,8 +11,13 @@ pub const COPPER_TITLE: &str = "基板編2. 配線の電圧降下";
 pub const COPPER_ID: &str = "board_copper";
 const COPPER_PROJECT: &str = include_str!("../../../../docs/examples/thin_power_line.ccproj");
 
+/// The third lesson, a challenge: a board with several faults that the pre-order check finds (`docs/examples/order_fix.ccproj`).
+pub const FIX_TITLE: &str = "基板編3. 発注前チェックをすべて通す";
+pub const FIX_ID: &str = "board_fix";
+const FIX_PROJECT: &str = include_str!("../../../../docs/examples/order_fix.ccproj");
+
 pub(super) struct BoardLesson {
-    /// 0 = from a schematic to the files to order, 1 = the copper lesson.
+    /// 0 = from a schematic to the files to order, 1 = the copper lesson, 2 = the pre-order check challenge.
     which: usize,
     done: Vec<bool>,
 }
@@ -88,6 +93,43 @@ const COPPER_STEPS: &[Step] = &[
     },
 ];
 
+fn parts_inside(e: &BoardEditor) -> bool {
+    e.board.outline.len() >= 3 && !e.board.parts.is_empty() && e.board.pads.iter().all(|p| inside_polygon(&e.board.outline, p.pos))
+}
+
+/// The pre-order check of the chosen fab has no error and no warning (the notes may stay), and a real fab (not the generic one) is chosen.
+fn order_clean(e: &BoardEditor) -> bool {
+    e.order.fab_id != "standard" && !pcb_core::fab::preflight(&e.board, e.selected_fab()).iter().any(|c| matches!(c.level, pcb_core::fab::Level::Error | pcb_core::fab::Level::Warn))
+}
+
+const FIX_STEPS: &[Step] = &[
+    Step {
+        title: "発注の準備を開いて、赤い ✖ と黄色い ▲ を読む",
+        detail: "「発注の準備…」を押して、「2. 発注前のチェック」を見ます。✖ は直さないと発注できない所、▲ は発注はできるけれど、たぶん意図と違う所です。項目をクリックすると、基板のその場所に飛びます。この基板には、わざと直す所がいくつもあります",
+        done: |e| e.order.open,
+    },
+    Step {
+        title: "基板の外にある部品を、基板の中へ入れる",
+        detail: "基板の外 (右の方) に D1 があります。ドラッグして、基板の中の空いた所へ置きます。置いたら、D1 につながっていた線が切れているので、黄色の線 (未配線) が出ます",
+        done: parts_inside,
+    },
+    Step {
+        title: "未配線をつなぐ",
+        detail: "「自動配線 → 全部」を押すか、「配線」ツールで黄色の線をなぞります。つながらないときは、D1 の位置を少し変えてやり直します。「発注の準備」の「もう一度チェック」で、✖ が消えたか確かめましょう",
+        done: routed,
+    },
+    Step {
+        title: "電流に対して細い配線を太くする",
+        detail: "この基板には「V1 の + 側 (N$1) とGNDに 1.5 A 流れる」という電流が設定してあります。左の「配線の太さ (電流から)」を開き、「足りないネットをすべて推奨幅にする」を押します。新しく引いた配線も、細いままなら太くします。太くしたあと、間隔が足りているか、DRC も確かめましょう",
+        done: copper_wide_enough,
+    },
+    Step {
+        title: "発注先を選び、ルールを合わせて、▲ と ✖ をなくす",
+        detail: "「発注の準備」で発注先 (例: JLCPCB) を選び、「ルールをこの発注先に合わせる」を押します。そのあと「もう一度チェック」を押して、✖ と ▲ がなくなれば完成です (ℹ の豆知識は残っていて構いません)。DRC の違反が出たら、その場所を直します",
+        done: order_clean,
+    },
+];
+
 const STEPS: &[Step] = &[
     Step {
         title: "回路図から取り込む",
@@ -138,8 +180,26 @@ impl BoardEditor {
         self.status = format!("レッスン「{COPPER_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
+    /// The project (schematic and board) the pre-order check challenge works on.
+    pub fn fix_lesson_project() -> &'static str {
+        FIX_PROJECT
+    }
+
+    /// Starts the pre-order check challenge on the board that was just opened (the app loads the project first).
+    pub fn start_fix_lesson(&mut self) {
+        self.post_layout_fresh = false;
+        self.drc_ran = false;
+        self.order = order::OrderState::default();
+        self.lesson = Some(BoardLesson { which: 2, done: vec![false; FIX_STEPS.len()] });
+        self.status = format!("チャレンジ「{FIX_TITLE}」を始めました。右の案内に沿って、発注前チェックの赤と黄色をなくしましょう");
+    }
+
     fn lesson_steps(&self) -> &'static [Step] {
-        if self.lesson.as_ref().is_some_and(|l| l.which == 1) { COPPER_STEPS } else { STEPS }
+        match self.lesson.as_ref().map(|l| l.which) {
+            Some(1) => COPPER_STEPS,
+            Some(2) => FIX_STEPS,
+            _ => STEPS,
+        }
     }
 
     /// The sample circuit this lesson imports.
@@ -150,13 +210,27 @@ impl BoardEditor {
     /// The progress key of the running board lesson once every step is ticked.
     pub fn finished_board_lesson(&self) -> Option<&'static str> {
         let l = self.lesson.as_ref().filter(|l| l.done.iter().all(|d| *d))?;
-        Some(if l.which == 1 { COPPER_ID } else { "board" })
+        Some(match l.which {
+            1 => COPPER_ID,
+            2 => FIX_ID,
+            _ => "board",
+        })
     }
 
     #[cfg(test)]
     pub fn lesson_progress(&mut self) -> usize {
         self.update_lesson();
         self.lesson.as_ref().map_or(0, |l| l.done.iter().filter(|d| **d).count())
+    }
+
+    /// What the learner does in the order window: pick the fab, make the rules match it, check again.
+    #[cfg(test)]
+    pub fn choose_fab_for_test(&mut self, id: &str) {
+        self.order.fab_id = id.into();
+        if let Some(f) = self.selected_fab() {
+            self.apply_fab(f);
+        }
+        self.run_checks();
     }
 
     fn update_lesson(&mut self) {
@@ -173,11 +247,14 @@ impl BoardEditor {
         let Some(l) = self.lesson.as_ref() else { return };
         let done = l.done.clone();
         let copper = l.which == 1;
+        let fix = l.which == 2;
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
-            ui.label(if copper {
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+            ui.label(if fix {
+                "発注前チェックに引っかかる基板です。部品が基板の外にある、配線が切れている、電流に対して配線が細い、発注先のルールに合っていない、という4つを、チェックの表示を頼りに自分で直します"
+            } else if copper {
                 "電源と負荷が遠く、配線が細い基板です。配線の抵抗で電圧がどれだけ落ちるかを、シミュレーションで見て、電流から必要な太さを決めて直します"
             } else {
                 "回路図で描いた回路を、基板のパターンにして、発注用のデータを作るところまでを一通り体験します"
@@ -203,7 +280,7 @@ impl BoardEditor {
                 }
             }
             ui.separator();
-            if !copper {
+            if !copper && !fix {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
@@ -221,6 +298,10 @@ impl BoardEditor {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
                 ui.label("配線は銅の抵抗を持ち、電流が大きいほど、細く長いほど、電圧が落ちます。流れる電流から必要な太さを決め (IPC-2221)、シミュレーションで確かめる、という順で考えます。この見積もりはDCの電流だけで、スイッチングの瞬間の大きな電流や、配線のインダクタンスは入っていません。余裕を見て、実機でも測りましょう。");
+            } else if cur.is_none() && fix {
+                ui.separator();
+                ui.colored_label(Color32::from_rgb(60, 160, 90), "チャレンジ達成!");
+                ui.label("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。");
             } else if cur.is_none() {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");

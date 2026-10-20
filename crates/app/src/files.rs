@@ -121,19 +121,24 @@ impl App {
         self.board_ed.status = msg;
     }
 
-    /// Opens a board lesson: 0 = schematic to order files (with its sample circuit), 1 = copper width and voltage drop
-    /// (with its sample project).
+    /// Opens a board lesson: 0 = schematic to order files (with its sample circuit), 1 = copper width and voltage drop,
+    /// 2 = the pre-order check challenge (each with its sample project).
     pub(super) fn start_board_lesson(&mut self, which: usize) {
         self.mode = Mode::Board;
-        if which == 1 {
-            match project::parse(board_editor::BoardEditor::copper_lesson_project()) {
+        if which == 1 || which == 2 {
+            let text = if which == 1 { board_editor::BoardEditor::copper_lesson_project() } else { board_editor::BoardEditor::fix_lesson_project() };
+            match project::parse(text) {
                 Ok(pr) => {
                     self.sch.adopt(pr.schematic, None);
                     self.sch.wiring.clear();
                     self.sch.couplings.clear();
                     self.board_ed.adopt(pr.board, None);
                     self.project = None;
-                    self.board_ed.start_copper_lesson();
+                    if which == 1 {
+                        self.board_ed.start_copper_lesson();
+                    } else {
+                        self.board_ed.start_fix_lesson();
+                    }
                 }
                 Err(e) => self.board_ed.status = format!("レッスンのプロジェクトを読み込めませんでした: {e}"),
             }

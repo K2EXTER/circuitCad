@@ -217,6 +217,39 @@ fn the_copper_lesson_walks_from_the_drop_to_the_fixed_copper() {
     assert_eq!(app.board_ed.finished_board_lesson(), Some("board_copper"));
 }
 
+/// The pre-order check challenge: the board starts with a part outside, two nets unrouted, thin copper for the declared current and
+/// rules looser than the fab's; each fix ticks the next step, and the end state is a check without error or warning.
+#[test]
+fn the_order_challenge_ticks_off_as_the_faults_are_fixed() {
+    use pcb_core::fab::Level;
+    let mut app = App::default();
+    app.start_board_lesson(2);
+    assert_eq!(app.board_ed.board.name, "order_fix");
+    let progress = |a: &mut App| {
+        for _ in 0..6 {
+            a.board_ed.lesson_progress();
+        }
+        a.board_ed.lesson_progress()
+    };
+    assert_eq!(progress(&mut app), 0);
+    app.board_ed.open_order();
+    assert_eq!(progress(&mut app), 1, "the order window is open");
+    let bad: Vec<Level> = app.board_ed.order_checks().iter().map(|c| c.level).collect();
+    assert!(bad.contains(&Level::Error) && bad.contains(&Level::Warn));
+    app.board_ed.board.place_part("D1", pcb_core::Point::new(14.5, 14.0), 0);
+    assert_eq!(progress(&mut app), 2, "D1 is back on the board");
+    app.board_ed.autoroute(None);
+    assert_eq!(progress(&mut app), 3, "{}", app.board_ed.status);
+    for net in ["N$1", "GND"] {
+        app.board_ed.widen_net_to_need(net);
+    }
+    assert_eq!(progress(&mut app), 4, "{}", app.board_ed.status);
+    assert!(app.board_ed.finished_board_lesson().is_none());
+    app.board_ed.choose_fab_for_test("jlcpcb");
+    assert_eq!(progress(&mut app), 5, "{:?}", app.board_ed.order_checks().iter().filter(|c| c.level != Level::Ok && c.level != Level::Info).map(|c| (&c.title, &c.detail)).collect::<Vec<_>>());
+    assert_eq!(app.board_ed.finished_board_lesson(), Some("board_fix"));
+}
+
 /// The ringing-trace sample (docs/examples/ringing_trace.ccproj): a 3.3 V edge through 22 ohm into a load at the end of a
 /// 90 mm trace over a ground pour. Ideal wiring gives a clean step; the copper's inductance and capacitance make the load pin ring.
 #[test]

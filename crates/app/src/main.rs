@@ -275,6 +275,11 @@ impl eframe::App for App {
                         self.start_board_lesson(1);
                         ui.close();
                     }
+                    let fix_mark = if self.progress.is_done(board_editor::lesson::FIX_ID) { "✔ " } else { "　 " };
+                    if ui.button(format!("{fix_mark}{}", board_editor::lesson::FIX_TITLE)).on_hover_text("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)").clicked() {
+                        self.start_board_lesson(2);
+                        ui.close();
+                    }
                 });
                 ui.menu_button("編集", |ui| {
                     if ui.button("元に戻す (Ctrl+Z)").on_hover_text("直前の操作を取り消します").clicked() {
