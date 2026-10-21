@@ -374,6 +374,27 @@ pub fn next_item(path: &LearningPath, progress: &Progress) -> Option<&'static It
 
 // ------------------------------------------------------------------ the window
 
+/// A feature to try once the lessons are done: what it is for, and where it is in the program.
+pub struct NextStep {
+    pub title: &'static str,
+    pub about: &'static str,
+    pub where_: &'static str,
+}
+
+/// "この先へ": the features that go beyond the lessons, for the learner who stays (shown folded at the bottom of the
+/// learning-path window, open once every lesson of the path is done). `where_` names the button or menu as it reads on
+/// the screen. When a button is renamed, change it here too.
+pub const NEXT_STEPS: &[NextStep] = &[
+    NextStep { title: "配線の見た目と作りやすさを整える", about: "配線の角を丸め、太さが変わる所をなめらかにし、2本が合流する所のすき間を銅で埋めます。製造のとき、エッチングで細いすき間がつぶれたり、液がたまったりするのを防ぎます", where_: "基板エディタの「③ 整える」" },
+    NextStep { title: "配線の太さを、流れる電流から決める", about: "回路の電流から、配線に必要な太さを求め、電圧降下 (配線の抵抗で電圧が下がる量) も確かめます", where_: "基板エディタで「配線」ツールを選び、「高度な配線 (中級者向け)」の「配線の太さ (電流から)」" },
+    NextStep { title: "差動ペアと長さ合わせ", about: "USB のように2本で信号を送る線を並べて引き、長さをそろえます。高い周波数の信号が乱れにくくなります", where_: "同じ「高度な配線 (中級者向け)」の「差動ペア」「長さ合わせ (蛇行)」" },
+    NextStep { title: "発注と、買うものの一覧", about: "ガーバー・ドリル・部品表・配置ファイルと一緒に、部品ごとの数量と、秋月電子・DigiKey・LCSC のリンク (型番が分かる部品は商品ページ) を書き出します", where_: "基板エディタの「④ 確認して発注」の「発注の準備…」" },
+    NextStep { title: "部品の故障を試す", about: "抵抗が焼ける、コンデンサがショートするなど、部品が壊れたときに回路がどうなるか、ほかの部品が連鎖して壊れないかを調べます", where_: "回路図の左パネルの「故障を試す」「連鎖故障を追う」" },
+    NextStep { title: "部品の誤差と温度の影響", about: "抵抗やコンデンサの誤差、温度の変化で、出力がどれだけ動くかを、たくさんの組み合わせで調べます", where_: "回路図の左パネルの「ばらつき解析を実行」「温度スイープを実行」" },
+    NextStep { title: "ほかのソフトと行き来する", about: "回路を SPICE のネットリストで書き出して LTspice や ngspice で動かしたり、KiCad の部品を取り込んだり、自分で部品を作って足したりできます", where_: "回路図の左パネルの「SPICEネットリストを書き出し…」「KiCadから取り込み…」「＋ 部品を作る…」" },
+    NextStep { title: "画面なしで動かす (ccad)", about: "1行1コマンドのスクリプトで、回路づくりから解析・基板・製造データまでを自動で実行します。AI エージェントから使うこともできます", where_: "ソフトに付いてくる `ccad`。使い方は docs/cli.md" },
+];
+
 /// What the learner asked for in the window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -504,6 +525,19 @@ impl LearnWindow {
                     ui.colored_label(Color32::from_rgb(60, 160, 90), "いま学べるレッスンは、すべて完了しました。残りは準備中です");
                 }
             }
+            // the lessons are done (or none is left to do): the way on is shown open
+            let done_all = available > 0 && finished >= available;
+            egui::CollapsingHeader::new("この先へ: 使いこむための機能").default_open(done_all).show(ui, |ui| {
+                ui.label(spaced("レッスンで基本を済ませたあと、慣れてきたら試せる機能です。順番も、使うかどうかも自由です").color(NOTE));
+                for s in NEXT_STEPS {
+                    ui.add_space(4.0);
+                    ui.strong(s.title);
+                    ui.indent(("next_step", s.title), |ui| {
+                        ui.label(spaced(s.about));
+                        ui.label(spaced(&format!("場所: {}", s.where_)).color(NOTE));
+                    });
+                }
+            }).header_response.on_hover_text("基板の仕上げ・発注・故障の試験・ほかのソフトとの連携など、レッスンのあとに使える機能の一覧と、その場所です");
             if is_tree(path) {
                 ui.add_space(6.0);
                 egui::CollapsingHeader::new("学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)").default_open(true).show(ui, |ui| {
@@ -652,6 +686,18 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_next_steps_are_filled_in_and_not_repeated() {
+        assert!(NEXT_STEPS.len() >= 6);
+        for s in NEXT_STEPS {
+            assert!(!s.title.is_empty() && !s.about.is_empty() && !s.where_.is_empty(), "{}", s.title);
+        }
+        let mut titles: Vec<&str> = NEXT_STEPS.iter().map(|s| s.title).collect();
+        titles.sort_unstable();
+        titles.dedup();
+        assert_eq!(titles.len(), NEXT_STEPS.len());
+    }
+
     use super::*;
 
     fn temp_file(name: &str) -> PathBuf {
