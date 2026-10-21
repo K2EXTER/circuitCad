@@ -195,9 +195,10 @@ fn fab_files_include_assembly_csv() {
     let dir = std::env::temp_dir().join(format!("circuitcad_fab_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let n = e.write_fab_files(&dir).unwrap();
-    assert_eq!(n, 11); // 9 Gerber/drill files + BOM + CPL
+    assert_eq!(n, 12); // 9 Gerber/drill files + BOM + CPL + shopping list
     assert!(std::fs::read_to_string(dir.join("unit-BOM.csv")).unwrap().contains("R1"));
     assert!(std::fs::read_to_string(dir.join("unit-CPL.csv")).unwrap().contains("R1,10.0000mm"));
+    assert!(std::fs::read_to_string(dir.join("unit-shopping.csv")).unwrap().contains("R1"));
     assert!(dir.join("unit_gerber.zip").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }

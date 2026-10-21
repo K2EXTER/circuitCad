@@ -124,6 +124,7 @@ fn opamp() -> CustomSymbol {
     let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false };
     CustomSymbol {
         ratings: None,
+        shops: Default::default(),
         glyph: String::new(),
         name: "LM358".into(),
         prefix: "U".into(),
@@ -420,6 +421,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)],
         sim: None,
         ratings: None,
+        shops: Default::default(),
         glyph: "electrolytic".into(),
     };
     let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym) };

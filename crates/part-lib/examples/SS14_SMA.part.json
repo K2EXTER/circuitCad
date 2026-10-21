@@ -47,5 +47,8 @@
         "condition": "IF = 1A"
       }
     ]
+  },
+  "shops": {
+    "lcsc": "C2480"
   }
 }

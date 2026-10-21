@@ -40,6 +40,7 @@ impl Session {
                     }
                 }
                 let rep = netlist::import(board, &parts, &nets);
+                netlist::import_shops(board, &shops_of(&self.sch));
                 Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
             }
             "autoplace" => {
@@ -254,6 +255,31 @@ impl Session {
                 Ok(obj(json!({"ready": pcb_core::fab::ready(&checks), "fab": fab.map(|f| f.id), "ok": count(Level::Ok), "info": count(Level::Info), "warnings": warnings, "errors": errors, "list": list,
                     "note": "ready:false means at least one error; fix those first (warnings can be ordered but are probably not what was meant). The numbers of the fab presets are a guide: look at the fab's own page before ordering. Add fab=jlcpcb|pcbway|oshpark|standard to also check that fab's minimums and price tier."})))
             }
+            "shopping" => {
+                // board shopping [boards=N] [file=PATH]: what to buy, with each shop's part number or a search link
+                let (_, kv) = options(rest);
+                let boards: usize = opt(&kv, "boards").map(|v| v.parse().map_err(|_| format!("boards={v}: a whole number is needed"))).transpose()?.unwrap_or(1);
+                let board = self.board_mut()?;
+                let lines: Vec<Value> = pcb_core::shops::lines(board)
+                    .iter()
+                    .map(|l| {
+                        let mut shops = serde_json::Map::new();
+                        for (shop, s) in pcb_core::shops::SHOPS.iter().zip(&l.sources) {
+                            shops.insert(shop.id.to_string(), match s {
+                                pcb_core::shops::Source::Code { number, url } => json!({"number": number, "url": url}),
+                                pcb_core::shops::Source::Search { url } => json!({"search": url}),
+                            });
+                        }
+                        json!({"value": l.value, "footprint": l.footprint, "refdes": l.refdes, "qty": l.qty * boards.max(1), "shops": shops})
+                    })
+                    .collect();
+                let mut answer = json!({"boards": boards.max(1), "lines": lines, "note": "number = the shop's own part number (checked against the shop before use); search = a link to the shop's search page, because the number is not known"});
+                if let Some(f) = opt(&kv, "file") {
+                    std::fs::write(f, pcb_core::shops::purchase_csv(board, boards)).map_err(|e| format!("{f}: {e}"))?;
+                    answer["file"] = json!(f);
+                }
+                Ok(obj(answer))
+            }
             "fab" => {
                 let dir = std::path::Path::new(rest.first().ok_or("board fab DIR")?);
                 let board = self.board_mut()?;
@@ -311,4 +337,9 @@ impl Session {
 
 fn num(s: &str) -> Result<f64, String> {
     s.parse::<f64>().ok().filter(|v| *v > 0.0 && v.is_finite()).ok_or_else(|| format!("'{s}' is not a positive size in mm"))
+}
+
+/// The shop part numbers of the schematic's library parts, by reference designator.
+fn shops_of(sch: &sch_core::Schematic) -> Vec<(String, std::collections::BTreeMap<String, String>)> {
+    sch.components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect()
 }

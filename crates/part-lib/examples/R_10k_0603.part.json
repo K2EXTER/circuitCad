@@ -64,5 +64,8 @@
   "ratings": {
     "p_max": 0.1
   },
-  "glyph": "resistor"
+  "glyph": "resistor",
+  "shops": {
+    "lcsc": "C25804"
+  }
 }

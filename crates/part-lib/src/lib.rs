@@ -64,6 +64,9 @@ pub struct PartDef {
     /// The body as the data sheet draws it (a rectangle or circle with an orientation mark): the silkscreen outline of the footprint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub body: Option<BodySpec>,
+    /// Where to buy it: shop id ("akizuki", "digikey", "lcsc") -> the shop's own part number. Left out when not known.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shops: std::collections::BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -114,6 +117,7 @@ impl PartDef {
             sim: self.sim.clone(),
             ratings: self.ratings.clone().filter(|r| !r.is_empty()),
             glyph: self.glyph.clone(),
+            shops: self.shops.clone(),
         }
     }
 
@@ -519,6 +523,19 @@ fn is_original_without_ripple(file: &Path, bundled: &str) -> bool {
     has(&new) && !has(&old) && old == PartDef { ratings: old.ratings.clone(), ..new }
 }
 
+/// Key recorded in `.bundled` once a part has been offered its shop part numbers.
+fn shops_key(name: &str) -> String {
+    format!("{name}+shops")
+}
+
+/// Is the file an unmodified copy of the bundled part from before it carried shop part numbers?
+/// (Equal to the bundled part in every field except the shops.)
+fn is_original_without_shops(file: &Path, bundled: &str) -> bool {
+    let Some(old) = std::fs::read_to_string(file).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()) else { return false };
+    let Ok(new) = serde_json::from_str::<PartDef>(bundled) else { return false };
+    !new.shops.is_empty() && old.shops.is_empty() && old == PartDef { shops: Default::default(), ..new }
+}
+
 /// Copy bundled parts the user has not been given yet. A `.bundled` file in the library records
 /// what was installed, so parts the user deleted stay deleted and edited parts are never touched.
 /// (Exception: an old bundled version that was never modified is upgraded, e.g. to gain a category.)
@@ -607,6 +624,18 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
         }
         let file = dir.join(format!("{name}{FILE_SUFFIX}"));
         if file.exists() && is_original_without_ripple(&file, text) {
+            std::fs::write(&file, text)?;
+        }
+        done.insert(key);
+    }
+    // parts that gained their shop part numbers: replaced once while unmodified
+    for (name, text) in EXAMPLES {
+        let key = shops_key(name);
+        if done.contains(&key) {
+            continue;
+        }
+        let file = dir.join(format!("{name}{FILE_SUFFIX}"));
+        if file.exists() && is_original_without_shops(&file, text) {
             std::fs::write(&file, text)?;
         }
         done.insert(key);

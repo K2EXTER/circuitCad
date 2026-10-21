@@ -4,7 +4,7 @@ use crate::model::*;
 use std::collections::BTreeMap;
 
 /// Natural order for designators: R2 before R10.
-fn natural_key(refdes: &str) -> (String, u32, String) {
+pub(crate) fn natural_key(refdes: &str) -> (String, u32, String) {
     let split = refdes.find(|c: char| c.is_ascii_digit()).unwrap_or(refdes.len());
     let (prefix, rest) = refdes.split_at(split);
     let digits: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -16,7 +16,7 @@ fn csv(field: &str) -> String {
 }
 
 /// The value as it is bought: simulation parameters written after it ("100u ESR=0.05") are dropped.
-fn bom_value(value: &str) -> String {
+pub(crate) fn bom_value(value: &str) -> String {
     let mut words = value.split_whitespace();
     match (words.next(), words.clone().next()) {
         (Some(first), Some(_)) if words.all(|w| w.contains('=')) => first.to_string(),
@@ -26,18 +26,20 @@ fn bom_value(value: &str) -> String {
 
 /// One row per distinct (value, footprint), designators listed together.
 pub fn bom_csv(board: &Board) -> String {
-    let mut groups: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+    // parts with another LCSC number stay on their own row
+    let mut groups: BTreeMap<(String, String, String), Vec<String>> = BTreeMap::new();
     for p in &board.parts {
-        groups.entry((bom_value(&p.value), p.footprint.clone())).or_default().push(p.refdes.clone());
+        let lcsc = board.part_shops.get(&p.refdes).and_then(|s| s.get("lcsc")).map(|c| c.trim().to_string()).unwrap_or_default();
+        groups.entry((bom_value(&p.value), p.footprint.clone(), lcsc)).or_default().push(p.refdes.clone());
     }
-    let mut rows: Vec<(String, String, Vec<String>)> = groups.into_iter().map(|((v, f), mut r)| {
+    let mut rows: Vec<(String, String, String, Vec<String>)> = groups.into_iter().map(|((v, f, l), mut r)| {
         r.sort_by_key(|x| natural_key(x));
-        (v, f, r)
+        (v, f, l, r)
     }).collect();
-    rows.sort_by_key(|(_, _, r)| natural_key(&r[0]));
+    rows.sort_by_key(|(_, _, _, r)| natural_key(&r[0]));
     let mut out = String::from("Comment,Designator,Footprint,LCSC Part #\n");
-    for (value, footprint, refs) in rows {
-        out.push_str(&format!("{},{},{},\n", csv(&value), csv(&refs.join(",")), csv(&footprint)));
+    for (value, footprint, lcsc, refs) in rows {
+        out.push_str(&format!("{},{},{},{}\n", csv(&value), csv(&refs.join(",")), csv(&footprint), csv(&lcsc)));
     }
     out
 }
@@ -61,7 +63,11 @@ pub fn cpl_csv(board: &Board) -> String {
 
 /// (file name, contents) for the assembly service.
 pub fn assembly_files(board: &Board) -> Vec<(String, String)> {
-    vec![(format!("{}-BOM.csv", board.name), bom_csv(board)), (format!("{}-CPL.csv", board.name), cpl_csv(board))]
+    vec![
+        (format!("{}-BOM.csv", board.name), bom_csv(board)),
+        (format!("{}-CPL.csv", board.name), cpl_csv(board)),
+        (format!("{}-shopping.csv", board.name), crate::shops::purchase_csv(board, 1)),
+    ]
 }
 
 #[cfg(test)]

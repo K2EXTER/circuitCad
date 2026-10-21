@@ -518,6 +518,9 @@ pub struct CustomSymbol {
     /// "capacitor" / "resistor" / "inductor": drawn as that symbol instead of a box (two pins, left and right).
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub glyph: String,
+    /// Where to buy it: shop id ("akizuki", "digikey", "lcsc") -> the shop's own part number.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shops: std::collections::BTreeMap<String, String>,
 }
 
 pub struct PinGeom {

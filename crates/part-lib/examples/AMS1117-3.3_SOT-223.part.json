@@ -91,5 +91,8 @@
         "condition": "IO = 800mA"
       }
     ]
+  },
+  "shops": {
+    "lcsc": "C6186"
   }
 }

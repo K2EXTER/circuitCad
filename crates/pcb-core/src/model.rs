@@ -311,6 +311,9 @@ pub struct Board {
     /// Nets whose tracks the finishing leaves as they are (a controlled-impedance line, a differential pair ...).
     #[serde(default)]
     pub finish_exclude: Vec<String>,
+    /// Shop part numbers of library parts (reference designator -> shop id -> number), taken from the schematic on import.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub part_shops: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
     pub rules: Rules,
 }
 
@@ -351,6 +354,7 @@ impl Board {
             diff_pairs: vec![],
             finish: Default::default(),
             finish_exclude: vec![],
+            part_shops: Default::default(),
             rules: Rules::default(),
         }
     }

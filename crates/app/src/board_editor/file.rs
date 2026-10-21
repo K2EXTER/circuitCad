@@ -149,6 +149,8 @@ impl BoardEditor {
                 }
         }
         let rep = netlist::import(&mut self.board, &parts, &nets);
+        let shops: Vec<_> = sch.components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect();
+        netlist::import_shops(&mut self.board, &shops);
         self.selected = None;
         self.multi.clear();
         self.currents_tried = false; // the circuit may have changed: the next route asks for the currents again if none are declared

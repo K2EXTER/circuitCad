@@ -562,3 +562,27 @@ fn tran_reports_overloaded_parts_and_ripple_like_the_app() {
     let (a, _) = run("new\nadd V 5 as=V1\nadd R 100k as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\ntran 1m 10u samples=2\n");
     assert!(last(&a, "tran")["ratings"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn board_shopping_lists_parts_with_a_search_link_per_shop() {
+    let (a, ok) = run("new\nadd V 5 as=V1\nadd R 10k as=R1\nadd R 10k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\nboard import\nboard shopping boards=3\n");
+    assert!(ok, "{a:?}");
+    let s = last(&a, "board");
+    assert_eq!(s["boards"], 3);
+    let r = s["lines"].as_array().unwrap().iter().find(|l| l["value"] == "10k").unwrap();
+    assert_eq!(r["qty"], 6);
+    for shop in ["akizuki", "digikey", "lcsc"] {
+        assert!(r["shops"][shop]["search"].as_str().unwrap().starts_with("https://"), "{r}");
+    }
+}
+
+#[test]
+fn board_shopping_gives_the_part_number_of_a_library_part_that_has_one() {
+    let (a, ok) = run("new\nadd V 5 as=V1\nadd LM358 as=U1\nnet VCC V1.+ U1.V+\nnet GND V1.- U1.V-\nboard import\nboard shopping\n");
+    assert!(ok, "{a:?}");
+    let s = last(&a, "board");
+    let u = s["lines"].as_array().unwrap().iter().find(|l| l["refdes"][0] == "U1").unwrap();
+    assert_eq!(u["shops"]["lcsc"]["number"], "C7950", "{u}");
+    assert_eq!(u["shops"]["lcsc"]["url"], "https://www.lcsc.com/product-detail/C7950.html");
+    assert!(u["shops"]["akizuki"]["search"].is_string(), "{u}");
+}

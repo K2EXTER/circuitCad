@@ -125,5 +125,8 @@
     "y": 0.0,
     "mark": "dot",
     "mark_pin": "1"
+  },
+  "shops": {
+    "lcsc": "C14267"
   }
 }

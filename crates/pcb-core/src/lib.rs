@@ -32,6 +32,7 @@ pub mod package;
 pub mod parts;
 pub mod ratsnest;
 pub mod reroute;
+pub mod shops;
 pub mod shove;
 pub mod smooth;
 pub mod strokefont;

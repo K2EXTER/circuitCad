@@ -24,6 +24,16 @@ pub struct ImportReport {
     pub warnings: Vec<String>,
 }
 
+/// Take the shop part numbers of the schematic's library parts (reference designator, shop id -> number).
+/// Parts that left the board or have no number any more are forgotten.
+pub fn import_shops(board: &mut Board, shops: &[(String, std::collections::BTreeMap<String, String>)]) {
+    board.part_shops = shops
+        .iter()
+        .filter(|(r, s)| !s.is_empty() && board.parts.iter().any(|p| &p.refdes == r))
+        .cloned()
+        .collect();
+}
+
 /// Synchronise the board with the netlist: add new parts (outside the board, ready to be
 /// dragged in), update value/footprint of existing ones while keeping their position,
 /// remove parts that left the schematic, and assign nets to pads.

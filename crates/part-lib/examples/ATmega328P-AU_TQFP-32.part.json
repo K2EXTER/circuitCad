@@ -173,5 +173,8 @@
     "span": 8.5,
     "pad_len": 1.5,
     "pad_width": 0.55
+  },
+  "shops": {
+    "lcsc": "C14877"
   }
 }

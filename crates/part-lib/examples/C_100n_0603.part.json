@@ -64,5 +64,8 @@
   "ratings": {
     "v_max": 16.0
   },
-  "glyph": "capacitor"
+  "glyph": "capacitor",
+  "shops": {
+    "lcsc": "C14663"
+  }
 }

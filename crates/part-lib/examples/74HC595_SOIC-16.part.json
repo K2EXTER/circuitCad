@@ -93,5 +93,8 @@
     "row_spacing": 5.4,
     "pad_len": 1.55,
     "pad_width": 0.6
+  },
+  "shops": {
+    "lcsc": "C5947"
   }
 }
