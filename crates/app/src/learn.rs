@@ -285,7 +285,7 @@ const MEGA_PATH: LearningPath = LearningPath {
             about: "ピンの数と部品の数が増えると、新しく考えることが出てきます。順番は自由です",
             items: &[
                 Item { requires: Some(&["pin_led", "datasheet"]), ..lesson("adc_input", "ADC の入力 (信号源の抵抗は 10kΩ 以下)", "ADC は、入力のコンデンサを短い時間で充電して読む。信号源の抵抗が大きいと充電しきれず、読み違える。ピンに大きなコンデンサをつけて直す。Mega は 16 チャンネル", Some("1MΩ 2 本で分圧した 2.5V を A0 で読み、コンデンサをつけて値の変化を見ます")) },
-                plan("mega_power", "電源ピンが 5 組ある (VCC・GND・AVCC・AREF)", "ATmega2560 は VCC と GND が 5 組。すべてのペアのそばにバイパスコンデンサを置く理由と、AVCC・AREF の扱い", &["decoupling"], Some("電源ピンの電圧を、バイパスコンデンサの有無でオシロで見比べます")),
+                Item { requires: Some(&["decoupling"]), ..lesson("mega_power", "電源ピンが 5 組ある (バイパスは、容量より近さ)", "ATmega2560 は VCC と GND が 5 組。すべてのペアのそばにバイパスコンデンサを置く。遠い 100nF より、近い 1nF のほうが効く。AVCC・AREF にも 0.1µF", Some("電源ピンの電圧を、バイパスコンデンサの有無でオシロで見比べます")) },
                 plan("ch340g", "CH340G: USB-シリアル変換", "USB の D+ / D− をシリアルに変える IC。12MHz の水晶と、V3 ピンのコンデンサが要る。DTR でリセットをかける仕組み", &["usb_signal", "serial"], Some("PC につなぎ、シリアルモニタに文字が出るか確かめます")),
             ],
         },

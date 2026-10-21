@@ -1268,3 +1268,37 @@ fn the_adc_lesson_ticks_its_four_steps_and_the_reading_is_short_for_a_high_sourc
     assert_eq!(progress(&e), 4);
     assert!((sh(&e) - 2.5).abs() < 0.01, "100n at the pin: {}", sh(&e));
 }
+
+#[test]
+fn the_power_pin_lesson_ticks_its_four_steps_and_the_swing_shrinks_with_distance() {
+    let idx = lesson_ids().iter().position(|l| *l == "mega_power").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let swing = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal("V(VCC)").unwrap().values;
+        v.iter().cloned().fold(f64::MIN, f64::max) - v.iter().cloned().fold(f64::MAX, f64::min)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    let none = swing(&e);
+    set_value(&mut e, "C1", "100n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let far = swing(&e);
+    set_value(&mut e, "L2", "2n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let near = swing(&e);
+    set_value(&mut e, "C1", "1n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    let small = swing(&e);
+    assert!(none > far && far > small && small > near, "{none} {far} {small} {near}");
+}

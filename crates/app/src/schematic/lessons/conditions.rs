@@ -441,6 +441,27 @@ pub(super) fn adc_big_pin_cap(e: &SchEditor) -> bool {
     tran_fresh(e) && adc_values(e).0.is_some_and(|r| r >= 500e3) && adc_values(e).1.is_some_and(|c| c >= 10e-9)
 }
 
+/// The power pin lesson: the bypass capacitor C1 and the wire to it L2 (first word of the value) as numbers.
+fn power_values(e: &SchEditor) -> (Option<f64>, Option<f64>) {
+    let first = |r: &str| value_of(&e.sch, r).and_then(|v| v.split_whitespace().next()).and_then(parse_value);
+    (first("C1"), first("L2"))
+}
+
+/// Step 2: a 100n at the end of a long wire (L2 10 nH or more).
+pub(super) fn power_far_cap(e: &SchEditor) -> bool {
+    tran_fresh(e) && power_values(e).0.is_some_and(|c| c >= 50e-9) && power_values(e).1.is_some_and(|l| l >= 10e-9)
+}
+
+/// Step 3: the same 100n with a short wire (L2 5 nH or less).
+pub(super) fn power_near_cap(e: &SchEditor) -> bool {
+    tran_fresh(e) && power_values(e).0.is_some_and(|c| c >= 50e-9) && power_values(e).1.is_some_and(|l| l <= 5e-9)
+}
+
+/// Step 4: a small capacitor (100p to 10n) with a short wire.
+pub(super) fn power_small_near_cap(e: &SchEditor) -> bool {
+    tran_fresh(e) && power_values(e).0.is_some_and(|c| (100e-12..=10e-9).contains(&c)) && power_values(e).1.is_some_and(|l| l <= 5e-9)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

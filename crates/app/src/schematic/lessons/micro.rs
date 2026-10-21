@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input, the power pins of a big chip.
 
 use super::conditions::*;
 use super::*;
@@ -797,6 +797,53 @@ pub(super) const ADC_INPUT: Lesson = Lesson {
             title: "ピンに 100n (C2) をつけて、直す",
             detail: "C2 を 1p から「100n IC=2.5」に変えます (IC=2.5 は、はじめから 2.5V に充電されている意味で、信号源に長くつないで、落ち着いた状態です)。「過渡解析を実行」すると、V(SH) は 12µs で 2.4997V になります。サンプル用コンデンサは、100nF から電荷を分けてもらうので、信号源の抵抗は関係なくなりました。かわりに、100nF は 1MΩ との時定数が 0.1 秒なので、信号の変化が速いと追いつけません。",
             done: adc_big_pin_cap,
+        },
+    ],
+};
+
+pub(super) const MEGA_POWER: Lesson = Lesson {
+    id: "mega_power",
+    title: "44. 電源ピンが 5 組ある (バイパスは、容量より近さ)",
+    goal: "ATmega2560 のように電源ピンが何組もある IC では、そのすべてのペアのそばに、バイパスコンデンサを置きます。1 組の電源ピンについて、コンデンサがないとき・遠いとき・近いときの、IC の電源ピンの電圧の揺れを比べ、容量より、近さが効くことを確かめます",
+    summary: "IC の内部のスイッチが入ると、電源から短い大きな電流が流れます。電源までの配線には、インダクタンス (この回路では 20nH。数 cm の細い配線ほど) があり、電流が急に変わると、その両端に L × (電流の変化 ÷ 時間) の電圧が出ます。この回路は、4ns で入るスイッチ (50mA) を、20nH の配線の先につないだ、電源ピン 1 組の様子です。バイパスコンデンサがない (C1 = 1p) と、電源ピンの電圧 V(VCC) は、5V から約 3.65V まで落ち、そのあと約 7V まで跳ね上がります (揺れの幅は 3.3V)。100nF のコンデンサをつけても、そこまでの配線 (L2) が 20nH と長いと、約 4.27V まで落ち、約 5.97V まで跳ねます。L2 を 2nH (ピンのすぐそば) にすると、4.85V〜5.15V と、揺れは 0.3V に収まります。大事なのは、容量より近さです。1nF でも、近く (L2 = 2nH) に置けば、4.68V〜5.32V で、遠くの 100nF (4.27V〜5.97V) より良く効きます。ATmega2560 は、VCC と GND のペアが 5 組あり、内部の場所ごとに別のペアから電流を取ります。そのため、5 組それぞれのすぐそばに 100nF を置きます。AVCC (アナログ用の電源) は、フィルタを通して VCC につなぎ、0.1µF をつけます。AREF にも 0.1µF をつなぎます (ADC のレッスン参照)。",
+    limits: &[
+        "IC の中は、100Ω で入り切りするスイッチ 1 個で表しています。実物は、数百万個のスイッチが、少しずつずれて切り替わり、電流の形はもっとなだらかです (でも、速い成分は同じようにあります)。",
+        "配線のインダクタンスは、20nH と 2nH という決まった値です。実物は、配線の長さ・幅・戻りの GND の近さで決まります (1mm あたり約 1nH が目安)。コンデンサ自身の ESL と ESR は、この回路では含めていません。",
+        "5 組の電源ピンは、1 組だけを見ています。実物は、5 組が同時に切り替わると、電源側の配線を共有するので、揺れが大きくなります。",
+        "電源 (V1) は、理想の 5V で、その手前の配線とレギュレータの応答は含みません。",
+    ],
+    real: &[
+        "まずデータシートを見よう: ATmega2560 のデータシートで、「ピン配置」の VCC と GND のペアが何組あるか (VCC 5 本・GND 5 本)、AVCC・AREF のピンの位置、「推奨する外付け部品」を探します。",
+        "用意するもの: オシロスコープ、Arduino Mega (または、基板)、プローブのグラウンドの短いばね (長いワイヤのクリップは、揺れを大きく見せます)。",
+        "測り方: IC の電源ピンの電圧を、AC 結合で、帯域制限をかけずに見て、動作中のノイズの幅 (mV) を測ります。バイパスコンデンサをはずせる基板では、はずした場合と比べます。",
+        "気づいてほしいこと: 基板では、コンデンサを、電源ピンから 2〜3mm 以内に、GND のビアも近くに置きます。ビアが遠いと、そのぶんインダクタンスが増えます。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/power_pin.schjson"),
+    setup: |e| e.set_tran_settings("200n", "0.2n"),
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "コンデンサなしで、電源ピンが揺れるのを見る",
+            detail: "「過渡解析を実行」を押し、V(VCC) を選びます。V2 (GATE) が 20ns に IC の内部のスイッチを入れ、V(VCC) は 5V から約 3.65V まで落ち、約 7V まで跳ね上がります。配線 L1 (20nH) が、電流の急な変化に逆らうからです。C1 は 1p で、ほとんどコンデンサがない状態です。",
+            done: tran_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "100n をつけても、遠いと効きが半分",
+            detail: "C1 を 100n に変えて「過渡解析を実行」。コンデンサは L2 (20nH の配線) の先にあるので、約 4.27V まで落ち、約 5.97V まで跳ねます。揺れの幅は 3.3V から 1.7V に減っただけです。コンデンサまでの配線が、電流の通り道をふさいでいます。",
+            done: power_far_cap,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "L2 を 2n にして、すぐそばに置く",
+            detail: "L2 を 20n から 2n に変えて「過渡解析を実行」。V(VCC) は 4.85V〜5.15V と、揺れの幅が 0.3V に収まります。同じ 100nF でも、近いだけで、揺れが 6 分の 1 になりました。基板では、コンデンサを電源ピンの 2〜3mm 以内に置く理由です。",
+            done: power_near_cap,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "C1 を 1n に小さくしても、近ければ遠い 100n より効く",
+            detail: "C1 を 100n から 1n に変えて (L2 は 2n のまま)「過渡解析を実行」。V(VCC) は 4.68V〜5.32V で、遠くの 100n (4.27V〜5.97V) より、揺れが小さくなります。容量を大きくするより、近くに置くほうが、先です。ATmega2560 の 5 組の電源ピンには、それぞれのそばに 100nF を置きます。",
+            done: power_small_near_cap,
         },
     ],
 };

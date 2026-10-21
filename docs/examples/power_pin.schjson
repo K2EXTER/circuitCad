@@ -1,0 +1,361 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 20n 4n 4n 100n 400n)",
+      "pos": [
+        0,
+        16
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "20n",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "L2",
+      "kind": "Inductor",
+      "value": "20n",
+      "pos": [
+        44,
+        0
+      ],
+      "rot": 0,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "1p",
+      "pos": [
+        64,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "SW1",
+      "kind": "Custom",
+      "value": "SW_SAMPLE_DEMO",
+      "pos": [
+        84,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SOT-143",
+      "custom": {
+        "name": "SW_SAMPLE_DEMO",
+        "prefix": "SW",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "B",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "CTRL",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "REF",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "S",
+          "name": "SWSAMPLE",
+          "text": ".model SWSAMPLE SW(RON=100 ROFF=1G VT=2.5 VW=2)",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {},
+          "limits": [
+            "学習用の理想スイッチです。実物の ADC のサンプル用スイッチは MOSFET で、数 kΩ のオン抵抗と、ゲートからの電荷の漏れ(チャージインジェクション)があります。ここでは、それを含めていません。",
+            "スイッチの切り替えの速さは、制御の電圧が 0.5〜4.5V の間でなめらかに変わる動きで表しています。実物のスイッチは、切り替えの遅れと、制御の信号が出力へ漏れる量 (容量の結合) が、部品ごとに違います。"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        14
+      ],
+      "b": [
+        0,
+        11
+      ]
+    },
+    {
+      "a": [
+        0,
+        18
+      ],
+      "b": [
+        0,
+        21
+      ]
+    },
+    {
+      "a": [
+        22,
+        0
+      ],
+      "b": [
+        19,
+        0
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        29,
+        0
+      ]
+    },
+    {
+      "a": [
+        42,
+        0
+      ],
+      "b": [
+        39,
+        0
+      ]
+    },
+    {
+      "a": [
+        46,
+        0
+      ],
+      "b": [
+        49,
+        0
+      ]
+    },
+    {
+      "a": [
+        64,
+        12
+      ],
+      "b": [
+        64,
+        9
+      ]
+    },
+    {
+      "a": [
+        64,
+        16
+      ],
+      "b": [
+        64,
+        19
+      ]
+    },
+    {
+      "a": [
+        80,
+        0
+      ],
+      "b": [
+        77,
+        0
+      ]
+    },
+    {
+      "a": [
+        88,
+        0
+      ],
+      "b": [
+        91,
+        0
+      ]
+    },
+    {
+      "a": [
+        84,
+        -4
+      ],
+      "b": [
+        84,
+        -7
+      ]
+    },
+    {
+      "a": [
+        84,
+        4
+      ],
+      "b": [
+        84,
+        7
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        11
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        0,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        19,
+        0
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        29,
+        0
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        39,
+        0
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        49,
+        0
+      ],
+      "text": "CAP"
+    },
+    {
+      "pos": [
+        64,
+        9
+      ],
+      "text": "CAP"
+    },
+    {
+      "pos": [
+        64,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        77,
+        0
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        91,
+        0
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        84,
+        -7
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        84,
+        7
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

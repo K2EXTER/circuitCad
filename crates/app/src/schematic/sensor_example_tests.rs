@@ -131,11 +131,40 @@ fn adc_input() -> Schematic {
     s
 }
 
+/// One power pin pair of a big chip: the supply reaches VCC through a thin wire (L1, 20 nH), the chip switches a load
+/// (the voltage-controlled switch, 100 ohm on) in 2 ns, and a bypass capacitor C1 sits behind its own wire L2.
+fn power_pin() -> Schematic {
+    let mut s = Schematic::default();
+    source(&mut s, (0, 0), "5", "VIN");
+    let v2 = s.add(Kind::VSource, (0, 16), 0);
+    s.components[v2].value = "PULSE(0 5 20n 4n 4n 100n 400n)".into();
+    label_pin(&mut s, v2, "+", "GATE");
+    label_pin(&mut s, v2, "-", "GND");
+    let l1 = s.add(Kind::Inductor, (24, 0), 0);
+    s.components[l1].value = "20n".into();
+    label_pin(&mut s, l1, "1", "VIN");
+    label_pin(&mut s, l1, "2", "VCC");
+    let l2 = s.add(Kind::Inductor, (44, 0), 0);
+    s.components[l2].value = "20n".into();
+    label_pin(&mut s, l2, "1", "VCC");
+    label_pin(&mut s, l2, "2", "CAP");
+    let c1 = s.add(Kind::Capacitor, (64, 14), 1);
+    s.components[c1].value = "1p".into();
+    label_pin(&mut s, c1, "1", "CAP");
+    label_pin(&mut s, c1, "2", "GND");
+    let sw = part_at(&mut s, "SW_SAMPLE_DEMO", (84, 0), 0);
+    label_pin(&mut s, sw, "1", "VCC");
+    label_pin(&mut s, sw, "2", "GND");
+    label_pin(&mut s, sw, "3", "GATE");
+    label_pin(&mut s, sw, "4", "GND");
+    s
+}
+
 #[test]
 #[ignore]
 fn write_sensor_examples() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input())] {
+    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input()), ("power_pin", power_pin())] {
         std::fs::write(root.join(format!("{name}.schjson")), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 }
@@ -222,4 +251,30 @@ fn adc_sample_fills_the_sample_capacitor_only_for_a_low_source_resistance() {
     assert!((1.3..1.6).contains(&read(&s)), "1M is not full: {}", read(&s));
     set(&mut s, "C2", "100n IC=2.5");
     assert!((read(&s) - 2.5).abs() < 0.01, "a 100n at the pin fills it: {}", read(&s));
+}
+
+/// (lowest, highest) V(VCC) of the power pin sample with the given C1 and L2.
+fn power_swing(c1: &str, l2: &str) -> (f64, f64) {
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/power_pin.schjson")).unwrap()).unwrap();
+    for (r, v) in [("C1", c1), ("L2", l2)] {
+        s.components.iter_mut().find(|c| c.refdes == r).unwrap().value = v.into();
+    }
+    let c = from_schematic(&s).unwrap();
+    let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 200e-9, tstep: 0.2e-9, uic: false }).unwrap();
+    r.signal("V(VCC)").unwrap().values.iter().fold((f64::MAX, f64::MIN), |a, x| (a.0.min(*x), a.1.max(*x)))
+}
+
+#[test]
+fn a_near_small_bypass_beats_a_far_big_one() {
+    let width = |c: &str, l: &str| {
+        let (lo, hi) = power_swing(c, l);
+        hi - lo
+    };
+    let none = width("1p", "20n");
+    let far = width("100n", "20n");
+    let near = width("100n", "2n");
+    let near_small = width("1n", "2n");
+    assert!(none > 3.0 && far < 0.6 * none, "none {none} far {far}");
+    assert!(near < 0.25 * far && near < 0.5, "near {near}");
+    assert!(near_small < far, "1n near {near_small} beats 100n far {far}");
 }
