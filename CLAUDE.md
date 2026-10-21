@@ -84,6 +84,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## ドキュメント・サンプル
 - `docs/code-notes/` コードの詳細メモ (`sim-core.md` `pcb-core.md` `app.md` `samples.md`)
 - `docs/quality-bench.md` 配置・配線の質を前後で比べる道具(`tools/quality_bench.py`=同梱サンプル一括、`tools/freerouting_compare.py`=Freerouting との比較)。配置・自動配線を変えたら、前後で回して `problems` が 0 のままか確かめる
+- `docs/candidates.md` 機能の候補と優先順位(次に何を作るかの一覧。着手したら該当行を消す)
 - `docs/learning-path.md` 学習パス(安定化電源)の設計 / `docs/board-editor.md` 基板の使い方 / `docs/library.md` 部品ライブラリ / `docs/part-format.md` 部品JSON形式
 - `docs/examples/*.schjson` サンプル回路 (各サンプルの説明と生成テストは `docs/code-notes/samples.md`)
 
