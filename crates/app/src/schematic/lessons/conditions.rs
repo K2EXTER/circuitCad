@@ -345,6 +345,21 @@ pub(super) fn flyback_big_coil(e: &SchEditor) -> bool {
     flyback_diode_added(e) && value_of(&e.sch, "L1").and_then(parse_value).is_some_and(|l| l >= 0.5)
 }
 
+/// The debounce lesson: C1 is between `lo` and `hi` farad and the run is fresh.
+fn bounce_c1_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    tran_fresh(e) && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| (lo..=hi).contains(&c))
+}
+
+/// Step 2: a debounce capacitor of 50 nF to 500 nF (with the 10k).
+pub(super) fn debounce_right_size(e: &SchEditor) -> bool {
+    bounce_c1_between(e, 50e-9, 500e-9)
+}
+
+/// Step 3: a far too big capacitor (800 nF or more).
+pub(super) fn debounce_too_big(e: &SchEditor) -> bool {
+    bounce_c1_between(e, 800e-9, 1.0)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

@@ -1003,6 +1003,37 @@ fn write_flyback_example() {
     std::fs::write(root.join("flyback_coil.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/button_bounce.schjson: a button that bounces. V1 is what the contact does (PWL: open = 5 V, closes at 1 ms,
+/// bounces back and forth until 2.1 ms), R1 = 10k stands for the pull-up, C1 = the debounce capacitor on the input pin IN (1 nF = hardly any):
+/// `cargo test -p app write_bounce_example -- --ignored`
+#[test]
+#[ignore]
+fn write_bounce_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "PWL(0 5 1m 5 1.001m 0 1.1m 0 1.101m 5 1.25m 5 1.251m 0 1.4m 0 1.401m 5 1.6m 5 1.601m 0 1.8m 0 1.801m 5 2.1m 5 2.101m 0 6m 0)".into();
+    label(&mut s, v1, "+", "CONTACT");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (14, 0), 1);
+    s.components[r1].value = "10k".into();
+    label(&mut s, r1, "1", "CONTACT");
+    label(&mut s, r1, "2", "IN");
+    let c1 = s.add(Kind::Capacitor, (28, 0), 1);
+    s.components[c1].value = "1n".into();
+    label(&mut s, c1, "1", "IN");
+    label(&mut s, c1, "2", "GND");
+    std::fs::write(root.join("button_bounce.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/coin_cell_led.schjson (CR2032 -> resistor -> LED):
 /// `cargo test -p app write_coin_cell_example -- --ignored`
 #[test]

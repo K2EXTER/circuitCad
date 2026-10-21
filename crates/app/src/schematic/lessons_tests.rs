@@ -1078,3 +1078,43 @@ fn the_flyback_lesson_ticks_its_three_steps_and_the_diode_holds_the_drain() {
     e2.update_lesson();
     assert_eq!(progress(&e2), 3);
 }
+
+#[test]
+fn the_debounce_lesson_ticks_its_three_steps_and_the_microcontroller_counts_as_it_says() {
+    let idx = lesson_ids().iter().position(|l| *l == "debounce").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // how many times IN crosses 2.5 V downward (the presses a microcontroller counts), and when it last does
+    let presses = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &t.signal("V(IN)").unwrap().values;
+        let mut n = 0;
+        let mut last = f64::NAN;
+        for i in 1..v.len() {
+            if v[i - 1] >= 2.5 && v[i] < 2.5 {
+                n += 1;
+                last = t.time[i];
+            }
+        }
+        (n, last, *v.last().unwrap())
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (n, _, _) = presses(&e);
+    assert_eq!(n, 4, "1 nF: one press is counted four times");
+    set_value(&mut e, "C1", "100n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (n, at, _) = presses(&e);
+    assert!(n == 1 && (0.0022..0.0030).contains(&at), "100 nF: {n} press at {at} s (about 1.5 ms after the contact closed)");
+    set_value(&mut e, "C1", "1u");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (n, _, fin) = presses(&e);
+    assert!(n == 0 && (3.0..3.5).contains(&fin), "1 uF: {n} presses, IN ends at {fin} V: too slow to notice");
+}

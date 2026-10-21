@@ -1,0 +1,147 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PWL(0 5 1m 5 1.001m 0 1.1m 0 1.101m 5 1.25m 5 1.251m 0 1.4m 0 1.401m 5 1.6m 5 1.601m 0 1.8m 0 1.801m 5 2.1m 5 2.101m 0 6m 0)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        14,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "1n",
+      "pos": [
+        28,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        14,
+        -2
+      ],
+      "b": [
+        14,
+        -5
+      ]
+    },
+    {
+      "a": [
+        14,
+        2
+      ],
+      "b": [
+        14,
+        5
+      ]
+    },
+    {
+      "a": [
+        28,
+        -2
+      ],
+      "b": [
+        28,
+        -5
+      ]
+    },
+    {
+      "a": [
+        28,
+        2
+      ],
+      "b": [
+        28,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "CONTACT"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        14,
+        -5
+      ],
+      "text": "CONTACT"
+    },
+    {
+      "pos": [
+        14,
+        5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        28,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        28,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

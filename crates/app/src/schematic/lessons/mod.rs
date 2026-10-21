@@ -85,6 +85,7 @@ const LESSONS: &[Lesson] = &[
     supply::LDO,
     supply::TL431,
     micro::FLYBACK,
+    micro::DEBOUNCE,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.
