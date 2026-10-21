@@ -420,6 +420,27 @@ pub(super) fn current_big_shunt(e: &SchEditor) -> bool {
     dc_fresh(e) && bus_and_shunt(e).0.is_some_and(|v| v >= 4.0) && bus_and_shunt(e).1.is_some_and(|r| r >= 0.08)
 }
 
+/// The ADC lesson: the source resistance R1 and the pin capacitor C2 (its first word: "100n IC=2.5" is 100n) as numbers.
+fn adc_values(e: &SchEditor) -> (Option<f64>, Option<f64>) {
+    let first = |r: &str| value_of(&e.sch, r).and_then(|v| v.split_whitespace().next()).and_then(parse_value);
+    (first("R1"), first("C2"))
+}
+
+/// Step 2: a source of 50k to 500k (a sensor with a long wire, a divider of big resistors) is still read well.
+pub(super) fn adc_medium_source(e: &SchEditor) -> bool {
+    tran_fresh(e) && adc_values(e).0.is_some_and(|r| (50e3..500e3).contains(&r))
+}
+
+/// Step 3: a 1 Mohm source with no capacitor at the pin: the sample capacitor is not full when the switch opens.
+pub(super) fn adc_high_source(e: &SchEditor) -> bool {
+    tran_fresh(e) && adc_values(e).0.is_some_and(|r| r >= 500e3) && adc_values(e).1.is_some_and(|c| c < 1e-9)
+}
+
+/// Step 4: the same 1 Mohm source with a big capacitor at the pin (100n or more): it fills the sample capacitor.
+pub(super) fn adc_big_pin_cap(e: &SchEditor) -> bool {
+    tran_fresh(e) && adc_values(e).0.is_some_and(|r| r >= 500e3) && adc_values(e).1.is_some_and(|c| c >= 10e-9)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

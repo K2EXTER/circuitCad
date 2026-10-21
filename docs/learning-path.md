@@ -114,3 +114,9 @@
 - 進み具合の記録は項目の id のままなので、直線のときの記録がそのまま使えます。`requires` を書かない項目は、従来どおり「直前の項目が前提」になります(テストは小さな直線のパスで確かめる)。
 - 追加のレッスン(樹形図の枝): `tl431_ref`(37、TL431。`zener` の先。基準電圧を好きな値にする)と `ldo`(36、LDO。`regulator_78xx` の先。入力の余裕と発熱)。
 
+## 3本目のパス: Arduino Mega 互換ボード (`MEGA_PATH`)
+
+Arduino のパスの続きです。ATmega2560 (100 ピン) の基板 (`docs/examples/arduino_mega_usb.schjson`、仕上げ待ちの基板は `docs/examples/work_in_progress/`) を作ります。新しい項目だけを書き、水晶・リセット・バイパス・シリアル・基板の置き方は、Arduino のパスの項目を `requires` で指します (id は全パスで一意)。
+
+- 書いた: レッスン 43 `adc_input` (ADC の入力。信号源の抵抗が 10kΩ より大きいと充電しきれず、ピンの大きなコンデンサで直す)
+- 準備中 (`plan`): `mega_power` (電源ピン 5 組と AVCC・AREF) / `ch340g` (USB-シリアル変換) / `board_mega` (自動配線で残った 18 本を手で通す。基板レッスン 6 にする。人の手で通しきれることを確かめてから書く) / `solder_tqfp100`

@@ -1,0 +1,360 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "2.5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 1u 10n 10n 12u 100u)",
+      "pos": [
+        0,
+        16
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "14p IC=0",
+      "pos": [
+        64,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "1p",
+      "pos": [
+        44,
+        14
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "SW1",
+      "kind": "Custom",
+      "value": "SW_SAMPLE_DEMO",
+      "pos": [
+        54,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SOT-143",
+      "custom": {
+        "name": "SW_SAMPLE_DEMO",
+        "prefix": "SW",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "B",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "CTRL",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "REF",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "S",
+          "name": "SWSAMPLE",
+          "text": ".model SWSAMPLE SW(RON=100 ROFF=1G VT=2.5 VW=0.1)",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {},
+          "limits": [
+            "学習用の理想スイッチです。実物の ADC のサンプル用スイッチは MOSFET で、数 kΩ のオン抵抗と、ゲートからの電荷の漏れ(チャージインジェクション)があります。ここでは、それを含めていません。"
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        14
+      ],
+      "b": [
+        0,
+        11
+      ]
+    },
+    {
+      "a": [
+        0,
+        18
+      ],
+      "b": [
+        0,
+        21
+      ]
+    },
+    {
+      "a": [
+        22,
+        0
+      ],
+      "b": [
+        19,
+        0
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        29,
+        0
+      ]
+    },
+    {
+      "a": [
+        64,
+        12
+      ],
+      "b": [
+        64,
+        9
+      ]
+    },
+    {
+      "a": [
+        64,
+        16
+      ],
+      "b": [
+        64,
+        19
+      ]
+    },
+    {
+      "a": [
+        44,
+        12
+      ],
+      "b": [
+        44,
+        9
+      ]
+    },
+    {
+      "a": [
+        44,
+        16
+      ],
+      "b": [
+        44,
+        19
+      ]
+    },
+    {
+      "a": [
+        50,
+        0
+      ],
+      "b": [
+        47,
+        0
+      ]
+    },
+    {
+      "a": [
+        58,
+        0
+      ],
+      "b": [
+        61,
+        0
+      ]
+    },
+    {
+      "a": [
+        54,
+        -4
+      ],
+      "b": [
+        54,
+        -7
+      ]
+    },
+    {
+      "a": [
+        54,
+        4
+      ],
+      "b": [
+        54,
+        7
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        11
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        0,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        19,
+        0
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        29,
+        0
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        64,
+        9
+      ],
+      "text": "SH"
+    },
+    {
+      "pos": [
+        64,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        44,
+        9
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        44,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        47,
+        0
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        61,
+        0
+      ],
+      "text": "SH"
+    },
+    {
+      "pos": [
+        54,
+        -7
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        54,
+        7
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

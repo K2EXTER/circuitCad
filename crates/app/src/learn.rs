@@ -137,13 +137,12 @@ const fn lesson(id: &'static str, title: &'static str, about: &'static str, real
     Item { id, title, about, kind: Kind::Lesson(id), build: false, requires: None, real }
 }
 
-// no step is "planned" right now; kept for the next one that is shown before it is written
-#[allow(dead_code)]
+// shown on the map before it is written
 const fn planned(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
     Item { id, title, about, kind: Kind::Planned, build: false, requires: None, real }
 }
 
-pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH];
+pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH];
 
 const POWER_PATH: LearningPath = LearningPath {
     id: "power_supply",
@@ -201,8 +200,7 @@ const POWER_PATH: LearningPath = LearningPath {
     ],
 };
 
-/// A planned item of a tree path: shown on the map, not yet written (no item of the Arduino path is planned any more).
-#[allow(dead_code)]
+/// A planned item of a tree path: shown on the map, not yet written (all items of the Arduino path are written; the Mega path has some).
 const fn plan(id: &'static str, title: &'static str, about: &'static str, requires: &'static [&'static str], real: Option<&'static str>) -> Item {
     Item { requires: Some(requires), ..planned(id, title, about, real) }
 }
@@ -271,6 +269,35 @@ const ARDUINO_PATH: LearningPath = LearningPath {
                 Item { id: "solder", title: "表面実装のはんだ付け", about: "0805 のチップ部品と TQFP-32 (0.8mm ピッチ) のはんだ付けのコツ。ブリッジの直し方と、電源を入れる前の点検", kind: Kind::Hands, build: false, requires: Some(&["board_arduino"]), real: Some("まず練習用の基板で、0805 のチップ部品から始めます") },
                 Item { id: "bootload", title: "ブートローダを書き込んで LED を点滅させる", about: "ICSP ヘッダでの書き込み、Arduino IDE の設定、シリアルでのスケッチの書き込み。うまくいかないときの見方", kind: Kind::Hands, build: false, requires: Some(&["solder", "serial"]), real: None },
             ],
+        },
+    ],
+};
+
+/// The third path: the Arduino Mega 2560 compatible board (`docs/examples/arduino_mega_usb.schjson`). It builds on the Arduino path (crystal,
+/// reset, bypass, serial, the board lessons) and adds what a 100-pin board needs. Only the new items are listed; the others are `requires`.
+const MEGA_PATH: LearningPath = LearningPath {
+    id: "arduino_mega",
+    title: "Arduino Mega 互換ボードを作ろう",
+    goal: "ATmega2560 (100 ピン) に、USB-シリアル変換 (CH340G)・12MHz と 16MHz の 2 つの水晶・電源まわりをつけた、Arduino Mega 互換のボードを、回路図・基板・実機まで作ります。Arduino 互換ボードの学習パスで、水晶・リセット・バイパス・シリアル・基板の置き方を済ませてから進めると分かりやすいです。ピンの数が多いので、基板は自動配線で通らない線を、手で仕上げます",
+    stages: &[
+        Stage {
+            name: "1. Mega ならではの電気",
+            about: "ピンの数と部品の数が増えると、新しく考えることが出てきます。順番は自由です",
+            items: &[
+                Item { requires: Some(&["pin_led", "datasheet"]), ..lesson("adc_input", "ADC の入力 (信号源の抵抗は 10kΩ 以下)", "ADC は、入力のコンデンサを短い時間で充電して読む。信号源の抵抗が大きいと充電しきれず、読み違える。ピンに大きなコンデンサをつけて直す。Mega は 16 チャンネル", Some("1MΩ 2 本で分圧した 2.5V を A0 で読み、コンデンサをつけて値の変化を見ます")) },
+                plan("mega_power", "電源ピンが 5 組ある (VCC・GND・AVCC・AREF)", "ATmega2560 は VCC と GND が 5 組。すべてのペアのそばにバイパスコンデンサを置く理由と、AVCC・AREF の扱い", &["decoupling"], Some("電源ピンの電圧を、バイパスコンデンサの有無でオシロで見比べます")),
+                plan("ch340g", "CH340G: USB-シリアル変換", "USB の D+ / D− をシリアルに変える IC。12MHz の水晶と、V3 ピンのコンデンサが要る。DTR でリセットをかける仕組み", &["usb_signal", "serial"], Some("PC につなぎ、シリアルモニタに文字が出るか確かめます")),
+            ],
+        },
+        Stage {
+            name: "2. 100 ピンの基板",
+            about: "0.5mm ピッチの 100 ピンの IC は、自動配線が通せない線が残ります。残った線を、手で仕上げます",
+            items: &[plan("board_mega", "基板を手で仕上げる (自動配線で通らない線)", "自動配置と自動配線のあと、18 本の線が残った基板を、部品の置き直し・配線のやり直し・ビアで、手で通しきる", &["board_arduino"], None)],
+        },
+        Stage {
+            name: "3. 作って動かす",
+            about: "100 ピンのチップを、はんだ付けします",
+            items: &[plan("solder_tqfp100", "100 ピン (0.5mm ピッチ) のはんだ付け", "TQFP-100 のはんだ付け。ブリッジの直し方、フラックスの使い方、導通の確かめ方", &["board_mega", "solder"], Some("まず練習用の基板で、0.5mm ピッチのチップを試します"))],
         },
     ],
 };
@@ -742,6 +769,22 @@ mod tests {
         // roots sit on row 0, the final tasks below everything they need
         assert_eq!(level(&ARDUINO_PATH, find_item("datasheet").unwrap(), 0), 0);
         assert!(level(&ARDUINO_PATH, find_item("draw_arduino").unwrap(), 0) > level(&ARDUINO_PATH, find_item("reset").unwrap(), 0));
+    }
+
+    #[test]
+    fn the_mega_path_builds_on_the_arduino_path_and_opens_after_its_prerequisites() {
+        let mega = PATHS.iter().find(|p| p.id == "arduino_mega").unwrap();
+        assert!(is_tree(mega));
+        let mut progress = Progress::default();
+        // the ADC lesson needs the data sheet and the pin LED (which need the power path's LED lesson)
+        assert!(recommended(mega, &progress).is_empty());
+        for id in ["divider", "led", "datasheet", "pin_led"] {
+            progress.mark(id);
+        }
+        assert_eq!(recommended(mega, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["adc_input"]);
+        // the planned items hold nothing back and are never recommended
+        assert!(items(mega).filter(|i| i.kind == Kind::Planned).count() >= 3);
+        assert!(requirements(mega, find_item("ch340g").unwrap()).iter().any(|i| i.id == "serial"));
     }
 
     #[test]

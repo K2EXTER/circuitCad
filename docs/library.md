@@ -36,6 +36,7 @@
 | トランジスタ (追加) | PN2222A | TO-92 | Ebers-Moll | ピン1=E 2=B 3=C |
 | | S8050 (NPN) / S8550 (PNP) | SOT-23 | Ebers-Moll | ピン1=B 2=E 3=C |
 | MOSFET (追加) | BSS138 | SOT-23 | レベル1 NMOS | ピン1=G 2=S 3=D。ロジックレベル駆動 |
+| スイッチ (学習用) | SW_SAMPLE_DEMO | 4パッド | 電圧制御スイッチ (`SW`) | ピン1-2 が通り道、ピン3(CTRL)がピン4(REF)より 2.5V 高いとオン(100Ω)。ADC のレッスン用の理想スイッチで、実物の部品ではない |
 | | IRLZ44N | TO-220 | レベル1 NMOS | ピン1=G 2=D 3=S。5V 駆動のパワーMOSFET |
 | ダイオード (追加) | 1N4007 | DO-41 | ダイオード | 1000V 1A |
 | | 1N5817 / SS14 | DO-41 / SMA | ダイオード | ショットキー。SS14 は ピン1=K 2=A |
@@ -78,6 +79,7 @@
 **サンプル**(`docs/examples/`):
 - `temperature_sensors.schjson` — LM35・TMP36・NTC を並べたもの。「解析 → 温度スイープ」で温度を振ると、LM35 は 10mV/℃、TMP36 は 0.5V+10mV/℃、NTC の分圧は曲線で変わります
 - `light_sensors.schjson` — LDR の分圧とフォトダイオード。電圧源 V2(LUX、1V=100lx)と V3(IRRAD、1V=1mW/cm²)の値を変えて、明るさを変えます。DCスイープで V2 を 0〜10V に振ると、明るさに対する出力の曲線が見えます
+- `adc_input.schjson` — ADC のサンプル用コンデンサ(14pF)を、信号源の抵抗 R1 を通して 12µs だけ充電します。R1 を変えて、V(SH) の読みを比べます
 - `current_sensors.schjson` — 10mΩ のシャントを INA180A2 で、同じ電流を ACS712-05B で読みます。V2(BUS)を変えて電流を振ります
 
 **光・磁界のセンサの使い方**: 「シミュレーション専用ピン」(LIGHT / IRRAD / B)に電圧源をつなぎ、その電圧で明るさや磁界を与えます。

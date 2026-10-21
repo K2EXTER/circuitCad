@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input.
 
 use super::conditions::*;
 use super::*;
@@ -750,6 +750,53 @@ pub(super) const CURRENT_SENSORS: Lesson = Lesson {
             title: "R1 (シャント) を 100m にして、アンプが頭打ちになるのを見る",
             detail: "R1 を 10m から 100m (0.1Ω) に変えて「DC動作点を解析」。電流は約 2.4A で、シャントの電圧は 0.24V、50 倍の計算値は約 11.9V ですが、VINA は約 4.80V で頭打ちになります (電源の約 5V までしか出せない)。電流が、もう読み取れません。シャントを大きくすると、読みやすくなる反面、アンプの範囲を超え、熱 (I² × R) と電圧降下 (約 0.24V) も増えます。ACS712 (VACS) は、約 2.94V で、シャントの大きさに関係ありません。",
             done: current_big_shunt,
+        },
+    ],
+};
+
+pub(super) const ADC_INPUT: Lesson = Lesson {
+    id: "adc_input",
+    title: "43. ADC の入力 (信号源の抵抗は 10kΩ 以下)",
+    goal: "マイコンの ADC (アナログを数にする部分) に、抵抗の大きい信号源をつなぐと、読み違えることを、信号源の抵抗を変えて確かめます。ADC は、入力のコンデンサ (14pF) を、短い時間だけ信号につないで充電し、その電圧を数にします。抵抗が大きいと、その時間で充電しきれません。直し方は、ピンに大きなコンデンサをつけることです",
+    summary: "ATmega の ADC は、読む前に、入力のスイッチを 1.5 クロックのあいだだけ閉じて、中の小さなコンデンサ (サンプルホールド用、約 14pF) を、信号の電圧まで充電します。ADC のクロックが 125kHz のとき、閉じている時間は 12µs です。そのあとスイッチを開いて、コンデンサの電圧を数に直します。直前に読んだ別のピンの電圧が残っているので、サンプル用コンデンサは、はじめは別の電圧です (ここでは 0V)。信号源の抵抗 Rs が小さければ、充電は一瞬で終わります。時定数は Rs × 14pF で、10kΩ なら 0.14µs、100kΩ でも 1.4µs と、12µs よりずっと短く、2.5V になります。ところが 1MΩ だと、時定数が 14µs 以上で、12µs ではまだ 6 割ほどしか充電できず、2.5V のはずが約 1.45V と読まれます (5V 基準なら、512 のはずが約 297)。データシートが「信号源の抵抗は 10kΩ 以下」と書くのは、このためです。直し方の 1 つは、ピンと GND の間に、大きなコンデンサ (100nF) をつけることです。サンプル用コンデンサは、この 100nF から電荷を分けてもらうので、電圧はほとんど下がりません (100nF と 14pF の電荷の分け合いで、2.4997V)。100nF は、信号源の抵抗とのあいだで、ゆっくり充電されるので、速く変わる信号には使えません。もう 1 つの直し方は、オペアンプのバッファで抵抗を下げることです。なお、ADC の分解能は、基準電圧 (AREF) を 1024 に分けた値で、5V 基準なら約 4.9mV、内蔵の 2.56V 基準 (Mega) なら 2.5mV です。AREF のピンには、0.1µF をつなぎます。",
+    limits: &[
+        "ADC の入力のスイッチは、100Ω で入り切りする、理想のスイッチです。実物は、MOSFET で、オン抵抗が数 kΩ あり、スイッチを切るときに、電荷が少し漏れます (チャージインジェクション)。実物の誤差は、ここより大きくなります。",
+        "サンプル用コンデンサは 14pF で、ピンの寄生容量 (数 pF) は、C2 の 1pF で表しています。実物の値は、データシートで確かめてください。ADC のクロックを速くする (200kHz 以上) と、サンプルの時間は短くなります。",
+        "ここでは、サンプル用コンデンサの、はじめの電圧を 0V としています。実際は、直前に読んだピンの電圧なので、0V よりずっと小さな差のこともあります。いちばん悪い場合 (0V と 5V の差) を見る気持ちで読んでください。",
+        "ADC の変換そのもの (逐次比較、量子化の誤差、オフセット) は、シミュレーションしていません。ここで見るのは、サンプル用コンデンサに、信号の電圧が届くかどうかだけです。",
+    ],
+    real: &[
+        "まずデータシートを見よう: ATmega2560 のデータシートで、「ADC の入力インピーダンス」「信号源の推奨抵抗 (10kΩ)」「サンプルの時間 (1.5 ADC クロック)」「ADC のクロックの範囲 (50〜200kHz)」を探します。",
+        "用意するもの: Arduino (Mega または Uno)、10kΩ のボリューム (または 100kΩ・1MΩ の抵抗 2 本の分圧)、0.1µF のコンデンサ、テスタ。",
+        "測り方: 5V を、1MΩ 2 本で分圧して(2.5V)、A0 につなぎ、analogRead(A0) を表示します。そのあと、A0 と GND の間に 0.1µF をつけて、値の変化を見ます。期待される値は、コンデンサなしで 400 台、あり (または 10kΩ の分圧) で 512 付近ですが、ばらつきます。",
+        "気づいてほしいこと: 複数のピンを続けて読むと、前のピンの電圧が残るので、高い抵抗の信号源は、前のピンの値に引きずられます。analogRead を 2 回続けて、2 回目を使うと、ましになります。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/adc_input.schjson"),
+    setup: |e| e.set_tran_settings("30u", ""),
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "10kΩ の信号源で、サンプル用コンデンサが満タンになるのを見る",
+            detail: "「過渡解析を実行」を押し、V(SH) (サンプル用コンデンサの電圧) を選びます。V2 (GATE) が 1µs から 13µs までの 12µs だけ入力のスイッチを閉じ、V(SH) は 1µs 過ぎに、0V から 2.5V まで一気に上がります (時定数は 10kΩ × 14pF = 0.14µs)。スイッチが開いた 13µs 以降は、その電圧が保たれ、ADC はこれを数にします。2.5V なので、5V 基準で 512 です。",
+            done: tran_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "R1 を 100k にしても、読めることを見る",
+            detail: "R1 を 10k から 100k に変えて「過渡解析を実行」。V(SH) は 1.4µs ほどの時定数で上がりますが、12µs のあいだに満タン (2.499V) になります。信号源の抵抗が 10 倍でも読めるので、10kΩ という値には、余裕があるとわかります。",
+            done: adc_medium_source,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "R1 を 1Meg にして、充電しきれないのを見る",
+            detail: "R1 を 1Meg に変えて「過渡解析を実行」。時定数は 1MΩ × (14pF + 1pF) = 15µs で、スイッチが開く 13µs の時点で、V(SH) はまだ約 1.45V です。2.5V のはずが約 1.45V と読まれ、5V 基準の数では、512 のはずが約 297 になります。信号が間違っているのではなく、サンプル用コンデンサに、信号が届ききらなかったのです。",
+            done: adc_high_source,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "ピンに 100n (C2) をつけて、直す",
+            detail: "C2 を 1p から「100n IC=2.5」に変えます (IC=2.5 は、はじめから 2.5V に充電されている意味で、信号源に長くつないで、落ち着いた状態です)。「過渡解析を実行」すると、V(SH) は 12µs で 2.4997V になります。サンプル用コンデンサは、100nF から電荷を分けてもらうので、信号源の抵抗は関係なくなりました。かわりに、100nF は 1MΩ との時定数が 0.1 秒なので、信号の変化が速いと追いつけません。",
+            done: adc_big_pin_cap,
         },
     ],
 };

@@ -1234,3 +1234,37 @@ fn the_current_lesson_ticks_its_four_steps_and_the_amplifier_runs_out_of_range()
     assert!((4.6..5.0).contains(&v(&e, "VINA")), "clipped: {}", v(&e, "VINA"));
     assert!((v(&e, "VACS") - 2.94).abs() < 0.03, "the Hall sensor does not care about the shunt: {}", v(&e, "VACS"));
 }
+
+#[test]
+fn the_adc_lesson_ticks_its_four_steps_and_the_reading_is_short_for_a_high_source_resistance() {
+    let idx = lesson_ids().iter().position(|l| *l == "adc_input").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // the sample capacitor voltage when the switch has just opened (13 us)
+    let sh = |e: &SchEditor| {
+        let t = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let i = t.time.iter().position(|x| *x >= 13e-6).unwrap();
+        t.signal("V(SH)").unwrap().values[i]
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((sh(&e) - 2.5).abs() < 0.01, "10k: {}", sh(&e));
+    set_value(&mut e, "R1", "100k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((sh(&e) - 2.5).abs() < 0.02, "100k: {}", sh(&e));
+    set_value(&mut e, "R1", "1Meg");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((1.3..1.6).contains(&sh(&e)), "1 Meg is not full: {}", sh(&e));
+    set_value(&mut e, "C2", "100n IC=2.5");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!((sh(&e) - 2.5).abs() < 0.01, "100n at the pin: {}", sh(&e));
+}

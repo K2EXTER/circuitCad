@@ -105,11 +105,37 @@ fn current_sensors() -> Schematic {
     s
 }
 
+/// The input of an ADC: a source with its resistance Rs (R1), the pin capacitor C2 (small at first), a switch (a voltage-controlled switch, closed for
+/// 12 us = 1.5 clocks at 125 kHz) and the 14 pF sample capacitor C1, which holds 0 V from the channel before.
+fn adc_input() -> Schematic {
+    let mut s = Schematic::default();
+    source(&mut s, (0, 0), "2.5", "SIG");
+    let v2 = s.add(Kind::VSource, (0, 16), 0);
+    s.components[v2].value = "PULSE(0 5 1u 10n 10n 12u 100u)".into();
+    label_pin(&mut s, v2, "+", "GATE");
+    label_pin(&mut s, v2, "-", "GND");
+    resistor(&mut s, (24, 0), 0, "10k", "SIG", "IN");
+    let c1 = s.add(Kind::Capacitor, (64, 14), 1);
+    s.components[c1].value = "14p IC=0".into();
+    label_pin(&mut s, c1, "1", "SH");
+    label_pin(&mut s, c1, "2", "GND");
+    let c2 = s.add(Kind::Capacitor, (44, 14), 1);
+    s.components[c2].value = "1p".into();
+    label_pin(&mut s, c2, "1", "IN");
+    label_pin(&mut s, c2, "2", "GND");
+    let q = part_at(&mut s, "SW_SAMPLE_DEMO", (54, 0), 0);
+    label_pin(&mut s, q, "1", "IN");
+    label_pin(&mut s, q, "2", "SH");
+    label_pin(&mut s, q, "3", "GATE");
+    label_pin(&mut s, q, "4", "GND");
+    s
+}
+
 #[test]
 #[ignore]
 fn write_sensor_examples() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors())] {
+    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input())] {
         std::fs::write(root.join(format!("{name}.schjson")), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 }
@@ -172,4 +198,28 @@ fn current_sample_reads_the_same_current_with_a_shunt_and_a_hall_sensor() {
     let i = 1.0 / (2.0 + 0.01 + 0.0012);
     assert!((volt(&c, "VINA") - 50.0 * 0.01 * i).abs() < 0.01, "VINA {}", volt(&c, "VINA"));
     assert!((volt(&c, "VACS") - (2.5 + 0.185 * i)).abs() < 0.01, "VACS {}", volt(&c, "VACS"));
+}
+
+/// Voltage of net `net` at time `at` in a transient run from zero.
+fn adc_at(sch: &Schematic, net: &str, at: f64) -> f64 {
+    let c = from_schematic(sch).unwrap();
+    let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 30e-6, tstep: 0.05e-6, uic: false }).unwrap();
+    let sig = r.signal(&format!("V({net})")).unwrap_or_else(|| panic!("no net {net}: {:?}", r.signals.iter().map(|s| &s.name).collect::<Vec<_>>()));
+    let i = r.time.iter().position(|t| *t >= at).unwrap();
+    sig.values[i]
+}
+
+#[test]
+fn adc_sample_fills_the_sample_capacitor_only_for_a_low_source_resistance() {
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/adc_input.schjson")).unwrap()).unwrap();
+    let set = |s: &mut Schematic, r: &str, v: &str| s.components.iter_mut().find(|c| c.refdes == r).unwrap().value = v.into();
+    // the switch opens at 13 us: the voltage of the sample capacitor is the reading
+    let read = |s: &Schematic| adc_at(s, "SH", 13e-6);
+    assert!((read(&s) - 2.5).abs() < 0.01, "10k: {}", read(&s));
+    set(&mut s, "R1", "100k");
+    assert!((read(&s) - 2.5).abs() < 0.02, "100k: {}", read(&s));
+    set(&mut s, "R1", "1Meg");
+    assert!((1.3..1.6).contains(&read(&s)), "1M is not full: {}", read(&s));
+    set(&mut s, "C2", "100n IC=2.5");
+    assert!((read(&s) - 2.5).abs() < 0.01, "a 100n at the pin fills it: {}", read(&s));
 }
