@@ -123,6 +123,7 @@ board fab out/
 | `board currents [tran] [from=F] [widen]` | `dc` と同じ動作点(`tran` を付けると、直前の `tran` の後半 F 以降(既定0.5)の実効値。スイッチング電源など DC で電流が決まらない回路用。ピークは `stats` に出すが太さには使わない。`spiky:true` はピークが実効の10倍超=起動サージやスパイクの可能性)から各ネットの電流を求め、基板のネット電流に入れて、必要な配線の太さ(IPC-2221、温度上昇10℃・35µm)と今の最細の太さを返す。`widen` で細い配線を必要な太さに太くする(あとで `board drc`)。 |
 | `board postlayout on\|off` | `on` にすると以後の `dc`/`tran`/`ac` に、配線した基板の銅の抵抗とインダクタンス(電源の入口パッドから各パッドまで)がパッドの手前に直列に入る(レイアウト後シミュレーション)。答えに `largest`(抵抗の大きいパッド。`nanohenry` も。`couplings`/`strongest_couplings` は別ネットの配線どうしの磁気結合 k。反映中に 1 MHz を超える `ac` を実行すると、`warnings` に「配線の抵抗は直流の値(表皮効果で約 300 kHz 以上は増える)」の注意が出る。行きと帰りが近いほどループのインダクタンスが小さくなる)。ピンの電圧は `ac`/`tran` の probe に `V(R1.1.wire)` と書く。`dc`/`tran` の答えの `post_layout` で効いているか分かる。ネットの電圧は入口側の値。 |
 | `board shopping [boards=N] [file=PATH]` | 買うものの一覧。値とフットプリントごとに `qty`(`boards` 枚分)と、店(`akizuki`・`digikey`・`lcsc`)ごとの `number`(部品JSONに型番があるとき)か `search`(店の検索ページへのリンク)を返す。`file=` を付けるとCSVも書く。`board fab` の出力にも `*-shopping.csv` として入る。 |
+| `board route` の `bridge=0` | 自動配線の前に、同じ部品・同じネットで隣り合う表面実装パッド(レギュレータの2つのLXピンなど)を短い銅でつなぐ処理を止める。答えの `pads_bridged` がつないだ数。 |
 | `board check [fab=jlcpcb\|pcbway\|oshpark\|standard]` | アプリの「発注の準備」と同じ発注前チェック。`ready`(エラーが無ければ true)、`errors`/`warnings`/`info`/`ok` の数、`list`(ok 以外の項目の `level`・`title`・理由 `detail`・場所 `at`)を返す。未配線・DRC違反・基板の外の部品・配線の太さと電圧降下・シルク・鋭角・サーマルビア・バイパスコンデンサ・料金の枠(`fab=` を付けたとき)・**回路図と基板の食い違い**(取り込み後に回路図を直したとき)を調べる。`board fab` の前に実行し、`ready:false` なら直してから書き出す。 |
 | `board save F` / `open F` / `fab DIR` | `.pcbjson` の保存・読込、ガーバー・ドリル・BOM・部品位置・zip の書き出し。 |
 

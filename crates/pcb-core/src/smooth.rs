@@ -906,6 +906,15 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
         patches_of.push(patch);
     }
     let (new, kept) = apply_checked(board, &kept_edits, fast);
-    let patches = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
+    let mut patches: Vec<Patch> = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
+    // the slots between tracks of one net that run side by side (the fork patch only fills the sharp tip)
+    if board.finish.forks {
+        for s in crate::slot::slot_patches(board, &conn, &patches, board.finish.radius) {
+            let excluded = conn.track_net(s.track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n));
+            if !excluded && copper.clear(board, &conn, s.side, &s.outline, s.track) {
+                patches.push(Patch { side: s.side, outline: s.outline, track: s.track });
+            }
+        }
+    }
     Some(Finished { board: new, patches })
 }

@@ -104,6 +104,8 @@ impl Session {
                     Some(v) => num(v)?,
                     None => 0.5,
                 };
+                // neighbouring pads of one net (the two LX pins of a regulator) become one piece of copper first (`bridge=0` leaves it out)
+                let bridged = if opt(&kv, "bridge") == Some("0") { 0 } else { pcb_core::bridge::bridge_pads(board) };
                 let before = board.tracks.len();
                 let ro = RouteOptions { pad_lead: (lead > 0.0).then_some(lead), ..RouteOptions::default() };
                 let rep = pcb_core::autoroute::autoroute_sized(board, &ro, only.as_deref());
@@ -123,7 +125,7 @@ impl Session {
                 // the bottom has the GND pour: fill the top with ground too (`top=0` leaves it out)
                 let top_pour = opt(&kv, "top") != Some("0") && rep.routed > 0 && board.zones.iter().any(|z| z.net == "GND" && z.side == pcb_core::model::Side::Bottom) && pcb_core::groundpour::top_pour(board, None) == Ok(true);
                 let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
-                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "slits_filled": slits_filled, "top_pour": top_pour, "currents_declared": auto_nets, "wide_nets": rep.wide.iter().map(|(n, w)| json!({"net": n, "width_mm": w})).collect::<Vec<_>>(), "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
+                Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "slits_filled": slits_filled, "pads_bridged": bridged, "top_pour": top_pour, "currents_declared": auto_nets, "wide_nets": rep.wide.iter().map(|(n, w)| json!({"net": n, "width_mm": w})).collect::<Vec<_>>(), "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
             }
             "drc" => {
                 let board = self.board_mut()?;

@@ -36,6 +36,8 @@ impl BoardEditor {
             return;
         }
         self.checkpoint();
+        // neighbouring pads of one net (the two LX pins of a regulator) become one piece of copper first, so that one trunk leaves them
+        let bridged = if net.is_none() { pcb_core::bridge::bridge_pads(&mut self.board) } else { 0 };
         let tracks_before = self.board.tracks.len();
         let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
         // differential pairs first, side by side; the rest afterwards
@@ -54,7 +56,7 @@ impl BoardEditor {
         // a pair connection that failed is tried again by the plain router above; count only what is still open
         let _ = pair_failed;
         self.violations.clear();
-        if report.routed == 0 {
+        if report.routed == 0 && bridged == 0 {
             self.undo.pop(); // nothing changed: no undo step
         }
         // the new tracks leave and enter the pads at a right angle, like those drawn by hand
@@ -79,6 +81,9 @@ impl BoardEditor {
         self.status = if report.failed.is_empty() {
             let mut tail = if aligned > 0 { format!("パッドの根元 {aligned} か所を垂直にそろえました。") } else { String::new() };
             tail += top_note;
+            if bridged > 0 {
+                tail += &format!("同じネットの隣り合うパッド {bridged} 組を、先に銅でつなぎました。");
+            }
             if filled > 0 {
                 tail += &format!("同じネットの銅どうしの狭いすき間 {filled} か所を、銅で埋めました。");
             }

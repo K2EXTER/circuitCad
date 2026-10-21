@@ -49,7 +49,7 @@ pub fn circle_steps(r: f64) -> usize {
     ((2.0 * PI / step).ceil() as usize).clamp(16, 720)
 }
 
-fn circle(c: Point, r: f64) -> Path {
+pub(crate) fn circle(c: Point, r: f64) -> Path {
     let n = circle_steps(r);
     (0..n)
         .map(|k| {
@@ -60,7 +60,7 @@ fn circle(c: Point, r: f64) -> Path {
 }
 
 /// A line of round-ended thickness 2r (counter-clockwise).
-fn capsule(a: Point, b: Point, r: f64) -> Path {
+pub(crate) fn capsule(a: Point, b: Point, r: f64) -> Path {
     let (dx, dy) = (b.x - a.x, b.y - a.y);
     if dx.hypot(dy) < 1e-9 {
         return circle(a, r);
@@ -80,7 +80,7 @@ fn capsule(a: Point, b: Point, r: f64) -> Path {
 }
 
 /// A pad grown by `c` on every side.
-fn pad_path(pos: Point, shape: PadShape, c: f64) -> Path {
+pub(crate) fn pad_path(pos: Point, shape: PadShape, c: f64) -> Path {
     match shape {
         PadShape::Circle { d } => circle(pos, d / 2.0 + c),
         PadShape::Rect { w, h } => {
