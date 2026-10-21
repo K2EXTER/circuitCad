@@ -137,7 +137,8 @@ const fn lesson(id: &'static str, title: &'static str, about: &'static str, real
     Item { id, title, about, kind: Kind::Lesson(id), build: false, requires: None, real }
 }
 
-// shown on the map before it is written
+// shown on the map before it is written (none is planned right now)
+#[allow(dead_code)]
 const fn planned(id: &'static str, title: &'static str, about: &'static str, real: Option<&'static str>) -> Item {
     Item { id, title, about, kind: Kind::Planned, build: false, requires: None, real }
 }
@@ -201,6 +202,7 @@ const POWER_PATH: LearningPath = LearningPath {
 };
 
 /// A planned item of a tree path: shown on the map, not yet written (all items of the Arduino path are written; the Mega path has some).
+#[allow(dead_code)]
 const fn plan(id: &'static str, title: &'static str, about: &'static str, requires: &'static [&'static str], real: Option<&'static str>) -> Item {
     Item { requires: Some(requires), ..planned(id, title, about, real) }
 }
@@ -471,7 +473,9 @@ impl LearnWindow {
         let mut action = None;
         let mut chosen = self.selected.min(PATHS.len() - 1);
         let path = &PATHS[chosen];
-        egui::Window::new("学習パス").open(&mut open).default_width(if is_tree(path) { 760.0 } else { 600.0 }).default_height(720.0).vscroll(true).show(ctx, |ui| {
+        // a map is wide: open the window as wide as the screen allows (up to 1200 px) so that it needs no sideways scroll
+        let tree_width = (ctx.content_rect().width() * 0.85).clamp(640.0, 1200.0);
+        egui::Window::new("学習パス").open(&mut open).default_width(if is_tree(path) { tree_width } else { 600.0 }).default_height((ctx.content_rect().height() * 0.92).max(480.0)).vscroll(true).show(ctx, |ui| {
             if PATHS.len() > 1 {
                 ui.horizontal_wrapped(|ui| {
                     for (k, p) in PATHS.iter().enumerate() {
@@ -584,16 +588,32 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
     const GY: f32 = 26.0;
     let all: Vec<&'static Item> = items(path).collect();
     let levels: Vec<usize> = all.iter().map(|i| level(path, i, 0)).collect();
-    let rows = levels.iter().max().copied().unwrap_or(0) + 1;
-    let mut in_row = vec![0usize; rows];
-    let slot: Vec<usize> = levels.iter().map(|&l| { in_row[l] += 1; in_row[l] - 1 }).collect();
-    let widest = in_row.iter().max().copied().unwrap_or(1);
+    let rows_of_level = levels.iter().max().copied().unwrap_or(0) + 1;
+    // a level with more boxes than fit in the window's width goes on to the next row, so the map never needs a sideways scroll
+    let max_cols = (((ui.available_width() + GX) / (W + GX)).floor() as usize).max(1);
+    let mut in_level = vec![0usize; rows_of_level];
+    let index_in_level: Vec<usize> = levels.iter().map(|&l| { in_level[l] += 1; in_level[l] - 1 }).collect();
+    let mut first_row = vec![0usize; rows_of_level];
+    let mut rows = 0;
+    for l in 0..rows_of_level {
+        first_row[l] = rows;
+        rows += in_level[l].div_ceil(max_cols).max(1);
+    }
+    let cols_in_row = |row: usize| -> usize {
+        let l = (0..rows_of_level).rev().find(|&l| first_row[l] <= row).unwrap_or(0);
+        let r = row - first_row[l];
+        (in_level[l] - r * max_cols).min(max_cols)
+    };
+    let widest = (0..rows).map(cols_in_row).max().unwrap_or(1);
     let size = egui::vec2(widest as f32 * (W + GX) - GX, rows as f32 * (H + GY) - GY);
     let (area, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let boxes: Vec<egui::Rect> = (0..all.len())
         .map(|k| {
-            let left = (widest - in_row[levels[k]]) as f32 * (W + GX) / 2.0 + slot[k] as f32 * (W + GX);
-            egui::Rect::from_min_size(area.min + egui::vec2(left, levels[k] as f32 * (H + GY)), egui::vec2(W, H))
+            let l = levels[k];
+            let row = first_row[l] + index_in_level[k] / max_cols;
+            let col = index_in_level[k] % max_cols;
+            let left = (widest - cols_in_row(row)) as f32 * (W + GX) / 2.0 + col as f32 * (W + GX);
+            egui::Rect::from_min_size(area.min + egui::vec2(left, row as f32 * (H + GY)), egui::vec2(W, H))
         })
         .collect();
     let line = ui.visuals().widgets.noninteractive.fg_stroke.color;

@@ -260,14 +260,54 @@ impl eframe::App for App {
                     }
                     ui.separator();
                     ui.label("サンプル回路を動かしながら学べます (✔ = 完了)");
+                    // the lessons are many: one submenu per learning path, one per stage of it (the lessons no path lists come last)
                     let ids = schematic::lesson_ids();
-                    for (i, t) in schematic::lesson_titles().into_iter().enumerate() {
+                    let titles = schematic::lesson_titles();
+                    let mut listed = vec![false; ids.len()];
+                    let mut start = None;
+                    let mut lesson_button = |ui: &mut egui::Ui, i: usize| {
                         let mark = if self.progress.is_done(ids[i]) { "✔ " } else { "　 " };
-                        if ui.button(format!("{mark}{t}")).clicked() {
-                            self.mode = Mode::Schematic;
-                            self.sch.start_lesson(i);
+                        if ui.button(format!("{mark}{}", titles[i])).clicked() {
+                            start = Some(i);
                             ui.close();
                         }
+                    };
+                    for path in learn::PATHS {
+                        ui.menu_button(path.title, |ui| {
+                            for stage in path.stages {
+                                let lessons: Vec<usize> = stage.items.iter().filter_map(|it| match it.kind { learn::Kind::Lesson(id) => ids.iter().position(|x| *x == id), _ => None }).collect();
+                                if lessons.is_empty() {
+                                    continue;
+                                }
+                                let done = lessons.iter().filter(|&&i| self.progress.is_done(ids[i])).count();
+                                ui.menu_button(format!("{} ({done}/{})", stage.name, lessons.len()), |ui| {
+                                    for &i in &lessons {
+                                        lesson_button(ui, i);
+                                    }
+                                });
+                            }
+                        });
+                        for stage in path.stages {
+                            for it in stage.items {
+                                if let learn::Kind::Lesson(id) = it.kind
+                                    && let Some(i) = ids.iter().position(|x| *x == id)
+                                {
+                                    listed[i] = true;
+                                }
+                            }
+                        }
+                    }
+                    let others: Vec<usize> = (0..ids.len()).filter(|&i| !listed[i]).collect();
+                    if !others.is_empty() {
+                        ui.menu_button("そのほかのレッスン", |ui| {
+                            for &i in &others {
+                                lesson_button(ui, i);
+                            }
+                        });
+                    }
+                    if let Some(i) = start {
+                        self.mode = Mode::Schematic;
+                        self.sch.start_lesson(i);
                     }
                     ui.separator();
                     if ui.button("値の決め方 (計算ツール)…").on_hover_text("LEDの抵抗・分圧・フィルタ・レギュレータ・トランジスタスイッチの値を、計算と注意点・故障パターンつきで決めます。部品の値は、勘ではなく計算で決められます。入力を変えると、結果・計算のしかた・注意点・壊れ方がすぐ下に出ます").clicked() {
@@ -276,36 +316,38 @@ impl eframe::App for App {
                         ui.close();
                     }
                     ui.separator();
-                    let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
-                    if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
-                        self.start_board_lesson(0);
-                        ui.close();
-                    }
-                    let copper_mark = if self.progress.is_done(board_editor::lesson::COPPER_ID) { "✔ " } else { "　 " };
-                    if ui.button(format!("{copper_mark}{}", board_editor::lesson::COPPER_TITLE)).on_hover_text("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します").clicked() {
-                        self.start_board_lesson(1);
-                        ui.close();
-                    }
-                    let fix_mark = if self.progress.is_done(board_editor::lesson::FIX_ID) { "✔ " } else { "　 " };
-                    if ui.button(format!("{fix_mark}{}", board_editor::lesson::FIX_TITLE)).on_hover_text("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)").clicked() {
-                        self.start_board_lesson(2);
-                        ui.close();
-                    }
-                    let arduino_mark = if self.progress.is_done(board_editor::lesson::ARDUINO_ID) { "✔ " } else { "　 " };
-                    if ui.button(format!("{arduino_mark}{}", board_editor::lesson::ARDUINO_TITLE)).on_hover_text("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します").clicked() {
-                        self.start_board_lesson(3);
-                        ui.close();
-                    }
-                    let usb_mark = if self.progress.is_done(board_editor::lesson::USB_ID) { "✔ " } else { "　 " };
-                    if ui.button(format!("{usb_mark}{}", board_editor::lesson::USB_TITLE)).on_hover_text("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します").clicked() {
-                        self.start_board_lesson(4);
-                        ui.close();
-                    }
-                    let mega_mark = if self.progress.is_done(board_editor::lesson::MEGA_ID) { "✔ " } else { "　 " };
-                    if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます").clicked() {
-                        self.start_board_lesson(5);
-                        ui.close();
-                    }
+                    ui.menu_button("基板のレッスン", |ui| {
+                        let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
+                        if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します").clicked() {
+                            self.start_board_lesson(0);
+                            ui.close();
+                        }
+                        let copper_mark = if self.progress.is_done(board_editor::lesson::COPPER_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{copper_mark}{}", board_editor::lesson::COPPER_TITLE)).on_hover_text("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します").clicked() {
+                            self.start_board_lesson(1);
+                            ui.close();
+                        }
+                        let fix_mark = if self.progress.is_done(board_editor::lesson::FIX_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{fix_mark}{}", board_editor::lesson::FIX_TITLE)).on_hover_text("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)").clicked() {
+                            self.start_board_lesson(2);
+                            ui.close();
+                        }
+                        let arduino_mark = if self.progress.is_done(board_editor::lesson::ARDUINO_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{arduino_mark}{}", board_editor::lesson::ARDUINO_TITLE)).on_hover_text("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します").clicked() {
+                            self.start_board_lesson(3);
+                            ui.close();
+                        }
+                        let usb_mark = if self.progress.is_done(board_editor::lesson::USB_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{usb_mark}{}", board_editor::lesson::USB_TITLE)).on_hover_text("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します").clicked() {
+                            self.start_board_lesson(4);
+                            ui.close();
+                        }
+                        let mega_mark = if self.progress.is_done(board_editor::lesson::MEGA_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます").clicked() {
+                            self.start_board_lesson(5);
+                            ui.close();
+                        }
+                    });
                 });
                 ui.menu_button("編集", |ui| {
                     if ui.button("元に戻す (Ctrl+Z)").on_hover_text("直前の操作を取り消します").clicked() {
