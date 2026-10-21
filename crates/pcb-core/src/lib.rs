@@ -9,6 +9,7 @@ pub mod assembly;
 pub mod autoplace;
 pub mod autoroute;
 pub mod body;
+mod connectors;
 pub mod bridge;
 pub mod current;
 pub mod diffpair;

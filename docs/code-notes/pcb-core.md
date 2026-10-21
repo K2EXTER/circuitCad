@@ -172,7 +172,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - 最後の手段だけが自由な角度。
 - `netlist.rs` 回路図→基板の取込 / `parts.rs` `place_part` / `footprints.rs`・`package.rs` フットプリント
 - `fab.rs` 発注先プリセット(`PRESETS`)と発注前チェック(`preflight`)。`preflight` には料金の枠(`FabPreset.cheap_size`、JLCPCB・PCBWay は 100×100 mm。超えると Info、ブロックしない)と配線の電圧降下(`net_currents` を入れたネットで最悪のパッドが `MAX_DROP_V`=0.1 V 超なら Warn)も入る。回路図と基板の食い違いは `schematic_sync_check`(アプリが `SchDiff` から作って先頭に入れる。ネットの違い・部品の追加/削除は Error、値・形だけなら Warn) / `gerber_view.rs` 書き出したガーバー・ドリルを読み戻して絵にする(`Preview`)
-- 自動配置の最後の仕上げ `orient_connectors`(`autoplace.rs`): 一直線に3つ以上パッドが並ぶ部品(ピンヘッダ)を、向き4通り×1mm刻みの±12mmの位置で試し、**種類の違うネットの未配線がたがいに交差する数**(`ratsnest::crossings`。GNDはベタが引き受けるので除く)が最小になる所へ置く。
+- 自動配置の最後の仕上げ `orient_connectors`(`connectors.rs`。`autoplace` が呼ぶ): 一直線に3つ以上パッドが並ぶ部品(ピンヘッダ)を、向き4通り×1mm刻みの±12mmの位置で試し、**種類の違うネットの未配線がたがいに交差する数**(`ratsnest::crossings`。GNDはベタが引き受けるので除く)が最小になる所へ置く。
   - 条件: 未配線の長さが5%+1mm以内・ほかの部品に近づきすぎない(`crowded`)・配置の範囲の中・DRC違反が増えない(増えたら全部元に戻す)。
   - ヘッダのピンの並びは回路図で決まっているので、効くのは向きと位置だけ。
   - 未配線が250本を超える基板では何もしない(`MAX_TANGLE_WIRES`。試すたびに交差を数え直すため)。
