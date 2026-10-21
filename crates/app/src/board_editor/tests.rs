@@ -1331,3 +1331,30 @@ fn the_usb_board_lesson_walks_from_import_to_the_order_window() {
     assert_eq!(e.lesson_progress(), 8);
     assert_eq!(e.finished_board_lesson(), Some("board_usb"));
 }
+
+/// Writes the Mega board as far as the autorouter gets (`docs/examples/work_in_progress/`): the parts as the autoplacer puts them, the
+/// GND pour, then the auto routing with the 0.1 mm grid. The open nets are left for the learner to route by hand in the board editor.
+/// `cargo test -p app write_mega_open_board -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn write_mega_open_board() {
+    let text = include_str!("../../../../docs/examples/arduino_mega_usb.schjson");
+    let mut sch = crate::schematic::SchEditor::default();
+    assert!(sch.load_sample(text));
+    let mut e = BoardEditor::default();
+    e.import_from_schematic(&sch);
+    e.board.name = "arduino_mega_usb".into();
+    e.ground_pour();
+    e.autoplace();
+    e.grid = 0.1;
+    e.autoroute_now(None);
+    e.run_drc();
+    let open = ratsnest(&e.board);
+    let mut nets: Vec<String> = open.iter().map(|w| w.net.clone()).collect();
+    nets.sort();
+    nets.dedup();
+    println!("unrouted {} connections in {} nets: {nets:?}; vias {}; drc {}", open.len(), nets.len(), e.board.vias.len(), e.violations.len());
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/work_in_progress");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("arduino_mega_usb_open.pcbjson"), serde_json::to_string_pretty(&e.board).unwrap()).unwrap();
+}
