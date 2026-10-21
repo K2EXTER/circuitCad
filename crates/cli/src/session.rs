@@ -33,6 +33,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic]
                                         starts from the DC operating point (a capacitor starts charged);
                                         add 'uic' to start from zero instead (step responses, oscillators)
+                                        'ratings' / 'warnings' (second half of the run): resistor rms power, LED peak current,
+                                        electrolytic ripple current, op-amp inputs that stay apart (saturation)
  Design help
   calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no
                                         arguments lists them with their inputs; the answer has the value, steps, cautions

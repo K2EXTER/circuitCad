@@ -434,7 +434,90 @@ impl Session {
                 (s.name.clone(), o)
             })
             .collect();
-        Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
+        let (ratings, notes) = self.tran_notes(&r);
+        Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).collect::<Vec<_>>()})))
+    }
+
+    /// The `tran` counterpart of `dc_notes`, over the second half of the run (the start-up is left out):
+    /// resistors by rms power against the package, LEDs by peak current, electrolytic capacitors by ripple current
+    /// (the app's `ripple_reports`), and op-amps whose inputs stay apart for more than a fifth of the time
+    /// (saturated output, no feedback, or a comparator / oscillator, which the message says to ignore).
+    fn tran_notes(&self, r: &sim_core::TranResult) -> (Vec<Value>, Vec<String>) {
+        let n = r.time.len();
+        if n < 4 {
+            return (vec![], vec![]);
+        }
+        let start = n / 2;
+        // time-weighted mean of f(i) over the second half (the solver's steps are not equal)
+        let tmean = |f: &dyn Fn(usize) -> f64| -> f64 {
+            let (mut sum, mut span) = (0.0, 0.0);
+            for i in start..n - 1 {
+                let dt = r.time[i + 1] - r.time[i];
+                sum += f(i) * dt;
+                span += dt;
+            }
+            if span > 0.0 { sum / span } else { f(n - 1) }
+        };
+        let signal = |name: String| r.signals.iter().find(|s| s.name.eq_ignore_ascii_case(&name)).map(|s| s.values.clone());
+        let nets = sch_core::extract(&self.sch);
+        let net_of = |refdes: &str, pin: &str| nets.iter().find(|x| x.pins.iter().any(|q| q.refdes == refdes && q.pin == pin)).map(|x| x.name.clone());
+        let mut ratings: Vec<Value> = vec![];
+        let mut push = |refdes: &str, over: bool, message: String, hint: &str| {
+            ratings.push(json!({"ref": refdes, "level": if over { "over" } else { "caution" }, "message": message, "hint": hint}));
+        };
+        let mut notes = vec![];
+        for c in &self.sch.components {
+            match c.kind {
+                Kind::Resistor => {
+                    let (Some(i), Some(ohm), Some(limit)) = (signal(format!("I({})", c.refdes)), sim_core::parse_value(&c.value), sim_core::package_power_limit(&c.footprint_name())) else { continue };
+                    let p = tmean(&|k| i[k] * i[k]) * ohm;
+                    if p > 0.5 * limit {
+                        push(
+                            &c.refdes,
+                            p > limit,
+                            format!("{} ({}) の消費電力 (実効値) は {:.0} mW で、この形の目安 {:.0} mW に対して{}", c.refdes, c.footprint_name(), p * 1e3, limit * 1e3, if p > limit { "目安を超えています" } else { "余裕が少ないです" }),
+                            "抵抗値を大きくして電流を減らすか、大きい形 (1206 / 2512 や 1/2W 品) に変えます。実際の定格はデータシートで確認してください。",
+                        );
+                    }
+                }
+                Kind::Led => {
+                    let Some(i) = signal(format!("I({})", c.refdes)) else { continue };
+                    let peak = i.iter().cloned().fold(0.0, f64::max);
+                    if peak > 0.02 {
+                        push(&c.refdes, peak > 0.03, format!("{} の電流が最大 {:.1} mA になっています。一般的な LED は 20 mA 前後が上限です", c.refdes, peak * 1e3), "電流制限抵抗を大きくします。R = (電源電圧 − LED の順電圧) ÷ 目標電流 で決めます。");
+                    }
+                }
+                _ => {}
+            }
+            let Some(sym) = &c.custom else { continue };
+            let pin = |name: &str| sym.pins.iter().find(|p| p.name.eq_ignore_ascii_case(name)).map(|p| p.number.clone());
+            let (Some(pp), Some(pn), Some(po)) = (pin("IN+"), pin("IN-"), pin("OUT")) else { continue };
+            // GND has no V(GND) signal: it is 0 V
+            let volts = |p: &str| -> Option<Vec<f64>> {
+                let net = net_of(&c.refdes, p)?;
+                if net.eq_ignore_ascii_case("GND") { Some(vec![0.0; n]) } else { signal(format!("V({net})")) }
+            };
+            let (Some(vp), Some(vn)) = (volts(&pp), volts(&pn)) else { continue };
+            let apart = tmean(&|k| if (vp[k] - vn[k]).abs() > 0.01 { 1.0 } else { 0.0 });
+            if apart > 0.2 {
+                let worst = (start..n).map(|k| (vp[k] - vn[k]).abs()).fold(0.0, f64::max);
+                let out = volts(&po).map(|v| format!(" (OUT {:.3} V at the end)", v[n - 1])).unwrap_or_default();
+                notes.push(format!(
+                    "{}: IN+ and IN- differ by more than 10 mV for {:.0}% of the second half of the run (up to {worst:.3} V){out}. With negative feedback they match, so the output is probably saturated (an op-amp output stops short of the supply: see 'part {}') or there is no feedback. Ignore this if the part is meant to be a comparator or an oscillator.",
+                    c.refdes, apart * 100.0, sym.name
+                ));
+            }
+        }
+        for rp in sim_core::ripple_reports(&self.sch, r, 27.0) {
+            if let Some(level) = rp.level {
+                push(&rp.refdes, level == sim_core::RatingLevel::Over, rp.message(), rp.hint());
+            }
+        }
+        if !ratings.is_empty() {
+            let over = ratings.iter().filter(|v| v["level"] == "over").count();
+            notes.insert(0, format!("{} rating issue(s), {over} over, in the second half of the run: see 'ratings' (typical package limits, not the data sheet)", ratings.len()));
+        }
+        (ratings, notes)
     }
 }
 

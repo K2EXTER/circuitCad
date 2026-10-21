@@ -528,3 +528,37 @@ fn dc_reports_ratings_like_the_app() {
     let (a, _) = run("new\nadd V 5 as=V1\nadd R 100k as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\nerc\ndc\n");
     assert!(last(&a, "dc")["ratings"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn tran_warns_about_a_saturated_op_amp_and_stays_quiet_in_the_linear_range() {
+    let amp = |vin: &str| {
+        format!(
+            "new\nadd V 5 as=V1\nadd V {vin} as=VIN\nadd LM358 as=U1\nadd R 10k as=RF\nadd R 1k as=RG\n\
+             net VCC V1.+ U1.V+\nnet IN VIN.+ U1.IN+\nnet FB U1.IN- RF.1 RG.1\nnet OUT U1.OUT RF.2\nnet GND V1.- VIN.- RG.2 U1.V-\ntran 2m 20u samples=2 probe=V(OUT)\n"
+        )
+    };
+    let (a, ok) = run(&amp("0.5"));
+    assert!(ok, "{a:?}");
+    let t = last(&a, "tran");
+    assert!(t["warnings"].as_array().unwrap().iter().any(|m| m.as_str().unwrap().starts_with("U1: IN+ and IN- differ")), "{t}");
+    let (a, _) = run(&amp("0.2"));
+    assert!(last(&a, "tran")["warnings"].as_array().unwrap().is_empty(), "{}", last(&a, "tran"));
+}
+
+#[test]
+fn tran_reports_overloaded_parts_and_ripple_like_the_app() {
+    // 12 V through 100 ohm into an LED: 90 mA in the LED, 0.8 W in a 0805 resistor
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 100 as=R1\nadd LED as=D1\nnet VCC V1.+ R1.1\nnet A R1.2 D1.A\nnet GND V1.- D1.K\ntran 1m 10u samples=2\n");
+    assert!(ok, "{a:?}");
+    let r = last(&a, "tran")["ratings"].as_array().unwrap().clone();
+    assert!(r.iter().any(|i| i["ref"] == "R1" && i["level"] == "over"), "{r:?}");
+    assert!(r.iter().any(|i| i["ref"] == "D1" && i["level"] == "over"), "{r:?}");
+    // a 100 uF electrolytic capacitor fed 4 V (peak) at 1 kHz through 10 ohm carries about 270 mA rms: past its rated ripple current
+    let (a, ok) = run("new\nadd V \"SIN(5 4 1k)\" as=V1\nadd R 10 as=R1\nadd CE_100u_16V as=C1\nnet IN V1.+ R1.1\nnet CAP R1.2 C1.1\nnet GND V1.- C1.2\ntran 10m 20u samples=2\n");
+    assert!(ok, "{a:?}");
+    let r = last(&a, "tran")["ratings"].as_array().unwrap().clone();
+    assert!(r.iter().any(|i| i["ref"] == "C1" && i["message"].as_str().unwrap().contains("リップル")), "{r:?}");
+    // nothing to say about a calm circuit
+    let (a, _) = run("new\nadd V 5 as=V1\nadd R 100k as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\ntran 1m 10u samples=2\n");
+    assert!(last(&a, "tran")["ratings"].as_array().unwrap().is_empty());
+}
