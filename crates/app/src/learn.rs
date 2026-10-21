@@ -293,7 +293,7 @@ const MEGA_PATH: LearningPath = LearningPath {
         Stage {
             name: "2. 100 ピンの基板",
             about: "0.5mm ピッチの 100 ピンの IC は、自動配線が通せない線が残ります。残った線を、手で仕上げます",
-            items: &[plan("board_mega", "基板を手で仕上げる (自動配線で通らない線)", "自動配置と自動配線のあと、18 本の線が残った基板を、部品の置き直し・配線のやり直し・ビアで、手で通しきる", &["board_arduino"], None)],
+            items: &[Item { id: "board_mega", title: "基板を手で仕上げる (自動配線で通らない線)", about: "自動配置と自動配線のあと、18 本のネットが残った基板を、手で引く・ビアで渡す・邪魔な線を引き直す、で仕上げる。1 本通すごとに DRC を確かめる", kind: Kind::Board(5), build: false, requires: Some(&["board_arduino"]), real: None }],
         },
         Stage {
             name: "3. 作って動かす",
@@ -784,7 +784,7 @@ mod tests {
         }
         assert_eq!(recommended(mega, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["adc_input"]);
         // the planned items hold nothing back and are never recommended
-        assert!(items(mega).filter(|i| i.kind == Kind::Planned).count() >= 2);
+        assert!(items(mega).filter(|i| i.kind == Kind::Planned).count() >= 1);
         assert!(requirements(mega, find_item("ch340g").unwrap()).iter().any(|i| i.id == "serial"));
     }
 

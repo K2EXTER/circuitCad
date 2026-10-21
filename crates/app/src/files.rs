@@ -122,9 +122,19 @@ impl App {
     }
 
     /// Opens a board lesson: 0 = schematic to order files (with its sample circuit), 1 = copper width and voltage drop,
-    /// 2 = the pre-order check challenge (each with its sample project), 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson.
+    /// 2 = the pre-order check challenge (each with its sample project), 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson, 5 = the Mega board to finish by hand.
     pub(super) fn start_board_lesson(&mut self, which: usize) {
         self.mode = Mode::Board;
+        if which == 5 {
+            match serde_json::from_str::<pcb_core::Board>(board_editor::BoardEditor::mega_lesson_board()) {
+                Ok(b) if self.sch.load_sample(board_editor::BoardEditor::mega_lesson_circuit()) => {
+                    self.board_ed.adopt(b, None);
+                    self.board_ed.start_mega_lesson();
+                }
+                _ => self.board_ed.status = "レッスンの基板を読み込めませんでした".into(),
+            }
+            return;
+        }
         if which == 4 {
             if !self.sch.load_sample(board_editor::BoardEditor::usb_lesson_circuit()) {
                 self.board_ed.status = "レッスンの回路を読み込めませんでした".into();

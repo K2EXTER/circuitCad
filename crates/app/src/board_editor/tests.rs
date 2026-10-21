@@ -1358,3 +1358,34 @@ fn write_mega_open_board() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("arduino_mega_usb_open.pcbjson"), serde_json::to_string_pretty(&e.board).unwrap()).unwrap();
 }
+
+#[test]
+fn the_mega_board_lesson_starts_half_routed_and_ticks_when_a_net_is_routed_and_drc_stays_clean() {
+    let mut sch = crate::schematic::SchEditor::default();
+    assert!(sch.load_sample(BoardEditor::mega_lesson_circuit()));
+    let mut e = BoardEditor::default();
+    e.adopt(serde_json::from_str(BoardEditor::mega_lesson_board()).unwrap(), None);
+    e.start_mega_lesson();
+    assert_eq!(e.lesson_progress(), 0);
+    // 18 nets are open, but the DRC is clean
+    let mut open: Vec<String> = ratsnest(&e.board).iter().map(|w| w.net.clone()).collect();
+    open.sort();
+    open.dedup();
+    assert_eq!(open.len(), 18);
+    e.run_drc();
+    assert!(e.violations.is_empty());
+    assert_eq!(e.lesson_progress(), 1);
+    // the hand work cannot be scripted here (a straight line over the board shorts other nets): stand in for "one net is routed" by taking
+    // one open net out of the board, which is what the lesson counts
+    let all = ratsnest(&e.board);
+    let net = all[0].net.clone();
+    e.checkpoint();
+    for p in e.board.pads.iter_mut().filter(|p| p.net == net) {
+        p.net.clear();
+    }
+    assert_eq!(e.lesson_progress(), 2, "one net less is open");
+    e.run_drc();
+    let clean = e.violations.is_empty();
+    assert_eq!(e.lesson_progress(), if clean { 3 } else { 2 }, "the last step needs a clean DRC after the work ({} violations)", e.violations.len());
+    assert_eq!(e.finished_board_lesson().is_some(), clean);
+}

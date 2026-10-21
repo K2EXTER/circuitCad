@@ -28,9 +28,19 @@ pub const USB_TITLE: &str = "基板編5. USB の配線 (差動ペア)";
 pub const USB_ID: &str = "board_usb";
 const USB_CIRCUIT: &str = include_str!("../../../../docs/examples/usb_device_input.schjson");
 
+/// The sixth lesson: the Arduino Mega 2560 compatible board as far as the autorouter gets (18 nets still open): finish it by hand
+/// (`docs/examples/work_in_progress/`). The 100-pin chip with a 0.5 mm pitch is the reason the autorouter stops.
+pub const MEGA_TITLE: &str = "基板編6. 100 ピンの基板を手で仕上げる (Arduino Mega 互換)";
+pub const MEGA_ID: &str = "board_mega";
+const MEGA_CIRCUIT: &str = include_str!("../../../../docs/examples/arduino_mega_usb.schjson");
+const MEGA_BOARD: &str = include_str!("../../../../docs/examples/work_in_progress/arduino_mega_usb_open.pcbjson");
+/// Nets still open on the board of the sixth lesson when it starts.
+const MEGA_OPEN_AT_START: usize = 18;
+
 pub(super) struct BoardLesson {
     /// 0 = from a schematic to the files to order, 1 = the copper lesson, 2 = the pre-order check challenge,
-    /// 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson.
+    /// 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson,
+    /// 5 = finishing the Mega board by hand.
     which: usize,
     done: Vec<bool>,
 }
@@ -55,6 +65,29 @@ fn routed(e: &BoardEditor) -> bool {
 
 fn drc_clean(e: &BoardEditor) -> bool {
     routed(e) && e.drc_ran && e.violations.is_empty()
+}
+
+/// Number of nets that still have an unrouted connection.
+fn open_nets(e: &BoardEditor) -> usize {
+    let mut nets: Vec<String> = ratsnest(&e.board).iter().map(|w| w.net.clone()).collect();
+    nets.sort();
+    nets.dedup();
+    nets.len()
+}
+
+/// The Mega board as it was given: DRC has been run, it is clean, and nets are still open (the DRC does not look for those).
+fn mega_checked_as_given(e: &BoardEditor) -> bool {
+    parts_on_board(e) && e.drc_ran && e.violations.is_empty() && open_nets(e) >= MEGA_OPEN_AT_START
+}
+
+/// At least one of the open nets has been routed by hand.
+fn mega_one_routed(e: &BoardEditor) -> bool {
+    parts_on_board(e) && open_nets(e) < MEGA_OPEN_AT_START
+}
+
+/// DRC run again after the hand work, and still clean.
+fn mega_still_clean(e: &BoardEditor) -> bool {
+    mega_one_routed(e) && e.drc_ran && e.violations.is_empty()
 }
 
 fn order_opened(e: &BoardEditor) -> bool {
@@ -284,6 +317,24 @@ const USB_STEPS: &[Step] = &[
     },
 ];
 
+const MEGA_STEPS: &[Step] = &[
+    Step {
+        title: "いまの基板の状態を確かめる",
+        detail: "この基板は、自動配置と自動配線で、通るところまで配線したものです。左パネルの「DRC を実行」を押すと、違反は 0 件です。でも、基板の上には黄色の線 (未配線) が残っています。左パネルの「未配線」で数えると、18 本のネットが残っています。DRC は「引いた配線がルールを守っているか」を調べるもので、「引き忘れ」は調べません。引き忘れは、未配線の表示と、発注前チェックで見つけます。",
+        done: mega_checked_as_given,
+    },
+    Step {
+        title: "未配線を 1 本、手で通す",
+        detail: "黄色の線の短いものから選びます (DTR・MOSI・PA0 など)。「配線」ツールで、パッドからパッドへクリックして引きます。通れないときは、「ビア」ツールで裏面へ渡します。邪魔をしている別の線は、一度消して (その線を選んで Delete)、先に通したい線を引いてから、消した線を引き直します (自動配線の「選んだネットだけ」も使えます)。ヘッダなどの部品を少し動かすだけで通ることもあります。0.5mm ピッチの IC の足の間は狭いので、拡大して、グリッドを 0.1mm や 0.05mm に細かくして引くと、置きやすくなります。1 本通ると、次に進めます。",
+        done: mega_one_routed,
+    },
+    Step {
+        title: "DRC を、もう一度実行して、0 件のままか確かめる",
+        detail: "手で配線を引いたり、部品を動かしたりすると、思わぬ所で線どうしが近づきすぎることがあります。「DRC を実行」を押して、違反が 0 件のままか確かめます。違反が出たら、一覧をクリックしてその場所を直します。そのあとも、残りの未配線を少しずつ通していけます (すべて通すのは、時間のかかる作業です。1 本通すごとに DRC を確かめる習慣をつけましょう)。",
+        done: mega_still_clean,
+    },
+];
+
 const STEPS: &[Step] = &[
     Step {
         title: "回路図から取り込む",
@@ -374,12 +425,30 @@ impl BoardEditor {
         self.status = format!("チャレンジ「{FIX_TITLE}」を始めました。右の案内に沿って、発注前チェックの赤と黄色をなくしましょう");
     }
 
+    /// The sample circuit of the Mega lesson.
+    pub fn mega_lesson_circuit() -> &'static str {
+        MEGA_CIRCUIT
+    }
+
+    /// The half-routed board of the Mega lesson (JSON).
+    pub fn mega_lesson_board() -> &'static str {
+        MEGA_BOARD
+    }
+
+    /// Starts the Mega lesson on the board that was just adopted (the app loads the circuit and the board first).
+    pub fn start_mega_lesson(&mut self) {
+        self.drc_ran = false;
+        self.lesson = Some(BoardLesson { which: 5, done: vec![false; MEGA_STEPS.len()] });
+        self.status = format!("レッスン「{MEGA_TITLE}」を始めました。右の案内に沿って操作してみましょう");
+    }
+
     fn lesson_steps(&self) -> &'static [Step] {
         match self.lesson.as_ref().map(|l| l.which) {
             Some(1) => COPPER_STEPS,
             Some(2) => FIX_STEPS,
             Some(3) => ARDUINO_STEPS,
             Some(4) => USB_STEPS,
+            Some(5) => MEGA_STEPS,
             _ => STEPS,
         }
     }
@@ -397,6 +466,7 @@ impl BoardEditor {
             2 => FIX_ID,
             3 => ARDUINO_ID,
             4 => USB_ID,
+            5 => MEGA_ID,
             _ => "board",
         })
     }
@@ -434,11 +504,14 @@ impl BoardEditor {
         let fix = l.which == 2;
         let arduino = l.which == 3;
         let usb = l.which == 4;
+        let mega = l.which == 5;
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
-            ui.label(if usb {
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+            ui.label(if mega {
+                "ATmega2560 (100 ピン、0.5mm ピッチ) の基板です。自動配線は、通せる所まで配線して、18 本のネットを残しました。残りを、手で引く・ビアで渡す・邪魔な線を引き直す・部品を動かす、で仕上げる練習です"
+            } else if usb {
                 "USB の D+ と D− は、2 本で 1 つの信号を運ぶ「差動ペア」です。並べて、同じ長さで、短く引きます。差動ペアの機能で、2 本を並べて配線し、長さの差を確かめます"
             } else if arduino {
                 "ATmega328P の Arduino 互換ボードを基板にします。自動配置は叩き台なので、水晶とバイパスコンデンサを、人が正しい場所へ寄せます。そのあと配線し、通らない線が残ったときの直し方も身につけます"
@@ -470,7 +543,7 @@ impl BoardEditor {
                 }
             }
             ui.separator();
-            if !copper && !fix && !arduino && !usb {
+            if !copper && !fix && !arduino && !usb && !mega {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
@@ -492,6 +565,10 @@ impl BoardEditor {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "チャレンジ達成!");
                 ui.label("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。");
+            } else if cur.is_none() && mega {
+                ui.separator();
+                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.label("自動配線が通せなかった線は、人が仕上げます。足の間が狭い IC では、「先に通したい線から引く」「邪魔な線を一度消して引き直す」「ビアで裏面へ渡す」「部品の位置を直す」の順に考えます。発注の前には、未配線が 0 本で、DRC が 0 件であることを、必ず確かめてください (未配線のまま発注すると、基板は動きません)。");
             } else if cur.is_none() && usb {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
