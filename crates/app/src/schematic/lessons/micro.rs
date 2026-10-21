@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors.
 
 use super::conditions::*;
 use super::*;
@@ -656,6 +656,53 @@ pub(super) const TEMP_SENSORS: Lesson = Lesson {
             title: "100℃ に戻し、R3 を 1k にして、サーミスタの感度を上げる",
             detail: "「回路の温度」を 100 に戻し、R3 を 10k から 1k に変えて「DC動作点を解析」。100℃ の VNTC は、約 0.33V から約 2.06V に上がり、感度は約 9mV/℃ から約 34mV/℃ に上がります (測りたい温度のあたりのサーミスタの抵抗 (約 680Ω) に近い抵抗を使ったため)。代わりに、27℃ のあたりでは、感度が下がります (約 55mV/℃ から約 20mV/℃)。1 つの抵抗では、広い温度の範囲で、感度を高く保つことはできません。測りたい温度の範囲に合わせて、R3 を選びます。",
             done: thermistor_divider_tuned,
+        },
+    ],
+};
+
+pub(super) const LIGHT_SENSORS: Lesson = Lesson {
+    id: "light_sensors",
+    title: "41. 光センサ (LDR とフォトダイオード)",
+    goal: "光を測る 2 つの部品を、光の強さを変えて比べます。LDR (CdS セル) は、明るいほど抵抗が下がる部品で、電圧の変わり方が直線でなく、暗いと 1MΩ に近くなります。フォトダイオードは、光に比例した電流を出しますが、強い光で飽和します。分圧の抵抗を選ぶ考え方を確かめます",
+    summary: "LDR (GL5528) は、光が強いほど抵抗が下がります (10 ルクスで約 15kΩ、100 ルクスで約 4kΩ、暗いと 1MΩ)。この回路は、LDR を、10kΩ と 5V の間に直列につなぎ、真ん中の電圧 (VLDR) を読みます。この回路では、光の強さを、電圧源 V2 で表します (1V = 100 ルクス)。V2 = 0.5V (50 ルクス) で約 1.82V、暗い (0V) と約 4.95V、5V (500 ルクス) で約 0.63V です。光が 10 倍になっても、電圧は 10 分の 1 にならず、変わり方は直線でなく、ゆるやかです (対数に近い)。フォトダイオード (BPW34) は、光が当たると、光の強さに比例した電流を出します (1 mW/cm² で約 75µA)。22kΩ を通して 5V に引くと、出力 VPD = 5V − 電流 × 22kΩ になり、光が 2 倍になると、電流も 2 倍 (150µA) で、VPD は 3.35V から 1.70V に下がります。直線で、LDR よりも、光の強さが正確に分かります。ただし、光が強すぎて、電流 × 抵抗が 5V を超えようとすると、VPD が 0V 付近で頭打ち (飽和) になります。そうなったら、抵抗を小さくします。LDR は安くて簡単ですが、応答が遅く (数十 ms)、個体差も大きいので、「明るい・暗い」の判定に向きます。フォトダイオードは、速く、直線で、光の強さを測るのに向きます。",
+    limits: &[
+        "光の強さは、ここでは電圧源で表しています (LDR は 1V = 100 ルクス、フォトダイオードは 1V = 1mW/cm²)。実際の光の単位 (ルクス、放射照度) は、光の色 (波長) で、センサの反応が変わります。",
+        "LDR は、「10 ルクスで 15kΩ、傾き 0.6、最大 1MΩ」という簡単な式です。実物は、個体差 (±30% 以上)、温度の影響、明るさに慣れる遅れ (数百 ms〜数秒) があります。",
+        "フォトダイオードのモデルは、光に比例した電流だけです。飽和したときの電圧は、実物では 0V より少し低い値 (順方向電圧) で止まり、ここの −0.35V のような負の値はこのモデルの動きです。暗電流 (光がなくても流れる微小な電流) は含みません。",
+        "光センサの出力を ADC (マイコンの A/D 変換) で読むときの、ノイズと、蛍光灯のちらつき (100/120Hz) は含みません。ちらつきを避けるには、コンデンサでならすか、平均をとります。",
+    ],
+    real: &[
+        "まずデータシートを見よう: LDR (GL5528 など) のデータシートで、「明るいときと暗いときの抵抗値」「応答時間」「最大電圧・電力」を探します。フォトダイオード (BPW34 など) は、「光電流 (照度ごと)」「暗電流」「分光感度 (どの色の光に強いか)」を探します。",
+        "用意するもの: LDR、抵抗 10kΩ、マイコンのボード (ADC 付き)、ブレッドボード、テスタ。フォトダイオードを試すなら、BPW34 と、22kΩ 前後の抵抗も。",
+        "測り方: LDR を、10kΩ と 5V の間に直列につなぎ、真ん中の電圧をテスタで測ります。部屋の明かりと、手で隠したとき、スマホのライトを近づけたときを比べます。電圧が、明るいほど下がります (この回路では)。",
+        "気づいてほしいこと: LDR の抵抗は、暗いと数百 kΩ〜MΩ になるので、ADC に直接つなぐ (分圧なし) と、読みにくくなります。測りたい明るさの範囲の LDR の抵抗に近い値の抵抗を、分圧に使うと、その範囲で、電圧が大きく変わります (温度センサのサーミスタと同じ考え方)。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/light_sensors.schjson"),
+    setup: |_| {},
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "最初の明るさで、2 つのセンサの電圧を見る",
+            detail: "「DC動作点を解析」を押します。LDR は 50 ルクス (V2 = 0.5V) で、VLDR が約 1.82V。フォトダイオードは 1mW/cm² (V3 = 1V) で、約 75µA が流れ、VPD が約 3.35V (= 5V − 75µA × 22kΩ) です。",
+            done: dc_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "光を消して (V2・V3 を 0 に)、暗いときを見る",
+            detail: "電圧源 V2 と V3 の値を、0 に変えて「DC動作点を解析」。LDR は暗いと約 1MΩ に上がり、VLDR は約 4.95V、フォトダイオードは電流が流れず、VPD は 5.00V です。暗いと、どちらも、電源の電圧に近くなります。",
+            done: light_dark,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "明るくする: V2 を 5、V3 を 2 にして、変わり方の違いを見る",
+            detail: "V2 (LDR の光) を 5 (500 ルクス) に、V3 (フォトダイオードの光) を 2 (最初の 2 倍) にして「DC動作点を解析」。VLDR は約 0.63V、VPD は約 1.70V です。フォトダイオードは、光が 2 倍で、電流が 2 倍 (75µA → 150µA) になり、直線で比例します。LDR は、光が 10 倍 (50 → 500 ルクス) でも、電圧が 1.82V → 0.63V と、ゆるやかな変わり方です。",
+            done: light_brighter,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "光を強くしすぎる: V3 を 5 にして、飽和を見て、R2 で直す",
+            detail: "V3 を 5 (5mW/cm²) にして「DC動作点を解析」。電流が約 375µA になり、× 22kΩ が 5V を超えるので、VPD が 0V 付近 (このモデルでは約 −0.35V) で頭打ちになります。光の強さが、もう読み取れません。R2 を 22k から 4.7k に変えて、もう一度解析すると、VPD が約 3.2V (= 5V − 375µA × 4.7kΩ) に戻って、強い光も読めます。強い光を測るときは、抵抗を小さくします (代わりに、弱い光での電圧の変化は小さくなります)。",
+            done: light_strong_small_resistor,
         },
     ],
 };

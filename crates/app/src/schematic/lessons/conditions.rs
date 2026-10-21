@@ -380,6 +380,26 @@ pub(super) fn thermistor_divider_tuned(e: &SchEditor) -> bool {
     circuit_temp_between(e, 90.0, 150.0) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r <= 2e3)
 }
 
+/// The light lesson: a source value (V2 = the photocell's light, V3 = the photodiode's light) as a number.
+fn light_value(e: &SchEditor, refdes: &str) -> Option<f64> {
+    value_of(&e.sch, refdes).and_then(parse_value)
+}
+
+/// Step 2: no light on either sensor and the DC result is fresh.
+pub(super) fn light_dark(e: &SchEditor) -> bool {
+    dc_fresh(e) && light_value(e, "V2").is_some_and(|v| v <= 0.01) && light_value(e, "V3").is_some_and(|v| v <= 0.01)
+}
+
+/// Step 3: the photodiode gets about twice the first light (V3 about 2) and the photocell a lot more (V2 3 or more).
+pub(super) fn light_brighter(e: &SchEditor) -> bool {
+    dc_fresh(e) && light_value(e, "V2").is_some_and(|v| v >= 3.0) && light_value(e, "V3").is_some_and(|v| (1.8..=2.2).contains(&v))
+}
+
+/// Step 4: a very strong light on the photodiode (V3 4 or more) with a small resistor (R2 6k or less): it stays out of saturation.
+pub(super) fn light_strong_small_resistor(e: &SchEditor) -> bool {
+    dc_fresh(e) && light_value(e, "V3").is_some_and(|v| v >= 4.0) && light_value(e, "R2").is_some_and(|r| r <= 6e3)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

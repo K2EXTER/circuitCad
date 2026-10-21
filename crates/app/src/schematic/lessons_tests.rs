@@ -1164,3 +1164,40 @@ fn the_temperature_lesson_ticks_its_four_steps_and_the_voltages_are_as_it_says()
     assert_eq!(progress(&e), 4);
     assert!((1.9..2.2).contains(&v(&e, "VNTC")) && v(&e, "VNTC") > 5.0 * ntc_hot_10k, "1k at 100: {}", v(&e, "VNTC"));
 }
+
+#[test]
+fn the_light_lesson_ticks_its_four_steps_and_the_voltages_are_as_it_says() {
+    let idx = lesson_ids().iter().position(|l| *l == "light_sensors").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((1.7..1.95).contains(&v(&e, "VLDR")) && (3.25..3.45).contains(&v(&e, "VPD")), "first light: {} {}", v(&e, "VLDR"), v(&e, "VPD"));
+    set_value(&mut e, "V2", "0");
+    set_value(&mut e, "V3", "0");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(v(&e, "VLDR") > 4.9 && v(&e, "VPD") > 4.99, "dark: {} {}", v(&e, "VLDR"), v(&e, "VPD"));
+    set_value(&mut e, "V2", "5");
+    set_value(&mut e, "V3", "2");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((0.55..0.72).contains(&v(&e, "VLDR")) && (1.6..1.8).contains(&v(&e, "VPD")), "brighter: {} {}", v(&e, "VLDR"), v(&e, "VPD"));
+    // the photodiode: twice the light, twice the current (5 V - VPD over 22k)
+    let current = |vpd: f64| (5.0 - vpd) / 22e3;
+    assert!((current(1.7) / current(3.35) - 2.0).abs() < 0.1, "twice the light, twice the current");
+    set_value(&mut e, "V3", "5");
+    e.run_dc();
+    assert!(v(&e, "VPD") < 0.5, "saturated at 5: {}", v(&e, "VPD"));
+    set_value(&mut e, "R2", "4.7k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!((3.0..3.5).contains(&v(&e, "VPD")), "a 4.7k resistor keeps it out of saturation: {}", v(&e, "VPD"));
+}
