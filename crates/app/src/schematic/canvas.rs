@@ -105,6 +105,20 @@ impl SchEditor {
             } else if cmd && ui.input(|i| i.key_pressed(egui::Key::Y)) {
                 self.redo();
             }
+            // egui turns Ctrl+C / Ctrl+X / Ctrl+V into these events (no key press), and the text of the system clipboard is not used
+            let (copy, cut, paste) = ui.input(|i| {
+                let any = |f: fn(&egui::Event) -> bool| i.events.iter().any(f);
+                (any(|e| matches!(e, egui::Event::Copy)), any(|e| matches!(e, egui::Event::Cut)), any(|e| matches!(e, egui::Event::Paste(_))))
+            });
+            if copy {
+                self.copy_selection();
+            } else if cut {
+                self.cut_selection();
+            } else if paste {
+                self.paste_clipboard();
+            } else if cmd && ui.input(|i| i.key_pressed(egui::Key::D)) {
+                self.duplicate_selection();
+            }
             if ui.input(|i| i.key_pressed(egui::Key::R)) {
                 match self.selected {
                     // placing: R turns the part about to be placed, never a part on the sheet
@@ -150,6 +164,44 @@ mod tests {
         input.events.push(egui::Event::Key { key, physical_key: Some(key), pressed: true, repeat: false, modifiers: egui::Modifiers::NONE });
         let mut out = ctx.run_ui(input, |ui| e.handle_keys(ui));
         out.textures_delta.clear();
+    }
+
+    fn send(e: &mut SchEditor, events: Vec<egui::Event>) {
+        send_with(e, events, egui::Modifiers::NONE);
+    }
+
+    /// One frame with these events and the modifier keys held (egui takes them from a `ModifiersChanged` event, not from the key event).
+    fn send_with(e: &mut SchEditor, events: Vec<egui::Event>, modifiers: egui::Modifiers) {
+        let ctx = egui::Context::default();
+        let mut input = egui::RawInput::default();
+        input.events.push(egui::Event::ModifiersChanged(modifiers));
+        input.events.extend(events);
+        let mut out = ctx.run_ui(input, |ui| e.handle_keys(ui));
+        out.textures_delta.clear();
+    }
+
+    /// Ctrl+C, Ctrl+X and Ctrl+V reach egui as events (not as key presses): the editor has to listen for them.
+    #[test]
+    fn the_copy_cut_and_paste_events_and_ctrl_d_drive_the_clipboard() {
+        let mut e = SchEditor::default();
+        e.sch = Schematic::default();
+        let r = e.sch.add(Kind::Resistor, (10, 10), 0);
+        e.tool = Tool::Select;
+        e.selected = Some(Sel::Comp(r));
+        send(&mut e, vec![egui::Event::Copy]);
+        assert_eq!(e.clipboard.components.len(), 1);
+        send(&mut e, vec![egui::Event::Paste(String::new())]);
+        assert_eq!(e.sch.components.len(), 2, "pasted");
+        // the pasted part is the selection: Ctrl+X takes it off again, Ctrl+V brings it back
+        send(&mut e, vec![egui::Event::Cut]);
+        assert_eq!(e.sch.components.len(), 1, "cut");
+        send(&mut e, vec![egui::Event::Paste("something from another program".into())]);
+        assert_eq!(e.sch.components.len(), 2, "the text on the system clipboard is not what is pasted");
+        // Ctrl+D copies and pastes in one go
+        e.selected = Some(Sel::Comp(r));
+        let ctrl = egui::Modifiers::COMMAND;
+        send_with(&mut e, vec![egui::Event::Key { key: egui::Key::D, physical_key: Some(egui::Key::D), pressed: true, repeat: false, modifiers: ctrl }], ctrl);
+        assert_eq!(e.sch.components.len(), 3, "duplicated");
     }
 
     /// Choosing a part to place puts the selection away, and R then turns the part about to be placed,

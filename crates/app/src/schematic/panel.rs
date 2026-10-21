@@ -471,7 +471,24 @@ impl SchEditor {
                     self.rotate_req = Some(i);
                 }
             }
-        if self.selected.is_some() && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
+        if self.has_selection() || !self.clipboard.is_empty() {
+            let has = self.has_selection();
+            ui.horizontal_wrapped(|ui| {
+                if ui.add_enabled(has, egui::Button::new("コピー")).on_hover_text("選んだ部品・線・ラベルをコピーします (Ctrl+C)。部品のピンについているネットラベルも一緒にコピーされます").clicked() {
+                    self.copy_selection();
+                }
+                if ui.add_enabled(has, egui::Button::new("切り取り")).on_hover_text("コピーして、元のものを消します (Ctrl+X)").clicked() {
+                    self.cut_selection();
+                }
+                if ui.add_enabled(!self.clipboard.is_empty(), egui::Button::new("貼り付け")).on_hover_text("コピーしたものを、近くの空いた所に置きます (Ctrl+V)。部品番号は新しくなります。貼ったあと、ドラッグで動かせます").clicked() {
+                    self.paste_clipboard();
+                }
+                if ui.add_enabled(has, egui::Button::new("複製")).on_hover_text("コピーしてすぐ貼り付けます (Ctrl+D)").clicked() {
+                    self.duplicate_selection();
+                }
+            });
+        }
+        if self.has_selection() && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
             self.delete_selected();
         }
     }

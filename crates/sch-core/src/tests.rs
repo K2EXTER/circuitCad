@@ -436,3 +436,47 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
     assert!(s.wires.contains(&Wire { a: (14, 10), b: (14, 20) })); // bent: kept ...
     assert!(s.wires.contains(&Wire { a: (12, 10), b: (14, 10) })); // ... with a stub
 }
+
+#[test]
+fn a_pasted_fragment_is_moved_and_its_parts_get_new_reference_designators() {
+    let mut s = Schematic::default();
+    let r1 = s.add(Kind::Resistor, (10, 10), 0);
+    let r2 = s.add(Kind::Resistor, (10, 20), 0);
+    s.wires.push(Wire { a: (12, 10), b: (12, 14) });
+    s.labels.push(Label { pos: (8, 10), text: "IN".into() });
+    let f = s.copy_fragment(&[r1], &[0], &[0]);
+    assert_eq!((f.components.len(), f.wires.len(), f.labels.len()), (1, 1, 1));
+    let p = s.paste_fragment(&f, 20, 0);
+    // R1 and R2 exist: the copy of R1 is R3, and it is where it was plus the move
+    let c = &s.components[p.components[0]];
+    assert_eq!(c.refdes, "R3");
+    assert_eq!(c.pos, (30, 10));
+    assert_eq!(s.wires[p.wires[0]], Wire { a: (32, 10), b: (32, 14) });
+    assert_eq!(s.labels[p.labels[0]], Label { pos: (28, 10), text: "IN".into() });
+    // the original is untouched, and a second paste goes on counting
+    assert_eq!(s.components[r1].refdes, "R1");
+    assert_eq!(s.components[r2].refdes, "R2");
+    let q = s.paste_fragment(&f, 40, 0);
+    assert_eq!(s.components[q.components[0]].refdes, "R4");
+}
+
+#[test]
+fn a_fragment_of_library_parts_and_power_symbols_pastes_with_their_own_prefixes() {
+    let mut s = Schematic::default();
+    let u = s.add_custom(opamp(), "LM358", "SOIC_8", (10, 10), 1);
+    let g = s.add(Kind::Ground, (30, 10), 0);
+    let f = s.copy_fragment(&[u, g], &[], &[]);
+    let p = s.paste_fragment(&f, 0, 30);
+    let (cu, cg) = (&s.components[p.components[0]], &s.components[p.components[1]]);
+    assert_eq!((cu.refdes.as_str(), cu.rot, cu.pos), ("U2", 1, (10, 40)));
+    assert!(cu.custom.is_some() && cu.value == "LM358" && cu.footprint == "SOIC_8");
+    assert!(cg.refdes.starts_with("#PWR"));
+    assert_ne!(cg.refdes, s.components[g].refdes);
+}
+
+#[test]
+fn copying_nothing_gives_an_empty_fragment_and_bad_indices_are_ignored() {
+    let s = Schematic::default();
+    assert!(s.copy_fragment(&[], &[], &[]).is_empty());
+    assert!(s.copy_fragment(&[3], &[2], &[1]).is_empty());
+}

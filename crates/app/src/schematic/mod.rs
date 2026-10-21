@@ -98,6 +98,8 @@ pub struct SchEditor {
     multi: Vec<Sel>,
     boxsel: Option<BoxSel>,
     gdrag: Option<GroupDrag>,
+    /// What Ctrl+C / Ctrl+X copied (kept when another circuit is opened, so it can be pasted there).
+    clipboard: sch_core::Fragment,
     /// A rotation asked for by the property panel, applied once the panel's borrow has ended.
     rotate_req: Option<usize>,
     /// The selection was put away when the Place tool was chosen (reset when another tool is chosen).
@@ -521,6 +523,7 @@ impl Default for SchEditor {
             multi: vec![],
             boxsel: None,
             gdrag: None,
+            clipboard: Default::default(),
             rotate_req: None,
             place_cleared: false,
             drag: None,
@@ -565,6 +568,7 @@ mod dc;
 mod library;
 mod kicad_import;
 mod edit;
+mod clipboard;
 mod history;
 mod hint;
 mod canvas;

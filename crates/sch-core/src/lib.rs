@@ -267,6 +267,36 @@ impl Schematic {
     }
 }
 
+/// A piece of a sheet that was copied: parts, wires and labels (what the clipboard of the editor holds).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Fragment {
+    pub components: Vec<Component>,
+    pub wires: Vec<Wire>,
+    pub labels: Vec<Label>,
+}
+
+impl Fragment {
+    pub fn is_empty(&self) -> bool {
+        self.components.is_empty() && self.wires.is_empty() && self.labels.is_empty()
+    }
+
+    /// Every point that can join a net: the pins of the parts, the ends of the wires and the labels, moved by (`dx`, `dy`).
+    pub fn contact_points(&self, dx: i32, dy: i32) -> Vec<Pt> {
+        let mut v: Vec<Pt> = self.components.iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).collect();
+        v.extend(self.wires.iter().flat_map(|w| [w.a, w.b]));
+        v.extend(self.labels.iter().map(|l| l.pos));
+        v.into_iter().map(|p| (p.0 + dx, p.1 + dy)).collect()
+    }
+}
+
+/// Where the things of a pasted fragment ended up on the sheet (indices).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Pasted {
+    pub components: Vec<usize>,
+    pub wires: Vec<usize>,
+    pub labels: Vec<usize>,
+}
+
 impl Schematic {
     /// Add a component with the next free reference designator.
     fn next_refdes(&self, prefix: &str) -> String {
@@ -278,6 +308,48 @@ impl Schematic {
             .max()
             .unwrap_or(0);
         format!("{prefix}{}", used + 1)
+    }
+
+    /// A copy of the given parts, wires and labels (indices), for the clipboard.
+    pub fn copy_fragment(&self, comps: &[usize], wires: &[usize], labels: &[usize]) -> Fragment {
+        let pick = |n: usize, list: &[usize]| -> Vec<usize> {
+            let mut v: Vec<usize> = list.iter().copied().filter(|&i| i < n).collect();
+            v.sort_unstable();
+            v.dedup();
+            v
+        };
+        Fragment {
+            components: pick(self.components.len(), comps).into_iter().map(|i| self.components[i].clone()).collect(),
+            wires: pick(self.wires.len(), wires).into_iter().map(|i| self.wires[i].clone()).collect(),
+            labels: pick(self.labels.len(), labels).into_iter().map(|i| self.labels[i].clone()).collect(),
+        }
+    }
+
+    /// Put a copy of `f` on the sheet, moved by (`dx`, `dy`) grid steps. Parts get the next free reference designators
+    /// (a copy of R1 is R3 when R2 exists); wires and labels keep their shape. Returns where the new things are.
+    pub fn paste_fragment(&mut self, f: &Fragment, dx: i32, dy: i32) -> Pasted {
+        let mut out = Pasted::default();
+        for c in &f.components {
+            let mut c = c.clone();
+            c.pos = (c.pos.0 + dx, c.pos.1 + dy);
+            c.refdes = if c.kind.is_power_symbol() {
+                format!("#PWR{:02}", self.components.iter().filter(|x| x.kind.is_power_symbol()).count() + 1)
+            } else {
+                let prefix = c.custom.as_ref().map_or_else(|| c.kind.prefix().to_string(), |s| s.prefix.clone());
+                self.next_refdes(&prefix)
+            };
+            self.components.push(c);
+            out.components.push(self.components.len() - 1);
+        }
+        for w in &f.wires {
+            self.wires.push(Wire { a: (w.a.0 + dx, w.a.1 + dy), b: (w.b.0 + dx, w.b.1 + dy) });
+            out.wires.push(self.wires.len() - 1);
+        }
+        for l in &f.labels {
+            self.labels.push(Label { pos: (l.pos.0 + dx, l.pos.1 + dy), text: l.text.clone() });
+            out.labels.push(self.labels.len() - 1);
+        }
+        out
     }
 
     pub fn add(&mut self, kind: Kind, pos: Pt, rot: u8) -> usize {

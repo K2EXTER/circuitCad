@@ -169,3 +169,93 @@ fn labels_on_pins_turn_with_the_part() {
     assert_eq!(e.sch.labels[0].pos, e.sch.components[0].pins()[0].1);
     assert_ne!(e.sch.labels[0].pos, pin1);
 }
+
+/// A resistor with a label on each pin (R1 at (0,0) of `editor()` has the wire on pin 2, so use a fresh sheet).
+fn sheet_with_labelled_resistor() -> SchEditor {
+    let mut e = SchEditor::default();
+    e.sch = Schematic::default();
+    e.sch.add(Kind::Resistor, (20, 20), 0);
+    let pins = e.sch.components[0].pins();
+    e.sch.labels.push(Label { pos: pins[0].1, text: "A".into() });
+    e.sch.labels.push(Label { pos: pins[1].1, text: "B".into() });
+    e
+}
+
+#[test]
+fn copy_and_paste_bring_the_part_with_the_labels_on_its_pins() {
+    let mut e = sheet_with_labelled_resistor();
+    e.selected = Some(Sel::Comp(0));
+    assert!(e.copy_selection());
+    e.paste_clipboard();
+    assert_eq!(e.sch.components.len(), 2);
+    assert_eq!(e.sch.labels.len(), 4, "the copy has its own two labels");
+    let (a, b) = (&e.sch.components[0], &e.sch.components[1]);
+    assert_eq!(b.refdes, "R2");
+    let moved = (b.pos.0 - a.pos.0, b.pos.1 - a.pos.1);
+    assert_ne!(moved, (0, 0));
+    // each pasted label sits on a pin of the pasted part, with the same text
+    let pins: Vec<Pt> = b.pins().into_iter().map(|p| p.1).collect();
+    for text in ["A", "B"] {
+        assert!(e.sch.labels.iter().any(|l| l.text == text && pins.contains(&l.pos)), "{text}");
+    }
+    // the pasted part and its two labels are selected together (so one drag moves all of them), and it does not lie on the first one
+    assert_eq!(e.selected, None);
+    assert_eq!(e.multi.len(), 3);
+    assert!(e.multi.contains(&Sel::Comp(1)));
+    assert!(!e.would_overlap(b.kind, comp_extents(b), b.pos, b.rot, &[1]));
+}
+
+#[test]
+fn paste_never_joins_the_copy_to_something_on_the_sheet() {
+    let mut e = editor(); // R1 and R2 with a wire between them
+    e.multi = vec![Sel::Comp(0), Sel::Comp(1), Sel::Wire(0)];
+    assert!(e.copy_selection());
+    e.paste_clipboard();
+    assert_eq!(e.sch.components.len(), 4);
+    assert_eq!(e.sch.wires.len(), 2);
+    assert_eq!(e.multi.len(), 3, "the three pasted things are selected");
+    // no pin, wire end or label of the copy is on one of the original
+    let old: Vec<Pt> = e.sch.components[..2].iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).chain([(2, 0), (8, 0), (10, -4)]).collect();
+    let new: Vec<Pt> = e.sch.components[2..].iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).chain([e.sch.wires[1].a, e.sch.wires[1].b]).collect();
+    assert!(new.iter().all(|p| !old.contains(p)));
+}
+
+#[test]
+fn cut_removes_the_selection_and_paste_brings_it_back_and_undo_takes_the_paste_back() {
+    let mut e = sheet_with_labelled_resistor();
+    e.reset_history();
+    e.selected = Some(Sel::Comp(0));
+    e.cut_selection();
+    assert!(e.sch.components.is_empty());
+    e.commit_history();
+    e.paste_clipboard();
+    e.commit_history();
+    assert_eq!(e.sch.components.len(), 1);
+    assert_eq!(e.sch.components[0].refdes, "R1", "nothing is left on the sheet, so the first free number is R1");
+    e.undo();
+    assert!(e.sch.components.is_empty(), "undo takes the paste back");
+}
+
+#[test]
+fn paste_with_nothing_copied_says_so_and_changes_nothing() {
+    let mut e = editor();
+    let before = (e.sch.components.len(), e.sch.wires.len(), e.sch.labels.len());
+    e.paste_clipboard();
+    assert_eq!(before, (e.sch.components.len(), e.sch.wires.len(), e.sch.labels.len()));
+    assert!(e.status.contains("Ctrl+C"));
+    e.selected = None;
+    e.multi.clear();
+    assert!(!e.copy_selection());
+}
+
+#[test]
+fn pasting_one_thing_selects_it_as_the_single_selection() {
+    let mut e = SchEditor::default();
+    e.sch = Schematic::default();
+    e.sch.add(Kind::Resistor, (20, 20), 0);
+    e.selected = Some(Sel::Comp(0));
+    e.duplicate_selection(); // a part with no label on its pins: one thing is pasted
+    assert_eq!(e.sch.components.len(), 2);
+    assert_eq!(e.selected, Some(Sel::Comp(1)));
+    assert!(e.multi.is_empty());
+}
