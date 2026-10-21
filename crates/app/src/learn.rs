@@ -236,6 +236,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "ピンで LED を光らせ、パソコンと話し、電圧の違う相手とつなぎます",
             items: &[
                 Item { requires: Some(&["led", "datasheet"]), ..lesson("pin_led", "ピンで LED を光らせる", "ピンから流せる電流の上限 (20〜40mA) と、抵抗の決め方。D13 の LED", Some("D13 の LED の電流を測って、データシートの上限と比べます")) },
+                Item { requires: Some(&["datasheet", "divider"]), ..lesson("temp_sensors", "温度センサを読む (LM35・TMP36・NTC)", "温度に比例する電圧の IC と、抵抗が変わるサーミスタ。感度、0℃ より低い温度、分圧抵抗の選び方", Some("センサの電圧を測って式で温度にし、温度計と比べます")) },
                 Item { requires: Some(&["pullup"]), ..lesson("debounce", "ボタンのチャタリング", "接点が数 ms ばたつき、1 回押しただけなのに何回も数えられる。RC で止めると遅れる。大きすぎると押したのが分からない", Some("押した回数を数えるスケッチで、1 回押して、カウントが 2 以上になるか見ます")) },
                 Item { requires: Some(&["pin_led"]), ..lesson("flyback", "リレーやモータをつなぐ (フライバックダイオード)", "コイルの電流を急に切ると、大きな逆起電力が出てトランジスタを壊す。コイルと並列にダイオードを入れて止める", Some("リレー (または小さなモータ) をトランジスタで駆動し、ダイオードの向きを確かめます")) },
                 Item { requires: Some(&["pin_led"]), ..lesson("pwm", "PWM とフィルタ (analogWrite でアナログ電圧を作る)", "High と Low の割合 (デューティ) と RC フィルタで、途中の電圧を作る。揺れと反応の速さは引き換え。重い負荷には使えない", Some("analogWrite の値を変えて、フィルタの出力をテスタで測ります")) },

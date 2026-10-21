@@ -86,6 +86,7 @@ const LESSONS: &[Lesson] = &[
     supply::TL431,
     micro::FLYBACK,
     micro::DEBOUNCE,
+    micro::TEMP_SENSORS,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

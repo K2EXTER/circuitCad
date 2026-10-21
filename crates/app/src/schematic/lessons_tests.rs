@@ -1118,3 +1118,49 @@ fn the_debounce_lesson_ticks_its_three_steps_and_the_microcontroller_counts_as_i
     let (n, _, fin) = presses(&e);
     assert!(n == 0 && (3.0..3.5).contains(&fin), "1 uF: {n} presses, IN ends at {fin} V: too slow to notice");
 }
+
+#[test]
+fn the_temperature_lesson_ticks_its_four_steps_and_the_voltages_are_as_it_says() {
+    let idx = lesson_ids().iter().position(|l| *l == "temp_sensors").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((v(&e, "VLM35") - 0.27).abs() < 0.01 && (v(&e, "VTMP36") - 0.77).abs() < 0.01 && (2.3..2.5).contains(&v(&e, "VNTC")), "27: {} {} {}", v(&e, "VLM35"), v(&e, "VTMP36"), v(&e, "VNTC"));
+    e.temp_c = "100".into();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((v(&e, "VLM35") - 1.0).abs() < 0.01 && (v(&e, "VTMP36") - 1.5).abs() < 0.01 && (0.28..0.38).contains(&v(&e, "VNTC")), "100: {} {} {}", v(&e, "VLM35"), v(&e, "VTMP36"), v(&e, "VNTC"));
+    let ntc_hot_10k = v(&e, "VNTC");
+    e.temp_c = "-20".into();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!(v(&e, "VLM35").abs() < 0.01, "the LM35 cannot go below 0 V: {}", v(&e, "VLM35"));
+    assert!((v(&e, "VTMP36") - 0.3).abs() < 0.01, "TMP36 at -20: {}", v(&e, "VTMP36"));
+    // the sensitivity of the thermistor's divider near 100 degrees, with 10k and with 1k
+    let slope = |e: &mut SchEditor| {
+        let mut lo = 0.0;
+        let mut hi = 0.0;
+        for (t, out) in [("99", &mut lo), ("101", &mut hi)] {
+            e.temp_c = t.into();
+            e.run_dc();
+            *out = v(e, "VNTC");
+        }
+        (hi - lo).abs() / 2.0 * 1e3
+    };
+    let s10 = slope(&mut e);
+    set_value(&mut e, "R3", "1k");
+    let s1 = slope(&mut e);
+    assert!((6.0..12.0).contains(&s10) && (28.0..40.0).contains(&s1), "sensitivity at 100 degrees: 10k {s10} mV/C, 1k {s1} mV/C");
+    e.temp_c = "100".into();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!((1.9..2.2).contains(&v(&e, "VNTC")) && v(&e, "VNTC") > 5.0 * ntc_hot_10k, "1k at 100: {}", v(&e, "VNTC"));
+}

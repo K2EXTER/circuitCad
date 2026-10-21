@@ -360,6 +360,26 @@ pub(super) fn debounce_too_big(e: &SchEditor) -> bool {
     bounce_c1_between(e, 800e-9, 1.0)
 }
 
+/// The temperature lesson: the circuit temperature is between `lo` and `hi` degrees and the DC result is fresh.
+fn circuit_temp_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    dc_fresh(e) && e.temp_c.trim().parse::<f64>().is_ok_and(|t| (lo..=hi).contains(&t))
+}
+
+/// Step 2: the circuit is at 90 degrees or more.
+pub(super) fn temp_hot(e: &SchEditor) -> bool {
+    circuit_temp_between(e, 90.0, 150.0)
+}
+
+/// Step 3: the circuit is at -10 degrees or less.
+pub(super) fn temp_cold(e: &SchEditor) -> bool {
+    circuit_temp_between(e, -60.0, -10.0)
+}
+
+/// Step 4: hot again, and the thermistor's divider resistor R3 is 2k or less.
+pub(super) fn thermistor_divider_tuned(e: &SchEditor) -> bool {
+    circuit_temp_between(e, 90.0, 150.0) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r <= 2e3)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }
