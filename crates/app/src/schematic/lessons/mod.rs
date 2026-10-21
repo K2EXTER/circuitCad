@@ -88,6 +88,7 @@ const LESSONS: &[Lesson] = &[
     micro::DEBOUNCE,
     micro::TEMP_SENSORS,
     micro::LIGHT_SENSORS,
+    micro::CURRENT_SENSORS,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

@@ -400,6 +400,26 @@ pub(super) fn light_strong_small_resistor(e: &SchEditor) -> bool {
     dc_fresh(e) && light_value(e, "V3").is_some_and(|v| v >= 4.0) && light_value(e, "R2").is_some_and(|r| r <= 6e3)
 }
 
+/// The current lesson: the bus voltage V2 and the shunt R1 as numbers.
+fn bus_and_shunt(e: &SchEditor) -> (Option<f64>, Option<f64>) {
+    (value_of(&e.sch, "V2").and_then(parse_value), value_of(&e.sch, "R1").and_then(parse_value))
+}
+
+/// Step 2: a small current (V2 0.1 V or less: about 50 mA).
+pub(super) fn current_small(e: &SchEditor) -> bool {
+    dc_fresh(e) && bus_and_shunt(e).0.is_some_and(|v| v <= 0.1)
+}
+
+/// Step 3: a big current (V2 4 V or more: about 2 A) with the 10 mohm shunt.
+pub(super) fn current_big(e: &SchEditor) -> bool {
+    dc_fresh(e) && bus_and_shunt(e).0.is_some_and(|v| v >= 4.0) && bus_and_shunt(e).1.is_some_and(|r| r <= 0.02)
+}
+
+/// Step 4: a big current with a big shunt (80 mohm or more): the amplifier runs out of output range.
+pub(super) fn current_big_shunt(e: &SchEditor) -> bool {
+    dc_fresh(e) && bus_and_shunt(e).0.is_some_and(|v| v >= 4.0) && bus_and_shunt(e).1.is_some_and(|r| r >= 0.08)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

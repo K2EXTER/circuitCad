@@ -1201,3 +1201,36 @@ fn the_light_lesson_ticks_its_four_steps_and_the_voltages_are_as_it_says() {
     assert_eq!(progress(&e), 4);
     assert!((3.0..3.5).contains(&v(&e, "VPD")), "a 4.7k resistor keeps it out of saturation: {}", v(&e, "VPD"));
 }
+
+#[test]
+fn the_current_lesson_ticks_its_four_steps_and_the_amplifier_runs_out_of_range() {
+    let idx = lesson_ids().iter().position(|l| *l == "current_sensors").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert!((v(&e, "VINA") - 0.249).abs() < 0.01 && (v(&e, "VACS") - 2.592).abs() < 0.01, "0.5 A: {} {}", v(&e, "VINA"), v(&e, "VACS"));
+    set_value(&mut e, "V2", "0.05");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    // the Hall sensor moves 5 mV off its 2.5 V, the shunt amplifier 12 mV: the shunt reads a small current better
+    let (ina, acs) = (v(&e, "VINA"), v(&e, "VACS") - 2.5);
+    assert!((0.010..0.015).contains(&ina) && (0.003..0.007).contains(&acs) && ina > 2.0 * acs, "25 mA: INA {ina} ACS {acs}");
+    set_value(&mut e, "V2", "5");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((v(&e, "VINA") - 1.243).abs() < 0.03 && (v(&e, "VACS") - 2.96).abs() < 0.03, "2.5 A: {} {}", v(&e, "VINA"), v(&e, "VACS"));
+    set_value(&mut e, "R1", "100m");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    // 50 x 0.1 ohm x 2.4 A would be 11.9 V: the amplifier stops near its supply, so the reading is no longer the current
+    assert!((4.6..5.0).contains(&v(&e, "VINA")), "clipped: {}", v(&e, "VINA"));
+    assert!((v(&e, "VACS") - 2.94).abs() < 0.03, "the Hall sensor does not care about the shunt: {}", v(&e, "VACS"));
+}
