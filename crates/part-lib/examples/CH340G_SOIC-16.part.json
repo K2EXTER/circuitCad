@@ -1,0 +1,111 @@
+{
+  "name": "CH340G",
+  "category": "マイコン",
+  "description": "USB-シリアル変換 IC (WCH、SOP-16、1.27mm ピッチ)。UD+ / UD- が USB の D+ / D-、TXD / RXD がシリアル、XI / XO に 12MHz の水晶 (両端に 22pF 前後)、V3 は電源が 5V のとき 0.1µF を GND へ、DTR は Arduino の自動リセットに使う。CTS / DSR / RI / DCD / DTR / RTS は、名前の上線 (アクティブ Low) を省いて書いてある。ピン表は KiCad 公式ライブラリのシンボルから、ランドパターンの寸法は同じくフットプリントから確かめて、自分の形式で書いたものです。必ずデータシートで確認してください。シミュレーションモデルなし",
+  "datasheet": "http://www.datasheet5.com/pdf-local-2195953",
+  "prefix": "U",
+  "value": "CH340G",
+  "pins": [
+    {
+      "number": "15",
+      "name": "R232",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "UD+",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "UD-",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "XI",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "XO",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "TXD",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "RXD",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "CTS",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "DSR",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "RI",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "DCD",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "DTR",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "RTS",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    },
+    {
+      "number": "4",
+      "name": "V3",
+      "side": "top"
+    },
+    {
+      "number": "1",
+      "name": "GND",
+      "side": "bottom"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 1.27,
+    "row_spacing": 4.95,
+    "pad_len": 1.95,
+    "pad_width": 0.6,
+    "drill": null
+  },
+  "footprint_name": "SOIC-16_3.9x9.9_P1.27",
+  "height": 1.75,
+  "sim": null,
+  "body": {
+    "shape": "rect",
+    "w": 3.9,
+    "h": 9.9,
+    "x": 0.0,
+    "y": 0.0,
+    "mark": "dot",
+    "mark_pin": "1"
+  }
+}

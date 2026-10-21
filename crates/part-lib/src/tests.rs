@@ -592,3 +592,116 @@ fn the_bundled_18650_has_wire_pads_and_old_holder_copies_get_them_once() {
     assert_eq!(kept.footprint_name(), "BatteryHolder_18650");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Reads the KiCad files named by the environment variable CCAD_KICAD_DIR (downloaded from the official KiCad libraries, see
+/// docs/library.md) and prints what the importer makes of them. Not part of the normal run:
+/// `CCAD_KICAD_DIR=<dir> cargo test -p part-lib import_downloaded_kicad_parts -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn import_downloaded_kicad_parts() {
+    let dir = std::path::PathBuf::from(std::env::var("CCAD_KICAD_DIR").expect("CCAD_KICAD_DIR"));
+    let read = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_else(|e| panic!("{n}: {e}"));
+    let mega = kicad::parse_symbols(&read("ATmega_merged.kicad_sym")).unwrap();
+    let s = mega.iter().find(|s| s.name == "ATmega2560-16A").expect("ATmega2560-16A");
+    let fp = kicad::parse_footprint(&read("TQFP-100_14x14mm_P0.5mm.kicad_mod")).unwrap();
+    println!("ATmega2560: {} pins, footprint {} with {} pads, warnings {:?}", s.pins.len(), fp.name, fp.pads.len(), fp.warnings);
+    {
+        // the land pattern's measures (what a `quad` spec needs): the pitch, the distance between opposite pad centres, the pad size
+        let pad = |n: &str| fp.pads.iter().find(|p| p.pin == n).unwrap();
+        let (p1, p2, p26, p76) = (pad("1"), pad("2"), pad("26"), pad("76"));
+        println!("  pad 1 ({:.3},{:.3}) {}x{}; pad 2 ({:.3},{:.3}); pad 26 ({:.3},{:.3}) {}x{}; pad 76 ({:.3},{:.3}); shape {}", p1.x, p1.y, p1.w, p1.h, p2.x, p2.y, p26.x, p26.y, p26.w, p26.h, p76.x, p76.y, p1.shape);
+    }
+    let part = kicad::to_part(s, Some(&fp)).unwrap();
+    println!("  first pins: {:?}", part.pins.iter().take(6).map(|p| (p.number.clone(), p.name.clone(), p.side)).collect::<Vec<_>>());
+    let ch = kicad::parse_symbols(&read("CH340G.kicad_sym")).unwrap();
+    let c = ch.iter().find(|s| s.name == "CH340G").expect("CH340G");
+    let fp2 = kicad::parse_footprint(&read("SOIC-16_3.9x9.9mm_P1.27mm.kicad_mod")).unwrap();
+    let part2 = kicad::to_part(c, Some(&fp2)).unwrap();
+    println!("CH340G: {} pins, footprint {} with {} pads", c.pins.len(), fp2.name, fp2.pads.len());
+    {
+        let pad = |n: &str| fp2.pads.iter().find(|p| p.pin == n).unwrap();
+        let (a, b, c9) = (pad("1"), pad("2"), pad("9"));
+        println!("  pad 1 ({:.3},{:.3}) {}x{}; pad 2 ({:.3},{:.3}); pad 9 ({:.3},{:.3}); shape {}", a.x, a.y, a.w, a.h, b.x, b.y, c9.x, c9.y, a.shape);
+    }
+    println!("  pins: {:?}", part2.pins.iter().map(|p| (p.number.clone(), p.name.clone(), p.side)).collect::<Vec<_>>());
+}
+
+/// Writes the two parts of the Arduino Mega board from the same downloaded KiCad files: the pin tables (numbers, names, the side the
+/// KiCad symbol puts them on) are used as they are, the packages are written as our own `quad` / `dual` specs from the measures of
+/// the land patterns (not the KiCad pads). `CCAD_KICAD_DIR=<dir> cargo test -p part-lib write_kicad_mega_parts -- --ignored`
+#[test]
+#[ignore]
+fn write_kicad_mega_parts() {
+    let dir = std::path::PathBuf::from(std::env::var("CCAD_KICAD_DIR").expect("CCAD_KICAD_DIR"));
+    let read = |n: &str| std::fs::read_to_string(dir.join(n)).unwrap_or_else(|e| panic!("{n}: {e}"));
+    let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples");
+    let plain = |n: &str| n.replace("~{", "").replace('}', "");
+    let make = |sym: &kicad::KicadSymbol, package_is_quad: bool, name: &str, description: &str, footprint_name: &str, package: serde_json::Value, body: serde_json::Value, height: f64, file: &str| {
+        let part = kicad::to_part(sym, None).unwrap();
+        let mut v = serde_json::to_value(&part).unwrap();
+        v["name"] = name.into();
+        v["category"] = "マイコン".into();
+        v["description"] = description.into();
+        v["footprint_name"] = footprint_name.into();
+        v["package"] = package;
+        v["body"] = body;
+        v["height"] = height.into();
+        v["value"] = name.into();
+        let pins = v["pins"].as_array_mut().unwrap();
+        for p in pins.iter_mut() {
+            let n = plain(p["name"].as_str().unwrap());
+            p["name"] = n.into();
+        }
+        // a quad part is drawn like its package: the pins 1.. down the left, then along the bottom, up the right and along the top
+        // (the order of the list is the order along a side: top to bottom, left to right)
+        if package_is_quad {
+            let n = pins.len();
+            let q = n / 4;
+            let num = |p: &serde_json::Value| p["number"].as_str().unwrap().parse::<usize>().unwrap();
+            pins.sort_by_key(|p| {
+                let k = num(p) - 1;
+                let (side, along) = (k / q, k % q);
+                // left: 1..q as they are; bottom: left to right; right: top to bottom is q*3..q*2; top: left to right is n..q*3+1
+                (side, if side >= 2 { q - 1 - along } else { along })
+            });
+            // the order above sorts the right side and the top side backwards: top-to-bottom / left-to-right
+            for p in pins.iter_mut() {
+                let side = (num(p) - 1) / q;
+                p["side"] = ["left", "bottom", "right", "top"][side].into();
+            }
+        }
+        let def: PartDef = serde_json::from_value(v).unwrap();
+        // the file is checked by the same validation the app uses when a part is added
+        let issues = def.validate();
+        assert!(issues.iter().all(|i| !i.error), "{name}: {issues:?}");
+        std::fs::write(out.join(file), serde_json::to_string_pretty(&def).unwrap() + "
+").unwrap();
+        println!("{name}: {} pins written to {file}", def.pins.len());
+    };
+    let mega = kicad::parse_symbols(&read("ATmega_merged.kicad_sym")).unwrap();
+    let s = mega.iter().find(|s| s.name == "ATmega2560-16A").unwrap();
+    make(
+        s,
+        true,
+        "ATmega2560-16AU",
+        "8ビットAVRマイコン (256KB フラッシュ、8KB SRAM、4KB EEPROM、TQFP-100、0.5mm ピッチ)。Arduino Mega 2560 のマイコン。ピン表は KiCad 公式ライブラリのシンボルから、ランドパターンの寸法 (ピッチ 0.5mm、向かい合うパッドの中心間 15.325mm、パッド 1.475x0.3mm) は同じくフットプリントから確かめて、自分の形式で書いたものです。必ずデータシートで確認してください。シミュレーションモデルなし",
+        "TQFP-100_14x14_P0.5",
+        serde_json::json!({"type": "quad", "pins": 100, "pitch": 0.5, "span": 15.325, "pad_len": 1.475, "pad_width": 0.3}),
+        serde_json::json!({"shape": "rect", "w": 14.0, "h": 14.0, "mark": "dot", "mark_pin": "1"}),
+        1.2,
+        "ATmega2560-16AU_TQFP-100.part.json",
+    );
+    let usb = kicad::parse_symbols(&read("CH340G.kicad_sym")).unwrap();
+    let c = usb.iter().find(|s| s.name == "CH340G").unwrap();
+    make(
+        c,
+        false,
+        "CH340G",
+        "USB-シリアル変換 IC (WCH、SOP-16、1.27mm ピッチ)。UD+ / UD- が USB の D+ / D-、TXD / RXD がシリアル、XI / XO に 12MHz の水晶 (両端に 22pF 前後)、V3 は電源が 5V のとき 0.1µF を GND へ、DTR は Arduino の自動リセットに使う。CTS / DSR / RI / DCD / DTR / RTS は、名前の上線 (アクティブ Low) を省いて書いてある。ピン表は KiCad 公式ライブラリのシンボルから、ランドパターンの寸法は同じくフットプリントから確かめて、自分の形式で書いたものです。必ずデータシートで確認してください。シミュレーションモデルなし",
+        "SOIC-16_3.9x9.9_P1.27",
+        serde_json::json!({"type": "dual", "pins": 16, "pitch": 1.27, "row_spacing": 4.95, "pad_len": 1.95, "pad_width": 0.6}),
+        serde_json::json!({"shape": "rect", "w": 3.9, "h": 9.9, "mark": "dot", "mark_pin": "1"}),
+        1.75,
+        "CH340G_SOIC-16.part.json",
+    );
+}

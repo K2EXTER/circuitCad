@@ -1,0 +1,168 @@
+# Arduino Mega 2560-compatible board without the shield headers: ATmega2560 + CH340G (USB-serial) + USB connector, ICSP, D13 LED,
+# and a header per port. For the Mega USB lessons and as a benchmark.
+# Build: cargo run -p cli -- docs/examples/arduino_mega_usb.ccad   (then: save ..., board new, board import, ...)
+new
+add ATmega2560-16AU as=U1
+add CH340G as=U2
+add USB_DEMO_TH as=J1
+add XTAL_16MHz_3225 16MHz as=Y1
+add XTAL_12MHz_3225 12MHz as=Y2
+add C 22p as=C1
+add C 22p as=C2
+add C 22p as=C3
+add C 22p as=C4
+add C 100n as=C5
+add C 100n as=C6
+add C 100n as=C7
+add C 100n as=C8
+add C 100n as=C9
+add C 100n as=C10
+add C 100n as=C11
+add C 100n as=C12
+add C 100n as=C13
+add C 10u as=C14
+add C 100n as=C15
+add R 10k as=R1
+add R 1k as=R2
+add LED as=D1
+add HEADER6 as=J2
+add HEADER8 as=J3
+add HEADER8 as=J4
+add HEADER8 as=J5
+add HEADER8 as=J6
+add HEADER6 as=J7
+add HEADER8 as=J8
+add HEADER6 as=J9
+add HEADER8 as=J10
+add HEADER8 as=J11
+add HEADER8 as=J12
+add HEADER8 as=J13
+add HEADER6 as=J14
+
+# power: 5 V comes from the USB connector
+net 5V J1.1 U1.10 U1.31 U1.61 U1.80 U1.100 U2.16 C5.1 C6.1 C7.1 C8.1 C9.1 C11.1 C12.1 C14.1 R1.1 J2.2
+net GND J1.4 J1.SH U1.11 U1.32 U1.62 U1.81 U1.99 U2.1 C1.2 C2.2 C3.2 C4.2 C5.2 C6.2 C7.2 C8.2 C9.2 C10.2 C11.2 C12.2 C13.2 C14.2 D1.K J2.6
+
+# the 16 MHz clock of the ATmega2560, the 12 MHz clock of the CH340G
+net XTAL1 U1.34 Y1.1 C1.1
+net XTAL2 U1.33 Y1.3 C2.1
+net GND Y1.2 Y1.4 Y2.2 Y2.4
+net XI U2.7 Y2.1 C3.1
+net XO U2.8 Y2.3 C4.1
+
+# AREF, the CH340G's V3, bypass of the CH340G
+net AREF U1.98 C10.1
+net V3 U2.4 C13.1
+
+# USB: D+ / D- from the connector to the CH340G
+net USB_DP J1.3 U2.5
+net USB_DM J1.2 U2.6
+
+# serial: the CH340G TXD -> RXD0 (PE0), the TXD0 (PE1) -> the CH340G RXD; DTR -> 100 nF -> RESET
+net RXD0 U2.2 U1.PE0
+net TXD0 U2.3 U1.PE1
+net DTR U2.13 C15.1
+net RESET U1.30 R1.2 C15.2 J2.5
+
+# D13 LED (PB7) and the ICSP header (1 MISO, 3 SCK, 4 MOSI)
+net D13 U1.PB7 R2.1
+net LED R2.2 D1.A
+net MISO U1.PB3 J2.1
+net SCK U1.PB1 J2.3
+net MOSI U1.PB2 J2.4
+
+# the CH340G modem lines go to a header (they are inputs: they should not float)
+net CTS U2.9 J14.1
+net DSR U2.10 J14.2
+net RI U2.11 J14.3
+net DCD U2.12 J14.4
+net RTS U2.14 J14.5
+net R232 U2.15 J14.6
+
+# a header per port (the pins of the ports that have another job share the net)
+net PA0 U1.PA0 J3.1
+net PA1 U1.PA1 J3.2
+net PA2 U1.PA2 J3.3
+net PA3 U1.PA3 J3.4
+net PA4 U1.PA4 J3.5
+net PA5 U1.PA5 J3.6
+net PA6 U1.PA6 J3.7
+net PA7 U1.PA7 J3.8
+net PB0 U1.PB0 J4.1
+net SCK J4.2
+net MOSI J4.3
+net MISO J4.4
+net PB4 U1.PB4 J4.5
+net PB5 U1.PB5 J4.6
+net PB6 U1.PB6 J4.7
+net D13 J4.8
+net PC0 U1.PC0 J5.1
+net PC1 U1.PC1 J5.2
+net PC2 U1.PC2 J5.3
+net PC3 U1.PC3 J5.4
+net PC4 U1.PC4 J5.5
+net PC5 U1.PC5 J5.6
+net PC6 U1.PC6 J5.7
+net PC7 U1.PC7 J5.8
+net PD0 U1.PD0 J6.1
+net PD1 U1.PD1 J6.2
+net PD2 U1.PD2 J6.3
+net PD3 U1.PD3 J6.4
+net PD4 U1.PD4 J6.5
+net PD5 U1.PD5 J6.6
+net PD6 U1.PD6 J6.7
+net PD7 U1.PD7 J6.8
+net PE2 U1.PE2 J7.1
+net PE3 U1.PE3 J7.2
+net PE4 U1.PE4 J7.3
+net PE5 U1.PE5 J7.4
+net PE6 U1.PE6 J7.5
+net PE7 U1.PE7 J7.6
+net PF0 U1.PF0 J8.1
+net PF1 U1.PF1 J8.2
+net PF2 U1.PF2 J8.3
+net PF3 U1.PF3 J8.4
+net PF4 U1.PF4 J8.5
+net PF5 U1.PF5 J8.6
+net PF6 U1.PF6 J8.7
+net PF7 U1.PF7 J8.8
+net PG0 U1.PG0 J9.1
+net PG1 U1.PG1 J9.2
+net PG2 U1.PG2 J9.3
+net PG3 U1.PG3 J9.4
+net PG4 U1.PG4 J9.5
+net PG5 U1.PG5 J9.6
+net PH0 U1.PH0 J10.1
+net PH1 U1.PH1 J10.2
+net PH2 U1.PH2 J10.3
+net PH3 U1.PH3 J10.4
+net PH4 U1.PH4 J10.5
+net PH5 U1.PH5 J10.6
+net PH6 U1.PH6 J10.7
+net PH7 U1.PH7 J10.8
+net PJ0 U1.PJ0 J11.1
+net PJ1 U1.PJ1 J11.2
+net PJ2 U1.PJ2 J11.3
+net PJ3 U1.PJ3 J11.4
+net PJ4 U1.PJ4 J11.5
+net PJ5 U1.PJ5 J11.6
+net PJ6 U1.PJ6 J11.7
+net PJ7 U1.PJ7 J11.8
+net PK0 U1.PK0 J12.1
+net PK1 U1.PK1 J12.2
+net PK2 U1.PK2 J12.3
+net PK3 U1.PK3 J12.4
+net PK4 U1.PK4 J12.5
+net PK5 U1.PK5 J12.6
+net PK6 U1.PK6 J12.7
+net PK7 U1.PK7 J12.8
+net PL0 U1.PL0 J13.1
+net PL1 U1.PL1 J13.2
+net PL2 U1.PL2 J13.3
+net PL3 U1.PL3 J13.4
+net PL4 U1.PL4 J13.5
+net PL5 U1.PL5 J13.6
+net PL6 U1.PL6 J13.7
+net PL7 U1.PL7 J13.8
+
+erc
