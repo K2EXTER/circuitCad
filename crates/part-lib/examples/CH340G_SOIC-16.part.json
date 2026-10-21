@@ -1,7 +1,7 @@
 {
   "name": "CH340G",
   "category": "マイコン",
-  "description": "USB-シリアル変換 IC (WCH、SOP-16、1.27mm ピッチ)。UD+ / UD- が USB の D+ / D-、TXD / RXD がシリアル、XI / XO に 12MHz の水晶 (両端に 22pF 前後)、V3 は電源が 5V のとき 0.1µF を GND へ、DTR は Arduino の自動リセットに使う。CTS / DSR / RI / DCD / DTR / RTS は、名前の上線 (アクティブ Low) を省いて書いてある。ピン表は KiCad 公式ライブラリのシンボルから、ランドパターンの寸法は同じくフットプリントから確かめて、自分の形式で書いたものです。必ずデータシートで確認してください。シミュレーションモデルなし",
+  "description": "USB-シリアル変換 IC (WCH、SOP-16、1.27mm ピッチ)。UD+ / UD- が USB の D+ / D-、TXD / RXD がシリアル、XI / XO に 12MHz の水晶 (両端に 22pF 前後)、V3 は電源が 5V のとき 0.1µF を GND へ、DTR は Arduino の自動リセットに使う。CTS / DSR / RI / DCD / DTR / RTS は、名前の上線 (アクティブ Low) を省いて書いてある。ピン表は KiCad 公式ライブラリのシンボルから、ランドパターンの寸法は同じくフットプリントから確かめて、自分の形式で書いたものです。必ずデータシートで確認してください。シミュレーションは仮のモデルです (USB の受信の差動判定・V3・DTR・電源の電流だけ。USB のプロトコルやシリアルの変換は含みません)",
   "datasheet": "http://www.datasheet5.com/pdf-local-2195953",
   "prefix": "U",
   "value": "CH340G",
@@ -98,7 +98,25 @@
   },
   "footprint_name": "SOIC-16_3.9x9.9_P1.27",
   "height": 1.75,
-  "sim": null,
+  "sim": {
+    "kind": "subckt",
+    "name": "CH340G",
+    "text": ".subckt CH340G vcc gnd dp dm txd v3 dtr\n* current drawn from the supply: about 10 mA at 5 V\nRiq vcc gnd 500\n* the USB inputs: nothing flows in\nRdp dp gnd 1G\nRdm dm gnd 1G\n* the USB receiver: D+ above D- by 0.2 V or more is a 1, below -0.2 V a 0 (in between, a smooth in-between level)\nBrx rx gnd V=V(vcc,gnd)*step(V(dp,dm),0.2)\nRtx rx txd 100\n* V3: the internal 3.3 V regulator (it needs 0.1 uF outside), never above the supply minus 0.2 V\nBv3 v3i gnd V=min(3.3,max(V(vcc,gnd)-0.2,0))\nRv3 v3i v3 10\n* DTR idles high\nBdtr d gnd V=V(vcc,gnd)\nRdtr d dtr 100\n.ends CH340G",
+    "pins": [
+      "16",
+      "1",
+      "5",
+      "6",
+      "2",
+      "4",
+      "13"
+    ],
+    "limits": [
+      "ピンの外から見た動きだけを真似た仮のモデルです。USB の受信 (D+ と D− の差が 0.2V 以上で TXD が High、−0.2V 以下で Low)、V3 (3.3V の内部電源)、DTR (ふだん High)、電源の電流 (約 10mA) だけを持ちます。",
+      "USB のプロトコル (パケット・アドレス・CRC)、ボーレートの生成、RXD 入力、RTS・CTS などのモデム線、12MHz の水晶の発振、リセット動作は含みません。実機の動作の確認には使えません。",
+      "受信の判定は理想的です。同相ノイズは完全に打ち消され、入力の同相電圧の範囲 (実物は 0.8〜2.5V ほど)、ヒステリシス、遅れ (伝搬遅延) は含みません。ノイズに強いかの傾向を見る目的で使ってください。"
+    ]
+  },
   "body": {
     "shape": "rect",
     "w": 3.9,

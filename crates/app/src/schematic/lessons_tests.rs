@@ -1332,3 +1332,37 @@ fn the_crystal_load_lesson_ticks_its_three_steps_and_the_peak_moves_with_the_cap
     let big = peak(&e);
     assert!(small > mid && mid > big && (small - big) > 5e3, "{small} {mid} {big}");
 }
+
+#[test]
+fn the_usb_noise_lesson_ticks_its_four_steps_and_only_one_sided_noise_adds_edges() {
+    let idx = lesson_ids().iter().position(|l| *l == "ch340g").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let edges = |e: &SchEditor| {
+        let rx = &e.tran.as_ref().unwrap().outcome.as_ref().unwrap().signal("V(RX)").unwrap().values;
+        (1..rx.len()).filter(|k| rx[k - 1] < 2.5 && rx[*k] >= 2.5).count()
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    assert_eq!(edges(&e), 12);
+    set_value(&mut e, "V4", "SIN(0 4 5Meg)");
+    set_value(&mut e, "V5", "SIN(0 4 5Meg)");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert_eq!(edges(&e), 12, "common noise is cancelled");
+    set_value(&mut e, "V4", "SIN(0 2 5Meg)");
+    set_value(&mut e, "V5", "SIN(0 0 5Meg)");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert_eq!(edges(&e), 12);
+    set_value(&mut e, "V4", "SIN(0 4 5Meg)");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!(edges(&e) > 12, "one-sided noise beyond the margin is misread: {}", edges(&e));
+}

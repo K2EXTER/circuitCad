@@ -179,11 +179,49 @@ fn crystal_load() -> Schematic {
     s
 }
 
+/// A full-speed USB pair into the CH340G with noise sources in series with each line: V2 / V3 drive D+ / D- (opposite, 12 Mbit/s: 83 ns
+/// bits), V4 / V5 add noise in series with each driver (SIN 5 MHz, 0 V at first), R1 / R2 are the cable and driver resistance, C1 / C2 the
+/// cable and ESD capacitance at the receiver.
+fn usb_noise() -> Schematic {
+    let mut s = Schematic::default();
+    source(&mut s, (0, 0), "5", "VCC");
+    let sources = [("PULSE(0 3.3 20n 4n 4n 79n 166n)", "DRVP", "GND", 16), ("PULSE(3.3 0 20n 4n 4n 79n 166n)", "DRVM", "GND", 32)];
+    for (value, plus, minus, y) in sources {
+        let v = s.add(Kind::VSource, (0, y), 0);
+        s.components[v].value = value.into();
+        label_pin(&mut s, v, "+", plus);
+        label_pin(&mut s, v, "-", minus);
+    }
+    for (value, plus, minus, y) in [("SIN(0 0 5Meg)", "A1", "DRVP", 48), ("SIN(0 0 5Meg)", "A2", "DRVM", 64)] {
+        let v = s.add(Kind::VSource, (0, y), 0);
+        s.components[v].value = value.into();
+        label_pin(&mut s, v, "+", plus);
+        label_pin(&mut s, v, "-", minus);
+    }
+    resistor(&mut s, (30, 16), 0, "22", "A1", "DP");
+    resistor(&mut s, (30, 32), 0, "22", "A2", "DM");
+    for (y, net) in [(48, "DP"), (64, "DM")] {
+        let c = s.add(Kind::Capacitor, (50, y), 1);
+        s.components[c].value = "50p".into();
+        label_pin(&mut s, c, "1", net);
+        label_pin(&mut s, c, "2", "GND");
+    }
+    let u = part_at(&mut s, "CH340G", (90, 30), 0);
+    for (pin, net) in [("16", "VCC"), ("1", "GND"), ("5", "DP"), ("6", "DM"), ("2", "RX"), ("4", "V3"), ("13", "DTR")] {
+        label_pin(&mut s, u, pin, net);
+    }
+    let c3 = s.add(Kind::Capacitor, (120, 48), 1);
+    s.components[c3].value = "100n".into();
+    label_pin(&mut s, c3, "1", "V3");
+    label_pin(&mut s, c3, "2", "GND");
+    s
+}
+
 #[test]
 #[ignore]
 fn write_sensor_examples() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input()), ("power_pin", power_pin()), ("crystal_load", crystal_load())] {
+    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input()), ("power_pin", power_pin()), ("crystal_load", crystal_load()), ("usb_noise", usb_noise())] {
         std::fs::write(root.join(format!("{name}.schjson")), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 }
@@ -317,4 +355,29 @@ fn a_smaller_load_capacitance_pulls_the_crystal_higher() {
         assert!((got - want).abs() < 400.0, "{cl}: {got} vs {want}");
     }
     assert!(crystal_peak("5p") > crystal_peak("11p") && crystal_peak("11p") > crystal_peak("47p"));
+}
+
+/// Rising edges of V(RX) (through 2.5 V) in 2 us of the USB noise sample with the noise sources V4 / V5 set.
+fn usb_edges(n1: &str, n2: &str) -> usize {
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/usb_noise.schjson")).unwrap()).unwrap();
+    for (r, v) in [("V4", n1), ("V5", n2)] {
+        s.components.iter_mut().find(|c| c.refdes == r).unwrap().value = v.into();
+    }
+    let tr = sim_core::transient(&from_schematic(&s).unwrap(), &sim_core::TranSettings { tstop: 2e-6, tstep: 1e-9, uic: false }).unwrap();
+    let rx = &tr.signal("V(RX)").unwrap().values;
+    (1..rx.len()).filter(|k| rx[k - 1] < 2.5 && rx[*k] >= 2.5).count()
+}
+
+#[test]
+fn usb_noise_is_cancelled_when_it_is_on_both_lines_and_misread_when_on_one() {
+    let off = "SIN(0 0 5Meg)";
+    // 12 bits' worth of toggling in 2 us
+    assert_eq!(usb_edges(off, off), 12);
+    // the same 4 V on both lines: the difference does not change
+    assert_eq!(usb_edges("SIN(0 4 5Meg)", "SIN(0 4 5Meg)"), 12);
+    // 2 V on one line: the difference swings wider but never crosses the threshold the wrong way
+    assert_eq!(usb_edges("SIN(0 2 5Meg)", off), 12);
+    // 4 V on one line is more than the margin (3.3 V - 0.2 V): extra edges
+    assert!(usb_edges("SIN(0 4 5Meg)", off) > 12);
+    assert!(usb_edges("SIN(0 4 30Meg)", off) > usb_edges("SIN(0 4 5Meg)", off));
 }

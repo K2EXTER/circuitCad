@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input, the power pins of a big chip, the load capacitance of a crystal.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input, the power pins of a big chip, the load capacitance of a crystal, the USB signal and noise (CH340G).
 
 use super::conditions::*;
 use super::*;
@@ -885,6 +885,53 @@ pub(super) const CRYSTAL_LOAD: Lesson = Lesson {
             title: "C1 を 47p に大きくして、ずれが小さくなるのを見る",
             detail: "C1 を 47p に変えて「AC解析を実行」。山は約 12.0013MHz で、fs から 1.3kHz (110ppm) 上です。CL を大きくするほど、周波数は fs に近づきますが、ずれは 4.4kHz から 1.3kHz に減っただけです。コンデンサを大きくしても、あまり変わらなくなります。大きすぎると、発振の余裕が減って、始まらないことがあります。",
             done: crystal_big_load,
+        },
+    ],
+};
+
+pub(super) const CH340G: Lesson = Lesson {
+    id: "ch340g",
+    title: "46. CH340G と USB の信号 (差動で受けるとノイズに強い)",
+    goal: "USB の D+ と D− は、逆の向きに動く 2 本で 1 つの信号を運び、受け側は 2 本の差 (D+ − D−) を読みます。この回路は、USB-シリアル変換 IC の CH340G (仮のモデル) に、12Mbit/s の信号を入れ、ノイズを 2 本に同じ大きさで入れたとき (同相) と、片方だけに入れたときで、読み違えるかを比べます。同じノイズでも、差で受けると打ち消されること、片方だけだと打ち消されないことを確かめます",
+    summary: "USB のフルスピードは、D+ と D− を逆の電圧 (片方が 3.3V なら、もう片方が 0V) で動かし、受け側は V(D+) − V(D−) が +0.2V 以上なら 1、−0.2V 以下なら 0 と読みます。信号の差は ±3.3V です。ノイズが、2 本に同じ大きさで乗る (たとえば、GND が揺れる、外から電波が当たる、2 本が同じ場所を通る) と、差を取ったとき、ノイズは引き算で消えます。これが、差動 (ペアで受ける) の強みです。この回路は、V2 (D+)・V3 (D−) の 83ns の 0/1 の列を、R1・R2 (22Ω、ケーブルと出力の抵抗)・C1・C2 (50pF、ケーブルと ESD の容量) を通して、U1 (CH340G の仮のモデル) の UD+・UD− に入れます。V4・V5 は、D+・D− のそれぞれの線に直列に入れるノイズ (5MHz の正弦波、はじめは 0V) です。U1 の TXD 出力 (V(RX)) が、読み取った 0/1 で、2µs のあいだの立ち上がりの数が、12 回なら正しく読めています。ノイズなしは 12 回。V4・V5 を同じ 4V にしても、差は ±3.3V のまま変わらず、12 回です。V4 だけ 2V にすると、差は ±5.3V になりますが、0 を横切らないので、12 回のままです。V4 だけ 4V にすると、0 のときの差 (−3.3V) に +4V のノイズが乗って、+0.7V まで上がり、0.2V を超えて、1 と読まれます。立ち上がりは 16 回に増え、4 回の読み違えが出ます。ノイズの周波数が高いと (30MHz)、さらに増えます (73 回)。つまり、同じ大きさのノイズでも、2 本に同じに乗れば無害で、片方だけだと、信号の余裕 (3.3V − 0.2V) を超えたところで読み違えます。基板で D+ と D− を並べて、同じ長さで、近くに引くのは、ノイズを 2 本に同じように乗せるためです。V3 ピンにつけた 100nF (C3) は、CH340G の内部の 3.3V 電源を安定させる、データシートの指定です。",
+    limits: &[
+        "CH340G は、ピンの外から見た動きだけを真似た仮のモデルです。USB の受信 (差の判定)、V3、DTR、電源の電流だけを持ちます。USB のプロトコル、シリアルの変換、水晶の発振は含みません。",
+        "受信は理想的です。2 本に同じに乗ったノイズは、完全に打ち消されます。実物の受信 IC は、同相電圧の範囲 (約 0.8〜2.5V) があり、それを超えるノイズは、同相でも読み違えます。この回路の同相 4V は、その範囲を超えており、実物では動きません。",
+        "ノイズは、ドライバの出力に直列に入れた正弦波です。実際のノイズは、近くの配線からの結合 (クロストーク)、GND の揺れ、電波で、それぞれ 2 本への乗り方が違います。「2 本に同じに乗る」という理想の場合と、「片方だけに乗る」という最悪の場合を、比べています。",
+        "ケーブルは、抵抗 22Ω と容量 50pF の集中定数です。実際の USB ケーブルは、伝送線路で、90Ω の差動インピーダンスを持ち、反射が起きます。USB のアイパターンや、規格への適合は、確かめられません。",
+    ],
+    real: &[
+        "まずデータシートを見よう: CH340G のデータシートで、「V3 ピンの 0.1µF (電源が 5V のとき)」「UD+ / UD− の接続」「XI / XO の 12MHz の水晶と 22pF」「DTR などの出力」を探します。USB の規格 (USB 2.0) の「差動受信のしきい値 (±200mV)」と、「同相電圧の範囲」も探します。",
+        "用意するもの: オシロスコープ (帯域 100MHz 以上)、できれば差動プローブ、USB ケーブル (長いものと短いもの)、CH340G を使ったボード (Arduino 互換ボードなど)。",
+        "測り方: プローブを D+ と D− に当て、それぞれの波形と、差 (オシロの A − B) を見ます。USB ケーブルを、モーターやスイッチング電源のそばに這わせたり、ケーブルを長くしたりして、差の波形のノイズを比べます。",
+        "気づいてほしいこと: D+ と D− を、基板で、並べて同じ長さで引く理由は、2 本に同じノイズを乗せるためです。2 本を離したり、片方だけ長くしたりすると、差でも打ち消されなくなります。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/usb_noise.schjson"),
+    setup: |e| e.set_tran_settings("2u", "1n"),
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "ノイズなしで、読み取りが正しいのを見る",
+            detail: "「過渡解析を実行」を押し、V(DP)・V(DM)・V(RX) を選びます。D+ と D− は、83ns ごとに 0V と 3.3V を入れ替え、U1 の出力 V(RX) は、それを 0V と 5V の 0/1 として読みます。2µs のあいだの立ち上がりは 12 回です。",
+            done: tran_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "ノイズを 2 本に同じに乗せる (V4 と V5 を 4V にする)",
+            detail: "V4 を「SIN(0 4 5Meg)」、V5 も「SIN(0 4 5Meg)」に変えて「過渡解析を実行」。V(DP) と V(DM) は、−4V〜7.3V まで揺れますが、差 (V(DP) − V(DM)) は ±3.3V のままで、V(RX) の立ち上がりは 12 回です。2 本に同じノイズが乗ると、差を取ったときに消えます。(実物の受信 IC は、同相電圧の範囲があるので、4V のノイズは動きません。ここは、理想の場合です)",
+            done: usb_common_noise,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "片方だけに 2V のノイズを乗せる (V5 を 0 に戻す)",
+            detail: "V4 を「SIN(0 2 5Meg)」、V5 を「SIN(0 0 5Meg)」に変えて「過渡解析を実行」。差は ±5.3V まで揺れますが、0 を横切らないので、V(RX) の立ち上がりは 12 回のままです。信号の余裕 (3.3V − 0.2V = 3.1V) より、ノイズが小さいので、片方だけでも読めました。",
+            done: usb_one_line_noise,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "片方だけに 4V のノイズを乗せて、読み違えるのを見る",
+            detail: "V4 を「SIN(0 4 5Meg)」にして (V5 は 0 のまま)「過渡解析を実行」。0 のときの差 (−3.3V) に +4V のノイズが乗って、+0.7V まで上がり、0.2V のしきい値を超えます。V(RX) の立ち上がりが 16 回に増え、4 回の読み違えが出ます。同じ 4V でも、2 本に同じに乗れば消え、片方だけだと読み違えます。V4 の周波数を 30Meg にすると、増えかたはさらに大きくなります。",
+            done: usb_one_line_big_noise,
         },
     ],
 };

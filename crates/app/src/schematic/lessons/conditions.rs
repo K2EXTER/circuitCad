@@ -477,6 +477,31 @@ pub(super) fn crystal_big_load(e: &SchEditor) -> bool {
     ac_fresh(e) && crystal_load_c(e).is_some_and(|c| c >= 40e-12)
 }
 
+/// The USB noise lesson: the amplitude of the noise source `name` ("SIN(0 4 5Meg)" is 4; a plain number counts as 0).
+fn usb_noise_amp(e: &SchEditor, name: &str) -> Option<f64> {
+    let v = value_of(&e.sch, name)?;
+    let inner = v.trim().strip_prefix("SIN(")?.trim_end_matches(')');
+    parse_value(inner.split_whitespace().nth(1)?)
+}
+
+/// Step 2: the same noise on both lines (3 V or more).
+pub(super) fn usb_common_noise(e: &SchEditor) -> bool {
+    let (a, b) = (usb_noise_amp(e, "V4"), usb_noise_amp(e, "V5"));
+    tran_fresh(e) && a.zip(b).is_some_and(|(a, b)| a >= 3.0 && (a - b).abs() < 0.5)
+}
+
+/// Step 3: noise on the D+ line only, a moderate one (1.5 V to 3 V).
+pub(super) fn usb_one_line_noise(e: &SchEditor) -> bool {
+    let (a, b) = (usb_noise_amp(e, "V4"), usb_noise_amp(e, "V5"));
+    tran_fresh(e) && a.zip(b).is_some_and(|(a, b)| (1.5..=3.0).contains(&a) && b <= 0.1)
+}
+
+/// Step 4: noise on the D+ line only that is bigger than the margin of the signal (3.8 V or more).
+pub(super) fn usb_one_line_big_noise(e: &SchEditor) -> bool {
+    let (a, b) = (usb_noise_amp(e, "V4"), usb_noise_amp(e, "V5"));
+    tran_fresh(e) && a.zip(b).is_some_and(|(a, b)| a >= 3.8 && b <= 0.1)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

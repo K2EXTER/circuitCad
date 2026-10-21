@@ -1,0 +1,706 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 3.3 20n 4n 4n 79n 166n)",
+      "pos": [
+        0,
+        16
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "PULSE(3.3 0 20n 4n 4n 79n 166n)",
+      "pos": [
+        0,
+        32
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V4",
+      "kind": "VSource",
+      "value": "SIN(0 0 5Meg)",
+      "pos": [
+        0,
+        48
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V5",
+      "kind": "VSource",
+      "value": "SIN(0 0 5Meg)",
+      "pos": [
+        0,
+        64
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "22",
+      "pos": [
+        30,
+        16
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "22",
+      "pos": [
+        30,
+        32
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "50p",
+      "pos": [
+        50,
+        48
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "50p",
+      "pos": [
+        50,
+        64
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "CH340G",
+      "pos": [
+        90,
+        30
+      ],
+      "rot": 0,
+      "footprint": "SOIC-16_3.9x9.9_P1.27",
+      "custom": {
+        "name": "CH340G",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "15",
+            "name": "R232",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "UD+",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "UD-",
+            "side": "left"
+          },
+          {
+            "number": "7",
+            "name": "XI",
+            "side": "left"
+          },
+          {
+            "number": "8",
+            "name": "XO",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "TXD",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "RXD",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "CTS",
+            "side": "right"
+          },
+          {
+            "number": "10",
+            "name": "DSR",
+            "side": "right"
+          },
+          {
+            "number": "11",
+            "name": "RI",
+            "side": "right"
+          },
+          {
+            "number": "12",
+            "name": "DCD",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "DTR",
+            "side": "right"
+          },
+          {
+            "number": "14",
+            "name": "RTS",
+            "side": "right"
+          },
+          {
+            "number": "16",
+            "name": "VCC",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "V3",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "CH340G",
+          "text": ".subckt CH340G vcc gnd dp dm txd v3 dtr\n* current drawn from the supply: about 10 mA at 5 V\nRiq vcc gnd 500\n* the USB inputs: nothing flows in\nRdp dp gnd 1G\nRdm dm gnd 1G\n* the USB receiver: D+ above D- by 0.2 V or more is a 1, below -0.2 V a 0 (in between, a smooth in-between level)\nBrx rx gnd V=V(vcc,gnd)*step(V(dp,dm),0.2)\nRtx rx txd 100\n* V3: the internal 3.3 V regulator (it needs 0.1 uF outside), never above the supply minus 0.2 V\nBv3 v3i gnd V=min(3.3,max(V(vcc,gnd)-0.2,0))\nRv3 v3i v3 10\n* DTR idles high\nBdtr d gnd V=V(vcc,gnd)\nRdtr d dtr 100\n.ends CH340G",
+          "pins": [
+            "16",
+            "1",
+            "5",
+            "6",
+            "2",
+            "4",
+            "13"
+          ],
+          "params": {},
+          "limits": [
+            "ピンの外から見た動きだけを真似た仮のモデルです。USB の受信 (D+ と D− の差が 0.2V 以上で TXD が High、−0.2V 以下で Low)、V3 (3.3V の内部電源)、DTR (ふだん High)、電源の電流 (約 10mA) だけを持ちます。",
+            "USB のプロトコル (パケット・アドレス・CRC)、ボーレートの生成、RXD 入力、RTS・CTS などのモデム線、12MHz の水晶の発振、リセット動作は含みません。実機の動作の確認には使えません。",
+            "受信の判定は理想的です。同相ノイズは完全に打ち消され、入力の同相電圧の範囲 (実物は 0.8〜2.5V ほど)、ヒステリシス、遅れ (伝搬遅延) は含みません。ノイズに強いかの傾向を見る目的で使ってください。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "C3",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        120,
+        48
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        14
+      ],
+      "b": [
+        0,
+        11
+      ]
+    },
+    {
+      "a": [
+        0,
+        18
+      ],
+      "b": [
+        0,
+        21
+      ]
+    },
+    {
+      "a": [
+        0,
+        30
+      ],
+      "b": [
+        0,
+        27
+      ]
+    },
+    {
+      "a": [
+        0,
+        34
+      ],
+      "b": [
+        0,
+        37
+      ]
+    },
+    {
+      "a": [
+        0,
+        46
+      ],
+      "b": [
+        0,
+        43
+      ]
+    },
+    {
+      "a": [
+        0,
+        50
+      ],
+      "b": [
+        0,
+        53
+      ]
+    },
+    {
+      "a": [
+        0,
+        62
+      ],
+      "b": [
+        0,
+        59
+      ]
+    },
+    {
+      "a": [
+        0,
+        66
+      ],
+      "b": [
+        0,
+        69
+      ]
+    },
+    {
+      "a": [
+        28,
+        16
+      ],
+      "b": [
+        25,
+        16
+      ]
+    },
+    {
+      "a": [
+        32,
+        16
+      ],
+      "b": [
+        35,
+        16
+      ]
+    },
+    {
+      "a": [
+        28,
+        32
+      ],
+      "b": [
+        25,
+        32
+      ]
+    },
+    {
+      "a": [
+        32,
+        32
+      ],
+      "b": [
+        35,
+        32
+      ]
+    },
+    {
+      "a": [
+        50,
+        46
+      ],
+      "b": [
+        50,
+        43
+      ]
+    },
+    {
+      "a": [
+        50,
+        50
+      ],
+      "b": [
+        50,
+        53
+      ]
+    },
+    {
+      "a": [
+        50,
+        62
+      ],
+      "b": [
+        50,
+        59
+      ]
+    },
+    {
+      "a": [
+        50,
+        66
+      ],
+      "b": [
+        50,
+        69
+      ]
+    },
+    {
+      "a": [
+        89,
+        20
+      ],
+      "b": [
+        89,
+        17
+      ]
+    },
+    {
+      "a": [
+        90,
+        40
+      ],
+      "b": [
+        90,
+        43
+      ]
+    },
+    {
+      "a": [
+        86,
+        28
+      ],
+      "b": [
+        83,
+        28
+      ]
+    },
+    {
+      "a": [
+        86,
+        30
+      ],
+      "b": [
+        83,
+        30
+      ]
+    },
+    {
+      "a": [
+        94,
+        23
+      ],
+      "b": [
+        94,
+        20
+      ]
+    },
+    {
+      "a": [
+        91,
+        20
+      ],
+      "b": [
+        91,
+        17
+      ]
+    },
+    {
+      "a": [
+        94,
+        35
+      ],
+      "b": [
+        94,
+        38
+      ]
+    },
+    {
+      "a": [
+        120,
+        46
+      ],
+      "b": [
+        120,
+        43
+      ]
+    },
+    {
+      "a": [
+        120,
+        50
+      ],
+      "b": [
+        120,
+        53
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        11
+      ],
+      "text": "DRVP"
+    },
+    {
+      "pos": [
+        0,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        27
+      ],
+      "text": "DRVM"
+    },
+    {
+      "pos": [
+        0,
+        37
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        43
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        0,
+        53
+      ],
+      "text": "DRVP"
+    },
+    {
+      "pos": [
+        0,
+        59
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        0,
+        69
+      ],
+      "text": "DRVM"
+    },
+    {
+      "pos": [
+        25,
+        16
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        35,
+        16
+      ],
+      "text": "DP"
+    },
+    {
+      "pos": [
+        25,
+        32
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        35,
+        32
+      ],
+      "text": "DM"
+    },
+    {
+      "pos": [
+        50,
+        43
+      ],
+      "text": "DP"
+    },
+    {
+      "pos": [
+        50,
+        53
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        50,
+        59
+      ],
+      "text": "DM"
+    },
+    {
+      "pos": [
+        50,
+        69
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        89,
+        17
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        90,
+        43
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        83,
+        28
+      ],
+      "text": "DP"
+    },
+    {
+      "pos": [
+        83,
+        30
+      ],
+      "text": "DM"
+    },
+    {
+      "pos": [
+        94,
+        20
+      ],
+      "text": "RX"
+    },
+    {
+      "pos": [
+        91,
+        17
+      ],
+      "text": "V3"
+    },
+    {
+      "pos": [
+        94,
+        38
+      ],
+      "text": "DTR"
+    },
+    {
+      "pos": [
+        120,
+        43
+      ],
+      "text": "V3"
+    },
+    {
+      "pos": [
+        120,
+        53
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}
