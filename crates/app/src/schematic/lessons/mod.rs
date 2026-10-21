@@ -91,6 +91,7 @@ const LESSONS: &[Lesson] = &[
     micro::CURRENT_SENSORS,
     micro::ADC_INPUT,
     micro::MEGA_POWER,
+    micro::CRYSTAL_LOAD,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

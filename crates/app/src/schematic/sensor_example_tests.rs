@@ -160,11 +160,30 @@ fn power_pin() -> Schematic {
     s
 }
 
+/// A 12 MHz crystal with the load capacitance CL (C1) behind it: the peak of V(OUT) is where the crystal, seen from the load, resonates.
+fn crystal_load() -> Schematic {
+    let mut s = Schematic::default();
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "SIN(0 1 12Meg) AC 1".into();
+    label_pin(&mut s, v, "+", "IN");
+    label_pin(&mut s, v, "-", "GND");
+    let y = part_at(&mut s, "XTAL_12MHz_3225", (24, 0), 0);
+    label_pin(&mut s, y, "1", "IN");
+    label_pin(&mut s, y, "3", "OUT");
+    label_pin(&mut s, y, "2", "GND");
+    label_pin(&mut s, y, "4", "GND");
+    let c1 = s.add(Kind::Capacitor, (44, 14), 1);
+    s.components[c1].value = "11p".into();
+    label_pin(&mut s, c1, "1", "OUT");
+    label_pin(&mut s, c1, "2", "GND");
+    s
+}
+
 #[test]
 #[ignore]
 fn write_sensor_examples() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
-    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input()), ("power_pin", power_pin())] {
+    for (name, s) in [("temperature_sensors", temperature_sensors()), ("light_sensors", light_sensors()), ("current_sensors", current_sensors()), ("adc_input", adc_input()), ("power_pin", power_pin()), ("crystal_load", crystal_load())] {
         std::fs::write(root.join(format!("{name}.schjson")), serde_json::to_string_pretty(&s).unwrap()).unwrap();
     }
 }
@@ -277,4 +296,25 @@ fn a_near_small_bypass_beats_a_far_big_one() {
     assert!(none > 3.0 && far < 0.6 * none, "none {none} far {far}");
     assert!(near < 0.25 * far && near < 0.5, "near {near}");
     assert!(near_small < far, "1n near {near_small} beats 100n far {far}");
+}
+
+/// Frequency of the highest point of V(OUT) in the crystal load sample with the load capacitor `cl`.
+fn crystal_peak(cl: &str) -> f64 {
+    let mut s: Schematic = serde_json::from_str(&std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/crystal_load.schjson")).unwrap()).unwrap();
+    s.components.iter_mut().find(|c| c.refdes == "C1").unwrap().value = cl.into();
+    let ac = sim_core::ac_analysis(&from_schematic(&s).unwrap(), &sim_core::AcSettings { fstart: 11.998e6, fstop: 12.012e6, sweep: sim_core::AcSweep::Decade(100_000) }).unwrap();
+    let m = ac.signal("V(OUT)").unwrap().mag();
+    let (i, _) = m.iter().copied().enumerate().fold((0, 0.0), |a, (i, x)| if x > a.1 { (i, x) } else { a });
+    ac.freq[i]
+}
+
+#[test]
+fn a_smaller_load_capacitance_pulls_the_crystal_higher() {
+    // fs + fs * Cm / (2 (C0 + CL)) with Cm = 10 fF, C0 = 3 pF
+    for (cl, farad) in [("5p", 5e-12), ("11p", 11e-12), ("22p", 22e-12), ("47p", 47e-12)] {
+        let want = 12e6 * (1.0 + 10e-15 / (2.0 * (3e-12 + farad)));
+        let got = crystal_peak(cl);
+        assert!((got - want).abs() < 400.0, "{cl}: {got} vs {want}");
+    }
+    assert!(crystal_peak("5p") > crystal_peak("11p") && crystal_peak("11p") > crystal_peak("47p"));
 }

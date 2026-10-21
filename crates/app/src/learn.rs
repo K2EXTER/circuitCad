@@ -286,6 +286,7 @@ const MEGA_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["pin_led", "datasheet"]), ..lesson("adc_input", "ADC の入力 (信号源の抵抗は 10kΩ 以下)", "ADC は、入力のコンデンサを短い時間で充電して読む。信号源の抵抗が大きいと充電しきれず、読み違える。ピンに大きなコンデンサをつけて直す。Mega は 16 チャンネル", Some("1MΩ 2 本で分圧した 2.5V を A0 で読み、コンデンサをつけて値の変化を見ます")) },
                 Item { requires: Some(&["decoupling"]), ..lesson("mega_power", "電源ピンが 5 組ある (バイパスは、容量より近さ)", "ATmega2560 は VCC と GND が 5 組。すべてのペアのそばにバイパスコンデンサを置く。遠い 100nF より、近い 1nF のほうが効く。AVCC・AREF にも 0.1µF", Some("電源ピンの電圧を、バイパスコンデンサの有無でオシロで見比べます")) },
+                Item { requires: Some(&["crystal"]), ..lesson("crystal_load", "水晶の負荷容量 (22pF の理由と周波数のずれ)", "水晶の両端の 22pF は、水晶から見た負荷容量 CL を決める。小さいほど周波数が高く、数百 ppm ずれる。データシートの CL に合わせる", Some("水晶の周波数を、プローブを当てる前後で比べます")) },
                 plan("ch340g", "CH340G: USB-シリアル変換", "USB の D+ / D− をシリアルに変える IC。12MHz の水晶と、V3 ピンのコンデンサが要る。DTR でリセットをかける仕組み", &["usb_signal", "serial"], Some("PC につなぎ、シリアルモニタに文字が出るか確かめます")),
             ],
         },

@@ -462,6 +462,21 @@ pub(super) fn power_small_near_cap(e: &SchEditor) -> bool {
     tran_fresh(e) && power_values(e).0.is_some_and(|c| (100e-12..=10e-9).contains(&c)) && power_values(e).1.is_some_and(|l| l <= 5e-9)
 }
 
+/// The crystal load lesson: the load capacitor C1 as a number.
+fn crystal_load_c(e: &SchEditor) -> Option<f64> {
+    value_of(&e.sch, "C1").and_then(|v| v.split_whitespace().next()).and_then(parse_value)
+}
+
+/// Step 2: a small load capacitor (7p or less) with a fresh AC run.
+pub(super) fn crystal_small_load(e: &SchEditor) -> bool {
+    ac_fresh(e) && crystal_load_c(e).is_some_and(|c| c <= 7e-12)
+}
+
+/// Step 3: a big load capacitor (40p or more).
+pub(super) fn crystal_big_load(e: &SchEditor) -> bool {
+    ac_fresh(e) && crystal_load_c(e).is_some_and(|c| c >= 40e-12)
+}
+
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
     e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
 }

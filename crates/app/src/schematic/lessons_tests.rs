@@ -1302,3 +1302,33 @@ fn the_power_pin_lesson_ticks_its_four_steps_and_the_swing_shrinks_with_distance
     let small = swing(&e);
     assert!(none > far && far > small && small > near, "{none} {far} {small} {near}");
 }
+
+#[test]
+fn the_crystal_load_lesson_ticks_its_three_steps_and_the_peak_moves_with_the_capacitor() {
+    let idx = lesson_ids().iter().position(|l| *l == "crystal_load").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let peak = |e: &SchEditor| {
+        let a = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        let m = a.signal("V(OUT)").unwrap().mag();
+        let (i, _) = m.iter().copied().enumerate().fold((0, 0.0), |p, (i, x)| if x > p.1 { (i, x) } else { p });
+        a.freq[i]
+    };
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    let mid = peak(&e);
+    set_value(&mut e, "C1", "5p");
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let small = peak(&e);
+    set_value(&mut e, "C1", "47p");
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let big = peak(&e);
+    assert!(small > mid && mid > big && (small - big) > 5e3, "{small} {mid} {big}");
+}

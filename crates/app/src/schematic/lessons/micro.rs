@@ -1,4 +1,4 @@
-//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input, the power pins of a big chip.
+//! Lessons around a microcontroller board (the Arduino-compatible path): the crystal, the reset circuit, the bypass capacitors, the pull-up, the LED on a pin, the level shifting, the serial line, reading a data sheet, the USB basics, PWM, the flyback diode, the button bounce, the temperature sensors, the light sensors, the current sensors, the ADC input, the power pins of a big chip, the load capacitance of a crystal.
 
 use super::conditions::*;
 use super::*;
@@ -844,6 +844,47 @@ pub(super) const MEGA_POWER: Lesson = Lesson {
             title: "C1 を 1n に小さくしても、近ければ遠い 100n より効く",
             detail: "C1 を 100n から 1n に変えて (L2 は 2n のまま)「過渡解析を実行」。V(VCC) は 4.68V〜5.32V で、遠くの 100n (4.27V〜5.97V) より、揺れが小さくなります。容量を大きくするより、近くに置くほうが、先です。ATmega2560 の 5 組の電源ピンには、それぞれのそばに 100nF を置きます。",
             done: power_small_near_cap,
+        },
+    ],
+};
+
+pub(super) const CRYSTAL_LOAD: Lesson = Lesson {
+    id: "crystal_load",
+    title: "45. 水晶の負荷容量 (22pF の理由と周波数のずれ)",
+    goal: "水晶の両端につける 22pF が、なぜ必要で、値を変えると周波数が何 kHz ずれるのかを、12MHz の水晶 (CH340G 用) で確かめます。水晶から見た負荷容量 CL が小さいほど、周波数が高くなります。データシートの CL に合わせると、仕様の周波数になります",
+    summary: "水晶を使う発振回路 (ピアース発振) では、水晶の両端と GND の間に、2 つのコンデンサ (C1・C2、どちらも 22pF など) をつけます。水晶から見ると、この 2 つが直列につながっていて、合計の容量 CL = C1 × C2 ÷ (C1 + C2) + 基板の浮遊容量 (3〜5pF) になります。22pF が 2 つなら、11pF + 約 4pF = 約 15pF です。水晶は、この CL をつないだときに、データシートの周波数 (たとえば 12.000MHz) で振動するように作られています。CL が変わると、周波数が変わります。水晶の直列共振の周波数を fs とすると、CL をつないだときの周波数は、fs × (1 + Cm ÷ (2 × (C0 + CL))) です (Cm = 10fF、C0 = 3pF)。この回路は、12MHz の水晶に、CL としてコンデンサ C1 をつないで、V(OUT) が最大になる周波数を見ます。C1 = 11p のとき、約 12.0044MHz (fs より 4.4kHz 上、約 360ppm)。5p に減らすと約 12.0077MHz (640ppm)、47p に増やすと約 12.0013MHz (110ppm) です。つまり、CL を大きくするほど、周波数は fs に近づきますが、変わり方はなだらかになります。水晶のデータシートに、CL = 18pF と書いてあるなら、18pF になるように C1・C2 を選びます (浮遊容量を引いて、C1 = C2 = 約 28pF)。CL が合わないと、周波数が数百 ppm ずれます。UART の通信 (許容 ±2% = 20000ppm) や USB (±0.25% = 2500ppm) では、数百 ppm は問題になりませんが、時計や、周波数の精度が必要な用途では、狂いになります。また、CL が小さすぎたり、大きすぎたりすると、発振が始まらなかったり、不安定になったりします。",
+    limits: &[
+        "水晶は等価回路 (Rm=40Ω, Lm=17.59mH, Cm=10fF, C0=3pF) だけで表しています。温度による周波数の変化、駆動レベルによる変化、年月による変化は扱いません。",
+        "マイコン・CH340G の内部の発振回路 (反転アンプ) はないので、この回路は発振しません。見ているのは、水晶に CL をつないだときの共振の位置だけです。",
+        "C1 だけを CL としています。実際の発振回路は、水晶の両端に C1・C2 がつながり、水晶から見ると直列の C1 × C2 ÷ (C1 + C2) です。基板の浮遊容量と、IC のピンの容量は、含みません。",
+        "AC解析の周波数の刻みが粗い (約 270Hz) ので、山の位置は、読みが数百 Hz 変わります。ずれの大きさ (kHz) を比べる目的の読み方です。山の高さは、刻みによって変わるので、比べないでください。",
+    ],
+    real: &[
+        "まずデータシートを見よう: 手元の水晶のデータシートで、「負荷容量 CL (例 18pF)」「周波数許容差 (±20ppm)」「ESR」「駆動レベル」を探します。マイコンや CH340G のデータシートに、推奨の C1・C2 (22pF など) が書いてあります。",
+        "用意するもの: 12MHz の水晶、22pF のセラミックコンデンサ (C0G / NP0) を 2 つ以上、周波数カウンタ (または、オシロの周波数表示)。",
+        "測り方: プローブの容量 (約 10pF) が CL に加わるので、周波数が下がります。プローブを当てずに周波数を測れないときは、オシロの 1/10 のプローブで、片側だけを見て、プローブを当てる前後の違いを知っておきます。",
+        "気づいてほしいこと: 容量は、ばらつきの小さい C0G (NP0) を使います。X7R は、電圧と温度で容量が大きく変わり、周波数もずれます。",
+    ],
+    circuit: include_str!("../../../../../docs/examples/crystal_load.schjson"),
+    setup: |e| e.set_ac_settings("11.998Meg", "12.012Meg", "100000"),
+    steps: &[
+        Step {
+            tab: PanelTab::Analyze,
+            title: "CL = 11p で、山の位置を見る",
+            detail: "「AC解析を実行」を押し、OUT を選びます (範囲は 11.998MHz〜12.012MHz)。山 (V(OUT) の最大) は、約 12.0044MHz にあります。水晶が単独で振動する 12.000MHz (fs) より、約 4.4kHz (360ppm) 上です。C1 (11p) は、22pF 2 つの直列の値です。",
+            done: ac_fresh,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "C1 を 5p に小さくして、周波数が上がるのを見る",
+            detail: "C1 を 11p から 5p に変えて「AC解析を実行」。山は約 12.0077MHz に動き、fs から 7.7kHz (640ppm) 上になりました。負荷容量が小さいほど、周波数が高くなります。CL が仕様より小さい基板では、時計が速く進みます。",
+            done: crystal_small_load,
+        },
+        Step {
+            tab: PanelTab::Draw,
+            title: "C1 を 47p に大きくして、ずれが小さくなるのを見る",
+            detail: "C1 を 47p に変えて「AC解析を実行」。山は約 12.0013MHz で、fs から 1.3kHz (110ppm) 上です。CL を大きくするほど、周波数は fs に近づきますが、ずれは 4.4kHz から 1.3kHz に減っただけです。コンデンサを大きくしても、あまり変わらなくなります。大きすぎると、発振の余裕が減って、始まらないことがあります。",
+            done: crystal_big_load,
         },
     ],
 };
