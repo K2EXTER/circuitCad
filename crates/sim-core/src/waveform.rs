@@ -308,8 +308,7 @@ fn parse_single(s: &str) -> Result<Waveform, String> {
             let tf = n.get(4).copied().unwrap_or(1e-9).max(1e-12);
             // the eighth number (LTspice) is how many cycles to make: written out as the corners of a piecewise-linear wave
             if let (Some(&cycles), Some(&per), Some(&pw)) = (n.get(7), n.get(6), n.get(5))
-                && cycles >= 1.0
-                && cycles <= 5000.0
+                && (1.0..=5000.0).contains(&cycles)
                 && per > tr + pw + tf
             {
                 let td = n[2];

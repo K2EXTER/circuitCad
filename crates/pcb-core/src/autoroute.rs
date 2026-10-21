@@ -112,12 +112,11 @@ pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&
     report.routed += rest.routed;
     report.failed = rest.failed;
     // wide tracks that cost connections: the plain run wins when it connects more
-    if let Some((plain_board, plain_report)) = plain {
-        if plain_report.failed.len() < report.failed.len() {
+    if let Some((plain_board, plain_report)) = plain
+        && plain_report.failed.len() < report.failed.len() {
             *board = plain_board;
             return plain_report;
         }
-    }
     report
 }
 
@@ -876,6 +875,8 @@ impl Router {
     /// copper). It runs between the two points on the grid, with the straight links from the points to the grid at the
     /// ends. `vias`: it may change layer. Only the box around the two points, grown by `margin` mm, is searched, and
     /// the search gives up after `budget`. `None` when nothing was found.
+    // one search request: the two ends, the layer, whether it may change layer, and how far and how long to look
+    #[allow(clippy::too_many_arguments)]
     pub fn path(&self, net: Option<&str>, a: Point, b: Point, side: Side, vias: bool, margin: f64, budget: std::time::Duration) -> Option<PathResult> {
         let grid = &self.grid;
         let net_id = net.and_then(|n| self.nets.iter().position(|x| x == n)).map_or(0, |k| k as i32 + 1);
@@ -941,7 +942,7 @@ impl Router {
         let mut pops = 0usize;
         while let Some(Node { s, .. }) = heap.pop() {
             pops += 1;
-            if pops % 1024 == 0 && started.elapsed() > budget {
+            if pops.is_multiple_of(1024) && started.elapsed() > budget {
                 return None;
             }
             let (l, i, j, d) = dec(s);

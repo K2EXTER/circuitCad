@@ -364,7 +364,7 @@ fn edge_junctions(board: &Board, radius: f64) -> Vec<Edit> {
                     let (ux, uy, l) = unit(at, to);
                     Ray { u: (ux, uy), w, len: l, track }
                 };
-                let mut rays = vec![ray(far, t.width, k), ray(u.a, u.width, m), ray(u.b, u.width, m)];
+                let mut rays = [ray(far, t.width, k), ray(u.a, u.width, m), ray(u.b, u.width, m)];
                 if rays.iter().any(|r| r.len < 1e-6) {
                     continue;
                 }

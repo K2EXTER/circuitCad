@@ -14,10 +14,10 @@ fn set_value(e: &mut SchEditor, refdes: &str, v: &str) {
 fn every_lesson_loads_and_its_circuit_simulates() {
     let titles = lesson_titles();
     assert!(titles.len() >= 5);
-    for i in 0..titles.len() {
+    for (i, title) in titles.iter().enumerate() {
         let mut e = SchEditor::default();
         e.start_lesson(i);
-        assert!(e.lesson.is_some(), "{}", titles[i]);
+        assert!(e.lesson.is_some(), "{}", title);
         assert!(!e.sch.components.is_empty(), "{}", titles[i]);
         // the 555 is a circuit that changes state by itself: it only makes sense in the time domain
         if titles[i].contains("555") || titles[i].contains("整流") {

@@ -484,7 +484,7 @@ impl Ctx<'_> {
                     t.splice(3..4, [a, b]);
                 }
             }
-            let line = if t.len() > 0 { t.join(" ") } else { line };
+            let line = if !t.is_empty() { t.join(" ") } else { line };
             let head = t[0].as_str();
             let letter = head.chars().next().unwrap().to_ascii_uppercase();
             if letter == 'X' {
@@ -532,7 +532,7 @@ impl Ctx<'_> {
                 let at = low.find("tbl(").unwrap_or(0) + 4;
                 let list = &line[at..];
                 let nums: Vec<f64> = list[..list.find(')').unwrap_or(list.len())].split(|c: char| c == ',' || c.is_whitespace()).filter(|w| !w.is_empty()).filter_map(parse_value).collect();
-                if nums.len() < 4 || nums.len() % 2 != 0 {
+                if nums.len() < 4 || !nums.len().is_multiple_of(2) {
                     return Err(format!("{head}: TBL(電圧 電流 電圧 電流 …) は、点 (電圧, 電流) を 2 つ以上並べます"));
                 }
                 let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
@@ -985,7 +985,7 @@ impl Ctx<'_> {
             && let Some((_, arr)) = rest.split_once('[')
         {
             let nums: Vec<f64> = arr.split(']').next().unwrap_or("").split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-            if nums.len() >= 4 && nums.len() % 2 == 0 {
+            if nums.len() >= 4 && nums.len().is_multiple_of(2) {
                 let mut pts: Vec<(f64, f64)> = nums.chunks(2).map(|c| (c[0], c[1])).collect();
                 let suffix = if path.is_empty() { String::new() } else { format!(".{path}") };
                 let x = format!("V({})", rename_node(&t[1], ports, prefix));
@@ -1165,12 +1165,12 @@ impl Ctx<'_> {
             if pts.is_empty() && !rest.contains('(') {
                 // the points without parentheses: `x y x y ...` (one pair per continuation line)
                 let nums: Vec<f64> = rest.split(|c: char| c == ',' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-                pts = nums.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+                pts = nums.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
             }
             if pts.len() < 2 {
                 // unbalanced or odd brackets (`(0 0 (1 10)`): take the numbers in order, two by two
                 let nums: Vec<f64> = rest.split(|c: char| c == ',' || c == '(' || c == ')' || c.is_whitespace()).filter(|s| !s.is_empty()).filter_map(parse_value).collect();
-                pts = nums.chunks_exact(2).map(|c| (c[0], c[1])).collect();
+                pts = nums.as_chunks::<2>().0.iter().map(|c| (c[0], c[1])).collect();
             }
             if pts.len() < 2 {
                 return Err(format!("{head}: TABLE の点 (x,y) が 2 つ以上ありません"));

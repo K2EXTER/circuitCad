@@ -41,7 +41,9 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
     let mut out = vec![];
     for side in board.copper_layers() {
         // the shapes of each group on this side, with the widest track among them
-        let mut groups: std::collections::BTreeMap<usize, (Vec<Path>, Vec<(Point, f64)>, f64, usize)> = Default::default();
+        // per group: its shapes, a disc (centre, radius) round each of them, the widest track, a track of the group
+        type Group = (Vec<Path>, Vec<(Point, f64)>, f64, usize);
+        let mut groups: std::collections::BTreeMap<usize, Group> = Default::default();
         for (i, t) in board.tracks.iter().enumerate().filter(|(_, t)| t.side == side) {
             let g = groups.entry(conn.items[i]).or_insert_with(|| (vec![], vec![], 0.0, i));
             g.0.push(capsule(t.a, t.b, t.width / 2.0));

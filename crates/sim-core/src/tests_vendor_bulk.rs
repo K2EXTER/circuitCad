@@ -75,9 +75,7 @@ fn guess_param(name: &str) -> &'static str {
         "5"
     } else if n.starts_with('r') || n.starts_with("dcr") || n.starts_with("zin") || n.starts_with("rf") {
         "1k"
-    } else if n.starts_with('c') {
-        "1n"
-    } else if n.starts_with('t') {
+    } else if n.starts_with('c') || n.starts_with('t') {
         "1n"
     } else {
         "1"
@@ -497,7 +495,7 @@ fn vendor_xcheck() {
             let mut diffs: Vec<(f64, String, f64, f64)> = all
                 .iter()
                 .filter_map(|(n, a)| {
-                    let key = n.to_ascii_lowercase().replacen("u1.", "x1.", 1).replacen("p_", "p_", 1);
+                    let key = n.to_ascii_lowercase().replacen("u1.", "x1.", 1);
                     let key = if key.starts_with("x1.") || key.starts_with("p_") { key } else { return None };
                     theirs.get(&clean_name(&key)).or_else(|| theirs.get(&key)).map(|b| ((a - b).abs() / (1e-3 + a.abs().max(b.abs())), n.clone(), *a, *b))
                 })
@@ -777,7 +775,7 @@ fn tran_profile() {
     }
     println!("STEPS by limit (1 breakpoint, 2 after rejection, 3 backward Euler retry, 4 at the largest step, 0 error control): {by:?}");
     let mut who: Vec<_> = who.into_iter().collect();
-    who.sort_by(|a, b| b.1.cmp(&a.1));
+    who.sort_by_key(|a| std::cmp::Reverse(a.1));
     println!("ERROR CONTROL worst element: {:?}", &who[..who.len().min(8)]);
     let mut hs: Vec<f64> = stats.iter().map(|x| x.1).collect();
     hs.sort_by(|a, b| a.total_cmp(b));

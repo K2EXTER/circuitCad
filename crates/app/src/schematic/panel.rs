@@ -133,7 +133,8 @@ impl SchEditor {
         ui.separator();
         let mut chosen = None;
         // library parts hang under the basic part of their kind (capacitor, diode, transistor), grouped by family
-        let families: Vec<(Kind, Vec<(&str, Vec<usize>)>)> = [Kind::Capacitor, Kind::Diode, Kind::Npn]
+        type Family<'a> = (Kind, Vec<(&'a str, Vec<usize>)>);
+        let families: Vec<Family> = [Kind::Capacitor, Kind::Diode, Kind::Npn]
             .into_iter()
             .map(|k| {
                 let names: &[&str] = match k {

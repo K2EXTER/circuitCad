@@ -9,7 +9,7 @@ impl BoardEditor {
             let br = self.to_world(rect, rect.right_bottom());
             // a zoomed-out view of a big board would need tens of thousands of dots: show every 2nd, 3rd ... point
             let (nx, ny) = ((br.x - tl.x) / self.grid, (tl.y - br.y) / self.grid);
-            let m = ((nx * ny / 5000.0).sqrt().ceil().max(1.0)) as f64;
+            let m = (nx * ny / 5000.0).sqrt().ceil().max(1.0);
             let grid = self.grid * m;
             let (mut x, y_end) = ((tl.x / grid).floor() * grid, (br.y / grid).floor() * grid);
             // one mesh of little squares: thousands of separate circles cost a frame in tessellation alone

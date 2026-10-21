@@ -149,7 +149,8 @@ impl Compiled {
         let (mut x, mut vj) = (x0, vj0);
         let n_node_unknowns = self.n_nodes - 1;
         // the previous point, its Newton step, its residual, its junction state and the fraction taken
-        let mut prev: Option<(Vec<f64>, Vec<f64>, f64, Vec<f64>, f64)> = None;
+        type Step = (Vec<f64>, Vec<f64>, f64, Vec<f64>, f64);
+        let mut prev: Option<Step> = None;
         // The plain iteration of a transient step that has not converged after a few dozen iterations is not going to: the
         // caller shrinks the step (or tries the line search below, which keeps the full limit). Running it on to the DC limit of
         // 150 was most of the iterations of a transient with many failing steps.

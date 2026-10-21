@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The RMS current of every net and the burst/peak figures (`tran_net_currents`).
+pub type NetCurrents = (Vec<(String, f64)>, Vec<sim_core::NetStat>);
+
 impl SchEditor {
     /// Problems that would stop the simulation (a value that is not a number, an unsupported part),
     /// as ERC findings placed on the offending part.
@@ -39,7 +42,7 @@ impl SchEditor {
 
     /// The RMS current of every net over the settled part of the last transient run (the second half), with the
     /// burst and peak figures for the warning. For circuits whose current only exists in time.
-    pub fn tran_net_currents(&self) -> Result<(Vec<(String, f64)>, Vec<sim_core::NetStat>), String> {
+    pub fn tran_net_currents(&self) -> Result<NetCurrents, String> {
         let Some(Ok(tr)) = self.tran.as_ref().map(|t| &t.outcome) else { return Err("先に回路図で「過渡解析を実行」してください (電流は、その結果の後半から求めます)".into()) };
         let c = self.sim_circuit().map_err(|e| e.join(" / "))?;
         let stats = sim_core::net_currents_tran(&c, tr, 0.5);

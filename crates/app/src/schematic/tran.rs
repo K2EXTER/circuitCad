@@ -213,7 +213,9 @@ impl SchEditor {
                                     }
                                     ui.end_row();
                                     let dash = || "—".to_string();
-                                    let rows: [(&str, &str, Box<dyn Fn(&(String, &str, sim_core::Stats, Option<sim_core::WaveMeasure>)) -> String>); 8] = [
+                                    type Stat<'a> = (String, &'a str, sim_core::Stats, Option<sim_core::WaveMeasure>);
+                                    type Column<'a> = (&'a str, &'a str, Box<dyn Fn(&Stat<'_>) -> String + 'a>);
+                                    let rows: [Column; 8] = [
                                         ("平均", "表示範囲の平均値です", Box::new(|s| format!("{}{}", plot::axis_label(s.2.mean, s.2.mean.abs() / 1000.0), s.1))),
                                         ("AC実効値", "平均を引いた交流分の実効値 (ノイズ・リップルの大きさ)", Box::new(|s| format!("{}{}", plot::axis_label(s.2.rms_ac, s.2.rms_ac.abs() / 1000.0), s.1))),
                                         ("最小", "表示中の範囲での最小値です。ズームすると、見ている部分だけの値になります", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.min, s.1)))),
@@ -224,7 +226,7 @@ impl SchEditor {
                                         ("デューティ比", "1周期のうち、中間の高さより上にいる時間の割合です", Box::new(|s| s.3.as_ref().and_then(|m| m.duty).map_or_else(dash, |d| format!("{:.1} %", d * 100.0)))),
                                     ];
                                     for (label, tip, f) in rows.iter() {
-                                        let cells: Vec<String> = stats.iter().map(|s| f(s)).collect();
+                                        let cells: Vec<String> = stats.iter().map(f).collect();
                                         // a row with nothing to show for any signal (no frequency, no duty) is left out
                                         if cells.iter().all(|c| c == "—") {
                                             continue;

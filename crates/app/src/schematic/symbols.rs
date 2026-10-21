@@ -378,26 +378,6 @@ impl SchEditor {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_source_symbol_follows_its_waveform() {
-        assert_eq!(source_shape("5"), SourceShape::Dc);
-        assert_eq!(source_shape("5 AC 1"), SourceShape::Dc);
-        assert_eq!(source_shape("SIN(0 141.4 50) AC 1"), SourceShape::Sine);
-        assert_eq!(source_shape(" pulse(0 5 1u 1n 1n 1u 2u)"), SourceShape::Pulse);
-        assert_eq!(source_shape("PWL(0 0 1 1)"), SourceShape::Other);
-        // DC keeps the +/- circle; the others draw a waveform (more segments than the DC symbol)
-        assert_eq!(source_symbol("5").len(), symbol(Kind::VSource).len());
-        assert!(source_symbol("SIN(0 1 1k)").len() > 10);
-        // pins stay where they were: every variant has the same two leads
-        let leads = |v: Vec<Sh>| v.iter().filter(|s| matches!(s, Sh::L(0., y, 0., _) if y.abs() >= 1.2 || *y == -2.0)).count();
-        assert!(leads(source_symbol("SIN(0 1 1k)")) >= 2);
-    }
-}
-
 /// A small picture of the plain symbol of `kind`, scaled to fit `rect` (for the parts list).
 pub(super) fn paint_kind_preview(painter: &egui::Painter, rect: Rect, kind: Kind, color: Color32) {
     let (x0, x1, y0, y1) = extents(kind);
@@ -429,5 +409,25 @@ pub(super) fn paint_lines_preview(painter: &egui::Painter, rect: Rect, lines: &[
     let stroke = Stroke::new(1.2, color);
     for (a, b) in lines {
         painter.line_segment([tr(*a), tr(*b)], stroke);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_source_symbol_follows_its_waveform() {
+        assert_eq!(source_shape("5"), SourceShape::Dc);
+        assert_eq!(source_shape("5 AC 1"), SourceShape::Dc);
+        assert_eq!(source_shape("SIN(0 141.4 50) AC 1"), SourceShape::Sine);
+        assert_eq!(source_shape(" pulse(0 5 1u 1n 1n 1u 2u)"), SourceShape::Pulse);
+        assert_eq!(source_shape("PWL(0 0 1 1)"), SourceShape::Other);
+        // DC keeps the +/- circle; the others draw a waveform (more segments than the DC symbol)
+        assert_eq!(source_symbol("5").len(), symbol(Kind::VSource).len());
+        assert!(source_symbol("SIN(0 1 1k)").len() > 10);
+        // pins stay where they were: every variant has the same two leads
+        let leads = |v: Vec<Sh>| v.iter().filter(|s| matches!(s, Sh::L(0., y, 0., _) if y.abs() >= 1.2 || *y == -2.0)).count();
+        assert!(leads(source_symbol("SIN(0 1 1k)")) >= 2);
     }
 }

@@ -1,5 +1,8 @@
 /// What to look up for each kind of part: (kind, which figures go in the three boxes, [(item, where to find it)]).
-pub(super) const CHECKLISTS: &[(&str, &str, &[(&str, &str)])] = &[
+type Row = (&'static str, &'static str);
+type Checklist = (&'static str, &'static str, &'static [Row]);
+
+pub(super) const CHECKLISTS: &[Checklist] = &[
     (
         "ダイオード",
         "最大電圧 = 逆耐圧 (VRRM)、最大電流 = 平均順電流 (IF(AV))。どちらも「絶対最大定格」の表にあります",

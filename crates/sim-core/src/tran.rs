@@ -118,11 +118,15 @@ fn divided_difference(pts: &[(f64, f64)]) -> f64 {
     d[0]
 }
 
+/// One accepted step as the test diagnostics keep it: (step, error ratio, what limited it, element, rejected before).
+#[cfg(test)]
+type StepStat = (f64, f64, u8, usize, bool);
+
 #[cfg(test)]
 thread_local! {
     /// Test-only diagnostics: which capacitor / inductor limited the last step, and why each step was as long as it was.
     pub(crate) static WORST: std::cell::Cell<(usize, bool)> = const { std::cell::Cell::new((0, false)) };
-    pub(crate) static STATS: std::cell::RefCell<Vec<(f64, f64, u8, usize, bool)>> = const { std::cell::RefCell::new(Vec::new()) };
+    pub(crate) static STATS: std::cell::RefCell<Vec<StepStat>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 /// One earlier accepted point: time, capacitor voltages, inductor currents.

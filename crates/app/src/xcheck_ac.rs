@@ -55,10 +55,13 @@ fn has_ac_source(s: &Schematic) -> bool {
 }
 
 /// `wrdata` of complex vectors: a frequency column, then a real and an imaginary column per vector.
-pub fn parse_ac_wrdata(text: &str) -> Option<(Vec<f64>, Vec<(String, Phasors)>)> {
+/// The frequencies and, per signal, its phasors.
+type Columns = (Vec<f64>, Vec<(String, Phasors)>);
+
+pub fn parse_ac_wrdata(text: &str) -> Option<Columns> {
     let mut lines = text.lines().filter(|l| !l.trim().is_empty());
     let header: Vec<String> = lines.next()?.split_whitespace().map(|n| n.to_ascii_lowercase()).collect();
-    if header.len() < 3 || (header.len() - 1) % 2 != 0 {
+    if header.len() < 3 || !(header.len() - 1).is_multiple_of(2) {
         return None;
     }
     let mut rows: Vec<Vec<f64>> = vec![];
@@ -91,7 +94,10 @@ pub fn phasor_error(ours: &[(f64, f64)], theirs: &[(f64, f64)]) -> f64 {
 }
 
 /// Our sweep of a circuit: SPICE node name (lower case) -> phasors.
-fn our_side(s: &Schematic) -> Result<(Vec<f64>, Vec<(String, String, Phasors)>), String> {
+/// The frequencies and, per signal, its name in ngspice, its own name and its phasors.
+type OurColumns = (Vec<f64>, Vec<(String, String, Phasors)>);
+
+fn our_side(s: &Schematic) -> Result<OurColumns, String> {
     let circuit = from_schematic(s).map_err(|e| format!("自前エンジン: 回路を作れません ({})", e.first().map(|x| x.to_string()).unwrap_or_default()))?;
     let r = ac_analysis(&circuit, &settings()).map_err(|e| format!("自前エンジン: {e}"))?;
     let nodes = extract(s)

@@ -189,6 +189,9 @@ pub enum CurrentSource {
     Tran,
 }
 
+/// The merged pours of the board, with the key they were made for (`zonefill::geometry_key`).
+type ZoneCache = Option<(u64, Vec<(Side, Vec<pcb_core::zonefill::FillShape>)>)>;
+
 pub struct BoardEditor {
     pub board: Board,
     pub path: Option<PathBuf>,
@@ -295,7 +298,7 @@ pub struct BoardEditor {
     /// The pours as geometry (cut to the outline, cleared around other nets), kept until the board changes.
     /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
     calc_cache: std::cell::RefCell<CalcCache>,
-    zone_cache: std::cell::RefCell<Option<(u64, Vec<(Side, Vec<pcb_core::zonefill::FillShape>)>)>>,
+    zone_cache: std::cell::RefCell<ZoneCache>,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,

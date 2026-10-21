@@ -245,6 +245,9 @@ fn interp(t: &[f64], v: &[f64], x: f64) -> Option<f64> {
 }
 
 /// Draw one group of traces in `rect`.
+// the eight arguments are independent (where, which traces, the shared state, which group, how to draw, whether to label x)
+// and every analysis window calls it: a struct would only move them
+#[allow(clippy::too_many_arguments)]
 pub fn draw_group(
     ui: &mut egui::Ui,
     rect: Rect,
