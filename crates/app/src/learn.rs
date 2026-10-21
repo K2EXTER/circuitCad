@@ -298,7 +298,7 @@ const MEGA_PATH: LearningPath = LearningPath {
         Stage {
             name: "3. 作って動かす",
             about: "100 ピンのチップを、はんだ付けします",
-            items: &[plan("solder_tqfp100", "100 ピン (0.5mm ピッチ) のはんだ付け", "TQFP-100 のはんだ付け。ブリッジの直し方、フラックスの使い方、導通の確かめ方", &["board_mega", "solder"], Some("まず練習用の基板で、0.5mm ピッチのチップを試します"))],
+            items: &[Item { id: "solder_tqfp100", title: "100 ピン (0.5mm ピッチ) のはんだ付け", about: "TQFP-100 のはんだ付け。ブリッジの直し方、フラックスの使い方、電源ピンの点検と、CH340 の COM ポートが出るまで", kind: Kind::Hands, build: false, requires: Some(&["board_mega", "solder"]), real: Some("まず練習用の基板で、0.5mm ピッチのチップを試します") }],
         },
     ],
 };
@@ -784,7 +784,7 @@ mod tests {
         }
         assert_eq!(recommended(mega, &progress).iter().map(|i| i.id).collect::<Vec<_>>(), ["adc_input"]);
         // the planned items hold nothing back and are never recommended
-        assert!(items(mega).filter(|i| i.kind == Kind::Planned).count() >= 3);
+        assert!(items(mega).filter(|i| i.kind == Kind::Planned).count() >= 2);
         assert!(requirements(mega, find_item("ch340g").unwrap()).iter().any(|i| i.id == "serial"));
     }
 
