@@ -25,6 +25,7 @@
 - **`ok` は「コマンドが動いた」だけ。** 回路の良否は `erc` の `errors`/`circuit_ok`。`--strict`(`Session.strict`)なら `erc` が失敗し、`dc`/`tran`/`board import` は ERC エラーのとき拒む(`erc_gate`)。`--strict` なしでは、これらの答えの `warnings` に「ERC reports N error(s)」が入る。初見のAIの試験で、`erc` が `ok:true` のまま、エラーつきの回路で `dc` が数値を返し、見落とす危険があったため。
 - **`dc` は名前に `.` を含む素子(ライブラリ部品のマクロモデルの内部。`U1.Ex` など)を隠す**(`dc full` で出す)。内部の電圧 2000V・電力 -4kW が故障に見えるため。
 - `dc`・`tran`・`board import` の答えに `circuit_ok`(ERCにエラーがなければ true)。`dc` はノードも `.` を含む名前(内部)を隠す。ミッシング GND のシミュレータのエラー文には ccad 向けの直し方を足す(`cli_sim_error`)。
+- **`dc` の答えに `ratings` と、オペアンプの飽和の警告を載せる**(`build.rs` の `dc_notes`)。「`ok` = 動いた」を「使える」と取り違えないため(2026-10-21、AIに作らせたレギュレータで、出力の頭打ちと定格オーバーを `warnings` が何も言わなかった)。`ratings` は `sim_core::check_ratings`(アプリの定格チェック)をそのまま。オペアンプの判定は、記号のピン名が `IN+`/`IN-`/`OUT` の部品で、`|V(IN+) − V(IN-)| > 10 mV`(負帰還がかかっていればほぼ0)。コンパレータなら誤警報になるので、文に「その場合は無視」と書いてある。`tran` には未対応。
 - `erc` の答えの `tips` に、CLI向けの直し方(GNDは「GND」というネット名、など)を入れる。ERCの `hint` はGUI向けの文言のため。
 
 ## 初見のAIによる試験(2026-10-19)

@@ -494,3 +494,37 @@ board status
     assert_eq!(r0["currents_declared"], 0);
     assert!(r0["wide_nets"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn dc_warns_when_an_op_amp_output_is_saturated() {
+    // 0.5 V x 11 on a 5 V supply would be 5.5 V: the LM358 output stops about 1.5 V short of the supply
+    let amp = |vin: &str| {
+        format!(
+            "new\nadd V 5 as=V1\nadd V {vin} as=VIN\nadd LM358 as=U1\nadd R 10k as=RF\nadd R 1k as=RG\n\
+             net VCC V1.+ U1.V+\nnet IN VIN.+ U1.IN+\nnet FB U1.IN- RF.1 RG.1\nnet OUT U1.OUT RF.2\nnet GND V1.- VIN.- RG.2 U1.V-\nerc\ndc\n"
+        )
+    };
+    let (a, ok) = run(&amp("0.5"));
+    assert!(ok, "{a:?}");
+    let dc = last(&a, "dc");
+    assert!(dc["voltages"]["OUT"].as_f64().unwrap() < 4.0, "{dc}");
+    let w = dc["warnings"].as_array().unwrap();
+    assert!(w.iter().any(|m| m.as_str().unwrap().starts_with("U1: IN+ is 0.500 V but IN- is")), "{dc}");
+    // in the linear range there is nothing to say
+    let (a, _) = run(&amp("0.2"));
+    assert!(last(&a, "dc")["warnings"].as_array().unwrap().is_empty(), "{}", last(&a, "dc"));
+}
+
+#[test]
+fn dc_reports_ratings_like_the_app() {
+    // 12 V across 100 ohm is 1.44 W in a 0805 resistor
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 100 as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\nerc\ndc\n");
+    assert!(ok, "{a:?}");
+    let dc = last(&a, "dc");
+    let r = dc["ratings"].as_array().unwrap();
+    assert!(r.iter().any(|i| i["ref"] == "R1" && i["level"] == "over"), "{dc}");
+    assert!(dc["warnings"].as_array().unwrap().iter().any(|m| m.as_str().unwrap().contains("rating issue")), "{dc}");
+    // a part within its limits adds nothing
+    let (a, _) = run("new\nadd V 5 as=V1\nadd R 100k as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\nerc\ndc\n");
+    assert!(last(&a, "dc")["ratings"].as_array().unwrap().is_empty());
+}

@@ -354,8 +354,43 @@ impl Session {
         let mut warnings = c.warnings.clone();
         warnings.extend(r.warnings.iter().cloned());
         warnings.extend(gate);
+        let (ratings, notes) = self.dc_notes(&r);
+        warnings.extend(notes);
         let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
-        Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings})))
+        Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings})))
+    }
+
+    /// What a DC answer says besides the numbers, so that "it ran" is not read as "it is fine":
+    /// the app's rating check (`ratings`: part, level over/caution, message, hint) and a warning for every op-amp
+    /// whose two inputs differ (negative feedback is not holding them together: the output is saturated or there is no feedback).
+    fn dc_notes(&self, r: &sim_core::DcResult) -> (Vec<Value>, Vec<String>) {
+        let ratings: Vec<Value> = sim_core::check_ratings(&self.sch, r)
+            .into_iter()
+            .map(|i| json!({"ref": i.refdes, "level": if i.level == sim_core::RatingLevel::Over { "over" } else { "caution" }, "message": i.message, "hint": i.hint}))
+            .collect();
+        let mut notes = vec![];
+        if !ratings.is_empty() {
+            let over = ratings.iter().filter(|v| v["level"] == "over").count();
+            notes.push(format!("{} rating issue(s), {over} over: see 'ratings' (typical package limits, not the data sheet)", ratings.len()));
+        }
+        let nets = sch_core::extract(&self.sch);
+        for c in &self.sch.components {
+            let Some(sym) = &c.custom else { continue };
+            let pin = |name: &str| sym.pins.iter().find(|p| p.name.eq_ignore_ascii_case(name)).map(|p| p.number.clone());
+            let (Some(pp), Some(pn), Some(po)) = (pin("IN+"), pin("IN-"), pin("OUT")) else { continue };
+            let volt = |p: &str| {
+                let net = nets.iter().find(|n| n.pins.iter().any(|q| q.refdes == c.refdes && q.pin == p))?;
+                r.voltage(&net.name)
+            };
+            let (Some(vp), Some(vn), Some(vo)) = (volt(&pp), volt(&pn), volt(&po)) else { continue };
+            if (vp - vn).abs() > 0.01 {
+                notes.push(format!(
+                    "{}: IN+ is {vp:.3} V but IN- is {vn:.3} V (OUT {vo:.3} V). With negative feedback they match, so the output is probably saturated (an op-amp output stops short of the supply: see 'part {}') or there is no feedback. Ignore this if the part is meant to be a comparator.",
+                    c.refdes, sym.name
+                ));
+            }
+        }
+        (ratings, notes)
     }
 
     pub fn tran(&mut self, args: &[String]) -> Res {

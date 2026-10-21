@@ -28,6 +28,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
  Simulation
   dc [full]                             operating point: node voltages, element currents
                                         (elements inside a library part's macro model are hidden unless 'full')
+                                        'ratings' lists parts over / near their package power limit (like the app);
+                                        'warnings' also flags an op-amp whose IN+ and IN- differ (saturated output)
   tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic]
                                         starts from the DC operating point (a capacitor starts charged);
                                         add 'uic' to start from zero instead (step responses, oscillators)
