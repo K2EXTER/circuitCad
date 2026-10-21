@@ -12,6 +12,27 @@ pub struct Airwire {
     pub b: Point,
 }
 
+/// How many pairs of airwires of different nets cross each other: the tangle one sees on an unrouted board.
+/// Ground nets are left out (a pour carries them).
+pub fn crossings(board: &Board) -> usize {
+    let wires: Vec<Airwire> = ratsnest(board).into_iter().filter(|w| !crate::drc::is_ground_net(&w.net)).collect();
+    let side = |o: Point, a: Point, b: Point| (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    let mut n = 0;
+    for (i, p) in wires.iter().enumerate() {
+        for q in &wires[i + 1..] {
+            if p.net == q.net {
+                continue;
+            }
+            let (d1, d2) = (side(p.a, p.b, q.a), side(p.a, p.b, q.b));
+            let (d3, d4) = (side(q.a, q.b, p.a), side(q.a, q.b, p.b));
+            if d1 * d2 < 0.0 && d3 * d4 < 0.0 {
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
 pub fn ratsnest(board: &Board) -> Vec<Airwire> {
     ratsnest_in(board, &pad_groups(board))
 }

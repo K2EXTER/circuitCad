@@ -46,7 +46,7 @@ impl Session {
             "autoplace" => {
                 let board = self.board_mut()?;
                 let r = pcb_core::autoplace::autoplace(board)?;
-                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured})))
+                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings})))
             }
             "pour" => {
                 // the GND pour of the editor: the bottom copper as a pour, with a via for every surface pad of the net
