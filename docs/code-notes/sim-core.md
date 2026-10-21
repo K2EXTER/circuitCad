@@ -31,7 +31,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - パラメータは数値の式として評価(`expr.rs` の `Expr` を流用。使える関数は `abs min max limit sqrt exp ln pow tanh if step`、`pi` `temp`)。呼び出し側の `k=値` が `.subckt` の既定値と内部の `.param` に勝つ。
 - 入れ子の中の素子名は `R1.X1`(頭文字は保つ)、内部ノードは `X1.n`、端子は呼び出し側のノードに置き換える。B素子の式の `V(...)` `I(...)` も同じ規則で書き換える。深さ12まで(自分自身を呼ぶとエラー)。
 - 実在のメーカーモデル(KiCad-Spice-Library の TI・IR・コミュニティ版)で試して足したもの(2026-10-15): `.param` の順序に依存しない評価、`.model` カードの `{param}`(インスタンスごとに展開)、`{式}` が `V()`/`I()` を含むときは式のまま(パラメータ名だけ置換)、`E`/`G` の `VALUE={式}`・`TABLE {式} = (x,y)…`(折れ線を `if` の入れ子に)・`POLY(n)`(1制御は多項式、複数制御は1次項のみ)、`F`/`H`(電流制御源を `I(Vsrc)` を使う B素子に)、4ノードの `Q`(基板ノードは捨てる)、`AREA`(IS倍・RB/RS割り)、`LPNP`→PNP、`VSWITCH`(Von/Voff か Vt/Vh)、`.end` で終わる `.subckt`、B素子の末尾の `Rpar=…` 等の捨てる、式に `& | ! buf inv u pwr tbl()`。未対応の種類の `.model`(JFET等)は、使う素子が出たときだけエラー。使われないモデルパラメータは `ignored_model_params` が返す(VAF・CJE・RC など。試し読みが警告する)。
-- 未対応のまま: `.include`/`.lib`、`J K T` 素子、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の基板容量(CJS・CCS)・バイアスで変わる TF(ITF/VTF/XTF)・BE降伏(BVBE)・雑音(KF/AF)、MOSFET の LEVEL 2 以上の式(体効果・移動度低下など)、JFET のゲート接合(IS)。
+- 未対応のまま: `.include`/`.lib`、XSPICE の `A` 素子(LTspice の SCHMITT など)、暗号化モデル(LTspice の Encrypted File、PSpice の $ENCRYPTED_LIB。`part_form/trial.rs` が検出して案内する)、BJT の基板容量(CJS・CCS)・バイアスで変わる TF(ITF/VTF/XTF)・BE降伏(BVBE)・雑音(KF/AF)、MOSFET の LEVEL 2 以上の式(体効果・移動度低下など)、JFET のゲート接合(IS)。
 - テスト: `tests_flat.rs`。
 
 ## BJT の早期効果と直列抵抗 (VAF/VAR/RC/RE)
