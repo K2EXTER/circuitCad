@@ -156,3 +156,16 @@ fn labels_on_a_pin_without_a_wire_belong_to_the_part() {
     assert_eq!(e.attached_labels(0), vec![1]);
     assert!(e.attached_labels(1).is_empty());
 }
+
+#[test]
+fn labels_on_pins_turn_with_the_part() {
+    let mut e = SchEditor::default();
+    e.sch = Schematic::default();
+    e.sch.add(Kind::Resistor, (20, 20), 0);
+    let pin1 = e.sch.components[0].pins()[0].1;
+    e.sch.labels.push(Label { pos: pin1, text: "A".into() });
+    e.rotate_comp(0);
+    assert_eq!(e.sch.components[0].rot, 1);
+    assert_eq!(e.sch.labels[0].pos, e.sch.components[0].pins()[0].1);
+    assert_ne!(e.sch.labels[0].pos, pin1);
+}

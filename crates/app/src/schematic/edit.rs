@@ -123,7 +123,20 @@ impl SchEditor {
         if self.would_overlap(c.kind, comp_extents(c), c.pos, next, &[i]) {
             self.status = "回すと他の部品と重なるので、回せません".into();
         } else {
+            // the labels set on the pins turn with the part: each goes to where its pin ends up
+            let before = self.sch.components[i].pins();
+            let carried: Vec<(usize, String)> = self
+                .attached_labels(i)
+                .into_iter()
+                .filter_map(|l| before.iter().find(|p| p.1 == self.sch.labels[l].pos).map(|p| (l, p.0.clone())))
+                .collect();
             self.sch.components[i].rot = next;
+            let after = self.sch.components[i].pins();
+            for (l, pin) in carried {
+                if let Some(p) = after.iter().find(|p| p.0 == pin) {
+                    self.sch.labels[l].pos = p.1;
+                }
+            }
         }
     }
 
