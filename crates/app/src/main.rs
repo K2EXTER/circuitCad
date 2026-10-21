@@ -254,7 +254,7 @@ impl eframe::App for App {
                     }
                 });
                 ui.menu_button("学ぶ", |ui| {
-                    if ui.button("学習パス: 安定化電源を作ろう…").on_hover_text("入門から、電源の部品、安定化のしくみ、基板と実機まで、順に学ぶ道筋です。どこまで進んだかも残ります").clicked() {
+                    if ui.button("学習パス (地図) を開く…").on_hover_text("学習パスの窓を開きます。3 つのパス (安定化電源・Arduino 互換ボード・Mega 互換ボード) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります").clicked() {
                         self.learn.open = true;
                         ui.close();
                     }
@@ -265,6 +265,7 @@ impl eframe::App for App {
                     let titles = schematic::lesson_titles();
                     let mut listed = vec![false; ids.len()];
                     let mut start = None;
+                    let mut open_path: Option<&str> = None;
                     let mut lesson_button = |ui: &mut egui::Ui, i: usize| {
                         let mark = if self.progress.is_done(ids[i]) { "✔ " } else { "　 " };
                         if ui.button(format!("{mark}{}", titles[i])).clicked() {
@@ -274,6 +275,11 @@ impl eframe::App for App {
                     };
                     for path in learn::PATHS {
                         ui.menu_button(path.title, |ui| {
+                            if ui.button("🗺 学習の地図 (樹形図) を開く…").on_hover_text("このパスの、レッスンの関係を樹形図で見ます (学習パスの窓が開きます)").clicked() {
+                                open_path = Some(path.id);
+                                ui.close();
+                            }
+                            ui.separator();
                             for stage in path.stages {
                                 let lessons: Vec<usize> = stage.items.iter().filter_map(|it| match it.kind { learn::Kind::Lesson(id) => ids.iter().position(|x| *x == id), _ => None }).collect();
                                 if lessons.is_empty() {
@@ -304,6 +310,10 @@ impl eframe::App for App {
                                 lesson_button(ui, i);
                             }
                         });
+                    }
+                    if let Some(id) = open_path {
+                        self.learn.select(id);
+                        self.learn.open = true;
                     }
                     if let Some(i) = start {
                         self.mode = Mode::Schematic;
