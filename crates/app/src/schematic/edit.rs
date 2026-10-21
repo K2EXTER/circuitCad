@@ -127,6 +127,13 @@ impl SchEditor {
         }
     }
 
+    /// Net labels that sit on a pin of part `i` and on no wire end: they belong to the part and move with it.
+    pub(super) fn attached_labels(&self, i: usize) -> Vec<usize> {
+        let pins: Vec<Pt> = self.sch.components[i].pins().into_iter().map(|p| p.1).collect();
+        let on_wire = |p: Pt| self.sch.wires.iter().any(|w| w.a == p || w.b == p);
+        self.sch.labels.iter().enumerate().filter(|(_, l)| pins.contains(&l.pos) && !on_wire(l.pos)).map(|(k, _)| k).collect()
+    }
+
     pub(super) fn start_group_drag(&mut self, anchor: Pt) {
         let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![] };
         for s in &self.multi {
@@ -134,6 +141,16 @@ impl SchEditor {
                 Sel::Comp(i) => g.comps.push((i, self.sch.components[i].pos)),
                 Sel::Wire(i) => g.wires.push((i, self.sch.wires[i].a, self.sch.wires[i].b)),
                 Sel::Label(i) => g.labels.push((i, self.sch.labels[i].pos)),
+            }
+        }
+        // the labels set on the pins of the moved parts go along, unless they are selected themselves
+        for s in &self.multi {
+            if let Sel::Comp(i) = *s {
+                for l in self.attached_labels(i) {
+                    if !g.labels.iter().any(|(k, _)| *k == l) {
+                        g.labels.push((l, self.sch.labels[l].pos));
+                    }
+                }
             }
         }
         self.gdrag = Some(g);

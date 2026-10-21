@@ -145,3 +145,14 @@ fn selecting_many_then_deleting_removes_exactly_those() {
     assert_eq!(e.selected, Some(Sel::Label(0)));
     assert!(e.multi.is_empty());
 }
+
+#[test]
+fn labels_on_a_pin_without_a_wire_belong_to_the_part() {
+    let mut e = editor();
+    let pins = e.sch.components[0].pins();
+    let free = pins.iter().find(|p| p.1 != (2, 0)).unwrap().1;
+    e.sch.labels.push(Label { pos: free, text: "A".into() }); // on a free pin
+    e.sch.labels.push(Label { pos: (2, 0), text: "B".into() }); // on the pin the wire ends on
+    assert_eq!(e.attached_labels(0), vec![1]);
+    assert!(e.attached_labels(1).is_empty());
+}

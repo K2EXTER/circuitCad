@@ -99,7 +99,14 @@ impl SchEditor {
                 if self.would_overlap(c.kind, comp_extents(c), np, c.rot, &[i]) {
                     self.status = OVERLAP_MSG.into();
                 } else {
+                    let (dx, dy) = (np.0 - c.pos.0, np.1 - c.pos.1);
+                    // net labels set on the pins go along with the part
+                    let carried = self.attached_labels(i);
                     self.sch.components[i].pos = np;
+                    for l in carried {
+                        let p = &mut self.sch.labels[l].pos;
+                        *p = (p.0 + dx, p.1 + dy);
+                    }
                 }
             } else {
                 self.drag = None;
