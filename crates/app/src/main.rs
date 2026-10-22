@@ -420,7 +420,17 @@ impl eframe::App for App {
         egui::Panel::bottom("status").show(ui, |ui| {
             // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
             ui.horizontal(|ui| {
-                ui.label(if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status });
+                let status = if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status };
+                if self.show_hints {
+                    // a long status keeps to two thirds of the line (the rest is the tip) and is read in full by pointing at it
+                    let width = ui.available_width() * 0.66;
+                    ui.scope(|ui| {
+                        ui.set_max_width(width);
+                        ui.add(egui::Label::new(status.as_str()).truncate()).on_hover_text(status.as_str());
+                    });
+                } else {
+                    ui.label(status.as_str());
+                }
                 if self.show_hints {
                     // rotate the general tips every 12 seconds
                     let t = ui.input(|i| i.time);

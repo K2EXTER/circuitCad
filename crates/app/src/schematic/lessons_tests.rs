@@ -1420,3 +1420,17 @@ fn lessons_samples_and_opened_circuits_start_in_the_select_tool() {
     e.adopt(s, None);
     assert!(matches!(e.tool, Tool::Select), "opened file");
 }
+
+/// The lesson window floats over the right of the canvas: fitting the circuit to the view leaves room for it.
+#[test]
+fn a_lesson_circuit_is_fitted_left_of_the_lesson_window() {
+    let rect = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::new(1500.0, 900.0));
+    let mut e = SchEditor::default();
+    e.start_lesson(0);
+    e.fit_view(rect);
+    let (pan_with, zoom_with) = (e.pan, e.zoom);
+    e.lesson = None;
+    e.fit_view(rect);
+    assert!(pan_with.x > e.pan.x, "the view's centre moves right, so the circuit moves left: {} vs {}", pan_with.x, e.pan.x);
+    assert!(zoom_with <= e.zoom, "and the circuit is no bigger than it would be on the whole canvas");
+}

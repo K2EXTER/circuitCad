@@ -373,10 +373,16 @@ impl SchEditor {
         let (x0, x1) = (pts.iter().map(|p| p.0).min().unwrap() as f32, pts.iter().map(|p| p.0).max().unwrap() as f32);
         let (y0, y1) = (pts.iter().map(|p| p.1).min().unwrap() as f32, pts.iter().map(|p| p.1).max().unwrap() as f32);
         let (w, h) = ((x1 - x0).max(4.0) + 6.0, (y1 - y0).max(4.0) + 6.0);
-        self.zoom = (rect.width() / w).min(rect.height() / h).clamp(6.0, 40.0);
-        self.pan = Vec2::new((x0 + x1) / 2.0, (y0 + y1) / 2.0);
+        // a running lesson's window floats over the right of the canvas: the circuit goes into the part left of it
+        let free = if self.lesson.is_some() { (rect.width() - LESSON_WINDOW_PX).max(rect.width() * 0.5) } else { rect.width() };
+        self.zoom = (free / w).min(rect.height() / h).clamp(6.0, 40.0);
+        let shift = (rect.width() - free) / 2.0 / self.zoom;
+        self.pan = Vec2::new((x0 + x1) / 2.0 + shift, (y0 + y1) / 2.0);
     }
 }
+
+/// Width of the lesson window (440) and its margin, in screen pixels.
+const LESSON_WINDOW_PX: f32 = 470.0;
 
 /// A small picture of the plain symbol of `kind`, scaled to fit `rect` (for the parts list).
 pub(super) fn paint_kind_preview(painter: &egui::Painter, rect: Rect, kind: Kind, color: Color32) {
