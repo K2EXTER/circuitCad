@@ -1526,3 +1526,14 @@ fn trunk_mode_is_part_of_the_wire_tool() {
     assert!(e.trunk_pads.is_empty() && e.pending.is_some(), "the wire tool starts a track as always");
     assert_eq!((tool_key(Tool::Select), tool_key(Tool::Silk)), (Some('1'), Some('0')));
 }
+
+/// The net under the pointer: a pad, a track of the pad's net, and nothing on bare board.
+#[test]
+fn the_net_under_a_point_is_found_for_pads_and_tracks() {
+    let mut e = lx_pair_editor();
+    e.tool = Tool::Select;
+    e.board.tracks.push(pcb_core::Track { a: p(15.05, 18.825), b: p(10.0, 18.825), width: 0.25, side: pcb_core::Side::Top });
+    assert_eq!(e.net_under(p(15.05, 18.175)).as_deref(), Some("LX"), "on a pad");
+    assert_eq!(e.net_under(p(12.0, 18.825)).as_deref(), Some("LX"), "on a track that leaves the pad");
+    assert_eq!(e.net_under(p(30.0, 30.0)), None, "on bare board");
+}

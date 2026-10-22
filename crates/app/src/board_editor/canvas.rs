@@ -17,10 +17,13 @@ impl BoardEditor {
         self.draw_grid(&painter, rect);
         let conn = (!self.board.zones.is_empty() || self.selected.is_some()).then(|| self.cached_connectivity());
         self.draw_zones(&painter, rect, conn.as_deref());
+        self.update_net_focus(&resp, rect);
         self.draw_copper(&painter, rect);
+        self.draw_net_focus(&painter, rect);
         self.draw_highlight(&painter, rect, conn.as_deref());
         self.draw_overlays(&painter, rect);
         self.draw_layer_badge(&painter, rect);
+        self.draw_pin_badge(&painter, rect);
         self.layer_overlay(ui, rect);
 
         if !self.alt_pan {
@@ -97,6 +100,7 @@ impl BoardEditor {
             }
         }
         if pressed(Key::Escape) {
+            self.pinned_net = None;
             self.pending = None;
             self.poly.clear();
             self.multi.clear();

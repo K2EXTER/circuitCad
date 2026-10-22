@@ -314,7 +314,8 @@ fn merged_fills_join_overlapping_and_touching_pours_of_one_net() {
     b.zones.push(Zone::new("SIG", Side::Top, rect(5.0, 18.0, 15.0, 25.0)));
     let merged = crate::zonefill::merged_fills(&b, &drc::connectivity(&b));
     assert_eq!(merged.len(), 3, "GND top, GND bottom, SIG top");
-    let (side, top) = &merged[0];
+    let (side, net, top) = &merged[0];
+    assert_eq!(net, "GND");
     assert_eq!(*side, Side::Top);
     assert_eq!(top.len(), 1, "one piece: {top:?}");
     let area = crate::geom::signed_area(&top[0].outer).abs();

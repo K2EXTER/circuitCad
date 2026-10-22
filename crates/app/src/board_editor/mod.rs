@@ -192,7 +192,7 @@ pub enum CurrentSource {
 }
 
 /// The merged pours of the board, with the key they were made for (`zonefill::geometry_key`).
-type ZoneCache = Option<(u64, Vec<(Side, Vec<pcb_core::zonefill::FillShape>)>)>;
+type ZoneCache = Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>;
 
 pub struct BoardEditor {
     pub board: Board,
@@ -309,6 +309,9 @@ pub struct BoardEditor {
     /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
     calc_cache: std::cell::RefCell<CalcCache>,
     zone_cache: std::cell::RefCell<ZoneCache>,
+    /// The net pinned by a click (Select tool) and the net under the pointer with the pointer's place; both glow (`netglow.rs`).
+    pinned_net: Option<String>,
+    hover_net: Option<(String, Pos2)>,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -394,6 +397,8 @@ impl Default for BoardEditor {
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
+            pinned_net: None,
+            hover_net: None,
             last_export_dir: None,
             lesson: None,
             drc_ran: false,
@@ -437,6 +442,7 @@ mod pairs;
 mod align;
 mod tools;
 mod trunk;
+mod netglow;
 mod file;
 mod actions;
 mod canvas;

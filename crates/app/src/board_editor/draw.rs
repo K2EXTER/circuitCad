@@ -53,7 +53,7 @@ impl BoardEditor {
             let alpha = if s == self.side { 90 } else { 40 };
             let fill = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
             let edge = self.side_color(s).gamma_multiply(if s == self.side { 0.8 } else { 0.35 });
-            for (_, shapes) in fills.iter().filter(|(side, _)| *side == s) {
+            for (_, net, shapes) in fills.iter().filter(|(side, _, _)| *side == s) {
                 for shape in shapes {
                     let mut mesh = egui::Mesh::default();
                     for t in shape.triangles() {
@@ -68,6 +68,7 @@ impl BoardEditor {
                         let pts: Vec<Pos2> = contour.iter().map(|p| self.to_screen(rect, *p)).collect();
                         painter.add(egui::Shape::closed_line(pts, Stroke::new(1.0, edge)));
                     }
+                    self.draw_pour_name(painter, rect, net, shape);
                 }
             }
         }

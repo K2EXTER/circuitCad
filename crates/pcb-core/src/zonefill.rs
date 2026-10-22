@@ -165,8 +165,8 @@ fn union(shapes: &[FillShape]) -> Vec<FillShape> {
 
 /// The pours as they are drawn: pours of the same net on one layer that overlap or touch are one piece of copper, so they are
 /// merged (drawn separately, the overlap would be painted twice). One entry per layer and net (pours without a net stay apart),
-/// with the pieces; the entries come in the order of the first pour of each.
-pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, Vec<FillShape>)> {
+/// with the pieces and the net name (empty for a pour without a net); the entries come in the order of the first pour of each.
+pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Vec<FillShape>)> {
     let mut out: Vec<(Side, Option<String>, Vec<FillShape>)> = vec![];
     for z in &board.zones {
         let fill = zone_fill(board, z, conn);
@@ -176,7 +176,7 @@ pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, Vec<FillSh
             None => out.push((z.side, key, fill)),
         }
     }
-    out.into_iter().map(|(s, k, shapes)| (s, if k.is_some() { union(&shapes) } else { shapes })).collect()
+    out.into_iter().map(|(s, k, shapes)| (s, k.clone().unwrap_or_default(), if k.is_some() { union(&shapes) } else { shapes })).collect()
 }
 
 fn raw_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
