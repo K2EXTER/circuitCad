@@ -147,7 +147,7 @@ impl PartForm {
             let mut remove = None;
             for (i, z) in zips.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    if ui.small_button("✕").on_hover_text("この zip を一覧から外します (ファイルは消えません)").clicked() {
+                    if ui.small_button("外す").on_hover_text("この zip を一覧から外します (ファイルは消えません)").clicked() {
                         remove = Some(i);
                     }
                     ui.small(z);
