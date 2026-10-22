@@ -65,7 +65,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         the pre-order check of the app: ready true/false, and every error / warning / note with the reason
                                         and the place (also: board no longer matches the schematic, copper drop, price tier of the fab)
   board save FILE.pcbjson / board open FILE.pcbjson
-  board shopping [boards=N] [file=PATH]  what to buy: per value and footprint the quantity and, for each shop (akizuki, digikey, lcsc), the part number if the library part has one, else a search link
+  board shopping [boards=N] [spare=0] [file=PATH]  what to buy: per value and footprint the quantity (qty), spares of chip R/C/L/LED (spare, 2 or a tenth; spare=0 off), their sum (buy) and, for each shop (akizuki, digikey, lcsc), the part number if the library part has one, else a search link
   board fab DIR                         Gerber, drill, BOM, placement and the zip
 ";
 

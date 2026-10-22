@@ -66,7 +66,7 @@ pub fn assembly_files(board: &Board) -> Vec<(String, String)> {
     vec![
         (format!("{}-BOM.csv", board.name), bom_csv(board)),
         (format!("{}-CPL.csv", board.name), cpl_csv(board)),
-        (format!("{}-shopping.csv", board.name), crate::shops::purchase_csv(board, 1)),
+        (format!("{}-shopping.csv", board.name), crate::shops::purchase_csv(board, 1, true)),
     ]
 }
 

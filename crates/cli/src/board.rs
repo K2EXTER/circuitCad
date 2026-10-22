@@ -258,9 +258,10 @@ impl Session {
                     "note": "ready:false means at least one error; fix those first (warnings can be ordered but are probably not what was meant). The numbers of the fab presets are a guide: look at the fab's own page before ordering. Add fab=jlcpcb|pcbway|oshpark|standard to also check that fab's minimums and price tier."})))
             }
             "shopping" => {
-                // board shopping [boards=N] [file=PATH]: what to buy, with each shop's part number or a search link
+                // board shopping [boards=N] [spare=0] [file=PATH]: what to buy, with each shop's part number or a search link
                 let (_, kv) = options(rest);
                 let boards: usize = opt(&kv, "boards").map(|v| v.parse().map_err(|_| format!("boards={v}: a whole number is needed"))).transpose()?.unwrap_or(1);
+                let spare_on = opt(&kv, "spare") != Some("0");
                 let board = self.board_mut()?;
                 let lines: Vec<Value> = pcb_core::shops::lines(board)
                     .iter()
@@ -272,12 +273,15 @@ impl Session {
                                 pcb_core::shops::Source::Search { url } => json!({"search": url}),
                             });
                         }
-                        json!({"value": l.value, "footprint": l.footprint, "refdes": l.refdes, "qty": l.qty * boards.max(1), "shops": shops})
+                        {
+                        let (need, spare) = (l.qty * boards.max(1), if spare_on { l.spare(boards) } else { 0 });
+                        json!({"value": l.value, "footprint": l.footprint, "refdes": l.refdes, "qty": need, "spare": spare, "buy": need + spare, "shops": shops})
+                    }
                     })
                     .collect();
-                let mut answer = json!({"boards": boards.max(1), "lines": lines, "note": "number = the shop's own part number (checked against the shop before use); search = a link to the shop's search page, because the number is not known"});
+                let mut answer = json!({"boards": boards.max(1), "spare_rule": "chip R/C/L/LED: 2 or a tenth of the total, whichever is more (spare=0 turns it off); other parts none", "lines": lines, "note": "qty = pieces the boards need, buy = qty + spare. number = the shop's own part number (checked against the shop before use); search = a link to the shop's search page, because the number is not known"});
                 if let Some(f) = opt(&kv, "file") {
-                    std::fs::write(f, pcb_core::shops::purchase_csv(board, boards)).map_err(|e| format!("{f}: {e}"))?;
+                    std::fs::write(f, pcb_core::shops::purchase_csv(board, boards, spare_on)).map_err(|e| format!("{f}: {e}"))?;
                     answer["file"] = json!(f);
                 }
                 Ok(obj(answer))

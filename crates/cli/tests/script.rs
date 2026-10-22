@@ -571,9 +571,28 @@ fn board_shopping_lists_parts_with_a_search_link_per_shop() {
     assert_eq!(s["boards"], 3);
     let r = s["lines"].as_array().unwrap().iter().find(|l| l["value"] == "10k").unwrap();
     assert_eq!(r["qty"], 6);
+    // 6 chip resistors: a tenth is below the minimum of 2 spares
+    assert_eq!((r["spare"].as_u64(), r["buy"].as_u64()), (Some(2), Some(8)), "{r}");
     for shop in ["akizuki", "digikey", "lcsc"] {
         assert!(r["shops"][shop]["search"].as_str().unwrap().starts_with("https://"), "{r}");
     }
+}
+
+#[test]
+fn board_shopping_spare_can_be_turned_off() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 10k as=R1
+add R 10k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+board import
+board shopping spare=0
+");
+    assert!(ok, "{a:?}");
+    let r = last(&a, "board")["lines"].as_array().unwrap().iter().find(|l| l["value"] == "10k").unwrap().clone();
+    assert_eq!((r["spare"].as_u64(), r["buy"].as_u64()), (Some(0), Some(2)), "{r}");
 }
 
 #[test]

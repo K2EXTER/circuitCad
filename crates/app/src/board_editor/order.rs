@@ -16,11 +16,14 @@ pub(super) struct OrderState {
     pub(super) exported_to: Option<PathBuf>,
     /// How the board differs from the schematic (blocks the order or only warns), as last seen by `note_schematic_diff`.
     pub(super) sync: Option<(bool, String)>,
+    /// The shopping list: how many boards to buy parts for, and whether chip parts get spares.
+    pub(super) boards: usize,
+    pub(super) spare: bool,
 }
 
 impl Default for OrderState {
     fn default() -> Self {
-        Self { open: false, fab_id: "standard".into(), checks: vec![], ran: false, preview: None, exported_to: None, sync: None }
+        Self { open: false, fab_id: "standard".into(), checks: vec![], ran: false, preview: None, exported_to: None, sync: None, boards: 1, spare: true }
     }
 }
 
@@ -111,6 +114,57 @@ impl BoardEditor {
     }
 
     /// The floating "発注の準備" window.
+    /// "部品の購入リスト": what to buy for the board, with the shops' links; a few spares of the tiny parts; a CSV to keep.
+    fn shopping_list(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("部品の購入リスト (買うもの)").id_salt("shopping_list").show(ui, |ui| {
+            ui.small("基板に載せる部品の一覧です。店のボタンで、その店の部品のページ (型番が分かるもの) か、検索のページ (分からないもの) が開きます。買う前に、店のページで値と大きさを確かめます");
+            ui.horizontal(|ui| {
+                ui.label("基板の枚数");
+                ui.add(egui::DragValue::new(&mut self.order.boards).range(1..=1000)).on_hover_text("この枚数の基板に載せる分を買います");
+                ui.checkbox(&mut self.order.spare, "予備を足す").on_hover_text("小さなチップ部品 (抵抗・コンデンサ・コイル・LED) は、落としたり飛ばしたりしやすいので、2個か全体の1割の多いほうを、多めに買います。ICやコネクタには足しません。目安です");
+            });
+            let (boards, spare) = (self.order.boards.max(1), self.order.spare);
+            let lines = pcb_core::shops::lines(&self.board);
+            if lines.is_empty() {
+                ui.small("基板に部品がありません");
+                return;
+            }
+            egui::Grid::new("shopping_grid").striped(true).show(ui, |ui| {
+                for h in ["値", "形", "番号", "必要", "予備", "買う数", "店"] {
+                    ui.small(h);
+                }
+                ui.end_row();
+                for l in &lines {
+                    let (need, extra) = (l.qty * boards, if spare { l.spare(boards) } else { 0 });
+                    ui.label(&l.value);
+                    ui.small(&l.footprint);
+                    ui.small(l.refdes.join(" ")).on_hover_text("この部品が使う場所 (部品番号)");
+                    ui.label(need.to_string());
+                    ui.label(if extra > 0 { format!("+{extra}") } else { String::new() });
+                    ui.strong((need + extra).to_string());
+                    ui.horizontal(|ui| {
+                        for (shop, s) in pcb_core::shops::SHOPS.iter().zip(&l.sources) {
+                            let (text, tip) = match s {
+                                pcb_core::shops::Source::Code { number, .. } => (format!("{} {number}", shop.name), "この店の部品のページを開きます (部品に登録された型番)"),
+                                pcb_core::shops::Source::Search { .. } => (shop.name.to_string(), "この店の検索のページを開きます (型番が分からないので、値と大きさで探します)"),
+                            };
+                            ui.hyperlink_to(text, s.url()).on_hover_text(tip);
+                        }
+                    });
+                    ui.end_row();
+                }
+            });
+            if ui.button("CSVに保存…").on_hover_text("この一覧を CSV (表計算ソフトで開けます) に保存します。店のリンクと型番も入ります").clicked()
+                && let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(format!("{}-shopping.csv", self.board.name)).save_file()
+            {
+                self.status = match std::fs::write(&path, pcb_core::shops::purchase_csv(&self.board, boards, spare)) {
+                    Ok(()) => format!("購入リストを保存しました: {}", path.display()),
+                    Err(e) => format!("購入リストを保存できませんでした: {e}。保存先に書き込めるか確認してください"),
+                };
+            }
+        });
+    }
+
     pub fn order_window(&mut self, ctx: &egui::Context) {
         if !self.order.open {
             return;
@@ -259,6 +313,8 @@ impl BoardEditor {
                     }
                 }
             }
+            ui.separator();
+            self.shopping_list(ui);
         });
         if run {
             self.run_checks();

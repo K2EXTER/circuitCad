@@ -92,6 +92,22 @@ pub struct Line {
     pub sources: Vec<Source>,
 }
 
+/// A chip resistor, capacitor, coil, bead or LED (a size code such as 0603 in the footprint): tiny and cheap, easily dropped,
+/// blown or lost, so it is bought with a few spares.
+fn is_chip(footprint: &str) -> bool {
+    let f = footprint.to_ascii_uppercase();
+    let sized = f.split(['_', '-']).any(|t| t.len() == 4 && t.chars().all(|c| c.is_ascii_digit()));
+    sized && ["R_", "C_", "L_", "LED", "FB_"].iter().any(|p| f.starts_with(p))
+}
+
+impl Line {
+    /// Pieces to buy on top of what `boards` boards need: for chip parts, 2 or a tenth of the total, whichever is more; none
+    /// for ICs, connectors and the like (a rule of thumb, not a data sheet figure).
+    pub fn spare(&self, boards: usize) -> usize {
+        if is_chip(&self.footprint) { (self.qty * boards.max(1)).div_ceil(10).max(2) } else { 0 }
+    }
+}
+
 /// One line per distinct (value, footprint, shop numbers).
 pub fn lines(board: &Board) -> Vec<Line> {
     type Key = (String, String, BTreeMap<String, String>);
@@ -123,16 +139,18 @@ fn csv(field: &str) -> String {
     if field.contains([',', '"', '\n']) { format!("\"{}\"", field.replace('"', "\"\"")) } else { field.to_string() }
 }
 
-/// The list as CSV for `boards` boards: the quantity is the pieces for all of them.
-pub fn purchase_csv(board: &Board, boards: usize) -> String {
+/// The list as CSV for `boards` boards: `Qty` is the pieces for all of them, `Spare` the extra pieces of chip parts (0 with
+/// `spare` off) and `Buy` their sum.
+pub fn purchase_csv(board: &Board, boards: usize, spare: bool) -> String {
     let boards = boards.max(1);
-    let mut out = String::from("Value,Footprint,Designator,Qty");
+    let mut out = String::from("Value,Footprint,Designator,Qty,Spare,Buy");
     for s in SHOPS {
         out.push_str(&format!(",{0} Part #,{0} Link", s.id));
     }
     out.push('\n');
     for l in lines(board) {
-        out.push_str(&format!("{},{},{},{}", csv(&l.value), csv(&l.footprint), csv(&l.refdes.join(" ")), l.qty * boards));
+        let (need, extra) = (l.qty * boards, if spare { l.spare(boards) } else { 0 });
+        out.push_str(&format!("{},{},{},{},{},{}", csv(&l.value), csv(&l.footprint), csv(&l.refdes.join(" ")), need, extra, need + extra));
         for s in &l.sources {
             out.push_str(&format!(",{},{}", csv(s.number()), csv(s.url())));
         }
@@ -183,8 +201,24 @@ mod tests {
 
     #[test]
     fn csv_multiplies_by_boards() {
-        let text = purchase_csv(&board(), 5);
-        assert!(text.starts_with("Value,Footprint,Designator,Qty,akizuki Part #,akizuki Link,digikey Part #"));
-        assert!(text.contains("10k,R_0805,R1 R2,10,,https://akizukidenshi.com/"));
+        let text = purchase_csv(&board(), 5, false);
+        assert!(text.starts_with("Value,Footprint,Designator,Qty,Spare,Buy,akizuki Part #,akizuki Link,digikey Part #"));
+        assert!(text.contains("10k,R_0805,R1 R2,10,0,10,,https://akizukidenshi.com/"));
+    }
+
+    #[test]
+    fn chip_parts_get_spares_and_the_rest_do_not() {
+        let l = lines(&board());
+        let by = |v: &str| l.iter().find(|x| x.value == v).unwrap();
+        // 2 chip resistors on 1 board: the minimum of 2 spares; on 30 boards (60 pieces): a tenth = 6
+        assert_eq!((by("10k").spare(1), by("10k").spare(30)), (2, 6));
+        // an IC in SOT-23 (not a chip passive) gets none, however many boards
+        assert_eq!(by("LM358").spare(10), 0);
+        let text = purchase_csv(&board(), 1, true);
+        assert!(text.contains("10k,R_0805,R1 R2,2,2,4,"), "{text}");
+        assert!(text.contains("LM358,SOT-23,U1,1,0,1,"), "{text}");
+        for (f, chip) in [("R_0603", true), ("C_0805", true), ("LED_0805", true), ("L_1210", true), ("SOT-23", false), ("R_Axial_10.16", false), ("PinHeader_1x2_P2.54mm", false), ("CP_Radial_D5_P2.0", false)] {
+            assert_eq!(is_chip(f), chip, "{f}");
+        }
     }
 }
