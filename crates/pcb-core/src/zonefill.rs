@@ -111,13 +111,20 @@ fn to_points(path: &[[f64; 2]]) -> Vec<Point> {
 
 /// The copper of `zone` (without thermal spokes, which the Gerber writer adds).
 pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
-    let mut out = raw_fill(board, zone, conn);
+    let raws: Vec<Vec<FillShape>> = board.zones.iter().map(|z| if z.net == zone.net && z.side == zone.side { raw_fill(board, z, conn) } else { vec![] }).collect();
+    fill_from(board, zone, conn, &raws)
+}
+
+/// [`zone_fill`] of `zone`, with the raw fills of all pours of its net and layer worked out already (`raws`, by zone index).
+fn fill_from(board: &Board, zone: &Zone, conn: &Connectivity, raws: &[Vec<FillShape>]) -> Vec<FillShape> {
+    let me = board.zones.iter().position(|z| std::ptr::eq(z, zone));
+    let mut out = me.map_or_else(|| raw_fill(board, zone, conn), |i| raws[i].clone());
     if zone.remove_islands && !zone.net.is_empty() {
         // Pours of the same net on the same layer that touch or overlap are one piece of copper: a pour beside another one is not an
         // island because the pad is in the other one.
         let mut all: Vec<FillShape> = out.clone();
-        for other in board.zones.iter().filter(|o| !std::ptr::eq(*o, zone) && o.side == zone.side && o.net == zone.net) {
-            all.extend(raw_fill(board, other, conn));
+        for (k, _) in board.zones.iter().enumerate().filter(|(_, o)| !std::ptr::eq(*o, zone) && o.side == zone.side && o.net == zone.net) {
+            all.extend(raws[k].iter().cloned());
         }
         let joined = union(&all);
         out.retain(|shape| match inner_point(shape) {
@@ -168,8 +175,10 @@ fn union(shapes: &[FillShape]) -> Vec<FillShape> {
 /// with the pieces and the net name (empty for a pour without a net); the entries come in the order of the first pour of each.
 pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Vec<FillShape>)> {
     let mut out: Vec<(Side, Option<String>, Vec<FillShape>)> = vec![];
+    // every pour's raw copper once (the island test of each pour looks at the others of its net)
+    let raws: Vec<Vec<FillShape>> = board.zones.iter().map(|z| raw_fill(board, z, conn)).collect();
     for z in &board.zones {
-        let fill = zone_fill(board, z, conn);
+        let fill = fill_from(board, z, conn, &raws);
         let key = (!z.net.is_empty()).then(|| z.net.clone());
         match key.as_ref().and_then(|_| out.iter_mut().find(|(s, k, _)| *s == z.side && *k == key)) {
             Some((_, _, shapes)) => shapes.extend(fill),

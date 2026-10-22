@@ -22,7 +22,7 @@ impl BoardEditor {
         let key = h.finish();
         let mut cache = self.finish_cache.borrow_mut();
         if let Some((k, v)) = cache.as_ref()
-            && *k == key
+            && (*k == key || self.moving_parts_only())
         {
             return Some(v.clone());
         }

@@ -39,6 +39,13 @@ impl BoardEditor {
         c.conn.get_or_insert_with(|| std::rc::Rc::new(connectivity(&self.board))).clone()
     }
 
+    /// Are only parts being moved (one part, or a group of parts)? The pours and the finished tracks are then kept as they were
+    /// until the drag ends: they cost tens of milliseconds to work out, and the part follows the pointer much more smoothly
+    /// without them. Anything that moves a track is not included (the track would stay where it was).
+    pub(super) fn moving_parts_only(&self) -> bool {
+        self.drag_part.is_some() || self.gdrag.as_ref().is_some_and(|g| g.items.iter().all(|i| matches!(i, Item::Part(_))))
+    }
+
     /// The unrouted connections (yellow lines), kept like `cached_connectivity`.
     pub(super) fn cached_airwires(&self) -> std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>> {
         let key = pcb_core::zonefill::geometry_key(&self.board);

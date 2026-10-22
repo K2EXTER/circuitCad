@@ -34,7 +34,7 @@ impl BoardEditor {
         }
         let key = pcb_core::zonefill::geometry_key(&self.board);
         let mut cache = self.zone_cache.borrow_mut();
-        if cache.as_ref().is_none_or(|(k, _)| *k != key) {
+        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.moving_parts_only()) {
             let fresh;
             let conn = match conn {
                 Some(c) => c,

@@ -1550,3 +1550,17 @@ fn hidden_things_get_no_selection_mark() {
     e.vis.top = false;
     assert!(!e.item_shown(Item::Track(0)) && !e.item_shown(Item::Pad(0)));
 }
+
+/// While only parts are being moved the pours and the finished tracks are kept (they are slow); a dragged track is not frozen.
+#[test]
+fn pours_are_kept_while_only_parts_are_dragged() {
+    let mut e = lx_pair_editor();
+    assert!(!e.moving_parts_only());
+    e.drag_part = Some(("U1".into(), p(0.0, 0.0)));
+    assert!(e.moving_parts_only());
+    e.drag_part = None;
+    e.gdrag = Some(GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: vec![Item::Part(0)] });
+    assert!(e.moving_parts_only());
+    e.gdrag = Some(GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: vec![Item::Part(0), Item::Track(0)] });
+    assert!(!e.moving_parts_only(), "a track in the group would stay where it was");
+}
