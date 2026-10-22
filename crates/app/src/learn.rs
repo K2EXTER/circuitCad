@@ -447,10 +447,11 @@ pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome>
     let mut open = true;
     egui::Window::new("ようこそ circuitCad へ").open(&mut open).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).default_width(460.0).show(ctx, |ui| {
         ui.label(spaced("回路図を描き、動かして確かめ、基板にして、発注用のデータまで作れるソフトです。電子工作が初めてでも、レッスンを順にたどれば進められます。"));
+        ui.label(spaced("最初のレッスンは、描いてある回路を動かして見るところから。自分で部品を置いて描くのは、そのあとのレッスンからです。").color(NOTE));
         ui.add_space(6.0);
         if let Some((next, action)) = next_item(&PATHS[0], progress).and_then(|i| item_action(i).map(|a| (i, a))) {
             let button = egui::Button::new(egui::RichText::new(format!("▶ 最初のレッスンを始める: {}", next.title)).strong());
-            if ui.add(button).on_hover_text("画面の案内にそって、部品を置いて配線し、電圧を測ります").clicked() {
+            if ui.add(button).on_hover_text("画面の案内にそって、描いてある回路を解析して、電圧を測ります (部品を置いて配線するのは、このあとのレッスンから)").clicked() {
                 choice = Some(Welcome::Start(action));
             }
         }
