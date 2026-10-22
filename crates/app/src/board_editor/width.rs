@@ -32,6 +32,11 @@ impl BoardEditor {
         n
     }
 
+    /// Closes the net-current panel that `use_simulated_currents` asked for.
+    pub fn close_width_panel(&mut self) {
+        self.widths_open = None;
+    }
+
     /// Declares the simulated net currents (from the schematic's DC analysis) and opens the panel.
     pub fn use_simulated_currents(&mut self, currents: Result<Vec<(String, f64)>, String>, stats: Vec<sim_core::NetStat>) {
         self.current_stats = stats;

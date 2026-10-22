@@ -68,6 +68,8 @@ impl SchEditor {
         self.path = path;
         self.selected = None;
         self.pending = None;
+        // an opened circuit is first looked at: the resistor the blank sheet has ready would land on a stray click
+        self.tool = Tool::Select;
         self.problems.clear();
         self.specs.clear();
         self.saved_specs.clear();

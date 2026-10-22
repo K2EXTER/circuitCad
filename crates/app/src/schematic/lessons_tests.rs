@@ -1403,3 +1403,20 @@ fn the_equivalent_model_lesson_ticks_its_four_steps_and_its_numbers_hold() {
     assert_eq!(progress(&e), 4);
     assert!((1.2..1.4).contains(&v(&e, "OUTA")) && (1.2..1.4).contains(&v(&e, "OUTB")), "3.3 V input: {} {}", v(&e, "OUTA"), v(&e, "OUTB"));
 }
+
+/// The app starts with the resistor ready to place. A lesson, a sample or an opened file is first for looking at, so a click on
+/// the circuit must not add a resistor: they start in the select tool.
+#[test]
+fn lessons_samples_and_opened_circuits_start_in_the_select_tool() {
+    let mut e = SchEditor::default();
+    assert!(matches!(e.tool, Tool::Place), "a blank sheet keeps the part ready to place");
+    e.start_lesson(0);
+    assert!(matches!(e.tool, Tool::Select), "lesson");
+    e.tool = Tool::Place;
+    assert!(e.open_sample("t", include_str!("../../../../docs/examples/led.schjson")));
+    assert!(matches!(e.tool, Tool::Select), "sample");
+    e.tool = Tool::Place;
+    let s = e.sch.clone();
+    e.adopt(s, None);
+    assert!(matches!(e.tool, Tool::Select), "opened file");
+}

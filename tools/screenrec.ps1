@@ -42,6 +42,28 @@ public static class Rec {
 
     public static void Init() { SetProcessDPIAware(); }
 
+    // --- driving an app that is already running, in absolute screen coordinates (1920x1080 primary screen) ---
+    // Several tool calls can work on one session this way. Use these instead of Click and friends then: the client origin that
+    // Client() reports differed between calls (with and without the title bar), so window-relative coordinates drifted.
+    public static void Attach() {
+        var ps = Process.GetProcessesByName("circuitCad");
+        if (ps.Length == 0) throw new Exception("circuitCad is not running");
+        App = ps[0]; hwnd = App.MainWindowHandle; SetForegroundWindow(hwnd); Thread.Sleep(200);
+    }
+    public static void FullShot(string path) {
+        using (var bmp = new Bitmap(1920, 1080, PixelFormat.Format24bppRgb))
+        using (var g = Graphics.FromImage(bmp)) { g.CopyFromScreen(0, 0, 0, 0, new Size(1920, 1080)); bmp.Save(path, ImageFormat.Png); }
+    }
+    static void MoveAbs(int ex, int ey, int ms) {
+        PT p; GetCursorPos(out p);
+        double sx = p.X, sy = p.Y; int steps = Math.Max(1, ms / 15);
+        for (int i = 1; i <= steps; i++) { double t = (double)i / steps; t = t * t * (3 - 2 * t); SetCursorPos((int)(sx + (ex - sx) * t), (int)(sy + (ey - sy) * t)); Thread.Sleep(15); }
+    }
+    public static void ClickAbs(int x, int y) { MoveAbs(x, y, 300); Thread.Sleep(100); mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(80); mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(150); }
+    public static void RightClickAbs(int x, int y) { MoveAbs(x, y, 300); Thread.Sleep(100); mouse_event(0x0008, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(80); mouse_event(0x0010, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(150); }
+    public static void DragAbs(int x1, int y1, int x2, int y2, int ms) { MoveAbs(x1, y1, 250); Thread.Sleep(100); mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(80); MoveAbs(x2, y2, ms); mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero); Thread.Sleep(150); }
+    public static void WheelAbs(int x, int y, int n) { MoveAbs(x, y, 200); for (int i = 0; i < Math.Abs(n); i++) { mouse_event(0x0800, 0, 0, n > 0 ? 120 : -120, UIntPtr.Zero); Thread.Sleep(60); } }
+
     public static void Launch(string exe, string args) {
         App = Process.Start(new ProcessStartInfo(exe, args) { UseShellExecute = false });
         for (int i = 0; i < 200 && (App.MainWindowHandle == IntPtr.Zero); i++) { Thread.Sleep(100); App.Refresh(); }
@@ -174,3 +196,11 @@ function PressKey($vk) { [Rec]::Key([byte]$vk) }   # e.g. 0x0D Enter, 0x1B Esc, 
 function CtrlKey($vk) { [Rec]::Chord(0x11, [byte]$vk) }
 function Mark($text) { [Rec]::Mark($text) }
 function Pause($ms) { Start-Sleep -Milliseconds $ms }
+# Absolute-coordinate helpers (see Attach in the C# above). Do NOT name a function AC or AR: `ac` is the alias of Add-Content, so the
+# call writes a file named after the first number and the mouse never moves.
+function Attach { [Rec]::Attach() }
+function FullShot($path) { [Rec]::FullShot($path) }
+function ClickAbs($x, $y) { [Rec]::ClickAbs($x, $y) }
+function RightClickAbs($x, $y) { [Rec]::RightClickAbs($x, $y) }
+function DragAbs($x1, $y1, $x2, $y2, $ms = 700) { [Rec]::DragAbs($x1, $y1, $x2, $y2, $ms) }
+function WheelAbs($x, $y, $n) { [Rec]::WheelAbs($x, $y, $n) }

@@ -114,7 +114,13 @@ impl eframe::App for App {
         match self.board_ed.currents_request.take() {
             Some(board_editor::CurrentSource::Dc) => {
                 let currents = self.sch.dc_net_currents();
+                // taken for "全部つなぐ": the route follows at once and the panel stays shut (opening it switches the tool to the
+                // wire tool and pushes the step list below the fold, with "DRC を実行" out of sight)
+                let for_route = self.board_ed.route_after_currents.is_some();
                 self.board_ed.use_simulated_currents(currents, vec![]);
+                if for_route {
+                    self.board_ed.close_width_panel();
+                }
             }
             Some(board_editor::CurrentSource::Tran) => match self.sch.tran_net_currents() {
                 Ok((currents, stats)) => self.board_ed.use_simulated_currents(Ok(currents), stats),

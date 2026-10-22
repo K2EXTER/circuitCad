@@ -125,6 +125,8 @@ impl SchEditor {
         self.sch = sch;
         self.reset_history();
         self.fit_pending = true;
+        // a finished circuit is for looking at: a click on it must not drop the part the blank sheet starts with
+        self.tool = Tool::Select;
         true
     }
 
@@ -149,6 +151,8 @@ impl SchEditor {
         self.reset_history();
         self.lesson_base = self.sch.clone();
         self.fit_pending = true;
+        // the app starts with the resistor ready to place: in a lesson a click on the circuit would add one
+        self.tool = Tool::Select;
         (lesson.setup)(self);
         self.lesson = Some(ActiveLesson { idx, shown: None, done: vec![false; lesson.steps.len()] });
         self.status = format!("レッスン「{}」を始めました。右の案内に沿って操作してみましょう", lesson.title);

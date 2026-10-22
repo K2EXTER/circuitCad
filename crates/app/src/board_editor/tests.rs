@@ -1390,3 +1390,14 @@ fn the_mega_board_lesson_starts_half_routed_and_ticks_when_a_net_is_routed_and_d
     assert_eq!(e.lesson_progress(), if clean { 3 } else { 2 }, "the last step needs a clean DRC after the work ({} violations)", e.violations.len());
     assert_eq!(e.finished_board_lesson().is_some(), clean);
 }
+
+/// Currents taken only to route ("未配線を全部つなぐ") must not leave the width panel asking to open: it would switch the tool to the
+/// wire tool and push the step list (DRC, order) below the fold.
+#[test]
+fn the_width_panel_can_be_shut_again_after_the_currents_came_in() {
+    let mut e = BoardEditor::default();
+    e.use_simulated_currents(Ok(vec![("GND".into(), 0.1)]), vec![]);
+    assert_eq!(e.widths_open, Some(true), "the button 'DC解析の電流を入れる' still opens it");
+    e.close_width_panel();
+    assert_eq!(e.widths_open, None);
+}

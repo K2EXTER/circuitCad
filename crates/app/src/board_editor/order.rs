@@ -269,7 +269,8 @@ impl BoardEditor {
                 });
                 let w = (ui.available_width() - 8.0).max(200.0) * pv.zoom;
                 let size = Vec2::new(w, w * pv.size_px[1] as f32 / pv.size_px[0] as f32);
-                egui::ScrollArea::both().max_height(380.0).id_salt("preview_scroll").show(ui, |ui| {
+                // inside the window's own scroll area, egui shrinks this one to its minimum scrolled height (64 px) unless told otherwise
+                egui::ScrollArea::both().max_height(380.0).min_scrolled_height(380.0).id_salt("preview_scroll").show(ui, |ui| {
                     ui.add(egui::Image::new(egui::load::SizedTexture::new(pv.texture.id(), size)));
                 });
                 ui.small(format!("基板 {:.1} × {:.1} mm。金色 = むき出しの銅 (はんだが付く所)、緑 = マスクをかぶった配線、黒 = 穴、白 = シルク", pv.size_mm.0, pv.size_mm.1));
