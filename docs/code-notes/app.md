@@ -44,6 +44,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 ## 部品作成フォーム・ライブラリ・電源値フォーム
 - 回路図の文字の重なり(`schematic/draw.rs`): ① 片側に3本以上ピンがある部品(IC)は、名前と値を本体の左中央ではなく、上と下に置く(`side_pinned`。左右の短い線とネットラベルでふさがるため。基本部品とピンが少ない部品は今まで通り) ② DC解析のピン電圧は、ネットラベルがそのピンの上にあるか、ピンから水平の短い線の先にあるとき、ラベルの外側に出す(`label_anchor`、`VoltageSpot`: 本体の右側のピン=名前の後ろ、左側のピン=ラベルの点の手前、上下の縁のピン=名前の上に積む(隣のピンが近いため)。電源シンボル(`Kind::Power`)の上のピンも、その値の文字の上に積む) ③ 電流の数字は、既定の位置がネットラベルに重なるとき、線の左→右の順にずらす(`first_clear`、`label_rects`)。テストは `draw.rs` の `tests`。
+- 故障のスキャン(ボタンは「よくある故障を順に試す」)は、`sim_core::likelihood` が Rare の故障を省く(「まれな故障も含める」= `scan_rare` で入れる。省いた件数は状態の行に出す)。テスト `the_fault_scan_leaves_out_the_rare_faults_unless_asked`
 - 故障のスキャン(`schematic/fault.rs` の `scan_plan`)は、「逆向きにつなぐ」(`Fault::Reverse`)を含めない。向き間違いは故障ではなく組み立てのミスなので、部品を1つずつ選ぶ方(`ALL_FAULTS` の並びと `--fault` の種類の番号は変えていない)だけで試せる。
 - 描画の軽さ(`draw.rs`): ベタの三角形は `zone_cache`(`PourCache`)に1回だけ作って毎フレーム使い回す。画面の外にある配線・涙型・シルクの線と文字・ベタのかたまりは描かない(`near_screen`、線の太さの分は余白に含める)。テスト `near_screen_leaves_out_only_what_is_far_away`
 - 部品のドラッグ中の軽さ(`view.rs` の `moving_parts_only`): 部品だけを動かしている間(1個のドラッグ・部品だけのグループ移動)は、ベタ(`draw_zones`)と整えた配線(`smoothing.rs` の `finished`)を前の結果のまま使い回し、ドラッグが終わったときに1回だけ計算し直す(どちらも小さな基板で 10〜30ms かかる)。配線が動くドラッグは対象外(配線が元の場所に残って見えるため)。ラッツネストは軽いので毎フレーム更新。テスト `pours_are_kept_while_only_parts_are_dragged`

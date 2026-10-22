@@ -984,3 +984,18 @@ fn the_fault_scan_on_its_own_thread_gives_the_same_rows_and_can_be_cancelled() {
     assert!(e.status.contains("中止"), "{}", e.status);
     assert_eq!(rows(&e), blocking);
 }
+
+/// The scan tries the faults that usually happen; the ones that hardly ever do (a resistor shorting) come only with the box ticked.
+#[test]
+fn the_fault_scan_leaves_out_the_rare_faults_unless_asked() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "series_regulator.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.analyze_fault_scan();
+    let usual = e.fault_scan.len();
+    assert!(!e.fault_scan.iter().any(|r| r.pin.is_empty() && r.label == "値が 10 倍" && r.part.starts_with('R')), "a resistor ten times larger is rare");
+    assert!(e.fault_scan.iter().any(|r| r.pin.is_empty() && r.part.starts_with('R') && r.label.contains("断線")), "an open resistor is not");
+    e.scan_rare = true;
+    e.analyze_fault_scan();
+    assert!(e.fault_scan.len() > usual, "{} vs {usual}", e.fault_scan.len());
+}

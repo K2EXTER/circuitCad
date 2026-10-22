@@ -3,7 +3,7 @@
 use super::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
-use sim_core::{assess_safety, chain_failure, dc_op, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
+use sim_core::{likelihood, Likelihood, assess_safety, chain_failure, dc_op, Danger, break_part, break_pin, breakable, describe_fault, fault_applicable, simulate_broken, simulate_broken_with, simulate_broken_ac, simulate_broken_tran, AcFaultReport, Broken, Fault, FaultReport, PinFaultSpec, PinHow, TranFaultReport};
 
 /// The last fault run.
 pub(super) struct FaultView {
@@ -44,13 +44,15 @@ struct ScanPlan {
     temp: f64,
     jobs: Vec<(String, usize, Broken)>,
     pin_jobs: Vec<(String, String, String)>,
+    /// The rare faults left out of `jobs`.
+    skipped: usize,
 }
 
 impl ScanPlan {
     /// Solves every fault on all the cores, in the order given (so the rows do not depend on which thread finished first). `done` counts the
     /// faults finished; once `cancel` is set no new ones are started and the result is `None`.
     fn run(self, done: &AtomicUsize, cancel: &AtomicBool) -> Option<Vec<ScanRow>> {
-        let ScanPlan { c, sch, temp, jobs, pin_jobs } = self;
+        let ScanPlan { c, sch, temp, jobs, pin_jobs, .. } = self;
         let rate = |r: &FaultReport| {
             let severity = match &r.faulted {
                 Err(_) => f64::INFINITY,
@@ -379,10 +381,16 @@ impl SchEditor {
             return None;
         };
         let mut jobs = vec![];
+        let mut skipped = 0;
         for part in breakable(&c) {
             // a part put in the wrong way round is a mistake of the assembly, not a failure: it is tried one part at a time only
             for (kind, fault) in ALL_FAULTS.iter().enumerate().filter(|(_, f)| !matches!(f, Fault::Reverse)) {
                 if let Some(b) = break_part(&c, &part, *fault) {
+                    // the faults that hardly ever happen are left out unless asked for
+                    if !self.scan_rare && likelihood(&c, &part, *fault) == Likelihood::Rare {
+                        skipped += 1;
+                        continue;
+                    }
                     jobs.push((part.clone(), kind, b));
                 }
             }
@@ -396,7 +404,7 @@ impl SchEditor {
                 pin_jobs.push((part.clone(), pin, label));
             }
         }
-        Some(ScanPlan { c, sch: self.sch.clone(), temp: self.fault_temp().unwrap_or(T_NOM_C), jobs, pin_jobs })
+        Some(ScanPlan { c, sch: self.sch.clone(), temp: self.fault_temp().unwrap_or(T_NOM_C), jobs, pin_jobs, skipped })
     }
 
     /// The scan, to the end, on the calling thread (command line, tests).
@@ -428,6 +436,7 @@ impl SchEditor {
         };
         let (done, cancel) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicBool::new(false)));
         let total = plan.jobs.len() + plan.pin_jobs.len();
+        let skipped = plan.skipped;
         let (tx, rx) = std::sync::mpsc::channel();
         let (d, c, options) = (done.clone(), cancel.clone(), sim_core::options());
         std::thread::spawn(move || {
@@ -436,7 +445,7 @@ impl SchEditor {
             let _ = tx.send(plan.run(&d, &c));
         });
         self.scan_run = Some(ScanRun { done, total, cancel, rx });
-        self.status = format!("故障シミュレーション: {total} 通りを試しています…");
+        self.status = format!("故障シミュレーション: {total} 通りを試しています…") + &if skipped > 0 { format!(" (まれな {skipped} 通りは省略。「まれな故障も含める」で試せます)") } else { String::new() };
     }
 
     /// Called every frame: takes the finished scan, and keeps the window redrawing while it runs.
@@ -599,9 +608,10 @@ impl SchEditor {
             if ui.button("連鎖故障を追う").on_hover_text("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)").clicked() {
                 self.run_fault_chain();
             }
-            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new("全部品を順に壊す")).on_hover_text("すべての部品を、断線・ショート・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます").clicked() {
+            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new("よくある故障を順に試す")).on_hover_text("すべての部品を、1つずつ、実際によく起きる壊れ方で壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。トランジスタやダイオードの断線・ショート、コンデンサのショート・断線・容量抜け、抵抗の断線、コイルの断線とレアショート、電源の低下・上昇、ICとトランジスタは全ピンの断線 (はんだ不良)。抵抗のショートや値が10倍になるような、めったに起きない故障は、下の「まれな故障も含める」を入れたときだけ試します。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。2か所が同時に壊れる組み合わせは試しません。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます").clicked() {
                 self.start_fault_scan();
             }
+            ui.checkbox(&mut self.scan_rare, "まれな故障も含める").on_hover_text("入れると、抵抗のショート・値が10倍や1/10になる、コンデンサの値が10倍、コイルのショートなど、めったに起きない故障も試します。件数が増え、時間もかかります");
         });
         if let Some(run) = &self.scan_run {
             let done = run.done.load(Ordering::Relaxed);

@@ -210,6 +210,8 @@ pub struct SchEditor {
     fault_kind: usize,
     fault_view: Option<fault::FaultView>,
     fault_scan: Vec<fault::ScanRow>,
+    /// The scan of every part also tries the faults that hardly ever happen.
+    scan_rare: bool,
     /// The "break every part" scan while it runs on its own thread.
     scan_run: Option<fault::ScanRun>,
     fault_chain: Option<Result<sim_core::ChainReport, Vec<String>>>,
@@ -483,6 +485,7 @@ impl Default for SchEditor {
             fault_kind: 0,
             fault_view: None,
             fault_scan: vec![],
+            scan_rare: false,
             scan_run: None,
             fault_chain: None,
             sweep_src: String::new(),

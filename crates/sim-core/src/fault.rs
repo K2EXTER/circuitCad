@@ -77,6 +77,35 @@ pub fn applicable(e: &Element) -> Vec<Fault> {
     }
 }
 
+/// How often a part fails in this way in practice: a rule of thumb from what usually goes wrong, to decide what a scan of every
+/// part tries first (not a failure rate: those depend on the part, the stress and the temperature, and are in the makers' data).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Likelihood {
+    /// What goes wrong first in many circuits: semiconductors that burn through (short or open), a ceramic capacitor cracking into a short.
+    Common,
+    /// Happens, but needs overload or age: an overloaded resistor opening, a capacitor losing capacity, a coil's layer short, a supply sagging.
+    Occasional,
+    /// Hardly ever: a resistor shorting or drifting by a factor of ten, a coil's winding shorting dead, a part put in the wrong way round
+    /// (a mistake of the assembly).
+    Rare,
+}
+
+/// How likely `fault` is for the part `element` of `c` (`Rare` for a part or fault that is not known).
+pub fn likelihood(c: &Circuit, element: &str, fault: Fault) -> Likelihood {
+    use Likelihood::*;
+    let Some(e) = c.elements.iter().find(|e| e.name() == element) else { return Rare };
+    match (e, fault) {
+        (_, Fault::Reverse) => Rare,
+        (Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. }, Fault::Open | Fault::Short) => Common,
+        (Element::Capacitor { .. }, Fault::Short) => Common,
+        (Element::Capacitor { .. }, Fault::Open | Fault::Scale(_)) => if matches!(fault, Fault::Scale(k) if k > 1.0) { Rare } else { Occasional },
+        (Element::Resistor { .. }, Fault::Open) => Occasional,
+        (Element::Inductor { .. }, Fault::Open | Fault::TurnShort(_)) => Occasional,
+        (Element::VSource { .. }, _) => Occasional,
+        _ => Rare,
+    }
+}
+
 /// The main two terminals of an element (what a short joins).
 pub(crate) fn main_pins(e: &Element) -> Option<(usize, usize)> {
     match e {
