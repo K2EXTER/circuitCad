@@ -12,6 +12,21 @@ mod drc_tests {
         Board::new("t", 40.0, 40.0)
     }
 
+    /// A hand-drawn pour of another net than GND joins the pads it only overlaps (their centres can lie outside its outline).
+    #[test]
+    fn a_pour_joins_pads_that_stick_out_of_its_outline() {
+        let mut b = board();
+        for (x, y) in [(10.0, 9.9), (14.0, 10.1)] {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+            p.net = "BAT".into();
+            b.pads.push(p);
+        }
+        let poly = [(9.0, 10.0), (15.0, 10.0), (15.0, 12.0), (9.0, 12.0)].map(|(x, y)| Point::new(x, y));
+        b.zones.push(Zone::new("BAT", Side::Top, poly.to_vec()));
+        let c = connectivity(&b);
+        assert_eq!(c.pad_group(0), c.pad_group(1), "one piece of copper through the pour");
+    }
+
     #[test]
     fn parallel_tracks_too_close() {
         let mut b = board();

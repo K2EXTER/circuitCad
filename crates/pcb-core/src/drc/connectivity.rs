@@ -119,11 +119,18 @@ impl Connectivity {
     }
 }
 
+/// Does the item lie in the pour's outline: its centre or an end inside, or its edge crossing the outline (a pad that sticks out of
+/// a hand-drawn pour is still joined to it).
 pub(super) fn anchors_inside(g: &Geo, poly: &[Point]) -> bool {
-    match g {
+    let anchored = match g {
         Geo::Cap { a, b, .. } => inside_polygon(poly, *a) || inside_polygon(poly, *b),
         Geo::Rect { c, .. } => inside_polygon(poly, *c),
-    }
+    };
+    anchored
+        || (0..poly.len()).any(|i| {
+            let edge = Geo::Cap { a: poly[i], b: poly[(i + 1) % poly.len()], r: 0.0 };
+            super::geo::dist(&edge, g) == 0.0
+        })
 }
 
 pub(super) fn pad_nets(board: &Board, parent: &mut [usize], n_tracks: usize) -> HashMap<usize, String> {
