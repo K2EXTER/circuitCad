@@ -339,6 +339,26 @@ fn bundled_ratings_are_sane_and_summarise_in_japanese() {
     assert!(s.contains("電圧 40V") && s.contains("電流 1A") && s.contains("順方向電圧"), "{s}");
 }
 
+/// The shop part numbers of the part file that is about to be replaced. They were checked against the shop by hand, so a
+/// generator that rewrites the file must keep them.
+fn existing_shops(path: impl AsRef<std::path::Path>) -> std::collections::BTreeMap<String, String> {
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str::<PartDef>(&t).ok()).map(|d| d.shops).unwrap_or_default()
+}
+
+#[test]
+fn a_rewritten_part_file_keeps_its_shop_numbers() {
+    let dir = std::env::temp_dir().join(format!("cc_shops_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("C_100n_0603.part.json");
+    let bundled = format!("{}/examples/C_100n_0603.part.json", env!("CARGO_MANIFEST_DIR"));
+    // a bundled part with a number is read back as it is; a missing or unreadable file gives none
+    assert_eq!(existing_shops(&bundled).get("lcsc").map(String::as_str), Some("C14663"));
+    assert!(existing_shops(&file).is_empty());
+    std::fs::write(&file, "not json").unwrap();
+    assert!(existing_shops(&file).is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Regenerates the bundled chip part samples: `cargo test -p part-lib write_chip_examples -- --ignored`.
 #[test]
 #[ignore]
@@ -424,7 +444,7 @@ fn write_chip_examples() {
             ratings: Some(ratings),
             glyph: if name.starts_with("CE_") || name.starts_with("CT_") { "electrolytic".into() } else { t.kind.glyph().into() },
             body: None,
-            shops: Default::default(),
+            shops: existing_shops(format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"))),
         };
         assert!(!def.has_errors(), "{name}: {:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
         let path = format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"));
@@ -670,6 +690,10 @@ fn write_kicad_mega_parts() {
                 let side = (num(p) - 1) / q;
                 p["side"] = ["left", "bottom", "right", "top"][side].into();
             }
+        }
+        let shops = existing_shops(out.join(file));
+        if !shops.is_empty() {
+            v["shops"] = serde_json::to_value(shops).unwrap();
         }
         let def: PartDef = serde_json::from_value(v).unwrap();
         // the file is checked by the same validation the app uses when a part is added
