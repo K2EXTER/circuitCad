@@ -396,7 +396,8 @@ impl eframe::App for App {
                     }
                     // these two survive a restart
                     if changed {
-                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints }.save(&prefs::Prefs::default_file());
+                        let file = prefs::Prefs::default_file();
+                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints, ..prefs::Prefs::load(&file) }.save(&file);
                         if let Err(e) = saved {
                             self.sch.status = e;
                         }

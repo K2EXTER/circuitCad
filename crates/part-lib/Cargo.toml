@@ -11,3 +11,4 @@ pcb-core = { version = "0.1.0", path = "../pcb-core" }
 sch-core = { version = "0.1.0", path = "../sch-core" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+zip = "8.6.0"

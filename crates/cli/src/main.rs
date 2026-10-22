@@ -9,6 +9,7 @@ mod board;
 mod build;
 mod design;
 mod mcp;
+mod murata;
 mod runner;
 mod session;
 

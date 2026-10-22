@@ -213,6 +213,7 @@ dependencies = [
  "sch-core",
  "serde_json",
  "sim-core",
+ "zip",
 ]
 
 [[package]]
@@ -2508,6 +2509,7 @@ dependencies = [
  "sch-core",
  "serde",
  "serde_json",
+ "zip",
 ]
 
 [[package]]

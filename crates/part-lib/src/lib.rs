@@ -648,6 +648,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
 
 pub mod diode;
 pub mod kicad;
+pub mod murata;
 pub mod passive;
 pub mod templates;
 pub mod thru_hole;
