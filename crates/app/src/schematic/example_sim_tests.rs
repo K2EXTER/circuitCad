@@ -993,6 +993,8 @@ fn the_fault_scan_leaves_out_the_rare_faults_unless_asked() {
     e.sch = sch;
     e.analyze_fault_scan();
     let usual = e.fault_scan.len();
+    // each row says which node moved most (what the table shows: "VOUT が 5V → 0V")
+    assert!(e.fault_scan.iter().any(|r| r.severity > 0.01 && r.worst.as_ref().is_some_and(|(_, a, b)| (b - a).abs() > 0.01)));
     assert!(!e.fault_scan.iter().any(|r| r.pin.is_empty() && r.label == "値が 10 倍" && r.part.starts_with('R')), "a resistor ten times larger is rare");
     assert!(e.fault_scan.iter().any(|r| r.pin.is_empty() && r.part.starts_with('R') && r.label.contains("断線")), "an open resistor is not");
     e.scan_rare = true;

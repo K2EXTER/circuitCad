@@ -58,7 +58,16 @@ impl ScanPlan {
                 Err(_) => f64::INFINITY,
                 Ok(_) => r.node_changes.iter().map(|(_, a, b)| (b - a).abs()).fold(0.0, f64::max),
             };
-            (severity, assess_safety(&sch, r).level)
+            // the node that moved most (`node_changes` is sorted by the size of the change), and the parts that come to be at risk
+            let worst = r.node_changes.first().cloned();
+            let safety = assess_safety(&sch, r);
+            let mut at_risk: Vec<String> = vec![];
+            for i in &safety.issues {
+                if !at_risk.contains(&i.refdes) {
+                    at_risk.push(i.refdes.clone());
+                }
+            }
+            Rated { severity, danger: safety.level, worst, at_risk }
         };
         let mut rows = vec![];
         // the healthy circuit is solved once for the whole scan (it used to be solved again for every fault); the broken circuits are
@@ -78,8 +87,8 @@ impl ScanPlan {
             cancel,
         );
         for ((part, kind, b), result) in jobs.into_iter().zip(solved) {
-            if let Some(Some((severity, danger))) = result {
-                rows.push(ScanRow { part, pin: String::new(), fault_kind: kind, label: b.label, severity, danger });
+            if let Some(Some(rated)) = result {
+                rows.push(ScanRow { part, pin: String::new(), fault_kind: kind, label: b.label, severity: rated.severity, danger: rated.danger, worst: rated.worst, at_risk: rated.at_risk });
             }
         }
         // every pin fault has the same healthy circuit: solve it once, from the first pin fault that can be built
@@ -99,8 +108,8 @@ impl ScanPlan {
                 cancel,
             );
             for ((part, pin, label), result) in pin_jobs.into_iter().zip(solved) {
-                if let Some(Some((severity, danger))) = result {
-                    rows.push(ScanRow { part, pin, fault_kind: 0, label, severity, danger });
+                if let Some(Some(rated)) = result {
+                    rows.push(ScanRow { part, pin, fault_kind: 0, label, severity: rated.severity, danger: rated.danger, worst: rated.worst, at_risk: rated.at_risk });
                 }
             }
         }
@@ -124,6 +133,23 @@ pub(super) struct ScanRow {
     pub(super) severity: f64,
     /// Whether a part ends up past its rating (see `sim_core::assess_safety`).
     pub(super) danger: Danger,
+    /// The node that moved most: its name, the voltage before and after.
+    pub(super) worst: Option<(String, f64, f64)>,
+    /// The parts that come to be over (or close to) their rating, worst first.
+    pub(super) at_risk: Vec<String>,
+}
+
+/// A voltage for a row of the table: 5V, 3.3V, 1.2mV.
+fn volts(v: f64) -> String {
+    format!("{}V", sim_core::format_value((v * 1e3).round() / 1e3))
+}
+
+/// What a scan finds out about one broken circuit.
+struct Rated {
+    severity: f64,
+    danger: Danger,
+    worst: Option<(String, f64, f64)>,
+    at_risk: Vec<String>,
 }
 
 /// Every way to break a whole part; the panel offers the ones that fit the part.
@@ -697,15 +723,17 @@ impl SchEditor {
                     for (k, row) in self.fault_scan.iter().enumerate() {
                         let effect = if row.severity.is_infinite() {
                             "計算できない (大電流/不定)".to_string()
-                        } else if row.severity < 0.01 {
-                            "DCでは変化なし".to_string()
+                        } else if let Some((node, before, after)) = row.worst.as_ref().filter(|_| row.severity >= 0.01) {
+                            // what a beginner can read: which point of the circuit goes where
+                            format!("{node} が {} → {}", volts(*before), volts(*after))
                         } else {
-                            format!("電圧が最大 {:.2} V 変化", row.severity)
+                            "DCでは変化なし".to_string()
                         };
+                        let who = if row.at_risk.is_empty() { String::new() } else { format!(" ({})", row.at_risk.iter().take(3).cloned().collect::<Vec<_>>().join("・")) };
                         let mark = match row.danger {
-                            Danger::Danger => " 🔥定格超え",
-                            Danger::Caution => " ⚠余裕なし",
-                            Danger::Safe => "",
+                            Danger::Danger => format!(" 🔥定格超え{who}"),
+                            Danger::Caution => format!(" ⚠余裕なし{who}"),
+                            Danger::Safe => String::new(),
                         };
                         let text = format!("{} {}: {}{}", row.part, row.label, effect, mark);
                         let col = if row.severity.is_infinite() || row.danger == Danger::Danger { Color32::from_rgb(230, 90, 70) } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
@@ -714,7 +742,7 @@ impl SchEditor {
                         }
                     }
                 });
-            });
+            }).header_response.on_hover_text("1行が1つの故障です。「VIN が 12V → 0V」は、その故障でいちばん電圧が変わった点の、前と後です。🔥定格超え = 部品が定格 (電圧・電流・電力) を超えて、焼損・発煙のおそれがあります。⚠余裕なし = 定格の近くまで来ます。かっこの中は、その部品です。灰色は、DCでは変わらないものです");
             if let Some(k) = pick {
                 let row = &self.fault_scan[k];
                 (self.fault_part, self.fault_pin, self.fault_kind, self.fault_pin_how) = (row.part.clone(), row.pin.clone(), row.fault_kind, 0);
