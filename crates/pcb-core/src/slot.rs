@@ -154,6 +154,37 @@ fn has_close_pair(discs: &[(Point, f64)], gap: f64) -> bool {
 /// What closing the union of `paths` by `d` adds: the polygons of the new copper (outer contours; pieces with a hole
 /// and corner-sized pieces are left out).
 fn closed_pieces(paths: &[Path], d: f64) -> Vec<Vec<Point>> {
+    use std::hash::{Hash, Hasher};
+    // the result depends on these paths and `d` alone, and it costs milliseconds per piece of copper: a piece that is the same as
+    // in the last run (most of them, after one edit) comes from the memory
+    thread_local! {
+        static MEMORY: std::cell::RefCell<std::collections::HashMap<u64, Vec<Vec<Point>>>> = Default::default();
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    d.to_bits().hash(&mut h);
+    for p in paths {
+        p.len().hash(&mut h);
+        for q in p {
+            q[0].to_bits().hash(&mut h);
+            q[1].to_bits().hash(&mut h);
+        }
+    }
+    let key = h.finish();
+    if let Some(hit) = MEMORY.with(|m| m.borrow().get(&key).cloned()) {
+        return hit;
+    }
+    let out = close_pieces(paths, d);
+    MEMORY.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() >= 1024 {
+            m.clear();
+        }
+        m.insert(key, out.clone());
+    });
+    out
+}
+
+fn close_pieces(paths: &[Path], d: f64) -> Vec<Vec<Point>> {
     let none: Vec<Path> = vec![];
     let union = paths.to_vec().overlay(&none, OverlayRule::Union, FillRule::NonZero);
     let grown = union.outline(&OutlineStyle::new(d));
