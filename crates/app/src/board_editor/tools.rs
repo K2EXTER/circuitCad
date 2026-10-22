@@ -57,7 +57,7 @@ impl BoardEditor {
                         self.status = format!("{r} のシルク文字: ドラッグで動かせます。Delete で、元の位置に戻ります");
                     }
             }
-            Tool::Trunk => self.trunk_click(p),
+            Tool::Track if self.trunk_mode => self.trunk_click(p),
             Tool::Track => match self.pending.take() {
                 None => self.pending = Some(p),
                 Some(a) => {

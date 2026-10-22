@@ -83,4 +83,53 @@ impl BoardEditor {
             }
         }
     }
+
+    /// The wire tool's box in trunk mode: the steps, and what the tool last said (the status line is overwritten with the
+    /// cursor position, so a refusal is read here).
+    pub(super) fn trunk_help(&self, ui: &mut egui::Ui) {
+        ui.small("① 同じネットで隣り合うパッドを2つクリック (例: QFN の2本の LX ピン)");
+        ui.small("② 幹を伸ばす先をクリック (パッドから 1mm 以上離れた所)");
+        ui.small(format!("パッドの首は下の「線幅」({:.2} mm)、幹は、2つのパッドの外側の縁までの太さになります。右クリックで取り消し", self.track_width));
+        ui.small("近くに別のネットがあって、間隔が足りなくなるときは、引かずに理由を出します");
+        match &self.trunk_note {
+            Some(Ok(m)) => {
+                ui.colored_label(Color32::from_rgb(110, 200, 130), m.as_str());
+            }
+            Some(Err(m)) => {
+                ui.colored_label(Color32::from_rgb(255, 130, 100), m.as_str());
+            }
+            None => {}
+        }
+        ui.separator();
+    }
+
+    /// The picture at the cursor in trunk mode: rings on the pads picked, and with two of them the neck and trunk as they would
+    /// be drawn to the cursor, or why they cannot be.
+    pub(super) fn draw_trunk_ghost(&self, painter: &egui::Painter, rect: Rect, p: Point, scr: Pos2) {
+        let ring = Color32::from_rgb(90, 230, 120);
+        for &i in &self.trunk_pads {
+            if let Some(pd) = self.board.pads.get(i) {
+                let (w, h) = pd.shape.size();
+                painter.circle_stroke(self.to_screen(rect, pd.pos), (w.max(h) as f32 * self.zoom / 2.0 + 5.0).max(8.0), Stroke::new(2.0, ring));
+            }
+        }
+        if let [i, j] = self.trunk_pads[..] {
+            match pcb_core::trunk::fan(&self.board, i, j, p, self.track_width) {
+                Ok(f) => {
+                    let col = self.side_color(self.side).gamma_multiply(0.7);
+                    for n in &f.necks {
+                        painter.line_segment([self.to_screen(rect, n.a), self.to_screen(rect, n.b)], Stroke::new((n.width as f32 * self.zoom).max(1.5), col));
+                    }
+                    let mut from = f.start;
+                    for to in self.trunk_path(&f, p) {
+                        painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, to)], Stroke::new((f.width as f32 * self.zoom).max(1.5), col));
+                        from = to;
+                    }
+                }
+                Err(e) => {
+                    painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, e, egui::FontId::proportional(13.0), Color32::from_rgb(255, 120, 90));
+                }
+            }
+        }
+    }
 }

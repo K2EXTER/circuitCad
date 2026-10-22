@@ -1470,7 +1470,8 @@ fn lx_pair_editor() -> BoardEditor {
         (pd.refdes, pd.pin, pd.net) = ("U1".into(), "2".into(), "LX".into());
         e.board.pads.push(pd);
     }
-    e.tool = Tool::Trunk;
+    e.tool = Tool::Track;
+    e.trunk_mode = true;
     e
 }
 
@@ -1516,9 +1517,12 @@ fn the_trunk_tool_refuses_with_a_reason_and_can_be_cancelled() {
     assert!(e.status.contains("ネットが違い") && e.trunk_pads.len() == 1, "{}", e.status);
 }
 
-/// The trunk tool is the eleventh tool: it has no number key (1-9 and 0 belong to the first ten).
+/// Trunk mode belongs to the wire tool: it is not a tool of its own, and an ordinary click in the wire tool starts a track.
 #[test]
-fn the_trunk_tool_has_no_number_key_and_the_others_keep_theirs() {
-    assert_eq!(tool_key(Tool::Trunk), None);
+fn trunk_mode_is_part_of_the_wire_tool() {
+    let mut e = lx_pair_editor();
+    e.trunk_mode = false;
+    e.click(p(15.05, 18.825));
+    assert!(e.trunk_pads.is_empty() && e.pending.is_some(), "the wire tool starts a track as always");
     assert_eq!((tool_key(Tool::Select), tool_key(Tool::Silk)), (Some('1'), Some('0')));
 }

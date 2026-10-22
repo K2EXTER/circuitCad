@@ -243,7 +243,6 @@ impl BoardEditor {
             Tool::PadSmd => "パッド(SMD)の設定",
             Tool::Hole => "取付穴の設定",
             Tool::Zone => "銅箔ゾーンの設定",
-            Tool::Trunk => "幹ツールの使い方",
             _ => return,
         };
         // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
@@ -265,6 +264,14 @@ impl BoardEditor {
     fn tool_options_body(&mut self, ui: &mut egui::Ui) {
         match self.tool {
             Tool::Track => {
+        if ui.checkbox(&mut self.trunk_mode, "幹で引く (2パッド→太い1本)").on_hover_text("入れると、配線ツールで、同じネットで隣り合う2つのパッド (QFN の2本の LX ピンなど) から、太い1本の幹を引き出します。パッドを2つクリックして、最後に幹を伸ばす先をクリックします。パッドの近くは細い首、そのあとが太い幹になります。合流の所に空きができず、すき間を埋める必要がない形です").changed() {
+            self.trunk_pads.clear();
+            self.trunk_note = None;
+            self.pending = None;
+        }
+        if self.trunk_mode {
+            self.trunk_help(ui);
+        }
         ui.label("引き方").on_hover_text("配線ツールで引くときの設定です。線幅・ビアは、自動配線にも使われます");
         ui.checkbox(&mut self.auto_route, "自動経路 (パッドまで探す)").on_hover_text("入れると、配線ツールで、行き先のパッド・ビア・配線の端にカーソルを合わせたとき、出発点からそこまでの経路を、障害物をよけて自動で探して見せます (水色の線)。クリックで、その経路を配線します。探せないとき・行き先が何もない所のときは、いつもの曲げ方の線になります。切ると、押しのけも使わない、手で決めたとおりの配線になります");
         // shoving only works on top of the automatic path, so it is offered only while that is on
@@ -295,21 +302,6 @@ impl BoardEditor {
         ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
         ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
             .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
-            }
-            Tool::Trunk => {
-                ui.small("① 同じネットで隣り合うパッドを2つクリック (例: QFN の2本の LX ピン)");
-                ui.small("② 幹を伸ばす先をクリック (パッドから 1mm 以上離れた所)");
-                ui.small(format!("パッドの首は「配線」ツールの線幅 ({:.2} mm)、幹は、2つのパッドの外側の縁までの太さになります。右クリックで取り消し", self.track_width));
-                ui.small("近くに別のネットがあって、間隔が足りなくなるときは、引かずに理由を出します");
-                match &self.trunk_note {
-                    Some(Ok(m)) => {
-                        ui.colored_label(Color32::from_rgb(110, 200, 130), m.as_str());
-                    }
-                    Some(Err(m)) => {
-                        ui.colored_label(Color32::from_rgb(255, 130, 100), m.as_str());
-                    }
-                    None => {}
-                }
             }
             Tool::PadTh | Tool::PadSmd => {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");

@@ -316,6 +316,7 @@ impl BoardEditor {
         painter.circle_stroke(scr, 4.0, Stroke::new(1.0, Color32::WHITE));
         let preview = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 200));
         match self.tool {
+            Tool::Track if self.trunk_mode => self.draw_trunk_ghost(painter, rect, p, scr),
             Tool::Track => {
                 if let Some(a) = self.pending {
                     let preview = self.route_preview(a, p);
@@ -346,34 +347,6 @@ impl BoardEditor {
                             format!("{pushed} 本を押しのけます")
                         };
                         painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, msg, egui::FontId::proportional(13.0), base);
-                    }
-                }
-            }
-            Tool::Trunk => {
-                let ring = Color32::from_rgb(90, 230, 120);
-                for &i in &self.trunk_pads {
-                    if let Some(pd) = self.board.pads.get(i) {
-                        let (w, h) = pd.shape.size();
-                        painter.circle_stroke(self.to_screen(rect, pd.pos), (w.max(h) as f32 * self.zoom / 2.0 + 5.0).max(8.0), Stroke::new(2.0, ring));
-                    }
-                }
-                // with two pads picked: the trunk as it would be drawn to the cursor, or why it cannot be
-                if let [i, j] = self.trunk_pads[..] {
-                    match pcb_core::trunk::fan(&self.board, i, j, p, self.track_width) {
-                        Ok(f) => {
-                            let col = self.side_color(self.side).gamma_multiply(0.7);
-                            for n in &f.necks {
-                                painter.line_segment([self.to_screen(rect, n.a), self.to_screen(rect, n.b)], Stroke::new((n.width as f32 * self.zoom).max(1.5), col));
-                            }
-                            let mut from = f.start;
-                            for to in self.trunk_path(&f, p) {
-                                painter.line_segment([self.to_screen(rect, from), self.to_screen(rect, to)], Stroke::new((f.width as f32 * self.zoom).max(1.5), col));
-                                from = to;
-                            }
-                        }
-                        Err(e) => {
-                            painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, e, egui::FontId::proportional(13.0), Color32::from_rgb(255, 120, 90));
-                        }
                     }
                 }
             }

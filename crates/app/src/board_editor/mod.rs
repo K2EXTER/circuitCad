@@ -23,8 +23,6 @@ pub enum Tool {
     OutlineRect,
     OutlinePoly,
     Zone,
-    /// Two pads of a net side by side, then a place to go to: thin necks and one thick trunk.
-    Trunk,
 }
 
 use crate::icons::Icon;
@@ -41,14 +39,12 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::PadSmd => "表面実装の単独パッドを置きます",
         Tool::Hole => "ネジ止め用の取付穴を置きます",
         Tool::Silk => "部品名や目印などの白い印刷 (シルク) の線を引きます",
-        Tool::Trunk => "同じネットで隣り合う2つのパッド (QFN の2本の LX ピンなど) から、太い1本の幹を引き出します。パッドを2つクリックして、最後に幹を伸ばす先をクリックします。パッドの近くは細い首、そのあとが太い幹になります",
     }
 }
 
 /// The number key that picks a tool: 1-9 and 0 in the order of `TOOLS`.
 fn tool_key(t: Tool) -> Option<char> {
-    // only the first ten tools have a key (1-9 and 0)
-    TOOLS.iter().position(|(x, _, _)| *x == t).filter(|i| *i < 10).and_then(|i| char::from_digit(((i + 1) % 10) as u32, 10))
+    TOOLS.iter().position(|(x, _, _)| *x == t).and_then(|i| char::from_digit(((i + 1) % 10) as u32, 10))
 }
 
 const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
@@ -62,7 +58,6 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::PadSmd, "パッド(SMD)", Icon::PadSmd),
     (Tool::Hole, "取付穴", Icon::Hole),
     (Tool::Silk, "シルク線", Icon::Silk),
-    (Tool::Trunk, "幹 (2パッド→太い1本)", Icon::Wire),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -251,7 +246,9 @@ pub struct BoardEditor {
     drag_part: Option<(String, Point)>,
     /// A designator text being dragged: its part and where the pointer grabbed it (from the text's centre).
     drag_label: Option<(String, Point)>,
-    /// The trunk tool: the pads picked so far (up to two).
+    /// The wire tool in its trunk mode ("幹で引く"): two pads of a net side by side, then a place to go to.
+    trunk_mode: bool,
+    /// In trunk mode: the pads picked so far (up to two).
     trunk_pads: Vec<usize>,
     /// What the trunk tool last said (shown in its box; the status line is overwritten with the cursor position).
     trunk_note: Option<Result<String, String>>,
@@ -358,6 +355,7 @@ impl Default for BoardEditor {
             gdrag: None,
             drag_part: None,
             drag_label: None,
+            trunk_mode: false,
             trunk_pads: vec![],
             trunk_note: None,
             seg_drag: None,
