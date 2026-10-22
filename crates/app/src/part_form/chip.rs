@@ -93,7 +93,7 @@ impl PartForm {
             crate::icons::help_small(ui, "ESR・ESL などを足すと実物に近づきます", "容量などの値に、データシートにある ESR・ESL・DCR などを足すと、実物に近いモデルになります。空の欄は入れません。値だけでも作れます");
             let kind = self.pas_kind;
             if kind == PassiveKind::Capacitor && !self.pas_polar {
-                self.murata_ui(ui);
+                self.vendor_ui(ui);
             }
             egui::Grid::new("pas_grid").num_columns(2).show(ui, |ui| {
                 let row = |ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str, hint: &str| {

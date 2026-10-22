@@ -110,8 +110,8 @@ pub struct PartForm {
     pub extras: String,
     /// A built-in footprint used as the package (empty = the dimensions typed below).
     pub fp_preset: String,
-    /// The Murata model picker of the chip capacitor section.
-    pub mu: murata::MurataPicker,
+    /// The maker model picker of the chip capacitor section.
+    pub mu: vendor::VendorPicker,
     /// Symbol drawn for a chip part (see `PartDef.glyph`); set by the chip part section.
     pub glyph: String,
     /// The chip part section: kind, value and what the data sheet says, as typed.
@@ -290,7 +290,7 @@ mod checklist;
 mod kind;
 mod parse;
 mod chip;
-mod murata;
+mod vendor;
 mod diode;
 mod zchart;
 mod thru;

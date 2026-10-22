@@ -35,10 +35,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         add 'uic' to start from zero instead (step responses, oscillators)
                                         'ratings' / 'warnings' (second half of the run): resistor rms power, LED peak current,
                                         electrolytic ripple current, op-amp inputs that stay apart (saturation)
- Murata capacitors (needs Murata's own 'SPICE netlist' zip; it is not shipped with the app)
-  murata [WORD] [zip=PATH] [size=0603] [diel=X7R] [cmin=1u] [cmax=10u] [vmin=16]
-                                        search chip ceramic capacitors by size (inch code), dielectric, capacitance, rating;
-                                        zip defaults to the one chosen in the app. 'murata model=PN' prints the subcircuit
+ Maker SPICE models (the zips are the maker's own download, e.g. Murata 'SPICE netlist'; not shipped with the app)
+  models [WORDS] [zip=PATH] [size=0603] [diel=X7R] [cmin=1u] [cmax=10u] [vmin=16]
+                                        search the models by name; size (inch code), dielectric, capacitance and rating
+                                        work for models a maker reader describes (Murata). zip defaults to the ones added in the app.
+                                        'models model=PN' prints the subcircuit (alias: murata)
  Design help
   calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no
                                         arguments lists them with their inputs; the answer has the value, steps, cautions
@@ -186,7 +187,7 @@ impl Session {
             "dc" => self.dc(args),
             "tran" => self.tran(args),
             "ac" => self.ac(args),
-            "murata" => crate::murata::murata(args),
+            "models" | "murata" => crate::models::models(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),
             "board" => self.board_cmd(args),
