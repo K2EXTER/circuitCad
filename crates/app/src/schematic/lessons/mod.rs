@@ -41,6 +41,7 @@ mod basics;
 mod conditions;
 mod devices;
 mod micro;
+mod models;
 mod supply;
 
 #[cfg(test)]
@@ -93,6 +94,7 @@ const LESSONS: &[Lesson] = &[
     micro::MEGA_POWER,
     micro::CRYSTAL_LOAD,
     micro::CH340G,
+    models::EQUIV_MODEL,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

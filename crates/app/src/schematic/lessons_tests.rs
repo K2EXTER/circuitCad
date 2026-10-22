@@ -1366,3 +1366,40 @@ fn the_usb_noise_lesson_ticks_its_four_steps_and_only_one_sided_noise_adds_edges
     assert_eq!(progress(&e), 4);
     assert!(edges(&e) > 12, "one-sided noise beyond the margin is misread: {}", edges(&e));
 }
+
+#[test]
+fn the_equivalent_model_lesson_ticks_its_four_steps_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "equiv_model").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, net: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(net).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    // light load (about 93 mA): both are near 0.8 V, as the text says
+    assert!((0.75..0.9).contains(&v(&e, "OUTA")) && (0.7..0.85).contains(&v(&e, "OUTB")), "120 ohm: {} {}", v(&e, "OUTA"), v(&e, "OUTB"));
+    for r in ["R1", "R2"] {
+        set_value(&mut e, r, "34");
+    }
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    // the part is near the data sheet's 1.3 V at about 320 mA; the hand-built one is far below it
+    assert!((1.2..1.35).contains(&v(&e, "OUTA")), "part at 34 ohm: {}", v(&e, "OUTA"));
+    assert!(v(&e, "OUTB") < 0.9, "hand-built without R6: {}", v(&e, "OUTB"));
+    set_value(&mut e, "R6", "1.5");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((1.2..1.4).contains(&v(&e, "OUTB")), "hand-built with 1.5 ohm: {}", v(&e, "OUTB"));
+    // the relay coils (34 ohm, about 3.5 W) are not chip resistors, so the only warning is the true one: a 2N3904 (200 mA) carrying 320 mA
+    let over: Vec<_> = sim_core::check_ratings(&e.sch, e.dc.as_ref().unwrap().outcome.as_ref().unwrap()).into_iter().filter(|i| i.level == sim_core::RatingLevel::Over).map(|i| i.refdes).collect();
+    assert_eq!(over, vec!["Q2".to_string()], "the lesson text tells about this warning");
+    set_value(&mut e, "V2", "3.3");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+    assert!((1.2..1.4).contains(&v(&e, "OUTA")) && (1.2..1.4).contains(&v(&e, "OUTB")), "3.3 V input: {} {}", v(&e, "OUTA"), v(&e, "OUTB"));
+}

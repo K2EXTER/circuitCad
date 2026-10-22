@@ -1687,3 +1687,89 @@ fn write_three_phase_examples() {
     }
     std::fs::write(root.join("three_phase_rectifier.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
+
+/// Generates docs/examples/uln2803a_model.schjson: the same relay-coil load (120 ohm from 12 V) switched by the library ULN2803A (U1, the
+/// packaged equivalent model, a reference) and by a hand-built equivalent of one channel: R3 2.7k input, R4 7.2k and R5 3k turn-off resistors,
+/// two 2N3904 as a Darlington (Q1, Q2), the clamp diode D1 and R6 = 0.01 ohm in Q2's emitter (the learner raises it to about 1.5 ohm). Both are
+/// driven from the same 5 V (V2). `cargo test -p app write_uln2803a_example -- --ignored`
+#[test]
+#[ignore]
+fn write_uln2803a_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let part = |name: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == name).unwrap();
+    let (uln, npn) = (part("ULN2803A"), part("2N3904"));
+    let pin = |def: &part_lib::PartDef, name: &str| def.pins.iter().find(|p| p.name == name).unwrap_or_else(|| panic!("pin {name}")).number.clone();
+    let mut s = sch_core::Schematic::default();
+    // a short wire out of the pin on the side of the symbol the pin belongs to (a tall symbol: the offset alone would point sideways pins up)
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let side = s.components[idx].custom.as_ref().and_then(|c| c.pins.iter().find(|p| p.number == pin)).map(|p| p.side);
+        let end = match side {
+            Some(sch_core::PinSide::Left) => (pt.0 - 3, pt.1),
+            Some(sch_core::PinSide::Right) => (pt.0 + 3, pt.1),
+            Some(sch_core::PinSide::Top) => (pt.0, pt.1 - 3),
+            Some(sch_core::PinSide::Bottom) => (pt.0, pt.1 + 3),
+            None => {
+                let c = s.components[idx].pos;
+                let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+                if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) }
+            }
+        };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    // sources: 12 V supply (also the relay supply), 5 V from a microcontroller pin
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (12, 0), 0);
+    s.components[v2].value = "5".into();
+    label(&mut s, v2, "+", "IN");
+    label(&mut s, v2, "-", "GND");
+    // the packaged part (reference): IN1 -> OUT1, unused inputs on GND, unused outputs named
+    let u1 = s.add_custom(uln.symbol(), &uln.default_value(), &uln.footprint_name(), (36, 14), 0);
+    label(&mut s, u1, &pin(&uln, "IN1"), "IN");
+    for i in 2..=8 {
+        label(&mut s, u1, &pin(&uln, &format!("IN{i}")), "GND");
+        label(&mut s, u1, &pin(&uln, &format!("OUT{i}")), &format!("NC{i}"));
+    }
+    label(&mut s, u1, &pin(&uln, "GND"), "GND");
+    label(&mut s, u1, &pin(&uln, "COM"), "VCC");
+    label(&mut s, u1, &pin(&uln, "OUT1"), "OUTA");
+    let r1 = s.add(Kind::Resistor, (70, 0), 1);
+    s.components[r1].value = "120".into();
+    // a relay coil is not a chip resistor: a name the rating check does not know, so that the coil's 1 W is not "over the limit"
+    s.components[r1].footprint = "Relay_coil".into();
+    label(&mut s, r1, "1", "VCC");
+    label(&mut s, r1, "2", "OUTA");
+    // the hand-built channel
+    let two = |s: &mut sch_core::Schematic, x: i32, value: &str, a: &str, b: &str| {
+        let r = s.add(Kind::Resistor, (x, 54), 1);
+        s.components[r].value = value.into();
+        label(s, r, "1", a);
+        label(s, r, "2", b);
+        r
+    };
+    let r2 = two(&mut s, 98, "120", "VCC", "OUTB");
+    s.components[r2].footprint = "Relay_coil".into();
+    two(&mut s, 0, "2.7k", "IN", "B1");
+    two(&mut s, 12, "7.2k", "B1", "GND");
+    two(&mut s, 50, "3k", "E1", "GND");
+    // 1.5 ohm at 320 mA is 0.15 W: a 1206 (0.25 W), not the default 0805 (0.125 W)
+    let r6 = two(&mut s, 80, "0.01", "QE", "GND");
+    s.components[r6].footprint = "R_1206".into();
+    let q1 = s.add_custom(npn.symbol(), &npn.default_value(), &npn.footprint_name(), (30, 56), 0);
+    label(&mut s, q1, &pin(&npn, "B"), "B1");
+    label(&mut s, q1, &pin(&npn, "C"), "OUTB");
+    label(&mut s, q1, &pin(&npn, "E"), "E1");
+    let q2 = s.add_custom(npn.symbol(), &npn.default_value(), &npn.footprint_name(), (62, 56), 0);
+    label(&mut s, q2, &pin(&npn, "B"), "E1");
+    label(&mut s, q2, &pin(&npn, "C"), "OUTB");
+    label(&mut s, q2, &pin(&npn, "E"), "QE");
+    let d1 = s.add(Kind::Diode, (110, 54), 1);
+    s.components[d1].value = "1N4007".into();
+    label(&mut s, d1, "A", "OUTB");
+    label(&mut s, d1, "K", "VCC");
+    std::fs::write(root.join("uln2803a_model.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}

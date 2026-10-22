@@ -112,7 +112,7 @@
 - 最終課題 `draw_psu` は、`series_regulator`・`regulator_78xx`・`protection` が前提。そのあと `board` → `board_copper`・`board_fix` → `build_psu`。
 - Arduino のパスの「LED と抵抗」「電圧を分ける」「基板」は、この木の項目を前提にしています(別のパスの項目も指せる)。
 - 進み具合の記録は項目の id のままなので、直線のときの記録がそのまま使えます。`requires` を書かない項目は、従来どおり「直前の項目が前提」になります(テストは小さな直線のパスで確かめる)。
-- 追加のレッスン(樹形図の枝): `tl431_ref`(37、TL431。`zener` の先。基準電圧を好きな値にする)と `ldo`(36、LDO。`regulator_78xx` の先。入力の余裕と発熱)。
+- 追加のレッスン(樹形図の枝): `tl431_ref`(37、TL431。`zener` の先。基準電圧を好きな値にする)と `ldo`(36、LDO。`regulator_78xx` の先。入力の余裕と発熱)。Arduino の道の `equiv_model`(47、`flyback` と `datasheet` の先。SPICE モデルのない ULN2803A を、データシートの内部回路図と代表値から基本の部品で組み直す)。
 
 ## 3本目のパス: Arduino Mega 互換ボード (`MEGA_PATH`)
 

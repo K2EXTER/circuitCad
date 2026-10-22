@@ -332,6 +332,31 @@ pub(super) fn tl431_overloaded(e: &SchEditor) -> bool {
     tl431_values(e, (9e3, 11e3), (1.0, 150.0))
 }
 
+/// The equivalent-model lesson: R1 and R2 (the relay coils) are both between `lo` and `hi` ohm.
+fn equiv_coils_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    ["R1", "R2"].iter().all(|r| value_of(&e.sch, r).and_then(parse_value).is_some_and(|v| (lo..=hi).contains(&v)))
+}
+
+/// R6 (the hand-built Darlington's emitter resistor) is between `lo` and `hi` ohm.
+fn equiv_emitter_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
+    value_of(&e.sch, "R6").and_then(parse_value).is_some_and(|v| (lo..=hi).contains(&v))
+}
+
+/// Step 2: both coils at about 34 ohm (about 320 mA) and a fresh result.
+pub(super) fn equiv_heavy_load(e: &SchEditor) -> bool {
+    dc_fresh(e) && equiv_coils_between(e, 28.0, 40.0)
+}
+
+/// Step 3: the same load and R6 raised to about 1.5 ohm.
+pub(super) fn equiv_matched(e: &SchEditor) -> bool {
+    equiv_heavy_load(e) && equiv_emitter_between(e, 1.0, 2.2)
+}
+
+/// Step 4: matched, and the input source V2 is a 3.3 V pin.
+pub(super) fn equiv_low_input(e: &SchEditor) -> bool {
+    equiv_matched(e) && value_of(&e.sch, "V2").and_then(parse_value).is_some_and(|v| (3.0..=3.6).contains(&v))
+}
+
 /// The flyback lesson, step 2: a diode with its anode on DRAIN and its cathode on VCC, a fresh run whose DRAIN stays below 20 V.
 pub(super) fn flyback_diode_added(e: &SchEditor) -> bool {
     let nets = sch_core::extract(&e.sch);
