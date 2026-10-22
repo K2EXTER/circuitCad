@@ -18,6 +18,10 @@ mod samples;
 mod learn;
 mod part_form;
 mod plot;
+/// Starting width of the left tool panels. The panels only grow to fit their widest line (the analysis tab, a selected part's
+/// form, the wire tool's settings), so a narrow start made the circuit shift sideways whenever the tab or the selection changed.
+const PANEL_WIDTH: f32 = 400.0;
+
 mod prefs;
 mod project;
 mod schematic;
@@ -432,7 +436,7 @@ impl eframe::App for App {
             }
         });
         if self.mode == Mode::Schematic {
-            egui::Panel::left("sch_tools").min_size(220.0).show(ui, |ui| self.sch.side_panel(ui));
+            egui::Panel::left("sch_tools").default_size(PANEL_WIDTH).min_size(220.0).show(ui, |ui| self.sch.side_panel(ui));
             if self.sch.has_wave() {
                 egui::Panel::bottom("wave").resizable(true).default_size(320.0).show(ui, |ui| self.sch.wave_panel(ui));
             }
@@ -446,7 +450,7 @@ impl eframe::App for App {
         self.board_ed.order_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
-        egui::Panel::left("board_tools").min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
+        egui::Panel::left("board_tools").default_size(PANEL_WIDTH).min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
         egui::CentralPanel::default().show(ui, |ui| self.board_ed.canvas(ui));
     }
 }

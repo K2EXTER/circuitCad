@@ -1401,3 +1401,19 @@ fn the_width_panel_can_be_shut_again_after_the_currents_came_in() {
     e.close_width_panel();
     assert_eq!(e.widths_open, None);
 }
+
+/// New parts land beside the outline, so an import that adds parts asks for the view to be fitted (the parts would otherwise sit
+/// half under the panel on the right); an import that adds nothing leaves the view alone.
+#[test]
+fn an_import_that_adds_parts_fits_the_view_to_the_board() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut sch = crate::schematic::SchEditor::default();
+    sch.load_path(root.join("led.schjson"));
+    let mut e = BoardEditor::default();
+    e.fit_pending = false;
+    e.import_from_schematic(&sch);
+    assert!(e.fit_pending, "parts were added");
+    e.fit_pending = false;
+    e.import_from_schematic(&sch);
+    assert!(!e.fit_pending, "nothing new: the view stays where the user put it");
+}

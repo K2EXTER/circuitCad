@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// Width of the floating layer panel at the canvas's right edge, in screen pixels (with a little air).
+const OVERLAY_PANEL_PX: f32 = 230.0;
+
 impl BoardEditor {
     pub(super) fn to_screen(&self, rect: Rect, p: Point) -> Pos2 {
         let c = rect.center();
@@ -16,8 +19,12 @@ impl BoardEditor {
     pub(super) fn fit_view(&mut self, rect: Rect) {
         let Some((lo, hi)) = self.board.bounds() else { return };
         let (w, h) = ((hi.x - lo.x).max(5.0) + 10.0, (hi.y - lo.y).max(5.0) + 10.0);
-        self.zoom = ((rect.width() as f64 / w).min(rect.height() as f64 / h) as f32).clamp(2.0, 60.0);
-        self.pan = Vec2::new(((lo.x + hi.x) / 2.0) as f32, ((lo.y + hi.y) / 2.0) as f32);
+        // the "物の表示とロック" panel floats over the right edge of the canvas: fit into the part of the canvas left of it
+        let free = (rect.width() - OVERLAY_PANEL_PX).max(rect.width() * 0.5);
+        self.zoom = ((free as f64 / w).min(rect.height() as f64 / h) as f32).clamp(2.0, 60.0);
+        // the view's centre moves right by half the panel, so the board sits in the free part
+        let shift = (rect.width() - free) / 2.0 / self.zoom;
+        self.pan = Vec2::new(((lo.x + hi.x) / 2.0) as f32 + shift, ((lo.y + hi.y) / 2.0) as f32);
     }
 
     /// The connections of the copper, worked out again only when the board has changed (it costs milliseconds

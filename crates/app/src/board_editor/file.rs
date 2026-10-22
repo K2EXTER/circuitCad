@@ -155,6 +155,10 @@ impl BoardEditor {
         self.multi.clear();
         self.currents_tried = false; // the circuit may have changed: the next route asks for the currents again if none are declared
         self.import_notes = rep.warnings.clone();
+        // new parts land beside the outline: show the whole board with them, not a corner of it under the panel on the right
+        if !rep.added.is_empty() {
+            self.fit_pending = true;
+        }
         self.status = format!("取り込み完了: 追加 {} / 更新 {} / 削除 {} / 警告 {}", rep.added.len(), rep.updated, rep.removed.len(), rep.warnings.len());
     }
 }
