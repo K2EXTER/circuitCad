@@ -1,0 +1,168 @@
+{
+  "name": "ULN2803A",
+  "category": "ドライバ",
+  "description": "ダーリントン・トランジスタ アレイ (8回路、DIP-18、ピン1〜8=IN1〜IN8 9=GND 10=COM 11〜18=OUT8〜OUT1)。マイコンの出力 (5V・数mA) で、リレー・ソレノイド・モーター・LED など最大 500mA/回路 (出力は最大 50V) の負荷を GND 側でスイッチする。COM はクランプ用で、誘導性の負荷 (リレーなど) の電源につなぐ。入力は 2.7kΩ 入りで、5V の出力にそのままつなげる。TI 製のモデルが見つからないので、データシートの値に合わせた自作の等価モデル (入力抵抗 + NPN 2段 + クランプダイオード)",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/uln2803a.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-18_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "IN1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "IN2",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "IN3",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "IN4",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "IN5",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "IN6",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "IN7",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "IN8",
+      "side": "left"
+    },
+    {
+      "number": "9",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "10",
+      "name": "COM",
+      "side": "top"
+    },
+    {
+      "number": "18",
+      "name": "OUT1",
+      "side": "right"
+    },
+    {
+      "number": "17",
+      "name": "OUT2",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "OUT3",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "OUT4",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "OUT5",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "OUT6",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "OUT7",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "OUT8",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 18,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "ULN2803A",
+    "text": "* ULN2803A: 8 Darlington drivers (one channel = ULN2803A_CH, used 8 times).\n* One channel: input 2.7k -> Q1 -> Q2 (Darlington), 7.2k and 3k turn-off resistors,\n* and the clamp diode from the output to COM. Pin order: IN1..IN8, GND, COM, OUT1..OUT8.\n.subckt ULN2803A i1 i2 i3 i4 i5 i6 i7 i8 gnd com o1 o2 o3 o4 o5 o6 o7 o8\nX1 i1 o1 gnd com ULN2803A_CH\nX2 i2 o2 gnd com ULN2803A_CH\nX3 i3 o3 gnd com ULN2803A_CH\nX4 i4 o4 gnd com ULN2803A_CH\nX5 i5 o5 gnd com ULN2803A_CH\nX6 i6 o6 gnd com ULN2803A_CH\nX7 i7 o7 gnd com ULN2803A_CH\nX8 i8 o8 gnd com ULN2803A_CH\n.ends\n.subckt ULN2803A_CH in out gnd com\nRin in b1 2.7k\nRb1 b1 gnd 7.2k\nQ1 out b1 e1 QDRV1\nRb2 e1 gnd 3k\nQ2 out e1 gnd QDRV2\nDc out com DCLAMP\n.model QDRV1 NPN(IS=1e-12 BF=150 RB=10 RC=1 RE=0.5 VAF=80)\n.model QDRV2 NPN(IS=2e-12 BF=100 RB=2 RC=0.3 RE=1.7 VAF=80)\n.model DCLAMP D(IS=1e-12 N=1.8 RS=1.3)\n.ends",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "18",
+      "17",
+      "16",
+      "15",
+      "14",
+      "13",
+      "12",
+      "11"
+    ],
+    "limits": [
+      "TI のモデルではなく、データシートの値に合わせた自作の等価モデルです。出力の飽和電圧 (IC=100mA で 約0.9V、200mA で 約1.1V、350mA で 約1.3V) と、クランプダイオードの順方向電圧 (350mA で 約1.7V) に合わせてあります。入力電流は、3.85V のとき約 0.85mA です (データシートの代表値は 約0.93mA)。",
+      "スイッチング時間 (ターンオン・ターンオフの遅れ) と、出力の漏れ電流 (最大 50µA)、温度による変化は扱いません。",
+      "8回路を同時に使ったときの発熱 (パッケージの許容損失) は扱いません。全部の回路で 350mA を流すと、パッケージの許容損失を超えます。データシートの「許容損失」と「同時に流せる電流」で確かめます。",
+      "クランプダイオードは COM の電圧 (リレーなどの電源) へつなぐと、誘導性の負荷が切れるときの逆起電力を吸収します。COM を未接続にすると、クランプは働きません。"
+    ]
+  },
+  "ratings": {
+    "v_max": 50.0,
+    "i_max": 0.5,
+    "rows": [
+      {
+        "name": "出力電圧 VCE (最大)",
+        "value": "50V"
+      },
+      {
+        "name": "出力電流 (1回路、連続)",
+        "value": "500mA",
+        "condition": "全回路の合計の許容は、パッケージの損失で決まる"
+      },
+      {
+        "name": "入力電圧 (最大)",
+        "value": "30V"
+      },
+      {
+        "name": "クランプダイオードの耐圧",
+        "value": "50V"
+      },
+      {
+        "name": "出力の飽和電圧 VCE(sat) (代表値)",
+        "value": "0.9V / 1.1V / 1.3V",
+        "condition": "IC = 100mA / 200mA / 350mA、入力電流 = 250µA / 350µA / 500µA"
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@ mod examples;
 mod converge;
 mod flow;
 mod mixed;
+mod uln2803a;
 
 use super::*;
 use pcb_core::ratsnest::ratsnest;
