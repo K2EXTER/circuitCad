@@ -97,7 +97,7 @@ fn dc_analysis_from_the_editor() {
         s.wires.push(Wire { a, b });
     }
     app.sch.analyze_dc();
-    assert!(app.sch.status.contains("収束"), "{}", app.sch.status);
+    assert!(app.sch.status.contains("計算しました"), "{}", app.sch.status);
     // R1 = R2 = 10k default: the midpoint is at half the supply
     assert!((app.sch.pin_voltage("R2", "1").unwrap() - 5.0).abs() < 1e-6);
     assert!(app.sch.pin_voltage("V1", "-").unwrap().abs() < 1e-9);

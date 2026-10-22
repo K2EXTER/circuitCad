@@ -190,7 +190,7 @@ impl SchEditor {
         let mut restart = false;
         let mut next = None;
         let mut build = None;
-        egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(360.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
+        egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();

@@ -94,7 +94,8 @@ impl PartForm {
     /// A form that starts from this kind of part ("ic", "transistor", "diode", "chip", "connector"), for scripts and screenshots.
     pub fn for_type(name: &str) -> Self {
         let mut f = PartForm::default();
-        // a kind of capacitor by its own name
+        // a kind of capacitor by its own name ("chip" is the small ceramic one)
+        let name = if name == "chip" { "ceramic" } else { name };
         if let Some(k) = ["ceramic", "electrolytic", "tantalum", "film"].into_iter().find(|k| *k == name) {
             f.set_capacitor(k);
             return f;

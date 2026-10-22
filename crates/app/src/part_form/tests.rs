@@ -712,3 +712,12 @@ mod passive_form_tests {
         assert!(f.dio_apply().unwrap_err().contains("Cj"));
     }
 }
+
+#[test]
+fn chip_in_the_new_part_argument_opens_the_ceramic_capacitor() {
+    let f = PartForm::for_type("chip");
+    assert_eq!(f.ptype, Some(PartType::Capacitor));
+    assert!(!f.pas_polar && f.glyph == "capacitor");
+    assert_eq!(PartForm::for_type("electrolytic").ptype, Some(PartType::Capacitor));
+    assert_eq!(PartForm::for_type("resistor").ptype, Some(PartType::Resistor));
+}

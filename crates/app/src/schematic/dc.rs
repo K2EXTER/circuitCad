@@ -74,7 +74,7 @@ impl SchEditor {
             }),
         };
         self.status = match &outcome {
-            Ok(r) => format!("DC動作点: 収束 ({} 回, {})", r.iterations, r.strategy),
+            Ok(r) => format!("DC動作点を計算しました (反復 {} 回)", r.iterations),
             Err(e) => format!("DC解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         self.dc = Some(self.dc_view(outcome, None));

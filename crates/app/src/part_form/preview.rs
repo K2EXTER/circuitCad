@@ -21,11 +21,15 @@ impl PartForm {
         }
         let issues: Vec<Issue> = def.validate();
         egui::ScrollArea::vertical().id_salt("part_form_issues").max_height(110.0).auto_shrink([false, true]).show(ui, |ui| {
+            if issues.iter().any(|i| i.error) {
+                ui.small("赤い項目を直すと、保存できます");
+            }
             if issues.is_empty() {
                 ui.colored_label(Color32::from_rgb(60, 170, 90), "✔ 問題は見つかりません");
             }
             for i in &issues {
-                let (c, mark) = if i.error { (Color32::from_rgb(230, 60, 60), "エラー") } else { (Color32::from_rgb(220, 160, 40), "注意") };
+                // an "error" here only means "cannot be saved yet": a blank form starts with some, so it is worded as a to-do
+                let (c, mark) = if i.error { (Color32::from_rgb(215, 90, 70), "保存前に直す") } else { (Color32::from_rgb(220, 160, 40), "注意") };
                 ui.colored_label(c, format!("{mark}: {}", i.message));
             }
         });

@@ -20,7 +20,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             }
         }
     if let Some(i) = args.iter().position(|a| a == "--new-part") {
-        // --new-part [ic|transistor|diode|chip|connector]
+        // --new-part [ic|transistor|diode|chip (= ceramic)|ceramic|electrolytic|tantalum|film|resistor|inductor|connector]
         app.sch.open_part_form_for(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
     }
     if let Some(i) = args.iter().position(|a| a == "--form-tab")
