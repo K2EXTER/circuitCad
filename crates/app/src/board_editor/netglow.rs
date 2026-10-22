@@ -23,14 +23,17 @@ impl BoardEditor {
             }
         }
         for (k, v) in self.board.vias.iter().enumerate() {
-            if p.dist(v.pos) <= v.diameter / 2.0 + tol {
+            if self.vis.vias && p.dist(v.pos) <= v.diameter / 2.0 + tol {
                 return conn.via_net(k).map(str::to_string);
             }
         }
-        for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
+        for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.vis.tracks && self.side_visible(t.side)) {
             if seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
                 return conn.track_net(i).map(str::to_string);
             }
+        }
+        if !self.vis.zones {
+            return None;
         }
         let cache = self.zone_cache.borrow();
         let (_, fills) = cache.as_ref()?;
@@ -58,7 +61,7 @@ impl BoardEditor {
         let col = HOVER;
         {
             let glow = col.gamma_multiply(0.55);
-            for (i, t) in self.board.tracks.iter().enumerate().filter(|(i, t)| self.side_visible(t.side) && conn.track_net(*i) == Some(net)) {
+            for (i, t) in self.board.tracks.iter().enumerate().filter(|(i, t)| self.vis.tracks && self.side_visible(t.side) && conn.track_net(*i) == Some(net)) {
                 let _ = i;
                 painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0) + 5.0, glow));
             }
@@ -72,12 +75,12 @@ impl BoardEditor {
                     egui::StrokeKind::Outside,
                 );
             }
-            for (k, v) in self.board.vias.iter().enumerate().filter(|(k, _)| conn.via_net(*k) == Some(net)) {
+            for (k, v) in self.board.vias.iter().enumerate().filter(|(k, _)| self.vis.vias && conn.via_net(*k) == Some(net)) {
                 let _ = k;
                 painter.circle_stroke(self.to_screen(rect, v.pos), v.diameter as f32 * z / 2.0 + 3.0, Stroke::new(2.5, col));
             }
             if let Some((_, fills)) = self.zone_cache.borrow().as_ref() {
-                for (side, _, shapes) in fills.iter().filter(|(s, n, _)| n == net && self.side_visible(*s)) {
+                for (side, _, shapes) in fills.iter().filter(|(s, n, _)| n == net && self.vis.zones && self.side_visible(*s)) {
                     let _ = side;
                     for shape in shapes {
                         let mut mesh = egui::Mesh::default();

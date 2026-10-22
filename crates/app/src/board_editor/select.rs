@@ -167,6 +167,20 @@ impl BoardEditor {
     }
 
     /// Points to ring when an object is selected.
+    /// Is the thing drawn at all (its layer and its kind are shown)? What is hidden gets no selection mark or glow.
+    pub(super) fn item_shown(&self, it: Item) -> bool {
+        match it {
+            Item::Part(i) => self.board.parts.get(i).is_none_or(|p| self.side_visible(p.side) || self.board.pads.iter().any(|q| q.refdes == p.refdes && q.drill.is_some())),
+            Item::Track(i) => self.vis.tracks && self.board.tracks.get(i).is_none_or(|t| self.side_visible(t.side)),
+            Item::Via(_) => self.vis.vias,
+            Item::Pad(i) => self.board.pads.get(i).is_none_or(|p| p.drill.is_some() || self.side_visible(p.side)),
+            Item::Silk(i) => self.vis.silk && self.board.silk.get(i).is_none_or(|s| self.side_visible(s.side)),
+            Item::Label(i) => self.vis.silk && self.board.texts.get(i).is_none_or(|t| self.side_visible(t.side)),
+            Item::Zone(i) => self.vis.zones && self.board.zones.get(i).is_none_or(|z| self.side_visible(z.side)),
+            _ => true,
+        }
+    }
+
     pub(super) fn item_points(&self, it: Item) -> Vec<Point> {
         match it {
             Item::Part(i) if i < self.board.parts.len() => {

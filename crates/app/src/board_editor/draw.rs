@@ -98,7 +98,7 @@ impl BoardEditor {
                     painter.circle_filled(self.to_screen(rect, e), (t.width as f32 * z / 2.0).max(0.5), col);
                 }
             }
-            for patch in finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == s) {
+            for patch in finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == s && self.vis.tracks) {
                 let shape = pcb_core::zonefill::FillShape { outer: patch.outline.clone(), holes: vec![] };
                 let mut mesh = egui::Mesh::default();
                 for t in shape.triangles() {
@@ -195,6 +195,9 @@ impl BoardEditor {
     /// Everything electrically connected to the selected track / pad / via.
     pub(super) fn draw_highlight(&mut self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
         let (Some(conn), Some(sel)) = (conn, self.selected) else { return };
+        if !self.item_shown(sel) {
+            return;
+        }
         let g = match sel {
             Item::Track(i) if i < self.board.tracks.len() => conn.track_group(i),
             Item::Pad(i) if i < self.board.pads.len() => conn.pad_group(i),
@@ -203,11 +206,11 @@ impl BoardEditor {
         };
         let z = self.zoom;
         let hl = Color32::from_rgba_unmultiplied(255, 255, 255, 140);
-        for (i, t) in self.board.tracks.iter().enumerate().filter(|(i, _)| conn.track_group(*i) == g) {
+        for (i, t) in self.board.tracks.iter().enumerate().filter(|(i, t)| conn.track_group(*i) == g && self.vis.tracks && self.side_visible(t.side)) {
             let _ = i;
             painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0) + 4.0, hl));
         }
-        for (j, p) in self.board.pads.iter().enumerate().filter(|(j, _)| conn.pad_group(*j) == g) {
+        for (j, p) in self.board.pads.iter().enumerate().filter(|(j, p)| conn.pad_group(*j) == g && (p.drill.is_some() || self.side_visible(p.side))) {
             let _ = j;
             let (w, h) = p.shape.size();
             painter.rect_stroke(
@@ -217,7 +220,7 @@ impl BoardEditor {
                 egui::StrokeKind::Outside,
             );
         }
-        for (k, v) in self.board.vias.iter().enumerate().filter(|(k, _)| conn.via_group(*k) == g) {
+        for (k, v) in self.board.vias.iter().enumerate().filter(|(k, _)| conn.via_group(*k) == g && self.vis.vias) {
             let _ = k;
             painter.circle_stroke(self.to_screen(rect, v.pos), v.diameter as f32 * z / 2.0 + 3.0, Stroke::new(2.0, hl));
         }
@@ -241,7 +244,7 @@ impl BoardEditor {
             painter.circle_stroke(self.to_screen(rect, v.at), 10.0, Stroke::new(2.0, Color32::from_rgb(255, 0, 255)));
         }
         self.draw_check_marks(painter, rect);
-        for sel in self.selected.iter().chain(self.multi.iter()) {
+        for sel in self.selected.iter().chain(self.multi.iter()).filter(|s| self.item_shown(**s)) {
             for p in self.item_points(*sel) {
                 painter.circle_stroke(self.to_screen(rect, p), 8.0, Stroke::new(2.0, Color32::WHITE));
             }

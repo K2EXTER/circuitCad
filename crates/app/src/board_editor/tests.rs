@@ -1537,3 +1537,16 @@ fn the_net_under_a_point_is_found_for_pads_and_tracks() {
     assert_eq!(e.net_under(p(12.0, 18.825)).as_deref(), Some("LX"), "on a track that leaves the pad");
     assert_eq!(e.net_under(p(30.0, 30.0)), None, "on bare board");
 }
+
+/// What is hidden (a layer, or the tracks) is not marked when selected, and a hidden kind is not shown by the glow either.
+#[test]
+fn hidden_things_get_no_selection_mark() {
+    let mut e = lx_pair_editor();
+    e.board.tracks.push(pcb_core::Track { a: p(15.05, 18.825), b: p(10.0, 18.825), width: 0.25, side: pcb_core::Side::Top });
+    assert!(e.item_shown(Item::Track(0)));
+    e.vis.tracks = false;
+    assert!(!e.item_shown(Item::Track(0)));
+    e.vis.tracks = true;
+    e.vis.top = false;
+    assert!(!e.item_shown(Item::Track(0)) && !e.item_shown(Item::Pad(0)));
+}
