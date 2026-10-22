@@ -47,6 +47,7 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 - 故障のスキャン(ボタンは「よくある故障を順に試す」)は、`sim_core::likelihood` が Rare の故障を省く(「まれな故障も含める」= `scan_rare` で入れる。省いた件数は状態の行に出す)。テスト `the_fault_scan_leaves_out_the_rare_faults_unless_asked`
 - 故障のスキャン(`schematic/fault.rs` の `scan_plan`)は、「逆向きにつなぐ」(`Fault::Reverse`)を含めない。向き間違いは故障ではなく組み立てのミスなので、部品を1つずつ選ぶ方(`ALL_FAULTS` の並びと `--fault` の種類の番号は変えていない)だけで試せる。
 - レッスンで今押すボタンを光らせる(`lessons/mod.rs` の `lit`): いまの手順の文の中で「」に入っている名前と同じラベルのボタンに、オレンジの枠を脈打たせる(解析パネルとパネルの `ui.button("…")` は `self.lit(…)` で包む)。手順のデータには何も足さない。ボタンの名前を変えたら、レッスンの文の「」も直す(光らなくなる)。テスト `lit_tests`
+- 発注の準備の窓(`board_editor/order.rs`): 窓の中だけ、小さい注釈の文字(`TextStyle::Small`)を 12px にしている(標準は約9px で、初めて発注する人が読む説明が読みにくかった)。手順4に「ガーバー=工場に渡す設計図のデータ」の一行、書き出したあとに「発注先に渡すのは `<基板名>_gerber.zip` の1つ(部品実装も頼むなら BOM と CPL)」を緑で出す
 - 描画の軽さ(`draw.rs`): ベタの三角形は `zone_cache`(`PourCache`)に1回だけ作って毎フレーム使い回す。画面の外にある配線・涙型・シルクの線と文字・ベタのかたまりは描かない(`near_screen`、線の太さの分は余白に含める)。テスト `near_screen_leaves_out_only_what_is_far_away`
 - 部品のドラッグ中の軽さ(`view.rs` の `moving_parts_only`): 部品だけを動かしている間(1個のドラッグ・部品だけのグループ移動)は、ベタ(`draw_zones`)と整えた配線(`smoothing.rs` の `finished`)を前の結果のまま使い回し、ドラッグが終わったときに1回だけ計算し直す(どちらも小さな基板で 10〜30ms かかる)。配線が動くドラッグは対象外(配線が元の場所に残って見えるため)。ラッツネストは軽いので毎フレーム更新。テスト `pours_are_kept_while_only_parts_are_dragged`
 - ネットを一目で(`board_editor/netglow.rs`): 選択ツールでカーソルの下のネット(パッド→ビア→配線→ベタの銅の順で `net_under`)が光る(水色。クリックで固定する機能は、いらないので作っていない)。光らせるのは配線・パッド・ビア・ベタ(`draw_net_focus`)。大きなベタには、ネット名を文字で出す(`draw_pour_name`、「ネット名」の目のスイッチに従う。`merged_fills` がネット名も返す)。テスト `the_net_under_a_point_is_found_for_pads_and_tracks`
