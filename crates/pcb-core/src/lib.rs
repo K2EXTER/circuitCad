@@ -11,6 +11,7 @@ pub mod autoroute;
 pub mod body;
 mod connectors;
 pub mod bridge;
+pub mod trunk;
 pub mod current;
 pub mod diffpair;
 pub mod drc;

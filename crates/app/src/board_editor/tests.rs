@@ -1461,3 +1461,64 @@ fn a_part_and_its_designator_dragged_together_keep_the_offset() {
     assert_eq!(e.board.texts[0].pos, p(at.x + 5.0 + 2.0, at.y), "the part carried the text, the offset stayed 2 mm");
     assert_eq!(e.board.label_offsets["R1"], p(2.0, 0.0));
 }
+
+fn lx_pair_editor() -> BoardEditor {
+    let mut e = BoardEditor::default();
+    e.board = pcb_core::Board::new("t", 40.0, 40.0);
+    for y in [18.825, 18.175] {
+        let mut pd = pcb_core::Pad::new(p(15.05, y), pcb_core::PadShape::Rect { w: 0.85, h: 0.3 }, None, pcb_core::Side::Top);
+        (pd.refdes, pd.pin, pd.net) = ("U1".into(), "2".into(), "LX".into());
+        e.board.pads.push(pd);
+    }
+    e.tool = Tool::Trunk;
+    e
+}
+
+/// The trunk tool: two pads, then a place; thin necks and a thick trunk are drawn and the DRC stays clean.
+#[test]
+fn the_trunk_tool_takes_two_pads_and_a_place_and_draws_necks_and_a_trunk() {
+    let mut e = lx_pair_editor();
+    e.click(p(15.05, 18.825));
+    assert_eq!(e.trunk_pads.len(), 1);
+    assert!(e.status.contains("U1"), "{}", e.status);
+    e.click(p(15.05, 18.175));
+    assert_eq!(e.trunk_pads.len(), 2);
+    e.click(p(10.0, 18.5));
+    assert!(e.trunk_pads.is_empty(), "{}", e.status);
+    assert!(e.board.tracks.len() >= 3, "two necks and the trunk: {}", e.board.tracks.len());
+    let widest = e.board.tracks.iter().map(|t| t.width).fold(0.0, f64::max);
+    assert!((widest - 0.9).abs() < 1e-9, "the trunk is as wide as the pair: {widest}");
+    assert!(pcb_core::drc::check(&e.board).is_empty());
+    assert!(e.status.contains("太い幹"), "{}", e.status);
+}
+
+/// A bad place or pair says why and changes nothing; a right click drops the pads that were picked.
+#[test]
+fn the_trunk_tool_refuses_with_a_reason_and_can_be_cancelled() {
+    let mut e = lx_pair_editor();
+    e.click(p(30.0, 30.0));
+    assert!(e.trunk_pads.is_empty() && e.status.contains("パッドをクリック"), "{}", e.status);
+    e.click(p(15.05, 18.825));
+    e.click(p(15.05, 18.825));
+    assert_eq!(e.trunk_pads.len(), 1, "the same pad twice is not a pair");
+    e.click(p(15.05, 18.175));
+    e.click(p(14.5, 18.5));
+    assert!(e.status.contains("近すぎ") && e.board.tracks.is_empty(), "{}", e.status);
+    assert_eq!(e.trunk_pads.len(), 2, "still waiting for a place");
+    assert!(e.leave_tool());
+    assert!(e.trunk_pads.is_empty());
+    // another net is not a pair
+    let mut pd = pcb_core::Pad::new(p(15.05, 19.475), pcb_core::PadShape::Rect { w: 0.85, h: 0.3 }, None, pcb_core::Side::Top);
+    pd.net = "VIN".into();
+    e.board.pads.push(pd);
+    e.click(p(15.05, 18.825));
+    e.click(p(15.05, 19.475));
+    assert!(e.status.contains("ネットが違い") && e.trunk_pads.len() == 1, "{}", e.status);
+}
+
+/// The trunk tool is the eleventh tool: it has no number key (1-9 and 0 belong to the first ten).
+#[test]
+fn the_trunk_tool_has_no_number_key_and_the_others_keep_theirs() {
+    assert_eq!(tool_key(Tool::Trunk), None);
+    assert_eq!((tool_key(Tool::Select), tool_key(Tool::Silk)), (Some('1'), Some('0')));
+}

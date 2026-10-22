@@ -158,6 +158,12 @@ impl BoardEditor {
     /// polygon of three or more points, drops a shorter one) and the tool stays; with nothing in
     /// progress it returns to the Select tool. Returns whether anything happened.
     pub(super) fn leave_tool(&mut self) -> bool {
+        if !self.trunk_pads.is_empty() {
+            self.trunk_pads.clear();
+            self.trunk_note = None;
+            self.status = "幹の選びを取り消しました (もう一度右クリックで選択ツールに戻ります)".into();
+            return true;
+        }
         if self.pending.take().is_some() {
             self.status = "配線を確定しました (もう一度右クリックで選択ツールに戻ります)".into();
             return true;

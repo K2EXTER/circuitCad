@@ -46,7 +46,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `smooth.rs` 配線の仕上げ(角丸め・涙型・分かれ目の凹み。`Board.finish` の設定で表示・出力・DRCのときに毎回計算)
 - `ratsnest.rs` 未配線 / `autoroute.rs` 自動配線 / `shove.rs` 押しのけ配線
 - `body.rs` 部品の本体外形 / `outline.rs` 曲線の外形 / `zonefill.rs` ベタの銅 / `model3d.rs` 3D用の立体
-- `bridge.rs` 隣り合う同じネットのパッドを先に銅でつなぐ(自動配線の前) / `slot.rs` 仕上げで並走する同ネット配線のすき間を埋める
+- `bridge.rs` 隣り合う同じネットのパッドを先に銅でつなぐ(自動配線の前) / `trunk.rs` その手で引く版(2パッドから首2本+太い幹) / `slot.rs` 仕上げで並走する同ネット配線のすき間を埋める
 - `shops.rs` 購入リスト(店の型番・検索リンク。`ccad board shopping`、`*-shopping.csv`)
 - `fab.rs` 発注先と発注前チェック / `export.rs` 製造一式 / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・配置CSV / `gerber_view.rs` 書き出しの読み戻し / `strokefont.rs` シルク文字
 

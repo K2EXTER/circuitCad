@@ -223,6 +223,8 @@ impl BoardEditor {
         self.tool = t;
         self.pending = None;
         self.poly.clear();
+        self.trunk_pads.clear();
+        self.trunk_note = None;
         // what was selected stays behind: R, B and Delete must not reach it from another tool
         if t != Tool::Select {
             self.selected = None;
@@ -241,6 +243,7 @@ impl BoardEditor {
             Tool::PadSmd => "パッド(SMD)の設定",
             Tool::Hole => "取付穴の設定",
             Tool::Zone => "銅箔ゾーンの設定",
+            Tool::Trunk => "幹ツールの使い方",
             _ => return,
         };
         // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
@@ -292,6 +295,21 @@ impl BoardEditor {
         ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
         ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
             .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
+            }
+            Tool::Trunk => {
+                ui.small("① 同じネットで隣り合うパッドを2つクリック (例: QFN の2本の LX ピン)");
+                ui.small("② 幹を伸ばす先をクリック (パッドから 1mm 以上離れた所)");
+                ui.small(format!("パッドの首は「配線」ツールの線幅 ({:.2} mm)、幹は、2つのパッドの外側の縁までの太さになります。右クリックで取り消し", self.track_width));
+                ui.small("近くに別のネットがあって、間隔が足りなくなるときは、引かずに理由を出します");
+                match &self.trunk_note {
+                    Some(Ok(m)) => {
+                        ui.colored_label(Color32::from_rgb(110, 200, 130), m.as_str());
+                    }
+                    Some(Err(m)) => {
+                        ui.colored_label(Color32::from_rgb(255, 130, 100), m.as_str());
+                    }
+                    None => {}
+                }
             }
             Tool::PadTh | Tool::PadSmd => {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");
