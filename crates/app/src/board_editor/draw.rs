@@ -167,7 +167,21 @@ impl BoardEditor {
             for l in self.board.silk.iter().filter(|l| self.side_visible(l.side)) {
                 painter.line_segment([self.to_screen(rect, l.a), self.to_screen(rect, l.b)], Stroke::new((l.width as f32 * z).max(1.0), silk));
             }
-            for t in self.board.texts.iter().filter(|t| self.side_visible(t.side)) {
+            let selected_label = match self.selected {
+                Some(Item::Label(i)) => Some(i),
+                _ => None,
+            };
+            for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
+                if selected_label == Some(i) {
+                    // a box round the picked designator, so that it is clear what the drag will move
+                    let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);
+                    painter.rect_stroke(
+                        Rect::from_center_size(self.to_screen(rect, t.pos), Vec2::new(w as f32 * z + 8.0, h as f32 * z + 8.0)),
+                        2.0,
+                        Stroke::new(1.5, Color32::from_rgb(90, 230, 120)),
+                        egui::StrokeKind::Outside,
+                    );
+                }
                 let stroke = Stroke::new(((t.height * 0.15).max(0.12) as f32 * z).max(1.0), silk);
                 for [a, b] in text_strokes(&t.text, t.height, t.side == Side::Bottom) {
                     let (pa, pb) = (Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y));

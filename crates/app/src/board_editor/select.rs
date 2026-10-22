@@ -36,6 +36,13 @@ impl BoardEditor {
                 return Some(Item::Hole(i));
             }
         }
+        // a part's designator on the silkscreen (above the tracks: a track under the text is still reachable from beside it)
+        for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty() && self.side_visible(t.side)) {
+            let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);
+            if pick.silk && self.vis.silk && side_ok(t.side) && (p.x - t.pos.x).abs() <= w / 2.0 + tol && (p.y - t.pos.y).abs() <= h / 2.0 + tol {
+                return Some(Item::Label(i));
+            }
+        }
         for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
             if pick.tracks && self.vis.tracks && side_ok(t.side) && seg_dist(p, t.a, t.b) <= t.width / 2.0 + tol {
                 return Some(Item::Track(i));
@@ -145,6 +152,7 @@ impl BoardEditor {
         let side = match *it {
             Item::Track(i) => self.board.tracks.get(i).map(|t| t.side),
             Item::Silk(i) => self.board.silk.get(i).map(|l| l.side),
+            Item::Label(i) => self.board.texts.get(i).map(|t| t.side),
             Item::Zone(i) => self.board.zones.get(i).map(|z| z.side),
             Item::Pad(i) => self.board.pads.get(i).filter(|p| p.drill.is_none()).map(|p| p.side),
             Item::Part(i) => self.board.parts.get(i).filter(|p| !self.board.pads.iter().any(|q| q.refdes == p.refdes && q.drill.is_some())).map(|p| p.side),
@@ -167,6 +175,7 @@ impl BoardEditor {
             }
             Item::Track(i) if i < self.board.tracks.len() => vec![self.board.tracks[i].a, self.board.tracks[i].b],
             Item::Silk(i) if i < self.board.silk.len() => vec![self.board.silk[i].a, self.board.silk[i].b],
+            Item::Label(i) if i < self.board.texts.len() => vec![self.board.texts[i].pos],
             Item::Pad(i) if i < self.board.pads.len() => vec![self.board.pads[i].pos],
             Item::Via(i) if i < self.board.vias.len() => vec![self.board.vias[i].pos],
             Item::Hole(i) if i < self.board.holes.len() => vec![self.board.holes[i].pos],
@@ -215,6 +224,24 @@ impl BoardEditor {
                         t.polygon = o.polygon.iter().map(|p| mv(*p)).collect();
                     }
                 }
+                Item::Label(i) => {
+                    // the text goes from where it was when the drag began; a text whose part moves in the same drag moves with
+                    // the part already (its offset is kept), so only a text moved on its own gets here with a new place
+                    if let Some(o) = g.orig.texts.get(i)
+                        && !g.items.iter().any(|x| matches!(*x, Item::Part(k) if g.orig.parts.get(k).is_some_and(|p| p.refdes == o.refdes)))
+                    {
+                        let refdes = o.refdes.clone();
+                        // restore the offset the drag began with, then move by the whole drag
+                        match g.orig.label_offsets.get(&refdes) {
+                            Some(off) => drop(self.board.label_offsets.insert(refdes.clone(), *off)),
+                            None => drop(self.board.label_offsets.remove(&refdes)),
+                        }
+                        if let Some(t) = self.board.texts.iter_mut().find(|t| t.refdes == refdes) {
+                            t.pos = o.pos;
+                        }
+                        self.board.move_label(&refdes, mv(o.pos));
+                    }
+                }
             }
         }
     }
@@ -232,7 +259,7 @@ impl BoardEditor {
                 Item::Hole(i) => idx[3].push(i),
                 Item::Silk(i) => idx[4].push(i),
                 Item::Zone(i) => idx[5].push(i),
-                Item::Part(_) => {}
+                Item::Part(_) | Item::Label(_) => {}
             }
         }
         let n: usize = idx.iter().map(Vec::len).sum();
@@ -261,6 +288,14 @@ impl BoardEditor {
             self.status = "部品は回路図側で削除してから「回路図から取り込み」を実行してください".into();
             return;
         }
+        // a designator is not deleted (it belongs to its part): Delete puts it back where it was placed automatically
+        if let Item::Label(i) = it {
+            if let Some(r) = self.board.texts.get(i).map(|t| t.refdes.clone()) {
+                self.checkpoint();
+                self.status = if self.board.reset_label(&r) { format!("{r} の文字を、元の位置に戻しました") } else { format!("{r} の文字は、もとの位置にあります") };
+            }
+            return;
+        }
         self.checkpoint();
         match it {
             Item::Track(i) => drop(self.board.tracks.remove(i)),
@@ -269,7 +304,7 @@ impl BoardEditor {
             Item::Hole(i) => drop(self.board.holes.remove(i)),
             Item::Silk(i) => drop(self.board.silk.remove(i)),
             Item::Zone(i) => drop(self.board.zones.remove(i)),
-            Item::Part(_) => {}
+            Item::Part(_) | Item::Label(_) => {}
         }
         self.selected = None;
     }

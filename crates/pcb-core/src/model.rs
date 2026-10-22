@@ -314,6 +314,10 @@ pub struct Board {
     /// Shop part numbers of library parts (reference designator -> shop id -> number), taken from the schematic on import.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub part_shops: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+    /// Where the user moved a part's silkscreen designator to: reference designator -> offset (mm) from the automatic spot.
+    /// The text follows its part and keeps the offset; an entry is removed when the text is put back.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub label_offsets: std::collections::BTreeMap<String, Point>,
     pub rules: Rules,
 }
 
@@ -355,6 +359,7 @@ impl Board {
             finish: Default::default(),
             finish_exclude: vec![],
             part_shops: Default::default(),
+            label_offsets: Default::default(),
             rules: Rules::default(),
         }
     }

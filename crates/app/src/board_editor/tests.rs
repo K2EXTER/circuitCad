@@ -1417,3 +1417,47 @@ fn an_import_that_adds_parts_fits_the_view_to_the_board() {
     e.import_from_schematic(&sch);
     assert!(!e.fit_pending, "nothing new: the view stays where the user put it");
 }
+
+fn board_with_one_part() -> BoardEditor {
+    let mut e = BoardEditor::default();
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "10k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
+    e
+}
+
+/// A part's silkscreen designator can be picked on its own, moved, and put back with Delete (it is not deleted).
+#[test]
+fn a_designator_is_picked_moved_and_put_back() {
+    let mut e = board_with_one_part();
+    let at = e.board.texts[0].pos;
+    // picking: on the text, but a pad of the part still wins over the text
+    assert_eq!(e.hit_test(at), Some(Item::Label(0)));
+    assert!(!matches!(e.hit_test(p(10.0, 10.0)), Some(Item::Label(_))), "the part's own pads come first");
+    // moving it in a group drag (how the app moves a selection): the text follows by the drag's distance
+    let g = GroupDrag { anchor: at, orig: e.board.clone(), items: vec![Item::Label(0)] };
+    e.move_group(&g, 3.0, -1.0);
+    assert_eq!(e.board.texts[0].pos, p(at.x + 3.0, at.y - 1.0));
+    // the same drag again from the same start does not pile up
+    e.move_group(&g, 4.0, 0.0);
+    assert_eq!(e.board.texts[0].pos, p(at.x + 4.0, at.y));
+    assert_eq!(e.board.label_offsets["R1"], p(4.0, 0.0));
+    // the part moves: the text keeps its place relative to it
+    e.board.place_part("R1", p(20.0, 10.0), 0);
+    assert_eq!(e.board.texts[0].pos, p(at.x + 10.0 + 4.0, at.y));
+    // Delete puts it back instead of deleting it
+    let n = e.board.texts.len();
+    e.delete(Item::Label(0));
+    assert_eq!(e.board.texts.len(), n);
+    assert!(e.board.label_offsets.is_empty() && e.status.contains("元の位置"), "{}", e.status);
+}
+
+/// Moving a part and its designator together does not move the text twice.
+#[test]
+fn a_part_and_its_designator_dragged_together_keep_the_offset() {
+    let mut e = board_with_one_part();
+    let at = e.board.texts[0].pos;
+    e.board.move_label("R1", p(at.x + 2.0, at.y));
+    let g = GroupDrag { anchor: p(10.0, 10.0), orig: e.board.clone(), items: vec![Item::Part(0), Item::Label(0)] };
+    e.move_group(&g, 5.0, 0.0);
+    assert_eq!(e.board.texts[0].pos, p(at.x + 5.0 + 2.0, at.y), "the part carried the text, the offset stayed 2 mm");
+    assert_eq!(e.board.label_offsets["R1"], p(2.0, 0.0));
+}

@@ -117,10 +117,11 @@ impl Board {
             }
         }
 
-        // designator above the part, centred
+        // designator above the part, centred (plus the offset the user gave it)
+        let off = self.label_offsets.get(&part.refdes).copied().unwrap_or_default();
         self.texts.push(SilkText {
             side: part.side,
-            pos: Point::new((x0 + x1) / 2.0, y1 + m + 0.2 + 0.5),
+            pos: Point::new((x0 + x1) / 2.0 + off.x, y1 + m + 0.2 + 0.5 + off.y),
             height: 1.0,
             text: part.refdes.clone(),
             refdes: part.refdes.clone(),
@@ -133,7 +134,31 @@ impl Board {
         Ok(())
     }
 
+    /// Move a part's designator text to `to` (its centre). The offset from the automatic spot is kept, so the text stays
+    /// there when the part moves. Returns false when the part has no text.
+    pub fn move_label(&mut self, refdes: &str, to: Point) -> bool {
+        let Some(t) = self.texts.iter_mut().find(|t| t.refdes == refdes) else { return false };
+        let (dx, dy) = (to.x - t.pos.x, to.y - t.pos.y);
+        t.pos = to;
+        let o = self.label_offsets.entry(refdes.to_string()).or_default();
+        o.x += dx;
+        o.y += dy;
+        true
+    }
+
+    /// Put a part's designator text back to the automatic spot. Returns false when it had not been moved.
+    pub fn reset_label(&mut self, refdes: &str) -> bool {
+        if self.label_offsets.remove(refdes).is_none() {
+            return false;
+        }
+        if let Some(part) = self.parts.iter().find(|p| p.refdes == refdes).cloned() {
+            let _ = self.set_part(part);
+        }
+        true
+    }
+
     pub fn remove_part(&mut self, refdes: &str) {
+        self.label_offsets.remove(refdes);
         self.parts.retain(|p| p.refdes != refdes);
         self.pads.retain(|p| p.refdes != refdes);
         self.silk.retain(|s| s.refdes != refdes);

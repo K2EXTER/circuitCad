@@ -2,7 +2,7 @@
 
 CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 
-- `model.rs` `Board`/`Track`/`Pad`/`Via`/`Zone`/`Rules` ほか全データ型。
+- `model.rs` `Board`/`Track`/`Pad`/`Via`/`Zone`/`Rules` ほか全データ型。部品番号のシルク文字(`SilkText` の `refdes` つき)は `set_part` が部品の上に自動で置く。ユーザーが動かした分は `Board.label_offsets`(部品番号 → 自動の位置からのずれ mm。無いファイルは空として読む)に持ち、`set_part` が毎回足すので、部品を動かしても文字は同じ間隔で付いてくる。`move_label`(文字を動かして、ずれを足す)・`reset_label`(自動の位置に戻す)・`remove_part` でずれも消える。テスト `tests_label.rs`
   - 銅箔は `Side` (Top/Bottom/`Inner(n)`)で表し、`Board.inner_layers`(内層の数、0=2層)と `copper_layers()` が層の一覧(上から下)。
   - トラックとゾーンだけが内層に置け、部品・パッド・シルクは `Side::outer()` で表裏のみ。
   - スルーホールとビアは全層につながる(ブラインド/ベリードビアは未対応)。

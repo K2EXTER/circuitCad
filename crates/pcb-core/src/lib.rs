@@ -70,6 +70,8 @@ mod tests_zone;
 #[cfg(test)]
 mod tests_fab;
 #[cfg(test)]
+mod tests_label;
+#[cfg(test)]
 mod tests_holes;
 #[cfg(test)]
 mod tests_quality;

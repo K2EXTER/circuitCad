@@ -429,9 +429,18 @@ impl BoardEditor {
             Item::Hole(i) if i < self.board.holes.len() => {
                 ui.label(format!("取付穴 φ{:.2} mm", self.board.holes[i].drill));
             }
+            Item::Label(i) if i < self.board.texts.len() => {
+                let r = self.board.texts[i].refdes.clone();
+                ui.label(format!("{r} のシルク文字 (部品番号)"));
+                ui.small("ドラッグで、好きな所へ動かせます。部品を動かすと、文字も付いてきます");
+                let moved = self.board.label_offsets.contains_key(&r);
+                if ui.add_enabled(moved, egui::Button::new("元の位置に戻す (Delete)")).on_hover_text("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません").clicked() {
+                    self.delete(sel);
+                }
+            }
             _ => {}
         }
-        if !matches!(sel, Item::Part(_)) && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キー)。部品は消せません").clicked() {
+        if !matches!(sel, Item::Part(_) | Item::Label(_)) && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キー)。部品は消せません").clicked() {
             self.delete(sel);
         }
     }

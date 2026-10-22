@@ -102,6 +102,22 @@ impl BoardEditor {
                     self.selected = Some(Item::Part(i));
                     self.multi.clear();
                 }
+            // a part's designator on the silkscreen: grab it where the pointer pressed, move it freely (not on the grid)
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
+                && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
+                && let w0 = self.to_world(rect, o)
+                && let Some(Item::Label(i)) = self.hit_test(w0)
+                && let Some(t) = self.board.texts.get(i) {
+                    let grab = Point::new(w0.x - t.pos.x, w0.y - t.pos.y);
+                    self.drag_label = Some((t.refdes.clone(), grab));
+                    self.selected = Some(Item::Label(i));
+                    self.multi.clear();
+                    self.checkpoint();
+                }
+            if let Some((r, grab)) = self.drag_label.clone()
+                && resp.dragged_by(egui::PointerButton::Primary) {
+                    self.board.move_label(&r, Point::new(w.x - grab.x, w.y - grab.y));
+                }
             if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
                 // the pointer has already moved a few pixels when the drag is recognised: look where it was pressed
                 && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
@@ -129,6 +145,7 @@ impl BoardEditor {
         if resp.drag_stopped() {
             self.finish_track_drag();
             self.drag_part = None;
+            self.drag_label = None;
             self.gdrag = None;
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {

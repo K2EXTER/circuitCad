@@ -52,6 +52,10 @@ impl BoardEditor {
             Tool::Select => {
                 self.multi.clear();
                 self.selected = self.hit_test(p);
+                if let Some(Item::Label(i)) = self.selected
+                    && let Some(r) = self.board.texts.get(i).map(|t| t.refdes.clone()) {
+                        self.status = format!("{r} のシルク文字: ドラッグで動かせます。Delete で、元の位置に戻ります");
+                    }
             }
             Tool::Track => match self.pending.take() {
                 None => self.pending = Some(p),

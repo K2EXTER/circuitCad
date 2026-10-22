@@ -77,6 +77,8 @@ enum Item {
     /// Index into `Board::parts`.
     Part(usize),
     Zone(usize),
+    /// A part's silkscreen designator: index into `Board::texts` (only texts with a reference designator).
+    Label(usize),
 }
 
 /// Rubber-band selection in progress.
@@ -159,7 +161,7 @@ impl Pickable {
             Item::Track(_) => self.tracks,
             Item::Via(_) => self.vias,
             Item::Pad(_) | Item::Hole(_) => self.pads,
-            Item::Silk(_) => self.silk,
+            Item::Silk(_) | Item::Label(_) => self.silk,
             Item::Zone(_) => self.zones,
         }
     }
@@ -242,6 +244,8 @@ pub struct BoardEditor {
     boxsel: Option<BoxSel>,
     gdrag: Option<GroupDrag>,
     drag_part: Option<(String, Point)>,
+    /// A designator text being dragged: its part and where the pointer grabbed it (from the text's centre).
+    drag_label: Option<(String, Point)>,
     /// Dragging one track with the Select tool: (the board as it was, the track, where the pointer took hold).
     seg_drag: Option<(Board, usize, Point)>,
     /// Push other nets' tracks aside while routing and dragging tracks.
@@ -344,6 +348,7 @@ impl Default for BoardEditor {
             boxsel: None,
             gdrag: None,
             drag_part: None,
+            drag_label: None,
             seg_drag: None,
             shove: true,
             finish_cache: Default::default(),
