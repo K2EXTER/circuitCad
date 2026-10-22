@@ -54,3 +54,24 @@ fn the_offset_is_saved_with_the_board_and_old_files_still_load() {
     let old: Board = serde_json::from_value(v).unwrap();
     assert!(old.label_offsets.is_empty());
 }
+
+/// Development aid: `CCAD_BOARD=<board.pcbjson> CCAD_OUT=<out.json> cargo test -p pcb-core dump_finish -- --ignored`
+/// writes the finished tracks and patches of a board (to draw them elsewhere).
+#[test]
+#[ignore]
+fn dump_finish() {
+    let (Ok(path), Ok(out)) = (std::env::var("CCAD_BOARD"), std::env::var("CCAD_OUT")) else { return };
+    let board: Board = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let f = crate::smooth::finished(&board).expect("finish is on");
+    let tracks: Vec<_> = f.board.tracks.iter().map(|t| serde_json::json!({"a": [t.a.x, t.a.y], "b": [t.b.x, t.b.y], "w": t.width, "side": format!("{:?}", t.side)})).collect();
+    let patches: Vec<_> = f.patches.iter().map(|p| serde_json::json!({"outline": p.outline.iter().map(|q| [q.x, q.y]).collect::<Vec<_>>(), "side": format!("{:?}", p.side)})).collect();
+    let pads: Vec<_> = board
+        .pads
+        .iter()
+        .map(|p| {
+            let (w, h) = p.shape.size();
+            serde_json::json!({"x": p.pos.x, "y": p.pos.y, "size": [w, h], "net": p.net})
+        })
+        .collect();
+    std::fs::write(out, serde_json::to_string(&serde_json::json!({"tracks": tracks, "patches": patches, "pads": pads})).unwrap()).unwrap();
+}

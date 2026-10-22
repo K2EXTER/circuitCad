@@ -12,7 +12,7 @@ use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::single::SingleFloatOverlay;
 use i_overlay::mesh::float::outline::offset::OutlineOffset;
-use i_overlay::mesh::float::style::OutlineStyle;
+use i_overlay::mesh::float::style::{LineJoin, OutlineStyle};
 
 type Path = Vec<[f64; 2]>;
 
@@ -26,6 +26,13 @@ const REACH: (f64, f64) = (0.12, 0.8);
 const SINK: f64 = 0.02;
 /// A piece smaller than this many `d * d` is only a rounded inside corner, which is not a slot.
 const MIN_PIECE: f64 = 0.6;
+/// Where a slot ends between two pads of its net, a notch is left open: this many slot widths deep from the pads' edge,
+/// with a rounded tip (a solid wall of copper up to the pads would read as one wide pad).
+const NOTCH_DEPTH: f64 = 1.4;
+/// The tip of the notch is rounded by opening it with this fraction of the slot width.
+const NOTCH_ROUND: f64 = 0.45;
+/// A pad counts as touching a slot when it comes this close (mm) to it.
+const TOUCH: f64 = 0.03;
 
 /// A polygon of copper to be added on `side` to the group of track `track`.
 #[derive(Clone, Debug)]
@@ -42,10 +49,10 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
     for side in board.copper_layers() {
         // the shapes of each group on this side, with the widest track among them
         // per group: its shapes, a disc (centre, radius) round each of them, the widest track, a track of the group
-        type Group = (Vec<Path>, Vec<(Point, f64)>, f64, usize);
+        type Group = (Vec<Path>, Vec<(Point, f64)>, f64, usize, Vec<Path>);
         let mut groups: std::collections::BTreeMap<usize, Group> = Default::default();
         for (i, t) in board.tracks.iter().enumerate().filter(|(_, t)| t.side == side) {
-            let g = groups.entry(conn.items[i]).or_insert_with(|| (vec![], vec![], 0.0, i));
+            let g = groups.entry(conn.items[i]).or_insert_with(|| (vec![], vec![], 0.0, i, vec![]));
             g.0.push(capsule(t.a, t.b, t.width / 2.0));
             g.1.push((Point::new((t.a.x + t.b.x) / 2.0, (t.a.y + t.b.y) / 2.0), t.a.dist(t.b) / 2.0 + t.width / 2.0));
             g.2 = g.2.max(t.width);
@@ -70,6 +77,7 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
             }
             if let Some(g) = groups.get_mut(&conn.pad_group(pi)) {
                 g.0.push(pad_path(p.pos, p.shape, 0.0));
+                g.4.push(pad_path(p.pos, p.shape, 0.0));
                 let (w, h) = p.shape.size();
                 g.1.push((p.pos, w.hypot(h) / 2.0));
             }
@@ -80,15 +88,60 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
                 g.1.push((v.pos, v.diameter / 2.0));
             }
         }
-        for (paths, discs, width, track) in groups.into_values() {
+        for (paths, discs, width, track, pads) in groups.into_values() {
             let d = (width.min(radius) * REACH_OF_WIDTH).clamp(REACH.0, REACH.1);
             if !has_close_pair(&discs, 2.0 * d) {
                 continue;
             }
-            for outline in closed_pieces(&paths, d) {
-                out.push(SlotPatch { side, outline, track });
+            for slot in closed_pieces(&paths, d) {
+                for outline in notched(&slot, &pads, 2.0 * d) {
+                    out.push(SlotPatch { side, outline, track });
+                }
             }
         }
+    }
+    out
+}
+
+/// The copper of `paths` grown by `r` (shrunk when `r` is negative), as paths. Corners are round (the closing above cuts them
+/// off, which is fine for a patch that is mostly covered; the notch is seen, so its tip has to be a real arc).
+fn grown(paths: &[Path], r: f64) -> Vec<Path> {
+    let none: Vec<Path> = vec![];
+    let union = paths.to_vec().overlay(&none, OverlayRule::Union, FillRule::NonZero);
+    union.outline(&OutlineStyle::new(r).line_join(LineJoin::Round(0.15))).into_iter().flatten().collect()
+}
+
+fn area_of(paths: &[Path]) -> f64 {
+    paths.iter().map(|p| signed_area(&p.iter().map(|q| Point::new(q[0], q[1])).collect::<Vec<_>>()).abs()).sum()
+}
+
+/// A slot that ends between two or more pads of its net keeps a notch open toward them: the part of the slot within
+/// `NOTCH_DEPTH` slot widths (`gap`) of the pads is left out, with a rounded tip. Any other slot comes back whole.
+fn notched(slot: &[Point], pads: &[Path], gap: f64) -> Vec<Vec<Point>> {
+    let slot_path: Vec<Path> = vec![slot.iter().map(|p| [p.x, p.y]).collect()];
+    let touching: Vec<Path> = pads.iter().filter(|p| area_of(&slot_path.clone().overlay(&grown(std::slice::from_ref(*p), TOUCH), OverlayRule::Intersect, FillRule::NonZero).into_iter().flatten().collect::<Vec<_>>()) > 1e-6).cloned().collect();
+    if touching.len() < 2 {
+        return vec![slot.to_vec()];
+    }
+    let near = grown(&touching, NOTCH_DEPTH * gap);
+    let cut: Vec<Path> = slot_path.clone().overlay(&near, OverlayRule::Intersect, FillRule::NonZero).into_iter().flatten().collect();
+    // opening: what is thinner than the rounding goes, and the tip comes back round
+    let opened = grown(&grown(&cut, -NOTCH_ROUND * gap), NOTCH_ROUND * gap);
+    if opened.is_empty() {
+        return vec![slot.to_vec()];
+    }
+    let kept = slot_path.overlay(&opened, OverlayRule::Difference, FillRule::NonZero);
+    let mut out = vec![];
+    for shape in kept {
+        let Some(outer) = shape.first() else { continue };
+        let mut pts: Vec<Point> = outer.iter().map(|p| Point::new(p[0], p[1])).collect();
+        if pts.len() < 3 || signed_area(&pts).abs() < MIN_PIECE * gap * gap / 4.0 {
+            continue;
+        }
+        if signed_area(&pts) < 0.0 {
+            pts.reverse();
+        }
+        out.push(pts);
     }
     out
 }
@@ -172,6 +225,52 @@ mod tests {
         let mut one = Board::new("t", 40.0, 40.0);
         one.tracks = vec![track(false, (10.0, 10.0), (10.0, 20.0))];
         assert!(slot_patches(&one, &crate::drc::connectivity(&one), &[], 0.5).is_empty());
+    }
+
+    /// Two pads of one net (0.65 mm apart, like the two LX pins of a QFN) with a track from each running left to a common trunk:
+    /// the slot between the tracks is filled, but it stays open for a rounded notch in front of the pads.
+    fn lx_pair() -> Board {
+        let mut b = Board::new("t", 40.0, 40.0);
+        for y in [18.825, 18.175] {
+            let mut p = Pad::new(Point::new(15.05, y), PadShape::Rect { w: 0.85, h: 0.3 }, None, Side::Top);
+            p.net = "LX".into();
+            b.pads.push(p);
+            b.tracks.push(Track { side: Side::Top, a: Point::new(15.05, y), b: Point::new(12.5, y), width: 0.25 });
+        }
+        b.tracks.push(Track { side: Side::Top, a: Point::new(12.5, 18.175), b: Point::new(12.5, 18.825), width: 0.25 });
+        b
+    }
+
+    fn covered(patches: &[SlotPatch], x: f64, y: f64) -> bool {
+        patches.iter().any(|p| crate::geom::inside_polygon(&p.outline, Point::new(x, y)))
+    }
+
+    #[test]
+    fn the_slot_between_two_pads_of_a_net_keeps_a_rounded_notch_in_front_of_them() {
+        let b = lx_pair();
+        let patches = slot_patches(&b, &crate::drc::connectivity(&b), &[], 0.5);
+        assert!(!patches.is_empty());
+        let edge = 15.05 - 0.425; // the pads' left edge
+        // the slot is 0.4 wide, the notch 1.4 x 0.4 deep: nothing within 0.4 of the pads, copper well beyond the tip
+        assert!(!covered(&patches, edge - 0.2, 18.5), "open just in front of the pads");
+        assert!(!covered(&patches, edge + 0.3, 18.5), "and between them");
+        assert!(covered(&patches, edge - 0.9, 18.5), "filled beyond the notch");
+        assert!(covered(&patches, edge - 1.5, 18.5));
+        // the tip is round: on the centre line the notch is deepest, near the slot's edges it is shallower
+        let depth_at = |y: f64| (0..200).map(|k| edge - k as f64 * 0.01).find(|x| covered(&patches, *x, y)).map(|x| edge - x);
+        let (mid, edge_row) = (depth_at(18.5).unwrap(), depth_at(18.3 + 0.02).unwrap());
+        assert!(mid > edge_row + 0.04, "a round tip: {mid} on the centre line, {edge_row} near the wall");
+        assert!((0.4..0.7).contains(&mid), "about 1.4 slot widths deep: {mid}");
+    }
+
+    #[test]
+    fn a_slot_not_between_two_pads_is_filled_to_its_end() {
+        // one pad only: the slot between two tracks that end at it is filled right up to the pad (no notch)
+        let mut b = lx_pair();
+        b.pads.truncate(1);
+        let patches = slot_patches(&b, &crate::drc::connectivity(&b), &[], 0.5);
+        let edge = 15.05 - 0.425;
+        assert!(covered(&patches, edge - 0.2, 18.5), "{patches:?}");
     }
 
     #[test]
