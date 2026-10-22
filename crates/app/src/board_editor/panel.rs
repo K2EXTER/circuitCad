@@ -93,12 +93,12 @@ impl BoardEditor {
                 for n in &self.import_notes {
                     ui.colored_label(Color32::from_rgb(255, 180, 60), n);
                 }
-                ui.label(format!("未配線: {} 本 (黄色の線)", self.cached_airwires().len()));
+                ui.label(format!("未配線: {} 本 (黄色の線)", self.cached_airwires().len())).on_hover_text("まだ銅の線でつながっていない部分です。黄色の線 (ラッツネスト) が、つなぐべき相手を結んで示します。配線すると減って、0 になれば全部つながっています");
                 if ui.button("部品を並べて外形を決める").on_hover_text("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。「GND ベタ」を置いたあとでも使えます (そのビアと短い線は、並べたあとに置き直します)。ほかの配線がある基板では使えません (部品を動かすと配線が合わなくなるため)").clicked() {
                     self.autoplace();
                 }
                 ui.separator();
-                ui.label("基板の外形");
+                ui.label("基板の外形").on_hover_text("基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります。矩形・円・多角形が選べます");
                 ui.horizontal(|ui| {
                     ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 ")).on_hover_text("基板の幅 (mm)。「矩形に設定」を押すと外形に反映されます");
                     ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ ")).on_hover_text("基板の高さ (mm)。「矩形に設定」を押すと外形に反映されます");
@@ -124,7 +124,7 @@ impl BoardEditor {
                 if let Some((lo, hi)) = self.board.bounds() {
                     ui.small(format!("現在 {:.1} × {:.1} mm ({}点)", hi.x - lo.x, hi.y - lo.y, self.board.outline.len()));
                 }
-            });
+            }).header_response.on_hover_text("回路図から部品を取り込み、基板の上に並べて、基板の外形 (大きさ・形) を決めます。ここまでが「何をどこに置くか」です");
             egui::CollapsingHeader::new("② 自動で配線").default_open(true).show(ui, |ui| {
                 let sel_net = match self.selected {
                     Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
@@ -164,7 +164,7 @@ impl BoardEditor {
                             self.shorten_routes(Some(n));
                         }
                 });
-            });
+            }).header_response.on_hover_text("部品どうしを銅の線でつなぎます (配線)。「ベタ」は、基板の面いっぱいに広げた銅箔のことで、GND (0V の基準) によく使います。自動で引いたあと、手で直せます");
             egui::CollapsingHeader::new("③ 整える (?)").default_open(false).show(ui, |ui| {
                 self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
@@ -200,9 +200,9 @@ impl BoardEditor {
                 if ui.button("発注の準備…").on_hover_text("発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します").clicked() {
                     self.open_order();
                 }
-                ui.label("基板名 (出力ファイル名)");
+                ui.label("基板名 (出力ファイル名)").on_hover_text("書き出すファイルの名前のもとになります (例: board_gerber.zip)");
                 ui.text_edit_singleline(&mut self.board.name).on_hover_text("製造ファイル (Gerber など) の名前に使います。半角の英数字がおすすめです");
-            });
+            }).header_response.on_hover_text("「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。問題がなければ、「発注の準備」で、工場に渡すデータ (ガーバー) を作ります");
             ui.separator();
             if ui.small_button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
                 self.help_request = Some(crate::help::HelpTab::Board);
