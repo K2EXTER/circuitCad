@@ -380,7 +380,8 @@ impl SchEditor {
         };
         let mut jobs = vec![];
         for part in breakable(&c) {
-            for (kind, fault) in ALL_FAULTS.iter().enumerate() {
+            // a part put in the wrong way round is a mistake of the assembly, not a failure: it is tried one part at a time only
+            for (kind, fault) in ALL_FAULTS.iter().enumerate().filter(|(_, f)| !matches!(f, Fault::Reverse)) {
                 if let Some(b) = break_part(&c, &part, *fault) {
                     jobs.push((part.clone(), kind, b));
                 }
@@ -527,7 +528,7 @@ impl SchEditor {
                         Fault::Open => "足が外れた・はんだ不良・パターン切れ。その部品が回路から消えた状態にします (電源は 0V になります)",
                         Fault::Short => "足同士がつながった (はんだブリッジ・部品の破壊)。ごく小さな抵抗でつなぎます",
                         Fault::TurnShort(_) => "コイルの巻線の層と層の絶縁がやぶれて、巻線の一部がショートした状態 (レアショート)。インダクタンスが下がって電流が増え、ショートした部分には大きな電流が回って発熱します。「連鎖故障を追う」で、そのあと何が壊れていくかを見られます",
-                        Fault::Reverse => "向きを逆につけた (ダイオード/LED のアノードとカソード、トランジスタのコレクタとエミッタ)。部品の向き間違いは、初心者の失敗でいちばん多いものの一つです",
+                        Fault::Reverse => "向きを逆につけた (ダイオード/LED のアノードとカソード、トランジスタのコレクタとエミッタ)。故障ではなく、組み立てのミスです。部品の向き間違いは、初心者の失敗でいちばん多いものの一つです (「全部品を順に壊す」には含めません)",
                         Fault::Scale(x) if *x > 1.0 => "値の読み間違い・部品の取り違え・電源電圧の上昇。値を大きくします",
                         _ => "値の読み間違い・部品の取り違え・容量抜け・電源電圧の低下。値を小さくします",
                     };
@@ -598,7 +599,7 @@ impl SchEditor {
             if ui.button("連鎖故障を追う").on_hover_text("選んだ部品を壊したあと、過渡解析で電流・電力が定格を超えた部品を順に壊していき、何がどの順に壊れるかを日本語で説明します (部品全体の故障で調べます。過渡解析の終了時間・刻みの設定を使います。コイルのレアショートが典型例です)").clicked() {
                 self.run_fault_chain();
             }
-            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new("全部品を順に壊す")).on_hover_text("すべての部品を、断線・ショート・逆向き・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます").clicked() {
+            if ui.add_enabled(self.scan_run.is_none(), egui::Button::new("全部品を順に壊す")).on_hover_text("すべての部品を、断線・ショート・値違い・電源低下で、ICとトランジスタは全ピンの断線でも壊して、部品が定格を超える危険なものから順に並べます (DCで比べます)。部品の向き間違い (逆向き) は、故障ではなく組み立てのミスなので、ここには含めません (上で1つずつ選べます)。クリックで詳しく見られます。大きな回路では時間がかかりますが、別の作業スレッドで走るので画面は止まらず、途中でやめられます").clicked() {
                 self.start_fault_scan();
             }
         });
