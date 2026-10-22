@@ -187,7 +187,7 @@ impl Session {
             "dc" => self.dc(args),
             "tran" => self.tran(args),
             "ac" => self.ac(args),
-            "models" | "murata" => crate::models::models(args),
+            "models" | "murata" => self.models(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),
             "board" => self.board_cmd(args),

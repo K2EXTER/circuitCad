@@ -6,7 +6,7 @@
 //! dielectric, capacitance and rating, so that the list can be narrowed by them.
 
 use crate::passive::{Generated, eng};
-use crate::PinDef;
+use crate::{PartDef, PinDef};
 use sch_core::PinSide;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,8 @@ pub struct CapMeta {
     pub capacitance: f64,
     /// Rated voltage in volts.
     pub voltage: f64,
+    /// An electrolytic: the part has `+` and `-` pins (pin 1 is `+`).
+    pub polar: bool,
     /// One line for the part's description ("村田 GRM... 1608(0603) X5R 10uF 10V").
     pub summary: String,
     /// What the model leaves out or only approximates, one sentence each (becomes the part's `limits`).
@@ -117,7 +119,7 @@ fn murata(path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
     notes.push("周波数は 100Hz〜6GHz (温度補償型は 1MHz〜6GHz) の範囲で合わせたモデルです。範囲の外は信用できません。".into());
     let part = text.lines().find_map(|l| l.split_once("Murata P/N :").map(|(_, p)| p.trim().to_string())).unwrap_or_default();
     let summary = format!("村田 {part} {size_metric}({size_inch}) {dielectric} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
-    Some(("村田", CapMeta { size_metric, size_inch, dielectric, capacitance, voltage, summary, notes }))
+    Some(("村田", CapMeta { size_metric, size_inch, dielectric, capacitance, voltage, polar: false, summary, notes }))
 }
 
 /// Nippon Chemi-Con (日本ケミコン) aluminium / polymer electrolytics. The file has no description line: the figures come
@@ -145,7 +147,7 @@ fn chemicon(_path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
     let mut notes = vec![format!("メーカーのRCはしご形モデル (7素子) です。{}の値で、温度による変化・直流電圧・寿命は入っていません。", if temp.is_empty() { "ある1つの温度" } else { temp.as_str() })];
     notes.push("電解コンデンサは極性があります。モデルは小信号の値で、逆電圧をかけたときや、リップル電流による発熱・寿命は扱いません。".into());
     let summary = format!("日本ケミコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
-    Some(("日本ケミコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, summary, notes }))
+    Some(("日本ケミコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, polar: true, summary, notes }))
 }
 
 /// Nichicon (ニチコン) electrolytics. The header has `Part Number :` and the modelling conditions; the figures come from the
@@ -188,7 +190,7 @@ fn nichicon(_path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
     let mut notes = vec![format!("メーカーのRCはしご形モデル (7素子) です。{}・直流電圧 {} の小信号の値で、温度による変化・直流電圧・寿命は入っていません。", if temp.is_empty() { "ある1つの温度" } else { temp.as_str() }, if bias.is_empty() { "0V" } else { bias.as_str() })];
     notes.push("電解コンデンサは極性があります。モデルは小信号の値で、逆電圧をかけたときや、リップル電流による発熱・寿命は扱いません。".into());
     let summary = format!("ニチコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
-    Some(("ニチコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, summary, notes }))
+    Some(("ニチコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, polar: true, summary, notes }))
 }
 
 /// "821" = 82 x 10^1 uF (the code electrolytics use: two digits and a power of ten), in farads with 3 significant digits.
@@ -378,6 +380,83 @@ impl VendorIndex {
     }
 }
 
+/// A part made from a model, and what to tell the user about it.
+#[derive(Clone, Debug)]
+pub struct MadePart {
+    pub part: PartDef,
+    /// The built-in footprint the part uses (`C_0603`), if its size has one.
+    pub footprint: Option<String>,
+    /// Things the user still has to do (the size has no built-in footprint, the value and rating are unknown), in Japanese.
+    pub todo: Vec<String>,
+}
+
+fn pad_spec(p: &pcb_core::footprints::FpPad) -> pcb_core::package::PadSpec {
+    use pcb_core::PadShape;
+    let (shape, w, h) = match p.shape {
+        PadShape::Circle { d } => ("circle", d, 0.0),
+        PadShape::Rect { w, h } => ("rect", w, h),
+        PadShape::Oval { w, h } => ("oval", w, h),
+    };
+    pcb_core::package::PadSpec { pin: p.pin.clone(), x: p.pos.x, y: p.pos.y, shape: shape.into(), w, h, drill: p.drill, slot: p.slot, slot_v: p.slot_v }
+}
+
+impl VendorIndex {
+    /// The model as a library part: two pins, the capacitor (or electrolytic) symbol, the `.subckt`, and the rated voltage and
+    /// built-in footprint when the maker's reader found them. What could not be filled in is listed in `todo`.
+    pub fn part_def(&self, e: &VendorEntry) -> Result<MadePart, String> {
+
+        use pcb_core::package::PackageSpec;
+        use sch_core::{PartRatings, SimKind, SimModel};
+        let g = self.generate(e)?;
+        let polar = e.meta.as_ref().is_some_and(|m| m.polar);
+        let pin = |n: &str, name: &str, side| PinDef { number: n.into(), name: name.into(), side: Some(side), sim_only: false };
+        let pins = if polar { vec![pin("1", "+", PinSide::Left), pin("2", "-", PinSide::Right)] } else { vec![pin("1", "1", PinSide::Left), pin("2", "2", PinSide::Right)] };
+        let mut todo = vec![];
+        let size = e.meta.as_ref().map(|m| m.size_inch.as_str()).filter(|s| !s.is_empty());
+        let footprint = size.map(|s| format!("C_{s}")).filter(|f| pcb_core::footprints::get(f).is_some());
+        let (package, footprint_name) = match footprint.as_deref().and_then(pcb_core::footprints::get) {
+            Some(fp) => (PackageSpec::Explicit { pads: fp.pads.iter().map(pad_spec).collect(), holes: vec![] }, footprint.clone()),
+            None => {
+                todo.push(match size {
+                    Some(s) => format!("{s} 用の組み込みフットプリントはまだ無いので、基板に使うには、パッケージの寸法を入れ直してください"),
+                    None => "このモデルには大きさの情報がないので、基板に使うには、データシートの寸法でパッケージを入れ直してください".into(),
+                });
+                (PackageSpec::Chip2 { pitch: 1.65, pad_len: 0.8, pad_width: 0.95 }, None)
+            }
+        };
+        let ratings = e.meta.as_ref().map(|m| PartRatings { v_max: Some(m.voltage), ..Default::default() });
+        if e.meta.is_none() {
+            todo.push("このモデルには容量と耐圧の情報がないので、値 (容量) と定格電圧は自分で入れてください".into());
+        }
+        let part = PartDef {
+            name: e.part_number.clone(),
+            category: "コンデンサ".into(),
+            description: g.description,
+            datasheet: String::new(),
+            prefix: "C".into(),
+            value: (!g.value_text.is_empty()).then_some(g.value_text),
+            pins,
+            package,
+            footprint_name,
+            height: None,
+            sim: Some(SimModel {
+                kind: SimKind::Subckt,
+                element: String::new(),
+                name: g.sim_name,
+                text: g.sim_text,
+                pins: g.sim_pins,
+                params: Default::default(),
+                limits: g.limits,
+            }),
+            ratings,
+            glyph: if polar { "electrolytic" } else { "capacitor" }.into(),
+            body: None,
+            shops: Default::default(),
+        };
+        Ok(MadePart { part, footprint, todo })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -563,6 +642,49 @@ L1 1 3 4.20e-09
         let g = idx.generate(&idx.entries[0]).unwrap();
         assert_eq!(g.value_text, "820u");
         assert!(g.sim_text.starts_with(".SUBCKT APSW250ELL821MJB5S_20deg-C 1 2") && g.sim_text.contains("L1 1 3 4.20e-09"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_model_becomes_a_library_part_that_passes_the_checks() {
+        let d = tmp("part");
+        let idx = VendorIndex::open(&make_zip(&d)).unwrap();
+        let by = |pn: &str| idx.entries.iter().find(|e| e.part_number == pn).unwrap();
+        // a Murata 0603: the built-in footprint, the rated voltage, the capacitor symbol
+        let m = idx.part_def(by("GRM188R61A106MAAL")).unwrap();
+        assert_eq!((m.part.prefix.as_str(), m.part.glyph.as_str(), m.part.value.as_deref()), ("C", "capacitor", Some("10u")));
+        assert_eq!((m.footprint.as_deref(), m.part.footprint_name.as_deref()), (Some("C_0603"), Some("C_0603")));
+        assert_eq!(m.part.ratings.as_ref().and_then(|r| r.v_max), Some(10.0));
+        assert!(m.todo.is_empty(), "{:?}", m.todo);
+        assert!(m.part.validate().iter().all(|i| !i.error), "{:?}", m.part.validate());
+        // a size with no built-in footprint is said, and the part still works for the circuit
+        let m = idx.part_def(by("GRM155R71C104KA88")).unwrap();
+        assert!(m.footprint.is_none() && m.todo.iter().any(|t| t.contains("0402")), "{:?}", m.todo);
+        assert!(m.part.validate().iter().all(|i| !i.error));
+        // a model no reader described: no value, no rating, and the user is told
+        let m = idx.part_def(by("CAP_A")).unwrap();
+        assert!(m.part.value.is_none() && m.part.ratings.is_none() && m.todo.len() == 2, "{:?}", m.todo);
+        assert!(m.part.validate().iter().all(|i| !i.error));
+        // three nodes: refused, as in the form
+        assert!(idx.part_def(by("NEST")).unwrap_err().contains("3 個"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn an_electrolytic_part_has_plus_and_minus_pins() {
+        let d = tmp("polar");
+        let p = d.join("psw.zip");
+        let mut z = zip::ZipWriter::new(std::fs::File::create(&p).unwrap());
+        z.start_file("a/APSW250ELL821MJB5S.lib", zip::write::SimpleFileOptions::default()).unwrap();
+        z.write_all(CHEMICON.as_bytes()).unwrap();
+        z.finish().unwrap();
+        let idx = VendorIndex::open(&p).unwrap();
+        let m = idx.part_def(&idx.entries[0]).unwrap();
+        assert_eq!(m.part.glyph, "electrolytic");
+        assert_eq!(m.part.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["+", "-"]);
+        assert_eq!(m.part.ratings.as_ref().and_then(|r| r.v_max), Some(25.0));
+        assert!(m.todo.iter().any(|t| t.contains("大きさ")), "no size: the package is left to the user");
+        assert!(m.part.validate().iter().all(|i| !i.error));
         let _ = std::fs::remove_dir_all(&d);
     }
 

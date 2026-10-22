@@ -28,7 +28,13 @@ fn farads(key: &str, v: Option<&str>) -> Result<Option<f64>, String> {
         .ok_or_else(|| format!("{key}='{v}' is not a capacitance (write 10u, 100n, 22p)"))
 }
 
-pub fn models(args: &[String]) -> Res {
+impl crate::session::Session {
+    pub fn models(&mut self, args: &[String]) -> Res {
+        models(self, args)
+    }
+}
+
+fn models(session: &mut crate::session::Session, args: &[String]) -> Res {
     let (words, kv) = options(args);
     let zips = match opt(&kv, "zip") {
         Some(z) => vec![z.to_string()],
@@ -47,6 +53,22 @@ pub fn models(args: &[String]) -> Res {
     }
     if indexes.is_empty() {
         return Err(skipped.iter().filter_map(|s| s["error"].as_str()).collect::<Vec<_>>().join("; "));
+    }
+    // `models use PART_NUMBER`: put the model into this session's library, so that `add PART_NUMBER` places it
+    if words.first().is_some_and(|w| w.eq_ignore_ascii_case("use")) {
+        let pn = words.get(1).ok_or("models use PART_NUMBER (search with 'models WORD')")?;
+        for idx in &indexes {
+            if let Some(e) = idx.entries.iter().find(|e| e.part_number.eq_ignore_ascii_case(pn)) {
+                let made = idx.part_def(e)?;
+                let name = made.part.name.clone();
+                let pins: Vec<_> = made.part.pins.iter().map(|p| json!({"pin": p.number, "name": p.name})).collect();
+                let out = json!({"part": name, "value": made.part.default_value(), "pins": pins, "footprint": made.footprint, "todo": made.todo, "simulates": true, "hint": format!("add {name} [VALUE] as=C1")});
+                session.lib.retain(|d| !d.name.eq_ignore_ascii_case(&name));
+                session.lib.push(made.part);
+                return Ok(obj(out));
+            }
+        }
+        return Err(format!("'{pn}' is not in the model zips (search with 'models WORD')"));
     }
     if let Some(pn) = opt(&kv, "model") {
         for idx in &indexes {

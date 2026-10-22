@@ -16,3 +16,6 @@ pcb-core = { version = "0.1.0", path = "../pcb-core" }
 sch-core = { version = "0.1.0", path = "../sch-core" }
 serde_json = "1.0.151"
 sim-core = { version = "0.1.0", path = "../sim-core" }
+
+[dev-dependencies]
+zip = "8.6.0"

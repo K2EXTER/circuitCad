@@ -81,6 +81,8 @@ impl PartForm {
     fn apply_vendor(&mut self, index: usize, e: &VendorEntry) -> Result<String, String> {
         let g = self.mu.indexes.get(index).ok_or("モデルのzipを読み込んでください")?.generate(e)?;
         self.pas_kind = PassiveKind::Capacitor;
+        // a maker's reader that knows the part is an electrolytic (no `+` / `-` choice left to the user)
+        self.pas_polar |= e.meta.as_ref().is_some_and(|m| m.polar);
         for s in [&mut self.pas_esr, &mut self.pas_esl, &mut self.pas_srf, &mut self.pas_bias, &mut self.pas_table, &mut self.pas_tc1, &mut self.pas_tc2, &mut self.pas_tctable] {
             s.clear();
         }

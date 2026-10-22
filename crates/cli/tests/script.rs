@@ -586,3 +586,32 @@ fn board_shopping_gives_the_part_number_of_a_library_part_that_has_one() {
     assert_eq!(u["shops"]["lcsc"]["url"], "https://www.lcsc.com/product-detail/C7950.html");
     assert!(u["shops"]["akizuki"]["search"].is_string(), "{u}");
 }
+
+/// A maker's model zip (made here: the real ones cannot be redistributed) -> `models` finds the part, `models use` puts it into the
+/// library, and `add` places it like any library part: the capacitor charges through a resistor to the supply voltage.
+#[test]
+fn a_model_from_a_maker_zip_can_be_found_used_added_and_simulated() {
+    use std::io::Write;
+    let dir = std::env::temp_dir().join(format!("ccad-test-zip-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let zip_path = dir.join("grm.zip");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+    z.start_file("High_dielectric_constant/1608_0603/GRM188R61A106MAAL.mod", zip::write::SimpleFileOptions::default()).unwrap();
+    z.write_all(b"* Murata Manufacturing\r\n* Description :1608M(0603)/X5R(-55to85[deg])/1.00e+01[uF]/10[V]\r\n* Murata P/N :GRM188R61A106MAAL\r\n.SUBCKT GRM188R61A106MAAL Port1 Port2\r\nC01 Port1 N01 9.0e-06\r\nL02 N01 N02 1.0e-10\r\nR01 N02 Port2 5.0e-03\r\n.ENDS GRM188R61A106MAAL\r\n").unwrap();
+    z.finish().unwrap();
+    let zip = zip_path.to_str().unwrap().replace('\\', "/");
+    let (a, ok) = run(&format!(
+        "models zip={zip} size=0603 cmin=10u cmax=10u\nmodels use GRM188R61A106MAAL zip={zip}\nnew\nmodels use GRM188R61A106MAAL zip={zip}\n\
+         add V 5 as=V1\nadd R 1k as=R1\nadd GRM188R61A106MAAL as=C1\nnet IN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\nerc\ntran 50m 100u probe=V(OUT) samples=2\n"
+    ));
+    assert!(ok, "{a:?}");
+    let found = &a[0];
+    assert_eq!((found["count"].as_u64(), found["parts"][0]["part_number"].as_str(), found["parts"][0]["maker"].as_str()), (Some(1), Some("GRM188R61A106MAAL"), Some("村田")));
+    let used = last(&a, "models");
+    assert_eq!((used["part"].as_str(), used["value"].as_str(), used["footprint"].as_str()), (Some("GRM188R61A106MAAL"), Some("10u"), Some("C_0603")));
+    assert_eq!(last(&a, "erc")["errors"], 0);
+    // 1 kohm x 9 uF = 9 ms: after 50 ms the capacitor is at the supply
+    let v = last(&a, "tran")["signals"]["V(OUT)"]["final"].as_f64().unwrap();
+    assert!((v - 5.0).abs() < 0.05, "V(OUT) = {v}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
