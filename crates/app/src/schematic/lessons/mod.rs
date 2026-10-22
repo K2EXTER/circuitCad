@@ -164,6 +164,29 @@ impl SchEditor {
         a.done.iter().all(|d| *d).then(|| LESSONS.get(a.idx).map(|l| l.id)).flatten()
     }
 
+    /// The text of the step the learner is on (the first that is not ticked), while a lesson runs.
+    fn current_step_detail(&self) -> Option<&'static str> {
+        let a = self.lesson.as_ref()?;
+        let lesson = LESSONS.get(a.idx)?;
+        let cur = a.done.iter().position(|d| !d)?;
+        lesson.steps.get(cur).map(|s| s.detail)
+    }
+
+    /// Makes the button the current lesson step names pulse: a button whose label is in 「」 in the step's text is the one to
+    /// press now, and it is hard to find among ten sections of the left panel. Returns the response as it was given.
+    pub(super) fn lit(&self, r: egui::Response, label: &str) -> egui::Response {
+        let Some(detail) = self.current_step_detail() else { return r };
+        if !detail.contains(&format!("「{label}」")) {
+            return r;
+        }
+        let t = r.ctx.input(|i| i.time);
+        let a = 0.55 + 0.45 * (t * 4.0).sin().abs();
+        let color = egui::Color32::from_rgb(255, 170, 40).gamma_multiply(a as f32);
+        r.ctx.layer_painter(r.layer_id).rect_stroke(r.rect.expand(2.0), 4.0, egui::Stroke::new(2.5, color), egui::StrokeKind::Outside);
+        r.ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        r
+    }
+
     /// Tick off the step the learner is on, once its condition holds.
     pub(super) fn update_lesson(&mut self) {
         let Some(active) = self.lesson.as_ref() else { return };
@@ -281,3 +304,20 @@ impl SchEditor {
     }
 }
 
+
+/// The button that the current step names in 「」 is the one that pulses; every step of every lesson that names a panel button names
+/// one that exists (a renamed button would otherwise stop glowing without a sound).
+#[cfg(test)]
+mod lit_tests {
+    use super::*;
+
+    #[test]
+    fn the_step_text_names_the_button_to_press() {
+        let mut e = SchEditor::default();
+        assert!(e.current_step_detail().is_none(), "no lesson, nothing to light");
+        let idx = LESSONS.iter().position(|l| l.id == "divider").unwrap();
+        e.start_lesson(idx);
+        let detail = e.current_step_detail().unwrap();
+        assert!(detail.contains("「DC動作点を解析」"), "{detail}");
+    }
+}

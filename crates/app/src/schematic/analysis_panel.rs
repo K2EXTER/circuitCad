@@ -5,7 +5,7 @@ use super::*;
 impl SchEditor {
     pub(super) fn panel_dc(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.button("DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
+            if self.lit(ui.button("DC動作点を解析"), "DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
                 self.run_dc();
             }
             ui.checkbox(&mut self.show_v, "電圧表示").on_hover_text("DC解析の結果を回路図に重ねて表示します。配線は電圧が低いほど青、高いほど赤に色分けされます");
@@ -44,7 +44,7 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).hint_text("自動").desired_width(56.0)).on_hover_text("計算の最大の時間刻み。空欄なら自動で、終了時間の 1/1000 になります (波形の変化が速い所では、自動でもっと細かくします)。波形が角ばって見えるときは、小さい値を入れます");
         });
         ui.horizontal(|ui| {
-            if ui.button("過渡解析を実行").on_hover_text("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います").clicked() {
+            if self.lit(ui.button("過渡解析を実行"), "過渡解析を実行").on_hover_text("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います").clicked() {
                 self.run_tran();
             }
             ui.checkbox(&mut self.tran_uic, "ゼロ状態から").on_hover_text("コンデンサの電圧などを 0 の状態から始めます。電源を入れた直後の立ち上がりを見たいときに使います");
@@ -60,7 +60,7 @@ impl SchEditor {
             ui.label("点/dec");
             ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0)).on_hover_text("周波数が10倍になる間に何点測るか。多いほど滑らかですが、20 もあれば十分です");
         });
-        if ui.button("AC解析を実行").on_hover_text("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます").clicked() {
+        if self.lit(ui.button("AC解析を実行"), "AC解析を実行").on_hover_text("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます").clicked() {
             self.run_ac();
         }
     }
@@ -77,7 +77,7 @@ impl SchEditor {
             ui.label("刻み");
             ui.add(egui::TextEdit::singleline(&mut self.sweep_step).desired_width(40.0)).on_hover_text("電圧を変える間隔 (V)。切り替わりをなめらかに見るには、電源電圧の 1/100 くらい");
         });
-        if ui.button("DCスイープを実行").on_hover_text("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します").clicked() {
+        if self.lit(ui.button("DCスイープを実行"), "DCスイープを実行").on_hover_text("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します").clicked() {
             self.run_sweep();
         }
     }
@@ -103,7 +103,7 @@ impl SchEditor {
                     self.status = "回路図の測りたいノードをクリックしてください".into();
                 }
             }
-            if ui.button("ノイズ解析を実行").on_hover_text("抵抗の熱雑音や、ダイオード・トランジスタのショット雑音が出力にどれだけ現れるかを周波数ごとに計算します。").clicked() {
+            if self.lit(ui.button("ノイズ解析を実行"), "ノイズ解析を実行").on_hover_text("抵抗の熱雑音や、ダイオード・トランジスタのショット雑音が出力にどれだけ現れるかを周波数ごとに計算します。").clicked() {
                 self.run_noise();
             }
         });
@@ -118,7 +118,7 @@ impl SchEditor {
             ui.label("刻み");
             ui.add(egui::TextEdit::singleline(&mut self.temp_step).desired_width(30.0)).on_hover_text("温度の間隔 (℃)");
         });
-        if ui.button("温度スイープを実行").on_hover_text("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
+        if self.lit(ui.button("温度スイープを実行"), "温度スイープを実行").on_hover_text("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
 LED の電流や、トランジスタ回路のバイアスが温度でずれる様子が分かります").clicked() {
             self.run_temp_sweep();
         }
@@ -167,7 +167,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             ui.label("L");
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_l).desired_width(26.0)).on_hover_text("コイルの誤差。10〜20% が一般的です");
         });
-        if ui.button("ばらつき解析を実行").on_hover_text("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
+        if self.lit(ui.button("ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
 「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります").clicked() {
             self.run_mc();
         }
@@ -190,7 +190,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                         ui.colored_label(Color32::from_rgb(230, 60, 60), m);
                     }
                     // an oscillator or latch has no single operating point: its waveform is the answer
-                    if msgs.iter().any(|m| m.contains("過渡解析")) && ui.button("過渡解析を実行").on_hover_text("DCの1点ではなく、時間を追った波形を計算します。発振回路や2つの状態を持つ回路は、ここで動きが見えます (終了時間と刻みは「過渡解析」の設定が使われます)").clicked() {
+                    if msgs.iter().any(|m| m.contains("過渡解析")) && self.lit(ui.button("過渡解析を実行"), "過渡解析を実行").on_hover_text("DCの1点ではなく、時間を追った波形を計算します。発振回路や2つの状態を持つ回路は、ここで動きが見えます (終了時間と刻みは「過渡解析」の設定が使われます)").clicked() {
                         go_tran = true;
                     }
                 }
@@ -243,7 +243,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                 ui.label(format!("{}: {}", n.name, pins.join(", ")));
             }
         });
-        if ui.button("SPICEネットリストを書き出し…").on_hover_text("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います").clicked()
+        if self.lit(ui.button("SPICEネットリストを書き出し…"), "SPICEネットリストを書き出し…").on_hover_text("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います").clicked()
             && let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
                 self.status = match std::fs::write(&p, to_spice(&self.sch, "circuitCad")) {
                     Ok(()) => format!("書き出しました: {}", p.display()),

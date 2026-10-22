@@ -124,7 +124,7 @@ impl SchEditor {
             { let tip = "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"; if crate::icons::icon_button(ui, crate::icons::Icon::Wire, "配線", self.tool == Tool::Wire, true, tip).clicked() { self.tool = Tool::Wire; } };
             { let tip = "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"; if crate::icons::icon_button(ui, crate::icons::Icon::Label, "ラベル", self.tool == Tool::Label, true, tip).clicked() { self.tool = Tool::Label; } };
         });
-        if ui.button("クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
+        if self.lit(ui.button("クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
             self.open_quick_add();
         }
         if self.tool == Tool::Label {
@@ -203,7 +203,7 @@ impl SchEditor {
             }
         });
         // outside the (closed by default) library list, so a newcomer can find it without opening anything
-        if ui.button("＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
+        if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
             self.form = Some(PartForm::default());
         }
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(false).show(ui, |ui| {
@@ -330,16 +330,16 @@ impl SchEditor {
             }
             ui.small("◎ = シミュレーションモデルあり");
             ui.horizontal(|ui| {
-                if ui.button("新規作成…").on_hover_text("ライブラリに、自分で部品 (記号・パッケージ・シミュレーションモデル) を作って追加します").clicked() {
+                if self.lit(ui.button("新規作成…"), "新規作成…").on_hover_text("ライブラリに、自分で部品 (記号・パッケージ・シミュレーションモデル) を作って追加します").clicked() {
                     self.form = Some(PartForm::default());
                 }
-                if ui.button("JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
+                if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
                     self.import_part_json();
                 }
-                if ui.button("KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
+                if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
                     self.open_kicad_import();
                 }
-                if ui.button("再読み込み").on_hover_text("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します").clicked() {
+                if self.lit(ui.button("再読み込み"), "再読み込み").on_hover_text("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します").clicked() {
                     self.reload_library();
                 }
             });
@@ -467,7 +467,7 @@ impl SchEditor {
                     }).response.on_hover_text("基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます");
                 }
                 advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
-                if ui.button("回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked() {
+                if self.lit(ui.button("回転 (R)"), "回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked() {
                     self.rotate_req = Some(i);
                 }
             }
@@ -488,7 +488,7 @@ impl SchEditor {
                 }
             });
         }
-        if self.has_selection() && ui.button("削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
+        if self.has_selection() && self.lit(ui.button("削除 (Delete)"), "削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
             self.delete_selected();
         }
     }
@@ -519,7 +519,7 @@ impl SchEditor {
 
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
         ui.separator();
-        if ui.button("ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
+        if self.lit(ui.button("ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
             self.problems = erc(&self.sch);
             self.problems.extend(self.conversion_problems());
             self.erc_focus = None;
