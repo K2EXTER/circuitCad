@@ -38,7 +38,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
  Maker SPICE models (the zips are the maker's own download, e.g. Murata 'SPICE netlist'; not shipped with the app)
   models [WORDS] [zip=PATH] [size=0603] [diel=X7R] [cmin=1u] [cmax=10u] [vmin=16]
                                         search the models by name; size (inch code), dielectric, capacitance and rating
-                                        work for models a maker reader describes (Murata; Nippon Chemi-Con gives capacitance and rating only). zip defaults to the ones added in the app.
+                                        work for models a maker reader describes (Murata; Nippon Chemi-Con and Nichicon give capacitance and rating only). zip defaults to the ones added in the app.
                                         'models model=PN' prints the subcircuit (alias: murata)
  Design help
   calc [KEY NUMBER ...]                 value calculators (led, divider, rc, regulator, buck, boost, opamp, ...): no

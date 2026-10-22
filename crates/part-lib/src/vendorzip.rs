@@ -75,7 +75,7 @@ pub struct VendorIndex {
 /// A maker's reader: `(path inside the zip, file text)` -> (maker, capacitor figures). Add one per maker whose files
 /// say more than the name (look at a real zip first: no two makers write the same header).
 type Extractor = fn(&str, &str) -> Option<(&'static str, CapMeta)>;
-const EXTRACTORS: &[Extractor] = &[murata, chemicon];
+const EXTRACTORS: &[Extractor] = &[murata, chemicon, nichicon];
 
 /// "1608M(0603)/X5R(-55to85[deg])/1.00e+01[uF]/10[V]" -> size, dielectric, capacitance, voltage.
 fn parse_murata_description(d: &str) -> Option<(String, String, String, f64, f64)> {
@@ -134,25 +134,79 @@ fn chemicon(_path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
     let rest = part.get(letters..)?;
     let v = rest.get(0..3)?;
     let voltage = if let Some((a, c)) = v.split_once('R') { format!("{a}.{c}").parse::<f64>().ok()? } else { v.parse::<f64>().ok()? / 10.0 };
-    let code = rest.get(6..9)?;
-    let digits: u32 = code.parse().ok()?;
-    let capacitance = format!("{:.2e}", f64::from(digits / 10) * 10f64.powi((digits % 10) as i32) * 1e-6).parse::<f64>().ok()?;
-    if !rest.get(3..6)?.bytes().all(|c| c.is_ascii_uppercase()) || voltage <= 0.0 || capacitance <= 0.0 {
+    let capacitance = micro_farads_from_code(rest.get(6..9)?)?;
+    if !rest.get(3..6)?.bytes().all(|c| c.is_ascii_uppercase()) || voltage <= 0.0 {
         return None;
     }
     // the model's own capacitors (C1, C2, ...) against the nominal capacitance
-    let sum: f64 = text
-        .lines()
-        .filter(|l| l.trim_start().starts_with(['C', 'c']) && !l.trim_start().starts_with('*'))
-        .filter_map(|l| l.split_whitespace().nth(3).and_then(|v| v.parse::<f64>().ok()))
-        .sum();
-    if !(0.5..=1.5).contains(&(sum / capacitance)) {
+    if !(0.5..=1.5).contains(&(ladder_capacitance(text) / capacitance)) {
         return None;
     }
     let mut notes = vec![format!("メーカーのRCはしご形モデル (7素子) です。{}の値で、温度による変化・直流電圧・寿命は入っていません。", if temp.is_empty() { "ある1つの温度" } else { temp.as_str() })];
     notes.push("電解コンデンサは極性があります。モデルは小信号の値で、逆電圧をかけたときや、リップル電流による発熱・寿命は扱いません。".into());
     let summary = format!("日本ケミコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
     Some(("日本ケミコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, summary, notes }))
+}
+
+/// Nichicon (ニチコン) electrolytics. The header has `Part Number :` and the modelling conditions; the figures come from the
+/// part number: series letters, a voltage code of a digit and a letter (`1E` = 25 V), a capacitance code (`101` = 100 uF),
+/// and are used only when the capacitors of the ladder add up to about that capacitance.
+fn nichicon(_path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
+    if !text.to_ascii_uppercase().contains("NICHICON") {
+        return None;
+    }
+    let part = text.lines().find_map(|l| l.split_once("Part Number").and_then(|(_, p)| p.trim_start().strip_prefix(':')).map(|p| p.trim().to_string()))?;
+    let letters = part.bytes().take_while(|c| c.is_ascii_uppercase()).count();
+    let rest = part.get(letters..)?;
+    let voltage = match rest.get(0..2)? {
+        "0E" => 2.5,
+        "0G" => 4.0,
+        "0J" => 6.3,
+        "1A" => 10.0,
+        "1C" => 16.0,
+        "1D" => 20.0,
+        "1E" => 25.0,
+        "1V" => 35.0,
+        "1H" => 50.0,
+        "1J" => 63.0,
+        "1K" => 80.0,
+        "2A" => 100.0,
+        "2C" => 160.0,
+        "2D" => 200.0,
+        "2E" => 250.0,
+        "2V" => 350.0,
+        "2G" => 400.0,
+        "2W" => 450.0,
+        _ => return None,
+    };
+    let capacitance = micro_farads_from_code(rest.get(2..5)?)?;
+    if !(0.5..=1.5).contains(&(ladder_capacitance(text) / capacitance)) {
+        return None;
+    }
+    let cond = |key: &str| text.lines().find_map(|l| l.split_once(key).and_then(|(_, p)| p.trim_start().strip_prefix('=')).map(|p| p.trim().to_string()));
+    let (temp, bias) = (cond("Temperature").unwrap_or_default(), cond("DC Bias Voltage").unwrap_or_default());
+    let mut notes = vec![format!("メーカーのRCはしご形モデル (7素子) です。{}・直流電圧 {} の小信号の値で、温度による変化・直流電圧・寿命は入っていません。", if temp.is_empty() { "ある1つの温度" } else { temp.as_str() }, if bias.is_empty() { "0V" } else { bias.as_str() })];
+    notes.push("電解コンデンサは極性があります。モデルは小信号の値で、逆電圧をかけたときや、リップル電流による発熱・寿命は扱いません。".into());
+    let summary = format!("ニチコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
+    Some(("ニチコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, summary, notes }))
+}
+
+/// "821" = 82 x 10^1 uF (the code electrolytics use: two digits and a power of ten), in farads with 3 significant digits.
+fn micro_farads_from_code(code: &str) -> Option<f64> {
+    if code.len() != 3 || !code.bytes().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let digits: u32 = code.parse().ok()?;
+    let farads = f64::from(digits / 10) * 10f64.powi((digits % 10) as i32) * 1e-6;
+    format!("{farads:.2e}").parse::<f64>().ok().filter(|c| *c > 0.0)
+}
+
+/// The sum of the capacitors (`C1 4 2 6.1e-05`, ...) of a ladder model.
+fn ladder_capacitance(text: &str) -> f64 {
+    text.lines()
+        .filter(|l| l.trim_start().starts_with(['C', 'c']))
+        .filter_map(|l| l.split_whitespace().nth(3).and_then(|v| v.parse::<f64>().ok()))
+        .sum()
 }
 
 /// The `.subckt` lines of a text: (name, number of nodes). Continuation lines (`+`) are not followed.
@@ -474,6 +528,22 @@ L1 1 3 4.20e-09
 .SUBCKT A 1 2
 .ends
 ").is_none());
+    }
+
+    const NICHICON: &str = "*  NICHICON CORPORATION and MoDeCH confidential\n*  Part Number          : GYB1E101MCQ1GS\n*   Temperature = 20 degC\n*   DC Bias Voltage = 0 V\n.SUBCKT GYB1E101MCQ1GS 1 2\nL1 1 3 8.000000E-10\nR1 3 4 2.113800E-02\nC1 4 2 6.166144E-05\nR2 4 5 2.279144E-01\nC2 5 2 2.238984E-05\nR3 5 6 7.960663E+00\nC3 6 2 7.549694E-06\n.ENDS\n";
+
+    #[test]
+    fn nichicon_figures_come_from_the_voltage_and_capacitance_codes() {
+        let (maker, m) = nichicon("GYB/x.lib", NICHICON).unwrap();
+        assert_eq!((maker, m.voltage, m.capacitance), ("ニチコン", 25.0, 100e-6));
+        assert!(m.notes[0].contains("20 degC") && m.notes[0].contains("0 V"), "{:?}", m.notes);
+        // 560 = 56 uF, 1H = 50 V
+        let small = NICHICON.replace("GYB1E101MCQ1GS", "GYB1H560MCQ1GS").replace("6.166144E-05", "3.0E-05").replace("2.238984E-05", "1.5E-05").replace("7.549694E-06", "7E-06");
+        assert_eq!(nichicon("x.lib", &small).map(|(_, m)| (m.voltage, m.capacitance)), Some((50.0, 56e-6)));
+        // an unknown voltage code, or capacitors that do not add up, are not trusted
+        assert!(nichicon("x.lib", &NICHICON.replace("GYB1E101", "GYB9Z101")).is_none());
+        assert!(nichicon("x.lib", &NICHICON.replace("6.166144E-05", "6.166144E-08")).is_none());
+        assert!(nichicon("x.lib", ".SUBCKT A 1 2\n.ends\n").is_none());
     }
 
     #[test]

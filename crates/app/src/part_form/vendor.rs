@@ -196,7 +196,7 @@ impl PartForm {
                 ui.add(egui::TextEdit::singleline(&mut self.mu.text).desired_width(140.0));
                 ui.end_row();
                 if described > 0 {
-                    ui.label("サイズ (インチ)").on_hover_text("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田と日本ケミコン。サイズ・温度特性は村田だけ) だけです");
+                    ui.label("サイズ (インチ)").on_hover_text("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田・日本ケミコン・ニチコン。サイズ・温度特性は村田だけ) だけです");
                     egui::ComboBox::from_id_salt("mu_size").selected_text(if self.mu.size.is_empty() { "すべて" } else { self.mu.size.as_str() }).show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.mu.size, String::new(), "すべて");
                         for s in &sizes {
