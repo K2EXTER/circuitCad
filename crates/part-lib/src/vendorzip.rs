@@ -19,18 +19,20 @@ const MAX_FILE: u64 = 4 << 20;
 /// What a maker's reader found out about a capacitor model.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CapMeta {
-    /// Metric code of the size, "1608".
+    /// Metric code of the size, "1608" (empty when the maker's data does not give one).
     pub size_metric: String,
-    /// Inch code of the size, "0603".
+    /// Inch code of the size, "0603" (empty when not given).
     pub size_inch: String,
-    /// "X5R", "X7R", "C0G", "SL", ...
+    /// "X5R", "X7R", "C0G", "SL", ... (empty when not given).
     pub dielectric: String,
     /// Nominal capacitance in farads.
     pub capacitance: f64,
     /// Rated voltage in volts.
     pub voltage: f64,
-    /// Large capacitance that falls with DC bias (X5R, X7R ...), as against the stable C0G / SL kind.
-    pub high_k: bool,
+    /// One line for the part's description ("村田 GRM... 1608(0603) X5R 10uF 10V").
+    pub summary: String,
+    /// What the model leaves out or only approximates, one sentence each (becomes the part's `limits`).
+    pub notes: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,7 +75,7 @@ pub struct VendorIndex {
 /// A maker's reader: `(path inside the zip, file text)` -> (maker, capacitor figures). Add one per maker whose files
 /// say more than the name (look at a real zip first: no two makers write the same header).
 type Extractor = fn(&str, &str) -> Option<(&'static str, CapMeta)>;
-const EXTRACTORS: &[Extractor] = &[murata];
+const EXTRACTORS: &[Extractor] = &[murata, chemicon];
 
 /// "1608M(0603)/X5R(-55to85[deg])/1.00e+01[uF]/10[V]" -> size, dielectric, capacitance, voltage.
 fn parse_murata_description(d: &str) -> Option<(String, String, String, f64, f64)> {
@@ -105,7 +107,52 @@ fn murata(path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
     let desc = text.lines().find_map(|l| l.split_once("Description :").map(|(_, d)| d.to_string()))?;
     let (size_metric, size_inch, dielectric, capacitance, voltage) = parse_murata_description(&desc)?;
     let high_k = !path.starts_with("Temperature_compensating");
-    Some(("村田", CapMeta { size_metric, size_inch, dielectric, capacitance, voltage, high_k }))
+    let mut notes = vec!["このモデルは 25℃・直流電圧 0V・小信号の値です。温度による変化は入っていません。".to_string()];
+    if high_k {
+        notes.push(format!(
+            "直流の電圧をかけると容量が下がる性質 (DCバイアス特性) は入っていません。{size_inch} の {dielectric} は、定格 {}V に近い電圧では容量が半分以下になることもあります。",
+            eng(voltage)
+        ));
+    }
+    notes.push("周波数は 100Hz〜6GHz (温度補償型は 1MHz〜6GHz) の範囲で合わせたモデルです。範囲の外は信用できません。".into());
+    let part = text.lines().find_map(|l| l.split_once("Murata P/N :").map(|(_, p)| p.trim().to_string())).unwrap_or_default();
+    let summary = format!("村田 {part} {size_metric}({size_inch}) {dielectric} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
+    Some(("村田", CapMeta { size_metric, size_inch, dielectric, capacitance, voltage, summary, notes }))
+}
+
+/// Nippon Chemi-Con (日本ケミコン) aluminium / polymer electrolytics. The file has no description line: the figures come
+/// from the part number (series, voltage `250` = 25.0 V or `6R3` = 6.3 V, three letters, capacitance code `821` = 82 x 10^1 uF,
+/// tolerance), and are used only when the capacitors of the ladder add up to about that capacitance.
+fn chemicon(_path: &str, text: &str) -> Option<(&'static str, CapMeta)> {
+    if !text.contains("Chemi-Con") {
+        return None;
+    }
+    let part = text.lines().find_map(|l| l.split_once("Part No.").and_then(|(_, p)| p.trim_start().strip_prefix(':')).map(|p| p.trim().to_string()))?;
+    let temp = text.lines().find_map(|l| l.split_once("Temperature").and_then(|(_, p)| p.trim_start().strip_prefix(':')).map(|p| p.trim().to_string())).unwrap_or_default();
+    let b = part.as_bytes();
+    let letters = b.iter().take_while(|c| c.is_ascii_uppercase()).count();
+    let rest = part.get(letters..)?;
+    let v = rest.get(0..3)?;
+    let voltage = if let Some((a, c)) = v.split_once('R') { format!("{a}.{c}").parse::<f64>().ok()? } else { v.parse::<f64>().ok()? / 10.0 };
+    let code = rest.get(6..9)?;
+    let digits: u32 = code.parse().ok()?;
+    let capacitance = format!("{:.2e}", f64::from(digits / 10) * 10f64.powi((digits % 10) as i32) * 1e-6).parse::<f64>().ok()?;
+    if !rest.get(3..6)?.bytes().all(|c| c.is_ascii_uppercase()) || voltage <= 0.0 || capacitance <= 0.0 {
+        return None;
+    }
+    // the model's own capacitors (C1, C2, ...) against the nominal capacitance
+    let sum: f64 = text
+        .lines()
+        .filter(|l| l.trim_start().starts_with(['C', 'c']) && !l.trim_start().starts_with('*'))
+        .filter_map(|l| l.split_whitespace().nth(3).and_then(|v| v.parse::<f64>().ok()))
+        .sum();
+    if !(0.5..=1.5).contains(&(sum / capacitance)) {
+        return None;
+    }
+    let mut notes = vec![format!("メーカーのRCはしご形モデル (7素子) です。{}の値で、温度による変化・直流電圧・寿命は入っていません。", if temp.is_empty() { "ある1つの温度" } else { temp.as_str() })];
+    notes.push("電解コンデンサは極性があります。モデルは小信号の値で、逆電圧をかけたときや、リップル電流による発熱・寿命は扱いません。".into());
+    let summary = format!("日本ケミコン {part} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", eng(capacitance), eng(voltage));
+    Some(("日本ケミコン", CapMeta { size_metric: String::new(), size_inch: String::new(), dielectric: String::new(), capacitance, voltage, summary, notes }))
 }
 
 /// The `.subckt` lines of a text: (name, number of nodes). Continuation lines (`+`) are not followed.
@@ -196,14 +243,14 @@ impl VendorIndex {
 
     /// Sizes present, as inch codes, smallest first.
     pub fn sizes(&self) -> Vec<String> {
-        let mut v: Vec<(String, String)> = self.entries.iter().filter_map(|e| e.meta.as_ref()).map(|m| (m.size_metric.clone(), m.size_inch.clone())).collect();
+        let mut v: Vec<(String, String)> = self.entries.iter().filter_map(|e| e.meta.as_ref()).filter(|m| !m.size_inch.is_empty()).map(|m| (m.size_metric.clone(), m.size_inch.clone())).collect();
         v.sort();
         v.dedup();
         v.into_iter().map(|(_, i)| i).collect()
     }
 
     pub fn dielectrics(&self) -> Vec<String> {
-        let mut v: Vec<String> = self.entries.iter().filter_map(|e| e.meta.as_ref()).map(|m| m.dielectric.clone()).collect();
+        let mut v: Vec<String> = self.entries.iter().filter_map(|e| e.meta.as_ref()).map(|m| m.dielectric.clone()).filter(|d| !d.is_empty()).collect();
         v.sort();
         v.dedup();
         v
@@ -257,26 +304,13 @@ impl VendorIndex {
         let text = self.read_file(e)?;
         let block = extract_block(&text, &e.part_number).ok_or_else(|| format!("{} の .subckt が .ends で閉じていません", e.part_number))?;
         let pin = |n: &str, side| PinDef { number: n.into(), name: n.into(), side: Some(side), sim_only: false };
-        let mut limits = vec![];
-        let (value_text, description) = match &e.meta {
-            Some(m) => {
-                let c = eng(m.capacitance);
-                limits.push("このモデルは 25℃・直流電圧 0V・小信号の値です。温度による変化は入っていません。".to_string());
-                if m.high_k {
-                    limits.push(format!(
-                        "直流の電圧をかけると容量が下がる性質 (DCバイアス特性) は入っていません。{} の {} は、定格 {}V に近い電圧では容量が半分以下になることもあります。",
-                        m.size_inch,
-                        m.dielectric,
-                        eng(m.voltage)
-                    ));
-                }
-                limits.push("周波数は 100Hz〜6GHz (温度補償型は 1MHz〜6GHz) の範囲で合わせたモデルです。範囲の外は信用できません。".into());
-                (c.clone(), format!("{} {} {}({}) {} {}F {}V。メーカーが公開しているSPICEモデル (ESR・ESLを含む等価回路) です", e.maker, e.part_number, m.size_metric, m.size_inch, m.dielectric, c, eng(m.voltage)))
-            }
-            None => {
-                limits.push("メーカーのモデルです。どんな条件の値か (温度・直流電圧・周波数の範囲) は、zip の説明か元のファイルで確かめてください。".to_string());
-                (String::new(), format!("{}。メーカーが公開しているSPICEモデルです", e.part_number))
-            }
+        let (value_text, description, limits) = match &e.meta {
+            Some(m) => (eng(m.capacitance), m.summary.clone(), m.notes.clone()),
+            None => (
+                String::new(),
+                format!("{}。メーカーが公開しているSPICEモデルです", e.part_number),
+                vec!["メーカーのモデルです。どんな条件の値か (温度・直流電圧・周波数の範囲) は、zip の説明か元のファイルで確かめてください。".to_string()],
+            ),
         };
         Ok(Generated {
             pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)],
@@ -361,7 +395,7 @@ mod tests {
         assert_eq!(idx.entries.len(), 3 + 4, "3 Murata files + 4 subckts of the other library; the pdf is skipped");
         assert_eq!(idx.described(), 3);
         let g = idx.entries.iter().find(|e| e.part_number == "GRM1555C1H101JA01").unwrap();
-        assert_eq!((g.maker.as_str(), g.meta.as_ref().map(|m| m.high_k)), ("村田", Some(false)));
+        assert_eq!((g.maker.as_str(), g.meta.as_ref().map(|m| m.notes.iter().any(|n| n.contains("DCバイアス")))), ("村田", Some(false)));
         assert!(idx.entries.iter().find(|e| e.part_number == "CAP_A").unwrap().meta.is_none());
         assert_eq!(idx.sizes(), vec!["0402".to_string(), "0603".to_string()]);
         assert_eq!(idx.dielectrics(), vec!["C0G".to_string(), "X5R".to_string(), "X7R".to_string()]);
@@ -404,6 +438,61 @@ mod tests {
         // a subcircuit with a parameter list still has 2 nodes; one with 3 is refused
         assert_eq!(by("WITHPARAM").nodes, 2);
         assert!(idx.generate(by("NEST")).unwrap_err().contains("3 個"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+
+    const CHEMICON: &str = "*$
+*//   Part No.    : APSW250ELL821MJB5S
+*//   Temperature : 20deg.C
+*//   Copyright (C) 2025 Nippon Chemi-Con Corporation.
+.SUBCKT APSW250ELL821MJB5S_20deg-C 1 2
+C1 4 2 5.33e-04
+C2 5 2 1.61e-04
+C3 6 2 5.93e-05
+R1 3 4 7.54e-03
+R2 4 5 4.25e-02
+R3 5 6 5.48e-02
+L1 1 3 4.20e-09
+.ENDS
+*$
+";
+
+    #[test]
+    fn nippon_chemi_con_figures_come_from_the_part_number_when_the_model_agrees() {
+        let (maker, m) = chemicon("x/APSW250ELL821MJB5S.lib", CHEMICON).unwrap();
+        assert_eq!(maker, "日本ケミコン");
+        assert_eq!((m.voltage, m.size_inch.as_str()), (25.0, ""));
+        assert!((m.capacitance - 820e-6).abs() < 1e-12, "821 = 82 x 10^1 uF: {}", m.capacitance);
+        assert!(m.notes[0].contains("20deg.C") && m.summary.contains("日本ケミコン APSW250ELL821MJB5S"));
+        // 6.3 V is written 6R3, and the capacitance code is 3 digits
+        let small = CHEMICON.replace("APSW250ELL821MJB5S", "APSW6R3ELL101MJB5S").replace("5.33e-04", "6.0e-05").replace("1.61e-04", "2.0e-05").replace("5.93e-05", "1.0e-05");
+        assert_eq!(chemicon("x.lib", &small).map(|(_, m)| (m.voltage, m.capacitance)), Some((6.3, 100e-6)));
+        // a model whose capacitors do not add up to the nominal value is not described (the name is not trusted)
+        assert!(chemicon("x.lib", &CHEMICON.replace("5.33e-04", "5.33e-07")).is_none());
+        assert!(chemicon("x.lib", "* some other maker
+.SUBCKT A 1 2
+.ends
+").is_none());
+    }
+
+    #[test]
+    fn an_electrolytic_model_in_a_zip_is_found_by_capacitance_and_rating() {
+        let d = tmp("chem");
+        let p = d.join("psw.zip");
+        let mut z = zip::ZipWriter::new(std::fs::File::create(&p).unwrap());
+        z.start_file("SPICE_POLYMER-LEAD-PSW/APSW250ELL821MJB5S.lib", zip::write::SimpleFileOptions::default()).unwrap();
+        z.write_all(CHEMICON.as_bytes()).unwrap();
+        z.finish().unwrap();
+        let idx = VendorIndex::open(&p).unwrap();
+        assert_eq!(idx.entries[0].part_number, "APSW250ELL821MJB5S_20deg-C");
+        assert_eq!(idx.entries.len(), 1);
+        let hit = |f: Filter| idx.search(&f).len();
+        assert_eq!(hit(Filter { c_min: Some(500e-6), v_min: Some(16.0), ..Default::default() }), 1);
+        assert_eq!(hit(Filter { v_min: Some(35.0), ..Default::default() }), 0);
+        let g = idx.generate(&idx.entries[0]).unwrap();
+        assert_eq!(g.value_text, "820u");
+        assert!(g.sim_text.starts_with(".SUBCKT APSW250ELL821MJB5S_20deg-C 1 2") && g.sim_text.contains("L1 1 3 4.20e-09"));
         let _ = std::fs::remove_dir_all(&d);
     }
 

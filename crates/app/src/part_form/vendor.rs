@@ -94,13 +94,15 @@ impl PartForm {
         if self.category.trim().is_empty() || self.category == "ユーザー" {
             self.category = PassiveKind::Capacitor.label().into();
         }
-        self.pins_text = "1 1 left\n2 2 right".into();
+        // an electrolytic (the polarized switch of the chip part section): pin 1 is "+"; the models are linear, so the
+        // direction does not change a result
+        self.pins_text = if self.pas_polar { "1 + left\n2 - right" } else { "1 1 left\n2 2 right" }.into();
         self.sim = SimChoice::Subckt;
         self.sim_name = g.sim_name;
         self.sim_text = g.sim_text;
         self.sim_pins = g.sim_pins.join(" ");
         self.sim_limits = g.limits.join("\n");
-        self.glyph = PassiveKind::Capacitor.glyph().into();
+        self.glyph = if self.pas_polar { "electrolytic" } else { PassiveKind::Capacitor.glyph() }.into();
         let Some(m) = &e.meta else {
             return Ok(format!(
                 "{} を入れました。このモデルには容量・耐圧の情報がないので、「値」と「定格」は自分で入れてください。モデルを入れ直してしまうので、このあと下の「部品を作る」は押さずに、そのまま保存してください",
@@ -108,6 +110,13 @@ impl PartForm {
             ));
         };
         self.rt_v = passive::eng(m.voltage);
+        if m.size_inch.is_empty() {
+            return Ok(format!(
+                "{} を入れました (定格電圧 {}V も「定格」に入れました)。パッケージは、データシートの寸法を「パッケージ」で入れてください。モデルを入れ直してしまうので、このあと下の「部品を作る」は押さずに、そのまま保存してください",
+                e.part_number,
+                passive::eng(m.voltage)
+            ));
+        }
         let fp = format!("C_{}", m.size_inch);
         let footprint = if pcb_core::footprints::get(&fp).is_some() {
             self.fp_preset = fp.clone();
@@ -187,7 +196,7 @@ impl PartForm {
                 ui.add(egui::TextEdit::singleline(&mut self.mu.text).desired_width(140.0));
                 ui.end_row();
                 if described > 0 {
-                    ui.label("サイズ (インチ)").on_hover_text("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田) だけです");
+                    ui.label("サイズ (インチ)").on_hover_text("0603 は 1608 (1.6×0.8mm)。メトリックの数字 (1608) でも探せます。サイズ・温度特性・容量・耐圧で絞れるのは、内容を読み取れるモデル (今は村田と日本ケミコン。サイズ・温度特性は村田だけ) だけです");
                     egui::ComboBox::from_id_salt("mu_size").selected_text(if self.mu.size.is_empty() { "すべて" } else { self.mu.size.as_str() }).show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.mu.size, String::new(), "すべて");
                         for s in &sizes {
@@ -316,6 +325,23 @@ mod tests {
         // three nodes cannot become a two-pin part
         let three = pick(&f, "IC3");
         assert!(f.apply_vendor(0, &three).unwrap_err().contains("3 個"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// With the polarized switch on, the part gets "+" / "-" pins and the electrolytic symbol; a maker's figures without a
+    /// size leave the package to the user.
+    #[test]
+    fn an_electrolytic_gets_plus_and_minus_pins() {
+        let (mu, dir) = picker_with_zip("polar");
+        let mut f = PartForm { mu, pas_polar: true, ..PartForm::default() };
+        let mut e = pick(&f, "GRM188R61A106MAAL");
+        e.meta.as_mut().unwrap().size_inch.clear();
+        let msg = f.apply_vendor(0, &e).unwrap();
+        assert!(msg.contains("寸法"), "{msg}");
+        let d = f.to_def().unwrap();
+        assert_eq!(d.glyph, "electrolytic");
+        assert_eq!(d.pins.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(), vec!["+", "-"]);
+        assert_eq!(d.ratings.as_ref().and_then(|r| r.v_max), Some(10.0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

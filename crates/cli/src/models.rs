@@ -86,6 +86,6 @@ pub fn models(args: &[String]) -> Res {
     dielectrics.dedup();
     Ok(obj(json!({
         "count": hits.len(), "shown": shown.len(), "parts": shown, "sizes": sizes, "dielectrics": dielectrics, "skipped_zips": skipped,
-        "note": "size/diel/cmin/cmax/vmin only match models a maker reader described (now Murata: 25C, 0 V DC bias, small signal; capacitance does not fall with DC voltage, which X5R/X7R lose a lot near rated voltage). Other models are found by name only. 'models model=PN' prints the subcircuit",
+        "note": "size/diel/cmin/cmax/vmin only match models a maker reader described (now Murata and Nippon Chemi-Con: Murata is 25C, 0 V DC bias, small signal; capacitance does not fall with DC voltage, which X5R/X7R lose a lot near rated voltage). Other models are found by name only. 'models model=PN' prints the subcircuit",
     })))
 }
