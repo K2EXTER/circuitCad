@@ -43,7 +43,14 @@ impl BoardEditor {
                     &*fresh
                 }
             };
-            *cache = Some((key, pcb_core::zonefill::merged_fills(&self.board, conn)));
+            let pours = pcb_core::zonefill::merged_fills(&self.board, conn)
+                .into_iter()
+                .map(|(s, n, shapes)| {
+                    let tris = shapes.iter().map(|sh| sh.triangles()).collect();
+                    (s, n, shapes, tris)
+                })
+                .collect();
+            *cache = Some((key, pours));
         }
         let Some((_, fills)) = cache.as_ref() else { return };
         for s in self.layer_order() {
@@ -53,13 +60,16 @@ impl BoardEditor {
             let alpha = if s == self.side { 90 } else { 40 };
             let fill = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
             let edge = self.side_color(s).gamma_multiply(if s == self.side { 0.8 } else { 0.35 });
-            for (_, net, shapes) in fills.iter().filter(|(side, _, _)| *side == s) {
-                for shape in shapes {
+            for (_, net, shapes, tris) in fills.iter().filter(|(side, _, _, _)| *side == s) {
+                for (shape, tris) in shapes.iter().zip(tris) {
+                    if !self.shape_on_screen(rect, shape) {
+                        continue;
+                    }
                     let mut mesh = egui::Mesh::default();
-                    for t in shape.triangles() {
+                    for t in tris {
                         let base = mesh.vertices.len() as u32;
                         for p in t {
-                            mesh.colored_vertex(self.to_screen(rect, p), fill);
+                            mesh.colored_vertex(self.to_screen(rect, *p), fill);
                         }
                         mesh.add_triangle(base, base + 1, base + 2);
                     }
@@ -68,10 +78,27 @@ impl BoardEditor {
                         let pts: Vec<Pos2> = contour.iter().map(|p| self.to_screen(rect, *p)).collect();
                         painter.add(egui::Shape::closed_line(pts, Stroke::new(1.0, edge)));
                     }
-                    self.draw_pour_name(painter, rect, net, shape);
+                    self.draw_pour_name(painter, rect, net, shape, tris);
                 }
             }
         }
+    }
+
+    /// Is any of the points (grown by `margin` mm) in the drawing area? What is not is left out of the picture.
+    pub(super) fn near_screen(&self, rect: Rect, pts: &[Point], margin: f64) -> bool {
+        let m = margin as f32 * self.zoom + 4.0;
+        let area = rect.expand(m);
+        let (mut lo, mut hi) = (Pos2::new(f32::MAX, f32::MAX), Pos2::new(f32::MIN, f32::MIN));
+        for p in pts {
+            let s = self.to_screen(rect, *p);
+            lo = Pos2::new(lo.x.min(s.x), lo.y.min(s.y));
+            hi = Pos2::new(hi.x.max(s.x), hi.y.max(s.y));
+        }
+        Rect::from_min_max(lo, hi).intersects(area)
+    }
+
+    fn shape_on_screen(&self, rect: Rect, shape: &pcb_core::zonefill::FillShape) -> bool {
+        self.near_screen(rect, &shape.outer, 0.0)
     }
 
     pub(super) fn draw_copper(&self, painter: &egui::Painter, rect: Rect) {
@@ -91,14 +118,14 @@ impl BoardEditor {
             }
             let alpha = if s == self.side { 255 } else { 60 };
             let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
-            for t in finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice()).iter().filter(|t| t.side == s && self.vis.tracks) {
+            for t in finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice()).iter().filter(|t| t.side == s && self.vis.tracks && self.near_screen(rect, &[t.a, t.b], t.width)) {
                 painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0), col));
                 // round ends, like the Gerber aperture
                 for e in [t.a, t.b] {
                     painter.circle_filled(self.to_screen(rect, e), (t.width as f32 * z / 2.0).max(0.5), col);
                 }
             }
-            for patch in finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == s && self.vis.tracks) {
+            for patch in finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == s && self.vis.tracks && self.near_screen(rect, &p.outline, 0.0)) {
                 let shape = pcb_core::zonefill::FillShape { outer: patch.outline.clone(), holes: vec![] };
                 let mut mesh = egui::Mesh::default();
                 for t in shape.triangles() {
@@ -165,14 +192,14 @@ impl BoardEditor {
         }
         if self.vis.silk {
             let silk = Color32::from_rgb(235, 235, 235);
-            for l in self.board.silk.iter().filter(|l| self.side_visible(l.side)) {
+            for l in self.board.silk.iter().filter(|l| self.side_visible(l.side) && self.near_screen(rect, &[l.a, l.b], l.width)) {
                 painter.line_segment([self.to_screen(rect, l.a), self.to_screen(rect, l.b)], Stroke::new((l.width as f32 * z).max(1.0), silk));
             }
             let selected_label = match self.selected {
                 Some(Item::Label(i)) => Some(i),
                 _ => None,
             };
-            for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
+            for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side) && self.near_screen(rect, &[t.pos], pcb_core::strokefont::text_width(&t.text, t.height).max(t.height))) {
                 if selected_label == Some(i) {
                     // a box round the picked designator, so that it is clear what the drag will move
                     let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);

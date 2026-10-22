@@ -38,9 +38,9 @@ impl BoardEditor {
         let cache = self.zone_cache.borrow();
         let (_, fills) = cache.as_ref()?;
         // the working layer's pour first
-        let mut order: Vec<&(Side, String, Vec<FillShape>)> = fills.iter().filter(|(s, n, _)| !n.is_empty() && self.side_visible(*s)).collect();
-        order.sort_by_key(|(s, _, _)| *s != self.side);
-        order.into_iter().find(|(_, _, shapes)| shapes.iter().any(|s| inside_shape(s, p))).map(|(_, n, _)| n.clone())
+        let mut order: Vec<&PourCache> = fills.iter().filter(|(s, n, _, _)| !n.is_empty() && self.side_visible(*s)).collect();
+        order.sort_by_key(|(s, _, _, _)| *s != self.side);
+        order.into_iter().find(|(_, _, shapes, _)| shapes.iter().any(|s| inside_shape(s, p))).map(|(_, n, _, _)| n.clone())
     }
 
     /// Work out which net the pointer is on (Select tool, no drag going on).
@@ -80,14 +80,14 @@ impl BoardEditor {
                 painter.circle_stroke(self.to_screen(rect, v.pos), v.diameter as f32 * z / 2.0 + 3.0, Stroke::new(2.5, col));
             }
             if let Some((_, fills)) = self.zone_cache.borrow().as_ref() {
-                for (side, _, shapes) in fills.iter().filter(|(s, n, _)| n == net && self.vis.zones && self.side_visible(*s)) {
+                for (side, _, shapes, tris) in fills.iter().filter(|(s, n, _, _)| n == net && self.vis.zones && self.side_visible(*s)) {
                     let _ = side;
-                    for shape in shapes {
+                    for (shape, tris) in shapes.iter().zip(tris) {
                         let mut mesh = egui::Mesh::default();
-                        for t in shape.triangles() {
+                        for t in tris {
                             let base = mesh.vertices.len() as u32;
                             for p in t {
-                                mesh.colored_vertex(self.to_screen(rect, p), col.gamma_multiply(0.22));
+                                mesh.colored_vertex(self.to_screen(rect, *p), col.gamma_multiply(0.22));
                             }
                             mesh.add_triangle(base, base + 1, base + 2);
                         }
@@ -109,7 +109,7 @@ impl BoardEditor {
     }
 
     /// The name of a pour in its piece (one name per piece that is large enough on the screen).
-    pub(super) fn draw_pour_name(&self, painter: &egui::Painter, rect: Rect, net: &str, shape: &FillShape) {
+    pub(super) fn draw_pour_name(&self, painter: &egui::Painter, rect: Rect, net: &str, shape: &FillShape, tris: &[[Point; 3]]) {
         if net.is_empty() || !self.vis.nets {
             return;
         }
@@ -118,7 +118,7 @@ impl BoardEditor {
         if bb.width() < 70.0 || bb.height() < 28.0 || !bb.intersects(rect) {
             return;
         }
-        let Some(t) = shape.triangles().into_iter().max_by(|a, b| pcb_core::geom::signed_area(a).abs().total_cmp(&pcb_core::geom::signed_area(b).abs())) else { return };
+        let Some(t) = tris.iter().max_by(|a, b| pcb_core::geom::signed_area(&a[..]).abs().total_cmp(&pcb_core::geom::signed_area(&b[..]).abs())) else { return };
         let c = Point::new((t[0].x + t[1].x + t[2].x) / 3.0, (t[0].y + t[1].y + t[2].y) / 3.0);
         painter.text(self.to_screen(rect, c), egui::Align2::CENTER_CENTER, net, egui::FontId::proportional(15.0), Color32::from_white_alpha(120));
     }

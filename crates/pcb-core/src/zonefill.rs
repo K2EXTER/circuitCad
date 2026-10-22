@@ -237,6 +237,20 @@ fn raw_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
             cuts.push(capsule(board.outline[i], board.outline[(i + 1) % n], edge));
         }
     }
+    // only what reaches the pour can cut it (a small pour among many tracks and pads is cut by a handful of them)
+    let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
+    for p in &zone.polygon {
+        lo = [lo[0].min(p.x), lo[1].min(p.y)];
+        hi = [hi[0].max(p.x), hi[1].max(p.y)];
+    }
+    cuts.retain(|path| {
+        let (mut plo, mut phi) = ([f64::MAX; 2], [f64::MIN; 2]);
+        for q in path {
+            plo = [plo[0].min(q[0]), plo[1].min(q[1])];
+            phi = [phi[0].max(q[0]), phi[1].max(q[1])];
+        }
+        plo[0] <= hi[0] && phi[0] >= lo[0] && plo[1] <= hi[1] && phi[1] >= lo[1]
+    });
     let subject = ccw(&zone.polygon);
     let inside = if n >= 3 { subject.overlay(&ccw(&board.outline), OverlayRule::Intersect, FillRule::NonZero) } else { vec![vec![subject]] };
     let mut out = vec![];

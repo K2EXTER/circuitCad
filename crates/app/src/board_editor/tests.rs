@@ -1564,3 +1564,16 @@ fn pours_are_kept_while_only_parts_are_dragged() {
     e.gdrag = Some(GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: vec![Item::Part(0), Item::Track(0)] });
     assert!(!e.moving_parts_only(), "a track in the group would stay where it was");
 }
+
+/// What is far outside the drawing area is left out of the picture; what reaches into it (a wide track) is not.
+#[test]
+fn near_screen_leaves_out_only_what_is_far_away() {
+    let mut e = BoardEditor::default();
+    e.zoom = 10.0;
+    e.pan = egui::Vec2::new(20.0, 20.0);
+    let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(400.0, 300.0));
+    assert!(e.near_screen(rect, &[p(20.0, 20.0)], 0.0), "the middle");
+    assert!(!e.near_screen(rect, &[p(200.0, 20.0), p(210.0, 20.0)], 0.5), "far to the right");
+    assert!(e.near_screen(rect, &[p(5.0, 20.0), p(60.0, 20.0)], 0.5), "a long track across the view, ends outside");
+    assert!(e.near_screen(rect, &[p(40.4, 20.0)], 5.0), "a wide track just outside");
+}

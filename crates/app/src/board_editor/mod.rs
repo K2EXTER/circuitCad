@@ -192,7 +192,9 @@ pub enum CurrentSource {
 }
 
 /// The merged pours of the board, with the key they were made for (`zonefill::geometry_key`).
-type ZoneCache = Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>;
+/// Per pour: its layer, its net, its pieces and the triangles of each piece (worked out once, not every frame).
+type PourCache = (Side, String, Vec<pcb_core::zonefill::FillShape>, Vec<Vec<[Point; 3]>>);
+type ZoneCache = Option<(u64, Vec<PourCache>)>;
 
 pub struct BoardEditor {
     pub board: Board,
