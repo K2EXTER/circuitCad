@@ -34,6 +34,8 @@ pub(super) struct View3d {
     zoom: f32,
     pan: Vec2,
     spin: bool,
+    /// The picture has been turned or zoomed once: the how-to line over it is not shown any more.
+    touched: bool,
     show_parts: bool,
     show_names: bool,
     mask: bool,
@@ -82,7 +84,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0 }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0 }
     }
 }
 

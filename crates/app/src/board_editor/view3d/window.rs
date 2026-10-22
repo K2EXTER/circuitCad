@@ -154,10 +154,14 @@ impl BoardEditor {
                 (v.pitch, v.zoom, v.pan) = (pitch, zoom, pan);
             }
             let mut moving = resp.dragged();
+            if resp.dragged() || resp.double_clicked() {
+                v.touched = true;
+            }
             if resp.hovered() {
                 let scroll = ui.input(|i| i.smooth_scroll_delta.y);
                 if scroll != 0.0 {
                     moving = true;
+                    v.touched = true;
                     v.zoom = (v.zoom * (1.0 + scroll * 0.002)).clamp(0.2, MAX_ZOOM);
                 }
             }
@@ -207,6 +211,19 @@ impl BoardEditor {
                 {
                     let id = c.ids[k];
                     hover = (id != NO_PART && v.show_parts).then_some(id as usize);
+                }
+            }
+            if !v.touched {
+                // what to do with the picture, until the first time it is turned or zoomed
+                let lines = ["ドラッグ: 回す  /  右ドラッグ: 動かす  /  ホイール: 拡大・縮小  /  ダブルクリック: 元の向きに戻す", "上の「ケース高さ」を入れると、ケースに入らない高さの部品が赤くなります"];
+                let font = egui::FontId::proportional(13.0);
+                let mut y = resp.rect.bottom() - 10.0;
+                for line in lines.iter().rev() {
+                    let g = painter.layout_no_wrap((*line).to_string(), font.clone(), Color32::WHITE);
+                    let at = Pos2::new(resp.rect.left() + 12.0, y - g.size().y);
+                    painter.rect_filled(Rect::from_min_size(at - Vec2::new(6.0, 3.0), g.size() + Vec2::new(12.0, 6.0)), 4.0, Color32::from_black_alpha(150));
+                    y = at.y - 8.0;
+                    painter.galley(at, g, Color32::WHITE);
                 }
             }
             if hover != v.hover {
