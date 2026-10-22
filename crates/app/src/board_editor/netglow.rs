@@ -1,11 +1,10 @@
-//! Seeing one net at a glance: the net under the pointer glows (Select tool), a click pins it, Esc lets it go. The big pours also
+//! Seeing one net at a glance: the net under the pointer glows (Select tool). The big pours also
 //! carry their net name, so two pours of one colour are told apart by their names.
 
 use super::*;
 use pcb_core::geom::inside_polygon;
 use pcb_core::zonefill::FillShape;
 
-const PINNED: Color32 = Color32::from_rgb(255, 214, 60);
 const HOVER: Color32 = Color32::from_rgb(120, 225, 255);
 
 fn inside_shape(s: &FillShape, p: Point) -> bool {
@@ -41,32 +40,23 @@ impl BoardEditor {
         order.into_iter().find(|(_, _, shapes)| shapes.iter().any(|s| inside_shape(s, p))).map(|(_, n, _)| n.clone())
     }
 
-    /// Work out which net the pointer is on (Select tool, no drag going on), and pin it on a click.
+    /// Work out which net the pointer is on (Select tool, no drag going on).
     pub(super) fn update_net_focus(&mut self, resp: &egui::Response, rect: Rect) {
         self.hover_net = None;
         if self.tool != Tool::Select || self.alt_pan || self.boxsel.is_some() || self.gdrag.is_some() || resp.dragged() {
             return;
         }
         let Some(pos) = resp.hover_pos() else { return };
-        let net = self.net_under(self.to_world(rect, pos));
-        if resp.clicked_by(egui::PointerButton::Primary) {
-            // a click on the pinned net lets it go, on another net pins that one, on nothing lets go
-            self.pinned_net = net.clone().filter(|n| self.pinned_net.as_ref() != Some(n));
-        }
-        self.hover_net = net.map(|n| (n, pos));
+        self.hover_net = self.net_under(self.to_world(rect, pos)).map(|n| (n, pos));
     }
 
-    /// The glow of the pinned net and the net under the pointer, over the copper.
+    /// The glow of the net under the pointer, over the copper.
     pub(super) fn draw_net_focus(&self, painter: &egui::Painter, rect: Rect) {
-        let hover = self.hover_net.as_ref().filter(|(n, _)| self.pinned_net.as_ref() != Some(n));
-        let nets: Vec<(&str, Color32)> =
-            hover.map(|(n, _)| (n.as_str(), HOVER)).into_iter().chain(self.pinned_net.as_deref().map(|n| (n, PINNED))).collect();
-        if nets.is_empty() {
-            return;
-        }
+        let Some((net, pos)) = self.hover_net.as_ref().map(|(n, p)| (n.as_str(), *p)) else { return };
         let conn = self.cached_connectivity();
         let z = self.zoom;
-        for (net, col) in nets {
+        let col = HOVER;
+        {
             let glow = col.gamma_multiply(0.55);
             for (i, t) in self.board.tracks.iter().enumerate().filter(|(i, t)| self.side_visible(t.side) && conn.track_net(*i) == Some(net)) {
                 let _ = i;
@@ -107,21 +97,12 @@ impl BoardEditor {
                 }
             }
         }
-        if let Some((n, pos)) = hover {
-            let galley = painter.layout_no_wrap(n.clone(), egui::FontId::proportional(14.0), Color32::BLACK);
-            let at = *pos + Vec2::new(14.0, -26.0);
+        {
+            let galley = painter.layout_no_wrap(net.to_string(), egui::FontId::proportional(14.0), Color32::BLACK);
+            let at = pos + Vec2::new(14.0, -26.0);
             painter.rect_filled(Rect::from_min_size(at, galley.size() + Vec2::new(10.0, 4.0)), 3.0, HOVER);
             painter.galley(at + Vec2::new(5.0, 2.0), galley, Color32::BLACK);
         }
-    }
-
-    /// "固定中: BAT" under the layer badge, while a net is pinned.
-    pub(super) fn draw_pin_badge(&self, painter: &egui::Painter, rect: Rect) {
-        let Some(n) = &self.pinned_net else { return };
-        let galley = painter.layout_no_wrap(format!("ネット {n} を固定中  (クリックか Esc で解除)"), egui::FontId::proportional(14.0), Color32::BLACK);
-        let at = rect.min + Vec2::new(30.0, 56.0);
-        painter.rect_filled(Rect::from_min_size(at, galley.size() + Vec2::new(16.0, 8.0)), 4.0, PINNED);
-        painter.galley(at + Vec2::new(8.0, 4.0), galley, Color32::BLACK);
     }
 
     /// The name of a pour in its piece (one name per piece that is large enough on the screen).

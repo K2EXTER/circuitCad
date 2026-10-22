@@ -309,8 +309,7 @@ pub struct BoardEditor {
     /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
     calc_cache: std::cell::RefCell<CalcCache>,
     zone_cache: std::cell::RefCell<ZoneCache>,
-    /// The net pinned by a click (Select tool) and the net under the pointer with the pointer's place; both glow (`netglow.rs`).
-    pinned_net: Option<String>,
+    /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
     hover_net: Option<(String, Pos2)>,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
@@ -397,7 +396,6 @@ impl Default for BoardEditor {
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
-            pinned_net: None,
             hover_net: None,
             last_export_dir: None,
             lesson: None,
