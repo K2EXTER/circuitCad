@@ -540,3 +540,38 @@ fn thin_power_line_project_shows_the_copper_drop_and_the_fix() {
     let wide = load(&mut app);
     assert!(wide > 4.9 && wide > thin + 0.3, "widened: {wide}");
 }
+
+/// Opening the window of a net with no current asks the schematic's DC analysis for that net alone and declares it (the others are left
+/// as they are); the window that lists all the currents draws.
+#[test]
+fn a_net_window_fetches_the_dc_current_of_its_net_and_the_list_window_draws() {
+    let mut app = App::default();
+    app.start_board_lesson(1);
+    let b = &mut app.board_ed;
+    b.board.net_currents.insert("GND".into(), 0.123);
+    b.open_net_window("VIN");
+    let ctx = egui::Context::default();
+    let frame = |app: &mut App| {
+        let mut input = egui::RawInput::default();
+        input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+        let mut out = ctx.run_ui(input, |ui| {
+            app.board_ed.net_window(ui.ctx());
+            app.board_ed.current_window(ui.ctx());
+        });
+        out.textures_delta.clear();
+    };
+    frame(&mut app);
+    // what App does with the request
+    let net = app.board_ed.net_current_request.take().expect("the window asked for the DC current of VIN");
+    assert_eq!(net, "VIN");
+    let currents = app.sch.dc_net_currents();
+    app.board_ed.fill_net_current(&net, currents);
+    assert!(app.board_ed.board.net_currents["VIN"] > 0.0, "the DC current of VIN is declared");
+    assert_eq!(app.board_ed.board.net_currents["GND"], 0.123, "the other nets keep what they had");
+    // asked once: another frame does not ask again
+    frame(&mut app);
+    assert!(app.board_ed.net_current_request.is_none());
+    app.board_ed.current_win_open = true;
+    frame(&mut app);
+    assert!(app.board_ed.current_win_open);
+}

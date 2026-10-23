@@ -1632,7 +1632,7 @@ fn the_net_window_draws_and_follows_the_net() {
     e.board.net_currents.insert("LX".into(), 1.0);
     e.net_win = Some("LX".into());
     let ctx = egui::Context::default();
-    let mut frame = |e: &mut BoardEditor| {
+    let frame = |e: &mut BoardEditor| {
         let mut input = egui::RawInput::default();
         input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
         let mut out = ctx.run_ui(input, |ui| e.net_window(ui.ctx()));

@@ -23,8 +23,16 @@ impl BoardEditor {
         }
     }
 
+    /// Open the window of `net` (command line and tests; a click on the net's copper does the same).
+    pub fn open_net_window(&mut self, net: &str) {
+        self.net_win = Some(net.to_string());
+    }
+
     pub fn net_window(&mut self, ctx: &egui::Context) {
-        let Some(net) = self.net_win.clone() else { return };
+        let Some(net) = self.net_win.clone() else {
+            self.net_win_asked = None;
+            return;
+        };
         if !self.board.pads.iter().any(|p| p.net == net) {
             self.net_win = None;
             return;
@@ -46,6 +54,25 @@ impl BoardEditor {
                 self.board.net_currents.insert(net.clone(), amps);
             } else {
                 self.board.net_currents.remove(&net);
+                // no current yet: the schematic's DC analysis is asked for this net's current, once
+                if self.net_win_asked.as_deref() != Some(net.as_str()) {
+                    self.net_win_asked = Some(net.clone());
+                    self.net_current_request = Some(net.clone());
+                }
+            }
+            if let Some((n, text)) = &self.net_win_note
+                && *n == net
+            {
+                ui.small(text.as_str());
+            }
+            if let Some(s) = self.current_stats.iter().find(|s| s.net == net).cloned() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.small(format!("過渡解析: 実効 {:.3} A / ピーク {:.3} A{}", s.rms, s.peak, if s.spiky() { " ⚠ ピークが実効値の10倍以上" } else { "" }));
+                    if (s.rms - amps).abs() > 1e-6 && s.rms > 1e-6 && ui.small_button("実効値を入れる").on_hover_text("過渡解析の実効値を、このネットの電流にします").clicked() {
+                        amps = s.rms;
+                        self.board.net_currents.insert(net.clone(), amps);
+                    }
+                });
             }
             let mut widen = false;
             let mut set_width: Option<f64> = None;

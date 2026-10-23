@@ -111,10 +111,8 @@ impl BoardEditor {
                 self.currents_request = Some(CurrentSource::Tran);
             }
             });
-            for s in &self.current_stats {
-                let txt = format!("{}: 実効 {:.2} A / 10 ms の最大 {:.2} A / ピーク {:.2} A{}", s.net, s.rms, s.burst_rms, s.peak, if s.spiky() { "  ⚠ ピークが実効値の10倍以上" } else { "" });
-                let r = if s.spiky() { ui.colored_label(egui::Color32::from_rgb(220, 160, 40), txt) } else { ui.small(txt) };
-                r.on_hover_text("太さに使うのは「実効」です。「10 ms の最大」は短くても繰り返す山の熱、「ピーク」は一瞬の最大値で、参考です。⚠ は、起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります");
+            if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます").clicked() {
+                self.current_win_open = true;
             }
             self.ir_drop_ui(ui);
             if let Some(w) = use_width {

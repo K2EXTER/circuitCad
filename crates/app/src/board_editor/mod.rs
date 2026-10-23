@@ -318,6 +318,13 @@ pub struct BoardEditor {
     /// The net whose window is open (a click on its copper with the Select tool), and whether a click opens it at all.
     net_win: Option<String>,
     net_win_on: bool,
+    /// Set by the net window for a net with no current: `App` answers with the schematic's DC current of that net (`fill_net_current`).
+    pub net_current_request: Option<String>,
+    /// The net the DC current was asked for (once per opening of its window), and what came of it (net, text).
+    net_win_asked: Option<String>,
+    net_win_note: Option<(String, String)>,
+    /// The window that lists the currents of all nets.
+    pub current_win_open: bool,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -407,6 +414,10 @@ impl Default for BoardEditor {
             drag_edit: false,
             net_win: None,
             net_win_on: true,
+            net_current_request: None,
+            net_win_asked: None,
+            net_win_note: None,
+            current_win_open: false,
             last_export_dir: None,
             lesson: None,
             drc_ran: false,
@@ -453,6 +464,7 @@ mod trunk;
 mod netglow;
 mod netclass;
 mod netwindow;
+mod currentwindow;
 mod file;
 mod actions;
 mod canvas;

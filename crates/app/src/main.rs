@@ -132,6 +132,11 @@ impl eframe::App for App {
             },
             None => {}
         }
+        // the window of a net asked for the DC current of that net alone
+        if let Some(net) = self.board_ed.net_current_request.take() {
+            let currents = self.sch.dc_net_currents();
+            self.board_ed.fill_net_current(&net, currents);
+        }
         // "全部" was pressed with no currents declared: the currents are in now (or could not be had), so route
         if let Some(net) = self.board_ed.route_after_currents.take() {
             self.board_ed.autoroute_now(net.as_deref());
@@ -459,6 +464,7 @@ impl eframe::App for App {
         self.board_ed.note_schematic_diff(&self.sch);
         self.board_ed.order_window(ui.ctx());
         self.board_ed.net_window(ui.ctx());
+        self.board_ed.current_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
         egui::Panel::left("board_tools").default_size(PANEL_WIDTH).min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));
