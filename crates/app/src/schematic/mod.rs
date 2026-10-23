@@ -105,6 +105,8 @@ pub struct SchEditor {
     /// The selection was put away when the Place tool was chosen (reset when another tool is chosen).
     place_cleared: bool,
     drag: Option<(usize, Pt)>,
+    /// Wires and pin places from the start of the part drag in progress (wires follow the moved parts).
+    stretch: Option<stretch::StretchBase>,
     zoom: f32, // pixels per grid step
     pan: Vec2, // grid position at the screen centre
     problems: Vec<Problem>,
@@ -530,6 +532,7 @@ impl Default for SchEditor {
             rotate_req: None,
             place_cleared: false,
             drag: None,
+            stretch: None,
             zoom: 22.0,
             pan: Vec2::new(10.0, 6.0),
             problems: vec![],
@@ -572,6 +575,7 @@ mod library;
 mod kicad_import;
 mod edit;
 mod clipboard;
+mod stretch;
 mod history;
 mod hint;
 mod canvas;

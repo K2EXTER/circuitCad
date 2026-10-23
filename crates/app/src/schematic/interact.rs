@@ -59,6 +59,7 @@ impl SchEditor {
                 } else {
                     let c = &self.sch.components[i];
                     self.drag = Some((i, (snapped.0 - c.pos.0, snapped.1 - c.pos.1)));
+                    self.begin_stretch(&[i]);
                     self.selected = Some(Sel::Comp(i));
                     self.multi.clear();
                 }
@@ -87,6 +88,8 @@ impl SchEditor {
                     for &(i, p) in &gd.labels {
                         self.sch.labels[i].pos = mv(p);
                     }
+                    let selected_wires: Vec<usize> = gd.wires.iter().map(|w| w.0).collect();
+                    self.apply_stretch(&selected_wires);
                 }
             } else {
                 self.gdrag = None;
@@ -107,6 +110,7 @@ impl SchEditor {
                         let p = &mut self.sch.labels[l].pos;
                         *p = (p.0 + dx, p.1 + dy);
                     }
+                    self.apply_stretch(&[]);
                 }
             } else {
                 self.drag = None;

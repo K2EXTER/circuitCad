@@ -137,6 +137,9 @@ impl SchEditor {
                     self.sch.labels[l].pos = p.1;
                 }
             }
+            // wires ending on the pins follow them
+            let moved: Vec<(Pt, Pt)> = before.iter().filter_map(|b| after.iter().find(|a| a.0 == b.0).map(|a| (b.1, a.1))).collect();
+            self.sch.wires = super::stretch::stretch_wires(&self.sch.wires, &moved, &[]);
         }
     }
 
@@ -166,6 +169,8 @@ impl SchEditor {
                 }
             }
         }
+        let comps: Vec<usize> = g.comps.iter().map(|c| c.0).collect();
+        self.begin_stretch(&comps);
         self.gdrag = Some(g);
     }
 
