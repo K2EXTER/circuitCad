@@ -44,8 +44,8 @@ fn a_zone_on_the_other_layer_does_not_connect_smd_pads() {
     b.zones.push(Zone::new("GND", Side::Bottom, rect(5.0, 5.0, 35.0, 25.0)));
     assert_eq!(ratsnest(&b).len(), 1);
     // ... but a via inside the zone does bring it to the bottom layer
-    b.vias.push(Via { pos: Point::new(10.0, 10.0), diameter: 0.6, drill: 0.3 });
-    b.vias.push(Via { pos: Point::new(30.0, 20.0), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(10.0, 10.0), diameter: 0.6, drill: 0.3, net: String::new() });
+    b.vias.push(Via { pos: Point::new(30.0, 20.0), diameter: 0.6, drill: 0.3, net: String::new() });
     assert_eq!(ratsnest(&b).len(), 0);
 }
 
@@ -209,7 +209,7 @@ fn frame_cost() {
         }
     }
     for i in 0..60 {
-        b.vias.push(Via { pos: Point::new(5.0 + i as f64 * 3.0, 4.0), diameter: 0.6, drill: 0.3 });
+        b.vias.push(Via { pos: Point::new(5.0 + i as f64 * 3.0, 4.0), diameter: 0.6, drill: 0.3, net: String::new() });
     }
     b.zones.push(Zone::new("N0", Side::Bottom, vec![Point::new(1.0, 1.0), Point::new(199.0, 1.0), Point::new(199.0, 99.0), Point::new(1.0, 99.0)]));
     println!("parts {} pads {} tracks {} vias {}", b.parts.len(), b.pads.len(), b.tracks.len(), b.vias.len());

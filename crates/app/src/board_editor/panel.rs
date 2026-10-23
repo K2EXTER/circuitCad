@@ -302,6 +302,21 @@ impl BoardEditor {
         }).header_response.on_hover_text("中級者向け: 配線の太さ (電流から)・差動ペア・長さ合わせ");
             }
             Tool::Via => {
+                let nets = self.board_nets();
+                let label = self.via_net.clone().unwrap_or_else(|| "自動 (置いた所のネット)".into());
+                ui.horizontal(|ui| {
+                    ui.label("ネット");
+                    egui::ComboBox::from_id_salt("via_net").selected_text(label).show_ui(ui, |ui| {
+                        if ui.selectable_label(self.via_net.is_none(), "自動 (置いた所のネット)").clicked() {
+                            self.via_net = None;
+                        }
+                        for n in &nets {
+                            if ui.selectable_label(self.via_net.as_deref() == Some(n.as_str()), n).clicked() {
+                                self.via_net = Some(n.clone());
+                            }
+                        }
+                    }).response.on_hover_text("置くビアを、どのネットのものにするか。「自動」は、置いた場所の パッド・ビア・配線・ベタのネットになります (何もない所ならネットなし)。ネットを選ぶと、ベタの上でも空いた所でも、そのネットのビアになり、そのネットのベタにつながり、未配線の線 (黄色) の相手にもなります");
+                });
         ui.add(egui::DragValue::new(&mut self.via_dia).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("ビア (表と裏をつなぐ穴) の外径。銅の丸の大きさです。穴径より 0.3〜0.4mm 大きくします。発注先の最小値を下回らないように");
         ui.add(egui::DragValue::new(&mut self.via_drill).speed(0.05).range(0.2..=2.0).prefix("ビア穴 ").suffix(" mm"))
             .on_hover_text("ビアの穴径。小さいほど基板が高くなることがあります。発注先の最小穴径を確認しましょう");
@@ -380,6 +395,19 @@ impl BoardEditor {
                 if r1.changed() || r2.changed() {
                     self.board.vias[i].diameter = d;
                     self.board.vias[i].drill = dr;
+                }
+                let nets = self.board_nets();
+                let mut vnet = self.board.vias[i].net.clone();
+                let before = vnet.clone();
+                egui::ComboBox::from_id_salt("sel_via_net").selected_text(if vnet.is_empty() { "ネットなし (触れたもののネット)".to_string() } else { vnet.clone() }).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut vnet, String::new(), "ネットなし (触れたもののネット)");
+                    for n in &nets {
+                        ui.selectable_value(&mut vnet, n.clone(), n);
+                    }
+                }).response.on_hover_text("このビアのネット。ネットを決めると、ベタ (同じネット) につながり、ほかのパッドや配線に触れると短絡になります");
+                if vnet != before {
+                    self.checkpoint();
+                    self.board.vias[i].net = vnet;
                 }
             }
             Item::Zone(i) if i < self.board.zones.len() => {

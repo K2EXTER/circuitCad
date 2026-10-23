@@ -156,7 +156,7 @@ pub fn add_thermal_vias(board: &mut Board) -> usize {
                 let c = Point::new(p.pos.x + at(ix, nx, iw), p.pos.y + at(iy, ny, ih));
                 let near = board.vias.iter().any(|v| v.pos.dist(c) < gap) || board.pads.iter().enumerate().any(|(j, q)| j != i && q.drill.is_some() && q.pos.dist(c) < gap);
                 if inside(c, margin - 0.1) && !near {
-                    board.vias.push(Via { pos: c, diameter: dia, drill });
+                    board.vias.push(Via { pos: c, diameter: dia, drill, net: String::new() });
                     have += 1;
                 }
             }

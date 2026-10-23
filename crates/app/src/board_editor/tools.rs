@@ -104,7 +104,10 @@ impl BoardEditor {
             }
             Tool::Via => {
                 self.checkpoint();
-                self.board.vias.push(Via { pos: p, diameter: self.via_dia, drill: self.via_drill });
+                // the via is for a net: the one chosen in the tool's settings, or else the net of what it is put on
+                let net = self.via_net_at(p);
+                self.status = if net.is_empty() { "ビアを置きました (ネットなし。配線でつなぐと、そのネットになります)".into() } else { format!("ビアを置きました (ネット {net})") };
+                self.board.vias.push(Via { pos: p, diameter: self.via_dia, drill: self.via_drill, net });
             }
             Tool::Hole => {
                 self.checkpoint();

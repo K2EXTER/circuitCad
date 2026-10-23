@@ -115,7 +115,7 @@ fn ripping_up_a_net_removes_its_tracks_and_vias_only() {
     pad(&mut b, 5.0, 20.0, "A");
     pad(&mut b, 35.0, 20.0, "A");
     b.tracks.push(trk((5.0, 20.0), (35.0, 20.0), 0.25));
-    b.vias.push(Via { pos: Point::new(20.0, 20.0), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(20.0, 20.0), diameter: 0.6, drill: 0.3, net: String::new() });
     assert_eq!(rip_up_net(&mut b, "A"), 2);
     assert_eq!(b.tracks.len(), 2);
     assert!(b.vias.is_empty());

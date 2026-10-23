@@ -133,6 +133,10 @@ pub struct Via {
     pub pos: Point,
     pub diameter: f64,
     pub drill: f64,
+    /// The net the via was placed for (empty: it takes the net of what it touches). A via of a net in empty board is something to
+    /// connect to (an airwire), and joins a pour of that net.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub net: String,
 }
 
 /// Non-plated hole: a mounting screw hole, or a locating peg hole that belongs to a part (`refdes` set).

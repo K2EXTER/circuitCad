@@ -40,10 +40,10 @@ fn a_via_joins_an_inner_track_to_the_outer_layers() {
     pad(&mut b, 5.0, 10.0, "A", false);
     pad(&mut b, 25.0, 10.0, "A", false);
     track(&mut b, Side::Top, (5.0, 10.0), (8.0, 10.0));
-    b.vias.push(Via { pos: Point::new(8.0, 10.0), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(8.0, 10.0), diameter: 0.6, drill: 0.3, net: String::new() });
     track(&mut b, Side::Inner(1), (8.0, 10.0), (22.0, 10.0));
     assert_eq!(ratsnest(&b).len(), 1, "the far end is not joined yet");
-    b.vias.push(Via { pos: Point::new(22.0, 10.0), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(22.0, 10.0), diameter: 0.6, drill: 0.3, net: String::new() });
     track(&mut b, Side::Top, (22.0, 10.0), (25.0, 10.0));
     assert!(ratsnest(&b).is_empty());
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));

@@ -1,7 +1,6 @@
 //! Unrouted connections ("airwires"): for every net, the minimum set of straight lines
 //! that would join its still-disconnected copper groups.
 
-use crate::drc::pad_groups;
 use crate::model::*;
 use std::collections::BTreeMap;
 
@@ -34,15 +33,28 @@ pub fn crossings(board: &Board) -> usize {
 }
 
 pub fn ratsnest(board: &Board) -> Vec<Airwire> {
-    ratsnest_in(board, &pad_groups(board))
+    let conn = crate::drc::connectivity(board);
+    let pads: Vec<usize> = (0..board.pads.len()).map(|i| conn.pad_group(i)).collect();
+    let vias: Vec<usize> = (0..board.vias.len()).map(|k| conn.via_group(k)).collect();
+    ratsnest_with_vias(board, &pads, &vias)
 }
 
 /// [`ratsnest`] with the copper groups of the pads (`grp[i]` for `board.pads[i]`) already known.
 pub fn ratsnest_in(board: &Board, grp: &[usize]) -> Vec<Airwire> {
+    ratsnest_with_vias(board, grp, &[])
+}
+
+/// [`ratsnest_in`] that also joins the vias placed for a net (`via_grp[k]` for `board.vias[k]`; none given: only pads).
+fn ratsnest_with_vias(board: &Board, grp: &[usize], via_grp: &[usize]) -> Vec<Airwire> {
     let mut by_net: BTreeMap<&str, Vec<(Point, usize)>> = BTreeMap::new();
     for (p, g) in board.pads.iter().zip(grp) {
         if !p.net.is_empty() {
             by_net.entry(&p.net).or_default().push((p.pos, *g));
+        }
+    }
+    for (v, g) in board.vias.iter().zip(via_grp) {
+        if !v.net.is_empty() {
+            by_net.entry(&v.net).or_default().push((v.pos, *g));
         }
     }
 

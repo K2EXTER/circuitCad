@@ -955,7 +955,7 @@ mod tests {
             vec![track(Side::Top, (0.0, 0.0), (10.0, 0.0), 0.5), track(Side::Bottom, (10.0, 0.0), (20.0, 0.0), 0.5)],
         );
         b.pads[1].side = Side::Bottom;
-        b.vias.push(Via { pos: Point::new(10.0, 0.0), diameter: 0.6, drill: 0.3 });
+        b.vias.push(Via { pos: Point::new(10.0, 0.0), diameter: 0.6, drill: 0.3, net: String::new() });
         let d = drops(&b, 1.0);
         let r = d.pads.iter().find(|p| p.refdes == "U1").unwrap().ohm.unwrap();
         let tracks_only = 2.0 * track_resistance(10.0, 0.5, &IrSpec::default());
@@ -1093,7 +1093,7 @@ mod tests {
             }
             for q in path.windows(2) {
                 if (q[0].0, q[0].1) == (q[1].0, q[1].1) {
-                    vias.push(Via { pos: Point::new(q[0].0, q[0].1), diameter: 2.0 * drill, drill });
+                    vias.push(Via { pos: Point::new(q[0].0, q[0].1), diameter: 2.0 * drill, drill, net: String::new() });
                 } else {
                     tracks.push(track(side(q[0].2), (q[0].0, q[0].1), (q[1].0, q[1].1), w));
                 }

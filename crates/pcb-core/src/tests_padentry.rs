@@ -220,7 +220,7 @@ fn a_via_a_hair_from_its_own_pad_gets_the_gap_filled() {
     pad(&mut b, 10.0, 20.0, 1.0, 1.0, "A");
     b.tracks.push(trk((10.0, 10.0), (10.0, 20.0)));
     // a via of the same net beside the pad's corner, 0.07 mm from it
-    b.vias.push(Via { pos: Point::new(10.545, 10.9), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(10.545, 10.9), diameter: 0.6, drill: 0.3, net: String::new() });
     b.tracks.push(trk((10.0, 11.5), (10.545, 10.9)));
     assert!(!drc::slit_checks(&b).is_empty());
     let n = drc::fill_slits(&mut b);

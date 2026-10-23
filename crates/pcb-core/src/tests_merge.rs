@@ -69,7 +69,7 @@ fn a_joint_on_a_pad_or_a_via_stays() {
     pad(&mut b, 10.0, 10.0, "A");
     b.tracks.push(trk(Side::Top, 0.25, (5.0, 10.0), (10.0, 10.0)));
     b.tracks.push(trk(Side::Top, 0.25, (10.0, 10.0), (15.0, 10.0)));
-    b.vias.push(Via { pos: Point::new(10.0, 20.0), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(10.0, 20.0), diameter: 0.6, drill: 0.3, net: String::new() });
     b.tracks.push(trk(Side::Top, 0.25, (5.0, 20.0), (10.0, 20.0)));
     b.tracks.push(trk(Side::Top, 0.25, (10.0, 20.0), (15.0, 20.0)));
     assert_eq!(merge_collinear(&mut b, 0), 0);

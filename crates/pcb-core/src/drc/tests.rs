@@ -65,7 +65,7 @@ mod drc_tests {
         let mut b = board();
         // top track A -> via -> bottom track A'; bottom track B passes 0.05 from the via ring
         b.tracks.push(track(Side::Top, (10.0, 10.0), (15.0, 10.0), 0.25));
-        b.vias.push(Via { pos: Point::new(15.0, 10.0), diameter: 0.6, drill: 0.3 });
+        b.vias.push(Via { pos: Point::new(15.0, 10.0), diameter: 0.6, drill: 0.3, net: String::new() });
         b.tracks.push(track(Side::Bottom, (15.0, 10.0), (15.0, 20.0), 0.25));
         b.tracks.push(track(Side::Bottom, (15.45, 5.0), (15.45, 12.0), 0.2));
         // gap between via edge (x=15.3) and B edge (x=15.35) is 0.05
@@ -225,7 +225,7 @@ mod drc_tests {
         let msg = thermal_via_checks(&big)[0].message.clone();
         assert!(msg.contains("2 個以上") && msg.contains("半分"), "{msg}");
         for dy in [-0.9, 0.9] {
-            big.vias.push(Via { pos: Point::new(16.0, 11.0 + dy), diameter: 0.6, drill: 0.3 });
+            big.vias.push(Via { pos: Point::new(16.0, 11.0 + dy), diameter: 0.6, drill: 0.3, net: String::new() });
         }
         assert!(thermal_via_checks(&big).is_empty(), "{:?}", thermal_via_checks(&big));
         // a 6 x 6 mm pour (an island around the tab) is too small to spread heat: the full number stays
@@ -257,10 +257,10 @@ mod drc_tests {
         assert!(v[0].message.contains("U1.3") && v[0].message.contains("0 個"), "{v:?}");
         // vias in the tab: 7.6 mm2 asks for 4
         for dy in [-1.2, -0.4, 0.4] {
-            b.vias.push(Via { pos: Point::new(16.0, 11.0 + dy), diameter: 0.6, drill: 0.3 });
+            b.vias.push(Via { pos: Point::new(16.0, 11.0 + dy), diameter: 0.6, drill: 0.3, net: String::new() });
         }
         assert_eq!(thermal_via_checks(&b).len(), 1, "three are not enough");
-        b.vias.push(Via { pos: Point::new(16.0, 12.8), diameter: 0.6, drill: 0.3 });
+        b.vias.push(Via { pos: Point::new(16.0, 12.8), diameter: 0.6, drill: 0.3, net: String::new() });
         assert!(thermal_via_checks(&b).is_empty());
         // a plain two-pad resistor with big pads is not a heat pad
         let mut c = board();
@@ -289,7 +289,7 @@ mod drc_tests {
         b.pads[0].drill = Some(0.6);
         assert!(acute_angle_checks(&b).is_empty());
         b.pads.clear();
-        b.vias.push(Via { pos: corner, diameter: 0.6, drill: 0.3 });
+        b.vias.push(Via { pos: corner, diameter: 0.6, drill: 0.3, net: String::new() });
         assert!(acute_angle_checks(&b).is_empty());
     }
 
@@ -466,7 +466,7 @@ mod added_tests {
 
     #[test]
     fn the_quick_check_agrees_with_the_full_one() {
-        let via = |x: f64, y: f64, d: f64, drill: f64| Via { pos: Point::new(x, y), diameter: d, drill };
+        let via = |x: f64, y: f64, d: f64, drill: f64| Via { pos: Point::new(x, y), diameter: d, drill, net: String::new() };
         let cases: Vec<(&str, Vec<Track>, Vec<Via>)> = vec![
             ("a clear route", vec![tr((5.0, 10.0), (5.0, 5.0), 0.25), tr((5.0, 5.0), (25.0, 5.0), 0.25), tr((25.0, 5.0), (25.0, 10.0), 0.25)], vec![]),
             ("through another net's pad", vec![tr((5.0, 10.0), (25.0, 10.0), 0.25), tr((15.0, 10.0), (15.0, 11.0), 0.25)], vec![]),
@@ -520,7 +520,7 @@ mod sweep_tests {
             b.tracks.push(Track { side: if k % 4 == 0 { Side::Bottom } else { Side::Top }, a, b: z, width: 0.25 });
         }
         for _ in 0..25 {
-            b.vias.push(Via { pos: Point::new(next(1.0, 29.0), next(1.0, 29.0)), diameter: 0.6, drill: 0.3 });
+            b.vias.push(Via { pos: Point::new(next(1.0, 29.0), next(1.0, 29.0)), diameter: 0.6, drill: 0.3, net: String::new() });
         }
         b
     }

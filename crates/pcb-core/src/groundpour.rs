@@ -140,7 +140,7 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
                 let at = Point::new(pad.pos.x + dx * d, pad.pos.y + dy * d);
                 let mut trial = work.clone();
                 trial.tracks.push(Track { side: pad.side, a: pad.pos, b: at, width: opt.track_width });
-                trial.vias.push(Via { pos: at, diameter: opt.via_diameter, drill: opt.via_drill });
+                trial.vias.push(Via { pos: at, diameter: opt.via_diameter, drill: opt.via_drill, net: String::new() });
                 if check(&trial).len() <= before {
                     work = trial;
                     done = true;

@@ -30,7 +30,7 @@ fn write_example_board() {
     route(b, Side::Top, &[r2, l1]);
     route(b, Side::Top, &[l2, Point::new(c1.x, l2.y), c1]);
     // GND: C1.2 reaches the bottom pour through a via, V1.- is a through-hole pad
-    b.vias.push(pcb_core::Via { pos: Point::new(c2.x, c2.y - 1.8), diameter: 0.8, drill: 0.4 });
+    b.vias.push(pcb_core::Via { pos: Point::new(c2.x, c2.y - 1.8), diameter: 0.8, drill: 0.4, net: String::new() });
     route(b, Side::Top, &[c2, Point::new(c2.x, c2.y - 1.8)]);
     let _ = v_m;
     b.zones.push(Zone::new("GND", Side::Bottom, vec![Point::new(2.0, 2.0), Point::new(38.0, 2.0), Point::new(38.0, 23.0), Point::new(2.0, 23.0)]));

@@ -97,7 +97,7 @@ fn bottom_pads_connect_through_bottom_tracks_and_vias() {
     let (a, c) = (pad_pos(&b, "R1", "1"), pad_pos(&b, "R2", "2"));
     let via = Point::new(14.0, a.y);
     b.tracks.push(Track { side: Side::Bottom, a, b: via, width: 0.25 });
-    b.vias.push(Via { pos: via, diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: via, diameter: 0.6, drill: 0.3, net: String::new() });
     b.tracks.push(Track { side: Side::Top, a: via, b: c, width: 0.25 });
     assert_eq!(ratsnest(&b).len(), 0);
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));

@@ -115,7 +115,7 @@ fn window_and_crossing_boxes_select_differently() {
     let mut e = BoardEditor::default();
     e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 5.0), b: p(10.0, 5.0), width: 0.25 }); // inside
     e.board.tracks.push(Track { side: Side::Top, a: p(8.0, 5.0), b: p(25.0, 5.0), width: 0.25 }); // leaves the box
-    e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3 });
+    e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3, net: String::new() });
     e.board.zones.push(Zone::new("GND", Side::Top, vec![p(0.0, 0.0), p(40.0, 0.0), p(40.0, 40.0), p(0.0, 40.0)]));
     let (a, b) = (p(3.0, 3.0), p(12.0, 10.0));
     let window = e.items_in_box(a, b, false);
@@ -135,7 +135,7 @@ fn window_and_crossing_boxes_select_differently() {
 fn group_move_and_delete() {
     let mut e = BoardEditor::default();
     e.board.tracks.push(Track { side: Side::Top, a: p(5.0, 5.0), b: p(10.0, 5.0), width: 0.25 });
-    e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3 });
+    e.board.vias.push(Via { pos: p(6.0, 8.0), diameter: 0.6, drill: 0.3, net: String::new() });
     e.board.holes.push(Hole::new(p(30.0, 30.0), 3.2));
     let items = e.items_in_box(p(3.0, 3.0), p(12.0, 10.0), false);
     assert_eq!(items.len(), 2);
@@ -238,7 +238,7 @@ fn only_the_layer_being_worked_on_can_be_picked_unless_that_is_switched_off() {
     let mut e = BoardEditor::default();
     e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Bottom }).unwrap();
     e.board.tracks.push(Track { side: Side::Bottom, a: p(20.0, 10.0), b: p(30.0, 10.0), width: 0.25 });
-    e.board.vias.push(Via { pos: p(25.0, 20.0), diameter: 0.6, drill: 0.3 });
+    e.board.vias.push(Via { pos: p(25.0, 20.0), diameter: 0.6, drill: 0.3, net: String::new() });
     let (on_pad, on_track, on_via) = (e.board.pads[0].pos, p(25.0, 10.0), p(25.0, 20.0));
     // working on the top: the bottom part and track are out of reach, the via (through the board) is not
     e.side = Side::Top;
@@ -285,7 +285,7 @@ fn a_fixed_part_is_not_dragged_turned_flipped_or_carried_along() {
 fn parts_switched_off_in_the_picking_filter_stay_out_of_boxes_and_clicks() {
     let mut e = BoardEditor::default();
     e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
-    e.board.vias.push(Via { pos: p(10.0, 10.0), diameter: 0.6, drill: 0.3 });
+    e.board.vias.push(Via { pos: p(10.0, 10.0), diameter: 0.6, drill: 0.3, net: String::new() });
     e.pick.parts = false;
     let items = e.items_in_box(p(0.0, 0.0), p(40.0, 30.0), false);
     assert!(items.iter().all(|i| !matches!(i, Item::Part(_))) && items.contains(&Item::Via(0)), "{items:?}");
@@ -1697,4 +1697,26 @@ fn the_width_slider_leaves_the_net_alone_until_it_is_moved() {
         assert!((e.board.tracks[0].width - 0.3).abs() < 1e-9, "with_class={with_class}");
     }
     assert_eq!(e.undo.len(), undo, "no step was taken");
+}
+
+/// The Via tool puts the via on the net under it (a pad, here), or on the net chosen in its settings, or on none on bare board; a via
+/// dropped while routing is of the net being routed.
+#[test]
+fn a_via_is_placed_for_the_net_under_it_or_the_net_chosen() {
+    let mut e = lx_pair_editor();
+    e.tool = Tool::Via;
+    e.click(p(15.05, 18.825));
+    assert_eq!(e.board.vias.last().unwrap().net, "LX", "on a pad of LX, automatically");
+    e.click(p(30.0, 30.0));
+    assert_eq!(e.board.vias.last().unwrap().net, "", "on bare board there is no net");
+    e.via_net = Some("GND".into());
+    e.click(p(30.0, 25.0));
+    assert_eq!(e.board.vias.last().unwrap().net, "GND", "the net chosen in the settings wins");
+    assert!(e.status.contains("GND"), "{}", e.status);
+    // while routing
+    e.via_net = None;
+    e.tool = Tool::Track;
+    e.trunk_mode = false;
+    e.route_via(p(15.05, 18.825), p(10.0, 18.825));
+    assert_eq!(e.board.vias.last().unwrap().net, "LX", "the via of a route is of its net");
 }

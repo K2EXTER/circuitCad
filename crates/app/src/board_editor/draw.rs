@@ -348,6 +348,13 @@ impl BoardEditor {
         let preview = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 200));
         match self.tool {
             Tool::Track if self.trunk_mode => self.draw_trunk_ghost(painter, rect, p, scr),
+            Tool::Via => {
+                // the via as it would be, and the net it would be for
+                painter.circle_stroke(scr, self.via_dia as f32 * self.zoom / 2.0, Stroke::new(1.5, Color32::from_rgb(60, 170, 90)));
+                let net = self.via_net_at(p);
+                let text = if net.is_empty() { "ビア (ネットなし)".to_string() } else { format!("ビア → ネット {net}") };
+                painter.text(scr + Vec2::new(14.0, -14.0), egui::Align2::LEFT_BOTTOM, text, egui::FontId::proportional(13.0), Color32::from_rgb(120, 225, 160));
+            }
             Tool::Track => {
                 if let Some(a) = self.pending {
                     let preview = self.route_preview(a, p);

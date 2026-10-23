@@ -11,7 +11,7 @@ fn sample() -> Board {
     b.pads.push(smd);
     b.pads.push(th);
     b.tracks.push(Track { side: Side::Top, a: Point::new(10.0, 10.0), b: Point::new(20.0, 10.0), width: 0.4 });
-    b.vias.push(Via { pos: Point::new(15.0, 15.0), diameter: 0.6, drill: 0.3 });
+    b.vias.push(Via { pos: Point::new(15.0, 15.0), diameter: 0.6, drill: 0.3, net: String::new() });
     b.holes.push(Hole::new(Point::new(3.0, 3.0), 3.0));
     b
 }

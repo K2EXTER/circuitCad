@@ -838,7 +838,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
         if l != cells[k - 1].0 {
             emit(cells[k - 1].0, run_from, cells[k - 1].1);
             if !vias.iter().any(|v: &Via| v.pos == p) {
-                vias.push(Via { pos: p, diameter: opt.via_diameter, drill: opt.via_drill });
+                vias.push(Via { pos: p, diameter: opt.via_diameter, drill: opt.via_drill, net: String::new() });
             }
             run_from = p;
             run_dir = None;
@@ -1052,7 +1052,7 @@ impl Router {
             if l != cells[k - 1].0 {
                 emit(cells[k - 1].0, run_from, cells[k - 1].1);
                 if !via_list.iter().any(|v: &Via| v.pos == p) {
-                    via_list.push(Via { pos: p, diameter: self.opt.via_diameter, drill: self.opt.via_drill });
+                    via_list.push(Via { pos: p, diameter: self.opt.via_diameter, drill: self.opt.via_drill, net: String::new() });
                 }
                 run_from = p;
                 run_dir = None;

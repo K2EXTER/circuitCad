@@ -55,6 +55,8 @@ mod tests_merge;
 #[cfg(test)]
 mod tests_netclass;
 #[cfg(test)]
+mod tests_via;
+#[cfg(test)]
 mod tests_padentry;
 #[cfg(test)]
 mod tests_router;

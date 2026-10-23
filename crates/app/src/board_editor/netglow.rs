@@ -43,6 +43,15 @@ impl BoardEditor {
         order.into_iter().find(|(_, _, shapes, _)| shapes.iter().any(|s| inside_shape(s, p))).map(|(_, n, _, _)| n.clone())
     }
 
+    /// The net a via placed at `p` is for: the one chosen in the Via tool, or, when it is left on "自動", the net of the pad, via, track or
+    /// pour there (none on bare board).
+    pub(super) fn via_net_at(&self, p: Point) -> String {
+        match &self.via_net {
+            Some(n) => n.clone(),
+            None => self.net_under(p).unwrap_or_default(),
+        }
+    }
+
     /// Work out which net the pointer is on (Select tool, no drag going on).
     pub(super) fn update_net_focus(&mut self, resp: &egui::Response, rect: Rect) {
         self.hover_net = None;

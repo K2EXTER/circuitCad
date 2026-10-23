@@ -167,15 +167,25 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
 
 /// Pads of different nets that end up in one copper group.
 pub fn shorts(board: &Board) -> Vec<Violation> {
-    let grp = pad_groups(board);
+    let conn = connectivity(board);
     let mut seen: std::collections::BTreeMap<usize, (Vec<String>, Point)> = Default::default();
-    for (p, g) in board.pads.iter().zip(grp) {
+    for (i, p) in board.pads.iter().enumerate() {
         if p.net.is_empty() {
             continue;
         }
-        let e = seen.entry(g).or_insert_with(|| (vec![], p.pos));
+        let e = seen.entry(conn.pad_group(i)).or_insert_with(|| (vec![], p.pos));
         if !e.0.contains(&p.net) {
             e.0.push(p.net.clone());
+        }
+    }
+    // a via placed for a net that sits on copper of another net
+    for (k, v) in board.vias.iter().enumerate() {
+        if v.net.is_empty() {
+            continue;
+        }
+        let e = seen.entry(conn.via_group(k)).or_insert_with(|| (vec![], v.pos));
+        if !e.0.contains(&v.net) {
+            e.0.push(v.net.clone());
         }
     }
     seen.into_values()

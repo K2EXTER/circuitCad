@@ -55,8 +55,10 @@ impl BoardEditor {
     pub(super) fn route_via(&mut self, a: Point, p: Point) {
         self.checkpoint();
         self.push_route(a, p);
-        let (_, via_dia, via_drill, _) = self.route_settings(self.net_at(a).as_deref());
-        self.board.vias.push(Via { pos: p, diameter: via_dia, drill: via_drill });
+        let net = self.net_at(a);
+        let (_, via_dia, via_drill, _) = self.route_settings(net.as_deref());
+        // a via dropped while routing is of the net that is being routed
+        self.board.vias.push(Via { pos: p, diameter: via_dia, drill: via_drill, net: net.unwrap_or_default() });
         self.side = self.next_layer();
         self.pending = Some(p);
     }

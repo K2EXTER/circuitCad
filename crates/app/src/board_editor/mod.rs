@@ -327,6 +327,8 @@ pub struct BoardEditor {
     pub current_win_open: bool,
     /// The impedance (Ω) last asked for in a net window.
     z_target: f64,
+    /// The net a via is placed for with the Via tool: `None` = the net of what is under the pointer (a pad, a track, a pour).
+    via_net: Option<String>,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -421,6 +423,7 @@ impl Default for BoardEditor {
             net_win_note: None,
             current_win_open: false,
             z_target: 50.0,
+            via_net: None,
             last_export_dir: None,
             lesson: None,
             drc_ran: false,

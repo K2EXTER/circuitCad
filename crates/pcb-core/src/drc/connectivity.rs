@@ -141,6 +141,13 @@ pub(super) fn pad_nets(board: &Board, parent: &mut [usize], n_tracks: usize) -> 
             m.entry(r).or_insert_with(|| p.net.clone());
         }
     }
+    // a via placed for a net names its group too (a pad of the group is what counts when they differ: that is a short)
+    for (k, v) in board.vias.iter().enumerate() {
+        if !v.net.is_empty() {
+            let r = find(parent, n_tracks + board.pads.len() + k);
+            m.entry(r).or_insert_with(|| v.net.clone());
+        }
+    }
     m
 }
 
