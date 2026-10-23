@@ -305,6 +305,28 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Ok, format!("電流を設定したネット {} 本は、配線の太さが足りています", widths.len()), "", None));
     }
 
+    // track widths against the impedance a net class asks for (a rule of thumb: the maker's own figure is the one to trust)
+    let wanted = board.net_classes.iter().filter(|c| c.impedance.is_some() && !c.nets.is_empty()).count();
+    if wanted > 0 {
+        let off = crate::impedance::check_targets(board, 0.1);
+        if let Some(first) = off.first() {
+            out.push(
+                check(
+                    Level::Warn,
+                    format!("目標のインピーダンスから外れた配線があります: {}", off.iter().take(4).map(|i| i.net.as_str()).collect::<Vec<_>>().join(", ")),
+                    format!(
+                        "例: {} は {:.0} Ω を目標にしていますが、{:.2} mm の配線は約 {:.0} Ω (目安) です。ネットの設定の窓の「目標の線幅にする」で、そろえられます。値は教科書の式による ±10% ほどの目安なので、発注先の積層構成と、そこの計算の値を確かめてください",
+                        first.net, first.target, first.worst_width, first.worst_z
+                    ),
+                    Some(first.at),
+                )
+                .with_also(off.iter().map(|i| i.at)),
+            );
+        } else {
+            out.push(check(Level::Ok, format!("インピーダンスを決めたネット {} 組の配線は、目標に合っています (目安)", wanted), "", None));
+        }
+    }
+
     // silk screen
     let silk = drc::silk_checks(board);
     if let Some(first) = silk.first() {

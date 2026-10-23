@@ -296,6 +296,7 @@ impl BoardEditor {
         egui::CollapsingHeader::new("高度な配線 (中級者向け)").default_open(false).open(self.widths_open.map(|_| true)).show(ui, |ui| {
                 self.panel_widths(ui);
                 self.panel_net_classes(ui);
+                self.panel_stackup(ui);
                 self.panel_pairs(ui);
                 self.panel_lengths(ui);
         }).header_response.on_hover_text("中級者向け: 配線の太さ (電流から)・差動ペア・長さ合わせ");

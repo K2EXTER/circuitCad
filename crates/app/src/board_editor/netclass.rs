@@ -4,6 +4,30 @@ use super::*;
 use pcb_core::NetClass;
 
 impl BoardEditor {
+    /// The layer stack the impedance is worked out from (`Board.stackup`).
+    pub(super) fn panel_stackup(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("層構成 (インピーダンスの目安)").default_open(false).show(ui, |ui| {
+            ui.small("配線の太さから特性インピーダンスの目安を出すための、基板の構成です。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔の厚さ) に直すと、近づきます");
+            let mut s = self.board.stackup;
+            ui.horizontal_wrapped(|ui| {
+                ui.add(egui::DragValue::new(&mut s.er).speed(0.05).range(2.0..=12.0).prefix("誘電率 ")).on_hover_text("基板の材料の比誘電率。FR-4 は 4.2〜4.6 ほどで、材料と周波数で変わります");
+                ui.add(egui::DragValue::new(&mut s.height).speed(0.01).range(0.05..=3.0).prefix("外層から基準面まで ").suffix(" mm")).on_hover_text("外層の配線から、その下の銅 (2層基板なら反対の面、4層基板なら隣の内層のベタ) までの距離。2層の 1.6 mm 基板なら約 1.53 mm、4層基板なら 0.1〜0.2 mm ほどです");
+                ui.add(egui::DragValue::new(&mut s.plane_gap).speed(0.01).range(0.1..=3.0).prefix("内層の上下のベタの間 ").suffix(" mm")).on_hover_text("内層の配線を上下から挟む2枚のベタの間の距離 (ストリップライン)");
+                ui.add(egui::DragValue::new(&mut s.copper_um).speed(1.0).range(9.0..=140.0).prefix("銅箔 ").suffix(" µm")).on_hover_text("銅箔の厚さ。1 oz = 35 µm");
+            });
+            if let Some(w) = pcb_core::impedance::width_for(&s, pcb_core::impedance::Kind::Microstrip, 50.0) {
+                ui.small(format!("この構成で、外層の 50 Ω は、線幅 約 {w:.2} mm です"));
+            }
+            if ui.small_button("初期値に戻す").on_hover_text("ふつうの 1.6 mm・2層基板の値に戻します").clicked() {
+                s = pcb_core::impedance::Stackup::default();
+            }
+            if s != self.board.stackup {
+                self.checkpoint_once();
+                self.board.stackup = s;
+            }
+        }).header_response.on_hover_text("基板の層の構成 (誘電率・層の間隔・銅箔)。インピーダンスの目安に使います");
+    }
+
     pub(super) fn panel_net_classes(&mut self, ui: &mut egui::Ui) {
         egui::CollapsingHeader::new("ネットクラス (線幅・間隔・ビア)").default_open(false).show(ui, |ui| {
             ui.small("電源は太く広く、信号は細く、のように、ネットのグループごとに配線のルールを決めます。配線ツールと自動配線は、そのネットをクラスの線幅・ビアで引き、DRC はクラスの間隔を守っているか調べます");
@@ -48,7 +72,7 @@ impl BoardEditor {
             }
             ui.horizontal(|ui| {
                 if ui.button("クラスを追加").on_hover_text("新しい空のクラスを作ります。ネットを足して、線幅・間隔・ビアを決めます").clicked() {
-                    classes.push(NetClass { name: format!("クラス{}", classes.len() + 1), track_width: self.track_width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, nets: vec![] });
+                    classes.push(NetClass { name: format!("クラス{}", classes.len() + 1), track_width: self.track_width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, nets: vec![], impedance: None });
                 }
                 if ui.button("電源のクラスを作る").on_hover_text("GND と、流れる電流を決めたネットを入れた「電源」クラスを作ります (線幅 0.5mm、間隔 0.25mm、ビア 0.8/0.4mm)。値はあとで直せます").clicked() {
                     let mut ns: Vec<String> = self.board.net_currents.keys().cloned().collect();
@@ -59,7 +83,7 @@ impl BoardEditor {
                     if ns.is_empty() {
                         self.status = "電源のクラスに入れるネットがありません (GND が無いか、すでに別のクラスにあります)。ネットは、クラスの「ネットを足す」から選べます".into();
                     } else {
-                        classes.push(NetClass { name: "電源".into(), nets: ns, track_width: 0.5_f64.max(rules.min_track_width), clearance: 0.25_f64.max(rules.min_clearance), via_diameter: 0.8, via_drill: 0.4 });
+                        classes.push(NetClass { name: "電源".into(), nets: ns, track_width: 0.5_f64.max(rules.min_track_width), clearance: 0.25_f64.max(rules.min_clearance), via_diameter: 0.8, via_drill: 0.4, impedance: None });
                     }
                 }
             });

@@ -325,6 +325,8 @@ pub struct BoardEditor {
     net_win_note: Option<(String, String)>,
     /// The window that lists the currents of all nets.
     pub current_win_open: bool,
+    /// The impedance (Ω) last asked for in a net window.
+    z_target: f64,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -418,6 +420,7 @@ impl Default for BoardEditor {
             net_win_asked: None,
             net_win_note: None,
             current_win_open: false,
+            z_target: 50.0,
             last_export_dir: None,
             lesson: None,
             drc_ran: false,

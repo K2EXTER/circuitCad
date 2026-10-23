@@ -20,6 +20,7 @@ pub mod export;
 pub mod fab;
 pub mod footprints;
 pub mod geom;
+pub mod impedance;
 pub mod irdrop;
 pub mod labels;
 pub mod meander;

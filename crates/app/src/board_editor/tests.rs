@@ -1617,7 +1617,7 @@ fn a_route_of_a_classed_net_uses_the_class_width_and_via() {
     let a = p(15.05, 18.825);
     let to = p(10.0, 18.825);
     assert!(e.route_segments(a, to).iter().all(|t| (t.width - 0.25).abs() < 1e-9));
-    e.board.net_classes.push(pcb_core::NetClass { name: "電源".into(), nets: vec!["LX".into()], track_width: 0.6, clearance: 0.3, via_diameter: 0.9, via_drill: 0.45 });
+    e.board.net_classes.push(pcb_core::NetClass { name: "電源".into(), nets: vec!["LX".into()], track_width: 0.6, clearance: 0.3, via_diameter: 0.9, via_drill: 0.45, impedance: None });
     let segs = e.route_segments(a, to);
     assert!(!segs.is_empty() && segs.iter().all(|t| (t.width - 0.6).abs() < 1e-9), "{segs:?}");
     assert_eq!(e.route_settings(Some("LX")), (0.6, 0.9, 0.45, Some(0.3)));

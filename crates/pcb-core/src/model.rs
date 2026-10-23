@@ -245,6 +245,10 @@ impl Zone {
     }
 }
 
+fn is_default_stackup(s: &crate::impedance::Stackup) -> bool {
+    *s == crate::impedance::Stackup::default()
+}
+
 /// A group of nets that share their own routing rules: a power class is routed wide and with room around it, a signal class thin. The
 /// values are what the nets are routed with and what the DRC asks of the copper around them (the board's `Rules` stay the floor).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -258,11 +262,13 @@ pub struct NetClass {
     pub clearance: f64,
     pub via_diameter: f64,
     pub via_drill: f64,
+    /// The impedance (Ω, single-ended) the tracks of these nets are meant to have: the width follows from the layer stack (`Board.stackup`).
+    pub impedance: Option<f64>,
 }
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3 }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None }
     }
 }
 
@@ -319,6 +325,9 @@ pub struct Board {
     /// Routing rules shared by groups of nets (the first class that lists a net is the one that counts).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub net_classes: Vec<NetClass>,
+    /// What the impedance of a track depends on besides its width (not written when it is the default).
+    #[serde(default, skip_serializing_if = "is_default_stackup")]
+    pub stackup: crate::impedance::Stackup,
     /// Parts (by reference designator) that were fixed in place: the editor does not move, turn or flip them.
     #[serde(default)]
     pub locked_parts: Vec<String>,
@@ -397,6 +406,7 @@ impl Board {
             footprints: vec![],
             net_currents: Default::default(),
             net_classes: vec![],
+            stackup: Default::default(),
             locked_parts: vec![],
             inner_layers: 0,
             diff_pairs: vec![],

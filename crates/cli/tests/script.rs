@@ -650,3 +650,19 @@ fn board_class_makes_lists_and_removes_classes() {
     let (a, _) = run("board new 40 30\nboard class x width=0.01\n");
     assert!(a.iter().any(|v| v["ok"] == false && v["error"].as_str().is_some_and(|e| e.contains("thinner"))), "{a:?}");
 }
+
+/// `board impedance` gives the impedance of a width and the width of an impedance, for a track and for a pair.
+#[test]
+fn board_impedance_goes_both_ways() {
+    let (a, ok) = run("board new 40 30\nboard impedance height=0.2 target=50\nboard impedance height=0.2 width=0.35\nboard impedance diff=90 space=0.2\nboard impedance diff=90 width=0.2\n");
+    assert!(ok, "{a:?}");
+    let answers: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "board" && v.get("stackup").is_some()).collect();
+    let w50 = answers[0]["width"].as_f64().unwrap();
+    assert!((0.3..=0.45).contains(&w50), "{w50}");
+    let z = answers[1]["z0"].as_f64().unwrap();
+    assert!((z - 50.0).abs() < 4.0, "{z}");
+    assert!(answers[2]["width"].as_f64().unwrap() > 0.1);
+    assert!(answers[3]["space"].as_f64().unwrap() > 0.0);
+    let (a, _) = run("board new 40 30\nboard impedance target=1.5\n");
+    assert!(a.iter().any(|v| v["ok"] == false), "{a:?}");
+}

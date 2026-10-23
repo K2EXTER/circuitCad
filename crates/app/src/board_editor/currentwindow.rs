@@ -114,7 +114,7 @@ impl BoardEditor {
             }
             ui.small("太さの目安は、銅箔 35µm・温度上昇 10℃ の外層 (IPC-2221) です。ピーク電流 (起動時・スイッチング) は入らないので、余裕を見てください");
             if let Some(n) = open_net {
-                self.net_win = Some(n);
+                self.open_net_window(&n);
             }
         });
         if !open {

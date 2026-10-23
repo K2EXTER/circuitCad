@@ -1,4 +1,4 @@
-//! Board commands: new, import, pour, autoplace, move, route, improve, labels, class, drc, status, postlayout, currents, save, open, fab.
+//! Board commands: new, import, pour, autoplace, move, route, improve, labels, class, impedance, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|labels|class|drc|status|postlayout|currents|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|labels|class|impedance|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -73,6 +73,74 @@ impl Session {
                 };
                 board.place_part(&part.refdes, pcb_core::model::Point::new(x, y), rot);
                 Ok(obj(json!({"part": part.refdes, "x": x, "y": y, "rot": rot})))
+            }
+            "impedance" => {
+                // the impedance of a track and the width for a wanted one (a rule of thumb, +-10 %):
+                //   board impedance [er=4.5] [height=1.53] [gap=0.36] [copper=35] [layer=outer|inner]
+                //                   width=W [space=S]        -> the impedance of a track of width W (a pair S apart: also differential)
+                //                   target=Z                 -> the width for Z ohm
+                //                   diff=Z space=S          -> the width of each track of a pair S apart for Z ohm differential
+                //                   diff=Z width=W          -> the space of a pair of tracks of width W for Z ohm differential
+                // `er`, `height`, `gap`, `copper` set the layer stack of the board first (and keep it)
+                let (_, kv) = options(rest);
+                let board = self.board_mut()?;
+                let get = |k: &str| -> Result<Option<f64>, String> { opt(&kv, k).map(|v| v.parse::<f64>().ok().filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("{k}={v}: a positive number is expected"))).transpose() };
+                if let Some(v) = get("er")? {
+                    board.stackup.er = v;
+                }
+                if let Some(v) = get("height")? {
+                    board.stackup.height = v;
+                }
+                if let Some(v) = get("gap")? {
+                    board.stackup.plane_gap = v;
+                }
+                if let Some(v) = get("copper")? {
+                    board.stackup.copper_um = v;
+                }
+                let kind = match opt(&kv, "layer") {
+                    Some("inner") => pcb_core::impedance::Kind::Stripline,
+                    Some("outer") | None => pcb_core::impedance::Kind::Microstrip,
+                    Some(o) => return Err(format!("layer={o}: use outer or inner")),
+                };
+                let s = board.stackup;
+                let round = |x: f64| (x * 1000.0).round() / 1000.0;
+                let (width, space, target, diff) = (get("width")?, get("space")?, get("target")?, get("diff")?);
+                let mut out = json!({"layer": kind.label(), "stackup": {"er": s.er, "height": s.height, "gap": s.plane_gap, "copper_um": s.copper_um}});
+                let m = out.as_object_mut().unwrap();
+                match (target, diff) {
+                    (Some(z), None) => {
+                        let w = pcb_core::impedance::width_for(&s, kind, z).ok_or_else(|| format!("target={z}: no track width gives that impedance on this layer stack"))?;
+                        m.insert("target".into(), json!(z));
+                        m.insert("width".into(), json!(round(w)));
+                    }
+                    (None, Some(z)) => match (width, space) {
+                        (None, Some(sp)) => {
+                            let w = pcb_core::impedance::width_for_differential(&s, kind, sp, z).ok_or_else(|| format!("diff={z} space={sp}: no track width gives that differential impedance"))?;
+                            m.insert("diff".into(), json!(z));
+                            m.insert("space".into(), json!(sp));
+                            m.insert("width".into(), json!(round(w)));
+                        }
+                        (Some(w), None) => {
+                            let sp = pcb_core::impedance::space_for_differential(&s, kind, w, z).ok_or_else(|| format!("diff={z} width={w}: no space gives that differential impedance"))?;
+                            m.insert("diff".into(), json!(z));
+                            m.insert("width".into(), json!(w));
+                            m.insert("space".into(), json!(round(sp)));
+                        }
+                        _ => return Err("diff=Z needs width=W (to find the space) or space=S (to find the width), one of them".into()),
+                    },
+                    (Some(_), Some(_)) => return Err("target=Z and diff=Z are two questions: ask one at a time".into()),
+                    (None, None) => {
+                        if let Some(w) = width {
+                            m.insert("width".into(), json!(w));
+                            m.insert("z0".into(), json!(round(pcb_core::impedance::single_ended(&s, kind, w))));
+                            if let Some(sp) = space {
+                                m.insert("space".into(), json!(sp));
+                                m.insert("zdiff".into(), json!(round(pcb_core::impedance::differential(&s, kind, w, sp))));
+                            }
+                        }
+                    }
+                }
+                Ok(obj(out))
             }
             "class" => {
                 // net classes: `board class` lists them; `board class NAME [width=mm] [clearance=mm] [via=dia/drill] [nets=A,B]` makes or
