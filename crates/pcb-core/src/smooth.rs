@@ -1011,8 +1011,25 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
     let mut patches: Vec<Patch> = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
     // the slots between tracks of one net that run side by side (the fork patch only fills the sharp tip)
     if board.finish.forks {
+        // the pads that a trunk's necks leave: the necks are thin on purpose and the pads stay apart, so nothing is filled in between them
+        let necked: Vec<&Pad> = (0..board.tracks.len())
+            .filter(|&i| crate::current::is_neck(board, &conn, i))
+            .filter_map(|i| {
+                let t = &board.tracks[i];
+                [t.a, t.b].into_iter().find_map(|e| board.pads.iter().find(|q| (q.drill.is_some() || q.side == t.side) && e.dist(q.pos) < 0.05))
+            })
+            .collect();
+        let near_necked_pad = |outline: &[Point]| {
+            let n = outline.len().max(1) as f64;
+            let c = Point::new(outline.iter().map(|p| p.x).sum::<f64>() / n, outline.iter().map(|p| p.y).sum::<f64>() / n);
+            necked.iter().any(|q| {
+                let (w, h) = q.shape.size();
+                let (dx, dy) = (((c.x - q.pos.x).abs() - w / 2.0).max(0.0), ((c.y - q.pos.y).abs() - h / 2.0).max(0.0));
+                dx.hypot(dy) <= 0.4
+            })
+        };
         for s in crate::slot::slot_patches(board, &conn, &patches, board.finish.radius) {
-            let excluded = conn.track_net(s.track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n));
+            let excluded = conn.track_net(s.track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n)) || near_necked_pad(&s.outline);
             if !excluded && copper.clear(board, &conn, s.side, &s.outline, s.track) {
                 patches.push(Patch { side: s.side, outline: s.outline, track: s.track });
             }

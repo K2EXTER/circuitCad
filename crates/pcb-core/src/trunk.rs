@@ -263,3 +263,57 @@ mod neck_widen_tests {
         assert!(b.tracks.iter().filter(|t| (t.a.x - 15.05).abs() < 1e-9 || (t.b.x - 15.05).abs() < 1e-9).all(|t| (t.width - 0.25).abs() < 1e-9), "the necks are still 0.25");
     }
 }
+
+#[cfg(test)]
+mod finish_tests {
+    use super::*;
+
+    fn lx_board() -> Board {
+        let mut b = Board::new("t", 40.0, 40.0);
+        for y in [18.825, 18.175] {
+            let mut p = Pad::new(Point::new(15.05, y), PadShape::Rect { w: 0.85, h: 0.3 }, None, Side::Top);
+            p.refdes = "U1".into();
+            p.pin = "2".into();
+            p.net = "LX".into();
+            b.pads.push(p);
+        }
+        let mut far = Pad::new(Point::new(10.0, 18.5), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        far.net = "LX".into();
+        b.pads.push(far);
+        b
+    }
+
+    fn fills_between_the_pads(b: &Board) -> bool {
+        let fin = crate::smooth::finished(b).unwrap();
+        fin.patches.iter().any(|p| {
+            let n = p.outline.len() as f64;
+            let (cx, cy) = (p.outline.iter().map(|q| q.x).sum::<f64>() / n, p.outline.iter().map(|q| q.y).sum::<f64>() / n);
+            (14.5..=15.6).contains(&cx) && (18.2..=18.8).contains(&cy)
+        })
+    }
+
+    /// The pads of a trunk stay apart: the finish does not fill the gap between them (the necks are thin so that the solder stays on them).
+    #[test]
+    fn the_finish_does_not_fill_between_the_pads_of_a_trunk() {
+        let mut b = lx_board();
+        let f = fan(&b, 0, 1, Point::new(10.0, 18.5), 0.25).unwrap();
+        add(&mut b, &f, &[Point::new(10.0, 18.5)]).unwrap();
+        b.finish.on = true;
+        assert!(!fills_between_the_pads(&b), "the gap between the two pads is left open");
+    }
+
+    /// Two ordinary tracks of one width from the same two pads (no trunk: nothing is wider) are finished as before: the slot between them is
+    /// filled (with the notch in front of the pads).
+    #[test]
+    fn two_ordinary_tracks_from_two_pads_are_still_filled_between() {
+        let mut b = lx_board();
+        b.pads.pop();
+        for y in [18.825, 18.175] {
+            b.tracks.push(Track { side: Side::Top, a: Point::new(15.05, y), b: Point::new(12.5, y), width: 0.25 });
+        }
+        b.tracks.push(Track { side: Side::Top, a: Point::new(12.5, 18.175), b: Point::new(12.5, 18.825), width: 0.25 });
+        b.finish.on = true;
+        let fin = crate::smooth::finished(&b).unwrap();
+        assert!(!fin.patches.is_empty(), "the slot between the two tracks is filled");
+    }
+}
