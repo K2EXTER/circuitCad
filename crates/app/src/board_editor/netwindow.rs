@@ -217,7 +217,7 @@ impl BoardEditor {
                     let kind = pcb_core::impedance::Kind::of(side);
                     let shown = new_width.unwrap_or(v);
                     let z = pcb_core::impedance::single_ended(&self.board.stackup, kind, shown);
-                    ui.label(egui::RichText::new(format!("線幅 {shown:.2} mm → 約 {z:.0} Ω")).strong()).on_hover_text(format!("{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成」で、その値を入れると近づきます", kind.label()));
+                    ui.label(egui::RichText::new(format!("線幅 {shown:.2} mm → 約 {z:.0} Ω")).strong()).on_hover_text(format!("{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成 (層数・材料)」で、その値を入れると近づきます", kind.label()));
                     let mut target = class_k.and_then(|k| classes[k].impedance).unwrap_or(self.z_target);
                     ui.horizontal_wrapped(|ui| {
                         ui.label("目標");
@@ -234,7 +234,7 @@ impl BoardEditor {
                                     new_target = Some(target);
                                 }
                                 Some(w) => self.status = format!("目標 {target:.0} Ω の線幅は {w:.3} mm で、基板の最小線幅 {:.2} mm より細くなります。層の間隔を薄くするか、目標を上げてください", rules.min_track_width),
-                                None => self.status = format!("この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成」の値を確かめてください"),
+                                None => self.status = format!("この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成 (層数・材料)」の値を確かめてください"),
                             }
                         }
                     });

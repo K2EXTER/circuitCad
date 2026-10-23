@@ -74,10 +74,11 @@ impl BoardEditor {
                     crate::icons::help(ui, concat!("画面右上の「層」で切り替えます (L キーでも順に切り替わります)。",
                         "いま配線を置く銅箔の層。部品とシルクは表面か裏面にだけ置けます (内層を選んでいるときは表面)。右上の「層」は、たたんで小さくできます"));
                 });
-                self.layer_count_ui(ui);
                 ui.checkbox(&mut self.net_win_on, "ネットを選ぶと設定の窓を開く").on_hover_text("選択ツールで、配線・パッド・ビア・ベタをクリックすると、そのネットの電流・推奨の線幅・ネットクラスの窓を開きます");
                 ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm")).on_hover_text("カーソルが吸い付く間隔。0 なら吸い付きません。小さいほど細かく置けます (部品の足の間隔は 2.54mm や 1.27mm が多いです)。自動配線の細かさにもなり、足の間隔の狭い IC (TQFP など) で通らない線が残るときは、0.1〜0.2 に小さくします");
             });
+            // the layers of the board: how many, and what they are made of (the impedance of a track follows from it)
+            self.panel_stackup(ui);
             self.selection_panel(ui);
             group_heading(ui, "手順 (上から順に)", "基板づくりの流れです。①から順に進めると、発注用のデータまで作れます。いつでも途中に戻れます");
             // open while the board is still being set up (no parts or no outline yet), then folded away
@@ -296,7 +297,6 @@ impl BoardEditor {
         egui::CollapsingHeader::new("高度な配線 (中級者向け)").default_open(false).open(self.widths_open.map(|_| true)).show(ui, |ui| {
                 self.panel_widths(ui);
                 self.panel_net_classes(ui);
-                self.panel_stackup(ui);
                 self.panel_pairs(ui);
                 self.panel_lengths(ui);
         }).header_response.on_hover_text("中級者向け: 配線の太さ (電流から)・差動ペア・長さ合わせ");
