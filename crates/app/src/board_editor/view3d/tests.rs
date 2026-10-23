@@ -113,7 +113,7 @@ mod view3d_tests {
         for s in [1.0, -1.0] {
             b.tracks.push(pcb_core::Track { side: Side::Top, a: Point::new(5.0, 15.0), b: Point::new(5.0 + 10.0 * a.cos(), 15.0 + s * 10.0 * a.sin()), width: 0.25 });
         }
-        b.finish = pcb_core::smooth::Finish { on: true, corners: false, tapers: false, ..Default::default() };
+        b.finish = pcb_core::smooth::Finish { corners: false, tapers: false, ..Default::default() };
         let f = pcb_core::smooth::finished(&b).unwrap();
         assert_eq!(f.patches.len(), 1);
         let conn = pcb_core::drc::connectivity(&f.board);

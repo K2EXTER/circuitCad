@@ -43,7 +43,8 @@ impl BoardEditor {
     }
 
     /// Make `b` the board being edited (from a file, or from a project; `path` is None for a project).
-    pub fn adopt(&mut self, b: Board, path: Option<PathBuf>) {
+    pub fn adopt(&mut self, mut b: Board, path: Option<PathBuf>) {
+        b.migrate_finish_exclude();
         let (lo, hi) = b.bounds().unwrap_or((Point::default(), Point::default()));
         self.size_w = hi.x - lo.x;
         self.size_h = hi.y - lo.y;

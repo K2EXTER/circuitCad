@@ -172,8 +172,9 @@ fn fork_board() -> Board {
 #[test]
 fn the_notch_between_two_tracks_at_a_sharp_angle_is_filled_with_a_concave_round_end() {
     let mut b = fork_board();
+    b.finish = Finish { corners: false, tapers: false, forks: false, ..Default::default() };
     assert!(finished(&b).is_none(), "off: the board is used as it is");
-    b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
+    b.finish = Finish { corners: false, tapers: false, forks: true, ..Default::default() };
     let before = b.tracks.clone();
     let f = finished(&b).unwrap();
     assert_eq!(f.patches.len(), 1);
@@ -190,14 +191,14 @@ fn the_notch_between_two_tracks_at_a_sharp_angle_is_filled_with_a_concave_round_
     assert!(drc::check_final(&b).is_empty());
     // the Gerber file has the patch as a region; with the finish off it does not
     assert!(gerber::copper(&b, Side::Top).contains("G36*"));
-    b.finish.on = false;
+    b.finish.forks = false;
     assert!(!gerber::copper(&b, Side::Top).contains("G36*"));
 }
 
 #[test]
 fn the_finish_follows_the_tracks_when_they_move() {
     let mut b = fork_board();
-    b.finish = Finish { on: true, corners: true, tapers: false, forks: false, ..Default::default() };
+    b.finish = Finish { corners: true, tapers: false, forks: false, ..Default::default() };
     b.tracks.push(trk((30.0, 5.0), (38.0, 5.0), 0.25));
     b.tracks.push(trk((38.0, 5.0), (38.0, 12.0), 0.25));
     let n = finished(&b).unwrap().board.tracks.len();
@@ -250,14 +251,13 @@ fn an_excluded_net_is_left_as_drawn_and_the_other_is_finished() {
     pad(&mut b, 20.0, 28.0, "B");
     b.tracks.push(trk((5.0, 25.0), (20.0, 25.0), 0.25));
     b.tracks.push(trk((20.0, 25.0), (20.0, 28.0), 0.25));
-    b.finish_exclude = vec!["A".into()];
+    b.net_classes.push(NetClass { name: "A".into(), nets: vec!["A".into()], finish: FinishOverride::off(), ..Default::default() });
     let r = smooth_tracks(&mut b, &SmoothOptions::default());
     assert_eq!(r.corners, 1, "only net B's corner");
     assert!(b.tracks.iter().any(|t| t.a == Point::new(25.0, 5.0) || t.b == Point::new(25.0, 5.0)), "net A's corner is still sharp");
     // the same in the live finish
     let mut c = l_shape();
-    c.finish = Finish { on: true, ..Default::default() };
-    c.finish_exclude = vec!["A".into()];
+    c.net_classes.push(NetClass { name: "A".into(), nets: vec!["A".into()], finish: FinishOverride::off(), ..Default::default() });
     assert_eq!(finished(&c).unwrap().board.tracks.len(), c.tracks.len(), "nothing is added for an excluded net");
 }
 
@@ -273,7 +273,7 @@ fn t_board(split: bool) -> Board {
         b.tracks.push(trk((5.0, 15.0), (25.0, 15.0), 0.25));
     }
     b.tracks.push(trk((15.0, 15.0), (15.0, 25.0), 0.25)); // the branch ends on the trunk
-    b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
+    b.finish = Finish { corners: false, tapers: false, forks: true, ..Default::default() };
     b
 }
 
@@ -297,14 +297,14 @@ fn both_corners_of_a_t_get_a_concave_fillet() {
 #[test]
 fn a_plain_corner_is_not_a_junction_fillet() {
     let mut b = l_shape();
-    b.finish = Finish { on: true, corners: false, tapers: false, forks: true, ..Default::default() };
+    b.finish = Finish { corners: false, tapers: false, forks: true, ..Default::default() };
     assert!(finished(&b).unwrap().patches.is_empty());
 }
 
 #[test]
 fn a_corner_in_the_live_finish_is_a_band_of_the_exact_arc() {
     let mut b = l_shape();
-    b.finish = Finish { on: true, corners: true, tapers: false, forks: false, radius: 1.0 };
+    b.finish = Finish { corners: true, tapers: false, forks: false, radius: 1.0 };
     let f = finished(&b).unwrap();
     assert_eq!(f.patches.len(), 1);
     // the corner (25, 5) is cut by a circle of radius 1 centred at (24, 6): every point of the band lies between the
@@ -345,7 +345,6 @@ fn the_fillets_at_a_pad_stay_within_the_pads_edge_and_reach_its_corner_where_the
     pad_sized(&mut b, 5.1, 12.0, "A", 1.0);
     // the track starts 0.1 mm to the side of the pad's centre
     b.tracks.push(trk((5.1, 5.0), (5.1, 12.0), 0.25));
-    b.finish.on = true;
     let f = finished(&b).unwrap();
     assert!(!f.patches.is_empty(), "a fillet polygon");
     // every point of the polygon at the first pad lies within the pad's width (4.5 .. 5.5): on the far side the
@@ -367,7 +366,6 @@ fn a_fillet_is_concave_and_its_base_is_flat_on_the_pads_edge() {
     b.pads.push(p);
     pad_sized(&mut b, 5.0, 14.0, "A", 1.0);
     b.tracks.push(trk((5.0, 5.0), (5.0, 14.0), 0.25));
-    b.finish.on = true;
     let f = finished(&b).unwrap();
     let patch = f.patches.iter().find(|p| p.outline.iter().any(|q| q.y < 8.0)).expect("the fillet at the first pad");
     // the pad's edge is at y = 5.7 (above the track's end): the base lies on it, as wide as the pad (corner to corner)
@@ -397,7 +395,6 @@ fn two_tracks_leaving_one_pad_side_by_side_get_one_round_arch_between_them() {
     // flush with the pad's two sides (corner points): centres 0.3875 either side, 0.25 wide: a gap of 0.525 between them
     b.tracks.push(trk((4.6125, 5.0), (4.6125, 14.0), 0.25));
     b.tracks.push(trk((5.3875, 5.0), (5.3875, 14.0), 0.25));
-    b.finish.on = true;
     let f = finished(&b).unwrap();
     let at_pad: Vec<&Patch> = f.patches.iter().filter(|p| p.outline.iter().any(|q| q.y < 8.0)).collect();
     assert_eq!(at_pad.len(), 2, "one for each track");
@@ -423,7 +420,6 @@ fn a_thin_track_ending_at_the_edge_of_a_wide_one_gets_the_notches_filled_like_an
     b.tracks.push(trk((5.0, 10.0), (25.0, 10.0), 0.5));
     b.tracks.push(trk((4.0, 14.0), (8.0, 14.0), 0.25));
     b.tracks.push(trk((8.0, 14.0), (11.75, 10.25), 0.25));
-    b.finish.on = true;
     let f = finished(&b).unwrap();
     // a fillet in the notch on each side of the branch: one polygon each, near the joint (at about x = 11.5 .. 12)
     let near: Vec<&Patch> = f.patches.iter().filter(|p| p.outline.iter().any(|q| (q.x - 11.75).abs() < 1.0 && (q.y - 10.0).abs() < 1.0)).collect();
@@ -442,7 +438,6 @@ fn a_branch_that_does_not_touch_the_other_track_gets_no_fillet() {
     b.tracks.push(trk((5.0, 10.0), (25.0, 10.0), 0.5));
     // 0.3 mm from the wide track's edge: a gap, not a joint
     b.tracks.push(trk((8.0, 14.0), (11.45, 10.55), 0.25));
-    b.finish.on = true;
     let f = finished(&b).unwrap();
     assert!(f.patches.is_empty(), "{} patches", f.patches.len());
 }
@@ -477,7 +472,6 @@ fn a_wide_track_on_a_narrow_pad_gets_a_neck_as_wide_as_the_pad() {
     b.pads.push(far);
     b.tracks.push(trk((10.0, 10.0), (14.0, 6.0), 0.6));
     b.tracks.push(trk((14.0, 6.0), (20.0, 3.0), 0.6));
-    b.finish.on = true;
     let f = finished(&b).expect("the finish is on");
     let at_pad = |t: &Track| t.a.dist(Point::new(10.0, 10.0)) < 1e-9 || t.b.dist(Point::new(10.0, 10.0)) < 1e-9;
     let first: Vec<&Track> = f.board.tracks.iter().filter(|t| at_pad(t)).collect();
@@ -499,7 +493,6 @@ fn a_wide_track_on_a_narrow_pad_gets_a_neck_as_wide_as_the_pad() {
     q2.net = "A".into();
     wide.pads.push(q2);
     wide.tracks.push(trk((10.0, 10.0), (20.0, 3.0), 0.6));
-    wide.finish.on = true;
     let g = finished(&wide).unwrap();
     assert!(g.board.tracks.iter().all(|t| t.width >= 0.6 - 1e-9 || t.width < 0.0), "{:?}", g.board.tracks.iter().map(|t| t.width).collect::<Vec<_>>());
 }
@@ -519,7 +512,6 @@ fn a_wide_track_entering_a_narrow_pad_from_the_side_is_cut_at_the_far_face_of_th
         // a 0.6 mm track from the right, across the 0.3 mm width of the pad, with only a short first piece
         b.tracks.push(trk(end, (10.7, 10.0), 0.6));
         b.tracks.push(trk((10.7, 10.0), (20.0, 10.0), 0.6));
-        b.finish.on = true;
         let f = finished(&b).unwrap();
         // no copper of the track lies to the left of the pad's far face (x = 9.85)
         let leftmost = f.board.tracks.iter().map(|t| t.a.x.min(t.b.x) - t.width / 2.0).fold(f64::MAX, f64::min);
@@ -532,4 +524,31 @@ fn a_wide_track_entering_a_narrow_pad_from_the_side_is_cut_at_the_far_face_of_th
         assert!(drc::check(&f.board).is_empty(), "{label}: {:?}", drc::check(&f.board));
         assert!(ratsnest(&f.board).is_empty(), "{label}: still connected to the pad");
     }
+}
+
+
+#[test]
+fn a_class_can_round_its_corners_with_its_own_radius_and_the_others_keep_the_boards() {
+    let mut b = l_shape(); // net A
+    pad(&mut b, 5.0, 25.0, "B");
+    pad(&mut b, 20.0, 28.0, "B");
+    b.tracks.push(trk((5.0, 25.0), (20.0, 25.0), 0.25));
+    b.tracks.push(trk((20.0, 25.0), (20.0, 28.0), 0.25));
+    b.finish = Finish { corners: false, tapers: false, forks: false, ..Default::default() };
+    assert!(finished(&b).is_none(), "nothing is on");
+    b.net_classes.push(NetClass { name: "B".into(), nets: vec!["B".into()], finish: FinishOverride { corners: Some(true), radius: Some(1.0), ..Default::default() }, ..Default::default() });
+    let f = finished(&b).expect("the class turns the corners on");
+    assert!(f.board.tracks.len() > b.tracks.len());
+    // net A's corner at (25, 5) is still sharp
+    assert!(f.board.tracks.iter().any(|t| t.a == Point::new(25.0, 5.0) || t.b == Point::new(25.0, 5.0)));
+}
+
+#[test]
+fn old_files_with_excluded_nets_get_a_class_that_turns_the_finish_off() {
+    let mut b = l_shape();
+    b.finish_exclude = vec!["A".into()];
+    b.migrate_finish_exclude();
+    assert!(b.finish_exclude.is_empty());
+    assert_eq!(b.class_of("A").unwrap().finish, FinishOverride::off());
+    assert_eq!(b.class_of("A").unwrap().track_width, 0.25);
 }

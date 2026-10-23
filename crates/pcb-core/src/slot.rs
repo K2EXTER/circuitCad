@@ -328,7 +328,6 @@ mod tests {
     #[test]
     fn the_finish_leaves_the_slot_open_when_another_net_is_in_it() {
         let mut b = u_shape(0.7);
-        b.finish.on = true;
         b.finish.forks = true;
         let with = crate::smooth::finished(&b).unwrap().patches.len();
         assert!(with > 0, "the finished board has the slot patch");

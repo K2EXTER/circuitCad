@@ -268,11 +268,14 @@ pub struct NetClass {
     pub via_drill: f64,
     /// The impedance (Ω, single-ended) the tracks of these nets are meant to have: the width follows from the layer stack (`Board.stackup`).
     pub impedance: Option<f64>,
+    /// How the finish (rounded corners, tapers, round notches) differs for these nets from the board's settings.
+    #[serde(skip_serializing_if = "crate::smooth::FinishOverride::is_default")]
+    pub finish: crate::smooth::FinishOverride,
 }
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default() }
     }
 }
 
@@ -345,8 +348,8 @@ pub struct Board {
     /// Finishing of the copper (rounded corners, teardrops ...) applied when the board is shown and made, not to the tracks.
     #[serde(default)]
     pub finish: crate::smooth::Finish,
-    /// Nets whose tracks the finishing leaves as they are (a controlled-impedance line, a differential pair ...).
-    #[serde(default)]
+    /// Nets whose tracks the finishing leaves as they are: only read from old files ([`Board::migrate_finish_exclude`] turns them into net classes).
+    #[serde(default, skip_serializing)]
     pub finish_exclude: Vec<String>,
     /// Shop part numbers of library parts (reference designator -> shop id -> number), taken from the schematic on import.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -365,6 +368,22 @@ impl Board {
         v.extend((1..=self.inner_layers).map(Side::Inner));
         v.push(Side::Bottom);
         v
+    }
+
+    /// Old files kept the nets that are not finished in a list of their own; now a net class says it. Each such net gets the "all off" setting
+    /// in its class (a class of its own named after the net if it has none, with the width of its tracks).
+    pub fn migrate_finish_exclude(&mut self) {
+        for net in std::mem::take(&mut self.finish_exclude) {
+            if self.class_of(&net).is_none() {
+                let conn = crate::drc::connectivity(self);
+                let width = self.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(net.as_str())).map(|(_, t)| t.width).fold(0.0, f64::max);
+                let width = if width > 0.0 { width } else { NetClass::default().track_width };
+                self.net_classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: self.rules.min_clearance, ..Default::default() });
+            }
+            if let Some(c) = self.net_classes.iter_mut().find(|c| c.nets.contains(&net)) {
+                c.finish = crate::smooth::FinishOverride::off();
+            }
+        }
     }
 
     /// The net class that lists `net`, if any.

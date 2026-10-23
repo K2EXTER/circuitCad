@@ -299,7 +299,6 @@ mod finish_tests {
         let mut b = lx_board();
         let f = fan(&b, 0, 1, Point::new(10.0, 18.5), 0.25).unwrap();
         add(&mut b, &f, &[Point::new(10.0, 18.5)]).unwrap();
-        b.finish.on = true;
         let fin = crate::smooth::finished(&b).unwrap();
         let filled = |x: f64, y: f64| fin.patches.iter().any(|p| crate::geom::inside_polygon(&p.outline, Point::new(x, y)));
         let face = 15.05 - 0.425; // the pads' left face
@@ -326,7 +325,6 @@ mod finish_tests {
             b.tracks.push(Track { side: Side::Top, a: Point::new(15.05, y), b: Point::new(12.5, y), width: 0.25 });
         }
         b.tracks.push(Track { side: Side::Top, a: Point::new(12.5, 18.175), b: Point::new(12.5, 18.825), width: 0.25 });
-        b.finish.on = true;
         let fin = crate::smooth::finished(&b).unwrap();
         assert!(!fin.patches.is_empty(), "the slot between the two tracks is filled");
     }

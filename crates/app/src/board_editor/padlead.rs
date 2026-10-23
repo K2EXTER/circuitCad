@@ -229,11 +229,11 @@ impl BoardEditor {
     }
 
     /// Make the tracks (`only`: these indices; all when `None`) leave their rectangular pads at a right angle, the
-    /// two tracks of one wide pad from its two ends. The nets of "整えないネット" are left alone. Returns how many track
+    /// two tracks of one wide pad from its two ends. The nets whose class switches the finish off are left alone. Returns how many track
     /// ends were changed.
     pub(super) fn align_pad_entries(&mut self, only: Option<Vec<usize>>) -> usize {
         let conn = drc::connectivity(&self.board);
-        let skip = |i: usize| conn.track_net(i).is_some_and(|n| self.board.finish_exclude.iter().any(|x| x == n));
+        let skip = |i: usize| conn.track_net(i).and_then(|n| self.board.class_of(n)).is_some_and(|c| !c.finish.is_default() && !c.finish.apply(&self.board.finish).any());
         let list: Vec<usize> = only.unwrap_or_else(|| (0..self.board.tracks.len()).collect()).into_iter().filter(|&i| !skip(i)).collect();
         let opts = pcb_core::padentry::EntryOptions { lead: self.pad_lead_len, spread: true };
         pcb_core::padentry::align_entries(&mut self.board, &opts, Some(&list)).aligned
@@ -274,7 +274,7 @@ impl BoardEditor {
         ui.separator();
         ui.label("パッドの根元").on_hover_text("配線がパッドに入る・パッドから出る根元を、パッドの辺に垂直な短い区間にそろえます。自動配線の直後には、新しい配線に自動で行います (「パッドに垂直に出入り」が入っているとき)");
         ui.horizontal(|ui| {
-            if ui.button("全部の配線をそろえる").on_hover_text("すべての配線の、四角いパッドへの根元をそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。「整えないネット」は除きます。元に戻すで取り消せます").clicked() {
+            if ui.button("全部の配線をそろえる").on_hover_text("すべての配線の、四角いパッドへの根元をそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。整えを切ったネットクラスのネットは除きます。元に戻すで取り消せます").clicked() {
                 self.align_pad_entries_button(None);
             }
             let picked: Vec<usize> = self.selected.iter().chain(&self.multi).filter_map(|it| if let Item::Track(i) = it { Some(*i) } else { None }).collect();

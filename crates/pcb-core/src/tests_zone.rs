@@ -52,6 +52,7 @@ fn a_zone_on_the_other_layer_does_not_connect_smd_pads() {
 #[test]
 fn zone_output_has_region_cutouts_and_thermals() {
     let mut b = board();
+    b.finish = crate::smooth::Finish { corners: false, tapers: false, forks: false, ..Default::default() };
     pad(&mut b, 10.0, 10.0, "GND", true); // thermal relief
     pad(&mut b, 20.0, 15.0, "SIG", false); // other net: cleared
     pad(&mut b, 24.0, 15.0, "SIG", false);

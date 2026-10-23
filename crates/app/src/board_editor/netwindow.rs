@@ -11,6 +11,48 @@ fn slider_changed(before: Option<f64>, after: f64) -> bool {
     before.is_none_or(|b| (b - after).abs() > 1e-9)
 }
 
+/// One of the three kinds of finishing for the nets of a class: follow the board, or on, or off.
+fn finish_kind(ui: &mut egui::Ui, label: &str, value: &mut Option<bool>, board: bool, hover: &str) {
+    let text = |v: Option<bool>| match v {
+        None => format!("基板に従う ({})", if board { "入" } else { "切" }),
+        Some(true) => "入れる".to_string(),
+        Some(false) => "切る".to_string(),
+    };
+    ui.horizontal(|ui| {
+        ui.label(label).on_hover_text(hover);
+        egui::ComboBox::from_id_salt(("net_finish", label)).selected_text(text(*value)).show_ui(ui, |ui| {
+            for v in [None, Some(true), Some(false)] {
+                ui.selectable_value(value, v, text(v));
+            }
+        }).response.on_hover_text(hover);
+    });
+}
+
+/// "整え方": what the finish does on the nets of a class when it differs from the board's settings (left panel "配線を整える").
+fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverride, board: &pcb_core::smooth::Finish) {
+    egui::CollapsingHeader::new(if o.is_default() { "整え方 (基板全体の設定に従う)" } else { "整え方 (このクラスだけ変えている)" })
+        .id_salt("net_window_finish")
+        .default_open(!o.is_default())
+        .show(ui, |ui| {
+            ui.small("配線を整える形 (角の丸み・太さの段差・分かれ目の丸み) を、このクラスのネットだけ変えます。形が特性を決める線 (USB・高周波・インピーダンスを決めた線) は、3つとも「切る」にします");
+            finish_kind(ui, "角を丸める", &mut o.corners, board.corners, "同じ太さの配線がつながる角を、円弧にします");
+            finish_kind(ui, "太さの段差をなだらかに", &mut o.tapers, board.tapers, "太さが変わる所と、パッド・ビアに入る根元に、中間の太さを挟みます");
+            finish_kind(ui, "分かれ目を丸める", &mut o.forks, board.forks, "鋭い角度で分かれる2本の間のくぼみを、銅で埋めて丸くします");
+            ui.horizontal(|ui| {
+                let mut own = o.radius.is_some();
+                if ui.checkbox(&mut own, "角の半径を変える").on_hover_text("入れると、このクラスの角の丸みの半径を、基板全体の値と別にします").changed() {
+                    o.radius = own.then_some(board.radius);
+                }
+                if let Some(r) = o.radius.as_mut() {
+                    ui.add(egui::DragValue::new(r).speed(0.05).range(0.1..=5.0).suffix(" mm")).on_hover_text("角の丸みの半径。配線が短いと、入る大きさまで自動で小さくなります");
+                }
+            });
+            if !o.is_default() && ui.small_button("基板全体の設定に戻す").on_hover_text("このクラスの整え方の変更をすべてやめます").clicked() {
+                *o = Default::default();
+            }
+        });
+}
+
 impl BoardEditor {
     /// Put the classes in the board when they differ (one undo step for a whole drag of a value).
     pub(super) fn commit_classes(&mut self, classes: Vec<NetClass>, pointer_down: bool) {
@@ -157,6 +199,7 @@ impl BoardEditor {
                         ui.add(egui::DragValue::new(&mut c.via_drill).speed(0.05).range(0.2..=2.0).prefix("穴 ").suffix(" mm")).on_hover_text("このクラスのビアの穴径");
                     });
                     c.via_drill = c.via_drill.min(c.via_diameter - 0.1).max(0.2);
+                    finish_override_ui(ui, &mut c.finish, &self.board.finish);
                     if let Some(w) = set_width {
                         c.track_width = w;
                     }
@@ -165,7 +208,7 @@ impl BoardEditor {
                     ui.small(format!("いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます", self.track_width, self.via_dia, self.via_drill));
                     if ui.button("このネット専用のクラスを作る").on_hover_text("このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます").clicked() {
                         let width = set_width.or_else(|| self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)))).unwrap_or(self.track_width).max(rules.min_track_width);
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default() });
                     } else if let Some(w) = set_width {
                         self.track_width = w;
                         self.status = format!("線幅を {w:.2} mm にしました");
@@ -255,7 +298,7 @@ impl BoardEditor {
                 let k = match class_k {
                     Some(k) => k,
                     None if new_target.is_some() => {
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default() });
                         classes.len() - 1
                     }
                     None => usize::MAX,

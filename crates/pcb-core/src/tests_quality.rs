@@ -98,7 +98,6 @@ fn the_quick_finish_is_the_slow_finish() {
     autoplace::autoplace(&mut b).unwrap();
     autoroute::autoroute(&mut b, &autoroute::RouteOptions { grid: 0.25, pad_lead: Some(0.5), ..Default::default() }, None);
     assert!(ratsnest(&b).len() <= 2);
-    b.finish.on = true;
     let (quick, slow) = (smooth::finished(&b).unwrap(), smooth::finished_slow(&b).unwrap());
     let key = |f: &smooth::Finished| -> String {
         let mut out = String::new();

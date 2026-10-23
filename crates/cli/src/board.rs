@@ -343,7 +343,9 @@ impl Session {
             "open" => {
                 let f = rest.first().ok_or("board open FILE.pcbjson")?;
                 let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
-                self.board = Some(serde_json::from_str::<Board>(&text).map_err(|e| format!("{f}: {e}"))?);
+                let mut board = serde_json::from_str::<Board>(&text).map_err(|e| format!("{f}: {e}"))?;
+                board.migrate_finish_exclude();
+                self.board = Some(board);
                 Ok(obj(json!({"file": f})))
             }
             "check" => {

@@ -15,12 +15,11 @@ use crate::model::*;
 use crate::ratsnest::ratsnest;
 use crate::shove::pinned;
 
-/// What to smooth and how much; stored in the board as its "finish" settings.
+/// What to smooth and how much; stored in the board as its "finish" settings (the copper is always shown and made finished;
+/// switch the three kinds off to get the tracks as drawn).
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct Finish {
-    /// Show and make the board with the finishing applied (the tracks in the file stay as drawn).
-    pub on: bool,
     /// Round the corners where two tracks of the same width meet.
     pub corners: bool,
     /// Corner radius (mm); smaller where the tracks are too short for it.
@@ -28,15 +27,47 @@ pub struct Finish {
     /// Step a width change through a few in-between widths.
     pub tapers: bool,
     /// Fill and round the sharp notch between two tracks that leave one point at a narrow angle (only as a patch,
-    /// so only when `on`; baking into the tracks leaves it out).
+    /// so only for the live finish; baking into the tracks leaves it out).
     pub forks: bool,
+}
+
+/// What a net class changes of the board's [`Finish`] for its nets (`None` = follow the board).
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct FinishOverride {
+    pub corners: Option<bool>,
+    pub radius: Option<f64>,
+    pub tapers: Option<bool>,
+    pub forks: Option<bool>,
+}
+
+impl FinishOverride {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// All three kinds off: the nets are left as drawn.
+    pub fn off() -> Self {
+        Self { corners: Some(false), tapers: Some(false), forks: Some(false), radius: None }
+    }
+
+    pub fn apply(&self, base: &Finish) -> Finish {
+        Finish { corners: self.corners.unwrap_or(base.corners), radius: self.radius.unwrap_or(base.radius), tapers: self.tapers.unwrap_or(base.tapers), forks: self.forks.unwrap_or(base.forks) }
+    }
+}
+
+impl Finish {
+    /// Does it do anything?
+    pub fn any(&self) -> bool {
+        self.corners || self.tapers || self.forks
+    }
 }
 
 pub type SmoothOptions = Finish;
 
 impl Default for Finish {
     fn default() -> Self {
-        Finish { on: false, corners: true, radius: 0.5, tapers: true, forks: true }
+        Finish { corners: true, radius: 0.5, tapers: true, forks: true }
     }
 }
 
@@ -918,6 +949,66 @@ pub fn smooth_selected(board: &mut Board, opts: &SmoothOptions, tracks: &[usize]
 /// The edits for the finish. `live`: for the finish that is only drawn and made into files (not baked into the tracks):
 /// where a track leaves a rectangular pad's face the fillets are used instead of the stepped teardrop.
 fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool) -> Vec<Edit> {
+    let base = SmoothOptions { forks: opts.forks && live, ..*opts };
+    let groups = groups(board, &base);
+    if let [only_group] = groups.as_slice()
+        && only_group.nets.is_none()
+        && only_group.except.is_empty()
+    {
+        return plan_one(board, &base, only, live);
+    }
+    let conn = crate::drc::connectivity(board);
+    let mut edits = vec![];
+    for g in &groups {
+        let o = SmoothOptions { forks: g.opts.forks && live, ..g.opts };
+        if o.any() {
+            edits.extend(plan_one(board, &o, only, live).into_iter().filter(|e| e.touches.iter().all(|&i| g.accepts(conn.track_net(i)))));
+        }
+    }
+    edits
+}
+
+/// The nets that are finished with the same settings: each net class that changes them (its own nets), and all the other nets
+/// (`nets` is `None`, `except` are the nets the classes took).
+struct Group<'a> {
+    opts: Finish,
+    nets: Option<Vec<&'a str>>,
+    except: Vec<&'a str>,
+}
+
+impl Group<'_> {
+    fn accepts(&self, net: Option<&str>) -> bool {
+        match &self.nets {
+            Some(list) => net.is_some_and(|n| list.contains(&n)),
+            None => net.is_none_or(|n| !self.except.contains(&n)),
+        }
+    }
+}
+
+/// The rest group (`base`) last; a net listed by several classes belongs to the first of them, as everywhere.
+fn groups<'a>(board: &'a Board, base: &Finish) -> Vec<Group<'a>> {
+    let mut out: Vec<Group<'a>> = vec![];
+    let mut seen: Vec<&str> = vec![];
+    let mut taken: Vec<&str> = vec![];
+    for c in &board.net_classes {
+        let nets: Vec<&str> = c.nets.iter().map(|n| n.as_str()).filter(|n| !seen.contains(n)).collect();
+        seen.extend(c.nets.iter().map(|n| n.as_str()));
+        if c.finish.is_default() || nets.is_empty() {
+            continue;
+        }
+        taken.extend(&nets);
+        out.push(Group { opts: c.finish.apply(base), nets: Some(nets), except: vec![] });
+    }
+    out.push(Group { opts: *base, nets: None, except: taken });
+    out
+}
+
+/// Is anything finished on this board (by the board's settings or the setting of a net class)?
+pub fn finish_active(board: &Board) -> bool {
+    board.finish.any() || board.net_classes.iter().any(|c| c.finish.apply(&board.finish).any())
+}
+
+fn plan_one(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool) -> Vec<Edit> {
     let mut edits = vec![];
     // ends that belong to a notch are left to it: no corner or teardrop there
     let mut used: Vec<End> = vec![];
@@ -964,11 +1055,6 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool)
     }
     if let Some(only) = only {
         edits.retain(|e| e.touches.iter().any(|i| only.contains(i)));
-    }
-    // the nets that are left as they are
-    if !board.finish_exclude.is_empty() {
-        let conn = crate::drc::connectivity(board);
-        edits.retain(|e| e.touches.iter().all(|&i| conn.track_net(i).is_none_or(|n| !board.finish_exclude.iter().any(|x| x == n))));
     }
     edits
 }
@@ -1053,7 +1139,7 @@ pub(crate) fn finished_slow(board: &Board) -> Option<Finished> {
 }
 
 fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
-    if !board.finish.on {
+    if !finish_active(board) {
         return None;
     }
     let conn = crate::drc::connectivity(board);
@@ -1080,19 +1166,18 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
     let mut patches: Vec<Patch> = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
     // the slots between tracks of one net that run side by side (the fork patch only fills the sharp tip)
     // where a trunk meets its two pads: the copper in front of the pads, as wide as the trunk, with a round notch between the pads
-    if board.finish.forks {
+    let groups = groups(board, &board.finish);
+    if groups.iter().any(|g| g.opts.forks) {
         for (outline, track) in trunk_blocks(board, &conn) {
             let side = board.tracks[track].side;
-            let excluded = conn.track_net(track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n));
-            if !excluded && copper.clear(board, &conn, side, &outline, track) {
+            if groups.iter().any(|g| g.opts.forks && g.accepts(conn.track_net(track))) && copper.clear(board, &conn, side, &outline, track) {
                 patches.push(Patch { side, outline, track });
             }
         }
     }
-    if board.finish.forks {
-        for s in crate::slot::slot_patches(board, &conn, &patches, board.finish.radius) {
-            let excluded = conn.track_net(s.track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n));
-            if !excluded && copper.clear(board, &conn, s.side, &s.outline, s.track) {
+    for g in groups.iter().filter(|g| g.opts.forks) {
+        for s in crate::slot::slot_patches(board, &conn, &patches, g.opts.radius) {
+            if g.accepts(conn.track_net(s.track)) && copper.clear(board, &conn, s.side, &s.outline, s.track) {
                 patches.push(Patch { side: s.side, outline: s.outline, track: s.track });
             }
         }

@@ -497,8 +497,7 @@ fn the_ground_pour_takes_the_ground_wires_off_the_tp5100_sample() {
     app.board_ed.autoroute_now(None);
     let b = &app.board_ed.board;
     assert!(pcb_core::ratsnest::ratsnest(b).is_empty(), "{}", app.board_ed.status);
-    let mut c = b.clone();
-    c.finish.on = true;
+    let c = b.clone();
     assert!(pcb_core::drc::check_final(&c).is_empty(), "{:?}", pcb_core::drc::check_final(&c));
     let conn = pcb_core::drc::connectivity(b);
     let gnd: f64 = b.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some("GND")).map(|(_, t)| t.a.dist(t.b)).sum();

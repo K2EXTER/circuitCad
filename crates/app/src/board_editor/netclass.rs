@@ -80,7 +80,7 @@ impl BoardEditor {
             }
             ui.horizontal(|ui| {
                 if ui.button("クラスを追加").on_hover_text("新しい空のクラスを作ります。ネットを足して、線幅・間隔・ビアを決めます").clicked() {
-                    classes.push(NetClass { name: format!("クラス{}", classes.len() + 1), track_width: self.track_width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, nets: vec![], impedance: None });
+                    classes.push(NetClass { name: format!("クラス{}", classes.len() + 1), track_width: self.track_width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, nets: vec![], impedance: None, finish: Default::default() });
                 }
                 if ui.button("電源のクラスを作る").on_hover_text("GND と、流れる電流を決めたネットを入れた「電源」クラスを作ります (線幅 0.5mm、間隔 0.25mm、ビア 0.8/0.4mm)。値はあとで直せます").clicked() {
                     let mut ns: Vec<String> = self.board.net_currents.keys().cloned().collect();
@@ -91,7 +91,7 @@ impl BoardEditor {
                     if ns.is_empty() {
                         self.status = "電源のクラスに入れるネットがありません (GND が無いか、すでに別のクラスにあります)。ネットは、クラスの「ネットを足す」から選べます".into();
                     } else {
-                        classes.push(NetClass { name: "電源".into(), nets: ns, track_width: 0.5_f64.max(rules.min_track_width), clearance: 0.25_f64.max(rules.min_clearance), via_diameter: 0.8, via_drill: 0.4, impedance: None });
+                        classes.push(NetClass { name: "電源".into(), nets: ns, track_width: 0.5_f64.max(rules.min_track_width), clearance: 0.25_f64.max(rules.min_clearance), via_diameter: 0.8, via_drill: 0.4, impedance: None, finish: Default::default() });
                     }
                 }
             });
