@@ -21,6 +21,7 @@ pub mod fab;
 pub mod footprints;
 pub mod geom;
 pub mod irdrop;
+pub mod labels;
 pub mod meander;
 pub mod merge;
 pub mod gerber;

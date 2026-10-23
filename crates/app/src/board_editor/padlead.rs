@@ -252,7 +252,25 @@ impl BoardEditor {
         };
     }
 
+    /// The "文字をよける" button: part designators off the copper.
+    pub(super) fn avoid_label_overlaps_button(&mut self) {
+        let mut trial = self.board.clone();
+        let r = pcb_core::labels::avoid_overlaps(&mut trial);
+        if r.moved == 0 {
+            self.status = if r.still_touching == 0 { "部品番号の文字は、どれも配線やパッドに重なっていません".into() } else { format!("部品番号の文字 {} 個が重なっていますが、よけられる空きがありません (文字を手でドラッグして動かせます)", r.still_touching) };
+            return;
+        }
+        self.checkpoint();
+        self.board = trial;
+        self.status = format!("部品番号の文字 {} 個を、配線やパッドから離れた所へ動かしました{}", r.moved, if r.still_touching > 0 { format!(" ({} 個は、よけられる空きがなく重なったままです)", r.still_touching) } else { String::new() });
+    }
+
     pub(super) fn panel_pad_entries(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        ui.label("部品番号の文字").on_hover_text("シルク (白い印刷) の部品番号 (R1 など) が、配線やパッドに重なると読みにくくなります");
+        if ui.button("文字を配線からよける").on_hover_text("配線・パッド・ビア・穴・ほかの文字に重なっている部品番号を、部品の上・下・横の、重ならない場所へ動かします。重なっていない文字と、手で動かした文字はそのままです。元に戻すで取り消せます").clicked() {
+            self.avoid_label_overlaps_button();
+        }
         ui.separator();
         ui.label("パッドの根元").on_hover_text("配線がパッドに入る・パッドから出る根元を、パッドの辺に垂直な短い区間にそろえます。自動配線の直後には、新しい配線に自動で行います (「パッドに垂直に出入り」が入っているとき)");
         ui.checkbox(&mut self.pad_spread, "2本は両端に寄せる").on_hover_text("同じパッドの同じ点から2本が出ているとき、パッドの両端に寄せて、2本を並べて出します (鋭角のくぼみができません)。2本ぶんの幅が入らない小さなパッドでは、寄せません");

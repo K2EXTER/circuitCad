@@ -1,4 +1,4 @@
-//! Board commands: new, import, pour, autoplace, move, route, improve, drc, status, postlayout, currents, save, open, fab.
+//! Board commands: new, import, pour, autoplace, move, route, improve, labels, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|drc|status|postlayout|currents|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|labels|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -73,6 +73,13 @@ impl Session {
                 };
                 board.place_part(&part.refdes, pcb_core::model::Point::new(x, y), rot);
                 Ok(obj(json!({"part": part.refdes, "x": x, "y": y, "rot": rot})))
+            }
+            "labels" => {
+                // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or
+                // another text go to the clearest spot around their part; what was placed by hand stays
+                let board = self.board_mut()?;
+                let r = pcb_core::labels::avoid_overlaps(board);
+                Ok(obj(json!({"moved": r.moved, "still_touching": r.still_touching})))
             }
             "improve" => {
                 // make the routes of the whole board shorter and its vias fewer: nets that detour (or carry a via) are ripped up

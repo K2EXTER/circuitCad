@@ -1577,3 +1577,20 @@ fn near_screen_leaves_out_only_what_is_far_away() {
     assert!(e.near_screen(rect, &[p(5.0, 20.0), p(60.0, 20.0)], 0.5), "a long track across the view, ends outside");
     assert!(e.near_screen(rect, &[p(40.4, 20.0)], 5.0), "a wide track just outside");
 }
+
+/// The "文字を配線からよける" button moves a designator off a track, can be undone, and says so when nothing overlaps.
+#[test]
+fn the_label_button_moves_a_designator_off_a_track_and_undoes() {
+    let mut e = BoardEditor::default();
+    e.board = pcb_core::Board::new("t", 40.0, 30.0);
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(20.0, 15.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
+    e.avoid_label_overlaps_button();
+    assert!(e.status.contains("重なっていません"), "{}", e.status);
+    let at = e.board.texts[0].pos;
+    e.board.tracks.push(pcb_core::Track { a: p(at.x - 3.0, at.y), b: p(at.x + 3.0, at.y), width: 0.25, side: pcb_core::Side::Top });
+    e.avoid_label_overlaps_button();
+    assert!(e.status.contains("動かしました"), "{}", e.status);
+    assert!(e.board.texts[0].pos != at);
+    e.undo();
+    assert_eq!(e.board.texts[0].pos, at, "undone");
+}
