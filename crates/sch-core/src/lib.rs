@@ -283,7 +283,7 @@ impl Schematic {
 }
 
 /// A piece of a sheet that was copied: parts, wires and labels (what the clipboard of the editor holds).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Fragment {
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,

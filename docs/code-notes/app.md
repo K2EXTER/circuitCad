@@ -118,3 +118,6 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 ### schematic/net_hints.rs — ネットの電流・差動ペア
 ネットラベルを選ぶと、左パネルに「流れる電流 (A)」と「差動ペアの相手」が出る。`Schematic.net_currents`(ネット名→A)と `Schematic.diff_pairs`(+側,−側)に保存(空なら書かない)。基板への取り込み(`board_editor/file.rs` の `import_from_schematic`、CLI の `board import`)で `pcb_core::netlist::import_hints` が、基板にパッドがあるネットだけ `Board.net_currents` と `Board.diff_pairs` に入れる。電流は回路図の値で上書き、ペアは既にあれば足さない。基板側だけで決めた設定は消さない。ネット名はラベルの文字なので、自動名(N$1 など)のネットには指定できない。
+
+### schematic/snippet.rs — スニペット
+選択を `.ccsnip`(クリップボードの `sch_core::Fragment` をそのまま JSON にしたもの)に保存し、別の回路で「スニペットを置く…」で貼り付ける。貼り付けは `paste_clipboard` と同じ(空き地を探す・部品番号を振り直す・ピン上のラベルも一緒)。自作部品は記号をファイルの中に持つので、ライブラリが無い回路でも置ける。基板の配置・配線のスニペットは未対応。

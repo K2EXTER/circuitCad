@@ -489,6 +489,7 @@ impl SchEditor {
                 }
             });
         }
+        self.snippet_ui(ui);
         if self.has_selection() && self.lit(ui.button("削除 (Delete)"), "削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
             self.delete_selected();
         }
