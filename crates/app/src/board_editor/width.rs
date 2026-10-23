@@ -21,7 +21,7 @@ impl BoardEditor {
         let Some(&amps) = self.board.net_currents.get(net) else { return 0 };
         let width = round_up_width(pcb_core::current::width_for_current(amps, &CopperSpec::default()));
         let conn = drc::connectivity(&self.board);
-        let would = self.board.tracks.iter().enumerate().filter(|(i, t)| conn.track_net(*i) == Some(net) && t.width + 1e-9 < width).count();
+        let would = self.board.tracks.iter().enumerate().filter(|(i, t)| conn.track_net(*i) == Some(net) && t.width + 1e-9 < width && !pcb_core::current::is_neck(&self.board, &conn, *i)).count();
         if would == 0 {
             return 0;
         }

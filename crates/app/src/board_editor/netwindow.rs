@@ -177,7 +177,8 @@ impl BoardEditor {
             ui.strong("線幅をスライダーで変える");
             let idx: Vec<usize> = {
                 let conn = drc::connectivity(&self.board);
-                (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str())).collect()
+                // (the necks of a trunk keep their width: they are thin so that the solder stays on the small pads)
+                (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str()) && !pcb_core::current::is_neck(&self.board, &conn, i)).collect()
             };
             let class_k = classes.iter().position(|c| c.nets.contains(&net));
             let start = class_k.map(|k| classes[k].track_width).or_else(|| idx.iter().map(|&i| self.board.tracks[i].width).reduce(f64::max));

@@ -202,3 +202,64 @@ mod tests {
         assert!(c.tracks.is_empty(), "nothing was added");
     }
 }
+
+#[cfg(test)]
+mod neck_tests {
+    use super::*;
+
+    /// The necks of a trunk are thin on purpose: the width check looks at the trunk, not at them.
+    #[test]
+    fn the_width_check_does_not_count_the_necks_of_a_trunk() {
+        let mut b = Board::new("t", 40.0, 40.0);
+        for y in [18.825, 18.175] {
+            let mut p = Pad::new(Point::new(15.05, y), PadShape::Rect { w: 0.85, h: 0.3 }, None, Side::Top);
+            p.refdes = "U1".into();
+            p.pin = "2".into();
+            p.net = "LX".into();
+            b.pads.push(p);
+        }
+        let mut far = Pad::new(Point::new(8.0, 18.5), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        far.net = "LX".into();
+        b.pads.push(far);
+        let f = fan(&b, 0, 1, Point::new(10.0, 18.5), 0.25).unwrap();
+        add(&mut b, &f, &[Point::new(10.0, 18.5), Point::new(8.0, 18.5)]).unwrap();
+        b.net_currents.insert("LX".into(), 1.48);
+        let conn = drc::connectivity(&b);
+        let w = crate::current::net_widths(&b, &conn, &Default::default());
+        assert_eq!(w.len(), 1);
+        assert!(!w[0].too_thin(), "the trunk is 0.9 mm and 1.48 A needs {:.2} mm; the necks do not count: {:?}", w[0].needed, w[0]);
+        assert!((w[0].thinnest.unwrap() - 0.9).abs() < 1e-9);
+        // a plain thin track of the same net is still found
+        let mut c = b.clone();
+        c.tracks.push(Track { side: Side::Top, a: Point::new(8.0, 18.5), b: Point::new(8.0, 25.0), width: 0.2 });
+        let conn = drc::connectivity(&c);
+        assert!(crate::current::net_widths(&c, &conn, &Default::default())[0].too_thin());
+    }
+}
+
+#[cfg(test)]
+mod neck_widen_tests {
+    use super::*;
+
+    /// "Widen to the current" leaves the necks of a trunk as they are.
+    #[test]
+    fn widening_a_net_leaves_the_necks_thin() {
+        let mut b = Board::new("t", 40.0, 40.0);
+        for y in [18.825, 18.175] {
+            let mut p = Pad::new(Point::new(15.05, y), PadShape::Rect { w: 0.85, h: 0.3 }, None, Side::Top);
+            p.net = "LX".into();
+            b.pads.push(p);
+        }
+        let mut far = Pad::new(Point::new(8.0, 18.5), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        far.net = "LX".into();
+        b.pads.push(far);
+        let f = fan(&b, 0, 1, Point::new(10.0, 18.5), 0.25).unwrap();
+        add(&mut b, &f, &[Point::new(10.0, 18.5), Point::new(8.0, 18.5)]).unwrap();
+        // a thin stretch of the trunk's net that is not a neck is widened
+        b.tracks.push(Track { side: Side::Top, a: Point::new(8.0, 18.5), b: Point::new(8.0, 25.0), width: 0.2 });
+        let conn = drc::connectivity(&b);
+        let n = crate::current::widen_net(&mut b, &conn, "LX", 1.2);
+        assert_eq!(n, 3, "the trunk's two pieces (0.9 -> 1.2) and the thin stretch: {:?}", b.tracks.iter().map(|t| t.width).collect::<Vec<_>>());
+        assert!(b.tracks.iter().filter(|t| (t.a.x - 15.05).abs() < 1e-9 || (t.b.x - 15.05).abs() < 1e-9).all(|t| (t.width - 0.25).abs() < 1e-9), "the necks are still 0.25");
+    }
+}

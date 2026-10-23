@@ -76,7 +76,36 @@ impl NetWidth {
     }
 }
 
-/// For every net with a current in `board.net_currents`: the needed width against the tracks drawn.
+/// The longest (mm) a thin stub on a pad can be and still count as a neck.
+const NECK_MAX: f64 = 1.2;
+
+/// Is track `i` a neck: a short stub that leaves a pad and runs into a wider track of the same net (the necks of a trunk that joins two
+/// pads, the thin lead of a fan-out)? Such a stub is thin on purpose, carries only its pad's share, and is not what limits the net.
+pub fn is_neck(board: &Board, conn: &Connectivity, i: usize) -> bool {
+    let t = &board.tracks[i];
+    if t.a.dist(t.b) > NECK_MAX {
+        return false;
+    }
+    let on_pad = |p: Point| {
+        board.pads.iter().any(|q| {
+            let (w, h) = q.shape.size();
+            (q.drill.is_some() || q.side == t.side) && (p.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() <= h / 2.0 + 1e-6
+        })
+    };
+    // the end of the stub lies on a wider track of the net (on its copper, not only at its end: a trunk's round end covers the necks' ends)
+    let dist_to = |u: &Track, p: Point| {
+        let (dx, dy) = (u.b.x - u.a.x, u.b.y - u.a.y);
+        let l2 = dx * dx + dy * dy;
+        let s = if l2 < 1e-18 { 0.0 } else { (((p.x - u.a.x) * dx + (p.y - u.a.y) * dy) / l2).clamp(0.0, 1.0) };
+        p.dist(Point::new(u.a.x + s * dx, u.a.y + s * dy))
+    };
+    let joins_wider = |p: Point| {
+        board.tracks.iter().enumerate().any(|(k, u)| k != i && u.side == t.side && u.width > t.width + 0.05 && conn.track_net(k) == conn.track_net(i) && dist_to(u, p) <= u.width / 2.0 + 0.02)
+    };
+    (on_pad(t.a) && joins_wider(t.b)) || (on_pad(t.b) && joins_wider(t.a))
+}
+
+/// For every net with a current in `board.net_currents`: the needed width against the tracks drawn (the necks of a trunk are left out).
 pub fn net_widths(board: &Board, conn: &Connectivity, spec: &CopperSpec) -> Vec<NetWidth> {
     board
         .net_currents
@@ -85,7 +114,7 @@ pub fn net_widths(board: &Board, conn: &Connectivity, spec: &CopperSpec) -> Vec<
         .map(|(net, amps)| {
             let mut thinnest: Option<(f64, Point)> = None;
             for (i, t) in board.tracks.iter().enumerate() {
-                if conn.track_net(i) == Some(net.as_str()) && thinnest.is_none_or(|(w, _)| t.width < w) {
+                if conn.track_net(i) == Some(net.as_str()) && thinnest.is_none_or(|(w, _)| t.width < w) && !is_neck(board, conn, i) {
                     thinnest = Some((t.width, t.a));
                 }
             }
@@ -110,8 +139,10 @@ pub fn set_net_currents(board: &mut Board, currents: &[(String, f64)]) -> usize 
 /// Sets every track of `net` to at least `width` (never thinner than it is). Returns how many tracks were widened.
 pub fn widen_net(board: &mut Board, conn: &Connectivity, net: &str, width: f64) -> usize {
     let mut n = 0;
+    // the necks of a trunk stay as thin as they are
+    let necks: Vec<bool> = (0..board.tracks.len()).map(|i| conn.track_net(i) == Some(net) && is_neck(board, conn, i)).collect();
     for (i, t) in board.tracks.iter_mut().enumerate() {
-        if conn.track_net(i) == Some(net) && t.width + 1e-9 < width {
+        if conn.track_net(i) == Some(net) && t.width + 1e-9 < width && !necks[i] {
             t.width = width;
             n += 1;
         }
