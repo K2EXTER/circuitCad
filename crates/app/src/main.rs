@@ -458,6 +458,7 @@ impl eframe::App for App {
         }
         self.board_ed.note_schematic_diff(&self.sch);
         self.board_ed.order_window(ui.ctx());
+        self.board_ed.net_window(ui.ctx());
         self.board_ed.view3d_window(ui.ctx());
         self.board_ed.lesson_window(ui.ctx());
         egui::Panel::left("board_tools").default_size(PANEL_WIDTH).min_size(240.0).show(ui, |ui| self.board_ed.side_panel(ui, &self.sch));

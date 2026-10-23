@@ -75,6 +75,7 @@ impl BoardEditor {
                         "いま配線を置く銅箔の層。部品とシルクは表面か裏面にだけ置けます (内層を選んでいるときは表面)。右上の「層」は、たたんで小さくできます"));
                 });
                 self.layer_count_ui(ui);
+                ui.checkbox(&mut self.net_win_on, "ネットを選ぶと設定の窓を開く").on_hover_text("選択ツールで、配線・パッド・ビア・ベタをクリックすると、そのネットの電流・推奨の線幅・ネットクラスの窓を開きます");
                 ui.add(egui::DragValue::new(&mut self.grid).speed(0.05).range(0.0..=5.0).prefix("グリッド ").suffix(" mm")).on_hover_text("カーソルが吸い付く間隔。0 なら吸い付きません。小さいほど細かく置けます (部品の足の間隔は 2.54mm や 1.27mm が多いです)。自動配線の細かさにもなり、足の間隔の狭い IC (TQFP など) で通らない線が残るときは、0.1〜0.2 に小さくします");
             });
             self.selection_panel(ui);

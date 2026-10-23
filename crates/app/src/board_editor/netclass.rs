@@ -63,17 +63,8 @@ impl BoardEditor {
                     }
                 }
             });
-            if classes != self.board.net_classes {
-                // one undo step for a whole drag of a value
-                if !self.class_editing {
-                    self.checkpoint();
-                    self.class_editing = true;
-                }
-                self.board.net_classes = classes;
-            }
-            if !ui.input(|i| i.pointer.any_down()) {
-                self.class_editing = false;
-            }
+            let down = ui.input(|i| i.pointer.any_down());
+            self.commit_classes(classes, down);
         }).header_response.on_hover_text("ネットのグループごとに、線幅・間隔・ビアを決めます (中級者向け)");
     }
 }

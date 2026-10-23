@@ -315,6 +315,9 @@ pub struct BoardEditor {
     hover_net: Option<(String, Pos2)>,
     /// A value of a net class is being dragged: the undo step was taken at its start.
     class_editing: bool,
+    /// The net whose window is open (a click on its copper with the Select tool), and whether a click opens it at all.
+    net_win: Option<String>,
+    net_win_on: bool,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -402,6 +405,8 @@ impl Default for BoardEditor {
             zone_cache: std::cell::RefCell::new(None),
             hover_net: None,
             class_editing: false,
+            net_win: None,
+            net_win_on: true,
             last_export_dir: None,
             lesson: None,
             drc_ran: false,
@@ -447,6 +452,7 @@ mod tools;
 mod trunk;
 mod netglow;
 mod netclass;
+mod netwindow;
 mod file;
 mod actions;
 mod canvas;

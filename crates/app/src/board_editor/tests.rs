@@ -1623,3 +1623,33 @@ fn a_route_of_a_classed_net_uses_the_class_width_and_via() {
     assert_eq!(e.route_settings(Some("LX")), (0.6, 0.9, 0.45, Some(0.3)));
     assert_eq!(e.route_settings(Some("GND")), (0.25, e.via_dia, e.via_drill, None));
 }
+
+/// The window of a net draws without trouble for a net of the board, drops a net that is not there, and a value dragged in the window
+/// of a classed net is one undo step.
+#[test]
+fn the_net_window_draws_and_follows_the_net() {
+    let mut e = lx_pair_editor();
+    e.board.net_currents.insert("LX".into(), 1.0);
+    e.net_win = Some("LX".into());
+    let ctx = egui::Context::default();
+    let mut frame = |e: &mut BoardEditor| {
+        let mut input = egui::RawInput::default();
+        input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+        let mut out = ctx.run_ui(input, |ui| e.net_window(ui.ctx()));
+        out.textures_delta.clear();
+    };
+    frame(&mut e);
+    assert_eq!(e.net_win.as_deref(), Some("LX"));
+    e.net_win = Some("NOPE".into());
+    frame(&mut e);
+    assert!(e.net_win.is_none(), "a net that is not on the board has no window");
+    // the classes are put in the board through one undo step while the pointer is down
+    let class = pcb_core::NetClass { name: "x".into(), nets: vec!["LX".into()], ..Default::default() };
+    let undo = e.undo.len();
+    e.commit_classes(vec![class.clone()], true);
+    let wider = pcb_core::NetClass { track_width: 0.5, ..class };
+    e.commit_classes(vec![wider], true);
+    assert_eq!(e.undo.len(), undo + 1, "one step for the whole drag");
+    e.commit_classes(e.board.net_classes.clone(), false);
+    assert!(!e.class_editing);
+}

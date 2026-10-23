@@ -50,7 +50,12 @@ impl BoardEditor {
             return;
         }
         let Some(pos) = resp.hover_pos() else { return };
-        self.hover_net = self.net_under(self.to_world(rect, pos)).map(|n| (n, pos));
+        let net = self.net_under(self.to_world(rect, pos));
+        // a click on copper of a net opens the window of that net; a click on nothing closes it
+        if self.net_win_on && resp.clicked_by(egui::PointerButton::Primary) {
+            self.net_win = net.clone();
+        }
+        self.hover_net = net.map(|n| (n, pos));
     }
 
     /// The glow of the net under the pointer, over the copper.
