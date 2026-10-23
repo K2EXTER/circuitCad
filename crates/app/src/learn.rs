@@ -543,6 +543,13 @@ impl LearnWindow {
             if is_tree(path) {
                 ui.add_space(6.0);
                 egui::CollapsingHeader::new("学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)").default_open(true).show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 18.0;
+                        ui.colored_label(Color32::from_rgb(255, 205, 70), "★ 次はこれ");
+                        ui.colored_label(Color32::from_rgb(220, 150, 40), "橙の枠 = いま学べる");
+                        ui.colored_label(Color32::from_rgb(60, 160, 90), "緑 = 完了");
+                        ui.colored_label(Color32::from_gray(150), "灰色 = 準備中");
+                    });
                     egui::ScrollArea::horizontal().show(ui, |ui| {
                         if let Some(a) = tree_map(ui, path, progress, &next_ids) {
                             action = Some(a);
@@ -618,8 +625,8 @@ impl LearnWindow {
 
 /// The map of a tree path: one row per level, an item per box, a line from each prerequisite down to what needs it.
 fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_ids: &[&str]) -> Option<Action> {
-    const W: f32 = 160.0;
-    const H: f32 = 54.0;
+    const W: f32 = 196.0;
+    const H: f32 = 60.0;
     const GX: f32 = 12.0;
     const GY: f32 = 26.0;
     let all: Vec<&'static Item> = items(path).collect();
@@ -661,7 +668,10 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         }
     }
     let mut action = None;
+    // the one "次のおすすめ" the line above the map names
+    let recommended = next_item(path, progress).map(|i| i.id);
     for (k, item) in all.iter().enumerate() {
+        let is_recommended = recommended == Some(item.id) && !item_done(progress, item);
         let (fill, stroke, text) = if item.kind == Kind::Planned {
             (Color32::from_gray(60), Color32::from_gray(90), Color32::from_gray(150))
         } else if item_done(progress, item) {
@@ -674,9 +684,16 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         let response = ui.interact(boxes[k], ui.id().with(("tree_item", item.id)), egui::Sense::click());
         let painter = ui.painter().with_clip_rect(boxes[k]);
         painter.rect_filled(boxes[k], 4.0, fill);
-        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(if next_ids.contains(&item.id) { 2.0 } else { 1.0 }, stroke), egui::StrokeKind::Inside);
+        let width = if is_recommended { 3.5 } else if next_ids.contains(&item.id) { 2.0 } else { 1.0 };
+        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { Color32::from_rgb(255, 205, 70) } else { stroke }), egui::StrokeKind::Inside);
         let galley = painter.layout(item.title.to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
         painter.galley(boxes[k].min + egui::vec2(5.0, 4.0), galley, text);
+        if is_recommended {
+            // a badge on the top edge: this is the one to take next
+            let badge = egui::Rect::from_min_size(boxes[k].right_top() + egui::vec2(-80.0, -19.0), egui::vec2(78.0, 18.0));
+            ui.painter().rect_filled(badge, 9.0, Color32::from_rgb(255, 205, 70));
+            ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, "★ 次はこれ", egui::FontId::proportional(12.0), Color32::BLACK);
+        }
         let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}
 (準備中)", item.about) } else { item.about.to_string() });
         if response.clicked() {
