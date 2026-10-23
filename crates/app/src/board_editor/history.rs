@@ -14,6 +14,15 @@ impl BoardEditor {
         self.redo.clear();
     }
 
+    /// [`checkpoint`](Self::checkpoint) once for a whole drag of a value (or a whole click on a check box): a number dragged in a panel
+    /// changes every frame, and each of those frames must not be a step of its own. The next step can be taken once the pointer is up.
+    pub(super) fn checkpoint_once(&mut self) {
+        if !self.drag_edit {
+            self.checkpoint();
+            self.drag_edit = true;
+        }
+    }
+
     /// Has the board changed since it was last saved or opened?
     pub fn dirty(&self) -> bool {
         self.rev != self.saved_rev

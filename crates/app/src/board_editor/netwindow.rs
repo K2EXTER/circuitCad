@@ -10,14 +10,11 @@ impl BoardEditor {
     /// Put the classes in the board when they differ (one undo step for a whole drag of a value).
     pub(super) fn commit_classes(&mut self, classes: Vec<NetClass>, pointer_down: bool) {
         if classes != self.board.net_classes {
-            if !self.class_editing {
-                self.checkpoint();
-                self.class_editing = true;
-            }
+            self.checkpoint_once();
             self.board.net_classes = classes;
         }
         if !pointer_down {
-            self.class_editing = false;
+            self.drag_edit = false;
         }
     }
 

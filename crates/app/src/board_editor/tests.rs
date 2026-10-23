@@ -1651,5 +1651,25 @@ fn the_net_window_draws_and_follows_the_net() {
     e.commit_classes(vec![wider], true);
     assert_eq!(e.undo.len(), undo + 1, "one step for the whole drag");
     e.commit_classes(e.board.net_classes.clone(), false);
-    assert!(!e.class_editing);
+    assert!(!e.drag_edit);
+}
+
+/// A value dragged in a panel is one undo step, not one per frame: `checkpoint_once` takes the step at the start and waits for the
+/// pointer to go up.
+#[test]
+fn a_dragged_panel_value_is_one_undo_step() {
+    let mut e = lx_pair_editor();
+    let before = e.undo.len();
+    for _ in 0..30 {
+        e.checkpoint_once();
+        e.board.finish.radius += 0.01;
+    }
+    assert_eq!(e.undo.len(), before + 1, "thirty frames of one drag");
+    // the pointer went up (the canvas does this every frame): the next drag is a step of its own
+    e.drag_edit = false;
+    e.checkpoint_once();
+    assert_eq!(e.undo.len(), before + 2);
+    e.undo();
+    e.undo();
+    assert!((e.board.finish.radius - pcb_core::Board::new("t", 1.0, 1.0).finish.radius).abs() < 1e-9, "two undos reach the start");
 }

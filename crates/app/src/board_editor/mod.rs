@@ -314,7 +314,7 @@ pub struct BoardEditor {
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
     hover_net: Option<(String, Pos2)>,
     /// A value of a net class is being dragged: the undo step was taken at its start.
-    class_editing: bool,
+    drag_edit: bool,
     /// The net whose window is open (a click on its copper with the Select tool), and whether a click opens it at all.
     net_win: Option<String>,
     net_win_on: bool,
@@ -404,7 +404,7 @@ impl Default for BoardEditor {
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
             hover_net: None,
-            class_editing: false,
+            drag_edit: false,
             net_win: None,
             net_win_on: true,
             last_export_dir: None,

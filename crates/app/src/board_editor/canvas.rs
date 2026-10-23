@@ -4,6 +4,10 @@ use super::*;
 
 impl BoardEditor {
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
+        // with the button up, the next edit of a panel value is a new undo step
+        if !ui.input(|i| i.pointer.any_down()) {
+            self.drag_edit = false;
+        }
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;
         painter.rect_filled(rect, 0.0, BG);
