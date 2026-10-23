@@ -75,3 +75,36 @@ fn the_net_of_a_via_is_saved_only_when_set() {
     let back: Board = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
     assert_eq!(back.vias[0].net, "GND");
 }
+
+fn ring(b: &mut Board, c: Point, r: f64) {
+    // a closed ring of tracks of net VIN round `c`, its corners on VIN pads
+    let corners = [Point::new(c.x - r, c.y - r), Point::new(c.x + r, c.y - r), Point::new(c.x + r, c.y + r), Point::new(c.x - r, c.y + r)];
+    for p in corners {
+        pad(b, p.x, p.y, "VIN");
+    }
+    for i in 0..4 {
+        b.tracks.push(Track { side: Side::Top, a: corners[i], b: corners[(i + 1) % 4], width: 0.3 });
+    }
+}
+
+/// A pour cut apart by a closed ring of another net: the pad inside the ring is in the outline of the pour, but its copper is not joined
+/// to the rest. The DRC says so, and there is an airwire for it.
+#[test]
+fn a_pour_cut_in_pieces_does_not_join_what_is_in_the_pieces() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 30.0, 20.0, "GND");
+    pad(&mut b, 5.0, 5.0, "GND");
+    pad(&mut b, 12.0, 20.0, "GND");
+    b.zones.push(Zone::new("GND", Side::Top, rect(2.0, 2.0, 38.0, 28.0)));
+    assert!(drc::split_pour_checks(&b).is_empty(), "one piece of pour joins all three");
+    assert!(drc::pour_split_airwires(&b).is_empty());
+    // a ring of VIN round the pad at (5, 5)
+    ring(&mut b, Point::new(5.0, 5.0), 2.5);
+    let found = drc::split_pour_checks(&b);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].message.contains("GND") && found[0].message.contains("分断"), "{}", found[0].message);
+    let wires = drc::pour_split_airwires(&b);
+    assert_eq!(wires.len(), 1);
+    assert_eq!(wires[0].net, "GND");
+    assert!(wires[0].a.dist(Point::new(5.0, 5.0)) < 1e-9, "the airwire starts at the pad that was cut off: {:?}", wires[0]);
+}

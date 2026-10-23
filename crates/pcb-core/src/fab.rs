@@ -360,7 +360,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     // slivers and islands of the copper pours
     let pours = drc::zone_checks(board);
     if let Some(first) = pours.first() {
-        out.push(check(Level::Warn, format!("ベタ (ゾーン) に、細いかけらや孤立した島が {} 箇所あります", pours.len()), format!("例: {}", first.message), Some(first.at)).with_also(pours.iter().map(|x| x.at)));
+        out.push(check(Level::Warn, format!("ベタ (ゾーン) に、気になる所が {} 箇所あります (細いかけら・孤立した島・他のネットで分断されて、つながっていないパッド)", pours.len()), format!("例: {}", first.message), Some(first.at)).with_also(pours.iter().map(|x| x.at)));
     }
 
     // bypass capacitors next to IC supply pins

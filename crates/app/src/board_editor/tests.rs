@@ -1720,3 +1720,29 @@ fn a_via_is_placed_for_the_net_under_it_or_the_net_chosen() {
     e.route_via(p(15.05, 18.825), p(10.0, 18.825));
     assert_eq!(e.board.vias.last().unwrap().net, "LX", "the via of a route is of its net");
 }
+
+/// A pad that only the outline of a pour seems to join (the pour is cut apart round it) has an airwire in the editor.
+#[test]
+fn the_editor_shows_an_airwire_for_a_pad_cut_off_by_its_pour() {
+    let mut e = BoardEditor::default();
+    e.board = pcb_core::Board::new("t", 40.0, 30.0);
+    let pad = |b: &mut pcb_core::Board, x: f64, y: f64, net: &str| {
+        let mut p = pcb_core::Pad::new(p(x, y), pcb_core::PadShape::Rect { w: 1.0, h: 1.0 }, None, pcb_core::Side::Top);
+        p.net = net.into();
+        b.pads.push(p);
+    };
+    pad(&mut e.board, 30.0, 20.0, "GND");
+    pad(&mut e.board, 5.0, 5.0, "GND");
+    e.board.zones.push(pcb_core::Zone::new("GND", pcb_core::Side::Top, vec![p(2.0, 2.0), p(38.0, 2.0), p(38.0, 28.0), p(2.0, 28.0)]));
+    assert!(e.cached_airwires().is_empty(), "one piece of pour joins both");
+    // a closed ring of VIN round the pad at (5, 5)
+    let c = [p(2.5, 2.5), p(7.5, 2.5), p(7.5, 7.5), p(2.5, 7.5)];
+    for q in c {
+        pad(&mut e.board, q.x, q.y, "VIN");
+    }
+    for i in 0..4 {
+        e.board.tracks.push(pcb_core::Track { side: pcb_core::Side::Top, a: c[i], b: c[(i + 1) % 4], width: 0.3 });
+    }
+    let wires = e.cached_airwires();
+    assert!(wires.iter().any(|w| w.net == "GND"), "the cut-off pad has an airwire: {wires:?}");
+}

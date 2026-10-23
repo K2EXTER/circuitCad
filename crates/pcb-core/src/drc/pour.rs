@@ -14,6 +14,7 @@ pub fn zone_checks(board: &Board) -> Vec<Violation> {
         return out;
     }
     let conn = connectivity(board);
+    out.extend(split_pour_checks(board));
     for z in &board.zones {
         let side = side_name(z.side);
         let name = if z.net.is_empty() { "ネットなし".to_string() } else { z.net.clone() };
@@ -41,6 +42,128 @@ pub fn zone_checks(board: &Board) -> Vec<Violation> {
                     at,
                 ));
             }
+        }
+    }
+    out
+}
+
+/// The pads of a net that has a pour, joined only by the pour's real copper: when the copper is in several pieces (the pour is cut apart
+/// by other nets' tracks and pads) and a piece has pads that no track or via joins to the rest, they are not connected to it, whatever the
+/// outline of the pour says. One finding per net, at the pads that are left out.
+pub fn split_pour_checks(board: &Board) -> Vec<Violation> {
+    pour_splits(board)
+        .into_iter()
+        .map(|s| {
+            let names: Vec<String> = s.left.iter().take(4).map(|&j| format!("{}-{}", board.pads[j].refdes, board.pads[j].pin)).collect();
+            v(
+                format!("ネット {} のベタが、他のネットの配線やパッドで分断されていて、{} が、残りの {} とつながっていません。配線かビアで、つなぎましょう (ベタの見た目は広がっていても、銅はつながっていません)", s.net, names.join("・"), s.net),
+                board.pads[s.left[0]].pos,
+            )
+        })
+        .collect()
+}
+
+/// A net whose pads are not all joined by its copper: the pads (numbers in `board.pads`) of the pieces that are left out, and the pads
+/// of the piece that is kept (the one with the most pads).
+pub struct PourSplit {
+    pub net: String,
+    pub left: Vec<usize>,
+    pub main: Vec<usize>,
+}
+
+/// An airwire for each net split like that: from the nearest left-out pad to a pad of the kept piece (the yellow line to draw).
+pub fn pour_split_airwires(board: &Board) -> Vec<crate::ratsnest::Airwire> {
+    pour_splits(board)
+        .into_iter()
+        .filter_map(|s| {
+            let a = &board.pads[s.left[0]];
+            let b = s.main.iter().map(|&j| &board.pads[j]).min_by(|x, y| x.pos.dist(a.pos).total_cmp(&y.pos.dist(a.pos)))?;
+            Some(crate::ratsnest::Airwire { net: s.net.clone(), a: a.pos, b: b.pos })
+        })
+        .collect()
+}
+
+fn pour_splits(board: &Board) -> Vec<PourSplit> {
+    use crate::geom::inside_polygon;
+    if !board.zones.iter().any(|z| !z.net.is_empty() && z.polygon.len() >= 3) {
+        return vec![];
+    }
+    let base = connectivity_without_pours(board);
+    let items = copper_items(board);
+    let mut parent: HashMap<usize, usize> = HashMap::new();
+    fn root(parent: &mut HashMap<usize, usize>, g: usize) -> usize {
+        let mut r = g;
+        while let Some(&p) = parent.get(&r) {
+            if p == r {
+                break;
+            }
+            r = p;
+        }
+        r
+    }
+    let mut nets: Vec<&str> = board.zones.iter().filter(|z| !z.net.is_empty() && z.polygon.len() >= 3).map(|z| z.net.as_str()).collect();
+    nets.sort_unstable();
+    nets.dedup();
+    let fills = crate::zonefill::merged_fills(board, &base);
+    let mut out: Vec<PourSplit> = vec![];
+    for net in nets {
+        // the copper groups of the net that hold a pad (a group of tracks alone is nothing to connect)
+        let group_of = |i: usize| base.items[i];
+        let mut pad_groups: Vec<(usize, usize)> = vec![]; // (group, pad number)
+        for (j, p) in board.pads.iter().enumerate() {
+            if p.net == net {
+                let g = group_of(base.n_tracks + j);
+                if !pad_groups.iter().any(|(x, _)| *x == g) {
+                    pad_groups.push((g, j));
+                }
+            }
+        }
+        if pad_groups.len() < 2 {
+            continue;
+        }
+        parent.clear();
+        for (g, _) in &pad_groups {
+            parent.insert(*g, *g);
+        }
+        // every piece of the pour of this net joins the groups that have copper in it
+        for (side, name, shapes) in fills.iter().filter(|(_, n, _)| n == net) {
+            let _ = name;
+            for shape in shapes {
+                let inside = |p: Point| inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p));
+                let mut first: Option<usize> = None;
+                for (i, it) in items.iter().enumerate() {
+                    if !it.on(*side) || base.group_net(group_of(i)) != Some(net) || !anchors_inside(&it.geo, &shape.outer) || !inside(center(&it.geo)) && !matches!(it.geo, Geo::Cap { .. }) {
+                        continue;
+                    }
+                    let g = group_of(i);
+                    if !parent.contains_key(&g) {
+                        parent.insert(g, g);
+                    }
+                    match first {
+                        None => first = Some(g),
+                        Some(f) => {
+                            let (a, b) = (root(&mut parent, f), root(&mut parent, g));
+                            if a != b {
+                                parent.insert(a, b);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let mut comps: Vec<(usize, Vec<usize>)> = vec![];
+        for (g, j) in &pad_groups {
+            let r = root(&mut parent, *g);
+            match comps.iter_mut().find(|(x, _)| *x == r) {
+                Some((_, pads)) => pads.push(*j),
+                None => comps.push((r, vec![*j])),
+            }
+        }
+        if comps.len() > 1 {
+            // the pieces that are left out: all but the one with the most pads
+            comps.sort_by_key(|(_, pads)| std::cmp::Reverse(pads.len()));
+            let left: Vec<usize> = comps[1..].iter().flat_map(|(_, p)| p.iter().copied()).collect();
+            out.push(PourSplit { net: net.to_string(), left, main: comps[0].1.clone() });
         }
     }
     out

@@ -152,6 +152,16 @@ pub(super) fn pad_nets(board: &Board, parent: &mut [usize], n_tracks: usize) -> 
 }
 
 pub fn connectivity(board: &Board) -> Connectivity {
+    connectivity_with(board, true)
+}
+
+/// [`connectivity`] without the pours: what is joined by copper that is really there (touching items), and not through a pour. With
+/// the pours' real shapes (`zonefill`), this is where the pieces of a pour are told apart.
+pub(crate) fn connectivity_without_pours(board: &Board) -> Connectivity {
+    connectivity_with(board, false)
+}
+
+fn connectivity_with(board: &Board, with_pours: bool) -> Connectivity {
     let items = copper_items(board);
     let (n_tracks, n_pads) = (board.tracks.len(), board.pads.len());
     let mut parent = groups(&items);
@@ -169,7 +179,7 @@ pub fn connectivity(board: &Board) -> Connectivity {
         }
     }
     // a zone joins every item of its net that has an anchor point inside it
-    for z in board.zones.iter().filter(|z| !z.net.is_empty() && z.polygon.len() >= 3) {
+    for z in board.zones.iter().filter(|z| with_pours && !z.net.is_empty() && z.polygon.len() >= 3) {
         let nets = pad_nets(board, &mut parent, n_tracks);
         let mut members = vec![];
         for (i, it) in items.iter().enumerate() {
