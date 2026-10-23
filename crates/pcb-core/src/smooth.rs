@@ -602,6 +602,49 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, patch: None, live, kind: Kind::Taper, touches: vec![i] })
 }
 
+/// How long (mm) the neck of a track on a pad narrower than the track is, before the track widens.
+const NECK_LEN: f64 = 0.35;
+
+/// A track that ends on a pad narrower than the track: its round end would stick out of the pad on both sides. From the pad, a neck as
+/// wide as the pad's short side (the same as the pad, so nothing sticks out), then a short stretch that widens to the track's width. The
+/// neck also keeps the solder on the small pad (a wide trace straight on it can pull the solder off). Not when the neck would be thinner than
+/// the board's minimum track width, when another track leaves the same place, or when the track is too short for it.
+fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
+    let t = &board.tracks[i];
+    let (v, far) = if is_a { (t.a, t.b) } else { (t.b, t.a) };
+    let (ux, uy, len) = unit(v, far);
+    // the pad the track's end is on
+    let pad = board.pads.iter().find(|q| {
+        let (w, h) = q.shape.size();
+        (q.drill.is_some() || q.side == t.side) && (v.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (v.y - q.pos.y).abs() <= h / 2.0 + 1e-6
+    })?;
+    let (w, h) = pad.shape.size();
+    let short = w.min(h);
+    if short < board.rules.min_track_width - 1e-9 || t.width - short <= MIN_STEP || v.dist(pad.pos) > 0.05 {
+        return None;
+    }
+    let crowded = board.tracks.iter().enumerate().any(|(k, u)| k != i && u.side == t.side && (u.a.dist(v) < t.width || u.b.dist(v) < t.width));
+    if crowded {
+        return None;
+    }
+    let dw = t.width - short;
+    let ramp = dw * 1.5;
+    let neck = NECK_LEN.min((len - ramp - 0.05).max(0.0));
+    if neck < 0.1 || neck + ramp > len - 0.05 {
+        return None;
+    }
+    let n = ((dw / BAKE_STEP).ceil() as usize).max(2);
+    let at = |s: f64| Point::new(v.x + ux * s, v.y + uy * s);
+    let mut pieces = vec![Track { side: t.side, a: v, b: at(neck), width: short }];
+    pieces.extend((0..n).map(|k| Track {
+        side: t.side,
+        a: at(neck + ramp * k as f64 / n as f64),
+        b: at(neck + ramp * (k + 1) as f64 / n as f64),
+        width: short + dw * (k + 1) as f64 / n as f64,
+    }));
+    Some(Edit { trims: vec![(i, is_a, at(neck + ramp))], pieces, patch: None, live: None, kind: Kind::Taper, touches: vec![i] })
+}
+
 /// The face of a rectangular pad that a track leaves straight out of (at a right angle): which pad, how far (mm) along the
 /// track from its end `p` the face is, and where the face's two ends lie to the sides of the track's line (`lo` < 0 <
 /// `hi` when the track leaves between them; measured to the left of the way out, `(-uy, ux)`).
@@ -785,7 +828,7 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool)
                 if !used.contains(&(i, is_a)) {
                     match live.then(|| pad_fillet(board, i, is_a)).flatten() {
                         Some(e) => edits.push(e),
-                        None => edits.extend(pad_taper(board, i, is_a)),
+                        None => edits.extend(pad_taper(board, i, is_a).or_else(|| pad_neck(board, i, is_a))),
                     }
                 }
             }

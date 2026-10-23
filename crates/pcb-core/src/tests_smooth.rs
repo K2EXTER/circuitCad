@@ -70,7 +70,8 @@ fn a_short_track_gives_a_smaller_radius() {
 #[test]
 fn a_width_change_is_stepped() {
     let mut b = Board::new("t", 40.0, 30.0);
-    pad(&mut b, 5.0, 5.0, "A");
+    // a pad as wide as the track, so that it needs no neck (a track wider than its pad gets one: `a_wide_track_on_a_narrow_pad_...`)
+    pad_sized(&mut b, 5.0, 5.0, "A", 0.8);
     pad(&mut b, 25.0, 5.0, "A");
     b.tracks.push(trk((5.0, 5.0), (15.0, 5.0), 0.8));
     b.tracks.push(trk((15.0, 5.0), (25.0, 5.0), 0.25));
@@ -461,4 +462,44 @@ fn a_baked_width_change_goes_in_steps_too_fine_to_show() {
     let biggest = widths.windows(2).map(|w| w[1] - w[0]).fold(0.0f64, f64::max);
     assert!(biggest <= 0.02 + 1e-9, "{widths:?}");
     assert!(ratsnest(&b).is_empty() && drc::check(&b).is_empty());
+}
+
+/// A wide track ending on a pad that is narrower than it would stick out of the pad with its round end: it gets a neck as wide as the pad.
+#[test]
+fn a_wide_track_on_a_narrow_pad_gets_a_neck_as_wide_as_the_pad() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    // a QFN-like pad, 0.3 wide and 0.85 tall, and a 0.6 mm track coming in from the lower right
+    let mut p = Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 0.3, h: 0.85 }, None, Side::Top);
+    p.net = "VS".into();
+    b.pads.push(p);
+    let mut far = Pad::new(Point::new(20.0, 3.0), PadShape::Rect { w: 1.5, h: 1.5 }, None, Side::Top);
+    far.net = "VS".into();
+    b.pads.push(far);
+    b.tracks.push(trk((10.0, 10.0), (14.0, 6.0), 0.6));
+    b.tracks.push(trk((14.0, 6.0), (20.0, 3.0), 0.6));
+    b.finish.on = true;
+    let f = finished(&b).expect("the finish is on");
+    let at_pad = |t: &Track| t.a.dist(Point::new(10.0, 10.0)) < 1e-9 || t.b.dist(Point::new(10.0, 10.0)) < 1e-9;
+    let first: Vec<&Track> = f.board.tracks.iter().filter(|t| at_pad(t)).collect();
+    assert_eq!(first.len(), 1, "one piece starts at the pad");
+    assert!((first[0].width - 0.3).abs() < 1e-9, "the neck is as wide as the pad: {:?}", first[0]);
+    // no copper on the pad's end is wider than the pad within the neck's length
+    let near_pad = f.board.tracks.iter().filter(|t| t.a.dist(Point::new(10.0, 10.0)) < 0.34).all(|t| t.width <= 0.3 + 1e-9);
+    assert!(near_pad);
+    // away from the pad the track keeps its width
+    assert!(f.board.tracks.iter().any(|t| (t.width - 0.6).abs() < 1e-9));
+    assert!(ratsnest(&f.board).is_empty(), "still connected");
+    assert!(drc::check(&f.board).is_empty(), "{:?}", drc::check(&f.board));
+    // a pad as wide as the track needs no neck
+    let mut wide = Board::new("t", 40.0, 30.0);
+    let mut p2 = Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+    p2.net = "A".into();
+    wide.pads.push(p2);
+    let mut q2 = Pad::new(Point::new(20.0, 3.0), PadShape::Rect { w: 1.5, h: 1.5 }, None, Side::Top);
+    q2.net = "A".into();
+    wide.pads.push(q2);
+    wide.tracks.push(trk((10.0, 10.0), (20.0, 3.0), 0.6));
+    wide.finish.on = true;
+    let g = finished(&wide).unwrap();
+    assert!(g.board.tracks.iter().all(|t| t.width >= 0.6 - 1e-9 || t.width < 0.0), "{:?}", g.board.tracks.iter().map(|t| t.width).collect::<Vec<_>>());
 }
