@@ -527,6 +527,8 @@ fn a_wide_track_entering_a_narrow_pad_from_the_side_is_cut_at_the_far_face_of_th
         // and it still reaches the pad (its tip is on the far face), at full width
         assert!(leftmost <= 9.85 + 1e-6, "{label}: the track is not cut back more than needed: {leftmost:.3}");
         assert!(f.board.tracks.iter().all(|t| (t.width - 0.6).abs() < 1e-9), "{label}: the width is not changed");
+        // the fillets (the teardrop curves) at the face where the track meets the pad are kept
+        assert!(!f.patches.is_empty(), "{label}: the teardrop at the pad is still there");
         assert!(drc::check(&f.board).is_empty(), "{label}: {:?}", drc::check(&f.board));
         assert!(ratsnest(&f.board).is_empty(), "{label}: still connected to the pad");
     }

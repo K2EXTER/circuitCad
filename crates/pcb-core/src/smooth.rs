@@ -876,9 +876,18 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool)
                 if !used.contains(&(i, is_a)) {
                     // a track wider than its pad is narrowed first (the neck): a fillet at the pad's face would leave the round end sticking out
                     // on the far side
-                    match pad_clip(board, i, is_a).or_else(|| pad_neck(board, i, is_a)).or_else(|| live.then(|| pad_fillet(board, i, is_a)).flatten()) {
-                        Some(e) => edits.push(e),
-                        None => edits.extend(pad_taper(board, i, is_a)),
+                    let fillet = || live.then(|| pad_fillet(board, i, is_a)).flatten();
+                    if let Some(mut clip) = pad_clip(board, i, is_a) {
+                        // the cut at the far face keeps the fillets (the teardrop curves) at the near face
+                        if let Some(Live { patch, .. }) = fillet().and_then(|f| f.live) {
+                            clip.live = Some(Live { trims: clip.trims.clone(), pieces: vec![], patch });
+                        }
+                        edits.push(clip);
+                    } else {
+                        match pad_neck(board, i, is_a).or_else(fillet) {
+                            Some(e) => edits.push(e),
+                            None => edits.extend(pad_taper(board, i, is_a)),
+                        }
                     }
                 }
             }
