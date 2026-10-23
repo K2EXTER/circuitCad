@@ -1,6 +1,8 @@
 //! Alignment guides ("延長線トラッキング", like AutoCAD's object snap tracking): rest the pointer on a snap point (a pad,
 //! a via, a track end) for a moment and the point is picked up; from then on horizontal and vertical dotted guides run through it,
 //! and the pointer snaps to a guide, or to the crossing of two guides, so a new track, via or corner lines up with what is there.
+//! With the Select tool the points are picked up the same way (pointer at rest, no button down), and a part that is dragged has
+//! its own place (not the pointer) snapped to the guides, so it lines up with a pad, a via or a track end.
 
 use super::*;
 
@@ -36,9 +38,9 @@ pub(super) fn guided(points: &[Point], w: Point, p: Point, tol: f64) -> (Point, 
 }
 
 impl BoardEditor {
-    /// Do the tools that place copper or corners use the guides?
+    /// Do the tools that place copper or corners use the guides? (The Select tool does, for a part that is dragged.)
     fn tracking_tool(&self) -> bool {
-        matches!(self.tool, Tool::Track | Tool::Via | Tool::OutlinePoly | Tool::Zone)
+        matches!(self.tool, Tool::Track | Tool::Via | Tool::OutlinePoly | Tool::Zone | Tool::Select)
     }
 
     /// Forget the picked-up points (Esc, another tool).
@@ -63,6 +65,11 @@ impl BoardEditor {
         if !self.tracking.on || !self.tracking_tool() {
             return p;
         }
+        // what is lined up: the pointer, or (dragging a part) the place of the part, which is `off` from the pointer
+        let selecting = self.tool == Tool::Select;
+        let off = if selecting { self.drag_part.as_ref().map(|(_, o)| *o) } else { Some(Point::new(0.0, 0.0)) };
+        // with the Select tool a point is picked up only by a pointer at rest
+        let near = if selecting && ctx.input(|i| i.pointer.any_down()) { None } else { near };
         let now = ctx.input(|i| i.time);
         match (near, self.tracking.hover) {
             (Some(c), Some((h, since))) if h.dist(c) < 1e-9 => {
@@ -89,10 +96,13 @@ impl BoardEditor {
             painter.line_segment([s - Vec2::new(5.0, 0.0), s + Vec2::new(5.0, 0.0)], Stroke::new(1.5, ink));
             painter.line_segment([s - Vec2::new(0.0, 5.0), s + Vec2::new(0.0, 5.0)], Stroke::new(1.5, ink));
         }
+        let Some(off) = off else { return p };
         if on_object {
             return p;
         }
-        let (q, gx, gy) = guided(&self.tracking.points, w, p, NEAR_PX / self.zoom as f64);
+        let at = |v: Point| Point::new(v.x - off.x, v.y - off.y);
+        let (q, gx, gy) = guided(&self.tracking.points, at(w), at(p), NEAR_PX / self.zoom as f64);
+        let q = Point::new(q.x + off.x, q.y + off.y);
         let dotted = Stroke::new(1.0, ink.gamma_multiply(0.8));
         if let Some(x) = gx {
             let sx = self.to_screen(rect, Point::new(x, 0.0)).x;
