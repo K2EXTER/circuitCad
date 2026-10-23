@@ -6,6 +6,11 @@ use super::*;
 use pcb_core::current::{net_widths, round_up_width, width_for_current, CopperSpec};
 use pcb_core::NetClass;
 
+/// Did the slider move the value (not just rounding of what it shows)?
+fn slider_changed(before: Option<f64>, after: f64) -> bool {
+    before.is_none_or(|b| (b - after).abs() > 1e-9)
+}
+
 impl BoardEditor {
     /// Put the classes in the board when they differ (one undo step for a whole drag of a value).
     pub(super) fn commit_classes(&mut self, classes: Vec<NetClass>, pointer_down: bool) {
@@ -137,6 +142,57 @@ impl BoardEditor {
                     } else if let Some(w) = set_width {
                         self.track_width = w;
                         self.status = format!("線幅を {w:.2} mm にしました");
+                    }
+                }
+            }
+            // --- a slider for the width of the net: its tracks follow it while it is dragged (one undo step), and so does the class
+            ui.separator();
+            ui.strong("線幅をスライダーで変える");
+            let idx: Vec<usize> = {
+                let conn = drc::connectivity(&self.board);
+                (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str())).collect()
+            };
+            let class_k = classes.iter().position(|c| c.nets.contains(&net));
+            let start = class_k.map(|k| classes[k].track_width).or_else(|| idx.iter().map(|&i| self.board.tracks[i].width).reduce(f64::max));
+            let rec = self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)));
+            match start {
+                None => {
+                    ui.small("このネットには、配線もクラスもまだありません。上の「このネット専用のクラスを作る」か、配線を引くと、スライダーが使えます");
+                }
+                Some(mut v) => {
+                    let hi = rec.map_or(3.0, |r| (r * 2.0).max(3.0));
+                    let slider = ui.add(egui::Slider::new(&mut v, rules.min_track_width..=hi).logarithmic(true).fixed_decimals(2).suffix(" mm"));
+                    slider.on_hover_text("ドラッグすると、このネットの配線の太さが、動かした値にそろって変わります (配線がなければ、これから引く線の太さ)。ネットクラスに入っていれば、クラスの線幅も変わります。元に戻すで、ドラッグの前に戻せます");
+                    if slider_changed(start, v) {
+                        self.checkpoint_once();
+                        for &i in &idx {
+                            self.board.tracks[i].width = v;
+                        }
+                        if let Some(k) = class_k {
+                            classes[k].track_width = v;
+                        }
+                        self.status = format!("ネット {net} の線幅: {v:.2} mm ({} 本)", idx.len());
+                    }
+                    if let Some(r) = rec {
+                        let ok = v + 1e-9 >= r;
+                        ui.horizontal(|ui| {
+                            if ok {
+                                ui.colored_label(Color32::from_rgb(90, 190, 110), format!("推奨 {r:.2} mm 以上で、足ります ✔"));
+                            } else {
+                                ui.colored_label(Color32::from_rgb(230, 90, 70), format!("推奨 {r:.2} mm に足りません"));
+                                if ui.small_button("推奨まで上げる").on_hover_text("スライダーを、推奨の線幅にします").clicked() {
+                                    self.checkpoint_once();
+                                    for &i in &idx {
+                                        self.board.tracks[i].width = r;
+                                    }
+                                    if let Some(k) = class_k {
+                                        classes[k].track_width = r;
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        ui.small("電流を入れると、推奨の線幅と比べて、足りているか出ます");
                     }
                 }
             }

@@ -1673,3 +1673,27 @@ fn a_dragged_panel_value_is_one_undo_step() {
     e.undo();
     assert!((e.board.finish.radius - pcb_core::Board::new("t", 1.0, 1.0).finish.radius).abs() < 1e-9, "two undos reach the start");
 }
+
+/// The net window's width slider does not touch the tracks (or take an undo step) until it is moved, with or without a class.
+#[test]
+fn the_width_slider_leaves_the_net_alone_until_it_is_moved() {
+    let mut e = lx_pair_editor();
+    e.board.net_currents.insert("LX".into(), 1.0);
+    e.board.tracks.push(pcb_core::Track { a: p(15.05, 18.825), b: p(10.0, 18.825), width: 0.3, side: pcb_core::Side::Top });
+    e.net_win = Some("LX".into());
+    let ctx = egui::Context::default();
+    let undo = e.undo.len();
+    for with_class in [false, true] {
+        if with_class {
+            e.board.net_classes.push(pcb_core::NetClass { name: "x".into(), nets: vec!["LX".into()], track_width: 0.3, ..Default::default() });
+        }
+        for _ in 0..3 {
+            let mut input = egui::RawInput::default();
+            input.screen_rect = Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200.0, 800.0)));
+            let mut out = ctx.run_ui(input, |ui| e.net_window(ui.ctx()));
+            out.textures_delta.clear();
+        }
+        assert!((e.board.tracks[0].width - 0.3).abs() < 1e-9, "with_class={with_class}");
+    }
+    assert_eq!(e.undo.len(), undo, "no step was taken");
+}
