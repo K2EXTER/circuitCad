@@ -125,6 +125,11 @@ fn notched(slot: &[Point], pads: &[Path], gap: f64) -> Vec<Vec<Point>> {
     }
     let near = grown(&touching, NOTCH_DEPTH * gap);
     let cut: Vec<Path> = slot_path.clone().overlay(&near, OverlayRule::Intersect, FillRule::NonZero).into_iter().flatten().collect();
+    // a slot that lies wholly within the notch depth (a short one: the necks of a trunk) is all notch: nothing is filled, instead of the
+    // whole slot coming back as one block between the pads
+    if area_of(&cut) >= 0.98 * area_of(&slot_path) {
+        return vec![];
+    }
     // opening: what is thinner than the rounding goes, and the tip comes back round
     let opened = grown(&grown(&cut, -NOTCH_ROUND * gap), NOTCH_ROUND * gap);
     if opened.is_empty() {
@@ -292,6 +297,22 @@ mod tests {
         let (mid, edge_row) = (depth_at(18.5).unwrap(), depth_at(18.3 + 0.02).unwrap());
         assert!(mid > edge_row + 0.04, "a round tip: {mid} on the centre line, {edge_row} near the wall");
         assert!((0.4..0.7).contains(&mid), "about 1.4 slot widths deep: {mid}");
+    }
+
+    /// A slot shorter than the notch (the necks of a trunk are 0.4 mm long in front of the pads) is all notch: nothing is filled, instead of the
+    /// whole slot coming back as one block between the pads.
+    #[test]
+    fn a_slot_shorter_than_the_notch_is_left_open() {
+        let mut b = lx_pair();
+        // the tracks end 0.4 mm in front of the pads' left edge (x = 14.625) and are joined by a wide one there
+        for t in b.tracks.iter_mut().take(2) {
+            t.b.x = 14.225;
+        }
+        b.tracks.truncate(2);
+        b.tracks.push(Track { side: Side::Top, a: Point::new(14.225, 18.5), b: Point::new(12.0, 18.5), width: 0.9 });
+        let patches = slot_patches(&b, &crate::drc::connectivity(&b), &[], 0.5);
+        assert!(!covered(&patches, 15.05, 18.5), "nothing between the pads");
+        assert!(!covered(&patches, 14.4, 18.5), "nor in front of them");
     }
 
     #[test]
