@@ -167,11 +167,11 @@ impl BoardEditor {
                         }
                 });
             }).header_response.on_hover_text("部品どうしを銅の線でつなぎます (配線)。「ベタ」は、基板の面いっぱいに広げた銅箔のことで、GND (0V の基準) によく使います。自動で引いたあと、手で直せます");
-            egui::CollapsingHeader::new("③ 整える (?)").default_open(false).show(ui, |ui| {
+            egui::CollapsingHeader::new("仕上げ (任意) (?)").default_open(false).show(ui, |ui| {
                 self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
             }).header_response.on_hover_text("パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです");
-            egui::CollapsingHeader::new("④ 確認して発注").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new("③ 確認して発注").default_open(true).show(ui, |ui| {
                 if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                     self.run_drc();
                 }
