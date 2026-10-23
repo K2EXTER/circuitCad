@@ -235,7 +235,7 @@ impl BoardEditor {
         let conn = drc::connectivity(&self.board);
         let skip = |i: usize| conn.track_net(i).is_some_and(|n| self.board.finish_exclude.iter().any(|x| x == n));
         let list: Vec<usize> = only.unwrap_or_else(|| (0..self.board.tracks.len()).collect()).into_iter().filter(|&i| !skip(i)).collect();
-        let opts = pcb_core::padentry::EntryOptions { lead: self.pad_lead_len, spread: self.pad_spread };
+        let opts = pcb_core::padentry::EntryOptions { lead: self.pad_lead_len, spread: true };
         pcb_core::padentry::align_entries(&mut self.board, &opts, Some(&list)).aligned
     }
 
@@ -273,7 +273,6 @@ impl BoardEditor {
         }
         ui.separator();
         ui.label("パッドの根元").on_hover_text("配線がパッドに入る・パッドから出る根元を、パッドの辺に垂直な短い区間にそろえます。自動配線の直後には、新しい配線に自動で行います (「パッドに垂直に出入り」が入っているとき)");
-        ui.checkbox(&mut self.pad_spread, "2本は両端に寄せる").on_hover_text("同じパッドの同じ点から2本が出ているとき、パッドの両端に寄せて、2本を並べて出します (鋭角のくぼみができません)。2本ぶんの幅が入らない小さなパッドでは、寄せません");
         ui.horizontal(|ui| {
             if ui.button("全部の配線をそろえる").on_hover_text("すべての配線の、四角いパッドへの根元をそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。「整えないネット」は除きます。元に戻すで取り消せます").clicked() {
                 self.align_pad_entries_button(None);
