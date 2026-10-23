@@ -146,6 +146,47 @@ fn inside_shape(shape: &FillShape, p: Point) -> bool {
     inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p))
 }
 
+/// Join the pour `board.zones[idx]` with the pours of its net and layer that overlap or touch it, into one pour (the new
+/// pour's settings are kept). A union with a hole (a ring) can't be one polygon, so those pours stay apart; the copper is the
+/// same either way. Returns how many pours were absorbed and the new index of the joined pour.
+pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
+    let Some(z) = board.zones.get(idx) else { return (0, idx) };
+    let (net, side) = (z.net.clone(), z.side);
+    if net.is_empty() {
+        return (0, idx);
+    }
+    let as_shape = |poly: &[Point]| FillShape { outer: poly.to_vec(), holes: vec![] };
+    let mut poly = z.polygon.clone();
+    let mut absorbed: Vec<usize> = vec![];
+    loop {
+        let mut grew = false;
+        for (k, o) in board.zones.iter().enumerate() {
+            if k == idx || absorbed.contains(&k) || o.net != net || o.side != side {
+                continue;
+            }
+            let joined = union(&[as_shape(&poly), as_shape(&o.polygon)]);
+            if let [one] = joined.as_slice()
+                && one.holes.is_empty() {
+                    poly = one.outer.clone();
+                    absorbed.push(k);
+                    grew = true;
+                }
+        }
+        if !grew {
+            break;
+        }
+    }
+    if absorbed.is_empty() {
+        return (0, idx);
+    }
+    board.zones[idx].polygon = poly;
+    absorbed.sort_unstable();
+    for &k in absorbed.iter().rev() {
+        board.zones.remove(k);
+    }
+    (absorbed.len(), idx - absorbed.iter().filter(|&&k| k < idx).count())
+}
+
 /// The pieces merged where they touch or overlap.
 fn union(shapes: &[FillShape]) -> Vec<FillShape> {
     // outer contours counter-clockwise, holes clockwise, so the holes are subtracted
@@ -329,4 +370,38 @@ pub fn geometry_key(board: &Board) -> u64 {
     }
     f(&mut h, board.rules.edge_clearance);
     h.finish()
+}
+
+#[cfg(test)]
+mod merge_outline_tests {
+    use super::*;
+
+    fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Point> {
+        vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)]
+    }
+
+    #[test]
+    fn overlapping_pours_of_one_net_become_one_outline() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        b.zones.push(Zone::new("GND", Side::Top, rect(0.0, 0.0, 10.0, 10.0)));
+        b.zones.push(Zone::new("5V", Side::Top, rect(5.0, 5.0, 15.0, 15.0)));
+        b.zones.push(Zone::new("GND", Side::Top, rect(20.0, 0.0, 30.0, 10.0)));
+        b.zones.push(Zone::new("GND", Side::Top, rect(8.0, 2.0, 12.0, 6.0)));
+        let (n, at) = merge_zone_outline(&mut b, 3);
+        assert_eq!(n, 1);
+        assert_eq!(b.zones.len(), 3);
+        assert_eq!(b.zones[at].net, "GND");
+        assert!(signed_area(&b.zones[at].polygon).abs() > 100.0);
+    }
+
+    #[test]
+    fn a_ring_is_left_apart() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 3.0), Point::new(0.0, 3.0)]));
+        b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(0.0, 3.0), Point::new(3.0, 3.0), Point::new(3.0, 10.0), Point::new(0.0, 10.0)]));
+        b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(0.0, 10.0), Point::new(10.0, 10.0), Point::new(10.0, 7.0), Point::new(0.0, 7.0)]));
+        b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(7.0, 3.0), Point::new(10.0, 3.0), Point::new(10.0, 7.0), Point::new(7.0, 7.0)]));
+        let (n, _) = merge_zone_outline(&mut b, 3);
+        assert!(n < 3, "a ring can't be one polygon");
+    }
 }

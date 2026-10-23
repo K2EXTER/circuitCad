@@ -41,7 +41,13 @@ impl BoardEditor {
                 z.thermal = self.zone_thermal;
                 z.remove_islands = self.zone_remove_islands;
                 self.board.zones.push(z);
-                self.status = format!("ゾーンを追加しました (ネット {})", self.zone_net);
+                let last = self.board.zones.len() - 1;
+                let (joined, _) = pcb_core::zonefill::merge_zone_outline(&mut self.board, last);
+                self.status = if joined > 0 {
+                    format!("ゾーンを追加し、重なる同じネットのゾーン {joined} 枚と1つにまとめました (ネット {})", self.zone_net)
+                } else {
+                    format!("ゾーンを追加しました (ネット {})", self.zone_net)
+                };
             }
             _ => {}
         }
