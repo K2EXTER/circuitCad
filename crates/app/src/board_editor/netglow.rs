@@ -101,11 +101,27 @@ impl BoardEditor {
             }
         }
         {
-            let galley = painter.layout_no_wrap(net.to_string(), egui::FontId::proportional(14.0), Color32::BLACK);
+            let galley = painter.layout_no_wrap(self.net_caption(net), egui::FontId::proportional(14.0), Color32::BLACK);
             let at = pos + Vec2::new(14.0, -26.0);
             painter.rect_filled(Rect::from_min_size(at, galley.size() + Vec2::new(10.0, 4.0)), 3.0, HOVER);
             painter.galley(at + Vec2::new(5.0, 2.0), galley, Color32::BLACK);
         }
+    }
+
+    /// The name shown by the pointer: a net the schematic never named (the program called it N$1) says which pins it joins, so
+    /// that it can be found on the sheet.
+    pub(super) fn net_caption(&self, net: &str) -> String {
+        if !net.starts_with("N$") {
+            return net.to_string();
+        }
+        let mut pins: Vec<String> = self.board.pads.iter().filter(|p| p.net == net && !p.refdes.is_empty()).map(|p| format!("{}-{}", p.refdes, p.pin)).collect();
+        pins.sort();
+        pins.dedup();
+        if pins.is_empty() {
+            return net.to_string();
+        }
+        let more = if pins.len() > 4 { format!(" ほか{}", pins.len() - 4) } else { String::new() };
+        format!("{net} (回路図で名前のないつながり: {}{more})", pins.iter().take(4).cloned().collect::<Vec<_>>().join("・"))
     }
 
     /// The name of a pour in its piece (one name per piece that is large enough on the screen).

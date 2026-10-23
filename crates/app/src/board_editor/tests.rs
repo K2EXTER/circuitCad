@@ -1594,3 +1594,15 @@ fn the_label_button_moves_a_designator_off_a_track_and_undoes() {
     e.undo();
     assert_eq!(e.board.texts[0].pos, at, "undone");
 }
+
+/// A net the schematic did not name is shown with the pins it joins, so it can be found on the sheet.
+#[test]
+fn an_unnamed_net_is_captioned_with_its_pins() {
+    let mut e = lx_pair_editor();
+    for pd in e.board.pads.iter_mut() {
+        pd.net = "N$1".into();
+    }
+    let c = e.net_caption("N$1");
+    assert!(c.contains("U1-2") && c.contains("回路図で名前のない"), "{c}");
+    assert_eq!(e.net_caption("GND"), "GND");
+}
