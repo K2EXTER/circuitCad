@@ -239,10 +239,10 @@ impl BoardEditor {
         pcb_core::padentry::align_entries(&mut self.board, &opts, Some(&list)).aligned
     }
 
-    /// The button: do it for `only` (or every track), as one undo step.
-    pub(super) fn align_pad_entries_button(&mut self, only: Option<Vec<usize>>) {
+    /// The button: do it for every track, as one undo step.
+    pub(super) fn align_pad_entries_button(&mut self) {
         self.checkpoint();
-        let n = self.align_pad_entries(only);
+        let n = self.align_pad_entries(None);
         self.violations.clear();
         self.status = if n == 0 {
             self.undo.pop(); // nothing changed: no undo step
@@ -271,16 +271,5 @@ impl BoardEditor {
         if ui.button("文字を配線からよける").on_hover_text("配線・パッド・ビア・穴・ほかの文字に重なっている部品番号を、部品の上・下・横の、重ならない場所へ動かします。重なっていない文字と、手で動かした文字はそのままです。元に戻すで取り消せます").clicked() {
             self.avoid_label_overlaps_button();
         }
-        ui.separator();
-        ui.label("パッドの根元").on_hover_text("配線がパッドに入る・パッドから出る根元を、パッドの辺に垂直な短い区間にそろえます。自動配線の直後には、新しい配線に自動で行います (「パッドに垂直に出入り」が入っているとき)");
-        ui.horizontal(|ui| {
-            if ui.button("全部の配線をそろえる").on_hover_text("すべての配線の、四角いパッドへの根元をそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。整えを切ったネットクラスのネットは除きます。元に戻すで取り消せます").clicked() {
-                self.align_pad_entries_button(None);
-            }
-            let picked: Vec<usize> = self.selected.iter().chain(&self.multi).filter_map(|it| if let Item::Track(i) = it { Some(*i) } else { None }).collect();
-            if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("選んだ ({} 本)", picked.len()))).on_hover_text("選択している配線の根元だけをそろえます").clicked() {
-                self.align_pad_entries_button(Some(picked));
-            }
-        });
     }
 }
