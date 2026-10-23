@@ -201,11 +201,17 @@ pub struct Schematic {
     /// Work-in-progress areas (min corner, max corner): ERC findings located inside are left out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub erc_skip: Vec<(Pt, Pt)>,
+    /// Current (A) a labelled net carries: the board import takes it as the net's current (track width, voltage drop).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub net_currents: BTreeMap<String, f64>,
+    /// Differential pairs, as the two labelled nets (the "+" and the "-" line): the board import makes them a pair.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub diff_pairs: Vec<(String, String)>,
 }
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![] }
+        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![] }
     }
 }
 
@@ -218,11 +224,15 @@ struct RawSchematic {
     layout_version: u32,
     #[serde(default)]
     erc_skip: Vec<(Pt, Pt)>,
+    #[serde(default)]
+    net_currents: BTreeMap<String, f64>,
+    #[serde(default)]
+    diff_pairs: Vec<(String, String)>,
 }
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs };
         s.migrate();
         s
     }

@@ -34,6 +34,35 @@ pub fn import_shops(board: &mut Board, shops: &[(String, std::collections::BTree
         .collect();
 }
 
+/// Net currents (A) and differential pairs the schematic declares, by net name.
+#[derive(Clone, Debug, Default)]
+pub struct NetHints {
+    pub currents: Vec<(String, f64)>,
+    pub pairs: Vec<(String, String)>,
+}
+
+/// Take the schematic's declarations for nets that have pads on the board: a current replaces the board's
+/// for that net; a pair is added unless the board has it already. What the board declares for other nets stays.
+/// Returns how many currents and pairs were taken.
+pub fn import_hints(board: &mut Board, hints: &NetHints) -> (usize, usize) {
+    let on_board = |n: &str| board.pads.iter().any(|p| p.net == n);
+    let currents: Vec<&(String, f64)> = hints.currents.iter().filter(|(n, a)| *a > 0.0 && on_board(n)).collect();
+    let pairs: Vec<&(String, String)> = hints.pairs.iter().filter(|(p, n)| on_board(p) && on_board(n)).collect();
+    let (nc, mut np) = (currents.len(), 0);
+    let currents: Vec<(String, f64)> = currents.into_iter().cloned().collect();
+    let pairs: Vec<(String, String)> = pairs.into_iter().cloned().collect();
+    for (n, a) in currents {
+        board.net_currents.insert(n, a);
+    }
+    for (p, n) in pairs {
+        if !board.diff_pairs.iter().any(|d| (d.p == p && d.n == n) || (d.p == n && d.n == p)) {
+            board.diff_pairs.push(crate::diffpair::DiffPair::new(&format!("{p}/{n}"), &p, &n));
+            np += 1;
+        }
+    }
+    (nc, np)
+}
+
 /// Synchronise the board with the netlist: add new parts (outside the board, ready to be
 /// dragged in), update value/footprint of existing ones while keeping their position,
 /// remove parts that left the schematic, and assign nets to pads.
@@ -276,5 +305,27 @@ mod tests {
         for n in crate::footprints::names() {
             assert!(crate::footprints::get(&n).is_some(), "{n}");
         }
+    }
+}
+
+#[cfg(test)]
+mod hint_tests {
+    use super::*;
+
+    #[test]
+    fn schematic_declarations_become_board_currents_and_pairs() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        for n in ["VIN", "D+", "D-"] {
+            let mut p = Pad::new(Point::new(0.0, 0.0), PadShape::Circle { d: 1.0 }, None, Side::Top);
+            p.net = n.into();
+            b.pads.push(p);
+        }
+        b.net_currents.insert("OTHER".into(), 2.0);
+        let h = NetHints { currents: vec![("VIN".into(), 1.5), ("ABSENT".into(), 1.0)], pairs: vec![("D+".into(), "D-".into()), ("X".into(), "Y".into())] };
+        assert_eq!(import_hints(&mut b, &h), (1, 1));
+        assert_eq!(b.net_currents.get("VIN"), Some(&1.5));
+        assert_eq!(b.net_currents.get("OTHER"), Some(&2.0), "the board's own settings stay");
+        assert_eq!(b.diff_pairs.len(), 1);
+        assert_eq!(import_hints(&mut b, &h).1, 0, "a pair the board has is not added twice");
     }
 }

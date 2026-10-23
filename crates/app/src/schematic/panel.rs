@@ -355,6 +355,7 @@ impl SchEditor {
     }
 
     pub(super) fn panel_properties(&mut self, ui: &mut egui::Ui) {
+        self.label_net_ui(ui);
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());

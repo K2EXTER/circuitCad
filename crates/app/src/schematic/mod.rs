@@ -577,6 +577,7 @@ mod edit;
 mod clipboard;
 mod stretch;
 mod erc_skip;
+mod net_hints;
 mod history;
 mod hint;
 mod canvas;

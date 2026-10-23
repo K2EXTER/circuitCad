@@ -41,6 +41,7 @@ impl Session {
                 }
                 let rep = netlist::import(board, &parts, &nets);
                 netlist::import_shops(board, &shops_of(&self.sch));
+                netlist::import_hints(board, &netlist::NetHints { currents: self.sch.net_currents.clone().into_iter().collect(), pairs: self.sch.diff_pairs.clone() });
                 Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
             }
             "autoplace" => {

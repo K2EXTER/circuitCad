@@ -115,3 +115,6 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 ### schematic/erc_skip.rs — 描きかけの範囲
 `Schematic.erc_skip`(最小角・最大角の組)の中にある ERC の指摘は `sch_core::erc` が捨てる(画面・CLI・チャレンジ判定とも共通。場所のない指摘=GNDなしなどは残る)。ERC ボタンの下の「選択を描きかけにする」で、選択物を囲む範囲(2マス余白)を足す。灰色の枠で表示(`draw_problems`)、×で外す。ファイルに保存され、Undo の対象。
+
+### schematic/net_hints.rs — ネットの電流・差動ペア
+ネットラベルを選ぶと、左パネルに「流れる電流 (A)」と「差動ペアの相手」が出る。`Schematic.net_currents`(ネット名→A)と `Schematic.diff_pairs`(+側,−側)に保存(空なら書かない)。基板への取り込み(`board_editor/file.rs` の `import_from_schematic`、CLI の `board import`)で `pcb_core::netlist::import_hints` が、基板にパッドがあるネットだけ `Board.net_currents` と `Board.diff_pairs` に入れる。電流は回路図の値で上書き、ペアは既にあれば足さない。基板側だけで決めた設定は消さない。ネット名はラベルの文字なので、自動名(N$1 など)のネットには指定できない。
