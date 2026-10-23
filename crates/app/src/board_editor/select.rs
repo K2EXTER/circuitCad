@@ -53,12 +53,27 @@ impl BoardEditor {
                 return Some(Item::Silk(i));
             }
         }
+        // Pours of different nets overlap (a small one inside a big GND pour): an outline under the
+        // pointer wins, otherwise the smallest pour containing it, so the inner one stays pickable.
+        let mut edge: Option<(usize, f64)> = None;
+        let mut inner: Option<(usize, f64)> = None;
         for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
-            if pick.zones && side_ok(z.side) && (polygon_edge_dist(&z.polygon, p) <= tol || inside_polygon(&z.polygon, p)) {
-                return Some(Item::Zone(i));
+            if !pick.zones || !side_ok(z.side) {
+                continue;
+            }
+            let d = polygon_edge_dist(&z.polygon, p);
+            if d <= tol {
+                if edge.is_none_or(|(_, best)| d < best) {
+                    edge = Some((i, d));
+                }
+            } else if inside_polygon(&z.polygon, p) {
+                let area = z.polygon.iter().zip(z.polygon.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0;
+                if inner.is_none_or(|(_, best)| area < best) {
+                    inner = Some((i, area));
+                }
             }
         }
-        None
+        edge.or(inner).map(|(i, _)| Item::Zone(i))
     }
 
     pub(super) fn set_selection(&mut self, items: Vec<Item>) {
