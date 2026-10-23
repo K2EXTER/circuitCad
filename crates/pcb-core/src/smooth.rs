@@ -618,9 +618,17 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         let (w, h) = q.shape.size();
         (q.drill.is_some() || q.side == t.side) && (v.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (v.y - q.pos.y).abs() <= h / 2.0 + 1e-6
     })?;
+    // the widest round end that still lies inside the pad at the place where the track ends (the pad's short side when the track ends at
+    // its centre, less when it ends off centre: a track that comes in from the side may end at the pad's edge)
     let (w, h) = pad.shape.size();
-    let short = w.min(h);
-    if short < board.rules.min_track_width - 1e-9 || t.width - short <= MIN_STEP || v.dist(pad.pos) > 0.05 {
+    let (dx, dy) = ((v.x - pad.pos.x).abs(), (v.y - pad.pos.y).abs());
+    let short = match pad.shape {
+        PadShape::Circle { d } => d - 2.0 * v.dist(pad.pos),
+        _ => 2.0 * (w / 2.0 - dx).min(h / 2.0 - dy),
+    };
+    // never thinner than the board's minimum track width (a hair of the end may then lie outside a pad that the track ends close to the edge of)
+    let short = short.max(board.rules.min_track_width);
+    if t.width - short <= MIN_STEP {
         return None;
     }
     let crowded = board.tracks.iter().enumerate().any(|(k, u)| k != i && u.side == t.side && (u.a.dist(v) < t.width || u.b.dist(v) < t.width));
@@ -628,9 +636,11 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         return None;
     }
     let dw = t.width - short;
-    let ramp = dw * 1.5;
-    let neck = NECK_LEN.min((len - ramp - 0.05).max(0.0));
-    if neck < 0.1 || neck + ramp > len - 0.05 {
+    // a short track (the lead of a route that enters a pad from the side) gets a shorter neck and a steeper widening rather than none
+    let room = len - 0.05;
+    let neck = NECK_LEN.min(room * 0.45);
+    let ramp = (dw * 1.5).min(room - neck);
+    if neck < 0.1 || ramp < 0.1 {
         return None;
     }
     let n = ((dw / BAKE_STEP).ceil() as usize).max(2);
@@ -826,9 +836,11 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool)
         for i in 0..board.tracks.len() {
             for is_a in [true, false] {
                 if !used.contains(&(i, is_a)) {
-                    match live.then(|| pad_fillet(board, i, is_a)).flatten() {
+                    // a track wider than its pad is narrowed first (the neck): a fillet at the pad's face would leave the round end sticking out
+                    // on the far side
+                    match pad_neck(board, i, is_a).or_else(|| live.then(|| pad_fillet(board, i, is_a)).flatten()) {
                         Some(e) => edits.push(e),
-                        None => edits.extend(pad_taper(board, i, is_a).or_else(|| pad_neck(board, i, is_a))),
+                        None => edits.extend(pad_taper(board, i, is_a)),
                     }
                 }
             }
