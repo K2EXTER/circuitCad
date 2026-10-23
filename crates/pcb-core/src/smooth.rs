@@ -602,6 +602,44 @@ fn pad_taper(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     Some(Edit { trims: vec![(i, is_a, at(exit + ramp))], pieces, patch: None, live, kind: Kind::Taper, touches: vec![i] })
 }
 
+/// A track that comes straight into one face of a pad that is deeper than the track is wide (across the track) but shallower than half
+/// the track's width (along it): the round end would reach past the far face of the pad. The track is shortened until the tip of its round
+/// end just touches the far face: the part that stuck out is cut, the rest of the end lies on the pad. (Where the pad is narrower across the
+/// track than the track is wide there is no cut that helps: `pad_neck` narrows the track instead.)
+fn pad_clip(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
+    let t = &board.tracks[i];
+    let (v, far) = if is_a { (t.a, t.b) } else { (t.b, t.a) };
+    let (ux, uy, len) = unit(v, far);
+    let axis_x = ux.abs() > 0.9999;
+    if !axis_x && uy.abs() <= 0.9999 {
+        return None;
+    }
+    let pad = board.pads.iter().find(|q| {
+        let (w, h) = q.shape.size();
+        matches!(q.shape, PadShape::Rect { .. }) && (q.drill.is_some() || q.side == t.side) && (v.x - q.pos.x).abs() <= w / 2.0 + 1e-6 && (v.y - q.pos.y).abs() <= h / 2.0 + 1e-6
+    })?;
+    let (w, h) = pad.shape.size();
+    // along the track (depth) and across it
+    let (depth, across, off_across) = if axis_x { (w, h, (v.y - pad.pos.y).abs()) } else { (h, w, (v.x - pad.pos.x).abs()) };
+    let r = t.width / 2.0;
+    if off_across + r > across / 2.0 + 1e-9 {
+        return None;
+    }
+    // the end of the copper, not a joint with another piece of track (the base of a teardrop that was baked into the tracks): finishing twice
+    // is the same as once
+    if board.tracks.iter().enumerate().any(|(k, u)| k != i && u.side == t.side && (u.a.dist(v) < 0.02 || u.b.dist(v) < 0.02)) {
+        return None;
+    }
+    // how far the pad's far face (the one the round end points at) is from the track's end
+    let c = (v.x - pad.pos.x) * -ux + (v.y - pad.pos.y) * -uy;
+    let far_face = depth / 2.0 - c;
+    let shift = r - far_face;
+    if shift <= 0.01 || shift > len - 0.1 {
+        return None;
+    }
+    Some(Edit { trims: vec![(i, is_a, Point::new(v.x + ux * shift, v.y + uy * shift))], pieces: vec![], patch: None, live: None, kind: Kind::Taper, touches: vec![i] })
+}
+
 /// How long (mm) the neck of a track on a pad narrower than the track is, before the track widens.
 const NECK_LEN: f64 = 0.35;
 
@@ -626,9 +664,9 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         PadShape::Circle { d } => d - 2.0 * v.dist(pad.pos),
         _ => 2.0 * (w / 2.0 - dx).min(h / 2.0 - dy),
     };
-    // never thinner than the board's minimum track width (a hair of the end may then lie outside a pad that the track ends close to the edge of)
-    let short = short.max(board.rules.min_track_width);
-    if t.width - short <= MIN_STEP {
+    // an end that is at the edge of the pad (the base of a teardrop that was baked into the tracks) has no room for a neck: it is left, so
+    // that finishing twice is the same as once
+    if short < board.rules.min_track_width - 1e-9 || t.width - short <= MIN_STEP {
         return None;
     }
     let crowded = board.tracks.iter().enumerate().any(|(k, u)| k != i && u.side == t.side && (u.a.dist(v) < t.width || u.b.dist(v) < t.width));
@@ -838,7 +876,7 @@ fn plan(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: bool)
                 if !used.contains(&(i, is_a)) {
                     // a track wider than its pad is narrowed first (the neck): a fillet at the pad's face would leave the round end sticking out
                     // on the far side
-                    match pad_neck(board, i, is_a).or_else(|| live.then(|| pad_fillet(board, i, is_a)).flatten()) {
+                    match pad_clip(board, i, is_a).or_else(|| pad_neck(board, i, is_a)).or_else(|| live.then(|| pad_fillet(board, i, is_a)).flatten()) {
                         Some(e) => edits.push(e),
                         None => edits.extend(pad_taper(board, i, is_a)),
                     }

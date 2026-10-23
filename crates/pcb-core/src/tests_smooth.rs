@@ -504,10 +504,10 @@ fn a_wide_track_on_a_narrow_pad_gets_a_neck_as_wide_as_the_pad() {
     assert!(g.board.tracks.iter().all(|t| t.width >= 0.6 - 1e-9 || t.width < 0.0), "{:?}", g.board.tracks.iter().map(|t| t.width).collect::<Vec<_>>());
 }
 
-/// The same from the side: a short lead goes across a narrow pad (its far side is only 0.15 mm from the centre) or ends at its edge. The
-/// round end of the wide track must stay inside the pad either way.
+/// From the side (straight into a face of the pad, across its 0.3 mm width): the pad is tall enough for the track, so the track is not
+/// narrowed: it is shortened until the tip of its round end just touches the far face of the pad, which cuts what stuck out.
 #[test]
-fn a_wide_track_entering_a_narrow_pad_from_the_side_does_not_stick_out_either() {
+fn a_wide_track_entering_a_narrow_pad_from_the_side_is_cut_at_the_far_face_of_the_pad() {
     for (end, label) in [((10.0, 10.0), "ending at the centre"), ((9.9, 10.0), "ending off the centre")] {
         let mut b = Board::new("t", 40.0, 30.0);
         let mut p = Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 0.3, h: 0.85 }, None, Side::Top);
@@ -521,18 +521,13 @@ fn a_wide_track_entering_a_narrow_pad_from_the_side_does_not_stick_out_either() 
         b.tracks.push(trk((10.7, 10.0), (20.0, 10.0), 0.6));
         b.finish.on = true;
         let f = finished(&b).unwrap();
-        // every piece that reaches the pad has a round end inside the pad: its width is no more than twice the room to the pad's edges
-        for t in f.board.tracks.iter().filter(|t| (t.a.x - end.0).abs() < 0.2 && (t.a.y - 10.0).abs() < 0.5 || (t.b.x - end.0).abs() < 0.2 && (t.b.y - 10.0).abs() < 0.5) {
-            for e in [t.a, t.b] {
-                let (dx, dy) = ((e.x - 10.0).abs(), (e.y - 10.0).abs());
-                if dx <= 0.15 && dy <= 0.425 {
-                    // the narrowest a neck can be is the board's minimum track width
-                    let fit = (2.0 * (0.15 - dx).min(0.425 - dy)).max(b.rules.min_track_width);
-                    assert!(t.width <= fit + 1e-6, "{label}: a track of {} ends at ({:.2}, {:.2}) where only {fit:.2} fits in the pad", t.width, e.x, e.y);
-                }
-            }
-        }
+        // no copper of the track lies to the left of the pad's far face (x = 9.85)
+        let leftmost = f.board.tracks.iter().map(|t| t.a.x.min(t.b.x) - t.width / 2.0).fold(f64::MAX, f64::min);
+        assert!(leftmost >= 9.85 - 1e-6, "{label}: the round end reaches x = {leftmost:.3}, past the pad's far face at 9.85");
+        // and it still reaches the pad (its tip is on the far face), at full width
+        assert!(leftmost <= 9.85 + 1e-6, "{label}: the track is not cut back more than needed: {leftmost:.3}");
+        assert!(f.board.tracks.iter().all(|t| (t.width - 0.6).abs() < 1e-9), "{label}: the width is not changed");
         assert!(drc::check(&f.board).is_empty(), "{label}: {:?}", drc::check(&f.board));
-        assert!(ratsnest(&f.board).is_empty(), "{label}");
+        assert!(ratsnest(&f.board).is_empty(), "{label}: still connected to the pad");
     }
 }
