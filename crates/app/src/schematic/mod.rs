@@ -576,6 +576,7 @@ mod kicad_import;
 mod edit;
 mod clipboard;
 mod stretch;
+mod erc_skip;
 mod history;
 mod hint;
 mod canvas;

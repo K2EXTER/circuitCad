@@ -527,6 +527,7 @@ impl SchEditor {
             let errors = self.problems.iter().filter(|p| p.severity == Severity::Error).count();
             self.status = format!("ERC: エラー {} 件、注意 {} 件", errors, self.problems.len() - errors);
         }
+        self.erc_skip_ui(ui);
         if self.erc_ran && self.problems.is_empty() {
             ui.colored_label(Color32::from_rgb(60, 160, 90), "✔ 問題は見つかりませんでした");
         }

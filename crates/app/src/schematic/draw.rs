@@ -245,6 +245,11 @@ impl SchEditor {
     }
 
     pub(super) fn draw_problems(&self, painter: &egui::Painter, rect: Rect) {
+        for (lo, hi) in &self.sch.erc_skip {
+            let r = Rect::from_two_pos(self.to_screen(rect, (lo.0 as f32, lo.1 as f32)), self.to_screen(rect, (hi.0 as f32, hi.1 as f32)));
+            painter.rect(r, 4.0, Color32::from_rgba_unmultiplied(150, 150, 150, 28), Stroke::new(1.2, Color32::from_rgb(130, 130, 130)), egui::StrokeKind::Inside);
+            painter.text(r.left_top() + Vec2::new(4.0, 2.0), Align2::LEFT_TOP, "描きかけ (ERC対象外)", FontId::proportional(11.0), Color32::from_rgb(120, 120, 120));
+        }
         for (k, pr) in self.problems.iter().enumerate() {
             if let Some(a) = pr.at {
                 let color = match pr.severity {

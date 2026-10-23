@@ -198,11 +198,14 @@ pub struct Schematic {
     pub wires: Vec<Wire>,
     pub labels: Vec<Label>,
     pub layout_version: u32,
+    /// Work-in-progress areas (min corner, max corner): ERC findings located inside are left out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub erc_skip: Vec<(Pt, Pt)>,
 }
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION }
+        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![] }
     }
 }
 
@@ -213,11 +216,13 @@ struct RawSchematic {
     labels: Vec<Label>,
     #[serde(default)]
     layout_version: u32,
+    #[serde(default)]
+    erc_skip: Vec<(Pt, Pt)>,
 }
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip };
         s.migrate();
         s
     }

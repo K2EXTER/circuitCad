@@ -184,8 +184,14 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
     (cn, nets)
 }
 
-/// Electrical rule check.
+/// Electrical rule check. Findings located inside a work-in-progress area (`Schematic::erc_skip`) are left out.
 pub fn erc(s: &Schematic) -> Vec<Problem> {
+    let mut out = erc_all(s);
+    out.retain(|p| p.at.is_none_or(|a| !s.erc_skip.iter().any(|(lo, hi)| a.0 >= lo.0 && a.0 <= hi.0 && a.1 >= lo.1 && a.1 <= hi.1)));
+    out
+}
+
+fn erc_all(s: &Schematic) -> Vec<Problem> {
     use Severity::{Error, Warning};
     let mut out = vec![];
     let mut seen: HashMap<&str, usize> = HashMap::new();
