@@ -7,7 +7,7 @@ use crate::drc;
 use crate::model::*;
 
 /// The necks are this long (mm) beyond the pads' edge before the trunk starts.
-const NECK_LEN: f64 = 0.4;
+const NECK_LEN: f64 = 0.75;
 /// Offset (mm) the two pad centres may differ by across the pair and still count as lined up.
 const LINED_UP: f64 = 0.05;
 
@@ -147,9 +147,9 @@ mod tests {
         let b = lx_board();
         let f = fan(&b, 0, 1, Point::new(10.0, 18.5), 0.25).unwrap();
         assert_eq!((f.dir.x, f.dir.y), (-1.0, 0.0), "out to the left, towards the destination");
-        // necks 0.25 wide from the pad centres, 0.4 beyond the pads' left edge
+        // necks 0.25 wide from the pad centres, 0.75 beyond the pads' left edge
         assert!(f.necks.iter().all(|n| (n.width - 0.25).abs() < 1e-9));
-        assert!((f.necks[0].b.x - (15.05 - 0.425 - 0.4)).abs() < 1e-9, "{:?}", f.necks[0]);
+        assert!((f.necks[0].b.x - (15.05 - 0.425 - 0.75)).abs() < 1e-9, "{:?}", f.necks[0]);
         // the trunk is the pair's outer edges: 0.65 + 0.25 = 0.9 wide, centred between the pads
         assert!((f.width - 0.9).abs() < 1e-9);
         assert!((f.start.y - 18.5).abs() < 1e-9);
@@ -292,14 +292,28 @@ mod finish_tests {
         })
     }
 
-    /// The pads of a trunk stay apart: the finish does not fill the gap between them (the necks are thin so that the solder stays on them).
+    /// The end of a trunk: the space in front of the two pads is filled out to the width of the trunk (flush with the necks' outer edges), and
+    /// a round notch is left open in front of the gap between the pads (the pads stay apart and the solder stays on them).
     #[test]
-    fn the_finish_does_not_fill_between_the_pads_of_a_trunk() {
+    fn the_finish_fills_in_front_of_a_trunks_pads_with_a_round_notch_between_them() {
         let mut b = lx_board();
         let f = fan(&b, 0, 1, Point::new(10.0, 18.5), 0.25).unwrap();
         add(&mut b, &f, &[Point::new(10.0, 18.5)]).unwrap();
         b.finish.on = true;
-        assert!(!fills_between_the_pads(&b), "the gap between the two pads is left open");
+        let fin = crate::smooth::finished(&b).unwrap();
+        let filled = |x: f64, y: f64| fin.patches.iter().any(|p| crate::geom::inside_polygon(&p.outline, Point::new(x, y)));
+        let face = 15.05 - 0.425; // the pads' left face
+        assert!(!fills_between_the_pads(&b), "nothing between the two pads");
+        // in front of the pads, out to the trunk's width: filled where the notch is not
+        assert!(filled(face - 0.2, 18.5 + 0.40) && filled(face - 0.2, 18.5 - 0.40), "filled out to the outer edges of the trunk");
+        assert!(filled(face - 0.6, 18.5), "and across the middle, beyond the notch");
+        // the notch: open in front of the gap, as wide as the gap, with a round tip
+        assert!(!filled(face - 0.05, 18.5) && !filled(face - 0.15, 18.5), "open in front of the gap");
+        assert!(filled(face - 0.05, 18.5 + 0.30), "and filled beside it, where the pad is");
+        let tip = |y: f64| (0..80).map(|k| face - k as f64 * 0.005).find(|x| filled(*x, y));
+        let (mid, wall) = (tip(18.5).unwrap(), tip(18.5 + 0.15).unwrap());
+        assert!(wall > mid + 0.005, "a round tip: the fill ends {:.3} from the face on the centre line and {:.3} near the wall", face - mid, face - wall);
+        assert!(drc::check(&b).is_empty());
     }
 
     /// Two ordinary tracks of one width from the same two pads (no trunk: nothing is wider) are finished as before: the slot between them is

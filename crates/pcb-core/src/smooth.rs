@@ -693,6 +693,75 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     Some(Edit { trims: vec![(i, is_a, at(neck + ramp))], pieces, patch: None, live: None, kind: Kind::Taper, touches: vec![i] })
 }
 
+/// The end of a trunk (`trunk.rs`: two thin necks that leave two side by side pads and run into one wide track): the space in front of the
+/// pads is filled out to the width of the trunk, from the pads' face to where the trunk starts, and a round notch, as wide as the gap
+/// between the pads, is left open in front of them (the solder stays on the pads, and the gap is not bridged). Returns the polygons, each
+/// with a track of the trunk's net.
+fn trunk_blocks(board: &Board, conn: &crate::drc::Connectivity) -> Vec<(Vec<Point>, usize)> {
+    let necks: Vec<usize> = (0..board.tracks.len()).filter(|&i| crate::current::is_neck(board, conn, i)).collect();
+    // the pad a neck starts at, and which end that is
+    let start_of = |i: usize| -> Option<(bool, &Pad)> {
+        let t = &board.tracks[i];
+        [(true, t.a), (false, t.b)].into_iter().find_map(|(is_a, e)| board.pads.iter().find(|q| (q.drill.is_some() || q.side == t.side) && e.dist(q.pos) < 0.05).map(|q| (is_a, q)))
+    };
+    let mut out = vec![];
+    let mut used: Vec<usize> = vec![];
+    for (x, &i) in necks.iter().enumerate() {
+        for &j in &necks[x + 1..] {
+            if used.contains(&i) || used.contains(&j) {
+                continue;
+            }
+            let (Some((ai, pi)), Some((aj, pj))) = (start_of(i), start_of(j)) else { continue };
+            let (ti, tj) = (&board.tracks[i], &board.tracks[j]);
+            if ti.side != tj.side || conn.track_net(i) != conn.track_net(j) {
+                continue;
+            }
+            let (ci, fi) = if ai { (ti.a, ti.b) } else { (ti.b, ti.a) };
+            let (cj, fj) = if aj { (tj.a, tj.b) } else { (tj.b, tj.a) };
+            let (ux, uy, li) = unit(ci, fi);
+            let (vx, vy, lj) = unit(cj, fj);
+            // the same way out, along an axis, and the same length: the two necks of one trunk
+            if (ux - vx).abs() > 1e-6 || (uy - vy).abs() > 1e-6 || (li - lj).abs() > 1e-6 || (ux.abs() < 0.9999 && uy.abs() < 0.9999) {
+                continue;
+            }
+            let (nx, ny) = (-uy, ux);
+            let pitch = ((cj.x - ci.x) * nx + (cj.y - ci.y) * ny).abs();
+            let along = (cj.x - ci.x) * ux + (cj.y - ci.y) * uy;
+            if pitch < 0.05 || along.abs() > 1e-6 {
+                continue;
+            }
+            // the pads' half length along the necks, and their size across
+            let (a, pw) = if ux.abs() > 0.5 { (pi.shape.size().0 / 2.0, pi.shape.size().1) } else { (pi.shape.size().1 / 2.0, pi.shape.size().0) };
+            let _ = pj;
+            let (len, nw) = (li - a, ti.width.max(tj.width));
+            let rho = (pitch - pw) / 2.0;
+            if len < 0.1 || rho < 0.03 {
+                continue;
+            }
+            let half_w = pitch / 2.0 + nw / 2.0;
+            // the notch: as wide as the gap between the pads, a U with a round tip, about 1.6 gap-widths deep (never most of the block)
+            let depth = (1.6 * rho).min(0.7 * len).max(rho);
+            let mid = Point::new((ci.x + cj.x) / 2.0, (ci.y + cj.y) / 2.0);
+            let q = |s: f64, u: f64| Point::new(mid.x + ux * (a + s) + nx * u, mid.y + uy * (a + s) + ny * u);
+            // `-0.02`: the block starts a hair inside the pads, so that no hairline is left against them
+            let mut pts = vec![q(-0.02, half_w), q(len + 0.02, half_w), q(len + 0.02, -half_w), q(-0.02, -half_w), q(-0.02, -rho), q(depth - rho, -rho)];
+            const STEPS: usize = 12;
+            for k in 1..STEPS {
+                let ang = -std::f64::consts::FRAC_PI_2 + std::f64::consts::PI * k as f64 / STEPS as f64;
+                pts.push(q(depth - rho + rho * ang.cos(), rho * ang.sin()));
+            }
+            pts.extend([q(depth - rho, rho), q(-0.02, rho)]);
+            // counter-clockwise, like the other patches
+            if crate::geom::signed_area(&pts) < 0.0 {
+                pts.reverse();
+            }
+            used.extend([i, j]);
+            out.push((pts, i));
+        }
+    }
+    out
+}
+
 /// The face of a rectangular pad that a track leaves straight out of (at a right angle): which pad, how far (mm) along the
 /// track from its end `p` the face is, and where the face's two ends lie to the sides of the track's line (`lo` < 0 <
 /// `hi` when the track leaves between them; measured to the left of the way out, `(-uy, ux)`).
@@ -1010,6 +1079,16 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
     let (new, kept) = apply_checked(board, &kept_edits, fast);
     let mut patches: Vec<Patch> = kept.iter().filter_map(|&k| patches_of[k].clone()).collect();
     // the slots between tracks of one net that run side by side (the fork patch only fills the sharp tip)
+    // where a trunk meets its two pads: the copper in front of the pads, as wide as the trunk, with a round notch between the pads
+    if board.finish.forks {
+        for (outline, track) in trunk_blocks(board, &conn) {
+            let side = board.tracks[track].side;
+            let excluded = conn.track_net(track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n));
+            if !excluded && copper.clear(board, &conn, side, &outline, track) {
+                patches.push(Patch { side, outline, track });
+            }
+        }
+    }
     if board.finish.forks {
         for s in crate::slot::slot_patches(board, &conn, &patches, board.finish.radius) {
             let excluded = conn.track_net(s.track).is_some_and(|n| board.finish_exclude.iter().any(|x| x == n));
