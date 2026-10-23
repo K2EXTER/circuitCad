@@ -55,7 +55,8 @@ impl BoardEditor {
     pub(super) fn route_via(&mut self, a: Point, p: Point) {
         self.checkpoint();
         self.push_route(a, p);
-        self.board.vias.push(Via { pos: p, diameter: self.via_dia, drill: self.via_drill });
+        let (_, via_dia, via_drill, _) = self.route_settings(self.net_at(a).as_deref());
+        self.board.vias.push(Via { pos: p, diameter: via_dia, drill: via_drill });
         self.side = self.next_layer();
         self.pending = Some(p);
     }
@@ -64,9 +65,11 @@ impl BoardEditor {
     pub(super) fn route_segments(&self, a: Point, p: Point) -> Vec<Track> {
         let mut from = a;
         let mut v = vec![];
+        // the width of the net class of the net the route starts on
+        let width = self.route_settings(self.net_at(a).as_deref()).0;
         for q in self.route_points(a, p) {
             if from.dist(q) > 1e-9 {
-                v.push(Track { side: self.side, a: from, b: q, width: self.track_width });
+                v.push(Track { side: self.side, a: from, b: q, width });
             }
             from = q;
         }

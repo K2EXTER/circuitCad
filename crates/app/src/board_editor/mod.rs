@@ -313,6 +313,8 @@ pub struct BoardEditor {
     zone_cache: std::cell::RefCell<ZoneCache>,
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
     hover_net: Option<(String, Pos2)>,
+    /// A value of a net class is being dragged: the undo step was taken at its start.
+    class_editing: bool,
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
@@ -399,6 +401,7 @@ impl Default for BoardEditor {
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
             hover_net: None,
+            class_editing: false,
             last_export_dir: None,
             lesson: None,
             drc_ran: false,
@@ -443,6 +446,7 @@ mod align;
 mod tools;
 mod trunk;
 mod netglow;
+mod netclass;
 mod file;
 mod actions;
 mod canvas;

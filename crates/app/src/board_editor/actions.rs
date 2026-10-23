@@ -39,7 +39,7 @@ impl BoardEditor {
         // neighbouring pads of one net (the two LX pins of a regulator) become one piece of copper first, so that one trunk leaves them
         let bridged = if net.is_none() { pcb_core::bridge::bridge_pads(&mut self.board) } else { 0 };
         let tracks_before = self.board.tracks.len();
-        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, clearance: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
         // differential pairs first, side by side; the rest afterwards
         let mut pair_routed = 0;
         let mut pair_failed = vec![];
@@ -134,7 +134,7 @@ impl BoardEditor {
             return;
         }
         self.checkpoint();
-        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, clearance: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
         let (len, vias) = (self.board.tracks.iter().map(|t| t.a.dist(t.b)).sum::<f64>(), self.board.vias.len());
         let r = pcb_core::reroute::improve_routes(&mut self.board, &opt, None, net);
         if r.improved == 0 {

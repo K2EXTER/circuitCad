@@ -106,7 +106,7 @@ impl BoardEditor {
             return;
         }
         self.checkpoint();
-        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: actions::route_pitch(self.grid), follow: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: actions::route_pitch(self.grid), follow: None, clearance: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len) };
         let r = autoroute::route_pair(&mut self.board, &d, &opt);
         if r.routed == 0 {
             self.undo.pop();

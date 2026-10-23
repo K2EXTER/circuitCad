@@ -124,12 +124,14 @@ pub fn check(board: &Board) -> Vec<Violation> {
 pub fn clearance(board: &Board) -> Vec<Violation> {
     let r = &board.rules;
     let items = copper_items(board);
-    let grp = connectivity(board).items;
+    let conn = connectivity(board);
+    let grp = conn.items.clone();
     let mut out = vec![];
 
     // only the pairs whose boxes come within the clearance of each other can break it; in the order of the item numbers
+    // (the clearance of a net class can be more than the board's rule)
     let mut near: Vec<(usize, usize)> = vec![];
-    near_pairs(&items, r.min_clearance, |i, j| near.push((i.min(j), i.max(j))));
+    near_pairs(&items, board.max_clearance(), |i, j| near.push((i.min(j), i.max(j))));
     near.sort_unstable();
     for side in board.copper_layers() {
         for &(i, j) in &near {
@@ -137,10 +139,12 @@ pub fn clearance(board: &Board) -> Vec<Violation> {
                 continue;
             }
             let d = dist(&items[i].geo, &items[j].geo);
-            if d + 1e-9 < r.min_clearance {
+            let need = board.clearance_between(conn.group_net(grp[i]), conn.group_net(grp[j]));
+            if d + 1e-9 < need {
                 let (p, q) = (center(&items[i].geo), center(&items[j].geo));
+                let why = if need > r.min_clearance + 1e-9 { " (ネットクラスで、広い間隔を決めたネットです)" } else { "" };
                 out.push(v(
-                    format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ)", side_name(side), d, r.min_clearance),
+                    format!("{} 銅箔どうしの間隔 {:.3}mm が最小 {:.3}mm より狭いです。配線やパッドを離しましょう (別のネットが近づきすぎ){}", side_name(side), d, need, why),
                     Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0),
                 ));
             }
@@ -234,7 +238,7 @@ pub fn violations_of_items(board: &Board, changed_tracks: &[usize], changed_vias
                 if is_new[j] && j < i {
                     continue; // a pair of new items is counted once
                 }
-                if dist(&items[i].geo, &items[j].geo) + 1e-9 < r.min_clearance {
+                if dist(&items[i].geo, &items[j].geo) + 1e-9 < board.clearance_between(conn.group_net(conn.items[i]), conn.group_net(conn.items[j])) {
                     n += 1;
                 }
             }

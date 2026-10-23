@@ -245,6 +245,27 @@ impl Zone {
     }
 }
 
+/// A group of nets that share their own routing rules: a power class is routed wide and with room around it, a signal class thin. The
+/// values are what the nets are routed with and what the DRC asks of the copper around them (the board's `Rules` stay the floor).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NetClass {
+    pub name: String,
+    pub nets: Vec<String>,
+    /// Width (mm) the tracks of these nets are drawn with.
+    pub track_width: f64,
+    /// Distance (mm) other copper keeps from the copper of these nets (never below `Rules::min_clearance`).
+    pub clearance: f64,
+    pub via_diameter: f64,
+    pub via_drill: f64,
+}
+
+impl Default for NetClass {
+    fn default() -> Self {
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3 }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Rules {
@@ -295,6 +316,9 @@ pub struct Board {
     /// Current (A) each net is meant to carry, set by the user: the track widths are checked against it.
     #[serde(default)]
     pub net_currents: std::collections::BTreeMap<String, f64>,
+    /// Routing rules shared by groups of nets (the first class that lists a net is the one that counts).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub net_classes: Vec<NetClass>,
     /// Parts (by reference designator) that were fixed in place: the editor does not move, turn or flip them.
     #[serde(default)]
     pub locked_parts: Vec<String>,
@@ -330,6 +354,25 @@ impl Board {
         v
     }
 
+    /// The net class that lists `net`, if any.
+    pub fn class_of(&self, net: &str) -> Option<&NetClass> {
+        if net.is_empty() {
+            return None;
+        }
+        self.net_classes.iter().find(|c| c.nets.iter().any(|n| n == net))
+    }
+
+    /// How far copper of net `a` and copper of net `b` must stay apart: the board's rule, or more when the class of either asks for it.
+    pub fn clearance_between(&self, a: Option<&str>, b: Option<&str>) -> f64 {
+        let of = |n: Option<&str>| n.and_then(|n| self.class_of(n)).map_or(0.0, |c| c.clearance);
+        self.rules.min_clearance.max(of(a)).max(of(b))
+    }
+
+    /// The largest clearance anything on the board asks for (what a search for "too close" has to look out to).
+    pub fn max_clearance(&self) -> f64 {
+        self.net_classes.iter().filter(|c| !c.nets.is_empty()).fold(self.rules.min_clearance, |m, c| m.max(c.clearance))
+    }
+
     pub fn is_locked(&self, refdes: &str) -> bool {
         self.locked_parts.iter().any(|r| r == refdes)
     }
@@ -353,6 +396,7 @@ impl Board {
             zones: vec![],
             footprints: vec![],
             net_currents: Default::default(),
+            net_classes: vec![],
             locked_parts: vec![],
             inner_layers: 0,
             diff_pairs: vec![],

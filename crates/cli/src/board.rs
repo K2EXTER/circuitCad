@@ -1,4 +1,4 @@
-//! Board commands: new, import, pour, autoplace, move, route, improve, labels, drc, status, postlayout, currents, save, open, fab.
+//! Board commands: new, import, pour, autoplace, move, route, improve, labels, class, drc, status, postlayout, currents, save, open, fab.
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
@@ -11,7 +11,7 @@ const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
 impl Session {
     pub fn board_cmd(&mut self, args: &[String]) -> Res {
-        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|labels|drc|status|postlayout|currents|save|open|fab".into()) };
+        let Some(sub) = args.first() else { return Err("board new|import|pour|autoplace|move|route|improve|labels|class|drc|status|postlayout|currents|save|open|fab".into()) };
         let rest = &args[1..];
         match sub.to_ascii_lowercase().as_str() {
             "new" => {
@@ -73,6 +73,62 @@ impl Session {
                 };
                 board.place_part(&part.refdes, pcb_core::model::Point::new(x, y), rot);
                 Ok(obj(json!({"part": part.refdes, "x": x, "y": y, "rot": rot})))
+            }
+            "class" => {
+                // net classes: `board class` lists them; `board class NAME [width=mm] [clearance=mm] [via=dia/drill] [nets=A,B]` makes or
+                // changes one (a net listed in it leaves its other class); `board class NAME remove=1` deletes it
+                let (pos, kv) = options(rest);
+                let board = self.board_mut()?;
+                let Some(name) = pos.first() else {
+                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill]})).collect();
+                    return Ok(obj(json!({"classes": list})));
+                };
+                if opt(&kv, "remove") == Some("1") {
+                    let before = board.net_classes.len();
+                    board.net_classes.retain(|c| &c.name != name);
+                    return Ok(obj(json!({"removed": before - board.net_classes.len()})));
+                }
+                let k = match board.net_classes.iter().position(|c| &c.name == name) {
+                    Some(k) => k,
+                    None => {
+                        board.net_classes.push(pcb_core::NetClass { name: name.clone(), ..Default::default() });
+                        board.net_classes.len() - 1
+                    }
+                };
+                let floor = board.rules.clone();
+                if let Some(w) = opt(&kv, "width") {
+                    let w = num(w)?;
+                    if w + 1e-9 < floor.min_track_width {
+                        return Err(format!("width={w}: thinner than the board's minimum track width {} mm", floor.min_track_width));
+                    }
+                    board.net_classes[k].track_width = w;
+                }
+                if let Some(c) = opt(&kv, "clearance") {
+                    let c = num(c)?;
+                    if c + 1e-9 < floor.min_clearance {
+                        return Err(format!("clearance={c}: less than the board's minimum clearance {} mm", floor.min_clearance));
+                    }
+                    board.net_classes[k].clearance = c;
+                }
+                if let Some(v) = opt(&kv, "via") {
+                    let (d, h) = v.split_once('/').ok_or("via=DIAMETER/DRILL, e.g. via=0.8/0.4")?;
+                    let (d, h) = (num(d)?, num(h)?);
+                    if h >= d {
+                        return Err(format!("via={v}: the drill must be smaller than the diameter"));
+                    }
+                    (board.net_classes[k].via_diameter, board.net_classes[k].via_drill) = (d, h);
+                }
+                if let Some(n) = opt(&kv, "nets") {
+                    let nets: Vec<String> = n.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                    for (j, other) in board.net_classes.iter_mut().enumerate() {
+                        if j != k {
+                            other.nets.retain(|x| !nets.contains(x));
+                        }
+                    }
+                    board.net_classes[k].nets = nets;
+                }
+                let c = &board.net_classes[k];
+                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill]})))
             }
             "labels" => {
                 // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or

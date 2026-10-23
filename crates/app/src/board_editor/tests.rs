@@ -932,10 +932,10 @@ fn the_automatic_route_is_searched_only_towards_something_to_connect_to() {
     assert!(!free.found);
     assert!(e.on_object(p(35.0, 15.0)) && !e.on_object(p(30.0, 10.0)));
     // the router is built once for the board as it is, and again when the copper changes
-    let r1 = e.router().unwrap();
-    assert!(std::rc::Rc::ptr_eq(&r1, &e.router().unwrap()));
+    let r1 = e.router_for(None).unwrap();
+    assert!(std::rc::Rc::ptr_eq(&r1, &e.router_for(None).unwrap()));
     e.board.tracks.push(Track { side: Side::Top, a: p(1.0, 1.0), b: p(2.0, 1.0), width: 0.25 });
-    assert!(!std::rc::Rc::ptr_eq(&r1, &e.router().unwrap()));
+    assert!(!std::rc::Rc::ptr_eq(&r1, &e.router_for(None).unwrap()));
 }
 
 #[test]
@@ -1605,4 +1605,21 @@ fn an_unnamed_net_is_captioned_with_its_pins() {
     let c = e.net_caption("N$1");
     assert!(c.contains("U1-2") && c.contains("回路図で名前のない"), "{c}");
     assert_eq!(e.net_caption("GND"), "GND");
+}
+
+/// A route that starts on a net of a class is drawn with the width of the class (and its via); other nets use the tool's width.
+#[test]
+fn a_route_of_a_classed_net_uses_the_class_width_and_via() {
+    let mut e = lx_pair_editor();
+    e.tool = Tool::Track;
+    e.trunk_mode = false;
+    e.track_width = 0.25;
+    let a = p(15.05, 18.825);
+    let to = p(10.0, 18.825);
+    assert!(e.route_segments(a, to).iter().all(|t| (t.width - 0.25).abs() < 1e-9));
+    e.board.net_classes.push(pcb_core::NetClass { name: "電源".into(), nets: vec!["LX".into()], track_width: 0.6, clearance: 0.3, via_diameter: 0.9, via_drill: 0.45 });
+    let segs = e.route_segments(a, to);
+    assert!(!segs.is_empty() && segs.iter().all(|t| (t.width - 0.6).abs() < 1e-9), "{segs:?}");
+    assert_eq!(e.route_settings(Some("LX")), (0.6, 0.9, 0.45, Some(0.3)));
+    assert_eq!(e.route_settings(Some("GND")), (0.25, e.via_dia, e.via_drill, None));
 }

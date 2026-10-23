@@ -18,7 +18,8 @@ impl PatchCheck {
     pub fn clear(&self, board: &Board, conn: &Connectivity, side: Side, outline: &[Point], track: usize) -> bool {
         let own = conn.items[track];
         let n = outline.len();
-        let m = board.rules.min_clearance;
+        // (the clearance a net class asks for is the largest on the board: a patch is kept away from all copper by that much)
+        let m = board.max_clearance();
         // only copper whose box is within the clearance of the polygon's box can be too close to it (or inside it)
         let (x0, x1, y0, y1) = outline.iter().fold((f64::MAX, f64::MIN, f64::MAX, f64::MIN), |b, p| (b.0.min(p.x), b.1.max(p.x), b.2.min(p.y), b.3.max(p.y)));
         for (k, it) in self.items.iter().enumerate() {
@@ -58,7 +59,7 @@ pub struct StretchCheck {
 
 impl StretchCheck {
     pub fn new(board: &Board) -> Self {
-        StretchCheck { items: copper_items(board), conn: connectivity(board), min_clearance: board.rules.min_clearance }
+        StretchCheck { items: copper_items(board), conn: connectivity(board), min_clearance: board.max_clearance() }
     }
 
     /// May a track of `width` run straight from `a` to `b` on `side`, leaving the pad number `pad` (`board.pads[pad]`)?

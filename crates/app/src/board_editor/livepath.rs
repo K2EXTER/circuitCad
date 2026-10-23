@@ -38,12 +38,27 @@ impl BoardEditor {
     }
 
     /// The router of the board as it is (the obstacle grid), kept until the copper or the settings change.
-    pub(super) fn router(&self) -> Option<Rc<Router>> {
+    /// The width, via and clearance a route of `net` is drawn with: those of its net class, or the settings of the tool.
+    pub(super) fn route_settings(&self, net: Option<&str>) -> (f64, f64, f64, Option<f64>) {
+        match net.and_then(|n| self.board.class_of(n)) {
+            Some(c) => (c.track_width, c.via_diameter, c.via_drill, (c.clearance > self.board.rules.min_clearance + 1e-9).then_some(c.clearance)),
+            None => (self.track_width, self.via_dia, self.via_drill, None),
+        }
+    }
+
+    /// [`router`](Self::router) for a net (one of a net class has its own width, via and clearance).
+    pub(super) fn router_for(&self, net: Option<&str>) -> Option<Rc<Router>> {
         use std::hash::{Hash, Hasher};
+        let (width, via_dia, via_drill, clearance) = self.route_settings(net);
         let mut h = std::collections::hash_map::DefaultHasher::new();
         pcb_core::zonefill::geometry_key(&self.board).hash(&mut h);
-        for v in [self.track_width, self.via_dia, self.via_drill, actions::route_pitch(self.grid)] {
+        for v in [width, via_dia, via_drill, clearance.unwrap_or(0.0), actions::route_pitch(self.grid)] {
             v.to_bits().hash(&mut h);
+        }
+        // the classes decide what the obstacles keep away
+        for c in &self.board.net_classes {
+            c.clearance.to_bits().hash(&mut h);
+            c.nets.hash(&mut h);
         }
         let key = h.finish();
         let mut cache = self.router_cache.borrow_mut();
@@ -52,7 +67,7 @@ impl BoardEditor {
         {
             return Some(r.clone());
         }
-        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: actions::route_pitch(self.grid), follow: None, pad_lead: None };
+        let opt = RouteOptions { track_width: width, via_diameter: via_dia, via_drill, grid: actions::route_pitch(self.grid), follow: None, clearance, pad_lead: None };
         let r = Rc::new(Router::new(&self.board, &opt)?);
         *cache = Some((key, r.clone()));
         Some(r)
@@ -71,12 +86,12 @@ impl BoardEditor {
             qp = None;
         }
         let (from, to) = (qa.unwrap_or(a), qp.unwrap_or(p));
-        let router = self.router()?;
-        let margin = 3.0 + 0.3 * a.dist(p);
         let net = self.net_at(a);
+        let router = self.router_for(net.as_deref())?;
+        let margin = 3.0 + 0.3 * a.dist(p);
         let found = router.path(net.as_deref(), from, to, self.side, false, margin, SEARCH_BUDGET)?;
         let mut tracks = vec![];
-        let width = self.track_width;
+        let width = self.route_settings(net.as_deref()).0;
         if let Some(q) = qa {
             tracks.push(Track { side: self.side, a, b: q, width });
         }

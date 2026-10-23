@@ -634,3 +634,19 @@ fn a_model_from_a_maker_zip_can_be_found_used_added_and_simulated() {
     assert!((v - 5.0).abs() < 0.05, "V(OUT) = {v}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `board class` makes, lists, changes and removes net classes, and refuses values below the board's floor.
+#[test]
+fn board_class_makes_lists_and_removes_classes() {
+    let (a, ok) = run("board new 40 30\nboard class power width=0.5 clearance=0.25 via=0.8/0.4 nets=VIN,GND\nboard class sig width=0.2 nets=SIG,GND\nboard class\nboard class sig remove=1\n");
+    assert!(ok, "{a:?}");
+    let list = a.iter().filter(|v| v["cmd"] == "board" && v.get("classes").is_some()).next().unwrap();
+    let classes = list["classes"].as_array().unwrap();
+    assert_eq!(classes.len(), 2);
+    // GND moved to the later class that listed it
+    assert_eq!(classes[0]["nets"], serde_json::json!(["VIN"]));
+    assert_eq!(classes[1]["nets"], serde_json::json!(["SIG", "GND"]));
+    assert_eq!(last(&a, "board")["removed"], 1);
+    let (a, _) = run("board new 40 30\nboard class x width=0.01\n");
+    assert!(a.iter().any(|v| v["ok"] == false && v["error"].as_str().is_some_and(|e| e.contains("thinner"))), "{a:?}");
+}

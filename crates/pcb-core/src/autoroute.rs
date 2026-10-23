@@ -29,11 +29,14 @@ pub struct RouteOptions {
     /// Leave and enter rectangular pads at a right angle to their edge for this many mm (the route starts and ends at
     /// a point that far outside the pad, straight out of one of its four edges). `None`: from anywhere around the pad.
     pub pad_lead: Option<f64>,
+    /// Keep this far from other copper (when more than the board's rule): the clearance of the net class of the net being routed.
+    /// What the net classes of the copper that is already there ask for is always kept.
+    pub clearance: Option<f64>,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None }
     }
 }
 
@@ -87,25 +90,41 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
 /// than a plain run does, the plain run is kept. With `only_net`, only that net is routed.
 pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
     let mut report = RouteReport::default();
-    let mut wide: Vec<(String, f64)> = vec![];
-    for (n, amps) in board.net_currents.clone() {
-        let need = crate::current::round_up_width(crate::current::width_for_current(amps, &Default::default()));
-        if need > opt.track_width + 1e-9 && only_net.is_none_or(|x| x == n) {
-            wide.push((n, need));
+    // the nets that are routed on their own terms: a width from the current, or the width / via / clearance of the net class
+    let mut wide: Vec<(String, RouteOptions)> = vec![];
+    let mut names: Vec<String> = board.net_currents.keys().cloned().collect();
+    names.extend(board.net_classes.iter().flat_map(|c| c.nets.iter().cloned()));
+    names.sort();
+    names.dedup();
+    for n in names {
+        if !only_net.is_none_or(|x| x == n) {
+            continue;
+        }
+        let mut o = opt.clone();
+        if let Some(c) = board.class_of(&n) {
+            (o.track_width, o.via_diameter, o.via_drill) = (c.track_width, c.via_diameter, c.via_drill);
+            o.clearance = (c.clearance > board.rules.min_clearance + 1e-9).then_some(c.clearance);
+        }
+        if let Some(amps) = board.net_currents.get(&n) {
+            let need = crate::current::round_up_width(crate::current::width_for_current(*amps, &Default::default()));
+            o.track_width = o.track_width.max(need);
+        }
+        let differs = (o.track_width - opt.track_width).abs() > 1e-9 || (o.via_diameter - opt.via_diameter).abs() > 1e-9 || (o.via_drill - opt.via_drill).abs() > 1e-9 || o.clearance.is_some();
+        if differs {
+            wide.push((n, o));
         }
     }
-    wide.sort_by(|a, b| a.0.cmp(&b.0));
     // the plain run, to fall back on when the wide tracks take room that other connections needed
     let plain = (!wide.is_empty()).then(|| {
         let mut b = board.clone();
         let r = autoroute(&mut b, opt, only_net);
         (b, r)
     });
-    for (n, w) in &wide {
-        let r = autoroute(board, &RouteOptions { track_width: *w, ..opt.clone() }, Some(n));
+    for (n, o) in &wide {
+        let r = autoroute(board, o, Some(n));
         report.routed += r.routed;
-        if r.routed > 0 {
-            report.wide.push((n.clone(), *w));
+        if r.routed > 0 && o.track_width > opt.track_width + 1e-9 {
+            report.wide.push((n.clone(), o.track_width));
         }
     }
     let rest = autoroute(board, opt, only_net);
@@ -321,8 +340,14 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     let r = &board.rules;
     // A path sampled on the grid can pass closer to a corner than its cells do, so inflate a little more.
     let widen = |need: f64| (need * need + g * g / 2.0).sqrt();
-    let t_need = widen(r.min_clearance + opt.track_width / 2.0 + 0.005);
-    let v_need = widen(r.min_clearance + opt.via_diameter / 2.0 + 0.005);
+    // what an obstacle of net `n` keeps a new track / via away: the board's rule, or the clearance of its net class, or of the class
+    // of the net being routed, whichever is the most
+    let own_clear = opt.clearance.unwrap_or(0.0);
+    let need_for = |n: Option<&str>| {
+        let c = board.clearance_between(n, None).max(own_clear);
+        (widen(c + opt.track_width / 2.0 + 0.005), widen(c + opt.via_diameter / 2.0 + 0.005))
+    };
+    let (t_need, v_need) = need_for(None);
     let t_edge = widen(r.edge_clearance + opt.track_width / 2.0 + 0.005);
     let v_edge = widen(r.edge_clearance + opt.via_diameter / 2.0 + 0.005);
 
@@ -361,21 +386,24 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     for (k, t) in board.tracks.iter().enumerate() {
         let net = id_of(conn.track_net(k));
         let geo = Geo::Cap { a: t.a, b: t.b, r: t.width / 2.0 };
-        grid.mark(grid.layer(t.side), &geo, net, t_need, v_need);
+        let (tn, vn) = need_for(conn.track_net(k));
+        grid.mark(grid.layer(t.side), &geo, net, tn, vn);
     }
     for (k, p) in board.pads.iter().enumerate() {
         let net = id_of(conn.pad_net(k).or(if p.net.is_empty() { None } else { Some(p.net.as_str()) }));
         let geo = shape_geo(p.pos, p.shape);
+        let (tn, vn) = need_for(conn.pad_net(k).or(if p.net.is_empty() { None } else { Some(p.net.as_str()) }));
         for l in pad_layers(p, nl) {
-            grid.mark(l, &geo, net, t_need, v_need);
+            grid.mark(l, &geo, net, tn, vn);
         }
         grid.mark_no_via(&geo, opt.via_diameter / 2.0);
     }
     for (k, v) in board.vias.iter().enumerate() {
         let net = id_of(conn.via_net(k));
         let geo = Geo::Cap { a: v.pos, b: v.pos, r: v.diameter / 2.0 };
+        let (tn, vn) = need_for(conn.via_net(k));
         for l in 0..nl {
-            grid.mark(l, &geo, net, t_need, v_need);
+            grid.mark(l, &geo, net, tn, vn);
         }
     }
     for h in &board.holes {

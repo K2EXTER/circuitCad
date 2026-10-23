@@ -43,6 +43,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `merge.rs` 一直線の配線を1本にまとめる(自動配線の後。銅の形は変えない)
 - `padentry.rs` パッドの根元をそろえる(垂直な出入り・2本は両端寄せ。自動配線の直後と全部の配線に)
 - `meander.rs` 長さ合わせ(蛇行配線。ネットを目標の長さに)
+- ネットクラス(ネットごとの線幅・間隔・ビア)は `model.rs` の `NetClass`(DRC は `clearance_between`、`autoroute.rs` の `autoroute_sized` が使う。画面は `board_editor/netclass.rs`、CLI は `board class`)
 - `labels.rs` 部品番号のシルク文字を、配線やパッドから離れた所へ動かす(「文字を配線からよける」ボタンと `ccad board labels`)
 - `smooth.rs` 配線の仕上げ(角丸め・涙型・分かれ目の凹み。`Board.finish` の設定で表示・出力・DRCのときに毎回計算)
 - `ratsnest.rs` 未配線 / `autoroute.rs` 自動配線 / `shove.rs` 押しのけ配線
