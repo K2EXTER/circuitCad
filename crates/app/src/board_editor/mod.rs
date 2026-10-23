@@ -302,6 +302,8 @@ pub struct BoardEditor {
     fit_pending: bool,
     /// A left drag with Alt held pans the view (until the button is released).
     alt_pan: bool,
+    /// Alignment guides through snap points the pointer rested on (see `tracking.rs`).
+    tracking: tracking::Tracking,
     /// The "発注の準備" window.
     order: order::OrderState,
     order_preview_src: Option<pcb_core::gerber_view::Preview>,
@@ -407,6 +409,7 @@ impl Default for BoardEditor {
             view3d: view3d::View3d::default(),
             fit_pending: true,
             alt_pan: false,
+            tracking: Default::default(),
             order: order::OrderState::default(),
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
@@ -465,6 +468,7 @@ mod align;
 mod tools;
 mod trunk;
 mod netglow;
+mod tracking;
 mod netclass;
 mod netwindow;
 mod currentwindow;

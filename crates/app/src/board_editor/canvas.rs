@@ -102,7 +102,11 @@ impl BoardEditor {
                 self.delete(it);
             }
         }
+        if pressed(Key::F11) {
+            self.toggle_tracking();
+        }
         if pressed(Key::Escape) {
+            self.clear_tracking();
             self.pending = None;
             self.poly.clear();
             self.multi.clear();

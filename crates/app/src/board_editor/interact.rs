@@ -74,12 +74,16 @@ impl BoardEditor {
                     painter.circle_stroke(self.to_screen(rect, e), 4.0, Stroke::new(1.0, Color32::from_rgba_unmultiplied(90, 230, 120, 170)));
                 }
             }
+            let near = self.snap_object(w);
+            let mut on_object = false;
             if matches!(self.tool, Tool::Track | Tool::Via)
-                && let Some(c) = self.snap_object(w) {
+                && let Some(c) = near {
                     // snapped onto something that is already there: a green ring says so
                     p = c;
+                    on_object = true;
                     painter.circle_stroke(self.to_screen(rect, c), 9.0, Stroke::new(2.0, Color32::from_rgb(90, 230, 120)));
                 }
+            p = self.track_guides(&resp.ctx, painter, rect, w, p, near, on_object);
             sp = Some(p);
             self.draw_cursor(painter, rect, p);
 
