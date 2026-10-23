@@ -35,6 +35,7 @@ impl BoardEditor {
     /// Closes the net-current panel that `use_simulated_currents` asked for.
     pub fn close_width_panel(&mut self) {
         self.widths_open = None;
+        self.current_win_open = false;
     }
 
     /// Declares the simulated net currents (from the schematic's DC analysis) and opens the panel.
@@ -45,7 +46,8 @@ impl BoardEditor {
             Ok(list) => {
                 self.checkpoint();
                 let n = pcb_core::current::set_net_currents(&mut self.board, &list);
-                self.widths_open = Some(true);
+                // the table of the currents opens in its own window
+                self.current_win_open = true;
                 self.status = if n == 0 {
                     "基板のネットに合う電流がありません。回路図から部品を取り込んだあとで試してください".into()
                 } else {
@@ -62,71 +64,18 @@ impl BoardEditor {
                 ui.small("回路図から部品を取り込むと、ネットの一覧が出ます");
                 return;
             }
-            let spec = CopperSpec::default();
             let conn = drc::connectivity(&self.board);
-            let report = net_widths(&self.board, &conn, &spec);
-            let mut widen: Vec<String> = vec![];
-            let mut use_width = None;
-            egui::Grid::new("net_widths").num_columns(3).spacing([8.0, 4.0]).show(ui, |ui| {
-                for net in &nets {
-                    ui.label(net);
-                    let mut a = self.board.net_currents.get(net).copied().unwrap_or(0.0);
-                    let r = ui.add(egui::DragValue::new(&mut a).speed(0.05).range(0.0..=30.0).suffix(" A").max_decimals(2));
-                    r.on_hover_text("このネットに流れる最大の電流。0 のままなら調べません。分からなければ、つなぐ部品のデータシートの最大電流を見ます");
-                    if a > 0.0 {
-                        self.board.net_currents.insert(net.clone(), a);
-                    } else {
-                        self.board.net_currents.remove(net);
-                    }
-                    match report.iter().find(|w| &w.net == net) {
-                        Some(w) => {
-                            let rec = round_up_width(w.needed);
-                            ui.horizontal(|ui| {
-                                let (txt, col) = match w.thinnest {
-                                    None => (format!("必要 {rec:.2} mm (配線なし)"), egui::Color32::from_gray(160)),
-                                    Some(t) if w.too_thin() => (format!("必要 {rec:.2} mm / 今 {t:.2} mm"), egui::Color32::from_rgb(230, 90, 70)),
-                                    Some(t) => (format!("必要 {rec:.2} mm / 今 {t:.2} mm ✔"), egui::Color32::from_rgb(90, 190, 110)),
-                                };
-                                ui.colored_label(col, txt).on_hover_text(format!("IPC-2221 の式で、{:.2} A を温度上昇 10℃ に収めて流すのに必要な幅は {:.3} mm です。丸めて {rec:.2} mm", w.amps, w.needed));
-                                if w.too_thin() && ui.small_button("推奨幅にする").on_hover_text("このネットの細い配線を、必要な幅まで太くします (Ctrl+Z で戻せます)。太くした結果、隣と近づきすぎることがあるので、あとで DRC を実行してください").clicked() {
-                                    widen.push(net.clone());
-                                }
-                                if ui.small_button("線幅に").on_hover_text("これから引く配線の線幅 (上の「線幅」) を、この値にします").clicked() {
-                                    use_width = Some(rec);
-                                }
-                            });
-                        }
-                        None => {
-                            ui.small("");
-                        }
-                    }
-                    ui.end_row();
-                }
-            });
+            let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
+            ui.small("流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます");
             ui.horizontal(|ui| {
-            if ui.button("DC解析の電流を入れる").on_hover_text("回路図のDC解析 (動作点) で各ネットに流れる電流を求めて、上の欄に入れます。ネットにつながる部品の電流を足して半分にした値で、電源とGNDには全体の電流が出ます。電流を自分で調べなくても、必要な線幅がすぐ分かります。ピーク電流 (起動時やスイッチング) は入らないので、余裕を見てください").clicked() {
-                self.currents_request = Some(CurrentSource::Dc);
-            }
-            if ui.button("過渡解析の電流を入れる").on_hover_text("回路図で最後に実行した過渡解析の、後半 (起動のあとの落ち着いた部分) の電流の実効値 (RMS) を、各ネットに入れます。スイッチング電源やパルスの負荷のように、DCでは電流が決まらない回路用です。銅は数秒かけて温まるので、短いスパイクではなく実効値で太さを決めます。起動時のサージは含めません。先に回路図で過渡解析を実行してください").clicked() {
-                self.currents_request = Some(CurrentSource::Tran);
-            }
-            });
-            if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます").clicked() {
-                self.current_win_open = true;
-            }
-            self.ir_drop_ui(ui);
-            if let Some(w) = use_width {
-                self.track_width = w;
-            }
-            for n in widen {
-                self.widen_net_to_need(&n);
-            }
-            if report.iter().any(|w| w.too_thin()) && ui.button("足りないネットをすべて推奨幅にする").on_hover_text("電流に対して細いネットの配線を、すべて必要な太さまで太くします (Ctrl+Z で戻せます)。太くした結果、配線の間隔が足りるか DRC で確かめましょう").clicked() {
-                let thin: Vec<String> = report.iter().filter(|w| w.too_thin()).map(|w| w.net.clone()).collect();
-                for n in thin {
-                    self.widen_net_to_need(&n);
+                if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます").clicked() {
+                    self.current_win_open = true;
                 }
-            }
+                if thin > 0 {
+                    ui.colored_label(egui::Color32::from_rgb(230, 90, 70), format!("電流に対して細いネット {thin} 本"));
+                }
+            });
+            self.ir_drop_ui(ui);
         }).header_response.on_hover_text("ネットごとに流す電流を入れると、必要な線幅を計算し、足りない配線を教えます (銅箔 35µm・温度上昇 10℃ の外層)。電源やモーターの線は、信号線より太くします");
     }
 }

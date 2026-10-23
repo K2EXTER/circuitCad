@@ -1391,15 +1391,16 @@ fn the_mega_board_lesson_starts_half_routed_and_ticks_when_a_net_is_routed_and_d
     assert_eq!(e.finished_board_lesson().is_some(), clean);
 }
 
-/// Currents taken only to route ("未配線を全部つなぐ") must not leave the width panel asking to open: it would switch the tool to the
-/// wire tool and push the step list (DRC, order) below the fold.
+/// Currents taken from the simulation open the window that lists them (not the width panel: that would switch the tool to the wire tool
+/// and push the step list below the fold); taken only to route ("未配線を全部つなぐ") they leave nothing open.
 #[test]
-fn the_width_panel_can_be_shut_again_after_the_currents_came_in() {
+fn the_currents_open_their_window_and_it_can_be_shut_again() {
     let mut e = BoardEditor::default();
     e.use_simulated_currents(Ok(vec![("GND".into(), 0.1)]), vec![]);
-    assert_eq!(e.widths_open, Some(true), "the button 'DC解析の電流を入れる' still opens it");
+    assert!(e.current_win_open, "the currents are shown in their window");
+    assert_eq!(e.widths_open, None, "and the width panel is left alone");
     e.close_width_panel();
-    assert_eq!(e.widths_open, None);
+    assert!(!e.current_win_open);
 }
 
 /// New parts land beside the outline, so an import that adds parts asks for the view to be fitted (the parts would otherwise sit
