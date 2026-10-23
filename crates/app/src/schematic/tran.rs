@@ -100,6 +100,7 @@ impl SchEditor {
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
+        let mut longer = false;
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
@@ -128,7 +129,32 @@ impl SchEditor {
             }
             Ok(res) => {
                 for w in &res.warnings {
-                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    // "starting from all zero" is the normal way into an oscillator: a calm note, not a warning
+                    if w.contains("普通のことです") {
+                        ui.colored_label(Color32::from_rgb(130, 170, 210), format!("ⓘ {w}"));
+                    } else {
+                        ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    }
+                }
+                // a picture that does not move in its second half: the end time may be too short for what the circuit does (a blinker
+                // with a period of a second, seen for 20 ms, is a flat line)
+                let half = res.time.last().copied().unwrap_or(0.0) * 0.5;
+                let seen: Vec<_> = res.signals.iter().filter(|s| s.unit == "V" && shown_signal(&s.name) && selected.contains(&s.name)).collect();
+                // flat = in the second half no signal moves by more than 2% of the largest voltage on the picture
+                let scale = seen.iter().flat_map(|sg| sg.values.iter()).fold(0.0f64, |m, v| m.max(v.abs()));
+                let flat = !seen.is_empty()
+                    && seen.iter().all(|sg| {
+                        let tail: Vec<f64> = res.time.iter().zip(&sg.values).filter(|(t, _)| **t >= half).map(|(_, v)| *v).collect();
+                        let (lo, hi) = tail.iter().fold((f64::MAX, f64::MIN), |(lo, hi), v| (lo.min(*v), hi.max(*v)));
+                        !tail.is_empty() && hi - lo < 0.02 * scale + 1e-3
+                    });
+                if flat {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(egui::RichText::new("波形が後半ほとんど動いていません。回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。").size(12.0));
+                        if ui.small_button("終了時間を10倍にして計算し直す").on_hover_text("終了時間の欄を10倍にして、もう一度過渡解析を実行します").clicked() {
+                            longer = true;
+                        }
+                    });
                 }
                 if !parts.is_empty() {
                     egui::CollapsingHeader::new("部品の定格 (リップル電流・寿命)").default_open(true).show(ui, |ui| {
@@ -164,7 +190,9 @@ impl SchEditor {
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name)).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
-                        ui.set_width(250.0);
+                        // wide enough for a column per signal (the table scrolled sideways and hid the last one)
+                        let columns = order.iter().filter(|n| selected.contains(**n)).take(6).count();
+                        ui.set_width((100.0 + 80.0 * columns as f32).clamp(250.0, 520.0));
                         ui.horizontal(|ui| {
                             if ui.button("選択をクリア").clicked() {
                                 selected.clear();
@@ -386,6 +414,10 @@ impl SchEditor {
         }
         if start_probe {
             self.start_probe();
+        }
+        if longer && let Some((tstop, _)) = self.tran_times() {
+            self.tran_tstop = sim_core::format_value(tstop * 10.0);
+            self.run_tran();
         }
         if close {
             self.tran = None;
