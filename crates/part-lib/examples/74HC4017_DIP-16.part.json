@@ -1,0 +1,128 @@
+{
+  "name": "74HC4017",
+  "category": "ロジックIC",
+  "description": "十進カウンタ (ジョンソンカウンタ、DIP-16)。CP の立ち上がりごとに、出力 Q0〜Q9 のうち 1 つだけが High になり、順に進みます (Q9 の次は Q0)。MR を High にすると Q0 に戻ります。CO は Q0〜Q4 の間 High (10 進カウンタの桁上げ)。スイッチで作った簡易モデル (遅延なし)。ピン番号は一般的な 4017 の並び (必ずデータシートで確かめてください)。2〜6V で動作",
+  "datasheet": "",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "Q5",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "Q1",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "Q0",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "Q2",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "Q6",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "Q7",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "Q3",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "Q8",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "Q4",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "Q9",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "CO",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "CE",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "CP",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "MR",
+      "side": "left"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC4017",
+    "text": "* 74HC4017 behavioural model: a Johnson counter of five D flip-flops (the 74HC74 model's flip-flop) and ten AND gates that decode it. CMOS made of voltage-controlled switches, no propagation delay.\n.subckt 74HC4017 q5 q1 q0 q2 q6 q7 q3 gnd q8 q4 q9 co ce cp mr vcc\nRh1 vcc hi 90k\nRh2 hi hv 10k\nRh3 hv lo 10k\nRh4 lo gnd 90k\nS1000 vcc clrb hv mr SWPA\nS1001 clrb gnd mr hv SWNA\nS1_1 jb5 m1_1 lo cp SWT\nS2_1 vcc m2_1 hv m1_1 SWPA\nS3_1 m2_1 gnd m1_1 hv SWNA\nS4_1 vcc m3_1 hv m2_1 SWPA\nS5_1 m3_1 gnd m2_1 hv SWNA\nS6_1 m3_1 m1_1 cp lo SWT\nS7_1 m2_1 s4_1 cp hi SWT\nS8_1 vcc s5_1 hv s4_1 SWPA\nS9_1 s5_1 gnd s4_1 hv SWNA\nS10_1 vcc s6_1 hv s5_1 SWPA\nS11_1 s6_1 gnd s5_1 hv SWNA\nS12_1 s6_1 s4_1 hi cp SWT\nS13_1 vcc g7_1 hv s5_1 SWPA\nS14_1 g7_1 gnd s5_1 hv SWNA\nS15_1 vcc j1 hv g7_1 SWPA\nS16_1 j1 gnd g7_1 hv SWNA\nS17_1 vcc jb1 hv s5_1 SWPA\nS18_1 jb1 gnd s5_1 hv SWNA\nS19_1 vcc m1_1 hv vcc SWF\nS20_1 s4_1 gnd hv vcc SWF\nS21_1 m1_1 gnd hv clrb SWF\nS22_1 vcc s4_1 hv clrb SWF\nS1_2 j1 m1_2 lo cp SWT\nS2_2 vcc m2_2 hv m1_2 SWPA\nS3_2 m2_2 gnd m1_2 hv SWNA\nS4_2 vcc m3_2 hv m2_2 SWPA\nS5_2 m3_2 gnd m2_2 hv SWNA\nS6_2 m3_2 m1_2 cp lo SWT\nS7_2 m2_2 s4_2 cp hi SWT\nS8_2 vcc s5_2 hv s4_2 SWPA\nS9_2 s5_2 gnd s4_2 hv SWNA\nS10_2 vcc s6_2 hv s5_2 SWPA\nS11_2 s6_2 gnd s5_2 hv SWNA\nS12_2 s6_2 s4_2 hi cp SWT\nS13_2 vcc g7_2 hv s5_2 SWPA\nS14_2 g7_2 gnd s5_2 hv SWNA\nS15_2 vcc j2 hv g7_2 SWPA\nS16_2 j2 gnd g7_2 hv SWNA\nS17_2 vcc jb2 hv s5_2 SWPA\nS18_2 jb2 gnd s5_2 hv SWNA\nS19_2 vcc m1_2 hv vcc SWF\nS20_2 s4_2 gnd hv vcc SWF\nS21_2 m1_2 gnd hv clrb SWF\nS22_2 vcc s4_2 hv clrb SWF\nS1_3 j2 m1_3 lo cp SWT\nS2_3 vcc m2_3 hv m1_3 SWPA\nS3_3 m2_3 gnd m1_3 hv SWNA\nS4_3 vcc m3_3 hv m2_3 SWPA\nS5_3 m3_3 gnd m2_3 hv SWNA\nS6_3 m3_3 m1_3 cp lo SWT\nS7_3 m2_3 s4_3 cp hi SWT\nS8_3 vcc s5_3 hv s4_3 SWPA\nS9_3 s5_3 gnd s4_3 hv SWNA\nS10_3 vcc s6_3 hv s5_3 SWPA\nS11_3 s6_3 gnd s5_3 hv SWNA\nS12_3 s6_3 s4_3 hi cp SWT\nS13_3 vcc g7_3 hv s5_3 SWPA\nS14_3 g7_3 gnd s5_3 hv SWNA\nS15_3 vcc j3 hv g7_3 SWPA\nS16_3 j3 gnd g7_3 hv SWNA\nS17_3 vcc jb3 hv s5_3 SWPA\nS18_3 jb3 gnd s5_3 hv SWNA\nS19_3 vcc m1_3 hv vcc SWF\nS20_3 s4_3 gnd hv vcc SWF\nS21_3 m1_3 gnd hv clrb SWF\nS22_3 vcc s4_3 hv clrb SWF\nS1_4 j3 m1_4 lo cp SWT\nS2_4 vcc m2_4 hv m1_4 SWPA\nS3_4 m2_4 gnd m1_4 hv SWNA\nS4_4 vcc m3_4 hv m2_4 SWPA\nS5_4 m3_4 gnd m2_4 hv SWNA\nS6_4 m3_4 m1_4 cp lo SWT\nS7_4 m2_4 s4_4 cp hi SWT\nS8_4 vcc s5_4 hv s4_4 SWPA\nS9_4 s5_4 gnd s4_4 hv SWNA\nS10_4 vcc s6_4 hv s5_4 SWPA\nS11_4 s6_4 gnd s5_4 hv SWNA\nS12_4 s6_4 s4_4 hi cp SWT\nS13_4 vcc g7_4 hv s5_4 SWPA\nS14_4 g7_4 gnd s5_4 hv SWNA\nS15_4 vcc j4 hv g7_4 SWPA\nS16_4 j4 gnd g7_4 hv SWNA\nS17_4 vcc jb4 hv s5_4 SWPA\nS18_4 jb4 gnd s5_4 hv SWNA\nS19_4 vcc m1_4 hv vcc SWF\nS20_4 s4_4 gnd hv vcc SWF\nS21_4 m1_4 gnd hv clrb SWF\nS22_4 vcc s4_4 hv clrb SWF\nS1_5 j4 m1_5 lo cp SWT\nS2_5 vcc m2_5 hv m1_5 SWPA\nS3_5 m2_5 gnd m1_5 hv SWNA\nS4_5 vcc m3_5 hv m2_5 SWPA\nS5_5 m3_5 gnd m2_5 hv SWNA\nS6_5 m3_5 m1_5 cp lo SWT\nS7_5 m2_5 s4_5 cp hi SWT\nS8_5 vcc s5_5 hv s4_5 SWPA\nS9_5 s5_5 gnd s4_5 hv SWNA\nS10_5 vcc s6_5 hv s5_5 SWPA\nS11_5 s6_5 gnd s5_5 hv SWNA\nS12_5 s6_5 s4_5 hi cp SWT\nS13_5 vcc g7_5 hv s5_5 SWPA\nS14_5 g7_5 gnd s5_5 hv SWNA\nS15_5 vcc j5 hv g7_5 SWPA\nS16_5 j5 gnd g7_5 hv SWNA\nS17_5 vcc jb5 hv s5_5 SWPA\nS18_5 jb5 gnd s5_5 hv SWNA\nS19_5 vcc m1_5 hv vcc SWF\nS20_5 s4_5 gnd hv vcc SWF\nS21_5 m1_5 gnd hv clrb SWF\nS22_5 vcc s4_5 hv clrb SWF\nSA0a vcc ag0 hv jb1 SWPA\nSA0b vcc ag0 hv jb5 SWPA\nSA0c ag0 aq0 jb1 hv SWNS\nSA0d aq0 gnd jb5 hv SWNS\nSA0e vcc q0 hv ag0 SWPA\nSA0f q0 gnd ag0 hv SWNA\nSA1a vcc ag1 hv j1 SWPA\nSA1b vcc ag1 hv jb2 SWPA\nSA1c ag1 aq1 j1 hv SWNS\nSA1d aq1 gnd jb2 hv SWNS\nSA1e vcc q1 hv ag1 SWPA\nSA1f q1 gnd ag1 hv SWNA\nSA2a vcc ag2 hv j2 SWPA\nSA2b vcc ag2 hv jb3 SWPA\nSA2c ag2 aq2 j2 hv SWNS\nSA2d aq2 gnd jb3 hv SWNS\nSA2e vcc q2 hv ag2 SWPA\nSA2f q2 gnd ag2 hv SWNA\nSA3a vcc ag3 hv j3 SWPA\nSA3b vcc ag3 hv jb4 SWPA\nSA3c ag3 aq3 j3 hv SWNS\nSA3d aq3 gnd jb4 hv SWNS\nSA3e vcc q3 hv ag3 SWPA\nSA3f q3 gnd ag3 hv SWNA\nSA4a vcc ag4 hv j4 SWPA\nSA4b vcc ag4 hv jb5 SWPA\nSA4c ag4 aq4 j4 hv SWNS\nSA4d aq4 gnd jb5 hv SWNS\nSA4e vcc q4 hv ag4 SWPA\nSA4f q4 gnd ag4 hv SWNA\nSA5a vcc ag5 hv j5 SWPA\nSA5b vcc ag5 hv j1 SWPA\nSA5c ag5 aq5 j5 hv SWNS\nSA5d aq5 gnd j1 hv SWNS\nSA5e vcc q5 hv ag5 SWPA\nSA5f q5 gnd ag5 hv SWNA\nSA6a vcc ag6 hv jb1 SWPA\nSA6b vcc ag6 hv j2 SWPA\nSA6c ag6 aq6 jb1 hv SWNS\nSA6d aq6 gnd j2 hv SWNS\nSA6e vcc q6 hv ag6 SWPA\nSA6f q6 gnd ag6 hv SWNA\nSA7a vcc ag7 hv jb2 SWPA\nSA7b vcc ag7 hv j3 SWPA\nSA7c ag7 aq7 jb2 hv SWNS\nSA7d aq7 gnd j3 hv SWNS\nSA7e vcc q7 hv ag7 SWPA\nSA7f q7 gnd ag7 hv SWNA\nSA8a vcc ag8 hv jb3 SWPA\nSA8b vcc ag8 hv j4 SWPA\nSA8c ag8 aq8 jb3 hv SWNS\nSA8d aq8 gnd j4 hv SWNS\nSA8e vcc q8 hv ag8 SWPA\nSA8f q8 gnd ag8 hv SWNA\nSA9a vcc ag9 hv jb4 SWPA\nSA9b vcc ag9 hv j5 SWPA\nSA9c ag9 aq9 jb4 hv SWNS\nSA9d aq9 gnd j5 hv SWNS\nSA9e vcc q9 hv ag9 SWPA\nSA9f q9 gnd ag9 hv SWNA\nSC1 vcc co hv j5 SWNA\nSC2 co gnd j5 hv SWPA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC4017",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "limits": [
+      "スイッチで作った CMOS の動作モデルです。5 個の D フリップフロップのジョンソンカウンタと、10 個の AND ゲートで作ってあります。入力のしきい値は電源電圧の半分、出力は High が約 80Ω、Low が約 40Ω の抵抗を通して電源・GND につながります。",
+      "扱わないもの: 伝搬遅延、クロック禁止 (CE。GND につないで使ってください)、電源電流、ホールド/セットアップ時間、電源投入時に起こりうる不正な状態からの自己復帰 (実物は数クロックで正しい状態に戻る)。",
+      "電源を入れたら、MR を一度 High にして、Q0 から数え始めるようにしてください (電源に 0.1µF、GND に 100kΩ をつなぐと、電源投入時に MR が一瞬 High になります)。",
+      "CP は立ち上がりで数えます。スイッチをつなぐときは、チャタリングをとるフィルタとシュミットトリガ (74HC14 など) を前に入れてください。"
+    ]
+  }
+}

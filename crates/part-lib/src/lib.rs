@@ -361,6 +361,7 @@ pub const EXAMPLES: &[(&str, &str)] = &[
     ("1N4728A_DO-41", include_str!("../examples/1N4728A_DO-41.part.json")),
     ("1N5817_DO-41", include_str!("../examples/1N5817_DO-41.part.json")),
     ("74HC595_SOIC-16", include_str!("../examples/74HC595_SOIC-16.part.json")),
+    ("74HC4017_DIP-16", include_str!("../examples/74HC4017_DIP-16.part.json")),
     ("AMS1117-5.0_SOT-223", include_str!("../examples/AMS1117-5.0_SOT-223.part.json")),
     ("ATtiny85_SOIC-8", include_str!("../examples/ATtiny85_SOIC-8.part.json")),
     ("BSS138_SOT-23", include_str!("../examples/BSS138_SOT-23.part.json")),

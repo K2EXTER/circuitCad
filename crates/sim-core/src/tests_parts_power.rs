@@ -359,3 +359,42 @@ fn the_buck_demo_works_with_its_output_as_the_system_ground() {
     let mean = tail.iter().sum::<f64>() / tail.len() as f64;
     assert!((mean - 1.8).abs() < 0.05, "the output should settle at 1.8 V, not {mean}");
 }
+
+#[test]
+fn the_74hc4017_counts_one_output_at_a_time_and_wraps_after_ten() {
+    let def = part("74HC4017");
+    let pin = |n: &str| def.pins.iter().find(|p| p.name == n).unwrap().number.clone();
+    let mut c = Circuit::new();
+    vs(&mut c, "Vcc", "vcc", "0", 5.0);
+    let a = c.node("cp");
+    let s = parse_source_full("PULSE(0 5 100u 1u 1u 50u 100u)").unwrap();
+    c.add(Element::VSource { name: "Vcp".into(), p: a, n: 0, wave: s.wave, ac: s.ac });
+    // MR is high at the start (the operating point is then a reset counter) and falls at 40 us
+    let m = c.node("mr");
+    let s = parse_source_full("PULSE(5 0 40u 1u 1u 1 2)").unwrap();
+    c.add(Element::VSource { name: "Vmr".into(), p: m, n: 0, wave: s.wave, ac: s.ac });
+    let names: Vec<String> = (0..10).map(|k| format!("q{k}")).collect();
+    let mut nets: Vec<(String, String)> = vec![(pin("VCC"), "vcc".into()), (pin("GND"), "0".into()), (pin("CE"), "0".into()), (pin("CP"), "cp".into()), (pin("MR"), "mr".into()), (pin("CO"), "co".into())];
+    for (k, n) in names.iter().enumerate() {
+        nets.push((pin(&format!("Q{k}")), n.clone()));
+    }
+    let wiring: Vec<(&str, &str)> = nets.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+    place(&mut c, &def, "U1", &wiring);
+    let r = transient(&c, &TranSettings { tstop: 1.45e-3, tstep: 1e-6, uic: false }).unwrap();
+    let at = |net: &str, t: f64| {
+        let i = r.time.iter().position(|x| *x >= t).unwrap();
+        r.signal(&format!("V({net})")).unwrap().values[i]
+    };
+    // the clock rises at 100 us, 200 us, ...: after n rising edges output n mod 10 is the only one that is high
+    for edges in 0..=12usize {
+        let t = 100e-6 * edges as f64 + 90e-6;
+        if t < 60e-6 {
+            continue;
+        }
+        let want = edges % 10;
+        let high: Vec<usize> = (0..10).filter(|k| at(&names[*k], t) > 2.5).collect();
+        assert_eq!(high, vec![want], "after {edges} clock edges (t = {t})");
+    }
+    // carry out: high while the count is 0..4
+    assert!(at("co", 100e-6 * 2.0 + 90e-6) > 2.5 && at("co", 100e-6 * 7.0 + 90e-6) < 2.5);
+}
