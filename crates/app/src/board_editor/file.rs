@@ -144,8 +144,15 @@ impl BoardEditor {
         let (parts, nets) = Self::netlist_of(sch);
         // library parts bring their own footprint
         self.checkpoint();
+        // A part added to the library folder after the program started (ccad part import, a file copied in) is not in `library` yet:
+        // look in the folder itself before giving up on its footprint.
+        let mut on_disk: Option<Vec<part_lib::PartDef>> = None;
         for c in sch.components.iter().filter(|c| c.custom.is_some()) {
-            if let Some(def) = sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint)
+            let found = match sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint) {
+                Some(d) => Some(d),
+                None => on_disk.get_or_insert_with(|| part_lib::load_dir(&part_lib::default_dir()).0).iter().find(|d| d.footprint_name() == c.footprint),
+            };
+            if let Some(def) = found
                 && let Ok(fp) = def.footprint() {
                     self.board.add_footprint(fp);
                     if let Some(m) = &def.model3d {
@@ -160,7 +167,12 @@ impl BoardEditor {
         self.selected = None;
         self.multi.clear();
         self.currents_tried = false; // the circuit may have changed: the next route asks for the currents again if none are declared
-        self.import_notes = rep.warnings.clone();
+        // a footprint that is neither built in nor in the library: say what to do about it
+        self.import_notes = rep
+            .warnings
+            .iter()
+            .map(|w| if w.contains("フットプリント") && w.contains("見つかりません") { format!("{w} (部品ライブラリにこの部品がありません。回路図の「ライブラリ」の「再読み込み」を押すか、部品を作り直してから、もう一度取り込んでください)") } else { w.clone() })
+            .collect();
         // new parts land beside the outline: show the whole board with them, not a corner of it under the panel on the right
         if !rep.added.is_empty() {
             self.fit_pending = true;

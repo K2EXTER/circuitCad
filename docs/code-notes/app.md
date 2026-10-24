@@ -131,3 +131,6 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 ### part_form/step3d.rs — 部品の3Dの形 (STEP)
 部品を作るフォームの「基板の形」タブの下に、「3D の形 (メーカーの STEP ファイル)」。「STEP を読み込む…」で `pcb_core::step::read_step` を呼び、`thin_out`(頂点を格子に寄せて、12000三角形以下に間引く)してから `step_base` に持つ。向き(X・Y・Z 軸に90°)・「本体の中心をパッドの中心に」・「本体の底を基板の面に」を `step_apply` で `model3d` に反映する。上から・横からの小さな図(`mesh_view`。赤い枠がパッド、緑の線が基板の面)で確かめる。**図は `egui::Mesh` で描くこと**(`convex_polygon` は角が羽毛化されて、細長い三角形がトゲになる)。`PartDef.model3d`(ライブラリの JSON に入る。空なら書かない)→ 回路図から基板への取り込み(`board_editor/file.rs`、CLI の `board import`)で `Board.models3d` へ。基板の3D(`view3d/scene.rs`)は `Scene.meshes` を三角形ごとに描き、高さ・ケースの高さの確認にも使う(メッシュの `z` の最大)。`--form-step <file>` は撮影用。限界: 既存の部品を開いて3Dだけ付け直す入口はない(部品の編集そのものが無い)。
+
+### 基板への取り込み: ライブラリの部品のフットプリント(2026-10-25)
+- `import_from_schematic`(`board_editor/file.rs`)は、ライブラリの部品が自分のフットプリントを連れてくる。**ライブラリが起動時のままだと、起動後にフォルダへ足した部品(`ccad part import`、ファイルのコピー)のフットプリントが見つからず**「フットプリント … が見つかりません」になった。今は、`SchEditor.library` に無いときは、既定のライブラリのフォルダ(`part_lib::default_dir()`)を一度だけ読み直して探す。それでも無いときは、警告に「回路図の『ライブラリ』の『再読み込み』を押すか、部品を作り直してから、もう一度取り込んでください」を足す(`import_notes`)。テスト `a_missing_library_footprint_says_to_reload_the_library`。

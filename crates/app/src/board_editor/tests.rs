@@ -1746,3 +1746,15 @@ fn the_editor_shows_an_airwire_for_a_pad_cut_off_by_its_pour() {
     let wires = e.cached_airwires();
     assert!(wires.iter().any(|w| w.net == "GND"), "the cut-off pad has an airwire: {wires:?}");
 }
+
+/// A part whose footprint is neither built in nor in the library (a part added to the library folder while the program was running,
+/// and the library not read again) is reported with what to do about it, not with the bare "not found".
+#[test]
+fn a_missing_library_footprint_says_to_reload_the_library() {
+    let mut sch = crate::schematic::SchEditor::default();
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LM358").unwrap();
+    sch.sch.add_custom(def.symbol(), &def.default_value(), "NO_SUCH_FOOTPRINT_XYZ", (20, 10), 0);
+    let mut e = BoardEditor::default();
+    e.import_from_schematic(&sch);
+    assert!(e.import_notes.iter().any(|n| n.contains("NO_SUCH_FOOTPRINT_XYZ") && n.contains("再読み込み")), "{:?}", e.import_notes);
+}
