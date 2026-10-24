@@ -234,6 +234,13 @@ impl Compiled {
             if it == limit {
                 note_stuck(&x, &xn, n_node_unknowns);
             }
+            if std::env::var_os("CCAD_TRACE").is_some() && (it <= 6 || it % 25 == 0) {
+                let o = crate::options::options();
+                let w = x.iter().zip(&xn).enumerate().filter(|(i, _)| *i < n_node_unknowns).map(|(i, (a, b))| (i, (a - b).abs() / (o.reltol * a.abs().max(b.abs()) + o.vntol), *a, *b)).max_by(|p, q| p.1.total_cmp(&q.1));
+                if let Some((i, r, a, b)) = w {
+                    eprintln!("TRACE gmin={:e} scale={} bt={} damp={} it={} worst={} {:.5e}->{:.5e} ratio={:.2e} limited={}", ctx.gmin, ctx.scale, backtrack, damp, it, self.node_names.get(i + 1).map(String::as_str).unwrap_or("?"), a, b, r, limited);
+                }
+            }
             let done = !limited && it > 1 && converged(&x, &xn, n_node_unknowns);
             // Close to a regenerative switching point the Jacobian is nearly singular: the
             // residual is already at rounding level while a poorly determined direction of x

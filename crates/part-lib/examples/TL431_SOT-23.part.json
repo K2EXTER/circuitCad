@@ -53,7 +53,7 @@
   "sim": {
     "kind": "subckt",
     "name": "TL431",
-    "text": ".subckt TL431 cat ref an\n* reference input current about 2 uA\nRref ref an 1.25Meg\n* the cathode current rises steeply once REF is above 2.495 V (and the cathode is above ~1.2 V)\nBk cat an I=limit(200*(V(ref,an)-2.495),0,0.1)*step(V(cat,an)-1.2,0.2)\nRleak cat an 10Meg\n.ends TL431",
+    "text": ".subckt TL431 cat ref an\n* reference input current about 2 uA\nRref ref an 1.25Meg\n* the cathode current rises steeply once REF is above 2.495 V (200 A/V; a smooth knee 0.3 mV wide, so that Newton's iteration always has a slope to follow; and the cathode is above ~1.2 V)\nBk cat an I=0.06*(0.5*(((V(ref,an)-2.495)/0.0003)+abs(((V(ref,an)-2.495)/0.0003)))+ln(1+exp(-abs(((V(ref,an)-2.495)/0.0003)))))*step(V(cat,an)-1.2,0.2)\nRleak cat an 10Meg\n.ends TL431",
     "pins": [
       "1",
       "2",

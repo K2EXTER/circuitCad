@@ -127,6 +127,24 @@ fn the_tl431_holds_its_reference_and_sets_a_voltage_with_a_divider() {
 }
 
 #[test]
+fn the_tl431_converges_from_zero_at_any_supply_and_holds_the_reference_within_a_millivolt() {
+    // The cathode current used to be clipped at both ends (flat, so Newton's iteration had no slope to follow) and the iterate jumped
+    // between the two flat parts for ever whenever a second nonlinear part (a comparator, an op-amp macro model) shared the circuit.
+    let def = part("TL431");
+    for vin in [3.5, 4.5, 5.0, 7.0, 12.0, 20.0, 36.0] {
+        let mut c = Circuit::new();
+        vs(&mut c, "Vin", "in", "0", vin);
+        res(&mut c, "R1", "in", "k", 2.2e3);
+        place(&mut c, &def, "U1", &[("1", "k"), ("2", "k"), ("3", "0")]);
+        let k = v(&dc_op(&c).unwrap_or_else(|e| panic!("{vin} V: {e}")), "k");
+        // from about 1 mA up the reference sits on 2.495 V
+        if (vin - 2.495) / 2.2e3 > 1e-3 {
+            assert!((k - 2.495).abs() < 0.002, "{vin} V: {k}");
+        }
+    }
+}
+
+#[test]
 fn the_lm7809_gives_nine_volts() {
     let def = part("LM7809");
     let mut c = Circuit::new();
