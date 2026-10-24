@@ -124,6 +124,57 @@ impl Session {
         Ok(obj(json!({"circuit_ok": gate.is_none(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).chain(self.skin_warning(f1)).collect::<Vec<_>>()})))
     }
 
+    /// `noise OUT[,REF] F0 F1 [ppd=10] [input=V1] [temp=27] [top=8]`: thermal and shot noise at an output node.
+    pub fn noise(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        if pos.len() < 3 {
+            return Err("noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]   (OUT: a net name, or 'A,B' for the difference of two nets; input= refers the noise to a V or I source)".into());
+        }
+        let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("'{s}' is not a positive frequency (write 10, 1k, 100k ...)"));
+        let (f0, f1) = (num(&pos[1])?, num(&pos[2])?);
+        let ppd: usize = opt(&kv, "ppd").and_then(|s| s.parse().ok()).unwrap_or(10);
+        let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8);
+        let temp_c = opt(&kv, "temp").map(|s| sim_core::parse_value(s).ok_or_else(|| format!("temp={s} is not a number"))).transpose()?.unwrap_or(27.0);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let node = |s: &str| -> Result<String, String> {
+            c.names.iter().find(|n| n.eq_ignore_ascii_case(s.trim())).cloned().ok_or_else(|| {
+                let some: Vec<&str> = c.names.iter().map(String::as_str).filter(|n| !n.contains('.') && *n != "0").take(30).collect();
+                format!("no net '{s}' in the circuit (nets: {})", some.join(", "))
+            })
+        };
+        let (out, out_ref) = match pos[0].split_once(',') {
+            Some((a, b)) => (node(a)?, Some(node(b)?)),
+            None => (node(&pos[0])?, None),
+        };
+        let input = match opt(&kv, "input") {
+            Some(s) => Some(c.elements.iter().map(|e| e.name()).find(|n| n.eq_ignore_ascii_case(s)).map(str::to_string).ok_or_else(|| format!("no source '{s}' for input= (a V or I source name, for example V1)"))?),
+            None => None,
+        };
+        let st = sim_core::NoiseSettings { sweep: sim_core::AcSettings { fstart: f0, fstop: f1, sweep: sim_core::AcSweep::Decade(ppd) }, output: out.clone(), output_ref: out_ref, input, temp_c };
+        let r = sim_core::noise_analysis(&c, &st).map_err(|e| e.to_string())?;
+        let near = |f: f64| r.freq.iter().enumerate().min_by(|a, b| (a.1 / f).ln().abs().total_cmp(&(b.1 / f).ln().abs())).map(|(i, _)| i).unwrap_or(0);
+        let (od, id) = (r.out_density(), r.in_density());
+        let mut decades = vec![];
+        let mut f = f0;
+        while f <= f1 * 1.0001 {
+            let i = near(f);
+            let mut row = json!({"hz": round6(r.freq[i]), "out_v_per_rthz": od[i]});
+            if let Some(d) = &id {
+                row["in_per_rthz"] = json!(d[i]);
+            }
+            decades.push(row);
+            f *= 10.0;
+        }
+        let total2 = r.out_rms * r.out_rms;
+        let contribs: Vec<Value> = r.contributions.iter().take(top).map(|k| json!({"name": k.name, "out_rms_v": k.rms, "share_percent": if total2 > 0.0 { 100.0 * k.rms * k.rms / total2 } else { 0.0 }})).collect();
+        let mut o = json!({"circuit_ok": gate.is_none(), "output": pos[0], "points": r.freq.len(), "out_rms_v": r.out_rms, "per_decade": decades, "top_contributors": contribs, "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()});
+        if let Some(x) = r.in_rms {
+            o["in_rms"] = json!(x);
+        }
+        Ok(obj(o))
+    }
+
     /// `spec KIND TARGET LO HI [at=Hz]`: a pass / fail check of the last `dc` / `tran` / `ac` answer.
     pub fn spec(&self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

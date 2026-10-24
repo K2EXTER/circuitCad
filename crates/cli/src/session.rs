@@ -46,6 +46,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   ac FSTART FSTOP [ppd=10] [probe=V(out)]
                                         frequency response (needs a source with an AC magnitude, e.g. value V1 \"0 AC 1\"):
                                         gain and phase per decade, -3 dB frequency, phase margin
+  noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]
+                                        thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,
+                                        density per decade, the biggest contributors; input=V1 also refers it to that source
   spec KIND TARGET LO HI [at=Hz]        pass / fail of the last dc / tran / ac answer against a range ('-' = no limit).
                                         'spec' alone lists the kinds (dc_voltage, tran_pp, ac_cutoff, ...)
                                         TARGET: dc_voltage = net name (MID); dc_current = part (D1, amps: 8m 12m);
@@ -187,6 +190,7 @@ impl Session {
             "dc" => self.dc(args),
             "tran" => self.tran(args),
             "ac" => self.ac(args),
+            "noise" => self.noise(args),
             "models" | "murata" => self.models(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),

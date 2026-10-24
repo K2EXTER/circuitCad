@@ -666,3 +666,26 @@ fn board_impedance_goes_both_ways() {
     let (a, _) = run("board new 40 30\nboard impedance target=1.5\n");
     assert!(a.iter().any(|v| v["ok"] == false), "{a:?}");
 }
+
+#[test]
+fn noise_of_an_rc_filter_is_the_kt_over_c_value_and_names_the_resistor() {
+    // sqrt(kT/C) for 100 nF at 27 C is 0.203 uV, whatever the resistor is; all of it comes from R1
+    let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nadd C 100n as=C1\nnet VIN V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\nerc\nnoise out 1 10Meg ppd=20 top=3\n");
+    assert!(ok, "{a:?}");
+    let n = last(&a, "noise");
+    let rms = n["out_rms_v"].as_f64().unwrap();
+    assert!((rms - 2.03e-7).abs() / 2.03e-7 < 0.03, "{rms}");
+    assert_eq!(n["top_contributors"][0]["name"], "R1");
+    assert!(n["top_contributors"][0]["share_percent"].as_f64().unwrap() > 99.0, "{n}");
+    // 12.9 nV/rtHz for 10k at low frequency
+    let d = n["per_decade"][0]["out_v_per_rthz"].as_f64().unwrap();
+    assert!((d - 12.9e-9).abs() / 12.9e-9 < 0.03, "{d}");
+}
+
+#[test]
+fn noise_names_the_nets_it_could_have_used() {
+    let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
+    assert!(!ok);
+    let e = a.last().unwrap()["error"].as_str().unwrap();
+    assert!(e.contains("no net 'nowhere'") && e.contains("VIN"), "{e}");
+}

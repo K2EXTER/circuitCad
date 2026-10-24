@@ -303,6 +303,8 @@ pub(crate) fn floating_warnings(circuit: &Circuit) -> Vec<String> {
 
 /// Try the strategies in order; the first that converges wins.
 pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'static str), SimError> {
+    TROUBLE.with(|t| t.borrow_mut().take());
+    newton::STUCK.with(|s| s.set(None));
     let mut last = SimError::NoConvergence;
     for &which in order {
         match cm.run(which) {
@@ -333,7 +335,39 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
             Err(Fail::NoConv) => last = SimError::NoConvergence,
         }
     }
+    if last == SimError::NoConvergence
+        && let Some((i, before, after)) = newton::STUCK.with(|s| s.get())
+        && let Some(name) = cm.node_names.get(i + 1)
+    {
+        TROUBLE.with(|t| *t.borrow_mut() = Some(trouble_text(name, before, after)));
+    }
     Err(last)
+}
+
+thread_local! {
+    static TROUBLE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+fn trouble_text(node: &str, before: f64, after: f64) -> String {
+    let place = match node.split_once('.') {
+        Some((part, _)) => format!("部品 {part} の中のノード {node}"),
+        None => format!("ノード {node}"),
+    };
+    if after.abs() > 1e3 {
+        // a node at kilovolts is the iteration running away, not a place that is merely hard to settle: it need not be the cause
+        format!(
+            "計算が発散しました。最後の繰り返しで一番大きく動いたのは {place} です ({before:.4} V から {after:.4} V)。ここは暴走の結果で、原因とは限りません。非線形な部品 (比較器・基準電圧・オペアンプのマクロモデルなど) が複数つながっていると、ゼロからの計算が飛び出すことがあります。部品を1つずつ外して、収束するようになるものを探すと、組み合わせの原因が分かります"
+        )
+    } else {
+        format!(
+            "計算の最後まで落ち着かなかったのは {place} です (最後の繰り返しで {before:.4} V から {after:.4} V へ動きました)。この近くの部品の向き・値と、帰還のかかり方を見直してください。2つの状態を持つ部品 (ヒステリシスつきの比較器など) や、電圧に応じて電流が決まる部品が近くにあると、DCでは答えが1点に決まらないことがあります"
+        )
+    }
+}
+
+/// Where the last DC solve that gave up was still unsettled (None if the last solve succeeded or has no such place).
+pub fn last_convergence_trouble() -> Option<String> {
+    TROUBLE.with(|t| t.borrow().clone())
 }
 
 pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResult, SimError> {

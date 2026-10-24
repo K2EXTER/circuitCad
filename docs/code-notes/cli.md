@@ -35,3 +35,4 @@
 ## 今はできないこと(足すなら)
 ノイズ・スイープ・故障の解析、波形の全点の出力、ベタ・多層・差動ペアなど基板の細かい設定、回路図の `.ccproj`、配線の座標指定、MCPサーバー(`ccad` を包めば作れる)。
 - `board check [fab=ID]`(`board.rs`): アプリの発注前チェック `pcb_core::fab::preflight` をそのまま返す(`ready`・各レベルの数・ok 以外の `list`)。回路図との食い違いは `pcb_core::netlist::diff`(アプリの `SchDiff` と共通。`NetlistDiff::blocking()` で Error/Warn を分ける)を `schematic_sync_check` にして先頭に入れる。取り込み前(基板に部品が無い)や回路図が空のときは比べない。テスト `board_check_says_ready_after_routing_and_notices_a_schematic_change`
+- `noise`(`design.rs`): `sim_core::noise_analysis` を呼ぶだけ。出力は大文字小文字を区別せずネット名に直す(無いときは使えるネット名を返す)。`input=` は V/I 素子の名前。答え: `out_rms_v`、`in_rms`(input= のとき)、`per_decade`(密度)、`top_contributors`(名前・rms・割合)。テスト `noise_of_an_rc_filter_is_the_kt_over_c_value_and_names_the_resistor`(kT/C = 0.203µV、12.9nV/√Hz、寄与のほぼ100%が R1)。

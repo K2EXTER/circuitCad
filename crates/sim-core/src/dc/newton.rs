@@ -16,6 +16,12 @@ thread_local! {
 }
 
 thread_local! {
+    /// The unknown that moved the most (compared with its tolerance) in the last iteration of the last Newton run that gave up:
+    /// its index, the value before the step and the value after. `solve_op` turns it into a sentence when every strategy failed.
+    pub(super) static STUCK: std::cell::Cell<Option<(usize, f64, f64)>> = const { std::cell::Cell::new(None) };
+}
+
+thread_local! {
     pub(crate) static REFAC: std::cell::Cell<[u64; 2]> = const { std::cell::Cell::new([0; 2]) };
 }
 
@@ -24,6 +30,20 @@ const PLAIN_CAP: usize = 40;
 
 /// Systems below this many unknowns are always factored from scratch (and their plain iteration is never cut short).
 const REFACTOR_MIN_SIZE: usize = 60;
+
+/// Remember which unknown was still moving the most when the iteration limit was reached.
+fn note_stuck(x: &[f64], xn: &[f64], n_node_unknowns: usize) {
+    let o = crate::options::options();
+    let worst = x
+        .iter()
+        .zip(xn)
+        .enumerate()
+        .filter(|(i, _)| *i < n_node_unknowns)
+        .map(|(i, (a, b))| (i, (a - b).abs() / (o.reltol * a.abs().max(b.abs()) + o.vntol), *a, *b))
+        .filter(|(_, r, _, _)| r.is_finite())
+        .max_by(|p, q| p.1.total_cmp(&q.1));
+    STUCK.with(|s| s.set(worst.map(|(i, _, a, b)| (i, a, b))));
+}
 
 pub(crate) enum Fail {
     Singular,
@@ -210,6 +230,9 @@ impl Compiled {
             }
             if xn.iter().any(|v| !v.is_finite()) {
                 return Err(Fail::NoConv);
+            }
+            if it == limit {
+                note_stuck(&x, &xn, n_node_unknowns);
             }
             let done = !limited && it > 1 && converged(&x, &xn, n_node_unknowns);
             // Close to a regenerative switching point the Jacobian is nearly singular: the

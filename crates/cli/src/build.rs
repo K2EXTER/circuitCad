@@ -70,6 +70,16 @@ fn cli_sim_error(e: String) -> String {
     }
 }
 
+/// A failed DC solve with the simulator's hints (where it was still unsettled, what to check) appended.
+fn dc_fail(c: &sim_core::Circuit, e: sim_core::SimError) -> String {
+    let mut msg = cli_sim_error(e.to_string());
+    let hints = sim_core::diagnose(c, &e);
+    if !hints.is_empty() {
+        msg += &format!(" | ヒント: {}", hints.join(" / "));
+    }
+    msg
+}
+
 fn bad_number(v: &str) -> String {
     format!("'{v}' is not a number (write 4.7k, 100n, 10u, 1Meg ...)")
 }
@@ -339,7 +349,7 @@ impl Session {
         let circuit_ok = gate.is_none();
         let full = args.iter().any(|a| a.eq_ignore_ascii_case("full"));
         let c = self.circuit()?;
-        let r = sim_core::dc_op(&c).map_err(|e| cli_sim_error(e.to_string()))?;
+        let r = sim_core::dc_op(&c).map_err(|e| dc_fail(&c, e))?;
         self.last_dc = Some(r.clone());
         let volts: Map<String, Value> = r.voltages.iter().filter(|(n, _)| full || !n.contains('.')).map(|(n, v)| (n.clone(), json!(v))).collect();
         let internal_nodes = r.voltages.iter().filter(|(n, _)| n.contains('.')).count();

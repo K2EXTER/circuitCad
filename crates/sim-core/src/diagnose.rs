@@ -64,6 +64,9 @@ pub fn diagnose(c: &Circuit, err: &SimError) -> Vec<String> {
             }
         }
         SimError::NoConvergence => {
+            if let Some(t) = crate::dc::last_convergence_trouble() {
+                out.push(t);
+            }
             let has_source = c.elements.iter().any(|e| matches!(e, Element::VSource { .. } | Element::ISource { .. }));
             if !has_source {
                 out.push("電源が1つもありません。電圧源か電流源を置きましょう".into());
@@ -117,5 +120,19 @@ mod tests {
         let c = Circuit::default();
         assert!(diagnose(&c, &SimError::NoGround)[0].contains("GND"));
         assert!(diagnose(&c, &SimError::NoConvergence).iter().any(|m| m.contains("電源が1つもありません")));
+    }
+
+    #[test]
+    fn a_circuit_without_an_operating_point_names_the_node_that_would_not_settle() {
+        // KCL at "a": V/1 + V^2 + 1 = 0 has no real root, so Newton's iteration can only wander
+        let mut c = Circuit::default();
+        let a = c.node("a");
+        c.elements.push(Element::Resistor { name: "R1".into(), a, b: 0, r: 1.0 });
+        let expr = crate::Expr::parse("V(a)*V(a)+1", &mut |_: &str| a, &|s: &str| s.to_string()).unwrap();
+        c.elements.push(Element::BSource { name: "B1".into(), p: a, n: 0, voltage: false, expr });
+        let err = crate::dc_op(&c).unwrap_err();
+        assert_eq!(err, SimError::NoConvergence);
+        let h = diagnose(&c, &err);
+        assert!(h[0].contains("ノード a ") && (h[0].contains("発散") || h[0].contains("落ち着かなかった")), "{h:?}");
     }
 }
