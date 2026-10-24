@@ -63,6 +63,7 @@ pub fn with_number(old: &str, v: f64) -> String {
 pub const MAX_RUNS: usize = 40;
 
 pub fn param_sweep(base: &Schematic, s: &ParamSettings) -> Result<ParamResult, SimError> {
+    let base = &*base.flat();
     if s.values.is_empty() || s.values.len() > MAX_RUNS {
         return Err(SimError::Invalid(format!("値の数は 1〜{MAX_RUNS} にしてください")));
     }

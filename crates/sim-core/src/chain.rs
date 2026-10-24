@@ -182,6 +182,7 @@ fn supply_peak(c: &Circuit, tr: &TranResult, w: (f64, f64)) -> Option<(String, f
 
 /// Breaks `element` of `c` (made from `sch`) as `fault` and follows the failures that come after.
 pub fn chain_failure(sch: &Schematic, c: &Circuit, element: &str, fault: Fault, set: &TranSettings) -> Result<ChainReport, SimError> {
+    let sch = &*sch.flat();
     let w = window_of(set);
     let mut cur = with_fault(c, element, fault).ok_or_else(|| SimError::Invalid(format!("{element} には「{}」の故障を設定できません", fault.label())))?;
     let healthy = transient(c, set)?;

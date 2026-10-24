@@ -1023,3 +1023,17 @@ fn two_sheet_sample_simulates_like_the_single_sheet_one() {
 fn erc_errors(s: &sch_core::Schematic) -> Vec<String> {
     sch_core::erc(s).into_iter().filter(|p| p.severity == sch_core::Severity::Error).map(|p| p.message).collect()
 }
+
+/// A part on another sheet can be broken too: the fault tools look at every sheet, not only the open one.
+#[test]
+fn fault_simulation_reaches_parts_on_the_other_sheets() {
+    let mut e = SchEditor::default();
+    e.sch = example_schematics().into_iter().find(|(n, _)| n == "two_sheets.schjson").unwrap().1;
+    assert!(e.sch.components.iter().all(|c| c.refdes != "R1"), "R1 is on the sheet that is not open");
+    e.set_fault("R1", 0);
+    e.analyze_fault();
+    let report = e.fault_view.as_ref().unwrap().report.as_ref().unwrap_or_else(|m| panic!("{m:?}"));
+    assert!(report.summary().iter().any(|l| l.contains("電流が止まります") || l.contains("→")), "{:?}", report.summary());
+    e.analyze_fault_scan();
+    assert!(e.fault_scan.iter().any(|f| f.part == "R1"), "the scan includes the other sheet's parts");
+}

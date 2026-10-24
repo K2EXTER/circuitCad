@@ -590,3 +590,26 @@ fn a_divider_split_over_two_sheets_simulates_as_one_circuit() {
     close(res.element("R2").unwrap().voltage, 12.0 * 2200.0 / (4700.0 + 2200.0), 1e-9);
     assert!(sch_core::to_spice(&s, "two sheets").contains("R2"), "the SPICE text has the parts of every sheet");
 }
+
+#[test]
+fn a_parameter_sweep_reaches_a_part_on_another_sheet() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "10".into();
+    s.add(Kind::Ground, (0, 6), 0);
+    wire(&mut s, (0, 2), (0, 6));
+    s.labels.push(Label { pos: (0, -2), text: "VIN".into() });
+    s.add_sheet();
+    // the divider is on the second sheet, but the first one is open when the sweep runs
+    s.add(Kind::Resistor, (10, 0), 0);
+    s.add(Kind::Resistor, (20, 0), 0);
+    s.add(Kind::Ground, (30, 0), 0);
+    wire(&mut s, (22, 0), (30, 0));
+    s.labels.push(Label { pos: (8, 0), text: "VIN".into() });
+    s.labels.push(Label { pos: (12, 0), text: "MID".into() });
+    s.labels.push(Label { pos: (18, 0), text: "MID".into() });
+    s.switch_sheet(0);
+    assert!(s.components.iter().all(|c| c.refdes != "R2"));
+    let r = param_sweep(&s, &ParamSettings { refdes: "R2".into(), values: vec![1000.0, 3000.0], node: "MID".into(), temp_c: 27.0, analysis: ParamAnalysis::Tran { tstop: 1e-3, tstep: 1e-5, uic: false } });
+    assert!(r.is_ok(), "{:?}", r.err());
+}

@@ -240,7 +240,8 @@ impl SchEditor {
 
     /// The pins of a part as (id used in the netlist, label shown): "2" / "2 IN-", "C" ...
     pub(super) fn pin_choices(&self, refdes: &str) -> Vec<(String, String)> {
-        let Some(c) = self.sch.components.iter().find(|c| c.refdes == refdes) else { return vec![] };
+        let flat = self.sch.flat();
+        let Some(c) = flat.components.iter().find(|c| c.refdes == refdes) else { return vec![] };
         c.pins()
             .into_iter()
             .map(|(n, _)| {
@@ -422,7 +423,7 @@ impl SchEditor {
             }
         }
         // ICs and transistors: every pin disconnected in turn (the usual solder / contact failure)
-        let pin_parts: Vec<String> = self.sch.components.iter().filter(|x| matches!(x.kind, Kind::Custom | Kind::Npn)).map(|x| x.refdes.clone()).collect();
+        let pin_parts: Vec<String> = self.sch.flat().components.iter().filter(|x| matches!(x.kind, Kind::Custom | Kind::Npn)).map(|x| x.refdes.clone()).collect();
         let mut pin_jobs = vec![];
         for part in pin_parts {
             for (pin, _) in self.pin_choices(&part) {
@@ -507,7 +508,7 @@ impl SchEditor {
 
     pub(super) fn panel_fault(&mut self, ui: &mut egui::Ui) {
         let circuit = self.sim_circuit().ok();
-        let parts: Vec<String> = self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
+        let parts: Vec<String> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
         ui.horizontal(|ui| {
             ui.label("部品");
             let shown = if self.fault_part.is_empty() { "選ぶ".to_string() } else { self.fault_part.clone() };

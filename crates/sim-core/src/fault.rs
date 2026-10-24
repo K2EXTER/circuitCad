@@ -195,6 +195,7 @@ pub fn break_part(c: &Circuit, element: &str, fault: Fault) -> Option<Broken> {
 /// Returns the healthy circuit and the broken one, both at `temp_c`. `label` says what was done,
 /// for the reports ("ピン 2 (OUT) を断線").
 pub fn break_pin(s: &sch_core::Schematic, temp_c: f64, spec: &crate::PinFaultSpec, label: &str) -> Result<(Circuit, Broken), SimError> {
+    let s = &*s.flat();
     let join = |e: Vec<crate::ConvertError>| SimError::Invalid(e.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" / "));
     let healthy = crate::from_schematic(s).map_err(join)?.at_temperature(temp_c);
     if !s.components.iter().any(|c| c.refdes == spec.refdes && c.pins().iter().any(|(n, _)| *n == spec.pin)) {
@@ -343,6 +344,7 @@ pub struct FaultSafety {
 
 /// Rates `r` against the part ratings of `sch` (the schematic `r` was made from).
 pub fn assess_safety(sch: &sch_core::Schematic, r: &FaultReport) -> FaultSafety {
+    let sch = &*sch.flat();
     use crate::RatingLevel;
     let Ok(f) = &r.faulted else {
         return FaultSafety { level: Danger::Danger, issues: vec![], unsolvable: true };
