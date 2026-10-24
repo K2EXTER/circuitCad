@@ -14,9 +14,14 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   open FILE.schjson / save FILE.schjson
   parts [WORDS]                         search the part library (name, category, description)
   part NAME                             pins (number + name) of a library part or a basic type (R C L D LED V NPN)
+  part import FILE [name=NAME] [subckt=SUB] [pins=A,B,..] [map=1,2,..] [package=PART]
+                                        make a library part from a maker's SPICE .subckt (a plain-text file you downloaded):
+                                        pins = the symbol's pin names in the subcircuit's node order, map = their pin numbers,
+                                        package = a library part whose footprint is borrowed (default TL072, SOIC-8). Encrypted models are refused.
+  lib [reload]                          the library folder and the number of parts; 'lib reload' reads it again (after part import or editing a file)
   add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
         TYPE: R C L D LED V NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
-  value REF VALUE                       change the value
+  value REF VALUE                       change the value (a value with spaces, like PULSE(0 5 1m 1u), needs no quotes)
   net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name (any case)
                                         (GND pins of a part that share a name are all connected)
                                         The net named GND is the 0 V reference: every circuit needs one.
@@ -26,7 +31,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         read 'errors' (or run with --strict, which fails the script on an ERC error)
   spice                                 the SPICE netlist text
  Simulation
-  dc [full]                             operating point: node voltages, element currents
+  dc [full] [probe=V(out),I(R1)]        operating point: node voltages, element currents (probe= returns only those)
                                         (elements inside a library part's macro model are hidden unless 'full')
                                         'ratings' lists parts over / near their package power limit (like the app);
                                         'warnings' also flags an op-amp whose IN+ and IN- differ (saturated output)
@@ -46,6 +51,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   ac FSTART FSTOP [ppd=10] [probe=V(out)]
                                         frequency response (needs a source with an AC magnitude, e.g. value V1 \"0 AC 1\"):
                                         gain and phase per decade, -3 dB frequency, phase margin
+  sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or sweep REF list=1,2,5)
+                                        the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value
   noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]
                                         thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,
                                         density per decade, the biggest contributors; input=V1 also refers it to that source
@@ -75,6 +82,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
 pub struct Session {
     pub sch: Schematic,
     pub lib: Vec<PartDef>,
+    /// The folder the library was read from (`lib reload` reads it again).
+    pub lib_dir: std::path::PathBuf,
     pub board: Option<Board>,
     /// Where the next part goes: (x, y, tallest part of the row).
     pub cursor: (i32, i32, i32),
@@ -145,7 +154,7 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, board: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
+        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {
@@ -179,7 +188,10 @@ impl Session {
                 Ok(obj(json!({"file": f})))
             }
             "parts" => Ok(self.parts(args)),
+            "part" if args.first().is_some_and(|a| a.eq_ignore_ascii_case("import")) => self.part_import(&args[1..]),
             "part" => self.part(args),
+            "lib" => self.lib_cmd(args),
+            "sweep" => self.sweep(args),
             "add" => self.add(args),
             "value" => self.set_value(args),
             "net" => self.net(args),

@@ -4,7 +4,9 @@ use serde_json::Value;
 use std::process::{Command, Stdio};
 
 fn run(script: &str) -> (Vec<Value>, bool) {
-    let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}", std::process::id()));
+    // one library folder per run: the tests run in parallel, and a part written (or the bundled parts copied) by one run must not be read half-written by another
+    static RUNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let lib = std::env::temp_dir().join(format!("ccad-test-lib-{}-{}", std::process::id(), RUNS.fetch_add(1, std::sync::atomic::Ordering::SeqCst)));
     let mut child = Command::new(env!("CARGO_BIN_EXE_ccad"))
         .args(["--lib", lib.to_str().unwrap(), "-"])
         .stdin(Stdio::piped())
@@ -688,4 +690,70 @@ fn noise_names_the_nets_it_could_have_used() {
     assert!(!ok);
     let e = a.last().unwrap()["error"].as_str().unwrap();
     assert!(e.contains("no net 'nowhere'") && e.contains("VIN"), "{e}");
+}
+
+#[test]
+fn value_takes_a_source_with_spaces_without_quotes() {
+    let (a, ok) = run("new\nadd V 5 as=V1\nvalue V1 PULSE(0 5 1m 1u 1u 2m 5m)\nvalue V1\n");
+    assert!(!ok);
+    assert_eq!(a[2]["value"], "PULSE(0 5 1m 1u 1u 2m 5m)", "{a:?}");
+    assert!(a[3]["error"].as_str().unwrap().contains("value REF VALUE"), "{a:?}");
+}
+
+#[test]
+fn dc_probe_returns_only_what_was_asked_for() {
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10k as=R1\nadd R 4.7k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\ndc probe=V(mid),I(r1),V(vin,mid)\n");
+    assert!(ok, "{a:?}");
+    let d = last(&a, "dc");
+    assert!(d.get("voltages").is_none() && d.get("elements").is_none(), "{d}");
+    let mid = d["probes"]["V(mid)"].as_f64().unwrap();
+    assert!((mid - 12.0 * 4.7 / 14.7).abs() < 1e-6, "{mid}");
+    assert!((d["probes"]["I(r1)"].as_f64().unwrap() - 12.0 / 14.7e3).abs() < 1e-9);
+    assert!((d["probes"]["V(vin,mid)"].as_f64().unwrap() - (12.0 - mid)).abs() < 1e-6);
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\ndc probe=V(nowhere)\n");
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("no net 'nowhere'"), "{a:?}");
+}
+
+#[test]
+fn sweep_gives_a_row_per_value_and_leaves_the_part_as_it_was() {
+    let (a, ok) = run("new\nadd V 5 as=V1\nadd R 10k as=R1\nadd R 10k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\nsweep V1 0 10 steps=3 probe=V(mid)\nsweep R2 list=10k,30k probe=V(mid),I(r1)\ndc probe=V(mid)\n");
+    assert!(ok, "{a:?}");
+    let s = a.iter().filter(|v| v["cmd"] == "sweep").collect::<Vec<_>>();
+    let mids: Vec<f64> = s[0]["rows"].as_array().unwrap().iter().map(|r| r["V(mid)"].as_f64().unwrap()).collect();
+    assert_eq!(mids.len(), 3);
+    assert!((mids[2] - 5.0).abs() < 1e-6 && mids[0].abs() < 1e-9, "{mids:?}");
+    assert_eq!(s[0]["restored_value"], "5");
+    let r2 = s[1]["rows"].as_array().unwrap();
+    assert!((r2[1]["V(mid)"].as_f64().unwrap() - 5.0 * 30.0 / 40.0).abs() < 1e-6, "{r2:?}");
+    // the part has its own value again
+    assert!((last(&a, "dc")["probes"]["V(mid)"].as_f64().unwrap() - 2.5).abs() < 1e-6);
+}
+
+#[test]
+fn a_maker_subcircuit_becomes_a_part_and_the_library_reads_again() {
+    let dir = std::env::temp_dir().join(format!("ccad-import-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let good = dir.join("model.cir");
+    std::fs::write(&good, "* a divider\n.SUBCKT IMPDIV 1 2 3\nR1 1 2 1k\nR2 2 3 3k\n.ENDS IMPDIV\n").unwrap();
+    let enc = dir.join("enc.sub");
+    std::fs::write(&enc, b"\r\n<Binary File>\r\n\x1a\x07\x01\x02\x03\x04\x05\x06\x07\x01").unwrap();
+    let f = |p: &std::path::Path| p.to_str().unwrap().replace(std::path::MAIN_SEPARATOR, "/");
+    let (a, ok) = run(&format!(
+        "part import {} pins=TOP,MID,BOT map=1,2,3\nlib reload\nnew\nadd V 8 as=V1\nadd IMPDIV as=U1\nnet VIN V1.+ U1.TOP\nnet MID U1.MID\nnet GND V1.- U1.BOT\nerc\ndc probe=V(mid)\n",
+        f(&good)
+    ));
+    assert!(ok, "{a:?}");
+    let imp = last(&a, "part");
+    assert_eq!(imp["name"], "IMPDIV");
+    assert!(imp["todo"].as_array().unwrap().len() >= 2);
+    assert!(last(&a, "lib")["parts"].as_i64().unwrap() > 1);
+    // 8 V across 1k + 3k, the tap at 6 V
+    let tap = a.iter().rev().find(|v| v["cmd"] == "dc").unwrap()["probes"].as_object().unwrap().values().next().unwrap().as_f64().unwrap();
+    assert!((tap - 6.0).abs() < 1e-6, "{tap}");
+    let (a, ok) = run(&format!("part import {}\n", f(&enc)));
+    assert!(!ok);
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("encrypted"), "{a:?}");
+    let (a, ok) = run(&format!("part import {} pins=A,B\n", f(&good)));
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("3 nodes"), "{a:?}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -36,3 +36,8 @@
 ノイズ・スイープ・故障の解析、波形の全点の出力、ベタ・多層・差動ペアなど基板の細かい設定、回路図の `.ccproj`、配線の座標指定、MCPサーバー(`ccad` を包めば作れる)。
 - `board check [fab=ID]`(`board.rs`): アプリの発注前チェック `pcb_core::fab::preflight` をそのまま返す(`ready`・各レベルの数・ok 以外の `list`)。回路図との食い違いは `pcb_core::netlist::diff`(アプリの `SchDiff` と共通。`NetlistDiff::blocking()` で Error/Warn を分ける)を `schematic_sync_check` にして先頭に入れる。取り込み前(基板に部品が無い)や回路図が空のときは比べない。テスト `board_check_says_ready_after_routing_and_notices_a_schematic_change`
 - `noise`(`design.rs`): `sim_core::noise_analysis` を呼ぶだけ。出力は大文字小文字を区別せずネット名に直す(無いときは使えるネット名を返す)。`input=` は V/I 素子の名前。答え: `out_rms_v`、`in_rms`(input= のとき)、`per_decade`(密度)、`top_contributors`(名前・rms・割合)。テスト `noise_of_an_rc_filter_is_the_kt_over_c_value_and_names_the_resistor`(kT/C = 0.203µV、12.9nV/√Hz、寄与のほぼ100%が R1)。
+- `libcmd.rs`: `lib [reload]`(`Session.lib_dir` から読み直す)と `part import`。`.subcircuit` の本体は、コメント行を省いて `sim.text` に入れる。取り込む前に `add_subckt_instance` で読めるか試す(読めない素子は、ここで理由つきで断る)。ピンの辺は `side_for`(名前から)、フットプリントは `package=` の部品から借りる。ADA4522(ADI)の `.cir` で `pins=IN+,IN-,V+,V-,OUT map=3,2,8,4,1` を使って確かめた。**取り込んだ部品はあなたのライブラリの中の1ファイルで、メーカーのモデルの再配布になることがある**ので、リポジトリには入れない。
+- `dc probe=` と `sweep`(`build.rs`): `probe=` は括弧の外のカンマで区切る(`V(a,b)` があるため)。`sweep` は部品の値を書き換えて `dc_op` を呼ぶだけ(`sim_core::param_sweep` は使わない: あれは解析の種類ごとの曲線用)。終わったら値を戻す。
+- `value` は残りの語をスペースでつなぐ(`split_words` が引用符を扱うので、どちらの書き方でも同じ値になる)。
+- `tests/script.rs` の `run` は、呼び出しごとに別の部品フォルダを使う(並列のテストが同じフォルダの同梱部品のコピーや `part import` を半端に読むことがあった)。
+

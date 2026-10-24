@@ -47,7 +47,7 @@ pub fn unsupported_notes(text: &str) -> Vec<String> {
 /// the simulator they were made for.
 pub fn is_encrypted(text: &str) -> bool {
     let low = text.to_ascii_lowercase();
-    low.contains("encrypted file") || low.contains("$encrypted_lib") || low.contains("encrypted_lib") || low.contains("begin:encrypted")
+    low.contains("encrypted file") || low.contains("$encrypted_lib") || low.contains("encrypted_lib") || low.contains("begin:encrypted") || low.contains("<binary file>")
 }
 
 pub const ENCRYPTED_MSG: &str = "このモデルは暗号化されていて、ほかのシミュレータでは読めません (メーカーが中身を公開していないモデルです)。メーカーのサイトに、暗号化されていない版 (ngspice 用・LTspice 用の別ファイル) がないか探すか、データシートの数値から作れる部品 (かんたん作成) を使ってください";
@@ -160,6 +160,8 @@ G1 1 2 value={V(1)}
  22 AB 91"));
         assert!(is_encrypted("* $ENCRYPTED_LIB
 "));
+        // LTspice's own library files for LTC parts (lib/sub/LTC2057.sub) start like this
+        assert!(is_encrypted("<Binary File>"));
         assert!(!is_encrypted(".subckt A 1 2
 R1 1 2 1k
 .ends"));

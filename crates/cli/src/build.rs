@@ -80,6 +80,41 @@ fn dc_fail(c: &sim_core::Circuit, e: sim_core::SimError) -> String {
     msg
 }
 
+/// `V(a),I(R1),V(a,b)` split at the commas outside the brackets.
+fn split_probes(list: &str) -> Vec<&str> {
+    let (mut out, mut depth, mut from) = (vec![], 0i32, 0);
+    for (i, c) in list.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth -= 1,
+            ',' if depth == 0 => {
+                out.push(&list[from..i]);
+                from = i + 1;
+            }
+            _ => {}
+        }
+    }
+    out.push(&list[from..]);
+    out.into_iter().map(str::trim).filter(|s| !s.is_empty()).collect()
+}
+
+/// `V(net)`, `V(a,b)` or `I(part)` from a DC answer (names in any case).
+fn probe_value(r: &sim_core::DcResult, spec: &str) -> Result<f64, String> {
+    let s = spec.trim();
+    let inner = |prefix: &str| s.get(..prefix.len()).filter(|p| p.eq_ignore_ascii_case(prefix)).and_then(|_| s.strip_suffix(')')).map(|x| x[prefix.len()..].to_string());
+    let volt = |n: &str| r.voltage(n.trim()).ok_or_else(|| format!("probe {s}: no net '{}' (nets: {})", n.trim(), r.voltages.iter().map(|(n, _)| n.as_str()).filter(|n| !n.contains('.')).take(30).collect::<Vec<_>>().join(", ")));
+    if let Some(x) = inner("V(") {
+        return match x.split_once(',') {
+            Some((a, b)) => Ok(volt(a)? - volt(b)?),
+            None => volt(&x),
+        };
+    }
+    if let Some(x) = inner("I(") {
+        return r.elements.iter().find(|e| e.name.eq_ignore_ascii_case(x.trim())).map(|e| e.current).ok_or_else(|| format!("probe {s}: no part '{}'", x.trim()));
+    }
+    Err(format!("probe {s}: write V(net), V(a,b) or I(part)"))
+}
+
 fn bad_number(v: &str) -> String {
     format!("'{v}' is not a number (write 4.7k, 100n, 10u, 1Meg ...)")
 }
@@ -208,7 +243,12 @@ impl Session {
     }
 
     pub fn set_value(&mut self, args: &[String]) -> Res {
-        let [r, v] = args else { return Err("value REF VALUE".into()) };
+        let [r, rest @ ..] = args else { return Err("value REF VALUE   (for example: value R1 4.7k, value V1 5, value V2 PULSE(0 5 1m 1u 1u 2m 5m))".into()) };
+        if rest.is_empty() {
+            return Err("value REF VALUE   (for example: value R1 4.7k, value V1 5, value V2 PULSE(0 5 1m 1u 1u 2m 5m))".into());
+        }
+        // a source with spaces in it (PULSE(0 5 1m ...), "0 AC 1") is one value whether or not it was written in quotes
+        let v = &rest.join(" ");
         let c = self.sch.components.iter_mut().find(|c| c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
         if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) && sim_core::parse_value(v).is_none() {
             return Err(bad_number(v));
@@ -347,7 +387,8 @@ impl Session {
     pub fn dc(&mut self, args: &[String]) -> Res {
         let gate = self.erc_gate()?;
         let circuit_ok = gate.is_none();
-        let full = args.iter().any(|a| a.eq_ignore_ascii_case("full"));
+        let (pos, kv) = options(args);
+        let full = pos.iter().any(|a| a.eq_ignore_ascii_case("full"));
         let c = self.circuit()?;
         let r = sim_core::dc_op(&c).map_err(|e| dc_fail(&c, e))?;
         self.last_dc = Some(r.clone());
@@ -367,7 +408,19 @@ impl Session {
         let (ratings, notes) = self.dc_notes(&r);
         warnings.extend(notes);
         let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
-        Ok(obj(json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings})))
+        let mut answer = json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings});
+        if let Some(list) = opt(&kv, "probe") {
+            let mut probes = Map::new();
+            for spec in split_probes(list) {
+                probes.insert(spec.trim().to_string(), json!(probe_value(&r, spec)?));
+            }
+            if let Some(o) = answer.as_object_mut() {
+                o.remove("voltages");
+                o.remove("elements");
+                o.insert("probes".into(), Value::Object(probes));
+            }
+        }
+        Ok(obj(answer))
     }
 
     /// What a DC answer says besides the numbers, so that "it ran" is not read as "it is fine":
@@ -538,4 +591,69 @@ pub(crate) fn post_layout_parts(b: &pcb_core::Board) -> (Vec<sim_core::WiringR>,
     let couplings = pcb_core::irdrop::wiring_couplings(&series, &spec).into_iter().map(|c| sim_core::WiringK { a: c.a, b: c.b, k: c.k }).collect();
     let wiring = series.into_iter().map(|w| sim_core::WiringR { refdes: w.refdes, pin: w.pin, ohm: w.ohm, henry: w.henry, farad: w.farad }).collect();
     (wiring, couplings)
+}
+
+impl Session {
+    /// `sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)` or `sweep REF list=a,b,c probe=...`: a DC point for each value of one part.
+    pub fn sweep(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        let usage = "sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or: sweep REF list=1,2,5 probe=...; REF is a V source, R, C or L)";
+        let Some(refdes) = pos.first() else { return Err(usage.into()) };
+        let num = |s: &str| sim_core::parse_value(s).ok_or_else(|| format!("'{s}' is not a number (write 4.7k, 100n, 0.5 ...)"));
+        let values: Vec<f64> = if let Some(l) = opt(&kv, "list") {
+            l.split(',').map(|s| num(s.trim())).collect::<Result<_, _>>()?
+        } else {
+            if pos.len() < 3 {
+                return Err(usage.into());
+            }
+            let (a, b) = (num(&pos[1])?, num(&pos[2])?);
+            let steps: usize = opt(&kv, "steps").and_then(|s| s.parse().ok()).unwrap_or(11).clamp(2, 200);
+            let log = opt(&kv, "log").is_some_and(|s| s != "0");
+            if log && (a <= 0.0 || b <= 0.0) {
+                return Err("log=1 needs positive START and STOP".into());
+            }
+            (0..steps).map(|i| {
+                let f = i as f64 / (steps - 1) as f64;
+                if log { a * (b / a).powf(f) } else { a + (b - a) * f }
+            }).collect()
+        };
+        if values.is_empty() || values.len() > 200 {
+            return Err("sweep: 1 to 200 values".into());
+        }
+        let probes: Vec<String> = opt(&kv, "probe").map(|p| split_probes(p).into_iter().map(str::to_string).collect()).unwrap_or_default();
+        if probes.is_empty() {
+            return Err(format!("sweep needs probe=V(net),I(part) to say what to record. {usage}"));
+        }
+        let idx = self.sch.components.iter().position(|c| c.refdes.eq_ignore_ascii_case(refdes)).ok_or_else(|| format!("no part {refdes}"))?;
+        let original = self.sch.components[idx].value.clone();
+        let gate = self.erc_gate()?;
+        let mut rows = vec![];
+        let mut failed = 0;
+        for x in &values {
+            self.sch.components[idx].value = format!("{x}");
+            let row = match self.circuit().and_then(|c| sim_core::dc_op(&c).map_err(|e| e.to_string())) {
+                Ok(r) => {
+                    let mut o = Map::new();
+                    o.insert("value".into(), json!(x));
+                    for p in &probes {
+                        match probe_value(&r, p) {
+                            Ok(v) => o.insert(p.clone(), json!(v)),
+                            Err(e) => {
+                                self.sch.components[idx].value = original;
+                                return Err(e);
+                            }
+                        };
+                    }
+                    Value::Object(o)
+                }
+                Err(e) => {
+                    failed += 1;
+                    json!({"value": x, "error": e})
+                }
+            };
+            rows.push(row);
+        }
+        self.sch.components[idx].value = original.clone();
+        Ok(obj(json!({"ref": self.sch.components[idx].refdes, "restored_value": original, "points": rows.len(), "failed": failed, "rows": rows, "warnings": gate.into_iter().collect::<Vec<_>>()})))
+    }
 }

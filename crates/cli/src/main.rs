@@ -8,6 +8,7 @@
 mod board;
 mod build;
 mod design;
+mod libcmd;
 mod mcp;
 mod models;
 mod runner;
