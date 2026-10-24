@@ -304,6 +304,7 @@ pub(crate) fn floating_warnings(circuit: &Circuit) -> Vec<String> {
 /// Try the strategies in order; the first that converges wins.
 pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'static str), SimError> {
     TROUBLE.with(|t| t.borrow_mut().take());
+    newton::LIMITED_USED.with(|c| c.set(false));
     newton::STUCK.with(|s| s.set(None));
     let mut last = SimError::NoConvergence;
     for &which in order {
@@ -374,9 +375,12 @@ pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResu
     if !has_ground(circuit) {
         return Err(SimError::NoGround);
     }
-    let warnings = floating_warnings(circuit);
+    let mut warnings = floating_warnings(circuit);
     let cm = compile(circuit);
     let (att, name) = solve_op(&cm, order)?;
+    if newton::LIMITED_USED.with(|c| c.get()) {
+        warnings.push("この答えは、ふつうの方法では収束せず、1回の変化を小さくした特別な反復で求めました。2つの状態を持つ回路 (555 の点滅・フリップフロップ・ヒステリシスつきの比較器) や発振回路では、実際には落ち着かない点が出ることがあります。時間を追って確かめるには「過渡解析」を使ってください".to_string());
+    }
     Ok(report(&cm, &att, name, warnings))
 }
 

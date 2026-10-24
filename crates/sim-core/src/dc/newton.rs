@@ -22,6 +22,17 @@ thread_local! {
 }
 
 thread_local! {
+    /// Set when an answer was found only by one of the step-limited iterations of `newton_damped` (a circuit that does not settle
+    /// by itself: two stable states, an oscillator's balance point). `dc_op` turns it into a warning.
+    pub(super) static LIMITED_USED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+thread_local! {
+    /// How much of an unknown's own size a limited step may add to `max_dx` (see `newton_with`); set by `newton_damped`.
+    static REL_STEP: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+}
+
+thread_local! {
     pub(crate) static REFAC: std::cell::Cell<[u64; 2]> = const { std::cell::Cell::new([0; 2]) };
 }
 
@@ -99,13 +110,20 @@ impl Compiled {
         if !matches!(r, Err(Fail::NoConv)) {
             return r;
         }
-        for (damp, max_dx) in [(0.3, f64::INFINITY), (0.1, f64::INFINITY), (1.0, 2.0), (1.0, 0.5), (0.5, 0.1)] {
+        // (damping, largest change in volts, and the share of an unknown's own size added to it). The last group lets a node that
+        // legitimately sits at 100 V (a macro model's internal reference) move in proportion; the ones before hold every node to volts.
+        let mut result = Err(Fail::NoConv);
+        for (damp, max_dx, rel) in [(0.3, f64::INFINITY, 0.0), (0.1, f64::INFINITY, 0.0), (1.0, 2.0, 0.0), (1.0, 0.5, 0.0), (0.5, 0.1, 0.0), (1.0, 2.0, 0.2), (1.0, 0.5, 0.2), (0.5, 0.1, 0.2), (1.0, 0.1, 0.2), (1.0, 0.5, 0.5)] {
+            REL_STEP.with(|c| c.set(rel));
             let r = self.newton_with(x0.clone(), vj0.clone(), ctx, false, damp, max_dx);
+            REL_STEP.with(|c| c.set(0.0));
             if !matches!(r, Err(Fail::NoConv)) {
-                return r;
+                LIMITED_USED.with(|c| c.set(true));
+                result = r;
+                break;
             }
         }
-        Err(Fail::NoConv)
+        result
     }
 
     /// Solve `rows * x = b`: with the pivot order of the last factorisation when the matrix has the same pattern and the answer
@@ -254,8 +272,15 @@ impl Compiled {
                 prev = Some((x_old, dx, if limited { f64::INFINITY } else { r2 }, vj_old, 1.0));
             }
             // a part of the step, and never more than `max_dx` volts/amps for any unknown
-            let big = x.iter().zip(&xn).map(|(a, b)| (b - a).abs()).fold(0.0, f64::max);
-            let part = if big * damp > max_dx { max_dx / big } else { damp };
+            // With a limit on the change: every unknown may move `max_dx` plus `rel` times its own size (a macro model whose
+            // internal node legitimately sits at 100 V is not held to 0.1 V steps).  Without one, `big` is only a scale.
+            let rel = REL_STEP.with(|r| r.get());
+            let part = if max_dx.is_finite() {
+                let tightest = x.iter().zip(&xn).map(|(a, b)| ((b - a).abs(), max_dx + rel * a.abs())).filter(|(d, _)| *d > 0.0).map(|(d, allowed)| allowed / d).fold(f64::INFINITY, f64::min);
+                damp.min(tightest)
+            } else {
+                damp
+            };
             x = if part < 1.0 { x.iter().zip(&xn).map(|(a, b)| a + part * (b - a)).collect() } else { xn };
         }
         Err(Fail::NoConv)

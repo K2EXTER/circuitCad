@@ -101,10 +101,15 @@ fn a_555_blinker_without_an_operating_point_points_to_the_transient_run() {
             c.value = format!("{:e}", v * 10f64.powf(rng.next() * 1.6 - 0.8));
         }
         let c = sim_core::from_schematic(&t).unwrap();
-        if let Err(e) = sim_core::dc_op(&c) {
-            let hints = sim_core::diagnose(&c, &e);
-            assert!(hints.iter().any(|h| h.contains("555 タイマー") && h.contains("過渡解析")), "{hints:?}");
-            return;
+        match sim_core::dc_op(&c) {
+            Err(e) => {
+                let hints = sim_core::diagnose(&c, &e);
+                assert!(hints.iter().any(|h| h.contains("555 タイマー") && h.contains("過渡解析")), "{hints:?}");
+                return;
+            }
+            // the step-limited iterations find the unstable balance point of an astable: the answer must say so and point to the transient run
+            Ok(r) if r.warnings.iter().any(|w| w.contains("特別な反復") && w.contains("過渡解析")) => return,
+            Ok(_) => {}
         }
     }
     panic!("no resistor set without an operating point turned up (the explorer found 8 of 12)");
