@@ -1001,3 +1001,25 @@ fn the_fault_scan_leaves_out_the_rare_faults_unless_asked() {
     e.analyze_fault_scan();
     assert!(e.fault_scan.len() > usual, "{} vs {usual}", e.fault_scan.len());
 }
+
+/// The two-sheet sample is the regulator sample cut in two: every net voltage must come out the same.
+#[test]
+fn two_sheet_sample_simulates_like_the_single_sheet_one() {
+    let all = example_schematics();
+    let find = |n: &str| all.iter().find(|(f, _)| f == n).unwrap().1.clone();
+    let (one, two) = (find("regulator_led.schjson"), find("two_sheets.schjson"));
+    assert_eq!(two.sheet_count(), 2);
+    let dc = |s: &sch_core::Schematic| sim_core::dc_op(&sim_core::from_schematic(s).unwrap()).unwrap();
+    let (a, b) = (dc(&one), dc(&two));
+    let led = |r: &sim_core::DcResult, s: &sch_core::Schematic| {
+        let d = s.flat().components.iter().find(|c| c.kind == sch_core::Kind::Led).unwrap().refdes.clone();
+        r.element(&d).unwrap().current
+    };
+    assert!((led(&a, &one) - led(&b, &two)).abs() < 1e-9, "{} vs {}", led(&a, &one), led(&b, &two));
+    assert!(led(&b, &two) > 5e-3, "the LED lights");
+    assert!(erc_errors(&two).is_empty(), "{:?}", erc_errors(&two));
+}
+
+fn erc_errors(s: &sch_core::Schematic) -> Vec<String> {
+    sch_core::erc(s).into_iter().filter(|p| p.severity == sch_core::Severity::Error).map(|p| p.message).collect()
+}

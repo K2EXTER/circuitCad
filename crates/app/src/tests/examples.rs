@@ -1773,3 +1773,33 @@ fn write_uln2803a_example() {
     label(&mut s, d1, "K", "VCC");
     std::fs::write(root.join("uln2803a_model.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
+
+/// Writes docs/examples/two_sheets.schjson (the regulator_led circuit split over two sheets, joined by the net label 5V):
+/// `cargo test -p app write_two_sheets_example -- --ignored`
+#[test]
+#[ignore]
+fn write_two_sheets_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let src: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join("regulator_led.schjson")).unwrap()).unwrap();
+    let part = |r: &str| src.components.iter().find(|c| c.refdes == r).unwrap().clone();
+    let mut s = sch_core::Schematic::default();
+    // sheet 1: the supply (12 V -> LM7805), its output named 5V
+    s.components = vec![part("V1"), part("U1"), part("#PWR01")];
+    for (a, b) in [((0, -2), (0, -6)), ((0, -6), (10, -6)), ((10, -6), (10, 0)), ((14, 4), (14, 8)), ((0, 2), (0, 8)), ((0, 8), (14, 8)), ((18, 0), (22, 0))] {
+        s.wires.push(Wire { a, b });
+    }
+    s.labels.push(sch_core::Label { pos: (22, 0), text: "5V".into() });
+    s.add_sheet();
+    // sheet 2: the load, taking 5V by the same label
+    s.components = vec![part("R1"), part("D1")];
+    let gnd = s.add(Kind::Ground, (30, 8), 0);
+    s.components[gnd].refdes = "#PWR02".into();
+    for (a, b) in [((24, 0), (26, 0)), ((30, 0), (30, 8))] {
+        s.wires.push(Wire { a, b });
+    }
+    s.labels.push(sch_core::Label { pos: (20, 0), text: "5V".into() });
+    s.rename_sheet(0, "電源");
+    s.rename_sheet(1, "負荷");
+    s.switch_sheet(0);
+    std::fs::write(root.join("two_sheets.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}

@@ -1,0 +1,237 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM7805",
+      "pos": [
+        14,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-220-3",
+      "custom": {
+        "name": "LM7805",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM7805",
+          "text": ".subckt LM7805 in gnd out\nVdo in ind DC 2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends LM7805",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {
+            "dropout": 2.0,
+            "vout": 5.0
+          }
+        }
+      }
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        0,
+        8
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -6
+      ]
+    },
+    {
+      "a": [
+        0,
+        -6
+      ],
+      "b": [
+        10,
+        -6
+      ]
+    },
+    {
+      "a": [
+        10,
+        -6
+      ],
+      "b": [
+        10,
+        0
+      ]
+    },
+    {
+      "a": [
+        14,
+        4
+      ],
+      "b": [
+        14,
+        8
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        8
+      ]
+    },
+    {
+      "a": [
+        0,
+        8
+      ],
+      "b": [
+        14,
+        8
+      ]
+    },
+    {
+      "a": [
+        18,
+        0
+      ],
+      "b": [
+        22,
+        0
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        22,
+        0
+      ],
+      "text": "5V"
+    }
+  ],
+  "layout_version": 1,
+  "sheets": [
+    {
+      "name": "電源",
+      "components": [],
+      "wires": [],
+      "labels": []
+    },
+    {
+      "name": "負荷",
+      "components": [
+        {
+          "refdes": "R1",
+          "kind": "Resistor",
+          "value": "330",
+          "pos": [
+            22,
+            0
+          ],
+          "rot": 0,
+          "footprint": "R_0805",
+          "custom": null
+        },
+        {
+          "refdes": "D1",
+          "kind": "Led",
+          "value": "LED",
+          "pos": [
+            28,
+            0
+          ],
+          "rot": 0,
+          "footprint": "LED_0805",
+          "custom": null
+        },
+        {
+          "refdes": "#PWR02",
+          "kind": "Ground",
+          "value": "GND",
+          "pos": [
+            30,
+            8
+          ],
+          "rot": 0,
+          "footprint": "",
+          "custom": null
+        }
+      ],
+      "wires": [
+        {
+          "a": [
+            24,
+            0
+          ],
+          "b": [
+            26,
+            0
+          ]
+        },
+        {
+          "a": [
+            30,
+            0
+          ],
+          "b": [
+            30,
+            8
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "pos": [
+            20,
+            0
+          ],
+          "text": "5V"
+        }
+      ]
+    }
+  ]
+}
