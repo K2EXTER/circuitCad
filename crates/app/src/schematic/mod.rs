@@ -579,6 +579,7 @@ mod stretch;
 mod erc_skip;
 mod net_hints;
 mod snippet;
+mod sheets_ui;
 mod history;
 mod hint;
 mod canvas;

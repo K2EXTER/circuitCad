@@ -534,16 +534,19 @@ impl SchEditor {
             ui.colored_label(Color32::from_rgb(60, 160, 90), "✔ 問題は見つかりませんでした");
         }
         let mut jump = None;
+        let mut jump_sheet = 0;
         for (k, p) in self.problems.iter().enumerate() {
             let (mark, color) = match p.severity {
                 Severity::Error => ("✖", Color32::from_rgb(220, 40, 60)),
                 Severity::Warning => ("▲", Color32::from_rgb(210, 150, 20)),
             };
-            let label = egui::RichText::new(format!("{mark} {}", p.message)).color(color);
+            let sheet = if self.sch.sheet_count() > 1 && p.at.is_some() { format!("[{}] ", self.sch.sheet_name(p.sheet)) } else { String::new() };
+            let label = egui::RichText::new(format!("{mark} {sheet}{}", p.message)).color(color);
             let tip = if p.at.is_some() { "クリックで、その場所へ移動して説明を表示します" } else { "クリックで説明を表示します" };
             if ui.link(label).on_hover_text(tip).clicked() {
                 self.erc_focus = Some(k);
                 jump = p.at;
+                jump_sheet = p.sheet;
             }
             if self.erc_focus == Some(k) {
                 ui.indent(("erc_hint", k), |ui| {
@@ -552,6 +555,7 @@ impl SchEditor {
             }
         }
         if let Some(at) = jump {
+            self.show_sheet(jump_sheet);
             self.pan = Vec2::new(at.0 as f32, at.1 as f32);
         }
     }

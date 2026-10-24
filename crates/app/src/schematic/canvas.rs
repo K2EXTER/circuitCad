@@ -6,6 +6,7 @@ impl SchEditor {
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
         self.track_history(ui);
         self.live_update();
+        self.sheet_tabs(ui);
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;
         painter.rect_filled(rect, 0.0, SCH_BG);

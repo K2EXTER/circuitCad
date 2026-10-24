@@ -3,7 +3,9 @@
 
 mod netlist;
 mod ngspice;
+mod sheets;
 mod spice;
+pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
 
 pub use netlist::{erc, extract, net_at, Net, PinRef, Problem, Severity};
 pub use spice::{node as spice_node, to_spice, to_spice_for, Dialect};
@@ -207,11 +209,20 @@ pub struct Schematic {
     /// Differential pairs, as the two labelled nets (the "+" and the "-" line): the board import makes them a pair.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diff_pairs: Vec<(String, String)>,
+    /// Several sheets: every sheet, the one being edited (`active_sheet`) as an empty place (it is in the fields above). Empty = one sheet.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sheets: Vec<Sheet>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub active_sheet: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![] }
+        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], sheets: vec![], active_sheet: 0 }
     }
 }
 
@@ -228,11 +239,15 @@ struct RawSchematic {
     net_currents: BTreeMap<String, f64>,
     #[serde(default)]
     diff_pairs: Vec<(String, String)>,
+    #[serde(default)]
+    sheets: Vec<Sheet>,
+    #[serde(default)]
+    active_sheet: usize,
 }
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, sheets: r.sheets, active_sheet: r.active_sheet };
         s.migrate();
         s
     }
@@ -318,6 +333,7 @@ impl Schematic {
         let used = self
             .components
             .iter()
+            .chain(self.sheets.iter().flat_map(|s| s.components.iter()))
             .filter(|c| !c.kind.is_power_symbol())
             .filter_map(|c| c.refdes.strip_prefix(prefix).and_then(|n| n.parse::<u32>().ok()))
             .max()

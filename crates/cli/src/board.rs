@@ -32,7 +32,7 @@ impl Session {
                 }
                 let board = self.board.get_or_insert_with(|| Board::new("board", DEFAULT_SIZE.0, DEFAULT_SIZE.1));
                 // library parts bring their own footprint
-                for c in self.sch.components.iter().filter(|c| c.custom.is_some()) {
+                for c in self.sch.flat().components.iter().filter(|c| c.custom.is_some()) {
                     if let Some(def) = self.lib.iter().find(|d| d.footprint_name() == c.footprint)
                         && let Ok(fp) = def.footprint()
                     {
@@ -445,7 +445,7 @@ impl Session {
 
     /// The parts and nets of the schematic as the board import sees them (same rules as the app).
     fn netlist_of(&self) -> (Vec<NetlistPart>, Vec<NetlistNet>) {
-        let sch = &self.sch;
+        let sch = &*self.sch.flat();
         let parts = sch
             .components
             .iter()
@@ -481,5 +481,5 @@ fn num(s: &str) -> Result<f64, String> {
 
 /// The shop part numbers of the schematic's library parts, by reference designator.
 fn shops_of(sch: &sch_core::Schematic) -> Vec<(String, std::collections::BTreeMap<String, String>)> {
-    sch.components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect()
+    sch.flat().components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect()
 }

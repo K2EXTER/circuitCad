@@ -93,6 +93,7 @@ impl BoardEditor {
 
     /// The parts and nets of the schematic as the board import sees them.
     fn netlist_of(sch: &sch_core::Schematic) -> (Vec<NetlistPart>, Vec<NetlistNet>) {
+        let sch = &*sch.flat();
         let parts: Vec<NetlistPart> = sch
             .components
             .iter()
@@ -139,7 +140,7 @@ impl BoardEditor {
     }
 
     pub fn import_from_schematic(&mut self, sch_ed: &SchEditor) {
-        let sch = &sch_ed.sch;
+        let sch = &*sch_ed.sch.flat();
         let (parts, nets) = Self::netlist_of(sch);
         // library parts bring their own footprint
         self.checkpoint();

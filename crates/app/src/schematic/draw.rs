@@ -251,7 +251,7 @@ impl SchEditor {
             painter.text(r.left_top() + Vec2::new(4.0, 2.0), Align2::LEFT_TOP, "描きかけ (ERC対象外)", FontId::proportional(11.0), Color32::from_rgb(120, 120, 120));
         }
         for (k, pr) in self.problems.iter().enumerate() {
-            if let Some(a) = pr.at {
+            if let Some(a) = pr.at.filter(|_| pr.sheet == self.sch.active_sheet) {
                 let color = match pr.severity {
                     Severity::Error => Color32::from_rgb(230, 0, 200),
                     Severity::Warning => Color32::from_rgb(230, 160, 20),

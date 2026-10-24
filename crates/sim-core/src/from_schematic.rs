@@ -95,6 +95,7 @@ pub fn from_schematic_with_pin_fault(s: &Schematic, f: &PinFaultSpec) -> Result<
 }
 
 fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], couplings: &[WiringK]) -> Result<Circuit, Vec<ConvertError>> {
+    let s = &*s.flat();
     let mut c = Circuit::new();
     let mut pin_node: HashMap<(String, String), usize> = HashMap::new();
     for net in extract(s) {

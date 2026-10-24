@@ -1,5 +1,5 @@
 use crate::*;
-use sch_core::{Kind, Schematic, Wire};
+use sch_core::{Kind, Label, Schematic, Wire};
 
 use crate::dc::VT;
 
@@ -563,4 +563,30 @@ fn fallback_strategies_reach_the_same_solution() {
     }
     assert_power_balance(&gmin);
     assert_power_balance(&source);
+}
+
+#[test]
+fn a_divider_split_over_two_sheets_simulates_as_one_circuit() {
+    let mut s = Schematic::default();
+    // sheet 1: the source, its + side labelled VIN
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "12".into();
+    s.add(Kind::Ground, (0, 6), 0);
+    wire(&mut s, (0, 2), (0, 6));
+    s.labels.push(Label { pos: (0, -2), text: "VIN".into() });
+    // sheet 2: the divider, joined to the source by the label alone
+    s.add_sheet();
+    s.add(Kind::Resistor, (10, 0), 0);
+    s.components[0].value = "4.7k".into();
+    s.add(Kind::Resistor, (20, 0), 0);
+    s.components[1].value = "2.2k".into();
+    s.add(Kind::Ground, (30, 0), 0);
+    wire(&mut s, (22, 0), (30, 0));
+    s.labels.push(Label { pos: (8, 0), text: "VIN".into() });
+    s.labels.push(Label { pos: (12, 0), text: "MID".into() });
+    s.labels.push(Label { pos: (18, 0), text: "MID".into() });
+    let c = from_schematic(&s).unwrap();
+    let res = dc_op(&c).unwrap();
+    close(res.element("R2").unwrap().voltage, 12.0 * 2200.0 / (4700.0 + 2200.0), 1e-9);
+    assert!(sch_core::to_spice(&s, "two sheets").contains("R2"), "the SPICE text has the parts of every sheet");
 }

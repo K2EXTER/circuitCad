@@ -1,4 +1,4 @@
-use crate::{on_segment, Kind, Label, Pt, Schematic};
+use crate::{on_segment, sheet_of, Kind, Label, Pt, Schematic, SHEET_STRIDE};
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,6 +26,8 @@ pub enum Severity {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Problem {
     pub message: String,
+    /// The sheet `at` is on (0 for a single sheet).
+    pub sheet: usize,
     pub at: Option<Pt>,
     pub hint: String,
     pub severity: Severity,
@@ -33,7 +35,7 @@ pub struct Problem {
 
 impl Problem {
     fn new(severity: Severity, message: String, at: Option<Pt>, hint: &str) -> Self {
-        Self { message, at, hint: hint.to_string(), severity }
+        Self { message, sheet: 0, at, hint: hint.to_string(), severity }
     }
 }
 
@@ -101,13 +103,14 @@ fn connectivity(s: &Schematic) -> Conn {
 /// Extract the netlist. Power symbols and labels name nets; same names merge.
 /// Unnamed nets are called `N$1`, `N$2`, ... Nets without any component pin are omitted.
 pub fn extract(s: &Schematic) -> Vec<Net> {
-    extract_groups(s, None).1.into_iter().map(|(_, n)| n).collect()
+    extract_groups(&s.flat(), None).1.into_iter().map(|(_, n)| n).collect()
 }
 
 /// Name of the net that passes through grid point `p` (a pin, a wire, a label), as `extract`
 /// would call it. `None` when nothing is connected there or the net has no component pin.
 pub fn net_at(s: &Schematic, p: Pt) -> Option<String> {
-    let mut probe = s.clone();
+    let p = (p.0 + s.active_sheet as i32 * SHEET_STRIDE, p.1);
+    let mut probe = s.flat().into_owned();
     probe.labels.push(Label { pos: p, text: String::new() });
     let skip = probe.labels.len() - 1;
     let (mut cn, groups) = extract_groups(&probe, Some(skip));
@@ -186,8 +189,16 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
 
 /// Electrical rule check. Findings located inside a work-in-progress area (`Schematic::erc_skip`) are left out.
 pub fn erc(s: &Schematic) -> Vec<Problem> {
+    let s = &*s.flat();
     let mut out = erc_all(s);
     out.retain(|p| p.at.is_none_or(|a| !s.erc_skip.iter().any(|(lo, hi)| a.0 >= lo.0 && a.0 <= hi.0 && a.1 >= lo.1 && a.1 <= hi.1)));
+    // findings are placed on their own sheet
+    for p in &mut out {
+        if let Some(a) = p.at {
+            let (k, local) = sheet_of(a);
+            (p.sheet, p.at) = (k, Some(local));
+        }
+    }
     out
 }
 

@@ -27,6 +27,7 @@ pub fn to_spice(s: &Schematic, title: &str) -> String {
 
 /// `to_spice` for a given simulator.
 pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
+    let s = &*s.flat();
     let mut pin_node: HashMap<(String, String), String> = HashMap::new();
     for n in extract(s) {
         for p in &n.pins {
