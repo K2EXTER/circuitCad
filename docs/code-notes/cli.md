@@ -42,4 +42,5 @@
 - `dc probe=` と `sweep`(`build.rs`): `probe=` は括弧の外のカンマで区切る(`V(a,b)` があるため)。`sweep` は部品の値を書き換えて `dc_op` を呼ぶだけ(`sim_core::param_sweep` は使わない: あれは解析の種類ごとの曲線用)。終わったら値を戻す。
 - `value` は残りの語をスペースでつなぐ(`split_words` が引用符を扱うので、どちらの書き方でも同じ値になる)。
 - `tests/script.rs` の `run` は、呼び出しごとに別の部品フォルダを使う(並列のテストが同じフォルダの同梱部品のコピーや `part import` を半端に読むことがあった)。
-
+- `board thermal`(`board.rs`): `pcb_core::drc::add_thermal_vias` を呼ぶだけ(アプリのボタンと同じ)。テスト `board_thermal_puts_vias_in_a_heat_pad_once`(IP2332 の裏のパッドに置いて、2回目は 0 個)。
+- `sheet use`・`sheet add`・`sheet tidy` のあとの `add` は、操作対象のシートの既存の部品の下から並べる(`cursor_below`)。以前は (8, 8) から始めて、既存の部品の上に重ね、ピンの位置がぶつかって `net` が「すでに別のネットにある」と断った。

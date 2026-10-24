@@ -820,3 +820,25 @@ save {}
     assert!(w.max(h) < w0.max(h0) && w <= 3 * h.max(20), "the longest side must shrink, and a long strip is not what is wanted: {w0} x {h0} -> {w} x {h}");
     let _ = (std::fs::remove_file(before_file), std::fs::remove_file(after_file));
 }
+
+#[test]
+fn board_thermal_puts_vias_in_a_heat_pad_once() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add IP2332 as=U1
+net VIN V1.+ U1.VIN
+net GND V1.- U1.GND
+board new 30 30
+board import
+board pour
+board autoplace
+board thermal
+board thermal
+");
+    assert!(ok, "{a:?}");
+    let t: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "board" && v.get("vias_added").is_some()).collect();
+    assert_eq!(t.len(), 2);
+    assert!(t[0]["pads_lacking"].as_i64().unwrap() >= 1 && t[0]["vias_added"].as_i64().unwrap() >= 1, "{}", t[0]);
+    assert_eq!(t[0]["pads_still_lacking"], 0);
+    assert_eq!(t[1]["vias_added"], 0, "a second call finds nothing lacking: {}", t[1]);
+}

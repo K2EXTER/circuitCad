@@ -75,6 +75,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board drc
   board status
   board currents [tran] [from=F] [widen]  take the net currents (DC point, or with tran the RMS of the settled part of the last tran), show the track width each needs, optionally thicken thin tracks
+  board thermal                         thermal vias in the heat pads that lack them (QFN / ESOP exposed pads): a grid of 0.3 mm vias inside the pad;
+                                        pour the back (board pour) first so that they join copper there
   board postlayout on|off               dc/tran/ac/noise also see the copper resistance of the board (post-layout simulation)
   board check [fab=jlcpcb|pcbway|oshpark|standard]
                                         the pre-order check of the app: ready true/false, and every error / warning / note with the reason
@@ -219,7 +221,7 @@ impl Session {
     }
 
     /// A cursor below everything already on the sheet (after `open`).
-    fn cursor_below(&self) -> (i32, i32, i32) {
+    pub(crate) fn cursor_below(&self) -> (i32, i32, i32) {
         let y = self.sch.components.iter().flat_map(|c| c.pins()).map(|(_, p)| p.1).max().unwrap_or(0);
         (8, y + 14, 0)
     }

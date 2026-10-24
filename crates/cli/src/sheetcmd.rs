@@ -100,13 +100,13 @@ impl Session {
                 if let Some(name) = pos.get(1) {
                     self.sch.rename_sheet(k, name);
                 }
-                self.cursor = (8, 8, 0);
+                self.cursor = self.cursor_below();
                 self.sheet_list()
             }
             "use" => {
                 let k = self.sheet_index(pos.get(1).ok_or("sheet use N|NAME")?)?;
                 self.sch.switch_sheet(k);
-                self.cursor = (8, 8, 0);
+                self.cursor = self.cursor_below();
                 self.sheet_list()
             }
             "name" => {
@@ -167,7 +167,7 @@ impl Session {
                 if all && self.sch.sheet_count() > 1 {
                     self.sch.switch_sheet(here);
                 }
-                self.cursor = (8, 8, 0);
+                self.cursor = self.cursor_below();
                 Ok(obj(json!({"tidied": sizes, "hint": "the parts are in rows about 1.7 times as wide as tall; nets and labels are unchanged"})))
             }
             _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all]]".into()),

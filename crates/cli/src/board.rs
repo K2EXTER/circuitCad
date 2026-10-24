@@ -209,6 +209,15 @@ impl Session {
                 let r = pcb_core::labels::avoid_overlaps(board);
                 Ok(obj(json!({"moved": r.moved, "still_touching": r.still_touching})))
             }
+            "thermal" => {
+                // the app's 「サーマルビアを置く」: a grid of 0.3 mm vias inside every heat pad (QFN / ESOP exposed pads) that has fewer than the
+                // check asks for; nothing is added when that would make the DRC worse. Joining them to the back copper is up to the pour.
+                let board = self.board_mut()?;
+                let lacking = pcb_core::drc::thermal_via_checks(board).len();
+                let added = pcb_core::drc::add_thermal_vias(board);
+                let still = pcb_core::drc::thermal_via_checks(board).len();
+                Ok(obj(json!({"pads_lacking": lacking, "vias_added": added, "pads_still_lacking": still, "drc_violations": pcb_core::drc::check(board).len()})))
+            }
             "improve" => {
                 // make the routes of the whole board shorter and its vias fewer: nets that detour (or carry a via) are ripped up
                 // and routed again, alone or with a neighbour in the way; a change is kept only when it is better and clean
