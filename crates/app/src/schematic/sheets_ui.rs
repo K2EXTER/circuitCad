@@ -19,6 +19,15 @@ impl SchEditor {
         self.fit_pending = true;
     }
 
+    /// The ERC list shown is made again after the sheets changed (a deleted sheet would leave findings that point nowhere).
+    fn refresh_erc(&mut self) {
+        if self.erc_ran {
+            self.problems = erc(&self.sch);
+            self.problems.extend(self.conversion_problems());
+            self.erc_focus = None;
+        }
+    }
+
     pub(super) fn sheet_tabs(&mut self, ui: &mut egui::Ui) {
         let count = self.sch.sheet_count();
         let mut go = None;
@@ -54,6 +63,7 @@ impl SchEditor {
             self.selected = None;
             self.multi.clear();
             self.fit_pending = true;
+            self.refresh_erc();
         }
         if add {
             self.sch.add_sheet();
@@ -61,9 +71,11 @@ impl SchEditor {
             self.multi.clear();
             self.pending = None;
             self.fit_pending = true;
+            self.refresh_erc();
         }
         if let Some(k) = go {
             self.show_sheet(k);
+            self.refresh_erc();
         }
     }
 }
@@ -83,5 +95,20 @@ mod tests {
         e.show_sheet(0);
         assert!(e.selected.is_none() && e.multi.is_empty());
         assert_eq!(e.sch.components[0].refdes, "R1");
+    }
+
+    #[test]
+    fn the_erc_list_follows_the_sheets() {
+        let mut e = SchEditor::default();
+        e.sch = Schematic::default();
+        e.sch.add(Kind::Resistor, (10, 10), 0);
+        e.sch.add_sheet();
+        e.erc_ran = true;
+        e.problems = vec![];
+        e.refresh_erc();
+        assert!(e.problems.iter().any(|p| p.sheet == 0), "the dangling part of the first sheet is listed from the second");
+        e.sch.remove_sheet(0);
+        e.refresh_erc();
+        assert!(e.problems.iter().all(|p| p.sheet == 0));
     }
 }
