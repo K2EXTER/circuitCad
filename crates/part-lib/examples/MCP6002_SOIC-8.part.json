@@ -42,7 +42,7 @@
   "sim": {
     "kind": "subckt",
     "name": "MCP6002",
-    "text": ".subckt MCP6002 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6002",
+    "text": ".subckt MCP6002 inp inn out vp vn\nRin inp inn 1e12\nEop m 0 inp inn 100k\nRp m n0 1Meg\nCp n0 0 16n\nEu u 0 vp 0 1\nVhu u uh DC 0.025\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVtop u ut DC -0.5\nDtop n0 ut DLIM\nVbot l lb DC 0.5\nDbot lb n0 DLIM\nVhl lh l DC 0.025\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 100\n.model DLIM D(IS=1e-12 N=1)\n.ends MCP6002",
     "pins": [
       "3",
       "2",

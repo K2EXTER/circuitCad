@@ -300,3 +300,28 @@ fn the_op_amp_models_have_their_stated_bandwidth() {
         assert!(r.freq[k] > gbw * 0.8 && r.freq[k] < gbw * 1.3, "{name}: -3 dB at {} Hz, expected ~{gbw}", r.freq[k]);
     }
 }
+
+#[test]
+fn an_op_amp_left_saturated_for_long_recovers_in_microseconds() {
+    // The gain stage ahead of the dominant pole used to be unbounded, so after 20 ms with the output
+    // stuck at a rail its internal node had grown to tens of kilovolts and the output took milliseconds
+    // to come back (a real op-amp takes about a microsecond).
+    for name in ["LM324", "LM358", "MCP6001", "MCP6002", "NE5532", "TL072"] {
+        let def = part(name);
+        let pins = def.sim.as_ref().unwrap().pins.clone();
+        let mut c = Circuit::new();
+        vs(&mut c, "Vp", "vp", "0", 5.0);
+        vs(&mut c, "Vref", "ref", "0", 2.5);
+        let (a, z) = (c.node("in"), 0);
+        // 2.0 V for 20 ms (output high, saturated), then 3.0 V
+        let s = parse_source_full("PULSE(2 3 20m 1u 1u 1 2)").unwrap();
+        c.add(Element::VSource { name: "Vin".into(), p: a, n: z, wave: s.wave, ac: s.ac });
+        res(&mut c, "RL", "out", "0", 10e3);
+        place(&mut c, &def, "U1", &[(&pins[0], "ref"), (&pins[1], "in"), (&pins[2], "out"), (&pins[3], "vp"), (&pins[4], "0")]);
+        let r = transient(&c, &TranSettings { tstop: 20.5e-3, tstep: 1e-6, uic: false }).unwrap();
+        let out = &r.signal("V(out)").unwrap().values;
+        let at = |t: f64| out[r.time.iter().position(|x| *x >= t).unwrap()];
+        assert!(at(19.9e-3) > 2.5, "{name}: should be high before the flip, {}", at(19.9e-3));
+        assert!(at(20.2e-3) < 2.5, "{name}: still {} V 200 us after the input flipped", at(20.2e-3));
+    }
+}
