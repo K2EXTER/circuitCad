@@ -190,6 +190,39 @@ mod view3d_tests {
         b
     }
 
+    /// A cube 4 x 4 x 6 mm (corners at +-2) as a mesh, outward-facing triangles, one colour.
+    fn cube_mesh(color: [u8; 3]) -> pcb_core::mesh::Mesh3d {
+        let v = |x: f32, y: f32, z: f32| [x, y, z];
+        let vertices = vec![v(-2.0, -2.0, 0.0), v(2.0, -2.0, 0.0), v(2.0, 2.0, 0.0), v(-2.0, 2.0, 0.0), v(-2.0, -2.0, 6.0), v(2.0, -2.0, 6.0), v(2.0, 2.0, 6.0), v(-2.0, 2.0, 6.0)];
+        let triangles = vec![[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5], [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7]];
+        pcb_core::mesh::Mesh3d { tri_color: vec![0; triangles.len()], vertices, triangles, palette: vec![color] }
+    }
+
+    #[test]
+    fn a_part_with_a_mesh_is_drawn_from_the_mesh_and_counts_in_the_heights() {
+        let mut b = two_resistors();
+        let mut pad = Pad::new(Point::new(20.0, 20.0), PadShape::Rect { w: 1.2, h: 1.6 }, None, Side::Top);
+        pad.refdes = "U1".into();
+        b.pads.push(pad);
+        b.models3d.insert("CUBE".into(), cube_mesh([40, 200, 60]));
+        b.parts.push(pcb_core::Part { refdes: "U1".into(), value: "x".into(), footprint: "CUBE".into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top });
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        assert!(s.boxes.iter().all(|x| x.refdes != "U1"), "no guessed box for the part");
+        assert_eq!(s.meshes.len(), 1);
+        assert_eq!(s.tallest[0].as_ref().map(|t| (t.0.as_str(), t.1.round())), Some(("U1", 6.0)));
+        // seen from above it is green; over the case height it is red
+        let (rect, cam) = top_view(&s);
+        let (img, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(1), None, None);
+        let (p, _) = cam.project([20.0, 20.0, BOARD_THICKNESS + 6.0]);
+        let c = img[p.y.round() as usize * 800 + p.x.round() as usize];
+        assert!(c[1] > 120 && c[0] < 100, "green cube: {c:?}");
+        s.set_limits(true, 3.0, 0.0);
+        let (img, ..) = snapshot(&s, rect, &cam, true, Quality::Fine(1), None, None);
+        let c = img[p.y.round() as usize * 800 + p.x.round() as usize];
+        assert!(c[0] > 150 && c[1] < 90, "red cube: {c:?}");
+        assert_eq!(s.over_list()[0].0, "U1");
+    }
+
     #[test]
     fn parts_over_the_case_height_turn_red_and_are_listed() {
         let b = tall_and_short();

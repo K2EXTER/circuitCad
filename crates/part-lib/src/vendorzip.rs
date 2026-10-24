@@ -451,6 +451,7 @@ impl VendorIndex {
             ratings,
             glyph: if polar { "electrolytic" } else { "capacitor" }.into(),
             body: None,
+            model3d: None,
             shops: Default::default(),
         };
         Ok(MadePart { part, footprint, todo })

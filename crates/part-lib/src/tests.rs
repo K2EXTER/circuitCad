@@ -444,6 +444,7 @@ fn write_chip_examples() {
             ratings: Some(ratings),
             glyph: if name.starts_with("CE_") || name.starts_with("CT_") { "electrolytic".into() } else { t.kind.glyph().into() },
             body: None,
+            model3d: None,
             shops: existing_shops(format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"))),
         };
         assert!(!def.has_errors(), "{name}: {:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());

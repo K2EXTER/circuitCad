@@ -326,6 +326,9 @@ pub struct Board {
     /// User-defined footprints used by this board (embedded so the file is self-contained).
     #[serde(default)]
     pub footprints: Vec<crate::footprints::Footprint>,
+    /// The 3D body of footprints that have one (from the maker's STEP file), by footprint name.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub models3d: std::collections::BTreeMap<String, crate::mesh::Mesh3d>,
     /// Current (A) each net is meant to carry, set by the user: the track widths are checked against it.
     #[serde(default)]
     pub net_currents: std::collections::BTreeMap<String, f64>,
@@ -427,6 +430,7 @@ impl Board {
             texts: vec![],
             zones: vec![],
             footprints: vec![],
+            models3d: Default::default(),
             net_currents: Default::default(),
             net_classes: vec![],
             stackup: Default::default(),

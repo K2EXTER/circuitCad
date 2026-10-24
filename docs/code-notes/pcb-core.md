@@ -202,3 +202,11 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - `shops.rs` の予備: チップ部品(フットプリントが `R_`・`C_`・`L_`・`LED`・`FB_` で始まり4桁の大きさ表記を持つもの)は `Line::spare` が「2個か全体の1割の多いほう」を足す。IC・コネクタ・リード付きには足さない(経験則であって、データシートの値ではない)。CSV の列は `Qty`(必要数)・`Spare`・`Buy`(合計)。アプリの「発注の準備」の窓の最後の「部品の購入リスト」(`board_editor/order.rs shopping_list`。枚数と予備の入れ切り、店のボタン=型番があればその店のページ・無ければ検索ページ、CSV保存)と `ccad board shopping` が使う。
 - `shops.rs` 購入リスト(値・フットプリント・店の型番ごとに行をまとめ、店ごとに型番のページか検索ページへのリンクを付ける。店のサイトは読まない)。型番は部品JSONの `shops` → `CustomSymbol.shops` → `Board.part_shops`(`netlist::import_shops` が取り込みのときに写す)。BOM の `LCSC Part #` 列もここから。店のURLの形は `SHOPS` に1か所
 - `export.rs` 製造一式 (zip) / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・部品配置CSV / `strokefont.rs` シルク文字
+
+### step.rs・mesh.rs — メーカーの STEP を3Dの形にする
+`read_step(&[u8]) -> Mesh3d`(ミリメートル・部品の座標、`mesh.rs` の `Mesh3d` = 頂点・三角形・色の表)。文字コードは問わない(バイト列で読む)。読むもの: `MANIFOLD_SOLID_BREP` / `BREP_WITH_VOIDS` / `SHELL_BASED_SURFACE_MODEL` の面(`ADVANCED_FACE`)、面は平面・円柱・円錐・球・トーラス(ほかは「外形の点を通る平らな面」)、辺は直線・円・楕円・B-スプライン、長さの単位(`unit_mm`。インチ変換つき単位を先に見る)、色(`STYLED_ITEM` から `COLOUR_RGB` をたどる)。読まないもの: 組み立て(`NEXT_ASSEMBLY_USAGE_OCCURRENCE`・`MAPPED_ITEM`)による部品の移動、曲面の内側の点(丸い面は外形の点だけで切るので、ドームは少数の平らな面になる)。
+- 三角形分割は `i_triangle`。**曲面の面は「長方形に点がたくさん」なので、`preserve_input_collinear` を立てて点を落とさないこと**(落とすと円柱の側面が2枚の三角形になる)。面の向きは、面の外向き(平面は軸、円柱・円錐は軸からの向き、球は中心から)に合わせて三角形の回り順を直す。テストは体積(発散定理)で向きを確かめる。
+- 曲線のあらさは `Step::tol`(0.03 mm)。円は弧の高さが tol 以内になる分割数、B-スプラインは33点にしてから Douglas-Peucker。実物(アルミ電解コンデンサ、SolidWorks 出力、1.6MB)で約3400三角形・35ms。
+- 三角形が `MAX_TRIANGLES`(30万)を超えると、部品でなく組み立て全体として断る。
+- `model3d.rs` の `part_meshes(board)` が、`Board.models3d`(フットプリント名 → `Mesh3d`)を、部品の位置・回転・裏面(左右反転して、基板の下にぶら下げる)に合わせて並べる。メッシュを持つ部品は `part_boxes` から外れる(推測の箱を描かない)。
+- 実ファイルで試す: `CCAD_STEP=<ファイル> cargo test -p pcb-core read_the_file_in_ccad_step -- --ignored --nocapture`。

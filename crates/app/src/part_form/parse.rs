@@ -366,6 +366,7 @@ impl PartForm {
                 mark_pin: self.body_pin.trim().to_string(),
             }),
             shops: Default::default(),
+            model3d: self.model3d.clone(),
         })
     }
 }

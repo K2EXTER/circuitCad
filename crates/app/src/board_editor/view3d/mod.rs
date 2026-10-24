@@ -6,7 +6,7 @@
 use super::raster3d::{outline_part, Buffers, Paint, Picture, Vert, NO_PART};
 use super::*;
 use pcb_core::gerber_view::Preview;
-use pcb_core::model3d::{part_boxes, part_height_on, BodyShape, PartBox, BOARD_THICKNESS};
+use pcb_core::model3d::{part_boxes, part_height_on, part_meshes, BodyShape, PartBox, PartMesh, BOARD_THICKNESS};
 
 mod camera;
 mod glow;

@@ -23,6 +23,13 @@ impl SchEditor {
         }
     }
 
+    /// Reads a STEP file into the open new-part form (`--form-step <file>`).
+    pub fn load_step_into_form(&mut self, path: &std::path::Path) {
+        if let Some(f) = self.form.as_mut() {
+            f.load_step(path);
+        }
+    }
+
     /// Opens the new-part form already set to a kind of part (`--new-part <kind>`).
     pub fn open_part_form_for(&mut self, kind: &str) {
         self.form = Some(PartForm::for_type(kind));

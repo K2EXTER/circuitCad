@@ -67,6 +67,10 @@ pub struct PartDef {
     /// Where to buy it: shop id ("akizuki", "digikey", "lcsc") -> the shop's own part number. Left out when not known.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub shops: std::collections::BTreeMap<String, String>,
+    /// The body as a triangle mesh (from a STEP file the maker publishes): the 3D view draws it instead of a guessed box.
+    /// In the footprint's frame, millimetres, z = 0 on the face the part sits on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model3d: Option<pcb_core::mesh::Mesh3d>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

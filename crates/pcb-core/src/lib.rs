@@ -25,6 +25,7 @@ pub mod irdrop;
 pub mod labels;
 pub mod meander;
 pub mod merge;
+pub mod mesh;
 pub mod gerber;
 pub mod groundpour;
 pub mod gerber_view;
@@ -41,6 +42,7 @@ pub mod shops;
 pub mod shove;
 pub mod slot;
 pub mod smooth;
+pub mod step;
 pub mod strokefont;
 pub mod zonefill;
 

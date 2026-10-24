@@ -66,6 +66,15 @@ pub enum SimChoice {
 }
 
 pub struct PartForm {
+    /// The 3D body read from a STEP file, as it is saved with the part (see `step3d.rs`).
+    pub model3d: Option<pcb_core::mesh::Mesh3d>,
+    /// The STEP as it was read, and how it is turned and placed to make `model3d` (see `step3d.rs`).
+    pub step_base: Option<pcb_core::mesh::Mesh3d>,
+    pub step_file: String,
+    pub step_rot: [u8; 3],
+    pub step_center: bool,
+    pub step_drop: bool,
+    pub step_msg: String,
     /// The tab shown and the kind of part chosen first (None = not chosen: the form is as before).
     pub tab: FormTab,
     pub ptype: Option<PartType>,
@@ -191,6 +200,13 @@ pub struct PartForm {
 impl Default for PartForm {
     fn default() -> Self {
         Self {
+            model3d: None,
+            step_base: None,
+            step_file: String::new(),
+            step_rot: [0; 3],
+            step_center: true,
+            step_drop: true,
+            step_msg: String::new(),
             tab: FormTab::Basic,
             ptype: None,
             ptype_sub: "",
@@ -296,6 +312,7 @@ mod zchart;
 mod thru;
 mod preview;
 mod tabs;
+mod step3d;
 mod template;
 mod trial;
 #[cfg(test)]

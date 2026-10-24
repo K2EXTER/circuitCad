@@ -37,6 +37,9 @@ impl Session {
                         && let Ok(fp) = def.footprint()
                     {
                         board.add_footprint(fp);
+                        if let Some(m) = &def.model3d {
+                            board.models3d.insert(def.footprint_name(), m.clone());
+                        }
                     }
                 }
                 let rep = netlist::import(board, &parts, &nets);

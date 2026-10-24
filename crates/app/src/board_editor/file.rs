@@ -148,6 +148,9 @@ impl BoardEditor {
             if let Some(def) = sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint)
                 && let Ok(fp) = def.footprint() {
                     self.board.add_footprint(fp);
+                    if let Some(m) = &def.model3d {
+                        self.board.models3d.insert(def.footprint_name(), m.clone());
+                    }
                 }
         }
         let rep = netlist::import(&mut self.board, &parts, &nets);

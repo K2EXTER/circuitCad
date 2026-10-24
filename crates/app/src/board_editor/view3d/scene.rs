@@ -11,6 +11,8 @@ pub(super) struct Scene {
     pub(super) lo: Point,
     pub(super) hi: Point,
     pub(super) boxes: Vec<PartBox>,
+    /// Parts that come with a mesh of their own (a maker's STEP), already placed on the board.
+    pub(super) meshes: Vec<PartMesh>,
     /// `(refdes, value, footprint, height above the board)` for every part, in `Board::parts` order.
     pub(super) parts: Vec<(String, String, String, f64)>,
     /// The tallest part on each side, for case checks.
@@ -101,7 +103,16 @@ impl Scene {
         }
         let (lo, hi) = board.bounds().ok_or("基板の外形がありません")?;
         let img = Self::images(&pv, mask, silk);
-        let parts: Vec<(String, String, String, f64)> = board.parts.iter().map(|p| (p.refdes.clone(), p.value.clone(), p.footprint.clone(), part_height_on(board, p))).collect();
+        let meshes = part_meshes(board);
+        // how high a mesh stands above the face its part is on
+        let mesh_height = |m: &PartMesh| {
+            let zs = m.mesh.vertices.iter().map(|v| f64::from(v[2]));
+            if m.bottom { -zs.fold(f64::MAX, f64::min) } else { zs.fold(f64::MIN, f64::max) - BOARD_THICKNESS }
+        };
+        let mut parts: Vec<(String, String, String, f64)> = board.parts.iter().map(|p| (p.refdes.clone(), p.value.clone(), p.footprint.clone(), part_height_on(board, p))).collect();
+        for m in &meshes {
+            parts[m.part].3 = mesh_height(m).max(0.0);
+        }
         let boxes = part_boxes(board);
         let mut tallest: [Option<(String, f64)>; 2] = [None, None];
         for b in &boxes {
@@ -111,7 +122,17 @@ impl Scene {
                 tallest[side] = Some((b.refdes.clone(), height));
             }
         }
+        for m in &meshes {
+            let side = m.bottom as usize;
+            let height = mesh_height(m).max(0.0);
+            if tallest[side].as_ref().is_none_or(|t| height > t.1) {
+                tallest[side] = Some((m.refdes.clone(), height));
+            }
+        }
         let mut heights = vec![0.0f64; board.parts.len()];
+        for m in &meshes {
+            heights[m.part] = mesh_height(m).max(0.0);
+        }
         for b in &boxes {
             let height = if b.bottom { -b.lo[2] } else { b.hi[2] - BOARD_THICKNESS };
             if let Some(h) = heights.get_mut(b.part) {
@@ -123,7 +144,7 @@ impl Scene {
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, nets, glow: vec![] })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, nets, glow: vec![] })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
@@ -241,6 +262,29 @@ impl Scene {
                 for k in 0..vs.len() {
                     buf.line(vs[k], vs[(k + 1) % vs.len()], dark);
                 }
+            }
+        }
+        for m in &self.meshes {
+            let too_tall = self.over.get(m.part).is_some_and(|o| *o > 1e-6);
+            let verts: Vec<[f64; 3]> = m.mesh.vertices.iter().map(|v| v.map(f64::from)).collect();
+            for (t, c) in m.mesh.triangles.iter().zip(&m.mesh.tri_color) {
+                let (a, b, d) = (verts[t[0] as usize], verts[t[1] as usize], verts[t[2] as usize]);
+                let (u, w) = ([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [d[0] - a[0], d[1] - a[1], d[2] - a[2]]);
+                let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+                let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                if len < 1e-12 {
+                    continue;
+                }
+                let nv = cam.dir([(n[0] / len) as f32, (n[1] / len) as f32, (n[2] / len) as f32]);
+                if nv[2] <= 1e-4 {
+                    continue;
+                }
+                let base = m.mesh.palette.get(*c as usize).copied().unwrap_or([140, 140, 140]);
+                let mut color = shade3(if too_tall { [225, 50, 40] } else { base }, light(nv));
+                if hover == Some(m.part) {
+                    color = [color[0].saturating_add(50), color[1].saturating_add(50), color[2].saturating_add(30)];
+                }
+                buf.triangle([vert(a, [0.0, 0.0]), vert(b, [0.0, 0.0]), vert(d, [0.0, 0.0])], Paint::Flat { color, part: m.part as u32 }, &pics);
             }
         }
         buf

@@ -721,3 +721,63 @@ fn chip_in_the_new_part_argument_opens_the_ceramic_capacitor() {
     assert_eq!(PartForm::for_type("electrolytic").ptype, Some(PartType::Capacitor));
     assert_eq!(PartForm::for_type("resistor").ptype, Some(PartType::Resistor));
 }
+
+#[test]
+fn a_step_shape_is_stood_on_the_board_over_the_pads_and_saved_with_the_part() {
+    use pcb_core::mesh::Mesh3d;
+    // a part lying on its side in the file: 10 long along x, 2 across, 4 up from z = 3
+    let v = |x: f32, y: f32, z: f32| [x, y, z];
+    let base = Mesh3d {
+        vertices: vec![v(5.0, 1.0, 3.0), v(15.0, 1.0, 3.0), v(15.0, 3.0, 7.0), v(5.0, 3.0, 7.0)],
+        triangles: vec![[0, 1, 2], [0, 2, 3]],
+        palette: vec![[9, 9, 9]],
+        tri_color: vec![0, 0],
+    };
+    let mut f = PartForm { name: "X1".into(), ..Default::default() };
+    f.step_base = Some(base);
+    f.step_apply();
+    let m = f.model3d.clone().unwrap();
+    let (lo, hi) = m.bounds().unwrap();
+    assert!((lo[2]).abs() < 1e-6 && (hi[2] - 4.0).abs() < 1e-6, "stands on the board: {lo:?} {hi:?}");
+    // the pads of the default package are symmetric about the origin, so the body is centred there
+    assert!(((lo[0] + hi[0]) / 2.0).abs() < 1e-6 && ((lo[1] + hi[1]) / 2.0).abs() < 1e-6, "{lo:?} {hi:?}");
+    // turned a quarter about y, the 10 mm length stands up
+    f.step_rot = [0, 1, 0];
+    f.step_apply();
+    let (lo, hi) = f.model3d.as_ref().unwrap().bounds().unwrap();
+    assert!((hi[2] - lo[2] - 10.0).abs() < 1e-6, "{lo:?} {hi:?}");
+    // the part carries it, and it survives the library file
+    let def = f.to_def().unwrap();
+    assert!(def.model3d.is_some());
+    let back: part_lib::PartDef = serde_json::from_str(&serde_json::to_string(&def).unwrap()).unwrap();
+    assert_eq!(back.model3d, def.model3d);
+    // a big mesh is thinned out and stays a closed-looking solid
+    let mut big = Mesh3d { palette: vec![[1, 1, 1]], ..Default::default() };
+    for k in 0..30_000 {
+        let x = (k % 200) as f32 * 0.05;
+        let y = (k / 200) as f32 * 0.05;
+        let n = big.vertices.len() as u32;
+        big.vertices.extend([[x, y, 0.0], [x + 0.04, y, 0.0], [x, y + 0.04, 0.0]]);
+        big.triangles.push([n, n + 1, n + 2]);
+        big.tri_color.push(0);
+    }
+    let thin = super::step3d::thin_out(big, 12_000);
+    assert!(thin.triangles.len() <= 12_000 && !thin.triangles.is_empty(), "{}", thin.triangles.len());
+}
+
+/// Makes a board with the part of the STEP in CCAD_STEP at CCAD_OUT, for looking at the 3D view by hand.
+#[test]
+#[ignore]
+fn write_board_with_step_part() {
+    let (Ok(p), Ok(out)) = (std::env::var("CCAD_STEP"), std::env::var("CCAD_OUT")) else { return };
+    let mut f = PartForm { name: "CAP1".into(), prefix: "C".into(), pkg: PkgKind::Row, ..Default::default() };
+    f.load_step(std::path::Path::new(&p));
+    let def = f.to_def().unwrap();
+    let mut b = pcb_core::Board::new("step", 60.0, 30.0);
+    b.add_footprint(def.footprint().unwrap());
+    b.models3d.insert(def.footprint_name(), def.model3d.clone().unwrap());
+    for (k, (x, rot, side)) in [(20.0, 0u8, pcb_core::Side::Top), (45.0, 1, pcb_core::Side::Top)].into_iter().enumerate() {
+        b.set_part(pcb_core::Part { refdes: format!("C{}", k + 1), value: "1u".into(), footprint: def.footprint_name(), pos: pcb_core::Point::new(x, 15.0), rot, side }).unwrap();
+    }
+    std::fs::write(out, serde_json::to_string(&b).unwrap()).unwrap();
+}

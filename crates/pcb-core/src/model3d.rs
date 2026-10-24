@@ -385,6 +385,10 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
 pub fn part_boxes(board: &Board) -> Vec<PartBox> {
     let mut out = vec![];
     for (i, part) in board.parts.iter().enumerate() {
+        // a part with a mesh of its own (a maker's STEP) is drawn from `part_meshes`
+        if board.models3d.contains_key(&part.footprint) {
+            continue;
+        }
         let bottom = part.side == Side::Bottom;
         for s in solids(board, part) {
             let (z0, z1) = if bottom { (-s.hi[2], -s.lo[2]) } else { (BOARD_THICKNESS + s.lo[2], BOARD_THICKNESS + s.hi[2]) };
@@ -394,9 +398,63 @@ pub fn part_boxes(board: &Board) -> Vec<PartBox> {
     out
 }
 
+/// The mesh of a part, placed on the board: x and y in board coordinates, z = 0 at the bottom face of the board
+/// (`BOARD_THICKNESS` at the top).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PartMesh {
+    pub refdes: String,
+    /// Index into `Board::parts`.
+    pub part: usize,
+    pub bottom: bool,
+    pub mesh: crate::mesh::Mesh3d,
+}
+
+/// The parts that have a mesh (`Board::models3d`), moved to where the part stands: turned with it, mirrored when it
+/// is on the bottom (mirrored left to right, hanging below the board).
+pub fn part_meshes(board: &Board) -> Vec<PartMesh> {
+    let mut out = vec![];
+    for (i, part) in board.parts.iter().enumerate() {
+        let Some(m) = board.models3d.get(&part.footprint) else { continue };
+        let bottom = part.side == Side::Bottom;
+        let mut mesh = m.clone();
+        for v in &mut mesh.vertices {
+            let local = if bottom { Point::new(-f64::from(v[0]), f64::from(v[1])) } else { Point::new(f64::from(v[0]), f64::from(v[1])) };
+            let r = crate::parts::rotate(local, part.rot);
+            let z = f64::from(v[2]);
+            *v = [(part.pos.x + r.x) as f32, (part.pos.y + r.y) as f32, if bottom { -z } else { BOARD_THICKNESS + z } as f32];
+        }
+        out.push(PartMesh { refdes: part.refdes.clone(), part: i, bottom, mesh });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A part with a mesh is drawn from the mesh: turned with the part, mirrored on the bottom, and no guessed box.
+    #[test]
+    fn a_part_with_a_mesh_is_placed_with_the_part() {
+        use crate::mesh::Mesh3d;
+        let mut b = Board::new("t", 30.0, 30.0);
+        let mut fp = crate::footprints::get("R_0805").unwrap();
+        fp.name = "WITH_MESH".into();
+        b.add_footprint(fp);
+        // one triangle: 2 mm along x, 1 mm along y, 3 mm up
+        b.models3d.insert("WITH_MESH".into(), Mesh3d { vertices: vec![[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, 3.0]], triangles: vec![[0, 1, 2]], palette: vec![[9, 9, 9]], tri_color: vec![0] });
+        b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "WITH_MESH".into(), pos: Point::new(10.0, 10.0), rot: 1, side: Side::Top }).unwrap();
+        assert!(part_boxes(&b).is_empty(), "no guessed box for a part with a mesh");
+        let m = &part_meshes(&b)[0];
+        // a quarter turn counter-clockwise: (2, 0) -> (0, 2), (0, 1) -> (-1, 0)
+        assert_eq!(m.mesh.vertices[1], [10.0, 12.0, BOARD_THICKNESS as f32 + 0.0]);
+        assert_eq!(m.mesh.vertices[2], [9.0, 10.0, BOARD_THICKNESS as f32 + 3.0]);
+        // on the bottom the part hangs below the board and is mirrored before it is turned
+        b.set_part(Part { refdes: "U1".into(), value: "x".into(), footprint: "WITH_MESH".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Bottom }).unwrap();
+        let m = &part_meshes(&b)[0];
+        assert!(m.bottom);
+        assert_eq!(m.mesh.vertices[1], [8.0, 10.0, 0.0]);
+        assert_eq!(m.mesh.vertices[2], [10.0, 11.0, -3.0]);
+    }
 
     /// A part whose footprint carries the data sheet body is drawn as that body: its size, its height,
     /// turned with the part, with the pin 1 dot on top.
