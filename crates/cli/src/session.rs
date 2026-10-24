@@ -26,7 +26,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         (GND pins of a part that share a name are all connected)
                                         The net named GND is the 0 V reference: every circuit needs one.
   remove REF
-  list                                  parts, pins and the net of every pin
+  list                                  parts, pins and the net of every pin (of the active sheet)
+  sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME]
+                                        several sheets: no argument lists them; add makes an empty one (and makes it the active one);
+                                        move sends parts (with the net labels on their pins) to another sheet. Nets join across
+                                        sheets by the same net label or power symbol; add / net / remove / list act on the active sheet
   erc                                   electrical rule check (message + hint). 'ok' only says the command ran:
                                         read 'errors' (or run with --strict, which fails the script on an ERC error)
   spice                                 the SPICE netlist text
@@ -160,7 +164,7 @@ impl Session {
     pub fn run(&mut self, w: &[String]) -> Res {
         let args = &w[1..];
         // an answer about the old circuit must not be judged against a new target
-        if matches!(w[0].to_ascii_lowercase().as_str(), "new" | "open" | "add" | "value" | "net" | "remove") {
+        if matches!(w[0].to_ascii_lowercase().as_str(), "new" | "open" | "add" | "value" | "net" | "remove" | "sheet") {
             (self.last_dc, self.last_tran, self.last_ac) = (None, None, None);
         }
         match w[0].to_ascii_lowercase().as_str() {
@@ -191,6 +195,7 @@ impl Session {
             "part" if args.first().is_some_and(|a| a.eq_ignore_ascii_case("import")) => self.part_import(&args[1..]),
             "part" => self.part(args),
             "lib" => self.lib_cmd(args),
+            "sheet" => self.sheet(args),
             "sweep" => self.sweep(args),
             "add" => self.add(args),
             "value" => self.set_value(args),

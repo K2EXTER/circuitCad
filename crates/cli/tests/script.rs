@@ -757,3 +757,24 @@ fn a_maker_subcircuit_becomes_a_part_and_the_library_reads_again() {
     assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("3 nodes"), "{a:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn sheets_split_a_label_circuit_without_changing_its_answer() {
+    let build = "new\nadd V 12 as=V1\nadd R 10k as=R1\nadd R 4.7k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\n";
+    let (a, ok) = run(&format!("{build}dc probe=V(mid)\nsheet add Load\nsheet use 1\nsheet move R2 to=Load\nsheet\ndc probe=V(mid)\nerc\nsheet use Load\nlist\n"));
+    assert!(ok, "{a:?}");
+    let dcs: Vec<f64> = a.iter().filter(|v| v["cmd"] == "dc").map(|v| v["probes"]["V(mid)"].as_f64().unwrap()).collect();
+    assert_eq!(dcs.len(), 2);
+    assert!((dcs[0] - dcs[1]).abs() < 1e-12, "{dcs:?}");
+    let mv = a.iter().find(|v| v["cmd"] == "sheet" && v.get("moved").is_some()).unwrap();
+    assert_eq!(mv["moved"]["parts"], 1);
+    assert_eq!(mv["moved"]["labels"], 2, "the labels on R2's two pins go with it: {mv}");
+    let list = a.iter().rev().find(|v| v["cmd"] == "sheet").unwrap();
+    assert_eq!(list["sheets"].as_array().unwrap().len(), 2);
+    assert_eq!(a.iter().find(|v| v["cmd"] == "erc").unwrap()["errors"], 0);
+    // after the move, 'list' shows only the active sheet's part
+    let l = last(&a, "list");
+    assert_eq!(l["parts"].as_array().unwrap().len(), 1, "{l}");
+    let (a, ok) = run(&format!("{build}sheet move R2 to=2\n"));
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("one sheet"), "{a:?}");
+}

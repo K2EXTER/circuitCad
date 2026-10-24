@@ -12,6 +12,7 @@ mod libcmd;
 mod mcp;
 mod models;
 mod runner;
+mod sheetcmd;
 mod session;
 
 use serde_json::{Map, Value};
