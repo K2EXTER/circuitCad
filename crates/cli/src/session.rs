@@ -27,9 +27,10 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         The net named GND is the 0 V reference: every circuit needs one.
   remove REF
   list                                  parts, pins and the net of every pin (of the active sheet)
-  sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME]
+  sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all]]
                                         several sheets: no argument lists them; add makes an empty one (and makes it the active one);
-                                        move sends parts (with the net labels on their pins) to another sheet. Nets join across
+                                        move sends parts (with the net labels on their pins) to another sheet; tidy packs the parts of the
+                                        active sheet (or 'tidy all') into compact rows, so that the whole sheet fits one screen. Nets join across
                                         sheets by the same net label or power symbol; add / net / remove / list act on the active sheet
   erc                                   electrical rule check (message + hint). 'ok' only says the command ran:
                                         read 'errors' (or run with --strict, which fails the script on an ERC error)

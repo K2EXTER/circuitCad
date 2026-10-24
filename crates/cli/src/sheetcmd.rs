@@ -5,7 +5,64 @@ use crate::session::{obj, opt, options, Session};
 use crate::Res;
 use serde_json::json;
 
+/// The box a part occupies on the grid: (min x, max x, min y, max y) over its pins and, for a library part, its body.
+fn part_bounds(c: &sch_core::Component) -> (i32, i32, i32, i32) {
+    let mut xs: Vec<i32> = c.pins().iter().map(|(_, p)| p.0).collect();
+    let mut ys: Vec<i32> = c.pins().iter().map(|(_, p)| p.1).collect();
+    if let Some(sym) = &c.custom {
+        let l = sym.layout();
+        for (cx, cy) in [(-l.hw, -l.hh), (l.hw, l.hh)] {
+            let r = sch_core::rotate((cx, cy), c.rot);
+            xs.push(c.pos.0 + r.0);
+            ys.push(c.pos.1 + r.1);
+        }
+    }
+    (*xs.iter().min().unwrap_or(&c.pos.0), *xs.iter().max().unwrap_or(&c.pos.0), *ys.iter().min().unwrap_or(&c.pos.1), *ys.iter().max().unwrap_or(&c.pos.1))
+}
+
 impl Session {
+    /// Packs the parts of the active sheet into rows of about the same width as they are tall (a wide screen: 1.7 : 1), in the order
+    /// they are in, and moves the net labels on their pins with them. Returns (parts, width, height) of the result.
+    fn tidy_active(&mut self) -> Result<(usize, i32, i32), String> {
+        if !self.sch.wires.is_empty() {
+            return Err("this sheet has wires, which would be torn apart: tidy is for circuits joined by net labels (the 'net' command)".into());
+        }
+        const GAP: i32 = 8;
+        let boxes: Vec<(i32, i32, i32, i32)> = self.sch.components.iter().map(part_bounds).collect();
+        if boxes.is_empty() {
+            return Ok((0, 0, 0));
+        }
+        let area: f64 = boxes.iter().map(|b| ((b.1 - b.0 + GAP) * (b.3 - b.2 + GAP)) as f64).sum();
+        let widest = boxes.iter().map(|b| b.1 - b.0).max().unwrap_or(0);
+        let row_w = ((area * 1.7).sqrt() as i32).max(widest + GAP).max(40);
+        let (mut x, mut y, mut rowh, mut max_x) = (8, 8, 0, 0);
+        let mut moves = vec![];
+        for b in &boxes {
+            let (w, h) = (b.1 - b.0, b.3 - b.2);
+            if x > 8 && x + w > row_w {
+                x = 8;
+                y += rowh + GAP;
+                rowh = 0;
+            }
+            moves.push((x - b.0, y - b.2));
+            x += w + GAP;
+            rowh = rowh.max(h);
+            max_x = max_x.max(x - GAP);
+        }
+        let height = y + rowh;
+        let old_pins: Vec<Vec<sch_core::Pt>> = self.sch.components.iter().map(|c| c.pins().into_iter().map(|(_, p)| p).collect()).collect();
+        // each label belongs to the first part that has a pin where it sits; found before anything moves, so that a label is never moved twice
+        for l in self.sch.labels.iter_mut() {
+            if let Some(i) = old_pins.iter().position(|ps| ps.contains(&l.pos)) {
+                l.pos = (l.pos.0 + moves[i].0, l.pos.1 + moves[i].1);
+            }
+        }
+        for (c, (dx, dy)) in self.sch.components.iter_mut().zip(&moves) {
+            c.pos = (c.pos.0 + dx, c.pos.1 + dy);
+        }
+        Ok((boxes.len(), max_x, height))
+    }
+
     fn sheet_index(&self, what: &str) -> Result<usize, String> {
         let n = self.sch.sheet_count();
         if let Ok(k) = what.parse::<usize>() {
@@ -94,7 +151,26 @@ impl Session {
                 out.insert("moved".into(), json!({"parts": n_parts, "labels": n_labels, "to": self.sch.sheet_name(target)}));
                 Ok(out)
             }
-            _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME]".into()),
+            "tidy" => {
+                // the labels that sit on pins are looked up by place, so two parts must never share a pin position: tidy one sheet at a time
+                let all = pos.get(1).is_some_and(|s| s.eq_ignore_ascii_case("all"));
+                let here = self.sch.active_sheet;
+                let mut sizes = vec![];
+                let ks: Vec<usize> = if all { (0..self.sch.sheet_count()).collect() } else { vec![here] };
+                for k in ks {
+                    if all && self.sch.sheet_count() > 1 {
+                        self.sch.switch_sheet(k);
+                    }
+                    let (n, w, h) = self.tidy_active()?;
+                    sizes.push(json!({"sheet": self.sch.sheet_name(self.sch.active_sheet), "parts": n, "width": w, "height": h}));
+                }
+                if all && self.sch.sheet_count() > 1 {
+                    self.sch.switch_sheet(here);
+                }
+                self.cursor = (8, 8, 0);
+                Ok(obj(json!({"tidied": sizes, "hint": "the parts are in rows about 1.7 times as wide as tall; nets and labels are unchanged"})))
+            }
+            _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all]]".into()),
         }
     }
 }

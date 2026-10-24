@@ -778,3 +778,45 @@ fn sheets_split_a_label_circuit_without_changing_its_answer() {
     let (a, ok) = run(&format!("{build}sheet move R2 to=2\n"));
     assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("one sheet"), "{a:?}");
 }
+
+#[test]
+fn tidy_packs_a_sprawling_sheet_into_a_compact_one_and_keeps_the_circuit() {
+    let mut s = String::from("new
+add V 12 as=V1
+");
+    for i in 1..=30 {
+        s += &format!("add R 1k as=R{i}
+");
+    }
+    s += "net VIN V1.+ R1.1
+net GND V1.- R30.2
+";
+    for i in 1..30 {
+        s += &format!("net N{i} R{i}.2 R{}.1
+", i + 1);
+    }
+    let dir = std::env::temp_dir();
+    let (before_file, after_file) = (dir.join(format!("ccad-tidy-a-{}.schjson", std::process::id())), dir.join(format!("ccad-tidy-b-{}.schjson", std::process::id())));
+    let f = |p: &std::path::Path| p.to_str().unwrap().replace(std::path::MAIN_SEPARATOR, "/");
+    let extent = |p: &std::path::Path| {
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(p).unwrap()).unwrap();
+        let at: Vec<(i64, i64)> = v["components"].as_array().unwrap().iter().map(|c| (c["pos"][0].as_i64().unwrap(), c["pos"][1].as_i64().unwrap())).collect();
+        (at.iter().map(|p| p.0).max().unwrap() - at.iter().map(|p| p.0).min().unwrap(), at.iter().map(|p| p.1).max().unwrap() - at.iter().map(|p| p.1).min().unwrap())
+    };
+    let (before, ok) = run(&format!("{s}dc probe=I(v1)
+save {}
+", f(&before_file)));
+    assert!(ok, "{before:?}");
+    let (after, ok) = run(&format!("{s}sheet tidy
+dc probe=I(v1)
+erc
+save {}
+", f(&after_file)));
+    assert!(ok, "{after:?}");
+    let i = |a: &[Value]| last(a, "dc")["probes"]["I(v1)"].as_f64().unwrap();
+    assert!((i(&before) - i(&after)).abs() < 1e-12, "the answer must not change");
+    assert_eq!(last(&after, "erc")["errors"], 0);
+    let ((w0, h0), (w, h)) = (extent(&before_file), extent(&after_file));
+    assert!(w.max(h) < w0.max(h0) && w <= 3 * h.max(20), "the longest side must shrink, and a long strip is not what is wanted: {w0} x {h0} -> {w} x {h}");
+    let _ = (std::fs::remove_file(before_file), std::fs::remove_file(after_file));
+}
