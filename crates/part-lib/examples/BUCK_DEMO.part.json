@@ -36,7 +36,7 @@
   "sim": {
     "kind": "subckt",
     "name": "BUCK_DEMO",
-    "text": "* Simplified step-down (buck) regulator IC: 150 kHz PWM, internal high-side switch, soft-start, 1.23 V reference.\n.subckt BUCK_DEMO vin gnd sw fb\nRq vin gnd 4k\nVclk ramp gnd PULSE(0 1 0 6.5u 0.1u 10n 6.67u)\nBgm gnd comp I=limit(0.32m*12/max(V(vin),3)*(1.23-V(fb)),-250u,250u)\nCcomp comp gnd 1u\nRcomp comp gnd 1G\nBzero comp gnd I=if(time<1u,1000*V(comp),0)\nBctl ctl gnd V=limit(V(comp),0,0.95)\nBpwm pwm gnd V=0.5*(1+tanh(30*(V(ctl)-V(ramp)-0.03)))\nS1 vin sw pwm gnd SWMAIN\n.model SWMAIN SW(RON=0.15 ROFF=1MEG VT=0.5 VW=0.15)\n.ends BUCK_DEMO",
+    "text": "* Simplified step-down (buck) regulator IC: 150 kHz PWM, internal high-side switch, soft-start, 1.23 V reference. Every voltage is taken against the gnd pin, so the output may be wired as the system ground (the IC sits on a floating negative rail).\n.subckt BUCK_DEMO vin gnd sw fb\nRq vin gnd 4k\nVclk ramp gnd PULSE(0 1 0 6.5u 0.1u 10n 6.67u)\nBgm gnd comp I=limit(0.32m*12/max(V(vin,gnd),3)*(1.23-V(fb,gnd)),-250u,250u)\nCcomp comp gnd 1u\nRcomp comp gnd 1G\nBzero comp gnd I=if(time<1u,1000*V(comp,gnd),0)\nBctl ctl gnd V=limit(V(comp,gnd),0,0.95)\nBpwm pwm gnd V=0.5*(1+tanh(30*(V(ctl,gnd)-V(ramp,gnd)-0.03)))\nS1 vin sw pwm gnd SWMAIN\n.model SWMAIN SW(RON=0.15 ROFF=1MEG VT=0.5 VW=0.15)\n.ends BUCK_DEMO",
     "pins": [
       "1",
       "2",

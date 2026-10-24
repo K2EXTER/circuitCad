@@ -335,3 +335,27 @@ fn the_stimulus_sensors_respond_to_their_input_pin() {
         assert!((o - want).abs() < 0.03, "{name}: {o} vs {want}");
     }
 }
+
+#[test]
+fn the_buck_demo_works_with_its_output_as_the_system_ground() {
+    // The IC sits on a floating negative rail: the battery's minus is the gnd pin, the inductor's far end is the circuit's 0 V.
+    // Every voltage inside the model used to be taken against node 0, so this wiring did not regulate.
+    let def = part("BUCK_DEMO");
+    let mut c = Circuit::new();
+    vs(&mut c, "Vbat", "bat", "neg", 9.0);
+    place(&mut c, &def, "U1", &[("1", "bat"), ("2", "neg"), ("3", "sw"), ("4", "fb")]);
+    let (sw, out, neg, fb, gnd) = (c.node("sw"), c.node("0"), c.node("neg"), c.node("fb"), 0);
+    let _ = out;
+    c.add(Element::Inductor { name: "L1".into(), a: sw, b: gnd, l: 33e-6 });
+    c.add(Element::Diode { name: "D1".into(), a: neg, k: sw, model: DiodeModel { rs: 0.05, ..DiodeModel::default() } });
+    c.add(Element::Capacitor { name: "C1".into(), a: gnd, b: neg, c: 470e-6 });
+    res(&mut c, "Rt", "0", "fb", 4.64e3);
+    res(&mut c, "Rb", "fb", "neg", 10e3);
+    res(&mut c, "Rl", "0", "neg", 1.8);
+    let _ = fb;
+    let r = transient(&c, &TranSettings { tstop: 8e-3, tstep: 1e-7, uic: false }).unwrap();
+    let vneg = &r.signal("V(neg)").unwrap().values;
+    let tail: Vec<f64> = vneg.iter().zip(&r.time).filter(|(_, t)| **t > 6e-3).map(|(v, _)| -v).collect();
+    let mean = tail.iter().sum::<f64>() / tail.len() as f64;
+    assert!((mean - 1.8).abs() < 0.05, "the output should settle at 1.8 V, not {mean}");
+}
