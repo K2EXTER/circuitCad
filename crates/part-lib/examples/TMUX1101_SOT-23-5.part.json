@@ -1,0 +1,98 @@
+{
+ "name": "TMUX1101",
+ "category": "アナログスイッチ",
+ "description": "TI TMUX1101 低リーク SPST アナログスイッチ (SOT-23-5 / SC70-5)。単電源 1.08〜5.5 V、GND ピン基準のロジック (SEL: High 1.49 V 以上、Low 0.87 V 以下、5 V のとき)。Ron 典型 1.8 Ω (最大 4 Ω)。オフの漏れ 25℃ 典型 約 5 pA、最大 ±80 pA (5 V、VD=4.5V/1.5V のとき)。信号は 0〜VDD の範囲。継続電流 150 mA (25℃)。ピン表と値は SCDS410D (Rev. D) から。ランドパターンは SOT-23-5 の標準寸法の概算",
+ "datasheet": "https://www.ti.com/lit/ds/symlink/tmux1101.pdf",
+ "prefix": "U",
+ "footprint_name": "SOT-23-5_P0.95",
+ "height": 1.1,
+ "pins": [
+  {
+   "number": "1",
+   "name": "D",
+   "side": "right"
+  },
+  {
+   "number": "2",
+   "name": "S",
+   "side": "left"
+  },
+  {
+   "number": "4",
+   "name": "SEL",
+   "side": "left"
+  },
+  {
+   "number": "5",
+   "name": "VDD",
+   "side": "top"
+  },
+  {
+   "number": "3",
+   "name": "GND",
+   "side": "bottom"
+  }
+ ],
+ "package": {
+  "type": "explicit",
+  "pads": [
+   {
+    "pin": "1",
+    "x": -0.95,
+    "y": -1.3,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 1.1
+   },
+   {
+    "pin": "2",
+    "x": 0.0,
+    "y": -1.3,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 1.1
+   },
+   {
+    "pin": "3",
+    "x": 0.95,
+    "y": -1.3,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 1.1
+   },
+   {
+    "pin": "4",
+    "x": 0.95,
+    "y": 1.3,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 1.1
+   },
+   {
+    "pin": "5",
+    "x": -0.95,
+    "y": 1.3,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 1.1
+   }
+  ]
+ },
+ "sim": {
+  "kind": "subckt",
+  "name": "TMUX1101",
+  "text": "* TMUX1101 behavioural model: one SPST switch, Ron 1.8 ohm (5 V supply, 25 C typical), Roff 1T ohm.\n* SEL above about 1.2 V over GND = on (VIH min 1.49 V, VIL max 0.87 V at 5 V).\n.subckt TMUX1101 d s sel gnd vdd\nS1 d s sel gnd SWA\n.model SWA SW(RON=1.8 ROFF=1T VT=1.2 VW=0.3)\n.ends TMUX1101",
+  "pins": [
+   "1",
+   "2",
+   "4",
+   "3",
+   "5"
+  ],
+  "limits": [
+   "オン抵抗は 5 V 単電源・25℃ の典型値 (1.8 Ω) の固定です。電圧・温度・電源電圧で変わります (最大 4 Ω、85℃ で 4.9 Ω)。",
+   "オフの漏れは 1 TΩ の固定 (0.2 V で約 0.2 pA)。実物の典型 約 5 pA と、保証の最大 ±80 pA (25℃) は入っていません。",
+   "電荷注入、容量、切り替え時間は扱いません。"
+  ]
+ }
+}
