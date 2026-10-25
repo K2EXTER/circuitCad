@@ -8,6 +8,9 @@ const MAX_POINTS: f64 = 1_000_000.0;
 /// Absolute floors of the step-error check: a capacitor voltage (V) and an inductor current (A).
 const LTE_ABS_V: f64 = 1e-6;
 const LTE_ABS_I: f64 = 1e-9;
+/// Absolute charge tolerance of a diode or transistor junction (SPICE's `CHGTOL`): a junction is checked by the charge its voltage moves, not by
+/// the volts, so that a few tens of microvolts of ringing on a junction of a few femtofarads is not taken for an inaccurate step.
+const LTE_CHGTOL: f64 = 1e-14;
 
 /// The largest time step used when the user leaves it blank: 1/1000 of the stop time. The error control still shrinks
 /// the step where the waveform bends faster, so this is only the ceiling.
@@ -107,6 +110,29 @@ fn reactive_state(cm: &crate::dc::Compiled, x: &[f64]) -> (Vec<f64>, Vec<f64>) {
     (cv, il)
 }
 
+/// The absolute voltage tolerance of every capacitor state for the step-error check: `LTE_ABS_V`, except for the junction of a diode or a
+/// transistor, which has a charge tolerance (`LTE_CHGTOL`) turned into volts with the junction's capacitance at the new voltage.
+fn lte_abs_voltages(cm: &crate::dc::Compiled, x: &[f64]) -> Vec<f64> {
+    let mut abs = vec![LTE_ABS_V; cm.n_caps];
+    for e in &cm.ce {
+        match e {
+            Ce::D { ai, k, nvt, dm, cap: Some(idx), .. } => {
+                let c = crate::dc::diode_q(dm, *nvt, v(x, *ai) - v(x, *k)).1;
+                abs[*idx] = LTE_ABS_V.max(LTE_CHGTOL / c.max(1e-30));
+            }
+            Ce::Q { bi, ci, ei, m, cap: Some(idx), .. } => {
+                let pol = if m.pnp { -1.0 } else { 1.0 };
+                let cbe = crate::dc::bjt_qbe(m, pol * (v(x, *bi) - v(x, *ei))).1;
+                let cbc = crate::dc::bjt_qbc(m, pol * (v(x, *bi) - v(x, *ci))).1;
+                abs[*idx] = LTE_ABS_V.max(LTE_CHGTOL / cbe.max(1e-30));
+                abs[*idx + 1] = LTE_ABS_V.max(LTE_CHGTOL / cbc.max(1e-30));
+            }
+            _ => {}
+        }
+    }
+    abs
+}
+
 /// Divided difference of order `pts.len() - 1` through `(t, y)` points.
 fn divided_difference(pts: &[(f64, f64)]) -> f64 {
     let mut d: Vec<f64> = pts.iter().map(|p| p.1).collect();
@@ -140,7 +166,7 @@ type Sample = (f64, Vec<f64>, Vec<f64>);
 /// difference of the platform's maths put one step just past 40 iterations.
 const CAPPED_TRIES: usize = 6;
 
-fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], il: &[f64], trap: bool, rel: f64) -> Option<f64> {
+fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], abs_v: &[f64], il: &[f64], trap: bool, rel: f64) -> Option<f64> {
     let need = if trap { 3 } else { 2 };
     if hist.len() < need {
         return None;
@@ -162,7 +188,7 @@ fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], il: &[f64], trap: b
         }
     };
     for (k, &new) in cv.iter().enumerate() {
-        check(&|p| p.1[k], new, LTE_ABS_V, (k, false));
+        check(&|p| p.1[k], new, abs_v[k], (k, false));
     }
     for (k, &new) in il.iter().enumerate() {
         check(&|p| p.2[k], new, LTE_ABS_I, (k, true));
@@ -362,7 +388,8 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
             let trap = !(force_be || retried);
             let order = if trap { 3.0 } else { 2.0 };
             let (cv, il) = reactive_state(&cm, &att.x);
-            let ratio = step_error_ratio(&hist, t + h, &cv, &il, trap, lte_rel);
+            let abs_v = lte_abs_voltages(&cm, &att.x);
+            let ratio = step_error_ratio(&hist, t + h, &cv, &abs_v, &il, trap, lte_rel);
             match ratio {
                 // too inaccurate: redo this step with a smaller one (unless it is already tiny)
                 Some(r) if r > 1.0 && h > h_min && rejects < 12 => {
@@ -453,4 +480,41 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     warnings.dedup();
     result.warnings = warnings;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Circuit, DiodeModel, Element};
+
+    /// The step-error tolerance of a junction is a charge (`LTE_CHGTOL`) turned into volts with its capacitance: a junction of a few
+    /// femtofarads may ring by tens of microvolts (TI's latch clamps did, and the step stayed at its minimum for the whole run), a
+    /// 10 pF one may not, and a plain capacitor keeps the tolerance in volts.
+    #[test]
+    fn a_small_junction_has_a_wide_voltage_tolerance_and_a_capacitor_does_not() {
+        let mut c = Circuit::new();
+        let (a, b, d) = (c.node("a"), c.node("b"), c.node("d"));
+        c.add(Element::Resistor { name: "R1".into(), a, b: 0, r: 1e3 });
+        c.add(Element::Resistor { name: "R2".into(), a: b, b: 0, r: 1e3 });
+        c.add(Element::Capacitor { name: "C1".into(), a: d, b: 0, c: 1e-9 });
+        c.add(Element::Resistor { name: "R3".into(), a: d, b: 0, r: 1e3 });
+        c.add(Element::Diode { name: "Dsmall".into(), a, k: 0, model: DiodeModel { cj0: 1e-15, ..DiodeModel::default() } });
+        c.add(Element::Diode { name: "Dbig".into(), a: b, k: 0, model: DiodeModel { cj0: 10e-12, ..DiodeModel::default() } });
+        let cm = compile(&c);
+        let x = vec![0.0; cm.n_unknowns];
+        let abs = lte_abs_voltages(&cm, &x);
+        assert_eq!(abs.len(), cm.n_caps);
+        let mut seen = std::collections::HashMap::new();
+        for e in &cm.ce {
+            match e {
+                Ce::C { name, idx, .. } => seen.insert(name.clone(), abs[*idx]),
+                Ce::D { name, cap: Some(idx), .. } => seen.insert(name.clone(), abs[*idx]),
+                _ => None,
+            };
+        }
+        // 1e-14 C / 1 fF = 10 V (it is not checked at all); 1e-14 C / 10 pF = 1 mV; the capacitor stays at 1 uV
+        assert!(seen["Dsmall"] > 5.0, "{seen:?}");
+        assert!((seen["Dbig"] - 1e-3).abs() < 2e-4, "{seen:?}");
+        assert_eq!(seen["C1"], LTE_ABS_V, "{seen:?}");
+    }
 }
