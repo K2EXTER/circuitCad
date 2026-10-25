@@ -10,6 +10,19 @@ fn group_heading(ui: &mut egui::Ui, text: &str, tip: &str) {
 }
 
 impl BoardEditor {
+    /// How many heat pads lack thermal vias (counted again only when the copper changed).
+    fn thermal_lacking(&self) -> usize {
+        let key = pcb_core::zonefill::geometry_key(&self.board);
+        match self.thermal_cache.get() {
+            Some((k, n)) if k == key => n,
+            _ => {
+                let n = pcb_core::drc::thermal_via_checks(&self.board).len();
+                self.thermal_cache.set(Some((key, n)));
+                n
+            }
+        }
+    }
+
     /// A tip for what to do next on the board.
     pub fn hint(&self) -> String {
         if self.board.parts.is_empty() {
@@ -188,7 +201,7 @@ impl BoardEditor {
                     self.pan = Vec2::new(at.x as f32, at.y as f32);
                     self.zoom = self.zoom.max(25.0);
                 }
-                let lacking = pcb_core::drc::thermal_via_checks(&self.board).len();
+                let lacking = self.thermal_lacking();
                 if lacking > 0
                     && ui
                         .button(format!("サーマルビアを置く ({lacking} 個の放熱パッド)"))

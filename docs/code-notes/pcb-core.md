@@ -155,6 +155,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - `tests_quality.rs` は73部品のLED基板(`large_led_board`、`--ignored --release`)で、配置・配線の時間と未配線・ビア・配線長・斜めの段差を測る(LEDは `K`/`A`、抵抗は `1`/`2` のピン名で結ぶこと。LEDをつなぎ間違えると未接続になり、成績が実際より良く出る)。
   - 132本の未配線で、段+焼きなましは5本、IC中心の配置は1〜3本が通らない(LED基板をつなぎ間違えていた間の数字は無効)。
   - 同梱サンプル40個では未配線0、面積 +3.7%、配線長 -5%、ビア 73→57。
+- 速さの注意: `drc::connectivity` が、ベタが銅箔の何かに触れるかを見るとき(`anchors_inside_in`)、ベタと品物の箱で先にふるう(ガードのベタは辺が数百ある。ふるわないと 2300 個 × 辺の距離で 80 ms かかった)。基板エディタの左パネルの「サーマルビア」の数は、`zonefill::geometry_key` が変わったときだけ数える(毎フレーム全部のベタを塗っていた)。
 - `copper.rs` 配線のあとに足す銅: `add_guard`(検出ネットの配線ごとの長方形のベタをガードのネットで置いて、`merge_zone_outline` でつなぐ。`remove_islands`。DRC が増えるなら戻す)、`add_copper`(長方形のベタを層ごとに置き、ビアをネットのパッドの近くから置く)。
 - `nudge.rs` 全部配線したあとに残った接続の近くの小さい部品を動かして引き直す(`route_with_nudging`。1〜4 mm の 24 通り × 近くの 8 部品を、スレッドで並べて試す。ベタのネットは足の短い線とビアだけ消してベタに付け直す。時間の予算つき)。ルーターの格子は `RouteOptions.grid`(0.5 mm ピッチの IC の足の間は 0.1 mm が要る)。
 - `groundpour.rs` GNDベタ(`ground_pour(board, opt)`)。 `PourOptions.side` でベタの層を選べる(`Side::Bottom` が既定、4 層以上なら `Side::Inner(n)`。表面のパッドごとにビアを置くのは同じ。CLI は `board layers N` と `board pour layer=inner1`)。内層のベタを引き取る `ground_pour` は、`top` の表面ベタは裏のときだけ。

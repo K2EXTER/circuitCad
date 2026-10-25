@@ -122,13 +122,40 @@ impl Connectivity {
 /// Does the item lie in the pour's outline: its centre or an end inside, or its edge crossing the outline (a pad that sticks out of
 /// a hand-drawn pour is still joined to it).
 pub(super) fn anchors_inside(g: &Geo, poly: &[Point]) -> bool {
+    anchors_inside_in(g, poly, poly_bbox(poly))
+}
+
+/// The box (lo.x, lo.y, hi.x, hi.y) of a polygon.
+pub(super) fn poly_bbox(poly: &[Point]) -> (f64, f64, f64, f64) {
+    poly.iter().fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |b, p| (b.0.min(p.x), b.1.min(p.y), b.2.max(p.x), b.3.max(p.y)))
+}
+
+fn geo_box(g: &Geo) -> (f64, f64, f64, f64) {
+    match g {
+        Geo::Cap { a, b, r } => (a.x.min(b.x) - r, a.y.min(b.y) - r, a.x.max(b.x) + r, a.y.max(b.y) + r),
+        Geo::Rect { c, hw, hh } => (c.x - hw, c.y - hh, c.x + hw, c.y + hh),
+    }
+}
+
+/// [`anchors_inside`] with the polygon's box worked out once: an item whose box does not reach it is out without a test of
+/// every edge (a pour that follows a long track has hundreds of edges and the board has thousands of items).
+pub(super) fn anchors_inside_in(g: &Geo, poly: &[Point], pb: (f64, f64, f64, f64)) -> bool {
+    let gb = geo_box(g);
+    if gb.0 > pb.2 || gb.2 < pb.0 || gb.1 > pb.3 || gb.3 < pb.1 {
+        return false;
+    }
     let anchored = match g {
         Geo::Cap { a, b, .. } => inside_polygon(poly, *a) || inside_polygon(poly, *b),
         Geo::Rect { c, .. } => inside_polygon(poly, *c),
     };
     anchored
         || (0..poly.len()).any(|i| {
-            let edge = Geo::Cap { a: poly[i], b: poly[(i + 1) % poly.len()], r: 0.0 };
+            let (p, q) = (poly[i], poly[(i + 1) % poly.len()]);
+            // an edge that stays clear of the item's box cannot touch it
+            if p.x.min(q.x) > gb.2 || p.x.max(q.x) < gb.0 || p.y.min(q.y) > gb.3 || p.y.max(q.y) < gb.1 {
+                return false;
+            }
+            let edge = Geo::Cap { a: p, b: q, r: 0.0 };
             super::geo::dist(&edge, g) == 0.0
         })
 }
@@ -182,8 +209,9 @@ fn connectivity_with(board: &Board, with_pours: bool) -> Connectivity {
     for z in board.zones.iter().filter(|z| with_pours && !z.net.is_empty() && z.polygon.len() >= 3) {
         let nets = pad_nets(board, &mut parent, n_tracks);
         let mut members = vec![];
+        let pb = poly_bbox(&z.polygon);
         for (i, it) in items.iter().enumerate() {
-            if it.on(z.side) && anchors_inside(&it.geo, &z.polygon) {
+            if it.on(z.side) && anchors_inside_in(&it.geo, &z.polygon, pb) {
                 let r = find(&mut parent, i);
                 if nets.get(&r) == Some(&z.net) {
                     members.push(i);

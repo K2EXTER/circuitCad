@@ -80,6 +80,14 @@ pub fn add_guard(board: &mut Board, net: &str, guard: &str, margin: f64, clearan
         work.zones.push(z);
     }
     merge_all(&mut work, first);
+    // a guard pour that kept no copper (a layer that only had a stray track) is not left behind: it would only cost time
+    let conn = connectivity(&work);
+    let empty: Vec<bool> = (0..work.zones.len()).map(|i| i >= first && crate::zonefill::zone_fill(&work, &work.zones[i], &conn).is_empty()).collect();
+    let mut k = 0;
+    work.zones.retain(|_| {
+        k += 1;
+        !empty[k - 1]
+    });
     if check(&work).len() > before {
         return Err("ガードの銅を置くと、ルール違反が増えるので、置きませんでした".into());
     }

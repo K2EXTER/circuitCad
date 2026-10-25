@@ -311,6 +311,8 @@ pub struct BoardEditor {
     /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
     calc_cache: std::cell::RefCell<CalcCache>,
     zone_cache: std::cell::RefCell<ZoneCache>,
+    /// How many heat pads lack thermal vias, with the geometry key it was counted for: the count fills every pour, so it is not worked out every frame.
+    thermal_cache: std::cell::Cell<Option<(u64, usize)>>,
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
     hover_net: Option<(String, Pos2)>,
     /// A value of a net class is being dragged: the undo step was taken at its start.
@@ -414,6 +416,7 @@ impl Default for BoardEditor {
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
+            thermal_cache: std::cell::Cell::new(None),
             hover_net: None,
             drag_edit: false,
             net_win: None,
