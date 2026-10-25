@@ -179,8 +179,15 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
     let mut nets = vec![];
     for (g, pins) in pins_by_group {
         let name = name_of.get(&g).cloned().unwrap_or_else(|| {
-            auto += 1;
-            format!("N${auto}")
+            // an unnamed net never takes a name that a label already gave to another net (a label called "N$2" would
+            // otherwise be the same net as the unnamed net the count calls "N$2", on a board and in a netlist alike)
+            loop {
+                auto += 1;
+                let n = format!("N${auto}");
+                if !by_name.contains_key(&n) {
+                    break n;
+                }
+            }
         });
         nets.push((g, Net { name, pins }));
     }

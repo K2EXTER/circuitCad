@@ -31,6 +31,25 @@ fn rotation_moves_pins() {
 }
 
 #[test]
+fn an_unnamed_net_never_takes_the_name_a_label_gave_to_another_net() {
+    // three resistors, nothing wired: three unnamed nets for the pins on one side, and a label called "N$1" on R3's pin
+    let mut s = Schematic::default();
+    for k in 0..3 {
+        s.add(Kind::Resistor, (10 * k, 0), 0);
+    }
+    let pin = |s: &Schematic, r: &str, n: &str| s.components.iter().find(|c| c.refdes == r).unwrap().pins().into_iter().find(|p| p.0 == n).unwrap().1;
+    let at = pin(&s, "R3", "1");
+    s.labels.push(Label { pos: at, text: "N$1".into() });
+    let nets = extract(&s);
+    let name_of = |r: &str, p: &str| nets.iter().find(|n| n.pins.iter().any(|x| x.refdes == r && x.pin == p)).unwrap().name.clone();
+    assert_eq!(name_of("R3", "1"), "N$1");
+    let mut names: Vec<String> = nets.iter().map(|n| n.name.clone()).collect();
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), nets.len(), "every net has its own name: {names:?}");
+}
+
+#[test]
 fn voltage_divider_netlist() {
     let mut s = divider();
     let r2 = s.components[2].pins();
