@@ -98,3 +98,22 @@ fn monte_carlo_overshoot_units_and_non_step_errors() {
         other => panic!("{other:?}"),
     }
 }
+
+#[test]
+fn settling_times_of_a_first_order_response_are_the_logarithms_of_the_tolerances() {
+    let tau = 1e-3;
+    // the step is applied at 2 ms: before it the waveform is at rest
+    let n = 20001;
+    let t: Vec<f64> = (0..n).map(|i| 0.05 * i as f64 / (n - 1) as f64).collect();
+    let v: Vec<f64> = t.iter().map(|&x| if x < 2e-3 { 0.0 } else { 1.0 - (-(x - 2e-3) / tau).exp() }).collect();
+    let s = settling_times(&t, &v, 2e-3, &[1e-2, 1e-3, 3e-5]).unwrap();
+    assert!((s.final_value - 1.0).abs() < 1e-6 && s.initial.abs() < 1e-9);
+    for (tol, when) in &s.times {
+        let want = -tol.ln() * tau;
+        assert!((when.unwrap() - want).abs() < 0.02 * want, "tolerance {tol}: {when:?} vs {want}");
+    }
+    assert!(s.overshoot_pct < 1e-6);
+    // a run that stops too early has not settled to the tight tolerance
+    let short = settling_times(&t[..2500], &v[..2500], 2e-3, &[1e-6]).unwrap();
+    assert_eq!(short.times[0].1, None);
+}

@@ -142,3 +142,15 @@ fn the_schematic_check_blocks_only_when_the_circuit_differs() {
     assert_eq!(schematic_sync_check("追加 1 (R3)", true).level, Level::Error);
     assert_eq!(schematic_sync_check("値・形が違う 1 (R1)", false).level, Level::Warn);
 }
+
+#[test]
+fn a_part_with_an_estimated_land_pattern_is_noted_until_the_flag_is_removed() {
+    let mut b = routed();
+    b.parts.push(Part { refdes: "U7".into(), value: "ADC".into(), footprint: "VQFN-32_5x5".into(), pos: Point::new(15.0, 15.0), rot: 0, side: Side::Top });
+    assert!(!preflight(&b, None).iter().any(|c| c.title.contains("ランドパターンが概算")));
+    b.land_unverified.insert("VQFN-32_5x5".into(), "ADS124S08".into());
+    let c = preflight(&b, None);
+    let note = c.iter().find(|c| c.title.contains("ランドパターンが概算")).expect("the estimate is noted");
+    assert_eq!(note.level, Level::Warn);
+    assert!(note.title.contains("U7 (ADS124S08)"), "{}", note.title);
+}

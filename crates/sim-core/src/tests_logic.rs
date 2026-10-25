@@ -235,3 +235,22 @@ fn logic_blinker_example_divides_the_oscillator_by_two_and_alternates_the_leds()
     let i = r.signal("I(D1)").unwrap().values.iter().fold(0.0f64, |m, v| m.max(*v));
     assert!(i > 2e-3 && i < 8e-3, "{i}");
 }
+
+#[test]
+fn a_flip_flop_circuit_says_its_dc_answer_is_one_state_and_the_start_state_picks_another() {
+    let mut c = Circuit::new();
+    let (d, clk, q, qb) = (c.node("d"), c.node("clk"), c.node("q"), c.node("qb"));
+    let levels = crate::SeqLevels { vlow: 0.0, vhigh: 5.0, vt: 2.5, vh: 0.0, set_low: false, reset_low: false };
+    c.add(Element::Seq { name: "FF1".into(), kind: crate::SeqKind::Dff, ins: vec![d, clk, 0, 0], q, qb, levels });
+    for (name, node) in [("Rd", d), ("Rclk", clk)] {
+        c.add(Element::Resistor { name: name.into(), a: node, b: 0, r: 1e3 });
+    }
+    let r = dc_op(&c).unwrap();
+    assert_eq!(r.seq_states, vec![("FF1".to_string(), false)], "a stored state starts at 0");
+    assert!(r.warnings.iter().any(|w| w.contains("記憶素子")), "{:?}", r.warnings);
+    assert!(r.voltage("q").unwrap() < 0.1);
+    c.set_initial_voltage("FF1", 1.0);
+    let r1 = dc_op(&c).unwrap();
+    assert_eq!(r1.seq_states, vec![("FF1".to_string(), true)], "the circuit's initial state is the stored state");
+    assert!((r1.voltage("q").unwrap() - 5.0).abs() < 0.1);
+}

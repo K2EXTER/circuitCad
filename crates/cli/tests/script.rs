@@ -842,3 +842,60 @@ board thermal
     assert_eq!(t[0]["pads_still_lacking"], 0);
     assert_eq!(t[1]["vias_added"], 0, "a second call finds nothing lacking: {}", t[1]);
 }
+
+#[test]
+fn a_latch_built_from_gates_has_two_answers_and_guess_picks_one() {
+    let latch = "new
+add V 5 as=V1
+add 74HC00 as=U1
+add R 10k as=R1
+add R 10k as=R2
+net VCC V1.+ U1.VCC R1.1 R2.1
+net GND V1.- U1.GND
+net Q U1.1Y U1.2A
+net QB U1.2Y U1.1B
+net S R1.2 U1.1A
+net R R2.2 U1.2B
+";
+    let (a, ok) = run(&format!("{latch}dc guess=Q=5,QB=0 probe=V(Q),V(QB)
+dc guess=Q=0,QB=5 probe=V(Q),V(QB)
+dc guess=ZZ=1
+"));
+    assert!(!ok, "the unknown net stops the run");
+    let dcs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "dc").collect();
+    assert!(dcs[0]["probes"]["V(Q)"].as_f64().unwrap() > 4.9 && dcs[0]["probes"]["V(QB)"].as_f64().unwrap() < 0.1, "{:?}", dcs[0]);
+    assert!(dcs[1]["probes"]["V(Q)"].as_f64().unwrap() < 0.1 && dcs[1]["probes"]["V(QB)"].as_f64().unwrap() > 4.9, "{:?}", dcs[1]);
+    assert!(dcs[2]["error"].as_str().unwrap().contains("no net called 'ZZ'"), "{:?}", dcs[2]);
+    // `states` finds the other answers from other starting points
+    let (b, ok) = run(&format!("{latch}dc states probe=V(Q)
+"));
+    assert!(ok, "{b:?}");
+    let d = last(&b, "dc");
+    assert!(d["other_states"].as_array().unwrap().iter().any(|s| s["nets_that_differ"].as_u64().unwrap_or(0) > 0), "{d:?}");
+    assert!(d["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("more than one DC answer")), "{d:?}");
+}
+
+#[test]
+fn tran_settle_gives_the_time_to_stay_within_each_tolerance() {
+    // an RC low-pass (tau = 1 ms) driven by a step at 1 ms: it stays within a tolerance after tau x ln(1 / tolerance)
+    let (a, ok) = run("new
+add V \"PWL(0 0 1m 0 1.001m 1 1 1)\" as=V1
+add R 1k as=R1
+add C 1u as=C1
+net IN V1.+ R1.1
+net OUT R1.2 C1.1
+net GND V1.- C1.2
+tran 20m 20u probe=V(OUT) settle=V(OUT) from=1m tol=1e-2,1e-3,1e-4
+tran 20m 20u settle=V(NOPE)
+");
+    assert!(!ok, "an unknown signal stops the run");
+    let s = &a.iter().find(|v| v["cmd"] == "tran").unwrap()["settle"]["V(OUT)"];
+    let tau = 1e-3;
+    for (tol, want) in [("1e-2", 4.605), ("1e-3", 6.908), ("1e-4", 9.210)] {
+        let got = s["settled_within"][tol].as_f64().unwrap_or_else(|| panic!("{tol}: {s:?}"));
+        // measured from the stimulus at 1 ms; the 1 us ramp adds about half of it
+        assert!((got / tau - want).abs() < 0.08, "tolerance {tol}: {got} vs {}", want * tau);
+    }
+    assert!((s["final"].as_f64().unwrap() - 1.0).abs() < 1e-3 && s["overshoot_pct"].as_f64().unwrap() < 0.01, "{s:?}");
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("no signal"), "{:?}", a.last());
+}

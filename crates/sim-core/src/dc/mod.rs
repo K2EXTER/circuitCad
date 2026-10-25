@@ -52,6 +52,8 @@ pub struct DcResult {
     pub iterations: usize,
     pub strategy: &'static str,
     pub warnings: Vec<String>,
+    /// The stored state (true = 1) of every flip-flop / latch / Schmitt trigger the answer was found with.
+    pub seq_states: Vec<(String, bool)>,
 }
 
 impl DcResult {
@@ -111,6 +113,10 @@ pub(crate) struct Compiled {
     pub(crate) ce: Vec<Ce>,
     /// The stored state (0 or 1) of every `Ce::Seq`, changed only between solves.
     pub(crate) seq_state: std::cell::RefCell<Vec<f64>>,
+    /// The element name of every `Ce::Seq`, in the order of `seq_state`.
+    pub(crate) seq_names: Vec<String>,
+    /// The voltage every node (index `node - 1`) is pulled towards while gmin is large, and starts from: empty if the circuit has no `nodesets`.
+    pub(crate) seed: Vec<f64>,
 }
 
 
@@ -203,7 +209,10 @@ pub(crate) const DC_ORDER_WIDEN: [Strategy; 4] = [Strategy::Direct, Strategy::Gm
 
 impl Compiled {
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
-        let zero_x = vec![0.0; self.n_unknowns];
+        let mut zero_x = vec![0.0; self.n_unknowns];
+        if !self.seed.is_empty() {
+            zero_x[..self.seed.len()].copy_from_slice(&self.seed);
+        }
         let zero_vj = vec![0.0; self.n_slots];
         match which {
             Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(crate::options::options().gmin, 1.0)),
@@ -308,6 +317,10 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
     newton::STUCK.with(|s| s.set(None));
     let mut last = SimError::NoConvergence;
     for &which in order {
+        // a circuit with `nodesets` is solved with gmin stepping (which pulls the nodes to the seeds): a direct solve would ignore them
+        if !cm.seed.is_empty() && matches!(which, Strategy::Direct) {
+            continue;
+        }
         match cm.run(which) {
             Ok(mut att) => {
                 // the stored states of flip-flops and latches follow the operating point: update them and solve again until
@@ -384,11 +397,20 @@ pub(crate) fn dc_op_with(circuit: &Circuit, order: &[Strategy]) -> Result<DcResu
     Ok(report(&cm, &att, name, warnings))
 }
 
-fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, warnings: Vec<String>) -> DcResult {
+fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, mut warnings: Vec<String>) -> DcResult {
     let x = &att.x;
     let els = cm.element_results(x, None, &vec![0.0; cm.n_caps]);
     let voltages = cm.node_names.iter().enumerate().map(|(i, n)| (n.clone(), v(x, i))).collect();
-    DcResult { voltages, elements: els, iterations: att.iterations, strategy, warnings }
+    let seq_states: Vec<(String, bool)> = cm.seq_names.iter().cloned().zip(cm.seq_state.borrow().iter().map(|s| *s > 0.5)).collect();
+    if !seq_states.is_empty() {
+        let ones = seq_states.iter().filter(|(_, s)| *s).count();
+        warnings.push(format!(
+            "この回路には記憶素子 (フリップフロップ・ラッチ・シュミットトリガ) が {} 個あります。DC の答えは、記憶の初期値 (既定はすべて 0) から求めた一つの状態で ({} 個が 1)、電源を入れたときの状態は決まっていません",
+            seq_states.len(),
+            ones
+        ));
+    }
+    DcResult { voltages, elements: els, iterations: att.iterations, strategy, warnings, seq_states }
 }
 
 impl Compiled {

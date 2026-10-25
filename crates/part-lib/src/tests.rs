@@ -446,6 +446,7 @@ fn write_chip_examples() {
             body: None,
             model3d: None,
             shops: existing_shops(format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"))),
+            land_unverified: false,
         };
         assert!(!def.has_errors(), "{name}: {:?}", def.validate().iter().map(|i| &i.message).collect::<Vec<_>>());
         let path = format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"));

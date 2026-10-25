@@ -280,6 +280,9 @@ pub struct Circuit {
     pub tempcos: Vec<(String, f64, f64)>,
     /// Saturating inductors by element name: `i0`, the current scale of the model `L(i) = L / (1 + (i/i0)²)`.
     pub saturations: Vec<(String, f64)>,
+    /// Where the DC solve should start (SPICE `.nodeset`): node name and voltage. A circuit with a latch built from gates has more than one
+    /// solution; the nodes listed here are pulled towards these voltages while the solver steps gmin down, which picks the state.
+    pub nodesets: Vec<(String, f64)>,
 }
 
 impl Default for Circuit {
@@ -290,7 +293,7 @@ impl Default for Circuit {
 
 impl Circuit {
     pub fn new() -> Self {
-        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![] }
+        Self { names: vec!["GND".into()], index: HashMap::new(), elements: vec![], warnings: vec![], initial: vec![], tempcos: vec![], saturations: vec![], nodesets: vec![] }
     }
 
     /// Node index for a name; `0` and `GND` (any case) are ground.

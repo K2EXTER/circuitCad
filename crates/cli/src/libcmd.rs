@@ -137,6 +137,7 @@ impl Session {
             glyph: String::new(),
             body: None,
             shops: Default::default(),
+            land_unverified: true,
             model3d: None,
         };
         let path = part_lib::save(&self.lib_dir, &part).map_err(|e| format!("cannot write the part file: {e}"))?;

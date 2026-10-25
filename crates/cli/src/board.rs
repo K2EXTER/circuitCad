@@ -40,6 +40,9 @@ impl Session {
                         if let Some(m) = &def.model3d {
                             board.models3d.insert(def.footprint_name(), m.clone());
                         }
+                        if def.land_unverified {
+                            board.land_unverified.insert(def.footprint_name(), def.name.clone());
+                        }
                     }
                 }
                 let rep = netlist::import(board, &parts, &nets);

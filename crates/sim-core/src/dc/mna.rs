@@ -132,6 +132,10 @@ impl Compiled {
         for node in 1..self.n_nodes {
             m.at(node - 1, node - 1, gmin);
         }
+        // `nodeset`: the large gmin of the first stages pulls a node to its seed voltage instead of to ground
+        for (i, s) in self.seed.iter().enumerate() {
+            m.b[i] += gmin * s;
+        }
         for e in &self.ce {
             match e {
                 Ce::R { a, b, g, .. } => m.g(*a, *b, *g),

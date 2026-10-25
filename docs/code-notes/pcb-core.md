@@ -210,3 +210,5 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - 三角形が `MAX_TRIANGLES`(30万)を超えると、部品でなく組み立て全体として断る。
 - `model3d.rs` の `part_meshes(board)` が、`Board.models3d`(フットプリント名 → `Mesh3d`)を、部品の位置・回転・裏面(左右反転して、基板の下にぶら下げる)に合わせて並べる。メッシュを持つ部品は `part_boxes` から外れる(推測の箱を描かない)。
 - 実ファイルで試す: `CCAD_STEP=<ファイル> cargo test -p pcb-core read_the_file_in_ccad_step -- --ignored --nocapture`。
+
+- **ランドパターンが概算の部品**: 部品JSONの `land_unverified`(`PartDef`)→ 取り込みのときに `Board.land_unverified`(フットプリント名→部品名。アプリは `board_editor/file.rs`、CLI は `board.rs` の `import`)→ `fab.rs preflight` が「ランドパターンが概算の部品があります: U7 (ADS124S08)」を警告にする(テスト `tests_order.rs`)。同梱の `ADS124S08`・`ADG2712` と、`ccad part import` で作る部品(パッケージを借りる)が立てる。

@@ -158,6 +158,9 @@ impl BoardEditor {
                     if let Some(m) = &def.model3d {
                         self.board.models3d.insert(def.footprint_name(), m.clone());
                     }
+                    if def.land_unverified {
+                        self.board.land_unverified.insert(def.footprint_name(), def.name.clone());
+                    }
                 }
         }
         let rep = netlist::import(&mut self.board, &parts, &nets);

@@ -11,6 +11,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     let mut n_br = 0;
     let mut n_slots = 0;
     let (mut n_caps, mut n_inds, mut n_seq) = (0, 0, 0);
+    let mut seq_names: Vec<String> = vec![];
     let mut ce = vec![];
     let mut b_exprs: Vec<(usize, &crate::expr::Expr)> = vec![];
     // branch unknowns are numbered after all node unknowns; node count is fixed after the loop,
@@ -55,7 +56,8 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
             // coupled inductors are compiled after all the inductors are known (below)
             Element::Mutual { .. } => {}
-            Element::Seq { kind, ins, q, qb, levels, .. } => {
+            Element::Seq { name, kind, ins, q, qb, levels } => {
+                seq_names.push(name.clone());
                 // one branch per used output; `usize::MAX` marks an output left unconnected
                 let mut take = |node: usize| {
                     if node == 0 {
@@ -150,8 +152,20 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     }
     let linear = !ce.iter().any(|e| matches!(e, Ce::D { .. } | Ce::Q { .. } | Ce::M { .. } | Ce::S { .. } | Ce::B { .. } | Ce::Cq { .. }) || matches!(e, Ce::L { i0, .. } if *i0 > 0.0));
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
-    let seq_state = std::cell::RefCell::new(vec![0.0; n_seq]);
-    Compiled { seq_state, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
+    // the stored states start at 0, unless the circuit says otherwise (`Circuit::initial` holds 1 / 0 under the element's name)
+    let seq_state = std::cell::RefCell::new(seq_names.iter().map(|n| c.initial.iter().find(|(m, _)| m == n).map_or(0.0, |(_, v)| if *v > 0.5 { 1.0 } else { 0.0 })).collect::<Vec<f64>>());
+    let seed = if c.nodesets.is_empty() {
+        vec![]
+    } else {
+        let mut s = vec![0.0; n_nodes.saturating_sub(1)];
+        for (name, volts) in &c.nodesets {
+            if let Some(i) = c.names.iter().position(|n| n.eq_ignore_ascii_case(name)).filter(|i| *i > 0) {
+                s[i - 1] = *volts;
+            }
+        }
+        s
+    };
+    Compiled { seed, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

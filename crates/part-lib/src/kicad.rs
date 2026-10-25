@@ -402,6 +402,7 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         glyph: glyph.into(),
         body: None,
         shops: Default::default(),
+        land_unverified: false,
         model3d: None,
     })
 }

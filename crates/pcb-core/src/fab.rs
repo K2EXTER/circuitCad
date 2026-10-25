@@ -413,6 +413,17 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
         out.push(check(Level::Warn, format!("値が空の部品があります: {}", blank.iter().take(5).copied().collect::<Vec<_>>().join(", ")), "部品表 (BOM) の「値」が空になります。回路図で部品の値を入れましょう", None));
     }
 
+    // land patterns that are an estimate
+    let guessed: Vec<String> = board.parts.iter().filter_map(|p| board.land_unverified.get(&p.footprint).map(|n| format!("{} ({n})", p.refdes))).collect();
+    if !guessed.is_empty() {
+        out.push(check(
+            Level::Warn,
+            format!("ランドパターンが概算の部品があります: {}", guessed.iter().take(5).cloned().collect::<Vec<_>>().join(", ")),
+            "部品ライブラリの寸法が、データシートの推奨ランドパターンから読み取ったものではありません。発注の前に、データシートの図面とパッドの位置・大きさ・ピン番号を照らし合わせてください。確認できたら、部品ファイルの land_unverified を消します",
+            None,
+        ));
+    }
+
     // holes
     let mut smallest = f64::MAX;
     for p in &board.pads {

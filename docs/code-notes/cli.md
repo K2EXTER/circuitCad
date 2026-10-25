@@ -44,3 +44,6 @@
 - `tests/script.rs` の `run` は、呼び出しごとに別の部品フォルダを使う(並列のテストが同じフォルダの同梱部品のコピーや `part import` を半端に読むことがあった)。
 - `board thermal`(`board.rs`): `pcb_core::drc::add_thermal_vias` を呼ぶだけ(アプリのボタンと同じ)。テスト `board_thermal_puts_vias_in_a_heat_pad_once`(IP2332 の裏のパッドに置いて、2回目は 0 個)。
 - `sheet use`・`sheet add`・`sheet tidy` のあとの `add` は、操作対象のシートの既存の部品の下から並べる(`cursor_below`)。以前は (8, 8) から始めて、既存の部品の上に重ね、ピンの位置がぶつかって `net` が「すでに別のネットにある」と断った。
+
+- **`ic` / `guess` / `states`**(`build.rs` の `apply_ic`・`apply_guess`・`other_states`): `ic` は `Circuit.initial` に `Element::Seq` の名前→1/0 を入れ(`dc/build.rs` が `seq_state` の初期値に使う)、`dc` の答えに `memory` と、記憶素子があるという警告(`sim-core/dc/mod.rs report`)を付ける。ゲートで組んだラッチ(`74HC74` などのモデルは `Seq` ではなくスイッチのゲート)は `Seq` が無いので、`Circuit.nodesets`(`guess=`)で選ぶ: `Compiled.seed` を gmin の対角に足す電流 `gmin·seed`(`dc/mna.rs`)と、初期値(`dc/mod.rs run`)にし、`Direct` の解き方は飛ばす(seed を無視するため)。`states` は全ネットを高い方・低い方に置いて `dc_op` を解き直し、0.2 V 以上違うネットを返す(1回の `dc` が30秒かかる回路では1分以上)。テスト: `script.rs a_latch_built_from_gates…`、`tests_logic.rs a_flip_flop_circuit…`。
+- **`tran settle=`**: `sim_core::settling_times`(`stepmetrics.rs`)。`from` 以降の最後の5%の平均を最終値とし、ステップ(最終−初期)の tol 倍の帯から出た最後の点を補間して時間にする。

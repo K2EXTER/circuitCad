@@ -71,6 +71,76 @@ fn cli_sim_error(e: String) -> String {
 }
 
 /// A failed DC solve with the simulator's hints (where it was still unsettled, what to check) appended.
+/// `ic=NAME=1,NAME=0`: the starting state of flip-flops and latches (the names are those of `dc`'s `memory` answer; a part of a
+/// name is enough, and it sets every memory element whose name contains it). Returns how many were set.
+fn apply_ic(c: &mut sim_core::Circuit, spec: &str) -> Result<usize, String> {
+    let seqs: Vec<String> = c.elements.iter().filter_map(|e| if let sim_core::Element::Seq { name, .. } = e { Some(name.clone()) } else { None }).collect();
+    if seqs.is_empty() {
+        return Err("ic: this circuit has no flip-flop or latch (a library part with a memory, such as a 74HC74 or 74HC4017)".into());
+    }
+    let mut n = 0;
+    for item in spec.split(',').filter(|s| !s.trim().is_empty()) {
+        let (pat, val) = item.rsplit_once('=').ok_or_else(|| format!("ic: '{item}' should be NAME=1 or NAME=0"))?;
+        let on = match val.trim() {
+            "1" => true,
+            "0" => false,
+            other => return Err(format!("ic: the state of '{}' must be 0 or 1, not '{other}'", pat.trim())),
+        };
+        let want = pat.trim().to_ascii_lowercase();
+        let exact: Vec<&String> = seqs.iter().filter(|s| s.to_ascii_lowercase() == want).collect();
+        let hits: Vec<&String> = if exact.is_empty() { seqs.iter().filter(|s| s.to_ascii_lowercase().contains(&want)).collect() } else { exact };
+        if hits.is_empty() {
+            let sample: Vec<&str> = seqs.iter().take(12).map(|s| s.as_str()).collect();
+            return Err(format!("ic: no flip-flop or latch matches '{}' (they are: {}{})", pat.trim(), sample.join(", "), if seqs.len() > 12 { ", ..." } else { "" }));
+        }
+        for h in hits {
+            c.initial.retain(|(m, _)| m != h);
+            c.initial.push((h.clone(), if on { 1.0 } else { 0.0 }));
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+/// `guess=NET=V,NET=V`: where the DC solve starts for these nets (SPICE `.nodeset`). A circuit with a latch built from gates has
+/// more than one answer; the guess picks the one near it.
+fn apply_guess(c: &mut sim_core::Circuit, spec: &str) -> Result<(), String> {
+    for item in spec.split(',').filter(|s| !s.trim().is_empty()) {
+        let (net, val) = item.rsplit_once('=').ok_or_else(|| format!("guess: '{item}' should be NET=VOLTS"))?;
+        let volts = sim_core::parse_value(val.trim()).ok_or_else(|| format!("guess: '{}' is not a voltage (write 3, -1.8, 500m ...)", val.trim()))?;
+        let name = net.trim();
+        if !c.names.iter().skip(1).any(|n| n.eq_ignore_ascii_case(name)) {
+            let sample: Vec<&str> = c.names.iter().skip(1).filter(|n| !n.contains('.')).take(10).map(|s| s.as_str()).collect();
+            return Err(format!("guess: no net called '{name}' (nets: {}, ...)", sample.join(", ")));
+        }
+        c.nodesets.retain(|(n, _)| !n.eq_ignore_ascii_case(name));
+        c.nodesets.push((name.to_string(), volts));
+    }
+    Ok(())
+}
+
+/// Solve again from other starting points (every net at the highest, then at the lowest voltage of the first answer) and report the
+/// nets that settle at another voltage: a circuit with a latch built from gates has several answers, and `dc` found only one.
+fn other_states(c: &sim_core::Circuit, first: &sim_core::DcResult) -> Value {
+    let named = |r: &sim_core::DcResult| -> Vec<(String, f64)> { r.voltages.iter().filter(|(n, _)| !n.contains('.') && !n.eq_ignore_ascii_case("gnd")).cloned().collect() };
+    let base = named(first);
+    let (lo, hi) = base.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), (_, v)| (a.min(*v), b.max(*v)));
+    let mut out = vec![];
+    for (label, level) in [("all nets high", hi), ("all nets low", lo)] {
+        let mut cc = c.clone();
+        cc.nodesets = base.iter().map(|(n, _)| (n.clone(), level)).collect();
+        match sim_core::dc_op(&cc) {
+            Ok(r) => {
+                let diff: Vec<(String, f64, f64)> = named(&r).into_iter().zip(&base).filter(|((_, v), (_, w))| (v - w).abs() > 0.2).map(|((n, v), (_, w))| (n, *w, v)).collect();
+                let examples: Map<String, Value> = diff.iter().take(8).map(|(n, a, b)| (n.clone(), json!({"first": a, "here": b}))).collect();
+                out.push(json!({"start": label, "nets_that_differ": diff.len(), "examples": examples}));
+            }
+            Err(e) => out.push(json!({"start": label, "error": e.to_string()})),
+        }
+    }
+    json!(out)
+}
+
 fn dc_fail(c: &sim_core::Circuit, e: sim_core::SimError) -> String {
     let mut msg = cli_sim_error(e.to_string());
     let hints = sim_core::diagnose(c, &e);
@@ -389,8 +459,13 @@ impl Session {
         let circuit_ok = gate.is_none();
         let (pos, kv) = options(args);
         let full = pos.iter().any(|a| a.eq_ignore_ascii_case("full"));
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        let ic = opt(&kv, "ic").map(|s| apply_ic(&mut c, s)).transpose()?;
+        if let Some(spec) = opt(&kv, "guess") {
+            apply_guess(&mut c, spec)?;
+        }
         let r = sim_core::dc_op(&c).map_err(|e| dc_fail(&c, e))?;
+        let states = pos.iter().any(|a| a.eq_ignore_ascii_case("states")).then(|| other_states(&c, &r));
         self.last_dc = Some(r.clone());
         let volts: Map<String, Value> = r.voltages.iter().filter(|(n, _)| full || !n.contains('.')).map(|(n, v)| (n.clone(), json!(v))).collect();
         let internal_nodes = r.voltages.iter().filter(|(n, _)| n.contains('.')).count();
@@ -405,10 +480,25 @@ impl Session {
         let mut warnings = c.warnings.clone();
         warnings.extend(r.warnings.iter().cloned());
         warnings.extend(gate);
+        if !r.seq_states.is_empty() && ic.is_none() {
+            warnings.push("To start from other memory states: dc ic=NAME=1,NAME=0 (the names are in 'memory'; a part of a name is enough).".to_string());
+        }
         let (ratings, notes) = self.dc_notes(&r);
         warnings.extend(notes);
         let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
         let mut answer = json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings});
+        if !r.seq_states.is_empty()
+            && let Some(o) = answer.as_object_mut()
+        {
+            o.insert("memory".into(), Value::Object(r.seq_states.iter().map(|(n, s)| (n.clone(), json!(u8::from(*s)))).collect()));
+        }
+        if let (Some(s), Some(o)) = (&states, answer.as_object_mut()) {
+            let differ = s.as_array().is_some_and(|a| a.iter().any(|x| x["nets_that_differ"].as_u64().unwrap_or(0) > 0));
+            o.insert("other_states".into(), s.clone());
+            if differ && let Some(w) = o.get_mut("warnings").and_then(|w| w.as_array_mut()) {
+                w.push(json!("This circuit has more than one DC answer (a latch or counter built from gates): another starting point settles at other voltages, see 'other_states'. Pick the state you mean with dc guess=NET=VOLTS,..."));
+            }
+        }
         if let Some(list) = opt(&kv, "probe") {
             let mut probes = Map::new();
             for spec in split_probes(list) {
@@ -471,7 +561,13 @@ impl Session {
         let probes: Vec<String> = opt(&kv, "probe").map(|p| p.split(',').map(lower).collect()).unwrap_or_default();
         let gate = self.erc_gate()?;
         let circuit_ok = gate.is_none();
-        let c = self.circuit()?;
+        let mut c = self.circuit()?;
+        if let Some(spec) = opt(&kv, "ic") {
+            apply_ic(&mut c, spec)?;
+        }
+        if let Some(spec) = opt(&kv, "guess") {
+            apply_guess(&mut c, spec)?;
+        }
         let r = sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
         self.last_tran = Some(r.clone());
         let n = r.time.len();
@@ -498,7 +594,33 @@ impl Session {
             })
             .collect();
         let (ratings, notes) = self.tran_notes(&r);
-        Ok(obj(json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).collect::<Vec<_>>()})))
+        let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).collect::<Vec<_>>()});
+        if let Some(list) = opt(&kv, "settle") {
+            let from = match opt(&kv, "from") {
+                Some(s) => sim_core::parse_value(s).filter(|v| *v >= 0.0).ok_or_else(|| format!("from: '{s}' is not a time (write 20u, 1m ...)"))?,
+                None => 0.0,
+            };
+            let tols: Vec<f64> = match opt(&kv, "tol") {
+                Some(s) => s.split(',').map(|x| sim_core::parse_value(x.trim()).filter(|v| *v > 0.0 && *v < 1.0).ok_or_else(|| format!("tol: '{x}' is not a fraction between 0 and 1 (write 1e-3, 3e-5 ...)"))).collect::<Result<_, _>>()?,
+                None => vec![1e-2, 1e-3, 1e-4],
+            };
+            let mut settle = Map::new();
+            for want in list.split(',').map(|s| lower(s.trim())).filter(|s| !s.is_empty()) {
+                let sig = r.signals.iter().find(|s| lower(&s.name) == want).or_else(|| r.signals.iter().find(|s| lower(&s.name).contains(want.as_str()))).ok_or_else(|| format!("settle: no signal '{want}' (probe it with probe=...)"))?;
+                let one = match sim_core::settling_times(&r.time, &sig.values, from, &tols) {
+                    Ok(s) => {
+                        let times: Map<String, Value> = s.times.iter().map(|(tol, when)| (format!("{tol:e}"), when.map_or(Value::Null, |w| json!(w)))).collect();
+                        json!({"initial": s.initial, "final": s.final_value, "overshoot_pct": s.overshoot_pct, "settled_within": times, "from": from})
+                    }
+                    Err(e) => json!({"error": e}),
+                };
+                settle.insert(sig.name.clone(), one);
+            }
+            if let Some(o) = answer.as_object_mut() {
+                o.insert("settle".into(), Value::Object(settle));
+            }
+        }
+        Ok(obj(answer))
     }
 
     /// The `tran` counterpart of `dc_notes`, over the second half of the run (the start-up is left out):

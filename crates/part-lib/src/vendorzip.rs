@@ -453,6 +453,7 @@ impl VendorIndex {
             body: None,
             model3d: None,
             shops: Default::default(),
+            land_unverified: false,
         };
         Ok(MadePart { part, footprint, todo })
     }

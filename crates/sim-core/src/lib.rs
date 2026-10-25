@@ -60,7 +60,7 @@ pub use from_schematic::{from_schematic, from_schematic_with_pin_fault, from_sch
 pub use spice_in::{add_model_instance, add_subckt_instance, decode_spice_text, ignored_model_params, parse_models};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{auto_tstep, transient, Signal, TranResult, TranSettings};
-pub use stepmetrics::{step_metrics, StepMetrics};
+pub use stepmetrics::{settling_times, step_metrics, Settling, StepMetrics};
 pub use power::{efficiency, mean_power};
 pub use spec::{compare_measured, evaluate as evaluate_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};
 pub use spectrum::{spectrum, stats, Spectrum, Stats};

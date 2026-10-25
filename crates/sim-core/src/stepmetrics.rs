@@ -66,3 +66,59 @@ pub fn step_metrics(t: &[f64], v: &[f64]) -> Result<StepMetrics, String> {
     });
     Ok(StepMetrics { initial, final_value, rise_time, overshoot_pct, settling_time })
 }
+
+/// How a response settles, measured from the instant `from` (when the stimulus was applied).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settling {
+    /// Value at `from`.
+    pub initial: f64,
+    /// Value it ends at (mean of the last twentieth of the run).
+    pub final_value: f64,
+    /// Highest excursion beyond the final value, in percent of the step (0 if it never passes it).
+    pub overshoot_pct: f64,
+    /// For every tolerance (a fraction of the step, e.g. 1e-3): the time after `from` from which the waveform stays within
+    /// `tolerance × |step|` of the final value to the end of the run (None: it never does).
+    pub times: Vec<(f64, Option<f64>)>,
+}
+
+/// Settling times of the waveform `v(t)` for several tolerances. Needs a step that has settled by the end of the run.
+pub fn settling_times(t: &[f64], v: &[f64], from: f64, tolerances: &[f64]) -> Result<Settling, String> {
+    if t.len() < 5 || t.len() != v.len() {
+        return Err("点数が足りません".into());
+    }
+    let i0 = t.iter().position(|x| *x >= from).ok_or("開始の時刻が、解析の時間より後です")?;
+    let (tt, vv) = (&t[i0..], &v[i0..]);
+    if tt.len() < 5 {
+        return Err("開始の時刻の後の点が足りません".into());
+    }
+    let tail_from = tt[tt.len() - 1] - 0.05 * (tt[tt.len() - 1] - tt[0]);
+    let tail: Vec<f64> = (0..tt.len()).filter(|&i| tt[i] >= tail_from).map(|i| vv[i]).collect();
+    let final_value = tail.iter().sum::<f64>() / tail.len() as f64;
+    let initial = vv[0];
+    let step = final_value - initial;
+    if step.abs() < 1e-30 {
+        return Err("最初と最後の値が同じです。ステップ応答ではない波形には使えません".into());
+    }
+    let (lo, hi) = tail.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), x| (a.min(*x), b.max(*x)));
+    let times = tolerances
+        .iter()
+        .map(|&tol| {
+            let band = tol * step.abs();
+            // the last sample outside the band: the waveform is inside from the next instant on
+            let last_out = (0..tt.len()).rev().find(|&i| (vv[i] - final_value).abs() > band);
+            let when = match last_out {
+                None => Some(0.0),
+                // outside at the very end: has not settled to this tolerance
+                Some(i) if i + 1 >= tt.len() || hi - lo > 2.0 * band => None,
+                Some(i) => {
+                    let (a, b) = ((vv[i] - final_value).abs(), (vv[i + 1] - final_value).abs());
+                    let k = if a > b { (a - band) / (a - b) } else { 1.0 };
+                    Some((tt[i] + (tt[i + 1] - tt[i]) * k - tt[0]).max(0.0))
+                }
+            };
+            (tol, when)
+        })
+        .collect();
+    let beyond = if step > 0.0 { vv.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - final_value } else { final_value - vv.iter().cloned().fold(f64::INFINITY, f64::min) };
+    Ok(Settling { initial, final_value, overshoot_pct: (beyond / step.abs() * 100.0).max(0.0), times })
+}
