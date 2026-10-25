@@ -59,10 +59,34 @@ impl Session {
                 // the GND pour of the editor: the bottom copper as a pour, with a via for every surface pad of the net
                 let (_, kv) = options(rest);
                 let net = opt(&kv, "net").map(str::to_string);
+                // layer=bottom (default) | inner1 | inner2 ...: the copper layer of the pour (an inner layer needs `board layers 4` first)
+                let side = match opt(&kv, "layer") {
+                    None | Some("bottom") => pcb_core::model::Side::Bottom,
+                    Some(l) => match l.strip_prefix("inner").and_then(|n| n.parse::<u8>().ok()).filter(|n| *n >= 1) {
+                        Some(n) => pcb_core::model::Side::Inner(n),
+                        None => return Err(format!("layer={l}: use bottom, inner1, inner2 ...")),
+                    },
+                };
                 let board = self.board_mut()?;
-                let o = pcb_core::groundpour::PourOptions { net, top: opt(&kv, "top") != Some("0"), ..Default::default() };
+                let o = pcb_core::groundpour::PourOptions { net, top: opt(&kv, "top") != Some("0"), side, ..Default::default() };
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "top_added": r.top_added, "vias": r.vias, "already": r.already, "left": r.left})))
+            }
+            "layers" => {
+                // board layers N: the number of copper layers (2, 4, 6 ...), like the editor's 「銅箔の層数」. Refuses when an inner layer that would go has copper.
+                let (words, _) = options(rest);
+                let total = words.first().ok_or("board layers N  (2, 4, 6 ...)")?.parse::<usize>().map_err(|_| "board layers N  (2, 4, 6 ...)")?;
+                if total < 2 || total % 2 != 0 || total > 8 {
+                    return Err("board layers N: N is 2, 4, 6 or 8".into());
+                }
+                let inner = (total - 2) as u8;
+                let board = self.board_mut()?;
+                let lost = board.tracks.iter().filter(|t| matches!(t.side, pcb_core::model::Side::Inner(n) if n > inner)).count() + board.zones.iter().filter(|z| matches!(z.side, pcb_core::model::Side::Inner(n) if n > inner)).count();
+                if lost > 0 {
+                    return Err(format!("{total} layers would drop {lost} track(s)/zone(s) on the inner layers that go away: remove them first"));
+                }
+                board.inner_layers = inner;
+                Ok(obj(json!({"layers": total})))
             }
             "move" => {
                 // board move REF X Y [rot=0..3]: put a part (its origin) at X, Y mm; tracks are not moved

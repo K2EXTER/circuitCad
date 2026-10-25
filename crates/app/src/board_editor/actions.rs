@@ -157,7 +157,7 @@ impl BoardEditor {
     /// The GND pour on the bottom layer with a via for every surface ground pad (see `pcb_core::groundpour`). One undo step.
     pub fn ground_pour(&mut self) {
         self.checkpoint();
-        let opt = pcb_core::groundpour::PourOptions { net: None, track_width: self.track_width.max(0.3), via_diameter: self.via_dia, via_drill: self.via_drill, top: self.pour_top };
+        let opt = pcb_core::groundpour::PourOptions { net: None, track_width: self.track_width.max(0.3), via_diameter: self.via_dia, via_drill: self.via_drill, top: self.pour_top, side: Side::Bottom };
         match pcb_core::groundpour::ground_pour(&mut self.board, &opt) {
             Ok(r) if r.zone_added || r.vias > 0 => {
                 self.violations.clear();

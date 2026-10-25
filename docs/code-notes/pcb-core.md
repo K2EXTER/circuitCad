@@ -155,7 +155,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - `tests_quality.rs` は73部品のLED基板(`large_led_board`、`--ignored --release`)で、配置・配線の時間と未配線・ビア・配線長・斜めの段差を測る(LEDは `K`/`A`、抵抗は `1`/`2` のピン名で結ぶこと。LEDをつなぎ間違えると未接続になり、成績が実際より良く出る)。
   - 132本の未配線で、段+焼きなましは5本、IC中心の配置は1〜3本が通らない(LED基板をつなぎ間違えていた間の数字は無効)。
   - 同梱サンプル40個では未配線0、面積 +3.7%、配線長 -5%、ビア 73→57。
-- `groundpour.rs` GNDベタ(`ground_pour(board, opt)`)。
+- `groundpour.rs` GNDベタ(`ground_pour(board, opt)`)。 `PourOptions.side` でベタの層を選べる(`Side::Bottom` が既定、4 層以上なら `Side::Inner(n)`。表面のパッドごとにビアを置くのは同じ。CLI は `board layers N` と `board pour layer=inner1`)。内層のベタを引き取る `ground_pour` は、`top` の表面ベタは裏のときだけ。
   - 四角い外形の裏面に、外形の `edge_clearance+0.2`mm内側のゾーン(`remove_islands`)を置き、表面のSMDのGNDパッドごとに、パッドの中心から縦横にまっすぐな短い線(既定0.3mm幅)とビア(0.6/0.3)を、近い順(0.25mm刻み、5mmまで)にDRCが悪くならない所へ置く。
   - スルーホールと裏面のパッドはゾーンに直接つながる(`connectivity` はゾーンの内側に点がある同じ側のものをつなぐ)。
   - もう置いてあれば何もしない。

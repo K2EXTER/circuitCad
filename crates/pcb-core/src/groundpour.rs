@@ -22,11 +22,14 @@ pub struct PourOptions {
     /// Also fill the free copper of the top with the net (`top_pour`), so that the router works on a board that has the
     /// pour on both sides.
     pub top: bool,
+    /// The copper layer of the pour: the bottom (default), or an inner layer of a 4+ layer board. Through-hole pads and
+    /// vias reach every layer, so the surface pads of the net get their via here just as on the bottom.
+    pub side: Side,
 }
 
 impl Default for PourOptions {
     fn default() -> Self {
-        Self { net: None, track_width: 0.3, via_diameter: 0.6, via_drill: 0.3, top: true }
+        Self { net: None, track_width: 0.3, via_diameter: 0.6, via_drill: 0.3, top: true, side: Side::Bottom }
     }
 }
 
@@ -98,8 +101,12 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
     let corners = pour_corners(board)?;
     let mut work = board.clone();
     let mut report = PourReport::default();
-    if !work.zones.iter().any(|z| z.net == net && z.side == Side::Bottom) {
-        let mut zone = Zone::new(&net, Side::Bottom, corners);
+    if let Side::Inner(n) = opt.side
+        && n > work.inner_layers {
+            return Err(format!("内層{n} がありません。先に層の数を増やしてください (いまは {} 層)", work.inner_layers as usize + 2));
+        }
+    if !work.zones.iter().any(|z| z.net == net && z.side == opt.side) {
+        let mut zone = Zone::new(&net, opt.side, corners);
         zone.remove_islands = true;
         work.zones.push(zone);
         report.zone_added = true;
@@ -107,7 +114,7 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
     // with the top filled too, every surface pad is on the pour already: the pour needs only one way through the board
     // (a through-hole pad or one via) and no via for each pad. A top pour that would break something is left out, and the
     // pads get their vias one by one.
-    if opt.top {
+    if opt.top && opt.side == Side::Bottom {
         report.top_added = top_pour(&mut work, Some(&net)) == Ok(true);
     }
     let ground_pads: Vec<usize> = (0..work.pads.len()).filter(|&i| work.pads[i].net == net).collect();
@@ -120,8 +127,8 @@ pub fn ground_pour(board: &mut Board, opt: &PourOptions) -> Result<PourReport, S
     };
     for &i in &ground_pads {
         let pad = work.pads[i].clone();
-        // a pad on the bottom is inside the zone already
-        if pad.drill.is_none() && pad.side == Side::Bottom {
+        // a pad on the pour's own layer is inside the zone already
+        if pad.drill.is_none() && pad.side == opt.side {
             report.already += 1;
             continue;
         }
@@ -194,6 +201,22 @@ mod tests {
         assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
         // the pour keeps off the board's edge
         assert!(drc::check_final(&b).is_empty(), "{:?}", drc::check_final(&b));
+    }
+
+    #[test]
+    fn a_pour_on_an_inner_layer_gets_a_via_for_every_surface_pad_of_the_net() {
+        let mut b = board();
+        b.inner_layers = 2;
+        let r = ground_pour(&mut b, &PourOptions { top: false, side: Side::Inner(1), ..Default::default() }).unwrap();
+        assert!(r.zone_added && !r.top_added);
+        assert_eq!((r.vias, r.already, r.left), (3, 1, 0), "{r:?}");
+        assert!(b.zones.iter().all(|z| z.side == Side::Inner(1)), "only the inner layer is poured");
+        assert!(ratsnest(&b).iter().all(|w| w.net != "GND"), "the ground needs no wires");
+        assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+        // a layer the board does not have is refused, and nothing changes
+        let mut two = board();
+        assert!(ground_pour(&mut two, &PourOptions { side: Side::Inner(1), ..Default::default() }).is_err());
+        assert!(two.zones.is_empty() && two.vias.is_empty());
     }
 
     #[test]
