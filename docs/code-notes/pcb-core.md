@@ -156,6 +156,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - 132本の未配線で、段+焼きなましは5本、IC中心の配置は1〜3本が通らない(LED基板をつなぎ間違えていた間の数字は無効)。
   - 同梱サンプル40個では未配線0、面積 +3.7%、配線長 -5%、ビア 73→57。
 - 速さの注意: `drc::connectivity` が、ベタが銅箔の何かに触れるかを見るとき(`anchors_inside_in`)、ベタと品物の箱で先にふるう(ガードのベタは辺が数百ある。ふるわないと 2300 個 × 辺の距離で 80 ms かかった)。基板エディタの左パネルの「サーマルビア」の数は、`zonefill::geometry_key` が変わったときだけ数える(毎フレーム全部のベタを塗っていた)。
+- `par.rs` `par_map`: 独立な仕事を全コアに配る(結果は元の順)。ベタ(`merged_fills`・`PourFills`)、仕上げの角と根元(`smooth::plan_one`)、スロット(`slot_patches`)がこれで動く。ガード付きの 190 部品の基板で、仕上げ `smooth::finished` が 1.5 秒 → 0.25 秒、ベタ全部 150 ms → 56 ms(8 コア)。ベタの塗りは `zonefill` が基板の状態ごとに覚えている(`FILL_CACHE`・`MERGED_CACHE`)。
 - `copper.rs` 配線のあとに足す銅: `add_guard`(検出ネットの配線ごとの長方形のベタをガードのネットで置いて、`merge_zone_outline` でつなぐ。`remove_islands`。DRC が増えるなら戻す)、`add_copper`(長方形のベタを層ごとに置き、ビアをネットのパッドの近くから置く)。
 - `nudge.rs` 全部配線したあとに残った接続の近くの小さい部品を動かして引き直す(`route_with_nudging`。1〜4 mm の 24 通り × 近くの 8 部品を、スレッドで並べて試す。ベタのネットは足の短い線とビアだけ消してベタに付け直す。時間の予算つき)。ルーターの格子は `RouteOptions.grid`(0.5 mm ピッチの IC の足の間は 0.1 mm が要る)。
 - `groundpour.rs` GNDベタ(`ground_pour(board, opt)`)。 `PourOptions.side` でベタの層を選べる(`Side::Bottom` が既定、4 層以上なら `Side::Inner(n)`。表面のパッドごとにビアを置くのは同じ。CLI は `board layers N` と `board pour layer=inner1`)。内層のベタを引き取る `ground_pour` は、`top` の表面ベタは裏のときだけ。

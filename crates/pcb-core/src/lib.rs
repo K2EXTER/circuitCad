@@ -36,6 +36,7 @@ pub mod nudge;
 pub mod netlist;
 pub mod outline;
 pub mod padentry;
+pub mod par;
 pub mod package;
 pub mod parts;
 pub mod ratsnest;

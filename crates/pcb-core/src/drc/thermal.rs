@@ -50,7 +50,8 @@ impl PourFills {
             return Self { fills: vec![] };
         }
         let conn = connectivity(board);
-        Self { fills: board.zones.iter().map(|z| (z.side, z.net.clone(), crate::zonefill::zone_fill(board, z, &conn))).collect() }
+        // (the pours are independent: one thread for each)
+        Self { fills: crate::par::par_map(&board.zones, |z| (z.side, z.net.clone(), crate::zonefill::zone_fill(board, z, &conn))) }
     }
 
     /// Copper (mm²) of the piece of a same-net pour on the pad's side that the pad sits in; 0 when no pour touches it.

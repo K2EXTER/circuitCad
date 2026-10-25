@@ -9,10 +9,7 @@ use std::rc::Rc;
 impl BoardEditor {
     /// The copper with the board's finish applied (`None` while the finish is off). Worked out again only when
     /// the copper or the settings change.
-    pub(super) fn finished(&self) -> Option<Rc<Finished>> {
-        if !smooth::finish_active(&self.board) {
-            return None;
-        }
+    fn finish_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let f = &self.board.finish;
         let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -22,7 +19,60 @@ impl BoardEditor {
             let o = &c.finish;
             (&c.nets, o.corners, o.tapers, o.forks, o.radius.map(f64::to_bits)).hash(&mut h);
         }
-        let key = h.finish();
+        h.finish()
+    }
+
+    /// [`finished`](Self::finished) for the picture: when the copper has changed, the new finish is worked out on another thread (a
+    /// quarter of a second on a board of this size, and it would freeze the window at the end of every move) and the picture keeps the
+    /// last one until it is ready. The very first one is worked out at once, there being nothing to keep.
+    pub(super) fn finished_async(&self, ctx: &egui::Context) -> Option<Rc<Finished>> {
+        if !smooth::finish_active(&self.board) {
+            return None;
+        }
+        let key = self.finish_key();
+        // an answer that came in
+        let mut done: Option<(u64, Option<Finished>)> = None;
+        {
+            let mut job = self.finish_job.borrow_mut();
+            if let Some((jk, rx)) = job.as_ref() {
+                match rx.try_recv() {
+                    Ok(f) => {
+                        done = Some((*jk, f));
+                        *job = None;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(30)),
+                    Err(_) => *job = None,
+                }
+            }
+        }
+        if let Some((k, Some(f))) = done {
+            *self.finish_cache.borrow_mut() = Some((k, Rc::new(f)));
+        }
+        let have = self.finish_cache.borrow().clone();
+        match have {
+            Some((k, v)) if k == key => return Some(v),
+            Some((_, v)) if self.moving_parts_only() => return Some(v),
+            None => return self.finished(),
+            Some(_) => {}
+        }
+        if self.finish_job.borrow().is_none() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let board = self.board.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(smooth::finished(&board));
+            });
+            *self.finish_job.borrow_mut() = Some((key, rx));
+            ctx.request_repaint_after(std::time::Duration::from_millis(30));
+        }
+        // the last finish stands until the new one is ready
+        self.finish_cache.borrow().as_ref().map(|(_, v)| v.clone())
+    }
+
+    pub(super) fn finished(&self) -> Option<Rc<Finished>> {
+        if !smooth::finish_active(&self.board) {
+            return None;
+        }
+        let key = self.finish_key();
         let mut cache = self.finish_cache.borrow_mut();
         if let Some((k, v)) = cache.as_ref()
             && (*k == key || self.moving_parts_only())

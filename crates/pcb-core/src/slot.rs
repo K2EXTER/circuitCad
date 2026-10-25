@@ -88,17 +88,27 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
                 g.1.push((v.pos, v.diameter / 2.0));
             }
         }
-        for (paths, discs, width, track, pads) in groups.into_values() {
-            let d = (width.min(radius) * REACH_OF_WIDTH).clamp(REACH.0, REACH.1);
-            if !has_close_pair(&discs, 2.0 * d) {
-                continue;
+        let groups: Vec<Group> = groups.into_values().collect();
+        // (the groups are independent: one thread for each)
+        let found: Vec<Vec<SlotPatch>> = crate::par::par_map(&groups, |(paths, discs, width, track, pads)| {
+            let mut mine = vec![];
+            // the copper of a net that has a pour is a plane's stubs and vias: the pour carries it, and these groups are the biggest
+            // of the board (a second of the finish on a board with three planes)
+            if conn.track_net(*track).is_some_and(|n| board.zones.iter().any(|z| z.net == n)) {
+                return mine;
             }
-            for slot in closed_pieces(&paths, d) {
-                for outline in notched(&slot, &pads, 2.0 * d) {
-                    out.push(SlotPatch { side, outline, track });
+            let d = (width.min(radius) * REACH_OF_WIDTH).clamp(REACH.0, REACH.1);
+            if !has_close_pair(discs, 2.0 * d) {
+                return mine;
+            }
+            for slot in closed_pieces(paths, d) {
+                for outline in notched(&slot, pads, 2.0 * d) {
+                    mine.push(SlotPatch { side, outline, track: *track });
                 }
             }
-        }
+            mine
+        });
+        out.extend(found.into_iter().flatten());
     }
     out
 }

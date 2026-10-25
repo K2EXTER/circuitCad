@@ -110,7 +110,7 @@ impl BoardEditor {
             painter.circle_filled(self.to_screen(rect, o[i]), 1.0, Color32::YELLOW);
         }
         // with the finish on, the copper is drawn as it will be made
-        let finished = self.finished();
+        let finished = self.finished_async(painter.ctx());
         // inactive layer first, so the active one is on top
         for s in self.layer_order() {
             if !self.side_visible(s) {

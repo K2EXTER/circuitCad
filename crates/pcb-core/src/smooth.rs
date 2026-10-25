@@ -1021,37 +1021,33 @@ fn plan_one(board: &Board, opts: &SmoothOptions, only: Option<&[usize]>, live: b
         }
         edits.extend(junctions(board, opts.radius));
     }
-    for (v, a, b) in joints(board) {
-        if used.contains(&a) || used.contains(&b) {
-            continue;
-        }
+    // (every joint and every track end is looked at on its own: the work is shared out over the cores, the edits keep their order)
+    let all_joints: Vec<(Point, End, End)> = joints(board).into_iter().filter(|(_, a, b)| !used.contains(a) && !used.contains(b)).collect();
+    let at_joints: Vec<Option<Edit>> = crate::par::par_map(&all_joints, |&(v, a, b)| {
         let e = if opts.corners { corner(board, v, a, b, opts.radius) } else { None };
-        if let Some(e) = e.or_else(|| if opts.tapers { taper(board, v, a, b) } else { None }) {
-            edits.push(e);
-        }
-    }
+        e.or_else(|| if opts.tapers { taper(board, v, a, b) } else { None })
+    });
+    edits.extend(at_joints.into_iter().flatten());
     if opts.tapers {
-        for i in 0..board.tracks.len() {
-            for is_a in [true, false] {
-                if !used.contains(&(i, is_a)) {
-                    // a track wider than its pad is narrowed first (the neck): a fillet at the pad's face would leave the round end sticking out
-                    // on the far side
-                    let fillet = || live.then(|| pad_fillet(board, i, is_a)).flatten();
-                    if let Some(mut clip) = pad_clip(board, i, is_a) {
-                        // the cut at the far face keeps the fillets (the teardrop curves) at the near face
-                        if let Some(Live { patch, .. }) = fillet().and_then(|f| f.live) {
-                            clip.live = Some(Live { trims: clip.trims.clone(), pieces: vec![], patch });
-                        }
-                        edits.push(clip);
-                    } else {
-                        match pad_neck(board, i, is_a).or_else(fillet) {
-                            Some(e) => edits.push(e),
-                            None => edits.extend(pad_taper(board, i, is_a)),
-                        }
-                    }
+        let ends: Vec<(usize, bool)> = (0..board.tracks.len()).flat_map(|i| [(i, true), (i, false)]).filter(|e| !used.contains(e)).collect();
+        let at_ends: Vec<Vec<Edit>> = crate::par::par_map(&ends, |&(i, is_a)| {
+            // a track wider than its pad is narrowed first (the neck): a fillet at the pad's face would leave the round end sticking out
+            // on the far side
+            let fillet = || live.then(|| pad_fillet(board, i, is_a)).flatten();
+            if let Some(mut clip) = pad_clip(board, i, is_a) {
+                // the cut at the far face keeps the fillets (the teardrop curves) at the near face
+                if let Some(Live { patch, .. }) = fillet().and_then(|f| f.live) {
+                    clip.live = Some(Live { trims: clip.trims.clone(), pieces: vec![], patch });
+                }
+                vec![clip]
+            } else {
+                match pad_neck(board, i, is_a).or_else(fillet) {
+                    Some(e) => vec![e],
+                    None => pad_taper(board, i, is_a).into_iter().collect(),
                 }
             }
-        }
+        });
+        edits.extend(at_ends.into_iter().flatten());
     }
     if let Some(only) = only {
         edits.retain(|e| e.touches.iter().any(|i| only.contains(i)));

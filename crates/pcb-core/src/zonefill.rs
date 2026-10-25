@@ -237,9 +237,11 @@ pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Ve
 fn merged_fills_uncached(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Vec<FillShape>)> {
     let mut out: Vec<(Side, Option<String>, Vec<FillShape>)> = vec![];
     // every pour's raw copper once (the island test of each pour looks at the others of its net)
-    let raws: Vec<Vec<FillShape>> = board.zones.iter().map(|z| raw_fill(board, z, conn)).collect();
-    for z in &board.zones {
-        let fill = fill_from(board, z, conn, &raws);
+    // (the pours are independent of each other: one thread for each)
+    let idx: Vec<usize> = (0..board.zones.len()).collect();
+    let raws: Vec<Vec<FillShape>> = crate::par::par_map(&idx, |&i| raw_fill(board, &board.zones[i], conn));
+    let fills: Vec<Vec<FillShape>> = crate::par::par_map(&idx, |&i| fill_from(board, &board.zones[i], conn, &raws));
+    for (z, fill) in board.zones.iter().zip(fills) {
         let key = (!z.net.is_empty()).then(|| z.net.clone());
         match key.as_ref().and_then(|_| out.iter_mut().find(|(s, k, _)| *s == z.side && *k == key)) {
             Some((_, _, shapes)) => shapes.extend(fill),
