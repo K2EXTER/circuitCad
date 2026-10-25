@@ -464,7 +464,9 @@ impl Session {
         if let Some(spec) = opt(&kv, "guess") {
             apply_guess(&mut c, spec)?;
         }
+        let clock = std::time::Instant::now();
         let r = sim_core::dc_op(&c).map_err(|e| dc_fail(&c, e))?;
+        let seconds = clock.elapsed().as_secs_f64();
         let states = pos.iter().any(|a| a.eq_ignore_ascii_case("states")).then(|| other_states(&c, &r));
         self.last_dc = Some(r.clone());
         let volts: Map<String, Value> = r.voltages.iter().filter(|(n, _)| full || !n.contains('.')).map(|(n, v)| (n.clone(), json!(v))).collect();
@@ -486,7 +488,7 @@ impl Session {
         let (ratings, notes) = self.dc_notes(&r);
         warnings.extend(notes);
         let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
-        let mut answer = json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "warnings": warnings});
+        let mut answer = json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "solver": {"strategy": r.strategy, "iterations": r.iterations, "seconds": seconds}, "warnings": warnings});
         if !r.seq_states.is_empty()
             && let Some(o) = answer.as_object_mut()
         {
@@ -777,5 +779,68 @@ impl Session {
         }
         self.sch.components[idx].value = original.clone();
         Ok(obj(json!({"ref": self.sch.components[idx].refdes, "restored_value": original, "points": rows.len(), "failed": failed, "rows": rows, "warnings": gate.into_iter().collect::<Vec<_>>()})))
+    }
+
+    /// `sens probe=V(out) [step=1] [parts=R1,R2] [kinds=R,V,I] [top=15]`: how much the probe moves when each part's value moves by
+    /// `step` percent (the DC operating point is solved again for every part). Returns the parts ordered by the size of the move,
+    /// with the move per percent and the elasticity (relative change of the probe per relative change of the part).
+    pub fn sens(&mut self, args: &[String]) -> Res {
+        let (_, kv) = options(args);
+        let usage = "sens probe=V(out) [step=1] [parts=R1,R2 | kinds=R,V,I,C,L] [top=15]   (a probe is V(net), V(a,b) or I(part); step is in percent)";
+        let probe = opt(&kv, "probe").ok_or_else(|| usage.to_string())?.trim().to_string();
+        let step: f64 = match opt(&kv, "step") {
+            Some(s) => s.parse().ok().filter(|v: &f64| *v > 0.0 && *v <= 50.0).ok_or("step is a percentage between 0 and 50 (1 = a 1 % change)")?,
+            None => 1.0,
+        };
+        let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(15).clamp(1, 200);
+        // the parts to move: those named, else every part of the wanted kinds (resistors and DC sources unless `kinds=` says otherwise)
+        let named: Vec<String> = opt(&kv, "parts").map(|p| p.split(',').map(|s| s.trim().to_ascii_lowercase()).filter(|s| !s.is_empty()).collect()).unwrap_or_default();
+        let kinds: Vec<String> = opt(&kv, "kinds").map(|p| p.split(',').map(|s| s.trim().to_ascii_uppercase()).collect()).unwrap_or_else(|| vec!["R".into(), "V".into(), "I".into()]);
+        let mut targets: Vec<(usize, f64)> = vec![];
+        for (i, c) in self.sch.components.iter().enumerate() {
+            let wanted = if named.is_empty() { kinds.iter().any(|k| c.refdes.to_ascii_uppercase().starts_with(k.as_str())) && c.custom.is_none() } else { named.contains(&c.refdes.to_ascii_lowercase()) };
+            // a value like "5 AC 1" or "PULSE(...)" has no single number to move
+            if wanted && let Some(x) = c.value.split_whitespace().next().and_then(sim_core::parse_value).filter(|x| *x != 0.0) {
+                targets.push((i, x));
+            }
+        }
+        if let Some(missing) = named.iter().find(|n| !self.sch.components.iter().any(|c| c.refdes.eq_ignore_ascii_case(n))) {
+            let spelled = opt(&kv, "parts").and_then(|p| p.split(',').map(str::trim).find(|s| s.eq_ignore_ascii_case(missing))).unwrap_or(missing);
+            return Err(format!("no part {spelled}"));
+        }
+        if targets.is_empty() {
+            return Err("sens: no part with a value to move (name them with parts=R1,R2, or choose kinds=R,C,L,V,I)".into());
+        }
+        if targets.len() > 150 {
+            return Err(format!("sens: {} parts would take {} DC solutions; name the parts you care about with parts=..., or lower the count with kinds=", targets.len(), targets.len() + 1));
+        }
+        let gate = self.erc_gate()?;
+        let base = {
+            let c = self.circuit()?;
+            let r = sim_core::dc_op(&c).map_err(|e| dc_fail(&c, e))?;
+            probe_value(&r, &probe)?
+        };
+        let mut rows = vec![];
+        let mut failed = vec![];
+        for (i, x) in targets {
+            let original = self.sch.components[i].value.clone();
+            let rest: String = original.split_whitespace().skip(1).collect::<Vec<_>>().join(" ");
+            let moved = x * (1.0 + step / 100.0);
+            self.sch.components[i].value = if rest.is_empty() { format!("{moved}") } else { format!("{moved} {rest}") };
+            let answer = self.circuit().and_then(|c| sim_core::dc_op(&c).map_err(|e| e.to_string()));
+            self.sch.components[i].value = original.clone();
+            let refdes = self.sch.components[i].refdes.clone();
+            match answer.and_then(|r| probe_value(&r, &probe)) {
+                Ok(v) => {
+                    let per_percent = (v - base) / step;
+                    let elasticity = if base.abs() > 1e-30 { Some((v - base) / base / (step / 100.0)) } else { None };
+                    rows.push((per_percent.abs(), json!({"part": refdes, "value": original, "per_percent": per_percent, "elasticity": elasticity})));
+                }
+                Err(e) => failed.push(json!({"part": refdes, "error": e})),
+            }
+        }
+        rows.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let shown: Vec<Value> = rows.iter().take(top).map(|(_, v)| v.clone()).collect();
+        Ok(obj(json!({"probe": probe, "base": base, "step_percent": step, "parts_tried": rows.len() + failed.len(), "parts": shown, "not_shown": rows.len().saturating_sub(top), "failed": failed, "warnings": gate.into_iter().collect::<Vec<_>>()})))
     }
 }

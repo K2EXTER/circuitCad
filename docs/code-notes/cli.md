@@ -47,3 +47,5 @@
 
 - **`ic` / `guess` / `states`**(`build.rs` の `apply_ic`・`apply_guess`・`other_states`): `ic` は `Circuit.initial` に `Element::Seq` の名前→1/0 を入れ(`dc/build.rs` が `seq_state` の初期値に使う)、`dc` の答えに `memory` と、記憶素子があるという警告(`sim-core/dc/mod.rs report`)を付ける。ゲートで組んだラッチ(`74HC74` などのモデルは `Seq` ではなくスイッチのゲート)は `Seq` が無いので、`Circuit.nodesets`(`guess=`)で選ぶ: `Compiled.seed` を gmin の対角に足す電流 `gmin·seed`(`dc/mna.rs`)と、初期値(`dc/mod.rs run`)にし、`Direct` の解き方は飛ばす(seed を無視するため)。`states` は全ネットを高い方・低い方に置いて `dc_op` を解き直し、0.2 V 以上違うネットを返す(1回の `dc` が30秒かかる回路では1分以上)。テスト: `script.rs a_latch_built_from_gates…`、`tests_logic.rs a_flip_flop_circuit…`。
 - **`tran settle=`**: `sim_core::settling_times`(`stepmetrics.rs`)。`from` 以降の最後の5%の平均を最終値とし、ステップ(最終−初期)の tol 倍の帯から出た最後の点を補間して時間にする。
+
+- **`sens`**(`build.rs`): `sweep` と同じく部品の `value` を書き換えて `dc_op` を呼び、元に戻す。値の先頭の数字だけを `step`% 動かし(残りの単語は残す: `5 AC 1`)、`probe_value` の差を `per_percent`・`elasticity` にする。基準値が 0 なら `elasticity` は null。全部品で 1 回ずつ解くので、150 部品まで。`dc` の答えには `solver`(`strategy`・`iterations`・`seconds`)が付く。

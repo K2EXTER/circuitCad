@@ -899,3 +899,30 @@ tran 20m 20u settle=V(NOPE)
     assert!((s["final"].as_f64().unwrap() - 1.0).abs() < 1e-3 && s["overshoot_pct"].as_f64().unwrap() < 0.01, "{s:?}");
     assert!(a.last().unwrap()["error"].as_str().unwrap().contains("no signal"), "{:?}", a.last());
 }
+
+#[test]
+fn sens_ranks_the_parts_by_how_much_they_move_the_probe() {
+    // V(MID) = 12 x R2 / (R1 + R2): the elasticities are 1 (V1), R1 / (R1 + R2) (R2) and minus that (R1); a capacitor does nothing at DC
+    let (a, ok) = run("new
+add V 12 as=V1
+add R 10k as=R1
+add R 4.7k as=R2
+add C 1u as=C1
+net VIN V1.+ R1.1
+net MID R1.2 R2.1 C1.1
+net GND V1.- R2.2 C1.2
+sens probe=V(MID)
+sens probe=V(MID) kinds=C
+sens probe=V(MID) parts=R9
+");
+    assert!(!ok, "an unknown part stops the run");
+    let s = a.iter().find(|v| v["cmd"] == "sens").unwrap();
+    let parts = s["parts"].as_array().unwrap();
+    assert_eq!(parts.len(), 3, "{s:?}");
+    assert_eq!(parts[0]["part"], "V1");
+    let el = |name: &str| parts.iter().find(|p| p["part"] == name).unwrap()["elasticity"].as_f64().unwrap();
+    assert!((el("V1") - 1.0).abs() < 1e-3 && (el("R2") - 10.0 / 14.7).abs() < 0.01 && (el("R1") + 10.0 / 14.7).abs() < 0.01, "{parts:?}");
+    let c = a.iter().filter(|v| v["cmd"] == "sens").nth(1).unwrap();
+    assert_eq!(c["parts"][0]["per_percent"].as_f64().unwrap(), 0.0, "{c:?}");
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("no part R9"), "{:?}", a.last());
+}

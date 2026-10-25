@@ -12,6 +12,8 @@ pub(crate) struct Factor {
     ops: Vec<(usize, usize, f64)>,
     /// The eliminated rows; `u[pivot_row[k]]` holds only columns >= k.
     u: Vec<Vec<(usize, f64)>>,
+    /// The unknown eliminated k-th (empty: the natural order). The columns of `u` are positions in this order.
+    perm: Vec<usize>,
 }
 
 /// What a factorisation decided, kept for the next matrix with the same sparsity pattern (every Newton iteration of a
@@ -19,8 +21,11 @@ pub(crate) struct Factor {
 /// eliminated rows. `refactor` then needs no searching and no allocation of rows.
 pub(crate) struct Symbolic {
     n: usize,
-    /// The columns of every input row: the pattern this plan is valid for.
+    /// The columns of every input row (in the original numbering): the pattern this plan is valid for.
     pattern: Vec<Vec<usize>>,
+    /// The unknown eliminated k-th (empty: the natural order) and the position of every unknown in that order.
+    perm: Vec<usize>,
+    pos: Vec<usize>,
     pivot_row: Vec<usize>,
     /// For every row `r`: the `(k, pivot row)` pairs it is combined with, in increasing `k`.
     row_ops: Vec<Vec<(usize, usize)>>,
@@ -80,7 +85,7 @@ impl Symbolic {
             }
             u_cols[p] = prow;
         }
-        Symbolic { n, pattern, pivot_row, row_ops, u_cols }
+        Symbolic { n, pattern, perm: vec![], pos: vec![], pivot_row, row_ops, u_cols }
     }
 }
 
@@ -94,6 +99,21 @@ pub(super) fn factor(n: usize, rows: Vec<Vec<(usize, f64)>>) -> Result<Factor, S
 /// `factor`, and the plan for `refactor`.
 pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(Factor, Symbolic), SimError> {
     const THRESHOLD: f64 = 0.1;
+    let orig_pattern: Vec<Vec<usize>> = rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect();
+    // A big system is eliminated in a minimum-degree order of its unknowns: in the natural order a circuit of a few hundred nodes
+    // fills in to fifteen times its entries, and the factorisation is most of the time of a DC solve. A small one keeps the natural
+    // order (a latch there is sensitive to the pivots chosen).
+    let (perm, pos) = if n >= ORDER_MIN_SIZE {
+        let perm = min_degree_order(n, &orig_pattern);
+        let mut pos = vec![0usize; n];
+        for (k, &c) in perm.iter().enumerate() {
+            pos[c] = k;
+        }
+        rows = permute_columns(&rows, &pos);
+        (perm, pos)
+    } else {
+        (vec![], vec![])
+    };
     let pattern: Vec<Vec<usize>> = rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect();
     // rows that have (or once had) an entry in each column
     let mut col_rows: Vec<Vec<usize>> = vec![vec![]; n];
@@ -167,8 +187,11 @@ pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(
         }
         rows[p] = prow;
     }
-    let sym = Symbolic::plan(n, pattern, pivot_row.clone());
-    Ok((Factor { n, pivot_row, ops, u: rows }, sym))
+    let mut sym = Symbolic::plan(n, pattern, pivot_row.clone());
+    sym.pattern = orig_pattern;
+    sym.perm = perm.clone();
+    sym.pos = pos;
+    Ok((Factor { n, pivot_row, ops, u: rows, perm }, sym))
 }
 
 /// The numeric factorisation of a matrix with the pattern of `sym`, in its pivot order: row by row, each row combined with
@@ -176,8 +199,14 @@ pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(
 /// factors from scratch and makes a new plan).
 pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Factor> {
     let n = sym.n;
+    let permuted;
+    let mut rows = rows;
     if rows.len() != n || rows.iter().zip(&sym.pattern).any(|(r, p)| r.len() != p.len() || r.iter().zip(p).any(|(e, c)| e.0 != *c)) {
         return None;
+    }
+    if !sym.perm.is_empty() {
+        permuted = permute_columns(rows, &sym.pos);
+        rows = &permuted;
     }
     let mut w = vec![0.0f64; n];
     let mut u: Vec<Vec<(usize, f64)>> = vec![vec![]; n];
@@ -206,7 +235,7 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Fac
         let cols = &sym.u_cols[p];
         let first_col = cols.first().copied().unwrap_or(k);
         if touched.iter().any(|&c| c < first_col && w[c] != 0.0) {
-            return None;
+                return None;
         }
         let cols = &sym.u_cols[p];
         let mut row = Vec::with_capacity(cols.len());
@@ -217,11 +246,11 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Fac
         let diag = row.first().map_or(0.0, |e| e.1);
         // (the accuracy of the answer is checked by the caller: see `residual_ok`)
         if !diag.is_finite() || diag.abs() < 1e-30 {
-            return None;
+                return None;
         }
         u[p] = row;
     }
-    Some(Factor { n, pivot_row: sym.pivot_row.clone(), ops, u })
+    Some(Factor { n, pivot_row: sym.pivot_row.clone(), ops, u, perm: sym.perm.clone() })
 }
 
 impl Factor {
@@ -244,8 +273,64 @@ impl Factor {
             }
             x[k] = sum / diag;
         }
-        b.copy_from_slice(&x);
+        if self.perm.is_empty() {
+            b.copy_from_slice(&x);
+        } else {
+            for (k, v) in x.into_iter().enumerate() {
+                b[self.perm[k]] = v;
+            }
+        }
     }
+}
+
+/// Systems with at least this many unknowns are eliminated in a minimum-degree order.
+const ORDER_MIN_SIZE: usize = 60;
+
+/// `rows` with every column index `c` replaced by `pos[c]`, each row sorted again.
+fn permute_columns(rows: &[Vec<(usize, f64)>], pos: &[usize]) -> Vec<Vec<(usize, f64)>> {
+    rows.iter()
+        .map(|row| {
+            let mut r: Vec<(usize, f64)> = row.iter().map(|&(c, v)| (pos[c], v)).collect();
+            r.sort_unstable_by_key(|e| e.0);
+            r
+        })
+        .collect()
+}
+
+/// A minimum-degree elimination order of the unknowns, from the pattern of A + Aᵀ: the unknown with the fewest neighbours goes first
+/// (its neighbours then become neighbours of each other, which is the fill-in the order tries to keep small). Ties go to the lower
+/// index, so the order does not depend on anything but the pattern.
+fn min_degree_order(n: usize, pattern: &[Vec<usize>]) -> Vec<usize> {
+    use std::collections::HashSet;
+    let mut adj: Vec<HashSet<usize>> = vec![HashSet::new(); n];
+    for (r, row) in pattern.iter().enumerate() {
+        for &c in row {
+            if c != r {
+                adj[r].insert(c);
+                adj[c].insert(r);
+            }
+        }
+    }
+    let mut alive = vec![true; n];
+    let mut order = Vec::with_capacity(n);
+    for _ in 0..n {
+        let v = (0..n).filter(|&i| alive[i]).min_by_key(|&i| (adj[i].len(), i)).expect("one unknown is left");
+        alive[v] = false;
+        order.push(v);
+        let mut nb: Vec<usize> = adj[v].drain().collect();
+        nb.sort_unstable();
+        for &a in &nb {
+            adj[a].remove(&v);
+        }
+        for i in 0..nb.len() {
+            for j in i + 1..nb.len() {
+                if adj[nb[i]].insert(nb[j]) {
+                    adj[nb[j]].insert(nb[i]);
+                }
+            }
+        }
+    }
+    order
 }
 
 /// Is `x` a solution of `rows * x = b` to rounding level? (A refactorisation in an old pivot order can lose digits when
@@ -304,5 +389,57 @@ mod tests {
         for (p, q) in solve_with(&g1, &b).iter().zip(&solve_with(&g2, &b)) {
             assert!((p - q).abs() < 1e-9);
         }
+    }
+
+    /// A system big enough to be eliminated in the minimum-degree order: the answer solves the equations, a refactorisation with
+    /// other values of the same pattern does too, and the order keeps the fill-in far below that of the natural order.
+    #[test]
+    fn a_big_system_is_solved_in_minimum_degree_order_with_little_fill() {
+        let n = 200;
+        let mut seed = 12345u64;
+        let mut rnd = move || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((seed >> 33) as f64) / (1u64 << 31) as f64
+        };
+        // a ring of nodes plus a few long links and one hub (ground-like) node connected to every tenth node
+        let mut m = vec![vec![0.0; n]; n];
+        for i in 0..n {
+            m[i][i] = 5.0 + rnd();
+            let j = (i + 1) % n;
+            let g = -1.0 - rnd();
+            m[i][j] = g;
+            m[j][i] = g;
+            if i % 10 == 0 {
+                let h = -0.5 - rnd();
+                m[i][n - 1] += h;
+                m[n - 1][i] += h;
+                m[n - 1][n - 1] += 3.0;
+            }
+        }
+        for k in 0..20 {
+            let (a, b) = ((k * 37) % n, (k * 91 + 13) % n);
+            if a != b {
+                m[a][b] -= 0.3;
+                m[b][a] -= 0.3;
+            }
+        }
+        let b: Vec<f64> = (0..n).map(|i| (i % 7) as f64 - 3.0).collect();
+        let rows = rows_of(&m);
+        let (f, sym) = factor_sym(n, rows.clone()).unwrap();
+        assert!(!sym.perm.is_empty(), "a system of {n} unknowns is ordered");
+        let x = solve_with(&f, &b);
+        assert!(residual_ok(&rows, &x, &b), "the answer solves the equations");
+        let nnz: usize = rows.iter().map(|r| r.len()).sum();
+        let fill: usize = f.u.iter().map(|r| r.len()).sum();
+        assert!(fill < 8 * nnz, "fill-in {fill} for {nnz} entries");
+        // the same pattern with other values
+        let mut m2 = m.clone();
+        for i in 0..n {
+            m2[i][i] += 1.0;
+        }
+        let rows2 = rows_of(&m2);
+        let g = refactor(&sym, &rows2).expect("the pattern is the same");
+        let x2 = solve_with(&g, &b);
+        assert!(residual_ok(&rows2, &x2, &b));
     }
 }

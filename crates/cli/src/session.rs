@@ -40,11 +40,17 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         (elements inside a library part's macro model are hidden unless 'full')
                                         'ratings' lists parts over / near their package power limit (like the app);
                                         'warnings' also flags an op-amp whose IN+ and IN- differ (saturated output)
+                                        'solver' = how it was solved (strategy, iterations, seconds). A circuit with flip-flops lists them in 'memory':
+                                        ic=NAME=1,NAME=0 sets their starting states. A latch built from gates has more than one answer:
+                                        guess=NET=V,NET=V picks the one near those voltages (like .nodeset); 'dc states' also solves
+                                        from other starting points and lists the nets that settle elsewhere ('other_states')
   tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic]
                                         starts from the DC operating point (a capacitor starts charged);
                                         add 'uic' to start from zero instead (step responses, oscillators)
                                         'ratings' / 'warnings' (second half of the run): resistor rms power, LED peak current,
                                         electrolytic ripple current, op-amp inputs that stay apart (saturation)
+                                        settle=V(out) [from=20u] [tol=1e-2,1e-3,1e-4]: from the instant `from`, the time until the signal
+                                        stays within each tolerance (a fraction of the step) of its final value; also the overshoot. ic= and guess= as in dc
  Maker SPICE models (the zips are the maker's own download, e.g. Murata 'SPICE netlist'; not shipped with the app)
   models [WORDS] [zip=PATH] [size=0603] [diel=X7R] [cmin=1u] [cmax=10u] [vmin=16]
                                         search the models by name; size (inch code), dielectric, capacitance and rating
@@ -57,6 +63,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         frequency response (needs a source with an AC magnitude, e.g. value V1 \"0 AC 1\"):
                                         gain and phase per decade, -3 dB frequency, phase margin
   sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or sweep REF list=1,2,5)
+  sens probe=V(out) [step=1] [parts=R1,R2 | kinds=R,V,I,C,L] [top=15]
+                                        sensitivity: moves each part's value by step % and says how far the probe moves (per_percent,
+                                        elasticity), the biggest first; names the parts that decide an accuracy
                                         the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value
   noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]
                                         thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,
@@ -200,6 +209,7 @@ impl Session {
             "lib" => self.lib_cmd(args),
             "sheet" => self.sheet(args),
             "sweep" => self.sweep(args),
+            "sens" => self.sens(args),
             "add" => self.add(args),
             "value" => self.set_value(args),
             "net" => self.net(args),
