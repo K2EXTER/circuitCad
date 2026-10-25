@@ -554,22 +554,70 @@ impl Expr {
     }
 }
 
+/// The derivatives of a value with respect to the expression's variables: up to `INLINE` of them live on the stack, so that
+/// evaluating a typical vendor-model source (a few variables) allocates nothing per node of the expression tree.
+#[derive(Clone, Debug)]
+enum Grad {
+    Inline([f64; INLINE], usize),
+    Heap(Vec<f64>),
+}
+
+const INLINE: usize = 8;
+
+impl Grad {
+    fn zeros(n: usize) -> Grad {
+        if n <= INLINE { Grad::Inline([0.0; INLINE], n) } else { Grad::Heap(vec![0.0; n]) }
+    }
+    fn from_fn(n: usize, f: impl Fn(usize) -> f64) -> Grad {
+        let mut g = Grad::zeros(n);
+        for (i, e) in g.iter_mut().enumerate() {
+            *e = f(i);
+        }
+        g
+    }
+    fn into_vec(self) -> Vec<f64> {
+        match self {
+            Grad::Inline(a, n) => a[..n].to_vec(),
+            Grad::Heap(v) => v,
+        }
+    }
+}
+
+impl std::ops::Deref for Grad {
+    type Target = [f64];
+    fn deref(&self) -> &[f64] {
+        match self {
+            Grad::Inline(a, n) => &a[..*n],
+            Grad::Heap(v) => v,
+        }
+    }
+}
+
+impl std::ops::DerefMut for Grad {
+    fn deref_mut(&mut self) -> &mut [f64] {
+        match self {
+            Grad::Inline(a, n) => &mut a[..*n],
+            Grad::Heap(v) => v,
+        }
+    }
+}
+
 /// A value and its derivatives with respect to the expression's variables.
 #[derive(Clone, Debug)]
 struct D {
     v: f64,
-    g: Vec<f64>,
+    g: Grad,
 }
 
 impl D {
     fn konst(v: f64, n: usize) -> D {
-        D { v, g: vec![0.0; n] }
+        D { v, g: Grad::zeros(n) }
     }
     fn map(&self, v: f64, dv: f64) -> D {
-        D { v, g: self.g.iter().map(|x| x * dv).collect() }
+        D { v, g: Grad::from_fn(self.g.len(), |i| self.g[i] * dv) }
     }
     fn lin(a: &D, ka: f64, b: &D, kb: f64, v: f64) -> D {
-        D { v, g: a.g.iter().zip(&b.g).map(|(x, y)| ka * x + kb * y).collect() }
+        D { v, g: Grad::from_fn(a.g.len(), |i| ka * a.g[i] + kb * b.g[i]) }
     }
 }
 
@@ -590,7 +638,7 @@ impl CExpr {
     pub fn eval(&self, x: &[f64], t: f64) -> (f64, Vec<f64>) {
         let n = self.vars.len();
         let d = self.go(&self.tree, x, t, n);
-        (d.v, d.g)
+        (d.v, d.g.into_vec())
     }
 
     fn go(&self, tr: &Tree, x: &[f64], t: f64, n: usize) -> D {
@@ -599,7 +647,7 @@ impl CExpr {
             Tree::Time => D::konst(t, n),
             Tree::Ground => D::konst(0.0, n),
             Tree::Var(k) => {
-                let mut g = vec![0.0; n];
+                let mut g = Grad::zeros(n);
                 g[*k] = 1.0;
                 D { v: self.read(x, *k), g }
             }
@@ -767,6 +815,24 @@ mod tests {
         assert_eq!(c.vars.len(), 2);
         let idx = |n| c.vars.iter().position(|x| *x == Var::Node(n)).unwrap();
         assert!((g[idx(1)] + 2.0).abs() < 1e-12 && (g[idx(2)] - 8.0).abs() < 1e-12, "{g:?}");
+    }
+
+    #[test]
+    fn derivatives_with_more_variables_than_fit_on_the_stack() {
+        // 10 variables: past the inline gradient size, so the heap path is used
+        let names: Vec<String> = (0..10).map(|i| format!("v{i}")).collect();
+        let text = names.iter().enumerate().map(|(i, n)| format!("{}*V({n})", i + 1)).collect::<Vec<_>>().join(" + ");
+        let mut node = |n: &str| names.iter().position(|x| x == n).map_or(0, |i| i + 1);
+        let e = Expr::parse(&text, &mut node, &|n| n.to_string()).unwrap();
+        let c = e.compile(&|_| None);
+        assert_eq!(c.vars.len(), 10);
+        let x: Vec<f64> = (1..=10).map(|i| i as f64).collect();
+        let (v, g) = c.eval(&x, 0.0);
+        assert!((v - (1..=10).map(|i| (i * i) as f64).sum::<f64>()).abs() < 1e-9, "{v}");
+        for (k, var) in c.vars.iter().enumerate() {
+            let Var::Node(n) = var else { panic!() };
+            assert!((g[k] - *n as f64).abs() < 1e-12, "d/dv{n} = {}", g[k]);
+        }
     }
 
     #[test]

@@ -199,15 +199,12 @@ pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(
 /// factors from scratch and makes a new plan).
 pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Factor> {
     let n = sym.n;
-    let permuted;
-    let mut rows = rows;
     if rows.len() != n || rows.iter().zip(&sym.pattern).any(|(r, p)| r.len() != p.len() || r.iter().zip(p).any(|(e, c)| e.0 != *c)) {
         return None;
     }
-    if !sym.perm.is_empty() {
-        permuted = permute_columns(rows, &sym.pos);
-        rows = &permuted;
-    }
+    // The columns are scattered into `w` below, in whatever order the row lists them, so the permuted numbering is applied on
+    // the way in instead of building a permuted, re-sorted copy of every row.
+    let map = |c: usize| if sym.perm.is_empty() { c } else { sym.pos[c] };
     let mut w = vec![0.0f64; n];
     let mut u: Vec<Vec<(usize, f64)>> = vec![vec![]; n];
     let mut ops: Vec<(usize, usize, f64)> = Vec::with_capacity(sym.row_ops.iter().map(|o| o.len()).sum());
@@ -216,6 +213,7 @@ pub(super) fn refactor(sym: &Symbolic, rows: &[Vec<(usize, f64)>]) -> Option<Fac
         let p = sym.pivot_row[k];
         touched.clear();
         for &(c, v) in &rows[p] {
+            let c = map(c);
             w[c] = v;
             touched.push(c);
         }

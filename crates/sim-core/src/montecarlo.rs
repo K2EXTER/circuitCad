@@ -194,28 +194,32 @@ pub fn monte_carlo(circuit: &Circuit, s: &McSettings) -> Result<McResult, SimErr
         return Err(SimError::Invalid("ばらつかせる部品 (抵抗・コンデンサ・コイル) がありません。許容差を 0 より大きくしてください".into()));
     }
 
-    let mut values = vec![];
-    let mut failed = 0;
-    for run in 0..s.runs {
+    // The runs are independent and the random numbers are a function of (seed, index), so they can be shared out over the cores:
+    // the results come back in run order, the same as when they run one after the other.
+    let run_ids: Vec<usize> = (0..s.runs).collect();
+    let measured = crate::par_map(&run_ids, |&run| {
         let mut c = circuit.clone();
         for (k, &(i, tol)) in toleranced.iter().enumerate() {
             let u = uniform(s.seed, (run * toleranced.len() + k) as u64);
             scale(&mut c.elements[i], 1.0 + tol * (2.0 * u - 1.0));
         }
-        match measure(&c, &output, &s.measure) {
+        measure(&c, &output, &s.measure)
+    });
+    let mut values = vec![];
+    let mut failed = 0;
+    for m in measured {
+        match m {
             Ok(v) if v.is_finite() => values.push(v),
             _ => failed += 1,
         }
     }
 
-    let mut sensitivity = vec![];
-    for &(i, tol) in &toleranced {
+    let swung = crate::par_map(&toleranced, |&(i, tol)| {
         let mut c = circuit.clone();
         scale(&mut c.elements[i], 1.0 + tol);
-        if let Ok(v) = measure(&c, &output, &s.measure) {
-            sensitivity.push((circuit.elements[i].name().to_string(), v - nominal));
-        }
-    }
+        measure(&c, &output, &s.measure).ok().map(|v| (circuit.elements[i].name().to_string(), v - nominal))
+    });
+    let mut sensitivity: Vec<(String, f64)> = swung.into_iter().flatten().collect();
     sensitivity.sort_by(|a, b| b.1.abs().total_cmp(&a.1.abs()));
     let unit = match &s.measure {
         McMeasure::DcVoltage => "V",

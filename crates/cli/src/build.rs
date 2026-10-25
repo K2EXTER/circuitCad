@@ -168,6 +168,11 @@ fn split_probes(list: &str) -> Vec<&str> {
     out.into_iter().map(str::trim).filter(|s| !s.is_empty()).collect()
 }
 
+/// The simulator's circuit for a schematic (the errors as one line).
+fn circuit_of(sch: &sch_core::Schematic, wiring: &[sim_core::WiringR], couplings: &[sim_core::WiringK]) -> Result<sim_core::Circuit, String> {
+    sim_core::from_schematic_with_layout(sch, wiring, couplings).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
+}
+
 /// `V(net)`, `V(a,b)` or `I(part)` from a DC answer (names in any case).
 fn probe_value(r: &sim_core::DcResult, spec: &str) -> Result<f64, String> {
     let s = spec.trim();
@@ -446,12 +451,17 @@ impl Session {
         Ok(obj(json!({"errors": errors, "warnings": probs.len() - errors, "circuit_ok": errors == 0, "problems": list, "tips": tips, "note": "'ok' only says the command ran; the circuit has no ERC error when errors is 0"})))
     }
 
-    pub(crate) fn circuit(&self) -> Result<sim_core::Circuit, String> {
-        let (wiring, couplings) = match (&self.board, self.post_layout) {
+    /// The copper of the board as extra resistances and couplings, when `board postlayout on` asks for it.
+    fn layout_parts(&self) -> (Vec<sim_core::WiringR>, Vec<sim_core::WiringK>) {
+        match (&self.board, self.post_layout) {
             (Some(b), true) => post_layout_parts(b),
             _ => (vec![], vec![]),
-        };
-        sim_core::from_schematic_with_layout(&self.sch, &wiring, &couplings).map_err(|es| es.iter().map(|e| format!("{}: {}", e.refdes, e.message)).collect::<Vec<_>>().join("; "))
+        }
+    }
+
+    pub(crate) fn circuit(&self) -> Result<sim_core::Circuit, String> {
+        let (wiring, couplings) = self.layout_parts();
+        circuit_of(&self.sch, &wiring, &couplings)
     }
 
     pub fn dc(&mut self, args: &[String]) -> Res {
@@ -822,15 +832,20 @@ impl Session {
         };
         let mut rows = vec![];
         let mut failed = vec![];
-        for (i, x) in targets {
-            let original = self.sch.components[i].value.clone();
+        // one DC solution per part, each on its own copy of the schematic: they are independent, so they run on all the cores
+        let (wiring, couplings) = self.layout_parts();
+        let base_sch = &self.sch;
+        let answers = sim_core::par_map(&targets, |&(i, x)| {
+            let mut sch = base_sch.clone();
+            let original = sch.components[i].value.clone();
             let rest: String = original.split_whitespace().skip(1).collect::<Vec<_>>().join(" ");
             let moved = x * (1.0 + step / 100.0);
-            self.sch.components[i].value = if rest.is_empty() { format!("{moved}") } else { format!("{moved} {rest}") };
-            let answer = self.circuit().and_then(|c| sim_core::dc_op(&c).map_err(|e| e.to_string()));
-            self.sch.components[i].value = original.clone();
-            let refdes = self.sch.components[i].refdes.clone();
-            match answer.and_then(|r| probe_value(&r, &probe)) {
+            sch.components[i].value = if rest.is_empty() { format!("{moved}") } else { format!("{moved} {rest}") };
+            let answer = circuit_of(&sch, &wiring, &couplings).and_then(|c| sim_core::dc_op(&c).map_err(|e| e.to_string()));
+            (sch.components[i].refdes.clone(), original, answer.and_then(|r| probe_value(&r, &probe)))
+        });
+        for (refdes, original, answer) in answers {
+            match answer {
                 Ok(v) => {
                     let per_percent = (v - base) / step;
                     let elasticity = if base.abs() > 1e-30 { Some((v - base) / base / (step / 100.0)) } else { None };

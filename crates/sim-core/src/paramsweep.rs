@@ -75,7 +75,8 @@ pub fn param_sweep(base: &Schematic, s: &ParamSettings) -> Result<ParamResult, S
     }
     let signal = format!("V({})", s.node);
     let mut out = ParamResult { curves: vec![], failed: vec![] };
-    for &v in &s.values {
+    // every value is its own run: share them out over the cores, then go through the results in the order of the values
+    let runs = crate::par_map(&s.values, |&v| {
         let mut sch = base.clone();
         sch.components[idx].value = with_number(&base.components[idx].value, v);
         let run = || -> Result<(Vec<f64>, Vec<f64>), SimError> {
@@ -93,7 +94,10 @@ pub fn param_sweep(base: &Schematic, s: &ParamSettings) -> Result<ParamResult, S
                 }
             }
         };
-        match run() {
+        run()
+    });
+    for (&v, result) in s.values.iter().zip(runs) {
+        match result {
             Ok((x, y)) => out.curves.push(ParamCurve { value: v, x, y }),
             // a wrong node name fails every run the same way: report it once, as an error
             Err(e @ SimError::Invalid(_)) if out.curves.is_empty() && v == s.values[0] => return Err(e),
