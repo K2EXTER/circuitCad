@@ -24,6 +24,27 @@ fn param_expressions_set_values() {
 }
 
 #[test]
+fn top_level_params_may_use_names_defined_later_in_the_line_or_after_the_block() {
+    // PSpice resolves `.param` in any order (a TI model puts its `.PARAM` after the `.subckt` that uses it, with `noc` before `k`)
+    // and writes `name= {expr}` with the value on the next line
+    let t = ".subckt T a b gnd
+R1 a b {r1}
+R2 b gnd {r2}
+.ends T
+.PARAM r1={2*k} k=1k
++ r2= {k*(1+flag)} flag=0";
+    // 2k over 1k: 1/3
+    assert!((run(t, "T", &["a", "b", "gnd"], 1.0, "b") - 1.0 / 3.0).abs() < 1e-9);
+    // a space on both sides of the = works too
+    let t2 = ".param k = 1k
+.subckt T a b gnd
+R1 a b {k}
+R2 b gnd {k}
+.ends T";
+    assert!((run(t2, "T", &["a", "b", "gnd"], 1.0, "b") - 0.5).abs() < 1e-9);
+}
+
+#[test]
 fn params_defaults_and_call_arguments() {
     let t = ".subckt DIV in out gnd params: r=1k k=2\nR1 in out {r}\nR2 out gnd {r*k}\n.ends\n\
              .subckt T a b gnd\nX1 a b gnd DIV r=1k k=3\n.ends T";

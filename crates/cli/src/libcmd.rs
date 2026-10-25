@@ -22,6 +22,84 @@ fn read_model(path: &str) -> Result<String, String> {
     Ok(text)
 }
 
+/// The logical lines of a maker's file: a `+` line continues the one before; comments and blank lines are dropped.
+fn logical(text: &str) -> Vec<String> {
+    let mut lines: Vec<String> = vec![];
+    for raw in text.lines() {
+        let t = raw.trim();
+        if t.is_empty() || t.starts_with('*') {
+            continue;
+        }
+        if let Some(rest) = t.strip_prefix('+')
+            && let Some(last) = lines.last_mut()
+        {
+            last.push(' ');
+            last.push_str(rest.trim());
+            continue;
+        }
+        lines.push(t.to_string());
+    }
+    lines
+}
+
+/// The part's own `.subckt` (`body`) with the helper `.subckt` blocks it calls (`X... name`, and what those call, down the chain) and the
+/// `.model` / `.param` / `.func` lines outside every block: a maker keeps those next to the subcircuit that is the part.
+fn with_dependencies(text: &str, main: &str, body: String) -> String {
+    use std::collections::{HashMap, HashSet};
+    let mut blocks: Vec<(String, Vec<String>)> = vec![];
+    let mut globals: Vec<String> = vec![];
+    let mut open: Option<(String, Vec<String>)> = None;
+    for l in logical(text) {
+        let low = l.to_ascii_lowercase();
+        if low.starts_with(".subckt") {
+            let name = l.split_whitespace().nth(1).unwrap_or("").to_ascii_lowercase();
+            open = Some((name, vec![l]));
+        } else if let Some((name, lines)) = open.as_mut() {
+            let ends = low.starts_with(".ends");
+            lines.push(l);
+            if ends {
+                blocks.push((std::mem::take(name), std::mem::take(lines)));
+                open = None;
+            }
+        } else if low.starts_with(".model") || low.starts_with(".param") || low.starts_with(".func") {
+            globals.push(l);
+        }
+    }
+    let index: HashMap<&str, usize> = blocks.iter().enumerate().map(|(i, (n, _))| (n.as_str(), i)).collect();
+    // the name a line `Xname nodes... subckt [params:] k=v` calls
+    let calls = |lines: &[String]| -> Vec<String> {
+        lines
+            .iter()
+            .filter(|l| l.starts_with(['x', 'X']))
+            .filter_map(|l| l.split_whitespace().skip(1).take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).last().map(|w| w.to_ascii_lowercase()))
+            .collect()
+    };
+    let mut seen: HashSet<String> = HashSet::from([main.to_ascii_lowercase()]);
+    let mut order: Vec<usize> = vec![];
+    let mut queue: Vec<String> = calls(&logical(&body));
+    while let Some(name) = queue.pop() {
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        if let Some(&i) = index.get(name.as_str()) {
+            order.push(i);
+            queue.extend(calls(&blocks[i].1));
+        }
+    }
+    let mut out = body;
+    for g in globals {
+        out.push('\n');
+        out.push_str(&g);
+    }
+    for i in order {
+        for l in &blocks[i].1 {
+            out.push('\n');
+            out.push_str(l);
+        }
+    }
+    out
+}
+
 /// The `.subckt NAME nodes... [params]` block called `want` (the first one when `want` is empty): (name, nodes, the block without comment lines).
 fn find_subckt(text: &str, want: &str) -> Result<(String, Vec<String>, String), String> {
     let mut found: Option<(String, Vec<String>, Vec<String>)> = None;
@@ -45,12 +123,16 @@ fn find_subckt(text: &str, want: &str) -> Result<(String, Vec<String>, String), 
             if !want.is_empty() && !name.eq_ignore_ascii_case(want) {
                 continue;
             }
-            let nodes: Vec<String> = words.take_while(|w| !w.contains('=')).map(str::to_string).collect();
+            let nodes: Vec<String> = words.take_while(|w| !w.contains('=') && !w.eq_ignore_ascii_case("params:")).map(str::to_string).collect();
             found = Some((name.to_string(), nodes, vec![t.to_string()]));
         }
     }
     match found {
-        Some((n, nodes, body)) if body.last().is_some_and(|l| l.to_ascii_lowercase().starts_with(".ends")) => Ok((n, nodes, body.join("\n"))),
+        Some((n, nodes, body)) if body.last().is_some_and(|l| l.to_ascii_lowercase().starts_with(".ends")) => {
+            let body = body.join("\n");
+            let text = with_dependencies(text, &n, body);
+            Ok((n, nodes, text))
+        }
         Some((n, _, _)) => Err(format!("the .subckt {n} has no .ends line")),
         None if names.is_empty() => Err("no .subckt block in the file (only .subckt models can be imported; a single .model card needs a hand-written part)".into()),
         None => Err(format!("no .subckt called '{want}' (the file has: {})", names.join(", "))),
@@ -149,5 +231,33 @@ impl Session {
             "pin numbers: check 'map' against the data sheet's pin out (the node order of the subcircuit is not the package's pin order)".to_string(),
         ];
         Ok(obj(json!({"saved": path.display().to_string(), "name": name, "subckt": sub, "nodes": nodes, "pins": names, "numbers": numbers, "todo": todo, "hint": format!("add {name} as=U1")})))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A TI-style file: the part's `.subckt` has a `PARAMS:` header, calls a helper `.subckt` defined further down (which calls another one),
+    /// and the `.model` / `.PARAM` lines sit outside every block, the `.PARAM` after the block that uses it.
+    const TI_STYLE: &str = "* header\n.SUBCKT PART IN OUT GND PARAMS: STEADY=0\n+ FLAG=0\nX1 IN M GND HELP PARAMS: K=2\nR1 M OUT {rr}\n.ENDS PART\n\
+                            .PARAM rr={2*kk} kk=1k\n.subckt HELP a b c params: K=1\nX2 a b DEEP\nD1 b c DX\n.ends HELP\n.subckt DEEP p q\nR9 p q 1\n.ends DEEP\n\
+                            .subckt UNUSED z\nR8 z 0 1\n.ends UNUSED\n.model DX D(IS=1e-14)";
+
+    #[test]
+    fn the_nodes_stop_at_params_and_the_helper_blocks_come_along() {
+        let (name, nodes, text) = find_subckt(TI_STYLE, "part").unwrap();
+        assert_eq!(name, "PART");
+        assert_eq!(nodes, ["IN", "OUT", "GND"], "PARAMS: is not a node");
+        let low = text.to_ascii_lowercase();
+        // the helpers it calls, and the ones those call, but not a block nobody calls
+        assert!(low.contains(".subckt help") && low.contains(".subckt deep"), "{text}");
+        assert!(!low.contains("unused"), "{text}");
+        // the lines outside every block: the model card and the parameters
+        assert!(low.contains(".model dx") && low.contains(".param rr"), "{text}");
+        // and the block is complete enough for the simulator to read
+        let mut c = sim_core::Circuit::new();
+        let ids: Vec<usize> = (0..3).map(|i| c.node(&format!("n{i}"))).collect();
+        sim_core::add_subckt_instance(&mut c, "X1", &name, &text, &ids).unwrap();
     }
 }

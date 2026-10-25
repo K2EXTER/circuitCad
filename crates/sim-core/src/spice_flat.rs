@@ -102,7 +102,17 @@ fn unbrace(tokens: Vec<String>) -> Vec<String> {
 }
 
 fn assignments(tokens: &[String]) -> Result<Vec<(String, String)>, String> {
-    tokens
+    // `gain= {expr}` and `a = 5` (spaces around the `=`): the pieces belong together
+    let mut joined: Vec<String> = vec![];
+    let mut it = tokens.iter().peekable();
+    while let Some(t) = it.next() {
+        let mut cur = t.clone();
+        while it.peek().is_some() && (cur.ends_with('=') || it.peek().is_some_and(|n| n.starts_with('='))) {
+            cur.push_str(it.next().unwrap());
+        }
+        joined.push(cur);
+    }
+    joined
         .iter()
         .filter(|t| !t.eq_ignore_ascii_case("params:") && !t.eq_ignore_ascii_case("optional:"))
         // a bare word is a flag (`SENS`, `noiseless`); the commas some vendors put between `name=value` pairs are dropped
@@ -1290,6 +1300,8 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
     let lines = &expanded[..];
     let mut defs: HashMap<String, Def> = HashMap::new();
     let mut global: Env = HashMap::new();
+    // the `.param` lines outside every block, resolved once the whole text is read (a name may be used before its line, as PSpice allows)
+    let mut top_params: Vec<(String, String)> = vec![];
     let mut models = vec![];
     let mut model_cards = vec![];
     // a .subckt may be defined inside another one: a stack of the blocks being read (definitions are global)
@@ -1317,18 +1329,29 @@ pub fn flatten(text: &str, sub_name: &str, lines: &[String]) -> Result<Option<St
                     d.body.push(l.clone());
                 }
             }
-            ".param" if stack.is_empty() => {
-                for (k, v) in assignments(&split_top(&l[6..]))? {
-                    let val = eval_expr(&v, &global)?;
-                    global.insert(k, val);
-                }
-            }
+            ".param" if stack.is_empty() => top_params.extend(assignments(&split_top(&l[6..]))?),
             _ => {
                 if let Some((_, d)) = stack.last_mut() {
                     d.body.push(l.clone());
                 }
             }
         }
+    }
+    loop {
+        let before = top_params.len();
+        top_params.retain(|(k, v)| match eval_expr(v, &global) {
+            Ok(x) => {
+                global.insert(k.clone(), x);
+                false
+            }
+            Err(_) => true,
+        });
+        if top_params.is_empty() || top_params.len() == before {
+            break;
+        }
+    }
+    if let Some((_, v)) = top_params.first() {
+        return Err(eval_expr(v, &global).unwrap_err());
     }
     let top = defs.get(&sub_name.to_ascii_lowercase()).ok_or_else(|| format!(".subckt {sub_name} が見つかりません"))?;
     let ports: HashMap<String, String> = top.ports.iter().map(|p| (p.to_ascii_lowercase(), p.clone())).collect();
