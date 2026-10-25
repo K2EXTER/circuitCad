@@ -1,0 +1,266 @@
+{
+ "name": "ADG2712",
+ "category": "アナログスイッチ",
+ "description": "ADI ADG2712 pA 級の低リーク 4 回路 SPST アナログスイッチ (LGA-16、2x2 mm)。漏れ 25℃ 典型 0.1〜0.3 pA、最大 ±20 pA (85℃ 典型 8 pA)。単電源 1.08〜5.5 V または ±1.08〜±2.75 V。Ron 約 9 Ω (5V)。ロジックは GND ピン基準で VL (1.65〜3.6 V) から。ピン表は Rev.0 から。ランドパターンは図面 CC-16-10 から読み取れていない概算なので、基板にする前に必ず確認すること。EP (中央のパッド) は VSS につなぐ。VDD−VSS 絶対最大 6 V",
+ "datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/adg2712.pdf",
+ "prefix": "U",
+ "footprint_name": "LGA-16_2x2_P0.4",
+ "height": 0.74,
+ "pins": [
+  {
+   "number": "2",
+   "name": "IN1",
+   "side": "left"
+  },
+  {
+   "number": "1",
+   "name": "S1",
+   "side": "left"
+  },
+  {
+   "number": "12",
+   "name": "IN2",
+   "side": "left"
+  },
+  {
+   "number": "13",
+   "name": "S2",
+   "side": "left"
+  },
+  {
+   "number": "10",
+   "name": "IN3",
+   "side": "left"
+  },
+  {
+   "number": "9",
+   "name": "S3",
+   "side": "left"
+  },
+  {
+   "number": "4",
+   "name": "IN4",
+   "side": "left"
+  },
+  {
+   "number": "5",
+   "name": "S4",
+   "side": "left"
+  },
+  {
+   "number": "16",
+   "name": "D1",
+   "side": "right"
+  },
+  {
+   "number": "14",
+   "name": "D2",
+   "side": "right"
+  },
+  {
+   "number": "8",
+   "name": "D3",
+   "side": "right"
+  },
+  {
+   "number": "6",
+   "name": "D4",
+   "side": "right"
+  },
+  {
+   "number": "15",
+   "name": "VDD",
+   "side": "top"
+  },
+  {
+   "number": "11",
+   "name": "VL",
+   "side": "top"
+  },
+  {
+   "number": "7",
+   "name": "VSS",
+   "side": "bottom"
+  },
+  {
+   "number": "3",
+   "name": "GND",
+   "side": "bottom"
+  },
+  {
+   "number": "17",
+   "name": "EP",
+   "side": "bottom"
+  }
+ ],
+ "package": {
+  "type": "explicit",
+  "pads": [
+   {
+    "pin": "1",
+    "x": -0.8,
+    "y": 0.6,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "2",
+    "x": -0.8,
+    "y": 0.2,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "3",
+    "x": -0.8,
+    "y": -0.2,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "4",
+    "x": -0.8,
+    "y": -0.6,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "5",
+    "x": -0.6,
+    "y": -0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "6",
+    "x": -0.2,
+    "y": -0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "7",
+    "x": 0.2,
+    "y": -0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "8",
+    "x": 0.6,
+    "y": -0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "9",
+    "x": 0.8,
+    "y": -0.6,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "10",
+    "x": 0.8,
+    "y": -0.2,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "11",
+    "x": 0.8,
+    "y": 0.2,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "12",
+    "x": 0.8,
+    "y": 0.6,
+    "shape": "rect",
+    "w": 0.4,
+    "h": 0.2
+   },
+   {
+    "pin": "13",
+    "x": 0.6,
+    "y": 0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "14",
+    "x": 0.2,
+    "y": 0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "15",
+    "x": -0.2,
+    "y": 0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "16",
+    "x": -0.6,
+    "y": 0.8,
+    "shape": "rect",
+    "w": 0.2,
+    "h": 0.4
+   },
+   {
+    "pin": "17",
+    "x": 0,
+    "y": 0,
+    "shape": "rect",
+    "w": 0.8,
+    "h": 0.8
+   }
+  ]
+ },
+ "sim": {
+  "kind": "subckt",
+  "name": "ADG2712",
+  "text": "* ADG2712 behavioural model: four SPST switches, Ron 9 ohm (5 V supply, 25 C typical), Roff 1T ohm (leakage about 0.2 pA at 0.2 V).\n* Control: IN above about 1.25 V over GND = on (VL = 2.5 V: VINH 0.65 VL, VINL 0.35 VL).\n.subckt ADG2712 s1 d1 in1 s2 d2 in2 s3 d3 in3 s4 d4 in4 vdd vss gnd vl\nS1 s1 d1 in1 gnd SWA\nS2 s2 d2 in2 gnd SWA\nS3 s3 d3 in3 gnd SWA\nS4 s4 d4 in4 gnd SWA\n.model SWA SW(RON=9 ROFF=1T VT=1.25 VW=0.2)\n.ends ADG2712",
+  "pins": [
+   "1",
+   "16",
+   "2",
+   "13",
+   "14",
+   "12",
+   "9",
+   "8",
+   "10",
+   "5",
+   "6",
+   "4",
+   "15",
+   "7",
+   "3",
+   "11"
+  ],
+  "limits": [
+   "オン抵抗は 5 V 単電源の 25℃ 典型値 (9 Ω) の固定です。電圧・温度で変わります (最大 13 Ω、85℃ で 15.5 Ω)。",
+   "オフの漏れは 1 TΩ の固定 (0.2 V で約 0.2 pA)。実物の温度依存 (85℃ で典型 8 pA) と、最大 ±20 pA (25℃) の保証値は入っていません。",
+   "電荷注入 (0.23 pC)、容量 (約 6 pF)、切り替え時間 (約 300 ns) は扱いません。",
+   "入力が VL を超えても壊れません。"
+  ]
+ }
+}
