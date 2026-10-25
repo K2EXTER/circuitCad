@@ -72,6 +72,25 @@ impl Session {
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "top_added": r.top_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
+            "nudge" => {
+                // board nudge [budget=SECONDS] [layers=outer] [vias=0]: for each connection still open after a full route, try small parts near
+                // it 1-3 mm away (their wiring taken away and routed again); a move stays only when fewer connections are open and the DRC
+                // finds nothing more. The answer is `moved` (part, dx, dy), `open_before`, `open_after`, `tried`.
+                let (_, kv) = options(rest);
+                let budget = match opt(&kv, "budget") {
+                    Some(v) => num(v)?.max(1.0),
+                    None => 300.0,
+                };
+                let grid = match opt(&kv, "grid") {
+                    Some(g) => num(g)?,
+                    None => RouteOptions::default().grid,
+                };
+                let ro = RouteOptions { grid, pad_lead: Some(0.5), outer_only: opt(&kv, "layers") == Some("outer"), no_vias: opt(&kv, "vias") == Some("0"), ..RouteOptions::default() };
+                let board = self.board_mut()?;
+                let r = pcb_core::nudge::route_with_nudging(board, &ro, std::time::Duration::from_secs_f64(budget));
+                let moved: Vec<Value> = r.moved.iter().map(|(p, dx, dy)| json!({"part": p, "dx": dx, "dy": dy})).collect();
+                Ok(obj(json!({"moved": moved, "open_before": r.open_before, "open_after": r.open_after, "tried": r.tried, "out_of_time": r.out_of_time})))
+            }
             "slits" => {
                 // board slits: fill the gaps narrower than the clearance between copper of one net with a short piece of copper (the editor's 「つないで埋める」); the answer is `filled`
                 let board = self.board_mut()?;
@@ -284,7 +303,11 @@ impl Session {
                 // neighbouring pads of one net (the two LX pins of a regulator) become one piece of copper first (`bridge=0` leaves it out)
                 let bridged = if opt(&kv, "bridge") == Some("0") { 0 } else { pcb_core::bridge::bridge_pads(board) };
                 let before = board.tracks.len();
-                let ro = RouteOptions { pad_lead: (lead > 0.0).then_some(lead), outer_only: opt(&kv, "layers") == Some("outer"), no_vias: opt(&kv, "vias") == Some("0"), ..RouteOptions::default() };
+                let grid = match opt(&kv, "grid") {
+                    Some(g) => num(g)?,
+                    None => RouteOptions::default().grid,
+                };
+                let ro = RouteOptions { grid, pad_lead: (lead > 0.0).then_some(lead), outer_only: opt(&kv, "layers") == Some("outer"), no_vias: opt(&kv, "vias") == Some("0"), ..RouteOptions::default() };
                 let rep = pcb_core::autoroute::autoroute_sized(board, &ro, only.as_deref());
                 let aligned = if lead > 0.0 && rep.routed > 0 {
                     let new: Vec<usize> = (before..board.tracks.len()).collect();
