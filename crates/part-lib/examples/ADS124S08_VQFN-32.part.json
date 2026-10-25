@@ -1,0 +1,440 @@
+{
+ "name": "ADS124S08",
+ "category": "ADC",
+ "description": "TI ADS124S08 24 bit ΔΣ ADC (12 入力、PGA、2.5 V 基準内蔵、4 kSPS)。VQFN-32 (RHB、5x5、0.5 mm ピッチ)。AVDD〜AVSS 2.7〜5.25 V、AVSS は DGND に対して -2.625〜0 V にできる。ピン表は SBAS660C (Rev. C) から。パッドの寸法は RHB0032M の例の概算なので、基板にする前にデータシートの推奨ランドパターンで確認してください。裏のサーマルパッドは AVSS につなぐ (ピン27と同じネット)。シミュレーションモデルなし (ADC の中は計算しない)",
+ "datasheet": "https://www.ti.com/lit/ds/symlink/ads124s08.pdf",
+ "prefix": "U",
+ "footprint_name": "VQFN-32_5x5_P0.5_EP",
+ "height": 1.0,
+ "pins": [
+  {
+   "number": "7",
+   "name": "AIN0",
+   "side": "left"
+  },
+  {
+   "number": "6",
+   "name": "AIN1",
+   "side": "left"
+  },
+  {
+   "number": "5",
+   "name": "AIN2",
+   "side": "left"
+  },
+  {
+   "number": "4",
+   "name": "AIN3",
+   "side": "left"
+  },
+  {
+   "number": "3",
+   "name": "AIN4",
+   "side": "left"
+  },
+  {
+   "number": "2",
+   "name": "AIN5",
+   "side": "left"
+  },
+  {
+   "number": "1",
+   "name": "AINCOM",
+   "side": "left"
+  },
+  {
+   "number": "32",
+   "name": "REFP1/AIN6",
+   "side": "left"
+  },
+  {
+   "number": "31",
+   "name": "REFN1/AIN7",
+   "side": "left"
+  },
+  {
+   "number": "30",
+   "name": "REFP0",
+   "side": "left"
+  },
+  {
+   "number": "29",
+   "name": "REFN0",
+   "side": "left"
+  },
+  {
+   "number": "9",
+   "name": "CS",
+   "side": "right"
+  },
+  {
+   "number": "11",
+   "name": "SCLK",
+   "side": "right"
+  },
+  {
+   "number": "10",
+   "name": "DIN",
+   "side": "right"
+  },
+  {
+   "number": "12",
+   "name": "DOUT/DRDY",
+   "side": "right"
+  },
+  {
+   "number": "13",
+   "name": "DRDY",
+   "side": "right"
+  },
+  {
+   "number": "8",
+   "name": "START/SYNC",
+   "side": "right"
+  },
+  {
+   "number": "18",
+   "name": "RESET",
+   "side": "right"
+  },
+  {
+   "number": "17",
+   "name": "CLK",
+   "side": "right"
+  },
+  {
+   "number": "22",
+   "name": "GPIO0/AIN8",
+   "side": "right"
+  },
+  {
+   "number": "21",
+   "name": "GPIO1/AIN9",
+   "side": "right"
+  },
+  {
+   "number": "20",
+   "name": "GPIO2/AIN10",
+   "side": "right"
+  },
+  {
+   "number": "19",
+   "name": "GPIO3/AIN11",
+   "side": "right"
+  },
+  {
+   "number": "26",
+   "name": "AVDD",
+   "side": "top"
+  },
+  {
+   "number": "16",
+   "name": "DVDD",
+   "side": "top"
+  },
+  {
+   "number": "15",
+   "name": "IOVDD",
+   "side": "top"
+  },
+  {
+   "number": "27",
+   "name": "AVSS",
+   "side": "bottom"
+  },
+  {
+   "number": "28",
+   "name": "AVSS-SW",
+   "side": "bottom"
+  },
+  {
+   "number": "14",
+   "name": "DGND",
+   "side": "bottom"
+  },
+  {
+   "number": "24",
+   "name": "REFCOM",
+   "side": "bottom"
+  },
+  {
+   "number": "23",
+   "name": "REFOUT",
+   "side": "bottom"
+  },
+  {
+   "number": "25",
+   "name": "NC",
+   "side": "bottom"
+  }
+ ],
+ "package": {
+  "type": "explicit",
+  "pads": [
+   {
+    "pin": "1",
+    "x": -2.4,
+    "y": 1.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "2",
+    "x": -2.4,
+    "y": 1.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "3",
+    "x": -2.4,
+    "y": 0.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "4",
+    "x": -2.4,
+    "y": 0.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "5",
+    "x": -2.4,
+    "y": -0.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "6",
+    "x": -2.4,
+    "y": -0.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "7",
+    "x": -2.4,
+    "y": -1.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "8",
+    "x": -2.4,
+    "y": -1.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "9",
+    "x": -1.75,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "10",
+    "x": -1.25,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "11",
+    "x": -0.75,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "12",
+    "x": -0.25,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "13",
+    "x": 0.25,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "14",
+    "x": 0.75,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "15",
+    "x": 1.25,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "16",
+    "x": 1.75,
+    "y": -2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "17",
+    "x": 2.4,
+    "y": -1.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "18",
+    "x": 2.4,
+    "y": -1.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "19",
+    "x": 2.4,
+    "y": -0.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "20",
+    "x": 2.4,
+    "y": -0.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "21",
+    "x": 2.4,
+    "y": 0.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "22",
+    "x": 2.4,
+    "y": 0.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "23",
+    "x": 2.4,
+    "y": 1.25,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "24",
+    "x": 2.4,
+    "y": 1.75,
+    "shape": "rect",
+    "w": 0.6,
+    "h": 0.25
+   },
+   {
+    "pin": "25",
+    "x": 1.75,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "26",
+    "x": 1.25,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "27",
+    "x": 0.75,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "28",
+    "x": 0.25,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "29",
+    "x": -0.25,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "30",
+    "x": -0.75,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "31",
+    "x": -1.25,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "32",
+    "x": -1.75,
+    "y": 2.4,
+    "shape": "rect",
+    "w": 0.25,
+    "h": 0.6
+   },
+   {
+    "pin": "27",
+    "x": 0,
+    "y": 0,
+    "shape": "rect",
+    "w": 3.1,
+    "h": 3.1
+   }
+  ]
+ }
+}
