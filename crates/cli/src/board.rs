@@ -87,8 +87,22 @@ impl Session {
                     None => 0.25,
                 };
                 let board = self.board_mut()?;
-                let n = pcb_core::copper::add_guard(board, &net, &guard, margin, clearance)?;
-                Ok(obj(json!({"net": net, "guard": guard, "pours": n})))
+                // mode=tracks (default): a guard track on each side of every top track of the net, joined at the corners, one via of
+                // the guard net on each run (route the guard net afterwards to join them); mode=pour: a pour round the net
+                if opt(&kv, "mode") == Some("pour") {
+                    let n = pcb_core::copper::add_guard(board, &net, &guard, margin, clearance)?;
+                    return Ok(obj(json!({"net": net, "guard": guard, "pours": n})));
+                }
+                let gap = match opt(&kv, "gap") {
+                    Some(v) => num(v)?,
+                    None => 0.35,
+                };
+                let width = match opt(&kv, "width") {
+                    Some(v) => num(v)?,
+                    None => 0.3,
+                };
+                let (tracks, vias) = pcb_core::copper::add_guard_tracks(board, &net, &guard, gap, width)?;
+                Ok(obj(json!({"net": net, "guard": guard, "tracks": tracks, "vias": vias})))
             }
             "copper" => {
                 // board copper net=DRN rect=x0,y0,x1,y1 [layers=top,bottom] [vias=6]: a patch of copper of a net (the drain of a power transistor)

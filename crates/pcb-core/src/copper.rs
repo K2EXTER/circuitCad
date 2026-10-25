@@ -151,3 +151,152 @@ pub fn add_copper(board: &mut Board, net: &str, area: (f64, f64, f64, f64), side
     *board = work;
     Ok((pours, put))
 }
+
+/// A guard of tracks: along every track of `net` on the top layer, one track of width `width` on each side, `gap` mm from its edge,
+/// joined at the corners, ending short of the pads (a pad end is a place where `net` leaves the track). Each run of guard tracks
+/// gets one via of the guard net, so the run counts as copper of that net and the router can join it to the guard's source.
+/// A track that the DRC would not accept (copper of another net in the way) is left out, so the guard has gaps there. Pours
+/// do not do this job: the pour round a track is cut into pieces by its own track, and a piece that touches nothing of the guard
+/// net is dropped as an island. Returns (tracks, vias).
+pub fn add_guard_tracks(board: &mut Board, net: &str, guard: &str, gap: f64, width: f64) -> Result<(usize, usize), String> {
+    if !board.pads.iter().any(|p| p.net == guard) {
+        return Err(format!("{guard} につながるパッドがありません (ガードのネット名を確かめてください)"));
+    }
+    let conn = connectivity(board);
+    let segs: Vec<(Point, Point, f64)> = board
+        .tracks
+        .iter()
+        .enumerate()
+        .filter(|(i, t)| t.side == Side::Top && conn.track_net(*i) == Some(net))
+        .map(|(_, t)| (t.a, t.b, t.width))
+        .filter(|(a, b, _)| a.dist(*b) > 1e-6)
+        .collect();
+    if segs.is_empty() {
+        return Err(format!("{net} に表面の配線がありません。先に配線してください"));
+    }
+    let key = |p: Point| ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64);
+    let mut at: std::collections::HashMap<(i64, i64), Vec<usize>> = Default::default();
+    for (i, (a, b, _)) in segs.iter().enumerate() {
+        at.entry(key(*a)).or_default().push(i);
+        at.entry(key(*b)).or_default().push(i);
+    }
+    // the offset line of segment i on side `sd` (+1 / -1): a point on it, the direction and the distance
+    let offset = |i: usize, sd: f64| {
+        let (a, b, w) = segs[i];
+        let l = a.dist(b);
+        let (ux, uy) = ((b.x - a.x) / l, (b.y - a.y) / l);
+        let d = w / 2.0 + gap + width / 2.0;
+        (Point::new(a.x - uy * sd * d, a.y + ux * sd * d), (ux, uy), d)
+    };
+    // ends of the guard track of (segment, side): [a end, b end], moved to the corner or pulled back from a pad
+    let mut ends: Vec<[Point; 2]> = vec![];
+    for i in 0..segs.len() {
+        for sd in [1.0, -1.0] {
+            let (p, (ux, uy), _) = offset(i, sd);
+            let l = segs[i].0.dist(segs[i].1);
+            ends.push([p, Point::new(p.x + ux * l, p.y + uy * l)]);
+        }
+    }
+    let idx = |i: usize, sd: f64| i * 2 + if sd > 0.0 { 0 } else { 1 };
+    let pull = 1.3;
+    for (i, (a, b, _)) in segs.iter().enumerate() {
+        for (end_k, v) in [(0usize, *a), (1usize, *b)] {
+            let joined = at[&key(v)].clone();
+            for sd in [1.0, -1.0] {
+                let k = idx(i, sd);
+                if joined.len() == 2 {
+                    let j = if joined[0] == i { joined[1] } else { joined[0] };
+                    // corner of two tracks: the offset lines meet
+                    let (p1, d1, _) = offset(i, sd);
+                    let (p2, d2, _) = offset(j, sd);
+                    let den = d1.0 * d2.1 - d1.1 * d2.0;
+                    if den.abs() > 1e-6 {
+                        let t = ((p2.x - p1.x) * d2.1 - (p2.y - p1.y) * d2.0) / den;
+                        let x = Point::new(p1.x + d1.0 * t, p1.y + d1.1 * t);
+                        if x.dist(v) <= 4.0 * (segs[i].2 / 2.0 + gap + width / 2.0) {
+                            ends[k][end_k] = x;
+                        }
+                    }
+                    // straight on: the offset ends already meet
+                } else {
+                    // a pad, a branch or a free end: stop short of it, along the track
+                    let other = if end_k == 0 { ends[k][1] } else { ends[k][0] };
+                    let here = ends[k][end_k];
+                    let l = here.dist(other);
+                    if l > 1e-9 {
+                        let f = (pull / l).min(1.0);
+                        ends[k][end_k] = Point::new(here.x + (other.x - here.x) * f, here.y + (other.y - here.y) * f);
+                    }
+                }
+            }
+        }
+    }
+    let before = check(board).len();
+    let mut work = board.clone();
+    let mut added: Vec<Track> = vec![];
+    for e in &ends {
+        if e[0].dist(e[1]) < 0.2 {
+            continue;
+        }
+        // a track that touches nothing has no net, and the DRC leaves it alone: for the test it starts on a tiny pad of the guard net,
+        // so that its distance from the copper of the other nets is looked at
+        let mut trial = work.clone();
+        trial.tracks.push(Track { side: Side::Top, a: e[0], b: e[1], width });
+        let mut probe = trial.clone();
+        let mut dot = Pad::new(e[0], PadShape::Rect { w: 0.05, h: 0.05 }, None, Side::Top);
+        dot.net = guard.to_string();
+        probe.pads.push(dot);
+        if check(&probe).len() <= before {
+            added.push(trial.tracks.last().unwrap().clone());
+            work = trial;
+        }
+    }
+    if added.is_empty() {
+        // nothing fits (copper of other nets is too near on both sides): the board stays as it is
+        return Ok((0, 0));
+    }
+    // runs: guard tracks that share an end; one via of the guard net on each, at the end nearest a pad of the guard net
+    let mut parent: Vec<usize> = (0..added.len()).collect();
+    fn find(p: &mut Vec<usize>, x: usize) -> usize {
+        if p[x] != x {
+            let r = find(p, p[x]);
+            p[x] = r;
+        }
+        p[x]
+    }
+    for i in 0..added.len() {
+        for j in 0..i {
+            let close = [added[i].a, added[i].b].iter().any(|p| [added[j].a, added[j].b].iter().any(|q| p.dist(*q) < 0.05));
+            if close {
+                let (ri, rj) = (find(&mut parent, i), find(&mut parent, j));
+                parent[ri] = rj;
+            }
+        }
+    }
+    let guard_pads: Vec<Point> = work.pads.iter().filter(|p| p.net == guard).map(|p| p.pos).collect();
+    let mut vias = 0;
+    let mut runs: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+    for i in 0..added.len() {
+        let r = find(&mut parent, i);
+        runs.entry(r).or_default().push(i);
+    }
+    for (_, members) in runs {
+        let mut spots: Vec<Point> = members.iter().flat_map(|&i| [added[i].a, added[i].b]).collect();
+        spots.sort_by(|a, b| {
+            let f = |p: &Point| guard_pads.iter().map(|g| g.dist(*p)).fold(f64::MAX, f64::min);
+            f(a).total_cmp(&f(b))
+        });
+        for s in spots {
+            let mut trial = work.clone();
+            trial.vias.push(Via { pos: s, diameter: 0.6, drill: 0.3, net: guard.to_string() });
+            if check(&trial).len() <= before {
+                work = trial;
+                vias += 1;
+                break;
+            }
+        }
+    }
+    let n = added.len();
+    *board = work;
+    Ok((n, vias))
+}
