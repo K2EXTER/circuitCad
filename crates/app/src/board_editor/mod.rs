@@ -322,6 +322,9 @@ pub struct BoardEditor {
     net_win_on: bool,
     /// Set by the net window for a net with no current: `App` answers with the schematic's DC current of that net (`fill_net_current`).
     pub net_current_request: Option<String>,
+    /// The schematic's DC currents are at hand (set by the app each frame): the net window then asks for them at once, otherwise it
+    /// offers a button, because the DC solve of a big circuit takes seconds and the window must open at once.
+    pub dc_currents_ready: bool,
     /// The net the DC current was asked for (once per opening of its window), and what came of it (net, text).
     net_win_asked: Option<String>,
     net_win_note: Option<(String, String)>,
@@ -422,6 +425,7 @@ impl Default for BoardEditor {
             net_win: None,
             net_win_on: true,
             net_current_request: None,
+            dc_currents_ready: false,
             net_win_asked: None,
             net_win_note: None,
             current_win_open: false,

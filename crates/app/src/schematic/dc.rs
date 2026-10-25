@@ -36,9 +36,24 @@ impl SchEditor {
 
     /// The current each net carries at the DC operating point (for sizing the board's copper).
     pub fn dc_net_currents(&self) -> Result<Vec<(String, f64)>, String> {
-        let c = self.sim_circuit().map_err(|e| e.join(" / "))?;
-        let r = dc_op(&c).map_err(|e| format!("DC解析ができませんでした: {e}"))?;
-        Ok(sim_core::net_currents(&c, &r))
+        let sig = self.signature();
+        if let Some((k, r)) = self.dc_currents_cache.borrow().as_ref()
+            && *k == sig {
+                return r.clone();
+            }
+        let result = (|| {
+            let c = self.sim_circuit().map_err(|e| e.join(" / "))?;
+            let r = dc_op(&c).map_err(|e| format!("DC解析ができませんでした: {e}"))?;
+            Ok(sim_core::net_currents(&c, &r))
+        })();
+        *self.dc_currents_cache.borrow_mut() = Some((sig, result.clone()));
+        self.dc_currents_rev.set(Some(self.rev));
+        result
+    }
+
+    /// Are the DC currents of the nets at hand (worked out for this circuit already)? Cheap: it goes by the edit counter.
+    pub fn dc_currents_ready(&self) -> bool {
+        self.dc_currents_rev.get() == Some(self.rev)
     }
 
     /// The RMS current of every net over the settled part of the last transient run (the second half), with the

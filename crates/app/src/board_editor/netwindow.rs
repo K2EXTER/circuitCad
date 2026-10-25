@@ -96,10 +96,16 @@ impl BoardEditor {
                 self.board.net_currents.insert(net.clone(), amps);
             } else {
                 self.board.net_currents.remove(&net);
-                // no current yet: the schematic's DC analysis is asked for this net's current, once
+                // no current yet: the schematic's DC analysis is asked for this net's current, once (at once when the answer is at hand;
+                // else on a button, so that the window does not wait for a solve of seconds)
                 if self.net_win_asked.as_deref() != Some(net.as_str()) {
-                    self.net_win_asked = Some(net.clone());
-                    self.net_current_request = Some(net.clone());
+                    if self.dc_currents_ready {
+                        self.net_win_asked = Some(net.clone());
+                        self.net_current_request = Some(net.clone());
+                    } else if ui.button("回路図の DC 解析で電流を調べる").on_hover_text("回路図のこの回路を DC で解いて、このネットに流れる電流を入れます。回路が大きいと数秒かかります (一度解くと、回路図を変えるまで、ほかのネットはすぐ出ます)").clicked() {
+                        self.net_win_asked = Some(net.clone());
+                        self.net_current_request = Some(net.clone());
+                    }
                 }
             }
             if let Some((n, text)) = &self.net_win_note
@@ -120,7 +126,7 @@ impl BoardEditor {
             let mut set_width: Option<f64> = None;
             if amps > 0.0 {
                 let rec = round_up_width(width_for_current(amps, &spec));
-                let conn = drc::connectivity(&self.board);
+                let conn = self.cached_connectivity();
                 let now = net_widths(&self.board, &conn, &spec).into_iter().find(|w| w.net == net).and_then(|w| w.thinnest);
                 ui.label(egui::RichText::new(format!("推奨の線幅: {rec:.2} mm")).strong()).on_hover_text("銅箔 35µm・温度上昇 10℃ の外層で、この電流を流せる太さ (IPC-2221 の式) を、0.05 mm 単位に切り上げたものです。内層や、厚い銅箔、温度上昇を許す場合は、もっと細くできます");
                 match now {
@@ -219,7 +225,7 @@ impl BoardEditor {
             ui.separator();
             ui.strong("線幅をスライダーで変える");
             let idx: Vec<usize> = {
-                let conn = drc::connectivity(&self.board);
+                let conn = self.cached_connectivity();
                 // (the necks of a trunk keep their width: they are thin so that the solder stays on the small pads)
                 (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str()) && !pcb_core::current::is_neck(&self.board, &conn, i)).collect()
             };

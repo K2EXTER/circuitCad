@@ -462,6 +462,7 @@ impl eframe::App for App {
             return;
         }
         self.board_ed.note_schematic_diff(&self.sch);
+        self.board_ed.dc_currents_ready = self.sch.dc_currents_ready();
         self.board_ed.order_window(ui.ctx());
         self.board_ed.net_window(ui.ctx());
         self.board_ed.current_window(ui.ctx());

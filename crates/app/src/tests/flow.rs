@@ -559,6 +559,8 @@ fn a_net_window_fetches_the_dc_current_of_its_net_and_the_list_window_draws() {
         });
         out.textures_delta.clear();
     };
+    // the DC currents are at hand (the app says so each frame): the window asks for them at once
+    app.board_ed.dc_currents_ready = true;
     frame(&mut app);
     // what App does with the request
     let net = app.board_ed.net_current_request.take().expect("the window asked for the DC current of VIN");

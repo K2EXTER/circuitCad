@@ -214,7 +214,27 @@ fn union(shapes: &[FillShape]) -> Vec<FillShape> {
 /// The pours as they are drawn: pours of the same net on one layer that overlap or touch are one piece of copper, so they are
 /// merged (drawn separately, the overlap would be painted twice). One entry per layer and net (pours without a net stay apart),
 /// with the pieces and the net name (empty for a pour without a net); the entries come in the order of the first pour of each.
+type MergedFills = Vec<(Side, String, Vec<FillShape>)>;
+static MERGED_CACHE: std::sync::Mutex<Vec<((u64, u64), std::sync::Arc<MergedFills>)>> = std::sync::Mutex::new(Vec::new());
+
 pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Vec<FillShape>)> {
+    // kept for the last few states of the board, like the fills of the single pours
+    let key = (geometry_key(board), nets_key(board, conn));
+    if let Ok(cache) = MERGED_CACHE.lock()
+        && let Some((_, v)) = cache.iter().find(|(k, _)| *k == key) {
+            return (**v).clone();
+        }
+    let out = merged_fills_uncached(board, conn);
+    if let Ok(mut cache) = MERGED_CACHE.lock() {
+        if cache.len() >= 4 {
+            cache.remove(0);
+        }
+        cache.push((key, std::sync::Arc::new(out.clone())));
+    }
+    out
+}
+
+fn merged_fills_uncached(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Vec<FillShape>)> {
     let mut out: Vec<(Side, Option<String>, Vec<FillShape>)> = vec![];
     // every pour's raw copper once (the island test of each pour looks at the others of its net)
     let raws: Vec<Vec<FillShape>> = board.zones.iter().map(|z| raw_fill(board, z, conn)).collect();
@@ -229,7 +249,41 @@ pub fn merged_fills(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Ve
     out.into_iter().map(|(s, k, shapes)| (s, k.clone().unwrap_or_default(), if k.is_some() { union(&shapes) } else { shapes })).collect()
 }
 
+type FillKey = (u64, u64, usize);
+
+/// The fills worked out last, by (the copper's key, the nets of the copper, the pour's place in the list). The editor asks for the
+/// same pours from several places for one state of the board (the picture, the pours in pieces, the thermal vias, the DRC): each
+/// is a boolean operation over every track, pad and via, tens of milliseconds a pour, so a state is worked out once.
+static FILL_CACHE: std::sync::Mutex<Vec<(FillKey, std::sync::Arc<Vec<FillShape>>)>> = std::sync::Mutex::new(Vec::new());
+const FILL_CACHE_LEN: usize = 48;
+
+fn nets_key(board: &Board, conn: &Connectivity) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (0..board.tracks.len()).for_each(|i| conn.track_net(i).hash(&mut h));
+    (0..board.pads.len()).for_each(|j| conn.pad_net(j).hash(&mut h));
+    (0..board.vias.len()).for_each(|k| conn.via_net(k).hash(&mut h));
+    h.finish()
+}
+
 fn raw_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
+    let Some(me) = board.zones.iter().position(|z| std::ptr::eq(z, zone)) else { return raw_fill_uncached(board, zone, conn) };
+    let key: FillKey = (geometry_key(board), nets_key(board, conn), me);
+    if let Ok(cache) = FILL_CACHE.lock()
+        && let Some((_, v)) = cache.iter().find(|(k, _)| *k == key) {
+            return (**v).clone();
+        }
+    let fill = raw_fill_uncached(board, zone, conn);
+    if let Ok(mut cache) = FILL_CACHE.lock() {
+        if cache.len() >= FILL_CACHE_LEN {
+            cache.remove(0);
+        }
+        cache.push((key, std::sync::Arc::new(fill.clone())));
+    }
+    fill
+}
+
+fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
     if zone.polygon.len() < 3 {
         return vec![];
     }

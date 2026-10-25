@@ -139,6 +139,11 @@ pub struct SchEditor {
     show_v: bool,
     show_i: bool,
     sig_cache: String,
+    /// The DC currents of the nets, with the signature of the circuit they were worked out for: the board's net window asks for
+    /// them each time it opens, and the DC solve of a big circuit takes seconds.
+    dc_currents_cache: std::cell::RefCell<Option<(String, Result<Vec<(String, f64)>, String>)>>,
+    /// `rev` when the cache above was filled (so the board can ask cheaply whether the answer is at hand).
+    dc_currents_rev: std::cell::Cell<Option<u64>>,
     tran: Option<TranView>,
     tran_tstop: String,
     tran_tstep: String,
@@ -432,6 +437,8 @@ impl Default for SchEditor {
             show_i: true,
             show_v: true,
             sig_cache: String::new(),
+            dc_currents_cache: std::cell::RefCell::new(None),
+            dc_currents_rev: std::cell::Cell::new(None),
             tran: None,
             tran_tstop: "10m".into(),
             tran_tstep: String::new(),
