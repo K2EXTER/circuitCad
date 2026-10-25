@@ -433,11 +433,18 @@ impl Session {
                 let strongest: Vec<Value> = couplings.iter().take(5).map(|c| json!({"pads": [format!("{}.{}", c.a.0, c.a.1), format!("{}.{}", c.b.0, c.b.1)], "k": (c.k * 1e3).round() / 1e3})).collect();
                 w.sort_by(|a, b| b.ohm.partial_cmp(&a.ohm).unwrap());
                 let list: Vec<Value> = w.iter().take(10).map(|x| json!({"net": x.net, "pad": format!("{}.{}", x.refdes, x.pin), "milliohm": (x.ohm * 1e6).round() / 1e3, "nanohenry": (x.henry * 1e10).round() / 10.0, "picofarad": (x.farad * 1e13).round() / 10.0})).collect();
+                // pads=RS1,RNA.1,Q1: the resistance, inductance and capacitance of those pads (a part name takes all its pads)
+                let wanted: Vec<String> = opt(&options(rest).1, "pads").map(|v| v.split(',').map(|x| x.trim().to_ascii_uppercase()).collect()).unwrap_or_default();
+                let picked: Vec<Value> = w
+                    .iter()
+                    .filter(|x| wanted.iter().any(|q| *q == x.refdes.to_ascii_uppercase() || *q == format!("{}.{}", x.refdes, x.pin).to_ascii_uppercase()))
+                    .map(|x| json!({"net": x.net, "pad": format!("{}.{}", x.refdes, x.pin), "milliohm": (x.ohm * 1e6).round() / 1e3, "nanohenry": (x.henry * 1e10).round() / 10.0}))
+                    .collect();
                 self.post_layout = on;
                 self.last_dc = None;
                 self.last_tran = None;
                 self.last_ac = None;
-                Ok(obj(json!({"postlayout": on, "pads_with_resistance": w.len(), "largest": list, "couplings": couplings.len(), "strongest_couplings": strongest,
+                Ok(obj(json!({"postlayout": on, "pads_with_resistance": w.len(), "pads": picked, "largest": list, "couplings": couplings.len(), "strongest_couplings": strongest,
                     "note": "Resistance and inductance are measured from each net's supply pad (a connector if there is one) through tracks, vias and pours; unrouted nets add nothing, so run 'board route' first. The inductance is per pad, and so is the capacitance (the copper over a pour, taken as ground: 'picofarad', a flat estimate within about 10 %, neighbouring traces not counted; with the inductance it makes a long trace ring); 'couplings' counts the magnetic coupling (k) between wires of different nets, which lowers the loop inductance of a supply trace and its close return (V(REF.PIN.wire) probes the pin). Both show in ac and fast tran, not in dc."})))
             }
             "save" => {

@@ -328,6 +328,32 @@ fn wiring_resistance_sits_in_series_with_the_pin() {
 }
 
 #[test]
+fn the_wiring_of_the_legs_of_one_pin_is_in_parallel() {
+    // a pin with two pads (a switch with two legs a side) comes as two entries: one resistor and one inductor in the
+    // circuit, the legs in parallel, not two elements of one name
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[0].value = "12".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (12, 0), 1);
+    s.components[1].value = "4.7k".into();
+    s.components[2].value = "2.2k".into();
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), r2[0].1);
+    wire(&mut s, r2[1].1, (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    let leg = |ohm: f64| WiringR { refdes: "R2".into(), pin: "1".into(), ohm, henry: 1e-6, farad: 0.0 };
+    let c = from_schematic_with_wiring(&s, &[leg(4400.0), leg(4400.0)]).unwrap();
+    assert_eq!(c.elements.iter().filter(|e| e.name() == "R2.1.LW").count(), 1);
+    close(dc_op(&c).unwrap().element("R2").unwrap().voltage, 12.0 * 2200.0 / (4700.0 + 2200.0 + 2200.0), 1e-9);
+}
+
+#[test]
 fn wiring_inductance_matters_for_ac_and_not_for_dc() {
     let mut s = Schematic::default();
     s.add(Kind::VSource, (0, 0), 0);

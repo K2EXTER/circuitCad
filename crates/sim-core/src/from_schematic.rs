@@ -112,8 +112,37 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
         };
         pin_node.insert((f.refdes.clone(), f.pin.clone()), node);
     }
+    // A pin with several pads (a tact switch with two legs per side) has one wiring entry per pad: the legs are in parallel
+    let merged: Vec<WiringR> = {
+        let mut order: Vec<(String, String)> = vec![];
+        let mut by_pin: HashMap<(String, String), Vec<&WiringR>> = HashMap::new();
+        for w in wiring {
+            let key = (w.refdes.clone(), w.pin.clone());
+            if !by_pin.contains_key(&key) {
+                order.push(key.clone());
+            }
+            by_pin.entry(key).or_default().push(w);
+        }
+        let parallel = |v: Vec<f64>| -> f64 {
+            let g: f64 = v.iter().filter(|x| **x > 0.0).map(|x| 1.0 / x).sum();
+            if g > 0.0 { 1.0 / g } else { 0.0 }
+        };
+        order
+            .into_iter()
+            .map(|key| {
+                let legs = &by_pin[&key];
+                WiringR {
+                    refdes: key.0.clone(),
+                    pin: key.1.clone(),
+                    ohm: parallel(legs.iter().map(|w| w.ohm).collect()),
+                    henry: parallel(legs.iter().map(|w| w.henry).collect()),
+                    farad: legs.iter().map(|w| w.farad).sum(),
+                }
+            })
+            .collect()
+    };
     // net --R-- --L-- pin
-    for w in wiring.iter().filter(|w| w.ohm > 0.0 || w.henry > 0.0) {
+    for w in merged.iter().filter(|w| w.ohm > 0.0 || w.henry > 0.0) {
         let key = (w.refdes.clone(), w.pin.clone());
         if let Some(&net_node) = pin_node.get(&key) {
             let m = c.node(&format!("{}.{}.wire", w.refdes, w.pin));
