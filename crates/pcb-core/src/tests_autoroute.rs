@@ -43,6 +43,29 @@ fn a_wall_of_another_net_is_crossed_with_vias() {
 }
 
 #[test]
+fn outer_only_keeps_the_tracks_off_the_inner_layers() {
+    // a wall on the top and the bottom: through an inner layer is the only way, unless the inner layers are planes
+    let mk = || {
+        let mut b = Board::new("t", 30.0, 20.0);
+        b.inner_layers = 2;
+        pad(&mut b, 5.0, 10.0, "A", true);
+        pad(&mut b, 25.0, 10.0, "A", true);
+        track(&mut b, Side::Top, (15.0, 0.5), (15.0, 19.5));
+        track(&mut b, Side::Bottom, (15.0, 0.5), (15.0, 19.5));
+        b
+    };
+    let mut open = mk();
+    let r = autoroute(&mut open, &RouteOptions::default(), None);
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert!(open.tracks.iter().any(|t| t.side.is_inner()), "the way through is an inner layer");
+    let mut planes = mk();
+    let before = planes.tracks.len();
+    let r = autoroute(&mut planes, &RouteOptions { outer_only: true, ..Default::default() }, None);
+    assert_eq!((r.routed, r.failed.len()), (0, 1));
+    assert_eq!(planes.tracks.len(), before, "nothing is left behind");
+}
+
+#[test]
 fn a_blocked_connection_is_reported_and_the_board_is_left_alone() {
     let mut b = Board::new("t", 30.0, 20.0);
     pad(&mut b, 5.0, 10.0, "A", true);

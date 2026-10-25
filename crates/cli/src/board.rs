@@ -72,6 +72,12 @@ impl Session {
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "top_added": r.top_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
+            "slits" => {
+                // board slits: fill the gaps narrower than the clearance between copper of one net with a short piece of copper (the editor's 「つないで埋める」); the answer is `filled`
+                let board = self.board_mut()?;
+                let filled = pcb_core::drc::fill_slits(board);
+                Ok(obj(json!({"filled": filled})))
+            }
             "layers" => {
                 // board layers N: the number of copper layers (2, 4, 6 ...), like the editor's 「銅箔の層数」. Refuses when an inner layer that would go has copper.
                 let (words, _) = options(rest);
@@ -251,7 +257,7 @@ impl Session {
                 let (_, kv) = options(rest);
                 let only = opt(&kv, "net").map(str::to_string);
                 let board = self.board_mut()?;
-                let ro = RouteOptions { pad_lead: Some(0.5), ..RouteOptions::default() };
+                let ro = RouteOptions { pad_lead: Some(0.5), outer_only: opt(&kv, "layers") == Some("outer"), ..RouteOptions::default() };
                 let (tracks, vias, len) = (board.tracks.len(), board.vias.len(), board.tracks.iter().map(|t| t.a.dist(t.b)).sum::<f64>());
                 let r = pcb_core::reroute::improve_routes(board, &ro, None, only.as_deref());
                 let len_after: f64 = board.tracks.iter().map(|t| t.a.dist(t.b)).sum();
@@ -278,7 +284,7 @@ impl Session {
                 // neighbouring pads of one net (the two LX pins of a regulator) become one piece of copper first (`bridge=0` leaves it out)
                 let bridged = if opt(&kv, "bridge") == Some("0") { 0 } else { pcb_core::bridge::bridge_pads(board) };
                 let before = board.tracks.len();
-                let ro = RouteOptions { pad_lead: (lead > 0.0).then_some(lead), ..RouteOptions::default() };
+                let ro = RouteOptions { pad_lead: (lead > 0.0).then_some(lead), outer_only: opt(&kv, "layers") == Some("outer"), no_vias: opt(&kv, "vias") == Some("0"), ..RouteOptions::default() };
                 let rep = pcb_core::autoroute::autoroute_sized(board, &ro, only.as_deref());
                 let aligned = if lead > 0.0 && rep.routed > 0 {
                     let new: Vec<usize> = (before..board.tracks.len()).collect();

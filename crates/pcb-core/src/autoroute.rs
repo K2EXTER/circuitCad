@@ -32,11 +32,15 @@ pub struct RouteOptions {
     /// Keep this far from other copper (when more than the board's rule): the clearance of the net class of the net being routed.
     /// What the net classes of the copper that is already there ask for is always kept.
     pub clearance: Option<f64>,
+    /// Keep the tracks off the inner layers of a board with more than two (they are planes there; vias still cross them).
+    pub outer_only: bool,
+    /// Put no via at all: the route stays on the layer of its pads (for a sensitive line that must not change layer).
+    pub no_vias: bool,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false }
     }
 }
 
@@ -428,6 +432,14 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
                     }
                 }
             }
+        }
+    }
+    if opt.no_vias {
+        grid.no_via.iter_mut().for_each(|c| *c = true);
+    }
+    if opt.outer_only {
+        for l in 1..nl.saturating_sub(1) {
+            grid.trk[l].iter_mut().for_each(|c| *c = -1);
         }
     }
     Some(grid)
