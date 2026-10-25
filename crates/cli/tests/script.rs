@@ -926,3 +926,25 @@ sens probe=V(MID) parts=R9
     assert_eq!(c["parts"][0]["per_percent"].as_f64().unwrap(), 0.0, "{c:?}");
     assert!(a.last().unwrap()["error"].as_str().unwrap().contains("no part R9"), "{:?}", a.last());
 }
+
+#[test]
+fn a_simulation_only_part_simulates_but_is_left_off_the_board() {
+    // a divider with a test source: the source drives the simulation, a header stands for the real connector
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10k as=R1\nadd R 4.7k as=R2\nadd HEADER2 as=J1\nnet VIN V1.+ R1.1 J1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2 J1.2\nsimonly V1\nerc\ndc\nboard import\nlist\n");
+    assert!(ok, "{a:?}");
+    // it still simulates
+    let v = last(&a, "dc")["voltages"]["MID"].as_f64().unwrap();
+    assert!((v - 12.0 * 4.7 / 14.7).abs() < 1e-6, "{v}");
+    // it is marked in the list, and the board has the other three parts only
+    let parts = last(&a, "list")["parts"].as_array().unwrap().clone();
+    assert!(parts.iter().any(|p| p["ref"] == "V1" && p["sim_only"] == true), "{parts:?}");
+    assert!(parts.iter().any(|p| p["ref"] == "R1" && p.get("sim_only").is_none()), "{parts:?}");
+    let imp = a.iter().rev().find(|v| v["cmd"] == "board" && v.get("added").is_some()).unwrap();
+    let added: Vec<String> = imp["added"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+    assert!(!added.contains(&"V1".to_string()) && added.contains(&"R1".to_string()) && added.contains(&"J1".to_string()), "{added:?}");
+    // `simonly V1 off` puts it back
+    let (b, ok) = run("new\nadd V 5 as=V1\nadd R 1k as=R1\nnet A V1.+ R1.1\nnet GND V1.- R1.2\nsimonly V1\nsimonly V1 off\nboard import\n");
+    assert!(ok, "{b:?}");
+    let imp = b.iter().rev().find(|v| v["cmd"] == "board" && v.get("added").is_some()).unwrap();
+    assert!(imp["added"].as_array().unwrap().iter().any(|x| x == "V1"), "{imp:?}");
+}

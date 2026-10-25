@@ -24,7 +24,7 @@ fn refdes_are_numbered_per_prefix() {
 
 #[test]
 fn rotation_moves_pins() {
-    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None };
+    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false };
     let pins = c.pins();
     assert_eq!(pins[0].1, (10, 8));
     assert_eq!(pins[1].1, (10, 12));
@@ -424,7 +424,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         shops: Default::default(),
         glyph: "electrolytic".into(),
     };
-    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym) };
+    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false };
     let mut s = Schematic::default();
     s.components.push(c);
     assert_eq!(s.components[0].pins()[0].1, (8, 10)); // new leads are 2 long
@@ -479,4 +479,20 @@ fn copying_nothing_gives_an_empty_fragment_and_bad_indices_are_ignored() {
     let s = Schematic::default();
     assert!(s.copy_fragment(&[], &[], &[]).is_empty());
     assert!(s.copy_fragment(&[3], &[2], &[1]).is_empty());
+}
+
+#[test]
+fn the_simulation_only_mark_is_saved_only_when_set() {
+    let mut s = Schematic::default();
+    let i = s.add(Kind::Resistor, (10, 10), 0);
+    let plain = serde_json::to_string(&s).unwrap();
+    assert!(!plain.contains("sim_only"), "an unmarked part writes nothing: {plain}");
+    s.components[i].sim_only = true;
+    let marked = serde_json::to_string(&s).unwrap();
+    assert!(marked.contains("\"sim_only\":true"), "{marked}");
+    let back: Schematic = serde_json::from_str(&marked).unwrap();
+    assert!(back.components[0].sim_only);
+    // a file from before the mark existed reads as not marked
+    let old: Schematic = serde_json::from_str(&plain).unwrap();
+    assert!(!old.components[0].sim_only);
 }

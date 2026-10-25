@@ -134,3 +134,4 @@ CLAUDE.md の地図から参照される、各機能の詳しい説明。
 
 ### 基板への取り込み: ライブラリの部品のフットプリント(2026-10-25)
 - `import_from_schematic`(`board_editor/file.rs`)は、ライブラリの部品が自分のフットプリントを連れてくる。**ライブラリが起動時のままだと、起動後にフォルダへ足した部品(`ccad part import`、ファイルのコピー)のフットプリントが見つからず**「フットプリント … が見つかりません」になった。今は、`SchEditor.library` に無いときは、既定のライブラリのフォルダ(`part_lib::default_dir()`)を一度だけ読み直して探す。それでも無いときは、警告に「回路図の『ライブラリ』の『再読み込み』を押すか、部品を作り直してから、もう一度取り込んでください」を足す(`import_notes`)。テスト `a_missing_library_footprint_says_to_reload_the_library`。
+- **シミュレーション専用の部品(`Component.sim_only`。2026-10-25)**: 試験用の電源・測る相手の代わりの抵抗を、基板・部品表から外す印。`sch-core/lib.rs` の `Component.sim_only`(保存は立っているときだけ)、基板の取り込みは `cli/board.rs` と `app/board_editor/file.rs` の `netlist_of` が `!c.sim_only` で除く(ネットの中のその部品のピンは、基板に部品がないので無視される)。CLI は `simonly REF [off]`、アプリは `schematic/panel.rs` の部品の編集欄のチェックボックス。テスト: `sch-core/tests.rs` の `the_simulation_only_mark_is_saved_only_when_set`、`cli/tests/script.rs` の `a_simulation_only_part_simulates_but_is_left_off_the_board`。

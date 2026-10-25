@@ -467,6 +467,10 @@ impl SchEditor {
                         }
                     }).response.on_hover_text("基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます");
                 }
+                if !c.kind.is_power_symbol() {
+                    ui.checkbox(&mut c.sim_only, "シミュレーション専用 (基板に載せない)")
+                        .on_hover_text("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)");
+                }
                 advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
                 if self.lit(ui.button("回転 (R)"), "回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked() {
                     self.rotate_req = Some(i);

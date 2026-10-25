@@ -332,6 +332,22 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "value": c.value})))
     }
 
+    /// `simonly REF [off]`: the part is only for the simulation (a test source, the stand-in for a device under test): it is not put on the board
+    /// or in the bill of materials. `off` puts it back.
+    pub fn sim_only(&mut self, args: &[String]) -> Res {
+        let usage = "simonly REF [off]   (a part only for the simulation is left off the board and the bill of materials)";
+        let (r, rest) = args.split_first().ok_or(usage)?;
+        let on = match rest.first().map(|s| s.to_ascii_lowercase()) {
+            None => true,
+            Some(w) if w == "on" => true,
+            Some(w) if w == "off" => false,
+            Some(_) => return Err(usage.into()),
+        };
+        let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        c.sim_only = on;
+        Ok(obj(json!({"ref": c.refdes, "sim_only": on})))
+    }
+
     /// The points of the pins `REF.PIN` stands for (a pin name shared by several pins means all of them).
     fn pin_points(&self, spec: &str) -> Result<Vec<Pt>, String> {
         let (r, p) = spec.split_once('.').ok_or_else(|| format!("'{spec}': write REF.PIN, for example R1.1 or U1.GND"))?;
@@ -411,7 +427,11 @@ impl Session {
             .map(|c| {
                 let pins: Vec<Value> = pin_names(c).iter().map(|(n, name)| json!({"pin": n, "name": name, "net": net_of(&c.refdes, n)})).collect();
                 let type_name = c.custom.as_ref().map(|s| s.name.clone()).unwrap_or_else(|| c.kind.label());
-                json!({"ref": c.refdes, "type": type_name, "value": c.value, "footprint": c.footprint_name(), "pins": pins})
+                let mut part = json!({"ref": c.refdes, "type": type_name, "value": c.value, "footprint": c.footprint_name(), "pins": pins});
+                if c.sim_only {
+                    part["sim_only"] = json!(true);
+                }
+                part
             })
             .collect();
         let nets_out: Vec<Value> = nets.iter().map(|n| json!({"net": n.name, "pins": n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect::<Vec<_>>()})).collect();

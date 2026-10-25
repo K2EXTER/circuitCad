@@ -464,7 +464,7 @@ impl Session {
         let parts = sch
             .components
             .iter()
-            .filter(|c| !c.kind.is_power_symbol())
+            .filter(|c| !c.kind.is_power_symbol() && !c.sim_only)
             .map(|c| NetlistPart { refdes: c.refdes.clone(), value: c.value.clone(), footprint: c.footprint_name() })
             .collect();
         let nets = sch_core::extract(sch)

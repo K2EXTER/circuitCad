@@ -145,6 +145,10 @@ pub struct Component {
     /// Symbol definition for `Kind::Custom` parts (embedded, so the file is self-contained).
     #[serde(default)]
     pub custom: Option<CustomSymbol>,
+    /// Only for the simulation (a test source, the stand-in for a device under test): the part is not put on the board, and the
+    /// board's shopping list and bill of materials do not have it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sim_only: bool,
 }
 
 pub fn rotate(p: Pt, rot: u8) -> Pt {
@@ -397,6 +401,7 @@ impl Schematic {
             rot: rot % 4,
             footprint: kind.default_footprint(),
             custom: None,
+            sim_only: false,
         });
         self.components.len() - 1
     }
@@ -412,6 +417,7 @@ impl Schematic {
             rot: rot % 4,
             footprint: footprint.to_string(),
             custom: Some(sym),
+            sim_only: false,
         });
         self.components.len() - 1
     }
