@@ -27,9 +27,10 @@ circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Ge
 - **A guided learning path.** "Build a regulated power supply" takes you from the basics to a board and a real-world measurement: 23 step-by-step lessons, 9 "build it yourself" challenges that check your circuit, and guides for bench experiments.
 - **Learn by breaking things.** Open, short, reverse or change parts and pins, and compare how far the damage spreads.
 - **Schematic to fabrication files.** Import into the PCB editor, then place, route (auto-route, push-and-shove, hand routing with cleanup), pour copper, run DRC, view in 3D, run pre-order checks for JLCPCB / PCBWay / OSH Park rules, and export Gerber, drill, BOM and placement files. 2 to 8 copper layers are supported.
-- **Simulation:** DC operating point, transient (adaptive time step), AC (Bode plot), DC sweep, noise, parameter sweep, Monte Carlo tolerance analysis, temperature effects, fault simulation.
+- **Simulation:** DC operating point, transient (adaptive time step), AC (Bode plot), DC sweep, noise, parameter sweep, Monte Carlo tolerance analysis, temperature effects, fault simulation. Step-response figures include settling times down to a ±0.003 % band.
 - **Cross-checked against ngspice.** Results on the bundled examples are compared with the open-source ngspice (DC operating points and transients; stored answers are checked in CI). Numbers, tolerances and known mismatches are on the [accuracy page](docs/accuracy.md) (Japanese). Agreement with real hardware has not been verified.
-- **Parts and samples included.** About 90 parts (power ICs, sensors, batteries and more) and 41 sample circuits, including a 41-part mixed-signal demo (power supply + 555 + counter + temperature alarm + amplifier) with a hand-routed board. KiCad symbols and footprints can be imported.
+- **Parts and samples included.** About 100 parts (power ICs, sensors, batteries, ADCs, low-leakage analog switches and more) and 41 sample circuits, including a 41-part mixed-signal demo (power supply + 555 + counter + temperature alarm + amplifier) with a hand-routed board. KiCad symbols and footprints can be imported.
+- **Headless use (`ccad`).** Build circuits, run ERC, analyses (operating point, transient, AC, noise, sweeps, part-value sensitivity), boards and fabrication files from a one-command-per-line script, with every answer as JSON (made for AI agents and automation). See [docs/cli.md](docs/cli.md) (Japanese).
 - **Free and open source,** under `MIT OR Apache-2.0`.
 
 | Transient waveform | Bode plot (AC analysis) |
@@ -65,7 +66,7 @@ A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in
 - **Tested on Windows 10 / 11 only.** macOS and Linux build and pass the tests in CI, but nobody has launched the app there yet.
 - **No board has been manufactured from this software yet.** Gerber and drill export and the pre-order checks exist, but they are unproven in practice. For a first order, use a small quantity and check the result in the fabricator's Gerber viewer.
 - **The simulator uses simplified models** and can differ noticeably from real hardware. Each lesson explains the differences.
-- **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page.
+- **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page. A part whose land pattern has not been checked against the datasheet is flagged `land_unverified`, and the pre-order check warns about it.
 - **Do not use it as the basis for safety-critical designs** (medical, automotive, high voltage, lithium-cell chargers, and so on).
 - It is developed by a small team (mostly one person plus an AI assistant), so replies and fixes can be slow.
 
