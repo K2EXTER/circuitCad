@@ -1,7 +1,7 @@
 {
  "name": "ADS124S08",
  "category": "ADC",
- "description": "TI ADS124S08 24 bit ΔΣ ADC (12 入力、PGA、2.5 V 基準内蔵、4 kSPS)。VQFN-32 (RHB、5x5、0.5 mm ピッチ)。AVDD〜AVSS 2.7〜5.25 V、AVSS は DGND に対して -2.625〜0 V にできる。ピン表は SBAS660C (Rev. C) から。パッドの寸法は RHB0032M の例の概算なので、基板にする前にデータシートの推奨ランドパターンで確認してください。裏のサーマルパッドは AVSS につなぐ (ピン27と同じネット)。シミュレーションモデルなし (ADC の中は計算しない)",
+ "description": "TI ADS124S08 24 bit ΔΣ ADC (12 入力、PGA、2.5 V 基準内蔵、4 kSPS)。VQFN-32 (RHB、5x5、0.5 mm ピッチ)。AVDD〜AVSS 2.7〜5.25 V、AVSS は DGND に対して -2.625〜0 V にできる。ピン表は SBAS660C (Rev. C) から。パッドの寸法は RHB0032M の例の概算なので、基板にする前にデータシートの推奨ランドパターンで確認してください。裏のサーマルパッドは AVSS につなぐ (ピン27と同じネット)。シミュレーションモデルなし (ADC の中は計算しない) ランドパターンは、データシート SBAS660C の RHB0032M の推奨ランドに合わせた: リードのパッド 0.6 × 0.25 mm、ピッチ 0.5 mm、2 列の中心間 4.8 mm、露出パッド 2.1 mm 角 (AVSS)。",
  "datasheet": "https://www.ti.com/lit/ds/symlink/ads124s08.pdf",
  "prefix": "U",
  "footprint_name": "VQFN-32_5x5_P0.5_EP",
@@ -432,10 +432,9 @@
     "x": 0,
     "y": 0,
     "shape": "rect",
-    "w": 3.1,
-    "h": 3.1
+    "w": 2.1,
+    "h": 2.1
    }
   ]
- },
- "land_unverified": true
+ }
 }
