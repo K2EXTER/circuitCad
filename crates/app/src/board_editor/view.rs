@@ -49,6 +49,11 @@ impl BoardEditor {
     /// The unrouted connections (yellow lines), kept like `cached_connectivity`.
     pub(super) fn cached_airwires(&self) -> std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>> {
         let key = pcb_core::zonefill::geometry_key(&self.board);
+        // while parts are dragged, the lines follow the part (they cost milliseconds), but a pour that is in pieces is not looked for
+        // (it fills every pour: 150 ms on a board with guards) and the answer is not kept, so the full one is made when the drag ends
+        if self.moving_parts_only() {
+            return std::rc::Rc::new(ratsnest(&self.board));
+        }
         let mut c = self.calc_cache.borrow_mut();
         if c.key != key {
             *c = CalcCache { key, conn: None, rats: None };
