@@ -146,6 +146,15 @@ mod ratings_tests {
         f
     }
 
+    /// The "land pattern is an estimate" box is saved with the part.
+    #[test]
+    fn the_land_pattern_estimate_flag_is_saved_with_the_part() {
+        let mut f = form();
+        assert!(!f.to_def().unwrap().land_unverified);
+        f.land_unverified = true;
+        assert!(f.to_def().unwrap().land_unverified);
+    }
+
     /// The checklist adds the items to look up; typing a value turns a line into a data sheet row, and the
     /// note to the learner (※...) is not saved as a condition.
     #[test]

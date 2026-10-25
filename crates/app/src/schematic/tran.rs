@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The bands (a fraction of the step) of the settling-time rows under "ステップ応答の指標".
+const SETTLE_BANDS: [f64; 4] = [1e-2, 1e-3, 1e-4, 3e-5];
+
 /// Signals the viewer lists: the nets and currents, and the pins' wire nodes `V(REF.PIN.wire)` of a post-layout run (the copper's
 /// inductance and capacitance act between the net and that node). Other names with a dot are the insides of parts.
 fn shown_signal(name: &str) -> bool {
@@ -272,11 +275,18 @@ impl SchEditor {
                             ui.small("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)");
                             // one column per signal, one row per figure (same layout as the table above)
                             let mut metrics = vec![];
+                            let mut settling = vec![];
                             let mut failed = vec![];
                             for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
                                 let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
                                 match step_metrics(&res.time, &sg.values) {
-                                    Ok(m) => metrics.push((name.to_string(), m)),
+                                    Ok(m) => {
+                                        // how long it takes to stay within a tight band, counted from the moment it starts to move
+                                        let step = (m.final_value - m.initial).abs();
+                                        let start = res.time.iter().zip(&sg.values).find(|(_, v)| (**v - m.initial).abs() > 0.005 * step).map_or(0.0, |(t, _)| *t);
+                                        settling.push(settling_times(&res.time, &sg.values, start, &SETTLE_BANDS).ok());
+                                        metrics.push((name.to_string(), m));
+                                    }
                                     Err(why) => failed.push(format!("{name}: {why}")),
                                 }
                             }
@@ -308,6 +318,14 @@ impl SchEditor {
                                         ui.label(m.settling_time.map_or_else(dash, |t| eng(t, "s")));
                                     }
                                     ui.end_row();
+                                    // tighter bands: how long until the waveform is within ±1 %, ±0.1 %, ... of the final value for good
+                                    for (k, band) in SETTLE_BANDS.iter().enumerate() {
+                                        ui.label(format!("±{} %", (band * 1e5).round() / 1e3)).on_hover_text("波形が動き始めてから、最終値との差がこの幅 (ステップの大きさに対する割合) に収まって、そのままになるまでの時間です。精密な測定では、この時間だけ待ってから読みます。解析の終わりまでに収まらないときは「—」です");
+                                        for s in &settling {
+                                            ui.label(s.as_ref().and_then(|s| s.times[k].1).map_or_else(dash, |t| eng(t, "s")));
+                                        }
+                                        ui.end_row();
+                                    }
                                 });
                             }
                             for why in failed {

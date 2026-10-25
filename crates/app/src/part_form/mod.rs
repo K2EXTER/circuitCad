@@ -71,6 +71,8 @@ pub struct PartForm {
     /// The STEP as it was read, and how it is turned and placed to make `model3d` (see `step3d.rs`).
     pub step_base: Option<pcb_core::mesh::Mesh3d>,
     pub step_file: String,
+    /// The pads were not checked against the data sheet's land pattern drawing (an estimate): saved as `PartDef.land_unverified`.
+    pub land_unverified: bool,
     pub step_rot: [u8; 3],
     pub step_center: bool,
     pub step_drop: bool,
@@ -203,6 +205,7 @@ impl Default for PartForm {
             model3d: None,
             step_base: None,
             step_file: String::new(),
+            land_unverified: false,
             step_rot: [0; 3],
             step_center: true,
             step_drop: true,

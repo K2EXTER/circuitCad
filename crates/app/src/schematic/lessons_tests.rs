@@ -277,8 +277,11 @@ fn a_library_part_shows_its_model_notes_in_the_tooltip_and_old_circuits_borrow_t
     let tip = super::panel::lib_hover_for_test(tp);
     assert!(tip.contains("このモデルの限界") && tip.contains("再充電のしきい値"), "{tip}");
     // a part without a model has nothing to add to its description
-    let mcu = e.library.iter().find(|d| d.sim.is_none()).unwrap();
+    let mcu = e.library.iter().find(|d| d.sim.is_none() && !d.land_unverified).unwrap();
     assert_eq!(super::panel::lib_hover_for_test(mcu), mcu.description);
+    // a part whose pads are an estimate says so
+    let adc = e.library.iter().find(|d| d.name == "ADS124S08").expect("ADS124S08 is bundled");
+    assert!(super::panel::lib_hover_for_test(adc).contains("ランドパターン"));
 }
 
 /// The three power-supply lessons tick their steps as the learner acts and carry a real-experiment card.

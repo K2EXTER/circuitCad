@@ -366,7 +366,7 @@ impl PartForm {
                 mark_pin: self.body_pin.trim().to_string(),
             }),
             shops: Default::default(),
-            land_unverified: false,
+            land_unverified: self.land_unverified,
             model3d: self.model3d.clone(),
         })
     }

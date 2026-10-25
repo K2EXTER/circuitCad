@@ -601,6 +601,9 @@ fn lib_hover(d: &part_lib::PartDef) -> String {
         t.push_str("
 (データシートの代表的な値。使う前に、必ずデータシートで確かめてください)");
     }
+    if d.land_unverified {
+        t.push_str("\n\nランドパターン: データシートの図面と照らし合わせていない概算です。基板にする前に、パッドの位置・大きさ・ピン番号を確かめてください (発注の準備のチェックも注意します)。");
+    }
     if let Some(m) = &d.sim
         && !m.limits.is_empty() {
             t.push_str("\n\nこのモデルの限界 (実物との違い):");

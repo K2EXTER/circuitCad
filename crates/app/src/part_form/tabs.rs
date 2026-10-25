@@ -356,6 +356,8 @@ impl PartForm {
                 ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
                     .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
             });
+            ui.checkbox(&mut self.land_unverified, "ランドパターンは概算 (データシートの図面と照らし合わせていない)")
+                .on_hover_text("パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください");
             self.step3d_ui(ui);
     }
 }
