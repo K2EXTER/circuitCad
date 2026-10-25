@@ -12,6 +12,7 @@ pub mod body;
 mod connectors;
 pub mod bridge;
 pub mod trunk;
+pub mod copper;
 pub mod current;
 pub mod diffpair;
 pub mod drc;

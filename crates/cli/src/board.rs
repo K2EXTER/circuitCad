@@ -72,6 +72,44 @@ impl Session {
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "top_added": r.top_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
+            "guard" => {
+                // board guard net=A guard=GRDA [margin=1.0] [clearance=0.25]: a pour of the guard net (the follower's output) along every
+                // track and pad of the sensitive net, so no voltage lies across the surface between them and the rails
+                let (_, kv) = options(rest);
+                let net = opt(&kv, "net").ok_or("board guard net=NET guard=GUARDNET [margin=1.0] [clearance=0.25]")?.to_string();
+                let guard = opt(&kv, "guard").ok_or("board guard net=NET guard=GUARDNET [margin=1.0] [clearance=0.25]")?.to_string();
+                let margin = match opt(&kv, "margin") {
+                    Some(v) => num(v)?,
+                    None => 1.0,
+                };
+                let clearance = match opt(&kv, "clearance") {
+                    Some(v) => num(v)?,
+                    None => 0.25,
+                };
+                let board = self.board_mut()?;
+                let n = pcb_core::copper::add_guard(board, &net, &guard, margin, clearance)?;
+                Ok(obj(json!({"net": net, "guard": guard, "pours": n})))
+            }
+            "copper" => {
+                // board copper net=DRN rect=x0,y0,x1,y1 [layers=top,bottom] [vias=6]: a patch of copper of a net (the drain of a power transistor)
+                // on the layers, and vias of the net that join them
+                let (_, kv) = options(rest);
+                let net = opt(&kv, "net").ok_or("board copper net=NET rect=x0,y0,x1,y1 [layers=top,bottom] [vias=6]")?.to_string();
+                let r: Vec<f64> = opt(&kv, "rect").ok_or("rect=x0,y0,x1,y1 (mm)")?.split(',').map(|v| v.trim().parse::<f64>().map_err(|_| format!("rect: {v} is not a number"))).collect::<Result<_, _>>()?;
+                let [x0, y0, x1, y1] = r.as_slice() else { return Err("rect=x0,y0,x1,y1 (four numbers, mm)".into()) };
+                let sides: Vec<pcb_core::model::Side> = opt(&kv, "layers").unwrap_or("top,bottom").split(',').map(|l| match l.trim() {
+                    "top" => Ok(pcb_core::model::Side::Top),
+                    "bottom" => Ok(pcb_core::model::Side::Bottom),
+                    o => o.strip_prefix("inner").and_then(|n| n.parse::<u8>().ok()).filter(|n| *n >= 1).map(pcb_core::model::Side::Inner).ok_or_else(|| format!("layers={o}: use top, bottom, inner1 ...")),
+                }).collect::<Result<_, _>>()?;
+                let vias = match opt(&kv, "vias") {
+                    Some(v) => v.parse::<usize>().map_err(|_| format!("vias={v}: a whole number is needed"))?,
+                    None => 6,
+                };
+                let board = self.board_mut()?;
+                let (pours, put) = pcb_core::copper::add_copper(board, &net, (*x0, *y0, *x1, *y1), &sides, vias)?;
+                Ok(obj(json!({"net": net, "pours": pours, "vias": put})))
+            }
             "nudge" => {
                 // board nudge [budget=SECONDS] [layers=outer] [vias=0]: for each connection still open after a full route, try small parts near
                 // it 1-3 mm away (their wiring taken away and routed again); a move stays only when fewer connections are open and the DRC
