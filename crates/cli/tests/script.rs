@@ -948,3 +948,24 @@ fn a_simulation_only_part_simulates_but_is_left_off_the_board() {
     let imp = b.iter().rev().find(|v| v["cmd"] == "board" && v.get("added").is_some()).unwrap();
     assert!(imp["added"].as_array().unwrap().iter().any(|x| x == "V1"), "{imp:?}");
 }
+
+#[test]
+fn board_picture_writes_a_png_with_a_legend() {
+    let file = std::env::temp_dir().join(format!("ccad-test-picture-{}.png", std::process::id()));
+    let path = file.display().to_string().replace(std::path::MAIN_SEPARATOR, "/");
+    let script = format!(
+        "new\nadd V 5 as=V1\nadd R 1k as=R1\nnet VCC V1.+ R1.1\nnet GND V1.- R1.2\nboard import\nboard autoplace\nboard route\nboard picture layer=top net=VCC marks=1 px=600 out={path}\n"
+    );
+    let (a, ok) = run(&script);
+    assert!(ok, "{a:?}");
+    let pic = a.iter().find(|v| v.get("legend").is_some()).unwrap();
+    assert_eq!(pic["file"], path.as_str());
+    assert!(pic["width"].as_u64().unwrap() > 100 && pic["legend"].as_array().unwrap().iter().any(|l| l.as_str().unwrap().contains("ネット VCC")));
+    let bytes = std::fs::read(&file).unwrap();
+    assert_eq!(&bytes[1..4], b"PNG");
+    let _ = std::fs::remove_file(&file);
+    // a layer that is not there is said
+    let (a, ok) = run("new\nadd R 1k as=R1\nnet N R1.1 R1.2\nboard import\nboard picture layer=inner9\n");
+    assert!(!ok, "{a:?}");
+    assert!(format!("{a:?}").contains("inner9"), "{a:?}");
+}

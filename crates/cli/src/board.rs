@@ -116,6 +116,45 @@ impl Session {
                 let (tracks, vias) = pcb_core::copper::add_guard_tracks(board, &net, &guard, gap, width)?;
                 Ok(obj(json!({"net": net, "guard": guard, "tracks": tracks, "vias": vias})))
             }
+            "picture" => {
+                // board picture [layer=top|bottom|inner1 ...] [rect=x0,y0,x1,y1] [px=1600] [net=A,B] [marks=1] [others=1] [grid=mm] [out=file.png]:
+                // a PNG of one copper layer (pours, tracks, pads, vias, holes, silk) with a millimetre grid and its numbers; `net=` draws those
+                // nets in colours of their own, `marks=1` numbers the DRC findings and draws the open connections, `others=1` shows the other
+                // copper layers faintly. The answer has the file and a legend (what the colours and numbers mean); look at the file.
+                let (_, kv) = options(rest);
+                let side = match opt(&kv, "layer") {
+                    Some(l) => parse_layer(l)?,
+                    None => pcb_core::model::Side::Top,
+                };
+                let area = match opt(&kv, "rect") {
+                    Some(v) => {
+                        let r: Vec<f64> = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("rect: {x} is not a number"))).collect::<Result<_, _>>()?;
+                        let [x0, y0, x1, y1] = r.as_slice() else { return Err("rect=x0,y0,x1,y1 (four numbers, mm)".into()) };
+                        Some((pcb_core::model::Point::new(x0.min(*x1), y0.min(*y1)), pcb_core::model::Point::new(x0.max(*x1), y0.max(*y1))))
+                    }
+                    None => None,
+                };
+                let max_side = match opt(&kv, "px") {
+                    Some(v) => v.parse::<usize>().map_err(|_| format!("px={v}: a whole number is needed"))?,
+                    None => 1600,
+                };
+                let flag = |name: &str| matches!(opt(&kv, name), Some("1") | Some("on") | Some("true"));
+                let grid = match opt(&kv, "grid") {
+                    Some(g) => num(g)?,
+                    None => 0.0,
+                };
+                let highlight: Vec<String> = opt(&kv, "net").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
+                let out = opt(&kv, "out").map(str::to_string).unwrap_or_else(|| format!("picture-{}.png", layer_name(side)));
+                let board = self.board_mut()?;
+                if let pcb_core::model::Side::Inner(n) = side
+                    && n > board.inner_layers
+                {
+                    return Err(format!("layer={}: この基板の内層は {} 枚です (`board layers 4` で 4 層にできます)", layer_name(side), board.inner_layers));
+                }
+                let pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid });
+                image::save_buffer(&out, &pic.rgba, pic.w as u32, pic.h as u32, image::ColorType::Rgba8).map_err(|e| format!("{out} に書けません: {e}"))?;
+                Ok(obj(json!({"file": out, "width": pic.w, "height": pic.h, "legend": pic.legend})))
+            }
             "zones" => {
                 // board zones [merge]: the pours (layer, net, corners, holes, area); `merge` joins the pours of one net and layer that
                 // overlap or touch into one (a pour with a hole keeps it)

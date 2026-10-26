@@ -37,6 +37,7 @@ pub mod netlist;
 pub mod outline;
 pub mod padentry;
 pub mod par;
+pub mod picture;
 pub mod pinlabels;
 pub mod package;
 pub mod parts;

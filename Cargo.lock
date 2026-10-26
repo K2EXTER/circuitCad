@@ -655,6 +655,7 @@ dependencies = [
 name = "cli"
 version = "0.1.0"
 dependencies = [
+ "image",
  "part-lib",
  "pcb-core",
  "sch-core",
