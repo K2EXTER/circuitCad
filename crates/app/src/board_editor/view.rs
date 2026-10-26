@@ -46,12 +46,24 @@ impl BoardEditor {
         self.drag_part.is_some() || self.gdrag.as_ref().is_some_and(|g| g.items.iter().all(|i| matches!(i, Item::Part(_))))
     }
 
+    /// Is a group being moved that is not a pour (parts, tracks, vias, silk ...)? The pours are then kept as they were until the drop,
+    /// like while parts are moved (they cost 100 ms a frame on a board with guards, and a group of a hundred tracks made the drag crawl).
+    /// The finished tracks are not kept: the tracks of the group would stay where they were, so the plain tracks are drawn instead.
+    pub(super) fn moving_group(&self) -> bool {
+        self.gdrag.as_ref().is_some_and(|g| !g.items.iter().any(|i| matches!(i, Item::Zone(_))))
+    }
+
+    /// The slow results (pours, islands, thermal count) are kept as they were: parts or a group are being moved.
+    pub(super) fn slow_results_kept(&self) -> bool {
+        self.moving_parts_only() || self.moving_group()
+    }
+
     /// The unrouted connections (yellow lines), kept like `cached_connectivity`.
     pub(super) fn cached_airwires(&self) -> std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>> {
         let key = pcb_core::zonefill::geometry_key(&self.board);
         // while parts are dragged, the lines follow the part (they cost milliseconds), but a pour that is in pieces is not looked for
         // (it fills every pour: 150 ms on a board with guards) and the answer is not kept, so the full one is made when the drag ends
-        if self.moving_parts_only() {
+        if self.slow_results_kept() {
             return std::rc::Rc::new(ratsnest(&self.board));
         }
         let mut c = self.calc_cache.borrow_mut();

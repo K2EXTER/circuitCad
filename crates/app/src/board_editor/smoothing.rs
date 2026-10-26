@@ -29,6 +29,10 @@ impl BoardEditor {
         if !smooth::finish_active(&self.board) {
             return None;
         }
+        // a group with tracks in it is being moved: the plain tracks follow the pointer, the finish is made once it is dropped
+        if self.moving_group() && !self.moving_parts_only() {
+            return None;
+        }
         let key = self.finish_key();
         // an answer that came in
         let mut done: Option<(u64, Option<Finished>)> = None;

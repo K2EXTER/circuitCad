@@ -1861,6 +1861,9 @@ fn pours_are_kept_while_only_parts_are_dragged() {
     assert!(e.moving_parts_only());
     e.gdrag = Some(GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: vec![Item::Part(0), Item::Track(0)] });
     assert!(!e.moving_parts_only(), "a track in the group would stay where it was");
+    assert!(e.moving_group() && e.slow_results_kept(), "the pours are kept while a group with tracks is moved");
+    e.gdrag = Some(GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: vec![Item::Zone(0)] });
+    assert!(!e.slow_results_kept(), "a pour that is moved is worked out again");
 }
 
 /// What is far outside the drawing area is left out of the picture; what reaches into it (a wide track) is not.
@@ -2054,4 +2057,66 @@ fn a_missing_library_footprint_says_to_reload_the_library() {
     let mut e = BoardEditor::default();
     e.import_from_schematic(&sch);
     assert!(e.import_notes.iter().any(|n| n.contains("NO_SUCH_FOOTPRINT_XYZ") && n.contains("再読み込み")), "{:?}", e.import_notes);
+}
+
+/// Timing of what runs every frame while a group is moved (a real board: set CCAD_BOARD). `cargo test -p app --release group_move_cost -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn group_move_cost() {
+    use std::time::Instant;
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser.pcbjson".into());
+    let text = std::fs::read_to_string(&path).unwrap();
+    let board: pcb_core::Board = serde_json::from_str(&text).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let t = |label: &str, f: &mut dyn FnMut()| {
+        let s = Instant::now();
+        f();
+        eprintln!("{label:32} {:>8.1} ms", s.elapsed().as_secs_f64() * 1e3);
+    };
+    // a group: everything in the lower left quarter
+    let (lo, hi) = (p(0.0, 0.0), p(50.0, 38.0));
+    let items = e.items_in_box(lo, hi, false);
+    eprintln!("group of {} items", items.len());
+    let orig = e.board.clone();
+    let g = GroupDrag { anchor: p(0.0, 0.0), orig, items };
+    let mut dx = 0.0;
+    for step in [0.0f64, 3.0, 12.0] {
+        e.move_group(&g, step, 0.0);
+        let s = Instant::now();
+        let n = pcb_core::smooth::finished(&e.board).map(|_| 1).unwrap_or(0);
+        eprintln!("finished after a move of {step:>4} mm: {:>8.1} ms ({n} pieces)", s.elapsed().as_secs_f64() * 1e3);
+    }
+    t("smooth::finished (before)", &mut || {
+        let _ = pcb_core::smooth::finished(&e.board);
+    });
+    t("move_group", &mut || {
+        dx += 0.5;
+        e.move_group(&g, dx, 0.0);
+    });
+    t("geometry_key", &mut || {
+        let _ = pcb_core::zonefill::geometry_key(&e.board);
+    });
+    t("connectivity", &mut || {
+        let _ = pcb_core::drc::connectivity(&e.board);
+    });
+    let conn = pcb_core::drc::connectivity(&e.board);
+    t("merged_fills (pours)", &mut || {
+        let _ = pcb_core::zonefill::merged_fills(&e.board, &conn);
+    });
+    t("dropped_islands", &mut || {
+        let _ = pcb_core::zonefill::dropped_islands(&e.board, &conn);
+    });
+    t("ratsnest", &mut || {
+        let _ = pcb_core::ratsnest::ratsnest(&e.board);
+    });
+    t("smooth::finished", &mut || {
+        let _ = pcb_core::smooth::finished(&e.board);
+    });
+    t("thermal_via_checks", &mut || {
+        let _ = pcb_core::drc::thermal_via_checks(&e.board);
+    });
+    t("board.clone()", &mut || {
+        let _ = e.board.clone();
+    });
 }

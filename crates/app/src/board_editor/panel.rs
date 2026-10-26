@@ -16,7 +16,7 @@ impl BoardEditor {
         match self.thermal_cache.get() {
             Some((k, n)) if k == key => n,
             // while parts are dragged the count is not made again (it fills every pour): the last one stands until the drag ends
-            Some((_, n)) if self.moving_parts_only() => n,
+            Some((_, n)) if self.slow_results_kept() => n,
             _ => {
                 let n = pcb_core::drc::thermal_via_checks(&self.board).len();
                 self.thermal_cache.set(Some((key, n)));

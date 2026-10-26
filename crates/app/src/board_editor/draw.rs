@@ -34,7 +34,7 @@ impl BoardEditor {
         }
         let key = pcb_core::zonefill::geometry_key(&self.board);
         let mut cache = self.zone_cache.borrow_mut();
-        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.moving_parts_only()) {
+        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.slow_results_kept()) {
             let fresh;
             let conn = match conn {
                 Some(c) => c,
@@ -92,7 +92,7 @@ impl BoardEditor {
         }
         let key = pcb_core::zonefill::geometry_key(&self.board);
         let mut cache = self.island_cache.borrow_mut();
-        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.moving_parts_only()) {
+        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.slow_results_kept()) {
             *cache = Some((key, pcb_core::zonefill::dropped_islands(&self.board, conn)));
         }
         let Some((_, islands)) = cache.as_ref() else { return };
