@@ -214,12 +214,13 @@ fn connectivity_with(board: &Board, with_pours: bool) -> Connectivity {
         }
     }
     // a zone joins every item of its net that has an anchor point inside it
-    for z in board.zones.iter().filter(|z| with_pours && !z.net.is_empty() && z.polygon.len() >= 3) {
+    for z in board.zones.iter().filter(|z| with_pours && !z.net.is_empty() && z.has_area()) {
         let nets = pad_nets(board, &mut parent, n_tracks);
         let mut members = vec![];
-        let pb = poly_bbox(&z.polygon);
+        // the pieces of the pour (an outline each, with its holes) and the box of each
+        let pieces: Vec<(crate::zonefill::FillShape, (f64, f64, f64, f64))> = z.region().into_iter().map(|s| { let b = poly_bbox(&s.outer); (s, b) }).collect();
         for (i, it) in items.iter().enumerate() {
-            if it.on(z.side) && anchors_inside_in(&it.geo, &z.polygon, pb) && !in_a_hole(&it.geo, &z.holes) {
+            if it.on(z.side) && pieces.iter().any(|(s, pb)| anchors_inside_in(&it.geo, &s.outer, *pb) && !in_a_hole(&it.geo, &s.holes)) {
                 let r = find(&mut parent, i);
                 if nets.get(&r) == Some(&z.net) {
                     members.push(i);

@@ -93,7 +93,7 @@ fn copper_fingerprint(b: &Board) -> f64 {
         s += (i as f64 + 1.0) * (p.pos.x * 0.9 + p.pos.y * 1.9) + p.net.len() as f64 * 0.01;
     }
     for z in &b.zones {
-        s += z.polygon.iter().map(|p| p.x * 0.3 + p.y * 0.4).sum::<f64>() + z.net.len() as f64;
+        s += z.shapes.iter().flat_map(|zs| zs.shape.verts.iter()).map(|v| v.p.x * 0.3 + v.p.y * 0.4).sum::<f64>() + z.net.len() as f64 + z.shapes.len() as f64;
     }
     for (n, a) in &b.net_currents {
         s += a * 13.0 + n.len() as f64;

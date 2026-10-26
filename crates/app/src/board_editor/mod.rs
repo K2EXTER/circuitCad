@@ -23,8 +23,6 @@ pub enum Tool {
     OutlineRect,
     OutlinePoly,
     Zone,
-    /// A polygon that is cut out of the pours of the layer (every net, or one).
-    ZoneHole,
 }
 
 use crate::icons::Icon;
@@ -35,7 +33,6 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::Track => "銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます",
         Tool::Via => "表面と裏面をつなぐ穴 (ビア) を置きます",
         Tool::Zone => "広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります",
-        Tool::ZoneHole => "ベタに銅のない穴を開けます。多角形を描くと、この層のベタ (すべてのネット) に穴が開きます。検出線のスルーホールのまわりの内層のベタを、離したいときなどに使います",
         Tool::OutlineRect => "基板の外形を矩形でドラッグして決めます",
         Tool::OutlinePoly => "基板の外形を多角形で決めます。クリックで頂点、ダブルクリックで確定",
         Tool::PadTh => "穴付き (スルーホール) の単独パッドを置きます",
@@ -61,7 +58,6 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::PadSmd, "パッド(SMD)", Icon::PadSmd),
     (Tool::Hole, "取付穴", Icon::Hole),
     (Tool::Silk, "シルク線", Icon::Silk),
-    (Tool::ZoneHole, "ベタの穴あけ", Icon::ZoneHole),
 ];
 
 /// What a click adds while a polygon is drawn (the board outline, a pour, a hole of a pour): like a drafting program, lines and arcs
@@ -259,6 +255,9 @@ pub struct BoardEditor {
     pending: Option<Point>,
     /// Polygon being drawn (board outline or zone).
     poly: Vec<Point>,
+    /// The corners of the shape being drawn (a corner and the point an arc from it passes through); `poly` is the same shape as short
+    /// straight pieces, for the picture and the checks.
+    poly_verts: Vec<pcb_core::shape::Vertex>,
     poly_mode: PolyMode,
     /// The point an arc passes through (`PolyMode::ArcThrough`), clicked and waiting for the end.
     arc_mid: Option<Point>,
@@ -321,7 +320,9 @@ pub struct BoardEditor {
     zone_clearance: f64,
     zone_thermal: bool,
     zone_remove_islands: bool,
-    /// The net whose pours the hole tool cuts (empty: the pours of every net on the layer).
+    /// What the shape drawn with the zone tool does to the pour: adds to it, or takes away (a hole).
+    zone_op: pcb_core::model::ShapeOp,
+    /// The net whose pours a shape that takes away cuts (empty: the pours of every net on the layer).
     hole_net: String,
     size_w: f64,
     size_h: f64,
@@ -403,6 +404,7 @@ impl Default for BoardEditor {
             pan: Vec2::new(25.0, 20.0),
             pending: None,
             poly: vec![],
+            poly_verts: vec![],
             poly_mode: PolyMode::default(),
             arc_mid: None,
             shape_round: 0.0,
@@ -442,6 +444,7 @@ impl Default for BoardEditor {
             zone_clearance: 0.3,
             zone_thermal: true,
             zone_remove_islands: true,
+            zone_op: pcb_core::model::ShapeOp::Add,
             hole_net: String::new(),
             size_w: 50.0,
             size_h: 40.0,

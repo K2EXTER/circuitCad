@@ -213,49 +213,156 @@ fn default_spoke() -> f64 {
     0.3
 }
 
-/// A copper pour. It is output as a filled region with clear-polarity cut-outs around every
-/// item of another net, so it follows the routing automatically.
+/// What a shape of a pour does to it: adds its area to the pour, or takes it away (a hole, a keep-out).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShapeOp {
+    #[default]
+    Add,
+    Sub,
+}
+
+/// One closed shape of a pour with what it does (the pour is all the shapes that add, minus all the shapes that take away).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ZoneShape {
+    pub shape: crate::shape::Shape,
+    #[serde(default)]
+    pub op: ShapeOp,
+}
+
+/// A copper pour. It is output as a filled region with clear-polarity cut-outs around every item of another net, so it follows the
+/// routing automatically. Its area is made of shapes (corners and arcs, kept so that they can be edited): the union of the shapes that
+/// add, minus the union of those that take away. Files with an outline and holes are read as one shape that adds and shapes that take away.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(from = "ZoneFile")]
 pub struct Zone {
     pub net: String,
     pub side: Side,
-    pub polygon: Vec<Point>,
-    #[serde(default = "default_zone_clearance")]
+    pub shapes: Vec<ZoneShape>,
     pub clearance: f64,
     /// Connect through-hole pads of the zone's net with four spokes instead of solid copper.
-    #[serde(default = "default_true")]
     pub thermal: bool,
-    #[serde(default = "default_thermal_gap")]
     pub thermal_gap: f64,
-    #[serde(default = "default_spoke")]
     pub spoke_width: f64,
     /// Drop pieces of the pour that touch no pad, via or track of its net (isolated fragments).
-    #[serde(default)]
     pub remove_islands: bool,
-    /// Areas inside the outline where this pour has no copper (a keep-out for a sense line, the ring that two pours of one net
-    /// make). Each is a polygon.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub holes: Vec<Vec<Point>>,
+}
+
+/// What a file holds for a pour: the shapes, or (older files) one outline and its holes.
+#[derive(Deserialize)]
+struct ZoneFile {
+    net: String,
+    side: Side,
+    #[serde(default)]
+    polygon: Vec<Point>,
+    #[serde(default)]
+    holes: Vec<Vec<Point>>,
+    #[serde(default)]
+    shapes: Vec<ZoneShape>,
+    #[serde(default = "default_zone_clearance")]
+    clearance: f64,
+    #[serde(default = "default_true")]
+    thermal: bool,
+    #[serde(default = "default_thermal_gap")]
+    thermal_gap: f64,
+    #[serde(default = "default_spoke")]
+    spoke_width: f64,
+    #[serde(default)]
+    remove_islands: bool,
+}
+
+impl From<ZoneFile> for Zone {
+    fn from(f: ZoneFile) -> Zone {
+        let mut shapes = f.shapes;
+        if shapes.is_empty() && f.polygon.len() >= 3 {
+            shapes.push(ZoneShape { shape: crate::shape::Shape::from_points(&f.polygon), op: ShapeOp::Add });
+            shapes.extend(f.holes.iter().filter(|h| h.len() >= 3).map(|h| ZoneShape { shape: crate::shape::Shape::from_points(h), op: ShapeOp::Sub }));
+        }
+        Zone { net: f.net, side: f.side, shapes, clearance: f.clearance, thermal: f.thermal, thermal_gap: f.thermal_gap, spoke_width: f.spoke_width, remove_islands: f.remove_islands }
+    }
 }
 
 impl Zone {
+    /// A pour with one outline of straight lines.
     pub fn new(net: &str, side: Side, polygon: Vec<Point>) -> Self {
+        Self::from_shape(net, side, crate::shape::Shape::from_points(&polygon))
+    }
+
+    /// A pour with one shape (corners and arcs).
+    pub fn from_shape(net: &str, side: Side, shape: crate::shape::Shape) -> Self {
         Self {
             net: net.to_string(),
             side,
-            polygon,
+            shapes: vec![ZoneShape { shape, op: ShapeOp::Add }],
             clearance: default_zone_clearance(),
             thermal: true,
             thermal_gap: default_thermal_gap(),
             spoke_width: default_spoke(),
             remove_islands: false,
-            holes: vec![],
         }
     }
 
-    /// True when `p` is inside the outline of the pour and in none of its holes (the copper can reach it).
+    /// The area of the pour: the shapes that add, joined, minus the shapes that take away. Several pieces when the shapes are apart;
+    /// a piece has its own holes.
+    pub fn region(&self) -> Vec<crate::zonefill::FillShape> {
+        crate::zonefill::zone_region(self)
+    }
+
+    /// True when `p` is in the copper area of the pour (inside a piece and in none of its holes).
     pub fn contains(&self, p: Point) -> bool {
-        crate::geom::inside_polygon(&self.polygon, p) && !self.holes.iter().any(|h| crate::geom::inside_polygon(h, p))
+        self.region().iter().any(|s| crate::geom::inside_polygon(&s.outer, p) && !s.holes.iter().any(|h| crate::geom::inside_polygon(h, p)))
+    }
+
+    /// The box round the shapes that add: (low corner, high corner).
+    pub fn bounds(&self) -> Option<(Point, Point)> {
+        let mut out: Option<(Point, Point)> = None;
+        for z in self.shapes.iter().filter(|z| z.op == ShapeOp::Add) {
+            if let Some((lo, hi)) = z.shape.bounds() {
+                out = Some(match out {
+                    None => (lo, hi),
+                    Some((a, b)) => (Point::new(a.x.min(lo.x), a.y.min(lo.y)), Point::new(b.x.max(hi.x), b.y.max(hi.y))),
+                });
+            }
+        }
+        out
+    }
+
+    /// Is `p` covered by the pour, going by the shapes alone (inside a shape that adds, in none that takes away)? Cheaper than
+    /// [`Zone::contains`], which joins the shapes; for the pointer, not for the copper.
+    pub fn covers(&self, p: Point) -> bool {
+        let inside = |zs: &ZoneShape| crate::geom::inside_polygon(&zs.shape.flatten(), p);
+        self.shapes.iter().any(|zs| zs.op == ShapeOp::Add && inside(zs)) && !self.shapes.iter().any(|zs| zs.op == ShapeOp::Sub && inside(zs))
+    }
+
+    /// The first shape that adds, as a polygon (for what only needs one outline to look at; empty when there is none).
+    pub fn outline(&self) -> Vec<Point> {
+        self.shapes.iter().find(|z| z.op == ShapeOp::Add).map(|z| z.shape.flatten()).unwrap_or_default()
+    }
+
+    /// Does the pour have an area (a shape that adds, of three or more corners)?
+    pub fn has_area(&self) -> bool {
+        self.shapes.iter().any(|z| z.op == ShapeOp::Add && z.shape.verts.len() >= 2 && z.shape.flatten().len() >= 3)
+    }
+
+    /// Move the pour by `d` (every shape).
+    pub fn translate(&mut self, d: Point) {
+        for z in &mut self.shapes {
+            z.shape = z.shape.moved(d);
+        }
+    }
+
+    /// The shapes that take away, as polygons (holes and keep-outs).
+    pub fn holes(&self) -> Vec<Vec<Point>> {
+        self.shapes.iter().filter(|z| z.op == ShapeOp::Sub).map(|z| z.shape.flatten()).collect()
+    }
+
+    /// Make the pour one outline of straight lines (what the shapes were is gone).
+    pub fn set_outline(&mut self, polygon: &[Point]) {
+        self.shapes = vec![ZoneShape { shape: crate::shape::Shape::from_points(polygon), op: ShapeOp::Add }];
+    }
+
+    /// Take away a hole polygon (a shape of straight lines).
+    pub fn add_hole(&mut self, polygon: &[Point]) {
+        self.shapes.push(ZoneShape { shape: crate::shape::Shape::from_points(polygon), op: ShapeOp::Sub });
     }
 }
 

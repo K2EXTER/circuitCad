@@ -81,7 +81,7 @@ fn polygon_tools_need_three_points() {
     assert!(e.status.contains("3点"));
 
     e.tool = Tool::OutlinePoly;
-    e.poly = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(10.0, 10.0), p(10.0, 20.0), p(0.0, 20.0)];
+    set_poly(&mut e, &vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(10.0, 10.0), p(10.0, 20.0), p(0.0, 20.0)]);
     e.finish_polygon();
     assert_eq!(e.board.outline.len(), 6, "an L-shaped board");
     e.undo();
@@ -90,39 +90,86 @@ fn polygon_tools_need_three_points() {
     // zone: the duplicate last point from a double-click is dropped
     e.tool = Tool::Zone;
     e.zone_net = "GND".into();
-    e.poly = vec![p(1.0, 1.0), p(9.0, 1.0), p(9.0, 9.0), p(9.0, 9.0)];
+    set_poly(&mut e, &vec![p(1.0, 1.0), p(9.0, 1.0), p(9.0, 9.0), p(9.0, 9.0)]);
     e.finish_polygon();
     assert_eq!(e.board.zones.len(), 1);
-    assert_eq!(e.board.zones[0].polygon.len(), 3);
+    assert_eq!(e.board.zones[0].outline().len(), 3);
     assert_eq!((e.board.zones[0].net.as_str(), e.board.zones[0].side), ("GND", Side::Top));
 }
 
 #[test]
-fn a_zone_polygon_can_be_a_hole_of_the_pours_of_a_net() {
+fn a_shape_that_takes_away_is_a_child_of_the_pour_and_goes_with_undo() {
     let mut e = BoardEditor::default();
     e.tool = Tool::Zone;
     e.zone_net = "VNEG".into();
-    e.poly = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 20.0), p(0.0, 20.0)];
+    set_poly(&mut e, &[p(0.0, 0.0), p(20.0, 0.0), p(20.0, 20.0), p(0.0, 20.0)]);
     e.finish_polygon();
-    // the hole tool cuts the pours of every net on the layer, no net to choose
-    e.tool = Tool::ZoneHole;
-    e.poly = vec![p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)];
+    assert_eq!(e.selected, Some(Item::Zone(0)), "the new pour is selected, to go on drawing in it");
+    // take away: no net to choose, and no new pour
+    e.selected = None;
+    e.zone_op = pcb_core::model::ShapeOp::Sub;
+    set_poly(&mut e, &[p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)]);
     e.finish_polygon();
     assert_eq!(e.board.zones.len(), 1, "a hole is not a new pour");
-    assert_eq!(e.board.zones[0].holes.len(), 1);
+    assert_eq!(e.board.zones[0].holes().len(), 1);
     e.undo();
-    assert!(e.board.zones[0].holes.is_empty(), "the hole goes with undo");
+    assert!(e.board.zones[0].holes().is_empty(), "the hole goes with undo");
     // one net only: a pour of another net is left alone and the status says so
     e.hole_net = "GND".into();
-    e.poly = vec![p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)];
+    set_poly(&mut e, &[p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)]);
     e.finish_polygon();
-    assert!(e.board.zones[0].holes.is_empty() && e.status.contains("ありません"));
+    assert!(e.board.zones[0].holes().is_empty() && e.status.contains("ありません"));
     // a polygon drawn with clicks closes by clicking the first point
     e.hole_net.clear();
     for q in [p(10.0, 10.0), p(12.0, 10.0), p(12.0, 12.0), p(10.0, 10.0)] {
         e.click(q);
     }
-    assert_eq!(e.board.zones[0].holes.len(), 1);
+    assert_eq!(e.board.zones[0].holes().len(), 1);
+}
+
+#[test]
+fn a_shape_drawn_with_a_pour_selected_is_added_to_that_pour_and_keeps_its_arcs() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "GND".into();
+    set_poly(&mut e, &[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)]);
+    e.finish_polygon();
+    // a circle beside it, drawn while the pour is selected: a second shape of the same pour, two arcs
+    e.poly_mode = PolyMode::Circle;
+    e.click(p(14.0, 5.0));
+    e.click(p(17.0, 5.0));
+    assert_eq!(e.board.zones.len(), 1);
+    let z = &e.board.zones[0];
+    assert_eq!(z.shapes.len(), 2);
+    assert_eq!((z.shapes[1].shape.verts.len(), z.shapes[1].op), (2, pcb_core::model::ShapeOp::Add));
+    assert!(z.shapes[1].shape.verts.iter().all(|v| v.arc_mid.is_some()), "the circle is kept as arcs");
+    assert_eq!(z.region().len(), 2, "the two shapes are apart: two pieces");
+    // a shape drawn over the arc mode: the arc is kept as the point it passes through
+    e.poly_mode = PolyMode::Lines;
+    e.selected = None;
+    e.click(p(30.0, 0.0));
+    e.click(p(40.0, 0.0));
+    e.poly_mode = PolyMode::ArcThrough;
+    e.click(p(43.0, 5.0));
+    e.click(p(40.0, 10.0));
+    e.poly_mode = PolyMode::Lines;
+    e.click(p(30.0, 10.0));
+    e.click(p(30.0, 0.0));
+    assert_eq!(e.board.zones.len(), 2, "no pour was selected: a pour of its own");
+    let arcs = e.board.zones[1].shapes[0].shape.verts.iter().filter(|v| v.arc_mid.is_some()).count();
+    assert_eq!(arcs, 1);
+    // the bake button's work: the shapes become straight corners, the area stays
+    let before = e.board.zones[1].region();
+    assert!(pcb_core::zonefill::bake_zone(&mut e.board, 1));
+    assert!(e.board.zones[1].shapes.iter().all(|zs| zs.shape.verts.iter().all(|v| v.arc_mid.is_none())));
+    let after = e.board.zones[1].region();
+    assert!((area(&before[0].outer) - area(&after[0].outer)).abs() < 0.5);
+}
+
+/// A polygon of straight lines as if its corners had been clicked (for the tests that finish it by hand).
+fn set_poly(e: &mut BoardEditor, pts: &[Point]) {
+    e.poly = pts.to_vec();
+    e.poly_verts = pts.iter().map(|q| pcb_core::shape::Vertex::line(*q)).collect();
 }
 
 fn area(poly: &[Point]) -> f64 {
@@ -147,8 +194,10 @@ fn a_shape_of_lines_and_an_arc_is_confirmed_as_a_pour() {
     e.click(p(0.0, 0.0));
     assert_eq!(e.board.zones.len(), 1);
     let z = &e.board.zones[0];
-    assert!(area(&z.polygon) > 100.0 + 5.0, "the arc bulges out of the 10 x 10 square: {}", area(&z.polygon));
-    assert!(z.polygon.iter().any(|q| q.x > 11.0), "points of the arc");
+    let outline = z.shapes[0].shape.flatten();
+    assert!(area(&outline) > 100.0 + 5.0, "the arc bulges out of the 10 x 10 square: {}", area(&outline));
+    assert!(outline.iter().any(|q| q.x > 11.0), "points of the arc");
+    assert_eq!(z.shapes[0].shape.verts.iter().filter(|v| v.arc_mid == Some(p(13.0, 5.0))).count(), 1, "the arc keeps its middle point");
 }
 
 #[test]
@@ -178,35 +227,37 @@ fn a_circle_and_a_rounded_rectangle_are_confirmed_at_once() {
     assert!(e.board.zones.is_empty(), "the centre alone is not a shape");
     e.click(p(15.0, 10.0));
     assert_eq!(e.board.zones.len(), 1);
-    assert!((area(&e.board.zones[0].polygon) - std::f64::consts::PI * 25.0).abs() < 1.0);
+    assert!((area(&e.board.zones[0].outline()) - std::f64::consts::PI * 25.0).abs() < 1.0);
+    e.selected = None; // no pour selected: the next shape is a pour of its own
     e.poly_mode = PolyMode::Rect;
     e.shape_round = 2.0;
     e.click(p(30.0, 0.0));
     e.click(p(50.0, 10.0));
     assert_eq!(e.board.zones.len(), 2);
-    let r = &e.board.zones[1].polygon;
+    let r = &e.board.zones[1].outline();
     assert!(r.len() > 4 && area(r) < 200.0 && area(r) > 190.0, "rounded corners: {} points, area {}", r.len(), area(r));
 }
 
 #[test]
-fn the_hole_tool_takes_the_same_shapes() {
+fn a_shape_that_takes_away_can_be_a_circle_too() {
     let mut e = BoardEditor::default();
     e.tool = Tool::Zone;
     e.zone_net = "VNEG".into();
-    e.poly = vec![p(0.0, 0.0), p(40.0, 0.0), p(40.0, 40.0), p(0.0, 40.0)];
+    set_poly(&mut e, &[p(0.0, 0.0), p(40.0, 0.0), p(40.0, 40.0), p(0.0, 40.0)]);
     e.finish_polygon();
-    e.tool = Tool::ZoneHole;
+    e.zone_op = pcb_core::model::ShapeOp::Sub;
     e.poly_mode = PolyMode::Circle;
     e.click(p(20.0, 20.0));
     e.click(p(23.0, 20.0));
     assert_eq!(e.board.zones.len(), 1);
-    assert_eq!(e.board.zones[0].holes.len(), 1);
-    assert!((area(&e.board.zones[0].holes[0]) - std::f64::consts::PI * 9.0).abs() < 0.5);
+    assert_eq!(e.board.zones[0].holes().len(), 1);
+    assert!((area(&e.board.zones[0].holes()[0]) - std::f64::consts::PI * 9.0).abs() < 0.5);
+    assert!(!e.board.zones[0].contains(p(20.0, 20.0)) && e.board.zones[0].contains(p(5.0, 5.0)));
     // a right click drops the centre that was clicked
     e.click(p(30.0, 30.0));
     assert!(e.pending.is_some());
     e.leave_tool();
-    assert!(e.pending.is_none() && e.tool == Tool::ZoneHole);
+    assert!(e.pending.is_none() && e.tool == Tool::Zone);
 }
 
 #[test]
@@ -583,7 +634,7 @@ fn right_click_in_the_board_editor_confirms_the_drawing_then_returns_to_select()
     assert!(e.leave_tool() && matches!(e.tool, Tool::Select), "the second one returns to Select");
     // a polygon of 3+ points is closed by the right click, a shorter one is dropped
     e.tool = Tool::OutlinePoly;
-    e.poly = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0)];
+    set_poly(&mut e, &vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0)]);
     assert!(e.leave_tool() && e.poly.is_empty() && matches!(e.tool, Tool::OutlinePoly));
     assert_eq!(e.board.outline.len(), 3, "the polygon became the outline");
     e.poly.push(p(0.0, 0.0));

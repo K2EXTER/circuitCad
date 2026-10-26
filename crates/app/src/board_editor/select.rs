@@ -61,13 +61,14 @@ impl BoardEditor {
             if !pick.zones || !side_ok(z.side) {
                 continue;
             }
-            let d = polygon_edge_dist(&z.polygon, p);
+            // the outline under the pointer: the edge of any shape of the pour
+            let d = z.shapes.iter().map(|zs| polygon_edge_dist(&zs.shape.flatten(), p)).fold(f64::MAX, f64::min);
             if d <= tol {
                 if edge.is_none_or(|(_, best)| d < best) {
                     edge = Some((i, d));
                 }
-            } else if inside_polygon(&z.polygon, p) {
-                let area = z.polygon.iter().zip(z.polygon.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0;
+            } else if z.covers(p) {
+                let area: f64 = z.shapes.iter().filter(|zs| zs.op == pcb_core::model::ShapeOp::Add).map(|zs| { let f = zs.shape.flatten(); f.iter().zip(f.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0 }).sum();
                 if inner.is_none_or(|(_, best)| area < best) {
                     inner = Some((i, area));
                 }
@@ -145,11 +146,12 @@ impl BoardEditor {
             }
         }
         for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
-            let n = z.polygon.len();
+            let outline = z.outline();
+            let n = outline.len();
             let hit = if crossing {
-                (0..n).any(|k| segment_hits_rect(z.polygon[k], z.polygon[(k + 1) % n], lo, hi))
+                (0..n).any(|k| segment_hits_rect(outline[k], outline[(k + 1) % n], lo, hi))
             } else {
-                z.polygon.iter().all(|p| rect_contains(lo, hi, *p))
+                outline.iter().all(|p| rect_contains(lo, hi, *p))
             };
             if n >= 3 && hit {
                 out.push(Item::Zone(i));
@@ -208,7 +210,7 @@ impl BoardEditor {
             Item::Pad(i) if i < self.board.pads.len() => vec![self.board.pads[i].pos],
             Item::Via(i) if i < self.board.vias.len() => vec![self.board.vias[i].pos],
             Item::Hole(i) if i < self.board.holes.len() => vec![self.board.holes[i].pos],
-            Item::Zone(i) if i < self.board.zones.len() => self.board.zones[i].polygon.clone(),
+            Item::Zone(i) if i < self.board.zones.len() => self.board.zones[i].outline(),
             _ => vec![],
         }
     }
@@ -250,7 +252,12 @@ impl BoardEditor {
                 }
                 Item::Zone(i) => {
                     if let (Some(o), Some(t)) = (g.orig.zones.get(i), self.board.zones.get_mut(i)) {
-                        t.polygon = o.polygon.iter().map(|p| mv(*p)).collect();
+                        // every shape moves by what the first corner moved by
+                        if let Some(first) = o.outline().first().copied() {
+                            let to = mv(first);
+                            let d = Point::new(to.x - first.x, to.y - first.y);
+                            t.shapes = o.shapes.iter().map(|zs| pcb_core::model::ZoneShape { shape: zs.shape.moved(d), op: zs.op }).collect();
+                        }
                     }
                 }
                 Item::Label(i) => {

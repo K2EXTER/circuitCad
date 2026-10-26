@@ -136,7 +136,7 @@ fn pad_on_copper(p: &Pad, side: Side) -> bool {
 /// of the zone's net (plus the board edge and mounting holes), then thermal spokes. The normal
 /// copper is drawn afterwards, on top of the cut-outs.
 fn zones(g: &mut GerberLayer, board: &Board, side: Side, conn: &Connectivity) {
-    for z in board.zones.iter().filter(|z| z.side == side && z.polygon.len() >= 3) {
+    for z in board.zones.iter().filter(|z| z.side == side && z.has_area()) {
         let same = |net: Option<&str>| !z.net.is_empty() && net == Some(z.net.as_str());
         // the pour itself: already cut to the board outline and cleared around other nets, holes and the edge
         for shape in crate::zonefill::zone_fill(board, z, conn) {

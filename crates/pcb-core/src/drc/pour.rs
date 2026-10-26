@@ -85,7 +85,7 @@ pub fn pour_split_airwires(board: &Board) -> Vec<crate::ratsnest::Airwire> {
 
 fn pour_splits(board: &Board) -> Vec<PourSplit> {
     use crate::geom::inside_polygon;
-    if !board.zones.iter().any(|z| !z.net.is_empty() && z.polygon.len() >= 3) {
+    if !board.zones.iter().any(|z| !z.net.is_empty() && z.has_area()) {
         return vec![];
     }
     let base = connectivity_without_pours(board);
@@ -101,7 +101,7 @@ fn pour_splits(board: &Board) -> Vec<PourSplit> {
         }
         r
     }
-    let mut nets: Vec<&str> = board.zones.iter().filter(|z| !z.net.is_empty() && z.polygon.len() >= 3).map(|z| z.net.as_str()).collect();
+    let mut nets: Vec<&str> = board.zones.iter().filter(|z| !z.net.is_empty() && z.has_area()).map(|z| z.net.as_str()).collect();
     nets.sort_unstable();
     nets.dedup();
     let fills = crate::zonefill::merged_fills(board, &base);

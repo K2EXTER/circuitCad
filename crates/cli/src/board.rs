@@ -222,18 +222,23 @@ impl Session {
                 Ok(obj(json!({"file": out, "width": pic.w, "height": pic.h, "legend": pic.legend})))
             }
             "zones" => {
-                // board zones [merge]: the pours (layer, net, corners, holes, area); `merge` joins the pours of one net and layer that
-                // overlap or touch into one (a pour with a hole keeps it)
+                // board zones [merge | bake]: the pours (layer, net, its shapes, area). Each pour is made of shapes that add and shapes that take away
+                // (a hole, a keep-out), with corners and arcs kept. `merge` joins the pours of one net and layer that overlap or touch into one and
+                // bakes it; `bake` turns the shapes of every pour into the final corners (straight lines): the area stays, the arcs and the
+                // separate shapes are gone. Both also tidy the corners (duplicates and straight-line points out).
                 let board = self.board_mut()?;
-                let merging = rest.first().is_some_and(|a| a.eq_ignore_ascii_case("merge"));
+                let word = rest.first().map(|a| a.to_ascii_lowercase());
+                let merging = word.as_deref() == Some("merge");
+                let baking = word.as_deref() == Some("bake");
                 let merged = if merging { Some(pcb_core::zonefill::merge_all_zones(board)) } else { None };
-                // `merge` also tidies the outlines: duplicate and straight-line points out, small gaps (under 0.5 mm²) filled
-                let tidied = if merging { Some(pcb_core::zonefill::tidy_zones(board)) } else { None };
+                let baked = if baking { Some((0..board.zones.len()).filter(|&i| pcb_core::zonefill::bake_zone(board, i)).count()) } else { None };
+                let tidied = if merging || baking { Some(pcb_core::zonefill::tidy_zones(board)) } else { None };
                 let list: Vec<_> = board.zones.iter().enumerate().map(|(i, z)| {
-                    let area = z.polygon.iter().zip(z.polygon.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0;
-                    json!({"index": i, "net": z.net, "layer": layer_name(z.side), "corners": z.polygon.len(), "holes": z.holes.len(), "area_mm2": (area * 10.0).round() / 10.0})
+                    let area: f64 = z.region().iter().map(|s| pcb_core::geom::signed_area(&s.outer).abs() - s.holes.iter().map(|h| pcb_core::geom::signed_area(h).abs()).sum::<f64>()).sum();
+                    let shapes: Vec<_> = z.shapes.iter().map(|zs| json!({"op": if zs.op == pcb_core::model::ShapeOp::Add { "add" } else { "sub" }, "corners": zs.shape.verts.len(), "arcs": zs.shape.verts.iter().filter(|v| v.arc_mid.is_some()).count()})).collect();
+                    json!({"index": i, "net": z.net, "layer": layer_name(z.side), "shapes": shapes, "area_mm2": (area * 10.0).round() / 10.0})
                 }).collect();
-                Ok(obj(json!({"zones": list, "merged": merged, "points_removed": tidied.map(|t| t.0), "gaps_filled": tidied.map(|t| t.1)})))
+                Ok(obj(json!({"zones": list, "merged": merged, "baked": baked, "points_removed": tidied.map(|t| t.0), "shapes_dropped": tidied.map(|t| t.1)})))
             }
             "keepout" => {
                 // board keepout layer=inner1 [net=VNEG] rect=x0,y0,x1,y1 | circle=x,y,r | pad=J3E,J3F [margin=1.0]: no copper of the pours on
@@ -251,15 +256,14 @@ impl Session {
                     let l: Vec<f64> = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{what}: {x} is not a number"))).collect::<Result<_, _>>()?;
                     if l.len() == n { Ok(l) } else { Err(format!("{what}: {n} numbers are needed")) }
                 };
-                let mut shapes: Vec<Vec<pcb_core::model::Point>> = vec![];
+                let mut shapes: Vec<pcb_core::shape::Shape> = vec![];
                 if let Some(v) = opt(&kv, "rect") {
                     let r = numbers(v, 4, "rect=x0,y0,x1,y1")?;
-                    let p = |x: f64, y: f64| pcb_core::model::Point::new(x, y);
-                    shapes.push(vec![p(r[0], r[1]), p(r[2], r[1]), p(r[2], r[3]), p(r[0], r[3])]);
+                    shapes.push(pcb_core::shape::Shape::rect(r[0], r[1], r[2], r[3], 0.0));
                 }
                 if let Some(v) = opt(&kv, "circle") {
                     let c = numbers(v, 3, "circle=x,y,r")?;
-                    shapes.push(pcb_core::zonefill::circle_polygon(pcb_core::model::Point::new(c[0], c[1]), c[2]));
+                    shapes.push(pcb_core::shape::Shape::circle(pcb_core::model::Point::new(c[0], c[1]), c[2]));
                 }
                 if let Some(v) = opt(&kv, "pad") {
                     let margin = match opt(&kv, "margin") {
@@ -274,14 +278,14 @@ impl Session {
                         }
                         for p in pads {
                             let (w, h) = p.shape.size();
-                            shapes.push(pcb_core::zonefill::circle_polygon(p.pos, w.max(h) / 2.0 + margin));
+                            shapes.push(pcb_core::shape::Shape::circle(p.pos, w.max(h) / 2.0 + margin));
                         }
                     }
                 }
                 if shapes.is_empty() {
                     return Err("board keepout layer=inner1 [net=NET] rect=x0,y0,x1,y1 | circle=x,y,r | pad=REF[,REF] [margin=1.0]".into());
                 }
-                let holes: usize = shapes.iter().map(|s| pcb_core::zonefill::add_zone_hole(board, side, net.as_deref(), s)).sum();
+                let holes: usize = shapes.iter().map(|s| pcb_core::zonefill::add_zone_cut(board, side, net.as_deref(), s)).sum();
                 Ok(obj(json!({"areas": shapes.len(), "holes": holes})))
             }
             "copper" => {

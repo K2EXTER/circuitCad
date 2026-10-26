@@ -110,10 +110,11 @@ impl BoardEditor {
             self.pending = None;
             self.arc_mid = None;
             self.poly.clear();
+            self.poly_verts.clear();
             self.multi.clear();
             self.boxsel = None;
         }
-        if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) {
+        if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
             self.finish_polygon();
         }
         if pressed(Key::L) {

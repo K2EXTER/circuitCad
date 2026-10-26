@@ -7,6 +7,7 @@
 use crate::drc::Connectivity;
 use crate::geom::signed_area;
 use crate::model::*;
+use crate::shape::Shape;
 use i_overlay::core::fill_rule::FillRule;
 use i_overlay::core::overlay_rule::OverlayRule;
 use i_overlay::float::single::SingleFloatOverlay;
@@ -146,19 +147,55 @@ fn inside_shape(shape: &FillShape, p: Point) -> bool {
     inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p))
 }
 
-/// Join the pour `board.zones[idx]` with the pours of its net and layer that overlap or touch it, into one pour (the new
-/// pour's settings are kept). A union that has a hole (two pours that make a ring) keeps the hole in the joined pour. Pours that
-/// touch the joined one only after it has grown are joined too. Returns how many pours were absorbed and the new index of the
-/// joined pour.
+/// The area of a pour: the shapes that add, joined, minus the shapes that take away.
+pub fn zone_region(zone: &Zone) -> Vec<FillShape> {
+    let adds: Vec<FillShape> = zone
+        .shapes
+        .iter()
+        .filter(|z| z.op == ShapeOp::Add)
+        .map(|z| z.shape.flatten())
+        .filter(|p| p.len() >= 3)
+        .map(|outer| FillShape { outer, holes: vec![] })
+        .collect();
+    if adds.is_empty() {
+        return vec![];
+    }
+    let pieces = union(&adds);
+    let subs: Vec<Path> = zone.shapes.iter().filter(|z| z.op == ShapeOp::Sub).map(|z| z.shape.flatten()).filter(|p| p.len() >= 3).map(|p| ccw(&p)).collect();
+    if subs.is_empty() {
+        return pieces;
+    }
+    let mut out = vec![];
+    for piece in pieces {
+        let mut paths: Vec<Path> = vec![ccw(&piece.outer)];
+        for h in &piece.holes {
+            let mut hp = ccw(h);
+            hp.reverse();
+            paths.push(hp);
+        }
+        for shape in paths.overlay(&subs, OverlayRule::Difference, FillRule::NonZero) {
+            let mut it = shape.into_iter();
+            let Some(outer) = it.next() else { continue };
+            let outer = to_points(&outer);
+            if signed_area(&outer).abs() >= 1e-6 {
+                out.push(FillShape { outer, holes: it.map(|h| to_points(&h)).collect() });
+            }
+        }
+    }
+    out
+}
+
+/// Join the pour `board.zones[idx]` with the pours of its net and layer that overlap or touch it, into one pour (its settings are
+/// kept), and bake the result: the pour then holds the joined area as shapes of straight lines (a shape that adds for each piece, a
+/// shape that takes away for each hole), with no arcs and no shape of its own left. Returns how many pours were absorbed and the new
+/// index of the joined pour.
 pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
     let Some(z) = board.zones.get(idx) else { return (0, idx) };
     let (net, side) = (z.net.clone(), z.side);
     if net.is_empty() {
         return (0, idx);
     }
-    let as_shape = |poly: &[Point], holes: &[Vec<Point>]| FillShape { outer: poly.to_vec(), holes: holes.to_vec() };
-    let mut poly = z.polygon.clone();
-    let mut holes = z.holes.clone();
+    let mut region = z.region();
     let mut absorbed: Vec<usize> = vec![];
     loop {
         let mut grew = false;
@@ -166,10 +203,13 @@ pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
             if k == idx || absorbed.contains(&k) || o.net != net || o.side != side {
                 continue;
             }
-            let joined = union(&[as_shape(&poly, &holes), as_shape(&o.polygon, &o.holes)]);
-            if let [one] = joined.as_slice() {
-                poly = one.outer.clone();
-                holes = one.holes.clone();
+            let other = o.region();
+            let mut both = region.clone();
+            both.extend(other.iter().cloned());
+            let joined = union(&both);
+            // they are one piece of copper when the join has fewer pieces than the two had
+            if joined.len() < region.len() + other.len() {
+                region = joined;
                 absorbed.push(k);
                 grew = true;
             }
@@ -181,13 +221,43 @@ pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
     if absorbed.is_empty() {
         return (0, idx);
     }
-    board.zones[idx].polygon = clean_outline(&poly);
-    board.zones[idx].holes = holes.iter().map(|h| clean_outline(h)).filter(|h| h.len() >= 3 && signed_area(h).abs() >= MIN_HOLE_AREA).collect();
+    board.zones[idx].shapes = baked_shapes(&region);
     absorbed.sort_unstable();
     for &k in absorbed.iter().rev() {
         board.zones.remove(k);
     }
     (absorbed.len(), idx - absorbed.iter().filter(|&&k| k < idx).count())
+}
+
+/// The shapes that make `region`: a shape of straight lines that adds for each piece, one that takes away for each hole (a hole
+/// smaller than [`MIN_HOLE_AREA`] is a gap a join left, and is filled).
+fn baked_shapes(region: &[FillShape]) -> Vec<ZoneShape> {
+    let mut out = vec![];
+    for piece in region {
+        let outer = clean_outline(&piece.outer);
+        if outer.len() >= 3 {
+            out.push(ZoneShape { shape: Shape::from_points(&outer), op: ShapeOp::Add });
+        }
+        for h in &piece.holes {
+            let h = clean_outline(h);
+            if h.len() >= 3 && signed_area(&h).abs() >= MIN_HOLE_AREA {
+                out.push(ZoneShape { shape: Shape::from_points(&h), op: ShapeOp::Sub });
+            }
+        }
+    }
+    out
+}
+
+/// Bake the pour `board.zones[idx]`: its area (the shapes that add, minus those that take away) becomes shapes of straight lines, so the
+/// vertices are the final ones. Returns false when the pour has no area.
+pub fn bake_zone(board: &mut Board, idx: usize) -> bool {
+    let Some(z) = board.zones.get(idx) else { return false };
+    let region = z.region();
+    if region.is_empty() {
+        return false;
+    }
+    board.zones[idx].shapes = baked_shapes(&region);
+    true
 }
 
 /// A hole of a joined pour smaller than this (mm²) is a gap the join left between the pours, not a keep-out someone drew: it is
@@ -225,22 +295,27 @@ pub fn clean_outline(poly: &[Point]) -> Vec<Point> {
     }
 }
 
-/// Tidy the outlines of all pours: duplicate and straight-line points taken out, holes smaller than [`MIN_HOLE_AREA`] filled.
-/// Returns (points taken out, holes filled).
+/// Tidy the shapes of all pours: duplicate and straight-line points taken out of the shapes that have no arc, and shapes that take
+/// away less than [`MIN_HOLE_AREA`] (mm²) dropped. Returns (points taken out, shapes dropped).
 pub fn tidy_zones(board: &mut Board) -> (usize, usize) {
-    let (mut points, mut holes) = (0, 0);
+    let (mut points, mut dropped) = (0, 0);
     for z in &mut board.zones {
-        let before = z.polygon.len() + z.holes.iter().map(Vec::len).sum::<usize>();
-        let poly = clean_outline(&z.polygon);
-        if poly.len() >= 3 {
-            z.polygon = poly;
+        for zs in &mut z.shapes {
+            if zs.shape.verts.iter().any(|v| v.arc_mid.is_some()) {
+                continue;
+            }
+            let pts: Vec<Point> = zs.shape.verts.iter().map(|v| v.p).collect();
+            let clean = clean_outline(&pts);
+            if clean.len() >= 3 && clean.len() < pts.len() {
+                points += pts.len() - clean.len();
+                zs.shape = Shape::from_points(&clean);
+            }
         }
-        let n = z.holes.len();
-        z.holes = z.holes.iter().map(|h| clean_outline(h)).filter(|h| h.len() >= 3 && signed_area(h).abs() >= MIN_HOLE_AREA).collect();
-        holes += n - z.holes.len();
-        points += before.saturating_sub(z.polygon.len() + z.holes.iter().map(Vec::len).sum::<usize>());
+        let n = z.shapes.len();
+        z.shapes.retain(|zs| zs.op != ShapeOp::Sub || signed_area(&zs.shape.flatten()).abs() >= MIN_HOLE_AREA);
+        dropped += n - z.shapes.len();
     }
-    (points, holes)
+    (points, dropped)
 }
 
 /// Join every pour that overlaps or touches another of its net and layer. Returns how many pours were absorbed (the board has
@@ -259,39 +334,28 @@ pub fn merge_all_zones(board: &mut Board) -> usize {
     total
 }
 
-/// Cut a hole into every pour of layer `side` (of the net `net` when given, else of every net) that the polygon reaches: the
-/// pour has no copper in it. Returns how many pours got the hole.
-pub fn add_zone_hole(board: &mut Board, side: Side, net: Option<&str>, polygon: &[Point]) -> usize {
-    if polygon.len() < 3 {
-        return 0;
-    }
-    let (lo, hi) = polygon.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(l, h), p| ([l[0].min(p.x), l[1].min(p.y)], [h[0].max(p.x), h[1].max(p.y)]));
+/// Take away `shape` from every pour of layer `side` (of the net `net` when given, else of every net) that its box reaches: the
+/// pour has no copper in it. The shape is added to the pour as a shape that takes away. Returns how many pours got it.
+pub fn add_zone_cut(board: &mut Board, side: Side, net: Option<&str>, shape: &Shape) -> usize {
+    let Some((lo, hi)) = shape.bounds() else { return 0 };
     let mut n = 0;
-    for z in board.zones.iter_mut().filter(|z| z.side == side && net.is_none_or(|w| z.net == w) && z.polygon.len() >= 3) {
-        let (zl, zh) = z.polygon.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(l, h), p| ([l[0].min(p.x), l[1].min(p.y)], [h[0].max(p.x), h[1].max(p.y)]));
-        if zl[0] <= hi[0] && zh[0] >= lo[0] && zl[1] <= hi[1] && zh[1] >= lo[1] {
-            z.holes.push(polygon.to_vec());
+    for z in board.zones.iter_mut().filter(|z| z.side == side && net.is_none_or(|w| z.net == w)) {
+        let Some((zl, zh)) = z.bounds() else { continue };
+        if zl.x <= hi.x && zh.x >= lo.x && zl.y <= hi.y && zh.y >= lo.y {
+            z.shapes.push(ZoneShape { shape: shape.clone(), op: ShapeOp::Sub });
             n += 1;
         }
     }
     n
 }
 
-/// A polygon for a circle (the hole round a through-hole pad).
-pub fn circle_polygon(c: Point, r: f64) -> Vec<Point> {
-    let n = circle_steps(r).max(16);
-    (0..n).map(|k| {
-        let a = std::f64::consts::TAU * k as f64 / n as f64;
-        Point::new(c.x + r * a.cos(), c.y + r * a.sin())
-    }).collect()
-}
-
-/// Take the holes away from the pours of layer `side` (of the net `net` when given). Returns how many holes were removed.
+/// Take away the shapes that take away from the pours of layer `side` (of the net `net` when given). Returns how many were removed.
 pub fn clear_zone_holes(board: &mut Board, side: Side, net: Option<&str>) -> usize {
     let mut n = 0;
     for z in board.zones.iter_mut().filter(|z| z.side == side && net.is_none_or(|w| z.net == w)) {
-        n += z.holes.len();
-        z.holes.clear();
+        let before = z.shapes.len();
+        z.shapes.retain(|zs| zs.op != ShapeOp::Sub);
+        n += before - z.shapes.len();
     }
     n
 }
@@ -395,7 +459,8 @@ fn raw_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
 }
 
 fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillShape> {
-    if zone.polygon.len() < 3 {
+    let region = zone.region();
+    if region.is_empty() {
         return vec![];
     }
     let c = zone.clearance;
@@ -428,17 +493,15 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
     }
     // a later pour of another net on the same layer wins where they overlap; this one keeps its clearance from it
     if let Some(me) = board.zones.iter().position(|z| std::ptr::eq(z, zone)) {
-        for other in board.zones[me + 1..].iter().filter(|o| o.side == side && o.polygon.len() >= 3 && !same(Some(o.net.as_str()))) {
-            cuts.push(ccw(&other.polygon));
-            let m = other.polygon.len();
-            for i in 0..m {
-                cuts.push(capsule(other.polygon[i], other.polygon[(i + 1) % m], c));
+        for other in board.zones[me + 1..].iter().filter(|o| o.side == side && !same(Some(o.net.as_str()))) {
+            for piece in other.region() {
+                cuts.push(ccw(&piece.outer));
+                let m = piece.outer.len();
+                for i in 0..m {
+                    cuts.push(capsule(piece.outer[i], piece.outer[(i + 1) % m], c));
+                }
             }
         }
-    }
-    // the holes of the pour itself: no copper there
-    for h in zone.holes.iter().filter(|h| h.len() >= 3) {
-        cuts.push(ccw(h));
     }
     let n = board.outline.len();
     let edge = c.max(board.rules.edge_clearance);
@@ -449,9 +512,11 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
     }
     // only what reaches the pour can cut it (a small pour among many tracks and pads is cut by a handful of them)
     let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
-    for p in &zone.polygon {
-        lo = [lo[0].min(p.x), lo[1].min(p.y)];
-        hi = [hi[0].max(p.x), hi[1].max(p.y)];
+    for piece in &region {
+        for p in &piece.outer {
+            lo = [lo[0].min(p.x), lo[1].min(p.y)];
+            hi = [hi[0].max(p.x), hi[1].max(p.y)];
+        }
     }
     cuts.retain(|path| {
         let (mut plo, mut phi) = ([f64::MAX; 2], [f64::MIN; 2]);
@@ -461,8 +526,17 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
         }
         plo[0] <= hi[0] && phi[0] >= lo[0] && plo[1] <= hi[1] && phi[1] >= lo[1]
     });
-    let subject = ccw(&zone.polygon);
-    let inside = if n >= 3 { subject.overlay(&ccw(&board.outline), OverlayRule::Intersect, FillRule::NonZero) } else { vec![vec![subject]] };
+    // the area of the pour: the outer contour of each piece counter-clockwise, its holes clockwise
+    let mut subject: Vec<Path> = vec![];
+    for piece in &region {
+        subject.push(ccw(&piece.outer));
+        for h in &piece.holes {
+            let mut hp = ccw(h);
+            hp.reverse();
+            subject.push(hp);
+        }
+    }
+    let inside = if n >= 3 { subject.overlay(&ccw(&board.outline), OverlayRule::Intersect, FillRule::NonZero) } else { vec![subject] };
     let mut out = vec![];
     for shape in inside {
         let cut = if cuts.is_empty() { vec![shape] } else { shape.overlay(&cuts, OverlayRule::Difference, FillRule::NonZero) };
@@ -505,13 +579,14 @@ pub fn geometry_key(board: &Board) -> u64 {
         z.thermal.hash(&mut h);
         z.remove_islands.hash(&mut h);
         f(&mut h, z.clearance);
-        for p in &z.polygon {
-            pt(&mut h, *p);
-        }
-        for hole in &z.holes {
-            hole.len().hash(&mut h);
-            for p in hole {
-                pt(&mut h, *p);
+        for zs in &z.shapes {
+            (zs.op as u8).hash(&mut h);
+            zs.shape.verts.len().hash(&mut h);
+            for v in &zs.shape.verts {
+                pt(&mut h, v.p);
+                if let Some(m) = v.arc_mid {
+                    pt(&mut h, m);
+                }
             }
         }
     }
@@ -566,7 +641,7 @@ mod merge_outline_tests {
         assert_eq!(n, 1);
         assert_eq!(b.zones.len(), 3);
         assert_eq!(b.zones[at].net, "GND");
-        assert!(signed_area(&b.zones[at].polygon).abs() > 100.0);
+        assert!(signed_area(&b.zones[at].outline()).abs() > 100.0);
     }
 
     #[test]
@@ -579,14 +654,14 @@ mod merge_outline_tests {
         let (n, at) = merge_zone_outline(&mut b, 3);
         assert_eq!(n, 3, "the four pours are one ring");
         assert_eq!(b.zones.len(), 1);
-        assert_eq!(b.zones[at].holes.len(), 1, "the ring has its hole");
+        assert_eq!(b.zones[at].holes().len(), 1, "the ring has its hole");
     }
 
     #[test]
     fn a_hole_leaves_no_copper_and_is_kept_when_pours_join() {
         let mut b = Board::new("t", 50.0, 50.0);
         b.zones.push(Zone::new("GND", Side::Top, rect(0.0, 0.0, 20.0, 20.0)));
-        assert_eq!(add_zone_hole(&mut b, Side::Top, None, &rect(5.0, 5.0, 8.0, 8.0)), 1);
+        assert_eq!(add_zone_cut(&mut b, Side::Top, None, &Shape::from_points(&rect(5.0, 5.0, 8.0, 8.0))), 1);
         assert!(!b.zones[0].contains(Point::new(6.0, 6.0)) && b.zones[0].contains(Point::new(2.0, 2.0)));
         let conn = crate::drc::connectivity(&b);
         let fill = zone_fill(&b, &b.zones[0], &conn);
@@ -595,7 +670,7 @@ mod merge_outline_tests {
         b.zones.push(Zone::new("GND", Side::Top, rect(15.0, 0.0, 30.0, 20.0)));
         assert_eq!(merge_all_zones(&mut b), 1);
         assert_eq!(b.zones.len(), 1);
-        assert_eq!(b.zones[0].holes.len(), 1);
+        assert_eq!(b.zones[0].holes().len(), 1);
         assert_eq!(clear_zone_holes(&mut b, Side::Top, None), 1);
     }
 
@@ -603,11 +678,11 @@ mod merge_outline_tests {
     fn tidy_takes_out_duplicate_and_straight_points_and_small_gaps() {
         let mut b = Board::new("t", 50.0, 50.0);
         let mut z = Zone::new("GND", Side::Top, vec![Point::new(0.0, 0.0), Point::new(5.0, 0.0), Point::new(5.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)]);
-        z.holes.push(rect(2.0, 2.0, 2.4, 2.4)); // 0.16 mm²: a gap
-        z.holes.push(rect(5.0, 5.0, 8.0, 8.0)); // a keep-out
+        z.add_hole(&rect(2.0, 2.0, 2.4, 2.4)); // 0.16 mm²: a gap
+        z.add_hole(&rect(5.0, 5.0, 8.0, 8.0)); // a keep-out
         b.zones.push(z);
         let (points, holes) = tidy_zones(&mut b);
-        assert_eq!((b.zones[0].polygon.len(), b.zones[0].holes.len(), holes), (4, 1, 1));
+        assert_eq!((b.zones[0].outline().len(), b.zones[0].holes().len(), holes), (4, 1, 1));
         assert!(points >= 2);
     }
 

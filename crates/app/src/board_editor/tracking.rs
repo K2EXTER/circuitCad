@@ -40,7 +40,7 @@ pub(super) fn guided(points: &[Point], w: Point, p: Point, tol: f64) -> (Point, 
 impl BoardEditor {
     /// Do the tools that place copper or corners use the guides? (The Select tool does, for a part that is dragged.)
     fn tracking_tool(&self) -> bool {
-        matches!(self.tool, Tool::Track | Tool::Via | Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole | Tool::Select)
+        matches!(self.tool, Tool::Track | Tool::Via | Tool::OutlinePoly | Tool::Zone | Tool::Select)
     }
 
     /// Forget the picked-up points (Esc, another tool).

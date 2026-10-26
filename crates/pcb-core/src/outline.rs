@@ -133,6 +133,31 @@ pub fn rounded_rect(x0: f64, y0: f64, x1: f64, y1: f64, radius: f64) -> Vec<Poin
     round_corners(&rect, radius.min((hi.x - lo.x).min(hi.y - lo.y) / 2.0))
 }
 
+/// A rectangle with rounded corners as a shape that keeps its arcs: straight sides, and an arc at each corner (`radius` 0: four corners).
+pub fn rounded_rect_arcs(x0: f64, y0: f64, x1: f64, y1: f64, radius: f64) -> crate::shape::Shape {
+    use crate::shape::{Shape, Vertex};
+    let (lo, hi) = (Point::new(x0.min(x1), y0.min(y1)), Point::new(x0.max(x1), y0.max(y1)));
+    let r = radius.min((hi.x - lo.x).min(hi.y - lo.y) / 2.0);
+    if r <= 1e-9 {
+        return Shape::from_points(&[lo, Point::new(hi.x, lo.y), hi, Point::new(lo.x, hi.y)]);
+    }
+    let k = r * std::f64::consts::FRAC_1_SQRT_2;
+    let (br, tr, tl, bl) = (Point::new(hi.x - r, lo.y + r), Point::new(hi.x - r, hi.y - r), Point::new(lo.x + r, hi.y - r), Point::new(lo.x + r, lo.y + r));
+    let at = |p: Point, mid: Option<Point>| Vertex { p, arc_mid: mid };
+    Shape {
+        verts: vec![
+            at(Point::new(lo.x + r, lo.y), None),
+            at(Point::new(hi.x - r, lo.y), Some(Point::new(br.x + k, br.y - k))),
+            at(Point::new(hi.x, lo.y + r), None),
+            at(Point::new(hi.x, hi.y - r), Some(Point::new(tr.x + k, tr.y + k))),
+            at(Point::new(hi.x - r, hi.y), None),
+            at(Point::new(lo.x + r, hi.y), Some(Point::new(tl.x - k, tl.y + k))),
+            at(Point::new(lo.x, hi.y - r), None),
+            at(Point::new(lo.x, lo.y + r), Some(Point::new(bl.x - k, bl.y - k))),
+        ],
+    }
+}
+
 /// A circle (or the ellipse that fits the box when the box is not square) as a polygon.
 pub fn ellipse(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<Point> {
     let (c, rx, ry) = (Point::new((x0 + x1) / 2.0, (y0 + y1) / 2.0), (x1 - x0).abs() / 2.0, (y1 - y0).abs() / 2.0);

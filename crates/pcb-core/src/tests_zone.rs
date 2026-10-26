@@ -131,7 +131,7 @@ fn zones_round_trip_through_json_with_defaults() {
     assert_eq!(b.zones.len(), 1);
     assert!((b.zones[0].clearance - 0.3).abs() < 1e-12 && b.zones[0].thermal);
     let again: Board = serde_json::from_str(&serde_json::to_string(&b).unwrap()).unwrap();
-    assert_eq!(again.zones[0].polygon.len(), 3);
+    assert_eq!(again.zones[0].outline().len(), 3);
 }
 
 #[test]
@@ -255,7 +255,7 @@ fn a_later_pour_of_another_net_cuts_the_earlier_one_with_a_gap() {
     assert!(area(&fill_a) < 18.0 * 18.0 - 8.0 * 12.0 + 1.0, "the overlap is gone: {}", area(&fill_a));
     for s in &fill_a {
         for p in &s.outer {
-            assert!(!inside_polygon(&b.zones[1].polygon, *p), "{p:?} is inside the other pour");
+            assert!(!inside_polygon(&b.zones[1].outline(), *p), "{p:?} is inside the other pour");
         }
     }
     // a gap of the clearance remains between the two coppers
@@ -295,10 +295,10 @@ fn a_pour_of_the_same_net_beside_another_is_not_an_island() {
     b.zones.push(next);
     assert!(fill_area(&b, 1) > 80.0, "the pour next to the first one stays: {}", fill_area(&b, 1));
     // over it, and reaching out of it
-    b.zones[1].polygon = rect(10.0, 5.0, 25.0, 15.0);
+    b.zones[1].set_outline(&rect(10.0, 5.0, 25.0, 15.0));
     assert!(fill_area(&b, 1) > 120.0, "the overlapping pour stays: {}", fill_area(&b, 1));
     // still an island when it touches nothing of the net
-    b.zones[1].polygon = rect(30.0, 5.0, 38.0, 15.0);
+    b.zones[1].set_outline(&rect(30.0, 5.0, 38.0, 15.0));
     assert!(fill_area(&b, 1) < 1e-6, "a pour that touches nothing of the net is removed");
 }
 

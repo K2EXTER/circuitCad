@@ -293,11 +293,12 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
     let mut g = Graph::default();
     let layers = board.copper_layers();
     // copper pours of other nets: (height, polygon), which act as the return plane of the traces of this net
-    let planes: Vec<(f64, &[Point])> = board
+    let planes: Vec<(f64, Vec<Point>)> = board
         .zones
         .iter()
-        .filter(|z| z.net != net && z.polygon.len() >= 3)
-        .filter_map(|z| layers.iter().position(|&x| x == z.side).map(|i| (layer_z(&layers, i), z.polygon.as_slice())))
+        .filter(|z| z.net != net && z.has_area())
+        .filter_map(|z| layers.iter().position(|&x| x == z.side).map(|i| (layer_z(&layers, i), z.region())))
+        .flat_map(|(h, region)| region.into_iter().map(move |piece| (h, piece.outer)))
         .collect();
     // pads: a through-hole pad is on both layers, joined by its barrel
     // one step of a barrel, between neighbouring copper layers
@@ -371,10 +372,12 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
     // pour touches the cells around it, through the spreading resistance of a contact of its size
     let pad_of_node: HashMap<usize, usize> = pad_node.iter().map(|(&pi, &n)| (n, pi)).collect();
     let contact_radius: HashMap<usize, f64> = pad_node.iter().map(|(&pi, &n)| (n, board.pads[pi].shape.size().0.min(board.pads[pi].shape.size().1) / 2.0)).collect();
-    for z in board.zones.iter().filter(|z| z.net == net && z.polygon.len() >= 3) {
-        let a = area(&z.polygon).max(1.0);
+    for z in board.zones.iter().filter(|z| z.net == net && z.has_area()) {
+        // the area of the pour (its pieces without their holes) and the box round it
+        let region = z.region();
+        let a = region.iter().map(|s| area(&s.outer) - s.holes.iter().map(|h| area(h)).sum::<f64>()).sum::<f64>().max(1.0);
         let step = (a / POUR_CELLS).sqrt().clamp(0.3, 1.5);
-        let (lo, hi) = z.polygon.iter().fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(l, h), p| (Point::new(l.x.min(p.x), l.y.min(p.y)), Point::new(h.x.max(p.x), h.y.max(p.y))));
+        let (lo, hi) = region.iter().flat_map(|s| s.outer.iter()).fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(l, h), p| (Point::new(l.x.min(p.x), l.y.min(p.y)), Point::new(h.x.max(p.x), h.y.max(p.y))));
         let (nx, ny) = (((hi.x - lo.x) / step).ceil().max(1.0) as usize, ((hi.y - lo.y) / step).ceil().max(1.0) as usize);
         if nx * ny > 4 * POUR_CELLS as usize {
             out.note = Some("ベタが大きすぎて、電圧降下は調べられません".into());
@@ -411,7 +414,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
             }
         }
         for (n, sd, p) in all.iter().copied() {
-            if sd != z.side || !in_polygon(&z.polygon, p) {
+            if sd != z.side || !region.iter().any(|s| in_polygon(&s.outer, p) && !s.holes.iter().any(|h| in_polygon(h, p))) {
                 continue;
             }
             // the nearest cells, as many as it takes for them (tied together by short links) to spread the current like a disc of
@@ -532,7 +535,7 @@ pub fn net_drop(board: &Board, conn: &Connectivity, net: &str, amps: f64, spec: 
 /// segments that go the same way on the same layer); each run is one trace of its length and length-weighted width, and the runs
 /// couple to each other (`mutual`), so a corner counts as it does on a real board: nothing at a right angle, a lot at a sharp
 /// turn. Plus a via inductance for each hole and a little for each pour.
-fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side], planes: &[(f64, &[Point])]) -> (f64, Vec<PathSeg>) {
+fn path_inductance(g: &Graph, src: usize, dst: usize, spec: &IrSpec, layers: &[Side], planes: &[(f64, Vec<Point>)]) -> (f64, Vec<PathSeg>) {
     let n = g.pos.len();
     let mut adj: Vec<Vec<(usize, usize)>> = vec![vec![]; n];
     for (k, &(a, b, _)) in g.edges.iter().enumerate() {

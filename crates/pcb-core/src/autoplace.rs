@@ -97,11 +97,14 @@ fn refit_pours(board: &mut Board, lo: Point, hi: Point) {
         None => return,
     };
     for z in board.zones.iter_mut() {
-        let (zlo, zhi) = z.polygon.iter().fold((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)), |(a, b), p| (Point::new(a.x.min(p.x), a.y.min(p.y)), Point::new(b.x.max(p.x), b.y.max(p.y))));
-        let rect = z.polygon.len() == 4 && z.polygon.iter().all(|p| (p.x == zlo.x || p.x == zhi.x) && (p.y == zlo.y || p.y == zhi.y));
+        let Some((zlo, zhi)) = z.bounds() else { continue };
+        // a pour of one rectangle (four straight corners at the box of the shape)
+        let rect = z.shapes.len() == 1
+            && z.shapes[0].shape.verts.len() == 4
+            && z.shapes[0].shape.verts.iter().all(|v| v.arc_mid.is_none() && (v.p.x == zlo.x || v.p.x == zhi.x) && (v.p.y == zlo.y || v.p.y == zhi.y));
         let inset = [zlo.x - lo.x, zlo.y - lo.y, hi.x - zhi.x, hi.y - zhi.y];
         if rect && inset.iter().all(|d| (0.0..=2.0).contains(d)) {
-            z.polygon = vec![Point::new(nlo.x + inset[0], nlo.y + inset[1]), Point::new(nlo.x + inset[0], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nlo.y + inset[1])];
+            z.shapes[0].shape = crate::shape::Shape::from_points(&[Point::new(nlo.x + inset[0], nlo.y + inset[1]), Point::new(nlo.x + inset[0], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nhi.y - inset[3]), Point::new(nhi.x - inset[2], nlo.y + inset[1])]);
         }
     }
 }
@@ -756,12 +759,12 @@ mod tests {
         b.zones.push(Zone::new("GND", Side::Bottom, odd.clone()));
         autoplace(&mut b).unwrap();
         let (lo, hi) = b.bounds().unwrap();
-        let xs: Vec<f64> = b.zones[0].polygon.iter().map(|p| p.x).collect();
-        let ys: Vec<f64> = b.zones[0].polygon.iter().map(|p| p.y).collect();
+        let xs: Vec<f64> = b.zones[0].outline().iter().map(|p| p.x).collect();
+        let ys: Vec<f64> = b.zones[0].outline().iter().map(|p| p.y).collect();
         let (zx0, zx1) = (xs.iter().cloned().fold(f64::MAX, f64::min), xs.iter().cloned().fold(f64::MIN, f64::max));
         let (zy0, zy1) = (ys.iter().cloned().fold(f64::MAX, f64::min), ys.iter().cloned().fold(f64::MIN, f64::max));
         assert_eq!((zx0, zy0, zx1, zy1), (lo.x + 0.5, lo.y + 0.5, hi.x - 0.5, hi.y - 0.5));
-        assert_eq!(b.zones[1].polygon, odd, "a pour that is not the whole board is left alone");
+        assert_eq!(b.zones[1].outline(), odd, "a pour that is not the whole board is left alone");
     }
 
     fn centre(b: &Board, r: &str) -> Point {

@@ -397,10 +397,10 @@ impl BoardEditor {
                     }
                 }
             }
-            Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole => {
-                let col = match self.tool {
-                    Tool::Zone => self.side_color(self.side),
-                    Tool::ZoneHole => Color32::LIGHT_RED,
+            Tool::OutlinePoly | Tool::Zone => {
+                let col = match (self.tool, self.zone_op) {
+                    (Tool::Zone, pcb_core::model::ShapeOp::Sub) => Color32::LIGHT_RED,
+                    (Tool::Zone, _) => self.side_color(self.side),
                     _ => Color32::YELLOW,
                 };
                 for w in self.poly.windows(2) {

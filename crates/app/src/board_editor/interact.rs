@@ -140,7 +140,7 @@ impl BoardEditor {
             if resp.clicked_by(egui::PointerButton::Primary) {
                 self.click(p);
             }
-            if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) {
+            if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
                 self.finish_polygon();
             }
             let layer = self.side.label();
@@ -168,7 +168,7 @@ impl BoardEditor {
             self.status = "幹の選びを取り消しました (もう一度右クリックで選択ツールに戻ります)".into();
             return true;
         }
-        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) && (self.arc_mid.take().is_some() || self.pending.take().is_some()) {
+        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone) && (self.arc_mid.take().is_some() || self.pending.take().is_some()) {
             self.status = "円弧・円・長方形の途中の点を取り消しました (もう一度右クリックで、描きかけの多角形を確定します)".into();
             return true;
         }
@@ -177,10 +177,11 @@ impl BoardEditor {
             return true;
         }
         if !self.poly.is_empty() {
-            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) {
+            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
                 self.finish_polygon();
             } else {
                 self.poly.clear();
+                self.poly_verts.clear();
                 self.status = "多角形の入力を取り消しました".into();
             }
             return true;

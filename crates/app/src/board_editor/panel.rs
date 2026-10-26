@@ -267,7 +267,6 @@ impl BoardEditor {
             Tool::PadSmd => "パッド(SMD)の設定",
             Tool::Hole => "取付穴の設定",
             Tool::Zone => "銅箔ゾーンの設定",
-            Tool::ZoneHole => "ベタの穴あけの設定",
             Tool::OutlinePoly => "基板外形 (多角形) の設定",
             _ => return,
         };
@@ -350,23 +349,25 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
             }
             Tool::OutlinePoly => self.poly_mode_ui(ui),
-            Tool::ZoneHole => {
-                ui.label("形を描いて確定。この層 (いま作業している面) のベタに、銅のない穴が開く");
-                self.poly_mode_ui(ui);
-                let nets = self.nets();
-                egui::ComboBox::from_label("対象のネット").selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.hole_net, String::new(), "すべて");
-                    for n in &nets {
-                        ui.selectable_value(&mut self.hole_net, n.clone(), n);
-                    }
-                }).response.on_hover_text("穴を開けるベタのネット。「すべて」なら、描いた範囲に触れる、この層のベタ全部に穴が開きます (ネットを決めなくてよい)");
-            }
             Tool::Hole => {
                 ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
             }
             Tool::Zone => {
                 ui.label("形を描いて確定 (右クリック・ダブルクリック・Enter、または最初の点をクリック)");
                 self.poly_mode_ui(ui);
+                ui.horizontal(|ui| {
+                    ui.selectable_value(&mut self.zone_op, pcb_core::model::ShapeOp::Add, "足す (+)").on_hover_text("描いた形を、ベタの面に足します。ベタを選んである (同じネット・同じ層) と、そのベタの図形として足します。選んでいなければ、新しいベタを作ります");
+                    ui.selectable_value(&mut self.zone_op, pcb_core::model::ShapeOp::Sub, "引く (−)").on_hover_text("描いた形を、ベタから引きます (銅のない穴・窓)。ベタを選んである (この層) と、そのベタだけから引きます。選んでいなければ、描いた範囲に触れる、この層のベタから引きます");
+                });
+                if self.zone_op == pcb_core::model::ShapeOp::Sub {
+                    let nets = self.nets();
+                    egui::ComboBox::from_label("引く対象のネット").selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.hole_net, String::new(), "すべて");
+                        for n in &nets {
+                            ui.selectable_value(&mut self.hole_net, n.clone(), n);
+                        }
+                    }).response.on_hover_text("ベタを選んでいないとき、どのネットのベタから引くか。「すべて」なら、描いた範囲に触れる、この層のベタ全部です (ネットを決めなくてよい)");
+                }
                 let nets = self.nets();
                 egui::ComboBox::from_label("ネット").selected_text(self.zone_net.clone()).show_ui(ui, |ui| {
                     for n in &nets {
@@ -378,11 +379,11 @@ impl BoardEditor {
                 }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
                 ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
                 ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
-                if ui.button("重なるベタを結合").on_hover_text("同じネット・同じ層で、重なったり接したりしているベタを、1 枚にまとめます (穴は残ります)。見た目はつながっていても内部のデータが別々のときに使います").clicked() {
+                if ui.button("重なるベタを結合").on_hover_text("同じネット・同じ層で、重なったり接したりしているベタを、1 枚のベタにまとめ、最終の頂点 (直線) に変換します (足す・引くの図形と円弧は、頂点の列になります)。見た目はつながっていても、内部のデータが別々のときに使います").clicked() {
                     self.checkpoint();
                     let n = pcb_core::zonefill::merge_all_zones(&mut self.board);
-                    let (points, gaps) = pcb_core::zonefill::tidy_zones(&mut self.board);
-                    self.status = format!("重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さなすき間 {gaps} 個を整理しました");
+                    let (points, dropped) = pcb_core::zonefill::tidy_zones(&mut self.board);
+                    self.status = format!("重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さな引く図形 {dropped} 個を整理しました");
                 }
                 ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
             }
@@ -487,15 +488,43 @@ impl BoardEditor {
                 let rt = ui.checkbox(&mut th, "サーマルリリーフ").on_hover_text("スルーホールのパッドを、細い十字の足でゾーンにつなぎます (はんだ付けしやすくなります)");
                 let mut ri = self.board.zones[i].remove_islands;
                 let rr = ui.checkbox(&mut ri, "孤立した銅の破片を消す").on_hover_text("ゾーンのネットのパッド・ビア・配線のどれにもつながっていない銅の島を作らないようにします (ノイズを拾う・製造中にはがれるのを防ぐ)");
-                if !self.board.zones[i].holes.is_empty() {
-                    let k = self.board.zones[i].holes.len();
-                    if ui.button(format!("穴を消す ({k} 個)")).on_hover_text("このベタに開けた、銅を置かない穴を、すべて消します").clicked() {
-                        self.checkpoint();
-                        self.board.zones[i].holes.clear();
-                        self.status = format!("ベタの穴を {k} 個、消しました");
-                        return;
-                    }
+                // the shapes of the pour: what each one does, how many corners and arcs it has; one can be turned round (add / take away) or deleted
+                let mut flip: Option<usize> = None;
+                let mut remove: Option<usize> = None;
+                let mut bake = false;
+                ui.separator();
+                ui.label(format!("図形 {} 個 (足す図形の和から、引く図形の和を引いたものがベタです)", self.board.zones[i].shapes.len()));
+                for (k, zs) in self.board.zones[i].shapes.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        let arcs = zs.shape.verts.iter().filter(|v| v.arc_mid.is_some()).count();
+                        ui.label(format!("{} {}  頂点 {} 円弧 {}", k + 1, if zs.op == pcb_core::model::ShapeOp::Add { "＋足す" } else { "−引く" }, zs.shape.verts.len(), arcs));
+                        if ui.small_button("足す↔引く").on_hover_text("この図形が、ベタに足すか、ベタから引くかを入れ替えます").clicked() {
+                            flip = Some(k);
+                        }
+                        if ui.small_button("消す").on_hover_text("この図形を消します (ほかの図形は残ります)").clicked() {
+                            remove = Some(k);
+                        }
+                    });
                 }
+                if ui.button("頂点に確定").on_hover_text("ベタの面 (足す図形の和から、引く図形の和を引いたもの) を、最終の頂点の列 (直線だけ) に変換します。円弧は短い直線になり、図形は面ごと・穴ごとの 1 つずつになります。あとで円弧として直すことはできなくなります").clicked() {
+                    bake = true;
+                }
+                if flip.is_some() || remove.is_some() || bake {
+                    self.checkpoint();
+                    let z = &mut self.board.zones[i];
+                    if let Some(k) = flip {
+                        z.shapes[k].op = if z.shapes[k].op == pcb_core::model::ShapeOp::Add { pcb_core::model::ShapeOp::Sub } else { pcb_core::model::ShapeOp::Add };
+                    }
+                    if let Some(k) = remove {
+                        z.shapes.remove(k);
+                    }
+                    if bake {
+                        pcb_core::zonefill::bake_zone(&mut self.board, i);
+                        pcb_core::zonefill::tidy_zones(&mut self.board);
+                    }
+                    return;
+                }
+                ui.separator();
                 // where pours of other nets overlap, the one in front keeps its copper and the other gives way
                 let (mut front, mut back) = (false, false);
                 ui.horizontal(|ui| {
