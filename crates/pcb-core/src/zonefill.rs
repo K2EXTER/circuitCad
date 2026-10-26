@@ -147,16 +147,18 @@ fn inside_shape(shape: &FillShape, p: Point) -> bool {
 }
 
 /// Join the pour `board.zones[idx]` with the pours of its net and layer that overlap or touch it, into one pour (the new
-/// pour's settings are kept). A union with a hole (a ring) can't be one polygon, so those pours stay apart; the copper is the
-/// same either way. Returns how many pours were absorbed and the new index of the joined pour.
+/// pour's settings are kept). A union that has a hole (two pours that make a ring) keeps the hole in the joined pour. Pours that
+/// touch the joined one only after it has grown are joined too. Returns how many pours were absorbed and the new index of the
+/// joined pour.
 pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
     let Some(z) = board.zones.get(idx) else { return (0, idx) };
     let (net, side) = (z.net.clone(), z.side);
     if net.is_empty() {
         return (0, idx);
     }
-    let as_shape = |poly: &[Point]| FillShape { outer: poly.to_vec(), holes: vec![] };
+    let as_shape = |poly: &[Point], holes: &[Vec<Point>]| FillShape { outer: poly.to_vec(), holes: holes.to_vec() };
     let mut poly = z.polygon.clone();
+    let mut holes = z.holes.clone();
     let mut absorbed: Vec<usize> = vec![];
     loop {
         let mut grew = false;
@@ -164,13 +166,13 @@ pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
             if k == idx || absorbed.contains(&k) || o.net != net || o.side != side {
                 continue;
             }
-            let joined = union(&[as_shape(&poly), as_shape(&o.polygon)]);
-            if let [one] = joined.as_slice()
-                && one.holes.is_empty() {
-                    poly = one.outer.clone();
-                    absorbed.push(k);
-                    grew = true;
-                }
+            let joined = union(&[as_shape(&poly, &holes), as_shape(&o.polygon, &o.holes)]);
+            if let [one] = joined.as_slice() {
+                poly = one.outer.clone();
+                holes = one.holes.clone();
+                absorbed.push(k);
+                grew = true;
+            }
         }
         if !grew {
             break;
@@ -180,11 +182,65 @@ pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
         return (0, idx);
     }
     board.zones[idx].polygon = poly;
+    board.zones[idx].holes = holes;
     absorbed.sort_unstable();
     for &k in absorbed.iter().rev() {
         board.zones.remove(k);
     }
     (absorbed.len(), idx - absorbed.iter().filter(|&&k| k < idx).count())
+}
+
+/// Join every pour that overlaps or touches another of its net and layer. Returns how many pours were absorbed (the board has
+/// that many pours fewer).
+pub fn merge_all_zones(board: &mut Board) -> usize {
+    let mut total = 0;
+    let mut i = 0;
+    while i < board.zones.len() {
+        let (n, _) = merge_zone_outline(board, i);
+        total += n;
+        // pours before this one that were absorbed move it down: look at what is at this place now, until nothing joins
+        if n == 0 {
+            i += 1;
+        }
+    }
+    total
+}
+
+/// Cut a hole into every pour of layer `side` (of the net `net` when given, else of every net) that the polygon reaches: the
+/// pour has no copper in it. Returns how many pours got the hole.
+pub fn add_zone_hole(board: &mut Board, side: Side, net: Option<&str>, polygon: &[Point]) -> usize {
+    if polygon.len() < 3 {
+        return 0;
+    }
+    let (lo, hi) = polygon.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(l, h), p| ([l[0].min(p.x), l[1].min(p.y)], [h[0].max(p.x), h[1].max(p.y)]));
+    let mut n = 0;
+    for z in board.zones.iter_mut().filter(|z| z.side == side && net.is_none_or(|w| z.net == w) && z.polygon.len() >= 3) {
+        let (zl, zh) = z.polygon.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(l, h), p| ([l[0].min(p.x), l[1].min(p.y)], [h[0].max(p.x), h[1].max(p.y)]));
+        if zl[0] <= hi[0] && zh[0] >= lo[0] && zl[1] <= hi[1] && zh[1] >= lo[1] {
+            z.holes.push(polygon.to_vec());
+            n += 1;
+        }
+    }
+    n
+}
+
+/// A polygon for a circle (the hole round a through-hole pad).
+pub fn circle_polygon(c: Point, r: f64) -> Vec<Point> {
+    let n = circle_steps(r).max(16);
+    (0..n).map(|k| {
+        let a = std::f64::consts::TAU * k as f64 / n as f64;
+        Point::new(c.x + r * a.cos(), c.y + r * a.sin())
+    }).collect()
+}
+
+/// Take the holes away from the pours of layer `side` (of the net `net` when given). Returns how many holes were removed.
+pub fn clear_zone_holes(board: &mut Board, side: Side, net: Option<&str>) -> usize {
+    let mut n = 0;
+    for z in board.zones.iter_mut().filter(|z| z.side == side && net.is_none_or(|w| z.net == w)) {
+        n += z.holes.len();
+        z.holes.clear();
+    }
+    n
 }
 
 /// The pieces merged where they touch or overlap.
@@ -327,6 +383,10 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
             }
         }
     }
+    // the holes of the pour itself: no copper there
+    for h in zone.holes.iter().filter(|h| h.len() >= 3) {
+        cuts.push(ccw(h));
+    }
     let n = board.outline.len();
     let edge = c.max(board.rules.edge_clearance);
     if n >= 3 {
@@ -395,6 +455,12 @@ pub fn geometry_key(board: &Board) -> u64 {
         for p in &z.polygon {
             pt(&mut h, *p);
         }
+        for hole in &z.holes {
+            hole.len().hash(&mut h);
+            for p in hole {
+                pt(&mut h, *p);
+            }
+        }
     }
     for t in &board.tracks {
         t.side.hash(&mut h);
@@ -451,13 +517,43 @@ mod merge_outline_tests {
     }
 
     #[test]
-    fn a_ring_is_left_apart() {
+    fn a_ring_becomes_one_pour_with_a_hole() {
         let mut b = Board::new("t", 50.0, 50.0);
         b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 3.0), Point::new(0.0, 3.0)]));
         b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(0.0, 3.0), Point::new(3.0, 3.0), Point::new(3.0, 10.0), Point::new(0.0, 10.0)]));
         b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(0.0, 10.0), Point::new(10.0, 10.0), Point::new(10.0, 7.0), Point::new(0.0, 7.0)]));
         b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(7.0, 3.0), Point::new(10.0, 3.0), Point::new(10.0, 7.0), Point::new(7.0, 7.0)]));
-        let (n, _) = merge_zone_outline(&mut b, 3);
-        assert!(n < 3, "a ring can't be one polygon");
+        let (n, at) = merge_zone_outline(&mut b, 3);
+        assert_eq!(n, 3, "the four pours are one ring");
+        assert_eq!(b.zones.len(), 1);
+        assert_eq!(b.zones[at].holes.len(), 1, "the ring has its hole");
+    }
+
+    #[test]
+    fn a_hole_leaves_no_copper_and_is_kept_when_pours_join() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        b.zones.push(Zone::new("GND", Side::Top, rect(0.0, 0.0, 20.0, 20.0)));
+        assert_eq!(add_zone_hole(&mut b, Side::Top, None, &rect(5.0, 5.0, 8.0, 8.0)), 1);
+        assert!(!b.zones[0].contains(Point::new(6.0, 6.0)) && b.zones[0].contains(Point::new(2.0, 2.0)));
+        let conn = crate::drc::connectivity(&b);
+        let fill = zone_fill(&b, &b.zones[0], &conn);
+        assert!(fill.iter().all(|s| !s.holes.is_empty() || signed_area(&s.outer).abs() < 399.0), "the pour is cut by the hole");
+        // a second pour that overlaps it joins, and the hole stays
+        b.zones.push(Zone::new("GND", Side::Top, rect(15.0, 0.0, 30.0, 20.0)));
+        assert_eq!(merge_all_zones(&mut b), 1);
+        assert_eq!(b.zones.len(), 1);
+        assert_eq!(b.zones[0].holes.len(), 1);
+        assert_eq!(clear_zone_holes(&mut b, Side::Top, None), 1);
+    }
+
+    #[test]
+    fn merge_all_joins_pours_that_were_never_merged() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        b.zones.push(Zone::new("A", Side::Top, rect(0.0, 0.0, 10.0, 10.0)));
+        b.zones.push(Zone::new("A", Side::Top, rect(5.0, 0.0, 15.0, 10.0)));
+        b.zones.push(Zone::new("A", Side::Top, rect(40.0, 0.0, 45.0, 5.0)));
+        b.zones.push(Zone::new("A", Side::Top, rect(12.0, 0.0, 20.0, 10.0)));
+        assert_eq!(merge_all_zones(&mut b), 2);
+        assert_eq!(b.zones.len(), 2);
     }
 }

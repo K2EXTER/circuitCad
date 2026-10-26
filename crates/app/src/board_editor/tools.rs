@@ -35,6 +35,14 @@ impl BoardEditor {
                 self.fit_pending = false;
                 self.status = "基板外形を設定しました".into();
             }
+            Tool::Zone if self.zone_cut => {
+                let n = pcb_core::zonefill::add_zone_hole(&mut self.board, self.side, Some(self.zone_net.as_str()).filter(|n| !n.is_empty()), &poly);
+                self.status = if n > 0 {
+                    format!("ネット {} のベタ {n} 枚に、銅を抜く穴を開けました (ベタの設定の「穴を消す」で戻せます)", self.zone_net)
+                } else {
+                    format!("この層に、ネット {} のベタがありません。穴を開けるベタを先に作ってください", self.zone_net)
+                };
+            }
             Tool::Zone => {
                 let mut z = Zone::new(&self.zone_net, self.side, poly);
                 z.clearance = self.zone_clearance;

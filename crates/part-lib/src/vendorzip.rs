@@ -661,7 +661,11 @@ L1 1 3 4.20e-09
         assert!(m.part.validate().iter().all(|i| !i.error), "{:?}", m.part.validate());
         // a size with no built-in footprint is said, and the part still works for the circuit
         let m = idx.part_def(by("GRM155R71C104KA88")).unwrap();
-        assert!(m.footprint.is_none() && m.todo.iter().any(|t| t.contains("0402")), "{:?}", m.todo);
+        assert_eq!(m.footprint.as_deref(), Some("C_0402"), "0402 has a built-in footprint now");
+        let mut e = by("GRM155R71C104KA88").clone();
+        e.meta.as_mut().unwrap().size_inch = "0201".into();
+        let m = idx.part_def(&e).unwrap();
+        assert!(m.footprint.is_none() && m.todo.iter().any(|t| t.contains("0201")), "{:?}", m.todo);
         assert!(m.part.validate().iter().all(|i| !i.error));
         // a model no reader described: no value, no rating, and the user is told
         let m = idx.part_def(by("CAP_A")).unwrap();

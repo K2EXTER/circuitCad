@@ -363,6 +363,12 @@ impl BoardEditor {
                 }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
                 ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
                 ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
+                ui.checkbox(&mut self.zone_cut, "描いた多角形を、このネットのベタの穴にする").on_hover_text("新しいベタを作るかわりに、この層にある上のネットのベタに、銅のない穴を開けます。検出線のスルーホールのまわりに、内層のベタを寄せたくないときなどに使います。穴は、選んだベタの設定の「穴を消す」で戻せます");
+                if ui.button("重なるベタを結合").on_hover_text("同じネット・同じ層で、重なったり接したりしているベタを、1 枚にまとめます (穴は残ります)。見た目はつながっていても内部のデータが別々のときに使います").clicked() {
+                    self.checkpoint();
+                    let n = pcb_core::zonefill::merge_all_zones(&mut self.board);
+                    self.status = if n > 0 { format!("重なるベタを {n} 枚、まとめました") } else { "まとめるベタはありませんでした".into() };
+                }
                 ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
             }
             _ => {}
@@ -447,6 +453,15 @@ impl BoardEditor {
                 let rt = ui.checkbox(&mut th, "サーマルリリーフ").on_hover_text("スルーホールのパッドを、細い十字の足でゾーンにつなぎます (はんだ付けしやすくなります)");
                 let mut ri = self.board.zones[i].remove_islands;
                 let rr = ui.checkbox(&mut ri, "孤立した銅の破片を消す").on_hover_text("ゾーンのネットのパッド・ビア・配線のどれにもつながっていない銅の島を作らないようにします (ノイズを拾う・製造中にはがれるのを防ぐ)");
+                if !self.board.zones[i].holes.is_empty() {
+                    let k = self.board.zones[i].holes.len();
+                    if ui.button(format!("穴を消す ({k} 個)")).on_hover_text("このベタに開けた、銅を置かない穴を、すべて消します").clicked() {
+                        self.checkpoint();
+                        self.board.zones[i].holes.clear();
+                        self.status = format!("ベタの穴を {k} 個、消しました");
+                        return;
+                    }
+                }
                 // where pours of other nets overlap, the one in front keeps its copper and the other gives way
                 let (mut front, mut back) = (false, false);
                 ui.horizontal(|ui| {

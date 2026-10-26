@@ -98,6 +98,27 @@ fn polygon_tools_need_three_points() {
 }
 
 #[test]
+fn a_zone_polygon_can_be_a_hole_of_the_pours_of_a_net() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "VNEG".into();
+    e.poly = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 20.0), p(0.0, 20.0)];
+    e.finish_polygon();
+    e.poly = vec![p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)];
+    e.zone_cut = true;
+    e.finish_polygon();
+    assert_eq!(e.board.zones.len(), 1, "a hole is not a new pour");
+    assert_eq!(e.board.zones[0].holes.len(), 1);
+    e.undo();
+    assert!(e.board.zones[0].holes.is_empty(), "the hole goes with undo");
+    // a net without a pour on this layer: nothing is cut and the status says so
+    e.zone_net = "GND".into();
+    e.poly = vec![p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)];
+    e.finish_polygon();
+    assert!(e.board.zones[0].holes.is_empty() && e.status.contains("ありません"));
+}
+
+#[test]
 fn closing_a_polygon_by_clicking_the_first_point() {
     let mut e = BoardEditor::default();
     e.tool = Tool::Zone;

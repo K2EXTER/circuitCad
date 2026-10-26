@@ -295,6 +295,8 @@ pub struct BoardEditor {
     zone_clearance: f64,
     zone_thermal: bool,
     zone_remove_islands: bool,
+    /// The polygon being drawn with the zone tool is a hole of the pours of `zone_net` on this layer, not a new pour.
+    zone_cut: bool,
     size_w: f64,
     size_h: f64,
     /// Corner radius (mm) for rectangular outlines; 0 = square corners.
@@ -411,6 +413,7 @@ impl Default for BoardEditor {
             zone_clearance: 0.3,
             zone_thermal: true,
             zone_remove_islands: true,
+            zone_cut: false,
             size_w: 50.0,
             size_h: 40.0,
             size_r: 0.0,

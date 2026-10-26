@@ -352,7 +352,7 @@ mod tests {
         let (mu, dir) = picker_with_zip("nofp");
         let mut f = PartForm { mu, ..PartForm::default() };
         let mut e = pick(&f, "GRM188R61A106MAAL");
-        e.meta.as_mut().unwrap().size_inch = "0402".into();
+        e.meta.as_mut().unwrap().size_inch = "0201".into();
         let msg = f.apply_vendor(0, &e).unwrap();
         assert!(msg.contains("寸法"), "{msg}");
         assert!(f.fp_preset.is_empty() && f.pkg == PkgKind::Chip2);

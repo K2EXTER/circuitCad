@@ -232,6 +232,10 @@ pub struct Zone {
     /// Drop pieces of the pour that touch no pad, via or track of its net (isolated fragments).
     #[serde(default)]
     pub remove_islands: bool,
+    /// Areas inside the outline where this pour has no copper (a keep-out for a sense line, the ring that two pours of one net
+    /// make). Each is a polygon.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub holes: Vec<Vec<Point>>,
 }
 
 impl Zone {
@@ -245,7 +249,13 @@ impl Zone {
             thermal_gap: default_thermal_gap(),
             spoke_width: default_spoke(),
             remove_islands: false,
+            holes: vec![],
         }
+    }
+
+    /// True when `p` is inside the outline of the pour and in none of its holes (the copper can reach it).
+    pub fn contains(&self, p: Point) -> bool {
+        crate::geom::inside_polygon(&self.polygon, p) && !self.holes.iter().any(|h| crate::geom::inside_polygon(h, p))
     }
 }
 

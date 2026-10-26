@@ -1,7 +1,6 @@
 //! Gerber RS-274X writer (format 4.6, millimetres).
 
 use crate::drc::{connectivity, Connectivity};
-use crate::geom::inside_polygon;
 use crate::model::*;
 use crate::strokefont::text_strokes;
 use std::fmt::Write;
@@ -154,7 +153,7 @@ fn zones(g: &mut GerberLayer, board: &Board, side: Side, conn: &Connectivity) {
         g.polarity(true);
         let mut spokes: Vec<(Point, f64)> = vec![];
         for (j, p) in board.pads.iter().enumerate().filter(|(_, p)| pad_on_copper(p, side)) {
-            if same(conn.pad_net(j)) && z.thermal && p.drill.is_some() && inside_polygon(&z.polygon, p.pos) {
+            if same(conn.pad_net(j)) && z.thermal && p.drill.is_some() && z.contains(p.pos) {
                 let (w, h) = p.shape.size();
                 let ring = w.max(h) + 2.0 * z.thermal_gap;
                 g.flash(p.pos, PadShape::Circle { d: ring }, 0.0);

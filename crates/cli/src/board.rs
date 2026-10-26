@@ -116,6 +116,66 @@ impl Session {
                 let (tracks, vias) = pcb_core::copper::add_guard_tracks(board, &net, &guard, gap, width)?;
                 Ok(obj(json!({"net": net, "guard": guard, "tracks": tracks, "vias": vias})))
             }
+            "zones" => {
+                // board zones [merge]: the pours (layer, net, corners, holes, area); `merge` joins the pours of one net and layer that
+                // overlap or touch into one (a pour with a hole keeps it)
+                let board = self.board_mut()?;
+                let merged = if rest.first().is_some_and(|a| a.eq_ignore_ascii_case("merge")) { Some(pcb_core::zonefill::merge_all_zones(board)) } else { None };
+                let list: Vec<_> = board.zones.iter().enumerate().map(|(i, z)| {
+                    let area = z.polygon.iter().zip(z.polygon.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0;
+                    json!({"index": i, "net": z.net, "layer": layer_name(z.side), "corners": z.polygon.len(), "holes": z.holes.len(), "area_mm2": (area * 10.0).round() / 10.0})
+                }).collect();
+                Ok(obj(json!({"zones": list, "merged": merged})))
+            }
+            "keepout" => {
+                // board keepout layer=inner1 [net=VNEG] rect=x0,y0,x1,y1 | circle=x,y,r | pad=J3E,J3F [margin=1.0]: no copper of the pours on
+                // the layer (of the net, when given) inside the area. `pad=` is a circle round each pad (its radius + margin).
+                // `board keepout clear layer=inner1 [net=VNEG]` takes the holes away again.
+                let (pos, kv) = options(rest);
+                let side = parse_layer(opt(&kv, "layer").ok_or("layer=top|bottom|inner1 ...")?)?;
+                let net = opt(&kv, "net").map(str::to_string);
+                let board = self.board_mut()?;
+                if pos.first().is_some_and(|a| a.eq_ignore_ascii_case("clear")) {
+                    let n = pcb_core::zonefill::clear_zone_holes(board, side, net.as_deref());
+                    return Ok(obj(json!({"removed": n})));
+                }
+                let numbers = |v: &str, n: usize, what: &str| -> Result<Vec<f64>, String> {
+                    let l: Vec<f64> = v.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{what}: {x} is not a number"))).collect::<Result<_, _>>()?;
+                    if l.len() == n { Ok(l) } else { Err(format!("{what}: {n} numbers are needed")) }
+                };
+                let mut shapes: Vec<Vec<pcb_core::model::Point>> = vec![];
+                if let Some(v) = opt(&kv, "rect") {
+                    let r = numbers(v, 4, "rect=x0,y0,x1,y1")?;
+                    let p = |x: f64, y: f64| pcb_core::model::Point::new(x, y);
+                    shapes.push(vec![p(r[0], r[1]), p(r[2], r[1]), p(r[2], r[3]), p(r[0], r[3])]);
+                }
+                if let Some(v) = opt(&kv, "circle") {
+                    let c = numbers(v, 3, "circle=x,y,r")?;
+                    shapes.push(pcb_core::zonefill::circle_polygon(pcb_core::model::Point::new(c[0], c[1]), c[2]));
+                }
+                if let Some(v) = opt(&kv, "pad") {
+                    let margin = match opt(&kv, "margin") {
+                        Some(m) => num(m)?,
+                        None => 1.0,
+                    };
+                    for r in v.split(',') {
+                        let r = r.trim();
+                        let pads: Vec<_> = board.pads.iter().filter(|p| p.refdes == r || format!("{}.{}", p.refdes, p.pin) == r).collect();
+                        if pads.is_empty() {
+                            return Err(format!("pad={r}: no such part or pad"));
+                        }
+                        for p in pads {
+                            let (w, h) = p.shape.size();
+                            shapes.push(pcb_core::zonefill::circle_polygon(p.pos, w.max(h) / 2.0 + margin));
+                        }
+                    }
+                }
+                if shapes.is_empty() {
+                    return Err("board keepout layer=inner1 [net=NET] rect=x0,y0,x1,y1 | circle=x,y,r | pad=REF[,REF] [margin=1.0]".into());
+                }
+                let holes: usize = shapes.iter().map(|s| pcb_core::zonefill::add_zone_hole(board, side, net.as_deref(), s)).sum();
+                Ok(obj(json!({"areas": shapes.len(), "holes": holes})))
+            }
             "copper" => {
                 // board copper net=DRN rect=x0,y0,x1,y1 [layers=top,bottom] [vias=6]: a patch of copper of a net (the drain of a power transistor)
                 // on the layers, and vias of the net that join them
@@ -621,4 +681,21 @@ fn num(s: &str) -> Result<f64, String> {
 /// The shop part numbers of the schematic's library parts, by reference designator.
 fn shops_of(sch: &sch_core::Schematic) -> Vec<(String, std::collections::BTreeMap<String, String>)> {
     sch.flat().components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect()
+}
+
+/// "top", "bottom", "inner1" ... as a copper layer.
+fn parse_layer(l: &str) -> Result<pcb_core::model::Side, String> {
+    match l.trim() {
+        "top" => Ok(pcb_core::model::Side::Top),
+        "bottom" => Ok(pcb_core::model::Side::Bottom),
+        o => o.strip_prefix("inner").and_then(|n| n.parse::<u8>().ok()).filter(|n| *n >= 1).map(pcb_core::model::Side::Inner).ok_or_else(|| format!("layer={o}: use top, bottom, inner1 ...")),
+    }
+}
+
+fn layer_name(s: pcb_core::model::Side) -> String {
+    match s {
+        pcb_core::model::Side::Top => "top".into(),
+        pcb_core::model::Side::Bottom => "bottom".into(),
+        pcb_core::model::Side::Inner(n) => format!("inner{n}"),
+    }
 }

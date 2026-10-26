@@ -160,6 +160,14 @@ pub(super) fn anchors_inside_in(g: &Geo, poly: &[Point], pb: (f64, f64, f64, f64
         })
 }
 
+/// An item whose centre or both ends are inside a hole of the pour (where there is no copper) is not joined by it.
+fn in_a_hole(g: &Geo, holes: &[Vec<Point>]) -> bool {
+    holes.iter().any(|h| match g {
+        Geo::Cap { a, b, .. } => inside_polygon(h, *a) && inside_polygon(h, *b),
+        Geo::Rect { c, .. } => inside_polygon(h, *c),
+    })
+}
+
 pub(super) fn pad_nets(board: &Board, parent: &mut [usize], n_tracks: usize) -> HashMap<usize, String> {
     let mut m = HashMap::new();
     for (j, p) in board.pads.iter().enumerate() {
@@ -211,7 +219,7 @@ fn connectivity_with(board: &Board, with_pours: bool) -> Connectivity {
         let mut members = vec![];
         let pb = poly_bbox(&z.polygon);
         for (i, it) in items.iter().enumerate() {
-            if it.on(z.side) && anchors_inside_in(&it.geo, &z.polygon, pb) {
+            if it.on(z.side) && anchors_inside_in(&it.geo, &z.polygon, pb) && !in_a_hole(&it.geo, &z.holes) {
                 let r = find(&mut parent, i);
                 if nets.get(&r) == Some(&z.net) {
                     members.push(i);
