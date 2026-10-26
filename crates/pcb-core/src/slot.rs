@@ -49,10 +49,11 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
     for side in board.copper_layers() {
         // the shapes of each group on this side, with the widest track among them
         // per group: its shapes, a disc (centre, radius) round each of them, the widest track, a track of the group
-        type Group = (Vec<Path>, Vec<(Point, f64)>, f64, usize, Vec<Path>);
+        type Group = (Vec<Path>, Vec<(Point, f64)>, f64, usize, Vec<Path>, Vec<(Point, Point, f64)>);
         let mut groups: std::collections::BTreeMap<usize, Group> = Default::default();
         for (i, t) in board.tracks.iter().enumerate().filter(|(_, t)| t.side == side) {
-            let g = groups.entry(conn.items[i]).or_insert_with(|| (vec![], vec![], 0.0, i, vec![]));
+            let g = groups.entry(conn.items[i]).or_insert_with(|| (vec![], vec![], 0.0, i, vec![], vec![]));
+            g.5.push((t.a, t.b, t.width));
             g.0.push(capsule(t.a, t.b, t.width / 2.0));
             g.1.push((Point::new((t.a.x + t.b.x) / 2.0, (t.a.y + t.b.y) / 2.0), t.a.dist(t.b) / 2.0 + t.width / 2.0));
             g.2 = g.2.max(t.width);
@@ -90,7 +91,7 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
         }
         let groups: Vec<Group> = groups.into_values().collect();
         // (the groups are independent: one thread for each)
-        let found: Vec<Vec<SlotPatch>> = crate::par::par_map(&groups, |(paths, discs, width, track, pads)| {
+        let found: Vec<Vec<SlotPatch>> = crate::par::par_map(&groups, |(paths, discs, width, track, pads, segs)| {
             let mut mine = vec![];
             // the copper of a net that has a pour is a plane's stubs and vias: the pour carries it, and these groups are the biggest
             // of the board (a second of the finish on a board with three planes)
@@ -105,6 +106,11 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
             // funnel from the track to the pad, wider than the neck it belongs to); the slot between two tracks is
             let tracks_only: Vec<Path> = paths.iter().filter(|p| !pads.contains(p)).cloned().collect();
             for slot in closed_pieces(&tracks_only, d) {
+                // where a narrow track joins a wide one (0.25 into 0.5) the space between them is a corner, not a slot: the fillets of
+                // the finish round it, and a polygon there only leaves seams and notches
+                if unequal_tracks(&slot, segs) {
+                    continue;
+                }
                 for outline in notched(&slot, pads, 2.0 * d) {
                     mine.push(SlotPatch { side, outline, track: *track });
                 }
@@ -114,6 +120,24 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
         out.extend(found.into_iter().flatten());
     }
     out
+}
+
+/// Does the piece touch tracks whose widths differ by more than a third?
+fn unequal_tracks(slot: &[Point], segs: &[(Point, Point, f64)]) -> bool {
+    let dist = |p: Point, a: Point, b: Point| {
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let l2 = dx * dx + dy * dy;
+        let t = if l2 == 0.0 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / l2).clamp(0.0, 1.0) };
+        p.dist(Point::new(a.x + t * dx, a.y + t * dy))
+    };
+    let (mut lo, mut hi) = (f64::MAX, 0.0f64);
+    for (a, b, w) in segs {
+        if slot.iter().any(|q| dist(*q, *a, *b) <= w / 2.0 + 0.05) {
+            lo = lo.min(*w);
+            hi = hi.max(*w);
+        }
+    }
+    hi > lo * 1.34
 }
 
 /// The copper of `paths` grown by `r` (shrunk when `r` is negative), as paths. Corners are round (the closing above cuts them
@@ -342,6 +366,7 @@ mod tests {
     fn the_finish_leaves_the_slot_open_when_another_net_is_in_it() {
         let mut b = u_shape(0.7);
         b.finish.forks = true;
+        b.finish.slots = true;
         let with = crate::smooth::finished(&b).unwrap().patches.len();
         assert!(with > 0, "the finished board has the slot patch");
         // a pad of another net in the middle of the slot

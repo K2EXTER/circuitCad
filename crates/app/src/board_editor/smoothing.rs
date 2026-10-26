@@ -14,10 +14,10 @@ impl BoardEditor {
         let f = &self.board.finish;
         let mut h = std::collections::hash_map::DefaultHasher::new();
         pcb_core::zonefill::geometry_key(&self.board).hash(&mut h);
-        (f.corners, f.tapers, f.forks, f.radius.to_bits()).hash(&mut h);
+        (f.corners, f.tapers, f.forks, f.slots, f.radius.to_bits()).hash(&mut h);
         for c in &self.board.net_classes {
             let o = &c.finish;
-            (&c.nets, o.corners, o.tapers, o.forks, o.radius.map(f64::to_bits)).hash(&mut h);
+            (&c.nets, o.corners, o.tapers, o.forks, o.slots, o.radius.map(f64::to_bits)).hash(&mut h);
         }
         h.finish()
     }
@@ -120,6 +120,7 @@ impl BoardEditor {
         });
         changed |= ui.checkbox(&mut f.tapers, "太さの段差をなだらかに").on_hover_text("太い配線と細い配線がつながる所と、配線がパッド・ビアに入る根元に、中間の太さの短い配線を挟みます (パッドより細い配線は、根元がパッドの幅から配線の太さへ徐々に細くなります)。電流が急に絞られず、配線の根元が割れにくくなります").changed();
         changed |= ui.checkbox(&mut f.forks, "分かれ目を丸める").on_hover_text("1つの点から2本の配線が鋭い角度で出ている所の、細いくぼみ (エッチング液がたまりやすい所) を銅で埋めて、先を凹んだ丸い形にします。T字の内側の角や、同じネットの並走が1本にまとまる所のすき間も同じです。配線の経路は変わらず、表示とガーバーにだけ働きます (確定はできません)").changed();
+        changed |= ui.checkbox(&mut f.slots, "すき間を埋める").on_hover_text("同じ所へ並んで走る2本の配線の間の細いすき間 (エッチング液がたまりやすい所) を、銅の多角形で埋めます。見た目と製造の整えだけで、電気には要りません。形が崩れる所があるときは切ります (初期は切)").changed();
         if changed {
             self.checkpoint_once();
             self.board.finish = f;

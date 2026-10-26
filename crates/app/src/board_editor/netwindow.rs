@@ -38,6 +38,7 @@ fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverrid
             finish_kind(ui, "角を丸める", &mut o.corners, board.corners, "同じ太さの配線がつながる角を、円弧にします");
             finish_kind(ui, "太さの段差をなだらかに", &mut o.tapers, board.tapers, "太さが変わる所と、パッド・ビアに入る根元に、中間の太さを挟みます");
             finish_kind(ui, "分かれ目を丸める", &mut o.forks, board.forks, "鋭い角度で分かれる2本の間のくぼみを、銅で埋めて丸くします");
+            finish_kind(ui, "すき間を埋める", &mut o.slots, board.slots, "並んで走る2本の間の細いすき間を、銅で埋めます");
             ui.horizontal(|ui| {
                 let mut own = o.radius.is_some();
                 if ui.checkbox(&mut own, "角の半径を変える").on_hover_text("入れると、このクラスの角の丸みの半径を、基板全体の値と別にします").changed() {

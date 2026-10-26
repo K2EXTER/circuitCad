@@ -304,7 +304,7 @@ fn a_plain_corner_is_not_a_junction_fillet() {
 #[test]
 fn a_corner_in_the_live_finish_is_a_band_of_the_exact_arc() {
     let mut b = l_shape();
-    b.finish = Finish { corners: true, tapers: false, forks: false, radius: 1.0 };
+    b.finish = Finish { corners: true, tapers: false, forks: false, slots: false, radius: 1.0 };
     let f = finished(&b).unwrap();
     assert_eq!(f.patches.len(), 1);
     // the corner (25, 5) is cut by a circle of radius 1 centred at (24, 6): every point of the band lies between the

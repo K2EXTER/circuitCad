@@ -29,6 +29,9 @@ pub struct Finish {
     /// Fill and round the sharp notch between two tracks that leave one point at a narrow angle (only as a patch,
     /// so only for the live finish; baking into the tracks leaves it out).
     pub forks: bool,
+    /// Fill the narrow slots between tracks that run side by side to the same place (`slot.rs`, only as a patch like the notch of
+    /// a fork). A looks-only finish, and the one that goes wrong most: off unless it is asked for.
+    pub slots: bool,
 }
 
 /// What a net class changes of the board's [`Finish`] for its nets (`None` = follow the board).
@@ -39,6 +42,7 @@ pub struct FinishOverride {
     pub radius: Option<f64>,
     pub tapers: Option<bool>,
     pub forks: Option<bool>,
+    pub slots: Option<bool>,
 }
 
 impl FinishOverride {
@@ -48,18 +52,18 @@ impl FinishOverride {
 
     /// All three kinds off: the nets are left as drawn.
     pub fn off() -> Self {
-        Self { corners: Some(false), tapers: Some(false), forks: Some(false), radius: None }
+        Self { corners: Some(false), tapers: Some(false), forks: Some(false), slots: Some(false), radius: None }
     }
 
     pub fn apply(&self, base: &Finish) -> Finish {
-        Finish { corners: self.corners.unwrap_or(base.corners), radius: self.radius.unwrap_or(base.radius), tapers: self.tapers.unwrap_or(base.tapers), forks: self.forks.unwrap_or(base.forks) }
+        Finish { corners: self.corners.unwrap_or(base.corners), radius: self.radius.unwrap_or(base.radius), tapers: self.tapers.unwrap_or(base.tapers), forks: self.forks.unwrap_or(base.forks), slots: self.slots.unwrap_or(base.slots) }
     }
 }
 
 impl Finish {
     /// Does it do anything?
     pub fn any(&self) -> bool {
-        self.corners || self.tapers || self.forks
+        self.corners || self.tapers || self.forks || self.slots
     }
 }
 
@@ -67,7 +71,7 @@ pub type SmoothOptions = Finish;
 
 impl Default for Finish {
     fn default() -> Self {
-        Finish { corners: true, radius: 0.5, tapers: true, forks: true }
+        Finish { corners: true, radius: 0.5, tapers: true, forks: true, slots: false }
     }
 }
 
@@ -1171,7 +1175,7 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
             }
         }
     }
-    for g in groups.iter().filter(|g| g.opts.forks) {
+    for g in groups.iter().filter(|g| g.opts.slots) {
         for s in crate::slot::slot_patches(board, &conn, &patches, g.opts.radius) {
             if g.accepts(conn.track_net(s.track)) && copper.clear(board, &conn, s.side, &s.outline, s.track) {
                 patches.push(Patch { side: s.side, outline: s.outline, track: s.track });
@@ -1203,6 +1207,59 @@ mod probe {
         eprintln!("-- patches");
         for p in f.patches.iter().filter(|p| p.outline.iter().any(|q| (q.x - cx).abs() < 1.5 && (q.y - cy).abs() < 1.5)) {
             eprintln!("{:?} {:?}", p.side, p.outline.iter().map(|q| (format!("{:.2}", q.x), format!("{:.2}", q.y))).collect::<Vec<_>>());
+        }
+    }
+}
+
+#[cfg(test)]
+mod probe_all {
+    use super::*;
+    use crate::geom::signed_area;
+    #[test]
+    #[ignore]
+    fn list_big_patches() {
+        let path = std::env::var("CCAD_BOARD").unwrap();
+        let mut board: Board = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        for forks in [false, true] {
+            board.finish.forks = forks;
+            for c in board.net_classes.iter_mut() {
+                c.finish.forks = None;
+            }
+            let f = finished(&board).unwrap();
+            let mut rows: Vec<(f64, usize, Point, Side)> = f.patches.iter().map(|p| {
+                let c = Point::new(p.outline.iter().map(|q| q.x).sum::<f64>() / p.outline.len() as f64, p.outline.iter().map(|q| q.y).sum::<f64>() / p.outline.len() as f64);
+                (signed_area(&p.outline).abs(), p.outline.len(), c, p.side)
+            }).collect();
+            rows.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+            eprintln!("forks={forks}: {} patches, total area {:.1}", rows.len(), rows.iter().map(|r| r.0).sum::<f64>());
+            let seg_x = |a: Point, b: Point, c: Point, d: Point| {
+                let o = |p: Point, q: Point, r: Point| (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+                let (d1, d2, d3, d4) = (o(a, b, c), o(a, b, d), o(c, d, a), o(c, d, b));
+                d1 * d2 < -1e-12 && d3 * d4 < -1e-12
+            };
+            let mut bad = vec![];
+            for p in &f.patches {
+                let n = p.outline.len();
+                let mut hit = false;
+                'o: for i in 0..n {
+                    for j in i + 2..n {
+                        if i == 0 && j == n - 1 {
+                            continue;
+                        }
+                        if seg_x(p.outline[i], p.outline[(i + 1) % n], p.outline[j], p.outline[(j + 1) % n]) {
+                            hit = true;
+                            break 'o;
+                        }
+                    }
+                }
+                if hit {
+                    bad.push(p.outline[0]);
+                }
+            }
+            eprintln!("  self-crossing patches: {} {:?}", bad.len(), bad.iter().take(10).map(|q| (format!("{:.1}", q.x), format!("{:.1}", q.y))).collect::<Vec<_>>());
+            for r in rows.iter().take(8) {
+                eprintln!("  area {:.2} mm2, {} pts at ({:.1},{:.1}) {:?}", r.0, r.1, r.2.x, r.2.y, r.3);
+            }
         }
     }
 }
