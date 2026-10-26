@@ -120,12 +120,15 @@ impl Session {
                 // board zones [merge]: the pours (layer, net, corners, holes, area); `merge` joins the pours of one net and layer that
                 // overlap or touch into one (a pour with a hole keeps it)
                 let board = self.board_mut()?;
-                let merged = if rest.first().is_some_and(|a| a.eq_ignore_ascii_case("merge")) { Some(pcb_core::zonefill::merge_all_zones(board)) } else { None };
+                let merging = rest.first().is_some_and(|a| a.eq_ignore_ascii_case("merge"));
+                let merged = if merging { Some(pcb_core::zonefill::merge_all_zones(board)) } else { None };
+                // `merge` also tidies the outlines: duplicate and straight-line points out, small gaps (under 0.5 mm²) filled
+                let tidied = if merging { Some(pcb_core::zonefill::tidy_zones(board)) } else { None };
                 let list: Vec<_> = board.zones.iter().enumerate().map(|(i, z)| {
                     let area = z.polygon.iter().zip(z.polygon.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0;
                     json!({"index": i, "net": z.net, "layer": layer_name(z.side), "corners": z.polygon.len(), "holes": z.holes.len(), "area_mm2": (area * 10.0).round() / 10.0})
                 }).collect();
-                Ok(obj(json!({"zones": list, "merged": merged})))
+                Ok(obj(json!({"zones": list, "merged": merged, "points_removed": tidied.map(|t| t.0), "gaps_filled": tidied.map(|t| t.1)})))
             }
             "keepout" => {
                 // board keepout layer=inner1 [net=VNEG] rect=x0,y0,x1,y1 | circle=x,y,r | pad=J3E,J3F [margin=1.0]: no copper of the pours on

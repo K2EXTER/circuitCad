@@ -112,7 +112,7 @@ impl BoardEditor {
             self.multi.clear();
             self.boxsel = None;
         }
-        if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+        if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) {
             self.finish_polygon();
         }
         if pressed(Key::L) {

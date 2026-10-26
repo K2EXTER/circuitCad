@@ -397,8 +397,12 @@ impl BoardEditor {
                     }
                 }
             }
-            Tool::OutlinePoly | Tool::Zone => {
-                let col = if self.tool == Tool::Zone { self.side_color(self.side) } else { Color32::YELLOW };
+            Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole => {
+                let col = match self.tool {
+                    Tool::Zone => self.side_color(self.side),
+                    Tool::ZoneHole => Color32::LIGHT_RED,
+                    _ => Color32::YELLOW,
+                };
                 for w in self.poly.windows(2) {
                     painter.line_segment([self.to_screen(rect, w[0]), self.to_screen(rect, w[1])], Stroke::new(1.5, col));
                 }

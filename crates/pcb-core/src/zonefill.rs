@@ -181,13 +181,66 @@ pub fn merge_zone_outline(board: &mut Board, idx: usize) -> (usize, usize) {
     if absorbed.is_empty() {
         return (0, idx);
     }
-    board.zones[idx].polygon = poly;
-    board.zones[idx].holes = holes;
+    board.zones[idx].polygon = clean_outline(&poly);
+    board.zones[idx].holes = holes.iter().map(|h| clean_outline(h)).filter(|h| h.len() >= 3 && signed_area(h).abs() >= MIN_HOLE_AREA).collect();
     absorbed.sort_unstable();
     for &k in absorbed.iter().rev() {
         board.zones.remove(k);
     }
     (absorbed.len(), idx - absorbed.iter().filter(|&&k| k < idx).count())
+}
+
+/// A hole of a joined pour smaller than this (mm²) is a gap the join left between the pours, not a keep-out someone drew: it is
+/// filled (its copper is cut again round whatever of another net is in it).
+const MIN_HOLE_AREA: f64 = 0.5;
+
+/// The outline without points on top of each other (closer than 0.1 µm) and without points on a straight line (the corners
+/// a union leaves where the old outlines crossed).
+pub fn clean_outline(poly: &[Point]) -> Vec<Point> {
+    let mut pts: Vec<Point> = vec![];
+    for p in poly {
+        if pts.last().is_none_or(|l| l.dist(*p) > 1e-4) {
+            pts.push(*p);
+        }
+    }
+    while pts.len() > 1 && pts[0].dist(pts[pts.len() - 1]) <= 1e-4 {
+        pts.pop();
+    }
+    loop {
+        let n = pts.len();
+        if n < 4 {
+            return pts;
+        }
+        let keep: Vec<Point> = (0..n)
+            .filter(|&i| {
+                let (a, p, c) = (pts[(i + n - 1) % n], pts[i], pts[(i + 1) % n]);
+                ((p.x - a.x) * (c.y - p.y) - (p.y - a.y) * (c.x - p.x)).abs() > 1e-7
+            })
+            .map(|i| pts[i])
+            .collect();
+        if keep.len() == n || keep.len() < 3 {
+            return pts;
+        }
+        pts = keep;
+    }
+}
+
+/// Tidy the outlines of all pours: duplicate and straight-line points taken out, holes smaller than [`MIN_HOLE_AREA`] filled.
+/// Returns (points taken out, holes filled).
+pub fn tidy_zones(board: &mut Board) -> (usize, usize) {
+    let (mut points, mut holes) = (0, 0);
+    for z in &mut board.zones {
+        let before = z.polygon.len() + z.holes.iter().map(Vec::len).sum::<usize>();
+        let poly = clean_outline(&z.polygon);
+        if poly.len() >= 3 {
+            z.polygon = poly;
+        }
+        let n = z.holes.len();
+        z.holes = z.holes.iter().map(|h| clean_outline(h)).filter(|h| h.len() >= 3 && signed_area(h).abs() >= MIN_HOLE_AREA).collect();
+        holes += n - z.holes.len();
+        points += before.saturating_sub(z.polygon.len() + z.holes.iter().map(Vec::len).sum::<usize>());
+    }
+    (points, holes)
 }
 
 /// Join every pour that overlaps or touches another of its net and layer. Returns how many pours were absorbed (the board has
@@ -544,6 +597,18 @@ mod merge_outline_tests {
         assert_eq!(b.zones.len(), 1);
         assert_eq!(b.zones[0].holes.len(), 1);
         assert_eq!(clear_zone_holes(&mut b, Side::Top, None), 1);
+    }
+
+    #[test]
+    fn tidy_takes_out_duplicate_and_straight_points_and_small_gaps() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        let mut z = Zone::new("GND", Side::Top, vec![Point::new(0.0, 0.0), Point::new(5.0, 0.0), Point::new(5.0, 0.0), Point::new(10.0, 0.0), Point::new(10.0, 10.0), Point::new(0.0, 10.0)]);
+        z.holes.push(rect(2.0, 2.0, 2.4, 2.4)); // 0.16 mm²: a gap
+        z.holes.push(rect(5.0, 5.0, 8.0, 8.0)); // a keep-out
+        b.zones.push(z);
+        let (points, holes) = tidy_zones(&mut b);
+        assert_eq!((b.zones[0].polygon.len(), b.zones[0].holes.len(), holes), (4, 1, 1));
+        assert!(points >= 2);
     }
 
     #[test]

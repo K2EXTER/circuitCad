@@ -267,6 +267,7 @@ impl BoardEditor {
             Tool::PadSmd => "パッド(SMD)の設定",
             Tool::Hole => "取付穴の設定",
             Tool::Zone => "銅箔ゾーンの設定",
+            Tool::ZoneHole => "ベタの穴あけの設定",
             _ => return,
         };
         // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
@@ -347,6 +348,16 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
             }
+            Tool::ZoneHole => {
+                ui.label("多角形を描き、ダブルクリックか Enter で確定。この層 (いま作業している面) のベタに、銅のない穴が開く");
+                let nets = self.nets();
+                egui::ComboBox::from_label("対象のネット").selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.hole_net, String::new(), "すべて");
+                    for n in &nets {
+                        ui.selectable_value(&mut self.hole_net, n.clone(), n);
+                    }
+                }).response.on_hover_text("穴を開けるベタのネット。「すべて」なら、描いた範囲に触れる、この層のベタ全部に穴が開きます (ネットを決めなくてよい)");
+            }
             Tool::Hole => {
                 ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
             }
@@ -363,11 +374,11 @@ impl BoardEditor {
                 }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
                 ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
                 ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
-                ui.checkbox(&mut self.zone_cut, "描いた多角形を、このネットのベタの穴にする").on_hover_text("新しいベタを作るかわりに、この層にある上のネットのベタに、銅のない穴を開けます。検出線のスルーホールのまわりに、内層のベタを寄せたくないときなどに使います。穴は、選んだベタの設定の「穴を消す」で戻せます");
                 if ui.button("重なるベタを結合").on_hover_text("同じネット・同じ層で、重なったり接したりしているベタを、1 枚にまとめます (穴は残ります)。見た目はつながっていても内部のデータが別々のときに使います").clicked() {
                     self.checkpoint();
                     let n = pcb_core::zonefill::merge_all_zones(&mut self.board);
-                    self.status = if n > 0 { format!("重なるベタを {n} 枚、まとめました") } else { "まとめるベタはありませんでした".into() };
+                    let (points, gaps) = pcb_core::zonefill::tidy_zones(&mut self.board);
+                    self.status = format!("重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さなすき間 {gaps} 個を整理しました");
                 }
                 ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
             }

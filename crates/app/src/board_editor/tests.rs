@@ -104,18 +104,25 @@ fn a_zone_polygon_can_be_a_hole_of_the_pours_of_a_net() {
     e.zone_net = "VNEG".into();
     e.poly = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 20.0), p(0.0, 20.0)];
     e.finish_polygon();
+    // the hole tool cuts the pours of every net on the layer, no net to choose
+    e.tool = Tool::ZoneHole;
     e.poly = vec![p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)];
-    e.zone_cut = true;
     e.finish_polygon();
     assert_eq!(e.board.zones.len(), 1, "a hole is not a new pour");
     assert_eq!(e.board.zones[0].holes.len(), 1);
     e.undo();
     assert!(e.board.zones[0].holes.is_empty(), "the hole goes with undo");
-    // a net without a pour on this layer: nothing is cut and the status says so
-    e.zone_net = "GND".into();
+    // one net only: a pour of another net is left alone and the status says so
+    e.hole_net = "GND".into();
     e.poly = vec![p(5.0, 5.0), p(8.0, 5.0), p(8.0, 8.0), p(5.0, 8.0)];
     e.finish_polygon();
     assert!(e.board.zones[0].holes.is_empty() && e.status.contains("ありません"));
+    // a polygon drawn with clicks closes by clicking the first point
+    e.hole_net.clear();
+    for q in [p(10.0, 10.0), p(12.0, 10.0), p(12.0, 12.0), p(10.0, 10.0)] {
+        e.click(q);
+    }
+    assert_eq!(e.board.zones[0].holes.len(), 1);
 }
 
 #[test]

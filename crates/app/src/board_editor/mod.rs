@@ -23,6 +23,8 @@ pub enum Tool {
     OutlineRect,
     OutlinePoly,
     Zone,
+    /// A polygon that is cut out of the pours of the layer (every net, or one).
+    ZoneHole,
 }
 
 use crate::icons::Icon;
@@ -33,6 +35,7 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::Track => "銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます",
         Tool::Via => "表面と裏面をつなぐ穴 (ビア) を置きます",
         Tool::Zone => "広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります",
+        Tool::ZoneHole => "ベタに銅のない穴を開けます。多角形を描くと、この層のベタ (すべてのネット) に穴が開きます。検出線のスルーホールのまわりの内層のベタを、離したいときなどに使います",
         Tool::OutlineRect => "基板の外形を矩形でドラッグして決めます",
         Tool::OutlinePoly => "基板の外形を多角形で決めます。クリックで頂点、ダブルクリックで確定",
         Tool::PadTh => "穴付き (スルーホール) の単独パッドを置きます",
@@ -44,7 +47,7 @@ fn tool_tip(t: Tool) -> &'static str {
 
 /// The number key that picks a tool: 1-9 and 0 in the order of `TOOLS`.
 fn tool_key(t: Tool) -> Option<char> {
-    TOOLS.iter().position(|(x, _, _)| *x == t).and_then(|i| char::from_digit(((i + 1) % 10) as u32, 10))
+    TOOLS.iter().position(|(x, _, _)| *x == t).filter(|i| *i < 10).and_then(|i| char::from_digit(((i + 1) % 10) as u32, 10))
 }
 
 const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
@@ -58,6 +61,7 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::PadSmd, "パッド(SMD)", Icon::PadSmd),
     (Tool::Hole, "取付穴", Icon::Hole),
     (Tool::Silk, "シルク線", Icon::Silk),
+    (Tool::ZoneHole, "ベタの穴あけ", Icon::ZoneHole),
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -295,8 +299,8 @@ pub struct BoardEditor {
     zone_clearance: f64,
     zone_thermal: bool,
     zone_remove_islands: bool,
-    /// The polygon being drawn with the zone tool is a hole of the pours of `zone_net` on this layer, not a new pour.
-    zone_cut: bool,
+    /// The net whose pours the hole tool cuts (empty: the pours of every net on the layer).
+    hole_net: String,
     size_w: f64,
     size_h: f64,
     /// Corner radius (mm) for rectangular outlines; 0 = square corners.
@@ -413,7 +417,7 @@ impl Default for BoardEditor {
             zone_clearance: 0.3,
             zone_thermal: true,
             zone_remove_islands: true,
-            zone_cut: false,
+            hole_net: String::new(),
             size_w: 50.0,
             size_h: 40.0,
             size_r: 0.0,

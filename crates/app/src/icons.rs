@@ -21,6 +21,7 @@ pub enum Icon {
     Label,
     Via,
     Zone,
+    ZoneHole,
     OutlineRect,
     OutlinePoly,
     PadTh,
@@ -72,6 +73,14 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
                 p.line_segment([q(0.12, 0.12 + t * 0.76 + 0.0), q(0.12 + t * 0.76, 0.12)], Stroke::new(1.0, c));
                 p.line_segment([q(0.88, 0.12 + t * 0.76), q(0.12 + t * 0.76, 0.88)], Stroke::new(1.0, c));
             }
+        }
+        Icon::ZoneHole => {
+            // a pour with a hole: the square, a few hatch lines at the corners and a ring in the middle
+            let b = Rect::from_min_max(q(0.12, 0.12), q(0.88, 0.88));
+            p.rect_stroke(b, 1.0, s, egui::StrokeKind::Inside);
+            p.line_segment([q(0.12, 0.4), q(0.4, 0.12)], Stroke::new(1.0, c));
+            p.line_segment([q(0.88, 0.6), q(0.6, 0.88)], Stroke::new(1.0, c));
+            p.circle_stroke(q(0.5, 0.5), u * 0.2, s);
         }
         Icon::OutlineRect => {
             let b = Rect::from_min_max(q(0.1, 0.2), q(0.9, 0.8));

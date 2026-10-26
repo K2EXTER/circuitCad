@@ -35,12 +35,14 @@ impl BoardEditor {
                 self.fit_pending = false;
                 self.status = "基板外形を設定しました".into();
             }
-            Tool::Zone if self.zone_cut => {
-                let n = pcb_core::zonefill::add_zone_hole(&mut self.board, self.side, Some(self.zone_net.as_str()).filter(|n| !n.is_empty()), &poly);
+            Tool::ZoneHole => {
+                let net = Some(self.hole_net.as_str()).filter(|n| !n.is_empty());
+                let n = pcb_core::zonefill::add_zone_hole(&mut self.board, self.side, net, &poly);
+                let which = net.map_or("この層のベタ".to_string(), |n| format!("ネット {n} のベタ"));
                 self.status = if n > 0 {
-                    format!("ネット {} のベタ {n} 枚に、銅を抜く穴を開けました (ベタの設定の「穴を消す」で戻せます)", self.zone_net)
+                    format!("{which} {n} 枚に、銅を抜く穴を開けました (ベタを選ぶと、設定の「穴を消す」で戻せます)")
                 } else {
-                    format!("この層に、ネット {} のベタがありません。穴を開けるベタを先に作ってください", self.zone_net)
+                    format!("{which}が、描いた範囲にありません。穴を開けるベタの上に描いてください (層は、いま作業している面です)")
                 };
             }
             Tool::Zone => {
@@ -101,7 +103,7 @@ impl BoardEditor {
                     }
                 }
             },
-            Tool::OutlinePoly | Tool::Zone => {
+            Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole => {
                 if self.poly.len() >= 3 && self.poly[0].dist(p) < 6.0 / self.zoom as f64 {
                     self.finish_polygon();
                 } else if self.poly.last().is_none_or(|l| l.dist(p) > 1e-9) {

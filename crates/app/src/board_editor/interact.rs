@@ -140,7 +140,7 @@ impl BoardEditor {
             if resp.clicked_by(egui::PointerButton::Primary) {
                 self.click(p);
             }
-            if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+            if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) {
                 self.finish_polygon();
             }
             let layer = self.side.label();
@@ -173,7 +173,7 @@ impl BoardEditor {
             return true;
         }
         if !self.poly.is_empty() {
-            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) {
                 self.finish_polygon();
             } else {
                 self.poly.clear();
