@@ -358,6 +358,8 @@ pub struct BoardEditor {
     /// The net whose window is open (a click on its copper with the Select tool), and whether a click opens it at all.
     net_win: Option<String>,
     net_win_on: bool,
+    /// Select tool: a drag that starts on a track slides it (off by default: a slip of the mouse moved wiring)
+    track_drag_on: bool,
     /// Set by the net window for a net with no current: `App` answers with the schematic's DC current of that net (`fill_net_current`).
     pub net_current_request: Option<String>,
     /// The schematic's DC currents are at hand (set by the app each frame): the net window then asks for them at once, otherwise it
@@ -472,6 +474,7 @@ impl Default for BoardEditor {
             drag_edit: false,
             net_win: None,
             net_win_on: true,
+            track_drag_on: false,
             net_current_request: None,
             dc_currents_ready: false,
             net_win_asked: None,

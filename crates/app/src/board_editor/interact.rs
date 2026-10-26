@@ -132,7 +132,7 @@ impl BoardEditor {
                 && resp.dragged_by(egui::PointerButton::Primary) {
                     self.board.move_label(&r, Point::new(w.x - grab.x, w.y - grab.y));
                 }
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
+            if self.track_drag_on && resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
                 // the pointer has already moved a few pixels when the drag is recognised: look where it was pressed
                 && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
                 && let w0 = self.to_world(rect, o)
