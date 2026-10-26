@@ -255,8 +255,19 @@ impl Step {
 
     /// Millimetres per unit of the file's length unit.
     fn unit_mm(&self) -> f64 {
-        let mut length_units: Vec<&Parts> = self.ents.values().filter(|p| p.iter().any(|q| q.0 == "LENGTH_UNIT")).collect();
-        length_units.sort_by_key(|p| p.iter().all(|q| q.0 != "CONVERSION_BASED_UNIT"));
+        // the units the file's geometry context names come first (a file can hold other length units too, a metre for a
+        // tolerance); then the order is the entity number, so the answer does not depend on the order of a hash map
+        let in_context: std::collections::HashSet<u32> = self
+            .ents
+            .values()
+            .flat_map(|p| p.iter())
+            .filter(|q| q.0 == "GLOBAL_UNIT_ASSIGNED_CONTEXT")
+            .flat_map(|q| q.1.iter())
+            .flat_map(|v| if let Val::List(l) = v { l.iter().filter_map(r#ref).collect::<Vec<_>>() } else { vec![] })
+            .collect();
+        let mut length_units: Vec<(&u32, &Parts)> = self.ents.iter().filter(|(_, p)| p.iter().any(|q| q.0 == "LENGTH_UNIT")).collect();
+        length_units.sort_by_key(|(id, p)| (!in_context.contains(*id), p.iter().all(|q| q.0 != "CONVERSION_BASED_UNIT"), **id));
+        let length_units: Vec<&Parts> = length_units.into_iter().map(|(_, p)| p).collect();
         for parts in length_units {
             if let Some((_, a)) = parts.iter().find(|p| p.0 == "CONVERSION_BASED_UNIT") {
                 // a conversion unit (the inch): its measure says how many of the base unit one of these is
@@ -914,6 +925,19 @@ mod tests {
         assert!((m.volume() - 25.4f64.powi(3)).abs() < 0.5, "volume {}", m.volume());
         let m = rs(&box_step(1.0, 1.0, 1.0, "#900=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT($,.METRE.));\n")).unwrap();
         assert!((m.volume() - 1e9).abs() < 1e3, "metres: {}", m.volume());
+    }
+
+    #[test]
+    fn a_second_length_unit_does_not_decide_the_scale() {
+        // the geometry context names the millimetre; a metre stands in the file for something else (a tolerance)
+        let units = "#900=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT($,.METRE.));
+#901=(LENGTH_UNIT()NAMED_UNIT(*)SI_UNIT(.MILLI.,.METRE.));
+#902=(GEOMETRIC_REPRESENTATION_CONTEXT(3)GLOBAL_UNIT_ASSIGNED_CONTEXT((#901)));
+";
+        for _ in 0..20 {
+            let m = rs(&box_step(2.0, 2.0, 2.0, units)).unwrap();
+            assert!((m.volume() - 8.0).abs() < 1e-3, "volume {}", m.volume());
+        }
     }
 
     #[test]
