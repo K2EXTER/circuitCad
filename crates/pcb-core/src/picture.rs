@@ -23,11 +23,13 @@ pub struct PictureOpts {
     pub others: bool,
     /// Grid spacing in mm (0: a spacing that suits the picture).
     pub grid: f64,
+    /// Routes to show as shadows (the way a net could be wired: not on the board): the net, its tracks and its vias.
+    pub ghost: Vec<(String, Vec<Track>, Vec<Via>)>,
 }
 
 impl Default for PictureOpts {
     fn default() -> Self {
-        PictureOpts { side: Side::Top, area: None, max_side: 1600, highlight: vec![], marks: false, others: false, grid: 0.0 }
+        PictureOpts { side: Side::Top, area: None, max_side: 1600, highlight: vec![], marks: false, others: false, grid: 0.0, ghost: vec![] }
     }
 }
 
@@ -242,6 +244,21 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
         cv.paint(&copper_prims(board, &conn, opts.side, Some(net)), c, 0.95);
         cv.paint(&hole_prims(board), HOLE, 1.0);
         legend.push(format!("ネット {net}: {}", ["黄", "水色", "ピンク", "黄緑", "橙", "薄紫"][k % HIGHLIGHTS.len()]));
+    }
+    // the shadows: wide and see-through, with a thin line down the middle, a ring for each via
+    for (k, (net, tracks, vias)) in opts.ghost.iter().enumerate() {
+        // the colour of the net when it is highlighted too, else the next free one
+        let ci = opts.highlight.iter().position(|h| h == net).unwrap_or(opts.highlight.len() + opts.ghost.iter().take(k).filter(|(n, _, _)| !opts.highlight.contains(n)).count());
+        let c = HIGHLIGHTS[ci % HIGHLIGHTS.len()];
+        let mine: Vec<&Track> = tracks.iter().filter(|t| t.side == opts.side).collect();
+        let wide: Vec<Prim> = mine.iter().map(|t| Prim::Line { a: t.a, b: t.b, width: t.width.max(8.0 * one_px), clear: false }).collect();
+        cv.paint(&wide, c, 0.4);
+        let centre: Vec<[Point; 2]> = mine.iter().map(|t| [t.a, t.b]).collect();
+        cv.lines(&centre, one_px * 1.5, c, 1.0);
+        let rings: Vec<Prim> = vias.iter().map(|v| Prim::Flash { ap: Aperture::Circle(v.diameter.max(10.0 * one_px)), at: v.pos, clear: false }).collect();
+        cv.paint(&rings, c, 0.6);
+        let length: f64 = tracks.iter().map(|t| t.a.dist(t.b)).sum();
+        legend.push(format!("影 (おすすめの取り回し) {net}: {}、全層の長さ {} mm、ビア {} 個 (この層に描いた線は {} 本)", ["黄", "水色", "ピンク", "黄緑", "橙", "薄紫"][ci % HIGHLIGHTS.len()], mm((length * 10.0).round() / 10.0), vias.len(), mine.len()));
     }
     // the silk of an outer layer
     if !opts.side.is_inner() {

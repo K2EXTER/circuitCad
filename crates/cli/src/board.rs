@@ -145,13 +145,41 @@ impl Session {
                 };
                 let highlight: Vec<String> = opt(&kv, "net").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
                 let out = opt(&kv, "out").map(str::to_string).unwrap_or_else(|| format!("picture-{}.png", layer_name(side)));
+                // ghost=SA,SB: the way the router would wire those nets, drawn as shadows (on a copy: the board is not changed); the
+                // wiring they have now is left out of the copy first. `ghost_vias=1` lets the shadow use vias (it does not by default)
+                let ghost_nets: Vec<String> = opt(&kv, "ghost").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
+                let ghost_vias = flag("ghost_vias");
                 let board = self.board_mut()?;
                 if let pcb_core::model::Side::Inner(n) = side
                     && n > board.inner_layers
                 {
                     return Err(format!("layer={}: この基板の内層は {} 枚です (`board layers 4` で 4 層にできます)", layer_name(side), board.inner_layers));
                 }
-                let pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid });
+                let mut ghost = vec![];
+                let mut failed: Vec<String> = vec![];
+                if !ghost_nets.is_empty() {
+                    let mut g = board.clone();
+                    for n in &ghost_nets {
+                        pcb_core::shove::rip_up_net(&mut g, n);
+                    }
+                    let ro = RouteOptions { outer_only: true, no_vias: !ghost_vias, ..RouteOptions::default() };
+                    for n in &ghost_nets {
+                        let rep = pcb_core::autoroute::autoroute_sized(&mut g, &ro, Some(n));
+                        if !rep.failed.is_empty() {
+                            failed.push(n.clone());
+                        }
+                    }
+                    let conn = pcb_core::drc::connectivity(&g);
+                    for n in &ghost_nets {
+                        let tracks: Vec<pcb_core::model::Track> = g.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(n.as_str())).map(|(_, t)| t.clone()).collect();
+                        let vias: Vec<pcb_core::model::Via> = g.vias.iter().enumerate().filter(|(k, _)| conn.via_net(*k) == Some(n.as_str())).map(|(_, v)| v.clone()).collect();
+                        ghost.push((n.clone(), tracks, vias));
+                    }
+                }
+                let mut pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid, ghost });
+                for n in &failed {
+                    pic.legend.push(format!("影 {n}: 経路が見つからない接続があります (ビアを許す `ghost_vias=1`、または周りの配置を空けてみてください)"));
+                }
                 image::save_buffer(&out, &pic.rgba, pic.w as u32, pic.h as u32, image::ColorType::Rgba8).map_err(|e| format!("{out} に書けません: {e}"))?;
                 Ok(obj(json!({"file": out, "width": pic.w, "height": pic.h, "legend": pic.legend})))
             }
