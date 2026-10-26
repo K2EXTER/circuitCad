@@ -25,15 +25,13 @@ pub fn write_pin_labels(board: &mut Board, names: &[(String, Vec<String>)], heig
         let mut pads: Vec<&Pad> = board.pads.iter().filter(|p| &p.refdes == refdes).collect();
         // pin 1, 2, 3 ... in order along the row
         pads.sort_by_key(|p| p.pin.parse::<usize>().unwrap_or(usize::MAX));
-        if pads.len() < 2 {
+        if pads.is_empty() {
             continue;
         }
         let (first, last) = (pads[0].pos, pads[pads.len() - 1].pos);
         let len = first.dist(last);
-        if len < 1e-6 {
-            continue;
-        }
-        let (ax, ay) = ((last.x - first.x) / len, (last.y - first.y) / len);
+        // a part of one pad has no row: the text goes above or below it, on the side of the middle of the board
+        let (ax, ay) = if len < 1e-6 { (1.0, 0.0) } else { ((last.x - first.x) / len, (last.y - first.y) / len) };
         // the row is along x (the text goes above or below the pads) or along y (to the side of them)
         let along_x = ax.abs() >= ay.abs();
         let mid = Point::new((first.x + last.x) / 2.0, (first.y + last.y) / 2.0);
@@ -80,5 +78,17 @@ mod tests {
         // run again: replaced, not added twice
         write_pin_labels(&mut b, &[("J3".into(), vec!["A".into(), "B".into(), "C".into()])], 1.0);
         assert_eq!(b.texts.len(), 3);
+    }
+
+    #[test]
+    fn a_part_of_one_pad_gets_its_name_on_the_side_of_the_board() {
+        let mut b = Board::new("t", 40.0, 30.0);
+        b.parts.push(Part { refdes: "J3A".into(), value: "".into(), footprint: "WirePad_1x1".into(), pos: Point::new(20.0, 3.0), rot: 0, side: Side::Top });
+        let mut p = Pad::new(Point::new(20.0, 3.0), PadShape::Circle { d: 2.2 }, Some(1.2), Side::Top);
+        p.refdes = "J3A".into();
+        p.pin = "1".into();
+        b.pads.push(p);
+        assert_eq!(write_pin_labels(&mut b, &[("J3A".into(), vec!["F+".into()])], 1.0), 1);
+        assert!(b.texts[0].pos.y > 3.0 + 1.1 && (b.texts[0].pos.x - 20.0).abs() < 1e-9);
     }
 }
