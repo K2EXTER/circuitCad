@@ -22,6 +22,19 @@ impl BoardEditor {
         h.finish()
     }
 
+    /// Where the tracks and vias are (what a finish is made from).
+    fn tracks_key(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for t in &self.board.tracks {
+            (t.a.x.to_bits(), t.a.y.to_bits(), t.b.x.to_bits(), t.b.y.to_bits(), t.width.to_bits(), t.side).hash(&mut h);
+        }
+        for v in &self.board.vias {
+            (v.pos.x.to_bits(), v.pos.y.to_bits(), v.diameter.to_bits()).hash(&mut h);
+        }
+        h.finish()
+    }
+
     /// [`finished`](Self::finished) for the picture: when the copper has changed, the new finish is worked out on another thread (a
     /// quarter of a second on a board of this size, and it would freeze the window at the end of every move) and the picture keeps the
     /// last one until it is ready. The very first one is worked out at once, there being nothing to keep.
@@ -51,6 +64,7 @@ impl BoardEditor {
         }
         if let Some((k, Some(f))) = done {
             *self.finish_cache.borrow_mut() = Some((k, Rc::new(f)));
+            self.finish_tracks.set(self.finish_job_tracks.get());
         }
         let have = self.finish_cache.borrow().clone();
         match have {
@@ -66,9 +80,13 @@ impl BoardEditor {
                 let _ = tx.send(smooth::finished(&board));
             });
             *self.finish_job.borrow_mut() = Some((key, rx));
+            self.finish_job_tracks.set(self.tracks_key());
             ctx.request_repaint_after(std::time::Duration::from_millis(30));
         }
-        // the last finish stands until the new one is ready
+        // the last finish stands until the new one is ready (unless the tracks have moved: then the plain ones are drawn)
+        if self.finish_tracks.get() != self.tracks_key() {
+            return None;
+        }
         self.finish_cache.borrow().as_ref().map(|(_, v)| v.clone())
     }
 
@@ -84,6 +102,7 @@ impl BoardEditor {
             return Some(v.clone());
         }
         let fresh = Rc::new(smooth::finished(&self.board)?);
+        self.finish_tracks.set(self.tracks_key());
         *cache = Some((key, fresh.clone()));
         Some(fresh)
     }

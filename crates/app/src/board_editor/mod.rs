@@ -291,6 +291,10 @@ pub struct BoardEditor {
     finish_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::smooth::Finished>)>>,
     /// The finish being worked out on another thread: for which key, and where the answer comes from (`finished_async`).
     finish_job: std::cell::RefCell<Option<(u64, std::sync::mpsc::Receiver<Option<pcb_core::smooth::Finished>>)>>,
+    /// The tracks and vias (`tracks_key`) the kept finish was made for, and those the running job was started for: a finish of tracks
+    /// that have moved since is not shown (it would stay where they were).
+    finish_tracks: std::cell::Cell<u64>,
+    finish_job_tracks: std::cell::Cell<u64>,
     /// The routing preview's verdict for the last cursor position: (key, tracks pushed, rule broken).
     preview_cache: std::cell::RefCell<Option<shoving::PreviewCache>>,
     pub status: String,
@@ -433,6 +437,8 @@ impl Default for BoardEditor {
             shove: true,
             finish_cache: Default::default(),
             finish_job: Default::default(),
+            finish_tracks: Default::default(),
+            finish_job_tracks: Default::default(),
             preview_cache: Default::default(),
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,
