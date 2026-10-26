@@ -348,6 +348,21 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "sim_only": on})))
     }
 
+    /// `pinnames REF NAME1,NAME2,...`: what each pin of a pin header is for (`-` clears them).
+    pub fn pin_names(&mut self, args: &[String]) -> Res {
+        let usage = "pinnames REF NAME1,NAME2,...   (the names of the pins of a pin header, pin 1 first; `-` clears them)";
+        let [r, list] = args else { return Err(usage.into()) };
+        let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        let Kind::Header(n) = c.kind else { return Err(format!("{} is not a pin header (pinnames is for headers)", c.refdes)) };
+        c.pin_names = if list == "-" { vec![] } else { list.split(',').map(|s| s.trim().to_string()).collect() };
+        if c.pin_names.len() > n as usize {
+            let k = c.pin_names.len();
+            c.pin_names.clear();
+            return Err(format!("{} has {n} pins, but {k} names were given", c.refdes));
+        }
+        Ok(obj(json!({"ref": c.refdes, "pins": n, "names": c.pin_names})))
+    }
+
     /// The points of the pins `REF.PIN` stands for (a pin name shared by several pins means all of them).
     fn pin_points(&self, spec: &str) -> Result<Vec<Pt>, String> {
         let (r, p) = spec.split_once('.').ok_or_else(|| format!("'{spec}': write REF.PIN, for example R1.1 or U1.GND"))?;

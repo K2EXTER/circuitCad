@@ -149,6 +149,10 @@ pub struct Component {
     /// board's shopping list and bill of materials do not have it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sim_only: bool,
+    /// What each pin of a pin header is for (the signal name written beside the pin of the symbol, and on the board's silk);
+    /// pin 1 first. Empty or short: the pins without a name are left unlabelled. The wiring and the netlist do not use it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pin_names: Vec<String>,
 }
 
 pub fn rotate(p: Pt, rot: u8) -> Pt {
@@ -162,6 +166,12 @@ pub fn rotate(p: Pt, rot: u8) -> Pt {
 impl Component {
     pub fn footprint_name(&self) -> String {
         if self.footprint.is_empty() { self.kind.default_footprint() } else { self.footprint.clone() }
+    }
+
+    /// The name written for pin `pin` ("1", "2" ...) of a pin header, if there is one.
+    pub fn pin_name(&self, pin: &str) -> Option<&str> {
+        let k: usize = pin.parse::<usize>().ok()?.checked_sub(1)?;
+        self.pin_names.get(k).map(|s| s.as_str()).filter(|s| !s.is_empty())
     }
 
     /// Pins as (name, absolute grid position).
@@ -402,6 +412,7 @@ impl Schematic {
             footprint: kind.default_footprint(),
             custom: None,
             sim_only: false,
+            pin_names: vec![],
         });
         self.components.len() - 1
     }
@@ -418,6 +429,7 @@ impl Schematic {
             footprint: footprint.to_string(),
             custom: Some(sym),
             sim_only: false,
+            pin_names: vec![],
         });
         self.components.len() - 1
     }

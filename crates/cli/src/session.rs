@@ -22,6 +22,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
         TYPE: R C L D LED V NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
   value REF VALUE                       change the value (a value with spaces, like PULSE(0 5 1m 1u), needs no quotes)
+  pinnames REF NAME1,NAME2,...          the names of the pins of a pin header (F+,F-,SA,SB,GND): written beside its symbol and, with `board pinlabels`, on the silk (`-` clears)
   simonly REF [off]                     the part is only for the simulation (a test source, a stand-in for the device under test): it is left off the board and the bill of materials
   net NAME REF.PIN [REF.PIN ...]        connect pins by name; REF.PIN is the pin number or its name (any case)
                                         (GND pins of a part that share a name are all connected)
@@ -214,6 +215,7 @@ impl Session {
             "add" => self.add(args),
             "value" => self.set_value(args),
             "simonly" => self.sim_only(args),
+            "pinnames" => self.pin_names(args),
             "net" => self.net(args),
             "remove" => self.remove(args),
             "list" => Ok(self.list()),

@@ -24,7 +24,7 @@ fn refdes_are_numbered_per_prefix() {
 
 #[test]
 fn rotation_moves_pins() {
-    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false };
+    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![] };
     let pins = c.pins();
     assert_eq!(pins[0].1, (10, 8));
     assert_eq!(pins[1].1, (10, 12));
@@ -47,6 +47,18 @@ fn an_unnamed_net_never_takes_the_name_a_label_gave_to_another_net() {
     names.sort();
     names.dedup();
     assert_eq!(names.len(), nets.len(), "every net has its own name: {names:?}");
+}
+
+#[test]
+fn the_pin_names_of_a_header_are_looked_up_by_pin_number_and_saved_only_when_there_are_some() {
+    let mut s = Schematic::default();
+    let i = s.add(Kind::Header(3), (0, 0), 0);
+    assert!(!serde_json::to_string(&s.components[i]).unwrap().contains("pin_names"), "nothing is written when there are no names");
+    s.components[i].pin_names = vec!["F+".into(), String::new(), "GND".into()];
+    let c = &s.components[i];
+    assert_eq!((c.pin_name("1"), c.pin_name("2"), c.pin_name("3"), c.pin_name("4"), c.pin_name("0")), (Some("F+"), None, Some("GND"), None, None));
+    let back: Component = serde_json::from_str(&serde_json::to_string(c).unwrap()).unwrap();
+    assert_eq!(back.pin_names, c.pin_names);
 }
 
 #[test]
@@ -443,7 +455,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         shops: Default::default(),
         glyph: "electrolytic".into(),
     };
-    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false };
+    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![] };
     let mut s = Schematic::default();
     s.components.push(c);
     assert_eq!(s.components[0].pins()[0].1, (8, 10)); // new leads are 2 long

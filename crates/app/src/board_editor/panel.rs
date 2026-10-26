@@ -105,6 +105,9 @@ impl BoardEditor {
                 if ui.button("回路図から取り込み").on_hover_text("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します").clicked() {
                     self.import_from_schematic(sch);
                 }
+                if ui.button("ヘッダのピン名をシルクに書く").on_hover_text("回路図でヘッダ(コネクタ)に付けた「ピンの名前」(F+、SA、GND など)を、基板のシルク(白い文字)として、パッドのそばに書きます。もう一度押すと書き直します。位置は、あとで「文字」ツールで動かせます").clicked() {
+                    self.write_pin_names(sch);
+                }
                 let diff = self.schematic_diff(sch).clone();
                 if !diff.is_empty() {
                     ui.colored_label(Color32::from_rgb(255, 180, 60), format!("回路図と違います: {}", diff.summary()))

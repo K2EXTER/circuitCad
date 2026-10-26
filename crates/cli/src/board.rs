@@ -72,6 +72,18 @@ impl Session {
                 let r = pcb_core::groundpour::ground_pour(board, &o)?;
                 Ok(obj(json!({"zone_added": r.zone_added, "top_added": r.top_added, "vias": r.vias, "already": r.already, "left": r.left})))
             }
+            "pinlabels" => {
+                // board pinlabels [height=1.0]: the names of the pins of the pin headers (`pinnames` in the circuit) on the silk beside the pads
+                let (_, kv) = options(rest);
+                let height = match opt(&kv, "height") {
+                    Some(v) => num(v)?,
+                    None => 1.0,
+                };
+                let names: Vec<(String, Vec<String>)> = self.sch.flat().components.iter().filter(|c| !c.pin_names.is_empty() && !c.sim_only).map(|c| (c.refdes.clone(), c.pin_names.clone())).collect();
+                let board = self.board_mut()?;
+                let n = pcb_core::pinlabels::write_pin_labels(board, &names, height);
+                Ok(obj(json!({"parts": names.len(), "texts": n})))
+            }
             "guard" => {
                 // board guard net=A guard=GRDA [margin=1.0] [clearance=0.25]: a pour of the guard net (the follower's output) along every
                 // track and pad of the sensitive net, so no voltage lies across the surface between them and the rails

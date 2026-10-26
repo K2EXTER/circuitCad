@@ -257,7 +257,26 @@ impl SchEditor {
         match &c.custom {
             Some(sym) => self.draw_custom(painter, rect, sym, c.pos, c.rot, color),
             None if c.kind == Kind::VSource => self.draw_shapes(painter, rect, source_symbol(&c.value), c.pos, c.rot, color),
-            None => self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color),
+            None => {
+                self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color);
+                // the name of each pin of a pin header, on the side of the body away from the pins (where the net labels go), upright whatever the turn
+                if let Kind::Header(n) = c.kind {
+                    let font = FontId::proportional((self.zoom * 0.5).clamp(12.0, 16.0));
+                    for i in 0..n as usize {
+                        if let Some(name) = c.pin_name(&(i + 1).to_string()) {
+                            let r = rot_f((-0.4, 2.0 * i as f32), c.rot);
+                            let p = self.to_screen(rect, (c.pos.0 as f32 + r.0, c.pos.1 as f32 + r.1));
+                            let anchor = match c.rot % 4 {
+                                0 => Align2::RIGHT_CENTER,
+                                2 => Align2::LEFT_CENTER,
+                                1 => Align2::CENTER_BOTTOM,
+                                _ => Align2::CENTER_TOP,
+                            };
+                            painter.text(p, anchor, name, font.clone(), color);
+                        }
+                    }
+                }
+            }
         }
     }
 

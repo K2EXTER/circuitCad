@@ -139,6 +139,18 @@ impl BoardEditor {
         netlist::diff(&self.board, &parts, &nets)
     }
 
+    /// Write the names of the pins of the pin headers (set in the circuit) on the silk beside the pads.
+    pub fn write_pin_names(&mut self, sch_ed: &SchEditor) {
+        let names: Vec<(String, Vec<String>)> = sch_ed.sch.flat().components.iter().filter(|c| !c.pin_names.is_empty() && !c.sim_only).map(|c| (c.refdes.clone(), c.pin_names.clone())).collect();
+        if names.is_empty() {
+            self.status = "名前をつけたヘッダがありません。回路図でヘッダを選んで、「ピンの名前」に書いてください".into();
+            return;
+        }
+        self.checkpoint();
+        let n = pcb_core::pinlabels::write_pin_labels(&mut self.board, &names, 1.0);
+        self.status = format!("ヘッダのピンの名前を、シルクに {n} か所書きました (もう一度押すと書き直します)");
+    }
+
     pub fn import_from_schematic(&mut self, sch_ed: &SchEditor) {
         let sch = &*sch_ed.sch.flat();
         let (parts, nets) = Self::netlist_of(sch);

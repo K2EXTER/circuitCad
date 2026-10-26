@@ -367,6 +367,21 @@ impl SchEditor {
                         ui.text_edit_singleline(&mut c.refdes).on_hover_text("部品番号 (R1、C2、U1 など)。同じ番号が2つあると、どちらかが解析やネットで区別できません");
                     });
                 }
+                if let Kind::Header(n) = c.kind {
+                    egui::CollapsingHeader::new("ピンの名前 (信号名)").id_salt(("pin_names", i)).default_open(true).show(ui, |ui| {
+                        ui.small("ピンごとの名前を、記号のそばと基板のシルクに書きます (配線やネットは変わりません)").on_hover_text("コネクタや端子台の各ピンが何の信号かを書いておくと、配線の間違いが減ります。空にすると、そのピンには名前を書きません");
+                        c.pin_names.resize(n as usize, String::new());
+                        for k in 0..n as usize {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("{}", k + 1));
+                                ui.add(egui::TextEdit::singleline(&mut c.pin_names[k]).desired_width(110.0)).on_hover_text("このピンの名前 (F+、SA、GND など)");
+                            });
+                        }
+                        if c.pin_names.iter().all(|s| s.is_empty()) {
+                            c.pin_names.clear();
+                        }
+                    });
+                }
                 if c.kind != Kind::Ground {
                     ui.horizontal(|ui| {
                         ui.label("値");
