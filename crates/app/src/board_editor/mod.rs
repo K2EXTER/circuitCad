@@ -191,6 +191,8 @@ struct Visible {
     /// Inner layers switched off in the layer overlay.
     inner_hidden: u32,
     silk: bool,
+    /// The parts: their pads, outlines and designators (with it off the copper under them can be seen).
+    parts: bool,
     airwires: bool,
     nets: bool,
     zones: bool,
@@ -258,6 +260,11 @@ pub struct BoardEditor {
     /// The corners of the shape being drawn (a corner and the point an arc from it passes through); `poly` is the same shape as short
     /// straight pieces, for the picture and the checks.
     poly_verts: Vec<pcb_core::shape::Vertex>,
+    /// The corner or arc middle point of a shape of the selected pour that is being dragged, the one that is picked (Delete takes it
+    /// away), and where the right click landed (for its menu).
+    vdrag: Option<VertexRef>,
+    vsel: Option<VertexRef>,
+    vmenu: Option<EditTarget>,
     poly_mode: PolyMode,
     /// The point an arc passes through (`PolyMode::ArcThrough`), clicked and waiting for the end.
     arc_mid: Option<Point>,
@@ -406,6 +413,9 @@ impl Default for BoardEditor {
             pending: None,
             poly: vec![],
             poly_verts: vec![],
+            vdrag: None,
+            vsel: None,
+            vmenu: None,
             poly_mode: PolyMode::default(),
             arc_mid: None,
             shape_round: 0.0,
@@ -440,7 +450,7 @@ impl Default for BoardEditor {
             redo: vec![],
             pick: Pickable::ALL,
             check_focus: None,
-            vis: Visible { top: true, bottom: true, silk: true, airwires: true, nets: true, zones: true, ruler: true, tracks: true, vias: true, inner_hidden: 0 },
+            vis: Visible { top: true, bottom: true, silk: true, parts: true, airwires: true, nets: true, zones: true, ruler: true, tracks: true, vias: true, inner_hidden: 0 },
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
@@ -512,6 +522,8 @@ mod lengths;
 mod pairs;
 mod align;
 mod tools;
+mod zoneedit;
+use zoneedit::{EditTarget, VertexRef};
 mod trunk;
 mod netglow;
 mod tracking;

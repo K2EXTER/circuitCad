@@ -57,10 +57,11 @@ impl BoardEditor {
                         // (icon, name, tip, eye, lock): None where a kind has no such switch
                         egui::Grid::new("view_lock_grid").spacing(Vec2::new(4.0, 2.0)).show(ui, |ui| {
                             let v = self.vis;
-                            let mut all_shown = v.tracks && v.vias && v.zones && v.silk && v.airwires && v.nets && v.ruler;
+                            let mut all_shown = v.parts && v.tracks && v.vias && v.zones && v.silk && v.airwires && v.nets && v.ruler;
                             if icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut all_shown, "すべての表示を、まとめて出す / 隠す (下の目の一括操作)。いまは全部が出ているときだけ明るくなります").changed() {
                                 (self.vis.tracks, self.vis.vias, self.vis.zones, self.vis.silk) = (all_shown, all_shown, all_shown, all_shown);
                                 (self.vis.airwires, self.vis.nets, self.vis.ruler) = (all_shown, all_shown, all_shown);
+                                self.vis.parts = all_shown;
                             }
                             ui.label("すべて");
                             let p = self.pick;
@@ -89,7 +90,7 @@ impl BoardEditor {
                                     ui.label(name);
                                 });
                             };
-                            none(ui);
+                            eye(ui, &mut self.vis.parts, "部品 (部品のパッド、外形、部品番号) を表示します。隠すと、部品の下の配線やベタが見やすくなります。隠している間も、配線やビアは、そのまま選べます");
                             kind(ui, Icon::Part, "部品");
                             lock(ui, &mut self.pick.parts, "部品をロックします。選べず、ドラッグでも動きません (範囲選択になります)");
                             ui.end_row();

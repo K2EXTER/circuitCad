@@ -13,7 +13,7 @@ impl BoardEditor {
                 return Some(Item::Via(i));
             }
         }
-        for (i, pd) in self.board.pads.iter().enumerate().filter(|(_, pd)| pd.drill.is_some() || self.side_visible(pd.side)) {
+        for (i, pd) in self.board.pads.iter().enumerate().filter(|(_, pd)| (pd.drill.is_some() || self.side_visible(pd.side)) && (self.vis.parts || pd.refdes.is_empty())) {
             let (w, h) = pd.shape.size();
             if (p.x - pd.pos.x).abs() <= w / 2.0 + tol && (p.y - pd.pos.y).abs() <= h / 2.0 + tol {
                 if !pd.refdes.is_empty()
@@ -37,7 +37,7 @@ impl BoardEditor {
             }
         }
         // a part's designator on the silkscreen (above the tracks: a track under the text is still reachable from beside it)
-        for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty() && self.side_visible(t.side)) {
+        for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty() && self.vis.parts && self.side_visible(t.side)) {
             let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);
             if pick.silk && self.vis.silk && side_ok(t.side) && (p.x - t.pos.x).abs() <= w / 2.0 + tol && (p.y - t.pos.y).abs() <= h / 2.0 + tol {
                 return Some(Item::Label(i));
@@ -187,12 +187,12 @@ impl BoardEditor {
     /// Is the thing drawn at all (its layer and its kind are shown)? What is hidden gets no selection mark or glow.
     pub(super) fn item_shown(&self, it: Item) -> bool {
         match it {
-            Item::Part(i) => self.board.parts.get(i).is_none_or(|p| self.side_visible(p.side) || self.board.pads.iter().any(|q| q.refdes == p.refdes && q.drill.is_some())),
+            Item::Part(i) => self.vis.parts && self.board.parts.get(i).is_none_or(|p| self.side_visible(p.side) || self.board.pads.iter().any(|q| q.refdes == p.refdes && q.drill.is_some())),
             Item::Track(i) => self.vis.tracks && self.board.tracks.get(i).is_none_or(|t| self.side_visible(t.side)),
             Item::Via(_) => self.vis.vias,
-            Item::Pad(i) => self.board.pads.get(i).is_none_or(|p| p.drill.is_some() || self.side_visible(p.side)),
+            Item::Pad(i) => self.board.pads.get(i).is_none_or(|p| (p.drill.is_some() || self.side_visible(p.side)) && (self.vis.parts || p.refdes.is_empty())),
             Item::Silk(i) => self.vis.silk && self.board.silk.get(i).is_none_or(|s| self.side_visible(s.side)),
-            Item::Label(i) => self.vis.silk && self.board.texts.get(i).is_none_or(|t| self.side_visible(t.side)),
+            Item::Label(i) => self.vis.silk && self.board.texts.get(i).is_none_or(|t| self.side_visible(t.side) && (self.vis.parts || t.refdes.is_empty())),
             Item::Zone(i) => self.vis.zones && self.board.zones.get(i).is_none_or(|z| self.side_visible(z.side)),
             _ => true,
         }

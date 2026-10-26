@@ -122,6 +122,7 @@ impl BoardEditor {
         if !self.vis.zones || !self.side_visible(z.side) {
             return;
         }
+        self.draw_picked_vertex(painter, rect);
         for zs in &z.shapes {
             let adds = zs.op == pcb_core::model::ShapeOp::Add;
             let col = if adds { self.side_color(z.side) } else { Color32::from_rgb(255, 90, 90) };
@@ -143,6 +144,16 @@ impl BoardEditor {
                     painter.add(egui::Shape::convex_polygon(vec![c + Vec2::new(0.0, -4.5), c + Vec2::new(4.5, 0.0), c + Vec2::new(0.0, 4.5), c + Vec2::new(-4.5, 0.0)], Color32::WHITE, Stroke::new(1.0, col)));
                 }
             }
+        }
+    }
+
+    /// A ring round the corner of a shape that is picked.
+    fn draw_picked_vertex(&self, painter: &egui::Painter, rect: Rect) {
+        let Some(h) = self.vsel else { return };
+        let Some(v) = self.board.zones.get(h.zone).and_then(|z| z.shapes.get(h.shape)).and_then(|zs| zs.shape.verts.get(h.vert)) else { return };
+        let p = if h.mid { v.arc_mid } else { Some(v.p) };
+        if let Some(p) = p {
+            painter.circle_stroke(self.to_screen(rect, p), 8.0, Stroke::new(2.0, Color32::WHITE));
         }
     }
 
@@ -202,7 +213,7 @@ impl BoardEditor {
         }
         for p in &self.board.pads {
             let visible = p.drill.is_some() && (self.vis.top || self.vis.bottom) || p.drill.is_none() && self.side_visible(p.side);
-            if !visible {
+            if !visible || (!self.vis.parts && !p.refdes.is_empty()) {
                 continue;
             }
             let c = self.to_screen(rect, p.pos);
@@ -254,14 +265,14 @@ impl BoardEditor {
         }
         if self.vis.silk {
             let silk = Color32::from_rgb(235, 235, 235);
-            for l in self.board.silk.iter().filter(|l| self.side_visible(l.side) && self.near_screen(rect, &[l.a, l.b], l.width)) {
+            for l in self.board.silk.iter().filter(|l| self.side_visible(l.side) && (self.vis.parts || l.refdes.is_empty()) && self.near_screen(rect, &[l.a, l.b], l.width)) {
                 painter.line_segment([self.to_screen(rect, l.a), self.to_screen(rect, l.b)], Stroke::new((l.width as f32 * z).max(1.0), silk));
             }
             let selected_label = match self.selected {
                 Some(Item::Label(i)) => Some(i),
                 _ => None,
             };
-            for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side) && self.near_screen(rect, &[t.pos], pcb_core::strokefont::text_width(&t.text, t.height).max(t.height))) {
+            for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side) && (self.vis.parts || t.refdes.is_empty()) && self.near_screen(rect, &[t.pos], pcb_core::strokefont::text_width(&t.text, t.height).max(t.height))) {
                 if selected_label == Some(i) {
                     // a box round the picked designator, so that it is clear what the drag will move
                     let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);

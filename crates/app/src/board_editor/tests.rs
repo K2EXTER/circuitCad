@@ -303,6 +303,66 @@ fn a_shape_that_touches_nothing_of_the_net_is_said_to_be_an_island() {
 }
 
 #[test]
+fn hiding_the_parts_hides_their_pads_and_designators_but_not_loose_copper() {
+    let mut e = BoardEditor::default();
+    e.board.parts.push(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top });
+    let mut pad = Pad::new(p(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+    pad.refdes = "R1".into();
+    pad.pin = "1".into();
+    e.board.pads.push(pad);
+    e.board.pads.push(Pad::new(p(20.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top)); // a loose pad
+    e.board.texts.push(pcb_core::SilkText { side: Side::Top, pos: p(10.0, 12.0), height: 1.0, text: "R1".into(), refdes: "R1".into() });
+    assert_eq!(e.hit_test(p(10.0, 10.0)), Some(Item::Part(0)));
+    assert!(e.item_shown(Item::Part(0)) && e.item_shown(Item::Label(0)));
+    e.vis.parts = false;
+    assert_ne!(e.hit_test(p(10.0, 10.0)), Some(Item::Part(0)), "the part cannot be picked while it is hidden");
+    assert!(!e.item_shown(Item::Part(0)) && !e.item_shown(Item::Pad(0)) && !e.item_shown(Item::Label(0)));
+    assert!(e.item_shown(Item::Pad(1)), "a loose pad is not a part");
+    assert_eq!(e.hit_test(p(20.0, 10.0)), Some(Item::Pad(1)));
+}
+
+#[test]
+fn the_corners_of_the_selected_pour_can_be_dragged_added_and_taken_away() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "GND".into();
+    set_poly(&mut e, &[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)]);
+    e.finish_polygon();
+    e.tool = Tool::Select;
+    assert_eq!(e.selected, Some(Item::Zone(0)));
+    // a corner is found under the pointer, and dragging moves it (and one undo puts it back)
+    let h = e.zone_handle_at(p(10.05, 0.05)).expect("the corner (10, 0)");
+    assert_eq!((h.shape, h.vert, h.mid), (0, 1, false));
+    e.start_vertex_drag(h);
+    e.drag_vertex(p(12.0, -1.0));
+    e.vdrag = None;
+    assert_eq!(e.board.zones[0].shapes[0].shape.verts[1].p, p(12.0, -1.0));
+    e.undo();
+    assert_eq!(e.board.zones[0].shapes[0].shape.verts[1].p, p(10.0, 0.0));
+    e.selected = Some(Item::Zone(0)); // undo drops the selection
+    // a double click on an edge puts a corner there
+    let (zone, shape, vert, at) = e.zone_edge_at(p(5.0, 0.1)).expect("the bottom edge");
+    e.insert_zone_vertex(zone, shape, vert, at);
+    assert_eq!(e.board.zones[0].shapes[0].shape.verts.len(), 5);
+    assert_eq!(e.vsel.map(|v| v.vert), Some(1), "the new corner is the picked one");
+    // Delete takes the picked corner away, not the pour
+    assert!(e.delete_picked_vertex());
+    assert_eq!((e.board.zones.len(), e.board.zones[0].shapes[0].shape.verts.len()), (1, 4));
+    // a line made an arc: its middle point is a handle of its own
+    e.board.zones[0].shapes[0].shape.make_arc(0);
+    let mid = e.board.zones[0].shapes[0].shape.verts[0].arc_mid.unwrap();
+    let h = e.zone_handle_at(mid).expect("the middle point of the arc");
+    assert!(h.mid);
+    e.start_vertex_drag(h);
+    e.drag_vertex(p(5.0, -4.0));
+    e.vdrag = None;
+    assert_eq!(e.board.zones[0].shapes[0].shape.verts[0].arc_mid, Some(p(5.0, -4.0)));
+    // nothing of this works when the pour is not the selected one
+    e.selected = None;
+    assert!(e.zone_handle_at(p(10.0, 0.0)).is_none() && e.zone_edge_at(p(5.0, 0.0)).is_none());
+}
+
+#[test]
 fn closing_a_polygon_by_clicking_the_first_point() {
     let mut e = BoardEditor::default();
     e.tool = Tool::Zone;

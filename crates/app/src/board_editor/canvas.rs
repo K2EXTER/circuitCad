@@ -97,7 +97,9 @@ impl BoardEditor {
         // R, B and Delete act on what is selected, and only the Select tool selects: in another tool they do nothing
         // to a part or a track picked earlier
         let selecting = self.tool == Tool::Select;
-        if selecting && (pressed(Key::Delete) || pressed(Key::Backspace)) {
+        if selecting && pressed(Key::Delete) && self.vsel.is_some() && self.delete_picked_vertex() {
+            // a corner of a shape of the pour was picked: it is gone, not the pour
+        } else if selecting && (pressed(Key::Delete) || pressed(Key::Backspace)) {
             if !self.multi.is_empty() {
                 self.delete_multi();
             } else if let Some(it) = self.selected {

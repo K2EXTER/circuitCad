@@ -13,7 +13,9 @@ impl BoardEditor {
                         let w0 = self.to_world(rect, o);
                         // a left drag that starts on a part or wire moves it instead (below); the inside
                         // of a copper pour does not count, or a box could not be drawn over one
-                        if crossing || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_)) || self.is_locked_item(&h)) {
+                        if self.zone_handle_at(w0).is_some() {
+                            // a corner of the pour is grabbed instead (pointer())
+                        } else if crossing || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_)) || self.is_locked_item(&h)) {
                             self.boxsel = Some(BoxSel { start: w0, crossing });
                         }
                     }
@@ -87,7 +89,15 @@ impl BoardEditor {
             sp = Some(p);
             self.draw_cursor(painter, rect, p);
 
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none()
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.vdrag.is_none()
+                && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
+                && let Some(h) = self.zone_handle_at(self.to_world(rect, o)) {
+                    self.start_vertex_drag(h);
+                }
+            if self.vdrag.is_some() && resp.dragged_by(egui::PointerButton::Primary) {
+                self.drag_vertex(p);
+            }
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none() && self.vdrag.is_none()
                 && self.hit_test(w).is_some_and(|h| self.multi.contains(&h) && !self.is_locked_item(&h)) {
                     self.checkpoint();
                     self.gdrag = Some(GroupDrag { anchor: p, orig: self.board.clone(), items: self.multi.clone() });
@@ -143,10 +153,17 @@ impl BoardEditor {
             if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
                 self.finish_polygon();
             }
+            // a double click on an edge of a shape of the selected pour puts a corner there
+            if resp.double_clicked() && self.tool == Tool::Select
+                && self.zone_handle_at(w).is_none()
+                && let Some((zone, shape, vert, at)) = self.zone_edge_at(w) {
+                    self.insert_zone_vertex(zone, shape, vert, at);
+                }
             let layer = self.side.label();
             self.status = format!("X {:.2}  Y {:.2} mm   [{layer}]", p.x, p.y);
         }
         if resp.drag_stopped() {
+            self.vdrag = None;
             self.finish_track_drag();
             self.drag_part = None;
             self.drag_label = None;
@@ -156,8 +173,16 @@ impl BoardEditor {
         let drawing = matches!(self.tool, Tool::OutlinePoly | Tool::Zone) && (!self.poly.is_empty() || self.pending.is_some() || self.arc_mid.is_some());
         if drawing {
             resp.context_menu(|ui| self.polygon_menu(ui));
-        } else if resp.clicked_by(egui::PointerButton::Secondary) {
-            self.leave_tool();
+        } else {
+            // on a corner or an edge of a shape of the selected pour: a menu (a corner, a line or an arc, add or take away)
+            if resp.secondary_clicked() && self.tool == Tool::Select {
+                self.vmenu = resp.hover_pos().map(|pos| self.to_world(rect, pos)).and_then(|w| self.zone_edit_target(w));
+            }
+            if self.tool == Tool::Select && self.vmenu.is_some() {
+                resp.context_menu(|ui| self.zone_edit_menu(ui));
+            } else if resp.clicked_by(egui::PointerButton::Secondary) {
+                self.leave_tool();
+            }
         }
         sp
     }

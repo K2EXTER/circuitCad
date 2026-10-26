@@ -314,6 +314,13 @@ impl BoardEditor {
         match self.tool {
             Tool::Select => {
                 self.multi.clear();
+                // a corner of a shape of the selected pour: it is picked (to be dragged or taken away), the selection stays
+                if let Some(h) = self.zone_handle_at(p) {
+                    self.vsel = Some(h);
+                    self.status = "頂点を選びました (ドラッグで動かせます。Delete で消します。右クリックでメニュー)".into();
+                    return;
+                }
+                self.vsel = None;
                 self.selected = self.hit_test(p);
                 if let Some(Item::Label(i)) = self.selected
                     && let Some(r) = self.board.texts.get(i).map(|t| t.refdes.clone()) {
