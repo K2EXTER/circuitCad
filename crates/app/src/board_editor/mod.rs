@@ -7,7 +7,6 @@ use pcb_core::drc::{self, connectivity};
 use pcb_core::geom::{inside_polygon, triangulate};
 use pcb_core::netlist::{self, NetlistNet, NetlistPart};
 use pcb_core::ratsnest::ratsnest;
-use pcb_core::strokefont::text_strokes;
 use pcb_core::{assembly, export, Board, Hole, Pad, PadShape, Point, Side, SilkLine, Track, Via, Zone};
 use std::path::PathBuf;
 

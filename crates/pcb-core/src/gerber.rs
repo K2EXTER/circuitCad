@@ -2,7 +2,6 @@
 
 use crate::drc::{connectivity, Connectivity};
 use crate::model::*;
-use crate::strokefont::text_strokes;
 use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -233,7 +232,7 @@ pub fn silk(board: &Board, side: Side) -> String {
     }
     for t in board.texts.iter().filter(|t| t.side == side) {
         let w = (t.height * 0.15).max(0.12);
-        for [a, b] in text_strokes(&t.text, t.height, side == Side::Bottom) {
+        for [a, b] in t.strokes() {
             g.line(Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y), w);
         }
     }

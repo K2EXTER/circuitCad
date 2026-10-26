@@ -169,13 +169,16 @@ impl BoardEditor {
                     let p = self.board.parts[i].clone();
                     self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
                 }
-            } else if !grouped_parts.is_empty() {
-                self.checkpoint();
-                for r in &grouped_parts {
-                    if let Some(p) = self.board.parts.iter().find(|p| &p.refdes == r).cloned() {
-                        self.board.place_part(&p.refdes, p.pos, (p.rot + 1) % 4);
-                    }
+            } else if let Some(Item::Label(i)) = self.selected {
+                if let Some(r) = self.board.texts.get(i).map(|t| t.refdes.clone()) {
+                    self.checkpoint();
+                    self.board.turn_label(&r);
                 }
+            } else if !self.multi.is_empty() {
+                self.checkpoint();
+                let items = self.multi.clone();
+                let n = self.rotate_group(&items);
+                self.status = format!("選んだ {n} 個をグループの中心のまわりに回しました");
             }
         }
         // V while routing: run to the cursor, drop a via and continue on the other layer

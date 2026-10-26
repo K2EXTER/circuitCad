@@ -100,7 +100,7 @@ mod drc_tests {
         b.silk.push(SilkLine { side: Side::Bottom, a: Point::new(9.0, 10.0), b: Point::new(11.0, 10.0), width: 0.15, refdes: String::new() });
         assert_eq!(silk_checks(&b).len(), 1, "{:?}", silk_checks(&b));
         b.silk.push(SilkLine { side: Side::Top, a: Point::new(30.0, 10.0), b: Point::new(32.0, 10.0), width: 0.08, refdes: String::new() });
-        b.texts.push(SilkText { side: Side::Top, pos: Point::new(5.0, 5.0), height: 0.5, text: "R1".into(), refdes: "R1".into() });
+        b.texts.push(SilkText { side: Side::Top, pos: Point::new(5.0, 5.0), height: 0.5, text: "R1".into(), refdes: "R1".into(), rot: 0 });
         let v = silk_checks(&b);
         assert_eq!(v.len(), 3, "{v:?}");
         assert!(v.iter().any(|x| x.message.contains("パッドに重なって")) && v.iter().any(|x| x.message.contains("細すぎ")) && v.iter().any(|x| x.message.contains("小さすぎ")));

@@ -38,7 +38,7 @@ impl BoardEditor {
         }
         // a part's designator on the silkscreen (above the tracks: a track under the text is still reachable from beside it)
         for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty() && self.vis.parts && self.side_visible(t.side)) {
-            let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);
+            let (w, h) = t.size();
             if pick.silk && self.vis.silk && side_ok(t.side) && (p.x - t.pos.x).abs() <= w / 2.0 + tol && (p.y - t.pos.y).abs() <= h / 2.0 + tol {
                 return Some(Item::Label(i));
             }
@@ -280,6 +280,83 @@ impl BoardEditor {
                 }
             }
         }
+    }
+
+    /// Turn the grouped objects a quarter turn about the middle of the group (the centre of the box round them).
+    /// Parts keep their designator's place relative to them; fixed parts stay where they are. Returns how many objects turned.
+    pub(super) fn rotate_group(&mut self, items: &[Item]) -> usize {
+        let pts: Vec<Point> = items.iter().flat_map(|it| self.item_points(*it)).collect();
+        if pts.is_empty() {
+            return 0;
+        }
+        let (mut lo, mut hi) = (pts[0], pts[0]);
+        for p in &pts {
+            lo = Point::new(lo.x.min(p.x), lo.y.min(p.y));
+            hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
+        }
+        // a round centre keeps four turns exactly where they began
+        let r3 = |v: f64| (v * 1000.0).round() / 1000.0;
+        let c = Point::new(r3((lo.x + hi.x) / 2.0), r3((lo.y + hi.y) / 2.0));
+        let turn = |p: Point| Point::new(c.x - (p.y - c.y), c.y + (p.x - c.x));
+        let mut n = 0;
+        for it in items {
+            match *it {
+                Item::Part(i) => {
+                    let Some(p) = self.board.parts.get(i).filter(|p| !self.board.is_locked(&p.refdes)).cloned() else { continue };
+                    if let Some(off) = self.board.label_offsets.get_mut(&p.refdes) {
+                        *off = Point::new(-off.y, off.x);
+                    }
+                    self.board.place_part(&p.refdes, turn(p.pos), (p.rot + 1) % 4);
+                }
+                Item::Track(i) => {
+                    let Some(t) = self.board.tracks.get_mut(i) else { continue };
+                    (t.a, t.b) = (turn(t.a), turn(t.b));
+                }
+                Item::Silk(i) => {
+                    let Some(t) = self.board.silk.get_mut(i).filter(|t| t.refdes.is_empty()) else { continue };
+                    (t.a, t.b) = (turn(t.a), turn(t.b));
+                }
+                Item::Pad(i) => {
+                    let Some(t) = self.board.pads.get_mut(i).filter(|t| t.refdes.is_empty()) else { continue };
+                    t.pos = turn(t.pos);
+                    t.shape = match t.shape {
+                        pcb_core::PadShape::Rect { w, h } => pcb_core::PadShape::Rect { w: h, h: w },
+                        pcb_core::PadShape::Oval { w, h } => pcb_core::PadShape::Oval { w: h, h: w },
+                        s => s,
+                    };
+                    t.slot_v = !t.slot_v;
+                }
+                Item::Via(i) => {
+                    let Some(t) = self.board.vias.get_mut(i) else { continue };
+                    t.pos = turn(t.pos);
+                }
+                Item::Hole(i) => {
+                    let Some(t) = self.board.holes.get_mut(i).filter(|t| t.refdes.is_empty()) else { continue };
+                    t.pos = turn(t.pos);
+                    t.slot_v = !t.slot_v;
+                }
+                Item::Zone(i) => {
+                    let Some(z) = self.board.zones.get_mut(i) else { continue };
+                    for zs in z.shapes.iter_mut() {
+                        zs.shape = zs.shape.rotated90(c);
+                    }
+                }
+                Item::Label(i) => {
+                    // a designator whose part turns with the group goes with the part
+                    let Some(t) = self.board.texts.get(i) else { continue };
+                    let refdes = t.refdes.clone();
+                    let with_part = items.iter().any(|x| matches!(*x, Item::Part(k) if self.board.parts.get(k).is_some_and(|p| p.refdes == refdes)));
+                    if with_part {
+                        continue;
+                    }
+                    let to = turn(t.pos);
+                    self.board.move_label(&refdes, to);
+                    self.board.turn_label(&refdes);
+                }
+            }
+            n += 1;
+        }
+        n
     }
 
     /// Delete everything in the multi-selection except parts (those belong to the schematic).

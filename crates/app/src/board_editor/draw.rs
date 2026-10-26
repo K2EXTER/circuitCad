@@ -275,7 +275,7 @@ impl BoardEditor {
             for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side) && (self.vis.parts || t.refdes.is_empty()) && self.near_screen(rect, &[t.pos], pcb_core::strokefont::text_width(&t.text, t.height).max(t.height))) {
                 if selected_label == Some(i) {
                     // a box round the picked designator, so that it is clear what the drag will move
-                    let (w, h) = (pcb_core::strokefont::text_width(&t.text, t.height), t.height);
+                    let (w, h) = t.size();
                     painter.rect_stroke(
                         Rect::from_center_size(self.to_screen(rect, t.pos), Vec2::new(w as f32 * z + 8.0, h as f32 * z + 8.0)),
                         2.0,
@@ -284,7 +284,7 @@ impl BoardEditor {
                     );
                 }
                 let stroke = Stroke::new(((t.height * 0.15).max(0.12) as f32 * z).max(1.0), silk);
-                for [a, b] in text_strokes(&t.text, t.height, t.side == Side::Bottom) {
+                for [a, b] in t.strokes() {
                     let (pa, pb) = (Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y));
                     painter.line_segment([self.to_screen(rect, pa), self.to_screen(rect, pb)], stroke);
                 }

@@ -311,7 +311,7 @@ fn hiding_the_parts_hides_their_pads_and_designators_but_not_loose_copper() {
     pad.pin = "1".into();
     e.board.pads.push(pad);
     e.board.pads.push(Pad::new(p(20.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top)); // a loose pad
-    e.board.texts.push(pcb_core::SilkText { side: Side::Top, pos: p(10.0, 12.0), height: 1.0, text: "R1".into(), refdes: "R1".into() });
+    e.board.texts.push(pcb_core::SilkText { side: Side::Top, pos: p(10.0, 12.0), height: 1.0, text: "R1".into(), refdes: "R1".into(), rot: 0 });
     assert_eq!(e.hit_test(p(10.0, 10.0)), Some(Item::Part(0)));
     assert!(e.item_shown(Item::Part(0)) && e.item_shown(Item::Label(0)));
     e.vis.parts = false;
@@ -580,6 +580,38 @@ fn connections_and_unrouted_lines_are_kept_until_the_board_changes() {
     let after = e.cached_airwires();
     assert!(after.is_empty(), "{} left", after.len());
     assert!(!std::rc::Rc::ptr_eq(&c1, &e.cached_connectivity()));
+}
+
+#[test]
+fn a_group_turns_about_its_own_middle_and_four_turns_come_back() {
+    let mut e = BoardEditor::default();
+    for (x, name) in [(10.0, "R1"), (20.0, "R2")] {
+        e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top }).unwrap();
+    }
+    e.board.tracks.push(Track { side: Side::Top, a: p(10.0, 10.0), b: p(20.0, 10.0), width: 0.25 });
+    let items = vec![Item::Part(0), Item::Part(1), Item::Track(0)];
+    let before = e.board.parts.iter().map(|q| q.pos).collect::<Vec<_>>();
+    e.rotate_group(&items);
+    // the pair was side by side about (15, 10): now one above the other about the same middle
+    let after = e.board.parts.iter().map(|q| q.pos).collect::<Vec<_>>();
+    assert_eq!((after[0], after[1]), (p(15.0, 5.0), p(15.0, 15.0)));
+    assert_eq!(e.board.parts[0].rot, 1);
+    assert_eq!((e.board.tracks[0].a, e.board.tracks[0].b), (after[0], after[1]));
+    for _ in 0..3 {
+        e.rotate_group(&items);
+    }
+    assert_eq!(e.board.parts.iter().map(|q| q.pos).collect::<Vec<_>>(), before);
+}
+
+#[test]
+fn a_designator_turns_by_itself_and_keeps_the_turn_when_the_part_moves() {
+    let mut e = BoardEditor::default();
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top }).unwrap();
+    let (w, h) = e.board.texts[0].size();
+    assert!(e.board.turn_label("R1"));
+    assert_eq!(e.board.texts[0].size(), (h, w));
+    e.board.place_part("R1", p(20.0, 10.0), 0);
+    assert_eq!(e.board.texts[0].rot, 1, "placing the part again keeps the turn");
 }
 
 #[test]

@@ -37,6 +37,8 @@ impl Board {
             .collect();
         self.pads.retain(|p| p.refdes != part.refdes);
         self.silk.retain(|s| s.refdes != part.refdes);
+        // a designator the user turned stays turned when the part is placed again
+        let label_rot = self.texts.iter().find(|t| t.refdes == part.refdes).map_or(0, |t| t.rot);
         self.texts.retain(|t| t.refdes != part.refdes);
 
         let mut new_holes: Vec<Hole> = vec![];
@@ -119,13 +121,10 @@ impl Board {
 
         // designator above the part, centred (plus the offset the user gave it)
         let off = self.label_offsets.get(&part.refdes).copied().unwrap_or_default();
-        self.texts.push(SilkText {
-            side: part.side,
-            pos: Point::new((x0 + x1) / 2.0 + off.x, y1 + m + 0.2 + 0.5 + off.y),
-            height: 1.0,
-            text: part.refdes.clone(),
-            refdes: part.refdes.clone(),
-        });
+        let mut label = SilkText { side: part.side, pos: Point::default(), height: 1.0, text: part.refdes.clone(), refdes: part.refdes.clone(), rot: label_rot };
+        let half_h = label.size().1 / 2.0;
+        label.pos = Point::new((x0 + x1) / 2.0 + off.x, y1 + m + 0.2 + half_h + off.y);
+        self.texts.push(label);
 
         match self.parts.iter_mut().find(|p| p.refdes == part.refdes) {
             Some(slot) => *slot = part,
@@ -143,6 +142,13 @@ impl Board {
         let o = self.label_offsets.entry(refdes.to_string()).or_default();
         o.x += dx;
         o.y += dy;
+        true
+    }
+
+    /// Turn a part's designator text a quarter turn about its own centre. Returns false when the part has no text.
+    pub fn turn_label(&mut self, refdes: &str) -> bool {
+        let Some(t) = self.texts.iter_mut().find(|t| t.refdes == refdes) else { return false };
+        t.rot = (t.rot + 1) % 4;
         true
     }
 

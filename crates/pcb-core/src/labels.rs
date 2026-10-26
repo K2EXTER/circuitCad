@@ -6,7 +6,6 @@
 
 use crate::geom::inside_polygon;
 use crate::model::*;
-use crate::strokefont::text_width;
 
 /// What `avoid_overlaps` did.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -138,7 +137,7 @@ pub fn avoid_overlaps(board: &mut Board) -> LabelReport {
     let mut report = LabelReport::default();
     // every text as it is, for the "touches another text" count (kept up to date as texts move)
     let boxes_of = |board: &Board| -> Vec<(String, Rect)> {
-        board.texts.iter().filter(|t| !t.refdes.is_empty()).map(|t| (t.refdes.clone(), Rect { c: t.pos, hw: text_width(&t.text, t.height) / 2.0, hh: t.height / 2.0 })).collect()
+        board.texts.iter().filter(|t| !t.refdes.is_empty()).map(|t| (t.refdes.clone(), Rect { c: t.pos, hw: t.size().0 / 2.0, hh: t.size().1 / 2.0 })).collect()
     };
     let refs: Vec<String> = board.texts.iter().filter(|t| !t.refdes.is_empty() && !board.label_offsets.contains_key(&t.refdes)).map(|t| t.refdes.clone()).collect();
     for refdes in refs {
@@ -147,7 +146,7 @@ pub fn avoid_overlaps(board: &mut Board) -> LabelReport {
         let Some((lo, hi)) = body_box(board, &refdes) else { continue };
         let ob = obstacles(board, t.side);
         let others = boxes_of(board);
-        let (tw, th) = (text_width(&t.text, t.height), t.height);
+        let (tw, th) = t.size();
         let (hw, hh) = (tw / 2.0, th / 2.0);
         let gap = 0.3;
         let (cx, cy) = ((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
@@ -215,7 +214,7 @@ mod tests {
         let r = avoid_overlaps(&mut b);
         assert_eq!((r.moved, r.still_touching), (1, 0), "{r:?}");
         let p = b.texts[0].pos;
-        let (tw, th) = (text_width("R1", 1.0), 1.0);
+        let (tw, th) = (crate::strokefont::text_width("R1", 1.0), 1.0);
         let rect = Rect { c: p, hw: tw / 2.0, hh: th / 2.0 };
         assert!(!rect.grown(0.125).hit_by_segment(Point::new(at.x - 3.0, at.y), Point::new(at.x + 3.0, at.y)), "{p:?}");
         // the spot is kept as the offset, so it follows the part

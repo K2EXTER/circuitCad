@@ -195,6 +195,23 @@ pub struct SilkText {
     pub text: String,
     #[serde(default)]
     pub refdes: String,
+    /// Quarter turns, counted the way a part's `rot` is (0 reads left to right).
+    #[serde(default)]
+    pub rot: u8,
+}
+
+impl SilkText {
+    /// Width and height of the box round the text as it stands (swapped on a quarter turn).
+    pub fn size(&self) -> (f64, f64) {
+        let w = crate::strokefont::text_width(&self.text, self.height);
+        if self.rot % 2 == 1 { (self.height, w) } else { (w, self.height) }
+    }
+
+    /// The strokes of the text, turned and (on the bottom) mirrored, relative to `pos`.
+    pub fn strokes(&self) -> Vec<[Point; 2]> {
+        let rot = |p: Point| crate::parts::rotate(p, self.rot);
+        crate::strokefont::text_strokes(&self.text, self.height, self.side == Side::Bottom).into_iter().map(|[a, b]| [rot(a), rot(b)]).collect()
+    }
 }
 
 fn default_zone_clearance() -> f64 {

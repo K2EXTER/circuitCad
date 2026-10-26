@@ -165,6 +165,12 @@ impl Shape {
         Shape { verts: self.verts.iter().map(|v| Vertex { p: Point::new(v.p.x + d.x, v.p.y + d.y), arc_mid: v.arc_mid.map(|m| Point::new(m.x + d.x, m.y + d.y)) }).collect() }
     }
 
+    /// The shape turned a quarter turn (the way a part's `rot` counts up) about `c`.
+    pub fn rotated90(&self, c: Point) -> Shape {
+        let r = |p: Point| Point::new(c.x - (p.y - c.y), c.y + (p.x - c.x));
+        Shape { verts: self.verts.iter().map(|v| Vertex { p: r(v.p), arc_mid: v.arc_mid.map(r) }).collect() }
+    }
+
     /// The box round the flattened shape: (low corner, high corner).
     pub fn bounds(&self) -> Option<(Point, Point)> {
         let pts = self.flatten();

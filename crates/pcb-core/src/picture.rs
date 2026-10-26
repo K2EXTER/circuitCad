@@ -269,7 +269,7 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
         let lines: Vec<[Point; 2]> = board.silk.iter().filter(|l| l.side == opts.side).map(|l| [l.a, l.b]).collect();
         cv.lines(&lines, 0.15, SILK, 0.8);
         for t in board.texts.iter().filter(|t| t.side == opts.side) {
-            let segs: Vec<[Point; 2]> = text_strokes(&t.text, t.height, opts.side == Side::Bottom).into_iter().map(|[a, b]| [Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y)]).collect();
+            let segs: Vec<[Point; 2]> = t.strokes().into_iter().map(|[a, b]| [Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y)]).collect();
             cv.lines(&segs, (t.height / 8.0).max(0.1), SILK, 0.8);
         }
     }

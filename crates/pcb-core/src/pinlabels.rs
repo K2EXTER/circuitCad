@@ -68,7 +68,7 @@ pub fn write_pin_labels(board: &mut Board, names: &[(String, Vec<String>)], heig
             let up = if h_up == h_down { centre.y >= p.pos.y } else { h_up < h_down };
             let y = if up { y_up } else { y_down };
             board.texts.retain(|t| &t.refdes != refdes);
-            board.texts.push(SilkText { side: part.side, pos: Point::new(x, y), height, text: name.clone(), refdes: marker(refdes) });
+            board.texts.push(SilkText { side: part.side, pos: Point::new(x, y), height, text: name.clone(), refdes: marker(refdes), rot: 0 });
             put += 1;
             continue;
         }
@@ -87,7 +87,7 @@ pub fn write_pin_labels(board: &mut Board, names: &[(String, Vec<String>)], heig
             let text_w = name.chars().count() as f64 * height * 0.75;
             let off = if along_x { h.max(w) / 2.0 + 0.4 + height / 2.0 } else { w.max(h) / 2.0 + 0.4 + text_w / 2.0 };
             let (dx, dy) = if along_x { (0.0, sign * py.signum() * off) } else { (sign * px.signum() * off, 0.0) };
-            board.texts.push(SilkText { side: part.side, pos: Point::new(p.pos.x + dx, p.pos.y + dy), height, text: name.clone(), refdes: marker(refdes) });
+            board.texts.push(SilkText { side: part.side, pos: Point::new(p.pos.x + dx, p.pos.y + dy), height, text: name.clone(), refdes: marker(refdes), rot: 0 });
             put += 1;
         }
     }
@@ -149,7 +149,7 @@ mod tests {
         for k in 0..4 {
             b.silk.push(SilkLine { side: Side::Top, a: corners[k], b: corners[(k + 1) % 4], width: 0.15, refdes: "J3C".into() });
         }
-        b.texts.push(SilkText { side: Side::Top, pos: Point::new(14.9, 1.59), height: 1.0, text: "J3C".into(), refdes: "J3C".into() });
+        b.texts.push(SilkText { side: Side::Top, pos: Point::new(14.9, 1.59), height: 1.0, text: "J3C".into(), refdes: "J3C".into(), rot: 0 });
         assert_eq!(write_pin_labels(&mut b, &[("J3C".into(), vec!["SH".into()])], 1.0), 1);
         assert_eq!(b.texts.len(), 1, "the designator is gone: {:?}", b.texts.iter().map(|t| &t.text).collect::<Vec<_>>());
         let t = &b.texts[0];
