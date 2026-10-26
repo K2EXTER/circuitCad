@@ -84,6 +84,38 @@ impl BoardEditor {
         }
     }
 
+    /// The shapes of the selected pour: the outline of each, solid for the ones that add and dashed red for the ones that take away, a dot at
+    /// each corner and a diamond on the point each arc passes through. Shown while the pour is selected, so the shapes can be seen (and later edited).
+    pub(super) fn draw_zone_shapes(&self, painter: &egui::Painter, rect: Rect) {
+        let Some(Item::Zone(i)) = self.selected else { return };
+        let Some(z) = self.board.zones.get(i) else { return };
+        if !self.vis.zones || !self.side_visible(z.side) {
+            return;
+        }
+        for zs in &z.shapes {
+            let adds = zs.op == pcb_core::model::ShapeOp::Add;
+            let col = if adds { self.side_color(z.side) } else { Color32::from_rgb(255, 90, 90) };
+            let pts: Vec<Pos2> = zs.shape.flatten().iter().map(|p| self.to_screen(rect, *p)).collect();
+            if pts.len() < 2 {
+                continue;
+            }
+            let mut closed = pts.clone();
+            closed.push(pts[0]);
+            if adds {
+                painter.add(egui::Shape::line(closed, Stroke::new(2.0, col)));
+            } else {
+                painter.extend(egui::Shape::dashed_line(&closed, Stroke::new(2.0, col), 8.0, 5.0));
+            }
+            for v in &zs.shape.verts {
+                painter.circle_filled(self.to_screen(rect, v.p), 3.5, col);
+                if let Some(m) = v.arc_mid {
+                    let c = self.to_screen(rect, m);
+                    painter.add(egui::Shape::convex_polygon(vec![c + Vec2::new(0.0, -4.5), c + Vec2::new(4.5, 0.0), c + Vec2::new(0.0, 4.5), c + Vec2::new(-4.5, 0.0)], Color32::WHITE, Stroke::new(1.0, col)));
+                }
+            }
+        }
+    }
+
     /// Is any of the points (grown by `margin` mm) in the drawing area? What is not is left out of the picture.
     pub(super) fn near_screen(&self, rect: Rect, pts: &[Point], margin: f64) -> bool {
         let m = margin as f32 * self.zoom + 4.0;

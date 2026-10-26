@@ -261,6 +261,49 @@ fn a_shape_that_takes_away_can_be_a_circle_too() {
 }
 
 #[test]
+fn the_mode_changes_while_drawing_and_the_last_corner_can_be_taken_back() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "GND".into();
+    e.click(p(0.0, 0.0));
+    e.click(p(10.0, 0.0));
+    e.set_poly_mode(PolyMode::ArcThrough); // what the menu and the key A do, without losing the corners
+    e.click(p(13.0, 5.0));
+    assert!(e.arc_mid.is_some());
+    e.set_poly_mode(PolyMode::Lines);
+    assert!(e.arc_mid.is_none() && e.poly.len() == 2, "the half-made arc is dropped, the corners stay");
+    e.click(p(10.0, 10.0));
+    e.poly_back();
+    assert_eq!((e.poly.len(), e.poly_verts.len()), (2, 2));
+    e.set_poly_mode(PolyMode::ArcTangent);
+    e.click(p(15.0, 5.0));
+    assert!(e.poly.len() > 3 && e.poly_verts.len() == 3 && e.poly_verts[1].arc_mid.is_some());
+    e.poly_back();
+    assert!(e.poly_verts[1].arc_mid.is_none(), "taking the arc's end back makes the corner before it a plain one again");
+    assert_eq!(e.poly.len(), 2);
+}
+
+#[test]
+fn a_shape_that_touches_nothing_of_the_net_is_said_to_be_an_island() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "VNEG".into();
+    let mut pad = Pad::new(p(5.0, 5.0), PadShape::Circle { d: 2.0 }, None, Side::Top);
+    pad.net = "VNEG".into();
+    e.board.pads.push(pad);
+    e.board.outline = vec![p(0.0, 0.0), p(60.0, 0.0), p(60.0, 40.0), p(0.0, 40.0)];
+    e.zone_remove_islands = true;
+    set_poly(&mut e, &[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)]);
+    e.finish_polygon();
+    assert!(!e.status.contains("孤立"), "{}", e.status);
+    // a second shape in the selected pour, far from the pad
+    set_poly(&mut e, &[p(30.0, 20.0), p(40.0, 20.0), p(40.0, 30.0), p(30.0, 30.0)]);
+    e.finish_polygon();
+    assert!(e.status.contains("孤立"), "{}", e.status);
+    assert_eq!(e.board.zones[0].shapes.len(), 2);
+}
+
+#[test]
 fn closing_a_polygon_by_clicking_the_first_point() {
     let mut e = BoardEditor::default();
     e.tool = Tool::Zone;

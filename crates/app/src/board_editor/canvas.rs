@@ -21,6 +21,7 @@ impl BoardEditor {
         self.draw_grid(&painter, rect);
         let conn = (!self.board.zones.is_empty() || self.selected.is_some()).then(|| self.cached_connectivity());
         self.draw_zones(&painter, rect, conn.as_deref());
+        self.draw_zone_shapes(&painter, rect);
         self.update_net_focus(&resp, rect);
         self.draw_copper(&painter, rect);
         self.draw_net_focus(&painter, rect);
@@ -116,6 +117,21 @@ impl BoardEditor {
         }
         if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
             self.finish_polygon();
+        }
+        // while a shape is drawn: S line, A arc through a point, T arc that leaves the last line smoothly, Backspace takes the last corner back
+        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+            if pressed(Key::S) {
+                self.set_poly_mode(PolyMode::Lines);
+            }
+            if pressed(Key::A) {
+                self.set_poly_mode(PolyMode::ArcThrough);
+            }
+            if pressed(Key::T) {
+                self.set_poly_mode(PolyMode::ArcTangent);
+            }
+            if pressed(Key::Backspace) {
+                self.poly_back();
+            }
         }
         if pressed(Key::L) {
             self.side = self.next_layer();

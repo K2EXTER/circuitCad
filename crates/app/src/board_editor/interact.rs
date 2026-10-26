@@ -152,7 +152,11 @@ impl BoardEditor {
             self.drag_label = None;
             self.gdrag = None;
         }
-        if resp.clicked_by(egui::PointerButton::Secondary) {
+        // while a shape is drawn, the right click opens a menu (line / arc / ..., the last corner back, close, cancel), like a drafting program
+        let drawing = matches!(self.tool, Tool::OutlinePoly | Tool::Zone) && (!self.poly.is_empty() || self.pending.is_some() || self.arc_mid.is_some());
+        if drawing {
+            resp.context_menu(|ui| self.polygon_menu(ui));
+        } else if resp.clicked_by(egui::PointerButton::Secondary) {
             self.leave_tool();
         }
         sp

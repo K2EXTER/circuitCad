@@ -40,6 +40,7 @@ impl BoardEditor {
                 self.status = "基板外形を設定しました".into();
             }
             Tool::Zone if self.zone_op == pcb_core::model::ShapeOp::Sub => {
+                let before = self.copper_area_of_layer();
                 // a shape that takes away: from the selected pour, or from every pour of the layer (of the net chosen) it reaches
                 let selected = match self.selected {
                     Some(Item::Zone(i)) if self.board.zones.get(i).is_some_and(|z| z.side == self.side) => Some(i),
@@ -52,8 +53,11 @@ impl BoardEditor {
                     let net = Some(self.hole_net.as_str()).filter(|n| !n.is_empty());
                     pcb_core::zonefill::add_zone_cut(&mut self.board, self.side, net, &shape)
                 };
-                self.status = if n > 0 {
+                let after = self.copper_area_of_layer();
+                self.status = if n > 0 && after < before - 1e-6 {
                     format!("{n} 枚のベタから、この形を引きました (ベタを選ぶと、中の図形を消せます)")
+                } else if n > 0 {
+                    format!("{n} 枚のベタに、引く図形を足しましたが、銅は減りませんでした。その範囲に、このベタの銅がありません (ほかのネットの配線のまわりのすき間や、ベタの外かもしれません)")
                 } else {
                     "引くベタがありません。ベタの上に描いてください (層は、いま作業している面です)".into()
                 };
@@ -64,6 +68,7 @@ impl BoardEditor {
                     Some(Item::Zone(i)) if self.board.zones.get(i).is_some_and(|z| z.side == self.side && z.net == self.zone_net) => Some(i),
                     _ => None,
                 };
+                let before = self.copper_area_of_layer();
                 if let Some(i) = into {
                     self.board.zones[i].shapes.push(pcb_core::model::ZoneShape { shape, op: pcb_core::model::ShapeOp::Add });
                     self.status = format!("選んだベタに、図形を足しました (ネット {})", self.zone_net);
@@ -75,6 +80,10 @@ impl BoardEditor {
                     self.board.zones.push(z);
                     self.selected = Some(Item::Zone(self.board.zones.len() - 1));
                     self.status = format!("ゾーンを追加しました (ネット {})。続けて描くと、このベタに図形を足せます", self.zone_net);
+                }
+                // a pour that touches nothing of its net is dropped as an island (「孤立した銅の破片を消す」): say so, or the shape seems lost
+                if self.copper_area_of_layer() <= before + 1e-6 {
+                    self.status = format!("図形を足しましたが、銅が増えません。このネット ({}) のパッド・ビア・配線のどれにも触れていないので、孤立した銅として消えています。「孤立した銅の破片を消す」を切るか、パッドにかかるように描いてください", self.zone_net);
                 }
             }
             _ => {}
@@ -96,6 +105,17 @@ impl BoardEditor {
             _ => None,
         };
         arc.unwrap_or_else(|| vec![p])
+    }
+
+    /// The copper area (mm²) of all the pours of the layer that is worked on, as it is drawn: to see whether a shape changed it.
+    fn copper_area_of_layer(&self) -> f64 {
+        let conn = pcb_core::drc::connectivity(&self.board);
+        pcb_core::zonefill::merged_fills(&self.board, &conn)
+            .iter()
+            .filter(|(side, _, _)| *side == self.side)
+            .flat_map(|(_, _, shapes)| shapes.iter())
+            .map(|s| pcb_core::geom::signed_area(&s.outer).abs() - s.holes.iter().map(|h| pcb_core::geom::signed_area(h).abs()).sum::<f64>())
+            .sum()
     }
 
     /// The points of the arc from the last point through `mid` to `end` (just `end` when they are on a line).
@@ -134,6 +154,68 @@ impl BoardEditor {
                 }
                 v
             }
+        }
+    }
+
+    /// Change what the next click draws (the half-made arc or circle is dropped).
+    pub(super) fn set_poly_mode(&mut self, mode: PolyMode) {
+        if self.poly_mode != mode {
+            self.arc_mid = None;
+            self.pending = None;
+        }
+        self.poly_mode = mode;
+        self.status = match mode {
+            PolyMode::Lines => "直線: クリックで次の点",
+            PolyMode::ArcThrough => "3点円弧: 途中の点、終点の順にクリック",
+            PolyMode::ArcTangent => "接線円弧: 終点をクリック (直前の線になめらかにつながる)",
+            PolyMode::Circle => "円: 中心、円周の点の順にクリック",
+            PolyMode::Rect => "長方形: 反対側の角をクリック",
+        }
+        .into();
+    }
+
+    /// Take back the last corner of the shape being drawn (and the arc from it).
+    pub(super) fn poly_back(&mut self) {
+        self.arc_mid = None;
+        self.pending = None;
+        if self.poly_verts.pop().is_some() {
+            // the polygon of short pieces is made again from the corners that are left
+            self.poly = pcb_core::shape::Shape { verts: self.poly_verts.clone() }.flatten();
+            if let Some(last) = self.poly_verts.last_mut() {
+                last.arc_mid = None;
+                self.poly = pcb_core::shape::Shape { verts: self.poly_verts.clone() }.flatten();
+            }
+        }
+        if self.poly_verts.is_empty() {
+            self.poly.clear();
+        }
+    }
+
+    /// The menu of the right click while a shape is drawn.
+    pub(super) fn polygon_menu(&mut self, ui: &mut egui::Ui) {
+        ui.label("次に描くもの");
+        for (m, text) in [(PolyMode::Lines, "直線 (S)"), (PolyMode::ArcThrough, "3点円弧 (A)"), (PolyMode::ArcTangent, "接線円弧 (T)")] {
+            if ui.selectable_label(self.poly_mode == m, text).clicked() {
+                self.set_poly_mode(m);
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.add_enabled(!self.poly_verts.is_empty(), egui::Button::new("最後の点を戻す (Backspace)")).clicked() {
+            self.poly_back();
+            ui.close();
+        }
+        if ui.add_enabled(self.poly.len() >= 3, egui::Button::new("確定 (閉じて、ベタ・外形にする)")).clicked() {
+            self.finish_polygon();
+            ui.close();
+        }
+        if ui.button("描きかけを取り消す (Esc)").clicked() {
+            self.poly.clear();
+            self.poly_verts.clear();
+            self.arc_mid = None;
+            self.pending = None;
+            self.status = "多角形の入力を取り消しました".into();
+            ui.close();
         }
     }
 
