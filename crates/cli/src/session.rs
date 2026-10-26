@@ -92,6 +92,16 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board check [fab=jlcpcb|pcbway|oshpark|standard]
                                         the pre-order check of the app: ready true/false, and every error / warning / note with the reason
                                         and the place (also: board no longer matches the schematic, copper drop, price tier of the fab)
+  board picture [layer=top|bottom|inner1] [rect=x0,y0,x1,y1] [px=1600] [net=A,B] [part=R1,U2] [names=1] [marks=1] [others=1] [ghost=A,B] [ghostguard=A:GRDA] [out=FILE.png]
+                                        a PNG of one copper layer to LOOK at (over MCP it comes back as an image): grid with mm numbers, nets in colours, net names, numbered DRC findings and open
+                                        connections, shadows of how the router would wire a net; use rect= to zoom (a small rect gives more pixels per mm)
+  board net NAME                        what the board has of a net: its pads (places), tracks per layer (length, widths), vias, pours, open connections
+  board track add x1,y1 x2,y2 ... [layer=top] [width=0.25] [net=NAME]   lay a track through the points; with net= it is taken back unless it ends on that net (a short or a floating track is refused)
+  board track remove net=NAME [layer=top] [vias=1] | rect=x0,y0,x1,y1 | index=N
+  board via add x,y [net=NAME] [dia=0.6] [drill=0.3] / board via remove x,y [r=0.3]
+  board zones [merge|bake]              the pours as lists of shapes that add and shapes that take away; merge joins overlapping pours of a net, bake turns the shapes into final corners
+  board keepout layer=inner1 [net=NET] rect=x0,y0,x1,y1 | circle=x,y,r | pad=J3E,J3F [margin=1.0]   a hole in the pours of a layer (clear: board keepout clear layer=...)
+  board guard net=A guard=GRDA          guard tracks on both sides of a sense net's top tracks; board copper net=DRN rect=... patches of copper; board nudge moves small parts to open a route; board layers 4; board class ...
   board save FILE.pcbjson / board open FILE.pcbjson
   board shopping [boards=N] [spare=0] [file=PATH]  what to buy: per value and footprint the quantity (qty), spares of chip R/C/L/LED (spare, 2 or a tenth; spare=0 off), their sum (buy) and, for each shop (akizuki, digikey, lcsc), the part number if the library part has one, else a search link
   board fab DIR                         Gerber, drill, BOM, placement and the zip

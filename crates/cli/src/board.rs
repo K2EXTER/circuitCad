@@ -144,7 +144,9 @@ impl Session {
                     None => 0.0,
                 };
                 let highlight: Vec<String> = opt(&kv, "net").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
-                let out = opt(&kv, "out").map(str::to_string).unwrap_or_else(|| format!("picture-{}.png", layer_name(side)));
+                // without out=, the picture goes to the temporary folder (the working folder of a server is not one to write into)
+                let out = opt(&kv, "out").map(str::to_string).unwrap_or_else(|| std::env::temp_dir().join(format!("ccad-picture-{}.png", layer_name(side))).display().to_string().replace('\\', "/"));
+                let parts: Vec<String> = opt(&kv, "part").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
                 // ghost=SA,SB: the way the router would wire those nets, drawn as shadows (on a copy: the board is not changed); the
                 // wiring they have now is left out of the copy first. `ghostvias=1` lets the shadow use vias (it does not by default)
                 let ghost_nets: Vec<String> = opt(&kv, "ghost").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
@@ -211,7 +213,7 @@ impl Session {
                     ghost.extend(shadows);
                     ghost.extend(guards);
                 }
-                let mut pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid, ghost });
+                let mut pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid, net_names: flag("names"), parts, ghost });
                 for n in notes {
                     pic.legend.push(n);
                 }
@@ -220,6 +222,159 @@ impl Session {
                 }
                 image::save_buffer(&out, &pic.rgba, pic.w as u32, pic.h as u32, image::ColorType::Rgba8).map_err(|e| format!("{out} に書けません: {e}"))?;
                 Ok(obj(json!({"file": out, "width": pic.w, "height": pic.h, "legend": pic.legend})))
+            }
+            "track" => {
+                // board track add x1,y1 x2,y2 [x3,y3 ...] [layer=top] [width=0.25] [net=NAME] [float=1]: lay a track (a line of pieces through the points).
+                // With net=, the track must end up on that net (it touches a pad, track or via of it); else it is taken back and the answer says what it touched.
+                // board track remove net=NAME [layer=top] [vias=1] | rect=x0,y0,x1,y1 [layer=top] | index=N: take tracks (and with vias=1 the vias of the net) away.
+                let (pos, kv) = options(rest);
+                let board = self.board_mut()?;
+                match pos.first().map(|a| a.to_ascii_lowercase()).as_deref() {
+                    Some("add") => {
+                        let pts: Vec<pcb_core::model::Point> = pos[1..].iter().map(|s| {
+                            let v: Vec<f64> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+                            if v.len() == 2 { Ok(pcb_core::model::Point::new(v[0], v[1])) } else { Err(format!("{s}: a point is x,y (mm)")) }
+                        }).collect::<Result<_, _>>()?;
+                        if pts.len() < 2 {
+                            return Err("board track add x1,y1 x2,y2 [x3,y3 ...] [layer=top] [width=0.25] [net=NAME]".into());
+                        }
+                        let side = match opt(&kv, "layer") {
+                            Some(l) => parse_layer(l)?,
+                            None => pcb_core::model::Side::Top,
+                        };
+                        let width = match opt(&kv, "width") {
+                            Some(w) => num(w)?,
+                            None => board.rules.min_track_width.max(0.25),
+                        };
+                        let before = board.tracks.clone();
+                        let first = board.tracks.len();
+                        for w in pts.windows(2) {
+                            board.tracks.push(pcb_core::model::Track { side, a: w[0], b: w[1], width });
+                        }
+                        let conn = pcb_core::drc::connectivity(board);
+                        let nets: std::collections::BTreeSet<String> = (first..board.tracks.len()).filter_map(|i| conn.track_net(i).map(str::to_string)).collect();
+                        let length: f64 = pts.windows(2).map(|w| w[0].dist(w[1])).sum();
+                        if let Some(want) = opt(&kv, "net") {
+                            if !nets.contains(want) || nets.len() > 1 {
+                                board.tracks = before;
+                                return Err(format!("track: the new track would be on {} (not {want}): it touches {}. Start and end it on pads or tracks of {want}", if nets.is_empty() { "no net (it touches nothing)".to_string() } else { nets.iter().cloned().collect::<Vec<_>>().join(" and ") }, if nets.len() > 1 { "more than one net (a short)" } else { "nothing of that net" }));
+                            }
+                        } else if nets.len() > 1 {
+                            board.tracks = before;
+                            return Err(format!("track: it would join the nets {} (a short): taken back", nets.iter().cloned().collect::<Vec<_>>().join(", ")));
+                        } else if nets.is_empty() && opt(&kv, "float") != Some("1") {
+                            board.tracks = before;
+                            return Err("track: it touches no pad, track or via (it would float): taken back. Start it on a pad or a track; float=1 allows it".into());
+                        }
+                        let drc = pcb_core::drc::check(board).len();
+                        Ok(obj(json!({"laid": pts.len() - 1, "layer": layer_name(side), "width": width, "length_mm": (length * 100.0).round() / 100.0, "net": nets.iter().next(), "drc_violations": drc})))
+                    }
+                    Some("remove") => {
+                        let conn = pcb_core::drc::connectivity(board);
+                        let side = opt(&kv, "layer").map(parse_layer).transpose()?;
+                        let mut gone = vec![false; board.tracks.len()];
+                        if let Some(net) = opt(&kv, "net") {
+                            for (i, t) in board.tracks.iter().enumerate() {
+                                gone[i] = conn.track_net(i) == Some(net) && side.is_none_or(|s| s == t.side);
+                            }
+                        } else if let Some(v) = opt(&kv, "rect") {
+                            let r: Vec<f64> = v.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+                            let [x0, y0, x1, y1] = r.as_slice() else { return Err("rect=x0,y0,x1,y1 (four numbers, mm)".into()) };
+                            let (lx, hx, ly, hy) = (x0.min(*x1), x0.max(*x1), y0.min(*y1), y0.max(*y1));
+                            let inside = |p: pcb_core::model::Point| p.x >= lx && p.x <= hx && p.y >= ly && p.y <= hy;
+                            for (i, t) in board.tracks.iter().enumerate() {
+                                gone[i] = inside(t.a) && inside(t.b) && side.is_none_or(|s| s == t.side);
+                            }
+                        } else if let Some(v) = opt(&kv, "index") {
+                            let i: usize = v.parse().map_err(|_| format!("index={v}: a whole number is needed"))?;
+                            if i >= gone.len() {
+                                return Err(format!("index={i}: the board has {} tracks", gone.len()));
+                            }
+                            gone[i] = true;
+                        } else {
+                            return Err("board track remove net=NAME [layer=top] [vias=1] | rect=x0,y0,x1,y1 [layer=top] | index=N".into());
+                        }
+                        let mut vias_gone = 0;
+                        if opt(&kv, "vias") == Some("1")
+                            && let Some(net) = opt(&kv, "net") {
+                                let keep: Vec<bool> = (0..board.vias.len()).map(|k| conn.via_net(k) != Some(net)).collect();
+                                vias_gone = keep.iter().filter(|k| !**k).count();
+                                let mut k = 0;
+                                board.vias.retain(|_| {
+                                    k += 1;
+                                    keep[k - 1]
+                                });
+                            }
+                        let n = gone.iter().filter(|g| **g).count();
+                        let mut k = 0;
+                        board.tracks.retain(|_| {
+                            k += 1;
+                            !gone[k - 1]
+                        });
+                        Ok(obj(json!({"removed": n, "vias_removed": vias_gone, "unrouted": pcb_core::ratsnest::ratsnest(board).len()})))
+                    }
+                    _ => Err("board track add ... | board track remove ...".into()),
+                }
+            }
+            "via" => {
+                // board via add x,y [net=NAME] [dia=0.6] [drill=0.3]: a via (the net is what it touches, or net=); board via remove x,y [r=0.3]: the vias within r mm of it.
+                let (pos, kv) = options(rest);
+                let board = self.board_mut()?;
+                let at = |s: &str| -> Result<pcb_core::model::Point, String> {
+                    let v: Vec<f64> = s.split(',').filter_map(|x| x.trim().parse().ok()).collect();
+                    if v.len() == 2 { Ok(pcb_core::model::Point::new(v[0], v[1])) } else { Err(format!("{s}: a point is x,y (mm)")) }
+                };
+                match pos.first().map(|a| a.to_ascii_lowercase()).as_deref() {
+                    Some("add") => {
+                        let p = at(pos.get(1).ok_or("board via add x,y [net=NAME] [dia=0.6] [drill=0.3]")?)?;
+                        let dia = match opt(&kv, "dia") {
+                            Some(v) => num(v)?,
+                            None => (board.rules.min_drill + 2.0 * board.rules.min_annular_ring).max(0.6),
+                        };
+                        let drill = match opt(&kv, "drill") {
+                            Some(v) => num(v)?,
+                            None => board.rules.min_drill.max(0.3),
+                        };
+                        board.vias.push(pcb_core::model::Via { pos: p, diameter: dia, drill, net: opt(&kv, "net").unwrap_or("").to_string() });
+                        let conn = pcb_core::drc::connectivity(board);
+                        let net = conn.via_net(board.vias.len() - 1).map(str::to_string);
+                        Ok(obj(json!({"at": [p.x, p.y], "diameter": dia, "drill": drill, "net": net, "drc_violations": pcb_core::drc::check(board).len()})))
+                    }
+                    Some("remove") => {
+                        let p = at(pos.get(1).ok_or("board via remove x,y [r=0.3]")?)?;
+                        let r = match opt(&kv, "r") {
+                            Some(v) => num(v)?,
+                            None => 0.3,
+                        };
+                        let before = board.vias.len();
+                        board.vias.retain(|v| v.pos.dist(p) > r);
+                        Ok(obj(json!({"removed": before - board.vias.len(), "unrouted": pcb_core::ratsnest::ratsnest(board).len()})))
+                    }
+                    _ => Err("board via add x,y ... | board via remove x,y".into()),
+                }
+            }
+            "net" => {
+                // board net NAME: what the board has of a net (its pads with their places, the tracks per layer with their lengths and widths, the vias,
+                // the pours, the connections still open): to check a route against the picture without counting by eye.
+                let name = rest.first().ok_or("board net NAME")?.to_string();
+                let board = self.board_mut()?;
+                let conn = pcb_core::drc::connectivity(board);
+                let pads: Vec<Value> = board.pads.iter().enumerate().filter(|(j, _)| conn.pad_net(*j) == Some(name.as_str())).map(|(_, p)| json!({"pad": format!("{}.{}", p.refdes, p.pin), "at": [p.pos.x, p.pos.y]})).collect();
+                let mut per_layer: std::collections::BTreeMap<String, (usize, f64, f64, f64)> = Default::default();
+                for (i, t) in board.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(name.as_str())) {
+                    let _ = i;
+                    let e = per_layer.entry(layer_name(t.side)).or_insert((0, 0.0, f64::MAX, 0.0));
+                    e.0 += 1;
+                    e.1 += t.a.dist(t.b);
+                    e.2 = e.2.min(t.width);
+                    e.3 = e.3.max(t.width);
+                }
+                let tracks: Vec<Value> = per_layer.iter().map(|(l, (n, len, wmin, wmax))| json!({"layer": l, "pieces": n, "length_mm": (len * 100.0).round() / 100.0, "width_min": wmin, "width_max": wmax})).collect();
+                let vias = (0..board.vias.len()).filter(|k| conn.via_net(*k) == Some(name.as_str())).count();
+                let pours: Vec<Value> = board.zones.iter().filter(|z| z.net == name).map(|z| json!({"layer": layer_name(z.side)})).collect();
+                let open: Vec<Value> = pcb_core::ratsnest::ratsnest(board).into_iter().filter(|a| a.net == name).map(|a| json!({"from": [a.a.x, a.a.y], "to": [a.b.x, a.b.y], "length_mm": (a.a.dist(a.b) * 100.0).round() / 100.0})).collect();
+                let total: f64 = per_layer.values().map(|v| v.1).sum();
+                Ok(obj(json!({"net": name, "pads": pads, "tracks": tracks, "track_length_mm": (total * 100.0).round() / 100.0, "vias": vias, "pours": pours, "open": open, "routed": open.is_empty() && !pads.is_empty()})))
             }
             "zones" => {
                 // board zones [merge | bake]: the pours (layer, net, its shapes, area). Each pour is made of shapes that add and shapes that take away

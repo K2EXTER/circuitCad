@@ -46,6 +46,39 @@ fn text_result(text: String, is_error: bool) -> Value {
     json!({"content": [{"type": "text", "text": text}], "isError": is_error})
 }
 
+/// The bytes as base64 (standard alphabet, padded).
+fn base64(bytes: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for c in bytes.chunks(3) {
+        let n = (u32::from(c[0]) << 16) | (u32::from(*c.get(1).unwrap_or(&0)) << 8) | u32::from(*c.get(2).unwrap_or(&0));
+        out.push(A[(n >> 18) as usize & 63] as char);
+        out.push(A[(n >> 12) as usize & 63] as char);
+        out.push(if c.len() > 1 { A[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if c.len() > 2 { A[n as usize & 63] as char } else { '=' });
+    }
+    out
+}
+
+/// The largest picture sent back inside the answer (bigger ones are only named: ask for a smaller `px`).
+const MAX_IMAGE_BYTES: u64 = 2_500_000;
+
+/// The pictures that the answers name (`board picture` answers have a PNG `file`): sent as image content, so that the agent can see them.
+fn image_blocks(answers: &[serde_json::Map<String, Value>]) -> Vec<Value> {
+    answers
+        .iter()
+        .filter_map(|a| a.get("file").and_then(Value::as_str).filter(|f| f.to_ascii_lowercase().ends_with(".png") && a.contains_key("legend")))
+        .filter_map(|f| {
+            let meta = std::fs::metadata(f).ok()?;
+            if meta.len() > MAX_IMAGE_BYTES {
+                return None;
+            }
+            let bytes = std::fs::read(f).ok()?;
+            Some(json!({"type": "image", "data": base64(&bytes), "mimeType": "image/png"}))
+        })
+        .collect()
+}
+
 fn call(session: &mut Session, name: &str, args: &Value) -> Result<Value, (i64, String)> {
     match name {
         "ccad_help" => Ok(text_result(format!("{HELP}\n{CONVENTIONS}"), false)),
@@ -54,7 +87,12 @@ fn call(session: &mut Session, name: &str, args: &Value) -> Result<Value, (i64, 
             let keep_going = args.get("keep_going").and_then(Value::as_bool).unwrap_or(false);
             let (answers, failed) = run_script(session, script, keep_going);
             let text = answers.iter().map(|a| Value::Object(a.clone()).to_string()).collect::<Vec<_>>().join("\n");
-            Ok(text_result(if text.is_empty() { "(no commands)".into() } else { text }, failed))
+            let mut result = text_result(if text.is_empty() { "(no commands)".into() } else { text }, failed);
+            // a picture that an answer names goes with it as an image
+            if let Some(content) = result.get_mut("content").and_then(Value::as_array_mut) {
+                content.extend(image_blocks(&answers));
+            }
+            Ok(result)
         }
         other => Err((-32602, format!("unknown tool '{other}'"))),
     }

@@ -23,13 +23,17 @@ pub struct PictureOpts {
     pub others: bool,
     /// Grid spacing in mm (0: a spacing that suits the picture).
     pub grid: f64,
+    /// Write the net name beside every pad of the layer (to read which pad is which net without a list).
+    pub net_names: bool,
+    /// Parts to ring and name (designators): where they are.
+    pub parts: Vec<String>,
     /// Routes to show as shadows (the way a net could be wired: not on the board): the net, its tracks and its vias.
     pub ghost: Vec<(String, Vec<Track>, Vec<Via>)>,
 }
 
 impl Default for PictureOpts {
     fn default() -> Self {
-        PictureOpts { side: Side::Top, area: None, max_side: 1600, highlight: vec![], marks: false, others: false, grid: 0.0, ghost: vec![] }
+        PictureOpts { side: Side::Top, area: None, max_side: 1600, highlight: vec![], marks: false, others: false, grid: 0.0, net_names: false, parts: vec![], ghost: vec![] }
     }
 }
 
@@ -296,6 +300,33 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
         let t = mm(y);
         cv.text(Point::new(x_lo + crate::strokefont::text_width(&t, label_h) / 2.0 + one_px * 3.0, y + label_h), &t, label_h, one_px * 1.2, [255, 255, 255], 0.75);
         y += step;
+    }
+    // the net of every pad, small, over the copper
+    if opts.net_names {
+        let h = (0.5f64).max(9.0 * one_px);
+        for (j, p) in board.pads.iter().enumerate().filter(|(_, p)| p.drill.is_some() || p.side == opts.side) {
+            let Some(net) = conn.pad_net(j).filter(|n| !n.is_empty()) else { continue };
+            let (w, ph) = p.shape.size();
+            // beside the pad when it is wide, above it otherwise
+            let at = Point::new(p.pos.x, p.pos.y + ph / 2.0 + h * 0.8);
+            let _ = w;
+            cv.text(at, net, h, (h / 7.0).max(one_px * 1.1), [150, 255, 200], 0.95);
+        }
+    }
+    // the parts that were asked for
+    for r in &opts.parts {
+        let Some(part) = board.parts.iter().find(|p| &p.refdes == r) else {
+            legend.push(format!("部品 {r}: 基板にありません"));
+            continue;
+        };
+        let rad = 2.5;
+        let ring: Vec<[Point; 2]> = (0..32).map(|k| {
+            let (a, b) = (std::f64::consts::TAU * k as f64 / 32.0, std::f64::consts::TAU * (k as f64 + 1.0) / 32.0);
+            [Point::new(part.pos.x + rad * a.cos(), part.pos.y + rad * a.sin()), Point::new(part.pos.x + rad * b.cos(), part.pos.y + rad * b.sin())]
+        }).collect();
+        cv.lines(&ring, one_px * 2.0, [255, 160, 40], 1.0);
+        cv.text(Point::new(part.pos.x, part.pos.y + rad + 12.0 * one_px), r, 12.0 * one_px, one_px * 1.8, [255, 160, 40], 1.0);
+        legend.push(format!("部品 {r}: ({}, {}) 面 {}", mm(part.pos.x), mm(part.pos.y), part.side.label()));
     }
     // the places to look at
     if opts.marks {

@@ -950,6 +950,54 @@ fn a_simulation_only_part_simulates_but_is_left_off_the_board() {
 }
 
 #[test]
+fn tracks_and_vias_can_be_laid_looked_up_and_taken_away() {
+    let script = "new
+add V 5 as=V1
+add R 1k as=R1
+add R 2k as=R2
+net VCC V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+board import
+board autoplace
+";
+    let (a, ok) = run(&format!("{script}board net MID
+"));
+    assert!(ok, "{a:?}");
+    let net = last(&a, "board");
+    assert_eq!(net["net"], "MID");
+    assert_eq!(net["pads"].as_array().unwrap().len(), 2);
+    assert_eq!(net["routed"], false, "nothing is routed yet: {net}");
+    let pads = net["pads"].as_array().unwrap();
+    let (p1, p2) = (pads[0]["at"].clone(), pads[1]["at"].clone());
+    let pt = |p: &Value| format!("{},{}", p[0].as_f64().unwrap(), p[1].as_f64().unwrap());
+    // a track from one pad to the other, claimed for MID: laid, and the net is routed
+    let (a, ok) = run(&format!("{script}board track add {} {} net=MID width=0.3
+board net MID
+", pt(&p1), pt(&p2)));
+    assert!(ok, "{a:?}");
+    let added = a.iter().find(|v| v.get("laid").is_some()).unwrap();
+    assert_eq!(added["net"], "MID");
+    assert_eq!(last(&a, "board")["routed"], true);
+    // claimed for another net: taken back, with the reason
+    let (a, ok) = run(&format!("{script}board track add {} {} net=VCC
+", pt(&p1), pt(&p2)));
+    assert!(!ok && a.iter().any(|v| v["error"].as_str().is_some_and(|e| e.contains("not VCC"))), "{a:?}");
+    // a track that touches nothing floats: refused
+    let (a, ok) = run(&format!("{script}board track add 1,1 2,2
+"));
+    assert!(!ok && a.iter().any(|v| v["error"].as_str().is_some_and(|e| e.contains("float"))), "{a:?}");
+    // taken away again
+    let (a, ok) = run(&format!("{script}board track add {} {} net=MID
+board track remove net=MID
+board via add 5,5
+board via remove 5,5
+", pt(&p1), pt(&p2)));
+    assert!(ok, "{a:?}");
+    assert_eq!(a.iter().find(|v| v.get("removed").is_some() && v.get("vias_removed").is_some()).unwrap()["removed"], 1);
+}
+
+#[test]
 fn board_picture_writes_a_png_with_a_legend() {
     let file = std::env::temp_dir().join(format!("ccad-test-picture-{}.png", std::process::id()));
     let path = file.display().to_string().replace(std::path::MAIN_SEPARATOR, "/");

@@ -49,3 +49,4 @@
 - **`tran settle=`**: `sim_core::settling_times`(`stepmetrics.rs`)。`from` 以降の最後の5%の平均を最終値とし、ステップ(最終−初期)の tol 倍の帯から出た最後の点を補間して時間にする。
 
 - **`sens`**(`build.rs`): `sweep` と同じく部品の `value` を書き換えて `dc_op` を呼び、元に戻す。値の先頭の数字だけを `step`% 動かし(残りの単語は残す: `5 AC 1`)、`probe_value` の差を `per_percent`・`elasticity` にする。基準値が 0 なら `elasticity` は null。全部品で 1 回ずつ解くので、150 部品まで。`dc` の答えには `solver`(`strategy`・`iterations`・`seconds`)が付く。
+- 基板の手直しの命令(2026-10-26): `board net`・`board track add|remove`・`board via add|remove`(`board.rs`)。`track add` は、引いたあとの接続(`drc::connectivity`)でネットを調べ、`net=` と違う・短絡・浮いているときは、引く前の配線に戻す。`mcp.rs` の `image_blocks` が、答えの `file`(PNG で `legend` があるもの)を、画像のコンテンツとして付ける(`base64`、2.5 MB まで)。`board picture` は `names=1`・`part=` も取る。

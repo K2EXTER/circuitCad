@@ -95,6 +95,26 @@ fn the_circuit_lives_across_calls() {
 }
 
 #[test]
+fn a_board_picture_comes_back_as_an_image() {
+    let mut c = Client::start();
+    let (a, failed) = c.run("new
+add V 5 as=V1
+add R 1k as=R1
+net VCC V1.+ R1.1
+net GND V1.- R1.2
+board import
+board autoplace
+board route
+");
+    assert!(!failed, "{a:?}");
+    let r = c.request("tools/call", json!({"name": "ccad_run", "arguments": {"script": "board picture px=500 net=VCC names=1
+"}}));
+    let content = r["result"]["content"].as_array().unwrap();
+    assert_eq!(content[0]["type"], "text");
+    assert!(content.iter().any(|b| b["type"] == "image" && b["mimeType"] == "image/png" && b["data"].as_str().is_some_and(|d| d.starts_with("iVBOR"))), "a PNG as image content: {r}");
+}
+
+#[test]
 fn bad_input_gets_protocol_errors_not_a_crash() {
     let mut c = Client::start();
     writeln!(c.stdin, "this is not json").unwrap();
