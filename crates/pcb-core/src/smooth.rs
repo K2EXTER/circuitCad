@@ -1180,3 +1180,29 @@ fn finished_with(board: &Board, fast: bool) -> Option<Finished> {
     }
     Some(Finished { board: new, patches })
 }
+
+#[cfg(test)]
+mod probe {
+    use super::*;
+    #[test]
+    #[ignore]
+    fn print_finish_near() {
+        let path = std::env::var("CCAD_BOARD").unwrap();
+        let (cx, cy): (f64, f64) = (std::env::var("CX").unwrap().parse().unwrap(), std::env::var("CY").unwrap().parse().unwrap());
+        let board: Board = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let near = |a: Point, b: Point| (a.x - cx).abs() < 1.5 && (a.y - cy).abs() < 1.5 || (b.x - cx).abs() < 1.5 && (b.y - cy).abs() < 1.5;
+        eprintln!("-- tracks before");
+        for t in board.tracks.iter().filter(|t| near(t.a, t.b)) {
+            eprintln!("{:?} ({:.2},{:.2})-({:.2},{:.2}) w{:.2}", t.side, t.a.x, t.a.y, t.b.x, t.b.y, t.width);
+        }
+        let f = finished(&board).unwrap();
+        eprintln!("-- tracks after");
+        for t in f.board.tracks.iter().filter(|t| near(t.a, t.b)) {
+            eprintln!("{:?} ({:.2},{:.2})-({:.2},{:.2}) w{:.2}", t.side, t.a.x, t.a.y, t.b.x, t.b.y, t.width);
+        }
+        eprintln!("-- patches");
+        for p in f.patches.iter().filter(|p| p.outline.iter().any(|q| (q.x - cx).abs() < 1.5 && (q.y - cy).abs() < 1.5)) {
+            eprintln!("{:?} {:?}", p.side, p.outline.iter().map(|q| (format!("{:.2}", q.x), format!("{:.2}", q.y))).collect::<Vec<_>>());
+        }
+    }
+}

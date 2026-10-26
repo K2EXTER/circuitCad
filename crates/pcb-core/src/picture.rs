@@ -29,11 +29,13 @@ pub struct PictureOpts {
     pub parts: Vec<String>,
     /// Routes to show as shadows (the way a net could be wired: not on the board): the net, its tracks and its vias.
     pub ghost: Vec<(String, Vec<Track>, Vec<Via>)>,
+    /// Draw the copper with the board's finish (round corners, teardrops, filled notches) as the editor and the Gerber show it.
+    pub finish: bool,
 }
 
 impl Default for PictureOpts {
     fn default() -> Self {
-        PictureOpts { side: Side::Top, area: None, max_side: 1600, highlight: vec![], marks: false, others: false, grid: 0.0, net_names: false, parts: vec![], ghost: vec![] }
+        PictureOpts { side: Side::Top, area: None, max_side: 1600, highlight: vec![], marks: false, others: false, grid: 0.0, net_names: false, parts: vec![], ghost: vec![], finish: false }
     }
 }
 
@@ -218,8 +220,14 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
     let base = Frame::around(lo, hi, opts.max_side.clamp(200, 4000));
     let fine = Frame { x0: base.x0, y1: base.y1, px: base.px * SUPERSAMPLE as f64, w: base.w * SUPERSAMPLE, h: base.h * SUPERSAMPLE };
     let mut cv = Canvas::new(fine);
-    let conn = drc::connectivity(board);
-    let fills = crate::zonefill::merged_fills(board, &conn);
+    // with the finish, the tracks are the derived ones and the patches are drawn as well
+    let finished = if opts.finish { crate::smooth::finished(board) } else { None };
+    let drawn: &Board = finished.as_ref().map_or(board, |f| &f.board);
+    let conn = drc::connectivity(drawn);
+    let fills = crate::zonefill::merged_fills(drawn, &conn);
+    let patch_prims = |side: Side, only: Option<&str>| -> Vec<Prim> {
+        finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == side && only.is_none_or(|n| conn.track_net(p.track) == Some(n))).map(|p| Prim::Region { pts: p.outline.clone(), clear: false }).collect()
+    };
     let px = base.px; // pixels per mm in the finished picture
     let one_px = 1.0 / px; // a finished pixel in mm
     let mut legend = vec![format!("範囲 x {}〜{} mm、y {}〜{} mm、1 mm = {} px、格子の数字は mm (x は上の縁、y は左の縁)", mm(base.x0), mm(base.x0 + base.w as f64 / px), mm(base.y1 - base.h as f64 / px), mm(base.y1), mm(px))];
@@ -233,19 +241,21 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
     if opts.others {
         for s in board.copper_layers().into_iter().filter(|s| *s != opts.side) {
             cv.paint(&zone_prims(&fills, s, None), layer_colour(s), 0.12);
-            cv.paint(&copper_prims(board, &conn, s, None), layer_colour(s), 0.2);
+            cv.paint(&copper_prims(drawn, &conn, s, None), layer_colour(s), 0.2);
         }
     }
     // the layer: pours, then tracks, pads and vias
     let colour = layer_colour(opts.side);
     cv.paint(&zone_prims(&fills, opts.side, None), colour, 0.35);
-    cv.paint(&copper_prims(board, &conn, opts.side, None), colour, 0.9);
+    cv.paint(&copper_prims(drawn, &conn, opts.side, None), colour, 0.9);
+    cv.paint(&patch_prims(opts.side, None), colour, 0.9);
     cv.paint(&hole_prims(board), HOLE, 1.0);
     // the nets to look at
     for (k, net) in opts.highlight.iter().enumerate() {
         let c = HIGHLIGHTS[k % HIGHLIGHTS.len()];
         cv.paint(&zone_prims(&fills, opts.side, Some(net)), c, 0.55);
-        cv.paint(&copper_prims(board, &conn, opts.side, Some(net)), c, 0.95);
+        cv.paint(&copper_prims(drawn, &conn, opts.side, Some(net)), c, 0.95);
+        cv.paint(&patch_prims(opts.side, Some(net)), c, 0.95);
         cv.paint(&hole_prims(board), HOLE, 1.0);
         legend.push(format!("ネット {net}: {}", ["黄", "水色", "ピンク", "黄緑", "橙", "薄紫"][k % HIGHLIGHTS.len()]));
     }

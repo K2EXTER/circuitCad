@@ -213,7 +213,7 @@ impl Session {
                     ghost.extend(shadows);
                     ghost.extend(guards);
                 }
-                let mut pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid, net_names: flag("names"), parts, ghost });
+                let mut pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid, net_names: flag("names"), parts, ghost, finish: flag("finish") });
                 for n in notes {
                     pic.legend.push(n);
                 }

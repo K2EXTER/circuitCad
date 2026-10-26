@@ -92,7 +92,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board check [fab=jlcpcb|pcbway|oshpark|standard]
                                         the pre-order check of the app: ready true/false, and every error / warning / note with the reason
                                         and the place (also: board no longer matches the schematic, copper drop, price tier of the fab)
-  board picture [layer=top|bottom|inner1] [rect=x0,y0,x1,y1] [px=1600] [net=A,B] [part=R1,U2] [names=1] [marks=1] [others=1] [ghost=A,B] [ghostguard=A:GRDA] [out=FILE.png]
+  board picture [layer=top|bottom|inner1] [rect=x0,y0,x1,y1] [px=1600] [net=A,B] [part=R1,U2] [names=1] [marks=1] [others=1] [finish=1] [ghost=A,B] [ghostguard=A:GRDA] [out=FILE.png]
                                         a PNG of one copper layer to LOOK at (over MCP it comes back as an image): grid with mm numbers, nets in colours, net names, numbered DRC findings and open
                                         connections, shadows of how the router would wire a net; use rect= to zoom (a small rect gives more pixels per mm)
   board net NAME                        what the board has of a net: its pads (places), tracks per layer (length, widths), vias, pours, open connections

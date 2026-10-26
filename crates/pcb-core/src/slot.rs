@@ -101,7 +101,10 @@ pub fn slot_patches(board: &Board, conn: &Connectivity, patches: &[crate::smooth
             if !has_close_pair(discs, 2.0 * d) {
                 return mine;
             }
-            for slot in closed_pieces(paths, d) {
+            // the pads are left out of the closing: the space between a pad and a track beside it is not a slot (closing it makes a
+            // funnel from the track to the pad, wider than the neck it belongs to); the slot between two tracks is
+            let tracks_only: Vec<Path> = paths.iter().filter(|p| !pads.contains(p)).cloned().collect();
+            for slot in closed_pieces(&tracks_only, d) {
                 for outline in notched(&slot, pads, 2.0 * d) {
                     mine.push(SlotPatch { side, outline, track: *track });
                 }
