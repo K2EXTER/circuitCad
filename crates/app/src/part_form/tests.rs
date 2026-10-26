@@ -823,3 +823,36 @@ fn attach_step_to_library_part() {
     def.model3d = Some(m);
     std::fs::write(&part, serde_json::to_string_pretty(&def).unwrap()).unwrap();
 }
+
+/// Builds a simple 3D shape from boxes and writes it into a part of the library (`CCAD_PART` = the `.part.json`, `CCAD_BOXES` = a
+/// JSON list of `[x0, y0, z0, x1, y1, z1, r, g, b]` in mm, in the part's frame: x right, y up on the board, z up from the board).
+/// For a part whose data sheet has the outline drawing but no STEP file; the sizes are read from the drawing by hand.
+#[test]
+#[ignore]
+fn attach_boxes_to_library_part() {
+    let (Ok(part), Ok(boxes)) = (std::env::var("CCAD_PART"), std::env::var("CCAD_BOXES")) else { return };
+    let boxes: Vec<[f64; 9]> = serde_json::from_str(&boxes).unwrap();
+    let mut def: part_lib::PartDef = serde_json::from_str(&std::fs::read_to_string(&part).unwrap()).unwrap();
+    let mut m = pcb_core::mesh::Mesh3d::default();
+    for b in &boxes {
+        let colour = [b[6] as u8, b[7] as u8, b[8] as u8];
+        let ci = m.palette.iter().position(|c| *c == colour).unwrap_or_else(|| {
+            m.palette.push(colour);
+            m.palette.len() - 1
+        }) as u8;
+        let n = m.vertices.len() as u32;
+        for k in 0..8 {
+            m.vertices.push([(if k & 1 == 0 { b[0] } else { b[3] }) as f32, (if k & 2 == 0 { b[1] } else { b[4] }) as f32, (if k & 4 == 0 { b[2] } else { b[5] }) as f32]);
+        }
+        // faces as quads (corner bits: 1 = x, 2 = y, 4 = z), counter-clockwise seen from outside
+        for q in [[0, 4, 6, 2], [1, 3, 7, 5], [0, 1, 5, 4], [2, 6, 7, 3], [0, 2, 3, 1], [4, 5, 7, 6]] {
+            m.triangles.push([n + q[0], n + q[1], n + q[2]]);
+            m.triangles.push([n + q[0], n + q[2], n + q[3]]);
+            m.tri_color.extend([ci, ci]);
+        }
+    }
+    let (lo, hi) = m.bounds().unwrap();
+    println!("SIZE x={:.2} y={:.2} z={:.2} triangles={}", hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], m.triangles.len());
+    def.model3d = Some(m);
+    std::fs::write(&part, serde_json::to_string_pretty(&def).unwrap()).unwrap();
+}
