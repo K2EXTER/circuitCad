@@ -102,6 +102,20 @@ fn header(name: &str, pins: &[String]) -> Footprint {
     }
 }
 
+/// Holes for wires soldered straight into the board (the force and sense leads of a measuring instrument): round pads of 2.2 mm
+/// with 1.2 mm holes (wire up to about AWG 20) on the pitch of a header, so a board that had a header there keeps its tracks.
+fn wire_pads(name: &str, pins: &[String]) -> Footprint {
+    let pitch = 2.54;
+    Footprint {
+        name: name.into(),
+        holes: vec![],
+        height: None,
+        silk: vec![],
+        body: None,
+        pads: pins.iter().enumerate().map(|(i, p)| pad(p, 0.0, -(i as f64) * pitch, PadShape::Circle { d: 2.2 }, Some(1.2))).collect(),
+    }
+}
+
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
         "R_0603", "R_0805", "R_1206", "R_2512", "C_0603", "C_0805", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
@@ -112,6 +126,9 @@ pub fn names() -> Vec<String> {
     .collect();
     for n in 2..=6 {
         v.push(format!("PinHeader_1x{n}"));
+    }
+    for n in 2..=6 {
+        v.push(format!("WirePad_1x{n}"));
     }
     v
 }
@@ -160,6 +177,13 @@ pub fn get(name: &str) -> Option<Footprint> {
             }
         }
         "PinHeader_1x2_PM" => header(name, &["+".to_string(), "-".to_string()]),
+        _ if name.starts_with("WirePad_1x") => {
+            let n: usize = name.strip_prefix("WirePad_1x")?.parse().ok()?;
+            if !(1..=40).contains(&n) {
+                return None;
+            }
+            wire_pads(name, &(1..=n).map(|i| i.to_string()).collect::<Vec<_>>())
+        }
         _ => {
             let n: usize = name.strip_prefix("PinHeader_1x")?.parse().ok()?;
             if !(1..=40).contains(&n) {
@@ -217,5 +241,19 @@ fn outline(name: &str) -> Vec<FpLine> {
             v
         }
         _ => vec![],
+    }
+}
+
+#[cfg(test)]
+mod wire_pad_tests {
+    use super::*;
+
+    #[test]
+    fn wire_pads_are_round_holes_on_the_header_pitch() {
+        let fp = get("WirePad_1x5").unwrap();
+        assert_eq!(fp.pads.len(), 5);
+        assert!(fp.pads.iter().all(|p| p.drill == Some(1.2) && matches!(p.shape, PadShape::Circle { d } if (d - 2.2).abs() < 1e-9)));
+        assert!((fp.pads[1].pos.y - fp.pads[0].pos.y + 2.54).abs() < 1e-9);
+        assert!(get("WirePad_1x41").is_none() && names().contains(&"WirePad_1x3".to_string()));
     }
 }
