@@ -790,3 +790,36 @@ fn write_board_with_step_part() {
     }
     std::fs::write(out, serde_json::to_string(&b).unwrap()).unwrap();
 }
+
+/// Puts the 3D shape of a STEP file on a part of the library (`CCAD_PART` = the `.part.json`, `CCAD_STEP` = the STEP, `CCAD_ROT` =
+/// quarter turns about x,y,z such as "1,0,0", `CCAD_DZ` = how far to lower it so that the body stands on the board and the leads go below it): turned, stood on the board and centred over the pads as the form does, thinned out,
+/// and written back into the part file. Prints the size of the shape for a check against the data sheet.
+#[test]
+#[ignore]
+fn attach_step_to_library_part() {
+    let (Ok(part), Ok(step)) = (std::env::var("CCAD_PART"), std::env::var("CCAD_STEP")) else { return };
+    let rot: Vec<u8> = std::env::var("CCAD_ROT").unwrap_or_default().split(',').filter_map(|s| s.trim().parse().ok()).collect();
+    let mut def: part_lib::PartDef = serde_json::from_str(&std::fs::read_to_string(&part).unwrap()).unwrap();
+    let mesh = pcb_core::step::read_step(&std::fs::read(&step).unwrap()).unwrap();
+    let mut m = super::step3d::thin_out(mesh, 12_000);
+    for (axis, q) in rot.iter().enumerate() {
+        m = m.turned(axis, *q);
+    }
+    let fp = def.footprint().unwrap();
+    let xs: Vec<f64> = fp.pads.iter().map(|p| p.pos.x).collect();
+    let ys: Vec<f64> = fp.pads.iter().map(|p| p.pos.y).collect();
+    let mid = |v: &[f64]| (v.iter().cloned().fold(f64::MAX, f64::min) + v.iter().cloned().fold(f64::MIN, f64::max)) / 2.0;
+    let (lo, hi) = m.bounds().unwrap();
+    m = m.shifted([mid(&xs) - (lo[0] + hi[0]) / 2.0, mid(&ys) - (lo[1] + hi[1]) / 2.0, -lo[2] - std::env::var("CCAD_DZ").ok().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0)]);
+    let (lo, hi) = m.bounds().unwrap();
+    println!("SIZE x={:.2} y={:.2} z={:.2} triangles={}", hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], m.triangles.len());
+    // how wide the shape is in the lowest and the highest fifth of its height (tells which way up it stands)
+    let slice = |from: f64, to: f64| {
+        let v: Vec<&[f32; 3]> = m.vertices.iter().filter(|v| f64::from(v[2]) >= lo[2] + (hi[2] - lo[2]) * from && f64::from(v[2]) <= lo[2] + (hi[2] - lo[2]) * to).collect();
+        let w = |k: usize| v.iter().map(|p| p[k]).fold(f32::MIN, f32::max) - v.iter().map(|p| p[k]).fold(f32::MAX, f32::min);
+        format!("{:.1} x {:.1}", w(0), w(1))
+    };
+    println!("BOTTOM {} TOP {}", slice(0.0, 0.2), slice(0.8, 1.0));
+    def.model3d = Some(m);
+    std::fs::write(&part, serde_json::to_string_pretty(&def).unwrap()).unwrap();
+}
