@@ -319,7 +319,6 @@ pub struct BoardEditor {
     zone_net: String,
     zone_clearance: f64,
     zone_thermal: bool,
-    zone_remove_islands: bool,
     /// What the shape drawn with the zone tool does to the pour: adds to it, or takes away (a hole).
     zone_op: pcb_core::model::ShapeOp,
     /// The net whose pours a shape that takes away cuts (empty: the pours of every net on the layer).
@@ -342,6 +341,8 @@ pub struct BoardEditor {
     /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
     calc_cache: std::cell::RefCell<CalcCache>,
     zone_cache: std::cell::RefCell<ZoneCache>,
+    /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
+    island_cache: std::cell::RefCell<Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>>,
     /// How many heat pads lack thermal vias, with the geometry key it was counted for: the count fills every pour, so it is not worked out every frame.
     thermal_cache: std::cell::Cell<Option<(u64, usize)>>,
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
@@ -443,7 +444,6 @@ impl Default for BoardEditor {
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,
-            zone_remove_islands: true,
             zone_op: pcb_core::model::ShapeOp::Add,
             hole_net: String::new(),
             size_w: 50.0,
@@ -457,6 +457,7 @@ impl Default for BoardEditor {
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             zone_cache: std::cell::RefCell::new(None),
+            island_cache: std::cell::RefCell::new(None),
             thermal_cache: std::cell::Cell::new(None),
             hover_net: None,
             drag_edit: false,

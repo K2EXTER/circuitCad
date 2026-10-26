@@ -161,6 +161,12 @@ fn designator_text_follows_the_part() {
 fn a_pour_is_cut_to_the_outline_and_round_around_track_ends() {
     let mut b = board();
     b.zones.push(Zone::new("GND", Side::Top, rect(-10.0, -10.0, 60.0, 50.0)));
+    // a pour that touches nothing of its net is left out: a GND pad keeps it
+    b.pads.push({
+        let mut p = Pad::new(Point::new(30.0, 25.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        p.net = "GND".into();
+        p
+    });
     b.tracks.push(Track { side: Side::Top, a: Point::new(10.0, 15.0), b: Point::new(20.0, 15.0), width: 0.25 });
     b.pads.push({
         let mut p = Pad::new(Point::new(10.0, 15.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
@@ -244,6 +250,12 @@ fn a_later_pour_of_another_net_cuts_the_earlier_one_with_a_gap() {
     let (mut a, mut c) = (Zone::new("A", Side::Top, rect(2.0, 2.0, 20.0, 20.0)), Zone::new("B", Side::Top, rect(12.0, 8.0, 30.0, 25.0)));
     a.clearance = 0.5;
     c.clearance = 0.5;
+    // a pad of each net in the middle of its pour: a pour that touches nothing of its net is left out
+    for (x, y, net) in [(5.0, 5.0, "A"), (27.0, 22.0, "B")] {
+        let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+        p.net = net.into();
+        b.pads.push(p);
+    }
     b.zones.push(a);
     b.zones.push(c);
     let conn = drc::connectivity(&b);

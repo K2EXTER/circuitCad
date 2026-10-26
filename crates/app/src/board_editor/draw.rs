@@ -84,6 +84,36 @@ impl BoardEditor {
         }
     }
 
+    /// The pieces of the pours that are dropped as islands, in a faint grey with a dashed outline (they are not in the copper that is made).
+    pub(super) fn draw_islands(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
+        let Some(conn) = conn else { return };
+        if !self.vis.zones || self.board.zones.is_empty() {
+            return;
+        }
+        let key = pcb_core::zonefill::geometry_key(&self.board);
+        let mut cache = self.island_cache.borrow_mut();
+        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.moving_parts_only()) {
+            *cache = Some((key, pcb_core::zonefill::dropped_islands(&self.board, conn)));
+        }
+        let Some((_, islands)) = cache.as_ref() else { return };
+        let grey = Color32::from_rgba_unmultiplied(170, 170, 170, 160);
+        for (side, _net, shapes) in islands.iter().filter(|(s, _, _)| self.side_visible(*s)) {
+            let _ = side;
+            for shape in shapes {
+                if !self.shape_on_screen(rect, shape) {
+                    continue;
+                }
+                let pts: Vec<Pos2> = shape.outer.iter().map(|p| self.to_screen(rect, *p)).collect();
+                if pts.len() < 3 {
+                    continue;
+                }
+                let mut closed = pts.clone();
+                closed.push(pts[0]);
+                painter.extend(egui::Shape::dashed_line(&closed, Stroke::new(1.2, grey), 6.0, 4.0));
+            }
+        }
+    }
+
     /// The shapes of the selected pour: the outline of each, solid for the ones that add and dashed red for the ones that take away, a dot at
     /// each corner and a diamond on the point each arc passes through. Shown while the pour is selected, so the shapes can be seen (and later edited).
     pub(super) fn draw_zone_shapes(&self, painter: &egui::Painter, rect: Rect) {

@@ -982,6 +982,8 @@ mod tests {
     #[test]
     fn a_pour_lowers_the_drop() {
         let mut b = board(vec![pad(0.0, 0.0, "J1", "1", "VCC", None), pad(80.0, 0.0, "U1", "1", "VCC", None)], vec![track(Side::Top, (0.0, 0.0), (80.0, 0.0), 0.25)]);
+        // a board round the pads (the pour is cut back from the edge, and a pour that touches no pad of its net is left out)
+        b.outline = vec![Point::new(-10.0, -25.0), Point::new(90.0, -25.0), Point::new(90.0, 25.0), Point::new(-10.0, 25.0)];
         let before = drops(&b, 1.0).pads[0].ohm.unwrap();
         b.zones.push(Zone::new("VCC", Side::Top, vec![Point::new(-5.0, -20.0), Point::new(85.0, -20.0), Point::new(85.0, 20.0), Point::new(-5.0, 20.0)]));
         let d = drops(&b, 1.0);

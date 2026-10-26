@@ -166,18 +166,17 @@ mod drc_tests {
         b.pads.push(gnd);
         b.zones.push(z(5.0, 5.0, 25.0, 15.0));
         assert!(zone_checks(&b).is_empty(), "{:?}", zone_checks(&b));
-        // a track of another net cuts the pour in two: the far piece touches no GND pad, it is an island
+        // a track of another net cuts the pour in two: the far piece touches no GND pad, it is an island, which is always left out: the
+        // far piece is not drawn, and nothing is reported
         b.tracks.push(Track { side: Side::Top, a: Point::new(18.0, 4.0), b: Point::new(18.0, 16.0), width: 0.25 });
-        let v = zone_checks(&b);
-        assert_eq!(v.len(), 1, "{v:?}");
-        assert!(v[0].message.contains("島"), "{v:?}");
-        // with islands removed the far piece is not drawn, and nothing is reported
-        b.zones[0].remove_islands = true;
         let conn = connectivity(&b);
         assert_eq!(crate::zonefill::zone_fill(&b, &b.zones[0], &conn).len(), 1);
         assert!(zone_checks(&b).is_empty(), "{:?}", zone_checks(&b));
         // a pour that is only a thin strip is a sliver
         let mut b = board();
+        let mut strip_pad = Pad::new(Point::new(10.0, 5.06), PadShape::Rect { w: 0.08, h: 0.08 }, None, Side::Top);
+        strip_pad.net = "GND".into();
+        b.pads.push(strip_pad); // a pad of the net keeps the strip (a pour that touches nothing of its net is left out)
         b.zones.push(z(5.0, 5.0, 25.0, 5.12));
         let v = zone_checks(&b);
         assert!(v.iter().any(|x| x.message.contains("スリバー")), "{v:?}");

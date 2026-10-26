@@ -120,7 +120,7 @@ pub fn zone_fill(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<FillSha
 fn fill_from(board: &Board, zone: &Zone, conn: &Connectivity, raws: &[Vec<FillShape>]) -> Vec<FillShape> {
     let me = board.zones.iter().position(|z| std::ptr::eq(z, zone));
     let mut out = me.map_or_else(|| raw_fill(board, zone, conn), |i| raws[i].clone());
-    if zone.remove_islands && !zone.net.is_empty() {
+    if !zone.net.is_empty() {
         // Pours of the same net on the same layer that touch or overlap are one piece of copper: a pour beside another one is not an
         // island because the pad is in the other one.
         let mut all: Vec<FillShape> = out.clone();
@@ -132,6 +132,22 @@ fn fill_from(board: &Board, zone: &Zone, conn: &Connectivity, raws: &[Vec<FillSh
             Some(p) => joined.iter().find(|j| inside_shape(j, p)).is_none_or(|j| touches_net(board, zone, conn, j)),
             None => true,
         });
+    }
+    out
+}
+
+/// The pieces of the pours that are dropped as islands (they touch nothing of their net), per layer and net: what the editor shows
+/// faintly, so a shape that came to nothing can be seen.
+pub fn dropped_islands(board: &Board, conn: &Connectivity) -> Vec<(Side, String, Vec<FillShape>)> {
+    let mut out = vec![];
+    for zone in board.zones.iter().filter(|z| !z.net.is_empty()) {
+        let raws: Vec<Vec<FillShape>> = board.zones.iter().map(|z| if z.net == zone.net && z.side == zone.side { raw_fill(board, z, conn) } else { vec![] }).collect();
+        let Some(me) = board.zones.iter().position(|z| std::ptr::eq(z, zone)) else { continue };
+        let kept = fill_from(board, zone, conn, &raws);
+        let gone: Vec<FillShape> = raws[me].iter().filter(|r| !kept.iter().any(|k| k.outer == r.outer)).cloned().collect();
+        if !gone.is_empty() {
+            out.push((zone.side, zone.net.clone(), gone));
+        }
     }
     out
 }

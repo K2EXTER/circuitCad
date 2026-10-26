@@ -76,14 +76,13 @@ impl BoardEditor {
                     let mut z = Zone::from_shape(&self.zone_net, self.side, shape);
                     z.clearance = self.zone_clearance;
                     z.thermal = self.zone_thermal;
-                    z.remove_islands = self.zone_remove_islands;
                     self.board.zones.push(z);
                     self.selected = Some(Item::Zone(self.board.zones.len() - 1));
                     self.status = format!("ゾーンを追加しました (ネット {})。続けて描くと、このベタに図形を足せます", self.zone_net);
                 }
                 // a pour that touches nothing of its net is dropped as an island (「孤立した銅の破片を消す」): say so, or the shape seems lost
                 if self.copper_area_of_layer() <= before + 1e-6 {
-                    self.status = format!("図形を足しましたが、銅が増えません。このネット ({}) のパッド・ビア・配線のどれにも触れていないので、孤立した銅として消えています。「孤立した銅の破片を消す」を切るか、パッドにかかるように描いてください", self.zone_net);
+                    self.status = format!("図形を足しましたが、銅が増えません。このネット ({}) のパッド・ビア・配線のどれにも触れていないので、孤立した銅として消えています (うすい灰色の破線で見えます)。パッドやビア・配線にかかるように描いてください", self.zone_net);
                 }
             }
             _ => {}

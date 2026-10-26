@@ -385,7 +385,6 @@ impl BoardEditor {
                     let (points, dropped) = pcb_core::zonefill::tidy_zones(&mut self.board);
                     self.status = format!("重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さな引く図形 {dropped} 個を整理しました");
                 }
-                ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
             }
             _ => {}
         }
@@ -486,8 +485,6 @@ impl BoardEditor {
                 let r = ui.add(egui::DragValue::new(&mut c).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("このゾーンと、ほかのネットの間をあける距離");
                 let mut th = self.board.zones[i].thermal;
                 let rt = ui.checkbox(&mut th, "サーマルリリーフ").on_hover_text("スルーホールのパッドを、細い十字の足でゾーンにつなぎます (はんだ付けしやすくなります)");
-                let mut ri = self.board.zones[i].remove_islands;
-                let rr = ui.checkbox(&mut ri, "孤立した銅の破片を消す").on_hover_text("ゾーンのネットのパッド・ビア・配線のどれにもつながっていない銅の島を作らないようにします (ノイズを拾う・製造中にはがれるのを防ぐ)");
                 // the shapes of the pour: what each one does, how many corners and arcs it has; one can be turned round (add / take away) or deleted
                 let mut flip: Option<usize> = None;
                 let mut remove: Option<usize> = None;
@@ -537,10 +534,9 @@ impl BoardEditor {
                     self.selected = Some(Item::Zone(at));
                     return;
                 }
-                if net != before || r.drag_started() || r.gained_focus() || rt.changed() || rr.changed() {
+                if net != before || r.drag_started() || r.gained_focus() || rt.changed() {
                     self.checkpoint();
                 }
-                self.board.zones[i].remove_islands = ri;
                 let z = &mut self.board.zones[i];
                 z.net = net;
                 if r.changed() {

@@ -47,6 +47,10 @@ fn a_zone_leaves_a_gap_around_other_nets_and_fills_the_rest() {
     let mut sig = Pad::new(Point::new(15.0, 10.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
     sig.net = "SIG".into();
     b.pads.push(sig);
+    // a GND pad keeps the pour (a pour that touches nothing of its net is left out)
+    let mut gnd = Pad::new(Point::new(4.0, 4.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
+    gnd.net = "GND".into();
+    b.pads.push(gnd);
     let p = preview(&b);
     assert!(p.copper_at(Side::Bottom, Point::new(8.0, 10.0)), "the pour");
     assert!(p.copper_at(Side::Bottom, Point::new(15.0, 10.0)), "the pad itself");

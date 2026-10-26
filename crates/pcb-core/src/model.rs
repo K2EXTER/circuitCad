@@ -243,7 +243,8 @@ pub struct Zone {
     pub thermal: bool,
     pub thermal_gap: f64,
     pub spoke_width: f64,
-    /// Drop pieces of the pour that touch no pad, via or track of its net (isolated fragments).
+    /// Not used any more: the pieces of a pour that touch no pad, via or track of its net (islands) are always left out. Kept so that the
+    /// files read and write as before.
     pub remove_islands: bool,
 }
 

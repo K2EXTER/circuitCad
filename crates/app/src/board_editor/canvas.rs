@@ -21,6 +21,7 @@ impl BoardEditor {
         self.draw_grid(&painter, rect);
         let conn = (!self.board.zones.is_empty() || self.selected.is_some()).then(|| self.cached_connectivity());
         self.draw_zones(&painter, rect, conn.as_deref());
+        self.draw_islands(&painter, rect, conn.as_deref());
         self.draw_zone_shapes(&painter, rect);
         self.update_net_focus(&resp, rect);
         self.draw_copper(&painter, rect);

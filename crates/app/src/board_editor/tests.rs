@@ -292,7 +292,6 @@ fn a_shape_that_touches_nothing_of_the_net_is_said_to_be_an_island() {
     pad.net = "VNEG".into();
     e.board.pads.push(pad);
     e.board.outline = vec![p(0.0, 0.0), p(60.0, 0.0), p(60.0, 40.0), p(0.0, 40.0)];
-    e.zone_remove_islands = true;
     set_poly(&mut e, &[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(0.0, 10.0)]);
     e.finish_polygon();
     assert!(!e.status.contains("孤立"), "{}", e.status);
