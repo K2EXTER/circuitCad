@@ -146,9 +146,19 @@ impl Session {
                 let highlight: Vec<String> = opt(&kv, "net").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
                 let out = opt(&kv, "out").map(str::to_string).unwrap_or_else(|| format!("picture-{}.png", layer_name(side)));
                 // ghost=SA,SB: the way the router would wire those nets, drawn as shadows (on a copy: the board is not changed); the
-                // wiring they have now is left out of the copy first. `ghost_vias=1` lets the shadow use vias (it does not by default)
+                // wiring they have now is left out of the copy first. `ghostvias=1` lets the shadow use vias (it does not by default)
                 let ghost_nets: Vec<String> = opt(&kv, "ghost").map(|v| v.split(',').map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect()).unwrap_or_default();
-                let ghost_vias = flag("ghost_vias");
+                let ghost_vias = flag("ghostvias");
+                // ghost_guard=A:GRDA,B:GRDB: the guard tracks (`board guard`) round those nets in the copy, drawn as shadows of the guard nets
+                let ghost_guard: Vec<(String, String)> = opt(&kv, "ghostguard").map(|v| v.split(',').filter_map(|p| p.split_once(':')).map(|(n, g)| (n.trim().to_string(), g.trim().to_string())).collect()).unwrap_or_default();
+                let guard_gap = match opt(&kv, "guardgap") {
+                    Some(v) => num(v)?,
+                    None => 0.25,
+                };
+                let guard_width = match opt(&kv, "guardwidth") {
+                    Some(v) => num(v)?,
+                    None => 0.3,
+                };
                 let board = self.board_mut()?;
                 if let pcb_core::model::Side::Inner(n) = side
                     && n > board.inner_layers
@@ -157,7 +167,8 @@ impl Session {
                 }
                 let mut ghost = vec![];
                 let mut failed: Vec<String> = vec![];
-                if !ghost_nets.is_empty() {
+                let mut notes: Vec<String> = vec![];
+                if !ghost_nets.is_empty() || !ghost_guard.is_empty() {
                     let mut g = board.clone();
                     for n in &ghost_nets {
                         pcb_core::shove::rip_up_net(&mut g, n);
@@ -170,15 +181,42 @@ impl Session {
                         }
                     }
                     let conn = pcb_core::drc::connectivity(&g);
+                    let mut shadows: Vec<(String, Vec<pcb_core::model::Track>, Vec<pcb_core::model::Via>)> = vec![];
                     for n in &ghost_nets {
                         let tracks: Vec<pcb_core::model::Track> = g.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(n.as_str())).map(|(_, t)| t.clone()).collect();
                         let vias: Vec<pcb_core::model::Via> = g.vias.iter().enumerate().filter(|(k, _)| conn.via_net(*k) == Some(n.as_str())).map(|(_, v)| v.clone()).collect();
-                        ghost.push((n.clone(), tracks, vias));
+                        shadows.push((n.clone(), tracks, vias));
                     }
+                    // the guard tracks come after the routes: they follow the routed tracks of the nets
+                    let mut guards: Vec<(String, Vec<pcb_core::model::Track>, Vec<pcb_core::model::Via>)> = vec![];
+                    for (net, guard) in &ghost_guard {
+                        let (t0, v0) = (g.tracks.len(), g.vias.len());
+                        match pcb_core::copper::add_guard_tracks(&mut g, net, guard, guard_gap, guard_width) {
+                            Ok(_) => {
+                                let (t, v) = (g.tracks[t0..].to_vec(), g.vias[v0..].to_vec());
+                                match guards.iter_mut().find(|(n, _, _)| n == guard) {
+                                    Some((_, tt, vv)) => {
+                                        tt.extend(t);
+                                        vv.extend(v);
+                                    }
+                                    None => guards.push((guard.clone(), t, v)),
+                                }
+                            }
+                            Err(e) => notes.push(format!("ガード {guard} ({net} の両側): {e}")),
+                        }
+                    }
+                    if !guards.is_empty() {
+                        notes.push("影のうち、ガードのネット (GRD…) は、`board guard` で検出線の両側に置くガード配線の案です (検出線の影のあとに置くので、検出線の影が前提)".into());
+                    }
+                    ghost.extend(shadows);
+                    ghost.extend(guards);
                 }
                 let mut pic = pcb_core::picture::render(board, &pcb_core::picture::PictureOpts { side, area, max_side, highlight, marks: flag("marks"), others: flag("others"), grid, ghost });
+                for n in notes {
+                    pic.legend.push(n);
+                }
                 for n in &failed {
-                    pic.legend.push(format!("影 {n}: 経路が見つからない接続があります (ビアを許す `ghost_vias=1`、または周りの配置を空けてみてください)"));
+                    pic.legend.push(format!("影 {n}: 経路が見つからない接続があります (ビアを許す `ghostvias=1`、または周りの配置を空けてみてください)"));
                 }
                 image::save_buffer(&out, &pic.rgba, pic.w as u32, pic.h as u32, image::ColorType::Rgba8).map_err(|e| format!("{out} に書けません: {e}"))?;
                 Ok(obj(json!({"file": out, "width": pic.w, "height": pic.h, "legend": pic.legend})))
