@@ -118,7 +118,7 @@ fn wire_pads(name: &str, pins: &[String]) -> Footprint {
 
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
-        "R_0603", "R_0805", "R_1206", "R_2512", "C_0603", "C_0805", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
+        "R_0603", "R_0805", "R_1206", "R_2512", "C_0603", "C_0805", "C_1206", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
         "D_DO-35_7.62", "LED_5mm", "TO-92", "SOT-23", "PinHeader_1x2_PM",
     ]
     .iter()
@@ -138,7 +138,7 @@ pub fn get(name: &str) -> Option<Footprint> {
         "R_0603" | "C_0603" => smd2(name, 0.825, 0.8, 0.95, ["1", "2"]),
         "R_0805" | "C_0805" | "L_0805" => smd2(name, 0.9125, 1.025, 1.4, ["1", "2"]),
         // IPC-7351 nominal land patterns for the larger chips (1/4 W and 1 W resistors)
-        "R_1206" => smd2(name, 1.5, 1.2, 1.8, ["1", "2"]),
+        "R_1206" | "C_1206" => smd2(name, 1.5, 1.2, 1.8, ["1", "2"]),
         "R_2512" => smd2(name, 2.95, 1.4, 3.4, ["1", "2"]),
         "LED_0805" => smd2(name, 0.9125, 1.025, 1.4, ["K", "A"]),
         "D_SOD-123" => smd2(name, 1.65, 0.91, 1.22, ["K", "A"]),
@@ -254,6 +254,7 @@ mod wire_pad_tests {
         assert_eq!(fp.pads.len(), 5);
         assert!(fp.pads.iter().all(|p| p.drill == Some(1.2) && matches!(p.shape, PadShape::Circle { d } if (d - 2.2).abs() < 1e-9)));
         assert!((fp.pads[1].pos.y - fp.pads[0].pos.y + 2.54).abs() < 1e-9);
+        assert_eq!(get("C_1206").unwrap().pads.len(), 2);
         assert!(get("WirePad_1x41").is_none() && names().contains(&"WirePad_1x3".to_string()));
     }
 }
