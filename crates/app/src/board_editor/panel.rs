@@ -359,31 +359,47 @@ impl BoardEditor {
                     ui.selectable_value(&mut self.zone_op, pcb_core::model::ShapeOp::Add, "足す (+)").on_hover_text("描いた形を、ベタの面に足します。ベタを選んである (同じネット・同じ層) と、そのベタの図形として足します。選んでいなければ、新しいベタを作ります");
                     ui.selectable_value(&mut self.zone_op, pcb_core::model::ShapeOp::Sub, "引く (−)").on_hover_text("描いた形を、ベタから引きます (銅のない穴・窓)。ベタを選んである (この層) と、そのベタだけから引きます。選んでいなければ、描いた範囲に触れる、この層のベタから引きます");
                 });
+                // the pour that is selected (on this layer): the shape goes to it, whatever the net below says
+                let target = match self.selected {
+                    Some(Item::Zone(i)) => self.board.zones.get(i).filter(|z| z.side == self.side).map(|z| z.net.clone()),
+                    _ => None,
+                };
                 if self.zone_op == pcb_core::model::ShapeOp::Sub {
+                    if let Some(net) = &target {
+                        ui.label(format!("選んでいるベタ (ネット {net}) から引きます"));
+                    } else {
+                        ui.label("選んでいるベタがないので、描いた範囲のベタから引きます");
+                    }
                     let nets = self.nets();
-                    egui::ComboBox::from_label("引く対象のネット").selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
+                    ui.add_enabled_ui(target.is_none(), |ui| egui::ComboBox::from_label("引く相手のネット").selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.hole_net, String::new(), "すべて");
                         for n in &nets {
                             ui.selectable_value(&mut self.hole_net, n.clone(), n);
                         }
-                    }).response.on_hover_text("ベタを選んでいないとき、どのネットのベタから引くか。「すべて」なら、描いた範囲に触れる、この層のベタ全部です (ネットを決めなくてよい)");
-                }
-                let nets = self.nets();
-                egui::ComboBox::from_label("ネット").selected_text(self.zone_net.clone()).show_ui(ui, |ui| {
-                    for n in &nets {
-                        ui.selectable_value(&mut self.zone_net, n.clone(), n);
+                    }).response.on_hover_text("ベタを選んでいないとき、どのネットのベタから引くか。「すべて」なら、描いた範囲に触れる、この層のベタ全部です (ネットを決めなくてよい)"));
+                } else {
+                    if target.as_ref().is_some_and(|n| n == &self.zone_net) {
+                        ui.label("選んでいるベタの図形として足します");
+                    } else {
+                        ui.label("新しいベタを作ります (同じネットのベタを選んでおくと、そのベタに足します)");
                     }
-                    if !nets.iter().any(|n| n == "GND") {
-                        ui.selectable_value(&mut self.zone_net, "GND".to_string(), "GND");
+                    let nets = self.nets();
+                    egui::ComboBox::from_label("ベタのネット").selected_text(self.zone_net.clone()).show_ui(ui, |ui| {
+                        for n in &nets {
+                            ui.selectable_value(&mut self.zone_net, n.clone(), n);
+                        }
+                        if !nets.iter().any(|n| n == "GND") {
+                            ui.selectable_value(&mut self.zone_net, "GND".to_string(), "GND");
+                        }
+                    }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
+                    ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
+                    ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
+                    if ui.button("重なるベタを結合").on_hover_text("同じネット・同じ層で、重なったり接したりしているベタを、1 枚のベタにまとめ、最終の頂点 (直線) に変換します (足す・引くの図形と円弧は、頂点の列になります)。見た目はつながっていても、内部のデータが別々のときに使います").clicked() {
+                        self.checkpoint();
+                        let n = pcb_core::zonefill::merge_all_zones(&mut self.board);
+                        let (points, dropped) = pcb_core::zonefill::tidy_zones(&mut self.board);
+                        self.status = format!("重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さな引く図形 {dropped} 個を整理しました");
                     }
-                }).response.on_hover_text("ゾーンでつなぐネット。ふつうは GND にして、基板の余った所を GND の銅で塗ります");
-                ui.add(egui::DragValue::new(&mut self.zone_clearance).speed(0.05).range(0.1..=2.0).prefix("隙間 ").suffix(" mm")).on_hover_text("ゾーンの銅と、ほかのネットの配線・パッドの間をあける距離。小さいと短絡しやすく、大きいと銅が減ります (多くは 0.3〜0.5mm)");
-                ui.checkbox(&mut self.zone_thermal, "スルーホールはサーマルリリーフ").on_hover_text("スルーホールのパッドを、ゾーンに細い十字の足 (サーマルリリーフ) でつなぎます。熱が逃げにくくなり、はんだ付けしやすくなります。オフにすると全面でつながります");
-                if ui.button("重なるベタを結合").on_hover_text("同じネット・同じ層で、重なったり接したりしているベタを、1 枚のベタにまとめ、最終の頂点 (直線) に変換します (足す・引くの図形と円弧は、頂点の列になります)。見た目はつながっていても、内部のデータが別々のときに使います").clicked() {
-                    self.checkpoint();
-                    let n = pcb_core::zonefill::merge_all_zones(&mut self.board);
-                    let (points, dropped) = pcb_core::zonefill::tidy_zones(&mut self.board);
-                    self.status = format!("重なるベタを {n} 枚まとめ、余分な頂点 {points} 個と、小さな引く図形 {dropped} 個を整理しました");
                 }
             }
             _ => {}
