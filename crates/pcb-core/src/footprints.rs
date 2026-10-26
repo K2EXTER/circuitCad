@@ -105,6 +105,11 @@ fn header(name: &str, pins: &[String]) -> Footprint {
 /// Holes for wires soldered straight into the board (the force and sense leads of a measuring instrument): round pads of 2.2 mm
 /// with 1.2 mm holes (wire up to about AWG 20) on the pitch of a header, so a board that had a header there keeps its tracks.
 fn wire_pads(name: &str, pins: &[String]) -> Footprint {
+    wire_pads_sized(name, pins, 2.2, 1.2)
+}
+
+/// [`wire_pads`] with the pad diameter and the hole diameter given (mm): a smaller hole for a thin wire.
+fn wire_pads_sized(name: &str, pins: &[String], pad_d: f64, drill: f64) -> Footprint {
     let pitch = 2.54;
     Footprint {
         name: name.into(),
@@ -112,7 +117,7 @@ fn wire_pads(name: &str, pins: &[String]) -> Footprint {
         height: None,
         silk: vec![],
         body: None,
-        pads: pins.iter().enumerate().map(|(i, p)| pad(p, 0.0, -(i as f64) * pitch, PadShape::Circle { d: 2.2 }, Some(1.2))).collect(),
+        pads: pins.iter().enumerate().map(|(i, p)| pad(p, 0.0, -(i as f64) * pitch, PadShape::Circle { d: pad_d }, Some(drill))).collect(),
     }
 }
 
@@ -180,6 +185,16 @@ pub fn get(name: &str) -> Option<Footprint> {
             }
         }
         "PinHeader_1x2_PM" => header(name, &["+".to_string(), "-".to_string()]),
+        // "WirePad_D0.7_P1.6": one pad for a wire, hole 0.7 mm and pad 1.6 mm (the pad is at least 0.4 mm wider than the hole)
+        _ if name.starts_with("WirePad_D") => {
+            let rest = name.strip_prefix("WirePad_D")?;
+            let (d, p) = rest.split_once("_P")?;
+            let (drill, pad_d): (f64, f64) = (d.parse().ok()?, p.parse().ok()?);
+            if !(0.3..=3.0).contains(&drill) || pad_d < drill + 0.4 || pad_d > 6.0 {
+                return None;
+            }
+            wire_pads_sized(name, &["1".to_string()], pad_d, drill)
+        }
         _ if name.starts_with("WirePad_1x") => {
             let n: usize = name.strip_prefix("WirePad_1x")?.parse().ok()?;
             if !(1..=40).contains(&n) {
@@ -259,6 +274,9 @@ mod wire_pad_tests {
         assert!((fp.pads[1].pos.y - fp.pads[0].pos.y + 2.54).abs() < 1e-9);
         assert_eq!(get("C_1206").unwrap().pads.len(), 2);
         assert!(get("C_0402").is_some() && get("C_1210").is_some());
+        let thin = get("WirePad_D0.7_P1.6").unwrap();
+        assert_eq!((thin.pads[0].drill, thin.pads[0].shape.size()), (Some(0.7), (1.6, 1.6)));
+        assert!(get("WirePad_D1.0_P1.2").is_none(), "a ring of less than 0.2 mm each side is refused");
         assert!(get("WirePad_1x41").is_none() && names().contains(&"WirePad_1x3".to_string()));
     }
 }
