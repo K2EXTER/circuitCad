@@ -406,8 +406,16 @@ impl BoardEditor {
                 for w in self.poly.windows(2) {
                     painter.line_segment([self.to_screen(rect, w[0]), self.to_screen(rect, w[1])], Stroke::new(1.5, col));
                 }
-                if let Some(last) = self.poly.last() {
-                    painter.line_segment([self.to_screen(rect, *last), scr], preview);
+                // the next piece: the line, the arc, or the circle or rectangle that the next click finishes
+                let ahead: Vec<Pos2> = self.polygon_preview(p).iter().map(|q| self.to_screen(rect, *q)).collect();
+                for w in ahead.windows(2) {
+                    painter.line_segment([w[0], w[1]], preview);
+                }
+                if let Some(m) = self.arc_mid {
+                    painter.circle_filled(self.to_screen(rect, m), 3.0, col);
+                }
+                if let Some(a) = self.pending.filter(|_| matches!(self.poly_mode, PolyMode::Circle | PolyMode::Rect)) {
+                    painter.circle_filled(self.to_screen(rect, a), 3.0, col);
                 }
                 if self.poly.len() >= 3 {
                     painter.circle_stroke(self.to_screen(rect, self.poly[0]), 6.0, Stroke::new(1.5, Color32::WHITE));

@@ -64,6 +64,23 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::ZoneHole, "ベタの穴あけ", Icon::ZoneHole),
 ];
 
+/// What a click adds while a polygon is drawn (the board outline, a pour, a hole of a pour): like a drafting program, lines and arcs
+/// close a shape, or a circle or a rectangle is drawn at once.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+enum PolyMode {
+    /// A straight line to each clicked point.
+    #[default]
+    Lines,
+    /// An arc: the click for a point it passes through, then the click for its end.
+    ArcThrough,
+    /// An arc that leaves the last line (or arc) in its direction: one click for the end.
+    ArcTangent,
+    /// The centre, then a point on the circle.
+    Circle,
+    /// Two opposite corners (rounded by `shape_round`).
+    Rect,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RouteMode {
     Free,
@@ -242,6 +259,11 @@ pub struct BoardEditor {
     pending: Option<Point>,
     /// Polygon being drawn (board outline or zone).
     poly: Vec<Point>,
+    poly_mode: PolyMode,
+    /// The point an arc passes through (`PolyMode::ArcThrough`), clicked and waiting for the end.
+    arc_mid: Option<Point>,
+    /// The radius of the rounded corners of a rectangle (mm; 0: square corners).
+    shape_round: f64,
     selected: Option<Item>,
     /// Two or more objects selected by a rubber band (then `selected` is empty).
     multi: Vec<Item>,
@@ -381,6 +403,9 @@ impl Default for BoardEditor {
             pan: Vec2::new(25.0, 20.0),
             pending: None,
             poly: vec![],
+            poly_mode: PolyMode::default(),
+            arc_mid: None,
+            shape_round: 0.0,
             selected: None,
             multi: vec![],
             boxsel: None,

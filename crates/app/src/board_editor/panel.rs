@@ -268,6 +268,7 @@ impl BoardEditor {
             Tool::Hole => "取付穴の設定",
             Tool::Zone => "銅箔ゾーンの設定",
             Tool::ZoneHole => "ベタの穴あけの設定",
+            Tool::OutlinePoly => "基板外形 (多角形) の設定",
             _ => return,
         };
         // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
@@ -348,8 +349,10 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.pad_size).speed(0.05).range(0.3..=10.0).prefix("パッド径 ").suffix(" mm")).on_hover_text("パッド (部品の足をはんだ付けする銅の丸) の直径");
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
             }
+            Tool::OutlinePoly => self.poly_mode_ui(ui),
             Tool::ZoneHole => {
-                ui.label("多角形を描き、ダブルクリックか Enter で確定。この層 (いま作業している面) のベタに、銅のない穴が開く");
+                ui.label("形を描いて確定。この層 (いま作業している面) のベタに、銅のない穴が開く");
+                self.poly_mode_ui(ui);
                 let nets = self.nets();
                 egui::ComboBox::from_label("対象のネット").selected_text(if self.hole_net.is_empty() { "すべて".to_string() } else { self.hole_net.clone() }).show_ui(ui, |ui| {
                     ui.selectable_value(&mut self.hole_net, String::new(), "すべて");
@@ -362,7 +365,8 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
             }
             Tool::Zone => {
-                ui.label("多角形を描き、ダブルクリックか Enter で確定");
+                ui.label("形を描いて確定 (右クリック・ダブルクリック・Enter、または最初の点をクリック)");
+                self.poly_mode_ui(ui);
                 let nets = self.nets();
                 egui::ComboBox::from_label("ネット").selected_text(self.zone_net.clone()).show_ui(ui, |ui| {
                     for n in &nets {
@@ -383,6 +387,25 @@ impl BoardEditor {
                 ui.checkbox(&mut self.zone_remove_islands, "孤立した銅の破片を消す").on_hover_text("配線で切り分けられて、ゾーンのネットのパッド・ビア・配線のどれにもつながっていない小さな銅 (島) を作らないようにします。島はノイズを拾うアンテナになり、製造中にはがれることもあります");
             }
             _ => {}
+        }
+    }
+
+    /// What a click draws: lines, arcs, a circle or a rectangle (for the board outline, a pour and the hole of a pour).
+    fn poly_mode_ui(&mut self, ui: &mut egui::Ui) {
+        let before = self.poly_mode;
+        ui.horizontal_wrapped(|ui| {
+            ui.selectable_value(&mut self.poly_mode, PolyMode::Lines, "直線").on_hover_text("クリックした点を直線でつなぎます。最初の点をクリックするか、右クリック・ダブルクリック・Enter で、囲んで確定します");
+            ui.selectable_value(&mut self.poly_mode, PolyMode::ArcThrough, "3点円弧").on_hover_text("円弧を描きます。最後の点から、途中の点をクリックし、終点をクリックします。直線と切り替えながら描けます");
+            ui.selectable_value(&mut self.poly_mode, PolyMode::ArcTangent, "接線円弧").on_hover_text("直前の線 (または円弧) になめらかにつながる円弧を、終点を1回クリックするだけで描きます");
+            ui.selectable_value(&mut self.poly_mode, PolyMode::Circle, "円").on_hover_text("中心をクリックし、円周の点をクリックします。その場で確定します");
+            ui.selectable_value(&mut self.poly_mode, PolyMode::Rect, "長方形").on_hover_text("反対側の2つの角をクリックします。その場で確定します");
+        });
+        if self.poly_mode == PolyMode::Rect {
+            ui.add(egui::DragValue::new(&mut self.shape_round).speed(0.1).range(0.0..=50.0).prefix("角の丸め R ").suffix(" mm")).on_hover_text("長方形の角の丸みの半径。0 なら角張ったままです");
+        }
+        if self.poly_mode != before {
+            self.arc_mid = None;
+            self.pending = None;
         }
     }
 

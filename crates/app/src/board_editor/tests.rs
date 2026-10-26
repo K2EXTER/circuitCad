@@ -125,6 +125,90 @@ fn a_zone_polygon_can_be_a_hole_of_the_pours_of_a_net() {
     assert_eq!(e.board.zones[0].holes.len(), 1);
 }
 
+fn area(poly: &[Point]) -> f64 {
+    poly.iter().zip(poly.iter().cycle().skip(1)).map(|(a, b)| a.x * b.y - b.x * a.y).sum::<f64>().abs() / 2.0
+}
+
+#[test]
+fn a_shape_of_lines_and_an_arc_is_confirmed_as_a_pour() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "GND".into();
+    // (0,0) -> (10,0) by lines, then an arc through (13,5) to (10,10), then a line to (0,10), closed on the first point
+    e.click(p(0.0, 0.0));
+    e.click(p(10.0, 0.0));
+    e.poly_mode = PolyMode::ArcThrough;
+    e.click(p(13.0, 5.0));
+    assert_eq!(e.arc_mid, Some(p(13.0, 5.0)));
+    e.click(p(10.0, 10.0));
+    assert!(e.arc_mid.is_none() && e.poly.len() > 4, "the arc is many short pieces: {}", e.poly.len());
+    e.poly_mode = PolyMode::Lines;
+    e.click(p(0.0, 10.0));
+    e.click(p(0.0, 0.0));
+    assert_eq!(e.board.zones.len(), 1);
+    let z = &e.board.zones[0];
+    assert!(area(&z.polygon) > 100.0 + 5.0, "the arc bulges out of the 10 x 10 square: {}", area(&z.polygon));
+    assert!(z.polygon.iter().any(|q| q.x > 11.0), "points of the arc");
+}
+
+#[test]
+fn a_tangent_arc_follows_the_last_line() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "GND".into();
+    e.poly_mode = PolyMode::ArcTangent;
+    e.click(p(0.0, 0.0)); // the start: a tangent arc has no direction yet
+    e.poly_mode = PolyMode::Lines;
+    e.click(p(10.0, 0.0));
+    e.poly_mode = PolyMode::ArcTangent;
+    e.click(p(15.0, 5.0)); // leaves to the right, turns up: a quarter circle of radius 5
+    assert!(e.poly.len() > 3);
+    let first = e.poly[2];
+    assert!(first.y.abs() < 0.2 && first.x > 10.0, "leaves along the line: {first:?}");
+    assert!(e.poly.last().unwrap().dist(p(15.0, 5.0)) < 1e-9);
+}
+
+#[test]
+fn a_circle_and_a_rounded_rectangle_are_confirmed_at_once() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "GND".into();
+    e.poly_mode = PolyMode::Circle;
+    e.click(p(10.0, 10.0));
+    assert!(e.board.zones.is_empty(), "the centre alone is not a shape");
+    e.click(p(15.0, 10.0));
+    assert_eq!(e.board.zones.len(), 1);
+    assert!((area(&e.board.zones[0].polygon) - std::f64::consts::PI * 25.0).abs() < 1.0);
+    e.poly_mode = PolyMode::Rect;
+    e.shape_round = 2.0;
+    e.click(p(30.0, 0.0));
+    e.click(p(50.0, 10.0));
+    assert_eq!(e.board.zones.len(), 2);
+    let r = &e.board.zones[1].polygon;
+    assert!(r.len() > 4 && area(r) < 200.0 && area(r) > 190.0, "rounded corners: {} points, area {}", r.len(), area(r));
+}
+
+#[test]
+fn the_hole_tool_takes_the_same_shapes() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Zone;
+    e.zone_net = "VNEG".into();
+    e.poly = vec![p(0.0, 0.0), p(40.0, 0.0), p(40.0, 40.0), p(0.0, 40.0)];
+    e.finish_polygon();
+    e.tool = Tool::ZoneHole;
+    e.poly_mode = PolyMode::Circle;
+    e.click(p(20.0, 20.0));
+    e.click(p(23.0, 20.0));
+    assert_eq!(e.board.zones.len(), 1);
+    assert_eq!(e.board.zones[0].holes.len(), 1);
+    assert!((area(&e.board.zones[0].holes[0]) - std::f64::consts::PI * 9.0).abs() < 0.5);
+    // a right click drops the centre that was clicked
+    e.click(p(30.0, 30.0));
+    assert!(e.pending.is_some());
+    e.leave_tool();
+    assert!(e.pending.is_none() && e.tool == Tool::ZoneHole);
+}
+
 #[test]
 fn closing_a_polygon_by_clicking_the_first_point() {
     let mut e = BoardEditor::default();

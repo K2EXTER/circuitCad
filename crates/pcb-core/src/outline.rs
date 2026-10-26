@@ -78,6 +78,54 @@ pub fn round_corners(poly: &[Point], radius: f64) -> Vec<Point> {
     out
 }
 
+/// The points of the arc that starts at `a`, passes through `m` and ends at `b` (`a` is not in the list, `b` is). `None` when the
+/// three points are on one line (there is no circle): the caller draws a straight line.
+pub fn arc_through(a: Point, m: Point, b: Point) -> Option<Vec<Point>> {
+    let d = 2.0 * (a.x * (m.y - b.y) + m.x * (b.y - a.y) + b.x * (a.y - m.y));
+    if d.abs() < 1e-12 {
+        return None;
+    }
+    let (sa, sm, sb) = (a.x * a.x + a.y * a.y, m.x * m.x + m.y * m.y, b.x * b.x + b.y * b.y);
+    let c = Point::new((sa * (m.y - b.y) + sm * (b.y - a.y) + sb * (a.y - m.y)) / d, (sa * (b.x - m.x) + sm * (a.x - b.x) + sb * (m.x - a.x)) / d);
+    let r = c.dist(a);
+    let ang = |p: Point| (p.y - c.y).atan2(p.x - c.x);
+    let (a0, am, a1) = (ang(a), ang(m), ang(b));
+    let norm = |x: f64| x.rem_euclid(2.0 * PI);
+    // counter-clockwise when the middle point is reached before the end going that way, else clockwise
+    let ccw = norm(am - a0) < norm(a1 - a0);
+    let sweep = if ccw { norm(a1 - a0) } else { -norm(a0 - a1) };
+    Some(arc_points(c, r, a0, sweep))
+}
+
+/// The points of the arc that starts at `a` going in the direction `t` (the arc is tangent to it there) and ends at `b`. `None` when
+/// `b` lies on the line of `t` (a straight line).
+pub fn arc_tangent(a: Point, t: (f64, f64), b: Point) -> Option<Vec<Point>> {
+    let t = unit(t)?;
+    let n = (-t.1, t.0);
+    let (dx, dy) = (b.x - a.x, b.y - a.y);
+    let denom = 2.0 * (dx * n.0 + dy * n.1);
+    if denom.abs() < 1e-9 {
+        return None;
+    }
+    let r = (dx * dx + dy * dy) / denom; // signed: positive when the centre is on the left of the direction
+    let c = Point::new(a.x + n.0 * r, a.y + n.1 * r);
+    let (a0, a1) = ((a.y - c.y).atan2(a.x - c.x), (b.y - c.y).atan2(b.x - c.x));
+    let norm = |x: f64| x.rem_euclid(2.0 * PI);
+    let sweep = if r > 0.0 { norm(a1 - a0) } else { -norm(a0 - a1) };
+    Some(arc_points(c, r.abs(), a0, sweep))
+}
+
+/// The points along an arc of centre `c` and radius `r` from the angle `a0` turning by `sweep` (radians, negative: clockwise), the start left out.
+fn arc_points(c: Point, r: f64, a0: f64, sweep: f64) -> Vec<Point> {
+    let steps = ((sweep.abs() / arc_step(r)).ceil() as usize).max(1);
+    (1..=steps)
+        .map(|s| {
+            let a = a0 + sweep * s as f64 / steps as f64;
+            Point::new(c.x + r * a.cos(), c.y + r * a.sin())
+        })
+        .collect()
+}
+
 /// A rectangle with rounded corners (`radius` is limited to half of the shorter side).
 pub fn rounded_rect(x0: f64, y0: f64, x1: f64, y1: f64, radius: f64) -> Vec<Point> {
     let (lo, hi) = (Point::new(x0.min(x1), y0.min(y1)), Point::new(x0.max(x1), y0.max(y1)));
@@ -126,6 +174,33 @@ mod tests {
         // a polygon corner whose neighbours are close gets a smaller arc, not a crossing path
         let tri = round_corners(&[Point::new(0.0, 0.0), Point::new(10.0, 0.0), Point::new(5.0, 1.0)], 3.0);
         assert!(tri.len() > 3 && signed_area(&tri) > 0.0);
+    }
+
+    #[test]
+    fn an_arc_through_three_points_follows_the_circle_and_ends_at_the_last() {
+        // a half circle of radius 5 from (-5,0) over the top (0,5) to (5,0)
+        let up = arc_through(Point::new(-5.0, 0.0), Point::new(0.0, 5.0), Point::new(5.0, 0.0)).unwrap();
+        assert!(up.last().unwrap().dist(Point::new(5.0, 0.0)) < 1e-9);
+        assert!(up.iter().all(|p| (p.dist(Point::new(0.0, 0.0)) - 5.0).abs() < 1e-6 && p.y >= -1e-9), "over the top");
+        // the same ends through the bottom go the other way round
+        let down = arc_through(Point::new(-5.0, 0.0), Point::new(0.0, -5.0), Point::new(5.0, 0.0)).unwrap();
+        assert!(down.iter().all(|p| p.y <= 1e-9));
+        // three points on a line: no arc
+        assert!(arc_through(Point::new(0.0, 0.0), Point::new(1.0, 0.0), Point::new(2.0, 0.0)).is_none());
+    }
+
+    #[test]
+    fn a_tangent_arc_leaves_in_the_given_direction() {
+        // from the origin going right, to (5,5): a quarter circle of radius 5 turning left (centre (0,5))
+        let arc = arc_tangent(Point::new(0.0, 0.0), (1.0, 0.0), Point::new(5.0, 5.0)).unwrap();
+        assert!(arc.last().unwrap().dist(Point::new(5.0, 5.0)) < 1e-9);
+        assert!(arc.iter().all(|p| (p.dist(Point::new(0.0, 5.0)) - 5.0).abs() < 1e-6));
+        assert!(arc[0].x > 0.0 && arc[0].y >= 0.0 && arc[0].y < arc[0].x, "leaves to the right, then curves up: {:?}", arc[0]);
+        // turning right instead: centre below
+        let right = arc_tangent(Point::new(0.0, 0.0), (1.0, 0.0), Point::new(5.0, -5.0)).unwrap();
+        assert!(right.iter().all(|p| (p.dist(Point::new(0.0, -5.0)) - 5.0).abs() < 1e-6));
+        // straight ahead: none
+        assert!(arc_tangent(Point::new(0.0, 0.0), (1.0, 0.0), Point::new(5.0, 0.0)).is_none());
     }
 
     #[test]

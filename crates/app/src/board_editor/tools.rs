@@ -21,6 +21,7 @@ impl BoardEditor {
 
     pub(super) fn finish_polygon(&mut self) {
         let mut poly = std::mem::take(&mut self.poly);
+        self.arc_mid = None;
         while poly.len() > 1 && poly[poly.len() - 1].dist(poly[poly.len() - 2]) < 1e-9 {
             poly.pop();
         }
@@ -60,6 +61,108 @@ impl BoardEditor {
                 };
             }
             _ => {}
+        }
+    }
+
+    /// The direction the drawn outline leaves its last point in (for a tangent arc), if it has two points.
+    fn poly_tangent(&self) -> Option<(f64, f64)> {
+        let n = self.poly.len();
+        (n >= 2).then(|| (self.poly[n - 1].x - self.poly[n - 2].x, self.poly[n - 1].y - self.poly[n - 2].y))
+    }
+
+    /// The points a click at `p` would add in the arc modes (the arc, or the straight line when there is no arc).
+    fn arc_to(&self, p: Point) -> Vec<Point> {
+        let Some(&last) = self.poly.last() else { return vec![p] };
+        let arc = match self.poly_mode {
+            PolyMode::ArcThrough => self.arc_mid.and_then(|m| pcb_core::outline::arc_through(last, m, p)),
+            PolyMode::ArcTangent => self.poly_tangent().and_then(|t| pcb_core::outline::arc_tangent(last, t, p)),
+            _ => None,
+        };
+        arc.unwrap_or_else(|| vec![p])
+    }
+
+    /// The outline of the circle or rectangle being drawn from `self.pending` to `p`.
+    fn shape_to(&self, p: Point) -> Option<Vec<Point>> {
+        let a = self.pending?;
+        match self.poly_mode {
+            PolyMode::Circle => {
+                let r = a.dist(p);
+                (r > 1e-6).then(|| pcb_core::outline::ellipse(a.x - r, a.y - r, a.x + r, a.y + r))
+            }
+            PolyMode::Rect => ((a.x - p.x).abs() > 1e-6 && (a.y - p.y).abs() > 1e-6).then(|| pcb_core::outline::rounded_rect(a.x, a.y, p.x, p.y, self.shape_round)),
+            _ => None,
+        }
+    }
+
+    /// What is drawn from the last point to the cursor `p` for the picture while the polygon is drawn: the line, the arc or the shape.
+    pub(super) fn polygon_preview(&self, p: Point) -> Vec<Point> {
+        match self.poly_mode {
+            PolyMode::Lines => self.poly.last().map(|l| vec![*l, p]).unwrap_or_default(),
+            PolyMode::ArcThrough if self.arc_mid.is_none() => self.poly.last().map(|l| vec![*l, p]).unwrap_or_default(),
+            PolyMode::ArcThrough | PolyMode::ArcTangent => {
+                let mut v: Vec<Point> = self.poly.last().copied().into_iter().collect();
+                v.extend(self.arc_to(p));
+                v
+            }
+            PolyMode::Circle | PolyMode::Rect => {
+                let mut v = self.shape_to(p).unwrap_or_default();
+                if let Some(first) = v.first().copied() {
+                    v.push(first);
+                }
+                v
+            }
+        }
+    }
+
+    /// A click while a polygon is drawn: it adds a corner, an arc, or finishes a circle or a rectangle. A click on the first point closes it.
+    fn polygon_click(&mut self, p: Point) {
+        let near_first = self.poly.len() >= 3 && self.poly[0].dist(p) < 6.0 / self.zoom as f64;
+        match self.poly_mode {
+            PolyMode::Lines => {
+                if near_first {
+                    self.finish_polygon();
+                } else if self.poly.last().is_none_or(|l| l.dist(p) > 1e-9) {
+                    self.poly.push(p);
+                }
+            }
+            PolyMode::ArcThrough => {
+                if self.poly.is_empty() {
+                    self.poly.push(p);
+                } else if self.arc_mid.is_none() {
+                    self.arc_mid = Some(p);
+                    self.status = "円弧: 終点をクリック (途中の点を通る円弧になります)".into();
+                } else {
+                    let end = if near_first { self.poly[0] } else { p };
+                    let pts = self.arc_to(end);
+                    self.arc_mid = None;
+                    self.poly.extend(pts);
+                    if near_first {
+                        self.finish_polygon();
+                    }
+                }
+            }
+            PolyMode::ArcTangent => {
+                if self.poly.is_empty() {
+                    self.poly.push(p);
+                } else if near_first {
+                    let pts = self.arc_to(self.poly[0]);
+                    self.poly.extend(pts);
+                    self.finish_polygon();
+                } else {
+                    let pts = self.arc_to(p);
+                    self.poly.extend(pts);
+                }
+            }
+            PolyMode::Circle | PolyMode::Rect => {
+                if self.pending.is_none() {
+                    self.pending = Some(p);
+                    self.status = if self.poly_mode == PolyMode::Circle { "円: 円周の点をクリック (半径が決まります)".into() } else { "長方形: 反対側の角をクリック".into() };
+                } else if let Some(shape) = self.shape_to(p) {
+                    self.pending = None;
+                    self.poly = shape;
+                    self.finish_polygon();
+                }
+            }
         }
     }
 
@@ -103,13 +206,7 @@ impl BoardEditor {
                     }
                 }
             },
-            Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole => {
-                if self.poly.len() >= 3 && self.poly[0].dist(p) < 6.0 / self.zoom as f64 {
-                    self.finish_polygon();
-                } else if self.poly.last().is_none_or(|l| l.dist(p) > 1e-9) {
-                    self.poly.push(p);
-                }
-            }
+            Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole => self.polygon_click(p),
             Tool::PadTh => {
                 self.checkpoint();
                 self.board.pads.push(Pad::new(p, PadShape::Circle { d: self.pad_size }, Some(self.pad_drill), self.side.outer()));

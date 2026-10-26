@@ -108,6 +108,7 @@ impl BoardEditor {
         if pressed(Key::Escape) {
             self.clear_tracking();
             self.pending = None;
+            self.arc_mid = None;
             self.poly.clear();
             self.multi.clear();
             self.boxsel = None;

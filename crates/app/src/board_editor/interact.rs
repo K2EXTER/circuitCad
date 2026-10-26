@@ -168,6 +168,10 @@ impl BoardEditor {
             self.status = "幹の選びを取り消しました (もう一度右クリックで選択ツールに戻ります)".into();
             return true;
         }
+        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::ZoneHole) && (self.arc_mid.take().is_some() || self.pending.take().is_some()) {
+            self.status = "円弧・円・長方形の途中の点を取り消しました (もう一度右クリックで、描きかけの多角形を確定します)".into();
+            return true;
+        }
         if self.pending.take().is_some() {
             self.status = "配線を確定しました (もう一度右クリックで選択ツールに戻ります)".into();
             return true;
