@@ -759,6 +759,34 @@ fn turn_copies(board: &mut Board, groups: &[Vec<Vec<usize>>], names: &[String], 
     }
 }
 
+/// ICs that share nets want to sit close: a bus between two ICs (the outputs of one that go to the other) is many wires that all have to run
+/// the distance between them. For every pair of ICs (8 pads or more) that have pads on one net, a two-pin net of one pad of each is added
+/// twice over (the placement adds up the lengths of nets, so the pair counts more the more nets they share).
+fn ic_pair_nets(board: &Board, items: &[(String, Point, f64, f64)], gap: f64, label: f64, poured: &[String]) -> Vec<NetPins> {
+    let index = |r: &str| items.iter().position(|it| it.0 == r);
+    let offset = |pad: &Pad, i: usize| (i, pad.pos.x - items[i].1.x + gap / 2.0, pad.pos.y - items[i].1.y + gap / 2.0 + label);
+    let count = |r: &str| board.pads.iter().filter(|p| p.refdes == r).count();
+    let ics: Vec<&Part> = board.parts.iter().filter(|p| count(&p.refdes) >= 8 && p.refdes.starts_with('U')).collect();
+    let mut out: Vec<NetPins> = vec![];
+    for (a, ia) in ics.iter().enumerate() {
+        for ib in &ics[a + 1..] {
+            let (Some(i), Some(j)) = (index(&ia.refdes), index(&ib.refdes)) else { continue };
+            let nets_a: std::collections::BTreeSet<&str> = board.pads.iter().filter(|p| p.refdes == ia.refdes && !p.net.is_empty() && !poured.contains(&p.net)).map(|p| p.net.as_str()).collect();
+            for net in board.pads.iter().filter(|p| p.refdes == ib.refdes && nets_a.contains(p.net.as_str())).map(|p| p.net.as_str()).collect::<std::collections::BTreeSet<_>>() {
+                // a net on many ICs (a supply, a bus to all of them) says little: only nets of a few pads
+                if board.pads.iter().filter(|p| p.net == net).count() > 8 {
+                    continue;
+                }
+                let (Some(pa), Some(pb)) = (board.pads.iter().find(|p| p.refdes == ia.refdes && p.net == net), board.pads.iter().find(|p| p.refdes == ib.refdes && p.net == net)) else { continue };
+                for _ in 0..2 {
+                    out.push(vec![offset(pa, i), offset(pb, j)]);
+                }
+            }
+        }
+    }
+    out
+}
+
 fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
     // a refusal must leave the board as it was (the pour wiring is taken out on the way)
     let backup = (!board.tracks.is_empty() || !board.vias.is_empty()).then(|| board.clone());
@@ -816,6 +844,9 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     let mut nets = nets;
     if tuning.bypass {
         nets.extend(bypass_nets(board, &items, gap, label));
+    }
+    if tuning.arrays {
+        nets.extend(ic_pair_nets(board, &items, gap, label, &poured));
     }
     // copies of one small structure become one item each (laid out alike in a grid); the placement works on those
     let sheet_name = |i: usize| board.part_sheets.get(&items[i].0).cloned().unwrap_or_default();
