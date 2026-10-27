@@ -266,7 +266,7 @@ impl Session {
                             board.tracks = before;
                             return Err("track: it touches no pad, track or via (it would float): taken back. Start it on a pad or a track; float=1 allows it".into());
                         }
-                        let drc = pcb_core::drc::check(board).len();
+                        let drc = pcb_core::drc::check_final(board).len();
                         Ok(obj(json!({"laid": pts.len() - 1, "layer": layer_name(side), "width": width, "length_mm": (length * 100.0).round() / 100.0, "net": nets.iter().next(), "drc_violations": drc})))
                     }
                     Some("remove") => {
@@ -338,7 +338,7 @@ impl Session {
                         board.vias.push(pcb_core::model::Via { pos: p, diameter: dia, drill, net: opt(&kv, "net").unwrap_or("").to_string() });
                         let conn = pcb_core::drc::connectivity(board);
                         let net = conn.via_net(board.vias.len() - 1).map(str::to_string);
-                        Ok(obj(json!({"at": [p.x, p.y], "diameter": dia, "drill": drill, "net": net, "drc_violations": pcb_core::drc::check(board).len()})))
+                        Ok(obj(json!({"at": [p.x, p.y], "diameter": dia, "drill": drill, "net": net, "drc_violations": pcb_core::drc::check_final(board).len()})))
                     }
                     Some("remove") => {
                         let p = at(pos.get(1).ok_or("board via remove x,y [r=0.3]")?)?;
@@ -659,7 +659,7 @@ impl Session {
                 let lacking = pcb_core::drc::thermal_via_checks(board).len();
                 let added = pcb_core::drc::add_thermal_vias(board);
                 let still = pcb_core::drc::thermal_via_checks(board).len();
-                Ok(obj(json!({"pads_lacking": lacking, "vias_added": added, "pads_still_lacking": still, "drc_violations": pcb_core::drc::check(board).len()})))
+                Ok(obj(json!({"pads_lacking": lacking, "vias_added": added, "pads_still_lacking": still, "drc_violations": pcb_core::drc::check_final(board).len()})))
             }
             "improve" => {
                 // make the routes of the whole board shorter and its vias fewer: nets that detour (or carry a via) are ripped up
@@ -720,14 +720,14 @@ impl Session {
             }
             "drc" => {
                 let board = self.board_mut()?;
-                let v = pcb_core::drc::check(board);
+                let v = pcb_core::drc::check_final(board);
                 let list: Vec<Value> = v.iter().take(60).map(|x| json!({"message": x.message, "at": [x.at.x, x.at.y]})).collect();
                 Ok(obj(json!({"violations": v.len(), "shown": list.len(), "list": list})))
             }
             "status" => {
                 let board = self.board_mut()?;
                 let unrouted = pcb_core::ratsnest::ratsnest(board).len();
-                let drc = pcb_core::drc::check(board).len();
+                let drc = pcb_core::drc::check_final(board).len();
                 Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "drc_violations": drc})))
             }
             "currents" => {

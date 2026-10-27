@@ -35,6 +35,11 @@ impl Board {
             .filter(|p| p.refdes == part.refdes)
             .map(|p| (p.pin.clone(), p.net.clone()))
             .collect();
+        // a part given another footprint: its pads are not where they were, and the tracks that ended on them must follow
+        let old_pads: Vec<Pad> = match self.parts.iter().find(|p| p.refdes == part.refdes) {
+            Some(old) if old.footprint != part.footprint => self.pads.iter().filter(|p| p.refdes == part.refdes).cloned().collect(),
+            _ => vec![],
+        };
         self.pads.retain(|p| p.refdes != part.refdes);
         self.silk.retain(|s| s.refdes != part.refdes);
         // a designator the user turned stays turned when the part is placed again
@@ -126,11 +131,44 @@ impl Board {
         label.pos = Point::new((x0 + x1) / 2.0 + off.x, y1 + m + 0.2 + half_h + off.y);
         self.texts.push(label);
 
+        if !old_pads.is_empty() {
+            self.follow_pads(&part.refdes, &old_pads);
+        }
         match self.parts.iter_mut().find(|p| p.refdes == part.refdes) {
             Some(slot) => *slot = part,
             None => self.parts.push(part),
         }
         Ok(())
+    }
+
+    /// After a part got another footprint: move the end of every track that sat on one of its old pads to the centre of the
+    /// new pad of the same pin (the nearest one when a pin has several). Returns how many track ends moved.
+    fn follow_pads(&mut self, refdes: &str, old_pads: &[Pad]) -> usize {
+        let new_pads: Vec<Pad> = self.pads.iter().filter(|p| p.refdes == refdes).cloned().collect();
+        let mut moved = 0;
+        for t in &mut self.tracks {
+            for end in [&mut t.a, &mut t.b] {
+                let Some(old) = old_pads.iter().find(|p| {
+                    let (w, h) = p.shape.size();
+                    (p.drill.is_some() || p.side == t.side)
+                        && (end.x - p.pos.x).abs() <= w / 2.0 + 1e-6
+                        && (end.y - p.pos.y).abs() <= h / 2.0 + 1e-6
+                }) else {
+                    continue;
+                };
+                let target = new_pads
+                    .iter()
+                    .filter(|p| p.pin == old.pin && (p.drill.is_some() || p.side == t.side))
+                    .min_by(|a, b| a.pos.dist(*end).total_cmp(&b.pos.dist(*end)));
+                if let Some(n) = target
+                    && n.pos != *end
+                {
+                    *end = n.pos;
+                    moved += 1;
+                }
+            }
+        }
+        moved
     }
 
     /// Move a part's designator text to `to` (its centre). The offset from the automatic spot is kept, so the text stays
@@ -187,5 +225,28 @@ impl Board {
             part.rot = rot % 4;
             let _ = self.set_part(part);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_track_end_follows_its_pad_when_the_footprint_changes() {
+        let mut b = Board::new("t", 40.0, 30.0);
+        let part = |fp: &str| Part { refdes: "C1".into(), value: "1n".into(), footprint: fp.into(), pos: Point::new(20.0, 15.0), rot: 0, side: Side::Top };
+        b.set_part(part("C_0603")).unwrap();
+        let p1 = b.pads.iter().find(|p| p.pin == "1").unwrap().pos;
+        let far = Point::new(p1.x - 3.0, p1.y);
+        b.tracks.push(Track { side: Side::Top, a: far, b: p1, width: 0.25 });
+        b.set_part(part("C_0402")).unwrap();
+        let n1 = b.pads.iter().find(|p| p.pin == "1").unwrap().pos;
+        assert_ne!(n1, p1);
+        assert_eq!(b.tracks[0].b, n1, "the end on the pad moves with it");
+        assert_eq!(b.tracks[0].a, far, "the other end stays");
+        // the same footprint again changes nothing
+        b.set_part(part("C_0402")).unwrap();
+        assert_eq!(b.tracks[0].b, n1);
     }
 }

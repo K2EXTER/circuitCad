@@ -8,7 +8,7 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - スルーホールとビアは全層につながる(ブラインド/ベリードビアは未対応)。
   - DRC・ラッツネスト・自動配線(`autoroute.rs` は N 層格子)・IR ドロップ・ガーバー(`Copper,L2,Inr`、`export.rs` が内層を `.G1`… で出す)・発注前チェックが対応。
   - GUIは `board_editor/layers.rs`(層数 2/4/6/8、減らすと内層の銅があれば断る。`layer_overlay` は画面右上の折りたたみ式の層パネル=作業層の選択と層ごとの表示/非表示、Lキーで順送り)。
-  - `Hole`=めっきなしの穴(長穴 `slot`/`slot_v`、部品付きは `refdes`。部品の穴は `parts.rs` の `set_part` が出し入れして部品に追従)、`Pad.slot`=めっき長穴。
+  - `Hole`=めっきなしの穴(長穴 `slot`/`slot_v`、部品付きは `refdes`。部品の穴は `parts.rs` の `set_part` が出し入れして部品に追従)、フットプリントを替えた部品は、古いパッドの上で終わっていた配線の端が同じピンの新しいパッドの中心へ動く(`set_part` の `follow_pads`)、`Pad.slot`=めっき長穴。
   - `footprints.rs` の `Footprint.holes`(`FpHole`)と `package.rs` の `Explicit{pads,holes}`(`PadSpec.slot`/`HoleSpec`)が元。
   - 長穴は `excellon.rs` が `G85` で出し、`gerber_view.rs` の `parse_excellon_slots` が読み戻す。
   - 部品作成フォームの「追加のパッドと穴」(`part_form/` の `parse_extras`、脚/穴/パッド)が入力口、見本は `USB_DEMO_TH`
