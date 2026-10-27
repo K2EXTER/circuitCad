@@ -130,6 +130,111 @@ pub(crate) fn find(board: &Board, items: &[Item], poured: &[String], sheet: &dyn
     by_signature.into_values().filter(|copies| copies.len() >= 2).collect()
 }
 
+/// Copies that go together in a bigger copy: the range stage (a switch, its resistor, its capacitor) and the LED of that range are three
+/// groups of copies, and copy k of each is joined to copy k of the others by the range's own net. Copies joined by a net that touches few parts
+/// (a net of an IC's output is such a net: it is a port of every copy it reaches) make one piece; pieces that are made of copies of the same
+/// groups are copies of each other, and are laid out alike as one block (`channels`). Returns the groups of the pieces; the copies that are in
+/// no such piece stay as they were.
+pub(crate) fn merge_channels(board: &Board, items: &[Item], groups: Vec<Vec<Vec<usize>>>, poured: &[String]) -> Vec<Vec<Vec<usize>>> {
+    // a group whose copies would end up some in a bigger copy and some alone (the ten LEDs, of which five hang on the range stages) is left
+    // out, so that its copies stay together in one grid: the pieces are worked out again without it
+    let mut left_out: BTreeSet<usize> = BTreeSet::new();
+    loop {
+        let (out, partial) = merge_channels_without(board, items, &groups, poured, &left_out);
+        if partial.is_empty() {
+            return out;
+        }
+        // the group with the smallest part of its copies in pieces goes first; the others may be whole once it is gone
+        let Some(&worst) = partial.iter().min_by_key(|(_, in_piece, all)| in_piece * 1000 / all).map(|(g, ..)| g) else { return out };
+        left_out.insert(worst);
+    }
+}
+
+fn merge_channels_without(board: &Board, items: &[Item], groups: &[Vec<Vec<usize>>], poured: &[String], left_out: &BTreeSet<usize>) -> (Vec<Vec<Vec<usize>>>, Vec<(usize, usize, usize)>) {
+    // which copy of which group a part belongs to
+    let mut node_of: HashMap<usize, usize> = HashMap::new();
+    let mut nodes: Vec<(usize, usize)> = vec![];
+    for (g, copies) in groups.iter().enumerate().filter(|(g, _)| !left_out.contains(g)) {
+        for (c, copy) in copies.iter().enumerate() {
+            for &i in copy {
+                node_of.insert(i, nodes.len());
+            }
+            nodes.push((g, c));
+        }
+    }
+    let index: HashMap<&str, usize> = items.iter().enumerate().map(|(i, it)| (it.0.as_str(), i)).collect();
+    let mut by_net: BTreeMap<&str, BTreeSet<usize>> = BTreeMap::new();
+    for p in board.pads.iter().filter(|p| !p.net.is_empty() && !poured.contains(&p.net)) {
+        if let Some(&i) = index.get(p.refdes.as_str()) {
+            by_net.entry(p.net.as_str()).or_default().insert(i);
+        }
+    }
+    let mut parent: Vec<usize> = (0..nodes.len()).collect();
+    fn root(parent: &mut [usize], i: usize) -> usize {
+        let mut r = i;
+        while parent[r] != r {
+            r = parent[r];
+        }
+        let mut c = i;
+        while parent[c] != r {
+            let next = parent[c];
+            parent[c] = r;
+            c = next;
+        }
+        r
+    }
+    for parts in by_net.values().filter(|p| p.len() <= HUB_NET) {
+        let touched: BTreeSet<usize> = parts.iter().filter_map(|i| node_of.get(i).copied()).collect();
+        // a net that reaches two copies of one group is a bus across the copies, not the link of one piece
+        let groups_hit: BTreeSet<usize> = touched.iter().map(|&n| nodes[n].0).collect();
+        if touched.len() < 2 || groups_hit.len() != touched.len() {
+            continue;
+        }
+        let first = *touched.iter().next().unwrap();
+        for &n in touched.iter().skip(1) {
+            let (a, b) = (root(&mut parent, n), root(&mut parent, first));
+            if a != b {
+                parent[a] = b;
+            }
+        }
+    }
+    let mut pieces: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for n in 0..nodes.len() {
+        let r = root(&mut parent, n);
+        pieces.entry(r).or_default().push(n);
+    }
+    // a piece is valid when it has at most one copy of each group; its signature is the groups it is made of
+    let mut by_signature: BTreeMap<Vec<usize>, Vec<Vec<usize>>> = BTreeMap::new();
+    let mut used: BTreeSet<usize> = BTreeSet::new();
+    for members in pieces.values().filter(|m| m.len() >= 2) {
+        let mut gs: Vec<usize> = members.iter().map(|&n| nodes[n].0).collect();
+        gs.sort_unstable();
+        if gs.windows(2).any(|w| w[0] == w[1]) {
+            continue;
+        }
+        let mut ordered = members.clone();
+        ordered.sort_by_key(|&n| nodes[n].0);
+        let parts: Vec<usize> = ordered.iter().flat_map(|&n| groups[nodes[n].0][nodes[n].1].iter().copied()).collect();
+        by_signature.entry(gs).or_default().push(parts);
+        used.extend(members.iter().copied());
+    }
+    let mut out: Vec<Vec<Vec<usize>>> = by_signature.into_values().filter(|pieces| pieces.len() >= 2).collect();
+    // the copies that are in no valid, repeated piece stay in their own groups
+    let merged: BTreeSet<usize> = out.iter().flatten().flatten().copied().collect();
+    let mut partial: Vec<(usize, usize, usize)> = vec![];
+    for (g, copies) in groups.iter().enumerate() {
+        let in_piece = copies.iter().filter(|c| c.iter().any(|i| merged.contains(i))).count();
+        if in_piece > 0 && in_piece < copies.len() && !left_out.contains(&g) {
+            partial.push((g, in_piece, copies.len()));
+        }
+        let rest: Vec<Vec<usize>> = copies.iter().filter(|c| !c.iter().any(|i| merged.contains(i))).cloned().collect();
+        if rest.len() >= 2 {
+            out.push(rest);
+        }
+    }
+    (out, partial)
+}
+
 /// A designator as (letters, number): "R12" sorts after "R9".
 pub(crate) fn natural(r: &str) -> (String, u64) {
     let letters: String = r.chars().take_while(|c| !c.is_ascii_digit()).collect();
@@ -222,6 +327,52 @@ mod tests {
         assert!(find(&b, &items, &["GND".to_string()], &|_| "s".to_string()).is_empty());
     }
 
+    /// Stages (R, C) and, on some of them, an LED: copy k of the stage and the LED of the same range are joined by the range's own net, which
+    /// also reaches an IC (a port): `n` stages, the LED on the first `leds` of them.
+    fn ranges(n: usize, leds: usize) -> Board {
+        let mut b = Board::new("t", 10.0, 10.0);
+        b.add_footprint(crate::package::PackageSpec::Dual { pins: 16, pitch: 2.54, row_spacing: 7.62, pad_len: 1.6, pad_width: 1.6, drill: Some(0.8) }.build("DIP-16").unwrap());
+        let mut parts = vec![part("U1", "DIP-16")];
+        let mut nets = vec![];
+        for k in 1..=n {
+            parts.push(part(&format!("R{k}"), "R_0805"));
+            parts.push(part(&format!("C{k}"), "C_0805"));
+            // the range's net: its resistor, its LED (when it has one) and a pin of the IC
+            let mut pins: Vec<(String, String)> = vec![(format!("R{k}"), "1".into()), ("U1".into(), k.to_string())];
+            if k <= leds {
+                parts.push(part(&format!("D{k}"), "R_0805"));
+                pins.push((format!("D{k}"), "1".into()));
+            }
+            nets.push(NetlistNet { name: format!("RANGE{k}"), pins });
+            nets.push(net(&format!("MID{k}"), &[(&format!("R{k}"), "2"), (&format!("C{k}"), "1")]));
+            // the LED's own side
+            if k <= leds {
+                nets.push(net(&format!("LED{k}"), &[(&format!("D{k}"), "2"), (&format!("C{k}"), "2")]));
+            }
+        }
+        import(&mut b, &parts, &nets);
+        b
+    }
+
+    #[test]
+    fn copies_joined_by_a_range_net_make_a_bigger_copy_but_a_half_used_group_is_left_whole() {
+        // 4 ranges, each with its stage (R, C) and its LED: (R, C, D) are one bigger copy, four times over
+        let b = ranges(4, 4);
+        let items = items_of(&b);
+        let found = find(&b, &items, &[], &|_| "s".to_string());
+        let merged = merge_channels(&b, &items, found.clone(), &[]);
+        assert!(merged.iter().any(|g| g.len() == 4 && g[0].len() >= 3), "{merged:?}");
+        // 6 ranges and an LED on two of them: the LED group would be used by two of its copies only, so it stays out and the stages merge
+        let b = ranges(6, 2);
+        let items = items_of(&b);
+        let found = find(&b, &items, &[], &|_| "s".to_string());
+        let merged = merge_channels(&b, &items, found, &[]);
+        for g in &merged {
+            // no group mixes copies of different sizes
+            assert!(g.iter().all(|c| c.len() == g[0].len()), "{merged:?}");
+        }
+    }
+
     #[test]
     fn designators_sort_by_their_number() {
         assert!(natural("R9") < natural("R12"));
@@ -245,6 +396,7 @@ mod tests {
         let poured: Vec<String> = b.zones.iter().map(|z| z.net.clone()).collect();
         let sheet = |i: usize| b.part_sheets.get(&items[i].0).cloned().unwrap_or_default();
         let found = find(&b, &items, &poured, &sheet);
+        let found = merge_channels(&b, &items, found, &poured);
         for g in &found {
             eprintln!("{} copies of {} parts: {:?}", g.len(), g[0].len(), g.iter().map(|c| c.iter().map(|&i| items[i].0.as_str()).collect::<Vec<_>>().join("+")).collect::<Vec<_>>());
         }

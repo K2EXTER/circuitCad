@@ -75,6 +75,9 @@ pub struct Tuning {
     pub sheets: bool,
     /// Lay out copies of one small structure (eight range switches, ten LEDs with their resistors) alike, in a regular grid (see `build_arrays`).
     pub arrays: bool,
+    /// Copies that go together (a range stage and the LED of that range) are one bigger copy (see `replicas::merge_channels`). Off by default:
+    /// it shortens the wiring where the LEDs go with the stages, but breaks up a row of LEDs of which only some hang on a stage.
+    pub channels: bool,
 }
 
 impl Tuning {
@@ -82,9 +85,9 @@ impl Tuning {
     /// parts can sit closer.
     pub fn for_board(board: &Board) -> Self {
         if board.zones.iter().any(|z| !z.net.is_empty()) {
-            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: false, arrays: true }
+            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: false, arrays: true, channels: false }
         } else {
-            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: false, arrays: true }
+            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: false, arrays: true, channels: false }
         }
     }
 }
@@ -818,6 +821,34 @@ fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<Ic
             assigned.entry(ic.refdes.clone()).or_default().push(cap.refdes.clone());
         }
     }
+    // the small parts that hang on one IC and nothing else of size (the resistors round an op amp, a filter on one input): on the nets they
+    // share with it, which are not hubs, they meet that one IC and no other IC or header
+    let mut sat_net: std::collections::BTreeMap<String, String> = Default::default();
+    let taken: std::collections::BTreeSet<String> = assigned.values().flatten().cloned().collect();
+    for part in board.parts.iter().filter(|p| !skip.contains(&p.refdes) && !p.refdes.starts_with('U') && count(&p.refdes) <= SATELLITE_PADS && !taken.contains(&p.refdes)) {
+        let mut touched: std::collections::BTreeMap<&str, &str> = Default::default();
+        let mut other_anchor = false;
+        for pad in board.pads.iter().filter(|p| p.refdes == part.refdes && !p.net.is_empty()) {
+            let on: std::collections::BTreeSet<&str> = board.pads.iter().filter(|q| q.net == pad.net).map(|q| q.refdes.as_str()).collect();
+            if on.len() > 6 {
+                continue;
+            }
+            for r in on.iter().filter(|r| count(r) >= 8) {
+                if r.starts_with('U') {
+                    touched.insert(r, pad.net.as_str());
+                } else {
+                    other_anchor = true;
+                }
+            }
+        }
+        if touched.len() == 1 && !other_anchor {
+            let (ic, net) = touched.into_iter().next().unwrap();
+            if ics.iter().any(|i| i.refdes == ic) {
+                sat_net.insert(part.refdes.clone(), net.to_string());
+                assigned.entry(ic.to_string()).or_default().push(part.refdes.clone());
+            }
+        }
+    }
     let mut out = vec![];
     for (ic_name, caps) in assigned {
         let Some(ic) = board.parts.iter().find(|p| p.refdes == ic_name) else { continue };
@@ -844,8 +875,12 @@ fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<Ic
         let mut block = IcBlock { ic: ic_name.clone(), caps: vec![] };
         for c in &caps {
             let cap_pads: Vec<Pad> = scratch.pads.iter().filter(|p| &p.refdes == c).cloned().collect();
-            let Some(sp) = cap_pads.iter().find(|p| supply(&p.net) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))).cloned() else { continue };
-            let other_net = cap_pads.iter().find(|q| q.net != sp.net && rail(&q.net)).map(|q| q.net.clone());
+            let sp = match sat_net.get(c) {
+                Some(net) => cap_pads.iter().find(|p| &p.net == net).cloned(),
+                None => cap_pads.iter().find(|p| supply(&p.net) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))).cloned(),
+            };
+            let Some(sp) = sp else { continue };
+            let other_net = if sat_net.contains_key(c) { None } else { cap_pads.iter().find(|q| q.net != sp.net && rail(&q.net)).map(|q| q.net.clone()) };
             let pins: Vec<Pad> = scratch.pads.iter().filter(|p| p.refdes == ic_name && p.net == sp.net).cloned().collect();
             let other_pins: Vec<Pad> = other_net.map_or(vec![], |n| scratch.pads.iter().filter(|p| p.refdes == ic_name && p.net == n).cloned().collect());
             // the boxes in the way: the IC and the capacitors already put
@@ -936,6 +971,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         let skip: Vec<String> = if tuning.skip_poured { board.zones.iter().map(|z| z.net.clone()).filter(|n| !n.is_empty()).collect() } else { vec![] };
         let sheet_by_name = |i: usize| board.part_sheets.get(&names[i]).cloned().unwrap_or_default();
         let groups = replicas::find(board, &dummy, &skip, &sheet_by_name);
+        let groups = if tuning.channels { replicas::merge_channels(board, &dummy, groups, &skip) } else { groups };
         turn_copies(board, &groups, &names, gap, label);
         in_copies = groups.iter().flat_map(|g| g.iter().flat_map(|c| c.iter().map(|&i| names[i].clone()))).collect();
     }
@@ -976,6 +1012,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     // copies of one small structure become one item each (laid out alike in a grid); the placement works on those
     let sheet_name = |i: usize| board.part_sheets.get(&items[i].0).cloned().unwrap_or_default();
     let copies = if tuning.arrays { replicas::find(board, &items, &poured, &sheet_name) } else { vec![] };
+    let copies = if tuning.arrays && tuning.channels { replicas::merge_channels(board, &items, copies, &poured) } else { copies };
     let mut arrays = build_arrays(&items, &nets, &degree, &copies, improve);
     // an IC with its capacitors is one item as well: the corners of the cells of its parts, from where the capacitors stand from the IC
     for b in &blocks {
@@ -1182,6 +1219,8 @@ fn turn_copies_toward_ports(board: &mut Board, groups: &[Vec<Vec<String>>]) {
 
 /// A bypass capacitor farther than this (mm) from the pin it serves is moved to the pin.
 const BYPASS_NEAR: f64 = 2.5;
+/// A part with this many pads or fewer can be a satellite of an IC (see `ic_blocks`).
+const SATELLITE_PADS: usize = 3;
 /// How far (mm) from the pin a place is looked for, and the distance between the places tried.
 const BYPASS_REACH: f64 = 6.0;
 const BYPASS_STEP: f64 = 1.0;
@@ -1505,8 +1544,8 @@ mod tests {
     #[test]
     fn turning_parts_shortens_the_airwires_and_keeps_the_board_clean() {
         let (mut plain, mut turned) = (divider(), divider());
-        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true }).unwrap();
-        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true }).unwrap();
+        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true, channels: true }).unwrap();
+        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true, channels: true }).unwrap();
         let (l0, l1) = (airwire_length(&plain), airwire_length(&turned));
         assert!(l1 < l0, "{l1} vs {l0}");
         assert!(drc::check(&turned).is_empty());
@@ -1537,8 +1576,8 @@ mod tests {
     #[test]
     fn improving_the_order_puts_the_parts_of_a_net_together() {
         let (mut plain, mut improved) = (fan(8), fan(8));
-        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false }).unwrap();
-        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false }).unwrap();
+        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true }).unwrap();
+        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true }).unwrap();
         // every resistor with its LED
         let pair_len = |b: &Board| -> f64 { (0..8).map(|k| { let at = |r: String| b.parts.iter().find(|p| p.refdes == r).unwrap().pos; at(format!("R{k:02}")).dist(at(format!("D{k:02}"))) }).sum() };
         let (l0, l1) = (pair_len(&plain), pair_len(&improved));
@@ -1546,7 +1585,7 @@ mod tests {
         assert!(drc::check(&improved).is_empty());
         // and the same board always gives the same placement
         let mut again = fan(8);
-        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false }).unwrap();
+        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true }).unwrap();
         assert!(again.parts.iter().zip(&improved.parts).all(|(a, b)| a.pos == b.pos));
     }
 
@@ -1662,7 +1701,7 @@ mod tests {
     fn alignment_does_not_add_centre_lines() {
         let rows = |align: bool| {
             let mut b = divider();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true, sheets: true, arrays: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true, sheets: true, arrays: true, channels: true }).unwrap();
             let mut ys: Vec<i64> = b.parts.iter().map(|p| (centre(&b, &p.refdes).y * 100.0).round() as i64).collect();
             ys.sort_unstable();
             ys.dedup();
@@ -1730,7 +1769,7 @@ mod tests {
             for p in b.pads.iter_mut().filter(|p| p.net == "GND") {
                 p.net = "VNEG".into();
             }
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true, channels: true }).unwrap();
             b
         };
         let (with, without) = (place_with(true), place_with(false));
@@ -1744,7 +1783,7 @@ mod tests {
     fn bypass_capacitors_sit_by_their_ic_supply_pin() {
         let place_with = |bypass: bool| {
             let mut b = ics_with_caps();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true, channels: true }).unwrap();
             b
         };
         let (with, without) = (place_with(true), place_with(false));
