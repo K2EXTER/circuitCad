@@ -511,6 +511,107 @@ fn sheet_groups(sheet: &[String]) -> Option<Vec<Vec<usize>>> {
 /// A block for every sheet (laid out as a circuit of its own, with the nets it has inside), then the blocks laid out the same way
 /// with the nets that run between sheets (one pin per block, at the middle of the sheet's pins on that net). The sheets are
 /// kept together instead of mixing with the parts they only share a net with.
+/// The squares (x, y, w, h) a block of parts covers, in the block's own coordinates.
+type Cells = Vec<(f64, f64, f64, f64)>;
+
+/// The raster of the nesting: the size of a pixel (mm).
+const NEST_PIXEL: f64 = 1.0;
+/// The places tried are this many pixels apart.
+const NEST_STEP: usize = 3;
+/// How many orders of the blocks are tried by `nest_blocks` besides the biggest first.
+const NEST_ORDERS: usize = 12;
+
+/// The blocks packed as the shapes they are, not as boxes: each is rasterised (its squares, grown by half the gap round them), and one after
+/// another, in an order, each goes to the place that makes the whole box smallest (a long thin box counted against), among the places where it
+/// does not cover what is there: a block can lie in the bay of another. Many orders are tried (the biggest first, then shuffled ones) and
+/// the best whole is kept: the box and the nets between the blocks (the pins of a block at the places its parts have). Returns the corner of each
+/// block, and the size of the whole.
+fn nest_blocks(shapes: &[Cells], nets: &[NetPins]) -> (Vec<(usize, f64, f64)>, f64, f64) {
+    let n = shapes.len();
+    // the pixels each block covers, and its size (the block's parts stand half the gap in from its corner: the squares are grown by the gap)
+    let masks: Vec<(Vec<(usize, usize)>, usize, usize)> = shapes
+        .iter()
+        .map(|cells| {
+            let mut px: std::collections::BTreeSet<(usize, usize)> = Default::default();
+            let (mut mw, mut mh) = (0usize, 0usize);
+            for &(x, y, w, h) in cells {
+                let (x0, y0, x1, y1) = (x, y, x + w + BLOCK_GAP, y + h + BLOCK_GAP);
+                let (i0, i1) = ((x0 / NEST_PIXEL).floor().max(0.0) as usize, (x1 / NEST_PIXEL).ceil() as usize);
+                let (j0, j1) = ((y0 / NEST_PIXEL).floor().max(0.0) as usize, (y1 / NEST_PIXEL).ceil() as usize);
+                for j in j0..j1 {
+                    for i in i0..i1 {
+                        px.insert((i, j));
+                    }
+                }
+                mw = mw.max(i1);
+                mh = mh.max(j1);
+            }
+            (px.into_iter().collect(), mw, mh)
+        })
+        .collect();
+    let area: usize = masks.iter().map(|m| m.1 * m.2).sum();
+    let side = ((area as f64) * 3.0).sqrt().ceil() as usize + masks.iter().map(|m| m.1.max(m.2)).max().unwrap_or(0);
+    let hpwl = |at: &[Option<(f64, f64)>]| -> f64 { nets.iter().map(|pins| net_hpwl(pins, |i| at[i])).sum() };
+    let score_of = |w: usize, h: usize, at: &[Option<(f64, f64)>]| -> f64 {
+        let (w, h) = (w as f64, h as f64);
+        let aspect = (w / h).max(h / w);
+        w * h * (1.0 + 0.5 * (aspect - 1.8).max(0.0)) + BLOCK_NET_WEIGHT * hpwl(at)
+    };
+    let pack = |order: &[usize]| -> (f64, Vec<(usize, usize)>, usize, usize) {
+        let mut occupied = vec![false; side * side];
+        let mut at: Vec<Option<(f64, f64)>> = vec![None; n];
+        let mut put: Vec<(usize, usize)> = vec![(0, 0); n];
+        let (mut bw, mut bh) = (0usize, 0usize);
+        for &b in order {
+            let (px, mw, mh) = (&masks[b].0, masks[b].1, masks[b].2);
+            let mut best: Option<(f64, usize, usize)> = None;
+            let mut y = 0;
+            while y + mh <= side {
+                let mut x = 0;
+                while x + mw <= side {
+                    // a place that would stretch the box much further than the best so far is not worth looking at
+                    let (nw, nh) = (bw.max(x + mw), bh.max(y + mh));
+                    if best.is_none_or(|bb| (nw * nh) as f64 <= bb.0 * 1.5 + 1.0) && px.iter().all(|&(i, j)| !occupied[(y + j) * side + x + i]) {
+                        at[b] = Some((x as f64 * NEST_PIXEL, y as f64 * NEST_PIXEL));
+                        let sc = score_of(nw, nh, &at);
+                        if best.is_none_or(|bb| sc < bb.0) {
+                            best = Some((sc, x, y));
+                        }
+                        at[b] = None;
+                    }
+                    x += NEST_STEP;
+                }
+                y += NEST_STEP;
+            }
+            let Some((_, x, y)) = best else { return (f64::MAX, put, side, side) };
+            for &(i, j) in px {
+                occupied[(y + j) * side + x + i] = true;
+            }
+            at[b] = Some((x as f64 * NEST_PIXEL, y as f64 * NEST_PIXEL));
+            put[b] = (x, y);
+            bw = bw.max(x + mw);
+            bh = bh.max(y + mh);
+        }
+        (score_of(bw, bh, &at), put, bw, bh)
+    };
+    let mut first: Vec<usize> = (0..n).collect();
+    first.sort_by_key(|&b| std::cmp::Reverse(masks[b].0.len()));
+    let mut best = pack(&first);
+    let mut rng = Rng(0x2545_F491_4F6C_DD1D);
+    for _ in 0..NEST_ORDERS.min(if n <= 3 { 6 } else { usize::MAX }) {
+        let mut order = first.clone();
+        for k in (1..n).rev() {
+            order.swap(k, rng.below(k + 1));
+        }
+        let r = pack(&order);
+        if r.0 < best.0 {
+            best = r;
+        }
+    }
+    let (_, put, bw, bh) = best;
+    (put.into_iter().enumerate().map(|(b, (x, y))| (b, x as f64 * NEST_PIXEL, y as f64 * NEST_PIXEL)).collect(), bw as f64 * NEST_PIXEL, bh as f64 * NEST_PIXEL)
+}
+
 fn sheet_blocks(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize], groups: &[Vec<usize>], improve: bool) -> (Vec<(usize, f64, f64)>, f64, f64) {
     // each sheet on its own, in its own coordinates
     let mut local: Vec<(Vec<(usize, f64, f64)>, f64, f64)> = vec![];
@@ -530,7 +631,8 @@ fn sheet_blocks(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &
             .filter(|pins| pins.iter().any(|p| p.0 != pins[0].0))
             .collect();
         let tie = ties(&sub_nets, sub_items.len());
-        let (spots, w, h) = layout(&sub_items, &sub_nets, &sub_degree, &tie, improve, true, false);
+        // (a sheet grows round its biggest part, or is packed in rows, whichever has the shorter nets: the blocks are nested as the shapes they are)
+        let (spots, w, h) = layout(&sub_items, &sub_nets, &sub_degree, &tie, improve, false, false);
         // back to the numbers of `items`
         local.push((spots.into_iter().map(|(l, x, y)| (members[l], x, y)).collect(), w, h));
     }
@@ -553,8 +655,14 @@ fn sheet_blocks(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &
             block_nets.push(per.into_iter().map(|(k, (sx, sy, n))| (k, sx / n + BLOCK_GAP / 2.0, sy / n + BLOCK_GAP / 2.0)).collect());
         }
     }
-    let tie = ties(&block_nets, groups.len());
-    let (bspots, used_w, used_h) = layout(&block_items, &block_nets, &block_degree, &tie, improve, true, true);
+    let _ = (&block_items, &block_degree);
+    // the shapes of the blocks: the squares of their parts' cells
+    let shapes: Vec<Cells> = local.iter().map(|(spots, ..)| spots.iter().map(|&(i, x, y)| (x, y, items[i].2, items[i].3)).collect()).collect();
+    // (the pins of a block for the nets between blocks are at the places the parts have, from the block's corner, plus the half gap)
+    let (bspots, used_w, used_h) = if improve { nest_blocks(&shapes, &block_nets) } else {
+        let tie = ties(&block_nets, groups.len());
+        layout(&block_items, &block_nets, &block_degree, &tie, improve, true, true)
+    };
     let mut out = vec![];
     for (k, bx, by) in bspots {
         for &(i, x, y) in &local[k].0 {
@@ -1454,6 +1562,30 @@ mod tests {
         let again = b.clone();
         attach_bypass_caps(&mut b, (Point::new(0.0, 0.0), Point::new(100.0, 60.0)), &Default::default());
         assert!(b.parts.iter().zip(&again.parts).all(|(a, c)| a.pos == c.pos && a.rot == c.rot));
+    }
+
+    #[test]
+    fn blocks_are_nested_as_the_shapes_they_are() {
+        // two L-shaped blocks (an arm along the bottom, an arm up the side) and a small square that fits in the bay of an L
+        let l = |len: f64, arm: f64| -> Cells { vec![(0.0, 0.0, len, arm), (0.0, 0.0, arm, len)] };
+        let shapes = vec![l(24.0, 4.0), l(24.0, 4.0), vec![(0.0, 0.0, 6.0, 6.0)]];
+        let (put, w, h) = nest_blocks(&shapes, &[]);
+        assert_eq!(put.len(), 3);
+        let boxes: f64 = shapes.iter().map(|c| c.iter().map(|q| q.0 + q.2).fold(0.0, f64::max) * c.iter().map(|q| q.1 + q.3).fold(0.0, f64::max)).sum();
+        // the box of the whole is smaller than the boxes of the blocks added up (they lie in each other's bays)
+        assert!(w * h < boxes * 0.9, "{w} x {h} against {boxes}");
+        // and nothing covers anything: the squares of two blocks do not overlap
+        for (a, pa) in put.iter().enumerate() {
+            for (b, pb) in put.iter().enumerate().skip(a + 1) {
+                for ca in &shapes[a] {
+                    for cb in &shapes[b] {
+                        let (ax, ay) = (pa.1 + ca.0, pa.2 + ca.1);
+                        let (bx, by) = (pb.1 + cb.0, pb.2 + cb.1);
+                        assert!(!(ax < bx + cb.2 && bx < ax + ca.2 && ay < by + cb.3 && by < ay + ca.3), "blocks {a} and {b} overlap");
+                    }
+                }
+            }
+        }
     }
 
     #[test]
