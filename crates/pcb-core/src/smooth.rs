@@ -154,6 +154,39 @@ fn unit(from: Point, to: Point) -> (f64, f64, f64) {
     if l < 1e-9 { (0.0, 0.0, 0.0) } else { ((to.x - from.x) / l, (to.y - from.y) / l, l) }
 }
 
+/// How far a straight run goes on beyond `p`, where track `skip` ends and runs in direction `u`: through the points where one
+/// more track of the same width carries on in the same direction and nothing else is there (a run drawn in several pieces; the
+/// joint between the pieces is no reason to call the track short). 0 where something else ends, or the run turns.
+fn continue_len(board: &Board, mut p: Point, u: (f64, f64), w: f64, side: Side, mut skip: usize) -> f64 {
+    let mut total = 0.0;
+    for _ in 0..16 {
+        if pinned(board, p, side) {
+            break;
+        }
+        let mut here = board.tracks.iter().enumerate().filter(|(k, t)| *k != skip && t.side == side && crate::drc::point_seg(p, t.a, t.b) < 1e-6);
+        let (Some((k, t)), None) = (here.next(), here.next()) else { break };
+        // it must end here (not run through), with the same width
+        let far = if t.a.dist(p) < 1e-6 {
+            t.b
+        } else if t.b.dist(p) < 1e-6 {
+            t.a
+        } else {
+            break;
+        };
+        let (ux, uy, l) = unit(p, far);
+        if (t.width - w).abs() > 0.02 || ux * u.0 + uy * u.1 < 0.9998 {
+            break;
+        }
+        total += l;
+        p = far;
+        skip = k;
+        if total > 6.0 {
+            break;
+        }
+    }
+    total
+}
+
 /// Every place where exactly two tracks of one layer end at the same point.
 fn pairs(board: &Board) -> Vec<(Point, End, End)> {
     let mut at: HashMap<(i64, i64, Side), Vec<End>> = HashMap::new();
@@ -192,6 +225,7 @@ fn fork(board: &Board, v: Point, (i, ia): End, (j, ja): End) -> Option<Edit> {
     }
     let (u1x, u1y, l1) = unit(v, far_end(ti, ia));
     let (u2x, u2y, l2) = unit(v, far_end(tj, ja));
+    let (l1, l2) = (l1 + continue_len(board, far_end(ti, ia), (u1x, u1y), ti.width, ti.side, i), l2 + continue_len(board, far_end(tj, ja), (u2x, u2y), tj.width, tj.side, j));
     let phi = (u1x * u2x + u1y * u2y).clamp(-1.0, 1.0).acos();
     if phi < MIN_FORK.to_radians() || phi > MAX_FORK.to_radians() {
         return None;
@@ -253,14 +287,14 @@ fn junction_rays(board: &Board, v: Point, side: Side) -> Vec<Ray> {
         let (da, db) = (t.a.dist(v), t.b.dist(v));
         if da < 1e-6 {
             let (ux, uy, len) = unit(v, t.b);
-            rays.push(Ray { u: (ux, uy), w: t.width, len, track: k });
+            rays.push(Ray { u: (ux, uy), w: t.width, len: len + continue_len(board, t.b, (ux, uy), t.width, side, k), track: k });
         } else if db < 1e-6 {
             let (ux, uy, len) = unit(v, t.a);
-            rays.push(Ray { u: (ux, uy), w: t.width, len, track: k });
+            rays.push(Ray { u: (ux, uy), w: t.width, len: len + continue_len(board, t.a, (ux, uy), t.width, side, k), track: k });
         } else if crate::drc::point_seg(v, t.a, t.b) < 1e-6 {
             for (end, d) in [(t.a, da), (t.b, db)] {
                 let (ux, uy, _) = unit(v, end);
-                rays.push(Ray { u: (ux, uy), w: t.width, len: d, track: k });
+                rays.push(Ray { u: (ux, uy), w: t.width, len: d + continue_len(board, end, (ux, uy), t.width, side, k), track: k });
             }
         }
     }
@@ -397,7 +431,7 @@ fn edge_junctions(board: &Board, radius: f64) -> Vec<Edit> {
                 }
                 let ray = |to: Point, w: f64, track: usize| {
                     let (ux, uy, l) = unit(at, to);
-                    Ray { u: (ux, uy), w, len: l, track }
+                    Ray { u: (ux, uy), w, len: l + continue_len(board, to, (ux, uy), w, t.side, track), track }
                 };
                 let mut rays = [ray(far, t.width, k), ray(u.a, u.width, m), ray(u.b, u.width, m)];
                 if rays.iter().any(|r| r.len < 1e-6) {
@@ -432,6 +466,7 @@ fn corner(board: &Board, v: Point, (i, ia): End, (j, ja): End, radius: f64) -> O
     }
     let (u1x, u1y, l1) = unit(v, far_end(ti, ia));
     let (u2x, u2y, l2) = unit(v, far_end(tj, ja));
+    let (l1, l2) = (l1 + continue_len(board, far_end(ti, ia), (u1x, u1y), ti.width, ti.side, i), l2 + continue_len(board, far_end(tj, ja), (u2x, u2y), tj.width, tj.side, j));
     let phi = (u1x * u2x + u1y * u2y).clamp(-1.0, 1.0).acos(); // the angle between the two tracks: pi when straight on
     let turn = std::f64::consts::PI - phi;
     if turn < MIN_TURN.to_radians() || phi < 30f64.to_radians() {

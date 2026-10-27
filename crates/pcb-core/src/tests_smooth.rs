@@ -295,6 +295,23 @@ fn both_corners_of_a_t_get_a_concave_fillet() {
 }
 
 #[test]
+fn a_trunk_drawn_in_short_pieces_still_gets_its_fillets() {
+    // the trunk is cut at 14.8 and 15.2 (joints with nothing else on them): the pieces next to the branch are 0.2 long, the run is not
+    let mut b = Board::new("t", 40.0, 30.0);
+    for (x, y) in [(5.0, 15.0), (25.0, 15.0), (15.0, 25.0)] {
+        pad(&mut b, x, y, "A");
+    }
+    for (a, c) in [(5.0, 14.8), (14.8, 15.0), (15.0, 15.2), (15.2, 25.0)] {
+        b.tracks.push(trk((a, 15.0), (c, 15.0), 0.25));
+    }
+    b.tracks.push(trk((15.0, 15.0), (15.0, 25.0), 0.25));
+    b.finish = Finish { corners: false, tapers: false, forks: true, ..Default::default() };
+    let f = finished(&b).unwrap();
+    assert_eq!(f.patches.len(), 2, "one corner on each side of the branch");
+    assert!(drc::check_final(&b).is_empty());
+}
+
+#[test]
 fn a_plain_corner_is_not_a_junction_fillet() {
     let mut b = l_shape();
     b.finish = Finish { corners: false, tapers: false, forks: true, ..Default::default() };
