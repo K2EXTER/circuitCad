@@ -73,6 +73,8 @@ pub struct Tuning {
     /// When the circuit has several schematic sheets, lay each sheet's parts out as a block of its own and then the blocks
     /// (see `sheet_blocks`).
     pub sheets: bool,
+    /// Lay out copies of one small structure (eight range switches, ten LEDs with their resistors) alike, in a regular grid (see `build_arrays`).
+    pub arrays: bool,
 }
 
 impl Tuning {
@@ -80,9 +82,9 @@ impl Tuning {
     /// parts can sit closer.
     pub fn for_board(board: &Board) -> Self {
         if board.zones.iter().any(|z| !z.net.is_empty()) {
-            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: true }
+            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: true, arrays: true }
         } else {
-            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: true }
+            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: true, arrays: true }
         }
     }
 }
@@ -117,17 +119,17 @@ fn refit_pours(board: &mut Board, lo: Point, hi: Point) {
 /// times over (the placement adds up the lengths of nets, so it counts three times as much as an ordinary connection),
 /// pulling the capacitor to the pin and not just somewhere in the supply's box.
 fn bypass_nets(board: &Board, items: &[(String, Point, f64, f64)], gap: f64, label: f64) -> Vec<NetPins> {
-    use crate::drc::{is_ground_net, is_supply_net};
+    use crate::drc::{is_ground_net, is_negative_supply_net, is_supply_net};
     let index = |r: &str| items.iter().position(|it| it.0 == r);
     let offset = |pad: &Pad, i: usize| (i, pad.pos.x - items[i].1.x + gap / 2.0, pad.pos.y - items[i].1.y + gap / 2.0 + label);
+    // a rail: the nets a capacitor bypasses between (ground, a supply, a negative supply)
+    let rail = |n: &str| is_ground_net(n) || is_supply_net(n) || is_negative_supply_net(n);
     let mut out: Vec<NetPins> = vec![];
     for cap in board.parts.iter().filter(|p| p.refdes.starts_with('C')) {
         let cap_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == cap.refdes).collect();
-        if !cap_pads.iter().any(|p| is_ground_net(&p.net)) {
-            continue;
-        }
         let Some(ci) = index(&cap.refdes) else { continue };
-        for cp in cap_pads.iter().filter(|p| is_supply_net(&p.net)) {
+        // the pads on a supply (positive or negative) whose other side is another rail: a ground, or the other supply the IC runs between
+        for cp in cap_pads.iter().filter(|p| (is_supply_net(&p.net) || is_negative_supply_net(&p.net)) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))) {
             for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U')) {
                 let ic_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == ic.refdes).collect();
                 if ic_pads.len() < 5 {
@@ -399,8 +401,9 @@ fn ties(nets: &[NetPins], n: usize) -> Vec<Vec<f64>> {
 
 /// Lay the `items` out: the order (begin with the part that has the most pads, then always the one most tied to those placed),
 /// improved by swaps, shelf-packed into a roughly 3:2 block, or placed freely round the most connected ones, whichever has the
-/// shorter nets (`compact`: only the shelf packing, which leaves a rectangular block). Returns the cell corners and the used width and height.
-fn layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize], tie: &[Vec<f64>], improve: bool, compact: bool) -> (Vec<(usize, f64, f64)>, f64, f64) {
+/// shorter nets (`compact`: only the shelf packing, which leaves a rectangular block; `fit`: the widths of the shelves and the orders are searched for the
+/// least waste, for blocks of different shapes). Returns the cell corners and the used width and height.
+fn layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize], tie: &[Vec<f64>], improve: bool, compact: bool, fit: bool) -> (Vec<(usize, f64, f64)>, f64, f64) {
     let mut order: Vec<usize> = vec![];
     let mut left: Vec<usize> = (0..items.len()).collect();
     left.sort_by(|&a, &b| degree[b].cmp(&degree[a]).then(items[a].0.cmp(&items[b].0)));
@@ -427,9 +430,39 @@ fn layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize
     let widest = items.iter().map(|i| i.2).fold(0.0, f64::max);
     let row_w = (area * 1.5).sqrt().max(widest);
     let greedy = order.clone();
-    if improve {
-        order = improve_order(items, nets, order, row_w);
+    // a block of parts is packed into several widths and the one that wastes the least room (and has the shorter nets) is kept: the
+    // blocks of a sheet, and of a copy, are of very different shapes, and a width of 3:2 for the sum of their areas often leaves holes
+    let widths: Vec<f64> = if fit && improve && items.len() >= 3 {
+        let mut w: Vec<f64> = [0.5, 0.6, 0.7, 0.85, 1.0, 1.2, 1.5].iter().map(|f| (row_w * f).max(widest)).collect();
+        w.dedup_by(|a, b| (*a - *b).abs() < 0.5);
+        w
+    } else {
+        vec![row_w]
+    };
+    let mut best_pack: Option<(f64, Vec<usize>, f64)> = None;
+    for &rw in &widths {
+        // a few blocks: every order is tried; more: the order improved by swaps
+        let orders: Vec<Vec<usize>> = if widths.len() > 1 && items.len() <= EVERY_ORDER {
+            let mut all = vec![];
+            permutations(&mut (0..items.len()).collect::<Vec<_>>(), 0, &mut all);
+            all
+        } else if improve {
+            vec![improve_order(items, nets, order.clone(), rw)]
+        } else {
+            vec![order.clone()]
+        };
+        for o in orders {
+            let (_, uw, uh) = pack(items, &o, rw);
+            // (a long thin strip has the least area for some blocks: the aspect counts against it)
+            let aspect = (uw / uh).max(uh / uw);
+            let score = if widths.len() > 1 { uw * uh * (1.0 + 0.5 * (aspect - 1.8).max(0.0)) + BLOCK_NET_WEIGHT * net_length(items, nets, &o, rw) } else { 0.0 };
+            if best_pack.as_ref().is_none_or(|b| score < b.0 - 1e-9) {
+                best_pack = Some((score, o, rw));
+            }
+        }
     }
+    let (_, best_order, row_w) = best_pack.unwrap();
+    order = best_order;
     let (mut spots, mut used_w, mut used_h) = pack(items, &order, row_w);
     // the other way to lay the parts out: free placement round the most connected ones; the one with the shorter nets wins
     if improve && !compact && items.len() >= 4 {
@@ -442,15 +475,32 @@ fn layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize
     (spots, used_w, used_h)
 }
 
+/// How much a mm of net length counts against a mm² of block area when the widths a block is packed to are compared.
+const BLOCK_NET_WEIGHT: f64 = 0.4;
+/// A block of at most this many items is packed in every order (the blocks of a sheet, the parts of a small copy).
+const EVERY_ORDER: usize = 7;
+
+fn permutations(v: &mut Vec<usize>, k: usize, out: &mut Vec<Vec<usize>>) {
+    if k == v.len() {
+        out.push(v.clone());
+        return;
+    }
+    for i in k..v.len() {
+        v.swap(k, i);
+        permutations(v, k + 1, out);
+        v.swap(k, i);
+    }
+}
+
 /// Room kept round a sheet's block (mm), so that the blocks can be told apart.
 const BLOCK_GAP: f64 = 2.0;
 
-/// The parts of each schematic sheet (indexes into `items`), when the circuit has more than one sheet with parts on the board;
-/// parts of no sheet make a group of their own. None for a one-sheet circuit.
-fn sheet_groups(board: &Board, items: &[(String, Point, f64, f64)]) -> Option<Vec<Vec<usize>>> {
+/// The items of each schematic sheet (`sheet`: the sheet of every item), when there is more than one sheet; items of no sheet make a
+/// group of their own. None for a one-sheet circuit.
+fn sheet_groups(sheet: &[String]) -> Option<Vec<Vec<usize>>> {
     let mut by: std::collections::BTreeMap<&str, Vec<usize>> = Default::default();
-    for (i, it) in items.iter().enumerate() {
-        by.entry(board.part_sheets.get(&it.0).map_or("", |s| s.as_str())).or_default().push(i);
+    for (i, s) in sheet.iter().enumerate() {
+        by.entry(s.as_str()).or_default().push(i);
     }
     (by.len() >= 2).then(|| by.into_values().collect())
 }
@@ -477,7 +527,7 @@ fn sheet_blocks(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &
             .filter(|pins| pins.iter().any(|p| p.0 != pins[0].0))
             .collect();
         let tie = ties(&sub_nets, sub_items.len());
-        let (spots, w, h) = layout(&sub_items, &sub_nets, &sub_degree, &tie, improve, true);
+        let (spots, w, h) = layout(&sub_items, &sub_nets, &sub_degree, &tie, improve, true, false);
         // back to the numbers of `items`
         local.push((spots.into_iter().map(|(l, x, y)| (members[l], x, y)).collect(), w, h));
     }
@@ -501,7 +551,7 @@ fn sheet_blocks(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &
         }
     }
     let tie = ties(&block_nets, groups.len());
-    let (bspots, used_w, used_h) = layout(&block_items, &block_nets, &block_degree, &tie, improve, true);
+    let (bspots, used_w, used_h) = layout(&block_items, &block_nets, &block_degree, &tie, improve, true, true);
     let mut out = vec![];
     for (k, bx, by) in bspots {
         for &(i, x, y) in &local[k].0 {
@@ -509,6 +559,114 @@ fn sheet_blocks(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &
         }
     }
     (out, used_w, used_h)
+}
+
+/// A grid of copies of one structure, as one item: where each member stands (item, offset from the array's corner), and the size.
+struct Array {
+    members: Vec<(usize, f64, f64)>,
+    w: f64,
+    h: f64,
+}
+
+/// For every group of copies (see `replicas`): lay the first copy out as a small circuit of its own, and put every copy in the same way,
+/// one after another in the order of the designators' numbers, in rows of about the shape of a 3:2 board.
+fn build_arrays(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize], groups: &[Vec<Vec<usize>>], improve: bool) -> Vec<Array> {
+    let mut out = vec![];
+    for copies in groups {
+        let template = &copies[0];
+        let at = |i: usize| template.iter().position(|&m| m == i);
+        // every copy has the same slot for a role: as big as the biggest part that plays it (the values and footprints of copies may differ)
+        let sub_items: Vec<_> = template
+            .iter()
+            .enumerate()
+            .map(|(j, &i)| {
+                let mut it = items[i].clone();
+                it.2 = copies.iter().map(|c| items[c[j]].2).fold(0.0, f64::max);
+                it.3 = copies.iter().map(|c| items[c[j]].3).fold(0.0, f64::max);
+                it
+            })
+            .collect();
+        let sub_degree: Vec<usize> = template.iter().map(|&i| degree[i]).collect();
+        let sub_nets: Vec<NetPins> = nets
+            .iter()
+            .map(|pins| pins.iter().filter_map(|&(i, x, y)| at(i).map(|l| (l, x, y))).collect::<NetPins>())
+            .filter(|pins| pins.iter().any(|p| p.0 != pins[0].0))
+            .collect();
+        let tie = ties(&sub_nets, sub_items.len());
+        let (spots, w, h) = layout(&sub_items, &sub_nets, &sub_degree, &tie, improve, true, false);
+        // the cell is a whole number of grid steps, so that every copy lands on the grid the same way
+        let (w, h) = ((w / SNAP).ceil() * SNAP, (h / SNAP).ceil() * SNAP);
+        let mut rel = vec![(0.0, 0.0); template.len()];
+        for (l, x, y) in spots {
+            rel[l] = (x, y);
+        }
+        let mut order: Vec<&Vec<usize>> = copies.iter().collect();
+        order.sort_by_key(|c| crate::replicas::natural(&items[c[0]].0));
+        let k = order.len();
+        let cols = ((1.5 * k as f64 * h / w).sqrt().round() as usize).clamp(1, k);
+        let rows = k.div_ceil(cols);
+        let mut members = vec![];
+        for (r, c) in order.iter().enumerate() {
+            let (col, row) = ((r % cols) as f64, (r / cols) as f64);
+            for (j, &i) in c.iter().enumerate() {
+                members.push((i, rel[j].0 + col * w, rel[j].1 + row * h));
+            }
+        }
+        out.push(Array { members, w: cols as f64 * w, h: rows as f64 * h });
+    }
+    out
+}
+
+/// Where an item of the collapsed problem comes from.
+#[derive(Clone, Copy)]
+enum Origin {
+    Single(usize),
+    Array(usize),
+}
+
+type Collapsed = (Vec<(String, Point, f64, f64)>, Vec<NetPins>, Vec<usize>, Vec<String>, Vec<Origin>);
+
+/// The problem with every array as one item: the parts not in an array, then the arrays. The pins of the members sit where the array's
+/// cell puts them; a net inside one array is no net any more.
+fn collapse(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usize], arrays: &[Array], sheet: &dyn Fn(usize) -> String) -> Collapsed {
+    let mut member_of: std::collections::HashMap<usize, (usize, f64, f64)> = Default::default();
+    for (k, a) in arrays.iter().enumerate() {
+        for &(i, x, y) in &a.members {
+            member_of.insert(i, (k, x, y));
+        }
+    }
+    let (mut citems, mut cdegree, mut csheet, mut origin) = (vec![], vec![], vec![], vec![]);
+    let mut single = vec![usize::MAX; items.len()];
+    for (i, it) in items.iter().enumerate() {
+        if !member_of.contains_key(&i) {
+            single[i] = citems.len();
+            citems.push(it.clone());
+            cdegree.push(degree[i]);
+            csheet.push(sheet(i));
+            origin.push(Origin::Single(i));
+        }
+    }
+    let mut sup = vec![0usize; arrays.len()];
+    for (k, a) in arrays.iter().enumerate() {
+        sup[k] = citems.len();
+        citems.push((format!("array{k}"), Point::new(0.0, 0.0), a.w, a.h));
+        cdegree.push(a.members.iter().map(|m| degree[m.0]).sum());
+        csheet.push(sheet(a.members[0].0));
+        origin.push(Origin::Array(k));
+    }
+    let cnets: Vec<NetPins> = nets
+        .iter()
+        .map(|pins| {
+            pins.iter()
+                .map(|&(i, ox, oy)| match member_of.get(&i) {
+                    Some(&(k, ax, ay)) => (sup[k], ox + ax, oy + ay),
+                    None => (single[i], ox, oy),
+                })
+                .collect::<NetPins>()
+        })
+        .filter(|pins| pins.iter().any(|p| p.0 != pins[0].0))
+        .collect();
+    (citems, cnets, cdegree, csheet, origin)
 }
 
 fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
@@ -559,17 +717,31 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     if tuning.bypass {
         nets.extend(bypass_nets(board, &items, gap, label));
     }
-    let by_sheet = if tuning.sheets { sheet_groups(board, &items) } else { None };
-    let (spots, used_w, used_h) = match by_sheet {
-        Some(groups) => sheet_blocks(&items, &nets, &degree, &groups, improve),
+    // copies of one small structure become one item each (laid out alike in a grid); the placement works on those
+    let sheet_name = |i: usize| board.part_sheets.get(&items[i].0).cloned().unwrap_or_default();
+    let copies = if tuning.arrays { replicas::find(board, &items, &poured, &sheet_name) } else { vec![] };
+    let arrays = build_arrays(&items, &nets, &degree, &copies, improve);
+    let (citems, cnets, cdegree, csheet, origin) = collapse(&items, &nets, &degree, &arrays, &sheet_name);
+    let by_sheet = if tuning.sheets { sheet_groups(&csheet) } else { None };
+    let (cspots, used_w, used_h) = match by_sheet {
+        Some(groups) => sheet_blocks(&citems, &cnets, &cdegree, &groups, improve),
         None => {
-            if items.is_empty() {
+            if citems.is_empty() {
                 return Err("パッドを持つ部品がありません".into());
             }
-            let tie = ties(&nets, items.len());
-            layout(&items, &nets, &degree, &tie, improve, false)
+            let tie = ties(&cnets, citems.len());
+            layout(&citems, &cnets, &cdegree, &tie, improve, false, false)
         }
     };
+    // back to the parts: the members of an array stand where the array's cell puts them
+    let mut spots: Vec<(usize, f64, f64)> = vec![];
+    for (ci, x, y) in cspots {
+        match origin[ci] {
+            Origin::Single(i) => spots.push((i, x, y)),
+            Origin::Array(k) => spots.extend(arrays[k].members.iter().map(|&(i, ax, ay)| (i, x + ax, y + ay))),
+        }
+    }
+    let in_array: std::collections::BTreeSet<String> = arrays.iter().flat_map(|a| a.members.iter().map(|m| items[m.0].0.clone())).collect();
     for (i, sx, sy) in &spots {
         let (refdes, lo, ..) = &items[*i];
         let rot = board.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
@@ -577,11 +749,11 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         board.place_part(refdes, Point::new(snap(MARGIN + gap / 2.0 + sx - lo.x), snap(MARGIN + gap / 2.0 + label + sy - lo.y)), rot);
     }
     if turn {
-        turn_to_shorten(board);
+        turn_to_shorten(board, &in_array);
         crate::connectors::orient_connectors(board, (Point::new(MARGIN, MARGIN), Point::new(MARGIN + used_w, MARGIN + used_h)));
     }
     if tuning.align {
-        align_parts(board);
+        align_parts(board, &in_array);
     }
     let (w, h) = (used_w + 2.0 * MARGIN, used_h + 2.0 * MARGIN);
     let old = board.bounds().filter(|_| board.outline.len() >= 3);
@@ -611,20 +783,20 @@ const ALIGN_SPACE: f64 = 0.9;
 /// Line up the parts: those in the same row (centres within `ALIGN_TOL` in y) get one centre line, those in the same
 /// column likewise. A part moves by whole `SNAP` steps and only when it keeps `ALIGN_SPACE` to every other part.
 /// Everything is undone when the airwires get longer than 1 % or the DRC finds more than before.
-fn align_parts(board: &mut Board) {
+fn align_parts(board: &mut Board, keep: &std::collections::BTreeSet<String>) {
     let before = board.clone();
     let (wire, drc) = (airwire_length(board), crate::drc::check(board).len());
     for axis in [1usize, 0] {
-        align_axis(board, axis);
+        align_axis(board, axis, keep);
     }
     if airwire_length(board) > wire * 1.01 + 0.5 || crate::drc::check(board).len() > drc {
         *board = before;
     }
 }
 
-fn align_axis(board: &mut Board, axis: usize) {
+fn align_axis(board: &mut Board, axis: usize, keep: &std::collections::BTreeSet<String>) {
     let coord = |p: Point| if axis == 0 { p.x } else { p.y };
-    let mut centers: Vec<(String, f64)> = board.parts.iter().filter_map(|p| extent(board, &p.refdes).map(|(lo, hi)| (p.refdes.clone(), coord(Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0))))).collect();
+    let mut centers: Vec<(String, f64)> = board.parts.iter().filter(|p| !keep.contains(&p.refdes)).filter_map(|p| extent(board, &p.refdes).map(|(lo, hi)| (p.refdes.clone(), coord(Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0))))).collect();
     centers.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
     let mut i = 0;
     while i < centers.len() {
@@ -662,11 +834,11 @@ pub(crate) fn crowded(board: &Board, refdes: &str) -> bool {
     })
 }
 
-fn turn_to_shorten(board: &mut Board) {
+fn turn_to_shorten(board: &mut Board, keep: &std::collections::BTreeSet<String>) {
     let center = |board: &Board, r: &str| extent(board, r).map(|(lo, hi)| Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0));
     for _ in 0..2 {
         let mut better = false;
-        for part in board.parts.clone() {
+        for part in board.parts.clone().into_iter().filter(|p| !keep.contains(&p.refdes)) {
             let before = airwire_length(board);
             let Some(c0) = center(board, &part.refdes) else { continue };
             board.place_part(&part.refdes, part.pos, part.rot + 2);
@@ -737,6 +909,55 @@ mod tests {
         (lo, hi)
     }
 
+    /// Eight copies of "a resistor and a capacitor in series", with a ground that touches all of them and an input and an output each.
+    fn eight_stages() -> Board {
+        let part = |r: &str, f: &str| NetlistPart { refdes: r.into(), value: "1k".into(), footprint: f.into() };
+        let net = |n: &str, pins: &[(&str, &str)]| NetlistNet { name: n.into(), pins: pins.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() };
+        let mut b = Board::new("t", 10.0, 10.0);
+        let (mut parts, mut nets, mut gnd) = (vec![], vec![], vec![]);
+        for k in 1..=8 {
+            parts.push(part(&format!("R{k}"), "R_0805"));
+            parts.push(part(&format!("C{k}"), "C_0805"));
+            nets.push(net(&format!("MID{k}"), &[(&format!("R{k}"), "2"), (&format!("C{k}"), "1")]));
+            gnd.push((format!("C{k}"), "2".to_string()));
+        }
+        nets.push(NetlistNet { name: "GND".into(), pins: gnd });
+        import(&mut b, &parts, &nets);
+        b
+    }
+
+    #[test]
+    fn copies_of_a_structure_are_laid_out_alike_in_a_regular_grid() {
+        let mut b = eight_stages();
+        autoplace(&mut b).unwrap();
+        let pos = |r: &str| b.parts.iter().find(|p| p.refdes == r).unwrap().pos;
+        // the capacitor of each stage stands the same way from its resistor
+        let off = |k: usize| (pos(&format!("C{k}")).x - pos(&format!("R{k}")).x, pos(&format!("C{k}")).y - pos(&format!("R{k}")).y);
+        for k in 2..=8 {
+            assert!((off(k).0 - off(1).0).abs() < 1e-6 && (off(k).1 - off(1).1).abs() < 1e-6, "stage {k}: {:?} against {:?}", off(k), off(1));
+        }
+        // the resistors stand on a grid: few different columns and rows, even steps
+        let mut xs: Vec<f64> = (1..=8).map(|k| pos(&format!("R{k}")).x).collect();
+        let mut ys: Vec<f64> = (1..=8).map(|k| pos(&format!("R{k}")).y).collect();
+        xs.sort_by(f64::total_cmp);
+        xs.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+        ys.sort_by(f64::total_cmp);
+        ys.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+        assert!(xs.len() * ys.len() >= 8 && xs.len() <= 5 && ys.len() <= 3, "{xs:?} {ys:?}");
+        let even = |v: &[f64]| v.windows(2).all(|w| ((w[1] - w[0]) - (v[1] - v[0])).abs() < 1e-6);
+        assert!(even(&xs) && even(&ys), "{xs:?} {ys:?}");
+        // they come in the order of their numbers, row by row
+        let order: Vec<(f64, f64)> = (1..=8).map(|k| (pos(&format!("R{k}")).y, pos(&format!("R{k}")).x)).collect();
+        assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+        // without the grid the stages are not alike
+        let mut plain = eight_stages();
+        let t = Tuning::for_board(&plain);
+        autoplace_with(&mut plain, &Tuning { arrays: false, ..t }).unwrap();
+        let pp = |r: &str| plain.parts.iter().find(|p| p.refdes == r).unwrap().pos;
+        let alike = (2..=8).all(|k| ((pp(&format!("C{k}")).x - pp(&format!("R{k}")).x) - (pp("C1").x - pp("R1").x)).abs() < 1e-6 && ((pp(&format!("C{k}")).y - pp(&format!("R{k}")).y) - (pp("C1").y - pp("R1").y)).abs() < 1e-6);
+        assert!(!alike || plain.parts.len() < 16, "the test means something only if the plain layout is not already a grid");
+    }
+
     #[test]
     fn the_parts_of_a_sheet_stay_together_in_a_block_of_their_own() {
         let mut b = two_sheets();
@@ -794,8 +1015,8 @@ mod tests {
     #[test]
     fn turning_parts_shortens_the_airwires_and_keeps_the_board_clean() {
         let (mut plain, mut turned) = (divider(), divider());
-        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true }).unwrap();
-        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true }).unwrap();
+        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true }).unwrap();
+        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true }).unwrap();
         let (l0, l1) = (airwire_length(&plain), airwire_length(&turned));
         assert!(l1 < l0, "{l1} vs {l0}");
         assert!(drc::check(&turned).is_empty());
@@ -826,8 +1047,8 @@ mod tests {
     #[test]
     fn improving_the_order_puts_the_parts_of_a_net_together() {
         let (mut plain, mut improved) = (fan(8), fan(8));
-        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true }).unwrap();
-        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true }).unwrap();
+        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false }).unwrap();
+        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false }).unwrap();
         // every resistor with its LED
         let pair_len = |b: &Board| -> f64 { (0..8).map(|k| { let at = |r: String| b.parts.iter().find(|p| p.refdes == r).unwrap().pos; at(format!("R{k:02}")).dist(at(format!("D{k:02}"))) }).sum() };
         let (l0, l1) = (pair_len(&plain), pair_len(&improved));
@@ -835,7 +1056,7 @@ mod tests {
         assert!(drc::check(&improved).is_empty());
         // and the same board always gives the same placement
         let mut again = fan(8);
-        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true }).unwrap();
+        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false }).unwrap();
         assert!(again.parts.iter().zip(&improved.parts).all(|(a, b)| a.pos == b.pos));
     }
 
@@ -928,7 +1149,7 @@ mod tests {
         for (r, x, y) in [("R1", 10.0, 10.0), ("R2", 20.0, 10.5), ("R3", 30.0, 11.0), ("R4", 10.0, 30.0), ("R5", 20.0, 30.0), ("R6", 30.0, 30.0)] {
             b.place_part(r, Point::new(x, y), 0);
         }
-        align_parts(&mut b);
+        align_parts(&mut b, &Default::default());
         let ys: Vec<f64> = ["R1", "R2", "R3"].iter().map(|r| centre(&b, r).y).collect();
         assert!(ys.iter().all(|y| (y - ys[0]).abs() < 1e-9), "{ys:?}");
         assert!((centre(&b, "R4").y - 30.0).abs() < 1e-9, "the other row stays");
@@ -951,7 +1172,7 @@ mod tests {
     fn alignment_does_not_add_centre_lines() {
         let rows = |align: bool| {
             let mut b = divider();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true, sheets: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true, sheets: true, arrays: true }).unwrap();
             let mut ys: Vec<i64> = b.parts.iter().map(|p| (centre(&b, &p.refdes).y * 100.0).round() as i64).collect();
             ys.sort_unstable();
             ys.dedup();
@@ -1012,10 +1233,28 @@ mod tests {
     }
 
     #[test]
+    fn a_capacitor_between_two_supplies_is_pulled_to_the_ic_that_runs_between_them() {
+        // the ICs' 0 V is VNEG (a single-supply logic IC on a negative rail): the capacitors sit between VCC and VNEG
+        let place_with = |bypass: bool| {
+            let mut b = ics_with_caps();
+            for p in b.pads.iter_mut().filter(|p| p.net == "GND") {
+                p.net = "VNEG".into();
+            }
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true }).unwrap();
+            b
+        };
+        let (with, without) = (place_with(true), place_with(false));
+        let d = |b: &Board| (gap_to_pin(b, "C1", "U1", "VCC") + gap_to_pin(b, "C2", "U2", "VCC") + gap_to_pin(b, "C1", "U1", "VNEG") + gap_to_pin(b, "C2", "U2", "VNEG"))
+            .min(gap_to_pin(b, "C1", "U2", "VCC") + gap_to_pin(b, "C2", "U1", "VCC") + gap_to_pin(b, "C1", "U2", "VNEG") + gap_to_pin(b, "C2", "U1", "VNEG"));
+        // (the two pins of a DIP-14 are 15 mm apart, so a capacitor cannot be at both: it lands between them)
+        assert!(d(&with) < d(&without) * 0.75, "closer than without the pull: {} {}", d(&with), d(&without));
+    }
+
+    #[test]
     fn bypass_capacitors_sit_by_their_ic_supply_pin() {
         let place_with = |bypass: bool| {
             let mut b = ics_with_caps();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true }).unwrap();
             b
         };
         let (with, without) = (place_with(true), place_with(false));

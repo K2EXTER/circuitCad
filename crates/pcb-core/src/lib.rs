@@ -44,6 +44,7 @@ pub mod pinlabels;
 pub mod package;
 pub mod parts;
 pub mod ratsnest;
+pub(crate) mod replicas;
 pub mod reroute;
 pub mod shape;
 pub mod shops;
