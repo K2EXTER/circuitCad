@@ -43,7 +43,7 @@ pub struct RouteOptions {
     /// A track on a layer that has a pour cuts the pour: its length counts this many times (1.0: no difference). Keeps wiring
     /// off the layer of the ground pour where the other layer has room.
     pub pour_layer_cost: f64,
-    /// When connections stay open, try them again on a pitch of half, then a quarter of `grid` (down to 0.05 mm), in `autoroute_sized`.
+    /// When connections stay open, try them again on a pitch of half, then a quarter of `grid` (down to 0.1 mm), in `autoroute_sized`.
     pub grid_ladder: bool,
     /// Nets this run leaves alone (a sensing line that was routed on its own terms is not routed again with vias).
     pub skip: Vec<String>,
@@ -105,9 +105,10 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
 /// than a plain run does, the plain run is kept. With `only_net`, only that net is routed.
 pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
     let mut report = route_pass(board, opt, only_net);
-    // what is still open is tried on a finer grid (half, then a quarter of the pitch: tracks go between the legs of a fine-pitch IC)
+    // what is still open is tried on a finer grid (half, then a quarter of the pitch, down to 0.1 mm: tracks go between the legs of a fine-pitch IC)
+    let started = std::time::Instant::now();
     let mut grid = opt.grid;
-    while !report.failed.is_empty() && grid / 2.0 >= MIN_LADDER_GRID - 1e-9 && opt.grid_ladder {
+    while !report.failed.is_empty() && grid / 2.0 >= MIN_LADDER_GRID - 1e-9 && opt.grid_ladder && started.elapsed() < LADDER_BUDGET {
         grid /= 2.0;
         let finer = route_pass(board, &RouteOptions { grid, ..opt.clone() }, only_net);
         report.routed += finer.routed;
@@ -190,8 +191,10 @@ fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> 
     report
 }
 
-/// The finest pitch (mm) the grid ladder goes down to.
-const MIN_LADDER_GRID: f64 = 0.05;
+/// The finest pitch (mm) the grid ladder goes down to (finer ones leave copper a hair closer than the rules allow after the pads' leads are made).
+const MIN_LADDER_GRID: f64 = 0.1;
+/// No finer pitch is started after this long (a run on a fine grid of a big board takes many seconds).
+const LADDER_BUDGET: std::time::Duration = std::time::Duration::from_secs(25);
 
 /// No further routing run is started once this much time has passed (a run on a big board takes several seconds).
 const RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);

@@ -1504,6 +1504,7 @@ fn drag_next_to(e: &mut BoardEditor, refdes: &str, ends: &[(&str, (&str, &str))]
     let dist = |a: Point, c: Point| ((a.x - c.x).powi(2) + (a.y - c.y).powi(2)).sqrt();
     let goal = pad(&e.board, (ends[0].1).0, (ends[0].1).1);
     let rot = e.board.parts.iter().find(|p| p.refdes == refdes).unwrap().rot;
+    let base_violations = pcb_core::drc::check(&e.board).len();
     let mut valid = vec![];
     for dx in -9..=9 {
         for dy in -9..=9 {
@@ -1513,7 +1514,8 @@ fn drag_next_to(e: &mut BoardEditor, refdes: &str, ends: &[(&str, (&str, &str))]
             let ds: Vec<f64> = ends.iter().map(|(own, tgt)| dist(pad(&t, refdes, own), pad(&t, tgt.0, tgt.1))).collect();
             let fits = ds.iter().all(|d| *d >= 2.0 && *d <= max);
             let inside = t.pads.iter().filter(|p| p.refdes == refdes).all(|p| inside_polygon(&t.outline, p.pos));
-            let clean = pcb_core::drc::check(&t).iter().all(|v| !v.message.contains(refdes));
+            // (the messages of the checks name no part: a spot is clean when the move adds no violation)
+            let clean = pcb_core::drc::check(&t).len() <= base_violations;
             if fits && inside && clean {
                 valid.push(at);
             }

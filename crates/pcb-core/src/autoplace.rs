@@ -859,6 +859,9 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     if tuning.align {
         align_parts(board, &in_array);
     }
+    if tuning.bypass && improve {
+        attach_bypass_caps(board, (Point::new(MARGIN, MARGIN), Point::new(MARGIN + used_w, MARGIN + used_h)), &in_array);
+    }
     let (w, h) = (used_w + 2.0 * MARGIN, used_h + 2.0 * MARGIN);
     let old = board.bounds().filter(|_| board.outline.len() >= 3);
     board.set_rect_outline(0.0, 0.0, w.ceil(), h.ceil());
@@ -874,7 +877,33 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
 }
 
 pub(crate) fn airwire_length(board: &Board) -> f64 {
-    crate::ratsnest::ratsnest(board).iter().map(|w| w.a.dist(w.b)).sum()
+    if !board.tracks.is_empty() || !board.vias.is_empty() {
+        return crate::ratsnest::ratsnest(board).iter().map(|w| w.a.dist(w.b)).sum();
+    }
+    // no copper yet: the airwires of a net are the shortest tree over its pads (a pour's nets have none). This is the ratsnest without
+    // working out which pads the copper joins, which takes much longer on a board with pours
+    let poured: std::collections::BTreeSet<&str> = board.zones.iter().map(|z| z.net.as_str()).filter(|n| !n.is_empty()).collect();
+    let mut by_net: std::collections::BTreeMap<&str, Vec<Point>> = Default::default();
+    for p in board.pads.iter().filter(|p| !p.net.is_empty() && !poured.contains(p.net.as_str())) {
+        by_net.entry(p.net.as_str()).or_default().push(p.pos);
+    }
+    let mut total = 0.0;
+    for pts in by_net.values().filter(|p| p.len() >= 2) {
+        let mut near: Vec<f64> = pts.iter().map(|q| q.dist(pts[0])).collect();
+        let mut inside = vec![false; pts.len()];
+        inside[0] = true;
+        for _ in 1..pts.len() {
+            let Some((k, d)) = near.iter().enumerate().filter(|(i, _)| !inside[*i]).min_by(|a, b| a.1.total_cmp(b.1)).map(|(i, d)| (i, *d)) else { break };
+            inside[k] = true;
+            total += d;
+            for (i, n) in near.iter_mut().enumerate() {
+                if !inside[i] {
+                    *n = n.min(pts[i].dist(pts[k]));
+                }
+            }
+        }
+    }
+    total
 }
 
 /// Try turning each part by half a turn (same footprint box, so nothing starts to overlap) and
@@ -972,6 +1001,93 @@ fn turn_copies_toward_ports(board: &mut Board, groups: &[Vec<Vec<String>>]) {
             if let Some((_, b)) = best {
                 *board = b;
             }
+        }
+    }
+}
+
+/// A bypass capacitor farther than this (mm) from the pin it serves is moved to the pin.
+const BYPASS_NEAR: f64 = 2.5;
+/// How far (mm) from the pin a place is looked for, and the distance between the places tried.
+const BYPASS_REACH: f64 = 6.0;
+const BYPASS_STEP: f64 = 1.0;
+
+/// The bypass capacitors that the placement left far from their IC are put next to the supply pin, with the pad on that supply towards the
+/// pin (and the other pad towards the IC's pin on the other rail, when it has one): each one goes to the best free place on the grid within
+/// `BYPASS_REACH` of the pin, on the board (`inside`), not too close to another part. Parts in `keep` (copies in a grid) are not moved.
+fn attach_bypass_caps(board: &mut Board, inside: (Point, Point), keep: &std::collections::BTreeSet<String>) {
+    use crate::drc::{is_ground_net, is_negative_supply_net, is_supply_net};
+    let rail = |n: &str| is_ground_net(n) || is_supply_net(n) || is_negative_supply_net(n);
+    let supply = |n: &str| is_supply_net(n) || is_negative_supply_net(n);
+    let caps: Vec<String> = board.parts.iter().filter(|p| p.refdes.starts_with('C') && !keep.contains(&p.refdes)).map(|p| p.refdes.clone()).collect();
+    for cap in caps {
+        let cap_pads: Vec<Pad> = board.pads.iter().filter(|p| p.refdes == cap).cloned().collect();
+        // the supply pad of the capacitor and the pin of an IC that it serves: the nearest pair
+        let mut best: Option<(f64, Pad, Pad)> = None;
+        for cp in cap_pads.iter().filter(|p| supply(&p.net) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))) {
+            for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U')) {
+                let ic_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == ic.refdes).collect();
+                if ic_pads.len() < 5 {
+                    continue;
+                }
+                for ip in ic_pads.iter().filter(|p| p.net == cp.net) {
+                    let d = cp.pos.dist(ip.pos);
+                    if best.as_ref().is_none_or(|b| d < b.0) {
+                        best = Some((d, cp.clone(), (*ip).clone()));
+                    }
+                }
+            }
+        }
+        let Some((now, cp, pin)) = best else { continue };
+        if now <= BYPASS_NEAR {
+            continue;
+        }
+        // the IC's pin on the other net of the capacitor (a negative rail: its 0 V pin), if there is one: the other pad faces it
+        let other_net = cap_pads.iter().find(|q| q.net != cp.net && rail(&q.net)).map(|q| q.net.clone());
+        let other_pin: Option<Pad> = other_net.and_then(|n| board.pads.iter().filter(|p| p.refdes == pin.refdes && p.net == n).min_by(|a, b| a.pos.dist(pin.pos).total_cmp(&b.pos.dist(pin.pos))).cloned());
+        let Some(part) = board.parts.iter().find(|p| p.refdes == cap).cloned() else { continue };
+        let boxes: Vec<(Point, Point)> = board.parts.iter().filter(|p| p.refdes != cap).filter_map(|p| extent(board, &p.refdes)).collect();
+        let cost_of = |pads: &[Pad]| -> f64 {
+            let a = pads.iter().find(|q| q.pin == cp.pin).map_or(f64::MAX, |q| q.pos.dist(pin.pos));
+            let b = other_pin.as_ref().map_or(0.0, |op| pads.iter().find(|q| q.pin != cp.pin && q.net != cp.net).map_or(0.0, |q| q.pos.dist(op.pos)) * 0.5);
+            a + b
+        };
+        let mut scratch = board.clone();
+        let mut best_at: Option<(f64, Point, u8)> = None;
+        // (places 1 mm apart: finer ones cost much and gain little)
+        let steps = (BYPASS_REACH / BYPASS_STEP) as i32;
+        for ix in -steps..=steps {
+            for iy in -steps..=steps {
+                let target = Point::new(pin.pos.x + ix as f64 * BYPASS_STEP, pin.pos.y + iy as f64 * BYPASS_STEP);
+                if target.dist(pin.pos) > BYPASS_REACH || target.x < inside.0.x || target.y < inside.0.y || target.x > inside.1.x || target.y > inside.1.y {
+                    continue;
+                }
+                for rot in 0..4u8 {
+                    // the capacitor turned, its pads' box centred on the target
+                    scratch.place_part(&cap, Point::new(0.0, 0.0), rot);
+                    let Some((lo, hi)) = extent(&scratch, &cap) else { continue };
+                    let at = Point::new(snap(target.x - (lo.x + hi.x) / 2.0), snap(target.y - (lo.y + hi.y) / 2.0));
+                    scratch.place_part(&cap, at, rot);
+                    let Some((lo, hi)) = extent(&scratch, &cap) else { continue };
+                    if lo.x < inside.0.x || lo.y < inside.0.y || hi.x > inside.1.x || hi.y > inside.1.y {
+                        continue;
+                    }
+                    if boxes.iter().any(|(l, h)| (l.x - hi.x).max(lo.x - h.x).max((l.y - hi.y).max(lo.y - h.y)) < ALIGN_SPACE) {
+                        continue;
+                    }
+                    let pads: Vec<Pad> = scratch.pads.iter().filter(|q| q.refdes == cap).cloned().collect();
+                    let c = cost_of(&pads);
+                    if best_at.as_ref().is_none_or(|b| c < b.0 - 1e-9) {
+                        best_at = Some((c, at, rot));
+                    }
+                }
+            }
+        }
+        if let Some((c, at, rot)) = best_at
+            && c < cost_of(&cap_pads) - 1.0
+        {
+            board.place_part(&cap, at, rot);
+        } else {
+            let _ = part;
         }
     }
 }
@@ -1098,6 +1214,32 @@ mod tests {
         let pp = |r: &str| plain.parts.iter().find(|p| p.refdes == r).unwrap().pos;
         let alike = (2..=8).all(|k| ((pp(&format!("C{k}")).x - pp(&format!("R{k}")).x) - (pp("C1").x - pp("R1").x)).abs() < 1e-6 && ((pp(&format!("C{k}")).y - pp(&format!("R{k}")).y) - (pp("C1").y - pp("R1").y)).abs() < 1e-6);
         assert!(!alike || plain.parts.len() < 16, "the test means something only if the plain layout is not already a grid");
+    }
+
+    #[test]
+    fn a_bypass_capacitor_left_far_from_its_ic_is_moved_to_the_supply_pin() {
+        let mut b = ics_with_caps();
+        b.set_rect_outline(0.0, 0.0, 100.0, 60.0);
+        // U1 at the middle, its capacitor C1 far away
+        b.place_part("U1", Point::new(30.0, 20.0), 0);
+        b.place_part("U2", Point::new(60.0, 20.0), 0);
+        b.place_part("C1", Point::new(5.0, 5.0), 0);
+        b.place_part("C2", Point::new(80.0, 5.0), 0);
+        for k in 0..6 {
+            b.place_part(&format!("R{k}"), Point::new(30.0 + 5.0 * k as f64, 45.0), 0);
+        }
+        let near = |b: &Board, cap: &str, ic: &str| gap_to_pin(b, cap, ic, "VCC");
+        assert!(near(&b, "C1", "U1") > 20.0 && near(&b, "C2", "U2") > 15.0);
+        attach_bypass_caps(&mut b, (Point::new(0.0, 0.0), Point::new(100.0, 60.0)), &Default::default());
+        assert!(near(&b, "C1", "U1") <= BYPASS_NEAR + 1.5, "{}", near(&b, "C1", "U1"));
+        assert!(near(&b, "C2", "U2") <= BYPASS_NEAR + 1.5, "{}", near(&b, "C2", "U2"));
+        // not on top of anything
+        assert!(!crowded(&b, "C1") && !crowded(&b, "C2"));
+        assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+        // a capacitor already near its pin stays
+        let again = b.clone();
+        attach_bypass_caps(&mut b, (Point::new(0.0, 0.0), Point::new(100.0, 60.0)), &Default::default());
+        assert!(b.parts.iter().zip(&again.parts).all(|(a, c)| a.pos == c.pos && a.rot == c.rot));
     }
 
     #[test]
