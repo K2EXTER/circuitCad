@@ -3,7 +3,7 @@ name = "cli"
 version = "0.1.0"
 edition = "2024"
 description = "ccad: circuitCad without the window. A line-oriented script (build a schematic by name, check, simulate, make a board, export) with one JSON object per answer, for scripts and AI agents."
-license = "MIT OR Apache-2.0"
+license = "AGPL-3.0-or-later"
 repository = "https://github.com/K2EXTER/circuitCad"
 
 [[bin]]

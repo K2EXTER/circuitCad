@@ -3,7 +3,7 @@ name = "sim-core"
 version = "0.1.0"
 edition = "2024"
 description = "circuitCad: 回路シミュレータ (DC / 過渡 / AC / ノイズ / 温度 / モンテカルロ)"
-license = "MIT OR Apache-2.0"
+license = "AGPL-3.0-or-later"
 repository = "https://github.com/K2EXTER/circuitCad"
 
 [dependencies]
