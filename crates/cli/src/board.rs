@@ -32,7 +32,11 @@ impl Session {
                 }
                 let board = self.board.get_or_insert_with(|| Board::new("board", DEFAULT_SIZE.0, DEFAULT_SIZE.1));
                 // library parts bring their own footprint
+                let mut swaps: Vec<(String, pcb_core::swap::SwapSpec)> = vec![];
                 for c in self.sch.flat().components.iter().filter(|c| c.custom.is_some()) {
+                    if let Some(spec) = self.lib.iter().find(|d| d.footprint_name() == c.footprint).and_then(|d| d.swap.clone()) {
+                        swaps.push((c.refdes.clone(), spec));
+                    }
                     if let Some(def) = self.lib.iter().find(|d| d.footprint_name() == c.footprint)
                         && let Ok(fp) = def.footprint()
                     {
@@ -47,8 +51,28 @@ impl Session {
                 }
                 let rep = netlist::import(board, &parts, &nets);
                 netlist::import_shops(board, &shops_of(&self.sch));
+                netlist::import_swaps(board, &swaps);
+                let sheets: Vec<(String, String)> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), self.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();
+                netlist::import_sheets(board, &sheets);
                 netlist::import_hints(board, &netlist::NetHints { currents: self.sch.net_currents.clone().into_iter().collect(), pairs: self.sch.diff_pairs.clone() });
                 Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
+            }
+            "swap" => {
+                // board swap [dry=1]: trade the nets of alike gates and alike inputs of logic ICs so that the airwires get shorter
+                // and cross less (only gates with no copper on their pads). The trade is kept in the board, so a new import keeps it.
+                let (_, kv) = options(rest);
+                let dry = opt(&kv, "dry") == Some("1");
+                let board = self.board_mut()?;
+                if board.swap_specs.is_empty() {
+                    return Err("no part with alike gates here: `board import` first (library parts such as 74HC32 carry the rule)".into());
+                }
+                let r = pcb_core::swap::run(board, dry);
+                let plans: Vec<_> = r
+                    .plans
+                    .iter()
+                    .map(|p| json!({"part": p.refdes, "moves": p.moves, "length_mm": [p.length.0, p.length.1], "crossings": [p.crossings.0, p.crossings.1]}))
+                    .collect();
+                Ok(obj(json!({"dry": dry, "swapped": plans, "locked": r.locked})))
             }
             "autoplace" => {
                 let board = self.board_mut()?;

@@ -126,6 +126,24 @@ impl BoardEditor {
         }
     }
 
+    /// Trade the nets of alike gates and alike inputs of the logic ICs (`pcb_core::swap`) where that shortens and untangles the airwires. One undo step.
+    pub fn swap_gates(&mut self) {
+        self.checkpoint();
+        let r = pcb_core::swap::run(&mut self.board, false);
+        if r.plans.is_empty() {
+            self.undo.pop();
+            self.status = if r.locked.is_empty() {
+                "ゲートの入れ替え: これ以上、短く・交差が減る割り当ては見つかりませんでした".into()
+            } else {
+                format!("ゲートの入れ替え: {} は、どのゲートにも配線が付いているので動かせません。入れ替えたいゲートの配線を消してから、もう一度押してください", r.locked.join("・"))
+            };
+            return;
+        }
+        self.violations.clear();
+        let parts: Vec<String> = r.plans.iter().map(|p| format!("{} (未配線 {:.0} → {:.0} mm、交差 {} → {})", p.refdes, p.length.0, p.length.1, p.crossings.0, p.crossings.1)).collect();
+        self.status = format!("ゲートの入れ替え: {}。回路は同じです。配線はこれからです", parts.join(" / "));
+    }
+
     /// Rip up and route again the nets that detour or carry vias that are not needed (`pcb_core::reroute`), among all the
     /// wiring or just `net`. One undo step; nothing changes when nothing gets better.
     pub fn shorten_routes(&mut self, net: Option<&str>) {

@@ -404,5 +404,6 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         shops: Default::default(),
         land_unverified: false,
         model3d: None,
+        swap: None,
     })
 }

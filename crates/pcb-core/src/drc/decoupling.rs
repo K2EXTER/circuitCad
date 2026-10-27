@@ -16,6 +16,12 @@ pub fn is_supply_net(net: &str) -> bool {
     n.starts_with("VCC") || n.starts_with("VDD") || n.starts_with("VBUS") || n.starts_with('+') || n == "V+" || v_digit || (n.contains('V') && n.chars().next().is_some_and(|c| c.is_ascii_digit()))
 }
 
+/// A negative supply: "VNEG", "VEE", "V-", "-5V", "-12V" ("VSS" is ground here).
+pub fn is_negative_supply_net(net: &str) -> bool {
+    let n = net.to_ascii_uppercase();
+    n.starts_with("VNEG") || n.starts_with("VEE") || n == "V-" || n.starts_with('-') && n.contains('V')
+}
+
 /// ICs (refdes `U…` with 5+ pads) whose supply has no bypass capacitor (a `C…` part joining the same net to ground)
 /// close by. A supply net counts once per IC: inputs tied high (a reset or preset pin on V5) are not supply pins, so
 /// the nearest capacitor to any pad of the IC on that net is what counts. Skipped when the board has no capacitor on
@@ -27,7 +33,7 @@ pub fn decoupling_checks(board: &Board) -> Vec<Violation> {
         if pads.len() < 5 {
             continue;
         }
-        let mut nets: Vec<&str> = pads.iter().filter(|p| is_supply_net(&p.net)).map(|p| p.net.as_str()).collect();
+        let mut nets: Vec<&str> = pads.iter().filter(|p| is_supply_net(&p.net) || is_negative_supply_net(&p.net)).map(|p| p.net.as_str()).collect();
         nets.sort_unstable();
         nets.dedup();
         for net in nets {

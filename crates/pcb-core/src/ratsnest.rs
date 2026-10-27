@@ -60,23 +60,30 @@ fn ratsnest_with_vias(board: &Board, grp: &[usize], via_grp: &[usize]) -> Vec<Ai
 
     let mut out = vec![];
     for (net, pads) in by_net {
-        // Prim's algorithm over copper groups, using the closest pad pair as edge length
-        let mut connected: Vec<usize> = vec![pads[0].1];
-        loop {
-            let mut best: Option<(f64, Point, Point, usize)> = None;
-            for &(pa, ga) in pads.iter().filter(|p| connected.contains(&p.1)) {
-                for &(pb, gb) in pads.iter().filter(|p| !connected.contains(&p.1)) {
-                    let d = pa.dist(pb);
-                    if best.is_none_or(|b| d < b.0) {
-                        best = Some((d, pa, pb, gb));
-                    }
+        out.extend(join_groups(net, &pads));
+    }
+    out
+}
+
+/// The airwires of one net, from its points (position, copper group): Prim's algorithm over the copper groups, using
+/// the closest pair of points as the length of an edge.
+pub(crate) fn join_groups(net: &str, pads: &[(Point, usize)]) -> Vec<Airwire> {
+    let mut out = vec![];
+    let Some(first) = pads.first() else { return out };
+    let mut connected: Vec<usize> = vec![first.1];
+    loop {
+        let mut best: Option<(f64, Point, Point, usize)> = None;
+        for &(pa, _) in pads.iter().filter(|p| connected.contains(&p.1)) {
+            for &(pb, gb) in pads.iter().filter(|p| !connected.contains(&p.1)) {
+                let d = pa.dist(pb);
+                if best.is_none_or(|b| d < b.0) {
+                    best = Some((d, pa, pb, gb));
                 }
-                let _ = ga;
             }
-            let Some((_, a, b, g)) = best else { break };
-            out.push(Airwire { net: net.to_string(), a, b });
-            connected.push(g);
         }
+        let Some((_, a, b, g)) = best else { break };
+        out.push(Airwire { net: net.to_string(), a, b });
+        connected.push(g);
     }
     out
 }

@@ -34,6 +34,20 @@ pub fn import_shops(board: &mut Board, shops: &[(String, std::collections::BTree
         .collect();
 }
 
+/// Take the sheet of each part (reference designator, sheet name). Nothing is kept when all parts are on one sheet.
+pub fn import_sheets(board: &mut Board, sheets: &[(String, String)]) {
+    let one = sheets.first().is_none_or(|f| sheets.iter().all(|(_, s)| *s == f.1));
+    board.part_sheets = if one { Default::default() } else { sheets.iter().filter(|(r, _)| board.parts.iter().any(|p| &p.refdes == r)).cloned().collect() };
+}
+
+/// Take the pin-trading rules of the schematic's library parts (reference designator, rules). Parts that left the board or have
+/// no rules any more are forgotten, and so are the trades of parts that left.
+pub fn import_swaps(board: &mut Board, swaps: &[(String, crate::swap::SwapSpec)]) {
+    board.swap_specs = swaps.iter().filter(|(r, s)| !s.gates.is_empty() && board.parts.iter().any(|p| &p.refdes == r)).cloned().collect();
+    let parts: Vec<String> = board.parts.iter().map(|p| p.refdes.clone()).collect();
+    board.pin_map.retain(|r, _| parts.contains(r));
+}
+
 /// Net currents (A) and differential pairs the schematic declares, by net name.
 #[derive(Clone, Debug, Default)]
 pub struct NetHints {
@@ -101,10 +115,15 @@ pub fn import(board: &mut Board, parts: &[NetlistPart], nets: &[NetlistNet]) -> 
     for p in board.pads.iter_mut().filter(|p| !p.refdes.is_empty()) {
         p.net.clear();
     }
+    // the pin that carries the schematic's pin (pins that were traded, `swap`)
+    let carrier = |board: &Board, r: &str, pin: &str| -> String {
+        board.pin_map.get(r).and_then(|m| m.iter().find(|(_, src)| src.as_str() == pin).map(|(p, _)| p.clone())).unwrap_or_else(|| pin.to_string())
+    };
     for net in nets {
         for (r, pin) in &net.pins {
             // every pad of the pin gets the net (a tab or exposed pad may share the pin number)
             let mut found = false;
+            let pin = &carrier(board, r, pin);
             for p in board.pads.iter_mut().filter(|p| &p.refdes == r && &p.pin == pin) {
                 p.net = net.name.clone();
                 found = true;
@@ -175,11 +194,13 @@ pub fn diff(board: &Board, parts: &[NetlistPart], nets: &[NetlistNet]) -> Netlis
     }
     d.removed = board.parts.iter().filter(|b| !parts.iter().any(|p| p.refdes == b.refdes)).map(|b| b.refdes.clone()).collect();
     let expected: std::collections::HashMap<(&str, &str), &str> = nets.iter().flat_map(|n| n.pins.iter().map(move |(r, p)| ((r.as_str(), p.as_str()), n.name.as_str()))).collect();
+    // a traded pad carries the net of the schematic pin it was traded for
+    let source = |p: &Pad| -> String { board.pin_map.get(&p.refdes).and_then(|m| m.get(&p.pin)).cloned().unwrap_or_else(|| p.pin.clone()) };
     d.nets = board
         .pads
         .iter()
         .filter(|p| !p.refdes.is_empty() && parts.iter().any(|q| q.refdes == p.refdes))
-        .filter(|p| p.net != expected.get(&(p.refdes.as_str(), p.pin.as_str())).copied().unwrap_or(""))
+        .filter(|p| p.net != expected.get(&(p.refdes.as_str(), source(p).as_str())).copied().unwrap_or(""))
         .count();
     d
 }
@@ -229,6 +250,34 @@ mod tests {
         let net_of = |r: &str, pin: &str| b.pads.iter().find(|p| p.refdes == r && p.pin == pin).unwrap().net.clone();
         assert_eq!(net_of("R1", "2"), "MID");
         assert_eq!(net_of("R3", "2"), "GND");
+    }
+
+    #[test]
+    fn a_traded_pin_keeps_its_trade_through_a_new_import() {
+        let mut b = Board::new("t", 30.0, 20.0);
+        import(&mut b, &parts(), &nets());
+        // R2 pin 1 (MID) and pin 2 (GND) trade nets, as `swap` would record
+        b.pin_map.insert("R2".into(), [("1".to_string(), "2".to_string()), ("2".to_string(), "1".to_string())].into());
+        for p in b.pads.iter_mut().filter(|p| p.refdes == "R2") {
+            p.net = if p.pin == "1" { "GND".into() } else { "MID".into() };
+        }
+        assert_eq!(diff(&b, &parts(), &nets()).nets, 0, "the trade is meant, not a difference");
+        import(&mut b, &parts(), &nets());
+        let net_of = |r: &str, pin: &str| b.pads.iter().find(|p| p.refdes == r && p.pin == pin).unwrap().net.clone();
+        assert_eq!((net_of("R2", "1"), net_of("R2", "2")), ("GND".to_string(), "MID".to_string()));
+    }
+
+    #[test]
+    fn sheets_are_kept_only_when_the_circuit_has_more_than_one() {
+        let mut b = Board::new("t", 30.0, 20.0);
+        import(&mut b, &parts(), &nets());
+        let sheet = |r: &str, s: &str| (r.to_string(), s.to_string());
+        import_sheets(&mut b, &[sheet("R1", "電源"), sheet("R2", "電源"), sheet("R3", "電源")]);
+        assert!(b.part_sheets.is_empty(), "one sheet is nothing to tell apart");
+        import_sheets(&mut b, &[sheet("R1", "電源"), sheet("R2", "制御"), sheet("R9", "制御")]);
+        assert_eq!(b.part_sheets.len(), 2, "a part that is not on the board is left out: {:?}", b.part_sheets);
+        import_sheets(&mut b, &[]);
+        assert!(b.part_sheets.is_empty());
     }
 
     #[test]

@@ -359,9 +359,12 @@ pub struct BoardEditor {
     hover_net: Option<(String, Pos2)>,
     /// A value of a net class is being dragged: the undo step was taken at its start.
     drag_edit: bool,
-    /// The net whose window is open (a click on its copper with the Select tool), and whether a click opens it at all.
+    /// The net whose window is open (from the right-click menu of its copper with the Select tool).
     net_win: Option<String>,
-    net_win_on: bool,
+    /// The net under the pointer when the right-click menu was opened (Select tool, not on a pour's corner or edge).
+    net_menu: Option<String>,
+    /// Tint the parts by the schematic sheet they come from.
+    show_sheets: bool,
     /// Select tool: a drag that starts on a track slides it (off by default: a slip of the mouse moved wiring)
     track_drag_on: bool,
     /// Set by the net window for a net with no current: `App` answers with the schematic's DC current of that net (`fill_net_current`).
@@ -479,7 +482,8 @@ impl Default for BoardEditor {
             hover_net: None,
             drag_edit: false,
             net_win: None,
-            net_win_on: true,
+            net_menu: None,
+            show_sheets: true,
             track_drag_on: false,
             net_current_request: None,
             dc_currents_ready: false,
@@ -537,6 +541,7 @@ mod netglow;
 mod tracking;
 mod netclass;
 mod netwindow;
+mod sheets;
 mod currentwindow;
 mod file;
 mod actions;

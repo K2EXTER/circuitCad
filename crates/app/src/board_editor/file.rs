@@ -159,11 +159,15 @@ impl BoardEditor {
         // A part added to the library folder after the program started (ccad part import, a file copied in) is not in `library` yet:
         // look in the folder itself before giving up on its footprint.
         let mut on_disk: Option<Vec<part_lib::PartDef>> = None;
+        let mut swaps: Vec<(String, pcb_core::swap::SwapSpec)> = vec![];
         for c in sch.components.iter().filter(|c| c.custom.is_some()) {
             let found = match sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint) {
                 Some(d) => Some(d),
                 None => on_disk.get_or_insert_with(|| part_lib::load_dir(&part_lib::default_dir()).0).iter().find(|d| d.footprint_name() == c.footprint),
             };
+            if let Some(spec) = found.and_then(|d| d.swap.clone()) {
+                swaps.push((c.refdes.clone(), spec));
+            }
             if let Some(def) = found
                 && let Ok(fp) = def.footprint() {
                     self.board.add_footprint(fp);
@@ -178,6 +182,9 @@ impl BoardEditor {
         let rep = netlist::import(&mut self.board, &parts, &nets);
         let shops: Vec<_> = sch.components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect();
         netlist::import_shops(&mut self.board, &shops);
+        netlist::import_swaps(&mut self.board, &swaps);
+        let sheets: Vec<(String, String)> = sch.components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), sch_ed.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();
+        netlist::import_sheets(&mut self.board, &sheets);
         netlist::import_hints(&mut self.board, &netlist::NetHints { currents: sch.net_currents.clone().into_iter().collect(), pairs: sch.diff_pairs.clone() });
         self.selected = None;
         self.multi.clear();

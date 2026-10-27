@@ -356,6 +356,32 @@ mod drc_tests {
     }
 
     #[test]
+    fn a_negative_supply_pin_needs_a_bypass_capacitor_too() {
+        let mut b = ic_board(Some(12.0));
+        // U1 pin 5 is on VNEG; the only capacitor is on VCC–GND, so the negative rail has none
+        b.pads[4].net = "VNEG".into();
+        let v = decoupling_checks(&b);
+        assert_eq!(v.len(), 1, "{v:?}");
+        assert!(v[0].message.contains("U1.5") && v[0].message.contains("VNEG"), "{}", v[0].message);
+        // a VNEG–GND capacitor next to it settles it
+        b.parts.push(Part { refdes: "C2".into(), value: "100n".into(), footprint: "C_0805".into(), pos: Point::new(12.0, 10.0), rot: 0, side: Side::Top });
+        for (pin, net, dx) in [("1", "VNEG", 0.0), ("2", "GND", 2.0)] {
+            let mut p = Pad::new(Point::new(12.0 + dx, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+            p.refdes = "C2".into();
+            p.pin = pin.into();
+            p.net = net.into();
+            b.pads.push(p);
+        }
+        assert!(decoupling_checks(&b).is_empty(), "{:?}", decoupling_checks(&b));
+        for n in ["VNEG", "VEE", "V-", "-5V", "-12V"] {
+            assert!(is_negative_supply_net(n), "{n}");
+        }
+        for n in ["VCC", "GND", "VSS", "VIN"] {
+            assert!(!is_negative_supply_net(n), "{n}");
+        }
+    }
+
+    #[test]
     fn acute_corners_are_flagged_but_45_degree_bends_are_not() {
         let mut b = board();
         // 135 degree interior angle (a 45 degree bend)

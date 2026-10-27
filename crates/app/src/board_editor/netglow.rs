@@ -60,8 +60,8 @@ impl BoardEditor {
         }
         let Some(pos) = resp.hover_pos() else { return };
         let net = self.net_under(self.to_world(rect, pos));
-        // a click on copper of a net opens the window of that net; a click on nothing closes it
-        if self.net_win_on && resp.clicked_by(egui::PointerButton::Primary) {
+        // the window is opened from the right-click menu; while it is open a click on copper of another net switches it, a click on nothing closes it
+        if self.net_win.is_some() && resp.clicked_by(egui::PointerButton::Primary) {
             self.net_win = net.clone();
         }
         self.hover_net = net.map(|n| (n, pos));

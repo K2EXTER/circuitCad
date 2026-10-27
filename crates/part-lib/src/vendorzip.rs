@@ -452,6 +452,7 @@ impl VendorIndex {
             glyph: if polar { "electrolytic" } else { "capacitor" }.into(),
             body: None,
             model3d: None,
+            swap: None,
             shops: Default::default(),
             land_unverified: false,
         };

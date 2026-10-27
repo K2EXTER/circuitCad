@@ -71,6 +71,17 @@ impl BoardEditor {
         self.net_win = Some(net.to_string());
     }
 
+    /// The right-click menu on copper of a net (Select tool).
+    pub(super) fn net_menu_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(net) = self.net_menu.clone() else { return };
+        ui.label(egui::RichText::new(self.net_caption(&net)).strong());
+        ui.separator();
+        if ui.button("ネットの設定…").on_hover_text("このネットの電流・推奨の線幅・ネットクラス (線幅・間隔・ビア・整え方) の窓を開きます").clicked() {
+            self.open_net_window(&net);
+            ui.close();
+        }
+    }
+
     pub fn net_window(&mut self, ctx: &egui::Context) {
         let Some(net) = self.net_win.clone() else {
             self.net_win_asked = None;

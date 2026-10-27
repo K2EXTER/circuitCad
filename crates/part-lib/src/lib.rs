@@ -74,6 +74,9 @@ pub struct PartDef {
     /// In the footprint's frame, millimetres, z = 0 on the face the part sits on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model3d: Option<pcb_core::mesh::Mesh3d>,
+    /// Gates and inputs that are alike, so their nets may trade places on the board (`ccad board swap`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub swap: Option<pcb_core::swap::SwapSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

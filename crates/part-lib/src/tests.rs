@@ -445,6 +445,7 @@ fn write_chip_examples() {
             glyph: if name.starts_with("CE_") || name.starts_with("CT_") { "electrolytic".into() } else { t.kind.glyph().into() },
             body: None,
             model3d: None,
+            swap: None,
             shops: existing_shops(format!("{}/examples/{name}.part.json", env!("CARGO_MANIFEST_DIR"))),
             land_unverified: false,
         };

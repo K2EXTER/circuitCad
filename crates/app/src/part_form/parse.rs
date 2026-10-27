@@ -368,6 +368,7 @@ impl PartForm {
             shops: Default::default(),
             land_unverified: self.land_unverified,
             model3d: self.model3d.clone(),
+            swap: None,
         })
     }
 }

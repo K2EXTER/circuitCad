@@ -329,6 +329,7 @@ impl BoardEditor {
     }
 
     pub(super) fn draw_overlays(&self, painter: &egui::Painter, rect: Rect) {
+        self.draw_sheet_groups(painter, rect);
         if self.vis.airwires {
             for w in self.cached_airwires().iter() {
                 painter.line_segment([self.to_screen(rect, w.a), self.to_screen(rect, w.b)], Stroke::new(1.0, Color32::from_rgb(240, 220, 90)));

@@ -495,6 +495,16 @@ pub struct Board {
     /// Shop part numbers of library parts (reference designator -> shop id -> number), taken from the schematic on import.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub part_shops: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+    /// The schematic sheet each part was drawn on (reference designator -> sheet name), taken on import; empty for a one-sheet circuit.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub part_sheets: std::collections::BTreeMap<String, String>,
+    /// Which pins of a part may trade nets (alike gates, alike inputs), taken from the library part on import.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub swap_specs: std::collections::BTreeMap<String, crate::swap::SwapSpec>,
+    /// Pins that were traded (`swap`): reference designator -> pad pin -> the schematic pin whose net the pad carries.
+    /// A new import of the schematic keeps the trade.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub pin_map: std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
     /// Where the user moved a part's silkscreen designator to: reference designator -> offset (mm) from the automatic spot.
     /// The text follows its part and keeps the offset; an entry is removed when the text is put back.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -579,6 +589,9 @@ impl Board {
             finish: Default::default(),
             finish_exclude: vec![],
             part_shops: Default::default(),
+            swap_specs: Default::default(),
+            part_sheets: Default::default(),
+            pin_map: Default::default(),
             label_offsets: Default::default(),
             rules: Rules::default(),
         }

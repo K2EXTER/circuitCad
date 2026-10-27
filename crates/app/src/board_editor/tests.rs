@@ -2120,3 +2120,16 @@ fn group_move_cost() {
         let _ = e.board.clone();
     });
 }
+
+
+#[test]
+fn each_sheet_of_the_circuit_gets_its_own_colour() {
+    let mut e = BoardEditor::default();
+    assert!(e.sheet_colors().is_empty(), "a one-sheet circuit has nothing to colour");
+    e.board.part_sheets.insert("R1".into(), "電源".into());
+    e.board.part_sheets.insert("R2".into(), "制御".into());
+    e.board.part_sheets.insert("R3".into(), "制御".into());
+    let c = e.sheet_colors();
+    assert_eq!(c.len(), 2);
+    assert_ne!(c[0].1, c[1].1);
+}

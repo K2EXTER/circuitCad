@@ -221,6 +221,7 @@ impl Session {
             shops: Default::default(),
             land_unverified: true,
             model3d: None,
+            swap: None,
         };
         let path = part_lib::save(&self.lib_dir, &part).map_err(|e| format!("cannot write the part file: {e}"))?;
         let (lib, errors) = part_lib::load_dir(&self.lib_dir);

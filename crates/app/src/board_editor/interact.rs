@@ -176,10 +176,14 @@ impl BoardEditor {
         } else {
             // on a corner or an edge of a shape of the selected pour: a menu (a corner, a line or an arc, add or take away)
             if resp.secondary_clicked() && self.tool == Tool::Select {
-                self.vmenu = resp.hover_pos().map(|pos| self.to_world(rect, pos)).and_then(|w| self.zone_edit_target(w));
+                let at = resp.hover_pos().map(|pos| self.to_world(rect, pos));
+                self.vmenu = at.and_then(|w| self.zone_edit_target(w));
+                self.net_menu = if self.vmenu.is_none() { at.and_then(|w| self.net_under(w)) } else { None };
             }
             if self.tool == Tool::Select && self.vmenu.is_some() {
                 resp.context_menu(|ui| self.zone_edit_menu(ui));
+            } else if self.tool == Tool::Select && self.net_menu.is_some() {
+                resp.context_menu(|ui| self.net_menu_ui(ui));
             } else if resp.clicked_by(egui::PointerButton::Secondary) {
                 self.leave_tool();
             }
