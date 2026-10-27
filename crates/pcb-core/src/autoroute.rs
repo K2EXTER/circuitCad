@@ -36,11 +36,15 @@ pub struct RouteOptions {
     pub outer_only: bool,
     /// Put no via at all: the route stays on the layer of its pads (for a sensitive line that must not change layer).
     pub no_vias: bool,
+    /// What a via costs the search, in mm of track (a higher value gives routes with fewer vias).
+    pub via_cost: f64,
+    /// What a bend costs the search, as a multiple of the grid pitch for each 45 degrees turned (a higher value gives straighter lines).
+    pub bend_cost: f64,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4 }
     }
 }
 
@@ -151,7 +155,8 @@ fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>,
     let mut report = RouteReport::default();
     let mut failed: Vec<Airwire> = vec![];
     loop {
-        let mut wires: Vec<Airwire> = ratsnest(board)
+        // pad to pad: a via the user placed on a net is no end of a connection (the route starts and ends on pads)
+        let mut wires: Vec<Airwire> = pad_ratsnest(board)
             .into_iter()
             .filter(|w| only_net.is_none_or(|n| w.net == n))
             .filter(|w| !failed.contains(w))
@@ -168,6 +173,14 @@ fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>,
     }
     report.failed = failed;
     report
+}
+
+/// The open connections between pads: [`ratsnest`] without the vias as ends (a net's vias that no track leads to would otherwise be
+/// the nearest "end", and the connection could not be routed from a via).
+fn pad_ratsnest(board: &Board) -> Vec<Airwire> {
+    let conn = connectivity(board);
+    let groups: Vec<usize> = (0..board.pads.len()).map(|i| conn.pad_group(i)).collect();
+    crate::ratsnest::ratsnest_in(board, &groups)
 }
 
 /// Route one connection. Returns false (and leaves the board untouched) when there is no
@@ -722,7 +735,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
         let (dx, dy) = ((i as f32 - gc.0 as f32).abs(), (j as f32 - gc.1 as f32).abs());
         g * (dx.max(dy) + 0.4142 * dx.min(dy)) * if following { 0.4 } else { 0.8 }
     };
-    let via_cost = 3.0f32; // a via costs as much as 3 mm of track
+    let via_cost = opt.via_cost as f32;
 
     let mut sc = Scratch::take(n_states);
     let mut heap = BinaryHeap::new();
@@ -771,7 +784,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
                 0.0
             } else {
                 let diff = (nd as i32 - d as i32).rem_euclid(8);
-                g * 0.4 * diff.min(8 - diff) as f32
+                g * opt.bend_cost as f32 * diff.min(8 - diff) as f32
             };
             let ns = enc(l, ni, nj, nd);
             let nc = c0 + step + turn;
@@ -965,7 +978,7 @@ impl Router {
             let (dx, dy) = ((i as f32 - cb.0 as f32).abs(), (j as f32 - cb.1 as f32).abs());
             g * (dx.max(dy) + 0.4142 * dx.min(dy)) * 0.8
         };
-        let via_cost = 3.0f32;
+        let via_cost = self.opt.via_cost as f32;
         let mut cost = vec![f32::INFINITY; n_states];
         let mut parent = vec![u32::MAX; n_states];
         let mut heap = BinaryHeap::new();
@@ -1009,7 +1022,7 @@ impl Router {
                     0.0
                 } else {
                     let diff = (nd as i32 - d as i32).rem_euclid(8);
-                    g * 0.4 * diff.min(8 - diff) as f32
+                    g * self.opt.bend_cost as f32 * diff.min(8 - diff) as f32
                 };
                 let ns = enc(l, ni, nj, nd);
                 let nc = c0 + step + turn;

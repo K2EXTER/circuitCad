@@ -224,3 +224,8 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 
 - `swap.rs` ゲート・入力の入れ替え。74HC32 のように同じゲートが並ぶ IC(部品 JSON の `swap`: `gates`=同じゲートのピン列、`inputs`=ゲートの中で入れ替えられる入力の位置)は、ゲートの割り当てを変えても回路が同じ。取り込みで `Board.swap_specs` に入り(`netlist::import_swaps`)、`swap::run(board, dry)` が、パッドに配線もビアも付いていないゲートだけを対象に、未配線の長さ + 3mm × 交差数(`CROSSING_COST`)がいちばん小さい割り当てを探す(ゲート 6 個までは全部の順番、それより多いときは 2 個ずつの入れ替え。そのあと入力の入れ替えを 1 個ずつ。最大 4 周)。ベタのネットに乗るゲートと、ネットのないゲートは動かさない。結果はパッドのネットを入れ替え、`Board.pin_map`(パッドのピン→そのパッドがネットを受け取った回路図のピン)に覚える。`netlist::import` は `pin_map` のとおりにネットを付け、`diff` も入れ替えを「違い」に数えない。回路図は変えない(回路図への反映は候補 C3)。CLI は `board swap [dry=1]`、アプリは「ゲートを入れ替えて交差を減らす」。テスト `swap.rs`・`netlist.rs` の `a_traded_pin_keeps_its_trade_through_a_new_import`
 - `drc/decoupling.rs` は負電源(`is_negative_supply_net`: VNEG・VEE・V-・-5V)のピンも、近くにバイパスコンデンサがあるか調べる
+
+- 自動配線の接続の端は、パッドだけ(`autoroute.rs` の `pad_ratsnest`)。以前は `ratsnest` のままで、ネットの途中に手で置いたビア(配線が行っていない)が「いちばん近い端」になると、パッドからビアへは引けず、その接続が通らなかった(マイクロオームメーターの GN4〜6 が、ビアを置いたあとで全部失敗した原因)。テスト `a_via_of_the_net_that_no_track_leads_to_does_not_stop_the_route`
+- ルーターの探索の重みは `RouteOptions.via_cost`(ビア 1 個を何 mm の配線と数えるか。既定 3)と `bend_cost`(45° 曲がるごとにグリッド何個分か。既定 0.4)。`reroute.rs` の `improve_routes` は、引き直しの探索を `via_cost` 10(`VIA_WEIGHT`)・`bend_cost` 1.0 で行い、採否のコストも「長さ + ビア × 10 + 曲がり × 0.7mm(`BEND_WEIGHT`)」にした(曲がり = 同じ層の 2 本が 1 点で出会い、一直線でない所)。細かい折れ(階段)の多い配線は、長さがほとんど同じでも引き直しの候補になる(2 つまでの曲がりは数えない)。マイクロオームメーターの基板で、ビア 378→367・配線 1477→1452 本・長さ −36mm。テスト `a_route_of_many_small_jogs_is_straightened_though_it_is_hardly_longer`
+- `board picture marks=1 finish=1` の DRC の印は、整えた形の検査(`check_final`、アプリと同じ)。`finish` なしは元の配線の検査。
+- 74HC のゲート類の入れ替えの規則は、部品 JSON の `swap` のほか、部品名から決める組み込みの表(`part-lib` の `swap_for`)も持つ(ライブラリのコピーが古くても使える)。

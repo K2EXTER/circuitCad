@@ -461,7 +461,9 @@ board status
     assert!(ok, "{a:?}");
     let imp = a.iter().find(|v| v.get("length_mm").is_some()).expect("improve answer");
     let (before, after) = (imp["length_mm"][0].as_f64().unwrap(), imp["length_mm"][1].as_f64().unwrap());
-    assert!(after <= before + 1e-6, "{imp}");
+    // what improves is the cost: a longer route may be kept when it saves vias (a via counts 10 mm)
+    let (v0, v1) = (imp["vias"][0].as_f64().unwrap(), imp["vias"][1].as_f64().unwrap());
+    assert!(after + 10.0 * v1 <= before + 10.0 * v0 + 1e-6, "{imp}");
     assert_eq!(imp["unrouted_left"], 0);
     let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
     assert_eq!((st["drc_violations"].as_u64(), st["unrouted"].as_u64()), (Some(0), Some(0)), "{st}");

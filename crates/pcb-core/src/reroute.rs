@@ -4,7 +4,7 @@
 //! The router makes one connection at a time, shortest first, and never moves what it has made, so a long net that
 //! came late has to detour round the nets that came before. Here the net with the most to gain goes first: the net and
 //! one of its neighbours are taken out, the net is routed first and the neighbour after it. A change is kept only when
-//! every net is still connected, the DRC finds no more than before and the cost (length + [`VIA_WEIGHT`] mm per via)
+//! every net is still connected, the DRC finds no more than before and the cost (length + [`VIA_WEIGHT`] mm per via + [`BEND_WEIGHT`] mm per bend)
 //! has gone down; otherwise the board is left as it was.
 
 use crate::autoroute::{autoroute, RouteOptions};
@@ -17,6 +17,11 @@ use std::time::{Duration, Instant};
 
 /// What a via is worth in millimetres of track when comparing two routes of a net.
 pub const VIA_WEIGHT: f64 = 10.0;
+/// What a bend of a route is worth in millimetres of track (a staircase of short jogs costs more than a straight run).
+pub const BEND_WEIGHT: f64 = 0.7;
+/// The search of a route made again counts a via as much as [`VIA_WEIGHT`] and bends dearly, so that what it makes is what the
+/// comparison asks for (the router's own, cheaper, defaults are for the first run).
+const SEARCH_BEND_COST: f64 = 1.0;
 /// A net must be this much (mm) above its shortest length (or carry a via) to be tried.
 const MIN_EXCESS: f64 = 2.0;
 /// A change must save at least this much (mm of cost) to be kept.
@@ -70,10 +75,10 @@ fn shortest_tree(pts: &[Point]) -> f64 {
     total
 }
 
-/// Per net: (length of its tracks, number of its vias).
-fn net_use(board: &Board) -> HashMap<String, (f64, usize)> {
+/// Per net: (length of its tracks, number of its vias, number of bends).
+fn net_use(board: &Board) -> HashMap<String, (f64, usize, usize)> {
     let conn = connectivity(board);
-    let mut out: HashMap<String, (f64, usize)> = HashMap::new();
+    let mut out: HashMap<String, (f64, usize, usize)> = HashMap::new();
     for (i, t) in board.tracks.iter().enumerate() {
         if let Some(n) = conn.track_net(i) {
             out.entry(n.to_string()).or_default().0 += t.a.dist(t.b);
@@ -84,11 +89,35 @@ fn net_use(board: &Board) -> HashMap<String, (f64, usize)> {
             out.entry(n.to_string()).or_default().1 += 1;
         }
     }
+    // a bend: two tracks of one layer end at one point (nothing else there) and do not run on in a line
+    let key = |p: Point, side: Side| ((p.x * 1e3).round() as i64, (p.y * 1e3).round() as i64, side);
+    let mut ends: HashMap<(i64, i64, Side), Vec<(usize, Point)>> = HashMap::new();
+    for (i, t) in board.tracks.iter().enumerate() {
+        ends.entry(key(t.a, t.side)).or_default().push((i, t.b));
+        ends.entry(key(t.b, t.side)).or_default().push((i, t.a));
+    }
+    for ((x, y, _), v) in &ends {
+        if v.len() != 2 || v[0].0 == v[1].0 {
+            continue;
+        }
+        let at = Point::new(*x as f64 / 1e3, *y as f64 / 1e3);
+        let (u1, u2) = ((v[0].1.x - at.x, v[0].1.y - at.y), (v[1].1.x - at.x, v[1].1.y - at.y));
+        let (l1, l2) = (u1.0.hypot(u1.1), u2.0.hypot(u2.1));
+        if l1 < 1e-9 || l2 < 1e-9 {
+            continue;
+        }
+        // a straight continuation has the two directions opposite (cosine -1)
+        if (u1.0 * u2.0 + u1.1 * u2.1) / (l1 * l2) > -0.9998
+            && let Some(n) = conn.track_net(v[0].0)
+        {
+            out.entry(n.to_string()).or_default().2 += 1;
+        }
+    }
     out
 }
 
-fn cost_of(use_: &HashMap<String, (f64, usize)>, nets: &[&str]) -> f64 {
-    nets.iter().map(|n| use_.get(*n).map_or(0.0, |(l, v)| l + VIA_WEIGHT * *v as f64)).sum()
+fn cost_of(use_: &HashMap<String, (f64, usize, usize)>, nets: &[&str]) -> f64 {
+    nets.iter().map(|n| use_.get(*n).map_or(0.0, |(l, v, b)| l + VIA_WEIGHT * *v as f64 + BEND_WEIGHT * *b as f64)).sum()
 }
 
 /// Route `net` (its tracks are gone), and tidy what was added the way the editor does after a run.
@@ -109,6 +138,8 @@ fn route_net(board: &mut Board, opt: &RouteOptions, net: &str) {
 /// are nets that are not routed completely. Nothing is changed when nothing gets better.
 pub fn improve_routes(board: &mut Board, opt: &RouteOptions, from: Option<usize>, only: Option<&str>) -> ImproveReport {
     let start = Instant::now();
+    let search = RouteOptions { via_cost: opt.via_cost.max(VIA_WEIGHT), bend_cost: opt.bend_cost.max(SEARCH_BEND_COST), ..opt.clone() };
+    let opt = &search;
     let mut report = ImproveReport::default();
     if board.tracks.is_empty() {
         return report;
@@ -138,12 +169,13 @@ pub fn improve_routes(board: &mut Board, opt: &RouteOptions, from: Option<usize>
             v
         };
         let mut cands: Vec<(String, f64)> = vec![];
-        for (net, (len, vias)) in &used {
+        for (net, (len, vias, bends)) in &used {
             if poured.contains(net) || big.contains(net) || open.contains(net) || tried.contains(net) || !fresh.contains(net) || only.is_some_and(|o| o != net) {
                 continue;
             }
             let pts: Vec<Point> = board.pads.iter().filter(|p| &p.net == net).map(|p| p.pos).collect();
-            let excess = len + VIA_WEIGHT * *vias as f64 - shortest_tree(&pts);
+            // (the bends a route needs anyway, two for a dogleg, are not held against it)
+            let excess = len + VIA_WEIGHT * *vias as f64 + BEND_WEIGHT * bends.saturating_sub(2) as f64 - shortest_tree(&pts);
             if excess > MIN_EXCESS || *vias > 0 && excess > 0.0 {
                 cands.push((net.clone(), excess));
             }
@@ -202,8 +234,8 @@ pub fn improve_routes(board: &mut Board, opt: &RouteOptions, from: Option<usize>
             report.improved += 1;
             report.saved += was - now;
             for n in &names {
-                let (l0, v0) = before_use.get(*n).copied().unwrap_or((0.0, 0));
-                let (l1, v1) = after_use.get(*n).copied().unwrap_or((0.0, 0));
+                let (l0, v0, _) = before_use.get(*n).copied().unwrap_or((0.0, 0, 0));
+                let (l1, v1, _) = after_use.get(*n).copied().unwrap_or((0.0, 0, 0));
                 report.length += l1 - l0;
                 report.vias += v1 as i64 - v0 as i64;
             }
@@ -258,6 +290,21 @@ mod tests {
         assert!(check(&b).is_empty(), "{:?}", check(&b));
         assert!(length(&b) < before - 15.0, "{before} -> {}", length(&b));
         assert!(r.saved > 15.0 && r.length < -15.0, "{r:?}");
+    }
+
+    #[test]
+    fn a_route_of_many_small_jogs_is_straightened_though_it_is_hardly_longer() {
+        let mut b = Board::new("t", 40.0, 30.0);
+        pad(&mut b, 5.0, 10.0, "N");
+        pad(&mut b, 35.0, 10.0, "N");
+        line(&mut b, &[(5.0, 10.0), (10.0, 10.0), (10.5, 10.5), (15.5, 10.5), (16.0, 10.0), (20.0, 10.0), (20.5, 10.5), (25.5, 10.5), (26.0, 10.0), (35.0, 10.0)]);
+        let (n, len) = (b.tracks.len(), length(&b));
+        assert!(len - 30.0 < 2.0, "the jogs add hardly any length: {len}");
+        assert!(net_use(&b)["N"].2 >= 8, "{:?}", net_use(&b));
+        let r = improve_routes(&mut b, &RouteOptions::default(), None, None);
+        assert!(r.improved >= 1, "{r:?}");
+        assert!(ratsnest(&b).is_empty() && check(&b).is_empty());
+        assert!(b.tracks.len() < n && net_use(&b)["N"].2 <= 2, "{n} -> {} tracks, {:?}", b.tracks.len(), net_use(&b));
     }
 
     #[test]

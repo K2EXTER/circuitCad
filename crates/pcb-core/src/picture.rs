@@ -343,7 +343,8 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
         for w in crate::ratsnest::ratsnest(board) {
             cv.lines(&[[w.a, w.b]], one_px * 2.0, AIRWIRE, 0.9);
         }
-        let viol = drc::check(board);
+        // with the finish the places are those of the finished copper (what the editor and the Gerber files show)
+        let viol = if opts.finish { drc::check_final(board) } else { drc::check(board) };
         for (n, v) in viol.iter().enumerate() {
             let r = 14.0 * one_px;
             let ring: Vec<[Point; 2]> = (0..24).map(|k| {

@@ -382,6 +382,18 @@ mod drc_tests {
     }
 
     #[test]
+    fn a_capacitor_between_two_supplies_bypasses_an_ic_that_runs_between_them() {
+        // a single-supply IC whose 0 V is the negative rail: U1 pin 1 is VCC and pin 5 is VNEG; the capacitor sits between VCC and VNEG
+        let mut b = ic_board(Some(12.0));
+        b.pads[4].net = "VNEG".into();
+        for p in b.pads.iter_mut().filter(|p| p.refdes == "C1" && p.pin == "2") {
+            p.net = "VNEG".into();
+        }
+        let v = decoupling_checks(&b);
+        assert!(v.is_empty(), "{v:?}");
+    }
+
+    #[test]
     fn acute_corners_are_flagged_but_45_degree_bends_are_not() {
         let mut b = board();
         // 135 degree interior angle (a 45 degree bend)

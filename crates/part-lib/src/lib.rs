@@ -318,6 +318,24 @@ pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
     Ok(path)
 }
 
+/// The pin-trading rules of the part named `name` (the symbol's name in the schematic): the library's own, else the built-in ones of
+/// the 74HC gates (a copy in the user's library from before the rules were written has none; "74HC32D" is the 74HC32 in a SOIC).
+pub fn swap_for(name: &str, lib: &[PartDef]) -> Option<pcb_core::swap::SwapSpec> {
+    if let Some(spec) = lib.iter().filter(|d| d.name == name).find_map(|d| d.swap.clone()) {
+        return Some(spec);
+    }
+    let base = name.trim_end_matches(['D', 'N']);
+    let pins = |g: &[&[&str]]| g.iter().map(|gate| gate.iter().map(|p| p.to_string()).collect()).collect::<Vec<Vec<String>>>();
+    // (input, input, output) four times; the inverters (input, output) six times
+    let three = |g: &[&[&str]]| pcb_core::swap::SwapSpec { gates: pins(g), inputs: vec![0, 1] };
+    match base {
+        "74HC00" | "74HC08" | "74HC32" | "74HC86" => Some(three(&[&["1", "2", "3"], &["4", "5", "6"], &["9", "10", "8"], &["12", "13", "11"]])),
+        "74HC02" => Some(three(&[&["2", "3", "1"], &["5", "6", "4"], &["8", "9", "10"], &["11", "12", "13"]])),
+        "74HC04" | "74HC14" => Some(pcb_core::swap::SwapSpec { gates: pins(&[&["1", "2"], &["3", "4"], &["5", "6"], &["9", "8"], &["11", "10"], &["13", "12"]]), inputs: vec![] }),
+        _ => None,
+    }
+}
+
 /// Parts that ship with the program. They are copied into the user's library once.
 pub const EXAMPLES: &[(&str, &str)] = &[
     ("NE555_DIP-8", include_str!("../examples/NE555_DIP-8.part.json")),

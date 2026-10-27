@@ -733,3 +733,13 @@ fn write_kicad_mega_parts() {
         "CH340G_SOIC-16.part.json",
     );
 }
+
+#[test]
+fn the_74hc_gates_have_swap_rules_even_from_a_library_copy_without_them() {
+    for name in ["74HC32", "74HC32D", "74HC14", "74HC14D", "74HC00", "74HC02", "74HC04", "74HC08", "74HC86"] {
+        let spec = swap_for(name, &[]).unwrap_or_else(|| panic!("{name}"));
+        assert!(spec.gates.len() >= 4, "{name}");
+    }
+    assert!(swap_for("74HC4017", &[]).is_none(), "a counter has no alike gates");
+    assert!(swap_for("NE555", &[]).is_none());
+}

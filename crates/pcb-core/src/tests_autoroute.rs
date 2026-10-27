@@ -14,6 +14,19 @@ fn track(b: &mut Board, side: Side, a: (f64, f64), z: (f64, f64)) {
 }
 
 #[test]
+fn a_via_of_the_net_that_no_track_leads_to_does_not_stop_the_route() {
+    // a via the user put on net A (to the plane, say) nearer to the first pad than the second pad is: the open connection is
+    // between the pads, not from the pad to the via
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 10.0, "A", false);
+    pad(&mut b, 35.0, 10.0, "A", false);
+    b.vias.push(Via { pos: Point::new(15.0, 22.0), diameter: 0.6, drill: 0.3, net: "A".into() });
+    let r = autoroute(&mut b, &RouteOptions::default(), None);
+    assert_eq!((r.routed, r.failed.len()), (1, 0), "{r:?}");
+    assert!(ratsnest(&b).iter().all(|w| w.a.dist(w.b) < 1e-9 || b.vias.iter().any(|v| v.pos == w.a || v.pos == w.b)), "only the stray via may be left unjoined: {:?}", ratsnest(&b));
+}
+
+#[test]
 fn two_pads_are_joined_without_breaking_a_rule() {
     let mut b = Board::new("t", 30.0, 20.0);
     pad(&mut b, 5.0, 10.0, "A", false);

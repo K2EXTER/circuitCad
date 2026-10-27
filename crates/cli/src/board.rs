@@ -34,7 +34,7 @@ impl Session {
                 // library parts bring their own footprint
                 let mut swaps: Vec<(String, pcb_core::swap::SwapSpec)> = vec![];
                 for c in self.sch.flat().components.iter().filter(|c| c.custom.is_some()) {
-                    if let Some(spec) = self.lib.iter().find(|d| d.footprint_name() == c.footprint).and_then(|d| d.swap.clone()) {
+                    if let Some(spec) = c.custom.as_ref().and_then(|sym| part_lib::swap_for(&sym.name, &self.lib)) {
                         swaps.push((c.refdes.clone(), spec));
                     }
                     if let Some(def) = self.lib.iter().find(|d| d.footprint_name() == c.footprint)
@@ -750,9 +750,15 @@ impl Session {
             }
             "status" => {
                 let board = self.board_mut()?;
-                let unrouted = pcb_core::ratsnest::ratsnest(board).len();
+                let wires = pcb_core::ratsnest::ratsnest(board);
+                let unrouted = wires.len();
+                // the open connections per net, so that one sees which nets are left without a `board net` for each
+                let mut open: std::collections::BTreeMap<&str, usize> = Default::default();
+                for w in &wires {
+                    *open.entry(w.net.as_str()).or_default() += 1;
+                }
                 let drc = pcb_core::drc::check_final(board).len();
-                Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "drc_violations": drc})))
+                Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "open_nets": open, "drc_violations": drc})))
             }
             "currents" => {
                 let (words, kv) = options(rest);

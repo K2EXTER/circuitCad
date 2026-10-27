@@ -165,7 +165,7 @@ impl BoardEditor {
                 Some(d) => Some(d),
                 None => on_disk.get_or_insert_with(|| part_lib::load_dir(&part_lib::default_dir()).0).iter().find(|d| d.footprint_name() == c.footprint),
             };
-            if let Some(spec) = found.and_then(|d| d.swap.clone()) {
+            if let Some(spec) = c.custom.as_ref().and_then(|sym| part_lib::swap_for(&sym.name, &sch_ed.library)) {
                 swaps.push((c.refdes.clone(), spec));
             }
             if let Some(def) = found

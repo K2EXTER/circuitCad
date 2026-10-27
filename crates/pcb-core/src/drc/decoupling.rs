@@ -22,7 +22,7 @@ pub fn is_negative_supply_net(net: &str) -> bool {
     n.starts_with("VNEG") || n.starts_with("VEE") || n == "V-" || n.starts_with('-') && n.contains('V')
 }
 
-/// ICs (refdes `U…` with 5+ pads) whose supply has no bypass capacitor (a `C…` part joining the same net to ground)
+/// ICs (refdes `U…` with 5+ pads) whose supply has no bypass capacitor (a `C…` part joining the same net to ground or to another supply)
 /// close by. A supply net counts once per IC: inputs tied high (a reset or preset pin on V5) are not supply pins, so
 /// the nearest capacitor to any pad of the IC on that net is what counts. Skipped when the board has no capacitor on
 /// that net at all and no ground net, so a half-finished board is not nagged.
@@ -42,7 +42,9 @@ pub fn decoupling_checks(board: &Board) -> Vec<Violation> {
             let mut nearest: Option<(f64, &Pad)> = None;
             for c in board.parts.iter().filter(|c| c.refdes.starts_with('C')) {
                 let cp: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == c.refdes).collect();
-                if !cp.iter().any(|p| is_ground_net(&p.net)) {
+                // the other side of the capacitor is the return: a ground, or another supply (a single-supply IC whose 0 V is the negative rail
+                // has its capacitor between VCC and that rail)
+                if !cp.iter().any(|p| p.net != net && (is_ground_net(&p.net) || is_supply_net(&p.net) || is_negative_supply_net(&p.net))) {
                     continue;
                 }
                 for p in cp.iter().filter(|p| p.net == net) {

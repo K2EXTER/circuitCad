@@ -67,7 +67,7 @@ impl BoardEditor {
         {
             return Some(r.clone());
         }
-        let opt = RouteOptions { track_width: width, via_diameter: via_dia, via_drill, grid: actions::route_pitch(self.grid), follow: None, clearance, pad_lead: None, outer_only: false, no_vias: false };
+        let opt = RouteOptions { track_width: width, via_diameter: via_dia, via_drill, grid: actions::route_pitch(self.grid), follow: None, clearance, pad_lead: None, outer_only: false, no_vias: false, ..RouteOptions::default() };
         let r = Rc::new(Router::new(&self.board, &opt)?);
         *cache = Some((key, r.clone()));
         Some(r)
