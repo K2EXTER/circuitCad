@@ -11,7 +11,7 @@ use std::collections::HashMap;
 /// Merge collinear joints among the tracks with index `>= from` (a joint touched by an older track is left alone).
 /// Returns the number of tracks removed.
 pub fn merge_collinear(board: &mut Board, from: usize) -> usize {
-    let mut removed = 0;
+    let mut removed = remove_covered(board, from);
     loop {
         let n = merge_pass(board, from);
         if n == 0 {
@@ -19,6 +19,47 @@ pub fn merge_collinear(board: &mut Board, from: usize) -> usize {
         }
         removed += n;
     }
+}
+
+/// Take out the tracks (index `>= from`) that lie entirely inside another track of the same layer that is as wide or wider: a stub that
+/// goes out and comes back, or two tracks drawn over one another. The copper is the same, and so are the connections (an end that
+/// lay on the covered track lies on the covering one). Of two identical tracks the later one goes. Returns how many were removed.
+pub fn remove_covered(board: &mut Board, from: usize) -> usize {
+    const TOL: f64 = 1e-6;
+    let n = board.tracks.len();
+    let mut dead = vec![false; n];
+    for i in from..n {
+        let a = &board.tracks[i];
+        for j in 0..n {
+            if i == j || dead[j] {
+                continue;
+            }
+            let b = &board.tracks[j];
+            if b.side != a.side || b.width + TOL < a.width {
+                continue;
+            }
+            // both ends of `a` on `b` (a is inside b)
+            if crate::drc::point_seg(a.a, b.a, b.b) > TOL || crate::drc::point_seg(a.b, b.a, b.b) > TOL {
+                continue;
+            }
+            // two identical tracks: the earlier one stays
+            let same = b.width - a.width < TOL && crate::drc::point_seg(b.a, a.a, a.b) <= TOL && crate::drc::point_seg(b.b, a.a, a.b) <= TOL;
+            if same && j > i {
+                continue;
+            }
+            dead[i] = true;
+            break;
+        }
+    }
+    let removed = dead.iter().filter(|d| **d).count();
+    if removed > 0 {
+        let mut k = 0;
+        board.tracks.retain(|_| {
+            k += 1;
+            !dead[k - 1]
+        });
+    }
+    removed
 }
 
 fn key(p: Point, side: Side) -> (i64, i64, Side) {

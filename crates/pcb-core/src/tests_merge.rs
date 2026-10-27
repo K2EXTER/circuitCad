@@ -55,12 +55,13 @@ fn bends_widths_sides_and_junctions_are_left_alone() {
     b.tracks.push(trk(Side::Top, 0.25, (20.0, 5.0), (25.0, 5.0)));
     b.tracks.push(trk(Side::Top, 0.25, (25.0, 5.0), (30.0, 5.0)));
     b.tracks.push(trk(Side::Top, 0.25, (25.0, 5.0), (25.0, 9.0)));
-    // a doubling back (same direction from the joint)
+    // a doubling back (same direction from the joint): not a merge, but the shorter track lies inside the longer one and goes
     b.tracks.push(trk(Side::Top, 0.25, (20.0, 20.0), (25.0, 20.0)));
     b.tracks.push(trk(Side::Top, 0.25, (20.0, 20.0), (24.0, 20.0)));
     let n = b.tracks.len();
-    assert_eq!(merge_collinear(&mut b, 0), 0);
-    assert_eq!(b.tracks.len(), n);
+    assert_eq!(merge_collinear(&mut b, 0), 1);
+    assert_eq!(b.tracks.len(), n - 1);
+    assert!(b.tracks.iter().any(|t| t.a == Point::new(20.0, 20.0) && t.b == Point::new(25.0, 20.0)));
 }
 
 #[test]
@@ -105,4 +106,32 @@ fn routed_samples_keep_their_copper_and_lose_pieces() {
     assert_eq!(drc::check(&b).len(), drc_before);
     // nothing is left to merge
     assert_eq!(merge_collinear(&mut b, 0), 0);
+}
+
+#[test]
+fn a_track_drawn_over_another_or_a_stub_that_goes_out_and_comes_back_is_taken_out() {
+    let mut b = Board::new("t", 40.0, 20.0);
+    pad(&mut b, 5.0, 10.0, "A");
+    pad(&mut b, 25.0, 10.0, "A");
+    b.tracks.push(trk(Side::Top, 0.25, (5.0, 10.0), (25.0, 10.0)));
+    // the same track again, and a stub that goes out along it from the middle and back
+    b.tracks.push(trk(Side::Top, 0.25, (25.0, 10.0), (5.0, 10.0)));
+    b.tracks.push(trk(Side::Top, 0.25, (15.0, 10.0), (15.0, 10.0 + 0.0)));
+    b.tracks.push(trk(Side::Top, 0.25, (10.0, 10.0), (12.0, 10.0)));
+    b.tracks.push(trk(Side::Top, 0.25, (12.0, 10.0), (10.0, 10.0)));
+    // a narrower track over a wider one goes, the wider one over a narrower one stays
+    b.tracks.push(trk(Side::Top, 0.5, (6.0, 12.0), (20.0, 12.0)));
+    b.tracks.push(trk(Side::Top, 0.25, (8.0, 12.0), (9.0, 12.0)));
+    b.tracks.push(trk(Side::Top, 0.25, (30.0, 15.0), (35.0, 15.0)));
+    b.tracks.push(trk(Side::Top, 0.5, (31.0, 15.0), (33.0, 15.0)));
+    // on another layer it is no cover
+    b.tracks.push(trk(Side::Bottom, 0.25, (10.0, 10.0), (12.0, 10.0)));
+    let before = b.tracks.len();
+    let n = crate::merge::remove_covered(&mut b, 0);
+    assert_eq!(b.tracks.len(), before - n);
+    // gone: the reversed copy, the zero-length stub, the two stubs over the long track (one of them twice), the narrow one over the wide one
+    assert_eq!(n, 5, "{:?}", b.tracks);
+    assert!(b.tracks.iter().any(|t| t.side == Side::Bottom), "the other layer is not a cover");
+    assert!(b.tracks.iter().any(|t| t.width == 0.5 && t.a.x == 31.0), "the wider track inside a narrower one stays");
+    assert!(b.tracks.iter().any(|t| t.width == 0.25 && t.a.x == 30.0), "and the narrow one it lies in");
 }

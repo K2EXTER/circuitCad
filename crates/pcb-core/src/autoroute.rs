@@ -40,11 +40,14 @@ pub struct RouteOptions {
     pub via_cost: f64,
     /// What a bend costs the search, as a multiple of the grid pitch for each 45 degrees turned (a higher value gives straighter lines).
     pub bend_cost: f64,
+    /// A track on a layer that has a pour cuts the pour: its length counts this many times (1.0: no difference). Keeps wiring
+    /// off the layer of the ground pour where the other layer has room.
+    pub pour_layer_cost: f64,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4 }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2 }
     }
 }
 
@@ -241,6 +244,8 @@ struct Grid {
     layers: Vec<Side>,
     /// Per layer: cells next to the net to follow (empty when not following).
     near: Vec<Vec<bool>>,
+    /// Per layer: what a step on it costs, as a multiple (more on a layer that carries a pour).
+    layer_cost: Vec<f32>,
     /// Cells where no via may be put because its copper would sit on a pad (any layer, any net).
     no_via: Vec<bool>,
 }
@@ -352,7 +357,8 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     }
     let layers = board.copper_layers();
     let nl = layers.len();
-    let mut grid = Grid { x0: lo.x, y0: lo.y, g, nx, ny, trk: vec![vec![0; nx * ny]; nl], via: vec![vec![0; nx * ny]; nl], layers, near: vec![], no_via: vec![false; nx * ny] };
+    let layer_cost: Vec<f32> = layers.iter().map(|l| if board.zones.iter().any(|z| !z.net.is_empty() && z.side == *l) { opt.pour_layer_cost as f32 } else { 1.0 }).collect();
+    let mut grid = Grid { x0: lo.x, y0: lo.y, g, nx, ny, trk: vec![vec![0; nx * ny]; nl], via: vec![vec![0; nx * ny]; nl], layers, near: vec![], layer_cost, no_via: vec![false; nx * ny] };
 
     let r = &board.rules;
     // A path sampled on the grid can pass closer to a corner than its cells do, so inflate a little more.
@@ -776,7 +782,7 @@ fn find_route(board: &Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy:
             if diagonal && !(passable(grid.trk[l][j * nx + ni], net) && passable(grid.trk[l][nj * nx + i], net)) {
                 continue;
             }
-            let mut step = if diagonal { g * std::f32::consts::SQRT_2 } else { g };
+            let mut step = (if diagonal { g * std::f32::consts::SQRT_2 } else { g }) * grid.layer_cost[l];
             if following && grid.near[l][nj * nx + ni] {
                 step *= 0.5; // running next to the partner line is cheap
             }
@@ -1017,7 +1023,7 @@ impl Router {
                 if diagonal && !(passable(grid.trk[l][j * grid.nx + ni], net_id) && passable(grid.trk[l][nj * grid.nx + i], net_id)) {
                     continue;
                 }
-                let step = if diagonal { g * std::f32::consts::SQRT_2 } else { g };
+                let step = (if diagonal { g * std::f32::consts::SQRT_2 } else { g }) * grid.layer_cost[l];
                 let turn = if d == NO_DIR {
                     0.0
                 } else {
