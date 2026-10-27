@@ -43,6 +43,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `merge.rs` 一直線の配線を1本にまとめる(自動配線の後。銅の形は変えない)
 - `padentry.rs` パッドの根元をそろえる(垂直な出入り・2本は両端寄せ。自動配線の直後と全部の配線に)
 - `step.rs`・`mesh.rs` メーカーの STEP を三角形のメッシュ(`Mesh3d`)にして、部品の3Dの形にする(`PartDef.model3d` → `Board.models3d` → `model3d.rs` の `part_meshes`)
+- `orient.rs` 部品の向き(0/90/180/270°)を、未配線の長さと交差が最小になるように決める(配線の付いていない部品だけ。`ccad board orient`、パネルのボタン)
 - `swap.rs` 同じゲート・同じ入力のネットの入れ替え(配置のあと、未配線の長さと交差を減らす。`ccad board swap`、パネルのボタン)
 - `meander.rs` 長さ合わせ(蛇行配線。ネットを目標の長さに)
 - ネットクラス(ネットごとの線幅・間隔・ビア)は `model.rs` の `NetClass`(DRC は `clearance_between`、`autoroute.rs` の `autoroute_sized` が使う。画面は `board_editor/netclass.rs`、CLI は `board class`)

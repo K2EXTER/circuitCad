@@ -47,7 +47,7 @@ pub struct SwapReport {
     pub locked: Vec<String>,
 }
 
-fn pad_has_copper(board: &Board, p: &Pad) -> bool {
+pub(crate) fn pad_has_copper(board: &Board, p: &Pad) -> bool {
     let (w, h) = p.shape.size();
     let on = |q: Point| (q.x - p.pos.x).abs() <= w / 2.0 + 1e-6 && (q.y - p.pos.y).abs() <= h / 2.0 + 1e-6;
     board.tracks.iter().any(|t| (p.drill.is_some() || t.side == p.side) && (on(t.a) || on(t.b))) || board.vias.iter().any(|v| on(v.pos))
@@ -80,7 +80,7 @@ fn is_ground(net: &str) -> bool {
 }
 
 /// How many pairs of airwires of different nets cross (ground nets are carried by a pour: left out).
-fn cross_count(mine: &[Airwire], others: &[Airwire]) -> usize {
+pub(crate) fn cross_count(mine: &[Airwire], others: &[Airwire]) -> usize {
     let side = |o: Point, a: Point, b: Point| (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
     let crosses = |p: &Airwire, q: &Airwire| {
         if p.net == q.net || is_ground(&p.net) || is_ground(&q.net) {

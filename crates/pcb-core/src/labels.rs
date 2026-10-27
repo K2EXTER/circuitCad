@@ -93,7 +93,7 @@ fn obstacles(board: &Board, side: Side) -> Obstacles {
 }
 
 /// The box of the part's pads and silk lines.
-fn body_box(board: &Board, refdes: &str) -> Option<(Point, Point)> {
+pub(crate) fn body_box(board: &Board, refdes: &str) -> Option<(Point, Point)> {
     let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
     let mut any = false;
     let mut add = |p: Point, mx: f64, my: f64| {

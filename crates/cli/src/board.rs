@@ -74,6 +74,22 @@ impl Session {
                     .collect();
                 Ok(obj(json!({"dry": dry, "swapped": plans, "locked": r.locked})))
             }
+            "orient" => {
+                // board orient [dry=1] [parts=U1,U2] [minpads=3]: turn each part (0/90/180/270 degrees) to the way that makes its airwires shortest and crosses
+                // the fewest. Parts with copper on a pad, locked parts, and turns that would land on something are left. A pin keeps its net.
+                let (_, kv) = options(rest);
+                let dry = opt(&kv, "dry") == Some("1");
+                let only: Option<Vec<String>> = opt(&kv, "parts").map(|l| l.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
+                let board = self.board_mut()?;
+                let min_pads = opt(&kv, "minpads").and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
+                let r = pcb_core::orient::run(board, only.as_deref(), min_pads, dry);
+                let turned: Vec<_> = r
+                    .turned
+                    .iter()
+                    .map(|t| json!({"part": t.refdes, "rot": [t.from, t.to], "length_mm": [t.length.0, t.length.1], "crossings": [t.crossings.0, t.crossings.1]}))
+                    .collect();
+                Ok(obj(json!({"dry": dry, "turned": turned, "tried": r.tried})))
+            }
             "autoplace" => {
                 let board = self.board_mut()?;
                 let r = pcb_core::autoplace::autoplace(board)?;

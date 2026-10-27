@@ -12,7 +12,7 @@
 use crate::drc::{connectivity, point_rect, point_seg, shape_geo, violations_of_added, Geo};
 use crate::geom::inside_polygon;
 use crate::model::*;
-use crate::ratsnest::{ratsnest, Airwire};
+use crate::ratsnest::Airwire;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 

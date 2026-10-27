@@ -126,6 +126,21 @@ impl BoardEditor {
         }
     }
 
+    /// Turn the parts that have no wiring yet to the way that shortens and untangles their airwires (`pcb_core::orient`). One undo step.
+    pub fn orient_parts(&mut self) {
+        self.checkpoint();
+        let r = pcb_core::orient::run(&mut self.board, None, 0, false);
+        if r.turned.is_empty() {
+            self.undo.pop();
+            self.status = format!("部品の向き: 回すと短く・交差が減る部品は見つかりませんでした (配線の付いていない部品 {} 個を調べました)", r.tried);
+            return;
+        }
+        self.violations.clear();
+        let list: Vec<String> = r.turned.iter().take(6).map(|t| format!("{} ({}→{}°)", t.refdes, u32::from(t.from) * 90, u32::from(t.to) * 90)).collect();
+        let (a, b) = r.turned.iter().fold((0.0, 0.0), |(a, b), t| (a + t.length.0, b + t.length.1));
+        self.status = format!("部品の向き: {} 個を回しました: {}{}。この部品の未配線の長さ {:.0} → {:.0} mm。気に入らなければ「元に戻す」", r.turned.len(), list.join("・"), if r.turned.len() > 6 { " ほか" } else { "" }, a, b);
+    }
+
     /// Trade the nets of alike gates and alike inputs of the logic ICs (`pcb_core::swap`) where that shortens and untangles the airwires. One undo step.
     pub fn swap_gates(&mut self) {
         self.checkpoint();
