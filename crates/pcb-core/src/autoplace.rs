@@ -787,6 +787,120 @@ fn ic_pair_nets(board: &Board, items: &[(String, Point, f64, f64)], gap: f64, la
     out
 }
 
+/// An IC with the bypass capacitors that belong to it, settled once and kept: how each capacitor is turned, and where its part origin stands from the IC's.
+struct IcBlock {
+    ic: String,
+    caps: Vec<(String, u8, Point)>,
+}
+
+/// For every IC (8 pads or more) the bypass capacitors that serve it (a supply pad on a net of the IC, the other pad on another rail), each
+/// put at the best free place round the IC's pin (as `attach_bypass_caps` does, on a board of the IC and its capacitors alone), turned so that
+/// the supply pad faces the pin. The IC and its capacitors then move as one piece. A capacitor goes to the IC that has both of its nets (a
+/// capacitor between VCC and VNEG, to the IC that runs between them), else to the IC with fewer capacitors; `skip` are parts that are in a copy.
+fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<IcBlock> {
+    use crate::drc::{is_ground_net, is_negative_supply_net, is_supply_net};
+    let rail = |n: &str| is_ground_net(n) || is_supply_net(n) || is_negative_supply_net(n);
+    let supply = |n: &str| is_supply_net(n) || is_negative_supply_net(n);
+    let count = |r: &str| board.pads.iter().filter(|p| p.refdes == r).count();
+    let ics: Vec<&Part> = board.parts.iter().filter(|p| p.refdes.starts_with('U') && count(&p.refdes) >= 8 && !skip.contains(&p.refdes)).collect();
+    let mut assigned: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for cap in board.parts.iter().filter(|p| p.refdes.starts_with('C') && !skip.contains(&p.refdes)) {
+        let cp: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == cap.refdes).collect();
+        let Some(sp) = cp.iter().find(|p| supply(&p.net) && cp.iter().any(|q| q.net != p.net && rail(&q.net))) else { continue };
+        let other = cp.iter().find(|q| q.net != sp.net && rail(&q.net)).map(|q| q.net.as_str());
+        let has = |ic: &Part, net: &str| board.pads.iter().any(|p| p.refdes == ic.refdes && p.net == net);
+        let mut fit: Vec<&&Part> = ics.iter().filter(|ic| has(ic, &sp.net)).collect();
+        if fit.iter().any(|ic| other.is_some_and(|o| has(ic, o))) {
+            fit.retain(|ic| other.is_some_and(|o| has(ic, o)));
+        }
+        fit.sort_by_key(|ic| assigned.get(&ic.refdes).map_or(0, Vec::len));
+        if let Some(ic) = fit.first() {
+            assigned.entry(ic.refdes.clone()).or_default().push(cap.refdes.clone());
+        }
+    }
+    let mut out = vec![];
+    for (ic_name, caps) in assigned {
+        let Some(ic) = board.parts.iter().find(|p| p.refdes == ic_name) else { continue };
+        let mut scratch = Board::new("block", 300.0, 300.0);
+        let mut wanted: Vec<&str> = vec![ic.footprint.as_str()];
+        wanted.extend(caps.iter().filter_map(|c| board.parts.iter().find(|p| &p.refdes == c)).map(|p| p.footprint.as_str()));
+        scratch.footprints = board.footprints.iter().filter(|f| wanted.contains(&f.name.as_str())).cloned().collect();
+        scratch.rules = board.rules.clone();
+        let origin = Point::new(100.0, 100.0);
+        if scratch.set_part(Part { pos: origin, ..ic.clone() }).is_err() {
+            continue;
+        }
+        for c in &caps {
+            if let Some(part) = board.parts.iter().find(|p| &p.refdes == c)
+                && scratch.set_part(Part { pos: Point::new(0.0, 0.0), ..part.clone() }).is_err()
+            {
+                continue;
+            }
+        }
+        for pad in scratch.pads.iter_mut() {
+            pad.net = board.pads.iter().find(|q| q.refdes == pad.refdes && q.pin == pad.pin).map_or(String::new(), |q| q.net.clone());
+        }
+        let mut placed: Vec<IcBlock> = vec![];
+        let mut block = IcBlock { ic: ic_name.clone(), caps: vec![] };
+        for c in &caps {
+            let cap_pads: Vec<Pad> = scratch.pads.iter().filter(|p| &p.refdes == c).cloned().collect();
+            let Some(sp) = cap_pads.iter().find(|p| supply(&p.net) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))).cloned() else { continue };
+            let other_net = cap_pads.iter().find(|q| q.net != sp.net && rail(&q.net)).map(|q| q.net.clone());
+            let pins: Vec<Pad> = scratch.pads.iter().filter(|p| p.refdes == ic_name && p.net == sp.net).cloned().collect();
+            let other_pins: Vec<Pad> = other_net.map_or(vec![], |n| scratch.pads.iter().filter(|p| p.refdes == ic_name && p.net == n).cloned().collect());
+            // the boxes in the way: the IC and the capacitors already put
+            let mut boxes: Vec<(Point, Point)> = extent(&scratch, &ic_name).into_iter().collect();
+            boxes.extend(block.caps.iter().filter_map(|(r, ..)| extent(&scratch, r)));
+            let cost_of = |pads: &[Pad]| -> f64 {
+                let Some(s) = pads.iter().find(|q| q.pin == sp.pin) else { return f64::MAX };
+                let o = pads.iter().find(|q| q.pin != sp.pin && q.net != sp.net);
+                pins.iter()
+                    .map(|pin| {
+                        let near = other_pins.iter().map(|op| o.map_or(0.0, |o| o.pos.dist(op.pos)) + 0.0 * pin.pos.dist(op.pos)).fold(f64::MAX, f64::min);
+                        s.pos.dist(pin.pos) + 0.5 * if near == f64::MAX { 0.0 } else { near }
+                    })
+                    .fold(f64::MAX, f64::min)
+            };
+            let mut best: Option<(f64, Point, u8)> = None;
+            for pin in &pins {
+                let steps = (BYPASS_REACH / BYPASS_STEP) as i32;
+                for ix in -steps..=steps {
+                    for iy in -steps..=steps {
+                        let target = Point::new(pin.pos.x + ix as f64 * BYPASS_STEP, pin.pos.y + iy as f64 * BYPASS_STEP);
+                        if target.dist(pin.pos) > BYPASS_REACH {
+                            continue;
+                        }
+                        for rot in 0..4u8 {
+                            scratch.place_part(c, Point::new(0.0, 0.0), rot);
+                            let Some((lo, hi)) = extent(&scratch, c) else { continue };
+                            let at = Point::new(snap(target.x - (lo.x + hi.x) / 2.0), snap(target.y - (lo.y + hi.y) / 2.0));
+                            scratch.place_part(c, at, rot);
+                            let Some((lo, hi)) = extent(&scratch, c) else { continue };
+                            if boxes.iter().any(|(l, h)| (l.x - hi.x).max(lo.x - h.x).max((l.y - hi.y).max(lo.y - h.y)) < ALIGN_SPACE) {
+                                continue;
+                            }
+                            let pads: Vec<Pad> = scratch.pads.iter().filter(|q| &q.refdes == c).cloned().collect();
+                            let cst = cost_of(&pads);
+                            if best.as_ref().is_none_or(|b| cst < b.0 - 1e-9) {
+                                best = Some((cst, at, rot));
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some((_, at, rot)) = best {
+                scratch.place_part(c, at, rot);
+                block.caps.push((c.clone(), rot, Point::new(at.x - origin.x, at.y - origin.y)));
+            }
+        }
+        let _ = &mut placed;
+        if !block.caps.is_empty() {
+            out.push(block);
+        }
+    }
+    out
+}
+
 fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
     // a refusal must leave the board as it was (the pour wiring is taken out on the way)
     let backup = (!board.tracks.is_empty() || !board.vias.is_empty()).then(|| board.clone());
@@ -815,6 +929,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     }
     // the copies of a small structure are turned the way that wires best, the first one tried by routing it alone (a person tries the small
     // circuit first, and copies what works)
+    let mut in_copies: std::collections::BTreeSet<String> = Default::default();
     if improve && tuning.arrays {
         let names: Vec<String> = board.parts.iter().map(|p| p.refdes.clone()).collect();
         let dummy: Vec<(String, Point, f64, f64)> = names.iter().map(|r| (r.clone(), Point::default(), 0.0, 0.0)).collect();
@@ -822,6 +937,16 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         let sheet_by_name = |i: usize| board.part_sheets.get(&names[i]).cloned().unwrap_or_default();
         let groups = replicas::find(board, &dummy, &skip, &sheet_by_name);
         turn_copies(board, &groups, &names, gap, label);
+        in_copies = groups.iter().flat_map(|g| g.iter().flat_map(|c| c.iter().map(|&i| names[i].clone()))).collect();
+    }
+    // an IC and its bypass capacitors are settled once and move as one piece (the capacitors are turned now, before the parts are measured)
+    let blocks: Vec<IcBlock> = if improve && tuning.bypass && tuning.arrays { ic_blocks(board, &in_copies) } else { vec![] };
+    for b in &blocks {
+        for (cap, rot, _) in &b.caps {
+            if let Some(part) = board.parts.iter().find(|p| &p.refdes == cap).cloned() {
+                board.place_part(cap, part.pos, *rot);
+            }
+        }
     }
     // measure each part at the origin, keeping its rotation
     let mut items: Vec<(String, Point, f64, f64)> = vec![]; // refdes, offset of the pad box, w, h
@@ -851,7 +976,26 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     // copies of one small structure become one item each (laid out alike in a grid); the placement works on those
     let sheet_name = |i: usize| board.part_sheets.get(&items[i].0).cloned().unwrap_or_default();
     let copies = if tuning.arrays { replicas::find(board, &items, &poured, &sheet_name) } else { vec![] };
-    let arrays = build_arrays(&items, &nets, &degree, &copies, improve);
+    let mut arrays = build_arrays(&items, &nets, &degree, &copies, improve);
+    // an IC with its capacitors is one item as well: the corners of the cells of its parts, from where the capacitors stand from the IC
+    for b in &blocks {
+        let Some(ii) = items.iter().position(|it| it.0 == b.ic) else { continue };
+        let corner = |i: usize, off: Point| (off.x + items[i].1.x - gap / 2.0, off.y + items[i].1.y - gap / 2.0 - label);
+        let mut cells: Vec<(usize, f64, f64)> = vec![(ii, corner(ii, Point::new(0.0, 0.0)).0, corner(ii, Point::new(0.0, 0.0)).1)];
+        for (cap, _, off) in &b.caps {
+            if let Some(ci) = items.iter().position(|it| &it.0 == cap) {
+                let c = corner(ci, *off);
+                cells.push((ci, c.0, c.1));
+            }
+        }
+        if cells.len() < 2 {
+            continue;
+        }
+        let (x0, y0) = cells.iter().fold((f64::MAX, f64::MAX), |a, c| (a.0.min(c.1), a.1.min(c.2)));
+        let w = cells.iter().map(|c| c.1 - x0 + items[c.0].2).fold(0.0, f64::max);
+        let h = cells.iter().map(|c| c.2 - y0 + items[c.0].3).fold(0.0, f64::max);
+        arrays.push(Array { members: cells.into_iter().map(|(i, x, y)| (i, x - x0, y - y0)).collect(), w, h });
+    }
     let (citems, cnets, cdegree, csheet, origin) = collapse(&items, &nets, &degree, &arrays, &sheet_name);
     let by_sheet = if tuning.sheets { sheet_groups(&csheet) } else { None };
     let (cspots, used_w, used_h) = match by_sheet {

@@ -1561,9 +1561,9 @@ fn the_arduino_board_lesson_walks_from_import_to_the_order_window() {
     drag_next_to(&mut e, "Y1", &[("1", ("U1", "7")), ("3", ("U1", "8"))], 8.0);
     assert!(far(&e, ("Y1", "3"), ("U1", "8")) <= 9.0, "the other end follows: {}", far(&e, ("Y1", "3"), ("U1", "8")));
     assert_eq!(e.lesson_progress(), 3, "the crystal is near");
+    // the auto placement puts the bypass capacitors by their pins itself (the lesson is to look, and to move one that is still far): the
+    // step is done as soon as both are near, however many the learner had to move
     drag_next_to(&mut e, "C3", &[("1", ("U1", "4"))], 5.0);
-    assert_eq!(e.lesson_progress(), 3, "only the VCC capacitor is near: the AVCC pin has none yet");
-    drag_next_to(&mut e, "C4", &[("1", ("U1", "18"))], 5.0);
     assert_eq!(e.lesson_progress(), 4, "the bypass capacitors are near");
     // the default grid (0.5 mm) may leave connections of this dense board open (on the plain auto placement it leaves two); the
     // tracks it did lay then get in the way of a second try, so the learner takes them back (Ctrl+Z) and routes with a finer grid
