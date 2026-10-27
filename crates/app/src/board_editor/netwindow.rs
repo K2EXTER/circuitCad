@@ -5,6 +5,7 @@
 use super::*;
 use pcb_core::current::{net_widths, round_up_width, width_for_current, CopperSpec};
 use pcb_core::NetClass;
+use pcb_core::model::Role;
 
 /// Did the slider move the value (not just rounding of what it shows)?
 fn slider_changed(before: Option<f64>, after: f64) -> bool {
@@ -210,6 +211,14 @@ impl BoardEditor {
                         ui.small(format!("この値は、同じクラスのネット ({}) にも効きます", others.join("・")));
                     }
                     let c = &mut classes[k];
+                    ui.horizontal(|ui| {
+                        ui.label("役割");
+                        egui::ComboBox::from_id_salt("net_window_role").selected_text(c.role.label()).show_ui(ui, |ui| {
+                            for r in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
+                                ui.selectable_value(&mut c.role, r, r.label());
+                            }
+                        }).response.on_hover_text("このクラスのネットの役割です。自動配線は、役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に引きます。「検出」のネットはビアを使わず、パッドと同じ層だけで引きます");
+                    });
                     ui.horizontal_wrapped(|ui| {
                         ui.add(egui::DragValue::new(&mut c.track_width).speed(0.01).range(rules.min_track_width..=5.0).prefix("線幅 ").suffix(" mm")).on_hover_text("このクラスのネットを引く線の太さ。発注先の最小線幅より細くはできません");
                         ui.add(egui::DragValue::new(&mut c.clearance).speed(0.01).range(rules.min_clearance..=5.0).prefix("間隔 ").suffix(" mm")).on_hover_text("ほかのネットの銅が、このクラスの銅から離れる距離");
@@ -226,7 +235,7 @@ impl BoardEditor {
                     ui.small(format!("いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます", self.track_width, self.via_dia, self.via_drill));
                     if ui.button("このネット専用のクラスを作る").on_hover_text("このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます").clicked() {
                         let width = set_width.or_else(|| self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)))).unwrap_or(self.track_width).max(rules.min_track_width);
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default() });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default() });
                     } else if let Some(w) = set_width {
                         self.track_width = w;
                         self.status = format!("線幅を {w:.2} mm にしました");
@@ -316,7 +325,7 @@ impl BoardEditor {
                 let k = match class_k {
                     Some(k) => k,
                     None if new_target.is_some() => {
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default() });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default() });
                         classes.len() - 1
                     }
                     None => usize::MAX,

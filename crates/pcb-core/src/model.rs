@@ -406,11 +406,77 @@ pub struct NetClass {
     /// How the finish (rounded corners, tapers, round notches) differs for these nets from the board's settings.
     #[serde(skip_serializing_if = "crate::smooth::FinishOverride::is_default")]
     pub finish: crate::smooth::FinishOverride,
+    /// What the nets are for: it decides the order the router takes them in, and a sensing line gets no vias.
+    #[serde(skip_serializing_if = "Role::is_none")]
+    pub role: Role,
+}
+
+/// What a net is for (`docs/routing-guidelines.md`, "役割とルール"). The router takes the nets in the order of the roles: a big current
+/// first, then the switching nodes, the sensing lines, the analog signals, the logic, and the nets of no role after them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    #[default]
+    None,
+    /// A big current (a load, a motor, the main path of a supply).
+    Power,
+    /// A switching node, a gate drive, a clock: short, and first, so that the loop is small.
+    Switching,
+    /// A high-impedance or a Kelvin sensing line: short, on the layer of its pads, no vias.
+    Sense,
+    Analog,
+    Logic,
+}
+
+impl Role {
+    pub fn is_none(&self) -> bool {
+        *self == Role::None
+    }
+
+    /// The place in the order of routing (small first). A net of no role comes after them all.
+    pub fn priority(self) -> u8 {
+        match self {
+            Role::Power => 0,
+            Role::Switching => 1,
+            Role::Sense => 2,
+            Role::Analog => 3,
+            Role::Logic => 4,
+            Role::None => 5,
+        }
+    }
+
+    /// The word for the command line and the files.
+    pub fn name(self) -> &'static str {
+        match self {
+            Role::None => "none",
+            Role::Power => "power",
+            Role::Switching => "switching",
+            Role::Sense => "sense",
+            Role::Analog => "analog",
+            Role::Logic => "logic",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Role> {
+        [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic].into_iter().find(|r| r.name() == s.to_ascii_lowercase())
+    }
+
+    /// The name shown in the window.
+    pub fn label(self) -> &'static str {
+        match self {
+            Role::None => "なし",
+            Role::Power => "大電流",
+            Role::Switching => "スイッチングノード",
+            Role::Sense => "検出 (ビアなし)",
+            Role::Analog => "アナログ信号",
+            Role::Logic => "ロジック",
+        }
+    }
 }
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default() }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None }
     }
 }
 

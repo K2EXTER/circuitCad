@@ -43,11 +43,15 @@ pub struct RouteOptions {
     /// A track on a layer that has a pour cuts the pour: its length counts this many times (1.0: no difference). Keeps wiring
     /// off the layer of the ground pour where the other layer has room.
     pub pour_layer_cost: f64,
+    /// When connections stay open, try them again on a pitch of half, then a quarter of `grid` (down to 0.05 mm), in `autoroute_sized`.
+    pub grid_ladder: bool,
+    /// Nets this run leaves alone (a sensing line that was routed on its own terms is not routed again with vias).
+    pub skip: Vec<String>,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2 }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2, grid_ladder: true, skip: vec![] }
     }
 }
 
@@ -100,9 +104,26 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
 /// normal width by the last run (the width check then warns about it). When the wide tracks leave more connections open
 /// than a plain run does, the plain run is kept. With `only_net`, only that net is routed.
 pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
+    let mut report = route_pass(board, opt, only_net);
+    // what is still open is tried on a finer grid (half, then a quarter of the pitch: tracks go between the legs of a fine-pitch IC)
+    let mut grid = opt.grid;
+    while !report.failed.is_empty() && grid / 2.0 >= MIN_LADDER_GRID - 1e-9 && opt.grid_ladder {
+        grid /= 2.0;
+        let finer = route_pass(board, &RouteOptions { grid, ..opt.clone() }, only_net);
+        report.routed += finer.routed;
+        report.failed = finer.failed;
+        report.wide.extend(finer.wide);
+    }
+    report
+}
+
+/// One pass of `autoroute_sized` on one grid: the nets with a role, a width of their own or the like first, in the order of their roles,
+/// then the rest.
+fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
     let mut report = RouteReport::default();
-    // the nets that are routed on their own terms: a width from the current, or the width / via / clearance of the net class
-    let mut wide: Vec<(String, RouteOptions)> = vec![];
+    // the nets that are routed on their own terms: a width from the current, the width / via / clearance of the net class, or a role that
+    // asks for something of the route; first, in the order of their roles (a big current, switching, sensing, analog, logic)
+    let mut special: Vec<(u8, String, RouteOptions)> = vec![];
     let mut names: Vec<String> = board.net_currents.keys().cloned().collect();
     names.extend(board.net_classes.iter().flat_map(|c| c.nets.iter().cloned()));
     names.sort();
@@ -112,43 +133,65 @@ pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&
             continue;
         }
         let mut o = opt.clone();
+        let mut role = Role::None;
         if let Some(c) = board.class_of(&n) {
             (o.track_width, o.via_diameter, o.via_drill) = (c.track_width, c.via_diameter, c.via_drill);
             o.clearance = (c.clearance > board.rules.min_clearance + 1e-9).then_some(c.clearance);
+            role = c.role;
         }
         if let Some(amps) = board.net_currents.get(&n) {
             let need = crate::current::round_up_width(crate::current::width_for_current(*amps, &Default::default()));
             o.track_width = o.track_width.max(need);
         }
-        let differs = (o.track_width - opt.track_width).abs() > 1e-9 || (o.via_diameter - opt.via_diameter).abs() > 1e-9 || (o.via_drill - opt.via_drill).abs() > 1e-9 || o.clearance.is_some();
+        // a sensing line stays on the layer of its pads
+        if role == Role::Sense {
+            o.no_vias = true;
+        }
+        let differs = (o.track_width - opt.track_width).abs() > 1e-9 || (o.via_diameter - opt.via_diameter).abs() > 1e-9 || (o.via_drill - opt.via_drill).abs() > 1e-9 || o.clearance.is_some() || role != Role::None;
         if differs {
-            wide.push((n, o));
+            // a wide net of no role goes with the big currents
+            let order = if role == Role::None { Role::Power.priority() } else { role.priority() };
+            special.push((order, n, o));
         }
     }
-    // the plain run, to fall back on when the wide tracks take room that other connections needed
-    let plain = (!wide.is_empty()).then(|| {
+    special.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    // the plain run, to fall back on when the wide tracks take room that other connections needed (not when a role asks for something
+    // the plain run would not keep to: a sensing line with no via)
+    let hard = special.iter().any(|(_, _, o)| o.no_vias && !opt.no_vias);
+    let plain = (!special.is_empty() && !hard).then(|| {
         let mut b = board.clone();
         let r = autoroute(&mut b, opt, only_net);
         (b, r)
     });
-    for (n, o) in &wide {
+    let mut hard_failed: Vec<Airwire> = vec![];
+    for (_, n, o) in &special {
         let r = autoroute(board, o, Some(n));
         report.routed += r.routed;
+        if o.no_vias && !opt.no_vias {
+            hard_failed.extend(r.failed.iter().cloned());
+        }
         if r.routed > 0 && o.track_width > opt.track_width + 1e-9 {
             report.wide.push((n.clone(), o.track_width));
         }
     }
-    let rest = autoroute(board, opt, only_net);
+    // (the sensing lines were routed with their own options above; the plain run must not route them again, with vias)
+    let leave: Vec<String> = special.iter().filter(|(_, _, o)| o.no_vias && !opt.no_vias).map(|(_, n, _)| n.clone()).collect();
+    let rest = autoroute(board, &RouteOptions { skip: leave, ..opt.clone() }, only_net);
     report.routed += rest.routed;
     report.failed = rest.failed;
+    report.failed.extend(hard_failed);
     // wide tracks that cost connections: the plain run wins when it connects more
     if let Some((plain_board, plain_report)) = plain
-        && plain_report.failed.len() < report.failed.len() {
-            *board = plain_board;
-            return plain_report;
-        }
+        && plain_report.failed.len() < report.failed.len()
+    {
+        *board = plain_board;
+        report = plain_report;
+    }
     report
 }
+
+/// The finest pitch (mm) the grid ladder goes down to.
+const MIN_LADDER_GRID: f64 = 0.05;
 
 /// No further routing run is started once this much time has passed (a run on a big board takes several seconds).
 const RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
@@ -161,7 +204,7 @@ fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>,
         // pad to pad: a via the user placed on a net is no end of a connection (the route starts and ends on pads)
         let mut wires: Vec<Airwire> = pad_ratsnest(board)
             .into_iter()
-            .filter(|w| only_net.is_none_or(|n| w.net == n))
+            .filter(|w| only_net.is_none_or(|n| w.net == n) && !opt.skip.contains(&w.net))
             .filter(|w| !failed.contains(w))
             .collect();
         // the nets that failed before first, then short connections first: they are the easiest and leave the long ones

@@ -228,3 +228,55 @@ fn a_net_that_cannot_be_routed_wide_falls_back_to_the_plain_run() {
     assert!(r.failed.is_empty() && r.wide.len() == 1 && r.wide[0].1 >= 2.5, "{:?}", r.wide);
     assert!(c.tracks.iter().all(|t| t.width >= 2.5));
 }
+
+/// Two pads of net A either side of a wall of net W that leaves only a narrow gap in the middle (0.8 mm between two bars: the free band for a track is 0.25 mm wide).
+fn narrow_gap() -> Board {
+    let mut b = Board::new("t", 30.0, 20.0);
+    pad(&mut b, 5.0, 10.0, "A", false);
+    pad(&mut b, 25.0, 10.0, "A", false);
+    for (k, (y0, y1)) in [(0.7, 9.6), (10.4, 19.3)].into_iter().enumerate() {
+        let mut p = Pad::new(Point::new(15.0, (y0 + y1) / 2.0), PadShape::Rect { w: 1.0, h: y1 - y0 }, None, Side::Top);
+        p.net = format!("W{k}");
+        b.pads.push(p);
+    }
+    b
+}
+
+#[test]
+fn what_stays_open_is_tried_again_on_a_finer_grid() {
+    // a pitch of 0.8 mm has no point in the gap: the ladder goes down to 0.4
+    let coarse = RouteOptions { grid: 0.8, grid_ladder: false, no_vias: true, ..Default::default() };
+    let mut b = narrow_gap();
+    assert_eq!(autoroute_sized(&mut b, &coarse, None).failed.len(), 1, "the coarse grid cannot pass");
+    let mut b = narrow_gap();
+    let r = autoroute_sized(&mut b, &RouteOptions { grid_ladder: true, ..coarse }, None);
+    assert!(r.failed.is_empty(), "{r:?}");
+    assert!(ratsnest(&b).is_empty() && drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+}
+
+#[test]
+fn a_sensing_net_gets_no_vias_and_the_nets_go_in_the_order_of_their_roles() {
+    // a wall of net W across the whole board: net A can only get across it on the other layer
+    let wall = || {
+        let mut b = Board::new("t", 30.0, 20.0);
+        pad(&mut b, 5.0, 10.0, "A", false);
+        pad(&mut b, 25.0, 10.0, "A", false);
+        let mut p = Pad::new(Point::new(15.0, 10.0), PadShape::Rect { w: 1.0, h: 18.6 }, None, Side::Top);
+        p.net = "W".into();
+        b.pads.push(p);
+        b
+    };
+    let mut b = wall();
+    let r = autoroute_sized(&mut b, &RouteOptions { grid_ladder: false, ..Default::default() }, None);
+    assert!(r.failed.is_empty() && !b.vias.is_empty(), "without a role the net crosses the wall by a via: {r:?}");
+    let mut b = wall();
+    b.net_classes.push(NetClass { name: "s".into(), nets: vec!["A".into()], role: Role::Sense, ..Default::default() });
+    let r = autoroute_sized(&mut b, &RouteOptions { grid_ladder: false, ..Default::default() }, None);
+    assert!(b.vias.is_empty(), "a sensing line gets no via");
+    assert_eq!(r.failed.len(), 1, "and so it cannot cross the wall");
+    // the order: power, switching, sensing, analog, logic, no role
+    let order: Vec<u8> = [Role::None, Role::Logic, Role::Analog, Role::Sense, Role::Switching, Role::Power].iter().map(|r| r.priority()).collect();
+    assert!(order.windows(2).all(|w| w[0] > w[1]), "{order:?}");
+    assert_eq!(Role::parse("SENSE"), Some(Role::Sense));
+    assert_eq!(Role::parse("nope"), None);
+}

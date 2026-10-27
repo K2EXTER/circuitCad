@@ -639,12 +639,14 @@ impl Session {
                 Ok(obj(out))
             }
             "class" => {
-                // net classes: `board class` lists them; `board class NAME [width=mm] [clearance=mm] [via=dia/drill] [nets=A,B]` makes or
-                // changes one (a net listed in it leaves its other class); `board class NAME remove=1` deletes it
+                // net classes: `board class` lists them; `board class NAME [width=mm] [clearance=mm] [via=dia/drill] [nets=A,B] [role=power|switching|
+                // sense|analog|logic|none]` makes or changes one (a net listed in it leaves its other class); `board class NAME remove=1` deletes it.
+                // The role is the order the router takes the nets in (a big current first, then switching, sensing, analog, logic), and a sensing
+                // line gets no vias.
                 let (pos, kv) = options(rest);
                 let board = self.board_mut()?;
                 let Some(name) = pos.first() else {
-                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill]})).collect();
+                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name()})).collect();
                     return Ok(obj(json!({"classes": list})));
                 };
                 if opt(&kv, "remove") == Some("1") {
@@ -682,6 +684,9 @@ impl Session {
                     }
                     (board.net_classes[k].via_diameter, board.net_classes[k].via_drill) = (d, h);
                 }
+                if let Some(r) = opt(&kv, "role") {
+                    board.net_classes[k].role = pcb_core::model::Role::parse(r).ok_or_else(|| format!("role={r}: use power, switching, sense, analog, logic or none"))?;
+                }
                 if let Some(n) = opt(&kv, "nets") {
                     let nets: Vec<String> = n.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                     for (j, other) in board.net_classes.iter_mut().enumerate() {
@@ -692,7 +697,7 @@ impl Session {
                     board.net_classes[k].nets = nets;
                 }
                 let c = &board.net_classes[k];
-                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill]})))
+                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name()})))
             }
             "labels" => {
                 // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or
@@ -747,7 +752,7 @@ impl Session {
                     Some(g) => num(g)?,
                     None => RouteOptions::default().grid,
                 };
-                let ro = RouteOptions { grid, pad_lead: (lead > 0.0).then_some(lead), outer_only: opt(&kv, "layers") == Some("outer"), no_vias: opt(&kv, "vias") == Some("0"), ..RouteOptions::default() };
+                let ro = RouteOptions { grid, pad_lead: (lead > 0.0).then_some(lead), outer_only: opt(&kv, "layers") == Some("outer"), no_vias: opt(&kv, "vias") == Some("0"), grid_ladder: opt(&kv, "ladder") != Some("0"), ..RouteOptions::default() };
                 let rep = pcb_core::autoroute::autoroute_sized(board, &ro, only.as_deref());
                 let aligned = if lead > 0.0 && rep.routed > 0 {
                     let new: Vec<usize> = (before..board.tracks.len()).collect();
