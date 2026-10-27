@@ -850,6 +850,10 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     }
     if turn {
         turn_to_shorten(board, &in_array);
+        if improve && tuning.arrays {
+            let groups: Vec<Vec<Vec<String>>> = copies.iter().map(|g| g.iter().map(|c| c.iter().map(|&i| items[i].0.clone()).collect()).collect()).collect();
+            turn_copies_toward_ports(board, &groups);
+        }
         crate::connectors::orient_connectors(board, (Point::new(MARGIN, MARGIN), Point::new(MARGIN + used_w, MARGIN + used_h)));
     }
     if tuning.align {
@@ -932,6 +936,44 @@ pub(crate) fn crowded(board: &Board, refdes: &str) -> bool {
         let gap_y = (l.y - hi.y).max(lo.y - h.y);
         gap_x.max(gap_y) < ALIGN_SPACE
     })
+}
+
+/// Turn a part about the middle of its pads (the pads' box keeps its place, to a grid step).
+fn turn_about_centre(board: &mut Board, refdes: &str, turns: u8) {
+    let center = |board: &Board, r: &str| extent(board, r).map(|(lo, hi)| Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0));
+    let (Some(part), Some(c0)) = (board.parts.iter().find(|p| p.refdes == refdes).cloned(), center(board, refdes)) else { return };
+    board.place_part(refdes, part.pos, part.rot + turns);
+    if let Some(c1) = center(board, refdes) {
+        board.place_part(refdes, Point::new(snap(part.pos.x + c0.x - c1.x), snap(part.pos.y + c0.y - c1.y)), part.rot + turns);
+    }
+}
+
+/// The copies of a structure stand in their grid; what each copy is joined to outside it (the ports) lies where the rest of the board put
+/// it. Here the role of every part is turned, in all the copies at once, to the way that makes the airwires of the whole board shortest:
+/// a resistor whose pin goes to the IC turns that pin to the IC. A turn is dropped when a part of a copy would stand too close to another.
+fn turn_copies_toward_ports(board: &mut Board, groups: &[Vec<Vec<String>>]) {
+    for copies in groups {
+        for role in 0..copies[0].len() {
+            let before = airwire_length(board);
+            let mut best: Option<(f64, Board)> = None;
+            for turns in 1..4u8 {
+                let mut trial = board.clone();
+                for copy in copies {
+                    turn_about_centre(&mut trial, &copy[role], turns);
+                }
+                if copies.iter().any(|c| crowded(&trial, &c[role])) {
+                    continue;
+                }
+                let len = airwire_length(&trial);
+                if len < before - 0.5 && best.as_ref().is_none_or(|b| len < b.0) {
+                    best = Some((len, trial));
+                }
+            }
+            if let Some((_, b)) = best {
+                *board = b;
+            }
+        }
+    }
 }
 
 fn turn_to_shorten(board: &mut Board, keep: &std::collections::BTreeSet<String>) {
@@ -1056,6 +1098,36 @@ mod tests {
         let pp = |r: &str| plain.parts.iter().find(|p| p.refdes == r).unwrap().pos;
         let alike = (2..=8).all(|k| ((pp(&format!("C{k}")).x - pp(&format!("R{k}")).x) - (pp("C1").x - pp("R1").x)).abs() < 1e-6 && ((pp(&format!("C{k}")).y - pp(&format!("R{k}")).y) - (pp("C1").y - pp("R1").y)).abs() < 1e-6);
         assert!(!alike || plain.parts.len() < 16, "the test means something only if the plain layout is not already a grid");
+    }
+
+    #[test]
+    fn the_role_of_a_part_in_every_copy_is_turned_to_face_what_it_is_joined_to() {
+        // a header on the left with a pin for each stage; three stages (R, C) to the right: each R's pin 1 is joined to its header pin,
+        // and the resistors stand turned the wrong way (their pin 1 faces away from the header)
+        let part = |r: &str, f: &str| NetlistPart { refdes: r.into(), value: "1k".into(), footprint: f.into() };
+        let net = |n: &str, pins: &[(&str, &str)]| NetlistNet { name: n.into(), pins: pins.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() };
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.add_footprint(package::PackageSpec::Dual { pins: 6, pitch: 2.54, row_spacing: 5.08, pad_len: 1.6, pad_width: 1.6, drill: Some(0.8) }.build("DIP-6").unwrap());
+        let mut parts = vec![part("J1", "DIP-6")];
+        let mut nets = vec![];
+        for k in 1..=3 {
+            parts.push(part(&format!("R{k}"), "R_0805"));
+            parts.push(part(&format!("C{k}"), "C_0805"));
+            nets.push(net(&format!("PORT{k}"), &[("J1", &k.to_string()), (&format!("R{k}"), "1")]));
+            nets.push(net(&format!("MID{k}"), &[(&format!("R{k}"), "2"), (&format!("C{k}"), "1")]));
+        }
+        import(&mut b, &parts, &nets);
+        b.place_part("J1", Point::new(5.0, 20.0), 0);
+        for k in 1..=3 {
+            b.place_part(&format!("R{k}"), Point::new(30.0, 8.0 + 4.0 * k as f64), 2);
+            b.place_part(&format!("C{k}"), Point::new(40.0, 8.0 + 4.0 * k as f64), 0);
+        }
+        let before = airwire_length(&b);
+        let groups: Vec<Vec<Vec<String>>> = vec![(1..=3).map(|k| vec![format!("R{k}"), format!("C{k}")]).collect()];
+        turn_copies_toward_ports(&mut b, &groups);
+        assert!(airwire_length(&b) < before - 1.0, "{before} -> {}", airwire_length(&b));
+        let rots: Vec<u8> = (1..=3).map(|k| b.parts.iter().find(|p| p.refdes == format!("R{k}")).unwrap().rot).collect();
+        assert!(rots.iter().all(|r| *r == rots[0]) && rots[0] != 2, "every copy turned alike: {rots:?}");
     }
 
     #[test]
