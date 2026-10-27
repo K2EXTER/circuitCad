@@ -365,6 +365,8 @@ pub struct BoardEditor {
     net_menu: Option<String>,
     /// Tint the parts by the schematic sheet they come from.
     show_sheets: bool,
+    /// Automatic placement keeps the parts of each schematic sheet together as a block (only with several sheets).
+    place_by_sheet: bool,
     /// Select tool: a drag that starts on a track slides it (off by default: a slip of the mouse moved wiring)
     track_drag_on: bool,
     /// Set by the net window for a net with no current: `App` answers with the schematic's DC current of that net (`fill_net_current`).
@@ -484,6 +486,7 @@ impl Default for BoardEditor {
             net_win: None,
             net_menu: None,
             show_sheets: true,
+            place_by_sheet: true,
             track_drag_on: false,
             net_current_request: None,
             dc_currents_ready: false,

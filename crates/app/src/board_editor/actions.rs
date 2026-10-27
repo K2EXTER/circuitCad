@@ -107,7 +107,8 @@ impl BoardEditor {
     /// Pack the parts into rows (connected ones together) and fit the outline. One undo step.
     pub fn autoplace(&mut self) {
         self.checkpoint();
-        match pcb_core::autoplace::autoplace(&mut self.board) {
+        let tuning = pcb_core::autoplace::Tuning { sheets: self.place_by_sheet, ..pcb_core::autoplace::Tuning::for_board(&self.board) };
+        match pcb_core::autoplace::autoplace_with(&mut self.board, &tuning) {
             Ok(r) => {
                 self.violations.clear();
                 self.selected = None;
