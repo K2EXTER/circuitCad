@@ -11,6 +11,9 @@ pub(super) fn route_pitch(grid: f64) -> f64 {
     grid / (grid / 0.25).ceil().max(1.0)
 }
 
+/// The most seconds the nudging of small parts may take (the editor waits for it).
+const NUDGE_SECONDS: u64 = 40;
+
 impl BoardEditor {
     /// Route the airwires of every net, or only of `net`. One undo step. When no currents are declared yet, the schematic's
     /// DC currents are asked for first (so that the nets that carry a lot of current get a track width that fits) and the
@@ -186,6 +189,27 @@ impl BoardEditor {
             vias,
             self.board.vias.len()
         );
+    }
+
+    /// For each connection that stays open, move the small parts near it a little and route again (`pcb_core::nudge`); a move
+    /// is kept only when fewer connections are open and the DRC finds nothing more. One undo step, at most `NUDGE_SECONDS`.
+    pub fn nudge_parts(&mut self) {
+        if ratsnest(&self.board).is_empty() {
+            self.status = "通らない接続はありません".into();
+            return;
+        }
+        self.checkpoint();
+        let opt = RouteOptions { track_width: self.track_width, via_diameter: self.via_dia, via_drill: self.via_drill, grid: route_pitch(self.grid), follow: None, clearance: None, pad_lead: self.pad_lead.then_some(self.pad_lead_len), outer_only: false, no_vias: false, ..RouteOptions::default() };
+        let r = pcb_core::nudge::route_with_nudging(&mut self.board, &opt, std::time::Duration::from_secs(NUDGE_SECONDS));
+        if r.moved.is_empty() {
+            self.undo.pop();
+            self.status = format!("小さい部品の押しのけ: 動かして通せる接続は見つかりませんでした (試した {} 通り)。大きな部品の位置を変えるか、手で配線してください", r.tried);
+            return;
+        }
+        self.violations.clear();
+        let list: Vec<String> = r.moved.iter().map(|(p, dx, dy)| format!("{p} ({dx:+.1}, {dy:+.1} mm)")).collect();
+        let more = if r.out_of_time && r.open_after > 0 { "時間切れで、まだ試していない接続があります。もう一度押すと続きをします。" } else { "" };
+        self.status = format!("小さい部品の押しのけ: {} を動かし、通らない接続が {} → {} 本になりました。{more}DRC で確認しましょう (気に入らなければ「元に戻す」)", list.join("・"), r.open_before, r.open_after);
     }
 
     /// The GND pour on the bottom layer with a via for every surface ground pad (see `pcb_core::groundpour`). One undo step.

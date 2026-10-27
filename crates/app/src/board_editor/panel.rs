@@ -194,6 +194,9 @@ impl BoardEditor {
                     if ui.button("配線を短くする").on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます").clicked() {
                         self.shorten_routes(None);
                     }
+                    if ui.button("通らない接続を通す").on_hover_text("自動配線で通らなかった(黄色の線が残った)接続のそばの小さい部品 (3 ピンまで) を 1〜4 mm 動かして、配線を引き直してみます。通らない接続が減り、ルール違反が増えないものだけを採用します。最長 40 秒かかります。気に入らなければ「元に戻す」で取り消せます").clicked() {
+                        self.nudge_parts();
+                    }
                     if ui.add_enabled(sel_net.is_some(), egui::Button::new(&only_label)).on_hover_text(format!("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります){only_tip}")).clicked()
                         && let Some(n) = &sel_net {
                             self.shorten_routes(Some(n));
