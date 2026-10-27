@@ -669,6 +669,96 @@ fn collapse(items: &[(String, Point, f64, f64)], nets: &[NetPins], degree: &[usi
     (citems, cnets, cdegree, csheet, origin)
 }
 
+/// How good a way of standing is for the small circuit that a group of copies is made of, by wiring it: the parts (`members`, turned as `rots`) are
+/// laid out alone on a board of their own, with only the nets between them, and routed. The cost is the wire and the vias that took, a big
+/// penalty for a connection that did not go through, and a little for the room it needs.
+fn template_cost(board: &Board, members: &[String], rots: &[u8], gap: f64, label: f64) -> f64 {
+    let mut b = Board::new("copy", 200.0, 200.0);
+    let wanted: Vec<&str> = members.iter().filter_map(|r| board.parts.iter().find(|p| &p.refdes == r)).map(|p| p.footprint.as_str()).collect();
+    b.footprints = board.footprints.iter().filter(|f| wanted.contains(&f.name.as_str())).cloned().collect();
+    b.rules = board.rules.clone();
+    for (r, &rot) in members.iter().zip(rots) {
+        let Some(part) = board.parts.iter().find(|p| &p.refdes == r) else { return f64::MAX };
+        if b.set_part(Part { pos: Point::new(0.0, 0.0), rot, ..part.clone() }).is_err() {
+            return f64::MAX;
+        }
+    }
+    // the nets between the parts of the copy; the other nets of their pads do not matter here
+    let mut count: std::collections::HashMap<&str, std::collections::HashSet<&str>> = Default::default();
+    for p in board.pads.iter().filter(|p| members.contains(&p.refdes) && !p.net.is_empty()) {
+        count.entry(p.net.as_str()).or_default().insert(p.refdes.as_str());
+    }
+    for pad in b.pads.iter_mut() {
+        let net = board.pads.iter().find(|q| q.refdes == pad.refdes && q.pin == pad.pin).map_or("", |q| q.net.as_str());
+        pad.net = if count.get(net).is_some_and(|parts| parts.len() >= 2) { net.to_string() } else { String::new() };
+    }
+    // laid out like the parts of the board are: the cells, the nets in the cells, the shelf packing
+    let mut items: Vec<(String, Point, f64, f64)> = vec![];
+    for r in members {
+        let Some((lo, hi)) = extent(&b, r) else { return f64::MAX };
+        items.push((r.clone(), lo, hi.x - lo.x + gap, hi.y - lo.y + gap + label));
+    }
+    let mut nets: std::collections::BTreeMap<&str, NetPins> = Default::default();
+    let mut degree = vec![0usize; items.len()];
+    for pad in b.pads.iter().filter(|p| !p.net.is_empty()) {
+        if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
+            nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + gap / 2.0, pad.pos.y - items[i].1.y + gap / 2.0 + label));
+            degree[i] += 1;
+        }
+    }
+    let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+    let tie = ties(&nets, items.len());
+    let (spots, w, h) = layout(&items, &nets, &degree, &tie, false, true, false);
+    for (i, sx, sy) in &spots {
+        let (refdes, lo, ..) = &items[*i];
+        let rot = b.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
+        b.place_part(refdes, Point::new(snap(1.0 + gap / 2.0 + sx - lo.x), snap(1.0 + gap / 2.0 + label + sy - lo.y)), rot);
+    }
+    b.set_rect_outline(0.0, 0.0, (w + 2.0).ceil(), (h + 2.0).ceil());
+    let report = crate::autoroute::autoroute(&mut b, &crate::autoroute::RouteOptions { outer_only: true, ..Default::default() }, None);
+    let length: f64 = b.tracks.iter().map(|t| t.a.dist(t.b)).sum();
+    length + 10.0 * b.vias.len() as f64 + 200.0 * report.failed.len() as f64 + 0.05 * w * h
+}
+
+/// Turn the parts of the copies the way that wires best (see `template_cost`): the first copy of each group is tried in the turns of its
+/// parts one at a time (twice over), and the turns that win are given to every copy (each part by its role). Parts are not moved.
+fn turn_copies(board: &mut Board, groups: &[Vec<Vec<usize>>], names: &[String], gap: f64, label: f64) {
+    for copies in groups {
+        let members: Vec<String> = copies[0].iter().map(|&i| names[i].clone()).collect();
+        let mut rots: Vec<u8> = members.iter().map(|r| board.parts.iter().find(|p| &p.refdes == r).map_or(0, |p| p.rot)).collect();
+        let mut best = template_cost(board, &members, &rots, gap, label);
+        if best == f64::MAX {
+            continue;
+        }
+        for _ in 0..2 {
+            let mut changed = false;
+            for j in 0..members.len() {
+                let current = rots[j];
+                for r in (0..4u8).filter(|r| *r != current) {
+                    let mut trial = rots.clone();
+                    trial[j] = r;
+                    let c = template_cost(board, &members, &trial, gap, label);
+                    if c < best - 0.5 {
+                        best = c;
+                        rots = trial;
+                        changed = true;
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        for copy in copies {
+            for (j, &i) in copy.iter().enumerate() {
+                if let Some(part) = board.parts.iter().find(|p| p.refdes == names[i]).cloned() {
+                    board.place_part(&part.refdes, part.pos, rots[j]);
+                }
+            }
+        }
+    }
+}
+
 fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
     // a refusal must leave the board as it was (the pour wiring is taken out on the way)
     let backup = (!board.tracks.is_empty() || !board.vias.is_empty()).then(|| board.clone());
@@ -694,6 +784,16 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     }
     if board.parts.is_empty() {
         return Err("部品がありません。先に「回路図から取り込み」をしてください".into());
+    }
+    // the copies of a small structure are turned the way that wires best, the first one tried by routing it alone (a person tries the small
+    // circuit first, and copies what works)
+    if improve && tuning.arrays {
+        let names: Vec<String> = board.parts.iter().map(|p| p.refdes.clone()).collect();
+        let dummy: Vec<(String, Point, f64, f64)> = names.iter().map(|r| (r.clone(), Point::default(), 0.0, 0.0)).collect();
+        let skip: Vec<String> = if tuning.skip_poured { board.zones.iter().map(|z| z.net.clone()).filter(|n| !n.is_empty()).collect() } else { vec![] };
+        let sheet_by_name = |i: usize| board.part_sheets.get(&names[i]).cloned().unwrap_or_default();
+        let groups = replicas::find(board, &dummy, &skip, &sheet_by_name);
+        turn_copies(board, &groups, &names, gap, label);
     }
     // measure each part at the origin, keeping its rotation
     let mut items: Vec<(String, Point, f64, f64)> = vec![]; // refdes, offset of the pad box, w, h
