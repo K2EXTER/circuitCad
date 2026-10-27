@@ -71,7 +71,7 @@ pub struct Tuning {
     /// Pull each bypass capacitor to the supply pin it serves (see `bypass_nets`).
     pub bypass: bool,
     /// When the circuit has several schematic sheets, lay each sheet's parts out as a block of its own and then the blocks
-    /// (see `sheet_blocks`).
+    /// (see `sheet_blocks`). Off by default: the blocks are easy to tell apart, but the board is bigger and the wiring longer.
     pub sheets: bool,
     /// Lay out copies of one small structure (eight range switches, ten LEDs with their resistors) alike, in a regular grid (see `build_arrays`).
     pub arrays: bool,
@@ -82,9 +82,9 @@ impl Tuning {
     /// parts can sit closer.
     pub fn for_board(board: &Board) -> Self {
         if board.zones.iter().any(|z| !z.net.is_empty()) {
-            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: true, arrays: true }
+            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: false, arrays: true }
         } else {
-            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: true, arrays: true }
+            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: false, arrays: true }
         }
     }
 }
@@ -961,7 +961,8 @@ mod tests {
     #[test]
     fn the_parts_of_a_sheet_stay_together_in_a_block_of_their_own() {
         let mut b = two_sheets();
-        autoplace(&mut b).unwrap();
+        let t = Tuning::for_board(&b);
+        autoplace_with(&mut b, &Tuning { sheets: true, ..t }).unwrap();
         let (a, c) = (sheet_box(&b, "電源"), sheet_box(&b, "制御"));
         let apart = a.1.x <= c.0.x || c.1.x <= a.0.x || a.1.y <= c.0.y || c.1.y <= a.0.y;
         assert!(apart, "the two sheets' boxes overlap: {a:?} {c:?}");

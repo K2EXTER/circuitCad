@@ -486,7 +486,7 @@ impl Default for BoardEditor {
             net_win: None,
             net_menu: None,
             show_sheets: true,
-            place_by_sheet: true,
+            place_by_sheet: false,
             track_drag_on: false,
             net_current_request: None,
             dc_currents_ready: false,

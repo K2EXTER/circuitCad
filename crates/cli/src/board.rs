@@ -91,10 +91,16 @@ impl Session {
                 Ok(obj(json!({"dry": dry, "turned": turned, "tried": r.tried})))
             }
             "autoplace" => {
-                // board autoplace [sheets=0]: sheets=0 mixes the parts of the schematic's sheets as the placement did before (for comparing)
+                // board autoplace [sheets=1] [arrays=0]: sheets=1 lays each schematic sheet out as a block (off by default), arrays=0 does not repeat the layout of copies (on by default)
                 let (_, kv) = options(rest);
                 let board = self.board_mut()?;
-                let tuning = pcb_core::autoplace::Tuning { sheets: opt(&kv, "sheets") != Some("0"), ..pcb_core::autoplace::Tuning::for_board(board) };
+                let base = pcb_core::autoplace::Tuning::for_board(board);
+                let flag = |name: &str, default: bool| match opt(&kv, name) {
+                    Some("1") => true,
+                    Some("0") => false,
+                    _ => default,
+                };
+                let tuning = pcb_core::autoplace::Tuning { sheets: flag("sheets", base.sheets), arrays: flag("arrays", base.arrays), ..base };
                 let r = pcb_core::autoplace::autoplace_with(board, &tuning)?;
                 Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings})))
             }

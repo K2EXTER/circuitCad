@@ -12,7 +12,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Parts with this many pads or more are anchors (ICs, headers): they do not join the groups.
 const ANCHOR_PADS: usize = 8;
-/// A net that touches more parts than this is a hub (a ground, a supply, a bus): it does not join the groups.
+/// A net that touches more parts than this is a hub (a ground, a supply, a bus): it does not join the groups, and neither does a net on a
+/// pin of an anchor.
 const HUB_NET: usize = 6;
 /// A group has at least this many parts, and at most.
 const MIN_PARTS: usize = 2;
@@ -42,7 +43,8 @@ pub(crate) fn find(board: &Board, items: &[Item], poured: &[String], sheet: &dyn
         .iter()
         .filter(|(_, pins)| {
             let parts: BTreeSet<usize> = pins.iter().map(|p| p.0).collect();
-            parts.len() <= HUB_NET && parts.iter().filter(|i| !anchor[**i]).count() >= 2
+            // (a net on a pin of an IC is a port, not a link inside a copy: the ten LEDs and the eight range switches both hang on the IC's outputs)
+            parts.len() <= HUB_NET && parts.iter().filter(|i| !anchor[**i]).count() >= 2 && !parts.iter().any(|i| anchor[*i])
         })
         .map(|(n, p)| (*n, p))
         .collect();
