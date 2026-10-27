@@ -39,6 +39,7 @@ pub mod outline;
 pub mod padentry;
 pub mod par;
 pub mod picture;
+pub mod quality;
 pub mod pinlabels;
 pub mod package;
 pub mod parts;

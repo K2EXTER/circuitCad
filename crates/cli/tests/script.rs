@@ -1019,3 +1019,34 @@ fn board_picture_writes_a_png_with_a_legend() {
     assert!(!ok, "{a:?}");
     assert!(format!("{a:?}").contains("inner9"), "{a:?}");
 }
+
+#[test]
+fn status_and_quality_give_the_numbers_of_the_wiring() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add R 270 as=R2
+add LED as=D1
+add LED as=D2
+net VCC V1.+ R1.1 R2.1
+net A R1.2 D1.A
+net B R2.2 D2.A
+net GND V1.- D1.K D2.K
+board import
+board autoplace
+board route
+board status
+board quality top=3 sort=length
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let st = a.iter().find(|v| v.get("drc_violations").is_some()).expect("status answer");
+    let q = &st["quality"];
+    assert!(q["length_mm"].as_f64().unwrap() > 0.0 && q["segments"].as_u64().unwrap() > 0, "{q}");
+    assert!(q["by_layer_mm"].is_object() && q["bends"].is_u64() && q["side_by_side_mm"].is_f64(), "{q}");
+    let qa = a.iter().find(|v| v.get("worst").is_some()).expect("quality answer");
+    let worst = qa["worst"].as_array().unwrap();
+    assert!(!worst.is_empty() && worst.len() <= 3, "{qa}");
+    let lengths: Vec<f64> = worst.iter().map(|r| r["length_mm"].as_f64().unwrap()).collect();
+    assert!(lengths.windows(2).all(|w| w[0] >= w[1]), "sorted by length, longest first: {lengths:?}");
+}

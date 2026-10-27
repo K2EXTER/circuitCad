@@ -767,6 +767,40 @@ impl Session {
                 let list: Vec<Value> = v.iter().take(60).map(|x| json!({"message": x.message, "at": [x.at.x, x.at.y]})).collect();
                 Ok(obj(json!({"violations": v.len(), "shown": list.len(), "list": list})))
             }
+            "quality" => {
+                // board quality [top=10] [sort=bends|vias|detour|length|segments] [net=A,B] [poured=1]: how the wiring looks, as numbers (see `status` for the
+                // summary), and the nets that look worst: the bends and the vias, how much longer a net is than its shortest tree (`detour`),
+                // and the layers it runs on. A person's route keeps these low; the router does not mind.
+                let (_, kv) = options(rest);
+                let top = opt(&kv, "top").and_then(|v| v.parse::<usize>().ok()).unwrap_or(10);
+                let sort = opt(&kv, "sort").unwrap_or("bends").to_string();
+                let only: Option<Vec<String>> = opt(&kv, "net").map(|l| l.split(',').map(|s| s.trim().to_string()).collect());
+                let board = self.board_mut()?;
+                let (q, mut nets) = pcb_core::quality::measure(board);
+                nets.retain(|n| only.as_ref().is_none_or(|o| o.contains(&n.net)));
+                // the nets a pour carries are wired with a via at each pad, not as one tree: their bends and vias say little, and the "detour" none
+                let poured: Vec<String> = board.zones.iter().map(|z| z.net.clone()).collect();
+                let hide_poured = only.is_none() && opt(&kv, "poured") != Some("1");
+                if hide_poured {
+                    nets.retain(|n| !poured.contains(&n.net));
+                }
+                let key = |n: &pcb_core::quality::NetQuality| -> f64 {
+                    match sort.as_str() {
+                        "vias" => n.vias as f64,
+                        "detour" => n.detour().unwrap_or(0.0),
+                        "length" => n.length,
+                        "segments" => n.segments as f64,
+                        _ => n.bends as f64,
+                    }
+                };
+                nets.sort_by(|a, b| key(b).total_cmp(&key(a)).then(a.net.cmp(&b.net)));
+                let rows: Vec<Value> = nets
+                    .iter()
+                    .take(top)
+                    .map(|n| json!({"net": n.net, "pads": n.pads, "length_mm": r1(n.length), "detour": n.detour().map(|d| (d * 100.0).round() / 100.0), "vias": n.vias, "bends": n.bends, "segments": n.segments, "by_layer_mm": n.by_layer.iter().map(|(l, v)| (l.clone(), r1(*v))).collect::<std::collections::BTreeMap<_, _>>()}))
+                    .collect();
+                Ok(obj(json!({"quality": quality_json(&q), "worst": rows, "sort": sort})))
+            }
             "status" => {
                 let board = self.board_mut()?;
                 let wires = pcb_core::ratsnest::ratsnest(board);
@@ -777,7 +811,8 @@ impl Session {
                     *open.entry(w.net.as_str()).or_default() += 1;
                 }
                 let drc = pcb_core::drc::check_final(board).len();
-                Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "open_nets": open, "drc_violations": drc})))
+                let (q, _) = pcb_core::quality::measure(board);
+                Ok(obj(json!({"parts": board.parts.len(), "pads": board.pads.len(), "tracks": board.tracks.len(), "vias": board.vias.len(), "unrouted": unrouted, "open_nets": open, "drc_violations": drc, "quality": quality_json(&q)})))
             }
             "currents" => {
                 let (words, kv) = options(rest);
@@ -1014,4 +1049,24 @@ fn layer_name(s: pcb_core::model::Side) -> String {
         pcb_core::model::Side::Bottom => "bottom".into(),
         pcb_core::model::Side::Inner(n) => format!("inner{n}"),
     }
+}
+
+fn r1(x: f64) -> f64 {
+    (x * 10.0).round() / 10.0
+}
+
+/// The numbers of `pcb_core::quality::Quality` for an answer.
+fn quality_json(q: &pcb_core::quality::Quality) -> Value {
+    json!({
+        "length_mm": r1(q.length),
+        "by_layer_mm": q.by_layer.iter().map(|(l, v)| (l.clone(), r1(*v))).collect::<std::collections::BTreeMap<_, _>>(),
+        "vias": q.vias,
+        "segments": q.segments,
+        "bends": q.bends,
+        "short_tracks": q.short,
+        "diagonal_mm": r1(q.diagonal),
+        "straight_mm": r1(q.straight),
+        "other_angle_mm": r1(q.other_angle),
+        "side_by_side_mm": r1(q.side_by_side),
+    })
 }

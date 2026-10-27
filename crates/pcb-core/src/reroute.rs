@@ -89,29 +89,8 @@ fn net_use(board: &Board) -> HashMap<String, (f64, usize, usize)> {
             out.entry(n.to_string()).or_default().1 += 1;
         }
     }
-    // a bend: two tracks of one layer end at one point (nothing else there) and do not run on in a line
-    let key = |p: Point, side: Side| ((p.x * 1e3).round() as i64, (p.y * 1e3).round() as i64, side);
-    let mut ends: HashMap<(i64, i64, Side), Vec<(usize, Point)>> = HashMap::new();
-    for (i, t) in board.tracks.iter().enumerate() {
-        ends.entry(key(t.a, t.side)).or_default().push((i, t.b));
-        ends.entry(key(t.b, t.side)).or_default().push((i, t.a));
-    }
-    for ((x, y, _), v) in &ends {
-        if v.len() != 2 || v[0].0 == v[1].0 {
-            continue;
-        }
-        let at = Point::new(*x as f64 / 1e3, *y as f64 / 1e3);
-        let (u1, u2) = ((v[0].1.x - at.x, v[0].1.y - at.y), (v[1].1.x - at.x, v[1].1.y - at.y));
-        let (l1, l2) = (u1.0.hypot(u1.1), u2.0.hypot(u2.1));
-        if l1 < 1e-9 || l2 < 1e-9 {
-            continue;
-        }
-        // a straight continuation has the two directions opposite (cosine -1)
-        if (u1.0 * u2.0 + u1.1 * u2.1) / (l1 * l2) > -0.9998
-            && let Some(n) = conn.track_net(v[0].0)
-        {
-            out.entry(n.to_string()).or_default().2 += 1;
-        }
+    for (n, b) in crate::quality::bends_by_net(board, &conn) {
+        out.entry(n).or_default().2 += b;
     }
     out
 }
