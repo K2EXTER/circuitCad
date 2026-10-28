@@ -1,0 +1,13 @@
+[package]
+name = "design-spec"
+version = "0.1.0"
+edition = "2024"
+description = "circuitCad: 設計の仕様の表 (ネットの役割・近くに置く組・離す距離)。回路図と基板が同じ型を使う"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/K2EXTER/circuitCad"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1.0.151"

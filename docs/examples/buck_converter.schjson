@@ -485,5 +485,71 @@
       ],
       "text": "GND"
     }
-  ]
+  ],
+  "requirements": {
+    "net_rules": [
+      {
+        "name": "スイッチングノード",
+        "nets": [
+          "SW"
+        ],
+        "role": "switching",
+        "width": 0.5,
+        "clearance": 0.0,
+        "current": 0.0,
+        "note": "面積を小さく。帰還やアナログの線から離す"
+      },
+      {
+        "name": "電源の電流",
+        "nets": [
+          "VIN",
+          "VOUT"
+        ],
+        "role": "power",
+        "width": 0.5,
+        "clearance": 0.0,
+        "current": 0.5,
+        "note": "電流が流れる経路。太く短く"
+      },
+      {
+        "name": "帰還",
+        "nets": [
+          "FB"
+        ],
+        "role": "sense",
+        "width": 0.2,
+        "clearance": 0.0,
+        "current": 0.0,
+        "note": "細くてよいが、短く。スイッチングノードに近づけない"
+      }
+    ],
+    "groups": [
+      {
+        "name": "降圧のループ",
+        "parts": [
+          "U1",
+          "L1",
+          "D1",
+          "C1"
+        ],
+        "max_dist": 25.0,
+        "note": "スイッチの電流が流れるループを小さくする"
+      }
+    ],
+    "apart": [
+      {
+        "name": "帰還をスイッチングノードから離す",
+        "a": [
+          "R1",
+          "R2"
+        ],
+        "b": [
+          "L1",
+          "D1"
+        ],
+        "min_dist": 6.0,
+        "note": "スイッチングの雑音を、帰還の分圧に入れない"
+      }
+    ]
+  }
 }

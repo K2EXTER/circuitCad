@@ -185,7 +185,7 @@ impl BoardEditor {
         netlist::import_swaps(&mut self.board, &swaps);
         let sheets: Vec<(String, String)> = sch.components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), sch_ed.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();
         netlist::import_sheets(&mut self.board, &sheets);
-        netlist::import_hints(&mut self.board, &netlist::NetHints { currents: sch.net_currents.clone().into_iter().collect(), pairs: sch.diff_pairs.clone() });
+        netlist::import_hints(&mut self.board, &netlist::NetHints { currents: sch.net_currents.clone().into_iter().collect(), pairs: sch.diff_pairs.clone(), requirements: sch.requirements.clone() });
         self.selected = None;
         self.multi.clear();
         self.currents_tried = false; // the circuit may have changed: the next route asks for the currents again if none are declared

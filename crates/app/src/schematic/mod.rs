@@ -196,6 +196,10 @@ pub struct SchEditor {
     lesson_base: Schematic,
     /// "値の決め方" window: open flag, which calculator, its input texts.
     wiz_open: bool,
+    /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
+    req_open: bool,
+    req_buf: requirements::Buffers,
+    req_problems: Vec<String>,
     wiz_kind: usize,
     wiz_in: Vec<String>,
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
@@ -478,6 +482,9 @@ impl Default for SchEditor {
             popup_serial: 0,
             lesson_base: Schematic::default(),
             wiz_open: false,
+            req_open: false,
+            req_buf: Default::default(),
+            req_problems: vec![],
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,
@@ -596,6 +603,7 @@ mod panel;
 mod fault;
 mod spec_table;
 mod power_ui;
+mod requirements;
 mod wizard;
 mod param;
 mod settings;

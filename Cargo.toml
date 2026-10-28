@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/pcb-core", "crates/sch-core", "crates/part-lib", "crates/sim-core", "crates/app", "crates/cli"]
+members = ["crates/pcb-core", "crates/sch-core", "crates/design-spec", "crates/part-lib", "crates/sim-core", "crates/app", "crates/cli"]
 
 # Debug builds of egui and the solver are very slow (a frame of a busy board took 15 ms, a transient run 20 s).
 # Optimise the dependencies fully and our own crates lightly; overflow checks stay, debug info is reduced to line tables.

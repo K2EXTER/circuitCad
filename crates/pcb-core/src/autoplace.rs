@@ -78,6 +78,8 @@ pub struct Tuning {
     /// Copies that go together (a range stage and the LED of that range) are one bigger copy (see `replicas::merge_channels`). Off by default:
     /// it shortens the wiring where the LEDs go with the stages, but breaks up a row of LEDs of which only some hang on a stage.
     pub channels: bool,
+    /// The parts of each group of the board's requirements (`Board.place_groups`) are laid out as one block that moves as one piece.
+    pub groups: bool,
 }
 
 impl Tuning {
@@ -85,9 +87,9 @@ impl Tuning {
     /// parts can sit closer.
     pub fn for_board(board: &Board) -> Self {
         if board.zones.iter().any(|z| !z.net.is_empty()) {
-            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: false, arrays: true, channels: false }
+            Self { gap: POURED_GAP, label: POURED_LABEL, skip_poured: true, align: true, bypass: true, sheets: false, arrays: true, channels: false, groups: true }
         } else {
-            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: false, arrays: true, channels: false }
+            Self { gap: GAP, label: LABEL, skip_poured: false, align: true, bypass: true, sheets: false, arrays: true, channels: false, groups: true }
         }
     }
 }
@@ -1280,6 +1282,28 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         let h = cells.iter().map(|c| c.2 - y0 + items[c.0].3).fold(0.0, f64::max);
         arrays.push(Array { members: cells.into_iter().map(|(i, x, y)| (i, x - x0, y - y0)).collect(), w, h });
     }
+    // the parts that the design's requirements say belong together are one block each (the parts already in a copy or an IC block stay there)
+    if improve && tuning.groups {
+        let mut taken: std::collections::BTreeSet<usize> = arrays.iter().flat_map(|a| a.members.iter().map(|m| m.0)).collect();
+        for (_, names) in crate::requirements::groups_on_board(board) {
+            let members: Vec<usize> = names.iter().filter_map(|r| items.iter().position(|it| &it.0 == r)).filter(|i| !taken.contains(i)).collect();
+            if members.len() < 2 {
+                continue;
+            }
+            let at = |i: usize| members.iter().position(|&m| m == i);
+            let sub_items: Vec<_> = members.iter().map(|&i| items[i].clone()).collect();
+            let sub_degree: Vec<usize> = members.iter().map(|&i| degree[i]).collect();
+            let sub_nets: Vec<NetPins> = nets
+                .iter()
+                .map(|pins| pins.iter().filter_map(|&(i, x, y)| at(i).map(|l| (l, x, y))).collect::<NetPins>())
+                .filter(|pins| pins.iter().any(|p| p.0 != pins[0].0))
+                .collect();
+            let tie = ties(&sub_nets, sub_items.len());
+            let (spots, w, h) = layout(&sub_items, &sub_nets, &sub_degree, &tie, improve, true, false);
+            taken.extend(members.iter().copied());
+            arrays.push(Array { members: spots.into_iter().map(|(l, x, y)| (members[l], x, y)).collect(), w, h });
+        }
+    }
     let (citems, cnets, cdegree, csheet, origin) = collapse(&items, &nets, &degree, &arrays, &sheet_name);
     let by_sheet = if tuning.sheets { sheet_groups(&csheet) } else { None };
     let (cspots, used_w, used_h) = match by_sheet {
@@ -1825,8 +1849,8 @@ mod tests {
     #[test]
     fn turning_parts_shortens_the_airwires_and_keeps_the_board_clean() {
         let (mut plain, mut turned) = (divider(), divider());
-        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true, channels: true }).unwrap();
-        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true, channels: true }).unwrap();
+        place(&mut plain, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true, channels: true, groups: true }).unwrap();
+        place(&mut turned, true, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: true, channels: true, groups: true }).unwrap();
         let (l0, l1) = (airwire_length(&plain), airwire_length(&turned));
         assert!(l1 < l0, "{l1} vs {l0}");
         assert!(drc::check(&turned).is_empty());
@@ -1857,8 +1881,8 @@ mod tests {
     #[test]
     fn improving_the_order_puts_the_parts_of_a_net_together() {
         let (mut plain, mut improved) = (fan(8), fan(8));
-        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true }).unwrap();
-        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true }).unwrap();
+        place(&mut plain, false, false, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true, groups: true }).unwrap();
+        place(&mut improved, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true, groups: true }).unwrap();
         // every resistor with its LED
         let pair_len = |b: &Board| -> f64 { (0..8).map(|k| { let at = |r: String| b.parts.iter().find(|p| p.refdes == r).unwrap().pos; at(format!("R{k:02}")).dist(at(format!("D{k:02}"))) }).sum() };
         let (l0, l1) = (pair_len(&plain), pair_len(&improved));
@@ -1866,7 +1890,7 @@ mod tests {
         assert!(drc::check(&improved).is_empty());
         // and the same board always gives the same placement
         let mut again = fan(8);
-        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true }).unwrap();
+        place(&mut again, false, true, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass: true, sheets: true, arrays: false, channels: true, groups: true }).unwrap();
         assert!(again.parts.iter().zip(&improved.parts).all(|(a, b)| a.pos == b.pos));
     }
 
@@ -1982,7 +2006,7 @@ mod tests {
     fn alignment_does_not_add_centre_lines() {
         let rows = |align: bool| {
             let mut b = divider();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true, sheets: true, arrays: true, channels: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align, bypass: true, sheets: true, arrays: true, channels: true, groups: true }).unwrap();
             let mut ys: Vec<i64> = b.parts.iter().map(|p| (centre(&b, &p.refdes).y * 100.0).round() as i64).collect();
             ys.sort_unstable();
             ys.dedup();
@@ -2050,7 +2074,7 @@ mod tests {
             for p in b.pads.iter_mut().filter(|p| p.net == "GND") {
                 p.net = "VNEG".into();
             }
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true, channels: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true, channels: true, groups: true }).unwrap();
             b
         };
         let (with, without) = (place_with(true), place_with(false));
@@ -2064,7 +2088,7 @@ mod tests {
     fn bypass_capacitors_sit_by_their_ic_supply_pin() {
         let place_with = |bypass: bool| {
             let mut b = ics_with_caps();
-            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true, channels: true }).unwrap();
+            autoplace_with(&mut b, &Tuning { gap: GAP, label: LABEL, skip_poured: false, align: false, bypass, sheets: true, arrays: true, channels: true, groups: true }).unwrap();
             b
         };
         let (with, without) = (place_with(true), place_with(false));

@@ -54,7 +54,7 @@ impl Session {
                 netlist::import_swaps(board, &swaps);
                 let sheets: Vec<(String, String)> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), self.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();
                 netlist::import_sheets(board, &sheets);
-                netlist::import_hints(board, &netlist::NetHints { currents: self.sch.net_currents.clone().into_iter().collect(), pairs: self.sch.diff_pairs.clone() });
+                netlist::import_hints(board, &netlist::NetHints { currents: self.sch.net_currents.clone().into_iter().collect(), pairs: self.sch.diff_pairs.clone(), requirements: self.sch.requirements.clone() });
                 Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
             }
             "swap" => {
@@ -113,7 +113,7 @@ impl Session {
                     Some("0") => false,
                     _ => default,
                 };
-                let tuning = pcb_core::autoplace::Tuning { sheets: flag("sheets", base.sheets), arrays: flag("arrays", base.arrays), channels: flag("channels", base.channels), ..base };
+                let tuning = pcb_core::autoplace::Tuning { sheets: flag("sheets", base.sheets), arrays: flag("arrays", base.arrays), channels: flag("channels", base.channels), groups: flag("groups", base.groups), ..base };
                 let r = pcb_core::autoplace::autoplace_with(board, &tuning)?;
                 Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings})))
             }
@@ -544,6 +544,7 @@ impl Session {
                 let moved: Vec<Value> = r.moved.iter().map(|(p, dx, dy)| json!({"part": p, "dx": dx, "dy": dy})).collect();
                 Ok(obj(json!({"moved": moved, "open_before": r.open_before, "open_after": r.open_after, "tried": r.tried, "out_of_time": r.out_of_time})))
             }
+            "req" => self.board_req(),
             "slits" => {
                 // board slits: fill the gaps narrower than the clearance between copper of one net with a short piece of copper (the editor's 「つないで埋める」); the answer is `filled`
                 let board = self.board_mut()?;
@@ -1013,7 +1014,7 @@ impl Session {
         }
     }
 
-    fn board_mut(&mut self) -> Result<&mut Board, String> {
+    pub(crate) fn board_mut(&mut self) -> Result<&mut Board, String> {
         self.board.as_mut().ok_or_else(|| "there is no board yet (use 'board import' or 'board new' first)".to_string())
     }
 

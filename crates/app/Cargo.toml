@@ -11,6 +11,7 @@ name = "circuitCad"
 path = "src/main.rs"
 
 [dependencies]
+design-spec = { version = "0.1.0", path = "../design-spec" }
 eframe = "0.36.2"
 part-lib = { version = "0.1.0", path = "../part-lib" }
 pcb-core = { version = "0.1.0", path = "../pcb-core" }

@@ -11,6 +11,7 @@ mod design;
 mod libcmd;
 mod mcp;
 mod models;
+mod reqcmd;
 mod runner;
 mod sheetcmd;
 mod session;

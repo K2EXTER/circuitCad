@@ -1050,3 +1050,27 @@ board quality top=3 sort=length
     let lengths: Vec<f64> = worst.iter().map(|r| r["length_mm"].as_f64().unwrap()).collect();
     assert!(lengths.windows(2).all(|w| w[0] >= w[1]), "sorted by length, longest first: {lengths:?}");
 }
+
+#[test]
+fn the_requirements_table_reaches_the_board_and_is_checked() {
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10k as=R1\nadd R 4.7k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\n\
+        req net 電源 nets=VIN role=power width=0.8 current=0.5 太く\n\
+        req group 分圧 parts=R1,R2 max=100\n\
+        req apart 離す a=R1 b=R2 min=500\n\
+        req group 欠け parts=R1,R9\n\
+        req\nboard import\nboard class\nboard req\n");
+    assert!(ok, "{a:?}");
+    let table = last(&a, "req");
+    assert_eq!(table["net_rules"][0]["note"], "太く");
+    assert_eq!(table["problems"].as_array().unwrap().len(), 1, "R9 is not in the circuit: {table}");
+    let classes = last(&a, "board")["classes"].as_array().cloned();
+    let classes = a.iter().filter_map(|v| v["classes"].as_array()).next().cloned().or(classes).unwrap();
+    assert_eq!(classes[0]["role"], "power");
+    assert_eq!(classes[0]["width"], 0.8);
+    let rep = a.iter().rev().find(|v| v.get("findings").is_some()).unwrap();
+    assert_eq!(rep["groups"], 2);
+    // two resistors a few mm apart break a distance of 500 mm, and not a group of 100 mm
+    assert_eq!(rep["violations"], 1, "{rep}");
+    assert_eq!(rep["findings"][0]["kind"], "apart");
+    assert!(rep["missing"].as_array().unwrap().iter().any(|m| m.as_str().unwrap().contains("R9")), "{rep}");
+}

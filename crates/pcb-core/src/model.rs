@@ -539,6 +539,11 @@ pub struct Board {
     /// Routing rules shared by groups of nets (the first class that lists a net is the one that counts).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub net_classes: Vec<NetClass>,
+    /// Parts that belong close together, and the distances to keep, taken from the schematic's table of requirements (`requirements::check` checks them).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub place_groups: Vec<design_spec::PlaceGroup>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keep_apart: Vec<design_spec::KeepApart>,
     /// What the impedance of a track depends on besides its width (not written when it is the default).
     #[serde(default, skip_serializing_if = "is_default_stackup")]
     pub stackup: crate::impedance::Stackup,
@@ -648,6 +653,8 @@ impl Board {
             land_unverified: Default::default(),
             net_currents: Default::default(),
             net_classes: vec![],
+            place_groups: vec![],
+            keep_apart: vec![],
             stackup: Default::default(),
             locked_parts: vec![],
             inner_layers: 0,

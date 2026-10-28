@@ -359,6 +359,12 @@ fn write_buck_example() {
     label(&mut s, r2, "2", "GND");
     label(&mut s, rl, "1", "VOUT");
     label(&mut s, rl, "2", "GND");
+    // what the board has to do for this circuit (the "設計の要件" table): the switching node small and away from the feedback line, the loop close
+    s.requirements.net_rules.push(design_spec::NetRule { name: "スイッチングノード".into(), nets: vec!["SW".into()], role: "switching".into(), width: 0.5, note: "面積を小さく。帰還やアナログの線から離す".into(), ..Default::default() });
+    s.requirements.net_rules.push(design_spec::NetRule { name: "電源の電流".into(), nets: vec!["VIN".into(), "VOUT".into()], role: "power".into(), width: 0.5, current: 0.5, note: "電流が流れる経路。太く短く".into(), ..Default::default() });
+    s.requirements.net_rules.push(design_spec::NetRule { name: "帰還".into(), nets: vec!["FB".into()], role: "sense".into(), width: 0.2, note: "細くてよいが、短く。スイッチングノードに近づけない".into(), ..Default::default() });
+    s.requirements.groups.push(design_spec::PlaceGroup { name: "降圧のループ".into(), parts: vec!["U1".into(), "L1".into(), "D1".into(), "C1".into()], max_dist: 25.0, note: "スイッチの電流が流れるループを小さくする".into() });
+    s.requirements.apart.push(design_spec::KeepApart { name: "帰還をスイッチングノードから離す".into(), a: vec!["R1".into(), "R2".into()], b: vec!["L1".into(), "D1".into()], min_dist: 6.0, note: "スイッチングの雑音を、帰還の分圧に入れない".into() });
     std::fs::write(root.join("buck_converter.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 

@@ -340,6 +340,11 @@ impl eframe::App for App {
                         self.sch.open_wizard(0);
                         ui.close();
                     }
+                    if ui.button("設計の要件 (表)…").on_hover_text("ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます").clicked() {
+                        self.mode = Mode::Schematic;
+                        self.sch.open_requirements();
+                        ui.close();
+                    }
                     ui.separator();
                     ui.menu_button("基板のレッスン", |ui| {
                         let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
@@ -422,6 +427,7 @@ impl eframe::App for App {
         });
         self.sch.settings_window(ui.ctx());
         self.sch.wizard_window(ui.ctx());
+        self.sch.requirements_window(ui.ctx());
         egui::Panel::bottom("status").show(ui, |ui| {
             // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
             ui.horizontal(|ui| {

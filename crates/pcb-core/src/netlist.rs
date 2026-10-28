@@ -53,6 +53,8 @@ pub fn import_swaps(board: &mut Board, swaps: &[(String, crate::swap::SwapSpec)]
 pub struct NetHints {
     pub currents: Vec<(String, f64)>,
     pub pairs: Vec<(String, String)>,
+    /// The table of requirements: net roles, parts that belong together, distances to keep (`requirements::import_requirements`).
+    pub requirements: design_spec::DesignSpec,
 }
 
 /// Take the schematic's declarations for nets that have pads on the board: a current replaces the board's
@@ -74,6 +76,7 @@ pub fn import_hints(board: &mut Board, hints: &NetHints) -> (usize, usize) {
             np += 1;
         }
     }
+    crate::requirements::import_requirements(board, &hints.requirements);
     (nc, np)
 }
 
@@ -370,7 +373,7 @@ mod hint_tests {
             b.pads.push(p);
         }
         b.net_currents.insert("OTHER".into(), 2.0);
-        let h = NetHints { currents: vec![("VIN".into(), 1.5), ("ABSENT".into(), 1.0)], pairs: vec![("D+".into(), "D-".into()), ("X".into(), "Y".into())] };
+        let h = NetHints { currents: vec![("VIN".into(), 1.5), ("ABSENT".into(), 1.0)], pairs: vec![("D+".into(), "D-".into()), ("X".into(), "Y".into())], ..Default::default() };
         assert_eq!(import_hints(&mut b, &h), (1, 1));
         assert_eq!(b.net_currents.get("VIN"), Some(&1.5));
         assert_eq!(b.net_currents.get("OTHER"), Some(&2.0), "the board's own settings stay");

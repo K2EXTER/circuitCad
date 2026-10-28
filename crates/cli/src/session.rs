@@ -238,6 +238,7 @@ impl Session {
             "models" | "murata" => self.models(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),
+            "req" => self.req(args),
             "board" => self.board_cmd(args),
             "help" => Ok(obj(json!({"text": HELP}))),
             other => Err(format!("unknown command '{other}' (try 'help')")),

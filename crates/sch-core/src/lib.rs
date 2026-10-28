@@ -3,9 +3,11 @@
 
 mod netlist;
 mod ngspice;
+mod requirements;
 mod sheets;
 mod spice;
 pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
+pub use design_spec::{matches_name, DesignSpec, KeepApart, NetRule, PlaceGroup, ROLES};
 
 pub use netlist::{erc, extract, net_at, Net, PinRef, Problem, Severity};
 pub use spice::{node as spice_node, to_spice, to_spice_for, Dialect};
@@ -223,6 +225,9 @@ pub struct Schematic {
     /// Differential pairs, as the two labelled nets (the "+" and the "-" line): the board import makes them a pair.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub diff_pairs: Vec<(String, String)>,
+    /// What the design asks for, as one table for all the sheets (net roles, parts that belong together, distances to keep).
+    #[serde(default, skip_serializing_if = "DesignSpec::is_empty")]
+    pub requirements: DesignSpec,
     /// Several sheets: every sheet, the one being edited (`active_sheet`) as an empty place (it is in the fields above). Empty = one sheet.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sheets: Vec<Sheet>,
@@ -236,7 +241,7 @@ fn is_zero(n: &usize) -> bool {
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], sheets: vec![], active_sheet: 0 }
+        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), sheets: vec![], active_sheet: 0 }
     }
 }
 
@@ -254,6 +259,8 @@ struct RawSchematic {
     #[serde(default)]
     diff_pairs: Vec<(String, String)>,
     #[serde(default)]
+    requirements: DesignSpec,
+    #[serde(default)]
     sheets: Vec<Sheet>,
     #[serde(default)]
     active_sheet: usize,
@@ -261,7 +268,7 @@ struct RawSchematic {
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, sheets: r.sheets, active_sheet: r.active_sheet };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, sheets: r.sheets, active_sheet: r.active_sheet };
         s.migrate();
         s
     }
