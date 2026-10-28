@@ -1237,10 +1237,18 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     for pad in board.pads.iter().filter(|p| !p.net.is_empty() && !p.refdes.is_empty() && !poured.contains(&p.net)) {
         if let Some(i) = items.iter().position(|it| it.0 == pad.refdes) {
             nets.entry(pad.net.as_str()).or_default().push((i, pad.pos.x - items[i].1.x + gap / 2.0, pad.pos.y - items[i].1.y + gap / 2.0 + label));
-            degree[i] += 1;
         }
     }
     let nets: Vec<NetPins> = nets.into_values().filter(|pins| pins.iter().any(|p| p.0 != pins[0].0)).collect();
+    // how many nets a part is on: each net once, however many pins of the part it has, and only a net that reaches another part
+    for pins in &nets {
+        let mut on: Vec<usize> = pins.iter().map(|p| p.0).collect();
+        on.sort_unstable();
+        on.dedup();
+        for i in on {
+            degree[i] += 1;
+        }
+    }
     let mut nets = nets;
     if tuning.bypass {
         nets.extend(bypass_nets(board, &items, gap, label));
