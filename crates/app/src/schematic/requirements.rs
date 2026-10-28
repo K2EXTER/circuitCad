@@ -18,7 +18,8 @@ fn list(text: &str) -> Vec<String> {
 /// A text box that shows `current` until it is edited; returns the new text when it changed.
 fn text_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current: &str, width: f32, hover: &str) -> Option<String> {
     let t = buf.entry(key).or_insert_with(|| current.to_string());
-    let r = ui.add(egui::TextEdit::singleline(t).desired_width(width)).on_hover_text(hover);
+    // add_sized: a grid column would otherwise shrink the box to what the first frame left over
+    let r = ui.add_sized([width, 20.0], egui::TextEdit::singleline(t)).on_hover_text(hover);
     r.changed().then(|| t.clone())
 }
 
@@ -43,7 +44,7 @@ impl SchEditor {
         }
         let mut open = true;
         let mut changed = false;
-        egui::Window::new("設計の要件").open(&mut open).default_size([760.0, 560.0]).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("設計の要件").open(&mut open).default_size([1040.0, 520.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
             ui.label("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。")
                 .on_hover_text("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます");
             if !self.req_problems.is_empty() {
@@ -64,11 +65,11 @@ impl SchEditor {
                     }
                     ui.end_row();
                     for (k, r) in spec.net_rules.iter_mut().enumerate() {
-                        if let Some(t) = text_cell(ui, buf, (0, k, 0), &r.name, 90.0, "この行の名前。基板ではネットクラスの名前になります") {
+                        if let Some(t) = text_cell(ui, buf, (0, k, 0), &r.name, 120.0, "この行の名前。基板ではネットクラスの名前になります") {
                             r.name = t;
                             changed = true;
                         }
-                        if let Some(t) = text_cell(ui, buf, (0, k, 1), &r.nets.join(","), 200.0, "ネット名を , で区切って書きます。末尾が * なら、その名前で始まるネットすべて") {
+                        if let Some(t) = text_cell(ui, buf, (0, k, 1), &r.nets.join(","), 230.0, "ネット名を , で区切って書きます。末尾が * なら、その名前で始まるネットすべて") {
                             r.nets = list(&t);
                             changed = true;
                         }
@@ -90,7 +91,7 @@ impl SchEditor {
                         number_cell(ui, &mut r.clearance, " mm", 0.05, "ほかの銅との間隔。0 は基板の既定のまま (基板の最小値より小さくはなりません)");
                         number_cell(ui, &mut r.current, " A", 0.05, "このネットに流れる電流の目安。0 は指定なし");
                         changed |= before != (r.width, r.clearance, r.current);
-                        if let Some(t) = text_cell(ui, buf, (0, k, 2), &r.note, 160.0, "なぜそうするかの一言。あとで読み返す人のためのメモ") {
+                        if let Some(t) = text_cell(ui, buf, (0, k, 2), &r.note, 260.0, "なぜそうするかの一言。あとで読み返す人のためのメモ") {
                             r.note = t;
                             changed = true;
                         }
@@ -120,18 +121,18 @@ impl SchEditor {
                     }
                     ui.end_row();
                     for (k, g) in spec.groups.iter_mut().enumerate() {
-                        if let Some(t) = text_cell(ui, buf, (1, k, 0), &g.name, 90.0, "この組の名前") {
+                        if let Some(t) = text_cell(ui, buf, (1, k, 0), &g.name, 120.0, "この組の名前") {
                             g.name = t;
                             changed = true;
                         }
-                        if let Some(t) = text_cell(ui, buf, (1, k, 1), &g.parts.join(","), 260.0, "部品番号を , で区切って書きます (例: J3A,ZT1,FP,FQ)") {
+                        if let Some(t) = text_cell(ui, buf, (1, k, 1), &g.parts.join(","), 330.0, "部品番号を , で区切って書きます (例: J3A,ZT1,FP,FQ)") {
                             g.parts = list(&t);
                             changed = true;
                         }
                         let before = g.max_dist;
                         number_cell(ui, &mut g.max_dist, " mm", 0.5, "組の中でいちばん離れた2つの部品の、中心どうしの距離の上限。0 はチェックなし");
                         changed |= before != g.max_dist;
-                        if let Some(t) = text_cell(ui, buf, (1, k, 2), &g.note, 160.0, "なぜ近くに置くかの一言") {
+                        if let Some(t) = text_cell(ui, buf, (1, k, 2), &g.note, 300.0, "なぜ近くに置くかの一言") {
                             g.note = t;
                             changed = true;
                         }
@@ -161,22 +162,22 @@ impl SchEditor {
                     }
                     ui.end_row();
                     for (k, a) in spec.apart.iter_mut().enumerate() {
-                        if let Some(t) = text_cell(ui, buf, (2, k, 0), &a.name, 90.0, "この行の名前") {
+                        if let Some(t) = text_cell(ui, buf, (2, k, 0), &a.name, 200.0, "この行の名前") {
                             a.name = t;
                             changed = true;
                         }
-                        if let Some(t) = text_cell(ui, buf, (2, k, 1), &a.a.join(","), 170.0, "部品番号かネット名を , で区切って書きます") {
+                        if let Some(t) = text_cell(ui, buf, (2, k, 1), &a.a.join(","), 200.0, "部品番号かネット名を , で区切って書きます") {
                             a.a = list(&t);
                             changed = true;
                         }
-                        if let Some(t) = text_cell(ui, buf, (2, k, 2), &a.b.join(","), 170.0, "部品番号かネット名を , で区切って書きます") {
+                        if let Some(t) = text_cell(ui, buf, (2, k, 2), &a.b.join(","), 200.0, "部品番号かネット名を , で区切って書きます") {
                             a.b = list(&t);
                             changed = true;
                         }
                         let before = a.min_dist;
                         number_cell(ui, &mut a.min_dist, " mm", 0.5, "AとBのパッドどうしの、中心間の距離の下限");
                         changed |= before != a.min_dist;
-                        if let Some(t) = text_cell(ui, buf, (2, k, 3), &a.note, 140.0, "なぜ離すかの一言") {
+                        if let Some(t) = text_cell(ui, buf, (2, k, 3), &a.note, 260.0, "なぜ離すかの一言") {
                             a.note = t;
                             changed = true;
                         }

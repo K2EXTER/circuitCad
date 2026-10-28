@@ -85,6 +85,9 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--dc") {
             app.sch.analyze_dc();
         }
+        if args.iter().any(|a| a == "--requirements") {
+            app.sch.open_requirements();
+        }
         if let Some(i) = args.iter().position(|a| a == "--select")
             && let Some(r) = args.get(i + 1) {
                 app.sch.select_part(r);
