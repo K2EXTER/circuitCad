@@ -45,13 +45,15 @@ pub struct RouteOptions {
     pub pour_layer_cost: f64,
     /// When connections stay open, try them again on a pitch of half, then a quarter of `grid` (down to 0.1 mm), in `autoroute_sized`.
     pub grid_ladder: bool,
+    /// Before a route of the whole board, a short wire is drawn out of the pins of the fine-pitch ICs (see `breakout`).
+    pub breakout: bool,
     /// Nets this run leaves alone (a sensing line that was routed on its own terms is not routed again with vias).
     pub skip: Vec<String>,
 }
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2, grid_ladder: true, skip: vec![] }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2, grid_ladder: true, breakout: true, skip: vec![] }
     }
 }
 
@@ -104,6 +106,30 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
 /// normal width by the last run (the width check then warns about it). When the wide tracks leave more connections open
 /// than a plain run does, the plain run is kept. With `only_net`, only that net is routed.
 pub fn autoroute_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
+    let plain = RouteOptions { breakout: false, ..opt.clone() };
+    if !opt.breakout || only_net.is_some() {
+        return route_sized(board, &plain, only_net);
+    }
+    // a route of the whole board: when connections stay open, it is made again from a short wire out of every pin of the fine-pitch ICs
+    // (`breakout`), and the one with fewer open connections is kept (the first when equal: the wires out of the pins make a route longer)
+    let before = board.clone();
+    let report = route_sized(board, &plain, None);
+    if report.failed.is_empty() {
+        return report;
+    }
+    let mut second = before;
+    if crate::breakout::breakout(&mut second, opt.track_width).stubs == 0 {
+        return report;
+    }
+    let again = route_sized(&mut second, &plain, None);
+    if again.failed.len() < report.failed.len() {
+        *board = second;
+        return again;
+    }
+    report
+}
+
+fn route_sized(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> RouteReport {
     let mut report = route_pass(board, opt, only_net);
     // what is still open is tried on a finer grid (half, then a quarter of the pitch, down to 0.1 mm: tracks go between the legs of a fine-pitch IC)
     let started = std::time::Instant::now();

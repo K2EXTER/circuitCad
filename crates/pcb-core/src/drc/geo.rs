@@ -42,7 +42,7 @@ pub(crate) fn point_rect(p: Point, c: Point, hw: f64, hh: f64) -> f64 {
     dx.hypot(dy)
 }
 
-pub(super) fn seg_rect(a: Point, b: Point, c: Point, hw: f64, hh: f64) -> f64 {
+pub(crate) fn seg_rect(a: Point, b: Point, c: Point, hw: f64, hh: f64) -> f64 {
     if point_rect(a, c, hw, hh) == 0.0 || point_rect(b, c, hw, hh) == 0.0 {
         return 0.0;
     }

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 mod acute;
 mod connectivity;
 mod decoupling;
-mod geo;
+pub(crate) mod geo;
 mod patch;
 mod pour;
 mod silk;

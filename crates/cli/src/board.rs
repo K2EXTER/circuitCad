@@ -74,6 +74,19 @@ impl Session {
                     .collect();
                 Ok(obj(json!({"dry": dry, "swapped": plans, "locked": r.locked})))
             }
+            "breakout" => {
+                // board breakout [width=0.2]: before routing, a short wire out of every pin of a fine-pitch IC that needs one: the pins in the middle of a
+                // side go straight out, the ones at the two ends turn outward (the nearer the end, the sooner), so they do not cross the way out of the
+                // middle ones. A part whose stubs make the DRC find more than before gets none. The answer is `stubs`, `parts` and `dropped`.
+                let (_, kv) = options(rest);
+                let width = match opt(&kv, "width") {
+                    Some(v) => num(v)?,
+                    None => 0.2,
+                };
+                let board = self.board_mut()?;
+                let r = pcb_core::breakout::breakout(board, width);
+                Ok(obj(json!({"stubs": r.stubs, "parts": r.parts, "dropped": r.dropped})))
+            }
             "orient" => {
                 // board orient [dry=1] [parts=U1,U2] [minpads=3]: turn each part (0/90/180/270 degrees) to the way that makes its airwires shortest and crosses
                 // the fewest. Parts with copper on a pad, locked parts, and turns that would land on something are left. A pin keeps its net.

@@ -41,6 +41,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `connectors.rs` 自動配置の最後に、ピンヘッダの向きと位置を決めて未配線の交差を減らす
 - `reroute.rs` 遠回りした配線・余分なビアの引き直し(手で引いた配線向け。「配線を短くする」ボタンと `ccad board improve`)
 - `merge.rs` 一直線の配線を1本にまとめる(自動配線の後。銅の形は変えない)
+- `breakout.rs` 細かいピッチの IC の足から出口の短い線を先に引く(辺の真ん中はまっすぐ、両端は外向きに曲げる。全体の配線で通らない接続が残ったときだけ使う。`ccad board breakout`)
 - `padentry.rs` パッドの根元をそろえる(垂直な出入り・2本は両端寄せ。自動配線の直後と全部の配線に)
 - `step.rs`・`mesh.rs` メーカーの STEP を三角形のメッシュ(`Mesh3d`)にして、部品の3Dの形にする(`PartDef.model3d` → `Board.models3d` → `model3d.rs` の `part_meshes`)
 - `quality.rs` 配線の見た目の数字(折れ・ビア・並走・層ごとの長さ。`ccad board status`/`board quality`。手動と自動の比較に使う)
