@@ -898,6 +898,43 @@ fn ic_pair_nets(board: &Board, items: &[(String, Point, f64, f64)], gap: f64, la
     out
 }
 
+/// How far (mm) a signal pin of an IC keeps free in front of it, for the wire that leaves it (`escape_zones`).
+const ESCAPE_LEN: f64 = 1.8;
+
+/// The ground in front of the signal pins on the edge of an IC, where the wires must be able to leave: for each such pin a box from its
+/// outer edge, `ESCAPE_LEN` out, as wide as the pin. A capacitor that sits there closes the way out of a fine-pitch package; its own
+/// supply pin is not a signal pin, so it still stands next to it. `rail` tells the nets that are not signals.
+fn escape_zones(board: &Board, ic: &str, rail: &dyn Fn(&str) -> bool) -> Vec<(Point, Point)> {
+    let Some((lo, hi)) = extent(board, ic) else { return vec![] };
+    let (cx, cy) = ((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+    let (hw, hh) = (((hi.x - lo.x) / 2.0).max(0.1), ((hi.y - lo.y) / 2.0).max(0.1));
+    let mut out = vec![];
+    for p in board.pads.iter().filter(|p| p.refdes == ic && !p.net.is_empty() && !rail(&p.net)) {
+        let (dx, dy) = ((p.pos.x - cx) / hw, (p.pos.y - cy) / hh);
+        // only the pins on the edge of the package
+        if dx.abs().max(dy.abs()) < 0.6 {
+            continue;
+        }
+        let (w, h) = p.shape.size();
+        let zone = if dx.abs() >= dy.abs() {
+            let s = dx.signum();
+            let edge = p.pos.x + s * w / 2.0;
+            (Point::new(edge.min(edge + s * ESCAPE_LEN), p.pos.y - h / 2.0), Point::new(edge.max(edge + s * ESCAPE_LEN), p.pos.y + h / 2.0))
+        } else {
+            let s = dy.signum();
+            let edge = p.pos.y + s * h / 2.0;
+            (Point::new(p.pos.x - w / 2.0, edge.min(edge + s * ESCAPE_LEN)), Point::new(p.pos.x + w / 2.0, edge.max(edge + s * ESCAPE_LEN)))
+        };
+        out.push(zone);
+    }
+    out
+}
+
+/// Whether the box (`lo`, `hi`) overlaps one of the `zones`.
+fn in_zones(zones: &[(Point, Point)], lo: Point, hi: Point) -> bool {
+    zones.iter().any(|(l, h)| l.x < hi.x && lo.x < h.x && l.y < hi.y && lo.y < h.y)
+}
+
 /// An IC with the bypass capacitors that belong to it, settled once and kept: how each capacitor is turned, and where its part origin stands from the IC's.
 struct IcBlock {
     ic: String,
@@ -1005,6 +1042,12 @@ fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<Ic
                     .fold(f64::MAX, f64::min)
             };
             let mut best: Option<(f64, Point, u8)> = None;
+            let zones = escape_zones(&scratch, &ic_name, &rail);
+            // the first pass keeps the way out of the signal pins free; when there is no such place, the second does not
+            for strict in [true, false] {
+            if best.is_some() {
+                break;
+            }
             for pin in &pins {
                 let steps = (BYPASS_REACH / BYPASS_STEP) as i32;
                 for ix in -steps..=steps {
@@ -1022,6 +1065,9 @@ fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<Ic
                             if boxes.iter().any(|(l, h)| (l.x - hi.x).max(lo.x - h.x).max((l.y - hi.y).max(lo.y - h.y)) < ALIGN_SPACE) {
                                 continue;
                             }
+                            if strict && in_zones(&zones, lo, hi) {
+                                continue;
+                            }
                             let pads: Vec<Pad> = scratch.pads.iter().filter(|q| &q.refdes == c).cloned().collect();
                             let cst = cost_of(&pads);
                             if best.as_ref().is_none_or(|b| cst < b.0 - 1e-9) {
@@ -1030,6 +1076,7 @@ fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<Ic
                         }
                     }
                 }
+            }
             }
             if let Some((_, at, rot)) = best {
                 scratch.place_part(c, at, rot);
@@ -1375,8 +1422,14 @@ fn attach_bypass_caps(board: &mut Board, inside: (Point, Point), keep: &std::col
         };
         let mut scratch = board.clone();
         let mut best_at: Option<(f64, Point, u8)> = None;
+        let zones = escape_zones(board, &pin.refdes, &rail);
         // (places 1 mm apart: finer ones cost much and gain little)
         let steps = (BYPASS_REACH / BYPASS_STEP) as i32;
+        // the first pass keeps the way out of the IC's signal pins free; when there is no such place, the second does not
+        for strict in [true, false] {
+        if best_at.is_some() {
+            break;
+        }
         for ix in -steps..=steps {
             for iy in -steps..=steps {
                 let target = Point::new(pin.pos.x + ix as f64 * BYPASS_STEP, pin.pos.y + iy as f64 * BYPASS_STEP);
@@ -1396,6 +1449,9 @@ fn attach_bypass_caps(board: &mut Board, inside: (Point, Point), keep: &std::col
                     if boxes.iter().any(|(l, h)| (l.x - hi.x).max(lo.x - h.x).max((l.y - hi.y).max(lo.y - h.y)) < ALIGN_SPACE) {
                         continue;
                     }
+                    if strict && in_zones(&zones, lo, hi) {
+                        continue;
+                    }
                     let pads: Vec<Pad> = scratch.pads.iter().filter(|q| q.refdes == cap).cloned().collect();
                     let c = cost_of(&pads);
                     if best_at.as_ref().is_none_or(|b| c < b.0 - 1e-9) {
@@ -1403,6 +1459,7 @@ fn attach_bypass_caps(board: &mut Board, inside: (Point, Point), keep: &std::col
                     }
                 }
             }
+        }
         }
         if let Some((c, at, rot)) = best_at
             && c < cost_of(&cap_pads) - 1.0
