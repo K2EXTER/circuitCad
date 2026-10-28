@@ -229,6 +229,18 @@ const RETRY_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
 fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>, slide: bool, first: &[String]) -> RouteReport {
     let mut report = RouteReport::default();
     let mut failed: Vec<Airwire> = vec![];
+    // the wires between two parts that the requirements give a width of their own: made first, each with its width (the rest of the net
+    // is joined to them afterwards)
+    for l in board.link_widths.clone().iter().filter(|l| only_net.is_none_or(|n| n == l.net) && !opt.skip.contains(&l.net)) {
+        let Some(w) = link_airwire(board, l) else { continue };
+        // (a width that does not fit - a thick wire into the pad of a small IC - falls back to the net's own width: the connection is made)
+        let made = route_airwire_mode(board, &w, &RouteOptions { track_width: l.width, ..opt.clone() }, slide) || (l.width > opt.track_width + 1e-9 && route_airwire_mode(board, &w, opt, slide));
+        if made {
+            report.routed += 1;
+        } else {
+            failed.push(w);
+        }
+    }
     loop {
         // pad to pad: a via the user placed on a net is no end of a connection (the route starts and ends on pads)
         let mut wires: Vec<Airwire> = pad_ratsnest(board)
@@ -248,6 +260,26 @@ fn autoroute_mode(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>,
     }
     report.failed = failed;
     report
+}
+
+/// The connection a width for the wire between two parts asks for: the nearest two pads of the net, one on each part. `None` when the
+/// two parts are joined on that net already (or have no pad on it).
+fn link_airwire(board: &Board, l: &LinkWidth) -> Option<Airwire> {
+    let conn = connectivity(board);
+    let on = |r: &str| board.pads.iter().enumerate().filter(move |(_, p)| p.refdes == r && p.net == l.net).map(|(i, _)| i).collect::<Vec<_>>();
+    let mut best: Option<(f64, usize, usize)> = None;
+    for &i in &on(&l.a) {
+        for &j in &on(&l.b) {
+            if conn.pad_group(i) == conn.pad_group(j) {
+                return None;
+            }
+            let d = board.pads[i].pos.dist(board.pads[j].pos);
+            if best.is_none_or(|b| d < b.0) {
+                best = Some((d, i, j));
+            }
+        }
+    }
+    best.map(|(_, i, j)| Airwire { net: l.net.clone(), a: board.pads[i].pos, b: board.pads[j].pos })
 }
 
 /// The open connections between pads: [`ratsnest`] without the vias as ends (a net's vias that no track leads to would otherwise be

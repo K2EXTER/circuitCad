@@ -3,7 +3,7 @@
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
-use design_spec::{KeepApart, NetRule, PlaceGroup, ROLES};
+use design_spec::{KeepApart, LinkWidth, NetRule, PlaceGroup, ROLES};
 use serde_json::{json, Value};
 
 fn names(v: &str) -> Vec<String> {
@@ -17,6 +17,19 @@ fn number(kv: &[(String, String)], key: &str) -> Result<Option<f64>, String> {
     }
 }
 
+/// `links=CB1-U7:0.6,U7-U4:0.3`: the wire between two parts and its width (mm).
+fn links(v: &str) -> Result<Vec<LinkWidth>, String> {
+    let mut out = vec![];
+    for item in v.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+        let bad = || format!("links={item}: write PART-PART:WIDTH, e.g. links=CB1-U7:0.6,U7-U4:0.3");
+        let (pair, w) = item.split_once(':').ok_or_else(bad)?;
+        let (a, b) = pair.split_once('-').ok_or_else(bad)?;
+        let width = w.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(bad)?;
+        out.push(LinkWidth { a: a.trim().into(), b: b.trim().into(), width });
+    }
+    Ok(out)
+}
+
 /// The note of a row: `note=` and any words left over after the name (a sentence needs no quotes).
 fn note(pos: &[String], kv: &[(String, String)]) -> Option<String> {
     let mut words: Vec<&str> = opt(kv, "note").into_iter().collect();
@@ -28,14 +41,14 @@ impl Session {
     fn req_list(&self) -> Res {
         let r = &self.sch.requirements;
         Ok(obj(json!({
-            "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "note": n.note})).collect::<Vec<Value>>(),
+            "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
         })))
     }
 
-    /// `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [note TEXT]`;
+    /// `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [links=A-B:mm,..] [note TEXT]`;
     /// `req group NAME [parts=R1,R2] [max=mm] [note TEXT]`; `req apart NAME [a=..] [b=..] [min=mm] [note TEXT]`; add `remove=1` to delete a row.
     /// A row that exists is changed only in what is given; a new row needs its names.
     pub fn req(&mut self, args: &[String]) -> Res {
@@ -53,6 +66,7 @@ impl Session {
                     return self.req_list();
                 }
                 let (width, clearance, current) = (number(&kv, "width")?, number(&kv, "clearance")?, number(&kv, "current")?);
+                let new_links = opt(&kv, "links").map(links).transpose()?;
                 if let Some(role) = opt(&kv, "role").filter(|r| !r.is_empty() && *r != "none" && !ROLES.contains(r)) {
                     return Err(format!("role={role}: use power, switching, sense, analog, logic or none"));
                 }
@@ -70,6 +84,9 @@ impl Session {
                 }
                 if let Some(v) = opt(&kv, "role") {
                     r.role = if v == "none" { String::new() } else { v.to_string() };
+                }
+                if let Some(l) = new_links {
+                    r.links = l;
                 }
                 (r.width, r.clearance, r.current) = (width.unwrap_or(r.width), clearance.unwrap_or(r.clearance), current.unwrap_or(r.current));
                 if let Some(t) = text {
@@ -140,6 +157,6 @@ impl Session {
             .iter()
             .map(|f| json!({"kind": if f.kind == pcb_core::requirements::FindingKind::Group { "group" } else { "apart" }, "name": f.name, "message": f.message, "actual_mm": (f.actual * 10.0).round() / 10.0, "limit_mm": f.limit}))
             .collect();
-        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "missing": rep.missing})))
+        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "missing": rep.missing})))
     }
 }

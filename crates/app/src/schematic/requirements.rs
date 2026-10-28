@@ -3,7 +3,7 @@
 //! (net classes, currents, placement groups, distances); the board editor checks the placement against it.
 
 use super::*;
-use design_spec::{KeepApart, NetRule, PlaceGroup};
+use design_spec::{KeepApart, LinkWidth, NetRule, PlaceGroup};
 use pcb_core::model::Role;
 use std::collections::HashMap;
 
@@ -111,6 +111,44 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
+                egui::CollapsingHeader::new("詳細: 部品間の線幅 (?)").id_salt("req_links").default_open(spec.net_rules.iter().any(|r| !r.links.is_empty())).show(ui, |ui| {
+                    ui.label("上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。").on_hover_text("例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです");
+                    for (k, r) in spec.net_rules.iter_mut().enumerate() {
+                        ui.horizontal(|ui| {
+                            ui.strong(&r.name);
+                            if ui.small_button("＋ 線を足す").on_hover_text("この行のネットに、部品間の線幅を足します").clicked() {
+                                r.links.push(LinkWidth { width: r.width.max(0.25), ..Default::default() });
+                                buf.clear();
+                                changed = true;
+                            }
+                        });
+                        let mut remove = None;
+                        for (j, l) in r.links.iter_mut().enumerate() {
+                            ui.horizontal(|ui| {
+                                if let Some(t) = text_cell(ui, buf, (3, k * 100 + j, 0), &l.a, 70.0, "1つめの部品の部品番号") {
+                                    l.a = t.trim().to_string();
+                                    changed = true;
+                                }
+                                ui.label("—");
+                                if let Some(t) = text_cell(ui, buf, (3, k * 100 + j, 1), &l.b, 70.0, "2つめの部品の部品番号") {
+                                    l.b = t.trim().to_string();
+                                    changed = true;
+                                }
+                                let before = l.width;
+                                number_cell(ui, &mut l.width, " mm", 0.05, "この2つの部品の間の線の幅。0 は行の幅のまま");
+                                changed |= before != l.width;
+                                if ui.small_button("削除").on_hover_text("この線の設定を消します").clicked() {
+                                    remove = Some(j);
+                                }
+                            });
+                        }
+                        if let Some(j) = remove {
+                            r.links.remove(j);
+                            buf.clear();
+                            changed = true;
+                        }
+                    }
+                });
             });
             egui::CollapsingHeader::new(format!("近くに置く部品の組 ({}) (?)", spec.groups.len())).id_salt("req_groups").default_open(true).show(ui, |ui| {
                 ui.label("端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。").on_hover_text("基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)");

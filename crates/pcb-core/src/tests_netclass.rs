@@ -90,3 +90,77 @@ fn the_router_keeps_the_clearance_of_a_net_class() {
     // whatever was found (or not), the DRC with the class clearance finds nothing wrong
     assert!(drc::clearance(&b).is_empty(), "{:?}", drc::clearance(&b));
 }
+
+fn part_pad(b: &mut Board, refdes: &str, x: f64, y: f64, net: &str) {
+    let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+    p.net = net.into();
+    p.refdes = refdes.into();
+    p.pin = "1".into();
+    b.pads.push(p);
+}
+
+/// A width for the wire between two parts: that connection is made first, with that width, even where the shortest tree would not
+/// have it (C stands next to A, so the tree would join B to C); the rest of the net joins the two with the default width.
+#[test]
+fn the_wire_between_two_parts_has_the_width_given_for_it() {
+    let mut b = Board::new("t", 40.0, 20.0);
+    part_pad(&mut b, "A", 5.0, 10.0, "N");
+    part_pad(&mut b, "B", 30.0, 10.0, "N");
+    part_pad(&mut b, "C", 7.5, 13.0, "N");
+    b.link_widths.push(LinkWidth { net: "N".into(), a: "A".into(), b: "B".into(), width: 0.6 });
+    let r = autoroute_sized(&mut b, &RouteOptions { pad_lead: None, ..Default::default() }, None);
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    let touching = |p: Point| b.tracks.iter().filter(move |t| t.a.dist(p) < 0.01 || t.b.dist(p) < 0.01).map(|t| t.width).collect::<Vec<_>>();
+    let at_b = touching(Point::new(30.0, 10.0));
+    assert!(!at_b.is_empty() && at_b.iter().all(|w| (*w - 0.6).abs() < 1e-9), "B: {at_b:?}");
+    let at_c = touching(Point::new(7.5, 13.0));
+    assert!(!at_c.is_empty() && at_c.iter().all(|w| (*w - 0.25).abs() < 1e-9), "C: {at_c:?}");
+}
+
+/// A link that names a part without a pad on the net is passed over, and one for a pair that is joined already makes no second wire.
+#[test]
+fn a_link_that_matches_nothing_does_nothing() {
+    let mut b = Board::new("t", 40.0, 20.0);
+    part_pad(&mut b, "A", 5.0, 10.0, "N");
+    part_pad(&mut b, "B", 30.0, 10.0, "N");
+    b.link_widths.push(LinkWidth { net: "N".into(), a: "A".into(), b: "Z".into(), width: 0.6 });
+    let r = autoroute_sized(&mut b, &RouteOptions { pad_lead: None, ..Default::default() }, None);
+    assert!(r.failed.is_empty());
+    assert!(b.tracks.iter().all(|t| (t.width - 0.25).abs() < 1e-9));
+    let n = b.tracks.len();
+    b.link_widths = vec![LinkWidth { net: "N".into(), a: "A".into(), b: "B".into(), width: 0.6 }];
+    let _ = autoroute_sized(&mut b, &RouteOptions { pad_lead: None, ..Default::default() }, None);
+    assert_eq!(b.tracks.len(), n, "A and B are joined: nothing more is drawn");
+}
+
+/// The table's links reach the board: a link between two parts that have pads on the net, and not one for a part that is not there.
+#[test]
+fn the_table_of_requirements_gives_the_board_its_link_widths() {
+    let mut b = Board::new("t", 40.0, 20.0);
+    part_pad(&mut b, "A", 5.0, 10.0, "N");
+    part_pad(&mut b, "B", 30.0, 10.0, "N");
+    let spec = design_spec::DesignSpec {
+        net_rules: vec![design_spec::NetRule {
+            name: "n".into(),
+            nets: vec!["N".into()],
+            links: vec![design_spec::LinkWidth { a: "A".into(), b: "B".into(), width: 0.5 }, design_spec::LinkWidth { a: "A".into(), b: "Q".into(), width: 0.5 }],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let r = requirements::import_requirements(&mut b, &spec);
+    assert_eq!(r.links, 1);
+    assert_eq!(b.link_widths, vec![LinkWidth { net: "N".into(), a: "A".into(), b: "B".into(), width: 0.5 }]);
+}
+
+/// A width that does not fit (a wire wider than the board's edge allows) does not cost the connection: it is made with the net's own width.
+#[test]
+fn a_link_width_that_does_not_fit_falls_back_to_the_width_of_the_net() {
+    let mut b = Board::new("t", 40.0, 20.0);
+    part_pad(&mut b, "A", 5.0, 10.0, "N");
+    part_pad(&mut b, "B", 30.0, 10.0, "N");
+    b.link_widths.push(LinkWidth { net: "N".into(), a: "A".into(), b: "B".into(), width: 25.0 });
+    let r = autoroute_sized(&mut b, &RouteOptions { pad_lead: None, ..Default::default() }, None);
+    assert!(r.failed.is_empty(), "{:?}", r.failed);
+    assert!(!b.tracks.is_empty() && b.tracks.iter().all(|t| (t.width - 0.25).abs() < 1e-9), "{:?}", b.tracks.iter().map(|t| t.width).collect::<Vec<_>>());
+}

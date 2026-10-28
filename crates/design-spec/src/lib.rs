@@ -8,6 +8,17 @@ use serde::{Deserialize, Serialize};
 /// The words a net's role can have (the board's `Role`, by name); empty = none.
 pub const ROLES: [&str; 5] = ["power", "switching", "sense", "analog", "logic"];
 
+/// The width (mm) of the wire between two parts on the nets of a rule ("from the battery to the regulator, thick; on to the filter, thin").
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LinkWidth {
+    /// The two parts' reference designators.
+    pub a: String,
+    pub b: String,
+    /// 0 = the rule's width.
+    pub width: f64,
+}
+
 /// A rule for a set of nets: what they are for and how they are routed.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -23,6 +34,9 @@ pub struct NetRule {
     pub clearance: f64,
     /// Current (A) the nets carry; 0 = not stated.
     pub current: f64,
+    /// Wires between two parts that have a width of their own (the router makes these connections first, with that width).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<LinkWidth>,
     /// Why (shown beside the rule, for the person who reads it later).
     pub note: String,
 }
@@ -73,6 +87,9 @@ impl DesignSpec {
         for r in &self.net_rules {
             for n in r.nets.iter().filter(|n| !net_known(n)) {
                 out.push(format!("ネットの役割「{}」の `{n}` というネットは、回路にありません", r.name));
+            }
+            for p in r.links.iter().flat_map(|l| [&l.a, &l.b]).filter(|p| !part_known(p)) {
+                out.push(format!("ネットの役割「{}」の部品間の線幅の `{p}` という部品は、回路にありません", r.name));
             }
             if !r.role.is_empty() && !ROLES.contains(&r.role.as_str()) {
                 out.push(format!("ネットの役割「{}」の役割 `{}` は、power / switching / sense / analog / logic のどれかにしてください", r.name, r.role));

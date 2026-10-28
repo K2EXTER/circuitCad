@@ -411,6 +411,16 @@ pub struct NetClass {
     pub role: Role,
 }
 
+/// The width (mm) of the wire between two parts on one net (from the schematic's table of requirements): the router makes this
+/// connection first, with this width, and the rest of the net after it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LinkWidth {
+    pub net: String,
+    pub a: String,
+    pub b: String,
+    pub width: f64,
+}
+
 /// What a net is for (`docs/routing-guidelines.md`, "役割とルール"). The router takes the nets in the order of the roles: a big current
 /// first, then the switching nodes, the sensing lines, the analog signals, the logic, and the nets of no role after them.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -542,6 +552,9 @@ pub struct Board {
     /// Parts that belong close together, and the distances to keep, taken from the schematic's table of requirements (`requirements::check` checks them).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub place_groups: Vec<design_spec::PlaceGroup>,
+    /// Wires between two parts that have a width of their own.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub link_widths: Vec<LinkWidth>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub keep_apart: Vec<design_spec::KeepApart>,
     /// What the impedance of a track depends on besides its width (not written when it is the default).
@@ -654,6 +667,7 @@ impl Board {
             net_currents: Default::default(),
             net_classes: vec![],
             place_groups: vec![],
+            link_widths: vec![],
             keep_apart: vec![],
             stackup: Default::default(),
             locked_parts: vec![],

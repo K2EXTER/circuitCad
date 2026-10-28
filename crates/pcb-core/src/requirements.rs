@@ -13,6 +13,8 @@ pub struct RequirementsImport {
     pub currents: usize,
     pub groups: usize,
     pub apart: usize,
+    /// Wires between two parts with a width of their own.
+    pub links: usize,
 }
 
 /// The nets of the board that a rule's names stand for (the names ending in `*` count as prefixes).
@@ -25,6 +27,7 @@ fn nets_matching(board: &Board, patterns: &[String]) -> Vec<String> {
 /// other classes), and sets the current of those nets when it states one; the groups and the distances replace the board's.
 pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> RequirementsImport {
     let mut out = RequirementsImport::default();
+    board.link_widths.clear();
     for rule in &spec.net_rules {
         let nets = nets_matching(board, &rule.nets);
         if nets.is_empty() || rule.name.is_empty() {
@@ -52,6 +55,15 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
             c.role = r;
         }
         out.classes += 1;
+        for l in rule.links.iter().filter(|l| l.width > 0.0) {
+            for n in &nets {
+                let on = |r: &str| board.pads.iter().any(|p| p.refdes == r && &p.net == n);
+                if on(&l.a) && on(&l.b) && l.a != l.b {
+                    board.link_widths.push(LinkWidth { net: n.clone(), a: l.a.clone(), b: l.b.clone(), width: l.width });
+                    out.links += 1;
+                }
+            }
+        }
         if rule.current > 0.0 {
             for n in &nets {
                 board.net_currents.insert(n.clone(), rule.current);

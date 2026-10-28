@@ -1074,3 +1074,22 @@ fn the_requirements_table_reaches_the_board_and_is_checked() {
     assert_eq!(rep["findings"][0]["kind"], "apart");
     assert!(rep["missing"].as_array().unwrap().iter().any(|m| m.as_str().unwrap().contains("R9")), "{rep}");
 }
+
+#[test]
+fn a_wire_between_two_parts_gets_its_width_from_the_table() {
+    let (a, ok) = run("new\nadd V 5 as=V1\nadd R 1k as=R1\nadd R 1k as=R2\nadd R 1k as=R3\n\
+        net N V1.+ R1.1 R2.1 R3.1\nnet GND V1.- R1.2 R2.2 R3.2\n\
+        req net 電源 nets=N width=0.3 links=R1-R3:0.8,R9-R1:0.5\n\
+        req\nboard import\nboard req\nboard autoplace\nboard route\nboard status\n");
+    assert!(ok, "{a:?}");
+    let table = last(&a, "req");
+    assert_eq!(table["net_rules"][0]["links"][0]["width"], 0.8);
+    assert_eq!(table["problems"].as_array().unwrap().len(), 1, "R9 is not in the circuit: {table}");
+    let rep = a.iter().find(|v| v.get("findings").is_some()).unwrap();
+    assert_eq!(rep["links"], 1, "only the link between two parts of the board is kept: {rep}");
+    let bad = last(&a, "req")["net_rules"][0]["links"][1]["a"].clone();
+    assert_eq!(bad, "R9");
+    let status = a.iter().rev().find(|v| v.get("unrouted").is_some()).unwrap();
+    assert_eq!(status["unrouted"], 0, "{status}");
+    assert_eq!(status["drc_violations"], 0, "{status}");
+}
