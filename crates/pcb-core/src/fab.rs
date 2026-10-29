@@ -372,11 +372,16 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     if !board.place_groups.is_empty() || !board.keep_apart.is_empty() || !board.bypass.is_empty() {
         let rep = crate::requirements::check(board);
         let marks = crate::requirements::marks(board);
-        let at: Vec<Point> = marks.groups.iter().filter(|g| !g.ok).map(|g| g.at).chain(marks.apart.iter().filter(|a| !a.ok).map(|a| Point::new((a.a.x + a.b.x) / 2.0, (a.a.y + a.b.y) / 2.0))).chain(marks.bypass.iter().filter(|b| !b.ok).map(|b| Point::new((b.a.x + b.b.x) / 2.0, (b.a.y + b.b.y) / 2.0))).collect();
+        let at: Vec<Point> = marks.groups.iter().filter(|g| !g.ok && !g.waived).map(|g| g.at).chain(marks.apart.iter().filter(|a| !a.ok && !a.waived).map(|a| Point::new((a.a.x + a.b.x) / 2.0, (a.a.y + a.b.y) / 2.0))).chain(marks.bypass.iter().filter(|b| !b.ok && !b.waived).map(|b| Point::new((b.a.x + b.b.x) / 2.0, (b.a.y + b.b.y) / 2.0))).collect();
         if let Some(first) = rep.findings.first() {
             out.push(check(Level::Warn, format!("設計の要件を満たしていない所が {} 件あります", rep.findings.len()), format!("例: {}。回路図の「設計の要件」の表にある、近くに置く組と離す組です。部品を動かすか、表の数字を見直してください。発注はできますが、設計の意図から外れています", first.message), at.first().copied()).with_also(at.iter().copied()));
         } else if rep.checked > 0 {
             out.push(check(Level::Ok, format!("設計の要件 {} 件を満たしています", rep.checked), "", None));
+        }
+        // what the table accepts: not a warning, but the reasons are on the list for whoever orders the board
+        if let Some((first, why)) = rep.waived.first() {
+            let why = if why.trim().is_empty() { "理由は書かれていません".to_string() } else { why.clone() };
+            out.push(check(Level::Info, format!("設計の要件のうち、承知した例外が {} 件あります", rep.waived.len()), format!("例: {} (承知した理由: {})。回路図の「設計の要件」の表の「承知した例外」で、一覧と理由を見られます", first.message, why), None));
         }
     }
 

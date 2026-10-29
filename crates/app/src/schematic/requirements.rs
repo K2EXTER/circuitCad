@@ -3,7 +3,7 @@
 //! (net classes, currents, placement groups, distances); the board editor checks the placement against it.
 
 use super::*;
-use design_spec::{Bypass, KeepApart, LinkWidth, NetRule, PlaceGroup};
+use design_spec::{Bypass, KeepApart, LinkWidth, NetRule, PlaceGroup, Waiver, WAIVER_KINDS};
 use pcb_core::model::Role;
 use std::collections::HashMap;
 
@@ -395,6 +395,57 @@ impl SchEditor {
                 }
                 if ui.button("＋ 離す組を足す").on_hover_text("新しい行を足します").clicked() {
                     spec.apart.push(KeepApart { name: format!("離す{}", spec.apart.len() + 1), min_dist: 10.0, ..Default::default() });
+                    buf.clear();
+                    changed = true;
+                }
+            });
+            egui::CollapsingHeader::new(format!("承知した例外 ({}) (?)", spec.waivers.len())).id_salt("req_waivers").default_open(!spec.waivers.is_empty()).show(ui, |ui| {
+                ui.label("基板の点検で指摘されても、承知の上でそのままにするものを、理由つきで書きます。").on_hover_text("基板の点検 (組の広がり・離す距離・バイパスの距離) の指摘のうち、ここに書いたものは「違反」に数えず、「承知した例外」として理由つきで別に出ます。あとで読む人が、直し忘れではなく承知の上だと分かります。基板の点検の一覧の「承知する」ボタンからも書き込めます");
+                let mut remove = None;
+                egui::Grid::new("req_waivers_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
+                    for h in ["種類", "行の名前", "コンデンサ", "理由", ""] {
+                        ui.strong(h);
+                    }
+                    ui.end_row();
+                    for (k, w) in spec.waivers.iter_mut().enumerate() {
+                        let label = WAIVER_KINDS.iter().find(|(key, _)| *key == w.kind).map_or("(選ぶ)", |(_, l)| *l);
+                        egui::ComboBox::from_id_salt(("waiver_kind", k)).selected_text(label).width(90.0).show_ui(ui, |ui| {
+                            for (key, l) in WAIVER_KINDS {
+                                if ui.selectable_label(w.kind == *key, *l).on_hover_text("どの種類の指摘を承知するか").clicked() {
+                                    w.kind = (*key).to_string();
+                                    changed = true;
+                                }
+                            }
+                        });
+                        if let Some(t) = text_cell(ui, buf, (4, k, 0), &w.name, 160.0, "表の行の名前です。組なら組の名前、離す距離なら行の名前、バイパスなら IC の部品番号") {
+                            w.name = t;
+                            changed = true;
+                        }
+                        if w.kind == "bypass" {
+                            if let Some(t) = text_cell(ui, buf, (4, k, 1), &w.item, 70.0, "承知するコンデンサの部品番号。空なら、その IC の行のコンデンサすべて") {
+                                w.item = t.trim().to_string();
+                                changed = true;
+                            }
+                        } else {
+                            ui.label("");
+                        }
+                        if let Some(t) = reason_cell(ui, buf, (4, k, 2), &w.note, 380.0, "なぜ承知するか (例: 基板が小さく、これ以上近づけられない)。空だと「理由のない行」に数えられます") {
+                            w.note = t;
+                            changed = true;
+                        }
+                        if ui.button("削除").on_hover_text("この例外を消します。基板の点検で、また指摘に戻ります").clicked() {
+                            remove = Some(k);
+                        }
+                        ui.end_row();
+                    }
+                });
+                if let Some(k) = remove {
+                    spec.waivers.remove(k);
+                    buf.clear();
+                    changed = true;
+                }
+                if ui.button("＋ 例外を足す").on_hover_text("新しい行を足します。種類・行の名前・理由を書きます").clicked() {
+                    spec.waivers.push(Waiver { kind: "apart".into(), ..Default::default() });
                     buf.clear();
                     changed = true;
                 }

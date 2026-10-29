@@ -560,6 +560,9 @@ pub struct Board {
     /// Which IC each bypass capacitor serves, as the table of requirements says (the placement and `requirements::check` use it).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bypass: Vec<design_spec::Bypass>,
+    /// The findings of the table's check that the designer accepted, each with the reason (`requirements::check` lists them apart).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub waivers: Vec<design_spec::Waiver>,
     /// What the impedance of a track depends on besides its width (not written when it is the default).
     #[serde(default, skip_serializing_if = "is_default_stackup")]
     pub stackup: crate::impedance::Stackup,
@@ -673,6 +676,7 @@ impl Board {
             link_widths: vec![],
             keep_apart: vec![],
             bypass: vec![],
+            waivers: vec![],
             stackup: Default::default(),
             locked_parts: vec![],
             inner_layers: 0,

@@ -306,6 +306,10 @@ pub struct BoardEditor {
     pub currents_request: Option<CurrentSource>,
     /// "入れ替えを回路図に反映" was pressed: `main.rs` applies the pin trades to the schematic and hands the answer to `trades_applied`.
     pub to_schematic_request: bool,
+    /// The reason typed for "承知する" (accept a finding of the requirements check).
+    pub waive_reason: String,
+    /// A waiver added (true) or taken back (false) in the list of the check: `main.rs` writes it into the schematic's table too.
+    pub waiver_request: Option<(bool, design_spec::Waiver)>,
     /// Set when "全部" found no declared currents and asked for the schematic's DC currents first: the route (all nets, or
     /// the named one) is made when `App` has answered. `currents_tried` stops it from asking twice.
     pub route_after_currents: Option<Option<String>>,
@@ -458,6 +462,8 @@ impl Default for BoardEditor {
             post_layout_request: None,
             currents_request: None,
             to_schematic_request: false,
+            waive_reason: String::new(),
+            waiver_request: None,
             route_after_currents: None,
             currents_tried: false,
             current_stats: vec![],

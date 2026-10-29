@@ -79,6 +79,32 @@ pub struct Bypass {
     pub note: String,
 }
 
+/// A finding of the check that the designer knows about and keeps, with the reason: the check then says "accepted" instead of "wrong".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Waiver {
+    /// One of `WAIVER_KINDS` ("group", "apart", "bypass").
+    pub kind: String,
+    /// The row it is about: the group, the distance to keep, or the IC of a bypass row.
+    pub name: String,
+    /// A bypass row only: the capacitor ("" = every capacitor of the row).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub item: String,
+    /// Why it is accepted (what the person who reads the table later needs to know).
+    pub note: String,
+}
+
+/// The kinds of a waiver: (key, what the table calls it).
+pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス")];
+
+impl Waiver {
+    /// "組「名前」" and the like, for a sentence.
+    pub fn label(&self) -> String {
+        let kind = WAIVER_KINDS.iter().find(|(k, _)| *k == self.kind).map_or(self.kind.as_str(), |(_, l)| *l);
+        if self.item.is_empty() { format!("{kind}「{}」", self.name) } else { format!("{kind}「{}」の {}", self.name, self.item) }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesignSpec {
@@ -87,11 +113,19 @@ pub struct DesignSpec {
     pub apart: Vec<KeepApart>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub bypass: Vec<Bypass>,
+    /// Findings of the check that are accepted, each with its reason.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub waivers: Vec<Waiver>,
 }
 
 impl DesignSpec {
     pub fn is_empty(&self) -> bool {
-        self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty() && self.bypass.is_empty()
+        self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty() && self.bypass.is_empty() && self.waivers.is_empty()
+    }
+
+    /// The accepted exception that covers a finding of `kind` in the row `name` (for a bypass row, the capacitor `item`), if there is one.
+    pub fn waiver_for(&self, kind: &str, name: &str, item: &str) -> Option<&Waiver> {
+        self.waivers.iter().find(|w| w.kind == kind && w.name == name && (w.item.is_empty() || w.item == item))
     }
 
     /// The rows that give no reason (the note is empty): one sentence for each. A table is read by people who were not there when it was
@@ -103,6 +137,7 @@ impl DesignSpec {
         out.extend(self.groups.iter().filter(|g| empty(&g.note)).map(|g| format!("近くに置く組「{}」", g.name)));
         out.extend(self.apart.iter().filter(|a| empty(&a.note)).map(|a| format!("離す組「{}」", a.name)));
         out.extend(self.bypass.iter().filter(|b| empty(&b.note)).map(|b| format!("バイパスの対応「{}」", b.ic)));
+        out.extend(self.waivers.iter().filter(|w| empty(&w.note)).map(|w| format!("承知した例外 {}", w.label())));
         out
     }
 
@@ -136,6 +171,17 @@ impl DesignSpec {
         for b in &self.bypass {
             for n in std::iter::once(&b.ic).chain(&b.caps).filter(|n| !part_known(n)) {
                 out.push(format!("バイパスの対応「{}」の `{n}` という部品は、回路にありません", b.ic));
+            }
+        }
+        for w in &self.waivers {
+            let row = match w.kind.as_str() {
+                "group" => self.groups.iter().any(|g| g.name == w.name),
+                "apart" => self.apart.iter().any(|a| a.name == w.name),
+                "bypass" => self.bypass.iter().any(|b| b.ic == w.name && (w.item.is_empty() || b.caps.contains(&w.item))),
+                _ => false,
+            };
+            if !row {
+                out.push(format!("承知した例外 {} に当てはまる行が、表にありません (行の名前を直したか、消した行かもしれません)", w.label()));
             }
         }
         out
@@ -175,6 +221,28 @@ mod tests {
         let msgs = spec.unknown_names(&parts, &nets);
         assert_eq!(msgs.len(), 3, "{msgs:?}");
         assert!(msgs.iter().any(|m| m.contains("XX")) && msgs.iter().any(|m| m.contains("Z9")) && msgs.iter().any(|m| m.contains("ZZ")));
+    }
+
+    #[test]
+    fn a_waiver_covers_its_row_and_is_checked_against_the_rows() {
+        let mut spec = DesignSpec {
+            bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into(), "C2".into()], note: "n".into() }],
+            groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["R1".into()], max_dist: 5.0, note: "n".into() }],
+            ..Default::default()
+        };
+        spec.waivers.push(Waiver { kind: "bypass".into(), name: "U1".into(), item: "C2".into(), note: "配線の都合".into() });
+        spec.waivers.push(Waiver { kind: "group".into(), name: "ループ".into(), ..Default::default() });
+        assert!(spec.waiver_for("bypass", "U1", "C2").is_some());
+        assert!(spec.waiver_for("bypass", "U1", "C1").is_none(), "only the capacitor named");
+        assert!(spec.waiver_for("group", "ループ", "").is_some() && spec.waiver_for("apart", "ループ", "").is_none());
+        // the group waiver has no reason: it is listed as unexplained
+        assert_eq!(spec.unexplained().len(), 1, "{:?}", spec.unexplained());
+        assert!(spec.unknown_names(&["U1".into(), "C1".into(), "C2".into(), "R1".into()], &[]).is_empty());
+        spec.waivers.push(Waiver { kind: "apart".into(), name: "なし".into(), note: "x".into(), ..Default::default() });
+        let msgs = spec.unknown_names(&["U1".into(), "C1".into(), "C2".into(), "R1".into()], &[]);
+        assert_eq!(msgs.len(), 1, "{msgs:?}");
+        let back: DesignSpec = serde_json::from_str(&serde_json::to_string(&spec).unwrap()).unwrap();
+        assert_eq!(back, spec);
     }
 
     #[test]
@@ -387,6 +455,7 @@ mod suggest_tests {
             groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["U1".into(), "L1".into()], ..Default::default() }],
             apart: vec![KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["L1".into()], min_dist: 6.0, note: "雑音".into() }],
             bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: String::new() }],
+            ..Default::default()
         };
         assert_eq!(spec.unexplained(), vec!["ネットの役割「帰還」".to_string(), "近くに置く組「ループ」".to_string(), "バイパスの対応「U1」".to_string()]);
         assert!(DesignSpec::default().unexplained().is_empty());

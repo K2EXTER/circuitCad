@@ -38,6 +38,38 @@ fn note(pos: &[String], kv: &[(String, String)]) -> Option<String> {
 }
 
 impl Session {
+    /// `req waive group|apart|bypass NAME [item=CAP] reason=TEXT [remove=1]`: accept a finding of the check (the row `NAME`; for a bypass row,
+    /// `item=` names one capacitor, else all of them). A new one needs its reason: the point of the table is that the next reader knows why.
+    fn req_waive(&mut self, pos: &[String], kv: &[(String, String)]) -> Res {
+        let usage = "req waive group|apart|bypass NAME [item=CAP] reason=TEXT [remove=1]";
+        let kind = pos.get(1).map(|s| s.to_ascii_lowercase()).filter(|k| design_spec::WAIVER_KINDS.iter().any(|(x, _)| x == k)).ok_or(usage)?;
+        let name = pos.get(2).ok_or(usage)?.clone();
+        let item = opt(kv, "item").unwrap_or("").to_string();
+        let mut words: Vec<&str> = opt(kv, "reason").into_iter().chain(opt(kv, "note")).collect();
+        words.extend(pos.iter().skip(3).map(|s| s.as_str()));
+        let reason = words.join(" ");
+        let req = &mut self.sch.requirements;
+        let same = |w: &design_spec::Waiver| w.kind == kind && w.name == name && w.item == item;
+        if opt(kv, "remove") == Some("1") {
+            req.waivers.retain(|w| !same(w));
+            return self.req_list();
+        }
+        match req.waivers.iter_mut().find(|w| same(w)) {
+            Some(w) => {
+                if !reason.is_empty() {
+                    w.note = reason;
+                }
+            }
+            None => {
+                if reason.trim().is_empty() {
+                    return Err(format!("a waiver needs its reason (what the next reader must know): {usage}"));
+                }
+                req.waivers.push(design_spec::Waiver { kind, name, item, note: reason });
+            }
+        }
+        self.req_list()
+    }
+
     fn req_list(&self) -> Res {
         let r = &self.sch.requirements;
         Ok(obj(json!({
@@ -45,6 +77,7 @@ impl Session {
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
+            "waivers": r.waivers.iter().map(|w| json!({"kind": w.kind, "name": w.name, "item": w.item, "note": w.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
             "unexplained": r.unexplained(),
         })))
@@ -59,7 +92,10 @@ impl Session {
         if kind == "suggest" {
             return self.req_suggest(opt(&kv, "apply") == Some("1"), opt(&kv, "bypass") == Some("1"));
         }
-        let name = pos.get(1).ok_or("req net|group|apart NAME ...")?.clone();
+        if kind == "waive" {
+            return self.req_waive(&pos, &kv);
+        }
+        let name = pos.get(1).ok_or("req net|group|apart|bypass|waive NAME ...")?.clone();
         let remove = opt(&kv, "remove") == Some("1");
         let text = note(&pos, &kv);
         let req = &mut self.sch.requirements;
@@ -211,8 +247,9 @@ impl Session {
         let findings: Vec<Value> = rep
             .findings
             .iter()
-            .map(|f| json!({"kind": match f.kind { pcb_core::requirements::FindingKind::Group => "group", pcb_core::requirements::FindingKind::Apart => "apart", pcb_core::requirements::FindingKind::Bypass => "bypass" }, "name": f.name, "message": f.message, "actual_mm": (f.actual * 10.0).round() / 10.0, "limit_mm": f.limit}))
+            .map(|f| json!({"kind": match f.kind { pcb_core::requirements::FindingKind::Group => "group", pcb_core::requirements::FindingKind::Apart => "apart", pcb_core::requirements::FindingKind::Bypass => "bypass" }, "name": f.name, "message": f.message, "actual_mm": (f.actual * 10.0).round() / 10.0, "item": f.item, "limit_mm": f.limit}))
             .collect();
-        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "bypass": board.bypass.iter().map(|b| b.caps.len()).sum::<usize>(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "missing": rep.missing})))
+        let waived: Vec<Value> = rep.waived.iter().map(|(f, why)| json!({"kind": f.kind.key(), "name": f.name, "item": f.item, "message": f.message, "reason": why})).collect();
+        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "bypass": board.bypass.iter().map(|b| b.caps.len()).sum::<usize>(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "waived": waived, "missing": rep.missing})))
     }
 }

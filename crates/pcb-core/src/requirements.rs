@@ -76,6 +76,7 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
     board.place_groups = spec.groups.clone();
     board.keep_apart = spec.apart.clone();
     board.bypass = spec.bypass.clone();
+    board.waivers = spec.waivers.clone();
     out.bypass = spec.bypass.iter().map(|b| b.caps.len()).sum();
     out.groups = spec.groups.len();
     out.apart = spec.apart.len();
@@ -92,10 +93,23 @@ pub enum FindingKind {
     Bypass,
 }
 
+impl FindingKind {
+    /// The key a waiver of the table uses for this kind (`design_spec::WAIVER_KINDS`).
+    pub fn key(self) -> &'static str {
+        match self {
+            FindingKind::Group => "group",
+            FindingKind::Apart => "apart",
+            FindingKind::Bypass => "bypass",
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Finding {
     pub kind: FindingKind,
     pub name: String,
+    /// A bypass finding: the capacitor. Empty for the others.
+    pub item: String,
     /// What is wrong, in a sentence (the parts or nets, the distance, the limit).
     pub message: String,
     /// The distance found (mm) and the limit (mm).
@@ -105,7 +119,10 @@ pub struct Finding {
 
 #[derive(Clone, Debug, Default)]
 pub struct RequirementsReport {
+    /// What is wrong and not accepted.
     pub findings: Vec<Finding>,
+    /// What is wrong but accepted by a waiver of the table, with its reason (not counted as a violation).
+    pub waived: Vec<(Finding, String)>,
     /// Groups and distances that were looked at.
     pub checked: usize,
     /// Names the board does not have (a part that is not on it, a net with no pad): those rows are left out.
@@ -149,6 +166,16 @@ fn bypass_pair(board: &Board, cap: &str, ic: &str) -> Option<(Point, Point, f64)
 
 /// Check the groups (the farthest two parts, from middle to middle, within `max_dist`; a group that says 0 is not checked) and the
 /// distances (the nearest two pads of the two sets, centre to centre, at least `min_dist`).
+impl RequirementsReport {
+    /// A finding goes to `waived` when the board has a waiver for it, else to `findings`.
+    fn add(&mut self, board: &Board, f: Finding) {
+        match board.waivers.iter().find(|w| w.kind == f.kind.key() && w.name == f.name && (w.item.is_empty() || w.item == f.item)) {
+            Some(w) => self.waived.push((f, w.note.clone())),
+            None => self.findings.push(f),
+        }
+    }
+}
+
 pub fn check(board: &Board) -> RequirementsReport {
     let mut rep = RequirementsReport::default();
     for g in &board.place_groups {
@@ -170,9 +197,10 @@ pub fn check(board: &Board) -> RequirementsReport {
             }
         }
         if let Some((d, a, b)) = worst.filter(|w| w.0 > g.max_dist) {
-            rep.findings.push(Finding {
+            rep.add(board, Finding {
                 kind: FindingKind::Group,
                 name: g.name.clone(),
+                item: String::new(),
                 message: format!("組「{}」: {a} と {b} が {d:.1} mm 離れています (上限 {} mm)", g.name, g.max_dist),
                 actual: d,
                 limit: g.max_dist,
@@ -206,9 +234,10 @@ pub fn check(board: &Board) -> RequirementsReport {
             }
         }
         if let Some((d, na, nb)) = best.filter(|b| b.0 < a.min_dist) {
-            rep.findings.push(Finding {
+            rep.add(board, Finding {
                 kind: FindingKind::Apart,
                 name: a.name.clone(),
+                item: String::new(),
                 message: format!("離す組「{}」: {na} と {nb} が {d:.1} mm まで近づいています (下限 {} mm)", a.name, a.min_dist),
                 actual: d,
                 limit: a.min_dist,
@@ -225,9 +254,10 @@ pub fn check(board: &Board) -> RequirementsReport {
             let Some((_, _, d)) = bypass_pair(board, cap, &b.ic) else { continue };
             rep.checked += 1;
             if d > crate::drc::MAX_DECOUPLING_DISTANCE {
-                rep.findings.push(Finding {
+                rep.add(board, Finding {
                     kind: FindingKind::Bypass,
                     name: b.ic.clone(),
+                    item: cap.clone(),
                     message: format!("バイパスコンデンサ {cap} ({} 用): {} の電源ピンから {d:.1} mm 離れています (目安 {} mm 以内)", b.ic, b.ic, crate::drc::MAX_DECOUPLING_DISTANCE),
                     actual: d,
                     limit: crate::drc::MAX_DECOUPLING_DISTANCE,
@@ -249,6 +279,8 @@ pub struct GroupMark {
     pub actual: f64,
     pub limit: f64,
     pub ok: bool,
+    /// Not kept but accepted by a waiver of the table.
+    pub waived: bool,
 }
 
 /// A distance to keep as it stands: the nearest two pads of the two sides (`a` and `b`), their distance, the least allowed, and whether it is kept.
@@ -260,6 +292,7 @@ pub struct ApartMark {
     pub actual: f64,
     pub limit: f64,
     pub ok: bool,
+    pub waived: bool,
 }
 
 /// A bypass capacitor and the IC pin it serves (from the table): the capacitor's supply pad, the pin, their distance and whether it is near enough.
@@ -271,6 +304,7 @@ pub struct BypassMark {
     pub b: Point,
     pub actual: f64,
     pub ok: bool,
+    pub waived: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -292,7 +326,7 @@ pub fn marks(board: &Board) -> Marks {
         let actual = mids.iter().enumerate().flat_map(|(i, a)| mids[i + 1..].iter().map(move |b| a.dist(*b))).fold(0.0, f64::max);
         let n = mids.len().max(1) as f64;
         let at = Point::new(mids.iter().map(|p| p.x).sum::<f64>() / n, mids.iter().map(|p| p.y).sum::<f64>() / n);
-        out.groups.push(GroupMark { name: g.name.clone(), parts, at, actual, limit: g.max_dist, ok: g.max_dist <= 0.0 || actual <= g.max_dist });
+        out.groups.push(GroupMark { name: g.name.clone(), parts, at, actual, limit: g.max_dist, ok: g.max_dist <= 0.0 || actual <= g.max_dist, waived: board.waivers.iter().any(|w| w.kind == "group" && w.name == g.name) });
     }
     for a in &board.keep_apart {
         let pads = |names: &[String]| -> Vec<Point> { names.iter().flat_map(|n| pads_of(board, n)).map(|p| p.pos).collect() };
@@ -307,13 +341,13 @@ pub fn marks(board: &Board) -> Marks {
             }
         }
         if let Some((d, qa, qb)) = best {
-            out.apart.push(ApartMark { name: a.name.clone(), a: qa, b: qb, actual: d, limit: a.min_dist, ok: a.min_dist <= 0.0 || d >= a.min_dist });
+            out.apart.push(ApartMark { name: a.name.clone(), a: qa, b: qb, actual: d, limit: a.min_dist, ok: a.min_dist <= 0.0 || d >= a.min_dist, waived: board.waivers.iter().any(|w| w.kind == "apart" && w.name == a.name) });
         }
     }
     for b in &board.bypass {
         for cap in &b.caps {
             if let Some((a, p, d)) = bypass_pair(board, cap, &b.ic) {
-                out.bypass.push(BypassMark { cap: cap.clone(), ic: b.ic.clone(), a, b: p, actual: d, ok: d <= crate::drc::MAX_DECOUPLING_DISTANCE });
+                out.bypass.push(BypassMark { cap: cap.clone(), ic: b.ic.clone(), a, b: p, actual: d, ok: d <= crate::drc::MAX_DECOUPLING_DISTANCE, waived: board.waivers.iter().any(|w| w.kind == "bypass" && w.name == b.ic && (w.item.is_empty() || w.item == *cap)) });
             }
         }
     }
@@ -402,6 +436,33 @@ mod tests {
         assert_eq!(c.role, Role::Sense);
         assert_eq!(c.track_width, 0.4, "a width of 0 in the table leaves the board's");
         assert_eq!(b.net_currents.get("SA"), Some(&0.05));
+    }
+
+    /// A waiver of the table moves a finding from "wrong" to "accepted, and why": it is not counted, the mark says so, and the pre-order
+    /// check lists the reason.
+    #[test]
+    fn an_accepted_exception_is_listed_apart_with_its_reason() {
+        let mut b = board();
+        let mut spec = DesignSpec {
+            groups: vec![PlaceGroup { name: "入口".into(), parts: vec!["R1".into(), "R2".into(), "R3".into()], max_dist: 10.0, ..Default::default() }],
+            apart: vec![KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["R2".into()], min_dist: 20.0, ..Default::default() }],
+            ..Default::default()
+        };
+        spec.waivers.push(design_spec::Waiver { kind: "apart".into(), name: "離す".into(), note: "基板が小さいので承知".into(), ..Default::default() });
+        import_requirements(&mut b, &spec);
+        let rep = check(&b);
+        assert_eq!(rep.findings.len(), 1, "{:?}", rep.findings);
+        assert_eq!(rep.findings[0].kind, FindingKind::Group);
+        assert_eq!(rep.waived.len(), 1);
+        assert_eq!((rep.waived[0].0.kind, rep.waived[0].1.as_str()), (FindingKind::Apart, "基板が小さいので承知"));
+        let marks = marks(&b);
+        assert!(marks.apart[0].waived && !marks.apart[0].ok);
+        assert!(!marks.groups[0].waived && !marks.groups[0].ok);
+        let list = crate::fab::preflight(&b, None);
+        assert!(list.iter().any(|c| c.title.contains("承知した例外") && c.detail.contains("基板が小さいので承知")), "{list:?}");
+        // a waiver for another row does not cover it
+        b.waivers[0].name = "別の行".into();
+        assert_eq!(check(&b).findings.len(), 2);
     }
 
     #[test]

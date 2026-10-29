@@ -157,6 +157,18 @@ impl eframe::App for App {
             let answer = self.sch.sch.apply_pin_trades(&trades);
             self.board_ed.trades_applied(answer);
         }
+        // a finding accepted (or taken back) in the board's list goes into the schematic's table too
+        if let Some((add, w)) = self.board_ed.waiver_request.take() {
+            let list = &mut self.sch.sch.requirements.waivers;
+            let same = |x: &design_spec::Waiver| x.kind == w.kind && x.name == w.name && (x.item.is_empty() || x.item == w.item);
+            if add {
+                if !list.iter().any(&same) {
+                    list.push(w);
+                }
+            } else {
+                list.retain(|x| !same(x));
+            }
+        }
         if let Some(on) = self.board_ed.post_layout_request.take() {
             self.apply_post_layout(on);
         }

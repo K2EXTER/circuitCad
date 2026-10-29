@@ -1248,3 +1248,38 @@ dc
     assert_eq!(dc["models"]["generic"], 1, "{dc}");
     assert_eq!(dc["models"]["see"], "coverage");
 }
+
+/// `req waive`: a finding the designer accepts moves to `waived` with its reason, and a waiver without a reason is refused.
+#[test]
+fn an_accepted_exception_keeps_its_reason_and_is_not_counted() {
+    let setup = "new
+add V 12 as=V1
+add R 10k as=R1
+add R 4.7k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+        req apart 離す a=R1 b=R2 min=500 近いと困る
+";
+    // no reason: refused
+    let (a, ok) = run(&format!("{setup}req waive apart 離す
+"));
+    assert!(!ok && a.iter().any(|v| v["error"].as_str().is_some_and(|e| e.contains("reason"))), "{a:?}");
+    // with the reason: counted as accepted
+    let (a, ok) = run(&format!("{setup}req waive apart 離す reason=基板が小さいので承知
+req
+board import
+board req
+req waive apart 離す remove=1
+req
+"));
+    assert!(ok, "{a:?}");
+    let with: &Value = a.iter().find(|v| v["waivers"].as_array().is_some_and(|l| !l.is_empty())).expect("a table with the waiver");
+    assert_eq!(with["waivers"][0]["note"], "基板が小さいので承知", "{with}");
+    assert_eq!(with["unexplained"], serde_json::json!([]), "{with}");
+    let rep = a.iter().find(|v| v.get("findings").is_some()).unwrap();
+    assert_eq!(rep["violations"], 0, "{rep}");
+    assert_eq!(rep["waived"][0]["reason"], "基板が小さいので承知", "{rep}");
+    let last_table = a.iter().rev().find(|v| v.get("waivers").is_some()).unwrap();
+    assert_eq!(last_table["waivers"].as_array().map(|l| l.len()), Some(0), "removed: {last_table}");
+}
