@@ -510,7 +510,7 @@ impl LearnWindow {
             ui.heading(path.title);
             ui.label(spaced(path.goal));
             let (finished, available, all) = summary(path, progress);
-            ui.add(egui::ProgressBar::new(finished as f32 / available.max(1) as f32).text(format!("完了 {finished} / いま学べる {available} (全体 {all})")));
+            ui.add(egui::ProgressBar::new(finished as f32 / available.max(1) as f32).text(if all > available { format!("完了 {finished} / {available} レッスン (準備中 {} 件)", all - available) } else { format!("完了 {finished} / {available} レッスン") }));
             let next_ids: Vec<&str> = recommended(path, progress).iter().map(|i| i.id).collect();
             if let Some(next) = next_item(path, progress) {
                 ui.horizontal_wrapped(|ui| {
@@ -548,7 +548,8 @@ impl LearnWindow {
                         ui.colored_label(Color32::from_rgb(255, 205, 70), "★ 次はこれ");
                         ui.colored_label(Color32::from_rgb(220, 150, 40), "橙の枠 = いま学べる");
                         ui.colored_label(Color32::from_rgb(60, 160, 90), "緑 = 完了");
-                        ui.colored_label(Color32::from_gray(150), "灰色 = 準備中");
+                        ui.colored_label(Color32::from_gray(190), "灰色の枠 = 先に済ませるレッスンがある");
+                        ui.colored_label(Color32::from_gray(130), "暗い灰色 = 準備中");
                     });
                     egui::ScrollArea::horizontal().show(ui, |ui| {
                         if let Some(a) = tree_map(ui, path, progress, &next_ids) {

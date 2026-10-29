@@ -279,7 +279,9 @@ impl Compiled {
 }
 
 pub fn dc_op(circuit: &Circuit) -> Result<DcResult, SimError> {
-    dc_op_with(circuit, &DC_ORDER_WIDEN)
+    let mut r = dc_op_with(circuit, &DC_ORDER_WIDEN)?;
+    r.warnings.extend(moving_source_warning(circuit));
+    Ok(r)
 }
 
 /// Floating-node warnings are produced by the caller; this only needs a ground reference.
@@ -296,6 +298,32 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } | Element::BSource { p, n, .. } => *p == 0 || *n == 0,
     })
+}
+
+/// The line for a DC answer of a circuit with a source that moves with time (pulse, sine ...): the operating point is the circuit at
+/// time 0, not where it settles. Only `dc_op` adds it: a transient run starts from that point on purpose.
+fn moving_source_warning(circuit: &Circuit) -> Option<String> {
+    let moving: Vec<&str> = circuit
+        .elements
+        .iter()
+        .filter_map(|e| match e {
+            Element::VSource { name, wave, .. } if !matches!(wave, crate::waveform::Waveform::Dc(_)) => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    if moving.is_empty() {
+        return None;
+    }
+    // the sources of the circuit are named; one inside a part (a name with a dot: the clock of a converter model) is only counted
+    let mine: Vec<&str> = moving.iter().filter(|n| !n.contains('.')).take(3).copied().collect();
+    let inside = moving.iter().filter(|n| n.contains('.')).count();
+    let mut who = mine.join("・");
+    if inside > 0 {
+        who.push_str(if who.is_empty() { "部品の中の電源" } else { " と部品の中の電源" });
+    }
+    Some(format!(
+        "時間で変わる電源 ({who}) があります。DC 解析は時間 0 の状態で計算するので、スイッチングやパルスで動く回路は、落ち着いた出力になりません。時間を追って確かめるには「過渡解析」を使ってください"
+    ))
 }
 
 pub(crate) fn floating_warnings(circuit: &Circuit) -> Vec<String> {

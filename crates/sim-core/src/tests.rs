@@ -639,3 +639,23 @@ fn a_parameter_sweep_reaches_a_part_on_another_sheet() {
     let r = param_sweep(&s, &ParamSettings { refdes: "R2".into(), values: vec![1000.0, 3000.0], node: "MID".into(), temp_c: 27.0, analysis: ParamAnalysis::Tran { tstop: 1e-3, tstep: 1e-5, uic: false } });
     assert!(r.is_ok(), "{:?}", r.err());
 }
+
+/// The operating point of a circuit with a pulse (or sine) source is the circuit at time 0: the answer says so, and names the source.
+/// A circuit of plain DC sources gets no such line.
+#[test]
+fn dc_warns_that_a_moving_source_is_taken_at_time_zero() {
+    let mut s = Schematic::default();
+    s.add(Kind::VSource, (0, 0), 0);
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Ground, (0, 6), 0);
+    wire(&mut s, (0, -2), (0, -6));
+    wire(&mut s, (0, -6), (4, -6));
+    wire(&mut s, (8, -6), (12, -6));
+    wire(&mut s, (12, -6), (12, 6));
+    wire(&mut s, (12, 6), (0, 6));
+    wire(&mut s, (0, 2), (0, 6));
+    let moving = |s: &Schematic| dc_op(&from_schematic(s).unwrap()).unwrap().warnings.iter().any(|w| w.contains("時間で変わる電源") && w.contains("V1"));
+    assert!(!moving(&s), "a plain DC source");
+    s.components[0].value = "PULSE(0 3.3 5n 0.5n 0.5n 50n 100n)".into();
+    assert!(moving(&s));
+}
