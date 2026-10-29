@@ -24,7 +24,7 @@ impl BoardEditor {
     }
 
     /// The box round a part's pads and outline.
-    fn part_box(&self, refdes: &str) -> Option<(Point, Point)> {
+    pub(super) fn part_box(&self, refdes: &str) -> Option<(Point, Point)> {
         let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
         let mut grow = |p: Point, mx: f64, my: f64| {
             lo = Point::new(lo.x.min(p.x - mx), lo.y.min(p.y - my));

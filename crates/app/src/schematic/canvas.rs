@@ -27,6 +27,7 @@ impl SchEditor {
         self.draw_wires(&painter, rect);
         self.draw_junctions(&painter, rect);
         self.draw_components(&painter, rect);
+        self.draw_requirement_frames(&painter, rect);
         self.draw_labels(&painter, rect);
         self.draw_voltages(&painter, rect);
         self.draw_currents(&painter, rect);

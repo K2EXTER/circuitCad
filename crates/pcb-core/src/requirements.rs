@@ -194,6 +194,65 @@ pub fn check(board: &Board) -> RequirementsReport {
     rep
 }
 
+/// A group of the table as it stands on the board, for drawing: the parts that are on the board, how far apart the farthest two are
+/// (0 for fewer than two parts), the limit (0: not checked) and whether it is kept.
+#[derive(Clone, Debug)]
+pub struct GroupMark {
+    pub name: String,
+    pub parts: Vec<String>,
+    pub actual: f64,
+    pub limit: f64,
+    pub ok: bool,
+}
+
+/// A distance to keep as it stands: the nearest two pads of the two sides (`a` and `b`), their distance, the least allowed, and whether it is kept.
+#[derive(Clone, Debug)]
+pub struct ApartMark {
+    pub name: String,
+    pub a: Point,
+    pub b: Point,
+    pub actual: f64,
+    pub limit: f64,
+    pub ok: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Marks {
+    pub groups: Vec<GroupMark>,
+    pub apart: Vec<ApartMark>,
+}
+
+/// What `check` works out, as numbers to draw: every group and every distance with where it stands (a row that names nothing the board has is left out).
+pub fn marks(board: &Board) -> Marks {
+    let mut out = Marks::default();
+    for g in &board.place_groups {
+        let mids: Vec<Point> = g.parts.iter().filter_map(|r| centre(&pads_of(board, r))).collect();
+        let parts: Vec<String> = g.parts.iter().filter(|r| board.parts.iter().any(|p| &p.refdes == *r)).cloned().collect();
+        if parts.len() < 2 {
+            continue;
+        }
+        let actual = mids.iter().enumerate().flat_map(|(i, a)| mids[i + 1..].iter().map(move |b| a.dist(*b))).fold(0.0, f64::max);
+        out.groups.push(GroupMark { name: g.name.clone(), parts, actual, limit: g.max_dist, ok: g.max_dist <= 0.0 || actual <= g.max_dist });
+    }
+    for a in &board.keep_apart {
+        let pads = |names: &[String]| -> Vec<Point> { names.iter().flat_map(|n| pads_of(board, n)).map(|p| p.pos).collect() };
+        let (pa, pb) = (pads(&a.a), pads(&a.b));
+        let mut best: Option<(f64, Point, Point)> = None;
+        for qa in &pa {
+            for qb in &pb {
+                let d = qa.dist(*qb);
+                if best.is_none_or(|b| d < b.0) {
+                    best = Some((d, *qa, *qb));
+                }
+            }
+        }
+        if let Some((d, qa, qb)) = best {
+            out.apart.push(ApartMark { name: a.name.clone(), a: qa, b: qb, actual: d, limit: a.min_dist, ok: a.min_dist <= 0.0 || d >= a.min_dist });
+        }
+    }
+    out
+}
+
 /// The distances to keep, for the placement: the references of the parts on each side (a name is a part, or the parts that have a pad on
 /// the net) and the least distance. A row with an empty side, or that says 0, is left out.
 pub fn apart_on_board(board: &Board) -> Vec<(Vec<String>, Vec<String>, f64)> {
@@ -236,6 +295,20 @@ mod tests {
         b.place_part("R2", Point::new(14.0, 10.0), 0);
         b.place_part("R3", Point::new(40.0, 10.0), 0);
         b
+    }
+
+    #[test]
+    fn the_marks_say_where_each_group_and_distance_stands() {
+        let mut b = board();
+        b.place_groups.push(design_spec::PlaceGroup { name: "g".into(), parts: vec!["R1".into(), "R2".into(), "R3".into()], max_dist: 10.0, ..Default::default() });
+        b.place_groups.push(design_spec::PlaceGroup { name: "near".into(), parts: vec!["R1".into(), "R2".into()], max_dist: 10.0, ..Default::default() });
+        b.keep_apart.push(KeepApart { name: "far".into(), a: vec!["R1".into()], b: vec!["R3".into()], min_dist: 20.0, ..Default::default() });
+        b.keep_apart.push(KeepApart { name: "close".into(), a: vec!["R1".into()], b: vec!["R2".into()], min_dist: 20.0, ..Default::default() });
+        let m = marks(&b);
+        assert_eq!(m.groups.iter().map(|g| (g.name.as_str(), g.ok)).collect::<Vec<_>>(), vec![("g", false), ("near", true)]);
+        assert_eq!(m.apart.iter().map(|a| (a.name.as_str(), a.ok)).collect::<Vec<_>>(), vec![("far", true), ("close", false)]);
+        // the line joins the nearest two pads
+        assert!(m.apart[1].actual < 4.0 && m.apart[1].a.dist(m.apart[1].b) == m.apart[1].actual);
     }
 
     #[test]

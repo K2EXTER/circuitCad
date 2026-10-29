@@ -365,6 +365,8 @@ pub struct BoardEditor {
     net_menu: Option<String>,
     /// Tint the parts by the schematic sheet they come from.
     show_sheets: bool,
+    /// Frames round the groups of the design's requirements, and lines between the parts that must keep apart, drawn on the board.
+    show_req_marks: bool,
     /// Automatic placement keeps the parts of each schematic sheet together as a block (only with several sheets).
     place_by_sheet: bool,
     /// Select tool: a drag that starts on a track slides it (off by default: a slip of the mouse moved wiring)
@@ -486,6 +488,7 @@ impl Default for BoardEditor {
             net_win: None,
             net_menu: None,
             show_sheets: true,
+            show_req_marks: true,
             place_by_sheet: false,
             track_drag_on: false,
             net_current_request: None,

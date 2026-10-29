@@ -34,7 +34,71 @@ fn number_cell(ui: &mut egui::Ui, v: &mut f64, suffix: &str, speed: f64, hover: 
     ui.add(egui::DragValue::new(v).speed(speed).range(0.0..=1000.0).suffix(suffix).max_decimals(3)).on_hover_text(hover);
 }
 
+/// The colours of the rows' frames, one after another.
+const FRAME_COLORS: [Color32; 6] = [
+    Color32::from_rgb(40, 150, 90),
+    Color32::from_rgb(60, 110, 220),
+    Color32::from_rgb(200, 120, 20),
+    Color32::from_rgb(160, 70, 200),
+    Color32::from_rgb(40, 160, 170),
+    Color32::from_rgb(200, 70, 110),
+];
+
 impl SchEditor {
+    /// The box round the parts of the sheet with these references, a little outside them (None when none of them is on this sheet).
+    fn frame_of(&self, rect: Rect, refs: &[String]) -> Option<Rect> {
+        let mut b: Option<(f32, f32, f32, f32)> = None;
+        for c in self.sch.components.iter().filter(|c| refs.contains(&c.refdes)) {
+            let Some(r) = super::symbols::sheet_box(c.kind, super::symbols::comp_extents(c), c.pos, c.rot) else { continue };
+            b = Some(match b {
+                None => r,
+                Some(o) => (o.0.min(r.0), o.1.max(r.1), o.2.min(r.2), o.3.max(r.3)),
+            });
+        }
+        let (x0, x1, y0, y1) = b?;
+        let m = 1.2;
+        Some(Rect::from_two_pos(self.to_screen(rect, (x0 - m, y0 - m)), self.to_screen(rect, (x1 + m, y1 + m))))
+    }
+
+    /// The groups of the requirements table as coloured frames with their names, and the parts to keep apart as two frames of one colour
+    /// ("A" and "B") with the distance: the intent of the design, readable on the sheet without opening the table. Only the parts on the
+    /// sheet that is shown (a net named in a distance is not framed).
+    pub(super) fn draw_requirement_frames(&self, painter: &egui::Painter, rect: Rect) {
+        if !self.req_frames || self.sch.requirements.is_empty() {
+            return;
+        }
+        let tag = |at: Pos2, text: String, col: Color32| {
+            let galley = painter.layout_no_wrap(text, FontId::proportional(12.0), Color32::WHITE);
+            let size = galley.size() + Vec2::new(8.0, 3.0);
+            // (a tag at the right edge of the sheet is moved left so that it can be read)
+            let x = at.x.min(rect.right() - size.x - 2.0).max(rect.left());
+            let r = Rect::from_min_size(Pos2::new(x, at.y - galley.size().y - 5.0), size);
+            painter.rect_filled(r, 3.0, col);
+            painter.galley(r.min + Vec2::new(4.0, 1.5), galley, Color32::WHITE);
+        };
+        let spec = &self.sch.requirements;
+        for (k, g) in spec.groups.iter().enumerate() {
+            let col = FRAME_COLORS[k % FRAME_COLORS.len()];
+            if let Some(r) = self.frame_of(rect, &g.parts).filter(|r| r.intersects(rect)) {
+                painter.rect_filled(r, 4.0, col.gamma_multiply(0.07));
+                painter.rect_stroke(r, 4.0, Stroke::new(1.5, col), egui::StrokeKind::Inside);
+                let text = if g.max_dist > 0.0 { format!("近くに置く: {} ({} mm 以内)", g.name, g.max_dist) } else { format!("近くに置く: {}", g.name) };
+                tag(r.left_top(), text, col);
+            }
+        }
+        for (k, a) in spec.apart.iter().enumerate() {
+            let col = FRAME_COLORS[(k + spec.groups.len() + 3) % FRAME_COLORS.len()];
+            for (side, names) in [("A", &a.a), ("B", &a.b)] {
+                if let Some(r) = self.frame_of(rect, names).filter(|r| r.intersects(rect)) {
+                    painter.rect_stroke(r, 4.0, Stroke::new(1.5, col), egui::StrokeKind::Inside);
+                    // a dashed look: a second, thinner frame inside
+                    painter.rect_stroke(r.shrink(3.0), 3.0, Stroke::new(0.7, col.gamma_multiply(0.6)), egui::StrokeKind::Inside);
+                    tag(r.left_top(), format!("離す {side}: {} ({} mm 以上)", a.name, a.min_dist), col);
+                }
+            }
+        }
+    }
+
     pub fn open_requirements(&mut self) {
         self.req_open = true;
         self.req_buf.clear();
@@ -76,6 +140,7 @@ impl SchEditor {
                     ui.colored_label(egui::Color32::from_rgb(220, 140, 30), format!("⚠ {p}"));
                 }
             }
+            ui.checkbox(&mut self.req_frames, "回路図の上に枠を出す").on_hover_text("近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)");
             let unexplained = self.sch.requirements.unexplained();
             if !unexplained.is_empty() {
                 ui.colored_label(egui::Color32::from_rgb(220, 140, 30), format!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
