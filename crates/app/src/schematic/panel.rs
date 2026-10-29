@@ -540,6 +540,12 @@ impl SchEditor {
 
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
         ui.separator();
+        if !self.sch.requirements.is_empty() {
+            ui.horizontal(|ui| {
+                crate::icons::icon_switch(ui, crate::icons::Icon::Eye, crate::icons::Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。明るい四角が「出している」です。表を開かなくても、回路図を見た人に設計の意図が伝わります");
+                ui.label("設計の要件の枠");
+            });
+        }
         if self.lit(ui.button("ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
             self.problems = erc(&self.sch);
             self.problems.extend(self.conversion_problems());

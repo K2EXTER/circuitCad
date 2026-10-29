@@ -199,7 +199,7 @@ pub struct SchEditor {
     /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
     req_open: bool,
     /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
-    req_frames: bool,
+    pub req_frames: bool,
     req_buf: requirements::Buffers,
     req_problems: Vec<String>,
     /// What the last DC analysis suggests for the table (ticked or not), the currents it came from, and a sentence about the run.

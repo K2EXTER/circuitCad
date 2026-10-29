@@ -32,6 +32,10 @@ pub enum Icon {
     Part,
     Airwire,
     Ruler,
+    /// A dashed frame (a group of the requirements).
+    Frame,
+    /// A distance between two points.
+    Gap,
     Layers,
     Eye,
     EyeOff,
@@ -119,6 +123,21 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             }
             p.circle_filled(q(0.1, 0.73), u * 0.08, c);
             p.circle_filled(q(0.9, 0.17), u * 0.08, c);
+        }
+        Icon::Frame => {
+            p.rect_stroke(Rect::from_min_max(q(0.12, 0.2), q(0.88, 0.8)), 2.0, s, egui::StrokeKind::Inside);
+            p.circle_filled(q(0.35, 0.5), u * 0.08, c);
+            p.circle_filled(q(0.65, 0.5), u * 0.08, c);
+        }
+        Icon::Gap => {
+            p.line_segment([q(0.15, 0.5), q(0.85, 0.5)], s);
+            for x in [0.15, 0.85] {
+                p.line_segment([q(x, 0.3), q(x, 0.7)], s);
+            }
+            p.line_segment([q(0.15, 0.5), q(0.28, 0.4)], Stroke::new(1.0, c));
+            p.line_segment([q(0.15, 0.5), q(0.28, 0.6)], Stroke::new(1.0, c));
+            p.line_segment([q(0.85, 0.5), q(0.72, 0.4)], Stroke::new(1.0, c));
+            p.line_segment([q(0.85, 0.5), q(0.72, 0.6)], Stroke::new(1.0, c));
         }
         Icon::Ruler => {
             p.rect_stroke(Rect::from_min_max(q(0.08, 0.35), q(0.92, 0.65)), 1.0, s, egui::StrokeKind::Inside);

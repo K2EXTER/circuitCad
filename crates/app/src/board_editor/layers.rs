@@ -118,6 +118,14 @@ impl BoardEditor {
                             kind(ui, Icon::Airwire, "未配線");
                             none(ui);
                             ui.end_row();
+                            eye(ui, &mut self.show_req_marks, "回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎなら赤)。表がないときは何も出ません");
+                            kind(ui, Icon::Frame, "要件の組 (枠)");
+                            none(ui);
+                            ui.end_row();
+                            eye(ui, &mut self.show_req_lines, "回路図の「設計の要件」の、離す組を、いちばん近い2つのパッドを結ぶ線と距離で表示します (足りなければ赤)。表がないときは何も出ません");
+                            kind(ui, Icon::Gap, "要件の距離 (線)");
+                            none(ui);
+                            ui.end_row();
                             eye(ui, &mut self.vis.nets, "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
                             kind(ui, Icon::Label, "ネット名");
                             none(ui);
