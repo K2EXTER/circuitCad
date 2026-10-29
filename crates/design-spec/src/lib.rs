@@ -78,6 +78,17 @@ impl DesignSpec {
         self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty()
     }
 
+    /// The rows that give no reason (the note is empty): one sentence for each. A table is read by people who were not there when it was
+    /// written; the numbers say what, the reason says why.
+    pub fn unexplained(&self) -> Vec<String> {
+        let empty = |n: &str| n.trim().is_empty();
+        let mut out = vec![];
+        out.extend(self.net_rules.iter().filter(|r| empty(&r.note)).map(|r| format!("ネットの役割「{}」", r.name)));
+        out.extend(self.groups.iter().filter(|g| empty(&g.note)).map(|g| format!("近くに置く組「{}」", g.name)));
+        out.extend(self.apart.iter().filter(|a| empty(&a.note)).map(|a| format!("離す組「{}」", a.name)));
+        out
+    }
+
     /// Check the table against the names that exist: the parts and the nets a row mentions but the design does not have.
     /// Returns one sentence for each (a row, a name) that matches nothing.
     pub fn unknown_names(&self, parts: &[String], nets: &[String]) -> Vec<String> {
@@ -224,7 +235,7 @@ impl Suggestion {
             Fill::NewRow { net, amps } => {
                 if !spec.net_rules.iter().any(|r| r.nets.iter().any(|p| matches_name(p, net))) {
                     let role = if *amps >= POWER_CURRENT { "power" } else { "" };
-                    spec.net_rules.push(NetRule { name: format!("{net} (解析)"), nets: vec![net.clone()], role: role.into(), current: *amps, note: "DC解析の電流から".into(), ..Default::default() });
+                    spec.net_rules.push(NetRule { name: format!("{net} (解析)"), nets: vec![net.clone()], role: role.into(), current: *amps, ..Default::default() });
                 }
             }
         }
@@ -234,6 +245,20 @@ impl Suggestion {
 #[cfg(test)]
 mod suggest_tests {
     use super::*;
+
+    #[test]
+    fn the_rows_without_a_reason_are_listed() {
+        let spec = DesignSpec {
+            net_rules: vec![
+                NetRule { name: "電源".into(), nets: vec!["VIN".into()], note: "電流が通る".into(), ..Default::default() },
+                NetRule { name: "帰還".into(), nets: vec!["FB".into()], note: "  ".into(), ..Default::default() },
+            ],
+            groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["U1".into(), "L1".into()], ..Default::default() }],
+            apart: vec![KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["L1".into()], min_dist: 6.0, note: "雑音".into() }],
+        };
+        assert_eq!(spec.unexplained(), vec!["ネットの役割「帰還」".to_string(), "近くに置く組「ループ」".to_string()]);
+        assert!(DesignSpec::default().unexplained().is_empty());
+    }
 
     #[test]
     fn a_current_is_rounded_up_to_two_figures() {

@@ -23,6 +23,13 @@ fn text_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current
     r.changed().then(|| t.clone())
 }
 
+/// The reason of a row: a longer sentence, so a box of two lines that wraps.
+fn reason_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current: &str, width: f32, hover: &str) -> Option<String> {
+    let t = buf.entry(key).or_insert_with(|| current.to_string());
+    let r = ui.add_sized([width, 62.0], egui::TextEdit::multiline(t).desired_rows(3).hint_text("なぜ? (理由を一言)")).on_hover_text(hover);
+    r.changed().then(|| t.clone())
+}
+
 fn number_cell(ui: &mut egui::Ui, v: &mut f64, suffix: &str, speed: f64, hover: &str) {
     ui.add(egui::DragValue::new(v).speed(speed).range(0.0..=1000.0).suffix(suffix).max_decimals(3)).on_hover_text(hover);
 }
@@ -60,7 +67,7 @@ impl SchEditor {
         let mut open = true;
         let mut changed = false;
         let (mut run_dc, mut apply_now) = (false, false);
-        egui::Window::new("設計の要件").open(&mut open).default_size([1040.0, 520.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
+        egui::Window::new("設計の要件").open(&mut open).default_size([1200.0, 620.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
             ui.label("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。")
                 .on_hover_text("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます");
             if !self.req_problems.is_empty() {
@@ -69,6 +76,11 @@ impl SchEditor {
                     ui.colored_label(egui::Color32::from_rgb(220, 140, 30), format!("⚠ {p}"));
                 }
             }
+            let unexplained = self.sch.requirements.unexplained();
+            if !unexplained.is_empty() {
+                ui.colored_label(egui::Color32::from_rgb(220, 140, 30), format!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
+                    .on_hover_text("数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)");
+            }
             ui.separator();
             let buf = &mut self.req_buf;
             let spec = &mut self.sch.requirements;
@@ -76,7 +88,7 @@ impl SchEditor {
                 ui.label("同じ役割・同じ太さのネットを、1行にまとめます。基板に取り込むと、行の名前のネットクラスになります。").on_hover_text("ネット名の末尾に * を付けると、その名前で始まるすべてのネットです (例: GN* は GN1〜GN10)。幅と間隔を 0 にすると、基板の既定のままです。電流を書くと、配線の太さの推奨と電圧降下の計算に使われます");
                 let mut remove = None;
                 egui::Grid::new("req_net_grid").num_columns(8).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                    for h in ["名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "メモ", ""] {
+                    for h in ["名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "理由", ""] {
                         ui.strong(h);
                     }
                     ui.end_row();
@@ -107,7 +119,7 @@ impl SchEditor {
                         number_cell(ui, &mut r.clearance, " mm", 0.05, "ほかの銅との間隔。0 は基板の既定のまま (基板の最小値より小さくはなりません)");
                         number_cell(ui, &mut r.current, " A", 0.05, "このネットに流れる電流の目安。0 は指定なし");
                         changed |= before != (r.width, r.clearance, r.current);
-                        if let Some(t) = text_cell(ui, buf, (0, k, 2), &r.note, 260.0, "なぜそうするかの一言。あとで読み返す人のためのメモ") {
+                        if let Some(t) = reason_cell(ui, buf, (0, k, 2), &r.note, 370.0, "なぜその値・その役割にするかの理由。数字は「何を」、理由は「なぜ」を伝えます。あとで読み返す人 (自分も) のために書いておきます") {
                             r.note = t;
                             changed = true;
                         }
@@ -170,7 +182,7 @@ impl SchEditor {
                 ui.label("端子のそばの保護、小さくしたいループなど、近くにあるべき部品を組にします。").on_hover_text("基板の自動配置は、組の部品を1つの塊にして並べます。基板の画面では、組が上限より広がっていないかを調べます。上限を 0 にすると、チェックはしません (自動配置では塊にします)");
                 let mut remove = None;
                 egui::Grid::new("req_group_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                    for h in ["名前", "部品 (, 区切り)", "上限", "メモ", ""] {
+                    for h in ["名前", "部品 (, 区切り)", "上限", "理由", ""] {
                         ui.strong(h);
                     }
                     ui.end_row();
@@ -186,7 +198,7 @@ impl SchEditor {
                         let before = g.max_dist;
                         number_cell(ui, &mut g.max_dist, " mm", 0.5, "組の中でいちばん離れた2つの部品の、中心どうしの距離の上限。0 はチェックなし");
                         changed |= before != g.max_dist;
-                        if let Some(t) = text_cell(ui, buf, (1, k, 2), &g.note, 300.0, "なぜ近くに置くかの一言") {
+                        if let Some(t) = reason_cell(ui, buf, (1, k, 2), &g.note, 440.0, "なぜ近くに置くかの理由 (例: 電流の輪を小さくしてノイズを減らす)") {
                             g.note = t;
                             changed = true;
                         }
@@ -227,7 +239,7 @@ impl SchEditor {
                 ui.label("降圧のスイッチングノードと、基準・ADC・検出線のように、離しておくものどうしを書きます。").on_hover_text("書くのは部品番号か、ネット名です (部品番号が先に見つかれば部品、なければネットの全パッド。末尾の * も使えます)。基板の画面で、いちばん近い2つのパッドの距離が下限より近くないかを調べます");
                 let mut remove = None;
                 egui::Grid::new("req_apart_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                    for h in ["名前", "A (, 区切り)", "B (, 区切り)", "下限", "メモ", ""] {
+                    for h in ["名前", "A (, 区切り)", "B (, 区切り)", "下限", "理由", ""] {
                         ui.strong(h);
                     }
                     ui.end_row();
@@ -247,7 +259,7 @@ impl SchEditor {
                         let before = a.min_dist;
                         number_cell(ui, &mut a.min_dist, " mm", 0.5, "AとBのパッドどうしの、中心間の距離の下限");
                         changed |= before != a.min_dist;
-                        if let Some(t) = text_cell(ui, buf, (2, k, 3), &a.note, 260.0, "なぜ離すかの一言") {
+                        if let Some(t) = reason_cell(ui, buf, (2, k, 3), &a.note, 440.0, "なぜ離すかの理由 (例: スイッチングの雑音を帰還に入れない)") {
                             a.note = t;
                             changed = true;
                         }

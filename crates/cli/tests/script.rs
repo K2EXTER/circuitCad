@@ -1052,6 +1052,22 @@ board quality top=3 sort=length
 }
 
 #[test]
+fn the_rows_of_the_requirements_table_without_a_reason_are_listed() {
+    let (a, ok) = run("new
+add R 10k as=R1
+add R 4.7k as=R2
+net MID R1.2 R2.1
+        req net 電源 nets=MID width=0.8 reason=電流の通り道なので太く
+        req group 分圧 parts=R1,R2 max=100
+        req
+");
+    assert!(ok, "{a:?}");
+    let table = last(&a, "req");
+    assert_eq!(table["net_rules"][0]["note"], "電流の通り道なので太く");
+    assert_eq!(table["unexplained"], serde_json::json!(["近くに置く組「分圧」"]), "{table}");
+}
+
+#[test]
 fn the_requirements_table_reaches_the_board_and_is_checked() {
     let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10k as=R1\nadd R 4.7k as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\n\
         req net 電源 nets=VIN role=power width=0.8 current=0.5 太く\n\

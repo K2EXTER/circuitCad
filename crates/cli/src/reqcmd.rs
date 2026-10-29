@@ -30,9 +30,9 @@ fn links(v: &str) -> Result<Vec<LinkWidth>, String> {
     Ok(out)
 }
 
-/// The note of a row: `note=` and any words left over after the name (a sentence needs no quotes).
+/// The reason of a row (kept in `note`): `reason=` (or `note=`) and any words left over after the name (a sentence needs no quotes).
 fn note(pos: &[String], kv: &[(String, String)]) -> Option<String> {
-    let mut words: Vec<&str> = opt(kv, "note").into_iter().collect();
+    let mut words: Vec<&str> = opt(kv, "reason").into_iter().chain(opt(kv, "note")).collect();
     words.extend(pos.iter().skip(2).map(|s| s.as_str()));
     if words.is_empty() { None } else { Some(words.join(" ")) }
 }
@@ -45,11 +45,12 @@ impl Session {
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
+            "unexplained": r.unexplained(),
         })))
     }
 
-    /// `req suggest [apply=1]` (what the DC analysis says about the currents); `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [links=A-B:mm,..] [note TEXT]`;
-    /// `req group NAME [parts=R1,R2] [max=mm] [note TEXT]`; `req apart NAME [a=..] [b=..] [min=mm] [note TEXT]`; add `remove=1` to delete a row.
+    /// `req suggest [apply=1]` (what the DC analysis says about the currents); `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [links=A-B:mm,..] [reason=TEXT]`;
+    /// `req group NAME [parts=R1,R2] [max=mm] [reason=TEXT]`; `req apart NAME [a=..] [b=..] [min=mm] [reason=TEXT]`; add `remove=1` to delete a row.
     /// A row that exists is changed only in what is given; a new row needs its names.
     pub fn req(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
