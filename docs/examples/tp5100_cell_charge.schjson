@@ -524,5 +524,11 @@
       "text": "GND"
     }
   ],
-  "layout_version": 1
+  "layout_version": 1,
+  "no_connects": [
+    [
+      "U1",
+      "13"
+    ]
+  ]
 }
