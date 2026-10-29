@@ -77,6 +77,31 @@ impl BoardEditor {
         edge.or(inner).map(|(i, _)| Item::Zone(i))
     }
 
+    /// Everything that is selected, one or many.
+    pub(super) fn selection_items(&self) -> Vec<Item> {
+        let mut all = self.multi.clone();
+        for it in self.selected {
+            if !all.contains(&it) {
+                all.push(it);
+            }
+        }
+        all
+    }
+
+    /// Ctrl+click and Ctrl+rubber band: an object that is selected leaves the selection, one that is not joins it.
+    pub(super) fn toggle_in_selection(&mut self, items: &[Item]) {
+        let mut all = self.selection_items();
+        for &it in items {
+            if let Some(k) = all.iter().position(|x| *x == it) {
+                all.remove(k);
+            } else if self.pick.allows(&it) {
+                all.push(it);
+            }
+        }
+        self.status = format!("{} 個を選択", all.len());
+        self.set_selection(all);
+    }
+
     pub(super) fn set_selection(&mut self, items: Vec<Item>) {
         if items.len() == 1 {
             self.selected = Some(items[0]);
@@ -157,7 +182,8 @@ impl BoardEditor {
                 out.push(Item::Zone(i));
             }
         }
-        out.retain(|it| self.pick.allows(it) && self.on_pickable_side(it));
+        // the lock of the other side is for clicks; a rubber band takes both sides unless `box_both_sides` is off
+        out.retain(|it| self.pick.allows(it) && (self.box_both_sides || self.on_pickable_side(it)));
         out
     }
 

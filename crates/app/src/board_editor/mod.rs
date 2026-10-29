@@ -28,7 +28,7 @@ use crate::icons::Icon;
 
 fn tool_tip(t: Tool) -> &'static str {
     match t {
-        Tool::Select => "クリックで選択、部品はドラッグで移動。空いた所を左ドラッグ = 完全に囲んだものを選択、右ドラッグ = 触れたものも選択 (Shiftで追加)",
+        Tool::Select => "クリックで選択、部品はドラッグで移動。空いた所を左ドラッグ = 完全に囲んだものを選択、右ドラッグ = 触れたものも選択 (Shiftで追加、Ctrl で足す・外す。Ctrl+クリックも)",
         Tool::Track => "銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます",
         Tool::Via => "表面と裏面をつなぐ穴 (ビア) を置きます",
         Tool::Zone => "広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります",
@@ -386,6 +386,11 @@ pub struct BoardEditor {
     place_by_sheet: bool,
     /// Select tool: a drag that starts on a track slides it (off by default: a slip of the mouse moved wiring)
     track_drag_on: bool,
+    /// Does a rubber band take the objects of the other side too (the wiring on the back with the parts and the wiring on the front)?
+    /// The lock of the other side keeps its meaning for clicks: it stops a click from grabbing what is drawn faintly behind.
+    pub box_both_sides: bool,
+    /// Is Ctrl held (read every frame by the pointer): a click then adds the object to the selection or takes it out.
+    ctrl_down: bool,
     /// Set by the net window for a net with no current: `App` answers with the schematic's DC current of that net (`fill_net_current`).
     pub net_current_request: Option<String>,
     /// The schematic's DC currents are at hand (set by the app each frame): the net window then asks for them at once, otherwise it
@@ -512,6 +517,8 @@ impl Default for BoardEditor {
             show_req_lines: true,
             place_by_sheet: false,
             track_drag_on: false,
+            box_both_sides: true,
+            ctrl_down: false,
             net_current_request: None,
             dc_currents_ready: false,
             net_win_asked: None,

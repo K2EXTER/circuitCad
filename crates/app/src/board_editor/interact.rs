@@ -15,7 +15,7 @@ impl BoardEditor {
                         // of a copper pour does not count, or a box could not be drawn over one
                         if self.zone_handle_at(w0).is_some() {
                             // a corner of the pour is grabbed instead (pointer())
-                        } else if crossing || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_)) || self.is_locked_item(&h)) {
+                        } else if crossing || ui.input(|i| i.modifiers.command) || self.hit_test(w0).is_none_or(|h| matches!(h, Item::Zone(_)) || self.is_locked_item(&h)) {
                             self.boxsel = Some(BoxSel { start: w0, crossing });
                         }
                     }
@@ -33,6 +33,12 @@ impl BoardEditor {
                 if resp.drag_stopped() {
                     let (start, crossing) = (b.start, b.crossing);
                     let mut items = self.items_in_box(start, cur, crossing);
+                    if ui.input(|i| i.modifiers.command) {
+                        // Ctrl: what the box holds is toggled (added if not selected, taken out if selected)
+                        self.toggle_in_selection(&items);
+                        self.boxsel = None;
+                        return;
+                    }
                     if ui.input(|i| i.modifiers.shift) {
                         let mut all = self.multi.clone();
                         all.extend(self.selected);
@@ -76,6 +82,8 @@ impl BoardEditor {
                     painter.circle_stroke(self.to_screen(rect, e), 4.0, Stroke::new(1.0, Color32::from_rgba_unmultiplied(90, 230, 120, 170)));
                 }
             }
+            let ctrl = resp.ctx.input(|i| i.modifiers.command);
+            self.ctrl_down = ctrl;
             let near = self.snap_object(w);
             let mut on_object = false;
             if matches!(self.tool, Tool::Track | Tool::Via)
@@ -97,7 +105,7 @@ impl BoardEditor {
             if self.vdrag.is_some() && resp.dragged_by(egui::PointerButton::Primary) {
                 self.drag_vertex(p);
             }
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.multi.len() > 1 && self.boxsel.is_none() && self.vdrag.is_none()
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !ctrl && self.multi.len() > 1 && self.boxsel.is_none() && self.vdrag.is_none()
                 && self.hit_test(w).is_some_and(|h| self.multi.contains(&h) && !self.is_locked_item(&h)) {
                     self.checkpoint();
                     self.gdrag = Some(GroupDrag { anchor: p, orig: self.board.clone(), items: self.multi.clone() });
@@ -107,7 +115,7 @@ impl BoardEditor {
                     self.move_group(&g, p.x - g.anchor.x, p.y - g.anchor.y);
                     self.gdrag = Some(g);
                 }
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !ctrl && self.gdrag.is_none() && self.multi.len() <= 1
                 && let Some(Item::Part(i)) = self.hit_test(w)
                 && !self.is_locked_item(&Item::Part(i)) {
                     self.checkpoint();
@@ -117,7 +125,7 @@ impl BoardEditor {
                     self.multi.clear();
                 }
             // a part's designator on the silkscreen: grab it where the pointer pressed, move it freely (not on the grid)
-            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !ctrl && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
                 && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
                 && let w0 = self.to_world(rect, o)
                 && let Some(Item::Label(i)) = self.hit_test(w0)
@@ -132,7 +140,7 @@ impl BoardEditor {
                 && resp.dragged_by(egui::PointerButton::Primary) {
                     self.board.move_label(&r, Point::new(w.x - grab.x, w.y - grab.y));
                 }
-            if self.track_drag_on && resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
+            if self.track_drag_on && !ctrl && resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
                 // the pointer has already moved a few pixels when the drag is recognised: look where it was pressed
                 && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
                 && let w0 = self.to_world(rect, o)

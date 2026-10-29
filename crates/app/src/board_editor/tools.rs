@@ -312,6 +312,12 @@ impl BoardEditor {
 
     pub(super) fn click(&mut self, p: Point) {
         match self.tool {
+            Tool::Select if self.ctrl_down => {
+                // Ctrl+click: the object under the pointer joins the selection or leaves it; on empty ground nothing changes
+                if let Some(it) = self.hit_test(p).filter(|it| !matches!(it, Item::Zone(_))) {
+                    self.toggle_in_selection(&[it]);
+                }
+            }
             Tool::Select => {
                 self.multi.clear();
                 // a corner of a shape of the selected pour: it is picked (to be dragged or taken away), the selection stays

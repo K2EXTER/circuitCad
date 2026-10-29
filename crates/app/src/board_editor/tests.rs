@@ -509,8 +509,12 @@ fn only_the_layer_being_worked_on_can_be_picked_unless_that_is_switched_off() {
     e.side = Side::Top;
     assert!(e.hit_test(on_pad).is_none() && e.hit_test(on_track).is_none());
     assert!(matches!(e.hit_test(on_via), Some(Item::Via(0))));
+    // the lock is for clicks: a rubber band takes both sides (unless that is switched off)
     let all = e.items_in_box(p(0.0, 0.0), p(40.0, 30.0), true);
-    assert_eq!(all, vec![Item::Via(0)], "a box does not take the other layer along");
+    assert!(all.contains(&Item::Via(0)) && all.contains(&Item::Track(0)) && all.contains(&Item::Part(0)), "a box takes the other layer along: {all:?}");
+    e.box_both_sides = false;
+    let all = e.items_in_box(p(0.0, 0.0), p(40.0, 30.0), true);
+    assert_eq!(all, vec![Item::Via(0)], "with the switch off a box does not take the other layer along");
     // on the bottom they are reachable; so they are with the switch off
     e.side = Side::Bottom;
     assert!(matches!(e.hit_test(on_pad), Some(Item::Part(0))) && matches!(e.hit_test(on_track), Some(Item::Track(0))));
@@ -2170,4 +2174,50 @@ fn the_requirements_answer_is_kept_until_the_board_or_the_table_changes() {
     let b = e.cached_requirements();
     assert!(!std::rc::Rc::ptr_eq(&a, &b));
     assert_eq!((b.0.findings.len(), b.0.waived.len()), (0, 1), "the finding is accepted now");
+}
+
+/// Ctrl+click and Ctrl+rubber band: an object that is selected leaves the selection, one that is not joins it.
+#[test]
+fn ctrl_adds_an_object_to_the_selection_and_takes_it_out() {
+    let mut e = BoardEditor::default();
+    for (x, name) in [(10.0, "R1"), (20.0, "R2"), (30.0, "R3")] {
+        e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top });
+    }
+    e.set_selection(vec![Item::Part(0)]);
+    e.toggle_in_selection(&[Item::Part(1)]);
+    assert_eq!(e.selection_items().len(), 2, "R2 joins R1");
+    e.toggle_in_selection(&[Item::Part(0), Item::Part(2)]);
+    let now = e.selection_items();
+    assert!(now.contains(&Item::Part(1)) && now.contains(&Item::Part(2)) && !now.contains(&Item::Part(0)), "R1 leaves, R3 joins: {now:?}");
+    e.toggle_in_selection(&[Item::Part(1)]);
+    assert_eq!((e.selected, e.multi.len()), (Some(Item::Part(2)), 0), "one left: it is the selected one");
+    e.toggle_in_selection(&[Item::Part(2)]);
+    assert!(e.selection_items().is_empty());
+    // an object the pick filter does not allow does not join
+    e.pick.parts = false;
+    e.toggle_in_selection(&[Item::Part(0)]);
+    assert!(e.selection_items().is_empty());
+}
+
+/// A rubber band takes the wiring on the back too (with the work layer on the front and the other side locked); with `box_both_sides` off
+/// the lock keeps it out. Moving the group moves the back wiring with the parts.
+#[test]
+fn a_rubber_band_takes_the_back_wiring_and_the_group_moves_with_it() {
+    let mut e = BoardEditor::default();
+    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top });
+    e.board.tracks.push(pcb_core::Track { side: Side::Top, a: p(8.0, 14.0), b: p(14.0, 14.0), width: 0.25 });
+    e.board.tracks.push(pcb_core::Track { side: Side::Bottom, a: p(8.0, 16.0), b: p(14.0, 16.0), width: 0.25 });
+    assert!(e.pick.active_side_only && e.side == Side::Top, "the defaults: front, the other side locked");
+    let (a, b) = (p(0.0, 0.0), p(30.0, 30.0));
+    let all = e.items_in_box(a, b, false);
+    assert!(all.contains(&Item::Track(0)) && all.contains(&Item::Track(1)) && all.contains(&Item::Part(0)), "{all:?}");
+    e.box_both_sides = false;
+    let front = e.items_in_box(a, b, false);
+    assert!(front.contains(&Item::Track(0)) && !front.contains(&Item::Track(1)), "the lock keeps the back out: {front:?}");
+    e.box_both_sides = true;
+    // the group moves, the back track with it
+    let g = GroupDrag { anchor: p(0.0, 0.0), orig: e.board.clone(), items: all };
+    e.move_group(&g, 5.0, 2.0);
+    let back = &e.board.tracks[1];
+    assert!((back.a.x - 13.0).abs() < 1e-6 && (back.a.y - 18.0).abs() < 1e-6, "{:?}", back.a);
 }
