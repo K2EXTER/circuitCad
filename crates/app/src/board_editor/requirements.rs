@@ -84,7 +84,7 @@ impl BoardEditor {
             if !m.ok || self.zoom >= 14.0 {
                 let anchor = m.at.or_else(|| m.ways.first().and_then(|w| w.get(w.len() / 2).copied()));
                 if let Some(a) = anchor {
-                    let text = format!("{}: {:.*} {}{}", m.name, if m.unit == "個" { 0 } else { 2 }, m.value, m.unit, if m.waived && !m.ok { " (承知)" } else { "" });
+                    let text = format!("{}: {:.*} {}{}", m.name, match m.unit.as_str() { "個" => 0, "%" => 1, _ => 2 }, m.value, m.unit, if m.waived && !m.ok { " (承知)" } else { "" });
                     let galley = painter.layout_no_wrap(text, egui::FontId::proportional(11.0), Color32::BLACK);
                     let tag = Rect::from_min_size(self.to_screen(rect, a) + Vec2::new(8.0, -8.0 + 15.0 * (row % 6) as f32), galley.size() + Vec2::new(6.0, 2.0));
                     painter.rect_filled(tag, 3.0, col);

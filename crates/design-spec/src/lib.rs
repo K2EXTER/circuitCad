@@ -104,11 +104,14 @@ pub struct Measure {
     /// "max" (the value must not exceed `limit`, the default) or "min".
     pub op: String,
     pub limit: f64,
+    /// Guard only: how far (mm) the guard's edge may be from the edge of the track it guards (0 = 1 mm).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub reach: f64,
     pub note: String,
 }
 
 /// The kinds of measure: (key, what the table calls it, unit, pads needed).
-pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2)];
+pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2)];
 
 impl Measure {
     pub fn is_min(&self) -> bool {
@@ -116,6 +119,11 @@ impl Measure {
     }
 
     /// (what it is called, its unit, the pads it needs); None for a kind that is not in `MEASURES`.
+    /// The reach of a guard (mm).
+    pub fn guard_reach(&self) -> f64 {
+        if self.reach > 0.0 { self.reach } else { 1.0 }
+    }
+
     pub fn kind(&self) -> Option<(&'static str, &'static str, usize)> {
         MEASURES.iter().find(|(k, ..)| *k == self.what).map(|(_, l, u, n)| (*l, *u, *n))
     }
@@ -230,10 +238,12 @@ impl DesignSpec {
                 Some(_) => {}
             }
             for pad in &m.pads {
-                if m.what == "gap" {
-                    // a gap is between nets
-                    if !net_known(pad.trim()) {
-                        out.push(format!("測定「{}」の `{pad}` というネットは、回路にありません", m.name));
+                if m.what == "gap" || m.what == "guard" {
+                    // a gap and a guard are between nets (several joined by `+`)
+                    for n in pad.split('+').map(str::trim).filter(|n| !n.is_empty()) {
+                        if !net_known(n) {
+                            out.push(format!("測定「{}」の `{n}` というネットは、回路にありません", m.name));
+                        }
                     }
                     continue;
                 }
@@ -321,7 +331,7 @@ mod tests {
     fn a_measure_is_checked_for_its_kind_and_pads_and_can_be_waived() {
         let mut spec = DesignSpec {
             measures: vec![
-                Measure { name: "検出線".into(), what: "fork".into(), pads: vec!["RS1.1".into(), "Q1.3".into(), "UAB.2".into()], op: "max".into(), limit: 0.5, note: "ケルビン".into() },
+                Measure { name: "検出線".into(), what: "fork".into(), pads: vec!["RS1.1".into(), "Q1.3".into(), "UAB.2".into()], op: "max".into(), limit: 0.5, reach: 0.0, note: "ケルビン".into() },
                 Measure { name: "短く".into(), what: "length".into(), pads: vec!["RS1.1".into()], limit: 10.0, ..Default::default() },
                 Measure { name: "変".into(), what: "area".into(), pads: vec![], ..Default::default() },
             ],

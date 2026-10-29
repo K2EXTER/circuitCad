@@ -1387,3 +1387,33 @@ req net 線 layers=nope
     // routed on the top only: nothing on the bottom
     assert!(!rep["findings"].as_array().unwrap().iter().any(|f| f["message"].as_str().is_some_and(|m| m.contains("許している層"))), "{rep}");
 }
+
+/// A guard asked for in the table (`what=guard`): the share of the sensitive track that has the guard net on both sides. Before the guard
+/// tracks are drawn the sensitive track is bare (0 %); `board guard` draws them and the share rises.
+#[test]
+fn a_guard_asked_for_in_the_table_is_found_missing_and_then_present() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+req measure 検出のガード what=guard pads=A,GND min=10 reach=1.0 reason=検出の線は、両側をガードで囲む
+board import
+board move R1 5 5 rot=0
+board move D1 35 5 rot=0
+board route
+board req
+board guard net=A guard=GND
+board req
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let reps: Vec<&Value> = a.iter().filter(|v| v.get("findings").is_some()).collect();
+    assert_eq!(reps.len(), 2, "{a:?}");
+    assert_eq!(reps[0]["violations"], 1, "no guard yet: {}", reps[0]);
+    assert!(reps[0]["findings"][0]["message"].as_str().is_some_and(|m| m.contains("ガードの被覆が 0.0 %")), "{}", reps[0]);
+    // the tracks of `board guard` stop where copper is in the way: this small board has room for one side only, which is about 15 %
+    assert_eq!(reps[1]["violations"], 0, "the guard tracks are drawn: {}", reps[1]);
+}

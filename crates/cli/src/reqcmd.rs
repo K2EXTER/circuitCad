@@ -77,7 +77,7 @@ impl Session {
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
-            "measures": r.measures.iter().map(|m| json!({"name": m.name, "what": m.what, "pads": m.pads, "op": if m.is_min() { "min" } else { "max" }, "limit": m.limit, "note": m.note})).collect::<Vec<Value>>(),
+            "measures": r.measures.iter().map(|m| json!({"name": m.name, "what": m.what, "pads": m.pads, "op": if m.is_min() { "min" } else { "max" }, "limit": m.limit, "reach": m.reach, "note": m.note})).collect::<Vec<Value>>(),
             "waivers": r.waivers.iter().map(|w| json!({"kind": w.kind, "name": w.name, "item": w.item, "note": w.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
             "unexplained": r.unexplained(),
@@ -200,13 +200,13 @@ impl Session {
                     req.measures.retain(|m| m.name != name);
                     return self.req_list();
                 }
-                let (max, min) = (number(&kv, "max")?, number(&kv, "min")?);
+                let (max, min, reach) = (number(&kv, "max")?, number(&kv, "min")?, number(&kv, "reach")?);
                 let what = opt(&kv, "what").map(str::to_ascii_lowercase);
                 let pads = opt(&kv, "pads").map(names);
                 let k = match req.measures.iter().position(|m| m.name == name) {
                     Some(k) => k,
                     None => {
-                        let usage = "req measure NAME what=length|vias|fork pads=A.1,B.1[,C.1] max=N|min=N [reason=...]  (length and vias take 2 pads, fork takes 3: the start and the two ends)";
+                        let usage = "req measure NAME what=length|vias|fork|gap|guard pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [reason=...]  (length and vias take 2 pads, fork takes 3: the start and the two ends)";
                         let what = what.clone().filter(|w| design_spec::MEASURES.iter().any(|(k, ..)| k == w)).ok_or(usage)?;
                         let need = design_spec::MEASURES.iter().find(|(k, ..)| *k == what).map_or(2, |m| m.3);
                         let pads = pads.clone().filter(|p| p.len() == need).ok_or(usage)?;
@@ -223,6 +223,9 @@ impl Session {
                 }
                 if let Some(p) = pads {
                     m.pads = p;
+                }
+                if let Some(v) = reach {
+                    m.reach = v;
                 }
                 if let Some(v) = max {
                     (m.op, m.limit) = ("max".into(), v);
@@ -326,7 +329,12 @@ impl Session {
             .iter()
             .map(|f| json!({"kind": f.kind.key(), "name": f.name, "message": f.message, "actual_mm": (f.actual * 10.0).round() / 10.0, "item": f.item, "limit_mm": f.limit}))
             .collect();
+        // every measure of the table with its value (the ones within the limit too), so that a pass can be read as a number
+        let measured: Vec<Value> = pcb_core::requirements::measure_marks(board)
+            .iter()
+            .map(|m| json!({"name": m.name, "value": (m.value * 100.0).round() / 100.0, "unit": m.unit, "limit": m.limit, "op": if m.is_min { "min" } else { "max" }, "ok": m.ok, "waived": m.waived}))
+            .collect();
         let waived: Vec<Value> = rep.waived.iter().map(|(f, why)| json!({"kind": f.kind.key(), "name": f.name, "item": f.item, "message": f.message, "reason": why})).collect();
-        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "bypass": board.bypass.iter().map(|b| b.caps.len()).sum::<usize>(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "waived": waived, "missing": rep.missing})))
+        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "bypass": board.bypass.iter().map(|b| b.caps.len()).sum::<usize>(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "measured": measured, "waived": waived, "missing": rep.missing})))
     }
 }

@@ -206,14 +206,25 @@ pub struct Measured {
 pub fn measure_one(board: &Board, g: &crate::drc::CopperGraph, m: &design_spec::Measure) -> Result<Measured, String> {
     use crate::drc::PadRef;
     let Some((_, _, need)) = m.kind() else { return Err(format!("測定「{}」の種類 `{}` が分かりません", m.name, m.what)) };
-    if m.what == "gap" {
-        // the nearest copper of the two sets of nets (the line to draw runs between the two items)
+    if m.what == "gap" || m.what == "guard" {
         if m.pads.len() != need {
             return Err(format!("測定「{}」には、ネットが {need} 個要ります", m.name));
         }
-        let (a, b) = (vec![m.pads[0].trim().to_string()], vec![m.pads[1].trim().to_string()]);
-        let (d, pa, pb) = crate::drc::net_gap(board, &a, &b).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, a[0], b[0]))?;
-        return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
+        let (a, b) = (crate::drc::net_set(&m.pads[0]), crate::drc::net_set(&m.pads[1]));
+        if a.is_empty() || b.is_empty() {
+            return Err(format!("測定「{}」のネットの名前が空です", m.name));
+        }
+        if m.what == "gap" {
+            // the nearest copper of the two sets of nets (the line to draw runs between the two items)
+            let (d, pa, pb) = crate::drc::net_gap(board, &a, &b).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
+            return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
+        }
+        // a guard: how much of the tracks of the sensitive nets has the guard on both sides; the runs without are drawn
+        if !board.pads.iter().any(|p| p.net != "" && crate::drc::net_set(&m.pads[1]).iter().any(|g| design_spec::matches_name(g, &p.net))) {
+            return Err(format!("測定「{}」: ガードのネット {} につながるパッドが、基板にありません", m.name, m.pads[1]));
+        }
+        let cover = crate::drc::guard_cover(board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
+        return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
     }
     let pads: Vec<PadRef> = m.pads.iter().filter_map(|p| PadRef::parse(p)).collect();
     if pads.len() != need || m.pads.len() != need {
@@ -325,7 +336,11 @@ pub fn check(board: &Board) -> RequirementsReport {
                     let (label, unit, _) = m.kind().unwrap_or(("", "", 0));
                     let bad = if m.is_min() { v.value < m.limit - 1e-9 } else { v.value > m.limit + 1e-9 };
                     if bad {
-                        let shown = if unit == "個" { format!("{:.0}", v.value) } else { format!("{:.2}", v.value) };
+                        let shown = match unit {
+                            "個" => format!("{:.0}", v.value),
+                            "%" => format!("{:.1}", v.value),
+                            _ => format!("{:.2}", v.value),
+                        };
                         rep.add(board, Finding {
                             kind: FindingKind::Measure,
                             name: m.name.clone(),
@@ -655,7 +670,7 @@ mod tests {
         pad_at(&mut b, 40.0, 40.0, "Z", "1");
         wire(&mut b, (5.0, 5.0), (25.0, 5.0));
         wire(&mut b, (8.0, 5.0), (8.0, 15.0));
-        let m = |name: &str, what: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, note: String::new() };
+        let m = |name: &str, what: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, note: String::new() };
         let spec = DesignSpec {
             measures: vec![
                 m("検出線", "fork", &["R.1", "F.1", "S.1"], "max", 0.5),
@@ -701,7 +716,7 @@ mod tests {
         b.pads[3].net = "SW1".into();
         wire(&mut b, (5.0, 5.0), (25.0, 5.0));
         wire(&mut b, (5.0, 8.0), (25.0, 8.0));
-        let m = |name: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: "gap".into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, note: String::new() };
+        let m = |name: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: "gap".into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, note: String::new() };
         let spec = DesignSpec {
             measures: vec![m("検出を離す", &["SA", "SW*"], "min", 5.0), m("十分", &["SA", "SW1"], "min", 1.0), m("なし", &["SA", "ZZ"], "min", 1.0)],
             ..Default::default()

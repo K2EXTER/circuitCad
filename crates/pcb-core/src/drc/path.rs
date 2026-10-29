@@ -343,26 +343,43 @@ impl CopperGraph {
     }
 }
 
+/// The net of each copper item (the order of `copper_items`: tracks, pads, vias), from the copper that joins them.
+fn item_nets(board: &Board) -> (Vec<Cu>, Vec<Option<String>>) {
+    let conn = connectivity(board);
+    let items = copper_items(board);
+    let (nt, np) = (board.tracks.len(), board.pads.len());
+    let nets = (0..items.len())
+        .map(|i| {
+            let n = if i < nt {
+                conn.track_net(i)
+            } else if i < nt + np {
+                conn.pad_net(i - nt)
+            } else {
+                conn.via_net(i - nt - np)
+            };
+            n.map(str::to_string)
+        })
+        .collect();
+    (items, nets)
+}
+
+/// The names of the nets one entry of a measure stands for: names (or ending in `*`) joined by `+` ("A+SA").
+pub fn net_set(entry: &str) -> Vec<String> {
+    entry.split('+').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+}
+
+fn in_set(set: &[String], n: &str) -> bool {
+    set.iter().any(|p| design_spec::matches_name(p, n))
+}
+
 /// The nearest copper of two sets of nets (names, or ending in `*`): the gap between the edges (0 when they touch) and the two points
 /// (the centres of the two items) to draw a line between. None when one of the sets has no copper on the board. Only copper on a
 /// common layer counts (a through-hole pad and a via are on all of them).
 pub fn net_gap(board: &Board, a: &[String], b: &[String]) -> Option<(f64, Point, Point)> {
-    let conn = connectivity(board);
-    let items = copper_items(board);
-    let (nt, np) = (board.tracks.len(), board.pads.len());
-    let net_of = |i: usize| -> Option<&str> {
-        if i < nt {
-            conn.track_net(i)
-        } else if i < nt + np {
-            conn.pad_net(i - nt)
-        } else {
-            conn.via_net(i - nt - np)
-        }
-    };
-    let in_set = |set: &[String], n: &str| set.iter().any(|p| design_spec::matches_name(p, n));
+    let (items, nets) = item_nets(board);
     let (mut left, mut right) = (vec![], vec![]);
-    for (i, _) in items.iter().enumerate() {
-        match net_of(i) {
+    for (i, n) in nets.iter().enumerate() {
+        match n.as_deref() {
             Some(n) if in_set(a, n) => left.push(i),
             Some(n) if in_set(b, n) => right.push(i),
             _ => {}
@@ -381,6 +398,95 @@ pub fn net_gap(board: &Board, a: &[String], b: &[String]) -> Option<(f64, Point,
         }
     }
     best
+}
+
+/// How much of the tracks of a sensitive net has a guard on both sides.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GuardCover {
+    /// Length (mm) of the tracks looked at, and of those with guard copper within reach on each side.
+    pub total: f64,
+    pub covered: f64,
+    /// The stretches with no guard on one side or both, as runs of points (to draw).
+    pub bare: Vec<Vec<Point>>,
+}
+
+impl GuardCover {
+    /// Percent of the length that is guarded (100 when there is nothing to guard).
+    pub fn percent(&self) -> f64 {
+        if self.total <= 1e-9 { 100.0 } else { 100.0 * self.covered / self.total }
+    }
+}
+
+/// Near a pad of the net the guard stops short on purpose (the net leaves the track there): this far from a pad, nothing is asked.
+pub const GUARD_PAD_ZONE: f64 = 2.0;
+
+/// A guard looks at the tracks of the nets `nets` (names, or ending in `*`): every 0.2 mm along a track, is there copper of the nets `guard`
+/// on the same layer within `reach` mm of the track's edge on the left, and on the right? Vias and pads of the guard count on every
+/// layer they are on. The ends of the tracks within `GUARD_PAD_ZONE` of a pad of the net are left out. None when the sensitive nets have
+/// no track.
+pub fn guard_cover(board: &Board, nets: &[String], guard: &[String], reach: f64) -> Option<GuardCover> {
+    let (items, item_net) = item_nets(board);
+    let nt = board.tracks.len();
+    let guards: Vec<usize> = (0..items.len()).filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(guard, n))).collect();
+    let pads: Vec<Point> = board.pads.iter().filter(|p| in_set(nets, &p.net)).map(|p| p.pos).collect();
+    let mut out = GuardCover::default();
+    let mut any = false;
+    let step = 0.2;
+    for i in 0..nt {
+        if !item_net[i].as_deref().is_some_and(|n| in_set(nets, n)) {
+            continue;
+        }
+        let t = &board.tracks[i];
+        let len = t.a.dist(t.b);
+        if len < 1e-6 {
+            continue;
+        }
+        any = true;
+        let n = ((len / step).ceil() as usize).max(1);
+        let piece = len / n as f64;
+        let mut run: Vec<Point> = vec![];
+        for k in 0..n {
+            let f = (k as f64 + 0.5) / n as f64;
+            let p = Point::new(t.a.x + (t.b.x - t.a.x) * f, t.a.y + (t.b.y - t.a.y) * f);
+            if pads.iter().any(|q| q.dist(p) < GUARD_PAD_ZONE) {
+                if run.len() > 1 {
+                    out.bare.push(std::mem::take(&mut run));
+                }
+                run.clear();
+                continue;
+            }
+            out.total += piece;
+            let probe = Geo::Cap { a: p, b: p, r: t.width / 2.0 };
+            let mut sides = [false, false];
+            for &g in &guards {
+                if !items[g].on(t.side) {
+                    continue;
+                }
+                let c = center(&items[g].geo);
+                let cross = (t.b.x - t.a.x) * (c.y - t.a.y) - (t.b.y - t.a.y) * (c.x - t.a.x);
+                if cross.abs() < 1e-9 {
+                    continue;
+                }
+                let s = usize::from(cross > 0.0);
+                if !sides[s] && dist(&probe, &items[g].geo) <= reach {
+                    sides[s] = true;
+                }
+            }
+            if sides[0] && sides[1] {
+                out.covered += piece;
+                if run.len() > 1 {
+                    out.bare.push(std::mem::take(&mut run));
+                }
+                run.clear();
+            } else {
+                run.push(p);
+            }
+        }
+        if run.len() > 1 {
+            out.bare.push(run);
+        }
+    }
+    any.then_some(out)
 }
 
 #[cfg(test)]
@@ -490,6 +596,38 @@ mod tests {
         assert!((p.length - 10.0).abs() < 1e-3, "{}", p.length);
     }
 
+    /// A guard on both sides of a sensitive track is asked for along the track except near its pads; a side with no guard for the second
+    /// half is found, with the bare run to draw.
+    #[test]
+    fn the_cover_of_a_guard_is_measured_along_the_sensitive_track() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad(&mut b, 5.0, 5.0, "A", "1", "S");
+        pad(&mut b, 25.0, 5.0, "B", "1", "S");
+        track(&mut b, Side::Top, (5.0, 5.0), (25.0, 5.0));
+        let via = |x: f64, y: f64| Via { pos: Point::new(x, y), diameter: 0.6, drill: 0.3, net: "G".into() };
+        // guard tracks 1 mm either side from x = 6 to 24
+        for y in [4.0, 6.0] {
+            b.vias.push(via(6.0, y));
+            track(&mut b, Side::Top, (6.0, y), (24.0, y));
+        }
+        let s = vec!["S".to_string()];
+        let g = vec!["G".to_string()];
+        let full = guard_cover(&b, &s, &g, 1.2).expect("tracks to look at");
+        assert!(full.percent() > 99.0, "{full:?}");
+        assert!((full.total - 16.0).abs() < 0.3, "the 2 mm round each pad is left out: {}", full.total);
+        assert!(full.bare.is_empty());
+        // the guard on one side stops at x = 15
+        b.tracks.retain(|t| !(t.a.y == 6.0));
+        b.tracks.push(Track { side: Side::Top, a: Point::new(6.0, 6.0), b: Point::new(15.0, 6.0), width: 0.25 });
+        let half = guard_cover(&b, &s, &g, 1.2).unwrap();
+        assert!(half.percent() > 45.0 && half.percent() < 70.0, "{half:?}");
+        assert!(!half.bare.is_empty() && half.bare[0][0].x > 14.0);
+        // a reach too short finds nothing guarded; a net with no track gives None; `+` joins nets
+        assert!(guard_cover(&b, &s, &g, 0.2).unwrap().percent() < 1.0);
+        assert!(guard_cover(&b, &["NOPE".to_string()], &g, 1.0).is_none());
+        assert_eq!(net_set("A+SA + B"), vec!["A", "SA", "B"]);
+    }
+
     /// Against the DRC's own idea of which pads are one piece of copper (without the pours): every such pair should have a path.
     /// Needs a board file (set `CCAD_PATH_BOARD`); not run by default.
     #[test]
@@ -524,4 +662,17 @@ mod tests {
         println!("built in {built:?}; {pairs} pairs of one copper group, {} without a path: {:?}", missing.len(), &missing[..missing.len().min(12)]);
         assert!(missing.is_empty(), "{} of {pairs}", missing.len());
     }
+
+    /// Prints how much sensitive track a guard looks at on a real board (set `CCAD_PATH_BOARD`); not run by default.
+    #[test]
+    #[ignore]
+    fn the_guard_of_a_real_board_is_looked_at() {
+        let Ok(file) = std::env::var("CCAD_PATH_BOARD") else { return };
+        let b: Board = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+        for (s, g) in [("A+SA", "GRDA"), ("B+SB", "GRDB")] {
+            let c = guard_cover(&b, &net_set(s), &net_set(g), 1.0);
+            println!("{s} <- {g}: {:?}", c.map(|c| (c.total, c.covered, c.bare.len())));
+        }
+    }
 }
+

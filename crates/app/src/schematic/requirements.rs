@@ -479,7 +479,7 @@ impl SchEditor {
                             }
                         });
                         let need = m.kind().map_or(2, |k| k.2);
-                        let hint = if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。例: SA,SW*)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
+                        let hint = if m.what == "guard" { "1つ目: ガードされる検出のネット、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 A+SA,GRDA)" } else if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SA,SW*)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
                         if let Some(t) = text_cell(ui, buf, (5, k, 1), &m.pads.join(","), 230.0, hint) {
                             m.pads = list(&t);
                             changed = true;
@@ -499,8 +499,17 @@ impl SchEditor {
                                 m.op = op.to_string();
                                 changed = true;
                             }
+                            if m.what == "guard" {
+                                let mut reach = m.guard_reach();
+                                let before = reach;
+                                number_cell(ui, &mut reach, " mm 以内", 0.1, "ガードの縁が、検出のトラックの縁から、この距離までにあれば「ガードがある」とみなします (空けた隙間 + ガードの幅の目安。0.35 mm の隙間・0.3 mm 幅なら 1 mm)。検出のトラックの両側にあるか、パッドの 2 mm 以内を除いた長さで数えます");
+                                if reach != before {
+                                    m.reach = reach;
+                                    changed = true;
+                                }
+                            }
                             let before = m.limit;
-                            let unit = m.kind().map_or("", |k| if k.1 == "個" { " 個" } else { " mm" });
+                            let unit = m.kind().map_or("", |k| match k.1 { "個" => " 個", "%" => " %", _ => " mm" });
                             number_cell(ui, &mut m.limit, unit, 0.1, "この値を超えたら (または下回ったら) 指摘します");
                             changed |= m.limit != before;
                         });
