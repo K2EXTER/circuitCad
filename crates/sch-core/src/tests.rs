@@ -423,6 +423,43 @@ fn labels_that_differ_only_in_case_are_a_warning() {
 }
 
 #[test]
+fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
+    let pin = |n: &str, name: &str, side| SymPin { number: n.into(), name: name.into(), side, sim_only: false };
+    let fet = CustomSymbol {
+        ratings: None,
+        shops: Default::default(),
+        glyph: "pmos".into(),
+        name: "AO3401A".into(),
+        prefix: "Q".into(),
+        pins: vec![pin("1", "G", PinSide::Left), pin("2", "S", PinSide::Top), pin("3", "D", PinSide::Bottom)],
+        sim: Some(SimModel {
+            kind: SimKind::Model,
+            element: "M".into(),
+            name: "AO3401A".into(),
+            text: ".model AO3401A PMOS(VTO=-1)".into(),
+            pins: vec!["3".into(), "1".into(), "2".into()],
+            params: Default::default(),
+            limits: vec![],
+        }),
+    };
+    let mut s = Schematic::default();
+    let u = s.add_custom(opamp(), "LM358", "SOIC-8", (40, 0), 0);
+    let q = s.add_custom(fet, "AO3401A", "SOT-23_MOS", (20, 0), 0);
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.add(Kind::Ground, (0, 8), 0);
+    let pin = |s: &Schematic, i: usize, name: &str| s.components[i].pins().into_iter().find(|p| p.0 == name).unwrap().1;
+    // battery + -> drain, source -> the IC's V+ (by labels)
+    s.labels.push(Label { pos: pin(&s, v, "+"), text: "BATJ".into() });
+    s.labels.push(Label { pos: pin(&s, q, "3"), text: "BATJ".into() });
+    s.labels.push(Label { pos: pin(&s, q, "2"), text: "BATP".into() });
+    s.labels.push(Label { pos: pin(&s, u, "8"), text: "BATP".into() });
+    assert!(!has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
+    // a switch whose other side is not supplied does not feed anything
+    s.labels[0].text = "OTHER".into();
+    assert!(has(&erc(&s), "電源ピン 8"), "{:?}", erc(&s));
+}
+
+#[test]
 fn ic_power_pins_must_reach_a_supply_but_a_regulator_output_counts() {
     let mut s = Schematic::default();
     let u = s.add_custom(opamp(), "LM358", "SOIC-8", (20, 0), 0);

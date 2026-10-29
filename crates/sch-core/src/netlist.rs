@@ -373,6 +373,29 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
         })
     };
 
+    // a MOSFET used as a series switch (reverse-battery protection, load switch) passes the supply through
+    let fed_through_switch = |ni: usize, me: &str| {
+        nets[ni].pins.iter().any(|p| {
+            p.refdes != me
+                && comp(&p.refdes).and_then(|c| c.custom.as_ref()).is_some_and(|sym| {
+                    let is_mos = sym.sim.as_ref().is_some_and(|m| m.element.eq_ignore_ascii_case("M"));
+                    let name = sym.pins.iter().find(|q| q.number == p.pin).map(|q| q.name.to_ascii_uppercase());
+                    let other = match name.as_deref() {
+                        Some("D") => "S",
+                        Some("S") => "D",
+                        _ => return false,
+                    };
+                    is_mos
+                        && sym
+                            .pins
+                            .iter()
+                            .find(|q| q.name.eq_ignore_ascii_case(other))
+                            .and_then(|q| net_index(&p.refdes, &q.number))
+                            .is_some_and(|oi| oi != ni && driven_by_source(oi))
+                })
+        })
+    };
+
     // an LED straight across a supply burns out: it needs a resistor in series
     for c in s.components.iter().filter(|c| c.kind == Kind::Led) {
         let (Some(a), Some(k)) = (net_index(&c.refdes, "A"), net_index(&c.refdes, "K")) else { continue };
@@ -398,7 +421,7 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
             if nets[ni].pins.len() < 2 {
                 continue; // already reported as an unconnected pin
             }
-            if is_vcc && !driven_by_source(ni) && !fed_by_output(ni, &c.refdes) {
+            if is_vcc && !driven_by_source(ni) && !fed_by_output(ni, &c.refdes) && !fed_through_switch(ni, &c.refdes) {
                 out.push(Problem::new(
                     Warning,
                     format!("{} の電源ピン {} ({}) が電源につながっていません", c.refdes, pin, name),
