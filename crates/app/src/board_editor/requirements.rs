@@ -4,15 +4,19 @@
 use super::*;
 use pcb_core::requirements::{check, FindingKind};
 
+/// Dark outline under the requirement frames and lines, so they stand out from the copper colours (top red, inner green, bottom blue).
+const HALO: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 200);
+
 impl BoardEditor {
-    /// The groups as frames (green when the farthest two parts are within the limit, red when not, a tag with the name and the numbers) and the
-    /// distances to keep as a line between the nearest two pads (green when long enough, red when too short, the distance at the middle).
+    /// The groups as frames (green when the farthest two parts are within the limit, pink when not, a tag with the name and the numbers) and the
+    /// distances to keep as a line between the nearest two pads (green when long enough, pink when too short, the distance at the middle).
     pub(super) fn draw_requirement_marks(&self, painter: &egui::Painter, rect: Rect) {
         if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || (self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty()) {
             return;
         }
         let marks = pcb_core::requirements::marks(&self.board);
-        let (good, bad) = (Color32::from_rgb(70, 190, 100), Color32::from_rgb(240, 70, 70));
+        let (good, bad) = (Color32::from_rgb(70, 190, 100), Color32::from_rgb(255, 60, 200));
+        // a dark halo under every line and frame: the top copper is red and the inner layers green, so the colour alone is not enough
         for g in marks.groups.iter().filter(|_| self.show_req_marks) {
             let col = if g.ok { good } else { bad };
             let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
@@ -28,6 +32,7 @@ impl BoardEditor {
             if !r.intersects(rect) {
                 continue;
             }
+            painter.rect_stroke(r, 3.0, Stroke::new(4.5, HALO), egui::StrokeKind::Outside);
             painter.rect_stroke(r, 3.0, Stroke::new(2.0, col), egui::StrokeKind::Outside);
             let text = if g.limit > 0.0 { format!("組「{}」 {:.1} / {} mm", g.name, g.actual, g.limit) } else { format!("組「{}」", g.name) };
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(12.0), Color32::BLACK);
@@ -41,7 +46,9 @@ impl BoardEditor {
         for b in marks.bypass.iter().filter(|_| self.show_req_lines) {
             let col = if b.ok { good } else { bad };
             let (p, q) = (self.to_screen(rect, b.a), self.to_screen(rect, b.b));
+            painter.line_segment([p, q], Stroke::new(if b.ok { 3.0 } else { 4.5 }, HALO));
             painter.line_segment([p, q], Stroke::new(if b.ok { 1.0 } else { 2.0 }, col));
+            painter.circle_stroke(q, 4.0, Stroke::new(3.5, HALO));
             painter.circle_stroke(q, 4.0, Stroke::new(1.5, col));
             if !b.ok || self.zoom >= 14.0 {
                 let galley = painter.layout_no_wrap(format!("{}→{} {:.1} mm", b.cap, b.ic, b.actual), egui::FontId::proportional(11.0), Color32::BLACK);
@@ -53,9 +60,12 @@ impl BoardEditor {
         for a in marks.apart.iter().filter(|_| self.show_req_lines) {
             let col = if a.ok { good } else { bad };
             let (p, q) = (self.to_screen(rect, a.a), self.to_screen(rect, a.b));
+            painter.line_segment([p, q], Stroke::new(if a.ok { 3.0 } else { 4.5 }, HALO));
             painter.line_segment([p, q], Stroke::new(if a.ok { 1.0 } else { 2.0 }, col));
-            painter.circle_filled(p, 3.0, col);
-            painter.circle_filled(q, 3.0, col);
+            for e in [p, q] {
+                painter.circle_filled(e, 4.5, HALO);
+                painter.circle_filled(e, 3.0, col);
+            }
             let text = if a.ok { format!("「{}」 {:.1} mm (下限 {})", a.name, a.actual, a.limit) } else { format!("「{}」 {:.1} mm しかない (下限 {})", a.name, a.actual, a.limit) };
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(12.0), Color32::BLACK);
             let tag = Rect::from_center_size(p.lerp(q, 0.5), galley.size() + Vec2::new(8.0, 3.0));
@@ -69,7 +79,7 @@ impl BoardEditor {
             return;
         }
         let mut both = self.show_req_marks || self.show_req_lines;
-        if ui.checkbox(&mut both, "組と離す距離を基板の上に出す").on_hover_text("近くに置く組を枠で囲み (守れていれば緑、広がりすぎなら赤)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければ赤)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます").changed() {
+        if ui.checkbox(&mut both, "組と離す距離を基板の上に出す").on_hover_text("近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます").changed() {
             (self.show_req_marks, self.show_req_lines) = (both, both);
         }
         let rep = check(&self.board);
