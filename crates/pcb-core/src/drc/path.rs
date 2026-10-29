@@ -82,6 +82,59 @@ pub struct CopperGraph {
 
 const SCALE: f64 = 1e6;
 
+/// A uniform grid of boxes: which items lie near a place. The search for touching copper asks it instead of looking at every pair.
+struct Cells {
+    cell: f64,
+    x0: f64,
+    y0: f64,
+    nx: usize,
+    ny: usize,
+    cells: Vec<Vec<u32>>,
+}
+
+type Box4 = (f64, f64, f64, f64);
+
+impl Cells {
+    fn new(lo: Point, hi: Point, cell: f64) -> Cells {
+        let mut cell = cell;
+        let size = |c: f64| (((hi.x - lo.x) / c).floor() as usize + 1, ((hi.y - lo.y) / c).floor() as usize + 1);
+        while size(cell).0 * size(cell).1 > 250_000 {
+            cell *= 2.0;
+        }
+        let (nx, ny) = size(cell);
+        Cells { cell, x0: lo.x, y0: lo.y, nx, ny, cells: vec![vec![]; nx * ny] }
+    }
+
+    fn span(&self, b: Box4) -> (usize, usize, usize, usize) {
+        let cx = |x: f64| (((x - self.x0) / self.cell).floor().max(0.0) as usize).min(self.nx - 1);
+        let cy = |y: f64| (((y - self.y0) / self.cell).floor().max(0.0) as usize).min(self.ny - 1);
+        (cx(b.0), cy(b.1), cx(b.2), cy(b.3))
+    }
+
+    fn insert(&mut self, id: u32, b: Box4) {
+        let (x0, y0, x1, y1) = self.span(b);
+        for iy in y0..=y1 {
+            for ix in x0..=x1 {
+                let k = iy * self.nx + ix;
+                self.cells[k].push(id);
+            }
+        }
+    }
+
+    /// The ids of the boxes that may touch `b`, in order, each once.
+    fn query(&self, b: Box4, out: &mut Vec<u32>) {
+        out.clear();
+        let (x0, y0, x1, y1) = self.span(b);
+        for iy in y0..=y1 {
+            for ix in x0..=x1 {
+                out.extend_from_slice(&self.cells[iy * self.nx + ix]);
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+    }
+}
+
 fn micro(mm: f64) -> u64 {
     (mm * SCALE).round().max(0.0) as u64
 }
@@ -153,11 +206,50 @@ impl CopperGraph {
                 && a.0.y.min(a.1.y) - a.2 <= b.0.y.max(b.1.y) + b.2
                 && b.0.y.min(b.1.y) - b.2 <= a.0.y.max(a.1.y) + a.2
         };
+        // the box of each track, and a grid of them for each layer (what lies near a pad or a via, or another track)
+        let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
+        let mut grow = |p: Point, e: f64| {
+            lo = Point::new(lo.x.min(p.x - e), lo.y.min(p.y - e));
+            hi = Point::new(hi.x.max(p.x + e), hi.y.max(p.y + e));
+        };
+        for k in &bd.tracks {
+            grow(k.a, k.width);
+            grow(k.b, k.width);
+        }
+        for p in &board.pads {
+            grow(p.pos, 10.0);
+        }
+        for v in &board.vias {
+            grow(v.pos, v.diameter);
+        }
+        if lo.x > hi.x {
+            (lo, hi) = (Point::new(0.0, 0.0), Point::new(1.0, 1.0));
+        }
+        let tbox: Vec<Box4> = bd.tracks.iter().map(|k| (k.a.x.min(k.b.x) - k.width / 2.0, k.a.y.min(k.b.y) - k.width / 2.0, k.a.x.max(k.b.x) + k.width / 2.0, k.a.y.max(k.b.y) + k.width / 2.0)).collect();
+        let mut tgrid: Vec<Cells> = (0..layers.len()).map(|_| Cells::new(lo, hi, 2.0)).collect();
+        for (k, tr) in bd.tracks.iter().enumerate() {
+            tgrid[tr.layer].insert(k as u32, tbox[k]);
+        }
+        let pad_box = |p: &Pad| -> Box4 {
+            let e = match p.shape {
+                PadShape::Circle { d } => d / 2.0,
+                PadShape::Rect { w, h } | PadShape::Oval { w, h } => w.max(h) / 2.0,
+            };
+            (p.pos.x - e, p.pos.y - e, p.pos.x + e, p.pos.y + e)
+        };
+        let mut pgrid = Cells::new(lo, hi, 2.0);
+        for (j, p) in board.pads.iter().enumerate() {
+            pgrid.insert(j as u32, pad_box(p));
+        }
+        let mut cand: Vec<u32> = vec![];
         // an end of one track on another track of the same layer: a branch
         let n_tracks = bd.tracks.len();
         for i in 0..n_tracks {
-            for j in (i + 1)..n_tracks {
-                if bd.tracks[i].layer != bd.tracks[j].layer {
+            let li = bd.tracks[i].layer;
+            tgrid[li].query(tbox[i], &mut cand);
+            for jj in 0..cand.len() {
+                let j = cand[jj] as usize;
+                if j <= i {
                     continue;
                 }
                 let (ti, tj) = (&bd.tracks[i], &bd.tracks[j]);
@@ -177,25 +269,20 @@ impl CopperGraph {
                 }
             }
         }
-        // the box of each track (a prefilter: most pads and vias are nowhere near most tracks)
-        let tbox: Vec<(f64, f64, f64, f64)> = bd.tracks.iter().map(|k| (k.a.x.min(k.b.x) - k.width / 2.0, k.a.y.min(k.b.y) - k.width / 2.0, k.a.x.max(k.b.x) + k.width / 2.0, k.a.y.max(k.b.y) + k.width / 2.0)).collect();
-        let near_box = |t: &(f64, f64, f64, f64), c: Point, ext: f64| t.0 <= c.x + ext && t.2 >= c.x - ext && t.1 <= c.y + ext && t.3 >= c.y - ext;
         // pads: a node on each layer the pad is on, joined to the tracks that touch it
         let all: Vec<usize> = (0..layers.len()).collect();
         let mut pad_nodes: Vec<Vec<(usize, usize)>> = vec![]; // per pad: (layer, node)
         for (j, p) in board.pads.iter().enumerate() {
             let on: Vec<usize> = if p.drill.is_some() { all.clone() } else { layer_of(p.side).into_iter().collect() };
             let geo = shape_geo(p.pos, p.shape);
-            let ext = match p.shape {
-                PadShape::Circle { d } => d / 2.0,
-                PadShape::Rect { w, h } | PadShape::Oval { w, h } => w.max(h) / 2.0,
-            };
             let mut mine = vec![];
             for &l in &on {
                 let n = bd.new_node(l, p.pos);
                 mine.push((l, n));
-                for k in 0..bd.tracks.len() {
-                    if bd.tracks[k].layer == l && near_box(&tbox[k], p.pos, ext) && dist(&cap(&bd.tracks[k]), &geo) <= 0.0 {
+                tgrid[l].query(pad_box(p), &mut cand);
+                for kk in 0..cand.len() {
+                    let k = cand[kk] as usize;
+                    if dist(&cap(&bd.tracks[k]), &geo) <= 0.0 {
                         let m = bd.split(k, p.pos);
                         bd.link(m, n, 0.0, false);
                     }
@@ -220,11 +307,13 @@ impl CopperGraph {
         }
         // pads that touch each other
         for i in 0..board.pads.len() {
-            for j in (i + 1)..board.pads.len() {
-                let (a, b) = (&board.pads[i], &board.pads[j]);
-                if (a.pos.x - b.pos.x).abs() > 20.0 || (a.pos.y - b.pos.y).abs() > 20.0 {
+            pgrid.query(pad_box(&board.pads[i]), &mut cand);
+            for jj in 0..cand.len() {
+                let j = cand[jj] as usize;
+                if j <= i {
                     continue;
                 }
+                let (a, b) = (&board.pads[i], &board.pads[j]);
                 if dist(&shape_geo(a.pos, a.shape), &shape_geo(b.pos, b.shape)) > 0.0 {
                     continue;
                 }
@@ -242,16 +331,19 @@ impl CopperGraph {
             for &l in &all {
                 let n = bd.new_node(l, v.pos);
                 mine.push(n);
-                for k in 0..bd.tracks.len() {
-                    if bd.tracks[k].layer == l && near_box(&tbox[k], v.pos, v.diameter / 2.0) && dist(&cap(&bd.tracks[k]), &vg) <= 0.0 {
+                let vbox: Box4 = (v.pos.x - v.diameter / 2.0, v.pos.y - v.diameter / 2.0, v.pos.x + v.diameter / 2.0, v.pos.y + v.diameter / 2.0);
+                tgrid[l].query(vbox, &mut cand);
+                for kk in 0..cand.len() {
+                    let k = cand[kk] as usize;
+                    if dist(&cap(&bd.tracks[k]), &vg) <= 0.0 {
                         let m = bd.split(k, v.pos);
                         bd.link(m, n, 0.0, false);
                     }
                 }
-                for (pi, p) in board.pads.iter().enumerate() {
-                    if (p.pos.x - v.pos.x).abs() > 20.0 || (p.pos.y - v.pos.y).abs() > 20.0 {
-                        continue;
-                    }
+                pgrid.query(vbox, &mut cand);
+                for pp in 0..cand.len() {
+                    let pi = cand[pp] as usize;
+                    let p = &board.pads[pi];
                     if let Some(&(_, np)) = pad_nodes[pi].iter().find(|(lp, _)| *lp == l)
                         && dist(&shape_geo(p.pos, p.shape), &vg) <= 0.0
                     {
@@ -350,24 +442,50 @@ impl CopperGraph {
     }
 }
 
-/// The net of each copper item (the order of `copper_items`: tracks, pads, vias), from the copper that joins them.
-fn item_nets(board: &Board) -> (Vec<Cu>, Vec<Option<String>>) {
-    let conn = connectivity(board);
-    let items = copper_items(board);
-    let (nt, np) = (board.tracks.len(), board.pads.len());
-    let nets = (0..items.len())
-        .map(|i| {
-            let n = if i < nt {
-                conn.track_net(i)
-            } else if i < nt + np {
-                conn.pad_net(i - nt)
-            } else {
-                conn.via_net(i - nt - np)
-            };
-            n.map(str::to_string)
-        })
-        .collect();
-    (items, nets)
+/// The copper items of a board (tracks, pads, vias: the order of `copper_items`) with the net of each, from the copper that joins them.
+/// Built once for the checks that look at nets (the gap between nets, a guard, the properties of a net class).
+pub struct CopperIndex {
+    items: Vec<Cu>,
+    nets: Vec<Option<String>>,
+    conn: Connectivity,
+}
+
+impl CopperIndex {
+    pub fn build(board: &Board) -> CopperIndex {
+        let conn = connectivity(board);
+        let items = copper_items(board);
+        let (nt, np) = (board.tracks.len(), board.pads.len());
+        let nets = (0..items.len())
+            .map(|i| {
+                let n = if i < nt {
+                    conn.track_net(i)
+                } else if i < nt + np {
+                    conn.pad_net(i - nt)
+                } else {
+                    conn.via_net(i - nt - np)
+                };
+                n.map(str::to_string)
+            })
+            .collect();
+        CopperIndex { items, nets, conn }
+    }
+
+    /// The net of track `i` of the board.
+    pub fn track_net(&self, i: usize) -> Option<&str> {
+        self.conn.track_net(i)
+    }
+}
+
+/// What the checks of the requirements ask of the copper, built once for all of them: the graph of ways and the index of nets.
+pub struct CopperModel {
+    pub graph: CopperGraph,
+    pub index: CopperIndex,
+}
+
+impl CopperModel {
+    pub fn build(board: &Board) -> CopperModel {
+        CopperModel { graph: CopperGraph::build(board), index: CopperIndex::build(board) }
+    }
 }
 
 /// The names of the nets one entry of a measure stands for: names (or ending in `*`) joined by `+` ("A+SA").
@@ -383,7 +501,12 @@ fn in_set(set: &[String], n: &str) -> bool {
 /// (the centres of the two items) to draw a line between. None when one of the sets has no copper on the board. Only copper on a
 /// common layer counts (a through-hole pad and a via are on all of them).
 pub fn net_gap(board: &Board, a: &[String], b: &[String]) -> Option<(f64, Point, Point)> {
-    let (items, nets) = item_nets(board);
+    net_gap_in(&CopperIndex::build(board), a, b)
+}
+
+/// [`net_gap`] on an index that is already built.
+pub fn net_gap_in(index: &CopperIndex, a: &[String], b: &[String]) -> Option<(f64, Point, Point)> {
+    let (items, nets) = (&index.items, &index.nets);
     let (mut left, mut right) = (vec![], vec![]);
     for (i, n) in nets.iter().enumerate() {
         match n.as_deref() {
@@ -432,7 +555,12 @@ pub const GUARD_PAD_ZONE: f64 = 2.0;
 /// layer they are on. The ends of the tracks within `GUARD_PAD_ZONE` of a pad of the net are left out. None when the sensitive nets have
 /// no track.
 pub fn guard_cover(board: &Board, nets: &[String], guard: &[String], reach: f64) -> Option<GuardCover> {
-    let (items, item_net) = item_nets(board);
+    guard_cover_in(&CopperIndex::build(board), board, nets, guard, reach)
+}
+
+/// [`guard_cover`] on an index that is already built.
+pub fn guard_cover_in(index: &CopperIndex, board: &Board, nets: &[String], guard: &[String], reach: f64) -> Option<GuardCover> {
+    let (items, item_net) = (&index.items, &index.nets);
     let nt = board.tracks.len();
     let guards: Vec<usize> = (0..items.len()).filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(guard, n))).collect();
     let pads: Vec<Point> = board.pads.iter().filter(|p| in_set(nets, &p.net)).map(|p| p.pos).collect();
@@ -647,7 +775,7 @@ mod tests {
         let built = t0.elapsed();
         let conn = connectivity_without_pours(&b);
         let mut by_group: HashMap<usize, Vec<usize>> = HashMap::new();
-        for (i, p) in b.pads.iter().enumerate().filter(|(_, p)| !p.refdes.is_empty() && !p.pin.is_empty()) {
+        for (i, _) in b.pads.iter().enumerate().filter(|(_, p)| !p.refdes.is_empty() && !p.pin.is_empty()) {
             by_group.entry(conn.pad_group(i)).or_default().push(i);
         }
         let (mut pairs, mut missing) = (0, vec![]);
@@ -702,6 +830,35 @@ mod tests {
         println!("measure_marks: {:?}", time(&|| drop(crate::requirements::measure_marks(&b))));
         b.measures.clear();
         println!("check without measures: {:?}", time(&|| drop(crate::requirements::check(&b))));
+    }
+
+    /// How long the board's structure computations take on a real board (set `CCAD_PATH_BOARD`); not run by default.
+    #[test]
+    #[ignore]
+    fn the_structure_computations_are_timed_on_a_real_board() {
+        let Ok(file) = std::env::var("CCAD_PATH_BOARD") else { return };
+        let b: Board = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+        let time = |name: &str, f: &dyn Fn()| {
+            let t0 = std::time::Instant::now();
+            for _ in 0..5 {
+                f();
+            }
+            println!("{name}: {:?}", t0.elapsed() / 5);
+        };
+        println!("tracks {} pads {} vias {} zones {}", b.tracks.len(), b.pads.len(), b.vias.len(), b.zones.len());
+        time("connectivity (with pours)", &|| drop(connectivity(&b)));
+        time("connectivity_without_pours", &|| drop(connectivity_without_pours(&b)));
+        time("ratsnest", &|| drop(crate::ratsnest::ratsnest(&b)));
+        time("pour_split_airwires", &|| drop(pour_split_airwires(&b)));
+        time("open_connections", &|| drop(crate::ratsnest::open_connections(&b)));
+        time("CopperGraph::build", &|| drop(CopperGraph::build(&b)));
+        time("CopperIndex::build", &|| drop(CopperIndex::build(&b)));
+        time("CopperModel::build", &|| drop(CopperModel::build(&b)));
+        time("drc::check", &|| drop(check(&b)));
+        time("drc::check_final", &|| drop(check_final(&b)));
+        time("quality::measure", &|| drop(crate::quality::measure(&b)));
+        time("requirements::check", &|| drop(crate::requirements::check(&b)));
+        time("zonefill geometry_key", &|| drop(crate::zonefill::geometry_key(&b)));
     }
 }
 

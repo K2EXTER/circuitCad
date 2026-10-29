@@ -203,7 +203,8 @@ pub struct Measured {
 }
 
 /// Measure `m` on the copper graph `g`. Err: why it cannot be measured (a kind or pads the table got wrong, no copper between the pads).
-pub fn measure_one(board: &Board, g: &crate::drc::CopperGraph, m: &design_spec::Measure) -> Result<Measured, String> {
+pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_spec::Measure) -> Result<Measured, String> {
+    let g = &model.graph;
     use crate::drc::PadRef;
     let Some((_, _, need)) = m.kind() else { return Err(format!("測定「{}」の種類 `{}` が分かりません", m.name, m.what)) };
     if m.what == "gap" || m.what == "guard" {
@@ -216,14 +217,14 @@ pub fn measure_one(board: &Board, g: &crate::drc::CopperGraph, m: &design_spec::
         }
         if m.what == "gap" {
             // the nearest copper of the two sets of nets (the line to draw runs between the two items)
-            let (d, pa, pb) = crate::drc::net_gap(board, &a, &b).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
+            let (d, pa, pb) = crate::drc::net_gap_in(&model.index, &a, &b).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
             return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
         }
         // a guard: how much of the tracks of the sensitive nets has the guard on both sides; the runs without are drawn
         if !board.pads.iter().any(|p| p.net != "" && crate::drc::net_set(&m.pads[1]).iter().any(|g| design_spec::matches_name(g, &p.net))) {
             return Err(format!("測定「{}」: ガードのネット {} につながるパッドが、基板にありません", m.name, m.pads[1]));
         }
-        let cover = crate::drc::guard_cover(board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
+        let cover = crate::drc::guard_cover_in(&model.index, board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
         return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
     }
     let pads: Vec<PadRef> = m.pads.iter().filter_map(|p| PadRef::parse(p)).collect();
@@ -247,8 +248,8 @@ pub fn measure_one(board: &Board, g: &crate::drc::CopperGraph, m: &design_spec::
 
 /// The check and the marks of the table together, on one copper graph (what the editor asks for when the board has changed).
 pub fn analyse(board: &Board) -> (RequirementsReport, Vec<MeasureMark>) {
-    let graph = (!board.measures.is_empty()).then(|| crate::drc::CopperGraph::build(board));
-    (check_with(board, graph.as_ref()), measure_marks_with(board, graph.as_ref()))
+    let model = needs_model(board).then(|| crate::drc::CopperModel::build(board));
+    (check_with(board, model.as_ref()), measure_marks_with(board, model.as_ref()))
 }
 
 /// A number that changes when anything the check reads besides the copper changes: the rows of the table that reached the board and the
@@ -272,16 +273,23 @@ pub fn any(board: &Board) -> bool {
 
 /// The properties of the net classes that the copper can break: tracks of a net on a layer its class does not allow (one finding for the
 /// class, with the length), and a net with more track than its class lets it have (one for each such net).
-fn net_findings(board: &Board) -> (Vec<Finding>, usize) {
+fn net_findings(board: &Board, model: Option<&crate::drc::CopperModel>) -> (Vec<Finding>, usize) {
     let (mut out, mut checked) = (vec![], 0);
     if !board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0) {
         return (out, 0);
     }
-    let conn = crate::drc::connectivity(board);
+    let built;
+    let index = match model {
+        Some(m) => &m.index,
+        None => {
+            built = crate::drc::CopperIndex::build(board);
+            &built
+        }
+    };
     // per net: the length on each layer
     let mut by_net: std::collections::BTreeMap<String, Vec<(Side, f64)>> = Default::default();
     for (i, t) in board.tracks.iter().enumerate() {
-        if let Some(n) = conn.track_net(i) {
+        if let Some(n) = index.track_net(i) {
             by_net.entry(n.to_string()).or_default().push((t.side, t.a.dist(t.b)));
         }
     }
@@ -335,27 +343,26 @@ pub fn check(board: &Board) -> RequirementsReport {
     check_with(board, None)
 }
 
-/// [`check`], with the copper graph the measures need when the caller has built it (it costs ~100 ms on a big board).
-pub fn check_with(board: &Board, graph: Option<&crate::drc::CopperGraph>) -> RequirementsReport {
+/// Does the check need the copper model (measures, or a net class with layers or a length limit)?
+fn needs_model(board: &Board) -> bool {
+    !board.measures.is_empty() || board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0)
+}
+
+/// [`check`], with the copper model when the caller has built it (a few ms on a big board; it is shared by all the rows).
+pub fn check_with(board: &Board, model: Option<&crate::drc::CopperModel>) -> RequirementsReport {
     let mut rep = RequirementsReport::default();
-    let (nets, n) = net_findings(board);
+    let built = (model.is_none() && needs_model(board)).then(|| crate::drc::CopperModel::build(board));
+    let model = model.or(built.as_ref());
+    let (nets, n) = net_findings(board, model);
     rep.checked += n;
     for f in nets {
         rep.add(board, f);
     }
     // the measures of the copper of a connection (the graph is built once, and only when there is something to measure)
-    if !board.measures.is_empty() {
-        let built;
-        let g = match graph {
-            Some(g) => g,
-            None => {
-                built = crate::drc::CopperGraph::build(board);
-                &built
-            }
-        };
+    if let Some(model) = model.filter(|_| !board.measures.is_empty()) {
         for m in &board.measures {
             rep.checked += 1;
-            match measure_one(board, g, m) {
+            match measure_one(board, model, m) {
                 Err(why) => {
                     rep.checked -= 1;
                     rep.missing.push(why);
@@ -493,15 +500,15 @@ pub fn measure_marks(board: &Board) -> Vec<MeasureMark> {
 }
 
 /// [`measure_marks`], with the copper graph when the caller has built it.
-pub fn measure_marks_with(board: &Board, graph: Option<&crate::drc::CopperGraph>) -> Vec<MeasureMark> {
+pub fn measure_marks_with(board: &Board, model: Option<&crate::drc::CopperModel>) -> Vec<MeasureMark> {
     if board.measures.is_empty() {
         return vec![];
     }
     let built;
-    let g = match graph {
-        Some(g) => g,
+    let g = match model {
+        Some(m) => m,
         None => {
-            built = crate::drc::CopperGraph::build(board);
+            built = crate::drc::CopperModel::build(board);
             &built
         }
     };
