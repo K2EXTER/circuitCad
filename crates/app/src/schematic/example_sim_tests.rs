@@ -1037,3 +1037,23 @@ fn fault_simulation_reaches_parts_on_the_other_sheets() {
     e.analyze_fault_scan();
     assert!(e.fault_scan.iter().any(|f| f.part == "R1"), "the scan includes the other sheet's parts");
 }
+
+/// The currents of a DC analysis fill what the table of requirements leaves empty (the "解析から入れる" button of the window).
+#[test]
+fn the_dc_currents_of_the_buck_sample_suggest_what_the_table_lacks() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "buck_converter.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    assert!(!e.sch.requirements.is_empty(), "the sample carries a table");
+    for r in &mut e.sch.requirements.net_rules {
+        r.current = 0.0;
+    }
+    let currents = e.dc_net_currents().expect("the buck sample has a DC operating point");
+    let found = design_spec::suggest_from_currents(&e.sch.requirements, &currents);
+    assert!(found.iter().any(|s| matches!(s.fill, design_spec::Fill::RowCurrent { .. })), "{found:?}");
+    for s in &found {
+        s.apply(&mut e.sch.requirements);
+    }
+    assert!(e.sch.requirements.net_rules.iter().any(|r| r.current > 0.0));
+    assert!(design_spec::suggest_from_currents(&e.sch.requirements, &currents).is_empty(), "nothing is left to suggest");
+}

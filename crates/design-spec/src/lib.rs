@@ -152,3 +152,128 @@ mod tests {
         assert_eq!(back, spec);
     }
 }
+
+/// A current found by an analysis, and what to put in the table because of it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Fill {
+    /// The row `row` carries no current yet: it gets the biggest of its nets'.
+    RowCurrent { row: usize, amps: f64 },
+    /// A net that carries a big current and is in no row: a row of its own.
+    NewRow { net: String, amps: f64 },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Suggestion {
+    /// One sentence for the person who decides (what, and why).
+    pub text: String,
+    pub fill: Fill,
+}
+
+/// The nets with no row that carry at least this current (A) get a row of their own.
+pub const BIG_CURRENT: f64 = 0.1;
+/// The current (A) from which a net of a suggested row is of the role `power`.
+pub const POWER_CURRENT: f64 = 0.5;
+/// A current below this (A) is noise of the analysis.
+const MIN_CURRENT: f64 = 1e-3;
+
+/// A current rounded up to two figures (0.234 -> 0.24 A): what is written in the table is a round number that is not below the current.
+pub fn round_up_amps(a: f64) -> f64 {
+    if a <= 0.0 {
+        return 0.0;
+    }
+    let scale = 10f64.powf(a.log10().floor() - 1.0);
+    ((a / scale - 1e-9).ceil() * scale * 1e6).round() / 1e6
+}
+
+/// What the currents of an analysis (net name, amperes; the sign does not matter) say about the table: rows that state no current get
+/// the biggest current of their nets, and the nets that carry `BIG_CURRENT` or more and are in no row get a row (role `power` from
+/// `POWER_CURRENT`). Only what is empty is filled: a current the table states is the person's.
+pub fn suggest_from_currents(spec: &DesignSpec, currents: &[(String, f64)]) -> Vec<Suggestion> {
+    let mut out = vec![];
+    let amps = |n: &str| currents.iter().find(|(m, _)| m == n).map_or(0.0, |(_, a)| a.abs());
+    for (k, r) in spec.net_rules.iter().enumerate() {
+        // (a switching node carries a current that only exists in time: the DC operating point says nothing about it)
+        if r.current > 0.0 || r.role == "switching" {
+            continue;
+        }
+        let best = currents.iter().filter(|(n, _)| r.nets.iter().any(|p| matches_name(p, n))).map(|(n, a)| (n.as_str(), a.abs())).max_by(|a, b| a.1.total_cmp(&b.1));
+        if let Some((net, a)) = best.filter(|b| b.1 >= MIN_CURRENT) {
+            let up = round_up_amps(a);
+            out.push(Suggestion { text: format!("「{}」の電流を {up} A にする (解析で {net} に {a:.3} A)", r.name), fill: Fill::RowCurrent { row: k, amps: up } });
+        }
+    }
+    let mut big: Vec<(&str, f64)> = currents.iter().map(|(n, _)| (n.as_str(), amps(n))).filter(|(n, a)| *a >= BIG_CURRENT && !spec.net_rules.iter().any(|r| r.nets.iter().any(|p| matches_name(p, n)))).collect();
+    big.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(b.0)));
+    big.dedup_by(|a, b| a.0 == b.0);
+    for (net, a) in big {
+        let up = round_up_amps(a);
+        out.push(Suggestion { text: format!("ネット {net} の行を足す: 電流 {up} A (解析で {a:.3} A。どの行にも入っていません)"), fill: Fill::NewRow { net: net.to_string(), amps: up } });
+    }
+    out
+}
+
+impl Suggestion {
+    /// Write it into the table. A row that was found by its number is looked up again by the table's size (the table may have changed).
+    pub fn apply(&self, spec: &mut DesignSpec) {
+        match &self.fill {
+            Fill::RowCurrent { row, amps } => {
+                if let Some(r) = spec.net_rules.get_mut(*row).filter(|r| r.current <= 0.0) {
+                    r.current = *amps;
+                }
+            }
+            Fill::NewRow { net, amps } => {
+                if !spec.net_rules.iter().any(|r| r.nets.iter().any(|p| matches_name(p, net))) {
+                    let role = if *amps >= POWER_CURRENT { "power" } else { "" };
+                    spec.net_rules.push(NetRule { name: format!("{net} (解析)"), nets: vec![net.clone()], role: role.into(), current: *amps, note: "DC解析の電流から".into(), ..Default::default() });
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod suggest_tests {
+    use super::*;
+
+    #[test]
+    fn a_current_is_rounded_up_to_two_figures() {
+        assert_eq!(round_up_amps(0.234), 0.24);
+        assert_eq!(round_up_amps(1.0), 1.0);
+        assert_eq!(round_up_amps(1.033), 1.1);
+        assert_eq!(round_up_amps(0.0), 0.0);
+    }
+
+    #[test]
+    fn the_empty_current_of_a_row_and_the_big_nets_without_a_row_are_suggested() {
+        let spec = DesignSpec {
+            net_rules: vec![
+                NetRule { name: "電源".into(), nets: vec!["VIN".into(), "VOUT".into()], ..Default::default() },
+                NetRule { name: "済".into(), nets: vec!["X".into()], current: 2.0, ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        // a switching row is not suggested a DC current
+        let mut spec = spec;
+        spec.net_rules.push(NetRule { name: "SW".into(), nets: vec!["SW".into()], role: "switching".into(), ..Default::default() });
+        let currents: Vec<(String, f64)> = [("SW", 0.3), ("VIN", 0.234), ("VOUT", -0.5), ("X", 5.0), ("BAT", 1.2), ("SIG", 0.002), ("SMALL", 0.0001)].iter().map(|(n, a)| (n.to_string(), *a)).collect();
+        let s = suggest_from_currents(&spec, &currents);
+        assert_eq!(s.len(), 2, "{s:?}");
+        assert_eq!(s[0].fill, Fill::RowCurrent { row: 0, amps: 0.5 });
+        assert_eq!(s[1].fill, Fill::NewRow { net: "BAT".into(), amps: 1.2 });
+        let mut t = spec.clone();
+        for x in &s {
+            x.apply(&mut t);
+        }
+        assert_eq!(t.net_rules[0].current, 0.5);
+        assert_eq!(t.net_rules[1].current, 2.0, "a stated current is left alone");
+        assert_eq!(t.net_rules.iter().find(|r| r.nets == ["BAT"]).unwrap().role, "power");
+        assert_eq!(t.net_rules[2].current, 0.0, "a switching row gets no DC current");
+        // applying again changes nothing
+        let again = t.clone();
+        for x in &s {
+            x.apply(&mut t);
+        }
+        assert_eq!(t, again);
+        assert!(suggest_from_currents(&t, &currents).is_empty());
+    }
+}

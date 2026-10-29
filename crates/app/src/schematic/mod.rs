@@ -200,6 +200,10 @@ pub struct SchEditor {
     req_open: bool,
     req_buf: requirements::Buffers,
     req_problems: Vec<String>,
+    /// What the last DC analysis suggests for the table (ticked or not), the currents it came from, and a sentence about the run.
+    req_suggest: Vec<(bool, design_spec::Suggestion)>,
+    req_currents: Vec<(String, f64)>,
+    req_suggest_msg: String,
     wiz_kind: usize,
     wiz_in: Vec<String>,
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
@@ -485,6 +489,9 @@ impl Default for SchEditor {
             req_open: false,
             req_buf: Default::default(),
             req_problems: vec![],
+            req_suggest: vec![],
+            req_currents: vec![],
+            req_suggest_msg: String::new(),
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,

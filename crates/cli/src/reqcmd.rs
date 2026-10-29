@@ -48,12 +48,15 @@ impl Session {
         })))
     }
 
-    /// `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [links=A-B:mm,..] [note TEXT]`;
+    /// `req suggest [apply=1]` (what the DC analysis says about the currents); `req` (list); `req net NAME [nets=A,B,GN*] [role=] [width=mm] [clearance=mm] [current=A] [links=A-B:mm,..] [note TEXT]`;
     /// `req group NAME [parts=R1,R2] [max=mm] [note TEXT]`; `req apart NAME [a=..] [b=..] [min=mm] [note TEXT]`; add `remove=1` to delete a row.
     /// A row that exists is changed only in what is given; a new row needs its names.
     pub fn req(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
         let Some(kind) = pos.first().map(|s| s.to_ascii_lowercase()) else { return self.req_list() };
+        if kind == "suggest" {
+            return self.req_suggest(opt(&kv, "apply") == Some("1"));
+        }
         let name = pos.get(1).ok_or("req net|group|apart NAME ...")?.clone();
         let remove = opt(&kv, "remove") == Some("1");
         let text = note(&pos, &kv);
@@ -146,6 +149,22 @@ impl Session {
             other => return Err(format!("req {other}: use net, group or apart")),
         }
         self.req_list()
+    }
+
+    /// `req suggest [apply=1]`: what the DC analysis says about the table (the current of each net): the empty currents of the rows, and
+    /// the big nets that have no row. `apply=1` writes them into the table (what the table states is left alone).
+    fn req_suggest(&mut self, apply: bool) -> Res {
+        let c = self.circuit().map_err(|e| format!("req suggest needs a circuit that can be analysed: {e}"))?;
+        let dc = sim_core::dc_op(&c).map_err(|e| format!("DC analysis failed: {e}"))?;
+        let currents = sim_core::net_currents(&c, &dc);
+        let found = design_spec::suggest_from_currents(&self.sch.requirements, &currents);
+        let list: Vec<Value> = found.iter().map(|s| json!({"text": s.text, "row": match &s.fill { design_spec::Fill::RowCurrent { row, .. } => json!(row), _ => Value::Null }, "net": match &s.fill { design_spec::Fill::NewRow { net, .. } => json!(net), _ => Value::Null }, "amps": match &s.fill { design_spec::Fill::RowCurrent { amps, .. } | design_spec::Fill::NewRow { amps, .. } => *amps }})).collect();
+        if apply {
+            for s in &found {
+                s.apply(&mut self.sch.requirements);
+            }
+        }
+        Ok(obj(json!({"suggestions": list, "applied": apply, "count": found.len()})))
     }
 
     /// `board req`: the board's groups and distances checked against the placement.

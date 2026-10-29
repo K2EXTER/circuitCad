@@ -1093,3 +1093,24 @@ fn a_wire_between_two_parts_gets_its_width_from_the_table() {
     assert_eq!(status["unrouted"], 0, "{status}");
     assert_eq!(status["drc_violations"], 0, "{status}");
 }
+
+#[test]
+fn the_dc_currents_fill_the_empty_currents_of_the_table() {
+    let (a, ok) = run("new\nadd V 12 as=V1\nadd R 10 as=R1\nadd R 4.7 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\n\
+        req net 電源 nets=VIN width=0.5\n\
+        req net 済み nets=GND current=3\n\
+        req suggest\nreq suggest apply=1\nreq\nreq suggest\n");
+    assert!(ok, "{a:?}");
+    let sugg: Vec<&Value> = a.iter().filter(|v| v.get("suggestions").is_some()).collect();
+    let first = sugg[0]["suggestions"].as_array().unwrap();
+    // the current of the 電源 row (0.816 A -> 0.82), and a row for MID (the GND row states its own current)
+    assert!(first.iter().any(|s| s["row"] == 0 && (s["amps"].as_f64().unwrap() - 0.82).abs() < 1e-9), "{first:?}");
+    assert!(first.iter().any(|s| s["net"] == "MID"), "{first:?}");
+    assert!(first.iter().all(|s| s["net"] != "GND"), "a stated current is left alone: {first:?}");
+    assert_eq!(sugg[1]["applied"], true);
+    let table = a.iter().rev().find(|v| v.get("net_rules").is_some()).unwrap();
+    assert_eq!(table["net_rules"][0]["current"], 0.82);
+    assert_eq!(table["net_rules"][1]["current"], 3.0);
+    assert_eq!(table["net_rules"].as_array().unwrap().len(), 3, "a row was added for MID");
+    assert_eq!(sugg.last().unwrap()["count"], 0, "nothing is left to suggest after applying");
+}

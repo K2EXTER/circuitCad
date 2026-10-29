@@ -34,6 +34,21 @@ impl SchEditor {
         self.req_problems = self.sch.requirement_problems();
     }
 
+    /// Run the DC analysis and make the suggestions for the table from the currents of the nets.
+    pub fn requirements_from_dc(&mut self) {
+        match self.dc_net_currents() {
+            Ok(c) => {
+                self.req_suggest = design_spec::suggest_from_currents(&self.sch.requirements, &c).into_iter().map(|s| (true, s)).collect();
+                self.req_suggest_msg = if self.req_suggest.is_empty() { "表に足せる電流は、ありませんでした (入れる電流は、すべて書いてあります)".into() } else { format!("{} 件の提案があります", self.req_suggest.len()) };
+                self.req_currents = c;
+            }
+            Err(e) => {
+                self.req_suggest.clear();
+                self.req_suggest_msg = format!("調べられませんでした: {e}");
+            }
+        }
+    }
+
     pub fn requirements_window(&mut self, ctx: &egui::Context) {
         if !self.req_open {
             return;
@@ -44,6 +59,7 @@ impl SchEditor {
         }
         let mut open = true;
         let mut changed = false;
+        let (mut run_dc, mut apply_now) = (false, false);
         egui::Window::new("設計の要件").open(&mut open).default_size([1040.0, 520.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
             ui.label("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。")
                 .on_hover_text("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます");
@@ -191,6 +207,22 @@ impl SchEditor {
                     changed = true;
                 }
             });
+            let (suggest, suggest_msg) = (&mut self.req_suggest, &self.req_suggest_msg);
+            egui::CollapsingHeader::new("解析から入れる (?)").id_salt("req_from_dc").default_open(!suggest.is_empty()).show(ui, |ui| {
+                ui.label("DC解析で、各ネットに流れる電流を調べて、表に入れます。").on_hover_text("電流が空の行には、その行のネットのうち最大の電流 (2桁に切り上げ) を提案します。どの行にも入っていないネットで 0.1 A 以上流れるものは、行の追加を提案します。表に書いてある電流は、そのままです。チェックを外したものは入れません");
+                if ui.button("DC解析の電流を調べる").on_hover_text("いまの回路を DC 解析して、ネットごとの電流から、表への提案を作ります。回路が解析できないときは、理由が出ます").clicked() {
+                    run_dc = true;
+                }
+                if !suggest_msg.is_empty() {
+                    ui.label(suggest_msg);
+                }
+                for (on, s) in suggest.iter_mut() {
+                    ui.checkbox(on, &s.text);
+                }
+                if suggest.iter().any(|(on, _)| *on) && ui.button("選んだものを表に入れる").on_hover_text("チェックの付いた提案を、上の表に書き込みます。あとから自由に直せます").clicked() {
+                    apply_now = true;
+                }
+            });
             egui::CollapsingHeader::new(format!("離す組 ({}) (?)", spec.apart.len())).id_salt("req_apart").default_open(true).show(ui, |ui| {
                 ui.label("降圧のスイッチングノードと、基準・ADC・検出線のように、離しておくものどうしを書きます。").on_hover_text("書くのは部品番号か、ネット名です (部品番号が先に見つかれば部品、なければネットの全パッド。末尾の * も使えます)。基板の画面で、いちばん近い2つのパッドの距離が下限より近くないかを調べます");
                 let mut remove = None;
@@ -237,6 +269,20 @@ impl SchEditor {
                 }
             });
         });
+        if run_dc {
+            self.requirements_from_dc();
+        }
+        if apply_now {
+            for (on, s) in std::mem::take(&mut self.req_suggest) {
+                if on {
+                    s.apply(&mut self.sch.requirements);
+                }
+            }
+            self.req_buf.clear();
+            self.req_suggest = design_spec::suggest_from_currents(&self.sch.requirements, &self.req_currents).into_iter().map(|s| (true, s)).collect();
+            self.req_suggest_msg = "表に入れました".into();
+            changed = true;
+        }
         if changed {
             self.req_problems = self.sch.requirement_problems();
         }
