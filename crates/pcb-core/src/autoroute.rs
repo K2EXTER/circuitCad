@@ -160,24 +160,21 @@ fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> 
             continue;
         }
         let mut o = opt.clone();
-        let mut role = Role::None;
+        let (mut order, mut asks) = (Role::Power.priority(), false);
         if let Some(c) = board.class_of(&n) {
             (o.track_width, o.via_diameter, o.via_drill) = (c.track_width, c.via_diameter, c.via_drill);
             o.clearance = (c.clearance > board.rules.min_clearance + 1e-9).then_some(c.clearance);
-            role = c.role;
+            (order, asks) = (c.route_order(), c.is_special());
+            // no vias when the table says so (a sensing line says so by its role: it stays on the layer of its pads)
+            o.no_vias |= c.forbids_vias();
         }
         if let Some(amps) = board.net_currents.get(&n) {
             let need = crate::current::round_up_width(crate::current::width_for_current(*amps, &Default::default()));
             o.track_width = o.track_width.max(need);
         }
-        // a sensing line stays on the layer of its pads
-        if role == Role::Sense {
-            o.no_vias = true;
-        }
-        let differs = (o.track_width - opt.track_width).abs() > 1e-9 || (o.via_diameter - opt.via_diameter).abs() > 1e-9 || (o.via_drill - opt.via_drill).abs() > 1e-9 || o.clearance.is_some() || role != Role::None;
+        let differs = (o.track_width - opt.track_width).abs() > 1e-9 || (o.via_diameter - opt.via_diameter).abs() > 1e-9 || (o.via_drill - opt.via_drill).abs() > 1e-9 || o.clearance.is_some() || asks;
         if differs {
-            // a wide net of no role goes with the big currents
-            let order = if role == Role::None { Role::Power.priority() } else { role.priority() };
+            // a wide net of no role goes with the big currents (`route_order`)
             special.push((order, n, o));
         }
     }

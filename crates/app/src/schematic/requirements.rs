@@ -205,6 +205,50 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
+                egui::CollapsingHeader::new("詳細: 配線の性質 (順番・ビア) (?)").id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty())).show(ui, |ui| {
+                    ui.label("役割がきめている「配線の順番」と「ビアを使うか」を、行ごとに直します。").on_hover_text("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます");
+                    egui::Grid::new("req_props_grid").num_columns(3).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
+                        for h in ["行", "配線の順番 (小さいほど先)", "ビア"] {
+                            ui.strong(h);
+                        }
+                        ui.end_row();
+                        for (k, r) in spec.net_rules.iter_mut().enumerate() {
+                            ui.label(&r.name);
+                            let role = Role::parse(&r.role).unwrap_or(Role::None);
+                            let by_role = if role == Role::None { Role::Power.priority() } else { role.priority() };
+                            let shown = match r.order {
+                                None => format!("役割のとおり ({by_role})"),
+                                Some(o) => o.to_string(),
+                            };
+                            egui::ComboBox::from_id_salt(("prop_order", k)).selected_text(shown).width(150.0).show_ui(ui, |ui| {
+                                if ui.selectable_label(r.order.is_none(), format!("役割のとおり ({by_role})")).clicked() {
+                                    r.order = None;
+                                    changed = true;
+                                }
+                                for o in 0..=9u8 {
+                                    if ui.selectable_label(r.order == Some(o), o.to_string()).clicked() {
+                                        r.order = Some(o);
+                                        changed = true;
+                                    }
+                                }
+                            });
+                            let via_text = match r.vias.as_str() {
+                                "none" => "使わない",
+                                "allow" => "使ってよい",
+                                _ => if role == Role::Sense { "役割のとおり (使わない)" } else { "役割のとおり (使ってよい)" },
+                            };
+                            egui::ComboBox::from_id_salt(("prop_vias", k)).selected_text(via_text).width(190.0).show_ui(ui, |ui| {
+                                for (key, label) in [("", "役割のとおり"), ("none", "使わない"), ("allow", "使ってよい")] {
+                                    if ui.selectable_label(r.vias == key, label).clicked() {
+                                        r.vias = key.to_string();
+                                        changed = true;
+                                    }
+                                }
+                            });
+                            ui.end_row();
+                        }
+                    });
+                });
                 egui::CollapsingHeader::new("詳細: 部品間の線幅 (?)").id_salt("req_links").default_open(spec.net_rules.iter().any(|r| !r.links.is_empty())).show(ui, |ui| {
                     ui.label("上級者向け。ネットの中で、2つの部品の間の線だけ、別の幅にします。").on_hover_text("例: 電池(CB1)から降圧IC(U7)までは太く 0.6 mm、U7 から LDO(U4)までは細く 0.3 mm。自動配線は、ここに書いた2つの部品の間を先に、この幅で引き、ネットの残りをそのあとにつなぎます。幅 0 は、行の幅のままです");
                     for (k, r) in spec.net_rules.iter_mut().enumerate() {

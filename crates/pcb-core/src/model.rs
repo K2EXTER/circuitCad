@@ -409,6 +409,31 @@ pub struct NetClass {
     /// What the nets are for: it decides the order the router takes them in, and a sensing line gets no vias.
     #[serde(skip_serializing_if = "Role::is_none")]
     pub role: Role,
+    /// The place in the order of routing (small first, 0 to 9) when the table says so; None: the role decides (`route_order`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u8>,
+    /// Vias: Some(true) none are used, Some(false) they are allowed, None: the role decides (a sensing line gets none; `forbids_vias`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_vias: Option<bool>,
+}
+
+impl NetClass {
+    /// The place of these nets in the order of routing: what the table asked for, else the role's (a net of no role that is wide goes
+    /// with the big currents, so it takes the power place).
+    pub fn route_order(&self) -> u8 {
+        self.order.unwrap_or(if self.role == Role::None { Role::Power.priority() } else { self.role.priority() })
+    }
+
+    /// Whether the router may not use a via for these nets: what the table asked for, else the role's (a sensing line stays on the
+    /// layer of its pads).
+    pub fn forbids_vias(&self) -> bool {
+        self.no_vias.unwrap_or(self.role == Role::Sense)
+    }
+
+    /// Does the class ask the router for anything that is not plain (so that its nets are routed on their own, in their place)?
+    pub fn is_special(&self) -> bool {
+        self.role != Role::None || self.order.is_some() || self.no_vias.is_some()
+    }
 }
 
 /// The width (mm) of the wire between two parts on one net (from the schematic's table of requirements): the router makes this
@@ -486,7 +511,7 @@ impl Role {
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None }
     }
 }
 

@@ -36,6 +36,12 @@ pub struct NetRule {
     pub clearance: f64,
     /// Current (A) the nets carry; 0 = not stated.
     pub current: f64,
+    /// The place in the order of routing (0 first, up to 9) when it is not the role's; None: the role decides.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order: Option<u8>,
+    /// Vias: "none" (no vias), "allow" (vias even if the role says none), "" (the role decides).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub vias: String,
     /// Wires between two parts that have a width of their own (the router makes these connections first, with that width).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<LinkWidth>,

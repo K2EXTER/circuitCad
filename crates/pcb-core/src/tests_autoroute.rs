@@ -280,3 +280,57 @@ fn a_sensing_net_gets_no_vias_and_the_nets_go_in_the_order_of_their_roles() {
     assert_eq!(Role::parse("SENSE"), Some(Role::Sense));
     assert_eq!(Role::parse("nope"), None);
 }
+
+/// The role is a preset of properties: a row of the table can set the vias and the order itself, with no role or against the role.
+#[test]
+fn the_vias_and_the_order_of_a_net_can_be_set_apart_from_its_role() {
+    let wall = || {
+        let mut b = Board::new("t", 30.0, 20.0);
+        pad(&mut b, 5.0, 10.0, "A", false);
+        pad(&mut b, 25.0, 10.0, "A", false);
+        let mut p = Pad::new(Point::new(15.0, 10.0), PadShape::Rect { w: 1.0, h: 18.6 }, None, Side::Top);
+        p.net = "W".into();
+        b.pads.push(p);
+        b
+    };
+    let opt = RouteOptions { grid_ladder: false, ..Default::default() };
+    // no role, but "no vias": the net cannot cross the wall
+    let mut b = wall();
+    b.net_classes.push(NetClass { name: "s".into(), nets: vec!["A".into()], no_vias: Some(true), ..Default::default() });
+    let r = autoroute_sized(&mut b, &opt, None);
+    assert!(b.vias.is_empty() && r.failed.len() == 1, "{r:?}");
+    // the role says "sense" (no vias), the table says vias are allowed: it crosses
+    let mut b = wall();
+    b.net_classes.push(NetClass { name: "s".into(), nets: vec!["A".into()], role: Role::Sense, no_vias: Some(false), ..Default::default() });
+    let r = autoroute_sized(&mut b, &opt, None);
+    assert!(r.failed.is_empty() && !b.vias.is_empty(), "{r:?}");
+    // the plain defaults
+    let c = NetClass { role: Role::Sense, ..Default::default() };
+    assert!(c.forbids_vias() && c.route_order() == Role::Sense.priority() && c.is_special());
+    let c = NetClass { role: Role::Sense, order: Some(7), no_vias: Some(false), ..Default::default() };
+    assert!(!c.forbids_vias() && c.route_order() == 7);
+    let c = NetClass::default();
+    assert!(!c.forbids_vias() && !c.is_special() && c.route_order() == Role::Power.priority(), "a wide net of no role goes with the power");
+    assert!(NetClass { order: Some(3), ..Default::default() }.is_special(), "an order of its own makes the net routed in its place");
+}
+
+/// The table's rows carry the properties to the net class.
+#[test]
+fn a_row_of_the_table_sets_the_order_and_the_vias_of_the_class() {
+    let mut b = Board::new("t", 30.0, 20.0);
+    pad(&mut b, 5.0, 10.0, "A", false);
+    pad(&mut b, 25.0, 10.0, "A", false);
+    let rule = |role: &str, order: Option<u8>, vias: &str| design_spec::DesignSpec {
+        net_rules: vec![design_spec::NetRule { name: "検出".into(), nets: vec!["A".into()], role: role.into(), order, vias: vias.into(), ..Default::default() }],
+        ..Default::default()
+    };
+    crate::requirements::import_requirements(&mut b, &rule("sense", Some(12), "allow"));
+    let c = b.class_of("A").unwrap();
+    assert_eq!((c.role, c.order, c.no_vias), (Role::Sense, Some(9), Some(false)), "the order stops at 9");
+    crate::requirements::import_requirements(&mut b, &rule("sense", None, ""));
+    let c = b.class_of("A").unwrap();
+    assert_eq!((c.order, c.no_vias), (None, None), "no property: the role decides again");
+    crate::requirements::import_requirements(&mut b, &rule("", None, "none"));
+    assert_eq!(b.class_of("A").unwrap().no_vias, Some(true));
+}
+

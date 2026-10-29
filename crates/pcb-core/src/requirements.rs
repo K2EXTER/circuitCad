@@ -56,6 +56,13 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
         if let Some(r) = Role::parse(&rule.role) {
             c.role = r;
         }
+        // the properties the role would otherwise decide: the place in the order of routing, and whether a via may be used
+        c.order = rule.order.map(|o| o.min(9));
+        c.no_vias = match rule.vias.as_str() {
+            "none" => Some(true),
+            "allow" => Some(false),
+            _ => None,
+        };
         out.classes += 1;
         for l in rule.links.iter().filter(|l| l.width > 0.0) {
             for n in &nets {

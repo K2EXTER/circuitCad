@@ -1321,3 +1321,34 @@ board req
     assert_eq!(reps[2]["violations"], 0, "{}", reps[2]);
     assert_eq!(reps[2]["waived"][0]["reason"], "試作なので承知", "{}", reps[2]);
 }
+
+/// `req net … order= vias=`: the properties a role would set (the order of routing, vias) are set by the row itself and reach the class.
+#[test]
+fn a_row_sets_the_order_and_the_vias_apart_from_its_role() {
+    let (a, ok) = run("new
+add V 12 as=V1
+add R 10k as=R1
+add R 4.7k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+req net 検出 nets=MID role=sense reason=高インピーダンス
+req net 検出 order=7 vias=allow
+req
+board import
+board class
+req net 検出 order=role vias=role
+board import
+board class
+req net 検出 order=12
+");
+    assert!(!ok, "an order of 12 is refused");
+    let classes: Vec<&Value> = a.iter().filter(|v| v["classes"].is_array()).collect();
+    assert_eq!(classes.len(), 2, "{a:?}");
+    let c = &classes[0]["classes"][0];
+    assert_eq!((c["role"].as_str(), c["order"].as_u64(), c["no_vias"].as_bool()), (Some("sense"), Some(7), Some(false)), "{c}");
+    let c = &classes[1]["classes"][0];
+    assert_eq!((c["order"].as_u64(), c["no_vias"].as_bool()), (Some(2), Some(true)), "the role decides again: {c}");
+    let table = a.iter().find(|v| v.get("net_rules").is_some_and(|n| n[0]["order"] == 7)).expect("the table keeps the order");
+    assert_eq!(table["net_rules"][0]["vias"], "allow");
+}

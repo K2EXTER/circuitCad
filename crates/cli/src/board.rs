@@ -699,7 +699,7 @@ impl Session {
                 let (pos, kv) = options(rest);
                 let board = self.board_mut()?;
                 let Some(name) = pos.first() else {
-                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name()})).collect();
+                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias()})).collect();
                     return Ok(obj(json!({"classes": list})));
                 };
                 if opt(&kv, "remove") == Some("1") {
@@ -740,6 +740,20 @@ impl Session {
                 if let Some(r) = opt(&kv, "role") {
                     board.net_classes[k].role = pcb_core::model::Role::parse(r).ok_or_else(|| format!("role={r}: use power, switching, sense, analog, logic or none"))?;
                 }
+                if let Some(v) = opt(&kv, "order") {
+                    board.net_classes[k].order = match v {
+                        "role" | "auto" => None,
+                        _ => Some(v.parse::<u8>().ok().filter(|n| *n <= 9).ok_or_else(|| format!("order={v}: a number from 0 to 9, or `role`"))?),
+                    };
+                }
+                if let Some(v) = opt(&kv, "vias") {
+                    board.net_classes[k].no_vias = match v {
+                        "none" => Some(true),
+                        "allow" => Some(false),
+                        "role" => None,
+                        _ => return Err(format!("vias={v}: use none, allow or role")),
+                    };
+                }
                 if let Some(n) = opt(&kv, "nets") {
                     let nets: Vec<String> = n.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
                     for (j, other) in board.net_classes.iter_mut().enumerate() {
@@ -750,7 +764,7 @@ impl Session {
                     board.net_classes[k].nets = nets;
                 }
                 let c = &board.net_classes[k];
-                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name()})))
+                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias()})))
             }
             "labels" => {
                 // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or
