@@ -194,6 +194,18 @@ pub fn check(board: &Board) -> RequirementsReport {
     rep
 }
 
+/// The distances to keep, for the placement: the references of the parts on each side (a name is a part, or the parts that have a pad on
+/// the net) and the least distance. A row with an empty side, or that says 0, is left out.
+pub fn apart_on_board(board: &Board) -> Vec<(Vec<String>, Vec<String>, f64)> {
+    let side = |names: &[String]| -> Vec<String> {
+        let mut v: Vec<String> = names.iter().flat_map(|n| pads_of(board, n)).map(|p| p.refdes.clone()).collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+    board.keep_apart.iter().map(|a| (side(&a.a), side(&a.b), a.min_dist)).filter(|(a, b, d)| *d > 0.0 && !a.is_empty() && !b.is_empty()).collect()
+}
+
 /// The groups of the board that name at least two parts, for the placement: each as the list of references that are on the board.
 pub fn groups_on_board(board: &Board) -> Vec<(&PlaceGroup, Vec<String>)> {
     board
