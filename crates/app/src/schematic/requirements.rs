@@ -3,7 +3,7 @@
 //! (net classes, currents, placement groups, distances); the board editor checks the placement against it.
 
 use super::*;
-use design_spec::{Bypass, KeepApart, LinkWidth, NetRule, PlaceGroup, Waiver, WAIVER_KINDS};
+use design_spec::{Bypass, KeepApart, LinkWidth, Measure, NetRule, PlaceGroup, Waiver, MEASURES, WAIVER_KINDS};
 use pcb_core::model::Role;
 use std::collections::HashMap;
 
@@ -395,6 +395,79 @@ impl SchEditor {
                 }
                 if ui.button("＋ 離す組を足す").on_hover_text("新しい行を足します").clicked() {
                     spec.apart.push(KeepApart { name: format!("離す{}", spec.apart.len() + 1), min_dist: 10.0, ..Default::default() });
+                    buf.clear();
+                    changed = true;
+                }
+            });
+            egui::CollapsingHeader::new(format!("道筋の測定 ({}) (?)", spec.measures.len())).id_salt("req_measures").default_open(!spec.measures.is_empty()).show(ui, |ui| {
+                ui.label("配線した銅の道筋 (トラックとビア) の長さ・ビア数・分かれ目を測って、上限か下限を決めます。").on_hover_text("基板に配線したあとの点検です。測るのは、2つのパッドの間をトラックとビアでたどった道筋で、ベタは通りません (ベタだけでつながっていると、道筋なしになります)。
+・長さ: 道筋の長さ (mm)
+・ビアの数: 道筋のビアの数 (検出線は 0 に)
+・分かれ目: 1つ目のパッドから、2つ目・3つ目のパッドへ行く道筋が、一緒に走る長さ (mm)。電流の線と電圧を測る線が、パッドの根元で分かれているかを見るときに (ケルビン接続: 0.5 mm 以下など)
+パッドは「部品.ピン」の形で書きます (例: RS1.1)");
+                let mut remove = None;
+                egui::Grid::new("req_measures_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
+                    for h in ["名前", "測るもの", "パッド (, 区切り)", "上限 / 下限", "理由", ""] {
+                        ui.strong(h);
+                    }
+                    ui.end_row();
+                    for (k, m) in spec.measures.iter_mut().enumerate() {
+                        if let Some(t) = text_cell(ui, buf, (5, k, 0), &m.name, 120.0, "この測定の名前") {
+                            m.name = t;
+                            changed = true;
+                        }
+                        let label = MEASURES.iter().find(|(key, ..)| *key == m.what).map_or("(選ぶ)", |(_, l, ..)| *l);
+                        egui::ComboBox::from_id_salt(("measure_what", k)).selected_text(label).width(150.0).show_ui(ui, |ui| {
+                            for (key, l, unit, need) in MEASURES {
+                                if ui.selectable_label(m.what == *key, format!("{l} ({unit})")).on_hover_text(format!("パッドが {need} 個要ります")).clicked() {
+                                    m.what = (*key).to_string();
+                                    changed = true;
+                                }
+                            }
+                        });
+                        let need = m.kind().map_or(2, |k| k.2);
+                        let hint = if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
+                        if let Some(t) = text_cell(ui, buf, (5, k, 1), &m.pads.join(","), 230.0, hint) {
+                            m.pads = list(&t);
+                            changed = true;
+                        }
+                        ui.horizontal(|ui| {
+                            let mut min = m.is_min();
+                            egui::ComboBox::from_id_salt(("measure_op", k)).selected_text(if min { "以上" } else { "以下" }).width(60.0).show_ui(ui, |ui| {
+                                if ui.selectable_label(!min, "以下 (上限)").clicked() {
+                                    min = false;
+                                }
+                                if ui.selectable_label(min, "以上 (下限)").clicked() {
+                                    min = true;
+                                }
+                            });
+                            let op = if min { "min" } else { "max" };
+                            if m.op != op {
+                                m.op = op.to_string();
+                                changed = true;
+                            }
+                            let before = m.limit;
+                            let unit = m.kind().map_or("", |k| if k.1 == "個" { " 個" } else { " mm" });
+                            number_cell(ui, &mut m.limit, unit, 0.1, "この値を超えたら (または下回ったら) 指摘します");
+                            changed |= m.limit != before;
+                        });
+                        if let Some(t) = reason_cell(ui, buf, (5, k, 2), &m.note, 320.0, "なぜこの限度か (例: 電流の線と電圧を測る線は、パッドの根元で分けるため)") {
+                            m.note = t;
+                            changed = true;
+                        }
+                        if ui.button("削除").on_hover_text("この行を消します").clicked() {
+                            remove = Some(k);
+                        }
+                        ui.end_row();
+                    }
+                });
+                if let Some(k) = remove {
+                    spec.measures.remove(k);
+                    buf.clear();
+                    changed = true;
+                }
+                if ui.button("＋ 測定を足す").on_hover_text("新しい行を足します").clicked() {
+                    spec.measures.push(Measure { name: format!("測定{}", spec.measures.len() + 1), what: "length".into(), op: "max".into(), limit: 10.0, ..Default::default() });
                     buf.clear();
                     changed = true;
                 }

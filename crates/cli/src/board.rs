@@ -74,6 +74,31 @@ impl Session {
                     .collect();
                 Ok(obj(json!({"dry": dry, "swapped": plans, "locked": r.locked})))
             }
+            "path" | "fork" => {
+                let sub = sub.to_ascii_lowercase();
+                // board path A.1 B.1: the way along the copper from pad A to pad B (tracks and vias only, a pour is not walked)
+                // board fork FROM.1 A.1 B.1: how far the ways from one pad to two others run together before they part
+                let (pos, _) = options(rest);
+                let pad = |k: usize| -> Result<pcb_core::drc::PadRef, String> {
+                    pos.get(k).and_then(|s| pcb_core::drc::PadRef::parse(s)).ok_or_else(|| "pads are written PART.PIN, e.g. RS1.1".to_string())
+                };
+                let board = self.board_mut()?;
+                let g = pcb_core::drc::CopperGraph::build(board);
+                let r1 = |x: f64| (x * 1000.0).round() / 1000.0;
+                if sub.as_str() == "path" {
+                    let (a, b) = (pad(0)?, pad(1)?);
+                    match g.path(&a, &b) {
+                        Some(p) => Ok(obj(json!({"from": a.to_string(), "to": b.to_string(), "length_mm": r1(p.length), "vias": p.vias, "layers": p.layers.iter().map(|s| s.label()).collect::<Vec<_>>(), "points": p.points.len()}))),
+                        None => Ok(obj(json!({"from": a.to_string(), "to": b.to_string(), "path": null, "note": "no tracks and vias join these pads (a pour is not walked, and a pad that is not on the board has no path)"}))),
+                    }
+                } else {
+                    let (from, a, b) = (pad(0)?, pad(1)?, pad(2)?);
+                    match g.fork(&from, &a, &b) {
+                        Some(f) => Ok(obj(json!({"from": from.to_string(), "a": a.to_string(), "b": b.to_string(), "run_together_mm": r1(f.length), "at": [r1(f.at.x), r1(f.at.y)], "a_length_mm": r1(f.a_length), "b_length_mm": r1(f.b_length)}))),
+                        None => Ok(obj(json!({"from": from.to_string(), "fork": null, "note": "one of the pads cannot be reached along tracks and vias"}))),
+                    }
+                }
+            }
             "backannotate" => {
                 // board backannotate: the pin trades of `board swap` (kept in the board) go into the schematic, so that the drawing says what
                 // the board says. On an error nothing is changed.

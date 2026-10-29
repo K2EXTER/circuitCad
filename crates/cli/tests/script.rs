@@ -1283,3 +1283,41 @@ req
     let last_table = a.iter().rev().find(|v| v.get("waivers").is_some()).unwrap();
     assert_eq!(last_table["waivers"].as_array().map(|l| l.len()), Some(0), "removed: {last_table}");
 }
+
+/// `req measure`: a limit on the copper of a connection (length, vias, where ways part) is measured on the routed board; a pad pair with no
+/// copper is `missing`, and a finding can be accepted like the others.
+#[test]
+fn a_measure_of_the_copper_is_checked_on_the_routed_board() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+req measure 短い what=length pads=R1.2,D1.A max=0.01 reason=テスト
+req measure 道あり what=length pads=R1.2,D1.A max=1000 reason=テスト
+req measure ビア what=vias pads=R1.2,D1.A max=0 reason=ビアなし
+board import
+board req
+board autoplace
+board route
+board req
+req waive measure 短い reason=試作なので承知
+board import
+board req
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let reps: Vec<&Value> = a.iter().filter(|v| v.get("findings").is_some()).collect();
+    assert_eq!(reps.len(), 3, "{a:?}");
+    // before routing there is no copper between the pads: all three are missing, none is wrong
+    assert_eq!(reps[0]["violations"], 0, "{}", reps[0]);
+    assert_eq!(reps[0]["missing"].as_array().map(|l| l.len()), Some(3), "{}", reps[0]);
+    // routed: the 0.01 mm limit is broken, the other two hold
+    assert_eq!(reps[1]["violations"], 1, "{}", reps[1]);
+    assert_eq!((reps[1]["findings"][0]["kind"].as_str(), reps[1]["findings"][0]["name"].as_str()), (Some("measure"), Some("短い")));
+    // accepted: not counted, listed with its reason
+    assert_eq!(reps[2]["violations"], 0, "{}", reps[2]);
+    assert_eq!(reps[2]["waived"][0]["reason"], "試作なので承知", "{}", reps[2]);
+}

@@ -1,0 +1,487 @@
+//! The copper path between two pads: which tracks and vias one follows to get from one to the other, how long it is, how many vias it
+//! passes and on which layers it runs. The building block of the checks that look at a connection and not only at a net (a sense wire that
+//! leaves its pad on its own, a track without vias, a connection of at most so many mm).
+//!
+//! Only tracks, vias and pads count; a pour is not walked (two pads that only a pour joins have no path). A track is cut where another
+//! track's end, a pad or a via touches it, so a branch is a point where paths part. When copper makes a ring the shortest way is taken.
+//! Two tracks that cross in the middle with no end on the other are not joined here (the DRC's `connectivity` joins them).
+
+use super::*;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
+
+/// A pad by part and pin ("RS1.1").
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PadRef {
+    pub refdes: String,
+    pub pin: String,
+}
+
+impl PadRef {
+    /// "RS1.1" -> part RS1, pin 1 (the last dot divides, so a part name may hold one).
+    pub fn parse(text: &str) -> Option<PadRef> {
+        let (r, p) = text.trim().rsplit_once('.')?;
+        (!r.is_empty() && !p.is_empty()).then(|| PadRef { refdes: r.to_string(), pin: p.to_string() })
+    }
+}
+
+impl std::fmt::Display for PadRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.refdes, self.pin)
+    }
+}
+
+/// The way along the copper from one pad to another.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CopperPath {
+    /// Length (mm) along the tracks (inside a pad or a via the way costs nothing).
+    pub length: f64,
+    /// How many vias it passes (a through-hole pad that changes the layer is not a via).
+    pub vias: usize,
+    /// The layers it runs on, in order, one entry for each change.
+    pub layers: Vec<Side>,
+    /// The points of the way, layer by layer, from the first pad to the last.
+    pub points: Vec<(Side, Point)>,
+}
+
+/// Where the ways from one pad to two others part.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fork {
+    /// How far (mm) the two ways run together from the pad before they part (0: they part at the pad).
+    pub length: f64,
+    /// Where they part.
+    pub at: Point,
+    /// The lengths (mm) of the two ways.
+    pub a_length: f64,
+    pub b_length: f64,
+}
+
+struct Edge {
+    to: usize,
+    /// In millionths of a mm (a whole number, so that the search has no rounding to worry about).
+    cost: u64,
+    via: bool,
+}
+
+struct TrackInfo {
+    layer: usize,
+    a: Point,
+    b: Point,
+    width: f64,
+    /// The places where something joins the track: (position along it from 0 to 1, the node there).
+    marks: Vec<(f64, usize)>,
+}
+
+/// The copper of a board as a graph of points, built once for many questions.
+pub struct CopperGraph {
+    layers: Vec<Side>,
+    nodes: Vec<(Side, Point)>,
+    adj: Vec<Vec<Edge>>,
+    pads: HashMap<PadRef, Vec<usize>>,
+}
+
+const SCALE: f64 = 1e6;
+
+fn micro(mm: f64) -> u64 {
+    (mm * SCALE).round().max(0.0) as u64
+}
+
+struct Builder<'a> {
+    board: &'a Board,
+    g: CopperGraph,
+    tracks: Vec<TrackInfo>,
+    /// Nodes made for a position on a track (one for each place, whoever asks).
+    at: HashMap<(usize, i64, i64), usize>,
+}
+
+impl Builder<'_> {
+    fn new_node(&mut self, layer: usize, p: Point) -> usize {
+        self.g.nodes.push((self.g.layers[layer], p));
+        self.g.adj.push(vec![]);
+        self.g.nodes.len() - 1
+    }
+
+    fn node_at(&mut self, layer: usize, p: Point) -> usize {
+        let key = (layer, (p.x * 1e4).round() as i64, (p.y * 1e4).round() as i64);
+        if let Some(&n) = self.at.get(&key) {
+            return n;
+        }
+        let n = self.new_node(layer, p);
+        self.at.insert(key, n);
+        n
+    }
+
+    fn link(&mut self, a: usize, b: usize, mm: f64, via: bool) {
+        if a == b {
+            return;
+        }
+        let cost = micro(mm);
+        self.g.adj[a].push(Edge { to: b, cost, via });
+        self.g.adj[b].push(Edge { to: a, cost, via });
+    }
+
+    /// The node where `p` (a point near track `k`) joins it: the end if it is at the end, else a new cut.
+    fn split(&mut self, k: usize, p: Point) -> usize {
+        let (a, b, layer) = (self.tracks[k].a, self.tracks[k].b, self.tracks[k].layer);
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let l2 = dx * dx + dy * dy;
+        let t = if l2 == 0.0 { 0.0 } else { (((p.x - a.x) * dx + (p.y - a.y) * dy) / l2).clamp(0.0, 1.0) };
+        let q = Point::new(a.x + t * dx, a.y + t * dy);
+        let n = self.node_at(layer, q);
+        if !self.tracks[k].marks.iter().any(|&(_, m)| m == n) {
+            self.tracks[k].marks.push((t, n));
+        }
+        n
+    }
+}
+
+impl CopperGraph {
+    pub fn build(board: &Board) -> CopperGraph {
+        let layers = board.copper_layers();
+        let layer_of = |s: Side| layers.iter().position(|l| *l == s);
+        let mut bd = Builder { board, g: CopperGraph { layers: layers.clone(), nodes: vec![], adj: vec![], pads: HashMap::new() }, tracks: vec![], at: HashMap::new() };
+        // the tracks and their two ends
+        for t in &board.tracks {
+            let Some(layer) = layer_of(t.side) else { continue };
+            let (na, nb) = (bd.node_at(layer, t.a), bd.node_at(layer, t.b));
+            bd.tracks.push(TrackInfo { layer, a: t.a, b: t.b, width: t.width, marks: vec![(0.0, na), (1.0, nb)] });
+        }
+        let cap = |k: &TrackInfo| Geo::Cap { a: k.a, b: k.b, r: k.width / 2.0 };
+        let near = |a: (Point, Point, f64), b: (Point, Point, f64)| -> bool {
+            a.0.x.min(a.1.x) - a.2 <= b.0.x.max(b.1.x) + b.2
+                && b.0.x.min(b.1.x) - b.2 <= a.0.x.max(a.1.x) + a.2
+                && a.0.y.min(a.1.y) - a.2 <= b.0.y.max(b.1.y) + b.2
+                && b.0.y.min(b.1.y) - b.2 <= a.0.y.max(a.1.y) + a.2
+        };
+        // an end of one track on another track of the same layer: a branch
+        let n_tracks = bd.tracks.len();
+        for i in 0..n_tracks {
+            for j in (i + 1)..n_tracks {
+                if bd.tracks[i].layer != bd.tracks[j].layer {
+                    continue;
+                }
+                let (ti, tj) = (&bd.tracks[i], &bd.tracks[j]);
+                if !near((ti.a, ti.b, ti.width / 2.0), (tj.a, tj.b, tj.width / 2.0)) || dist(&cap(ti), &cap(tj)) > 0.0 {
+                    continue;
+                }
+                let (ai, bi, wi, aj, bj, wj) = (ti.a, ti.b, ti.width, tj.a, tj.b, tj.width);
+                for (end, onto, w) in [(aj, i, wi), (bj, i, wi), (ai, j, wj), (bi, j, wj)] {
+                    let (ta, tb) = (bd.tracks[onto].a, bd.tracks[onto].b);
+                    if point_seg(end, ta, tb) <= w / 2.0 + 1e-6 {
+                        let layer = bd.tracks[onto].layer;
+                        let n_end = bd.node_at(layer, end);
+                        let n_on = bd.split(onto, end);
+                        let (pn, pe) = (bd.g.nodes[n_on].1, bd.g.nodes[n_end].1);
+                        bd.link(n_on, n_end, pn.dist(pe), false);
+                    }
+                }
+            }
+        }
+        // pads: a node on each layer the pad is on, joined to the tracks that touch it
+        let all: Vec<usize> = (0..layers.len()).collect();
+        let mut pad_nodes: Vec<Vec<(usize, usize)>> = vec![]; // per pad: (layer, node)
+        for (j, p) in board.pads.iter().enumerate() {
+            let on: Vec<usize> = if p.drill.is_some() { all.clone() } else { layer_of(p.side).into_iter().collect() };
+            let geo = shape_geo(p.pos, p.shape);
+            let mut mine = vec![];
+            for &l in &on {
+                let n = bd.new_node(l, p.pos);
+                mine.push((l, n));
+                for k in 0..bd.tracks.len() {
+                    if bd.tracks[k].layer == l && dist(&cap(&bd.tracks[k]), &geo) <= 0.0 {
+                        let m = bd.split(k, p.pos);
+                        bd.link(m, n, 0.0, false);
+                    }
+                }
+            }
+            // a through-hole pad is one piece of copper on all its layers
+            for w in mine.windows(2) {
+                bd.link(w[0].1, w[1].1, 0.0, false);
+            }
+            if !p.refdes.is_empty() && !p.pin.is_empty() {
+                bd.g.pads.entry(PadRef { refdes: p.refdes.clone(), pin: p.pin.clone() }).or_default().extend(mine.iter().map(|&(_, n)| n));
+            }
+            pad_nodes.push(mine);
+            let _ = j;
+        }
+        // pads of one part and pin are one connection (an exposed pad, a package tab)
+        let groups: Vec<Vec<usize>> = bd.g.pads.values().filter(|v| v.len() > 1).cloned().collect();
+        for v in groups {
+            for w in v.windows(2) {
+                bd.link(w[0], w[1], 0.0, false);
+            }
+        }
+        // pads that touch each other
+        for i in 0..board.pads.len() {
+            for j in (i + 1)..board.pads.len() {
+                let (a, b) = (&board.pads[i], &board.pads[j]);
+                if (a.pos.x - b.pos.x).abs() > 20.0 || (a.pos.y - b.pos.y).abs() > 20.0 {
+                    continue;
+                }
+                if dist(&shape_geo(a.pos, a.shape), &shape_geo(b.pos, b.shape)) > 0.0 {
+                    continue;
+                }
+                for &(la, na) in &pad_nodes[i] {
+                    if let Some(&(_, nb)) = pad_nodes[j].iter().find(|(lb, _)| *lb == la) {
+                        bd.link(na, nb, 0.0, false);
+                    }
+                }
+            }
+        }
+        // vias: a node on every layer, the layers joined by the barrel, joined to the tracks and pads that touch it
+        for v in &board.vias {
+            let vg = Geo::Cap { a: v.pos, b: v.pos, r: v.diameter / 2.0 };
+            let mut mine = vec![];
+            for &l in &all {
+                let n = bd.new_node(l, v.pos);
+                mine.push(n);
+                for k in 0..bd.tracks.len() {
+                    if bd.tracks[k].layer == l && dist(&cap(&bd.tracks[k]), &vg) <= 0.0 {
+                        let m = bd.split(k, v.pos);
+                        bd.link(m, n, 0.0, false);
+                    }
+                }
+                for (pi, p) in board.pads.iter().enumerate() {
+                    if (p.pos.x - v.pos.x).abs() > 20.0 || (p.pos.y - v.pos.y).abs() > 20.0 {
+                        continue;
+                    }
+                    if let Some(&(_, np)) = pad_nodes[pi].iter().find(|(lp, _)| *lp == l)
+                        && dist(&shape_geo(p.pos, p.shape), &vg) <= 0.0
+                    {
+                        bd.link(np, n, 0.0, false);
+                    }
+                }
+            }
+            for w in mine.windows(2) {
+                bd.link(w[0], w[1], 0.0, true);
+            }
+        }
+        // the tracks themselves: an edge between each two neighbouring places
+        for k in 0..bd.tracks.len() {
+            let mut marks = bd.tracks[k].marks.clone();
+            marks.sort_by(|x, y| x.0.total_cmp(&y.0));
+            let len = bd.tracks[k].a.dist(bd.tracks[k].b);
+            for w in marks.windows(2) {
+                bd.link(w[0].1, w[1].1, (w[1].0 - w[0].0) * len, false);
+            }
+        }
+        let _ = bd.board;
+        bd.g
+    }
+
+    /// Distances (millionths of a mm) and the way back, from every node of the pad.
+    fn search(&self, from: &PadRef) -> Option<(Vec<u64>, Vec<Option<usize>>)> {
+        let sources = self.pads.get(from)?;
+        let mut dist = vec![u64::MAX; self.nodes.len()];
+        let mut prev = vec![None; self.nodes.len()];
+        let mut heap = BinaryHeap::new();
+        for &s in sources {
+            dist[s] = 0;
+            heap.push(Reverse((0u64, s)));
+        }
+        while let Some(Reverse((d, u))) = heap.pop() {
+            if d > dist[u] {
+                continue;
+            }
+            for e in &self.adj[u] {
+                let nd = d + e.cost;
+                if nd < dist[e.to] {
+                    dist[e.to] = nd;
+                    prev[e.to] = Some(u);
+                    heap.push(Reverse((nd, e.to)));
+                }
+            }
+        }
+        Some((dist, prev))
+    }
+
+    /// The nearest node of the pad `to`, and the nodes of the way to it (from the first pad to the last).
+    fn way(&self, to: &PadRef, dist: &[u64], prev: &[Option<usize>]) -> Option<Vec<usize>> {
+        let end = *self.pads.get(to)?.iter().filter(|&&n| dist[n] != u64::MAX).min_by_key(|&&n| dist[n])?;
+        let mut chain = vec![end];
+        while let Some(p) = prev[*chain.last().unwrap()] {
+            chain.push(p);
+        }
+        chain.reverse();
+        Some(chain)
+    }
+
+    /// The shortest way along the copper from pad `a` to pad `b` (None when no tracks and vias join them).
+    pub fn path(&self, a: &PadRef, b: &PadRef) -> Option<CopperPath> {
+        let (dist, prev) = self.search(a)?;
+        let way = self.way(b, &dist, &prev)?;
+        let mut vias = 0;
+        for w in way.windows(2) {
+            if self.adj[w[0]].iter().any(|e| e.to == w[1] && e.via) {
+                vias += 1;
+            }
+        }
+        let points: Vec<(Side, Point)> = way.iter().map(|&n| self.nodes[n]).collect();
+        let mut layers: Vec<Side> = vec![];
+        for (s, _) in &points {
+            if layers.last() != Some(s) {
+                layers.push(*s);
+            }
+        }
+        let length = dist[*way.last()?] as f64 / SCALE;
+        Some(CopperPath { length, vias, layers, points })
+    }
+
+    /// Where the ways from pad `from` to pads `a` and `b` part: how far they run together first. None when either pad cannot be reached.
+    pub fn fork(&self, from: &PadRef, a: &PadRef, b: &PadRef) -> Option<Fork> {
+        let (dist, prev) = self.search(from)?;
+        let (wa, wb) = (self.way(a, &dist, &prev)?, self.way(b, &dist, &prev)?);
+        let common = wa.iter().zip(&wb).take_while(|(x, y)| x == y).count();
+        let (length, at) = if common == 0 {
+            // they leave the pad on their own (or on different layers of a through-hole pad)
+            (0.0, self.nodes[wa[0]].1)
+        } else {
+            let last = wa[common - 1];
+            (dist[last] as f64 / SCALE, self.nodes[last].1)
+        };
+        Some(Fork { length, at, a_length: dist[*wa.last()?] as f64 / SCALE, b_length: dist[*wb.last()?] as f64 / SCALE })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pad(b: &mut Board, x: f64, y: f64, r: &str, pin: &str, net: &str) {
+        let mut p = Pad::new(Point::new(x, y), PadShape::Circle { d: 1.0 }, None, Side::Top);
+        p.refdes = r.into();
+        p.pin = pin.into();
+        p.net = net.into();
+        b.pads.push(p);
+    }
+
+    fn track(b: &mut Board, side: Side, a: (f64, f64), c: (f64, f64)) {
+        b.tracks.push(Track { side, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.25 });
+    }
+
+    fn r(s: &str) -> PadRef {
+        PadRef::parse(s).unwrap()
+    }
+
+    #[test]
+    fn a_pad_reference_is_part_dot_pin() {
+        assert_eq!(PadRef::parse("RS1.1"), Some(PadRef { refdes: "RS1".into(), pin: "1".into() }));
+        assert_eq!(PadRef::parse("U1.A.2").unwrap().refdes, "U1.A");
+        assert_eq!(PadRef::parse("RS1"), None);
+        assert_eq!(PadRef::parse(".1"), None);
+    }
+
+    #[test]
+    fn the_path_follows_the_tracks_and_counts_the_length() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad(&mut b, 5.0, 5.0, "A", "1", "N");
+        pad(&mut b, 25.0, 5.0, "B", "1", "N");
+        track(&mut b, Side::Top, (5.0, 5.0), (15.0, 5.0));
+        track(&mut b, Side::Top, (15.0, 5.0), (15.0, 9.0));
+        track(&mut b, Side::Top, (15.0, 9.0), (25.0, 5.0));
+        let g = CopperGraph::build(&b);
+        let p = g.path(&r("A.1"), &r("B.1")).expect("a path");
+        let expect = 10.0 + 4.0 + (100.0f64 + 16.0).sqrt();
+        assert!((p.length - expect).abs() < 1e-3, "{} vs {expect}", p.length);
+        assert_eq!((p.vias, p.layers.clone()), (0, vec![Side::Top]));
+        assert_eq!(p.points.first().map(|x| x.1), Some(Point::new(5.0, 5.0)));
+        // no copper between A and C: no path, however near
+        pad(&mut b, 5.0, 30.0, "C", "1", "N");
+        let g = CopperGraph::build(&b);
+        assert!(g.path(&r("A.1"), &r("C.1")).is_none());
+        assert!(g.path(&r("A.1"), &r("Z.9")).is_none(), "a pad that is not on the board");
+    }
+
+    #[test]
+    fn a_via_changes_the_layer_and_is_counted() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad(&mut b, 5.0, 5.0, "A", "1", "N");
+        pad(&mut b, 25.0, 5.0, "B", "1", "N");
+        b.pads[1].side = Side::Bottom;
+        track(&mut b, Side::Top, (5.0, 5.0), (15.0, 5.0));
+        b.vias.push(Via { pos: Point::new(15.0, 5.0), diameter: 0.6, drill: 0.3, net: String::new() });
+        track(&mut b, Side::Bottom, (15.0, 5.0), (25.0, 5.0));
+        let g = CopperGraph::build(&b);
+        let p = g.path(&r("A.1"), &r("B.1")).expect("a path");
+        assert_eq!(p.vias, 1);
+        assert_eq!(p.layers, vec![Side::Top, Side::Bottom]);
+        assert!((p.length - 20.0).abs() < 1e-3, "{}", p.length);
+    }
+
+    #[test]
+    fn two_ways_part_where_a_branch_leaves_the_track() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad(&mut b, 5.0, 5.0, "R", "1", "N");
+        pad(&mut b, 25.0, 5.0, "F", "1", "N");
+        pad(&mut b, 8.0, 15.0, "S", "1", "N");
+        // the force track runs on along x; the sense branch leaves it 3 mm from the pad
+        track(&mut b, Side::Top, (5.0, 5.0), (25.0, 5.0));
+        track(&mut b, Side::Top, (8.0, 5.0), (8.0, 15.0));
+        let g = CopperGraph::build(&b);
+        let f = g.fork(&r("R.1"), &r("F.1"), &r("S.1")).expect("a fork");
+        assert!((f.length - 3.0).abs() < 1e-3, "{f:?}");
+        assert!(f.at.dist(Point::new(8.0, 5.0)) < 1e-3);
+        assert!((f.a_length - 20.0).abs() < 1e-3 && (f.b_length - 13.0).abs() < 1e-3, "{f:?}");
+    }
+
+    #[test]
+    fn ways_that_leave_the_pad_on_their_own_part_at_the_pad() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad(&mut b, 5.0, 5.0, "R", "1", "N");
+        pad(&mut b, 25.0, 5.0, "F", "1", "N");
+        pad(&mut b, 5.0, 20.0, "S", "1", "N");
+        track(&mut b, Side::Top, (5.0, 5.0), (25.0, 5.0));
+        track(&mut b, Side::Top, (5.0, 5.0), (5.0, 20.0));
+        let g = CopperGraph::build(&b);
+        let f = g.fork(&r("R.1"), &r("F.1"), &r("S.1")).expect("a fork");
+        assert!(f.length < 1e-6, "{f:?}");
+    }
+
+    #[test]
+    fn a_ring_of_copper_gives_the_shorter_way() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad(&mut b, 5.0, 5.0, "A", "1", "N");
+        pad(&mut b, 15.0, 5.0, "B", "1", "N");
+        track(&mut b, Side::Top, (5.0, 5.0), (15.0, 5.0));
+        track(&mut b, Side::Top, (5.0, 5.0), (5.0, 15.0));
+        track(&mut b, Side::Top, (5.0, 15.0), (15.0, 15.0));
+        track(&mut b, Side::Top, (15.0, 15.0), (15.0, 5.0));
+        let p = CopperGraph::build(&b).path(&r("A.1"), &r("B.1")).unwrap();
+        assert!((p.length - 10.0).abs() < 1e-3, "{}", p.length);
+    }
+
+    /// Against the DRC's own idea of which pads are one piece of copper (without the pours): every such pair should have a path.
+    /// Needs a board file (set `CCAD_PATH_BOARD`); not run by default.
+    #[test]
+    #[ignore]
+    fn the_paths_agree_with_the_connectivity_on_a_real_board() {
+        let Ok(file) = std::env::var("CCAD_PATH_BOARD") else { return };
+        let b: Board = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+        let t0 = std::time::Instant::now();
+        let g = CopperGraph::build(&b);
+        let built = t0.elapsed();
+        let conn = connectivity_without_pours(&b);
+        let mut by_group: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (i, p) in b.pads.iter().enumerate().filter(|(_, p)| !p.refdes.is_empty() && !p.pin.is_empty()) {
+            by_group.entry(conn.pad_group(i)).or_default().push(i);
+        }
+        let (mut pairs, mut missing) = (0, vec![]);
+        for pads in by_group.values().filter(|v| v.len() > 1) {
+            let first = &b.pads[pads[0]];
+            let a = PadRef { refdes: first.refdes.clone(), pin: first.pin.clone() };
+            for &j in &pads[1..] {
+                let q = &b.pads[j];
+                let to = PadRef { refdes: q.refdes.clone(), pin: q.pin.clone() };
+                if to == a {
+                    continue;
+                }
+                pairs += 1;
+                if g.path(&a, &to).is_none() {
+                    missing.push(format!("{a} -> {to} ({})", first.net));
+                }
+            }
+        }
+        println!("built in {built:?}; {pairs} pairs of one copper group, {} without a path: {:?}", missing.len(), &missing[..missing.len().min(12)]);
+        assert!(missing.is_empty(), "{} of {pairs}", missing.len());
+    }
+}

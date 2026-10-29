@@ -77,6 +77,7 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
     board.keep_apart = spec.apart.clone();
     board.bypass = spec.bypass.clone();
     board.waivers = spec.waivers.clone();
+    board.measures = spec.measures.clone();
     out.bypass = spec.bypass.iter().map(|b| b.caps.len()).sum();
     out.groups = spec.groups.len();
     out.apart = spec.apart.len();
@@ -91,6 +92,8 @@ pub enum FindingKind {
     Apart,
     /// A bypass capacitor farther from the supply pin of its IC than the check allows.
     Bypass,
+    /// A measure of the copper of a connection (length, vias, where ways part) outside its limit.
+    Measure,
 }
 
 impl FindingKind {
@@ -100,6 +103,7 @@ impl FindingKind {
             FindingKind::Group => "group",
             FindingKind::Apart => "apart",
             FindingKind::Bypass => "bypass",
+            FindingKind::Measure => "measure",
         }
     }
 }
@@ -176,8 +180,68 @@ impl RequirementsReport {
     }
 }
 
+/// What a measure of the table finds on the board: its value, the points of the ways to draw, and (for a fork) where they part.
+#[derive(Clone, Debug)]
+pub struct Measured {
+    pub value: f64,
+    /// The ways (each a run of points) that were measured: one for a length or vias, two for a fork.
+    pub ways: Vec<Vec<Point>>,
+    pub at: Option<Point>,
+}
+
+/// Measure `m` on the copper graph `g`. Err: why it cannot be measured (a kind or pads the table got wrong, no copper between the pads).
+pub fn measure_one(g: &crate::drc::CopperGraph, m: &design_spec::Measure) -> Result<Measured, String> {
+    use crate::drc::PadRef;
+    let Some((_, _, need)) = m.kind() else { return Err(format!("測定「{}」の種類 `{}` が分かりません", m.name, m.what)) };
+    let pads: Vec<PadRef> = m.pads.iter().filter_map(|p| PadRef::parse(p)).collect();
+    if pads.len() != need || m.pads.len() != need {
+        return Err(format!("測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります", m.name));
+    }
+    let way = |a: &PadRef, b: &PadRef| g.path(a, b).ok_or_else(|| format!("測定「{}」: {a} と {b} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name));
+    match m.what.as_str() {
+        "length" | "vias" => {
+            let p = way(&pads[0], &pads[1])?;
+            let value = if m.what == "length" { p.length } else { p.vias as f64 };
+            Ok(Measured { value, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at: None })
+        }
+        _ => {
+            let f = g.fork(&pads[0], &pads[1], &pads[2]).ok_or_else(|| format!("測定「{}」: {} から {} か {} へ、銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name, pads[0], pads[1], pads[2]))?;
+            let (a, b) = (way(&pads[0], &pads[1])?, way(&pads[0], &pads[2])?);
+            Ok(Measured { value: f.length, ways: vec![a.points.iter().map(|(_, q)| *q).collect(), b.points.iter().map(|(_, q)| *q).collect()], at: Some(f.at) })
+        }
+    }
+}
+
 pub fn check(board: &Board) -> RequirementsReport {
     let mut rep = RequirementsReport::default();
+    // the measures of the copper of a connection (the graph is built once, and only when there is something to measure)
+    if !board.measures.is_empty() {
+        let g = crate::drc::CopperGraph::build(board);
+        for m in &board.measures {
+            rep.checked += 1;
+            match measure_one(&g, m) {
+                Err(why) => {
+                    rep.checked -= 1;
+                    rep.missing.push(why);
+                }
+                Ok(v) => {
+                    let (label, unit, _) = m.kind().unwrap_or(("", "", 0));
+                    let bad = if m.is_min() { v.value < m.limit - 1e-9 } else { v.value > m.limit + 1e-9 };
+                    if bad {
+                        let shown = if unit == "個" { format!("{:.0}", v.value) } else { format!("{:.2}", v.value) };
+                        rep.add(board, Finding {
+                            kind: FindingKind::Measure,
+                            name: m.name.clone(),
+                            item: String::new(),
+                            message: format!("測定「{}」: {label}が {shown} {unit} です ({} {} {unit})", m.name, if m.is_min() { "下限" } else { "上限" }, m.limit),
+                            actual: v.value,
+                            limit: m.limit,
+                        });
+                    }
+                }
+            }
+        }
+    }
     for g in &board.place_groups {
         let mids: Vec<(String, Point)> = g.parts.iter().filter_map(|r| centre(&pads_of(board, r)).map(|c| (r.clone(), c))).collect();
         for r in g.parts.iter().filter(|r| !mids.iter().any(|(m, _)| m == *r)) {
@@ -266,6 +330,39 @@ pub fn check(board: &Board) -> RequirementsReport {
         }
     }
     rep
+}
+
+/// A measure of the table as it stands on the board, for drawing: the ways measured, where they part, the value and whether it is within the limit.
+#[derive(Clone, Debug)]
+pub struct MeasureMark {
+    pub name: String,
+    pub ways: Vec<Vec<Point>>,
+    pub at: Option<Point>,
+    pub value: f64,
+    pub limit: f64,
+    pub is_min: bool,
+    pub unit: String,
+    pub ok: bool,
+    pub waived: bool,
+}
+
+/// The measures of the table, measured (those that cannot be measured are left out). Builds the copper graph: ask for it only when the
+/// board changed.
+pub fn measure_marks(board: &Board) -> Vec<MeasureMark> {
+    if board.measures.is_empty() {
+        return vec![];
+    }
+    let g = crate::drc::CopperGraph::build(board);
+    board
+        .measures
+        .iter()
+        .filter_map(|m| {
+            let v = measure_one(&g, m).ok()?;
+            let ok = if m.is_min() { v.value >= m.limit - 1e-9 } else { v.value <= m.limit + 1e-9 };
+            let waived = board.waivers.iter().any(|w| w.kind == "measure" && w.name == m.name);
+            Some(MeasureMark { name: m.name.clone(), ways: v.ways, at: v.at, value: v.value, limit: m.limit, is_min: m.is_min(), unit: m.kind().map_or("", |k| k.1).to_string(), ok, waived })
+        })
+        .collect()
 }
 
 /// A group of the table as it stands on the board, for drawing: the parts that are on the board, how far apart the farthest two are
@@ -436,6 +533,61 @@ mod tests {
         assert_eq!(c.role, Role::Sense);
         assert_eq!(c.track_width, 0.4, "a width of 0 in the table leaves the board's");
         assert_eq!(b.net_currents.get("SA"), Some(&0.05));
+    }
+
+    fn pad_at(b: &mut Board, x: f64, y: f64, r: &str, pin: &str) {
+        let mut p = Pad::new(Point::new(x, y), PadShape::Circle { d: 1.0 }, None, Side::Top);
+        p.refdes = r.into();
+        p.pin = pin.into();
+        p.net = "N".into();
+        b.pads.push(p);
+    }
+
+    fn wire(b: &mut Board, a: (f64, f64), c: (f64, f64)) {
+        b.tracks.push(Track { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.25 });
+    }
+
+    /// The measures of the copper of a connection: a branch that taps the force track 3 mm from the pad breaks a fork limit of 0.5 mm, a way
+    /// that is longer than its limit is found, the pads without copper between them are `missing`, and the marks carry the ways to draw.
+    #[test]
+    fn measures_of_the_copper_are_checked_against_their_limits() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "R", "1");
+        pad_at(&mut b, 25.0, 5.0, "F", "1");
+        pad_at(&mut b, 8.0, 15.0, "S", "1");
+        pad_at(&mut b, 40.0, 40.0, "Z", "1");
+        wire(&mut b, (5.0, 5.0), (25.0, 5.0));
+        wire(&mut b, (8.0, 5.0), (8.0, 15.0));
+        let m = |name: &str, what: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, note: String::new() };
+        let spec = DesignSpec {
+            measures: vec![
+                m("検出線", "fork", &["R.1", "F.1", "S.1"], "max", 0.5),
+                m("短く", "length", &["R.1", "F.1"], "max", 25.0),
+                m("長い", "length", &["R.1", "F.1"], "max", 10.0),
+                m("ビアなし", "vias", &["R.1", "S.1"], "max", 0.0),
+                m("下限", "length", &["R.1", "S.1"], "min", 20.0),
+                m("道なし", "length", &["R.1", "Z.1"], "max", 5.0),
+            ],
+            ..Default::default()
+        };
+        import_requirements(&mut b, &spec);
+        let rep = check(&b);
+        let names: Vec<&str> = rep.findings.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, ["検出線", "長い", "下限"], "{:?}", rep.findings);
+        assert!(rep.findings.iter().all(|f| f.kind == FindingKind::Measure));
+        assert!(rep.findings[0].message.contains("3.00 mm"), "{}", rep.findings[0].message);
+        assert!(rep.missing.iter().any(|m| m.contains("道なし")), "{:?}", rep.missing);
+        let marks = measure_marks(&b);
+        assert_eq!(marks.len(), 5, "the one without copper is left out");
+        assert_eq!(marks[0].ways.len(), 2);
+        assert!(marks[0].at.is_some_and(|p| p.dist(Point::new(8.0, 5.0)) < 1e-3) && !marks[0].ok);
+        assert!(marks[1].ok && marks[3].ok);
+        // a waiver on a measure moves it aside
+        b.waivers.push(design_spec::Waiver { kind: "measure".into(), name: "検出線".into(), note: "試作".into(), ..Default::default() });
+        let rep = check(&b);
+        assert_eq!(rep.findings.len(), 2);
+        assert_eq!(rep.waived.len(), 1);
+        assert!(measure_marks(&b)[0].waived);
     }
 
     /// A waiver of the table moves a finding from "wrong" to "accepted, and why": it is not counted, the mark says so, and the pre-order

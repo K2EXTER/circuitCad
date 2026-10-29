@@ -79,6 +79,36 @@ pub struct Bypass {
     pub note: String,
 }
 
+/// A measure of the copper of a connection that must stay within a limit: the length of the way from one pad to another, the vias on
+/// it, or how far the ways from one pad to two others run together before they part (a sense wire that must leave the pad on its own).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Measure {
+    pub name: String,
+    /// One of `MEASURES`: "length", "vias" or "fork".
+    pub what: String,
+    /// Pads as "PART.PIN": length and vias take two (from, to), fork takes three (the pad the ways start at, and the two they go to).
+    pub pads: Vec<String>,
+    /// "max" (the value must not exceed `limit`, the default) or "min".
+    pub op: String,
+    pub limit: f64,
+    pub note: String,
+}
+
+/// The kinds of measure: (key, what the table calls it, unit, pads needed).
+pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3)];
+
+impl Measure {
+    pub fn is_min(&self) -> bool {
+        self.op == "min"
+    }
+
+    /// (what it is called, its unit, the pads it needs); None for a kind that is not in `MEASURES`.
+    pub fn kind(&self) -> Option<(&'static str, &'static str, usize)> {
+        MEASURES.iter().find(|(k, ..)| *k == self.what).map(|(_, l, u, n)| (*l, *u, *n))
+    }
+}
+
 /// A finding of the check that the designer knows about and keeps, with the reason: the check then says "accepted" instead of "wrong".
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -95,7 +125,7 @@ pub struct Waiver {
 }
 
 /// The kinds of a waiver: (key, what the table calls it).
-pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス")];
+pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス"), ("measure", "測定")];
 
 impl Waiver {
     /// "組「名前」" and the like, for a sentence.
@@ -116,11 +146,14 @@ pub struct DesignSpec {
     /// Findings of the check that are accepted, each with its reason.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub waivers: Vec<Waiver>,
+    /// Limits on the copper of a connection (length, vias, where ways part).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub measures: Vec<Measure>,
 }
 
 impl DesignSpec {
     pub fn is_empty(&self) -> bool {
-        self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty() && self.bypass.is_empty() && self.waivers.is_empty()
+        self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty() && self.bypass.is_empty() && self.waivers.is_empty() && self.measures.is_empty()
     }
 
     /// The accepted exception that covers a finding of `kind` in the row `name` (for a bypass row, the capacitor `item`), if there is one.
@@ -137,6 +170,7 @@ impl DesignSpec {
         out.extend(self.groups.iter().filter(|g| empty(&g.note)).map(|g| format!("近くに置く組「{}」", g.name)));
         out.extend(self.apart.iter().filter(|a| empty(&a.note)).map(|a| format!("離す組「{}」", a.name)));
         out.extend(self.bypass.iter().filter(|b| empty(&b.note)).map(|b| format!("バイパスの対応「{}」", b.ic)));
+        out.extend(self.measures.iter().filter(|m| empty(&m.note)).map(|m| format!("測定「{}」", m.name)));
         out.extend(self.waivers.iter().filter(|w| empty(&w.note)).map(|w| format!("承知した例外 {}", w.label())));
         out
     }
@@ -173,11 +207,25 @@ impl DesignSpec {
                 out.push(format!("バイパスの対応「{}」の `{n}` という部品は、回路にありません", b.ic));
             }
         }
+        for m in &self.measures {
+            match m.kind() {
+                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork のどれかにしてください", m.name, m.what)),
+                Some((_, _, need)) if m.pads.len() != need => out.push(format!("測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります (いま {} 個)", m.name, m.pads.len())),
+                Some(_) => {}
+            }
+            for pad in &m.pads {
+                match pad.trim().rsplit_once('.') {
+                    Some((r, _)) if part_known(r) => {}
+                    _ => out.push(format!("測定「{}」の `{pad}` は、部品.ピン の形で、回路にある部品を指してください", m.name)),
+                }
+            }
+        }
         for w in &self.waivers {
             let row = match w.kind.as_str() {
                 "group" => self.groups.iter().any(|g| g.name == w.name),
                 "apart" => self.apart.iter().any(|a| a.name == w.name),
                 "bypass" => self.bypass.iter().any(|b| b.ic == w.name && (w.item.is_empty() || b.caps.contains(&w.item))),
+                "measure" => self.measures.iter().any(|m| m.name == w.name),
                 _ => false,
             };
             if !row {
@@ -241,6 +289,28 @@ mod tests {
         spec.waivers.push(Waiver { kind: "apart".into(), name: "なし".into(), note: "x".into(), ..Default::default() });
         let msgs = spec.unknown_names(&["U1".into(), "C1".into(), "C2".into(), "R1".into()], &[]);
         assert_eq!(msgs.len(), 1, "{msgs:?}");
+        let back: DesignSpec = serde_json::from_str(&serde_json::to_string(&spec).unwrap()).unwrap();
+        assert_eq!(back, spec);
+    }
+
+    #[test]
+    fn a_measure_is_checked_for_its_kind_and_pads_and_can_be_waived() {
+        let mut spec = DesignSpec {
+            measures: vec![
+                Measure { name: "検出線".into(), what: "fork".into(), pads: vec!["RS1.1".into(), "Q1.3".into(), "UAB.2".into()], op: "max".into(), limit: 0.5, note: "ケルビン".into() },
+                Measure { name: "短く".into(), what: "length".into(), pads: vec!["RS1.1".into()], limit: 10.0, ..Default::default() },
+                Measure { name: "変".into(), what: "area".into(), pads: vec![], ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        let parts: Vec<String> = ["RS1", "Q1", "UAB"].iter().map(|s| s.to_string()).collect();
+        let msgs = spec.unknown_names(&parts, &[]);
+        assert_eq!(msgs.len(), 2, "{msgs:?}");
+        assert!(msgs.iter().any(|m| m.contains("area")) && msgs.iter().any(|m| m.contains("パッドが 2 個")));
+        assert_eq!(spec.unexplained().len(), 2, "two measures have no reason: {:?}", spec.unexplained());
+        assert_eq!(spec.measures[0].kind(), Some(("分かれ目 (一緒に走る長さ)", "mm", 3)));
+        spec.waivers.push(Waiver { kind: "measure".into(), name: "検出線".into(), note: "x".into(), ..Default::default() });
+        assert_eq!(spec.unknown_names(&parts, &[]).len(), 2, "the waiver finds its row");
         let back: DesignSpec = serde_json::from_str(&serde_json::to_string(&spec).unwrap()).unwrap();
         assert_eq!(back, spec);
     }

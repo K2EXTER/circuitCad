@@ -18,7 +18,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 |---|---|
 | `sch-core` | 回路図モデル (`Schematic`/`Component`/`Wire`/`Label`/`Kind`)、ネット抽出 `netlist.rs` (`extract`, `net_at`, `erc` — 指摘は `Problem{message,at,hint,severity}`、hintに原因と直し方を書く)、SPICE出力 `spice.rs`、ngspice方言 `ngspice.rs`、基板で入れ替えたピンを回路図へ戻す `backannotate.rs` |
 | `sim-core` | GUI非依存のシミュレータ。`from_schematic.rs` で回路図→`Circuit` |
-| `design-spec` | 設計の要件の表の型(`DesignSpec`: ネットの役割・近くに置く組・離す組・バイパスの対応・承知した例外 `Waiver`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が同じ型を使う |
+| `design-spec` | 設計の要件の表の型(`DesignSpec`: ネットの役割・近くに置く組・離す組・バイパスの対応・道筋の測定 `Measure`・承知した例外 `Waiver`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が同じ型を使う |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON (`*.part.json`: 記号+パッケージ+SPICEモデル)。`examples/` が同梱部品。`kicad.rs` はKiCadの `.kicad_sym`/`.kicad_mod` を `PartDef` に変換、`passive.rs` はチップ部品のテンプレート、`vendorzip.rs` はメーカーのSPICEモデルzip(村田など。自分でダウンロードしたもの)の索引、`diode.rs` はダイオードの IS/N/RS をグラフの点から決める計算、`thru_hole.rs` はリード付き部品の穴・パッド・ピッチの目安、`passive.rs` にはコイル・抵抗のインピーダンス当てはめと温度係数の当てはめも |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
@@ -38,7 +38,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 ## pcb-core (`crates/pcb-core/src`) — 詳細: `docs/code-notes/pcb-core.md`
 - `model.rs` 全データ型 (層は `Side`、内層は `Board.inner_layers`) / `footprints.rs`・`package.rs` フットプリント / `parts.rs` `place_part` / `netlist.rs` 回路図→基板の取込
-- `drc/` DRC (`mod.rs`=`check`・`clearance`・`shorts` / `connectivity.rs` 銅の接続グループ / `geo.rs` 距離計算 / `silk.rs` シルクとマスク帯 / `thermal.rs` サーマルビア / `pour.rs` ベタ / `decoupling.rs` バイパスコンデンサ / `acute.rs` 鋭角 / `tests.rs`) / `current.rs` 配線の太さと電流 / `irdrop.rs` 電圧降下 + レイアウト後シミュレーション用の配線抵抗 (`wiring_resistances` → `sim-core::from_schematic_with_wiring`) / `diffpair.rs` 差動ペア
+- `drc/` DRC (`mod.rs`=`check`・`clearance`・`shorts` / `connectivity.rs` 銅の接続グループ / `path.rs` 2つのパッドの間の銅の道筋(トラックとビアをたどる。長さ・ビア数・層・分かれ目) / `geo.rs` 距離計算 / `silk.rs` シルクとマスク帯 / `thermal.rs` サーマルビア / `pour.rs` ベタ / `decoupling.rs` バイパスコンデンサ / `acute.rs` 鋭角 / `tests.rs`) / `current.rs` 配線の太さと電流 / `irdrop.rs` 電圧降下 + レイアウト後シミュレーション用の配線抵抗 (`wiring_resistances` → `sim-core::from_schematic_with_wiring`) / `diffpair.rs` 差動ペア
 - `align.rs` 選んだ部品の整列(左右上下・中心・等間隔)。`autoplace.rs` の配置のあとの整列とベタ先の配置も
 - `connectors.rs` 自動配置の最後に、ピンヘッダの向きと位置を決めて未配線の交差を減らす
 - `reroute.rs` 遠回りした配線・余分なビアの引き直し(手で引いた配線向け。「配線を短くする」ボタンと `ccad board improve`)

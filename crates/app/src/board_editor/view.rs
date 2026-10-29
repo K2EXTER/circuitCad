@@ -78,6 +78,22 @@ impl BoardEditor {
             .clone()
     }
 
+    /// The measures of the table, measured again only when the board changed (the copper graph costs 100 ms on a big board).
+    /// While parts are dragged the last answer stays, so that the drag is smooth.
+    pub(super) fn cached_measure_marks(&self) -> std::rc::Rc<Vec<pcb_core::requirements::MeasureMark>> {
+        if self.board.measures.is_empty() {
+            return std::rc::Rc::new(vec![]);
+        }
+        let key = pcb_core::zonefill::geometry_key(&self.board) ^ (self.board.measures.len() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ (self.board.waivers.len() as u64).wrapping_mul(31);
+        let mut c = self.measure_cache.borrow_mut();
+        if let Some((k, m)) = c.as_ref() && (*k == key || self.slow_results_kept()) {
+            return m.clone();
+        }
+        let m = std::rc::Rc::new(pcb_core::requirements::measure_marks(&self.board));
+        *c = Some((key, m.clone()));
+        m
+    }
+
     pub(super) fn side_color(&self, s: Side) -> Color32 {
         match s {
             Side::Top => Color32::from_rgb(220, 60, 60),

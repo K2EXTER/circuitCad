@@ -11,7 +11,7 @@ impl BoardEditor {
     /// The groups as frames (green when the farthest two parts are within the limit, pink when not, a tag with the name and the numbers) and the
     /// distances to keep as a line between the nearest two pads (green when long enough, pink when too short, the distance at the middle).
     pub(super) fn draw_requirement_marks(&self, painter: &egui::Painter, rect: Rect) {
-        if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || (self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty()) {
+        if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || (self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty() && self.board.measures.is_empty()) {
             return;
         }
         let marks = pcb_core::requirements::marks(&self.board);
@@ -59,6 +59,39 @@ impl BoardEditor {
                 painter.galley(tag.min + Vec2::new(3.0, 1.0), galley, Color32::BLACK);
             }
         }
+        // the copper of a connection that the table limits: the way along the tracks (two ways and the place they part for a fork)
+        // the ones that are fine first, so that what is wrong lies on top (and the tags of one place sit in a column, not on each other)
+        let measured = self.cached_measure_marks();
+        let mut order: Vec<(usize, &pcb_core::requirements::MeasureMark)> = measured.iter().enumerate().filter(|_| self.show_req_lines).collect();
+        order.sort_by_key(|(_, m)| !m.ok);
+        for (row, m) in order {
+            let col = if m.ok { good } else if m.waived { accepted } else { bad };
+            let wide = if m.ok { 1.5 } else { 3.0 };
+            for way in &m.ways {
+                let pts: Vec<Pos2> = way.iter().map(|p| self.to_screen(rect, *p)).collect();
+                for w in pts.windows(2) {
+                    painter.line_segment([w[0], w[1]], Stroke::new(wide + 2.0, HALO));
+                }
+                for w in pts.windows(2) {
+                    painter.line_segment([w[0], w[1]], Stroke::new(wide, col));
+                }
+            }
+            if let Some(at) = m.at {
+                let c = self.to_screen(rect, at);
+                painter.circle_stroke(c, 7.0, Stroke::new(4.0, HALO));
+                painter.circle_stroke(c, 7.0, Stroke::new(2.0, col));
+            }
+            if !m.ok || self.zoom >= 14.0 {
+                let anchor = m.at.or_else(|| m.ways.first().and_then(|w| w.get(w.len() / 2).copied()));
+                if let Some(a) = anchor {
+                    let text = format!("{}: {:.*} {}{}", m.name, if m.unit == "個" { 0 } else { 2 }, m.value, m.unit, if m.waived && !m.ok { " (承知)" } else { "" });
+                    let galley = painter.layout_no_wrap(text, egui::FontId::proportional(11.0), Color32::BLACK);
+                    let tag = Rect::from_min_size(self.to_screen(rect, a) + Vec2::new(8.0, -8.0 + 15.0 * (row % 6) as f32), galley.size() + Vec2::new(6.0, 2.0));
+                    painter.rect_filled(tag, 3.0, col);
+                    painter.galley(tag.min + Vec2::new(3.0, 1.0), galley, Color32::BLACK);
+                }
+            }
+        }
         for a in marks.apart.iter().filter(|_| self.show_req_lines) {
             let col = if a.ok { good } else if a.waived { accepted } else { bad };
             let (p, q) = (self.to_screen(rect, a.a), self.to_screen(rect, a.b));
@@ -77,7 +110,7 @@ impl BoardEditor {
     }
 
     pub(super) fn requirements_check(&mut self, ui: &mut egui::Ui) {
-        if self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty() {
+        if self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty() && self.board.measures.is_empty() {
             return;
         }
         let mut both = self.show_req_marks || self.show_req_lines;

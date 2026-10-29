@@ -563,6 +563,9 @@ pub struct Board {
     /// The findings of the table's check that the designer accepted, each with the reason (`requirements::check` lists them apart).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub waivers: Vec<design_spec::Waiver>,
+    /// Limits on the copper of a connection from the table of requirements (`requirements::check` measures them).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub measures: Vec<design_spec::Measure>,
     /// What the impedance of a track depends on besides its width (not written when it is the default).
     #[serde(default, skip_serializing_if = "is_default_stackup")]
     pub stackup: crate::impedance::Stackup,
@@ -677,6 +680,7 @@ impl Board {
             keep_apart: vec![],
             bypass: vec![],
             waivers: vec![],
+            measures: vec![],
             stackup: Default::default(),
             locked_parts: vec![],
             inner_layers: 0,
