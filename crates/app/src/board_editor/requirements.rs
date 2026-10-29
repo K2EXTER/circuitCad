@@ -78,6 +78,9 @@ impl BoardEditor {
                 });
             }
         }
+        for note in &self.group_notes {
+            ui.label(egui::RichText::new(format!("配置: {note}")).small().color(Color32::GRAY)).on_hover_text("自動配置のとき、組の部品のうち、コピー (同じ形の繰り返し) や IC のブロックにまとまっている部品は、組の塊に入れられません。その部品は、組の上限を距離のコストで守る形になります");
+        }
         if !rep.missing.is_empty() {
             ui.label(format!("基板にない名前: {} 件", rep.missing.len())).on_hover_text(format!("表にあるが、基板に部品・パッドがないもの (回路図から取り込み直すと消えることがあります): {}", rep.missing.join("、")));
         }

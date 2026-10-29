@@ -200,6 +200,8 @@ pub fn check(board: &Board) -> RequirementsReport {
 pub struct GroupMark {
     pub name: String,
     pub parts: Vec<String>,
+    /// The middle of the parts' pads.
+    pub at: Point,
     pub actual: f64,
     pub limit: f64,
     pub ok: bool,
@@ -232,7 +234,9 @@ pub fn marks(board: &Board) -> Marks {
             continue;
         }
         let actual = mids.iter().enumerate().flat_map(|(i, a)| mids[i + 1..].iter().map(move |b| a.dist(*b))).fold(0.0, f64::max);
-        out.groups.push(GroupMark { name: g.name.clone(), parts, actual, limit: g.max_dist, ok: g.max_dist <= 0.0 || actual <= g.max_dist });
+        let n = mids.len().max(1) as f64;
+        let at = Point::new(mids.iter().map(|p| p.x).sum::<f64>() / n, mids.iter().map(|p| p.y).sum::<f64>() / n);
+        out.groups.push(GroupMark { name: g.name.clone(), parts, at, actual, limit: g.max_dist, ok: g.max_dist <= 0.0 || actual <= g.max_dist });
     }
     for a in &board.keep_apart {
         let pads = |names: &[String]| -> Vec<Point> { names.iter().flat_map(|n| pads_of(board, n)).map(|p| p.pos).collect() };
@@ -295,6 +299,18 @@ mod tests {
         b.place_part("R2", Point::new(14.0, 10.0), 0);
         b.place_part("R3", Point::new(40.0, 10.0), 0);
         b
+    }
+
+    #[test]
+    fn the_pre_order_check_reports_the_requirements_that_are_not_met() {
+        use crate::fab::{preflight, Level};
+        let has = |b: &Board, level: Level| preflight(b, None).iter().any(|c| c.level == level && c.title.contains("設計の要件"));
+        let mut b = board();
+        assert!(!has(&b, Level::Warn) && !has(&b, Level::Ok), "no table, nothing to say");
+        b.place_groups.push(design_spec::PlaceGroup { name: "g".into(), parts: vec!["R1".into(), "R3".into()], max_dist: 10.0, ..Default::default() });
+        assert!(has(&b, Level::Warn), "R1 and R3 are 30 mm apart");
+        b.place_groups[0].max_dist = 50.0;
+        assert!(has(&b, Level::Ok) && !has(&b, Level::Warn));
     }
 
     #[test]

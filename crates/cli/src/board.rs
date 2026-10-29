@@ -115,7 +115,7 @@ impl Session {
                 };
                 let tuning = pcb_core::autoplace::Tuning { sheets: flag("sheets", base.sheets), arrays: flag("arrays", base.arrays), channels: flag("channels", base.channels), groups: flag("groups", base.groups), apart: flag("apart", base.apart), ..base };
                 let r = pcb_core::autoplace::autoplace_with(board, &tuning)?;
-                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings})))
+                Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings, "group_notes": r.group_notes})))
             }
             "pour" => {
                 // the GND pour of the editor: the bottom copper as a pour, with a via for every surface pad of the net

@@ -33,6 +33,8 @@ pub struct PlaceReport {
     pub repoured: usize,
     /// Pairs of airwires of different nets that cross (see `ratsnest::crossings`), after the placement.
     pub crossings: usize,
+    /// What the groups of the requirements could not get: parts that are not in the block of their group (they are in a copy or an IC's block).
+    pub group_notes: Vec<String>,
 }
 
 pub(crate) fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
@@ -231,11 +233,14 @@ fn net_length(items: &[(String, Point, f64, f64)], nets: &[NetPins], apart: &[Ap
     spots_cost(items, nets, apart, &spots)
 }
 
-/// Parts the design's requirements say to keep apart: the items on the two sides and the least distance between their cells (mm).
+/// A distance of the design's requirements, for the layout: either parts to keep apart (`near` false: the items on the two sides and the
+/// least gap between their cells, mm) or parts that belong together (`near`: the items of a group, `a` and `b` the same, and the most
+/// distance between the middles of their cells, mm).
 struct Apart {
     a: Vec<usize>,
     b: Vec<usize>,
-    min: f64,
+    limit: f64,
+    near: bool,
 }
 
 /// What a mm of a distance that falls short counts against a mm of net length (see `apart_cost`). Measured on the microohm meter.
@@ -248,16 +253,22 @@ fn cell_gap(items: &[(String, Point, f64, f64)], i: usize, (x, y): (f64, f64), j
     dx.hypot(dy)
 }
 
-/// How far the cells fall short of the distances to keep, in mm, times `APART_WEIGHT`. The cell is bigger than the pads in it, so the real
-/// distance of the pads is a little more than the gap of the cells: a part may be pushed a little further than the rule says.
+/// The distance between the middles of the cells of two items.
+fn cell_centres(items: &[(String, Point, f64, f64)], i: usize, (x, y): (f64, f64), j: usize, (u, v): (f64, f64)) -> f64 {
+    ((x + items[i].2 / 2.0) - (u + items[j].2 / 2.0)).hypot((y + items[i].3 / 2.0) - (v + items[j].3 / 2.0))
+}
+
+/// How far the cells fall short of the distances to keep (or are too far for a group), in mm, times `APART_WEIGHT`. The cell is bigger than
+/// the pads in it, so the real distance of the pads is a little more than the gap of the cells: a part may be pushed a little further than
+/// the rule says.
 fn apart_cost(items: &[(String, Point, f64, f64)], apart: &[Apart], at: impl Fn(usize) -> Option<(f64, f64)>) -> f64 {
     let mut sum = 0.0;
     for r in apart {
         for &i in &r.a {
             let Some(p) = at(i) else { continue };
-            for &j in r.b.iter().filter(|&&j| j != i) {
+            for &j in r.b.iter().filter(|&&j| j != i && !(r.near && j < i)) {
                 let Some(q) = at(j) else { continue };
-                sum += (r.min - cell_gap(items, i, p, j, q)).max(0.0);
+                sum += if r.near { (cell_centres(items, i, p, j, q) - r.limit).max(0.0) } else { (r.limit - cell_gap(items, i, p, j, q)).max(0.0) };
             }
         }
     }
@@ -380,7 +391,7 @@ fn attach_layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], apart: &
         // be: the whole board is searched on a coarser grid for the spots where it keeps its distance
         let keeps_away = apart.iter().any(|r| (r.a.contains(&i) && r.b.iter().any(|j| placed.contains(j))) || (r.b.contains(&i) && r.a.iter().any(|j| placed.contains(j))));
         if keeps_away && found.iter().any(|&p| apart_cost(items, apart, |j| if j == i { Some(p) } else { at[j] }) > apart_cost(items, apart, |j| if j == i { None } else { at[j] }) + 1e-9) {
-            let reach = apart.iter().map(|r| r.min).fold(0.0, f64::max);
+            let reach = apart.iter().map(|r| r.limit).fold(0.0, f64::max);
             let (gx0, gx1, gy0, gy1) = (bx0 - reach, bx1 + reach, by0 - reach, by1 + reach);
             let mut y = gy0;
             while y <= gy1 {
@@ -566,7 +577,7 @@ fn repair_apart(items: &[(String, Point, f64, f64)], nets: &[NetPins], apart: &[
             }
         }
     }
-    let reach = apart.iter().map(|r| r.min).fold(0.0, f64::max);
+    let reach = apart.iter().map(|r| r.limit).fold(0.0, f64::max);
     let involved: Vec<usize> = (0..n).filter(|i| apart.iter().any(|r| r.a.contains(i) || r.b.contains(i))).collect();
     for _ in 0..3 {
         let mut moved = false;
@@ -625,11 +636,11 @@ fn repair_apart(items: &[(String, Point, f64, f64)], nets: &[NetPins], apart: &[
 /// `order` with the items on the first side of every distance to keep moved to the front and those on the second side to the back, the
 /// rest in their order between (None when there is nothing to keep apart).
 fn parted_order(order: &[usize], apart: &[Apart]) -> Option<Vec<usize>> {
-    if apart.is_empty() {
+    if !apart.iter().any(|r| !r.near) {
         return None;
     }
-    let first: std::collections::BTreeSet<usize> = apart.iter().flat_map(|r| r.a.iter().copied()).collect();
-    let last: std::collections::BTreeSet<usize> = apart.iter().flat_map(|r| r.b.iter().copied()).filter(|i| !first.contains(i)).collect();
+    let first: std::collections::BTreeSet<usize> = apart.iter().filter(|r| !r.near).flat_map(|r| r.a.iter().copied()).collect();
+    let last: std::collections::BTreeSet<usize> = apart.iter().filter(|r| !r.near).flat_map(|r| r.b.iter().copied()).filter(|i| !first.contains(i)).collect();
     let pick = |f: &dyn Fn(usize) -> bool| order.iter().copied().filter(|&i| f(i)).collect::<Vec<_>>();
     let mut out = pick(&|i| first.contains(&i));
     out.extend(pick(&|i| !first.contains(&i) && !last.contains(&i)));
@@ -1440,10 +1451,16 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         arrays.push(Array { members: cells.into_iter().map(|(i, x, y)| (i, x - x0, y - y0)).collect(), w, h });
     }
     // the parts that the design's requirements say belong together are one block each (the parts already in a copy or an IC block stay there)
+    let mut group_notes: Vec<String> = vec![];
     if improve && tuning.groups {
         let mut taken: std::collections::BTreeSet<usize> = arrays.iter().flat_map(|a| a.members.iter().map(|m| m.0)).collect();
-        for (_, names) in crate::requirements::groups_on_board(board) {
+        for (g, names) in crate::requirements::groups_on_board(board) {
             let members: Vec<usize> = names.iter().filter_map(|r| items.iter().position(|it| &it.0 == r)).filter(|i| !taken.contains(i)).collect();
+            let left_out: Vec<&str> = names.iter().filter(|r| items.iter().position(|it| &it.0 == *r).is_some_and(|i| !members.contains(&i))).map(|r| r.as_str()).collect();
+            if !left_out.is_empty() {
+                let result = if members.len() >= 2 { "残りだけを塊にしました" } else { "塊にしていません" };
+                group_notes.push(format!("組「{}」: {} は、コピーまたは IC のブロックにまとまっているため、組の塊に入れられません ({result}。組の上限は距離のコストで守ります)", g.name, left_out.join("・")));
+            }
             if members.len() < 2 {
                 continue;
             }
@@ -1462,28 +1479,37 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         }
     }
     let (citems, cnets, cdegree, csheet, origin) = collapse(&items, &nets, &degree, &arrays, &sheet_name);
-    // the distances to keep, for the items of the layout (a part in an array stands for the array)
-    let apart_items: Vec<Apart> = if improve && tuning.apart {
-        let item_of = |r: &String| origin.iter().position(|o| match o {
+    // the distances of the requirements, for the items of the layout (a part in an array stands for the array): those to keep, and the
+    // limits of the groups (a group that is one item already, as a block, needs none)
+    let item_of = |r: &String| {
+        origin.iter().position(|o| match o {
             Origin::Single(i) => &items[*i].0 == r,
             Origin::Array(k) => arrays[*k].members.iter().any(|m| &items[m.0].0 == r),
-        });
-        crate::requirements::apart_on_board(board)
-            .into_iter()
-            .map(|(a, b, min)| {
-                let side = |names: Vec<String>| {
-                    let mut v: Vec<usize> = names.iter().filter_map(&item_of).collect();
-                    v.sort_unstable();
-                    v.dedup();
-                    v
-                };
-                Apart { a: side(a), b: side(b), min }
-            })
-            .filter(|r| !r.a.is_empty() && !r.b.is_empty())
-            .collect()
-    } else {
-        vec![]
+        })
     };
+    let to_items = |names: &[String]| {
+        let mut v: Vec<usize> = names.iter().filter_map(&item_of).collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+    let mut apart_items: Vec<Apart> = vec![];
+    if improve && tuning.apart {
+        apart_items.extend(
+            crate::requirements::apart_on_board(board)
+                .into_iter()
+                .map(|(a, b, limit)| Apart { a: to_items(&a), b: to_items(&b), limit, near: false })
+                .filter(|r| !r.a.is_empty() && !r.b.is_empty()),
+        );
+    }
+    if improve && tuning.groups {
+        for (g, names) in crate::requirements::groups_on_board(board) {
+            let v = to_items(&names);
+            if g.max_dist > 0.0 && v.len() >= 2 {
+                apart_items.push(Apart { a: v.clone(), b: v, limit: g.max_dist, near: true });
+            }
+        }
+    }
     let by_sheet = if tuning.sheets { sheet_groups(&csheet) } else { None };
     let (cspots, used_w, used_h) = match by_sheet {
         Some(groups) => sheet_blocks(&citems, &cnets, &cdegree, &groups, improve),
@@ -1535,7 +1561,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     poured.dedup();
     let repoured = repour.iter().map(|(_, o)| groundpour::ground_pour(board, o).map_or(0, |r| r.vias)).sum();
     let crossings = crate::ratsnest::crossings(board);
-    Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil(), poured, repoured, crossings })
+    Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil(), poured, repoured, crossings, group_notes })
 }
 
 pub(crate) fn airwire_length(board: &Board) -> f64 {
@@ -2101,9 +2127,26 @@ mod tests {
             let at = |i: usize| spots.iter().find(|s| s.0 == i).map(|s| (s.1, s.2)).unwrap();
             cell_gap(&items, 0, at(0), 1, at(1))
         };
-        let rule = [Apart { a: vec![0], b: vec![1], min: 12.0 }];
+        let rule = [Apart { a: vec![0], b: vec![1], limit: 12.0, near: false }];
         let (without, with) = (gap(&[]), gap(&rule));
         assert!(without < 12.0 && with >= 12.0, "the gap is {with} mm with the rule, {without} mm without");
+    }
+
+    #[test]
+    fn the_parts_of_a_group_are_laid_out_within_its_limit_though_the_nets_would_spread_them() {
+        // a chain of ten cells, each tied to the next: the two ends are far apart unless a group says otherwise
+        let items: Vec<(String, Point, f64, f64)> = (0..10).map(|k| (format!("P{k}"), Point::new(0.0, 0.0), 3.0, 3.0)).collect();
+        let nets: Vec<NetPins> = (0..9).map(|k| vec![(k, 1.5, 1.5), (k + 1, 1.5, 1.5)]).collect();
+        let degree = vec![2usize; 10];
+        let tie = ties(&nets, 10);
+        let apart = |rules: &[Apart]| {
+            let (spots, ..) = layout(&items, &nets, rules, &degree, &tie, true, false, false);
+            let at = |i: usize| spots.iter().find(|s| s.0 == i).map(|s| (s.1, s.2)).unwrap();
+            cell_centres(&items, 0, at(0), 9, at(9))
+        };
+        let group = [Apart { a: vec![0, 9], b: vec![0, 9], limit: 4.5, near: true }];
+        let (without, with) = (apart(&[]), apart(&group));
+        assert!(without > 4.5 && with <= 4.5, "the ends are {with} mm apart with the group, {without} mm without");
     }
 
     #[test]
