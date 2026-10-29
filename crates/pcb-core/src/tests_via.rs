@@ -108,3 +108,20 @@ fn a_pour_cut_in_pieces_does_not_join_what_is_in_the_pieces() {
     assert_eq!(wires[0].net, "GND");
     assert!(wires[0].a.dist(Point::new(5.0, 5.0)) < 1e-9, "the airwire starts at the pad that was cut off: {:?}", wires[0]);
 }
+
+/// The count the user sees as unrouted (screen, `board status`, the pre-order check) is the airwires of the copper plus those of a cut pour.
+#[test]
+fn open_connections_count_the_pads_a_cut_pour_leaves_out() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 30.0, 20.0, "GND");
+    pad(&mut b, 5.0, 5.0, "GND");
+    b.zones.push(Zone::new("GND", Side::Top, rect(2.0, 2.0, 38.0, 28.0)));
+    assert!(crate::ratsnest::open_connections(&b).is_empty(), "one piece of pour joins both pads");
+    ring(&mut b, Point::new(5.0, 5.0), 2.5);
+    let (plain, seen) = (crate::ratsnest::ratsnest(&b), crate::ratsnest::open_connections(&b));
+    assert!(plain.iter().all(|w| w.net != "GND"), "the pour's outline joins the GND pads, so the plain ratsnest has nothing for them");
+    assert_eq!(seen.len(), plain.len() + 1, "{seen:?}");
+    let list = crate::fab::preflight(&b, None);
+    let miss = list.iter().find(|c| c.title.contains("未配線")).expect("the pre-order check lists the open connections");
+    assert!(miss.title.contains(&seen.len().to_string()), "{}", miss.title);
+}

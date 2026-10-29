@@ -340,7 +340,8 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
     }
     // the places to look at
     if opts.marks {
-        for w in crate::ratsnest::ratsnest(board) {
+        let open = crate::ratsnest::open_connections(board);
+        for w in &open {
             cv.lines(&[[w.a, w.b]], one_px * 2.0, AIRWIRE, 0.9);
         }
         // with the finish the places are those of the finished copper (what the editor and the Gerber files show)
@@ -355,7 +356,7 @@ pub fn render(board: &Board, opts: &PictureOpts) -> Picture {
             cv.text(Point::new(v.at.x + r + 8.0 * one_px, v.at.y + r), &(n + 1).to_string(), 12.0 * one_px, one_px * 1.8, MARK, 1.0);
             legend.push(format!("{}: ({}, {}) {}", n + 1, mm(v.at.x), mm(v.at.y), v.message));
         }
-        legend.push(format!("黄色の線: 未配線 {} 本。ピンクの輪と番号: DRC 違反", crate::ratsnest::ratsnest(board).len()));
+        legend.push(format!("黄色の線: 未配線 {} 本。ピンクの輪と番号: DRC 違反", open.len()));
     }
     let (w, h, rgba) = cv.finish();
     Picture { w, h, rgba, legend }

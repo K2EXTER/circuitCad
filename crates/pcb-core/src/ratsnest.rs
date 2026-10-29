@@ -39,6 +39,15 @@ pub fn ratsnest(board: &Board) -> Vec<Airwire> {
     ratsnest_with_vias(board, &pads, &vias)
 }
 
+/// The connections the user sees as unrouted (the yellow lines): [`ratsnest`] plus one line for each pad a pour leaves out when it is cut into
+/// pieces (its outline joins them, its copper does not). The screen, `ccad board status`, the pre-order check and the board picture all use
+/// this one count; the routers work on [`ratsnest`] alone.
+pub fn open_connections(board: &Board) -> Vec<Airwire> {
+    let mut w = ratsnest(board);
+    w.extend(crate::drc::pour_split_airwires(board));
+    w
+}
+
 /// [`ratsnest`] with the copper groups of the pads (`grp[i]` for `board.pads[i]`) already known.
 pub fn ratsnest_in(board: &Board, grp: &[usize]) -> Vec<Airwire> {
     ratsnest_with_vias(board, grp, &[])

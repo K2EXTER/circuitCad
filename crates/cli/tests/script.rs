@@ -1165,3 +1165,26 @@ fn the_dc_currents_fill_the_empty_currents_of_the_table() {
     assert_eq!(table["net_rules"].as_array().unwrap().len(), 3, "a row was added for MID");
     assert_eq!(sugg.last().unwrap()["count"], 0, "nothing is left to suggest after applying");
 }
+
+/// `board route net=A` routes that net only: the rest of the board stays as it is, so no pour is added to the top unless `top=1` asks for it.
+#[test]
+fn routing_one_net_does_not_add_a_pour_to_the_top() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+board import
+board autoplace
+board pour
+board route net=A
+board route net=VCC top=1
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let routes: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "board" && v.get("top_pour").is_some()).collect();
+    assert_eq!(routes.len(), 2, "{a:?}");
+    assert_eq!(routes[0]["top_pour"], false, "{}", routes[0]);
+}

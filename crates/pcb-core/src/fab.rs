@@ -8,7 +8,6 @@
 use crate::drc;
 use crate::geom::{inside_polygon, signed_area};
 use crate::model::*;
-use crate::ratsnest::ratsnest;
 
 #[derive(Clone, Debug)]
 pub struct FabPreset {
@@ -242,7 +241,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
 
     // routing
-    let airwires = ratsnest(board);
+    let airwires = crate::ratsnest::open_connections(board);
     if let Some(w) = airwires.first() {
         out.push(check(
             Level::Error,

@@ -73,9 +73,7 @@ impl BoardEditor {
         c.rats
             .get_or_insert_with(|| {
                 // the airwires of what no copper joins, and those of a pour that is in pieces (its outline joins them, its copper does not)
-                let mut w = ratsnest(&self.board);
-                w.extend(drc::pour_split_airwires(&self.board));
-                std::rc::Rc::new(w)
+                std::rc::Rc::new(pcb_core::ratsnest::open_connections(&self.board))
             })
             .clone()
     }

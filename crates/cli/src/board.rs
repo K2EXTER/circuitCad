@@ -373,7 +373,7 @@ impl Session {
                             k += 1;
                             !gone[k - 1]
                         });
-                        Ok(obj(json!({"removed": n, "vias_removed": vias_gone, "unrouted": pcb_core::ratsnest::ratsnest(board).len()})))
+                        Ok(obj(json!({"removed": n, "vias_removed": vias_gone, "unrouted": pcb_core::ratsnest::open_connections(board).len()})))
                     }
                     _ => Err("board track add ... | board track remove ...".into()),
                 }
@@ -410,7 +410,7 @@ impl Session {
                         };
                         let before = board.vias.len();
                         board.vias.retain(|v| v.pos.dist(p) > r);
-                        Ok(obj(json!({"removed": before - board.vias.len(), "unrouted": pcb_core::ratsnest::ratsnest(board).len()})))
+                        Ok(obj(json!({"removed": before - board.vias.len(), "unrouted": pcb_core::ratsnest::open_connections(board).len()})))
                     }
                     _ => Err("board via add x,y ... | board via remove x,y".into()),
                 }
@@ -434,7 +434,7 @@ impl Session {
                 let tracks: Vec<Value> = per_layer.iter().map(|(l, (n, len, wmin, wmax))| json!({"layer": l, "pieces": n, "length_mm": (len * 100.0).round() / 100.0, "width_min": wmin, "width_max": wmax})).collect();
                 let vias = (0..board.vias.len()).filter(|k| conn.via_net(*k) == Some(name.as_str())).count();
                 let pours: Vec<Value> = board.zones.iter().filter(|z| z.net == name).map(|z| json!({"layer": layer_name(z.side)})).collect();
-                let open: Vec<Value> = pcb_core::ratsnest::ratsnest(board).into_iter().filter(|a| a.net == name).map(|a| json!({"from": [a.a.x, a.a.y], "to": [a.b.x, a.b.y], "length_mm": (a.a.dist(a.b) * 100.0).round() / 100.0})).collect();
+                let open: Vec<Value> = pcb_core::ratsnest::open_connections(board).into_iter().filter(|a| a.net == name).map(|a| json!({"from": [a.a.x, a.a.y], "to": [a.b.x, a.b.y], "length_mm": (a.a.dist(a.b) * 100.0).round() / 100.0})).collect();
                 let total: f64 = per_layer.values().map(|v| v.1).sum();
                 Ok(obj(json!({"net": name, "pads": pads, "tracks": tracks, "track_length_mm": (total * 100.0).round() / 100.0, "vias": vias, "pours": pours, "open": open, "routed": open.is_empty() && !pads.is_empty()})))
             }
@@ -782,7 +782,9 @@ impl Session {
                 // the router the gain is small (43 samples: 2 vias fewer in all); `board improve` is for hand-drawn routes
                 let improved = if opt(&kv, "improve") == Some("1") && rep.failed.is_empty() { pcb_core::reroute::improve_routes(board, &ro, Some(before), None) } else { Default::default() };
                 // the bottom has the GND pour: fill the top with ground too (`top=0` leaves it out)
-                let top_pour = opt(&kv, "top") != Some("0") && rep.routed > 0 && board.zones.iter().any(|z| z.net == "GND" && z.side == pcb_core::model::Side::Bottom) && pcb_core::groundpour::top_pour(board, None) == Ok(true);
+                // one net asked for (`net=`): the rest of the board stays as it is, so the top pour only comes with `top=1`
+                let top_asked = if opt(&kv, "net").is_some() { opt(&kv, "top") == Some("1") } else { opt(&kv, "top") != Some("0") };
+                let top_pour = top_asked && rep.routed > 0 && board.zones.iter().any(|z| z.net == "GND" && z.side == pcb_core::model::Side::Bottom) && pcb_core::groundpour::top_pour(board, None) == Ok(true);
                 let failed: Vec<Value> = rep.failed.iter().map(|a| json!({"net": a.net})).collect();
                 Ok(obj(json!({"routed": rep.routed, "failed": failed, "aligned_pads": aligned, "joined_tracks": joined, "slits_filled": slits_filled, "pads_bridged": bridged, "top_pour": top_pour, "currents_declared": auto_nets, "wide_nets": rep.wide.iter().map(|(n, w)| json!({"net": n, "width_mm": w})).collect::<Vec<_>>(), "rerouted_nets": improved.improved, "saved_mm": (improved.saved * 10.0).round() / 10.0, "vias_change": improved.vias, "unrouted_left": pcb_core::ratsnest::ratsnest(board).len()})))
             }
@@ -828,7 +830,7 @@ impl Session {
             }
             "status" => {
                 let board = self.board_mut()?;
-                let wires = pcb_core::ratsnest::ratsnest(board);
+                let wires = pcb_core::ratsnest::open_connections(board);
                 let unrouted = wires.len();
                 // the open connections per net, so that one sees which nets are left without a `board net` for each
                 let mut open: std::collections::BTreeMap<&str, usize> = Default::default();
