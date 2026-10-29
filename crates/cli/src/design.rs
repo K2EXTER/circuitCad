@@ -121,7 +121,7 @@ impl Session {
         let names: Vec<&str> = r.signals.iter().map(|s| s.name.as_str()).filter(|n| n.starts_with("V(")).take(30).collect();
         let hint = if probes.is_empty() { "add probe=V(out) to see a signal; these are the voltage signals" } else { "" };
         self.last_ac = Some(r.clone());
-        Ok(obj(json!({"circuit_ok": gate.is_none(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).chain(self.skin_warning(f1)).collect::<Vec<_>>()})))
+        Ok(obj(json!({"circuit_ok": gate.is_none(), "models": self.model_gaps(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).chain(self.skin_warning(f1)).collect::<Vec<_>>()})))
     }
 
     /// `noise OUT[,REF] F0 F1 [ppd=10] [input=V1] [temp=27] [top=8]`: thermal and shot noise at an output node.

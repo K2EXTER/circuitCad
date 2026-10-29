@@ -12,6 +12,7 @@ const ANALYSIS_SECTIONS: &[(&str, &str, bool, &str)] = &[
     ("noise", "ノイズ解析", false, "熱雑音・ショット雑音が出力にどれだけ出るかを見ます。周波数範囲・点数は AC解析の欄を共用。入力電源を指定すると入力換算も表示"),
     ("variation", "温度とばらつき", false, "温度を変える、部品の値を許容差の範囲でランダムに変えて何度も計算する、などで、ずれる範囲を調べます。縦棒が高いところほど、よく出る値です"),
     ("spec", "スペック (合否の表)", false, "作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます"),
+    ("coverage", "モデルの前提 (何がわからないか)", false, "シミュレーションが計算に入れていない部品 (モデルがない)、汎用の標準値で計算している部品、モデルの注意書きをまとめて見ます。結果を信じてよい範囲が分かります"),
     ("fault", "故障シミュレーション", false, "部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます"),
 ];
 
@@ -95,6 +96,13 @@ impl SchEditor {
                         self.sec_mode = if all_open { 2 } else { 1 };
                     }
                 });
+                // what the results rest on: a part without a model is not in the calculation at all
+                let cov = self.model_coverage();
+                if !cov.ignored.is_empty() {
+                    let names: Vec<&str> = cov.ignored.iter().map(|p| p.refdes.as_str()).collect();
+                    ui.colored_label(egui::Color32::from_rgb(240, 170, 20), format!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
+                        .on_hover_text("この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます");
+                }
                 let lesson = self.lesson.is_some();
                 let (open_all, close_all) = (self.sec_mode == 1 || lesson, self.sec_mode == 2 && !lesson);
                 for (key, title, basic, hint) in ANALYSIS_SECTIONS {
@@ -109,6 +117,7 @@ impl SchEditor {
                             "noise" => self.panel_noise(ui),
                             "variation" => self.panel_variation(ui),
                             "spec" => self.panel_spec(ui),
+                            "coverage" => self.panel_coverage(ui),
                             _ => self.panel_fault(ui),
                         }
                     }).header_response.on_hover_text(*hint);

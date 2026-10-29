@@ -1224,3 +1224,27 @@ board swap dry=1
     let dry = a.iter().find(|v| v["dry"] == true).expect("dry swap");
     assert_eq!(dry["swapped"].as_array().map(|l| l.len()), Some(0), "nothing more to win after the import: {dry}");
 }
+
+/// `coverage` says what the simulation leaves out or only guesses; the analyses carry the counts in `models`.
+#[test]
+fn coverage_lists_what_the_simulation_guesses_and_the_answers_carry_the_counts() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+coverage
+dc
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let c = a.iter().find(|v| v["cmd"] == "coverage").expect("coverage answer");
+    assert_eq!(c["clean"], false, "{c}");
+    assert_eq!(c["generic"][0]["part"], "D1", "{c}");
+    assert_eq!(c["ignored"].as_array().map(|l| l.len()), Some(0));
+    let dc = a.iter().find(|v| v["cmd"] == "dc").expect("dc answer");
+    assert_eq!(dc["models"]["generic"], 1, "{dc}");
+    assert_eq!(dc["models"]["see"], "coverage");
+}

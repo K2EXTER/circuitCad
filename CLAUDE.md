@@ -32,6 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標・整定時間(`settling_times`。CLI の `tran settle=`) / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
 - `ratings.rs` 定格チェック / `ripple.rs` 電解コンデンサのリップルと寿命
 - `fault.rs` 故障シミュレーション / `chain.rs` 連鎖故障
+- `coverage.rs` シミュレーションが知らないこと(モデルがない部品・汎用の標準値の部品・モデルの注意書き・試験用。CLI `coverage`、画面は解析タブの「モデルの前提」)
 - `designcalc.rs` 初学者向けの値の計算 (足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 

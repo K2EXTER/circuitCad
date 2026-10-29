@@ -85,6 +85,9 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         if args.iter().any(|a| a == "--dc") {
             app.sch.analyze_dc();
         }
+        if args.iter().any(|a| a == "--analyze") {
+            app.sch.show_analysis_tab();
+        }
         if args.iter().any(|a| a == "--requirements") {
             app.sch.open_requirements();
             if args.iter().any(|a| a == "--dc") {

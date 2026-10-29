@@ -232,6 +232,7 @@ impl Session {
             "remove" => self.remove(args),
             "list" => Ok(self.list()),
             "erc" => self.erc(),
+            "coverage" => self.coverage(),
             "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
             "dc" => self.dc(args),
             "tran" => self.tran(args),

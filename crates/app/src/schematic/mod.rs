@@ -213,6 +213,8 @@ pub struct SchEditor {
     wiz_in: Vec<String>,
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
     sec_gen: u32,
+    /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
+    coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     sec_mode: u8,
     fault_part: String,
     /// Pin to break ("" = break the whole part), how (0 open, 1 to ground, 2 bridge to `fault_bridge`).
@@ -503,6 +505,7 @@ impl Default for SchEditor {
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,
+            coverage_cache: None,
             sec_mode: 0,
             fault_part: String::new(),
             fault_pin: String::new(),
@@ -615,6 +618,7 @@ mod canvas;
 mod draw;
 mod interact;
 mod panel;
+mod coverage;
 mod fault;
 mod spec_table;
 mod power_ui;

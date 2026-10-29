@@ -499,6 +499,28 @@ impl Session {
         if self.strict { Err(msg) } else { Ok(Some(msg)) }
     }
 
+    /// What the simulation leaves out or only guesses (`sim_core::model_coverage`): the parts without a model, the general-purpose ones,
+    /// the library models with caveats and the test sources.
+    pub fn coverage(&self) -> Res {
+        let c = sim_core::model_coverage(&self.sch);
+        let list = |v: &[sim_core::PartNote]| -> Vec<Value> { v.iter().map(|p| json!({"part": p.refdes, "value": p.value, "notes": p.notes})).collect() };
+        Ok(obj(json!({
+            "clean": c.is_clean(),
+            "total": c.total,
+            "ignored": list(&c.ignored),
+            "generic": list(&c.generic),
+            "caveats": list(&c.caveats),
+            "test_sources": list(&c.test_sources),
+            "hint": "ignored = left out of the calculation (no model); generic = built-in standard parameters, not the part number's data; caveats = what the library model leaves out; test_sources = for the simulation only",
+        })))
+    }
+
+    /// The counts of `coverage`, for the answers of the analyses: how much of the result rests on parts that are left out or only guessed.
+    pub fn model_gaps(&self) -> Value {
+        let c = sim_core::model_coverage(&self.sch);
+        json!({"ignored": c.ignored.iter().map(|p| p.refdes.clone()).collect::<Vec<_>>(), "generic": c.generic.len(), "caveats": c.caveats.len(), "see": "coverage"})
+    }
+
     pub fn erc(&self) -> Res {
         let probs = sch_core::erc(&self.sch);
         let errors = probs.iter().filter(|p| p.severity == sch_core::Severity::Error).count();
@@ -565,7 +587,7 @@ impl Session {
         let (ratings, notes) = self.dc_notes(&r);
         warnings.extend(notes);
         let (hidden, hidden_nodes) = if full { (0, 0) } else { (internal, internal_nodes) };
-        let mut answer = json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "post_layout": self.post_layout && self.board.is_some(), "solver": {"strategy": r.strategy, "iterations": r.iterations, "seconds": seconds}, "warnings": warnings});
+        let mut answer = json!({"circuit_ok": circuit_ok, "voltages": volts, "elements": elems, "ratings": ratings, "internal_elements_hidden": hidden, "internal_nodes_hidden": hidden_nodes, "models": self.model_gaps(), "post_layout": self.post_layout && self.board.is_some(), "solver": {"strategy": r.strategy, "iterations": r.iterations, "seconds": seconds}, "warnings": warnings});
         if !r.seq_states.is_empty()
             && let Some(o) = answer.as_object_mut()
         {
@@ -673,7 +695,7 @@ impl Session {
             })
             .collect();
         let (ratings, notes) = self.tran_notes(&r);
-        let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).collect::<Vec<_>>()});
+        let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "models": self.model_gaps(), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).collect::<Vec<_>>()});
         if let Some(list) = opt(&kv, "settle") {
             let from = match opt(&kv, "from") {
                 Some(s) => sim_core::parse_value(s).filter(|v| *v >= 0.0).ok_or_else(|| format!("from: '{s}' is not a time (write 20u, 1m ...)"))?,
