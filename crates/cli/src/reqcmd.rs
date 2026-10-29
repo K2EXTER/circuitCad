@@ -73,7 +73,7 @@ impl Session {
     fn req_list(&self) -> Res {
         let r = &self.sch.requirements;
         Ok(obj(json!({
-            "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "order": n.order, "vias": n.vias, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
+            "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "order": n.order, "vias": n.vias, "layers": n.layers, "max_length": n.max_length, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
@@ -115,6 +115,18 @@ impl Session {
                     Some("role") | Some("auto") => Some(None),
                     Some(v) => Some(Some(v.parse::<u8>().ok().filter(|n| *n <= 9).ok_or_else(|| format!("order={v}: a number from 0 to 9, or `role`"))?)),
                 };
+                let layers: Option<Vec<String>> = match opt(&kv, "layers") {
+                    None => None,
+                    Some("any") | Some("") => Some(vec![]),
+                    Some(v) => {
+                        let list = names(v);
+                        if let Some(bad) = list.iter().find(|k| pcb_core::model::Side::from_key(k).is_none()) {
+                            return Err(format!("layers={bad}: use top, bottom, inner1 ... (comma separated), or `any`"));
+                        }
+                        Some(list.into_iter().map(|k| k.to_ascii_lowercase()).collect())
+                    }
+                };
+                let max_length = number(&kv, "max_length")?;
                 let vias = match opt(&kv, "vias") {
                     None => None,
                     Some("role") => Some(String::new()),
@@ -147,6 +159,12 @@ impl Session {
                 }
                 if let Some(v) = vias {
                     r.vias = v;
+                }
+                if let Some(l) = layers {
+                    r.layers = l;
+                }
+                if let Some(v) = max_length {
+                    r.max_length = v;
                 }
                 (r.width, r.clearance, r.current) = (width.unwrap_or(r.width), clearance.unwrap_or(r.clearance), current.unwrap_or(r.current));
                 if let Some(t) = text {

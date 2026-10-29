@@ -159,7 +159,7 @@ pub fn options(words: &[String]) -> (Vec<String>, Vec<(String, String)>) {
     let mut kv = vec![];
     for w in words {
         match w.split_once('=') {
-            Some((k, v)) if !k.is_empty() && k.chars().all(|c| c.is_ascii_alphabetic()) => kv.push((k.to_ascii_lowercase(), v.to_string())),
+            Some((k, v)) if !k.is_empty() && k.chars().all(|c| c.is_ascii_alphabetic() || c == '_') => kv.push((k.to_ascii_lowercase(), v.to_string())),
             _ => pos.push(w.clone()),
         }
     }

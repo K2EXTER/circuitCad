@@ -1352,3 +1352,38 @@ req net 検出 order=12
     let table = a.iter().find(|v| v.get("net_rules").is_some_and(|n| n[0]["order"] == 7)).expect("the table keeps the order");
     assert_eq!(table["net_rules"][0]["vias"], "allow");
 }
+
+/// Layers, the length of a net and the gap between two nets: set by the table, kept by the router and found by the check.
+#[test]
+fn the_layers_the_length_and_the_gap_of_nets_are_set_by_the_table_and_checked() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+req net 線 nets=A layers=top max_length=0.5 reason=短く表面だけ
+req measure 間隔 what=gap pads=A,VCC min=100 reason=離す
+req
+board import
+board autoplace
+board route
+board class
+board req
+req net 線 layers=any max_length=1000
+req net 線 layers=nope
+";
+    let (a, ok) = run(script);
+    assert!(!ok, "a layer that does not exist is refused");
+    let table = a.iter().find(|v| v.get("net_rules").is_some_and(|n| n[0]["layers"] == serde_json::json!(["top"]))).expect("the table keeps the layers");
+    assert_eq!(table["net_rules"][0]["max_length"], 0.5);
+    let class = a.iter().filter_map(|v| v["classes"].as_array()).next().unwrap();
+    assert_eq!(class[0]["layers"], serde_json::json!(["top"]), "{class:?}");
+    let rep = a.iter().rev().find(|v| v.get("findings").is_some()).unwrap();
+    let kinds: Vec<(&str, &str)> = rep["findings"].as_array().unwrap().iter().map(|f| (f["kind"].as_str().unwrap(), f["name"].as_str().unwrap())).collect();
+    assert!(kinds.contains(&("net", "線")), "the net is longer than 0.5 mm: {rep}");
+    assert!(kinds.contains(&("measure", "間隔")), "the nets are nearer than 100 mm: {rep}");
+    // routed on the top only: nothing on the bottom
+    assert!(!rep["findings"].as_array().unwrap().iter().any(|f| f["message"].as_str().is_some_and(|m| m.contains("許している層"))), "{rep}");
+}

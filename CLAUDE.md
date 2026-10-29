@@ -51,7 +51,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `orient.rs` 部品の向き(0/90/180/270°)を、未配線の長さと交差が最小になるように決める(配線の付いていない部品だけ。`ccad board orient`、パネルのボタン)
 - `swap.rs` 同じゲート・同じ入力のネットの入れ替え(配置のあと、未配線の長さと交差を減らす。`ccad board swap`、パネルのボタン)
 - `meander.rs` 長さ合わせ(蛇行配線。ネットを目標の長さに)
-- ネットクラス(ネットごとの線幅・間隔・ビア・配線の順番 `order`・ビアの可否 `no_vias`。役割 `Role` はこの性質のひな形)は `model.rs` の `NetClass`(DRC は `clearance_between`、`autoroute.rs` の `autoroute_sized` が使う。画面は `board_editor/netclass.rs`、CLI は `board class`)
+- ネットクラス(ネットごとの線幅・間隔・ビア・配線の順番 `order`・ビアの可否 `no_vias`・使う層 `layers`・長さの上限 `max_length`。役割 `Role` はこの性質のひな形)は `model.rs` の `NetClass`(DRC は `clearance_between`、`autoroute.rs` の `autoroute_sized` が使う。画面は `board_editor/netclass.rs`、CLI は `board class`)
 - `impedance.rs` 配線の太さ⇄インピーダンスの目安と層構成 `Stackup`(ネットクラスの `impedance` 目標を発注前チェックで調べる。`ccad board impedance`)
 - `labels.rs` 部品番号のシルク文字を、配線やパッドから離れた所へ動かす(「文字を配線からよける」ボタンと `ccad board labels`)
 - `smooth.rs` 配線の仕上げ(角丸め・涙型・分かれ目の凹み。`Board.finish` の設定で表示・出力・DRCのときに毎回計算)

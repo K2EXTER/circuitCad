@@ -343,6 +343,46 @@ impl CopperGraph {
     }
 }
 
+/// The nearest copper of two sets of nets (names, or ending in `*`): the gap between the edges (0 when they touch) and the two points
+/// (the centres of the two items) to draw a line between. None when one of the sets has no copper on the board. Only copper on a
+/// common layer counts (a through-hole pad and a via are on all of them).
+pub fn net_gap(board: &Board, a: &[String], b: &[String]) -> Option<(f64, Point, Point)> {
+    let conn = connectivity(board);
+    let items = copper_items(board);
+    let (nt, np) = (board.tracks.len(), board.pads.len());
+    let net_of = |i: usize| -> Option<&str> {
+        if i < nt {
+            conn.track_net(i)
+        } else if i < nt + np {
+            conn.pad_net(i - nt)
+        } else {
+            conn.via_net(i - nt - np)
+        }
+    };
+    let in_set = |set: &[String], n: &str| set.iter().any(|p| design_spec::matches_name(p, n));
+    let (mut left, mut right) = (vec![], vec![]);
+    for (i, _) in items.iter().enumerate() {
+        match net_of(i) {
+            Some(n) if in_set(a, n) => left.push(i),
+            Some(n) if in_set(b, n) => right.push(i),
+            _ => {}
+        }
+    }
+    let mut best: Option<(f64, Point, Point)> = None;
+    for &i in &left {
+        for &j in &right {
+            if !items[i].layers.iter().any(|l| items[j].layers.contains(l)) {
+                continue;
+            }
+            let d = dist(&items[i].geo, &items[j].geo);
+            if best.is_none_or(|x| d < x.0) {
+                best = Some((d, center(&items[i].geo), center(&items[j].geo)));
+            }
+        }
+    }
+    best
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -30,6 +30,7 @@ fn nets_matching(board: &Board, patterns: &[String]) -> Vec<String> {
 pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> RequirementsImport {
     let mut out = RequirementsImport::default();
     board.link_widths.clear();
+    let copper = board.copper_layers();
     for rule in &spec.net_rules {
         let nets = nets_matching(board, &rule.nets);
         if nets.is_empty() || rule.name.is_empty() {
@@ -58,6 +59,8 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
         }
         // the properties the role would otherwise decide: the place in the order of routing, and whether a via may be used
         c.order = rule.order.map(|o| o.min(9));
+        c.layers = rule.layers.iter().filter_map(|k| Side::from_key(k)).filter(|s| copper.contains(s)).collect();
+        c.max_length = rule.max_length.max(0.0);
         c.no_vias = match rule.vias.as_str() {
             "none" => Some(true),
             "allow" => Some(false),
@@ -101,6 +104,8 @@ pub enum FindingKind {
     Bypass,
     /// A measure of the copper of a connection (length, vias, where ways part) outside its limit.
     Measure,
+    /// A property of a net class that the copper does not keep: tracks on a layer it does not allow, more track than it lets a net have.
+    Net,
 }
 
 impl FindingKind {
@@ -111,6 +116,7 @@ impl FindingKind {
             FindingKind::Apart => "apart",
             FindingKind::Bypass => "bypass",
             FindingKind::Measure => "measure",
+            FindingKind::Net => "net",
         }
     }
 }
@@ -197,9 +203,18 @@ pub struct Measured {
 }
 
 /// Measure `m` on the copper graph `g`. Err: why it cannot be measured (a kind or pads the table got wrong, no copper between the pads).
-pub fn measure_one(g: &crate::drc::CopperGraph, m: &design_spec::Measure) -> Result<Measured, String> {
+pub fn measure_one(board: &Board, g: &crate::drc::CopperGraph, m: &design_spec::Measure) -> Result<Measured, String> {
     use crate::drc::PadRef;
     let Some((_, _, need)) = m.kind() else { return Err(format!("測定「{}」の種類 `{}` が分かりません", m.name, m.what)) };
+    if m.what == "gap" {
+        // the nearest copper of the two sets of nets (the line to draw runs between the two items)
+        if m.pads.len() != need {
+            return Err(format!("測定「{}」には、ネットが {need} 個要ります", m.name));
+        }
+        let (a, b) = (vec![m.pads[0].trim().to_string()], vec![m.pads[1].trim().to_string()]);
+        let (d, pa, pb) = crate::drc::net_gap(board, &a, &b).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, a[0], b[0]))?;
+        return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
+    }
     let pads: Vec<PadRef> = m.pads.iter().filter_map(|p| PadRef::parse(p)).collect();
     if pads.len() != need || m.pads.len() != need {
         return Err(format!("測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります", m.name));
@@ -219,14 +234,89 @@ pub fn measure_one(g: &crate::drc::CopperGraph, m: &design_spec::Measure) -> Res
     }
 }
 
+/// Is there anything in the board for the requirements check to look at?
+pub fn any(board: &Board) -> bool {
+    !board.place_groups.is_empty()
+        || !board.keep_apart.is_empty()
+        || !board.bypass.is_empty()
+        || !board.measures.is_empty()
+        || board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0)
+}
+
+/// The properties of the net classes that the copper can break: tracks of a net on a layer its class does not allow (one finding for the
+/// class, with the length), and a net with more track than its class lets it have (one for each such net).
+fn net_findings(board: &Board) -> (Vec<Finding>, usize) {
+    let (mut out, mut checked) = (vec![], 0);
+    if !board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0) {
+        return (out, 0);
+    }
+    let conn = crate::drc::connectivity(board);
+    // per net: the length on each layer
+    let mut by_net: std::collections::BTreeMap<String, Vec<(Side, f64)>> = Default::default();
+    for (i, t) in board.tracks.iter().enumerate() {
+        if let Some(n) = conn.track_net(i) {
+            by_net.entry(n.to_string()).or_default().push((t.side, t.a.dist(t.b)));
+        }
+    }
+    for c in &board.net_classes {
+        if !c.layers.is_empty() {
+            checked += 1;
+            let mut off: Vec<(Side, f64)> = vec![];
+            for n in &c.nets {
+                for (side, len) in by_net.get(n).into_iter().flatten().filter(|(s, _)| !c.layers.contains(s)) {
+                    match off.iter_mut().find(|(s, _)| s == side) {
+                        Some(e) => e.1 += len,
+                        None => off.push((*side, *len)),
+                    }
+                }
+            }
+            let total: f64 = off.iter().map(|(_, l)| l).sum();
+            if total > 1e-6 {
+                let allowed: Vec<String> = c.layers.iter().map(|s| s.label()).collect();
+                let on: Vec<String> = off.iter().map(|(s, l)| format!("{} {l:.1} mm", s.label())).collect();
+                out.push(Finding {
+                    kind: FindingKind::Net,
+                    name: c.name.clone(),
+                    item: String::new(),
+                    message: format!("ネット「{}」: 許している層 ({}) の外に配線があります: {}", c.name, allowed.join("・"), on.join("、")),
+                    actual: total,
+                    limit: 0.0,
+                });
+            }
+        }
+        if c.max_length > 0.0 {
+            for n in &c.nets {
+                checked += 1;
+                let len: f64 = by_net.get(n).into_iter().flatten().map(|(_, l)| l).sum();
+                if len > c.max_length + 1e-9 {
+                    out.push(Finding {
+                        kind: FindingKind::Net,
+                        name: c.name.clone(),
+                        item: n.clone(),
+                        message: format!("ネット {n} (「{}」): 配線の長さが {len:.1} mm です (上限 {} mm)", c.name, c.max_length),
+                        actual: len,
+                        limit: c.max_length,
+                    });
+                }
+            }
+        }
+    }
+    (out, checked)
+}
+
 pub fn check(board: &Board) -> RequirementsReport {
     let mut rep = RequirementsReport::default();
+    let (nets, n) = net_findings(board);
+    rep.checked += n;
+    for f in nets {
+        rep.add(board, f);
+    }
     // the measures of the copper of a connection (the graph is built once, and only when there is something to measure)
     if !board.measures.is_empty() {
         let g = crate::drc::CopperGraph::build(board);
         for m in &board.measures {
             rep.checked += 1;
-            match measure_one(&g, m) {
+            match measure_one(board, &g, m) {
                 Err(why) => {
                     rep.checked -= 1;
                     rep.missing.push(why);
@@ -364,7 +454,7 @@ pub fn measure_marks(board: &Board) -> Vec<MeasureMark> {
         .measures
         .iter()
         .filter_map(|m| {
-            let v = measure_one(&g, m).ok()?;
+            let v = measure_one(board, &g, m).ok()?;
             let ok = if m.is_min() { v.value >= m.limit - 1e-9 } else { v.value <= m.limit + 1e-9 };
             let waived = board.waivers.iter().any(|w| w.kind == "measure" && w.name == m.name);
             Some(MeasureMark { name: m.name.clone(), ways: v.ways, at: v.at, value: v.value, limit: m.limit, is_min: m.is_min(), unit: m.kind().map_or("", |k| k.1).to_string(), ok, waived })
@@ -595,6 +685,71 @@ mod tests {
         assert_eq!(rep.findings.len(), 2);
         assert_eq!(rep.waived.len(), 1);
         assert!(measure_marks(&b)[0].waived);
+    }
+
+    /// The gap between the copper of two nets (names or patterns): the nearest items, edge to edge.
+    #[test]
+    fn the_gap_between_two_nets_is_measured_edge_to_edge() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "A", "1");
+        pad_at(&mut b, 25.0, 5.0, "A", "2");
+        pad_at(&mut b, 5.0, 8.0, "B", "1");
+        pad_at(&mut b, 25.0, 8.0, "B", "2");
+        b.pads[0].net = "SA".into();
+        b.pads[1].net = "SA".into();
+        b.pads[2].net = "SW1".into();
+        b.pads[3].net = "SW1".into();
+        wire(&mut b, (5.0, 5.0), (25.0, 5.0));
+        wire(&mut b, (5.0, 8.0), (25.0, 8.0));
+        let m = |name: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: "gap".into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, note: String::new() };
+        let spec = DesignSpec {
+            measures: vec![m("検出を離す", &["SA", "SW*"], "min", 5.0), m("十分", &["SA", "SW1"], "min", 1.0), m("なし", &["SA", "ZZ"], "min", 1.0)],
+            ..Default::default()
+        };
+        import_requirements(&mut b, &spec);
+        let rep = check(&b);
+        assert_eq!(rep.findings.len(), 1, "{:?}", rep.findings);
+        // the nearest copper is the pads (1 mm wide, 3 mm apart): 2.00 mm edge to edge, closer than the tracks (2.75 mm)
+        assert!(rep.findings[0].message.contains("2.00 mm"), "{}", rep.findings[0].message);
+        assert!(rep.missing.iter().any(|m| m.contains("なし")), "{:?}", rep.missing);
+        let marks = measure_marks(&b);
+        assert_eq!(marks.len(), 2);
+        assert_eq!(marks[0].ways[0].len(), 2, "a line between the two nearest items");
+    }
+
+    /// The properties of a net class that the copper can break: tracks on a layer the class does not allow, and a net with more track than
+    /// its class lets it have. A waiver of kind "net" accepts them.
+    #[test]
+    fn the_layers_and_the_length_of_a_net_class_are_checked() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "R", "1");
+        pad_at(&mut b, 25.0, 5.0, "F", "1");
+        b.pads[0].net = "SA".into();
+        b.pads[1].net = "SA".into();
+        // 20 mm of track on the top, 10 mm more on the bottom (joined by a via), all of net SA
+        wire(&mut b, (5.0, 5.0), (25.0, 5.0));
+        b.vias.push(Via { pos: Point::new(25.0, 5.0), diameter: 0.6, drill: 0.3, net: "SA".into() });
+        b.tracks.push(Track { side: Side::Bottom, a: Point::new(25.0, 5.0), b: Point::new(35.0, 5.0), width: 0.25 });
+        let spec = DesignSpec {
+            net_rules: vec![design_spec::NetRule { name: "検出".into(), nets: vec!["SA".into()], layers: vec!["top".into()], max_length: 25.0, ..Default::default() }],
+            ..Default::default()
+        };
+        import_requirements(&mut b, &spec);
+        assert!(any(&b));
+        let rep = check(&b);
+        assert_eq!(rep.findings.len(), 2, "{:?}", rep.findings);
+        assert!(rep.findings.iter().all(|f| f.kind == FindingKind::Net));
+        assert!(rep.findings.iter().any(|f| f.item.is_empty() && f.message.contains("裏面") && f.message.contains("10.0 mm")), "{:?}", rep.findings);
+        assert!(rep.findings.iter().any(|f| f.item == "SA" && f.message.contains("30.0 mm")), "{:?}", rep.findings);
+        // accepted: the layers finding by the class, the length by the net
+        b.waivers.push(design_spec::Waiver { kind: "net".into(), name: "検出".into(), item: "SA".into(), note: "試作".into() });
+        let rep = check(&b);
+        assert_eq!((rep.findings.len(), rep.waived.len()), (1, 1));
+        // allowing both layers: only the length is left; a long enough limit: nothing
+        b.net_classes[0].layers = vec![Side::Top, Side::Bottom];
+        b.net_classes[0].max_length = 40.0;
+        b.waivers.clear();
+        assert!(check(&b).findings.is_empty());
     }
 
     /// A waiver of the table moves a finding from "wrong" to "accepted, and why": it is not counted, the mark says so, and the pre-order

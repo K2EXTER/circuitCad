@@ -205,10 +205,12 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                egui::CollapsingHeader::new("詳細: 配線の性質 (順番・ビア) (?)").id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty())).show(ui, |ui| {
-                    ui.label("役割がきめている「配線の順番」と「ビアを使うか」を、行ごとに直します。").on_hover_text("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます");
-                    egui::Grid::new("req_props_grid").num_columns(3).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
-                        for h in ["行", "配線の順番 (小さいほど先)", "ビア"] {
+                egui::CollapsingHeader::new("詳細: 配線の性質 (順番・ビア・層・長さ) (?)").id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty() || !r.layers.is_empty() || r.max_length > 0.0)).show(ui, |ui| {
+                    ui.label("役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。").on_hover_text("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。
+・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します
+・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし");
+                    egui::Grid::new("req_props_grid").num_columns(5).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
+                        for h in ["行", "配線の順番 (小さいほど先)", "ビア", "使う層 (, 区切り)", "長さの上限"] {
                             ui.strong(h);
                         }
                         ui.end_row();
@@ -245,6 +247,13 @@ impl SchEditor {
                                     }
                                 }
                             });
+                            if let Some(s) = text_cell(ui, buf, (6, k, 0), &r.layers.join(","), 130.0, "この行のネットのトラックを引ける層: top (表面)・bottom (裏面)・inner1 ... を , で区切ります。空なら、どの層でも") {
+                                r.layers = list(&s).into_iter().map(|x| x.to_ascii_lowercase()).collect();
+                                changed = true;
+                            }
+                            let before = r.max_length;
+                            number_cell(ui, &mut r.max_length, " mm", 1.0, "1つのネットのトラックの長さの合計の上限。0 なら上限なし");
+                            changed |= r.max_length != before;
                             ui.end_row();
                         }
                     });
@@ -451,7 +460,7 @@ impl SchEditor {
 パッドは「部品.ピン」の形で書きます (例: RS1.1)");
                 let mut remove = None;
                 egui::Grid::new("req_measures_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
-                    for h in ["名前", "測るもの", "パッド (, 区切り)", "上限 / 下限", "理由", ""] {
+                    for h in ["名前", "測るもの", "パッド・ネット (, 区切り)", "上限 / 下限", "理由", ""] {
                         ui.strong(h);
                     }
                     ui.end_row();
@@ -470,7 +479,7 @@ impl SchEditor {
                             }
                         });
                         let need = m.kind().map_or(2, |k| k.2);
-                        let hint = if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
+                        let hint = if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。例: SA,SW*)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
                         if let Some(t) = text_cell(ui, buf, (5, k, 1), &m.pads.join(","), 230.0, hint) {
                             m.pads = list(&t);
                             changed = true;

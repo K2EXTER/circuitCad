@@ -42,6 +42,12 @@ pub struct NetRule {
     /// Vias: "none" (no vias), "allow" (vias even if the role says none), "" (the role decides).
     #[serde(skip_serializing_if = "String::is_empty")]
     pub vias: String,
+    /// The layers the tracks of these nets may use ("top", "bottom", "inner1" ...); empty: any.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<String>,
+    /// The most track (mm) a net of the row may have in all; 0 = no limit.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub max_length: f64,
     /// Wires between two parts that have a width of their own (the router makes these connections first, with that width).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<LinkWidth>,
@@ -102,7 +108,7 @@ pub struct Measure {
 }
 
 /// The kinds of measure: (key, what the table calls it, unit, pads needed).
-pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3)];
+pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2)];
 
 impl Measure {
     pub fn is_min(&self) -> bool {
@@ -130,8 +136,12 @@ pub struct Waiver {
     pub note: String,
 }
 
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
+}
+
 /// The kinds of a waiver: (key, what the table calls it).
-pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス"), ("measure", "測定")];
+pub const WAIVER_KINDS: &[(&str, &str)] = &[("group", "組"), ("apart", "離す距離"), ("bypass", "バイパス"), ("measure", "測定"), ("net", "ネットの性質")];
 
 impl Waiver {
     /// "組「名前」" and the like, for a sentence.
@@ -220,6 +230,13 @@ impl DesignSpec {
                 Some(_) => {}
             }
             for pad in &m.pads {
+                if m.what == "gap" {
+                    // a gap is between nets
+                    if !net_known(pad.trim()) {
+                        out.push(format!("測定「{}」の `{pad}` というネットは、回路にありません", m.name));
+                    }
+                    continue;
+                }
                 match pad.trim().rsplit_once('.') {
                     Some((r, _)) if part_known(r) => {}
                     _ => out.push(format!("測定「{}」の `{pad}` は、部品.ピン の形で、回路にある部品を指してください", m.name)),
@@ -232,6 +249,7 @@ impl DesignSpec {
                 "apart" => self.apart.iter().any(|a| a.name == w.name),
                 "bypass" => self.bypass.iter().any(|b| b.ic == w.name && (w.item.is_empty() || b.caps.contains(&w.item))),
                 "measure" => self.measures.iter().any(|m| m.name == w.name),
+                "net" => self.net_rules.iter().any(|n| n.name == w.name),
                 _ => false,
             };
             if !row {

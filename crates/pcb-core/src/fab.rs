@@ -369,7 +369,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
 
     // the groups and distances of the schematic's requirements table
-    if !board.place_groups.is_empty() || !board.keep_apart.is_empty() || !board.bypass.is_empty() || !board.measures.is_empty() {
+    if crate::requirements::any(board) {
         let rep = crate::requirements::check(board);
         let marks = crate::requirements::marks(board);
         let at: Vec<Point> = marks.groups.iter().filter(|g| !g.ok && !g.waived).map(|g| g.at).chain(marks.apart.iter().filter(|a| !a.ok && !a.waived).map(|a| Point::new((a.a.x + a.b.x) / 2.0, (a.a.y + a.b.y) / 2.0))).chain(marks.bypass.iter().filter(|b| !b.ok && !b.waived).map(|b| Point::new((b.a.x + b.b.x) / 2.0, (b.a.y + b.b.y) / 2.0))).collect();

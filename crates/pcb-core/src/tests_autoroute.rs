@@ -334,3 +334,29 @@ fn a_row_of_the_table_sets_the_order_and_the_vias_of_the_class() {
     assert_eq!(b.class_of("A").unwrap().no_vias, Some(true));
 }
 
+/// The layers a net may use: shut the bottom and the net cannot cross the wall (it would need the other layer); allow both and it does.
+#[test]
+fn a_net_keeps_to_the_layers_its_class_allows() {
+    let wall = || {
+        let mut b = Board::new("t", 30.0, 20.0);
+        pad(&mut b, 5.0, 10.0, "A", false);
+        pad(&mut b, 25.0, 10.0, "A", false);
+        let mut p = Pad::new(Point::new(15.0, 10.0), PadShape::Rect { w: 1.0, h: 18.6 }, None, Side::Top);
+        p.net = "W".into();
+        b.pads.push(p);
+        b
+    };
+    let opt = RouteOptions { grid_ladder: false, ..Default::default() };
+    let mut b = wall();
+    b.net_classes.push(NetClass { name: "s".into(), nets: vec!["A".into()], layers: vec![Side::Top], ..Default::default() });
+    let r = autoroute_sized(&mut b, &opt, None);
+    assert_eq!(r.failed.len(), 1, "no way over the wall on the top alone: {r:?}");
+    assert!(b.tracks.iter().all(|t| t.side == Side::Top));
+    let mut b = wall();
+    b.net_classes.push(NetClass { name: "s".into(), nets: vec!["A".into()], layers: vec![Side::Top, Side::Bottom], ..Default::default() });
+    let r = autoroute_sized(&mut b, &opt, None);
+    assert!(r.failed.is_empty() && !b.vias.is_empty(), "{r:?}");
+    assert_eq!(Side::from_key("Inner2"), Some(Side::Inner(2)));
+    assert_eq!((Side::from_key("top"), Side::from_key("nope"), Side::Inner(1).key()), (Some(Side::Top), None, "inner1".to_string()));
+}
+

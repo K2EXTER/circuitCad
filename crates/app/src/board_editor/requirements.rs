@@ -11,7 +11,7 @@ impl BoardEditor {
     /// The groups as frames (green when the farthest two parts are within the limit, pink when not, a tag with the name and the numbers) and the
     /// distances to keep as a line between the nearest two pads (green when long enough, pink when too short, the distance at the middle).
     pub(super) fn draw_requirement_marks(&self, painter: &egui::Painter, rect: Rect) {
-        if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || (self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty() && self.board.measures.is_empty()) {
+        if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || !pcb_core::requirements::any(&self.board) {
             return;
         }
         let marks = pcb_core::requirements::marks(&self.board);
@@ -110,7 +110,7 @@ impl BoardEditor {
     }
 
     pub(super) fn requirements_check(&mut self, ui: &mut egui::Ui) {
-        if self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty() && self.board.measures.is_empty() {
+        if !pcb_core::requirements::any(&self.board) {
             return;
         }
         let mut both = self.show_req_marks || self.show_req_lines;

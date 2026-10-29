@@ -235,7 +235,7 @@ impl BoardEditor {
                     ui.small(format!("いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます", self.track_width, self.via_dia, self.via_drill));
                     if ui.button("このネット専用のクラスを作る").on_hover_text("このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます").clicked() {
                         let width = set_width.or_else(|| self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)))).unwrap_or(self.track_width).max(rules.min_track_width);
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0 });
                     } else if let Some(w) = set_width {
                         self.track_width = w;
                         self.status = format!("線幅を {w:.2} mm にしました");
@@ -325,7 +325,7 @@ impl BoardEditor {
                 let k = match class_k {
                     Some(k) => k,
                     None if new_target.is_some() => {
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0 });
                         classes.len() - 1
                     }
                     None => usize::MAX,

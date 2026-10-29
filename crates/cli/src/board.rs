@@ -699,7 +699,7 @@ impl Session {
                 let (pos, kv) = options(rest);
                 let board = self.board_mut()?;
                 let Some(name) = pos.first() else {
-                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias()})).collect();
+                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length})).collect();
                     return Ok(obj(json!({"classes": list})));
                 };
                 if opt(&kv, "remove") == Some("1") {
@@ -746,6 +746,19 @@ impl Session {
                         _ => Some(v.parse::<u8>().ok().filter(|n| *n <= 9).ok_or_else(|| format!("order={v}: a number from 0 to 9, or `role`"))?),
                     };
                 }
+                if let Some(v) = opt(&kv, "layers") {
+                    let mut list = vec![];
+                    if v != "any" && !v.is_empty() {
+                        for key in v.split(',') {
+                            let s = pcb_core::model::Side::from_key(key).filter(|s| board.copper_layers().contains(s)).ok_or_else(|| format!("layers={key}: a copper layer of this board (top, bottom, inner1 ...), or `any`"))?;
+                            list.push(s);
+                        }
+                    }
+                    board.net_classes[k].layers = list;
+                }
+                if let Some(v) = opt(&kv, "max_length") {
+                    board.net_classes[k].max_length = v.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("max_length={v}: a number of 0 or more (mm)"))?;
+                }
                 if let Some(v) = opt(&kv, "vias") {
                     board.net_classes[k].no_vias = match v {
                         "none" => Some(true),
@@ -764,7 +777,7 @@ impl Session {
                     board.net_classes[k].nets = nets;
                 }
                 let c = &board.net_classes[k];
-                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias()})))
+                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length})))
             }
             "labels" => {
                 // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or

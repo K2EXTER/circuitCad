@@ -52,6 +52,24 @@ impl Side {
     pub fn is_inner(self) -> bool {
         matches!(self, Side::Inner(_))
     }
+
+    /// The word for the command line and the files: top / bottom / inner1 ...
+    pub fn key(self) -> String {
+        match self {
+            Side::Top => "top".into(),
+            Side::Bottom => "bottom".into(),
+            Side::Inner(n) => format!("inner{n}"),
+        }
+    }
+
+    /// The layer a word names (`key`; "outer" is not a layer).
+    pub fn from_key(s: &str) -> Option<Side> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "top" => Some(Side::Top),
+            "bottom" => Some(Side::Bottom),
+            k => k.strip_prefix("inner").and_then(|n| n.parse::<u8>().ok()).filter(|n| *n >= 1).map(Side::Inner),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -415,6 +433,17 @@ pub struct NetClass {
     /// Vias: Some(true) none are used, Some(false) they are allowed, None: the role decides (a sensing line gets none; `forbids_vias`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_vias: Option<bool>,
+    /// The layers the tracks of these nets may use when the table says so (empty: any). The router keeps to them and the check finds
+    /// copper of these nets on the others.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<Side>,
+    /// The most track (mm) a net of the class may have in all (0: no limit); the check finds a net with more.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub max_length: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 impl NetClass {
@@ -432,7 +461,7 @@ impl NetClass {
 
     /// Does the class ask the router for anything that is not plain (so that its nets are routed on their own, in their place)?
     pub fn is_special(&self) -> bool {
-        self.role != Role::None || self.order.is_some() || self.no_vias.is_some()
+        self.role != Role::None || self.order.is_some() || self.no_vias.is_some() || !self.layers.is_empty()
     }
 }
 
@@ -511,7 +540,7 @@ impl Role {
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0 }
     }
 }
 

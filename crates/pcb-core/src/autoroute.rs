@@ -34,6 +34,8 @@ pub struct RouteOptions {
     pub clearance: Option<f64>,
     /// Keep the tracks off the inner layers of a board with more than two (they are planes there; vias still cross them).
     pub outer_only: bool,
+    /// The layers the tracks may use (None: all). The others are shut like the inner layers of `outer_only`; vias still cross them.
+    pub only_layers: Option<Vec<Side>>,
     /// Put no via at all: the route stays on the layer of its pads (for a sensitive line that must not change layer).
     pub no_vias: bool,
     /// What a via costs the search, in mm of track (a higher value gives routes with fewer vias).
@@ -53,7 +55,7 @@ pub struct RouteOptions {
 
 impl Default for RouteOptions {
     fn default() -> Self {
-        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2, grid_ladder: true, breakout: true, skip: vec![] }
+        Self { track_width: 0.25, via_diameter: 0.6, via_drill: 0.3, grid: 0.2, follow: None, pad_lead: None, clearance: None, outer_only: false, only_layers: None, no_vias: false, via_cost: 3.0, bend_cost: 0.4, pour_layer_cost: 1.2, grid_ladder: true, breakout: true, skip: vec![] }
     }
 }
 
@@ -167,6 +169,10 @@ fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> 
             (order, asks) = (c.route_order(), c.is_special());
             // no vias when the table says so (a sensing line says so by its role: it stays on the layer of its pads)
             o.no_vias |= c.forbids_vias();
+            // only the layers the table allows (the router shuts the others)
+            if !c.layers.is_empty() {
+                o.only_layers = Some(c.layers.clone());
+            }
         }
         if let Some(amps) = board.net_currents.get(&n) {
             let need = crate::current::round_up_width(crate::current::width_for_current(*amps, &Default::default()));
@@ -181,7 +187,7 @@ fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> 
     special.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
     // the plain run, to fall back on when the wide tracks take room that other connections needed (not when a role asks for something
     // the plain run would not keep to: a sensing line with no via)
-    let hard = special.iter().any(|(_, _, o)| o.no_vias && !opt.no_vias);
+    let hard = special.iter().any(|(_, _, o)| (o.no_vias && !opt.no_vias) || (o.only_layers.is_some() && opt.only_layers.is_none()));
     let plain = (!special.is_empty() && !hard).then(|| {
         let mut b = board.clone();
         let r = autoroute(&mut b, opt, only_net);
@@ -191,7 +197,7 @@ fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> 
     for (_, n, o) in &special {
         let r = autoroute(board, o, Some(n));
         report.routed += r.routed;
-        if o.no_vias && !opt.no_vias {
+        if (o.no_vias && !opt.no_vias) || (o.only_layers.is_some() && opt.only_layers.is_none()) {
             hard_failed.extend(r.failed.iter().cloned());
         }
         if r.routed > 0 && o.track_width > opt.track_width + 1e-9 {
@@ -199,7 +205,7 @@ fn route_pass(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) -> 
         }
     }
     // (the sensing lines were routed with their own options above; the plain run must not route them again, with vias)
-    let leave: Vec<String> = special.iter().filter(|(_, _, o)| o.no_vias && !opt.no_vias).map(|(_, n, _)| n.clone()).collect();
+    let leave: Vec<String> = special.iter().filter(|(_, _, o)| (o.no_vias && !opt.no_vias) || (o.only_layers.is_some() && opt.only_layers.is_none())).map(|(_, n, _)| n.clone()).collect();
     let rest = autoroute(board, &RouteOptions { skip: leave, ..opt.clone() }, only_net);
     report.routed += rest.routed;
     report.failed = rest.failed;
@@ -560,6 +566,13 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
     if opt.outer_only {
         for l in 1..nl.saturating_sub(1) {
             grid.trk[l].iter_mut().for_each(|c| *c = -1);
+        }
+    }
+    if let Some(allowed) = &opt.only_layers {
+        for l in 0..nl {
+            if !allowed.contains(&grid.layers[l]) {
+                grid.trk[l].iter_mut().for_each(|c| *c = -1);
+            }
         }
     }
     Some(grid)
