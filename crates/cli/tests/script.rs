@@ -1188,3 +1188,39 @@ board route net=VCC top=1
     assert_eq!(routes.len(), 2, "{a:?}");
     assert_eq!(routes[0]["top_pour"], false, "{}", routes[0]);
 }
+
+/// `board backannotate`: the gate trade of `board swap` goes into the schematic, and a new import has nothing left to remember.
+#[test]
+fn a_gate_trade_goes_back_into_the_schematic() {
+    let script = "new
+add 74HC32 as=U1
+add R 1k as=R1
+add R 1k as=R2
+net IA U1.1A R1.1
+net OA U1.1Y R1.2
+net IB U1.2A R2.1
+net OB U1.2Y R2.2
+board import
+board move U1 20 20
+board move R1 8 40
+board move R2 8 6
+board swap
+board status
+board backannotate
+board import
+board status
+board swap dry=1
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let swapped = a.iter().find(|v| v.get("swapped").is_some() && v["dry"] == false).expect("swap answer");
+    assert_eq!(swapped["swapped"].as_array().map(|l| l.len()), Some(1), "{swapped}");
+    let back = a.iter().find(|v| v.get("moved").is_some() && v.get("parts").is_some()).expect("backannotate answer");
+    assert_eq!(back["parts"][0], "U1", "{back}");
+    assert_eq!(back["left"].as_array().map(|l| l.len()), Some(0), "{back}");
+    let st: Vec<&Value> = a.iter().filter(|v| v.get("open_nets").is_some()).collect();
+    assert_eq!(st.len(), 2, "{a:?}");
+    assert_eq!(st[0]["open_nets"], st[1]["open_nets"], "the board says the same before and after");
+    let dry = a.iter().find(|v| v["dry"] == true).expect("dry swap");
+    assert_eq!(dry["swapped"].as_array().map(|l| l.len()), Some(0), "nothing more to win after the import: {dry}");
+}

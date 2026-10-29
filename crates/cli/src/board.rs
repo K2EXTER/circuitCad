@@ -74,6 +74,20 @@ impl Session {
                     .collect();
                 Ok(obj(json!({"dry": dry, "swapped": plans, "locked": r.locked})))
             }
+            "backannotate" => {
+                // board backannotate: the pin trades of `board swap` (kept in the board) go into the schematic, so that the drawing says what
+                // the board says. On an error nothing is changed.
+                let trades = self.board_mut()?.pin_map.clone();
+                if trades.is_empty() {
+                    return Err("no pin trades on the board (`board swap` makes them)".into());
+                }
+                let rep = self.sch.apply_pin_trades(&trades)?;
+                let board = self.board_mut()?;
+                for r in &rep.parts {
+                    board.pin_map.remove(r);
+                }
+                Ok(obj(json!({"parts": rep.parts, "moved": rep.moved, "left": board.pin_map.keys().collect::<Vec<_>>()})))
+            }
             "breakout" => {
                 // board breakout [width=0.2]: before routing, a short wire out of every pin of a fine-pitch IC that needs one: the pins in the middle of a
                 // side go straight out, the ones at the two ends turn outward (the nearer the end, the sooner), so they do not cross the way out of the

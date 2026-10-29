@@ -164,6 +164,21 @@ impl BoardEditor {
         self.status = format!("ゲートの入れ替え: {}。回路は同じです。配線はこれからです", parts.join(" / "));
     }
 
+    /// The answer of the schematic to "入れ替えを回路図に反映": the traded parts are in the drawing now, so the board has nothing left to remember.
+    pub fn trades_applied(&mut self, answer: Result<sch_core::BackAnnotation, String>) {
+        match answer {
+            Ok(rep) if rep.parts.is_empty() => self.status = "回路図に反映する入れ替えが見つかりませんでした (回路図にその部品がありません)".into(),
+            Ok(rep) => {
+                self.checkpoint();
+                for r in &rep.parts {
+                    self.board.pin_map.remove(r);
+                }
+                self.status = format!("回路図に反映しました: {} (配線の端 {} 本を動かしました。ピンの間で配線が交差して見えるときは、回路図で描き直せます)", rep.parts.join("・"), rep.moved);
+            }
+            Err(e) => self.status = e,
+        }
+    }
+
     /// Rip up and route again the nets that detour or carry vias that are not needed (`pcb_core::reroute`), among all the
     /// wiring or just `net`. One undo step; nothing changes when nothing gets better.
     pub fn shorten_routes(&mut self, net: Option<&str>) {

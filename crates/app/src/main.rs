@@ -152,6 +152,11 @@ impl eframe::App for App {
         if let Some(net) = self.board_ed.route_after_currents.take() {
             self.board_ed.autoroute_now(net.as_deref());
         }
+        if std::mem::take(&mut self.board_ed.to_schematic_request) {
+            let trades = self.board_ed.board.pin_map.clone();
+            let answer = self.sch.sch.apply_pin_trades(&trades);
+            self.board_ed.trades_applied(answer);
+        }
         if let Some(on) = self.board_ed.post_layout_request.take() {
             self.apply_post_layout(on);
         }

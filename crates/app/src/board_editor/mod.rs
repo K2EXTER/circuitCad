@@ -304,6 +304,8 @@ pub struct BoardEditor {
     pub post_layout_request: Option<bool>,
     /// Set by the width panel: ask `App` for the schematic's DC net currents (it answers with `use_simulated_currents`).
     pub currents_request: Option<CurrentSource>,
+    /// "入れ替えを回路図に反映" was pressed: `main.rs` applies the pin trades to the schematic and hands the answer to `trades_applied`.
+    pub to_schematic_request: bool,
     /// Set when "全部" found no declared currents and asked for the schematic's DC currents first: the route (all nets, or
     /// the named one) is made when `App` has answered. `currents_tried` stops it from asking twice.
     pub route_after_currents: Option<Option<String>>,
@@ -455,6 +457,7 @@ impl Default for BoardEditor {
             help_request: None,
             post_layout_request: None,
             currents_request: None,
+            to_schematic_request: false,
             route_after_currents: None,
             currents_tried: false,
             current_stats: vec![],

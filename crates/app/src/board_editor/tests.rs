@@ -2135,3 +2135,20 @@ fn each_sheet_of_the_circuit_gets_its_own_colour() {
     assert_eq!(c.len(), 2);
     assert_ne!(c[0].1, c[1].1);
 }
+
+/// The answer of the schematic to "入れ替えを回路図に反映": the board forgets the trades of the parts that went into the drawing (and gets them
+/// back with undo); an error leaves the board as it is and says why.
+#[test]
+fn applied_pin_trades_leave_the_board_and_come_back_with_undo() {
+    let mut e = BoardEditor::default();
+    e.board.pin_map.insert("U1".into(), [("1".to_string(), "3".to_string()), ("3".to_string(), "1".to_string())].into());
+    e.board.pin_map.insert("U2".into(), [("1".to_string(), "2".to_string()), ("2".to_string(), "1".to_string())].into());
+    e.trades_applied(Err("つながりが変わります".into()));
+    assert_eq!(e.board.pin_map.len(), 2);
+    assert!(e.status.contains("つながりが変わります"));
+    e.trades_applied(Ok(sch_core::BackAnnotation { parts: vec!["U1".into()], moved: 4 }));
+    assert!(!e.board.pin_map.contains_key("U1") && e.board.pin_map.contains_key("U2"));
+    assert!(e.status.contains("U1") && e.status.contains('4'), "{}", e.status);
+    e.undo();
+    assert!(e.board.pin_map.contains_key("U1"), "undo brings the trade back");
+}

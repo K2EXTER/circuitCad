@@ -3,10 +3,12 @@
 
 mod netlist;
 mod ngspice;
+mod backannotate;
 mod noconnect;
 mod requirements;
 mod sheets;
 mod spice;
+pub use backannotate::BackAnnotation;
 pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
 pub use design_spec::{matches_name, DesignSpec, KeepApart, NetRule, PlaceGroup, ROLES};
 
