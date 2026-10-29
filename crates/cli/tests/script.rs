@@ -1052,6 +1052,20 @@ board quality top=3 sort=length
 }
 
 #[test]
+fn a_pin_marked_nc_is_not_asked_about_by_erc_and_a_wire_on_it_is() {
+    let (a, ok) = run("new\nadd R 10k as=R1\nadd R 4.7k as=R2\nnet MID R1.2 R2.1\nnet GND R2.2\nerc\nnc R1.1\nerc\nnc R1.1 remove=1\nnc\nnc R1.2\nerc\n");
+    assert!(ok, "{a:?}");
+    let ercs: Vec<&Value> = a.iter().filter(|v| v["cmd"] == "erc").collect();
+    let asks = |v: &Value| v["problems"].as_array().unwrap().iter().filter(|p| p["message"].as_str().unwrap().contains("R1 ピン1")).count();
+    assert_eq!((asks(ercs[0]), asks(ercs[1])), (1, 0), "R1.1 is open: asked before the mark, not after");
+    // R1.2 is on net MID: marking it is a conflict that ERC reports
+    assert!(ercs[2]["problems"].as_array().unwrap().iter().any(|p| p["message"].as_str().unwrap().contains("NC")), "{}", ercs[2]);
+    let nc_lists: Vec<&Value> = a.iter().filter(|v| v.get("no_connects").is_some()).collect();
+    assert_eq!(nc_lists[0]["changed"], serde_json::json!(["R1.1"]));
+    assert_eq!(nc_lists[1]["no_connects"], serde_json::json!([]));
+}
+
+#[test]
 fn a_bypass_row_is_listed_checked_against_the_circuit_and_removed() {
     let (a, ok) = run("new
 add R 10k as=R1

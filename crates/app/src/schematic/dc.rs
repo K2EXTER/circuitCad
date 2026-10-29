@@ -17,6 +17,7 @@ impl SchEditor {
                 message: format!("シミュレーションできません: {e}"),
                 hint: "部品の値は 10k、4.7u、100n のように、数字のあとに k (キロ)・m (ミリ)・u (マイクロ)・n (ナノ) などを付けて書きます。部品を選んで、左の「値」を直しましょう".into(),
                 severity: Severity::Error,
+                pin: None,
             })
             .collect()
     }

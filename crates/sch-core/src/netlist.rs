@@ -31,11 +31,13 @@ pub struct Problem {
     pub at: Option<Pt>,
     pub hint: String,
     pub severity: Severity,
+    /// For a pin that is not connected: the part and the pin number (the editor offers to mark it as left open on purpose).
+    pub pin: Option<(String, String)>,
 }
 
 impl Problem {
     fn new(severity: Severity, message: String, at: Option<Pt>, hint: &str) -> Self {
-        Self { message, sheet: 0, at, hint: hint.to_string(), severity }
+        Self { message, sheet: 0, at, hint: hint.to_string(), severity, pin: None }
     }
 }
 
@@ -252,6 +254,19 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
                 continue;
             }
             let alone = connected.get(&(c.refdes.clone(), pin.clone())).is_none_or(|&n| n < 2);
+            // a pin marked as left open on purpose: nothing to say while it is alone; a warning when it has been wired after all
+            if s.no_connects.iter().any(|(r, p)| *r == c.refdes && *p == pin) {
+                let named = nets.iter().any(|n| !n.name.starts_with("N$") && n.pins.iter().any(|p| p.refdes == c.refdes && p.pin == pin));
+                if !alone || named {
+                    out.push(Problem::new(
+                        Warning,
+                        format!("{} ピン{} は「使わない (NC)」の印がありますが、つながっています", c.refdes, pin),
+                        Some(at),
+                        "このピンには、使わない印 (×) が付いていますが、配線かネット名がつながっています。つないだままにするなら、印を外しましょう (部品の設定の「使わないピン」)。つなぐつもりがなかったなら、線かラベルを消しましょう",
+                    ));
+                }
+                continue;
+            }
             if alone {
                 // a pin alone on a net is only fine when it is explicitly named (e.g. a header pin on a labelled net)
                 let named = nets.iter().any(|n| {
@@ -269,7 +284,9 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
                     } else {
                         ("この端子には何もつながっていないので、電流が流れません。配線ツールで相手の部品までつなぎましょう。使わない部品なら削除します".to_string(), Error)
                     };
-                    out.push(Problem::new(sev, format!("{} ピン{} が未接続です", c.refdes, pin), Some(at), &hint));
+                    let mut problem = Problem::new(sev, format!("{} ピン{} が未接続です", c.refdes, pin), Some(at), &hint);
+                    problem.pin = Some((c.refdes.clone(), pin.clone()));
+                    out.push(problem);
                 }
             }
         }

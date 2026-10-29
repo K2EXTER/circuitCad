@@ -382,6 +382,28 @@ impl SchEditor {
                         }
                     });
                 }
+                // the pins this part does not use: marked, ERC stops asking about them
+                if !c.kind.is_power_symbol() && (c.custom.is_some() || c.kind.pins().len() >= 3) {
+                    let pins: Vec<(String, String)> = match &c.custom {
+                        Some(s) => s.pins.iter().map(|p| (p.number.clone(), p.name.clone())).collect(),
+                        None => c.kind.pins().into_iter().map(|(n, _)| (n.clone(), n)).collect(),
+                    };
+                    let marked = self.sch.no_connects.iter().filter(|(r, _)| *r == c.refdes).count();
+                    egui::CollapsingHeader::new(format!("使わないピン (NC) ({marked})")).id_salt(("nc_pins", i)).default_open(marked > 0).show(ui, |ui| {
+                        ui.small("つながないピンに印を付けます。回路図に × が出て、ERC は「未接続」と言わなくなります").on_hover_text("データシートが「開放のまま」と言うピンや、使わない出力などに付けます。つなぎ忘れとの区別が付くので、本当のミスだけが ERC に残ります。あとから線やラベルでつなぐと、ERC が印との食い違いを知らせます");
+                        for (num, name) in &pins {
+                            let mut on = self.sch.no_connects.iter().any(|(r, p)| *r == c.refdes && p == num);
+                            let text = if name.is_empty() || name == num { num.clone() } else { format!("{num}  {name}") };
+                            if ui.checkbox(&mut on, text).on_hover_text("チェックを付けると、このピンは使わない (つながない) ピンになります").changed() {
+                                if on {
+                                    self.sch.no_connects.push((c.refdes.clone(), num.clone()));
+                                } else {
+                                    self.sch.no_connects.retain(|(r, p)| !(*r == c.refdes && p == num));
+                                }
+                            }
+                        }
+                    });
+                }
                 if c.kind != Kind::Ground {
                     ui.horizontal(|ui| {
                         ui.label("値");
@@ -560,6 +582,7 @@ impl SchEditor {
         }
         let mut jump = None;
         let mut jump_sheet = 0;
+        let mut make_nc: Option<(String, String)> = None;
         for (k, p) in self.problems.iter().enumerate() {
             let (mark, color) = match p.severity {
                 Severity::Error => ("✖", Color32::from_rgb(220, 40, 60)),
@@ -576,12 +599,24 @@ impl SchEditor {
             if self.erc_focus == Some(k) {
                 ui.indent(("erc_hint", k), |ui| {
                     ui.small(&p.hint);
+                    if let Some((refdes, pin)) = &p.pin
+                        && ui.small_button("使わないピン (NC) にする").on_hover_text("このピンは、つながないのが正しいときに押します (使わない出力、データシートが開放と言うピンなど)。印の × が付いて、ERC はこのピンを聞かなくなります。つなぎ忘れなら、押さずに配線しましょう").clicked()
+                    {
+                        make_nc = Some((refdes.clone(), pin.clone()));
+                    }
                 });
             }
         }
         if let Some(at) = jump {
             self.show_sheet(jump_sheet);
             self.pan = Vec2::new(at.0 as f32, at.1 as f32);
+        }
+        if let Some((refdes, pin)) = make_nc {
+            self.sch.set_no_connect(&refdes, &pin, true);
+            self.problems = erc(&self.sch);
+            self.problems.extend(self.conversion_problems());
+            self.erc_focus = None;
+            self.status = format!("{refdes} ピン{pin} を「使わない (NC)」にしました。印を外すには、部品を選んで「使わないピン」のチェックを外します");
         }
     }
 

@@ -380,6 +380,38 @@ impl Session {
         Ok(by_name)
     }
 
+    /// `nc REF.PIN [REF.PIN ...] [remove=1]`: pins left unconnected on purpose (ERC does not ask about them); no pins: the list. A pin name
+    /// shared by several pins marks all of them.
+    pub fn nc(&mut self, args: &[String]) -> Res {
+        let remove = args.iter().any(|a| a == "remove=1");
+        let specs: Vec<&String> = args.iter().filter(|a| !a.contains('=')).collect();
+        let mut changed = vec![];
+        for spec in specs {
+            let (r, p) = spec.split_once('.').ok_or_else(|| format!("'{spec}': write REF.PIN, for example U8.3 or U8.TEMP"))?;
+            let c = self.sch.components.iter().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+            let refdes = c.refdes.clone();
+            let numbers: Vec<String> = {
+                let pins = c.pins();
+                if let Some((n, _)) = pins.iter().find(|(n, _)| n.eq_ignore_ascii_case(p)) {
+                    vec![n.clone()]
+                } else {
+                    let by_name: Vec<String> = pin_names(c).iter().filter(|(_, name)| name.eq_ignore_ascii_case(p)).map(|(n, _)| n.clone()).collect();
+                    if by_name.is_empty() {
+                        return Err(format!("{refdes} has no pin '{p}'"));
+                    }
+                    by_name
+                }
+            };
+            for n in numbers {
+                if self.sch.set_no_connect(&refdes, &n, !remove) {
+                    changed.push(format!("{refdes}.{n}"));
+                }
+            }
+        }
+        let all: Vec<String> = self.sch.no_connects.iter().map(|(r, p)| format!("{r}.{p}")).collect();
+        Ok(obj(json!({"changed": changed, "no_connects": all})))
+    }
+
     pub fn net(&mut self, args: &[String]) -> Res {
         if args.len() < 2 {
             return Err("net NAME REF.PIN [REF.PIN ...]".into());

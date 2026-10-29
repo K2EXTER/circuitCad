@@ -60,6 +60,15 @@ impl SchEditor {
                     Color32::from_rgb(190, 40, 40),
                 );
             }
+            // the pins left open on purpose: a cross over the pin
+            for (pin, p) in c.pins() {
+                if self.sch.is_no_connect(&c.refdes, &pin) {
+                    let at = self.to_screen(rect, (p.0 as f32, p.1 as f32));
+                    let s = Stroke::new(1.8, Color32::from_rgb(60, 90, 170));
+                    painter.line_segment([at + Vec2::new(-4.5, -4.5), at + Vec2::new(4.5, 4.5)], s);
+                    painter.line_segment([at + Vec2::new(-4.5, 4.5), at + Vec2::new(4.5, -4.5)], s);
+                }
+            }
             let f = FontId::proportional((self.zoom * 0.55).clamp(8.0, 18.0));
             let (x0, x1, y0, y1) = comp_extents(c);
             if c.kind.is_power_symbol() {
