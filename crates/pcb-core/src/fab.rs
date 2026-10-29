@@ -434,7 +434,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     if !guessed.is_empty() {
         out.push(check(
             Level::Warn,
-            format!("ランドパターンが概算の部品があります: {}", guessed.iter().take(5).cloned().collect::<Vec<_>>().join(", ")),
+            format!("ランドパターンが概算の部品があります: {}{}", guessed.iter().take(5).cloned().collect::<Vec<_>>().join(", "), if guessed.len() > 5 { format!(" ほか {} 個", guessed.len() - 5) } else { String::new() }),
             "部品ライブラリの寸法が、データシートの推奨ランドパターンから読み取ったものではありません。発注の前に、データシートの図面とパッドの位置・大きさ・ピン番号を照らし合わせてください。確認できたら、部品ファイルの land_unverified を消します",
             None,
         ));

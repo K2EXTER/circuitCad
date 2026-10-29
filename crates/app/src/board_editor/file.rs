@@ -159,6 +159,9 @@ impl BoardEditor {
         // A part added to the library folder after the program started (ccad part import, a file copied in) is not in `library` yet:
         // look in the folder itself before giving up on its footprint.
         let mut on_disk: Option<Vec<part_lib::PartDef>> = None;
+        // the footprints whose land is only roughly right are worked out again from the library each time (a part whose land was
+        // checked since loses its mark)
+        self.board.land_unverified.clear();
         let mut swaps: Vec<(String, pcb_core::swap::SwapSpec)> = vec![];
         for c in sch.components.iter().filter(|c| c.custom.is_some()) {
             let found = match sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint) {

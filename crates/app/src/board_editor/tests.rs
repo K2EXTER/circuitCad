@@ -2221,3 +2221,19 @@ fn a_rubber_band_takes_the_back_wiring_and_the_group_moves_with_it() {
     let back = &e.board.tracks[1];
     assert!((back.a.x - 13.0).abs() < 1e-6 && (back.a.y - 18.0).abs() < 1e-6, "{:?}", back.a);
 }
+
+/// The marks of the lands that are only roughly right follow the library at each import: a part whose land was checked since (the mark
+/// taken off its file) is no longer listed, though an older import had written it into the board.
+#[test]
+fn an_import_forgets_the_marks_of_lands_that_were_checked_since() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut sch = crate::schematic::SchEditor::default();
+    sch.load_path(root.join("arduino_minimal.schjson"));
+    let fp = sch.sch.flat().components.iter().find(|c| c.custom.is_some()).map(|c| c.footprint.clone()).expect("a library part");
+    let unflagged = !sch.library.iter().any(|d| d.footprint_name() == fp && d.land_unverified);
+    assert!(unflagged, "the test needs a part whose land is not marked");
+    let mut e = BoardEditor::default();
+    e.board.land_unverified.insert(fp.clone(), "STALE".into());
+    e.import_from_schematic(&sch);
+    assert!(!e.board.land_unverified.contains_key(&fp), "{:?}", e.board.land_unverified);
+}

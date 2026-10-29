@@ -31,7 +31,9 @@ impl Session {
                     return Err("the schematic has no parts to import".into());
                 }
                 let board = self.board.get_or_insert_with(|| Board::new("board", DEFAULT_SIZE.0, DEFAULT_SIZE.1));
-                // library parts bring their own footprint
+                // library parts bring their own footprint; the footprints whose land is only roughly right are worked out again from the
+                // library each time (a part whose land was checked since loses its mark)
+                board.land_unverified.clear();
                 let mut swaps: Vec<(String, pcb_core::swap::SwapSpec)> = vec![];
                 for c in self.sch.flat().components.iter().filter(|c| c.custom.is_some()) {
                     if let Some(spec) = c.custom.as_ref().and_then(|sym| part_lib::swap_for(&sym.name, &self.lib)) {
