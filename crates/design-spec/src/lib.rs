@@ -97,7 +97,7 @@ pub struct Bypass {
 #[serde(default)]
 pub struct Measure {
     pub name: String,
-    /// One of `MEASURES`: "length", "vias" or "fork".
+    /// One of `MEASURES`: "length", "vias", "fork", "gap", "guard" or "tap".
     pub what: String,
     /// Pads as "PART.PIN": length and vias take two (from, to), fork takes three (the pad the ways start at, and the two they go to).
     pub pads: Vec<String>,
@@ -111,7 +111,7 @@ pub struct Measure {
 }
 
 /// The kinds of measure: (key, what the table calls it, unit, pads needed).
-pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2)];
+pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("tap", "検出の線のつなぎ目 (内側の縁から)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2)];
 
 impl Measure {
     pub fn is_min(&self) -> bool {
@@ -233,7 +233,7 @@ impl DesignSpec {
         }
         for m in &self.measures {
             match m.kind() {
-                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork のどれかにしてください", m.name, m.what)),
+                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork / gap / guard / tap のどれかにしてください", m.name, m.what)),
                 Some((_, _, need)) if m.pads.len() != need => out.push(format!("測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります (いま {} 個)", m.name, m.pads.len())),
                 Some(_) => {}
             }

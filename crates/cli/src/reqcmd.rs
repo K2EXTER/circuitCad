@@ -195,7 +195,7 @@ impl Session {
                 }
             }
             "measure" => {
-                // req measure NAME what=length|vias|fork pads=A.1,B.1[,C.1] max=N | min=N [reason=...]
+                // req measure NAME what=length|vias|fork|tap pads=A.1,B.1[,C.1] max=N | min=N [reason=...]
                 if remove {
                     req.measures.retain(|m| m.name != name);
                     return self.req_list();
@@ -206,7 +206,7 @@ impl Session {
                 let k = match req.measures.iter().position(|m| m.name == name) {
                     Some(k) => k,
                     None => {
-                        let usage = "req measure NAME what=length|vias|fork|gap|guard pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [reason=...]  (length and vias take 2 pads, fork takes 3: the start and the two ends)";
+                        let usage = "req measure NAME what=length|vias|fork|gap|guard|tap pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [reason=...]  (length and vias take 2 pads, fork and tap take 3: the start and the two ends / the shunt pad, where the sense wire goes and the other pad of the shunt)";
                         let what = what.clone().filter(|w| design_spec::MEASURES.iter().any(|(k, ..)| k == w)).ok_or(usage)?;
                         let need = design_spec::MEASURES.iter().find(|(k, ..)| *k == what).map_or(2, |m| m.3);
                         let pads = pads.clone().filter(|p| p.len() == need).ok_or(usage)?;

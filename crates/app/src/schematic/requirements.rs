@@ -479,7 +479,7 @@ impl SchEditor {
                             }
                         });
                         let need = m.kind().map_or(2, |k| k.2);
-                        let hint = if m.what == "guard" { "1つ目: ガードされる検出のネット、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 A+SA,GRDA)" } else if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SA,SW*)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
+                        let hint = if m.what == "guard" { "1つ目: ガードされる検出のネット、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 A+SA,GRDA)" } else if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SA,SW*)" } else if m.what == "tap" { "1つ目: 実装用パッド (例: RS1.1)、2つ目: 検出の線の行き先のパッド (例: SS1.2)、3つ目: 抵抗のもう片方のパッド (例: RS1.2)。検出の線がパッドの銅につながる点を、もう片方のパッドに向いた縁から測る (0 = 内側の縁)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
                         if let Some(t) = text_cell(ui, buf, (5, k, 1), &m.pads.join(","), 230.0, hint) {
                             m.pads = list(&t);
                             changed = true;

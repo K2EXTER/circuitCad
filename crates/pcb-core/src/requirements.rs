@@ -202,6 +202,15 @@ pub struct Measured {
     pub at: Option<Point>,
 }
 
+/// The pad of the part and pin; with several (an exposed pad) the one that holds `near`.
+fn find_pad<'a>(board: &'a Board, r: &crate::drc::PadRef, near: Option<Point>) -> Option<&'a crate::model::Pad> {
+    let mut all = board.pads.iter().filter(|p| p.refdes == r.refdes && p.pin == r.pin);
+    let first = all.next()?;
+    let Some(n) = near else { return Some(first) };
+    let holds = |p: &crate::model::Pad| { let (w, h) = p.shape.size(); (n.x - p.pos.x).abs() <= w / 2.0 + 1e-6 && (n.y - p.pos.y).abs() <= h / 2.0 + 1e-6 };
+    Some(std::iter::once(first).chain(all).find(|p| holds(p)).unwrap_or(first))
+}
+
 /// Measure `m` on the copper graph `g`. Err: why it cannot be measured (a kind or pads the table got wrong, no copper between the pads).
 pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_spec::Measure) -> Result<Measured, String> {
     let g = &model.graph;
@@ -237,6 +246,21 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             let p = way(&pads[0], &pads[1])?;
             let value = if m.what == "length" { p.length } else { p.vias as f64 };
             Ok(Measured { value, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at: None })
+        }
+        "tap" => {
+            let p = way(&pads[0], &pads[1])?;
+            let (shunt, other) = (find_pad(board, &pads[0], p.points.first().map(|q| q.1)), find_pad(board, &pads[2], None));
+            let (Some(a), Some(b)) = (shunt, other) else { return Err(format!("測定「{}」: {} か {} のパッドが、基板にありません", m.name, pads[0], pads[2])) };
+            let (w, h) = a.shape.size();
+            let (dx, dy) = (b.pos.x - a.pos.x, b.pos.y - a.pos.y);
+            // the side that faces the partner pad: along x or along y
+            let (ux, uy, half) = if dx.abs() > dy.abs() { (dx.signum(), 0.0, w / 2.0) } else { (0.0, dy.signum(), h / 2.0) };
+            let inside = |q: &Point| (q.x - a.pos.x).abs() <= w / 2.0 + 1e-6 && (q.y - a.pos.y).abs() <= h / 2.0 + 1e-6;
+            // the point where the way leaves the pad: the last of its first points that lie on the pad's copper
+            let tap = p.points.iter().map(|(_, q)| *q).take_while(inside).last().unwrap_or(a.pos);
+            let depth = half - ((tap.x - a.pos.x) * ux + (tap.y - a.pos.y) * uy);
+            let edge = Point { x: tap.x + ux * depth, y: tap.y + uy * depth };
+            Ok(Measured { value: depth.max(0.0), ways: vec![vec![tap, edge]], at: Some(tap) })
         }
         _ => {
             let f = g.fork(&pads[0], &pads[1], &pads[2]).ok_or_else(|| format!("測定「{}」: {} から {} か {} へ、銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name, pads[0], pads[1], pads[2]))?;
@@ -747,6 +771,37 @@ mod tests {
         assert_eq!(rep.findings.len(), 2);
         assert_eq!(rep.waived.len(), 1);
         assert!(measure_marks(&b)[0].waived);
+    }
+
+    /// A tap: how far from the inner edge of the shunt pad (the edge that faces the other pad) a sense wire meets the pad's copper.
+    #[test]
+    fn a_sense_tap_is_measured_from_the_inner_edge_of_the_pad() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        // two 3.0 x 2.7 pads, 3.3 apart (centres), the sense pad far away
+        for (x, y, r, pin) in [(10.0, 20.0, "RS", "1"), (10.0, 16.7, "RS", "2"), (30.0, 20.0, "SS", "1")] {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 3.0, h: 2.7 }, None, Side::Top);
+            p.refdes = r.into();
+            p.pin = pin.into();
+            p.net = "N".into();
+            b.pads.push(p);
+        }
+        let m = |name: &str, limit: f64| design_spec::Measure { name: name.into(), what: "tap".into(), pads: ["RS.1", "SS.1", "RS.2"].iter().map(|s| s.to_string()).collect(), op: "max".into(), limit, reach: 0.0, note: String::new() };
+        // the sense wire starts at the outer side of the pad (y 20.5 is 0.5 below the centre, away from the partner above): 1.35 + 0.5 = 1.85 mm
+        wire(&mut b, (10.0, 20.5), (30.0, 20.5));
+        wire(&mut b, (30.0, 20.5), (30.0, 20.0));
+        let spec = DesignSpec { measures: vec![m("外側", 0.5)], ..Default::default() };
+        import_requirements(&mut b, &spec);
+        let rep = check(&b);
+        assert_eq!(rep.findings.len(), 1, "{:?} {:?}", rep.findings, rep.missing);
+        assert!(rep.findings[0].message.contains("1.85 mm"), "{}", rep.findings[0].message);
+        // moved to the inner side (y 19.0, 0.35 mm from the inner edge at 18.65): the tap is 0.35 mm in
+        b.tracks.clear();
+        wire(&mut b, (10.0, 19.0), (30.0, 19.0));
+        wire(&mut b, (30.0, 19.0), (30.0, 20.0));
+        let rep = check(&b);
+        assert!(rep.findings.is_empty(), "{:?} {:?}", rep.findings, rep.missing);
+        let marks = measure_marks(&b);
+        assert!((marks[0].value - 0.35).abs() < 1e-6, "{}", marks[0].value);
     }
 
     /// The gap between the copper of two nets (names or patterns): the nearest items, edge to edge.
