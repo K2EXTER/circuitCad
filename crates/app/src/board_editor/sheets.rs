@@ -80,9 +80,11 @@ impl BoardEditor {
         if colors.is_empty() {
             return;
         }
-        ui.horizontal(|ui| {
-            ui.checkbox(&mut self.show_sheets, "シートごとに色分け").on_hover_text("回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます");
-        });
+        // the colours are switched with the eye of "シートの色" in the list of what is shown; here only the list of the sheets
+        if !self.show_sheets {
+            return;
+        }
+        ui.label(egui::RichText::new("シート (色は右上の「物の表示とロック」の「シートの色」で切り替え)").small().color(Color32::GRAY));
         for (name, col) in colors {
             let parts: Vec<String> = self.board.part_sheets.iter().filter(|(_, s)| **s == name).map(|(r, _)| r.clone()).collect();
             ui.horizontal(|ui| {

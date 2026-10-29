@@ -177,18 +177,25 @@ impl CopperGraph {
                 }
             }
         }
+        // the box of each track (a prefilter: most pads and vias are nowhere near most tracks)
+        let tbox: Vec<(f64, f64, f64, f64)> = bd.tracks.iter().map(|k| (k.a.x.min(k.b.x) - k.width / 2.0, k.a.y.min(k.b.y) - k.width / 2.0, k.a.x.max(k.b.x) + k.width / 2.0, k.a.y.max(k.b.y) + k.width / 2.0)).collect();
+        let near_box = |t: &(f64, f64, f64, f64), c: Point, ext: f64| t.0 <= c.x + ext && t.2 >= c.x - ext && t.1 <= c.y + ext && t.3 >= c.y - ext;
         // pads: a node on each layer the pad is on, joined to the tracks that touch it
         let all: Vec<usize> = (0..layers.len()).collect();
         let mut pad_nodes: Vec<Vec<(usize, usize)>> = vec![]; // per pad: (layer, node)
         for (j, p) in board.pads.iter().enumerate() {
             let on: Vec<usize> = if p.drill.is_some() { all.clone() } else { layer_of(p.side).into_iter().collect() };
             let geo = shape_geo(p.pos, p.shape);
+            let ext = match p.shape {
+                PadShape::Circle { d } => d / 2.0,
+                PadShape::Rect { w, h } | PadShape::Oval { w, h } => w.max(h) / 2.0,
+            };
             let mut mine = vec![];
             for &l in &on {
                 let n = bd.new_node(l, p.pos);
                 mine.push((l, n));
                 for k in 0..bd.tracks.len() {
-                    if bd.tracks[k].layer == l && dist(&cap(&bd.tracks[k]), &geo) <= 0.0 {
+                    if bd.tracks[k].layer == l && near_box(&tbox[k], p.pos, ext) && dist(&cap(&bd.tracks[k]), &geo) <= 0.0 {
                         let m = bd.split(k, p.pos);
                         bd.link(m, n, 0.0, false);
                     }
@@ -236,7 +243,7 @@ impl CopperGraph {
                 let n = bd.new_node(l, v.pos);
                 mine.push(n);
                 for k in 0..bd.tracks.len() {
-                    if bd.tracks[k].layer == l && dist(&cap(&bd.tracks[k]), &vg) <= 0.0 {
+                    if bd.tracks[k].layer == l && near_box(&tbox[k], v.pos, v.diameter / 2.0) && dist(&cap(&bd.tracks[k]), &vg) <= 0.0 {
                         let m = bd.split(k, v.pos);
                         bd.link(m, n, 0.0, false);
                     }
@@ -673,6 +680,28 @@ mod tests {
             let c = guard_cover(&b, &net_set(s), &net_set(g), 1.0);
             println!("{s} <- {g}: {:?}", c.map(|c| (c.total, c.covered, c.bare.len())));
         }
+    }
+
+    /// How long the checks of the requirements take on a real board (set `CCAD_PATH_BOARD`); not run by default.
+    #[test]
+    #[ignore]
+    fn the_requirements_check_is_timed_on_a_real_board() {
+        let Ok(file) = std::env::var("CCAD_PATH_BOARD") else { return };
+        let mut b: Board = serde_json::from_str(&std::fs::read_to_string(file).unwrap()).unwrap();
+        let time = |f: &dyn Fn()| {
+            let t0 = std::time::Instant::now();
+            for _ in 0..5 {
+                f();
+            }
+            t0.elapsed() / 5
+        };
+        println!("check: {:?}", time(&|| drop(crate::requirements::check(&b))));
+        println!("marks: {:?}", time(&|| drop(crate::requirements::marks(&b))));
+        println!("requirements_hash: {:?}", time(&|| drop(crate::requirements::requirements_hash(&b))));
+        println!("geometry_key: {:?}", time(&|| drop(crate::zonefill::geometry_key(&b))));
+        println!("measure_marks: {:?}", time(&|| drop(crate::requirements::measure_marks(&b))));
+        b.measures.clear();
+        println!("check without measures: {:?}", time(&|| drop(crate::requirements::check(&b))));
     }
 }
 

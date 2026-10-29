@@ -2152,3 +2152,22 @@ fn applied_pin_trades_leave_the_board_and_come_back_with_undo() {
     e.undo();
     assert!(e.board.pin_map.contains_key("U1"), "undo brings the trade back");
 }
+
+/// The requirements check is kept until the copper or the rows of the table change (it walks the copper when the table has measures, and
+/// the panel asks every frame).
+#[test]
+fn the_requirements_answer_is_kept_until_the_board_or_the_table_changes() {
+    let mut e = BoardEditor::default();
+    for (x, name) in [(10.0, "R1"), (20.0, "R2")] {
+        e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top });
+    }
+    e.board.keep_apart.push(design_spec::KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["R2".into()], min_dist: 500.0, ..Default::default() });
+    let a = e.cached_requirements();
+    assert!(std::rc::Rc::ptr_eq(&a, &e.cached_requirements()), "the same answer while nothing changed");
+    assert_eq!(a.0.findings.len(), 1, "the two resistors are nearer than 500 mm");
+    // a row of the table changes: the answer is worked out again
+    e.board.waivers.push(design_spec::Waiver { kind: "apart".into(), name: "離す".into(), note: "x".into(), ..Default::default() });
+    let b = e.cached_requirements();
+    assert!(!std::rc::Rc::ptr_eq(&a, &b));
+    assert_eq!((b.0.findings.len(), b.0.waived.len()), (0, 1), "the finding is accepted now");
+}

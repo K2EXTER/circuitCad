@@ -151,6 +151,9 @@ struct CalcCache {
     rats: Option<std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>>>,
 }
 
+/// The answer of the requirements check and the measures of the table (`pcb_core::requirements::analyse`).
+type ReqAnswer = (pcb_core::requirements::RequirementsReport, Vec<pcb_core::requirements::MeasureMark>);
+
 /// What a click or a rubber band may pick up. Switching parts off makes them safe from accidental moves
 /// while selecting and moving vias and tracks.
 #[derive(Clone, Copy)]
@@ -356,8 +359,8 @@ pub struct BoardEditor {
     /// The pours as geometry (cut to the outline, cleared around other nets), kept until the board changes.
     /// What is worked out from the copper every frame (connections, unrouted lines), kept until the board changes.
     calc_cache: std::cell::RefCell<CalcCache>,
-    /// The measures of the requirements table, measured, with the key of the board they were measured on.
-    measure_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<Vec<pcb_core::requirements::MeasureMark>>)>>,
+    /// The requirements check and the measures of the table, with the key of the board they were worked out for.
+    req_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<ReqAnswer>)>>,
     zone_cache: std::cell::RefCell<ZoneCache>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
     island_cache: std::cell::RefCell<Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>>,
@@ -495,7 +498,7 @@ impl Default for BoardEditor {
             order: order::OrderState::default(),
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
-            measure_cache: std::cell::RefCell::new(None),
+            req_cache: std::cell::RefCell::new(None),
             zone_cache: std::cell::RefCell::new(None),
             island_cache: std::cell::RefCell::new(None),
             thermal_cache: std::cell::Cell::new(None),

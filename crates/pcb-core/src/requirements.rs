@@ -245,6 +245,22 @@ pub fn measure_one(board: &Board, g: &crate::drc::CopperGraph, m: &design_spec::
     }
 }
 
+/// The check and the marks of the table together, on one copper graph (what the editor asks for when the board has changed).
+pub fn analyse(board: &Board) -> (RequirementsReport, Vec<MeasureMark>) {
+    let graph = (!board.measures.is_empty()).then(|| crate::drc::CopperGraph::build(board));
+    (check_with(board, graph.as_ref()), measure_marks_with(board, graph.as_ref()))
+}
+
+/// A number that changes when anything the check reads besides the copper changes: the rows of the table that reached the board and the
+/// net classes (the editor keeps the answer of `analyse` until the copper or this changes).
+pub fn requirements_hash(board: &Board) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let parts = (&board.place_groups, &board.keep_apart, &board.bypass, &board.waivers, &board.measures, &board.net_classes);
+    serde_json::to_string(&parts).unwrap_or_default().hash(&mut h);
+    h.finish()
+}
+
 /// Is there anything in the board for the requirements check to look at?
 pub fn any(board: &Board) -> bool {
     !board.place_groups.is_empty()
@@ -316,6 +332,11 @@ fn net_findings(board: &Board) -> (Vec<Finding>, usize) {
 }
 
 pub fn check(board: &Board) -> RequirementsReport {
+    check_with(board, None)
+}
+
+/// [`check`], with the copper graph the measures need when the caller has built it (it costs ~100 ms on a big board).
+pub fn check_with(board: &Board, graph: Option<&crate::drc::CopperGraph>) -> RequirementsReport {
     let mut rep = RequirementsReport::default();
     let (nets, n) = net_findings(board);
     rep.checked += n;
@@ -324,10 +345,17 @@ pub fn check(board: &Board) -> RequirementsReport {
     }
     // the measures of the copper of a connection (the graph is built once, and only when there is something to measure)
     if !board.measures.is_empty() {
-        let g = crate::drc::CopperGraph::build(board);
+        let built;
+        let g = match graph {
+            Some(g) => g,
+            None => {
+                built = crate::drc::CopperGraph::build(board);
+                &built
+            }
+        };
         for m in &board.measures {
             rep.checked += 1;
-            match measure_one(board, &g, m) {
+            match measure_one(board, g, m) {
                 Err(why) => {
                     rep.checked -= 1;
                     rep.missing.push(why);
@@ -461,15 +489,27 @@ pub struct MeasureMark {
 /// The measures of the table, measured (those that cannot be measured are left out). Builds the copper graph: ask for it only when the
 /// board changed.
 pub fn measure_marks(board: &Board) -> Vec<MeasureMark> {
+    measure_marks_with(board, None)
+}
+
+/// [`measure_marks`], with the copper graph when the caller has built it.
+pub fn measure_marks_with(board: &Board, graph: Option<&crate::drc::CopperGraph>) -> Vec<MeasureMark> {
     if board.measures.is_empty() {
         return vec![];
     }
-    let g = crate::drc::CopperGraph::build(board);
+    let built;
+    let g = match graph {
+        Some(g) => g,
+        None => {
+            built = crate::drc::CopperGraph::build(board);
+            &built
+        }
+    };
     board
         .measures
         .iter()
         .filter_map(|m| {
-            let v = measure_one(board, &g, m).ok()?;
+            let v = measure_one(board, g, m).ok()?;
             let ok = if m.is_min() { v.value >= m.limit - 1e-9 } else { v.value <= m.limit + 1e-9 };
             let waived = board.waivers.iter().any(|w| w.kind == "measure" && w.name == m.name);
             Some(MeasureMark { name: m.name.clone(), ways: v.ways, at: v.at, value: v.value, limit: m.limit, is_min: m.is_min(), unit: m.kind().map_or("", |k| k.1).to_string(), ok, waived })

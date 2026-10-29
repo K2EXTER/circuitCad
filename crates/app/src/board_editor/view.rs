@@ -78,20 +78,18 @@ impl BoardEditor {
             .clone()
     }
 
-    /// The measures of the table, measured again only when the board changed (the copper graph costs 100 ms on a big board).
-    /// While parts are dragged the last answer stays, so that the drag is smooth.
-    pub(super) fn cached_measure_marks(&self) -> std::rc::Rc<Vec<pcb_core::requirements::MeasureMark>> {
-        if self.board.measures.is_empty() {
-            return std::rc::Rc::new(vec![]);
+    /// The requirements check and the measures of the table, worked out again only when the copper or the rows of the table changed
+    /// (the measures walk the copper: ~15 ms on a big board, and the panel and the picture ask every frame). While parts or a group
+    /// are dragged the last answer stays, so that the drag is smooth.
+    pub(super) fn cached_requirements(&self) -> std::rc::Rc<ReqAnswer> {
+        let key = pcb_core::zonefill::geometry_key(&self.board) ^ pcb_core::requirements::requirements_hash(&self.board).rotate_left(17);
+        let mut c = self.req_cache.borrow_mut();
+        if let Some((k, a)) = c.as_ref() && (*k == key || self.slow_results_kept()) {
+            return a.clone();
         }
-        let key = pcb_core::zonefill::geometry_key(&self.board) ^ (self.board.measures.len() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ (self.board.waivers.len() as u64).wrapping_mul(31);
-        let mut c = self.measure_cache.borrow_mut();
-        if let Some((k, m)) = c.as_ref() && (*k == key || self.slow_results_kept()) {
-            return m.clone();
-        }
-        let m = std::rc::Rc::new(pcb_core::requirements::measure_marks(&self.board));
-        *c = Some((key, m.clone()));
-        m
+        let a = std::rc::Rc::new(pcb_core::requirements::analyse(&self.board));
+        *c = Some((key, a.clone()));
+        a
     }
 
     pub(super) fn side_color(&self, s: Side) -> Color32 {

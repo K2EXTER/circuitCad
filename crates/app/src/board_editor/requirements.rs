@@ -2,7 +2,7 @@
 //! the board on import; see `pcb_core::requirements`), with a button that selects the parts of a group that is too spread out.
 
 use super::*;
-use pcb_core::requirements::{check, FindingKind};
+use pcb_core::requirements::FindingKind;
 
 /// Dark outline under the requirement frames and lines, so they stand out from the copper colours (top red, inner green, bottom blue).
 const HALO: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 200);
@@ -61,7 +61,8 @@ impl BoardEditor {
         }
         // the copper of a connection that the table limits: the way along the tracks (two ways and the place they part for a fork)
         // the ones that are fine first, so that what is wrong lies on top (and the tags of one place sit in a column, not on each other)
-        let measured = self.cached_measure_marks();
+        let answer = self.cached_requirements();
+        let measured = &answer.1;
         let mut order: Vec<(usize, &pcb_core::requirements::MeasureMark)> = measured.iter().enumerate().filter(|_| self.show_req_lines).collect();
         order.sort_by_key(|(_, m)| !m.ok);
         for (row, m) in order {
@@ -117,7 +118,8 @@ impl BoardEditor {
         if ui.checkbox(&mut both, "組と離す距離を基板の上に出す").on_hover_text("近くに置く組を枠で囲み (守れていれば緑、広がりすぎならピンク)、離す組の最も近い2つのパッドを線で結んで距離を書きます (足りなければピンク)。回路図の「設計の要件」の表が、基板の上で見えます。枠と線は、右上の「物の表示とロック」で別々に切り替えられます").changed() {
             (self.show_req_marks, self.show_req_lines) = (both, both);
         }
-        let rep = check(&self.board);
+        let answer = self.cached_requirements();
+        let rep = &answer.0;
         let orange = Color32::from_rgb(255, 180, 60);
         if rep.findings.is_empty() {
             ui.label(format!("✔ 設計の要件を満たしています ({} 件を確認)", rep.checked)).on_hover_text("回路図の「設計の要件」の表にある、近くに置く組と、離す組を調べました。上限や下限の0のものは調べません");
