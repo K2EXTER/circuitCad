@@ -36,6 +36,8 @@ pub enum Icon {
     Frame,
     /// A distance between two points.
     Gap,
+    /// Two sheets of paper, one over the other (the schematic sheets).
+    Sheet,
     Layers,
     Eye,
     EyeOff,
@@ -128,6 +130,10 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             p.rect_stroke(Rect::from_min_max(q(0.12, 0.2), q(0.88, 0.8)), 2.0, s, egui::StrokeKind::Inside);
             p.circle_filled(q(0.35, 0.5), u * 0.08, c);
             p.circle_filled(q(0.65, 0.5), u * 0.08, c);
+        }
+        Icon::Sheet => {
+            p.rect_stroke(Rect::from_min_max(q(0.1, 0.1), q(0.65, 0.65)), 1.0, Stroke::new(1.0, c), egui::StrokeKind::Inside);
+            p.rect_stroke(Rect::from_min_max(q(0.35, 0.35), q(0.9, 0.9)), 1.0, s, egui::StrokeKind::Inside);
         }
         Icon::Gap => {
             p.line_segment([q(0.15, 0.5), q(0.85, 0.5)], s);

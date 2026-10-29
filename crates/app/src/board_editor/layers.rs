@@ -118,6 +118,12 @@ impl BoardEditor {
                             kind(ui, Icon::Airwire, "未配線");
                             none(ui);
                             ui.end_row();
+                            if !self.board.part_sheets.is_empty() {
+                                eye(ui, &mut self.show_sheets, "回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります");
+                                kind(ui, Icon::Sheet, "シートの色");
+                                none(ui);
+                                ui.end_row();
+                            }
                             eye(ui, &mut self.show_req_marks, "回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎなら赤)。表がないときは何も出ません");
                             kind(ui, Icon::Frame, "要件の組 (枠)");
                             none(ui);

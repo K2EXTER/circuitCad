@@ -13,11 +13,13 @@ pub struct Prefs {
     pub req_frames: bool,
     pub req_groups: bool,
     pub req_lines: bool,
+    /// The colours of the schematic sheets on the board.
+    pub sheet_colors: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Self { icon_only: false, show_hints: true, model_zips: vec![], req_frames: true, req_groups: true, req_lines: true }
+        Self { icon_only: false, show_hints: true, model_zips: vec![], req_frames: true, req_groups: true, req_lines: true, sheet_colors: true }
     }
 }
 
@@ -43,12 +45,12 @@ impl Prefs {
         {
             model_zips.push(old.to_string());
         }
-        Self { icon_only: get("icon_only", d.icon_only), show_hints: get("show_hints", d.show_hints), model_zips, req_frames: get("req_frames", d.req_frames), req_groups: get("req_groups", d.req_groups), req_lines: get("req_lines", d.req_lines) }
+        Self { icon_only: get("icon_only", d.icon_only), show_hints: get("show_hints", d.show_hints), model_zips, req_frames: get("req_frames", d.req_frames), req_groups: get("req_groups", d.req_groups), req_lines: get("req_lines", d.req_lines), sheet_colors: get("sheet_colors", d.sheet_colors) }
     }
 
     /// Writes the file; the error text says what to do (the setting then only lasts until the app closes).
     pub fn save(&self, file: &Path) -> Result<(), String> {
-        let json = serde_json::json!({ "version": 1, "icon_only": self.icon_only, "show_hints": self.show_hints, "model_zips": self.model_zips, "req_frames": self.req_frames, "req_groups": self.req_groups, "req_lines": self.req_lines });
+        let json = serde_json::json!({ "version": 1, "icon_only": self.icon_only, "show_hints": self.show_hints, "model_zips": self.model_zips, "req_frames": self.req_frames, "req_groups": self.req_groups, "req_lines": self.req_lines, "sheet_colors": self.sheet_colors });
         file.parent()
             .map_or(Ok(()), std::fs::create_dir_all)
             .and_then(|_| std::fs::write(file, serde_json::to_string_pretty(&json).unwrap_or_default()))
@@ -65,7 +67,7 @@ mod tests {
         let d = std::env::temp_dir().join(format!("cc_prefs_{}", std::process::id()));
         let f = d.join("settings.json");
         assert_eq!(Prefs::load(&f), Prefs::default(), "no file: defaults");
-        let p = Prefs { icon_only: true, show_hints: false, model_zips: vec!["C:/m/grm.zip".into()], req_frames: false, req_groups: true, req_lines: false };
+        let p = Prefs { icon_only: true, show_hints: false, model_zips: vec!["C:/m/grm.zip".into()], req_frames: false, req_groups: true, req_lines: false, sheet_colors: false };
         p.save(&f).unwrap();
         assert_eq!(Prefs::load(&f), p);
         std::fs::write(&f, r#"{"icon_only": true}"#).unwrap();

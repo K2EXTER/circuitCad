@@ -52,7 +52,7 @@ struct App {
     sch: SchEditor,
     board_ed: BoardEditor,
     /// The three switches of the requirements' frames and lines as last written to the settings (the file is written when one changes).
-    req_view: (bool, bool, bool),
+    req_view: (bool, bool, bool, bool),
     /// Where the screenshot being taken goes (the capture arrives a frame after the request).
     shot_path: Option<std::path::PathBuf>,
     help: help::Help,
@@ -97,7 +97,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
     }
 }
 
@@ -111,12 +111,12 @@ impl eframe::App for App {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
-        // the switches of the requirements' frames survive a restart
-        let now = (self.sch.req_frames, self.board_ed.show_req_marks, self.board_ed.show_req_lines);
+        // the switches of the requirements' frames and of the sheet colours survive a restart
+        let now = (self.sch.req_frames, self.board_ed.show_req_marks, self.board_ed.show_req_lines, self.board_ed.show_sheets);
         if now != self.req_view {
             self.req_view = now;
             let file = prefs::Prefs::default_file();
-            if let Err(e) = (prefs::Prefs { req_frames: now.0, req_groups: now.1, req_lines: now.2, ..prefs::Prefs::load(&file) }).save(&file) {
+            if let Err(e) = (prefs::Prefs { req_frames: now.0, req_groups: now.1, req_lines: now.2, sheet_colors: now.3, ..prefs::Prefs::load(&file) }).save(&file) {
                 self.sch.status = e;
             }
         }
@@ -509,8 +509,8 @@ fn main() -> eframe::Result {
             let prefs = prefs::Prefs::load(&prefs::Prefs::default_file());
             app.show_hints = prefs.show_hints;
             icons::set_icon_only(prefs.icon_only);
-            (app.sch.req_frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines) = (prefs.req_frames, prefs.req_groups, prefs.req_lines);
-            app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines);
+            (app.sch.req_frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines, app.board_ed.show_sheets) = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
+            app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)

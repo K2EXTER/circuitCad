@@ -364,7 +364,7 @@ pub struct BoardEditor {
     /// The net under the pointer when the right-click menu was opened (Select tool, not on a pour's corner or edge).
     net_menu: Option<String>,
     /// Tint the parts by the schematic sheet they come from.
-    show_sheets: bool,
+    pub show_sheets: bool,
     /// Frames round the groups of the design's requirements, and lines between the parts that must keep apart, drawn on the board.
     pub show_req_marks: bool,
     /// The lines between the nearest pads of the parts that must keep apart (with the distance).
