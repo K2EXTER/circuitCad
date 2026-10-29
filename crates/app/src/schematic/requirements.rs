@@ -3,7 +3,7 @@
 //! (net classes, currents, placement groups, distances); the board editor checks the placement against it.
 
 use super::*;
-use design_spec::{KeepApart, LinkWidth, NetRule, PlaceGroup};
+use design_spec::{Bypass, KeepApart, LinkWidth, NetRule, PlaceGroup};
 use pcb_core::model::Role;
 use std::collections::HashMap;
 
@@ -131,6 +131,7 @@ impl SchEditor {
         let mut open = true;
         let mut changed = false;
         let (mut run_dc, mut apply_now) = (false, false);
+        let (mut run_bp, mut apply_bp) = (false, false);
         egui::Window::new("設計の要件").open(&mut open).default_size([1200.0, 620.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
             ui.label("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。")
                 .on_hover_text("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます");
@@ -300,6 +301,59 @@ impl SchEditor {
                     apply_now = true;
                 }
             });
+            let (bp, bp_msg) = (&mut self.req_bp_suggest, &self.req_bp_msg);
+            egui::CollapsingHeader::new(format!("バイパスの対応 ({}) (?)", spec.bypass.len())).id_salt("req_bypass").default_open(true).show(ui, |ui| {
+                ui.label("どのコンデンサが、どの IC のためのものかを書きます。").on_hover_text("電源のネットが同じだと、回路図のつなぎ方だけでは、コンデンサがどの IC のためのものか分かりません (ラベルでつなぐと、置いた場所も当てになりません)。ここに書くと、基板の自動配置がそのコンデンサを、その IC の電源ピンのそばに置き、点検もその IC のピンからの距離を調べます。書いていないコンデンサは、これまでどおり自動で決めます");
+                let mut remove = None;
+                egui::Grid::new("req_bypass_grid").num_columns(4).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
+                    for h in ["IC", "コンデンサ (, 区切り)", "理由", ""] {
+                        ui.strong(h);
+                    }
+                    ui.end_row();
+                    for (k, b) in spec.bypass.iter_mut().enumerate() {
+                        if let Some(t) = text_cell(ui, buf, (3, k, 0), &b.ic, 80.0, "IC の部品番号 (例: U3)") {
+                            b.ic = t.trim().to_string();
+                            changed = true;
+                        }
+                        if let Some(t) = text_cell(ui, buf, (3, k, 1), &b.caps.join(","), 230.0, "この IC のバイパスコンデンサの部品番号を , で区切って書きます (例: C5,C6)") {
+                            b.caps = list(&t);
+                            changed = true;
+                        }
+                        if let Some(t) = reason_cell(ui, buf, (3, k, 2), &b.note, 440.0, "なぜそのコンデンサがその IC のものか (例: 同じシートで、U3 の電源ピン 8 の隣に置く)") {
+                            b.note = t;
+                            changed = true;
+                        }
+                        if ui.button("削除").on_hover_text("この行を消します").clicked() {
+                            remove = Some(k);
+                        }
+                        ui.end_row();
+                    }
+                });
+                if let Some(k) = remove {
+                    spec.bypass.remove(k);
+                    buf.clear();
+                    changed = true;
+                }
+                ui.horizontal(|ui| {
+                    if ui.button("＋ 対応を足す").on_hover_text("新しい行を足します").clicked() {
+                        spec.bypass.push(Bypass::default());
+                        buf.clear();
+                        changed = true;
+                    }
+                    if ui.button("回路から提案を作る").on_hover_text("対応が書かれていないコンデンサについて、どの IC のものかを回路から推測して、提案します。電源のネットを持つ IC のうち、両側の電源を持つもの → 同じシートのもの → コンデンサの数が少ないもの、の順に決めます。提案ごとに、決めた理由が出ます。違うものはチェックを外してください").clicked() {
+                        run_bp = true;
+                    }
+                });
+                if !bp_msg.is_empty() {
+                    ui.label(bp_msg);
+                }
+                for (on, s) in bp.iter_mut() {
+                    ui.checkbox(on, &s.text);
+                }
+                if bp.iter().any(|(on, _)| *on) && ui.button("選んだものを表に入れる").on_hover_text("チェックの付いた提案を、上の表に書き込みます。理由の欄は空で入るので、あとで書いてください").clicked() {
+                    apply_bp = true;
+                }
+            });
             egui::CollapsingHeader::new(format!("離す組 ({}) (?)", spec.apart.len())).id_salt("req_apart").default_open(true).show(ui, |ui| {
                 ui.label("降圧のスイッチングノードと、基準・ADC・検出線のように、離しておくものどうしを書きます。").on_hover_text("書くのは部品番号か、ネット名です (部品番号が先に見つかれば部品、なければネットの全パッド。末尾の * も使えます)。基板の画面で、いちばん近い2つのパッドの距離が下限より近くないかを調べます");
                 let mut remove = None;
@@ -348,6 +402,21 @@ impl SchEditor {
         });
         if run_dc {
             self.requirements_from_dc();
+        }
+        if run_bp {
+            self.req_bp_suggest = self.sch.bypass_suggestions().into_iter().map(|s| (true, s)).collect();
+            self.req_bp_msg = if self.req_bp_suggest.is_empty() { "提案できるコンデンサは、ありませんでした (すべて書いてあるか、電源につながる IC が見つかりません)".into() } else { format!("{} 件の提案があります", self.req_bp_suggest.len()) };
+        }
+        if apply_bp {
+            for (on, s) in std::mem::take(&mut self.req_bp_suggest) {
+                if on {
+                    s.apply(&mut self.sch.requirements);
+                }
+            }
+            self.req_buf.clear();
+            self.req_bp_suggest = self.sch.bypass_suggestions().into_iter().map(|s| (true, s)).collect();
+            self.req_bp_msg = "表に入れました".into();
+            changed = true;
         }
         if apply_now {
             for (on, s) in std::mem::take(&mut self.req_suggest) {

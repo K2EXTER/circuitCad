@@ -8,7 +8,7 @@ impl BoardEditor {
     /// The groups as frames (green when the farthest two parts are within the limit, red when not, a tag with the name and the numbers) and the
     /// distances to keep as a line between the nearest two pads (green when long enough, red when too short, the distance at the middle).
     pub(super) fn draw_requirement_marks(&self, painter: &egui::Painter, rect: Rect) {
-        if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || (self.board.place_groups.is_empty() && self.board.keep_apart.is_empty()) {
+        if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || (self.board.place_groups.is_empty() && self.board.keep_apart.is_empty() && self.board.bypass.is_empty()) {
             return;
         }
         let marks = pcb_core::requirements::marks(&self.board);
@@ -36,6 +36,19 @@ impl BoardEditor {
             let tag = Rect::from_min_size(Pos2::new(x, r.top() - galley.size().y - 6.0), size);
             painter.rect_filled(tag, 3.0, col);
             painter.galley(tag.min + Vec2::new(4.0, 1.5), galley, Color32::BLACK);
+        }
+        // a bypass capacitor and the IC pin the table says it serves: a thin line (green when near enough, red when far)
+        for b in marks.bypass.iter().filter(|_| self.show_req_lines) {
+            let col = if b.ok { good } else { bad };
+            let (p, q) = (self.to_screen(rect, b.a), self.to_screen(rect, b.b));
+            painter.line_segment([p, q], Stroke::new(if b.ok { 1.0 } else { 2.0 }, col));
+            painter.circle_stroke(q, 4.0, Stroke::new(1.5, col));
+            if !b.ok || self.zoom >= 14.0 {
+                let galley = painter.layout_no_wrap(format!("{}→{} {:.1} mm", b.cap, b.ic, b.actual), egui::FontId::proportional(11.0), Color32::BLACK);
+                let tag = Rect::from_center_size(p.lerp(q, 0.5), galley.size() + Vec2::new(6.0, 2.0));
+                painter.rect_filled(tag, 3.0, col);
+                painter.galley(tag.min + Vec2::new(3.0, 1.0), galley, Color32::BLACK);
+            }
         }
         for a in marks.apart.iter().filter(|_| self.show_req_lines) {
             let col = if a.ok { good } else { bad };

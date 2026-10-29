@@ -3,6 +3,8 @@
 //! over (net classes, currents, placement groups, distances to check). They are written as the person who designs the board would
 //! say them, so the same sentences can be read back from the file.
 
+pub mod netnames;
+
 use serde::{Deserialize, Serialize};
 
 /// The words a net's role can have (the board's `Role`, by name); empty = none.
@@ -65,17 +67,31 @@ pub struct KeepApart {
     pub note: String,
 }
 
+/// The bypass capacitors of one IC ("C5 and C6 are for U3"). The schematic does not say which IC a capacitor on a shared supply serves
+/// (the nets are the same wherever it is drawn); this does, for the placement (the capacitor goes by the IC's supply pin) and the check.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Bypass {
+    /// The IC's reference designator.
+    pub ic: String,
+    /// The capacitors' reference designators.
+    pub caps: Vec<String>,
+    pub note: String,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DesignSpec {
     pub net_rules: Vec<NetRule>,
     pub groups: Vec<PlaceGroup>,
     pub apart: Vec<KeepApart>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub bypass: Vec<Bypass>,
 }
 
 impl DesignSpec {
     pub fn is_empty(&self) -> bool {
-        self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty()
+        self.net_rules.is_empty() && self.groups.is_empty() && self.apart.is_empty() && self.bypass.is_empty()
     }
 
     /// The rows that give no reason (the note is empty): one sentence for each. A table is read by people who were not there when it was
@@ -86,6 +102,7 @@ impl DesignSpec {
         out.extend(self.net_rules.iter().filter(|r| empty(&r.note)).map(|r| format!("ネットの役割「{}」", r.name)));
         out.extend(self.groups.iter().filter(|g| empty(&g.note)).map(|g| format!("近くに置く組「{}」", g.name)));
         out.extend(self.apart.iter().filter(|a| empty(&a.note)).map(|a| format!("離す組「{}」", a.name)));
+        out.extend(self.bypass.iter().filter(|b| empty(&b.note)).map(|b| format!("バイパスの対応「{}」", b.ic)));
         out
     }
 
@@ -114,6 +131,11 @@ impl DesignSpec {
         for a in &self.apart {
             for n in a.a.iter().chain(&a.b).filter(|n| !part_known(n) && !net_known(n)) {
                 out.push(format!("離す組「{}」の `{n}` は、部品にもネットにもありません", a.name));
+            }
+        }
+        for b in &self.bypass {
+            for n in std::iter::once(&b.ic).chain(&b.caps).filter(|n| !part_known(n)) {
+                out.push(format!("バイパスの対応「{}」の `{n}` という部品は、回路にありません", b.ic));
             }
         }
         out
@@ -146,6 +168,7 @@ mod tests {
             net_rules: vec![NetRule { name: "検出".into(), nets: vec!["SA".into(), "XX".into()], role: "sense".into(), ..Default::default() }],
             groups: vec![PlaceGroup { name: "入口".into(), parts: vec!["J3A".into(), "Z9".into()], ..Default::default() }],
             apart: vec![KeepApart { name: "降圧".into(), a: vec!["BKSW".into()], b: vec!["U8".into(), "ZZ".into()], min_dist: 20.0, ..Default::default() }],
+            ..Default::default()
         };
         let parts: Vec<String> = ["J3A", "U8"].iter().map(|s| s.to_string()).collect();
         let nets: Vec<String> = ["SA", "BKSW"].iter().map(|s| s.to_string()).collect();
@@ -171,6 +194,8 @@ pub enum Fill {
     RowCurrent { row: usize, amps: f64 },
     /// A net that carries a big current and is in no row: a row of its own.
     NewRow { net: String, amps: f64 },
+    /// A capacitor that serves an IC (found from the circuit, not from an analysis).
+    Bypass { ic: String, cap: String },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -223,6 +248,70 @@ pub fn suggest_from_currents(spec: &DesignSpec, currents: &[(String, f64)]) -> V
     out
 }
 
+/// A part of the circuit as the bypass suggestions see it.
+#[derive(Clone, Debug, Default)]
+pub struct PartView {
+    pub refdes: String,
+    /// The sheet it is drawn on.
+    pub sheet: String,
+    /// How many pins the part has (an IC has 8 or more).
+    pub pin_count: usize,
+    /// The net of each pin that is on a net.
+    pub nets: Vec<String>,
+}
+
+/// An IC has this many pins or more (as on the board: `autoplace`'s IC blocks).
+const IC_PINS: usize = 8;
+
+/// Which IC each bypass capacitor serves, for the capacitors the table does not place yet. A capacitor has a pin on a supply and a pin on
+/// another rail (ground or a supply); it goes to an IC (`U…` with 8 pins or more) that has a pin on its supply net: of those, the ones that
+/// also have its other net (a capacitor between VCC and VNEG goes to the IC that runs between them), then the ones on the same sheet,
+/// then the one that has the fewest capacitors so far. Each suggestion says which of these decided. (The net labels say nothing about where
+/// a capacitor is drawn, so the position on the sheet is not used; the sheet is.)
+pub fn suggest_bypass(spec: &DesignSpec, parts: &[PartView]) -> Vec<Suggestion> {
+    use netnames::{is_ground_net, is_negative_supply_net, is_supply_net};
+    let supply = |n: &str| is_supply_net(n) || is_negative_supply_net(n);
+    let rail = |n: &str| supply(n) || is_ground_net(n);
+    let ics: Vec<&PartView> = parts.iter().filter(|p| p.refdes.starts_with('U') && p.pin_count >= IC_PINS).collect();
+    let mut count: std::collections::BTreeMap<&str, usize> = Default::default();
+    for b in &spec.bypass {
+        *count.entry(b.ic.as_str()).or_default() += b.caps.len();
+    }
+    let mut caps: Vec<&PartView> = parts.iter().filter(|p| p.refdes.starts_with('C') && !spec.bypass.iter().any(|b| b.caps.contains(&p.refdes))).collect();
+    caps.sort_by(|a, b| a.refdes.cmp(&b.refdes));
+    let mut out = vec![];
+    for cap in caps {
+        let Some(sp) = cap.nets.iter().find(|n| supply(n) && cap.nets.iter().any(|o| o != *n && rail(o))) else { continue };
+        let other = cap.nets.iter().find(|o| *o != sp && rail(o));
+        let has = |ic: &PartView, net: &str| ic.nets.iter().any(|n| n == net);
+        let mut fit: Vec<&PartView> = ics.iter().copied().filter(|ic| has(ic, sp)).collect();
+        if fit.is_empty() {
+            continue;
+        }
+        let mut why = if fit.len() == 1 { "その電源につながる IC は、これだけです" } else { "" };
+        if fit.len() > 1 && fit.iter().any(|ic| other.is_some_and(|o| has(ic, o))) {
+            fit.retain(|ic| other.is_some_and(|o| has(ic, o)));
+            if fit.len() == 1 {
+                why = "コンデンサの両側の電源を、ともに持つ IC です";
+            }
+        }
+        if fit.len() > 1 && fit.iter().any(|ic| !cap.sheet.is_empty() && ic.sheet == cap.sheet) {
+            fit.retain(|ic| ic.sheet == cap.sheet);
+            if fit.len() == 1 {
+                why = "同じシートの IC です";
+            }
+        }
+        fit.sort_by_key(|ic| count.get(ic.refdes.as_str()).copied().unwrap_or(0));
+        let ic = fit[0];
+        if why.is_empty() {
+            why = "候補が複数あります (持っているコンデンサの数が少ない IC を選びました。確かめてください)";
+        }
+        *count.entry(ic.refdes.as_str()).or_default() += 1;
+        out.push(Suggestion { text: format!("{} は {} のバイパスコンデンサ ({why})", cap.refdes, ic.refdes), fill: Fill::Bypass { ic: ic.refdes.clone(), cap: cap.refdes.clone() } });
+    }
+    out
+}
+
 impl Suggestion {
     /// Write it into the table. A row that was found by its number is looked up again by the table's size (the table may have changed).
     pub fn apply(&self, spec: &mut DesignSpec) {
@@ -238,6 +327,15 @@ impl Suggestion {
                     spec.net_rules.push(NetRule { name: format!("{net} (解析)"), nets: vec![net.clone()], role: role.into(), current: *amps, ..Default::default() });
                 }
             }
+            Fill::Bypass { ic, cap } => {
+                if spec.bypass.iter().any(|b| b.caps.contains(cap)) {
+                    return;
+                }
+                match spec.bypass.iter_mut().find(|b| &b.ic == ic) {
+                    Some(b) => b.caps.push(cap.clone()),
+                    None => spec.bypass.push(Bypass { ic: ic.clone(), caps: vec![cap.clone()], note: String::new() }),
+                }
+            }
         }
     }
 }
@@ -245,6 +343,39 @@ impl Suggestion {
 #[cfg(test)]
 mod suggest_tests {
     use super::*;
+
+    fn view(r: &str, sheet: &str, pins: usize, nets: &[&str]) -> PartView {
+        PartView { refdes: r.into(), sheet: sheet.into(), pin_count: pins, nets: nets.iter().map(|s| s.to_string()).collect() }
+    }
+
+    #[test]
+    fn a_bypass_capacitor_goes_to_the_ic_of_its_sheet_and_the_choice_says_why() {
+        let parts = vec![
+            view("U1", "電源", 8, &["VCC", "GND", "A"]),
+            view("U2", "計測", 8, &["VCC", "GND", "B"]),
+            view("C1", "計測", 2, &["VCC", "GND"]),
+            view("C2", "電源", 2, &["VCC", "GND"]),
+            view("C3", "電源", 2, &["VCC", "VNEG"]),
+            view("U3", "電源", 8, &["VCC", "VNEG"]),
+            view("R1", "電源", 2, &["VCC", "A"]),
+        ];
+        let found = suggest_bypass(&DesignSpec::default(), &parts);
+        let by = |cap: &str| found.iter().find_map(|s| match &s.fill { Fill::Bypass { ic, cap: c } if c == cap => Some((ic.clone(), s.text.clone())), _ => None });
+        assert_eq!(by("C1").unwrap().0, "U2", "same sheet");
+        assert_eq!(by("C2").unwrap().0, "U1", "same sheet");
+        assert_eq!(by("C3").unwrap().0, "U3", "the one that has both supplies");
+        assert!(by("C3").unwrap().1.contains("両側"));
+        assert!(by("R1").is_none(), "a resistor is no bypass capacitor");
+        // what the table says is left alone, and a suggestion that is applied joins the row of its IC
+        let mut spec = DesignSpec { bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: "手で".into() }], ..Default::default() };
+        let rest = suggest_bypass(&spec, &parts);
+        assert!(rest.iter().all(|s| !matches!(&s.fill, Fill::Bypass { cap, .. } if cap == "C1")));
+        for s in &rest {
+            s.apply(&mut spec);
+        }
+        assert_eq!(spec.bypass.iter().find(|b| b.ic == "U1").unwrap().caps, vec!["C1".to_string(), "C2".to_string()]);
+        assert!(spec.bypass.iter().any(|b| b.ic == "U3" && b.caps == vec!["C3".to_string()]));
+    }
 
     #[test]
     fn the_rows_without_a_reason_are_listed() {
@@ -255,8 +386,9 @@ mod suggest_tests {
             ],
             groups: vec![PlaceGroup { name: "ループ".into(), parts: vec!["U1".into(), "L1".into()], ..Default::default() }],
             apart: vec![KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["L1".into()], min_dist: 6.0, note: "雑音".into() }],
+            bypass: vec![Bypass { ic: "U1".into(), caps: vec!["C1".into()], note: String::new() }],
         };
-        assert_eq!(spec.unexplained(), vec!["ネットの役割「帰還」".to_string(), "近くに置く組「ループ」".to_string()]);
+        assert_eq!(spec.unexplained(), vec!["ネットの役割「帰還」".to_string(), "近くに置く組「ループ」".to_string(), "バイパスの対応「U1」".to_string()]);
         assert!(DesignSpec::default().unexplained().is_empty());
     }
 

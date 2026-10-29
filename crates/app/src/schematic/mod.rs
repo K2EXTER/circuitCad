@@ -200,6 +200,9 @@ pub struct SchEditor {
     req_open: bool,
     /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
     pub req_frames: bool,
+    /// The suggestions for the bypass section of the requirements table (each with its tick), and the sentence about them.
+    req_bp_suggest: Vec<(bool, design_spec::Suggestion)>,
+    req_bp_msg: String,
     req_buf: requirements::Buffers,
     req_problems: Vec<String>,
     /// What the last DC analysis suggests for the table (ticked or not), the currents it came from, and a sentence about the run.
@@ -490,6 +493,8 @@ impl Default for SchEditor {
             wiz_open: false,
             req_open: false,
             req_frames: true,
+            req_bp_suggest: vec![],
+            req_bp_msg: String::new(),
             req_buf: Default::default(),
             req_problems: vec![],
             req_suggest: vec![],

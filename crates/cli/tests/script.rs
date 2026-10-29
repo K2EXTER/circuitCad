@@ -1052,6 +1052,27 @@ board quality top=3 sort=length
 }
 
 #[test]
+fn a_bypass_row_is_listed_checked_against_the_circuit_and_removed() {
+    let (a, ok) = run("new
+add R 10k as=R1
+add R 4.7k as=R2
+net MID R1.2 R2.1
+        req bypass U9 caps=R1,C9 reason=電源ピンの隣に置く
+        req
+        req bypass U9 remove=1
+        req
+");
+    assert!(ok, "{a:?}");
+    let tables: Vec<&Value> = a.iter().filter(|v| v.get("bypass").is_some()).collect();
+    assert_eq!(tables[0]["bypass"][0]["ic"], "U9");
+    assert_eq!(tables[0]["bypass"][0]["caps"], serde_json::json!(["R1", "C9"]));
+    assert_eq!(tables[0]["bypass"][0]["note"], "電源ピンの隣に置く");
+    // U9 and C9 are not in the circuit
+    assert_eq!(tables[0]["problems"].as_array().unwrap().len(), 2, "{}", tables[0]);
+    assert!(tables.last().unwrap()["bypass"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn the_rows_of_the_requirements_table_without_a_reason_are_listed() {
     let (a, ok) = run("new
 add R 10k as=R1

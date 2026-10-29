@@ -3,7 +3,7 @@
 
 use crate::session::{obj, opt, options, Session};
 use crate::Res;
-use design_spec::{KeepApart, LinkWidth, NetRule, PlaceGroup, ROLES};
+use design_spec::{Bypass, KeepApart, LinkWidth, NetRule, PlaceGroup, ROLES};
 use serde_json::{json, Value};
 
 fn names(v: &str) -> Vec<String> {
@@ -44,6 +44,7 @@ impl Session {
             "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
+            "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
             "unexplained": r.unexplained(),
         })))
@@ -56,7 +57,7 @@ impl Session {
         let (pos, kv) = options(args);
         let Some(kind) = pos.first().map(|s| s.to_ascii_lowercase()) else { return self.req_list() };
         if kind == "suggest" {
-            return self.req_suggest(opt(&kv, "apply") == Some("1"));
+            return self.req_suggest(opt(&kv, "apply") == Some("1"), opt(&kv, "bypass") == Some("1"));
         }
         let name = pos.get(1).ok_or("req net|group|apart NAME ...")?.clone();
         let remove = opt(&kv, "remove") == Some("1");
@@ -120,6 +121,28 @@ impl Session {
                     g.note = t;
                 }
             }
+            "bypass" => {
+                if remove {
+                    req.bypass.retain(|b| b.ic != name);
+                    return self.req_list();
+                }
+                let caps = opt(&kv, "caps").map(names);
+                let k = match req.bypass.iter().position(|b| b.ic == name) {
+                    Some(k) => k,
+                    None => {
+                        let caps = caps.clone().filter(|c| !c.is_empty()).ok_or("req bypass IC caps=C1,C2 [reason=...]  (a new row needs its capacitors)")?;
+                        req.bypass.push(Bypass { ic: name.clone(), caps, ..Default::default() });
+                        req.bypass.len() - 1
+                    }
+                };
+                let b = &mut req.bypass[k];
+                if let Some(c) = caps {
+                    b.caps = c;
+                }
+                if let Some(t) = text {
+                    b.note = t;
+                }
+            }
             "apart" => {
                 if remove {
                     req.apart.retain(|a| a.name != name);
@@ -147,19 +170,32 @@ impl Session {
                     a.note = t;
                 }
             }
-            other => return Err(format!("req {other}: use net, group or apart")),
+            other => return Err(format!("req {other}: use net, group, apart or bypass")),
         }
         self.req_list()
     }
 
     /// `req suggest [apply=1]`: what the DC analysis says about the table (the current of each net): the empty currents of the rows, and
     /// the big nets that have no row. `apply=1` writes them into the table (what the table states is left alone).
-    fn req_suggest(&mut self, apply: bool) -> Res {
+    fn req_suggest(&mut self, apply: bool, bypass: bool) -> Res {
+        if bypass {
+            let found = self.sch.bypass_suggestions();
+            let list: Vec<Value> = found.iter().map(|s| match &s.fill {
+                design_spec::Fill::Bypass { ic, cap } => json!({"text": s.text, "ic": ic, "cap": cap}),
+                _ => json!({"text": s.text}),
+            }).collect();
+            if apply {
+                for s in &found {
+                    s.apply(&mut self.sch.requirements);
+                }
+            }
+            return Ok(obj(json!({"suggestions": list, "applied": apply, "count": found.len()})));
+        }
         let c = self.circuit().map_err(|e| format!("req suggest needs a circuit that can be analysed: {e}"))?;
         let dc = sim_core::dc_op(&c).map_err(|e| format!("DC analysis failed: {e}"))?;
         let currents = sim_core::net_currents(&c, &dc);
         let found = design_spec::suggest_from_currents(&self.sch.requirements, &currents);
-        let list: Vec<Value> = found.iter().map(|s| json!({"text": s.text, "row": match &s.fill { design_spec::Fill::RowCurrent { row, .. } => json!(row), _ => Value::Null }, "net": match &s.fill { design_spec::Fill::NewRow { net, .. } => json!(net), _ => Value::Null }, "amps": match &s.fill { design_spec::Fill::RowCurrent { amps, .. } | design_spec::Fill::NewRow { amps, .. } => *amps }})).collect();
+        let list: Vec<Value> = found.iter().map(|s| json!({"text": s.text, "row": match &s.fill { design_spec::Fill::RowCurrent { row, .. } => json!(row), _ => Value::Null }, "net": match &s.fill { design_spec::Fill::NewRow { net, .. } => json!(net), _ => Value::Null }, "amps": match &s.fill { design_spec::Fill::RowCurrent { amps, .. } | design_spec::Fill::NewRow { amps, .. } => *amps, design_spec::Fill::Bypass { .. } => 0.0 }})).collect();
         if apply {
             for s in &found {
                 s.apply(&mut self.sch.requirements);
@@ -175,8 +211,8 @@ impl Session {
         let findings: Vec<Value> = rep
             .findings
             .iter()
-            .map(|f| json!({"kind": if f.kind == pcb_core::requirements::FindingKind::Group { "group" } else { "apart" }, "name": f.name, "message": f.message, "actual_mm": (f.actual * 10.0).round() / 10.0, "limit_mm": f.limit}))
+            .map(|f| json!({"kind": match f.kind { pcb_core::requirements::FindingKind::Group => "group", pcb_core::requirements::FindingKind::Apart => "apart", pcb_core::requirements::FindingKind::Bypass => "bypass" }, "name": f.name, "message": f.message, "actual_mm": (f.actual * 10.0).round() / 10.0, "limit_mm": f.limit}))
             .collect();
-        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "missing": rep.missing})))
+        Ok(obj(json!({"groups": board.place_groups.len(), "apart": board.keep_apart.len(), "links": board.link_widths.len(), "bypass": board.bypass.iter().map(|b| b.caps.len()).sum::<usize>(), "checked": rep.checked, "violations": findings.len(), "findings": findings, "missing": rep.missing})))
     }
 }

@@ -15,6 +15,8 @@ pub struct RequirementsImport {
     pub apart: usize,
     /// Wires between two parts with a width of their own.
     pub links: usize,
+    /// Capacitors that the table places at an IC.
+    pub bypass: usize,
 }
 
 /// The nets of the board that a rule's names stand for (the names ending in `*` count as prefixes).
@@ -73,6 +75,8 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
     }
     board.place_groups = spec.groups.clone();
     board.keep_apart = spec.apart.clone();
+    board.bypass = spec.bypass.clone();
+    out.bypass = spec.bypass.iter().map(|b| b.caps.len()).sum();
     out.groups = spec.groups.len();
     out.apart = spec.apart.len();
     out
@@ -84,6 +88,8 @@ pub enum FindingKind {
     Group,
     /// Two sets nearer to each other than they may be.
     Apart,
+    /// A bypass capacitor farther from the supply pin of its IC than the check allows.
+    Bypass,
 }
 
 #[derive(Clone, Debug)]
@@ -121,6 +127,24 @@ fn centre(pads: &[&Pad]) -> Option<Point> {
     }
     let n = pads.len() as f64;
     Some(Point::new(pads.iter().map(|p| p.pos.x).sum::<f64>() / n, pads.iter().map(|p| p.pos.y).sum::<f64>() / n))
+}
+
+/// A bypass capacitor and the IC the table says it serves: the pad of the capacitor on a supply (its other pad on a rail) and the pad of the
+/// IC on that net that is nearest to it, with their distance. None when the board lacks the parts or the capacitor has no such pad.
+fn bypass_pair(board: &Board, cap: &str, ic: &str) -> Option<(Point, Point, f64)> {
+    use crate::drc::{is_ground_net, is_negative_supply_net, is_supply_net};
+    let rail = |n: &str| is_ground_net(n) || is_supply_net(n) || is_negative_supply_net(n);
+    let cap_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == cap).collect();
+    let mut best: Option<(Point, Point, f64)> = None;
+    for cp in cap_pads.iter().filter(|p| (is_supply_net(&p.net) || is_negative_supply_net(&p.net)) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))) {
+        for ip in board.pads.iter().filter(|p| p.refdes == ic && p.net == cp.net) {
+            let d = cp.pos.dist(ip.pos);
+            if best.is_none_or(|b| d < b.2) {
+                best = Some((cp.pos, ip.pos, d));
+            }
+        }
+    }
+    best
 }
 
 /// Check the groups (the farthest two parts, from middle to middle, within `max_dist`; a group that says 0 is not checked) and the
@@ -191,6 +215,26 @@ pub fn check(board: &Board) -> RequirementsReport {
             });
         }
     }
+    for b in &board.bypass {
+        for cap in &b.caps {
+            let on = |r: &str| board.parts.iter().any(|p| p.refdes == r);
+            if !on(cap) || !on(&b.ic) {
+                rep.missing.push(format!("{} (バイパスの対応「{}」)", if on(cap) { &b.ic } else { cap }, b.ic));
+                continue;
+            }
+            let Some((_, _, d)) = bypass_pair(board, cap, &b.ic) else { continue };
+            rep.checked += 1;
+            if d > crate::drc::MAX_DECOUPLING_DISTANCE {
+                rep.findings.push(Finding {
+                    kind: FindingKind::Bypass,
+                    name: b.ic.clone(),
+                    message: format!("バイパスコンデンサ {cap} ({} 用): {} の電源ピンから {d:.1} mm 離れています (目安 {} mm 以内)", b.ic, b.ic, crate::drc::MAX_DECOUPLING_DISTANCE),
+                    actual: d,
+                    limit: crate::drc::MAX_DECOUPLING_DISTANCE,
+                });
+            }
+        }
+    }
     rep
 }
 
@@ -218,10 +262,22 @@ pub struct ApartMark {
     pub ok: bool,
 }
 
+/// A bypass capacitor and the IC pin it serves (from the table): the capacitor's supply pad, the pin, their distance and whether it is near enough.
+#[derive(Clone, Debug)]
+pub struct BypassMark {
+    pub cap: String,
+    pub ic: String,
+    pub a: Point,
+    pub b: Point,
+    pub actual: f64,
+    pub ok: bool,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Marks {
     pub groups: Vec<GroupMark>,
     pub apart: Vec<ApartMark>,
+    pub bypass: Vec<BypassMark>,
 }
 
 /// What `check` works out, as numbers to draw: every group and every distance with where it stands (a row that names nothing the board has is left out).
@@ -252,6 +308,13 @@ pub fn marks(board: &Board) -> Marks {
         }
         if let Some((d, qa, qb)) = best {
             out.apart.push(ApartMark { name: a.name.clone(), a: qa, b: qb, actual: d, limit: a.min_dist, ok: a.min_dist <= 0.0 || d >= a.min_dist });
+        }
+    }
+    for b in &board.bypass {
+        for cap in &b.caps {
+            if let Some((a, p, d)) = bypass_pair(board, cap, &b.ic) {
+                out.bypass.push(BypassMark { cap: cap.clone(), ic: b.ic.clone(), a, b: p, actual: d, ok: d <= crate::drc::MAX_DECOUPLING_DISTANCE });
+            }
         }
     }
     out

@@ -123,6 +123,11 @@ fn refit_pours(board: &mut Board, lo: Point, hi: Point) {
     }
 }
 
+/// The IC that the requirements table says a capacitor serves (None: the placement works it out).
+fn bypass_ic<'a>(board: &'a Board, cap: &str) -> Option<&'a str> {
+    board.bypass.iter().find(|b| b.caps.iter().any(|c| c == cap)).map(|b| b.ic.as_str())
+}
+
 /// A bypass capacitor belongs right next to the supply pin it serves: a `C` part with one pad on a supply net and
 /// another on ground, and an IC (`U`, 5+ pads) with a pad on that net. Each such pair is a two-pad net of its own, three
 /// times over (the placement adds up the lengths of nets, so it counts three times as much as an ordinary connection),
@@ -139,7 +144,7 @@ fn bypass_nets(board: &Board, items: &[(String, Point, f64, f64)], gap: f64, lab
         let Some(ci) = index(&cap.refdes) else { continue };
         // the pads on a supply (positive or negative) whose other side is another rail: a ground, or the other supply the IC runs between
         for cp in cap_pads.iter().filter(|p| (is_supply_net(&p.net) || is_negative_supply_net(&p.net)) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))) {
-            for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U')) {
+            for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U') && bypass_ic(board, &cap.refdes).is_none_or(|b| b == p.refdes)) {
                 let ic_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == ic.refdes).collect();
                 if ic_pads.len() < 5 {
                     continue;
@@ -1211,6 +1216,11 @@ fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>) -> Vec<Ic
         let Some(sp) = cp.iter().find(|p| supply(&p.net) && cp.iter().any(|q| q.net != p.net && rail(&q.net))) else { continue };
         let other = cp.iter().find(|q| q.net != sp.net && rail(&q.net)).map(|q| q.net.as_str());
         let has = |ic: &Part, net: &str| board.pads.iter().any(|p| p.refdes == ic.refdes && p.net == net);
+        // the table says which IC it serves
+        if let Some(named) = bypass_ic(board, &cap.refdes).and_then(|r| ics.iter().find(|ic| ic.refdes == r)).filter(|ic| has(ic, &sp.net)) {
+            assigned.entry(named.refdes.clone()).or_default().push(cap.refdes.clone());
+            continue;
+        }
         let mut fit: Vec<&&Part> = ics.iter().filter(|ic| has(ic, &sp.net)).collect();
         if fit.iter().any(|ic| other.is_some_and(|o| has(ic, o))) {
             fit.retain(|ic| other.is_some_and(|o| has(ic, o)));
@@ -1714,7 +1724,7 @@ fn attach_bypass_caps(board: &mut Board, inside: (Point, Point), keep: &std::col
         // the supply pad of the capacitor and the pin of an IC that it serves: the nearest pair
         let mut best: Option<(f64, Pad, Pad)> = None;
         for cp in cap_pads.iter().filter(|p| supply(&p.net) && cap_pads.iter().any(|q| q.net != p.net && rail(&q.net))) {
-            for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U')) {
+            for ic in board.parts.iter().filter(|p| p.refdes.starts_with('U') && bypass_ic(board, &cap).is_none_or(|b| b == p.refdes)) {
                 let ic_pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == ic.refdes).collect();
                 if ic_pads.len() < 5 {
                     continue;
@@ -2303,6 +2313,34 @@ mod tests {
     fn gap_to_pin(b: &Board, cap: &str, ic: &str, net: &str) -> f64 {
         let (cp, ip): (Vec<&Pad>, Vec<&Pad>) = (b.pads.iter().filter(|p| p.refdes == cap && p.net == net).collect(), b.pads.iter().filter(|p| p.refdes == ic && p.net == net).collect());
         cp.iter().flat_map(|c| ip.iter().map(move |i| c.pos.dist(i.pos))).fold(f64::MAX, f64::min)
+    }
+
+    #[test]
+    fn a_capacitor_the_table_places_at_an_ic_goes_to_that_ic_whichever_the_nets_would_choose() {
+        // two ICs on one VCC: without the table the capacitors are shared out; with it both go to the one it names
+        for ic in ["U1", "U2"] {
+            let other = if ic == "U1" { "U2" } else { "U1" };
+            let mut b = ics_with_caps();
+            b.bypass.push(design_spec::Bypass { ic: ic.into(), caps: vec!["C1".into(), "C2".into()], ..Default::default() });
+            autoplace(&mut b).unwrap();
+            for cap in ["C1", "C2"] {
+                let (near, far) = (gap_to_pin(&b, cap, ic, "VCC"), gap_to_pin(&b, cap, other, "VCC"));
+                assert!(near < crate::drc::MAX_DECOUPLING_DISTANCE && near < far, "{cap}: {near} mm from {ic}, {far} mm from {other}");
+            }
+            assert!(crate::requirements::check(&b).findings.is_empty(), "{:?}", crate::requirements::check(&b).findings);
+        }
+    }
+
+    #[test]
+    fn a_capacitor_far_from_the_ic_the_table_gives_it_is_a_finding() {
+        let mut b = ics_with_caps();
+        autoplace(&mut b).unwrap();
+        // the capacitor that sits by U1 is told to serve U2, which is a few cm away
+        let by_u1 = ["C1", "C2"].into_iter().find(|c| gap_to_pin(&b, c, "U1", "VCC") < gap_to_pin(&b, c, "U2", "VCC")).unwrap();
+        b.bypass.push(design_spec::Bypass { ic: "U2".into(), caps: vec![by_u1.into()], ..Default::default() });
+        let rep = crate::requirements::check(&b);
+        assert!(rep.findings.iter().any(|f| f.kind == crate::requirements::FindingKind::Bypass), "{:?}", rep.findings);
+        assert!(crate::requirements::marks(&b).bypass.iter().any(|m| !m.ok));
     }
 
     #[test]
