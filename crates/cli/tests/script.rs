@@ -1417,3 +1417,30 @@ board req
     // the tracks of `board guard` stop where copper is in the way: this small board has room for one side only, which is about 15 %
     assert_eq!(reps[1]["violations"], 0, "the guard tracks are drawn: {}", reps[1]);
 }
+
+/// `board currents declared widen`: the widths are made for the currents the board already has (here from the table), with no DC.
+#[test]
+fn declared_currents_widen_the_thin_tracks_without_a_dc_run() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+req net 電流 nets=A current=1.5 reason=大きな電流の道
+board import
+board autoplace
+board route
+req net 電流 current=3
+board import
+board currents declared widen
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let r = a.iter().find(|v| v.get("widened_tracks").is_some()).expect("the answer");
+    assert!(r["widened_tracks"].as_u64().unwrap_or(0) > 0, "a net routed for 1.5 A and now declared 3 A gets wider: {r}");
+    let a_net = r["list"].as_array().unwrap().iter().find(|w| w["net"] == "A").expect("net A");
+    assert_eq!(a_net["too_thin"], false, "{a_net}");
+    assert_eq!(a_net["amps"], 3.0, "the declared current is kept");
+}

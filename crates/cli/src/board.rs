@@ -911,12 +911,18 @@ impl Session {
                 let (words, kv) = options(rest);
                 let widen = words.iter().any(|w| w.eq_ignore_ascii_case("widen"));
                 let use_tran = words.iter().any(|w| w.eq_ignore_ascii_case("tran"));
-                let c = self.circuit()?;
+                // `declared`: keep the currents the board already has (from the table of requirements or by hand) and only look at the widths,
+                // so a circuit whose DC does not converge can still be widened
+                let declared = words.iter().any(|w| w.eq_ignore_ascii_case("declared"));
+                let c = if declared { None } else { Some(self.circuit()?) };
                 let mut stats: Vec<Value> = vec![];
-                let currents = if use_tran {
+                let currents = if declared {
+                    vec![]
+                } else if use_tran {
+                    let c = c.as_ref().unwrap();
                     let tr = self.last_tran.as_ref().ok_or("board currents tran: run 'tran' first (the current is read from its result)")?;
                     let from = opt(&kv, "from").map(|f| f.parse::<f64>().ok().filter(|v| (0.0..0.95).contains(v)).ok_or("from=F is the part of the run to skip, 0 to 0.9 (default 0.5: the second half, without the start-up)")).transpose()?.unwrap_or(0.5);
-                    let st = sim_core::net_currents_tran(&c, tr, from);
+                    let st = sim_core::net_currents_tran(c, tr, from);
                     let r3 = |x: f64| (x * 1e3).round() / 1e3;
                     stats = st
                         .iter()
@@ -925,11 +931,12 @@ impl Session {
                     // the RMS of the settled part is what the copper heats with; the peak is only shown
                     st.iter().map(|s| (s.net.clone(), s.rms)).collect::<Vec<_>>()
                 } else {
-                    let dc = sim_core::dc_op(&c).map_err(|e| e.to_string())?;
-                    sim_core::net_currents(&c, &dc)
+                    let c = c.as_ref().unwrap();
+                    let dc = sim_core::dc_op(c).map_err(|e| e.to_string())?;
+                    sim_core::net_currents(c, &dc)
                 };
                 let board = self.board_mut()?;
-                let n = pcb_core::current::set_net_currents(board, &currents);
+                let n = if declared { 0 } else { pcb_core::current::set_net_currents(board, &currents) };
                 let spec = pcb_core::current::CopperSpec::default();
                 let conn = pcb_core::drc::connectivity(board);
                 let mut widened = 0;
