@@ -642,6 +642,85 @@ pub fn guard_cover_in(index: &CopperIndex, board: &Board, nets: &[String], guard
     any.then_some(out)
 }
 
+/// The narrowest track along a way (the way's points, layer by layer): its width, and where it is (the middle of that piece). None when
+/// the way has no track (it lies inside a pad).
+pub fn narrowest_on_way(board: &Board, way: &[(Side, Point)]) -> Option<(f64, Point)> {
+    let mut best: Option<(f64, Point)> = None;
+    for w in way.windows(2) {
+        let ((s0, p), (s1, q)) = (w[0], w[1]);
+        if s0 != s1 || p.dist(q) < 1e-6 {
+            continue;
+        }
+        let mid = Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0);
+        // the track that carries this piece: the one that holds both ends (the way's points are track ends and the places where tracks meet)
+        let on = |t: &Track, x: Point| {
+            let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
+            let l2 = dx * dx + dy * dy;
+            let f = if l2 < 1e-12 { 0.0 } else { (((x.x - t.a.x) * dx + (x.y - t.a.y) * dy) / l2).clamp(0.0, 1.0) };
+            Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(x) < 1e-3
+        };
+        let width = board.tracks.iter().filter(|t| t.side == s0 && on(t, p) && on(t, q) && on(t, mid)).map(|t| t.width).fold(f64::INFINITY, f64::min);
+        if width.is_finite() && best.is_none_or(|b| width < b.0) {
+            best = Some((width, mid));
+        }
+    }
+    best
+}
+
+/// How long two sets of nets run side by side.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ParallelRun {
+    /// Length (mm) of the tracks of the first nets that have copper of the second nets within reach on the same layer.
+    pub length: f64,
+    /// The stretches, as runs of points (to draw).
+    pub runs: Vec<Vec<Point>>,
+}
+
+/// Every 0.2 mm along a track of the nets `a`: is there copper of the nets `b` on the same layer within `reach` mm of the track's edge? The
+/// length of those stretches. The pads of the parts in `except` (or all pads, `pads`) are not copper of `b`. None when `a` has no track.
+pub fn parallel_run(index: &CopperIndex, board: &Board, a: &[String], b: &[String], reach: f64, except: &[String]) -> Option<ParallelRun> {
+    let (items, item_net) = (&index.items, &index.nets);
+    let (nt, np) = (board.tracks.len(), board.pads.len());
+    let others: Vec<usize> = (0..items.len())
+        .filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(b, n)))
+        .filter(|&i| !(i >= nt && i < nt + np && except.iter().any(|e| e == "pads" || *e == board.pads[i - nt].refdes)))
+        .collect();
+    let mut out = ParallelRun::default();
+    let mut any = false;
+    let step = 0.2;
+    for i in 0..nt {
+        if !item_net[i].as_deref().is_some_and(|n| in_set(a, n)) {
+            continue;
+        }
+        let t = &board.tracks[i];
+        let len = t.a.dist(t.b);
+        if len < 1e-6 {
+            continue;
+        }
+        any = true;
+        let n = ((len / step).ceil() as usize).max(1);
+        let piece = len / n as f64;
+        let mut run: Vec<Point> = vec![];
+        for k in 0..n {
+            let f = (k as f64 + 0.5) / n as f64;
+            let p = Point::new(t.a.x + (t.b.x - t.a.x) * f, t.a.y + (t.b.y - t.a.y) * f);
+            let probe = Geo::Cap { a: p, b: p, r: t.width / 2.0 };
+            if others.iter().any(|&g| items[g].on(t.side) && dist(&probe, &items[g].geo) <= reach) {
+                out.length += piece;
+                run.push(p);
+            } else if run.len() > 1 {
+                out.runs.push(std::mem::take(&mut run));
+            } else {
+                run.clear();
+            }
+        }
+        if run.len() > 1 {
+            out.runs.push(run);
+        }
+    }
+    any.then_some(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

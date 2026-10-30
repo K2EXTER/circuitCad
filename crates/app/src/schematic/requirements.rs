@@ -479,12 +479,12 @@ impl SchEditor {
                             }
                         });
                         let need = m.kind().map_or(2, |k| k.2);
-                        let hint = if m.what == "area" { "銅の面積を測るパッド 1 個 (部品.ピン: 例 Q1.2)。そのパッドにつながった銅 (配線・ビア・ベタ) の面積です。放熱のために、データシートが求める銅の面積があるかを見ます" } else if m.what == "guard" { "1つ目: ガードされる検出のネット、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 A+SA,GRDA)" } else if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SA,SW*)" } else if m.what == "tap" { "1つ目: 実装用パッド (例: RS1.1)、2つ目: 検出の線の行き先のパッド (例: SS1.2)、3つ目: 抵抗のもう片方のパッド (例: RS1.2)。検出の線がパッドの銅につながる点を、もう片方のパッドに向いた縁から測る (0 = 内側の縁)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
+                        let hint = if m.what == "area" { "銅の面積を測るパッド 1 個 (部品.ピン: 例 Q1.2)。そのパッドにつながった銅 (配線・ビア・ベタ) の面積です。放熱のために、データシートが求める銅の面積があるかを見ます" } else if m.what == "guard" { "1つ目: ガードされる検出のネット、2つ目: ガードのネット (名前か、末尾に * を付けた名前。+ で複数 : 例 A+SA,GRDA)" } else if m.what == "gap" { "間隔を測る2つのネット (名前か、末尾に * を付けた名前。+ で複数。例: SA,SW*)" } else if m.what == "parallel" { "1つ目: 配線の長さを数えるネット、2つ目: それに近づくネット (名前か、末尾に * を付けた名前。+ で複数。例: SA+SB,BKSW)。2つ目の銅が、1つ目の配線の縁から「近さ」以内にある長さを測る" } else if m.what == "width" { "配線の太さを調べる道筋の、出発のパッドと行き先のパッド (例: Q1.3,RS1.1)。その道筋の中で一番細い所の太さを測る" } else if m.what == "tap" { "1つ目: 実装用パッド (例: RS1.1)、2つ目: 検出の線の行き先のパッド (例: SS1.2)、3つ目: 抵抗のもう片方のパッド (例: RS1.2)。検出の線がパッドの銅につながる点を、もう片方のパッドに向いた縁から測る (0 = 内側の縁)" } else if need == 3 { "1つ目: 道筋の出発のパッド、2つ目と3つ目: 行き先のパッド (例: RS1.1,Q1.3,UAB.2)" } else { "出発のパッドと、行き先のパッド (例: RS1.1,UAB.2)" };
                         if let Some(t) = text_cell(ui, buf, (5, k, 1), &m.pads.join(","), 230.0, hint) {
                             m.pads = list(&t);
                             changed = true;
                         }
-                        if m.what == "gap" {
+                        if m.what == "gap" || m.what == "parallel" {
                             if let Some(t) = text_cell(ui, buf, (5, k, 3), &m.except.join(","), 230.0, "間隔から除く部品 (コンマ区切り)。その部品のパッドは数えません。pads と書くと、全部のパッドを除いて、配線とビアだけの間隔を見ます。IC のピンどうしは近くて当然なので、配線の間隔を見たいときに使います") {
                                 m.except = list(&t);
                                 changed = true;
@@ -505,7 +505,12 @@ impl SchEditor {
                                 m.op = op.to_string();
                                 changed = true;
                             }
-                            if m.what == "guard" {
+                            if m.what == "area" {
+                                let before = m.reach;
+                                number_cell(ui, &mut m.reach, " mm 以内 (0 = 全部)", 0.5, "パッドの中心からこの半径の中の銅だけを数えます。0 なら、つながった銅の全部 (遠くへ伸びる配線も入る)。部品の熱が広がるのは近くの銅なので、10 mm などにすると放熱の目安になります");
+                                changed |= m.reach != before;
+                            }
+                            if m.what == "guard" || m.what == "parallel" {
                                 let mut reach = m.guard_reach();
                                 let before = reach;
                                 number_cell(ui, &mut reach, " mm 以内", 0.1, "ガードの縁が、検出のトラックの縁から、この距離までにあれば「ガードがある」とみなします (空けた隙間 + ガードの幅の目安。0.35 mm の隙間・0.3 mm 幅なら 1 mm)。検出のトラックの両側にあるか、パッドの 2 mm 以内を除いた長さで数えます");

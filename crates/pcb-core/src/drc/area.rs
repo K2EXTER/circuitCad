@@ -1,19 +1,8 @@
 //! The area of the copper that a pad is joined to: what a part's heat can spread into.
 
 use super::*;
-use crate::zonefill::{fill_area, zone_fill, FillShape};
+use crate::zonefill::{copper_area, pad_piece, track_piece, via_piece, zone_fill, FillShape};
 use std::collections::HashSet;
-
-fn pad_area(shape: PadShape) -> f64 {
-    match shape {
-        PadShape::Circle { d } => std::f64::consts::PI * d * d / 4.0,
-        PadShape::Rect { w, h } => w * h,
-        PadShape::Oval { w, h } => {
-            let (short, long) = (w.min(h), w.max(h));
-            std::f64::consts::PI * short * short / 4.0 + (long - short) * short
-        }
-    }
-}
 
 fn in_piece(piece: &FillShape, p: Point) -> bool {
     inside_polygon(&piece.outer, p) && !piece.holes.iter().any(|h| inside_polygon(h, p))
@@ -21,9 +10,11 @@ fn in_piece(piece: &FillShape, p: Point) -> bool {
 
 /// The area (mm²) of the copper joined to the pad(s) `r` (every pad of that part and pin: an exposed pad and a pin of one net count
 /// together), and the middle of the first of them. The copper is the pads, tracks and vias of the group the pad is in, and the pieces of
-/// the pours of its net that hold something of the group. What lies in a pour piece is not counted a second time. A track is its length
-/// times its width (the round ends are left out). None when the board has no such pad.
-pub fn pad_copper_area(board: &Board, r: &PadRef) -> Option<(f64, Point)> {
+/// the pours of its net that hold something of the group. The copper of each layer is joined into one shape, so what lies in two items
+/// is counted once; the layers are added (a through-hole pad and a via are on every layer the group has copper on). With `radius` above
+/// zero only the copper within that distance of the first pad's middle counts (the heat of a part spreads into the copper near it). None
+/// when the board has no such pad.
+pub fn pad_copper_area(board: &Board, r: &PadRef, radius: f64) -> Option<(f64, Point)> {
     let conn = connectivity(board);
     let mine: Vec<usize> = board.pads.iter().enumerate().filter(|(_, p)| p.refdes == r.refdes && p.pin == r.pin).map(|(i, _)| i).collect();
     let first = *mine.first()?;
@@ -47,26 +38,54 @@ pub fn pad_copper_area(board: &Board, r: &PadRef) -> Option<(f64, Point)> {
             }
         }
     }
-    let covered = |side: Option<Side>, p: Point| pieces.iter().any(|(s, piece)| side.is_none_or(|x| x == *s) && in_piece(piece, p));
 
-    let mut area: f64 = pieces.iter().map(|(_, p)| fill_area(std::slice::from_ref(p))).sum();
-    for (i, p) in board.pads.iter().enumerate().filter(|(i, _)| pad_in(*i)) {
-        let side = if p.drill.is_some() { None } else { Some(p.side) };
-        if !covered(side, p.pos) {
-            area += pad_area(p.shape);
+    // the layers the group has copper on of its own (a track, a pad of one side, a pour piece)
+    let mut layers: Vec<Side> = vec![];
+    let mut note = |s: Side| {
+        if !layers.contains(&s) {
+            layers.push(s);
+        }
+    };
+    for (s, _) in &pieces {
+        note(*s);
+    }
+    for (i, t) in board.tracks.iter().enumerate() {
+        if track_in(i) {
+            note(t.side);
         }
     }
-    for (i, t) in board.tracks.iter().enumerate().filter(|(i, _)| track_in(*i)) {
-        if !(covered(Some(t.side), t.a) && covered(Some(t.side), t.b)) {
-            area += t.a.dist(t.b) * t.width;
+    for (i, p) in board.pads.iter().enumerate() {
+        if pad_in(i) && p.drill.is_none() {
+            note(p.side);
         }
     }
-    for (i, v) in board.vias.iter().enumerate().filter(|(i, _)| via_in(*i)) {
-        if !covered(None, v.pos) {
-            area += std::f64::consts::PI * v.diameter * v.diameter / 4.0;
-        }
+    if layers.is_empty() {
+        layers.push(Side::Top);
     }
-    Some((area, board.pads[first].pos))
+
+    let centre = board.pads[first].pos;
+    let within = (radius > 0.0).then_some((centre, radius));
+    let mut area = 0.0;
+    for &layer in &layers {
+        let mut shapes: Vec<FillShape> = pieces.iter().filter(|(s, _)| *s == layer).map(|(_, p)| p.clone()).collect();
+        for (i, p) in board.pads.iter().enumerate() {
+            if pad_in(i) && (p.drill.is_some() || p.side == layer) {
+                shapes.push(pad_piece(p.pos, p.shape));
+            }
+        }
+        for (i, t) in board.tracks.iter().enumerate() {
+            if track_in(i) && t.side == layer {
+                shapes.push(track_piece(t.a, t.b, t.width));
+            }
+        }
+        for (i, v) in board.vias.iter().enumerate() {
+            if via_in(i) {
+                shapes.push(via_piece(v.pos, v.diameter));
+            }
+        }
+        area += copper_area(&shapes, within);
+    }
+    Some((area, centre))
 }
 
 #[cfg(test)]
@@ -87,19 +106,24 @@ mod tests {
     fn a_lone_pad_has_its_own_area_and_tracks_and_pours_add_to_it() {
         let mut b = board();
         let r = PadRef { refdes: "Q1".into(), pin: "2".into() };
-        assert!((pad_copper_area(&b, &r).unwrap().0 - 4.0).abs() < 1e-9);
-        // a track of 10 mm by 1 mm adds 10 mm²
+        assert!((pad_copper_area(&b, &r, 0.0).unwrap().0 - 4.0).abs() < 1e-6);
+        // a track of 10 mm by 1 mm from the pad's middle: what lies in the pad is not counted twice (a round end adds a little)
         b.tracks.push(Track { side: Side::Top, a: Point::new(10.0, 10.0), b: Point::new(20.0, 10.0), width: 1.0 });
-        assert!((pad_copper_area(&b, &r).unwrap().0 - 14.0).abs() < 1e-9);
-        // a 10 x 10 mm pour of the net on the same side takes over what lies in it: the pad and the track are not counted again
+        let with_track = pad_copper_area(&b, &r, 0.0).unwrap().0;
+        assert!(with_track > 13.0 && with_track < 14.0, "{with_track}");
+        // a 10 x 10 mm pour of the net on the same side takes over what lies in it
         b.zones.push(Zone::new("DRN", Side::Top, vec![Point::new(5.0, 5.0), Point::new(15.0, 5.0), Point::new(15.0, 15.0), Point::new(5.0, 15.0)]));
-        let with_pour = pad_copper_area(&b, &r).unwrap().0;
-        assert!(with_pour > 99.0 && with_pour < 112.0, "{with_pour}");
+        let with_pour = pad_copper_area(&b, &r, 0.0).unwrap().0;
+        assert!(with_pour > 104.0 && with_pour < 107.0, "{with_pour}");
+        // only the copper within 1 mm of the pad's middle: a disc of 3.14 mm² (the pour and the pad cover all of it)
+        let near = pad_copper_area(&b, &r, 1.0).unwrap().0;
+        assert!(near > 3.0 && near < 3.3, "{near}");
         // a pour of another net does not count
         b.zones.clear();
         b.zones.push(Zone::new("GND", Side::Top, vec![Point::new(5.0, 5.0), Point::new(15.0, 5.0), Point::new(15.0, 15.0), Point::new(5.0, 15.0)]));
-        assert!((pad_copper_area(&b, &r).unwrap().0 - 14.0).abs() < 1e-9);
+        let other = pad_copper_area(&b, &r, 0.0).unwrap().0;
+        assert!((other - with_track).abs() < 1e-6, "{other}");
         // a pad that is not there
-        assert!(pad_copper_area(&b, &PadRef { refdes: "Q9".into(), pin: "1".into() }).is_none());
+        assert!(pad_copper_area(&b, &PadRef { refdes: "Q9".into(), pin: "1".into() }, 0.0).is_none());
     }
 }

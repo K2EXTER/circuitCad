@@ -376,20 +376,56 @@ pub fn clear_zone_holes(board: &mut Board, side: Side, net: Option<&str>) -> usi
     n
 }
 
+/// The contours of pieces for the overlay engine: outer ones counter-clockwise, holes clockwise.
+fn contours(shapes: &[FillShape]) -> Vec<Path> {
+    let mut out = vec![];
+    for s in shapes {
+        out.push(ccw(&s.outer));
+        for h in &s.holes {
+            let mut p = ccw(h);
+            p.reverse();
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// The area (mm²) of the copper made of `shapes` (what lies in two of them is counted once), and with `within` = (centre, radius) only
+/// the part of it inside that circle.
+pub fn copper_area(shapes: &[FillShape], within: Option<(Point, f64)>) -> f64 {
+    let joined = union(shapes);
+    match within {
+        None => fill_area(&joined),
+        Some((c, r)) => {
+            let clipped: Vec<FillShape> = contours(&joined)
+                .overlay(&vec![circle(c, r)], OverlayRule::Intersect, FillRule::NonZero)
+                .into_iter()
+                .filter_map(|shape| {
+                    let mut it = shape.into_iter();
+                    let outer = to_points(&it.next()?);
+                    Some(FillShape { outer, holes: it.map(|h| to_points(&h)).collect() })
+                })
+                .collect();
+            fill_area(&clipped)
+        }
+    }
+}
+
+/// A pad, a track or a via as a piece of copper (for [`copper_area`]).
+pub fn pad_piece(pos: Point, shape: PadShape) -> FillShape {
+    FillShape { outer: to_points(&pad_path(pos, shape, 0.0)), holes: vec![] }
+}
+
+pub fn track_piece(a: Point, b: Point, width: f64) -> FillShape {
+    FillShape { outer: to_points(&capsule(a, b, width / 2.0)), holes: vec![] }
+}
+
+pub fn via_piece(pos: Point, diameter: f64) -> FillShape {
+    FillShape { outer: to_points(&circle(pos, diameter / 2.0)), holes: vec![] }
+}
+
 /// What of `a` is left once the shapes of `b` are taken out.
 fn difference(a: &[FillShape], b: &[FillShape]) -> Vec<FillShape> {
-    let contours = |shapes: &[FillShape]| -> Vec<Path> {
-        let mut out = vec![];
-        for s in shapes {
-            out.push(ccw(&s.outer));
-            for h in &s.holes {
-                let mut p = ccw(h);
-                p.reverse();
-                out.push(p);
-            }
-        }
-        out
-    };
     contours(a)
         .overlay(&contours(b), OverlayRule::Difference, FillRule::NonZero)
         .into_iter()

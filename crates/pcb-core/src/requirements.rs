@@ -216,7 +216,7 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
     let g = &model.graph;
     use crate::drc::PadRef;
     let Some((_, _, need)) = m.kind() else { return Err(format!("測定「{}」の種類 `{}` が分かりません", m.name, m.what)) };
-    if m.what == "gap" || m.what == "guard" {
+    if m.what == "gap" || m.what == "guard" || m.what == "parallel" {
         if m.pads.len() != need {
             return Err(format!("測定「{}」には、ネットが {need} 個要ります", m.name));
         }
@@ -229,6 +229,10 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             let (d, pa, pb) = crate::drc::net_gap_except(&model.index, Some(board), &a, &b, &m.except).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
             return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
         }
+        if m.what == "parallel" {
+            let run = crate::drc::parallel_run(&model.index, board, &a, &b, m.guard_reach(), &m.except).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
+            return Ok(Measured { value: run.length, ways: run.runs, at: None });
+        }
         // a guard: how much of the tracks of the sensitive nets has the guard on both sides; the runs without are drawn
         if !board.pads.iter().any(|p| p.net != "" && crate::drc::net_set(&m.pads[1]).iter().any(|g| design_spec::matches_name(g, &p.net))) {
             return Err(format!("測定「{}」: ガードのネット {} につながるパッドが、基板にありません", m.name, m.pads[1]));
@@ -238,7 +242,7 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
     }
     if m.what == "area" {
         let Some(pad) = m.pads.first().and_then(|p| PadRef::parse(p)) else { return Err(format!("測定「{}」には、パッドが 1 個 (部品.ピン) 要ります", m.name)) };
-        let (area, at) = crate::drc::pad_copper_area(board, &pad).ok_or_else(|| format!("測定「{}」: {pad} のパッドが、基板にありません", m.name))?;
+        let (area, at) = crate::drc::pad_copper_area(board, &pad, m.reach).ok_or_else(|| format!("測定「{}」: {pad} のパッドが、基板にありません", m.name))?;
         return Ok(Measured { value: area, ways: vec![], at: Some(at) });
     }
     let pads: Vec<PadRef> = m.pads.iter().filter_map(|p| PadRef::parse(p)).collect();
@@ -247,6 +251,11 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
     }
     let way = |a: &PadRef, b: &PadRef| g.path(a, b).ok_or_else(|| format!("測定「{}」: {a} と {b} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name));
     match m.what.as_str() {
+        "width" => {
+            let p = way(&pads[0], &pads[1])?;
+            let (w, at) = crate::drc::narrowest_on_way(board, &p.points).ok_or_else(|| format!("測定「{}」: {} と {} の間に配線がありません", m.name, pads[0], pads[1]))?;
+            Ok(Measured { value: w, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at: Some(at) })
+        }
         "length" | "vias" => {
             let p = way(&pads[0], &pads[1])?;
             let value = if m.what == "length" { p.length } else { p.vias as f64 };
@@ -863,6 +872,40 @@ mod tests {
         let a = measure_one(&b, &model, &m("area", &["A.1"], &[], "min", 10.0)).unwrap().value;
         assert!(a > 1.0 && a < 40.0, "{a}");
         assert!(measure_one(&b, &model, &m("area", &["Z.9"], &[], "min", 10.0)).is_err());
+    }
+
+    /// `width`: the narrowest track on the way between two pads; `parallel`: how long two nets run side by side.
+    #[test]
+    fn the_narrowest_width_and_the_parallel_length_are_measured() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "A", "1");
+        pad_at(&mut b, 25.0, 5.0, "A", "2");
+        pad_at(&mut b, 5.0, 8.0, "B", "1");
+        pad_at(&mut b, 25.0, 8.0, "B", "2");
+        for (k, net) in ["SA", "SA", "SW1", "SW1"].iter().enumerate() {
+            b.pads[k].net = (*net).into();
+        }
+        // SA: 20 mm of 0.5 mm track with a 0.2 mm piece in the middle; SW1: 20 mm of 0.25 mm track 3 mm away
+        b.tracks.push(Track { side: Side::Top, a: Point::new(5.0, 5.0), b: Point::new(12.0, 5.0), width: 0.5 });
+        b.tracks.push(Track { side: Side::Top, a: Point::new(12.0, 5.0), b: Point::new(15.0, 5.0), width: 0.2 });
+        b.tracks.push(Track { side: Side::Top, a: Point::new(15.0, 5.0), b: Point::new(25.0, 5.0), width: 0.5 });
+        wire(&mut b, (5.0, 8.0), (25.0, 8.0));
+        let m = |what: &str, pads: &[&str], reach: f64, op: &str, limit: f64| design_spec::Measure { name: "m".into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach, except: vec![], note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        let w = measure_one(&b, &model, &m("width", &["A.1", "A.2"], 0.0, "min", 0.4)).unwrap();
+        assert!((w.value - 0.2).abs() < 1e-9, "{}", w.value);
+        assert!(w.at.is_some_and(|p| (p.x - 13.5).abs() < 0.01), "{:?}", w.at);
+        // the nets run 3 mm apart (edge to edge 2.75 mm): within 1 mm nothing, within 3 mm the whole of SA
+        let near = measure_one(&b, &model, &m("parallel", &["SA", "SW1"], 1.0, "max", 0.0)).unwrap();
+        assert!(near.value < 1e-9, "{}", near.value);
+        let far = measure_one(&b, &model, &m("parallel", &["SA", "SW1"], 3.0, "max", 0.0)).unwrap();
+        assert!((far.value - 20.0).abs() < 0.3 && !far.ways.is_empty(), "{}", far.value);
+        // without the pads of B (they sit at the ends of its track) it is the same track that counts
+        let mut pm = m("parallel", &["SA", "SW1"], 3.0, "max", 0.0);
+        pm.except = vec!["pads".into()];
+        assert!((measure_one(&b, &model, &pm).unwrap().value - 20.0).abs() < 0.3);
+        // a net with no track cannot be measured
+        assert!(measure_one(&b, &model, &m("parallel", &["ZZ", "SW1"], 1.0, "max", 0.0)).is_err());
     }
 
     /// The properties of a net class that the copper can break: tracks on a layer the class does not allow, and a net with more track than
