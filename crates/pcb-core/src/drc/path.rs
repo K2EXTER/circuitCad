@@ -1089,55 +1089,73 @@ pub fn stubs(index: &CopperIndex, board: &Board, nets: &[String]) -> Vec<Stub> {
     }
     // the pads and vias on a grid of 2 mm cells, so that a track end looks only at what is near it
     let cell = |v: f64| (v / 2.0).floor() as i64;
+    // a track end touches a pad or via when the round end of the track (half its width) reaches it
+    let widest = mine.iter().map(|&i| board.tracks[i].width).fold(0.0, f64::max) / 2.0;
     let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     for &i in &anchors {
         let (x0, x1, y0, y1) = bbox(&index.items[i].geo);
-        for cx in cell(x0 - 0.02)..=cell(x1 + 0.02) {
-            for cy in cell(y0 - 0.02)..=cell(y1 + 0.02) {
+        for cx in cell(x0 - 0.02 - widest)..=cell(x1 + 0.02 + widest) {
+            for cy in cell(y0 - 0.02 - widest)..=cell(y1 + 0.02 + widest) {
                 grid.entry((cx, cy)).or_default().push(i);
             }
         }
     }
-    let anchored = |s: Side, p: Point| {
+    let anchored = |s: Side, p: Point, half: f64| {
         let probe = Geo::Cap { a: p, b: p, r: 0.0 };
-        grid.get(&(cell(p.x), cell(p.y))).is_some_and(|v| v.iter().any(|&i| index.items[i].on(s) && dist(&probe, &index.items[i].geo) <= 0.01))
+        grid.get(&(cell(p.x), cell(p.y))).is_some_and(|v| v.iter().any(|&i| index.items[i].on(s) && dist(&probe, &index.items[i].geo) <= 0.01 + half))
             || pours.iter().any(|(ps, b, sh)| *ps == s && p.x >= b.0 && p.x <= b.1 && p.y >= b.2 && p.y <= b.3 && inside_polygon(&sh.outer, p) && !sh.holes.iter().any(|h| inside_polygon(h, p)))
     };
     // atomic pieces: each track cut where the end of another track of the nets lies on it
-    let mut pieces: Vec<(Side, Point, Point)> = vec![];
+    let mut pieces: Vec<(Side, Point, Point, f64)> = vec![];
     // the track ends sorted along x, so that a track looks only at the ends within its own span
     let mut ends: Vec<(f64, usize, Point)> = mine.iter().flat_map(|&j| [(board.tracks[j].a.x, j, board.tracks[j].a), (board.tracks[j].b.x, j, board.tracks[j].b)]).collect();
     ends.sort_by(|a, b| a.0.total_cmp(&b.0));
+    // the end of a track that lies in the copper of another track of the nets (within the two half widths of its middle line) is joined to
+    // it: the end is moved onto that track's middle line, and the track is cut there
+    let mut cuts: Vec<Vec<f64>> = vec![vec![]; board.tracks.len()];
+    let mut snap: HashMap<(Side, i64, i64), Point> = HashMap::new();
     for &i in &mine {
         let t = &board.tracks[i];
         let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
         let l2 = dx * dx + dy * dy;
-        let mut cuts: Vec<f64> = vec![];
-        if l2 > 1e-12 {
-            let (lo, hi) = (t.a.x.min(t.b.x) - 0.01, t.a.x.max(t.b.x) + 0.01);
-            let from = ends.partition_point(|e| e.0 < lo);
-            for &(x, j, e) in ends[from..].iter().take_while(|e| e.0 <= hi) {
-                let _ = x;
-                if j == i || board.tracks[j].side != t.side {
-                    continue;
-                }
-                let f = ((e.x - t.a.x) * dx + (e.y - t.a.y) * dy) / l2;
-                if f > 1e-6 && f < 1.0 - 1e-6 && Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(e) < 0.01 {
-                    cuts.push(f);
+        if l2 <= 1e-12 {
+            continue;
+        }
+        let reach = t.width / 2.0;
+        let (lo, hi) = (t.a.x.min(t.b.x) - t.width - 0.5, t.a.x.max(t.b.x) + t.width + 0.5);
+        let from = ends.partition_point(|e| e.0 < lo);
+        for &(_, j, e) in ends[from..].iter().take_while(|e| e.0 <= hi) {
+            let o = &board.tracks[j];
+            if j == i || o.side != t.side {
+                continue;
+            }
+            let f = (((e.x - t.a.x) * dx + (e.y - t.a.y) * dy) / l2).clamp(0.0, 1.0);
+            let proj = Point::new(t.a.x + dx * f, t.a.y + dy * f);
+            if proj.dist(e) <= reach + o.width / 2.0 + 1e-6 {
+                snap.entry(key(t.side, e)).or_insert(proj);
+                if f > 1e-6 && f < 1.0 - 1e-6 {
+                    cuts[i].push(f);
                 }
             }
         }
-        cuts.sort_by(|a, b| a.total_cmp(b));
-        cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
-        let mut last = t.a;
-        for f in cuts.into_iter().chain([1.0]) {
-            let q = if f >= 1.0 { t.b } else { Point::new(t.a.x + dx * f, t.a.y + dy * f) };
-            pieces.push((t.side, last, q));
+    }
+    for &i in &mine {
+        let t = &board.tracks[i];
+        let fix = |p: Point| snap.get(&key(t.side, p)).copied().unwrap_or(p);
+        let (a, b) = (fix(t.a), fix(t.b));
+        let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
+        let c = &mut cuts[i];
+        c.sort_by(|x, y| x.total_cmp(y));
+        c.dedup_by(|x, y| (*x - *y).abs() < 1e-9);
+        let mut last = a;
+        for &f in c.iter().chain([&1.0]) {
+            let q = if f >= 1.0 { b } else { Point::new(t.a.x + dx * f, t.a.y + dy * f) };
+            pieces.push((t.side, last, q, t.width / 2.0));
             last = q;
         }
     }
     let mut at: HashMap<(Side, i64, i64), Vec<usize>> = HashMap::new();
-    for (k, &(s, a, b)) in pieces.iter().enumerate() {
+    for (k, &(s, a, b, _)) in pieces.iter().enumerate() {
         at.entry(key(s, a)).or_default().push(k);
         at.entry(key(s, b)).or_default().push(k);
     }
@@ -1147,23 +1165,23 @@ pub fn stubs(index: &CopperIndex, board: &Board, nets: &[String]) -> Vec<Stub> {
             continue;
         }
         let k = ks[0];
-        let (s, a, b) = pieces[k];
+        let (s, a, b, half) = pieces[k];
         // the free end is the one of this piece that is the node
         let (free, far) = if key(s, a) == *nodekey { (a, b) } else { (b, a) };
-        if anchored(s, free) {
+        if anchored(s, free, half) {
             continue;
         }
         let (mut length, mut points, mut prev, mut cur) = (free.dist(far), vec![free, far], k, far);
         let found = loop {
             let here = &at[&key(s, cur)];
-            if anchored(s, cur) || here.len() >= 3 {
+            if anchored(s, cur, pieces[prev].3) || here.len() >= 3 {
                 break true;
             }
             if here.len() == 1 {
                 break false;
             }
             let Some(&n) = here.iter().find(|&&n| n != prev) else { break false };
-            let (_, na, nb) = pieces[n];
+            let (_, na, nb, _) = pieces[n];
             let next = if key(s, na) == key(s, cur) { nb } else { na };
             length += cur.dist(next);
             points.push(next);

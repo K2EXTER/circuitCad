@@ -1112,6 +1112,27 @@ mod tests {
         assert_eq!(measure_one(&b, &model, &m("balance", &["P.1", "P.2", "Q.1", "Q.2"])).unwrap().value, 2.0, "a bend and a via");
     }
 
+    /// A track end that lies in the copper of another track (not on its middle line) or that its round end carries onto a pad is joined: no stub.
+    #[test]
+    fn a_track_end_in_the_copper_of_another_or_on_a_pad_is_not_a_stub() {
+        let mut b = Board::new("t", 60.0, 40.0);
+        pad_at(&mut b, 5.0, 5.0, "U", "1");
+        pad_at(&mut b, 15.0, 5.0, "C", "1");
+        wire(&mut b, (5.0, 5.0), (15.0, 5.0));
+        // ends 0.1 mm off the middle line of the track it meets (within the two half widths of 0.125 mm)
+        wire(&mut b, (10.0, 5.1), (10.0, 9.0));
+        wire(&mut b, (10.0, 9.0), (6.0, 9.0));
+        pad_at(&mut b, 6.0, 9.0, "D", "1");
+        // a track of 2 mm width whose middle ends 0.7 mm short of the edge of a pad (its round end, 1 mm, reaches it)
+        pad_at(&mut b, 20.0, 20.0, "E", "1");
+        pad_at(&mut b, 26.2, 20.0, "E", "2");
+        b.tracks.push(Track { side: Side::Top, a: Point::new(20.0, 20.0), b: Point::new(25.0, 20.0), width: 2.0 });
+        let m = design_spec::Measure { name: "m".into(), what: "stub".into(), pads: vec!["N".into()], op: "max".into(), limit: 1.0, reach: 0.0, except: vec![], note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        let s = measure_one(&b, &model, &m).unwrap();
+        assert_eq!(s.value, 0.0, "{:?}", s.ways);
+    }
+
     /// `thermal_vias` counts the vias in a pad, `loop` adds the two legs of a loop, `match` is the difference of two ways, `ring` is how much of
     /// the way round a pad has guard copper.
     #[test]
