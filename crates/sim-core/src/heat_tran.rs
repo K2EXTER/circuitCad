@@ -61,6 +61,38 @@ pub struct HeatTran {
     pub cold: TranResult,
 }
 
+impl HeatTran {
+    /// The node voltages the warming moved most: (signal, cold, warm), at the last time the hottest part still dissipated at least half of its
+    /// peak power (the highest rise comes just as the power ends, when the circuit has already switched off), and that time.
+    pub fn moved(&self, top: usize) -> (f64, Vec<(String, f64, f64)>) {
+        let t_at = self
+            .parts
+            .iter()
+            .max_by(|a, b| a.rise_peak.total_cmp(&b.rise_peak))
+            .map_or(0.0, |p| p.power.iter().rposition(|&w| w >= 0.5 * p.power_peak).map_or(p.peak_time, |i| self.time[i]));
+        let at = |tr: &TranResult, v: &[f64]| -> f64 {
+            if tr.time.len() < 2 {
+                return v.first().copied().unwrap_or(0.0);
+            }
+            let i = tr.time.partition_point(|&t| t < t_at).clamp(1, tr.time.len() - 1);
+            let (t0, t1) = (tr.time[i - 1], tr.time[i]);
+            let f = if t1 > t0 { ((t_at - t0) / (t1 - t0)).clamp(0.0, 1.0) } else { 0.0 };
+            v[i - 1] + f * (v[i] - v[i - 1])
+        };
+        let mut moved: Vec<(String, f64, f64)> = self
+            .tran
+            .signals
+            .iter()
+            .filter(|s| s.name.starts_with("V(") && !s.name.contains('.'))
+            .filter_map(|s| self.cold.signal(&s.name).map(|c| (s.name.clone(), at(&self.cold, &c.values), at(&self.tran, &s.values))))
+            .filter(|(_, a, b)| (a - b).abs() > 1e-9)
+            .collect();
+        moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
+        moved.truncate(top);
+        (t_at, moved)
+    }
+}
+
 /// The parts of a schematic named in `refs` as thermal nodes: all the resistors, diodes, bipolar and MOS transistors inside each part
 /// (a library part's macro model counts). θ and the coefficient come as in `heaters_from_schematic`, the capacity from the part.
 pub fn thermal_nodes_from_schematic(sch: &Schematic, circuit: &Circuit, refs: &[String]) -> Result<Vec<ThermalNode>, String> {

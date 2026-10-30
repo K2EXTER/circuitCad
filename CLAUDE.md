@@ -33,7 +33,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `ratings.rs` 定格チェック / `ripple.rs` 電解コンデンサのリップルと寿命
 - `fault.rs` 故障シミュレーション / `chain.rs` 連鎖故障
 - `selfheat.rs` 抵抗の自己発熱(電力×熱抵抗で温まり、温度係数で値が変わるのを落ち着くまで計算。CLI `heat`/`thermal`、画面は解析タブの「自己発熱」)
-- `heat_tran.rs` 温度の時間変化(過渡解析の電力 → 部品ごとの熱容量・熱抵抗 → 温度。部品どうしの熱の結合。CLI `heattran`。画面はまだ無い)
+- `heat_tran.rs` 温度の時間変化(過渡解析の電力 → 部品ごとの熱容量・熱抵抗 → 温度。部品どうしの熱の結合。半導体・抵抗は温度で値・モデルが戻る。CLI `heattran`、画面は解析タブの「自己発熱」の下)
 - `coverage.rs` シミュレーションが知らないこと(モデルがない部品・汎用の標準値の部品・モデルの注意書き・試験用。CLI `coverage`、画面は解析タブの「モデルの前提」)
 - `designcalc.rs` 初学者向けの値の計算 (足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
@@ -82,7 +82,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 エディタは1つの型を複数ファイルの `impl` に分割している (子モジュールから親の非公開フィールドが見える)。型・フィールドは各 `mod.rs`。
 
 ### `schematic/` (`SchEditor`) — ファイル一覧: `docs/code-notes/app.md`
-`mod.rs` 型 / `canvas.rs`・`draw.rs`・`interact.rs`・`symbols.rs` 描画と操作 / `panel.rs`・`analysis_panel.rs`・`hint.rs` 左パネル / `edit.rs`・`stretch.rs` 部品を動かすと配線が付いてくる・`erc_skip.rs` 描きかけの範囲をERC対象外に・`net_hints.rs` ネットの電流・差動ペアの指定・`sch-core/noconnect.rs` 意図して未接続のピンの印 (NC)・`selfheat.rs` 自己発熱の窓・`requirements.rs` 設計の要件の表の窓・`snippet.rs` 選択を保存して再利用・`sheets_ui.rs` シートのタブ(複数シートの中身は `sch-core/sheets.rs`)・`clipboard.rs` コピー&貼り付け・`history.rs`・`file.rs`・`library.rs` / `quick.rs` クイック追加 / `lessons/`(`mod.rs`=型と窓、`conditions.rs`=手順の自動チェック、`basics/devices/analog/supply/models.rs`=レッスンのデータ)・`challenge/`(`mod.rs`=型、`basic.rs`/`power.rs`=データ、`judge.rs`=判定、`window.rs`)・`wizard.rs` 学習 / `dc.rs`・`tran.rs`・`ac.rs`・`sweep.rs`・`noise.rs`・`wave.rs` 各解析 / `fault.rs`・`param.rs`・`variation.rs`・`spec_table.rs`・`power_ui.rs`・`settings.rs`
+`mod.rs` 型 / `canvas.rs`・`draw.rs`・`interact.rs`・`symbols.rs` 描画と操作 / `panel.rs`・`analysis_panel.rs`・`hint.rs` 左パネル / `edit.rs`・`stretch.rs` 部品を動かすと配線が付いてくる・`erc_skip.rs` 描きかけの範囲をERC対象外に・`net_hints.rs` ネットの電流・差動ペアの指定・`sch-core/noconnect.rs` 意図して未接続のピンの印 (NC)・`selfheat.rs`・`selfheat_tran.rs` 自己発熱と温度の時間変化の窓・`requirements.rs` 設計の要件の表の窓・`snippet.rs` 選択を保存して再利用・`sheets_ui.rs` シートのタブ(複数シートの中身は `sch-core/sheets.rs`)・`clipboard.rs` コピー&貼り付け・`history.rs`・`file.rs`・`library.rs` / `quick.rs` クイック追加 / `lessons/`(`mod.rs`=型と窓、`conditions.rs`=手順の自動チェック、`basics/devices/analog/supply/models.rs`=レッスンのデータ)・`challenge/`(`mod.rs`=型、`basic.rs`/`power.rs`=データ、`judge.rs`=判定、`window.rs`)・`wizard.rs` 学習 / `dc.rs`・`tran.rs`・`ac.rs`・`sweep.rs`・`noise.rs`・`wave.rs` 各解析 / `fault.rs`・`param.rs`・`variation.rs`・`spec_table.rs`・`power_ui.rs`・`settings.rs`
 
 ### `board_editor/` (`BoardEditor`)
 `mod.rs` 型 / `padlead.rs` パッドの両端の吸着点と垂直な出入り / `align.rs` 選んだ部品の整列ボタン / `livepath.rs` 自動経路(出発点からカーソルまでの探索) / `lengths.rs` 長さ合わせ(蛇行) / `canvas.rs`・`interact.rs`・`draw.rs`・`panel.rs` / `select.rs`・`route.rs`・`tools.rs` / `view3d/`(`mod.rs`=状態、`window.rs`=窓、`scene.rs`=立体と描画、`camera.rs`、`picture.rs`、`glow.rs`)・`raster3d.rs` 3D / `width.rs` 配線の太さ・電圧降下 / `order.rs` 発注の準備 / `netwindow.rs` ネットをクリックしたときの設定の窓(電流・推奨の線幅・ネットクラス) / `file.rs`・`actions.rs`・`history.rs`・`view.rs` / `layers.rs` 層 / `pairs.rs` 差動ペア / `shoving.rs` 押しのけ / `tracking.rs` 延長線トラッキング(吸着点からのガイド) / `requirements.rs` 取り込んだ組と距離の点検の表示

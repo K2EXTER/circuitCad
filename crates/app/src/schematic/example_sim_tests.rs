@@ -1073,3 +1073,25 @@ fn the_self_heating_section_lists_the_warm_resistors() {
     e.heat_ambient = "abc".into();
     assert!(e.run_self_heat().is_err());
 }
+
+/// The temperature-over-time block: a part with a heat capacity warms less in a short run than its steady state, inputs are checked.
+#[test]
+fn the_heat_over_time_block_warms_a_part_less_than_the_steady_state() {
+    let mut e = editor_with("led.schjson");
+    let name = e.run_self_heat().expect("a DC point").parts[0].name.clone();
+    {
+        let c = e.sch.components.iter_mut().find(|c| c.refdes == name).unwrap();
+        c.theta = 100.0;
+        c.cth = 0.05;
+    }
+    e.htran_parts = name.clone();
+    e.htran_stop = "1".into();
+    let v = e.run_heat_tran().expect("a transient run");
+    let p = &v.parts[0];
+    assert!(p.rise_peak > 0.0 && p.rise_peak < 0.5 * p.power_peak * p.theta, "{} {}", p.rise_peak, p.power_peak * p.theta);
+    e.htran_parts = String::new();
+    assert!(e.run_heat_tran().is_err());
+    e.htran_parts = name;
+    e.htran_links = "A:B".into();
+    assert!(e.run_heat_tran().is_err());
+}

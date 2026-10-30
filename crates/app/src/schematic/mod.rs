@@ -217,6 +217,11 @@ pub struct SchEditor {
     /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
     heat_view: Option<Result<selfheat::HeatView, String>>,
     heat_ambient: String,
+    /// The temperature-over-time block: its last answer and its inputs (parts, seconds, "A:B:K/W" couplings).
+    htran: Option<Result<selfheat_tran::HeatTranView, String>>,
+    htran_parts: String,
+    htran_stop: String,
+    htran_links: String,
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     sec_mode: u8,
     fault_part: String,
@@ -510,6 +515,10 @@ impl Default for SchEditor {
             sec_gen: 0,
             heat_view: None,
             heat_ambient: "27".into(),
+            htran: None,
+            htran_parts: String::new(),
+            htran_stop: "0.6".into(),
+            htran_links: String::new(),
             coverage_cache: None,
             sec_mode: 0,
             fault_part: String::new(),
@@ -625,6 +634,7 @@ mod interact;
 mod panel;
 mod coverage;
 mod selfheat;
+mod selfheat_tran;
 mod fault;
 mod spec_table;
 mod power_ui;

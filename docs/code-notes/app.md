@@ -125,6 +125,9 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 ### schematic/selfheat.rs — 自己発熱
 解析タブの折りたたみ「自己発熱 (部品の温度上昇)」(`panel_selfheat`)。周囲の温度(`heat_ambient`)を決めて「自己発熱を計算」で `run_self_heat`(`sim_core::self_heat`)。結果 `heat_view` の表は、電力・上昇・値の変化・熱抵抗・係数。熱抵抗と係数の欄はそのまま `Component.theta`/`tc_ppm` に書く(回路図の履歴に入る。計算はボタンで再実行)。温まって動いたネットも上位8個。DC が収束しない回路は計算できない(エラーを赤で表示)。
 
+### schematic/selfheat_tran.rs — 温度の時間変化
+「自己発熱」の下のブロック(`panel_heat_tran`)。部品(`htran_parts`、コンマ区切り)・時間(`htran_stop`)・結合(`htran_links`、`A:B:K/W`)を入れて「温度の変化を計算」で `run_heat_tran`(`sim_core::heat_tran`)。結果 `htran` の表は、電力の最大・上昇の最大・熱抵抗・熱容量・定常なら。熱抵抗と熱容量の欄は `Component.theta`/`cth` に書く。各部品の上昇の曲線(`draw_rise_chart`)と、温まって動いた電圧(`HeatTran::moved`)も出す。結合は回路図に保存されない(入力欄だけ)。過渡解析を回すので、大きい回路では時間がかかる(画面は固まる)。
+
 ### schematic/erc_skip.rs — 描きかけの範囲
 `Schematic.erc_skip`(最小角・最大角の組)の中にある ERC の指摘は `sch_core::erc` が捨てる(画面・CLI・チャレンジ判定とも共通。場所のない指摘=GNDなしなどは残る)。ERC ボタンの下の「選択を描きかけにする」で、選択物を囲む範囲(2マス余白)を足す。灰色の枠で表示(`draw_problems`)、×で外す。ファイルに保存され、Undo の対象。
 

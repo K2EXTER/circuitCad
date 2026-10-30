@@ -119,7 +119,10 @@ impl SchEditor {
                             "variation" => self.panel_variation(ui),
                             "spec" => self.panel_spec(ui),
                             "coverage" => self.panel_coverage(ui),
-                            "selfheat" => self.panel_selfheat(ui),
+                            "selfheat" => {
+                                self.panel_selfheat(ui);
+                                self.panel_heat_tran(ui);
+                            }
                             _ => self.panel_fault(ui),
                         }
                     }).header_response.on_hover_text(*hint);
