@@ -216,6 +216,8 @@ pub enum CurrentSource {
 /// Per pour: its layer, its net, its pieces and the triangles of each piece (worked out once, not every frame).
 type PourCache = (Side, String, Vec<pcb_core::zonefill::FillShape>, Vec<Vec<[Point; 3]>>);
 type ZoneCache = Option<(u64, Vec<PourCache>)>;
+/// The pours and islands being worked out on another thread, for the geometry key given.
+type ZoneJob = Option<(u64, std::sync::mpsc::Receiver<(Vec<PourCache>, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>)>;
 
 pub struct BoardEditor {
     pub board: Board,
@@ -362,6 +364,7 @@ pub struct BoardEditor {
     /// The requirements check and the measures of the table, with the key of the board they were worked out for.
     req_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<ReqAnswer>)>>,
     zone_cache: std::cell::RefCell<ZoneCache>,
+    zone_job: std::cell::RefCell<ZoneJob>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
     island_cache: std::cell::RefCell<Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>>,
     /// How many heat pads lack thermal vias, with the geometry key it was counted for: the count fills every pour, so it is not worked out every frame.
@@ -505,6 +508,7 @@ impl Default for BoardEditor {
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             req_cache: std::cell::RefCell::new(None),
             zone_cache: std::cell::RefCell::new(None),
+            zone_job: Default::default(),
             island_cache: std::cell::RefCell::new(None),
             thermal_cache: std::cell::Cell::new(None),
             hover_net: None,

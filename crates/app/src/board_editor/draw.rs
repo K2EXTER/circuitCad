@@ -26,15 +26,45 @@ impl BoardEditor {
         }
     }
 
-    /// Copper pours as the fab will get them: cut to the board outline, cleared around other nets and the
-    /// edge (thermal spokes not drawn). The shapes come from the same code as the Gerber output.
-    pub(super) fn draw_zones(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
-        if !self.vis.zones || self.board.zones.is_empty() {
+    /// The pours (with their triangles) and the islands, for the board as it is. The first time they are worked out here; after a change
+    /// they are worked out on another thread (50 ms or more on a board with guards) and the last ones stay on the screen until the new
+    /// ones are in, so that drawing a track with the pours shown does not stop at each corner. While parts or a group are dragged they stay as they were.
+    fn refresh_zone_caches(&self, ctx: &egui::Context, conn: Option<&drc::Connectivity>) {
+        let key = pcb_core::zonefill::geometry_key(&self.board);
+        let make = |board: &pcb_core::Board, conn: &drc::Connectivity| {
+            let pours: Vec<PourCache> = pcb_core::zonefill::merged_fills(board, conn)
+                .into_iter()
+                .map(|(s, n, shapes)| {
+                    let tris = shapes.iter().map(|sh| sh.triangles()).collect();
+                    (s, n, shapes, tris)
+                })
+                .collect();
+            (pours, pcb_core::zonefill::dropped_islands(board, conn))
+        };
+        // an answer that came in
+        let mut done = None;
+        {
+            let mut job = self.zone_job.borrow_mut();
+            if let Some((jk, rx)) = job.as_ref() {
+                match rx.try_recv() {
+                    Ok(r) => {
+                        done = Some((*jk, r));
+                        *job = None;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(30)),
+                    Err(_) => *job = None,
+                }
+            }
+        }
+        if let Some((k, (pours, islands))) = done {
+            *self.zone_cache.borrow_mut() = Some((k, pours));
+            *self.island_cache.borrow_mut() = Some((k, islands));
+        }
+        let have = self.zone_cache.borrow().as_ref().map(|(k, _)| *k);
+        if have == Some(key) || (have.is_some() && self.slow_results_kept()) {
             return;
         }
-        let key = pcb_core::zonefill::geometry_key(&self.board);
-        let mut cache = self.zone_cache.borrow_mut();
-        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.slow_results_kept()) {
+        if have.is_none() {
             let fresh;
             let conn = match conn {
                 Some(c) => c,
@@ -43,16 +73,34 @@ impl BoardEditor {
                     &*fresh
                 }
             };
-            let pours = pcb_core::zonefill::merged_fills(&self.board, conn)
-                .into_iter()
-                .map(|(s, n, shapes)| {
-                    let tris = shapes.iter().map(|sh| sh.triangles()).collect();
-                    (s, n, shapes, tris)
-                })
-                .collect();
-            *cache = Some((key, pours));
+            let (pours, islands) = make(&self.board, conn);
+            *self.zone_cache.borrow_mut() = Some((key, pours));
+            *self.island_cache.borrow_mut() = Some((key, islands));
+            return;
         }
+        // the board changed since the last answer: a new one is asked for, unless one is on its way (it is asked for again when it is in)
+        if self.zone_job.borrow().is_none() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let board = self.board.clone();
+            std::thread::spawn(move || {
+                let conn = drc::connectivity(&board);
+                let _ = tx.send(make(&board, &conn));
+            });
+            *self.zone_job.borrow_mut() = Some((key, rx));
+            ctx.request_repaint_after(std::time::Duration::from_millis(30));
+        }
+    }
+
+    /// Copper pours as the fab will get them: cut to the board outline, cleared around other nets and the
+    /// edge (thermal spokes not drawn). The shapes come from the same code as the Gerber output.
+    pub(super) fn draw_zones(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
+        if !self.vis.zones || self.board.zones.is_empty() {
+            return;
+        }
+        self.refresh_zone_caches(painter.ctx(), conn);
+        let cache = self.zone_cache.borrow();
         let Some((_, fills)) = cache.as_ref() else { return };
+        let area = rect.expand(4.0);
         for s in self.layer_order() {
             if !self.side_visible(s) {
                 continue;
@@ -65,17 +113,27 @@ impl BoardEditor {
                     if !self.shape_on_screen(rect, shape) {
                         continue;
                     }
+                    // only what is on the screen: a big pour is one shape, and its triangles and its many small holes (the clearance
+                    // round each pad) mostly lie outside the view when zoomed in, or are a pixel or two wide when zoomed out
                     let mut mesh = egui::Mesh::default();
                     for t in tris {
+                        let s = [self.to_screen(rect, t[0]), self.to_screen(rect, t[1]), self.to_screen(rect, t[2])];
+                        if !Rect::from_points(&s).intersects(area) {
+                            continue;
+                        }
                         let base = mesh.vertices.len() as u32;
-                        for p in t {
-                            mesh.colored_vertex(self.to_screen(rect, *p), fill);
+                        for q in s {
+                            mesh.colored_vertex(q, fill);
                         }
                         mesh.add_triangle(base, base + 1, base + 2);
                     }
                     painter.add(egui::Shape::mesh(mesh));
-                    for contour in std::iter::once(&shape.outer).chain(shape.holes.iter()) {
+                    for (k, contour) in std::iter::once(&shape.outer).chain(shape.holes.iter()).enumerate() {
                         let pts: Vec<Pos2> = contour.iter().map(|p| self.to_screen(rect, *p)).collect();
+                        let bb = Rect::from_points(&pts);
+                        if !bb.intersects(area) || (k > 0 && bb.width().max(bb.height()) < 3.0) {
+                            continue;
+                        }
                         painter.add(egui::Shape::closed_line(pts, Stroke::new(1.0, edge)));
                     }
                     self.draw_pour_name(painter, rect, net, shape, tris);
@@ -86,15 +144,13 @@ impl BoardEditor {
 
     /// The pieces of the pours that are dropped as islands, in a faint grey with a dashed outline (they are not in the copper that is made).
     pub(super) fn draw_islands(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
-        let Some(conn) = conn else { return };
+        if conn.is_none() {
+            return;
+        }
         if !self.vis.zones || self.board.zones.is_empty() {
             return;
         }
-        let key = pcb_core::zonefill::geometry_key(&self.board);
-        let mut cache = self.island_cache.borrow_mut();
-        if cache.as_ref().is_none_or(|(k, _)| *k != key && !self.slow_results_kept()) {
-            *cache = Some((key, pcb_core::zonefill::dropped_islands(&self.board, conn)));
-        }
+        let cache = self.island_cache.borrow();
         let Some((_, islands)) = cache.as_ref() else { return };
         let grey = Color32::from_rgba_unmultiplied(170, 170, 170, 160);
         for (side, _net, shapes) in islands.iter().filter(|(s, _, _)| self.side_visible(*s)) {

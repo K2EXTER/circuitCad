@@ -1375,6 +1375,57 @@ fn board_frame_time() {
     println!("drc {} violations {:.1} ms", v.len(), t.elapsed().as_secs_f64() * 1000.0);
 }
 
+/// Frame time with the pours shown and hidden, on a real board (set CCAD_BOARD): `cargo test --release -p app zone_frame_cost -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn zone_frame_cost() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let ctx = egui::Context::default();
+    let frame = |e: &mut BoardEditor, label: &str| {
+        let (mut worst, mut total) = (0.0f64, 0.0);
+        for i in 0..15 {
+            let t = std::time::Instant::now();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let n = out.shapes.len();
+            let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+            let tris: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+            let dt = t.elapsed().as_secs_f64() * 1000.0;
+            if i == 0 {
+                println!("  first frame {dt:.1} ms, shapes {n}, triangles {tris}");
+            } else {
+                worst = worst.max(dt);
+                total += dt;
+            }
+        }
+        println!("{label}: avg {:.1} ms, worst {:.1} ms", total / 14.0, worst);
+    };
+    println!("zones {}", e.board.zones.len());
+    e.vis.zones = false;
+    frame(&mut e, "zones hidden");
+    e.vis.zones = true;
+    frame(&mut e, "zones shown");
+    // an edit: the first frame after it must not wait for the pours, the new ones come in a moment later
+    let key0 = pcb_core::zonefill::geometry_key(&e.board);
+    let t0 = e.board.tracks[0].clone();
+    e.board.tracks.push(pcb_core::model::Track { a: Point::new(t0.a.x + 0.4, t0.a.y), b: Point::new(t0.a.x + 0.9, t0.a.y), ..t0 });
+    assert_ne!(key0, pcb_core::zonefill::geometry_key(&e.board));
+    frame(&mut e, "zones shown, after an edit");
+    let key = pcb_core::zonefill::geometry_key(&e.board);
+    assert_eq!(e.zone_cache.borrow().as_ref().map(|(k, _)| *k), Some(key), "the new pours came in");
+    // the same edit with the pours hidden: what is left of the first frame is not the pours
+    e.vis.zones = false;
+    let t1 = e.board.tracks[1].clone();
+    e.board.tracks.push(pcb_core::model::Track { a: Point::new(t1.a.x + 0.4, t1.a.y), b: Point::new(t1.a.x + 0.9, t1.a.y), ..t1 });
+    frame(&mut e, "zones hidden, after an edit");
+}
+
 /// Frame time while the pointer moves, drags a part and routes: `cargo test -p app board_interaction_time -- --ignored --nocapture`
 #[test]
 #[ignore]
