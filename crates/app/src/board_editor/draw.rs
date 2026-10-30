@@ -373,29 +373,42 @@ impl BoardEditor {
         }
         if self.vis.silk {
             let silk = Color32::from_rgb(235, 235, 235);
-            for l in self.board.silk.iter().filter(|l| self.side_visible(l.side) && (self.vis.parts || l.refdes.is_empty()) && self.near_screen(rect, &[l.a, l.b], l.width)) {
-                painter.line_segment([self.to_screen(rect, l.a), self.to_screen(rect, l.b)], Stroke::new((l.width as f32 * z).max(1.0), silk));
+            // the lines and the strokes of the texts, followed into chains, as one mesh
+            {
+                let mut cache = self.silk_cache.borrow_mut();
+                if !cache.as_ref().is_some_and(|c| c.is_for(&self.board)) {
+                    *cache = Some(ribbon::SilkCache::new(&self.board));
+                }
             }
-            let selected_label = match self.selected {
-                Some(Item::Label(i)) => Some(i),
-                _ => None,
-            };
-            for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| self.side_visible(t.side) && (self.vis.parts || t.refdes.is_empty()) && self.near_screen(rect, &[t.pos], pcb_core::strokefont::text_width(&t.text, t.height).max(t.height))) {
-                if selected_label == Some(i) {
-                    // a box round the picked designator, so that it is clear what the drag will move
-                    let (w, h) = t.size();
-                    painter.rect_stroke(
-                        Rect::from_center_size(self.to_screen(rect, t.pos), Vec2::new(w as f32 * z + 8.0, h as f32 * z + 8.0)),
-                        2.0,
-                        Stroke::new(1.5, Color32::from_rgb(90, 230, 120)),
-                        egui::StrokeKind::Outside,
-                    );
+            let cache = self.silk_cache.borrow();
+            let cache = cache.as_ref().expect("made above");
+            let mut mesh = egui::Mesh::default();
+            let shown = cache.plain.iter().chain(cache.of_parts.iter().filter(|_| self.vis.parts));
+            for ch in shown.filter(|c| self.side_visible(c.side)) {
+                let (lo, hi) = (self.to_screen(rect, ch.lo), self.to_screen(rect, ch.hi));
+                if !ribbon::on_screen(rect, lo, hi, ch.width as f32 * z / 2.0 + 4.0) {
+                    continue;
                 }
-                let stroke = Stroke::new(((t.height * 0.15).max(0.12) as f32 * z).max(1.0), silk);
-                for [a, b] in t.strokes() {
-                    let (pa, pb) = (Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y));
-                    painter.line_segment([self.to_screen(rect, pa), self.to_screen(rect, pb)], stroke);
+                let pts: Vec<Pos2> = ch.pts.iter().map(|p| self.to_screen(rect, *p)).collect();
+                ribbon::add_chain(&mut mesh, &pts, ch.width as f32 * z, silk);
+                if mesh.vertices.len() > 60_000 {
+                    painter.add(egui::Shape::mesh(std::mem::take(&mut mesh)));
                 }
+            }
+            painter.add(egui::Shape::mesh(mesh));
+            if let Some(Item::Label(i)) = self.selected
+                && let Some(t) = self.board.texts.get(i)
+                && self.side_visible(t.side)
+                && (self.vis.parts || t.refdes.is_empty())
+            {
+                // a box round the picked designator, so that it is clear what the drag will move
+                let (w, h) = t.size();
+                painter.rect_stroke(
+                    Rect::from_center_size(self.to_screen(rect, t.pos), Vec2::new(w as f32 * z + 8.0, h as f32 * z + 8.0)),
+                    2.0,
+                    Stroke::new(1.5, Color32::from_rgb(90, 230, 120)),
+                    egui::StrokeKind::Outside,
+                );
             }
         }
     }

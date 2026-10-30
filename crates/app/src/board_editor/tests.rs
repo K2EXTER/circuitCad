@@ -1510,14 +1510,15 @@ fn frame_breakdown() {
     let set = |e: &mut BoardEditor, which: &str| {
         e.vis.top = true;
         e.vis.bottom = true;
-        e.vis.silk = which == "silk";
-        e.vis.parts = which == "parts";
-        e.vis.airwires = which == "airwires";
-        e.vis.nets = which == "nets";
-        e.vis.zones = which == "zones";
+        let all = which == "all";
+        e.vis.silk = all || which == "silk" || which == "parts+silk";
+        e.vis.parts = all || which == "parts" || which == "parts+silk";
+        e.vis.airwires = all || which == "airwires";
+        e.vis.nets = all || which == "nets";
+        e.vis.zones = all || which == "zones";
         e.vis.ruler = false;
-        e.vis.tracks = which == "tracks";
-        e.vis.vias = which == "vias";
+        e.vis.tracks = all || which == "tracks";
+        e.vis.vias = all || which == "vias";
     };
     // let the pours come in before timing anything
     set(&mut e, "zones");
@@ -1525,7 +1526,7 @@ fn frame_breakdown() {
         measure(&mut e);
         std::thread::sleep(std::time::Duration::from_millis(40));
     }
-    for which in ["none", "tracks", "vias", "zones", "silk", "parts", "airwires", "nets"] {
+    for which in ["none", "tracks", "vias", "zones", "silk", "parts", "parts+silk", "airwires", "nets", "all"] {
         set(&mut e, which);
         let (s, t, v, ms) = measure(&mut e);
         println!("{which:>9}: shapes {s:>6} triangles {t:>8} vertices {v:>8}  {ms:.1} ms");
@@ -1542,6 +1543,10 @@ fn frame_breakdown() {
         e.vis.bottom = side == "bottom only";
         let (s, t, v, ms) = measure(&mut e);
         println!("zones,  {side}: shapes {s} triangles {t} vertices {v}  {ms:.1} ms");
+    }
+    if let Some(c) = e.silk_cache.borrow().as_ref() {
+        let seg = |v: &[ribbon::Chain]| (v.len(), v.iter().map(|c| c.pts.len().saturating_sub(1)).sum::<usize>(), v.iter().filter(|c| c.pts.len() <= 2).count());
+        println!("silk (chains, pieces, chains of one piece): plain {:?}, of parts {:?}; silk lines {}, texts {}", seg(&c.plain), seg(&c.of_parts), e.board.silk.len(), e.board.texts.len());
     }
     if let Some(c) = e.copper_cache.borrow().as_ref() {
         let pts: usize = c.chains.iter().map(|ch| ch.pts.len()).sum();

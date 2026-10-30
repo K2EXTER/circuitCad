@@ -171,6 +171,49 @@ pub(super) fn simplify_closed(pts: &[Point], tol: f64) -> Vec<Point> {
     if a.len() < 3 { pts.to_vec() } else { a }
 }
 
+/// The silkscreen (lines and the strokes of the texts) followed into chains like the tracks, kept until the silk changes. The lines and
+/// texts of parts are apart from the others: they are shown with the parts.
+pub(super) struct SilkCache {
+    key: u64,
+    pub plain: Vec<Chain>,
+    pub of_parts: Vec<Chain>,
+}
+
+impl SilkCache {
+    pub fn is_for(&self, board: &pcb_core::Board) -> bool {
+        self.key == silk_hash(board)
+    }
+
+    pub fn new(board: &pcb_core::Board) -> Self {
+        let (mut plain, mut of_parts): (Vec<Track>, Vec<Track>) = (vec![], vec![]);
+        for l in &board.silk {
+            let t = Track { side: l.side, a: l.a, b: l.b, width: l.width };
+            if l.refdes.is_empty() { plain.push(t) } else { of_parts.push(t) }
+        }
+        for t in &board.texts {
+            // as thick as the drawing of a text has always been
+            let width = (t.height * 0.15).max(0.12);
+            let dst = if t.refdes.is_empty() { &mut plain } else { &mut of_parts };
+            for [a, b] in t.strokes() {
+                dst.push(Track { side: t.side, a: Point::new(t.pos.x + a.x, t.pos.y + a.y), b: Point::new(t.pos.x + b.x, t.pos.y + b.y), width });
+            }
+        }
+        SilkCache { key: silk_hash(board), plain: chains(&plain), of_parts: chains(&of_parts) }
+    }
+}
+
+fn silk_hash(board: &pcb_core::Board) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for l in &board.silk {
+        (l.a.x.to_bits(), l.a.y.to_bits(), l.b.x.to_bits(), l.b.y.to_bits(), l.width.to_bits(), l.side, l.refdes.is_empty()).hash(&mut h);
+    }
+    for t in &board.texts {
+        (t.pos.x.to_bits(), t.pos.y.to_bits(), t.height.to_bits(), &t.text, t.rot, t.side, t.refdes.is_empty()).hash(&mut h);
+    }
+    h.finish()
+}
+
 fn tracks_hash(tracks: &[Track]) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -359,9 +402,16 @@ pub(super) fn add_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32)
         }
         prev_row = Some(row);
     }
+    // a line that is only a pixel or two wide has an end that no one can tell from a round one
+    if width < ROUND_ENDS_FROM {
+        return;
+    }
     cap(mesh, p[0], -dirs[0], core, outer, col);
     cap(mesh, p[p.len() - 1], dirs[dirs.len() - 1], core, outer, col);
 }
+
+/// The width (pixels) from which the end of a strip is drawn round.
+const ROUND_ENDS_FROM: f32 = 2.5;
 
 /// The closed line through `pts` (on the screen) as a pixel wide quad for each piece, two triangles a piece: no fade at the edge and no
 /// join at the corners (a corner of a line one pixel wide shows no gap). The outlines of the pours, of which there are very many.
@@ -512,6 +562,35 @@ mod tests {
         // a triangle is not made smaller than a triangle
         let tri = [p(0.0, 0.0), p(1.0, 0.0), p(0.0, 1.0)];
         assert_eq!(simplify_closed(&tri, 5.0), tri.to_vec());
+    }
+
+    #[test]
+    fn the_silk_is_followed_into_chains_and_the_parts_are_kept_apart() {
+        let mut b = pcb_core::Board::new("t", 20.0, 20.0);
+        let line = |a: (f64, f64), c: (f64, f64), refdes: &str| pcb_core::SilkLine { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.15, refdes: refdes.into() };
+        // an outline of a part in three pieces, and a free line
+        b.silk = vec![line((0.0, 0.0), (1.0, 0.0), "R1"), line((1.0, 0.0), (1.0, 1.0), "R1"), line((1.0, 1.0), (0.0, 1.0), "R1"), line((5.0, 5.0), (6.0, 5.0), "")];
+        let c = SilkCache::new(&b);
+        assert_eq!((c.plain.len(), c.of_parts.len()), (1, 1));
+        assert_eq!(c.of_parts[0].pts.len(), 4, "three lines are one chain of four points");
+        assert!(c.is_for(&b));
+        // a text is a few chains, not a chain for each stroke
+        b.texts.push(pcb_core::SilkText { side: Side::Top, pos: Point::new(2.0, 2.0), height: 1.0, text: "R12".into(), refdes: "R12".into(), rot: 0 });
+        assert!(!c.is_for(&b), "a new text is a change");
+        let c = SilkCache::new(&b);
+        let strokes: usize = b.texts[0].strokes().len();
+        assert!(c.of_parts.len() < strokes, "{} chains for {strokes} strokes", c.of_parts.len());
+    }
+
+    #[test]
+    fn a_thin_line_has_flat_ends_and_a_wide_one_round_ends() {
+        let n = |w: f32| {
+            let mut m = Mesh::default();
+            add_chain(&mut m, &[Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0)], w, Color32::RED);
+            m.indices.len() / 3
+        };
+        assert_eq!(n(1.5), 6, "a strip and its fade, nothing else");
+        assert!(n(6.0) > 6 + 2 * 6, "caps are added");
     }
 
     #[test]

@@ -302,6 +302,8 @@ pub struct BoardEditor {
     finish_job_tracks: std::cell::Cell<u64>,
     /// The tracks followed into chains and the finish's polygons cut into triangles, kept until the copper changes (`draw_copper`).
     copper_cache: std::cell::RefCell<Option<ribbon::CopperCache>>,
+    /// The silkscreen followed into chains (`draw_copper`).
+    silk_cache: std::cell::RefCell<Option<ribbon::SilkCache>>,
     /// The routing preview's verdict for the last cursor position: (key, tracks pushed, rule broken).
     preview_cache: std::cell::RefCell<Option<shoving::PreviewCache>>,
     pub status: String,
@@ -475,6 +477,7 @@ impl Default for BoardEditor {
             finish_tracks: Default::default(),
             finish_job_tracks: Default::default(),
             copper_cache: Default::default(),
+            silk_cache: Default::default(),
             preview_cache: Default::default(),
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,
