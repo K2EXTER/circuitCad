@@ -67,7 +67,10 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         gain and phase per decade, -3 dB frequency, phase margin
   sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or sweep REF list=1,2,5)
   heat [temp=27] [top=10]               the DC point with every resistor warmed by its own power (a steady state): per part the power, rise, temperature and
-                                        change of its value, and the nets that move because of it. thermal REF theta=K/W tc=ppm sets a part's heat resistance / coefficient
+                                        change of its value, and the nets that move because of it. thermal REF theta=K/W tc=ppm cth=J/K sets a part's heat resistance / coefficient / capacity
+  heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300] [tstep=] [temp=27] [uic] [samples=8]
+                                        a transient run whose power (I^2 R, I Vds) becomes temperatures over time: a pulse warms a part less than the
+                                        steady state by its time constant (theta cth); couple=A:B:K/W lets two parts warm each other; a resistor's value follows its temperature
   sens probe=V(out) [step=1] [parts=R1,R2 | kinds=R,V,I,C,L] [top=15]
                                         sensitivity: moves each part's value by step % and says how far the probe moves (per_percent,
                                         elasticity), the biggest first; names the parts that decide an accuracy
@@ -236,6 +239,7 @@ impl Session {
             "erc" => self.erc(),
             "coverage" => self.coverage(),
             "heat" => self.heat(args),
+            "heattran" => self.heattran(args),
             "thermal" => self.thermal(args),
             "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
             "dc" => self.dc(args),

@@ -85,7 +85,7 @@ pub fn heaters_from_schematic(sch: &Schematic, circuit: &Circuit) -> Vec<Heater>
     out
 }
 
-fn scale(h: &Heater, temp_c: f64) -> f64 {
+pub(crate) fn scale(h: &Heater, temp_c: f64) -> f64 {
     let d = temp_c - T_NOM_C;
     (1.0 + h.tc1 * d + h.tc2 * d * d).max(0.01)
 }

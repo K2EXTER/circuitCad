@@ -164,6 +164,9 @@ pub struct Component {
     /// Temperature coefficient of a resistor (ppm/K) for the self-heating run; 0 = the model's own (`TC=`), or none.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub tc_ppm: f64,
+    /// Heat capacity (J/K) of the part and the copper it warms, for the temperature-over-time run; 0 = none given.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub cth: f64,
 }
 
 fn is_zero_f64(x: &f64) -> bool {
@@ -440,6 +443,7 @@ impl Schematic {
             pin_names: vec![],
             theta: 0.0,
             tc_ppm: 0.0,
+            cth: 0.0,
         });
         self.components.len() - 1
     }
@@ -459,6 +463,7 @@ impl Schematic {
             pin_names: vec![],
             theta: 0.0,
             tc_ppm: 0.0,
+            cth: 0.0,
         });
         self.components.len() - 1
     }

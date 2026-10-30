@@ -363,14 +363,14 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "pins": n, "names": c.pin_names})))
     }
 
-    /// `thermal REF [theta=K/W] [tc=ppm]`: the heat resistance and the temperature coefficient of a resistor for `heat` (0 = back to the guess).
+    /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K]`: the heat resistance, the temperature coefficient and the heat capacity of a part for `heat` / `heattran` (0 = back to the guess).
     pub fn thermal(&mut self, args: &[String]) -> Res {
-        let usage = "thermal REF [theta=K/W] [tc=ppm/K]   (0 puts a value back to the default: theta from the package, tc from the model)";
+        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity)";
         let (pos, kv) = options(args);
         let [r] = pos.as_slice() else { return Err(usage.into()) };
-        let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k != "theta" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "theta" { " (zero or more)" } else { "" }))).transpose();
-        let (theta, tc) = (num("theta")?, num("tc")?);
-        if theta.is_none() && tc.is_none() {
+        let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k == "tc" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "tc" { "" } else { " (zero or more)" }))).transpose();
+        let (theta, tc, cth) = (num("theta")?, num("tc")?, num("cth")?);
+        if theta.is_none() && tc.is_none() && cth.is_none() {
             return Err(usage.into());
         }
         let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
@@ -380,7 +380,63 @@ impl Session {
         if let Some(x) = tc {
             c.tc_ppm = x;
         }
-        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm})))
+        if let Some(x) = cth {
+            c.cth = x;
+        }
+        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth})))
+    }
+
+    /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
+    /// temperatures over time (`sim_core::heat_tran`). Each part is one heat resistance (`thermal REF theta=`) and heat capacity
+    /// (`thermal REF cth=`) to the surroundings; `couple=A:B:K/W` ties two parts by a heat resistance of their own.
+    pub fn heattran(&mut self, args: &[String]) -> Res {
+        let usage = "heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300] [tstep=] [temp=27] [uic] [samples=8]   (theta and cth per part: thermal REF theta=K/W cth=J/K)";
+        let (pos, kv) = options(args);
+        let pos_num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0 && v.is_finite()).ok_or_else(|| format!("'{s}' is not a positive number (write 10m, 20u ...)"));
+        let tstop = pos.first().map(|s| pos_num(s)).transpose()?.ok_or(usage)?;
+        let tstep = opt(&kv, "tstep").map(pos_num).transpose()?.unwrap_or_else(|| sim_core::auto_tstep(tstop));
+        let uic = pos.iter().skip(1).any(|w| w.eq_ignore_ascii_case("uic"));
+        let temp = opt(&kv, "temp").map_or(Ok(27.0), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("temp={s} is not a number")))?;
+        let samples: usize = opt(&kv, "samples").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(2, 200);
+        let refs: Vec<String> = opt(&kv, "parts").ok_or(usage)?.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+        let mut links = vec![];
+        for spec in opt(&kv, "couple").map(|c| c.split(',').collect::<Vec<_>>()).unwrap_or_default() {
+            let w: Vec<&str> = spec.split(':').collect();
+            let [a, b, th] = w.as_slice() else { return Err(format!("couple '{spec}': write PART:PART:K/W, for example Q1:RS1:300")) };
+            let theta = sim_core::parse_value(th).filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("couple '{spec}': '{th}' is not a heat resistance above zero (K/W)"))?;
+            links.push(sim_core::ThermalLink { a: a.trim().to_string(), b: b.trim().to_string(), theta });
+        }
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs)?;
+        let r = sim_core::heat_tran(&c, &nodes, &links, temp, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
+        self.last_tran = Some(r.tran.clone());
+        let n = r.time.len();
+        let at = |k: usize| k * (n - 1) / (samples - 1);
+        let rows: Vec<Value> = r
+            .parts
+            .iter()
+            .map(|p| {
+                let series: Vec<Value> = (0..samples).map(|k| json!([r.time[at(k)], p.power[at(k)], p.rise[at(k)]])).collect();
+                json!({"part": p.name, "theta_k_per_w": p.theta, "cth_j_per_k": p.cth, "tau_s": p.theta * p.cth,
+                    "power_peak_w": p.power_peak, "power_mean_w": p.power_mean,
+                    "rise_peak_k": p.rise_peak, "peak_at_s": p.peak_time, "rise_end_k": p.rise_end,
+                    "temp_peak_c": temp + p.rise_peak, "added_by_neighbours_k": p.rise_peak - p.rise_alone,
+                    "working_temp_c": p.temp_working_c, "change_ppm": p.change * 1e6,
+                    "steady_state_rise_k": p.power_peak * p.theta, "samples_time_power_rise": series})
+            })
+            .collect();
+        let mut notes = vec!["each part is one heat capacity and one heat resistance to the surroundings (board copper included): a rough picture, not a field solution".to_string()];
+        let no_cap: Vec<&str> = r.parts.iter().filter(|p| p.cth == 0.0).map(|p| p.name.as_str()).collect();
+        if !no_cap.is_empty() {
+            notes.push(format!("{} has no heat capacity (thermal REF cth=J/K), so it follows its power at once: the rise is the steady-state value, too high for a short pulse", no_cap.join(", ")));
+        }
+        if links.is_empty() && r.parts.len() > 1 {
+            notes.push("no couple=: the parts do not warm each other".to_string());
+        }
+        notes.push("the value of a resistor with a temperature coefficient is worked out at the temperature it had while it dissipated; transistors and diodes are not changed by their temperature".to_string());
+        notes.extend(gate);
+        Ok(obj(json!({"ambient_c": temp, "tstop": tstop, "rounds": r.rounds, "parts": rows, "notes": notes})))
     }
 
     /// `heat [temp=27] [top=10]`: the DC point with the resistors warmed by their own power (`sim_core::self_heat`): per part the power,

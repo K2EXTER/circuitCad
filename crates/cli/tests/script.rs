@@ -1466,3 +1466,21 @@ fn heat_warms_a_resistor_by_its_own_power_and_moves_the_nets() {
     let (_, ok) = run("new\nadd R 1k as=R1\nthermal R1 theta=-3\n");
     assert!(!ok);
 }
+
+/// `heattran`: a 1 s pulse of 0.25 W into a part of 100 K/W and 0.05 J/K (5 s) warms it by 25 (1 - e^-0.2) = 4.5 K, far below the 25 K of the
+/// steady state; a part without a heat capacity shows the steady value; a coupling to a wrong name is refused.
+#[test]
+fn heattran_warms_a_part_by_the_pulse_not_by_the_steady_state() {
+    let head = "new\nadd V \"PULSE(0 10 0.1 1u 1u 1 100)\" as=V1\nadd R 100 as=R1\nadd R 100 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\nthermal R1 theta=100 cth=0.05\n";
+    let (a, ok) = run(&format!("{head}heattran 1.1 parts=R1 tstep=5m\n"));
+    assert!(ok, "{a:?}");
+    let p = &last(&a, "heattran")["parts"][0];
+    let rise = p["rise_peak_k"].as_f64().unwrap();
+    assert!(rise > 4.2 && rise < 4.8, "{p}");
+    assert!((p["steady_state_rise_k"].as_f64().unwrap() - 25.0).abs() < 0.1, "{p}");
+    let (a, ok) = run(&format!("{head}thermal R1 cth=0\nheattran 1.1 parts=R1 tstep=5m\n"));
+    assert!(ok, "{a:?}");
+    assert!(last(&a, "heattran")["parts"][0]["rise_peak_k"].as_f64().unwrap() > 24.0);
+    let (_, ok) = run(&format!("{head}heattran 1.1 parts=R1 couple=R1:R9:50\n"));
+    assert!(!ok);
+}
