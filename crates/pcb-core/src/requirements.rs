@@ -216,7 +216,7 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
     let g = &model.graph;
     use crate::drc::PadRef;
     let Some((_, _, need)) = m.kind() else { return Err(format!("測定「{}」の種類 `{}` が分かりません", m.name, m.what)) };
-    if m.what == "gap" || m.what == "guard" || m.what == "parallel" {
+    if m.what == "gap" || m.what == "guard" || m.what == "parallel" || m.what == "overlap" {
         if m.pads.len() != need {
             return Err(format!("測定「{}」には、ネットが {need} 個要ります", m.name));
         }
@@ -229,6 +229,10 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             let (d, pa, pb) = crate::drc::net_gap_except(&model.index, Some(board), &a, &b, &m.except).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
             return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
         }
+        if m.what == "overlap" {
+            let (area, at) = crate::drc::layer_overlap(&model.index, board, &a, &b).ok_or_else(|| format!("測定「{}」: {} か {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
+            return Ok(Measured { value: area, ways: vec![], at });
+        }
         if m.what == "parallel" {
             let run = crate::drc::parallel_run(&model.index, board, &a, &b, m.guard_reach(), &m.except).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
             return Ok(Measured { value: run.length, ways: run.runs, at: None });
@@ -238,6 +242,16 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             return Err(format!("測定「{}」: ガードのネット {} につながるパッドが、基板にありません", m.name, m.pads[1]));
         }
         let cover = crate::drc::guard_cover_in(&model.index, board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
+        return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
+    }
+    if m.what == "under" {
+        let (Some(from), Some(to)) = (m.pads.first().and_then(|p| PadRef::parse(p)), m.pads.get(1).and_then(|p| PadRef::parse(p))) else { return Err(format!("測定「{}」の1つ目と2つ目には、道筋の両端のパッド (部品.ピン) を書いてください", m.name)) };
+        let ground = m.pads.get(2).map(|p| crate::drc::net_set(p)).unwrap_or_default();
+        if m.pads.len() != 3 || ground.is_empty() {
+            return Err(format!("測定「{}」には、道筋の両端のパッド 2 個とグラウンドのネットが要ります", m.name));
+        }
+        let way = g.path(&from, &to).ok_or_else(|| format!("測定「{}」: {from} と {to} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name))?;
+        let cover = crate::drc::under_cover(&model.index, board, &way.points, &ground);
         return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
     }
     if m.what == "thermal_vias" {
@@ -272,6 +286,11 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             let (a, b) = (way(&pads[0], &pads[1])?, way(&pads[2], &pads[3])?);
             let value = if m.what == "loop" { a.length + b.length } else { (a.length - b.length).abs() };
             Ok(Measured { value, ways: vec![a.points.iter().map(|(_, q)| *q).collect(), b.points.iter().map(|(_, q)| *q).collect()], at: None })
+        }
+        "resistance" => {
+            let p = way(&pads[0], &pads[1])?;
+            let (ohm, at) = crate::drc::way_resistance(board, &p.points, 35.0);
+            Ok(Measured { value: ohm * 1000.0, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at })
         }
         "width" => {
             let p = way(&pads[0], &pads[1])?;
@@ -928,6 +947,35 @@ mod tests {
         assert!((measure_one(&b, &model, &pm).unwrap().value - 20.0).abs() < 0.3);
         // a net with no track cannot be measured
         assert!(measure_one(&b, &model, &m("parallel", &["ZZ", "SW1"], 1.0, "max", 0.0)).is_err());
+    }
+
+    /// `resistance` is rho * L / (w * t) of the way (10 mm of 0.25 mm in 35 um copper: 19.7 mOhm), `under` is the share of the way with ground
+    /// on the layer below (half of it here) and `overlap` is the area where copper of two nets lies over each other on two layers.
+    #[test]
+    fn the_resistance_of_a_way_ground_under_it_and_copper_over_copper_are_measured() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "U", "1");
+        pad_at(&mut b, 15.0, 5.0, "C", "1");
+        let mut g = Pad::new(Point::new(5.0, 3.0), PadShape::Circle { d: 1.2 }, Some(0.5), Side::Top);
+        g.refdes = "G".into();
+        g.pin = "1".into();
+        g.net = "GND".into();
+        b.pads.push(g);
+        wire(&mut b, (5.0, 5.0), (15.0, 5.0));
+        for (a, c) in [((5.0, 3.0), (5.0, 5.0)), ((5.0, 5.0), (10.0, 5.0))] {
+            b.tracks.push(Track { side: Side::Bottom, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.25 });
+        }
+        let m = |what: &str, pads: &[&str]| design_spec::Measure { name: "m".into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: "max".into(), limit: 1.0, reach: 0.0, except: vec![], note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        let r = measure_one(&b, &model, &m("resistance", &["U.1", "C.1"])).unwrap();
+        assert!((r.value - 19.657).abs() < 0.05, "{}", r.value);
+        let u = measure_one(&b, &model, &m("under", &["U.1", "C.1", "GND"])).unwrap();
+        assert!(u.value > 45.0 && u.value < 55.0 && !u.ways.is_empty(), "{}", u.value);
+        let none = measure_one(&b, &model, &m("under", &["U.1", "C.1", "NOPE"])).unwrap();
+        assert!(none.value < 1.0, "{}", none.value);
+        let o = measure_one(&b, &model, &m("overlap", &["N", "GND"])).unwrap();
+        assert!(o.value > 1.0 && o.value < 3.0 && o.at.is_some(), "{}", o.value);
+        assert_eq!(measure_one(&b, &model, &m("overlap", &["N", "N"])).unwrap().value, 0.0);
     }
 
     /// `thermal_vias` counts the vias in a pad, `loop` adds the two legs of a loop, `match` is the difference of two ways, `ring` is how much of

@@ -411,6 +411,22 @@ pub fn copper_area(shapes: &[FillShape], within: Option<(Point, f64)>) -> f64 {
     }
 }
 
+/// The copper that lies in both `a` and `b` (each joined into one shape first), as pieces.
+pub fn overlap_shapes(a: &[FillShape], b: &[FillShape]) -> Vec<FillShape> {
+    if a.is_empty() || b.is_empty() {
+        return vec![];
+    }
+    contours(&union(a))
+        .overlay(&contours(&union(b)), OverlayRule::Intersect, FillRule::NonZero)
+        .into_iter()
+        .filter_map(|shape| {
+            let mut it = shape.into_iter();
+            let outer = to_points(&it.next()?);
+            (signed_area(&outer).abs() >= 1e-6).then(|| FillShape { outer, holes: it.map(|h| to_points(&h)).collect() })
+        })
+        .collect()
+}
+
 /// A pad, a track or a via as a piece of copper (for [`copper_area`]).
 pub fn pad_piece(pos: Point, shape: PadShape) -> FillShape {
     FillShape { outer: to_points(&pad_path(pos, shape, 0.0)), holes: vec![] }

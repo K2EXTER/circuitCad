@@ -19,7 +19,7 @@ use crate::zonefill;
 /// Resistivity of copper at about 25 C, in ohm * mm.
 const RHO_MM: f64 = 1.72e-5;
 /// Board thickness a via barrel crosses (mm).
-const BOARD_MM: f64 = 1.6;
+pub(crate) const BOARD_MM: f64 = 1.6;
 /// Plating thickness of a via barrel (mm).
 const PLATING_MM: f64 = 0.025;
 /// Largest network that is solved; bigger nets are reported as too large. A pour adds up to `POUR_CELLS` cells.

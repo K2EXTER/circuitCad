@@ -652,19 +652,179 @@ pub fn narrowest_on_way(board: &Board, way: &[(Side, Point)]) -> Option<(f64, Po
             continue;
         }
         let mid = Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0);
-        // the track that carries this piece: the one that holds both ends (the way's points are track ends and the places where tracks meet)
-        let on = |t: &Track, x: Point| {
-            let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
-            let l2 = dx * dx + dy * dy;
-            let f = if l2 < 1e-12 { 0.0 } else { (((x.x - t.a.x) * dx + (x.y - t.a.y) * dy) / l2).clamp(0.0, 1.0) };
-            Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(x) < 1e-3
-        };
-        let width = board.tracks.iter().filter(|t| t.side == s0 && on(t, p) && on(t, q) && on(t, mid)).map(|t| t.width).fold(f64::INFINITY, f64::min);
-        if width.is_finite() && best.is_none_or(|b| width < b.0) {
+        if let Some(width) = carrier_width(board, s0, p, q)
+            && best.is_none_or(|b| width < b.0)
+        {
             best = Some((width, mid));
         }
     }
     best
+}
+
+/// The width of the track that carries the piece `p`-`q` of a way on layer `side`: the narrowest of the tracks that hold both ends and the
+/// middle (the way's points are track ends and the places where tracks meet). None when no track does.
+fn carrier_width(board: &Board, side: Side, p: Point, q: Point) -> Option<f64> {
+    let mid = Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0);
+    let on = |t: &Track, x: Point| {
+        let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
+        let l2 = dx * dx + dy * dy;
+        let f = if l2 < 1e-12 { 0.0 } else { (((x.x - t.a.x) * dx + (x.y - t.a.y) * dy) / l2).clamp(0.0, 1.0) };
+        Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(x) < 1e-3
+    };
+    let width = board.tracks.iter().filter(|t| t.side == side && on(t, p) && on(t, q) && on(t, mid)).map(|t| t.width).fold(f64::INFINITY, f64::min);
+    width.is_finite().then_some(width)
+}
+
+/// The DC resistance (ohm) of a way (its points, layer by layer): each piece of track by its length and width, each change of layer at a via
+/// by the barrel of that via (the board thickness split evenly between the copper layers). Copper of `thickness_um` (35 = 1 oz). A pour
+/// is not walked, a through-hole pad that changes the layer costs nothing. Also the middle of the piece with the most resistance.
+pub fn way_resistance(board: &Board, way: &[(Side, Point)], thickness_um: f64) -> (f64, Option<Point>) {
+    let spec = crate::irdrop::IrSpec { thickness_um };
+    let layers = board.copper_layers();
+    let (mut total, mut worst) = (0.0, (0.0, None));
+    for w in way.windows(2) {
+        let ((s0, p), (s1, q)) = (w[0], w[1]);
+        let r = if s0 == s1 {
+            if p.dist(q) < 1e-6 {
+                continue;
+            }
+            let Some(width) = carrier_width(board, s0, p, q) else { continue };
+            crate::irdrop::track_resistance(p.dist(q), width, &spec)
+        } else {
+            let Some(via) = board.vias.iter().find(|v| v.pos.dist(p) < 0.01) else { continue };
+            let (i0, i1) = (layers.iter().position(|&l| l == s0), layers.iter().position(|&l| l == s1));
+            let (Some(i0), Some(i1)) = (i0, i1) else { continue };
+            let height = crate::irdrop::BOARD_MM * i0.abs_diff(i1) as f64 / (layers.len().max(2) - 1) as f64;
+            crate::irdrop::via_resistance(via.drill, height)
+        };
+        total += r;
+        if r > worst.0 {
+            worst = (r, Some(Point::new((p.x + q.x) / 2.0, (p.y + q.y) / 2.0)));
+        }
+    }
+    (total, worst.1)
+}
+
+/// How much of a way has copper of the `ground` nets on a layer next to it (the layers above and below it in the stack): the return current
+/// of a signal runs there. Every 0.2 mm along the tracks of the way is looked at; the stretches without are kept to draw.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct UnderCover {
+    pub covered: f64,
+    pub total: f64,
+    pub bare: Vec<Vec<Point>>,
+}
+
+impl UnderCover {
+    /// Percent of the length that has ground next to it (100 when the way has no track).
+    pub fn percent(&self) -> f64 {
+        if self.total <= 1e-9 { 100.0 } else { 100.0 * self.covered / self.total }
+    }
+}
+
+pub fn under_cover(index: &CopperIndex, board: &Board, way: &[(Side, Point)], ground: &[String]) -> UnderCover {
+    let layers = board.copper_layers();
+    let (items, item_net) = (&index.items, &index.nets);
+    let grounds: Vec<usize> = (0..items.len()).filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(ground, n))).collect();
+    let pours: Vec<(Side, Vec<crate::zonefill::FillShape>)> =
+        crate::zonefill::merged_fills(board, &index.conn).into_iter().filter(|(_, n, _)| !n.is_empty() && in_set(ground, n)).map(|(s, _, f)| (s, f)).collect();
+    let mut out = UnderCover::default();
+    for w in way.windows(2) {
+        let ((s0, p), (s1, q)) = (w[0], w[1]);
+        let len = p.dist(q);
+        if s0 != s1 || len < 1e-6 {
+            continue;
+        }
+        let Some(i) = layers.iter().position(|&l| l == s0) else { continue };
+        let next: Vec<Side> = [i.checked_sub(1), Some(i + 1)].into_iter().flatten().filter_map(|k| layers.get(k).copied()).collect();
+        let n = (len / 0.2).ceil().max(1.0) as usize;
+        let at = |t: f64| Point::new(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t);
+        let mut run: Vec<Point> = vec![];
+        for k in 0..n {
+            let (t0, t1) = (k as f64 / n as f64, (k + 1) as f64 / n as f64);
+            let x = at((t0 + t1) / 2.0);
+            let probe = Geo::Cap { a: x, b: x, r: 0.0 };
+            let under = next.iter().any(|&l| {
+                grounds.iter().any(|&g| items[g].on(l) && dist(&probe, &items[g].geo) <= 1e-6)
+                    || pours.iter().any(|(s, f)| *s == l && f.iter().any(|sh| inside_polygon(&sh.outer, x) && !sh.holes.iter().any(|h| inside_polygon(h, x))))
+            });
+            let seg = len / n as f64;
+            out.total += seg;
+            if under {
+                out.covered += seg;
+                if run.len() > 1 {
+                    out.bare.push(std::mem::take(&mut run));
+                }
+                run.clear();
+            } else {
+                if run.is_empty() {
+                    run.push(at(t0));
+                }
+                run.push(at(t1));
+            }
+        }
+        if run.len() > 1 {
+            out.bare.push(run);
+        }
+    }
+    out
+}
+
+/// How much copper of the nets `a` lies over or under copper of the nets `b` on another layer (mm²): pads, tracks, vias and pours, each
+/// layer's copper joined into one shape. Also the middle of the biggest overlap. None when a set has no copper.
+pub fn layer_overlap(index: &CopperIndex, board: &Board, a: &[String], b: &[String]) -> Option<(f64, Option<Point>)> {
+    use crate::zonefill::{overlap_shapes, pad_piece, track_piece, via_piece, FillShape};
+    let layers = board.copper_layers();
+    let (nt, np) = (board.tracks.len(), board.pads.len());
+    let mut copper: [HashMap<Side, Vec<FillShape>>; 2] = Default::default();
+    for (k, set) in [a, b].into_iter().enumerate() {
+        let hit = |i: usize| index.nets[i].as_deref().is_some_and(|n| in_set(set, n));
+        for (i, t) in board.tracks.iter().enumerate() {
+            if hit(i) {
+                copper[k].entry(t.side).or_default().push(track_piece(t.a, t.b, t.width));
+            }
+        }
+        for (j, p) in board.pads.iter().enumerate() {
+            if hit(nt + j) {
+                let on: Vec<Side> = if p.drill.is_some() { layers.clone() } else { vec![p.side] };
+                for s in on {
+                    copper[k].entry(s).or_default().push(pad_piece(p.pos, p.shape));
+                }
+            }
+        }
+        for (j, v) in board.vias.iter().enumerate() {
+            if hit(nt + np + j) {
+                for &s in &layers {
+                    copper[k].entry(s).or_default().push(via_piece(v.pos, v.diameter));
+                }
+            }
+        }
+        for (s, n, f) in crate::zonefill::merged_fills(board, &index.conn) {
+            if !n.is_empty() && in_set(set, &n) {
+                copper[k].entry(s).or_default().extend(f);
+            }
+        }
+    }
+    if copper[0].is_empty() || copper[1].is_empty() {
+        return None;
+    }
+    let (mut area, mut biggest) = (0.0, (0.0, None));
+    for &la in &layers {
+        for &lb in &layers {
+            if la == lb {
+                continue;
+            }
+            let (Some(x), Some(y)) = (copper[0].get(&la), copper[1].get(&lb)) else { continue };
+            for piece in overlap_shapes(x, y) {
+                let s = crate::zonefill::fill_area(std::slice::from_ref(&piece));
+                area += s;
+                if s > biggest.0 {
+                    let n = piece.outer.len().max(1) as f64;
+                    biggest = (s, Some(Point::new(piece.outer.iter().map(|p| p.x).sum::<f64>() / n, piece.outer.iter().map(|p| p.y).sum::<f64>() / n)));
+                }
+            }
+        }
+    }
+    Some((area, biggest.1))
 }
 
 /// How much of the way round a pad has copper of the guard nets within `reach` mm of its edge: 72 directions from the pad's middle, and in
