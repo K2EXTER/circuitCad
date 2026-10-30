@@ -244,6 +244,17 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
         let cover = crate::drc::guard_cover_in(&model.index, board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
         return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
     }
+    if m.what == "stub" {
+        let nets = m.pads.first().map(|p| crate::drc::net_set(p)).unwrap_or_default();
+        if m.pads.len() != 1 || nets.is_empty() {
+            return Err(format!("測定「{}」には、ネットが 1 つ要ります", m.name));
+        }
+        if !board.tracks.iter().enumerate().any(|(i, _)| model.index.net_of(i).is_some_and(|n| nets.iter().any(|x| design_spec::matches_name(x, n)))) {
+            return Err(format!("測定「{}」: {} の配線が、基板にありません (先に配線してください)", m.name, m.pads[0]));
+        }
+        let all = crate::drc::stubs(&model.index, board, &nets);
+        return Ok(Measured { value: all.first().map_or(0.0, |s| s.length), at: all.first().and_then(|s| s.points.first().copied()), ways: all.into_iter().map(|s| s.points).collect() });
+    }
     if m.what == "return" {
         let (Some(from), Some(to)) = (m.pads.first().and_then(|p| PadRef::parse(p)), m.pads.get(1).and_then(|p| PadRef::parse(p))) else { return Err(format!("測定「{}」の1つ目と2つ目には、道筋の両端のパッド (部品.ピン) を書いてください", m.name)) };
         let ground = m.pads.get(2).map(|p| crate::drc::net_set(p)).unwrap_or_default();
@@ -315,6 +326,11 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             }
             let (ohm, at) = crate::drc::way_resistance(board, &p.points, 35.0);
             Ok(Measured { value: ohm * amps * 1000.0, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at })
+        }
+        "balance" => {
+            let (a, b) = (way(&pads[0], &pads[1])?, way(&pads[2], &pads[3])?);
+            let value = (a.vias.abs_diff(b.vias) + crate::drc::way_bends(&a.points).abs_diff(crate::drc::way_bends(&b.points))) as f64;
+            Ok(Measured { value, ways: vec![a.points.iter().map(|(_, q)| *q).collect(), b.points.iter().map(|(_, q)| *q).collect()], at: None })
         }
         "width" => {
             let p = way(&pads[0], &pads[1])?;
@@ -1036,6 +1052,44 @@ mod tests {
         bottom(&mut b, (11.0, 7.0), (17.0, 7.0));
         let model = crate::drc::CopperModel::build(&b);
         assert_eq!(measure_one(&b, &model, &m("return", &["U.1", "C.1", "GND"], 0.0)).unwrap().value, 1000.0);
+    }
+
+    /// `stub` finds the branch that ends on nothing (4 mm, hanging on the track it leaves) and not the one that ends on a pad; `balance` adds
+    /// the difference of the vias and of the bends of two ways.
+    #[test]
+    fn a_dead_end_branch_and_the_difference_of_two_ways_are_measured() {
+        let mut b = Board::new("t", 60.0, 60.0);
+        pad_at(&mut b, 5.0, 5.0, "U", "1");
+        pad_at(&mut b, 15.0, 5.0, "C", "1");
+        pad_at(&mut b, 10.0, 12.0, "D", "1");
+        wire(&mut b, (5.0, 5.0), (15.0, 5.0));
+        wire(&mut b, (10.0, 5.0), (10.0, 9.0));
+        // a second branch that ends on a pad of the net is not a stub
+        wire(&mut b, (12.0, 5.0), (12.0, 12.0));
+        wire(&mut b, (12.0, 12.0), (10.0, 12.0));
+        let m = |what: &str, pads: &[&str]| design_spec::Measure { name: "m".into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: "max".into(), limit: 1.0, reach: 0.0, except: vec![], note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        let s = measure_one(&b, &model, &m("stub", &["N"])).unwrap();
+        assert!((s.value - 4.0).abs() < 1e-6 && s.ways.len() == 1, "{} {}", s.value, s.ways.len());
+        assert!(measure_one(&b, &model, &m("stub", &["NOPE"])).is_err());
+        // two ways: a straight one, one with a bend, one with a via
+        pad_at(&mut b, 5.0, 30.0, "P", "1");
+        pad_at(&mut b, 10.0, 33.0, "P", "2");
+        wire(&mut b, (5.0, 30.0), (10.0, 30.0));
+        wire(&mut b, (10.0, 30.0), (10.0, 33.0));
+        let mut q = Pad::new(Point::new(12.0, 40.0), PadShape::Circle { d: 1.0 }, None, Side::Bottom);
+        q.refdes = "Q".into();
+        q.pin = "2".into();
+        q.net = "N".into();
+        b.pads.push(q);
+        pad_at(&mut b, 5.0, 40.0, "Q", "1");
+        wire(&mut b, (5.0, 40.0), (8.0, 40.0));
+        b.vias.push(Via { pos: Point::new(8.0, 40.0), diameter: 0.6, drill: 0.3, net: String::new() });
+        b.tracks.push(Track { side: Side::Bottom, a: Point::new(8.0, 40.0), b: Point::new(12.0, 40.0), width: 0.25 });
+        let model = crate::drc::CopperModel::build(&b);
+        assert_eq!(measure_one(&b, &model, &m("balance", &["U.1", "C.1", "P.1", "P.2"])).unwrap().value, 1.0, "one bend");
+        assert_eq!(measure_one(&b, &model, &m("balance", &["U.1", "C.1", "Q.1", "Q.2"])).unwrap().value, 1.0, "one via");
+        assert_eq!(measure_one(&b, &model, &m("balance", &["P.1", "P.2", "Q.1", "Q.2"])).unwrap().value, 2.0, "a bend and a via");
     }
 
     /// `thermal_vias` counts the vias in a pad, `loop` adds the two legs of a loop, `match` is the difference of two ways, `ring` is how much of

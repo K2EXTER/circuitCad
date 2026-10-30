@@ -451,6 +451,11 @@ pub struct CopperIndex {
 }
 
 impl CopperIndex {
+    /// The net of the item `i` (tracks come first), if it has one.
+    pub fn net_of(&self, i: usize) -> Option<&str> {
+        self.nets.get(i).and_then(|n| n.as_deref())
+    }
+
     pub fn build(board: &Board) -> CopperIndex {
         let conn = connectivity(board);
         let items = copper_items(board);
@@ -1026,6 +1031,122 @@ pub fn return_path(index: &CopperIndex, board: &Board, way: &[(Side, Point)], gr
     let points: Vec<Point> = cells.iter().enumerate().filter(|(k, _)| k % 3 == 0 || *k + 1 == cells.len()).map(|(_, &c)| Point::new(x0 + (c % nx) as f64 * step, y0 + (c / nx) as f64 * step)).collect();
     let chord = Point::new(x0 + (s % nx) as f64 * step, y0 + (s / nx) as f64 * step).dist(Point::new(x0 + (e % nx) as f64 * step, y0 + (e / nx) as f64 * step));
     Some(ReturnPath { length: best[e] as f64 / 1000.0, chord, points })
+}
+
+/// A track that ends on nothing: from its free end back to the place where it joins the rest of the net.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Stub {
+    /// Length (mm) from the free end to the pad, via, pour or branch it hangs on.
+    pub length: f64,
+    /// The stub as points, from the free end inwards.
+    pub points: Vec<Point>,
+}
+
+/// The dead-end branches of the tracks of the nets: a track end that touches no pad, via or pour of the net and no other track, followed
+/// inwards to the first pad, via, pour or place where three tracks meet. A track that is free at both ends is not a stub (it is loose, the
+/// DRC says so). Only the tracks are walked.
+pub fn stubs(index: &CopperIndex, board: &Board, nets: &[String]) -> Vec<Stub> {
+    let nt = board.tracks.len();
+    let mine: Vec<usize> = (0..nt).filter(|&i| index.nets[i].as_deref().is_some_and(|n| in_set(nets, n))).collect();
+    if mine.is_empty() {
+        return vec![];
+    }
+    // the places where tracks of the nets are joined by a pad or via lying on them, and the tracks cut there
+    let key = |s: Side, p: Point| (s, (p.x * 200.0).round() as i64, (p.y * 200.0).round() as i64);
+    let anchors: Vec<usize> = (nt..index.items.len()).filter(|&i| index.nets[i].as_deref().is_some_and(|n| in_set(nets, n))).collect();
+    let pours: Vec<(Side, Vec<crate::zonefill::FillShape>)> =
+        crate::zonefill::merged_fills(board, &index.conn).into_iter().filter(|(_, n, _)| !n.is_empty() && in_set(nets, n)).map(|(s, _, f)| (s, f)).collect();
+    let anchored = |s: Side, p: Point| {
+        let probe = Geo::Cap { a: p, b: p, r: 0.0 };
+        anchors.iter().any(|&i| index.items[i].on(s) && dist(&probe, &index.items[i].geo) <= 0.01)
+            || pours.iter().any(|(ps, f)| *ps == s && f.iter().any(|sh| inside_polygon(&sh.outer, p) && !sh.holes.iter().any(|h| inside_polygon(h, p))))
+    };
+    // atomic pieces: each track cut where the end of another track of the nets lies on it
+    let mut pieces: Vec<(Side, Point, Point)> = vec![];
+    for &i in &mine {
+        let t = &board.tracks[i];
+        let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
+        let l2 = dx * dx + dy * dy;
+        let mut cuts: Vec<f64> = vec![];
+        if l2 > 1e-12 {
+            for &j in mine.iter().filter(|&&j| j != i) {
+                let o = &board.tracks[j];
+                if o.side != t.side {
+                    continue;
+                }
+                for e in [o.a, o.b] {
+                    let f = ((e.x - t.a.x) * dx + (e.y - t.a.y) * dy) / l2;
+                    if f > 1e-6 && f < 1.0 - 1e-6 && Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(e) < 0.01 {
+                        cuts.push(f);
+                    }
+                }
+            }
+        }
+        cuts.sort_by(|a, b| a.total_cmp(b));
+        cuts.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+        let mut last = t.a;
+        for f in cuts.into_iter().chain([1.0]) {
+            let q = if f >= 1.0 { t.b } else { Point::new(t.a.x + dx * f, t.a.y + dy * f) };
+            pieces.push((t.side, last, q));
+            last = q;
+        }
+    }
+    let mut at: HashMap<(Side, i64, i64), Vec<usize>> = HashMap::new();
+    for (k, &(s, a, b)) in pieces.iter().enumerate() {
+        at.entry(key(s, a)).or_default().push(k);
+        at.entry(key(s, b)).or_default().push(k);
+    }
+    let mut out = vec![];
+    for (nodekey, ks) in &at {
+        if ks.len() != 1 {
+            continue;
+        }
+        let k = ks[0];
+        let (s, a, b) = pieces[k];
+        // the free end is the one of this piece that is the node
+        let (free, far) = if key(s, a) == *nodekey { (a, b) } else { (b, a) };
+        if anchored(s, free) {
+            continue;
+        }
+        let (mut length, mut points, mut prev, mut cur) = (free.dist(far), vec![free, far], k, far);
+        let found = loop {
+            let here = &at[&key(s, cur)];
+            if anchored(s, cur) || here.len() >= 3 {
+                break true;
+            }
+            if here.len() == 1 {
+                break false;
+            }
+            let Some(&n) = here.iter().find(|&&n| n != prev) else { break false };
+            let (_, na, nb) = pieces[n];
+            let next = if key(s, na) == key(s, cur) { nb } else { na };
+            length += cur.dist(next);
+            points.push(next);
+            prev = n;
+            cur = next;
+            if points.len() > pieces.len() + 2 {
+                break false;
+            }
+        };
+        if found {
+            out.push(Stub { length, points });
+        }
+    }
+    out.sort_by(|a, b| b.length.total_cmp(&a.length));
+    out
+}
+
+/// How many times a way bends (a turn of more than 1 degree on one layer).
+pub fn way_bends(way: &[(Side, Point)]) -> usize {
+    let mut dirs: Vec<(f64, f64)> = vec![];
+    for w in way.windows(2) {
+        let ((s0, p), (s1, q)) = (w[0], w[1]);
+        let l = p.dist(q);
+        if s0 == s1 && l > 1e-6 {
+            dirs.push(((q.x - p.x) / l, (q.y - p.y) / l));
+        }
+    }
+    dirs.windows(2).filter(|d| d[0].0 * d[1].0 + d[0].1 * d[1].1 < 1.0_f64.to_radians().cos()).count()
 }
 
 /// How long two sets of nets run side by side.
