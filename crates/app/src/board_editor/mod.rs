@@ -369,6 +369,9 @@ pub struct BoardEditor {
     zone_job: std::cell::RefCell<ZoneJob>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
     island_cache: std::cell::RefCell<Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>>,
+    /// The outlines of the pours (the outer line and the holes of every shape) thinned to a level of detail (`ribbon::lod_level`) of the
+    /// zoom, for the key of `zone_cache` they were made from.
+    zone_outline_lod: std::cell::RefCell<Option<(u64, usize, std::rc::Rc<Vec<Vec<Vec<Vec<Point>>>>>)>>,
     /// How many heat pads lack thermal vias, with the geometry key it was counted for: the count fills every pour, so it is not worked out every frame.
     thermal_cache: std::cell::Cell<Option<(u64, usize)>>,
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
@@ -513,6 +516,7 @@ impl Default for BoardEditor {
             zone_cache: std::cell::RefCell::new(None),
             zone_job: Default::default(),
             island_cache: std::cell::RefCell::new(None),
+            zone_outline_lod: Default::default(),
             thermal_cache: std::cell::Cell::new(None),
             hover_net: None,
             drag_edit: false,

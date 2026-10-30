@@ -1566,6 +1566,18 @@ fn frame_breakdown() {
             tri += tris.iter().map(Vec::len).sum::<usize>();
         }
         println!("zone geometry: shapes {nshapes}, outer vertices {outer}, holes {nholes} with {holes} vertices, fill triangles {tri}");
+        let key = pcb_core::zonefill::geometry_key(&e.board);
+        let thin = e.pour_outlines(key, fills);
+        let kept: usize = thin.iter().flatten().flatten().map(Vec::len).sum();
+        let big = thin.iter().flatten().flatten().filter(|c| c.len() > 200).count();
+        println!("zoom {:.1} px/mm, level {}, outline vertices after thinning {kept}, contours over 200 vertices {big}", e.zoom, ribbon::lod_level(e.zoom));
+        for tol in [0.003, 0.01, 0.03, 0.1, 0.3] {
+            let n: usize = fills.iter().flat_map(|(_, _, shapes, _)| shapes.iter()).flat_map(|sh| std::iter::once(&sh.outer).chain(sh.holes.iter())).map(|c| ribbon::simplify_closed(c, tol).len()).sum();
+            println!("  tolerance {tol} mm ({:.2} px): {n} vertices", tol * e.zoom as f64);
+        }
+        let mut sizes: Vec<usize> = fills.iter().flat_map(|(_, _, shapes, _)| shapes.iter()).flat_map(|sh| sh.holes.iter()).map(Vec::len).collect();
+        sizes.sort();
+        println!("  hole sizes: min {} median {} p90 {} max {}", sizes[0], sizes[sizes.len() / 2], sizes[sizes.len() * 9 / 10], sizes[sizes.len() - 1]);
     }
 }
 

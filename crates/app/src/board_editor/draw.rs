@@ -91,6 +91,26 @@ impl BoardEditor {
         }
     }
 
+    /// The outlines of the pours (for each pour, each shape: the outer line, then the holes) thinned to the zoom; kept until the pours or the
+    /// level of detail change.
+    pub(super) fn pour_outlines(&self, key: u64, fills: &[PourCache]) -> std::rc::Rc<Vec<Vec<Vec<Vec<Point>>>>> {
+        // a one pixel line can be half a pixel off the fill
+        let level = ribbon::lod_level_px(self.zoom, 0.5);
+        if let Some((k, l, v)) = self.zone_outline_lod.borrow().as_ref()
+            && *k == key
+            && *l == level
+        {
+            return v.clone();
+        }
+        let tol = ribbon::lod_tolerance(level);
+        let thin = |c: &Vec<Point>| if tol > 0.0 { ribbon::simplify_closed(c, tol) } else { c.clone() };
+        let v: Vec<Vec<Vec<Vec<Point>>>> =
+            fills.iter().map(|(_, _, shapes, _)| shapes.iter().map(|sh| std::iter::once(&sh.outer).chain(sh.holes.iter()).map(thin).collect()).collect()).collect();
+        let v = std::rc::Rc::new(v);
+        *self.zone_outline_lod.borrow_mut() = Some((key, level, v.clone()));
+        v
+    }
+
     /// Copper pours as the fab will get them: cut to the board outline, cleared around other nets and the
     /// edge (thermal spokes not drawn). The shapes come from the same code as the Gerber output.
     pub(super) fn draw_zones(&self, painter: &egui::Painter, rect: Rect, conn: Option<&drc::Connectivity>) {
@@ -99,7 +119,8 @@ impl BoardEditor {
         }
         self.refresh_zone_caches(painter.ctx(), conn);
         let cache = self.zone_cache.borrow();
-        let Some((_, fills)) = cache.as_ref() else { return };
+        let Some((key, fills)) = cache.as_ref() else { return };
+        let outlines = self.pour_outlines(*key, fills);
         let area = rect.expand(4.0);
         for s in self.layer_order() {
             if !self.side_visible(s) {
@@ -108,8 +129,9 @@ impl BoardEditor {
             let alpha = if s == self.side { 90 } else { 40 };
             let fill = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
             let edge = self.side_color(s).gamma_multiply(if s == self.side { 0.8 } else { 0.35 });
-            for (_, net, shapes, tris) in fills.iter().filter(|(side, _, _, _)| *side == s) {
-                for (shape, tris) in shapes.iter().zip(tris) {
+            let mut edges = egui::Mesh::default();
+            for (fi, (_, net, shapes, tris)) in fills.iter().enumerate().filter(|(_, (side, _, _, _))| *side == s) {
+                for (si, (shape, tris)) in shapes.iter().zip(tris).enumerate() {
                     if !self.shape_on_screen(rect, shape) {
                         continue;
                     }
@@ -128,17 +150,23 @@ impl BoardEditor {
                         mesh.add_triangle(base, base + 1, base + 2);
                     }
                     painter.add(egui::Shape::mesh(mesh));
-                    for (k, contour) in std::iter::once(&shape.outer).chain(shape.holes.iter()).enumerate() {
+                    // the lines are the outlines thinned to the zoom (a corner that is under half a pixel off the line is dropped), all
+                    // of a layer in one mesh of thin quads
+                    for (k, contour) in outlines[fi][si].iter().enumerate() {
                         let pts: Vec<Pos2> = contour.iter().map(|p| self.to_screen(rect, *p)).collect();
                         let bb = Rect::from_points(&pts);
                         if !bb.intersects(area) || (k > 0 && bb.width().max(bb.height()) < 3.0) {
                             continue;
                         }
-                        painter.add(egui::Shape::closed_line(pts, Stroke::new(1.0, edge)));
+                        ribbon::add_hairline_ring(&mut edges, &pts, edge);
+                        if edges.vertices.len() > 60_000 {
+                            painter.add(egui::Shape::mesh(std::mem::take(&mut edges)));
+                        }
                     }
                     self.draw_pour_name(painter, rect, net, shape, tris);
                 }
             }
+            painter.add(egui::Shape::mesh(edges));
         }
     }
 

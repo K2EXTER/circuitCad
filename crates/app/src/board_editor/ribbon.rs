@@ -44,7 +44,7 @@ pub(super) struct Lod {
 }
 
 /// The tolerances (mm) of the levels of detail. At a zoom the level is the coarsest one that is under a quarter of a pixel.
-const LODS: [f64; 7] = [0.0, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0];
+const LODS: [f64; 12] = [0.0, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.125, 0.25, 0.5, 1.0, 2.0];
 
 enum Source {
     /// The plain tracks of the board, by a hash of them.
@@ -83,8 +83,7 @@ impl CopperCache {
 
     /// The level of detail for a view of `zoom` pixels to the mm.
     pub fn lod(&self, zoom: f32) -> Rc<Lod> {
-        let tol = 0.25 / zoom.max(1e-6) as f64;
-        let level = LODS.iter().rposition(|&t| t <= tol).unwrap_or(0);
+        let level = lod_level(zoom);
         let mut levels = self.levels.borrow_mut();
         levels.resize(LODS.len(), None);
         levels[level]
@@ -104,6 +103,22 @@ impl CopperCache {
             })
             .clone()
     }
+}
+
+/// The level of detail (an index of [`LODS`]) for a view of `zoom` pixels to the mm: the coarsest one that is under a quarter of a pixel.
+pub(super) fn lod_level(zoom: f32) -> usize {
+    lod_level_px(zoom, 0.25)
+}
+
+/// The coarsest level that is under `px` pixels at the zoom (a thin line can do with a coarser one than a filled shape).
+pub(super) fn lod_level_px(zoom: f32, px: f64) -> usize {
+    let tol = px / zoom.max(1e-6) as f64;
+    LODS.iter().rposition(|&t| t <= tol).unwrap_or(0)
+}
+
+/// The tolerance (mm) of a level of detail.
+pub(super) fn lod_tolerance(level: usize) -> f64 {
+    LODS[level.min(LODS.len() - 1)]
 }
 
 /// How far `p` is from the segment `a`-`b`.
@@ -348,6 +363,30 @@ pub(super) fn add_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32)
     cap(mesh, p[p.len() - 1], dirs[dirs.len() - 1], core, outer, col);
 }
 
+/// The closed line through `pts` (on the screen) as a pixel wide quad for each piece, two triangles a piece: no fade at the edge and no
+/// join at the corners (a corner of a line one pixel wide shows no gap). The outlines of the pours, of which there are very many.
+pub(super) fn add_hairline_ring(mesh: &mut Mesh, pts: &[Pos2], col: Color32) {
+    let n = pts.len();
+    if n < 2 {
+        return;
+    }
+    for i in 0..n {
+        let (a, b) = (pts[i], pts[(i + 1) % n]);
+        let d = b - a;
+        let len = d.length();
+        if len < 1e-3 {
+            continue;
+        }
+        let h = Vec2::new(-d.y, d.x) / len * 0.5;
+        let base = mesh.vertices.len() as u32;
+        for q in [a + h, a - h, b - h, b + h] {
+            mesh.colored_vertex(q, col);
+        }
+        mesh.add_triangle(base, base + 1, base + 2);
+        mesh.add_triangle(base, base + 2, base + 3);
+    }
+}
+
 /// A half disc round `c`, bulging towards `dir`, from the left edge of a strip to its right edge.
 fn cap(mesh: &mut Mesh, c: Pos2, dir: Vec2, core: f32, outer: f32, col: Color32) {
     // an even number of steps, so that the middle of the cap is a corner (the cap then reaches out by the full radius)
@@ -473,6 +512,15 @@ mod tests {
         // a triangle is not made smaller than a triangle
         let tri = [p(0.0, 0.0), p(1.0, 0.0), p(0.0, 1.0)];
         assert_eq!(simplify_closed(&tri, 5.0), tri.to_vec());
+    }
+
+    #[test]
+    fn a_hairline_ring_is_two_triangles_a_piece() {
+        let mut m = Mesh::default();
+        add_hairline_ring(&mut m, &[Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0), Pos2::new(10.0, 10.0), Pos2::new(0.0, 10.0)], Color32::RED);
+        assert_eq!((m.vertices.len(), m.indices.len() / 3), (16, 8));
+        let w = m.vertices.iter().map(|v| v.pos.y).fold(f32::MIN, f32::max) - m.vertices.iter().map(|v| v.pos.y).fold(f32::MAX, f32::min);
+        assert!((w - 11.0).abs() < 1e-4, "a pixel wide line round a 10 px square reaches half a pixel out on both sides");
     }
 
     #[test]
