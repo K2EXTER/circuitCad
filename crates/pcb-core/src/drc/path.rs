@@ -952,10 +952,26 @@ pub fn return_path(index: &CopperIndex, board: &Board, way: &[(Side, Point)], gr
             if bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1 {
                 continue;
             }
+            // row by row: where the outlines cross the row, the copper lies between the 1st and 2nd, 3rd and 4th ... (holes included)
             for cy in cell_range(by0, by1, y0, ny) {
-                for cx in cell_range(bx0, bx1, x0, nx) {
-                    let q = Point::new(x0 + cx as f64 * step, y0 + cy as f64 * step);
-                    if !cover[cy * nx + cx] && inside_polygon(&sh.outer, q) && !sh.holes.iter().any(|h| inside_polygon(h, q)) {
+                let y = y0 + cy as f64 * step;
+                let mut xs: Vec<f64> = vec![];
+                for ring in std::iter::once(&sh.outer).chain(sh.holes.iter()) {
+                    for k in 0..ring.len() {
+                        let (p, q) = (ring[k], ring[(k + 1) % ring.len()]);
+                        if (p.y <= y) != (q.y <= y) {
+                            xs.push(p.x + (y - p.y) / (q.y - p.y) * (q.x - p.x));
+                        }
+                    }
+                }
+                xs.sort_by(|a, b| a.total_cmp(b));
+                for pair in xs.chunks_exact(2) {
+                    let a = (((pair[0] - x0) / step).ceil().max(0.0)) as usize;
+                    let b = ((pair[1] - x0) / step).floor();
+                    if b < 0.0 {
+                        continue;
+                    }
+                    for cx in a..=(b as usize).min(nx - 1) {
                         cover[cy * nx + cx] = true;
                     }
                 }
@@ -1054,31 +1070,60 @@ pub fn stubs(index: &CopperIndex, board: &Board, nets: &[String]) -> Vec<Stub> {
     // the places where tracks of the nets are joined by a pad or via lying on them, and the tracks cut there
     let key = |s: Side, p: Point| (s, (p.x * 200.0).round() as i64, (p.y * 200.0).round() as i64);
     let anchors: Vec<usize> = (nt..index.items.len()).filter(|&i| index.nets[i].as_deref().is_some_and(|n| in_set(nets, n))).collect();
-    let pours: Vec<(Side, Vec<crate::zonefill::FillShape>)> =
-        crate::zonefill::merged_fills(board, &index.conn).into_iter().filter(|(_, n, _)| !n.is_empty() && in_set(nets, n)).map(|(s, _, f)| (s, f)).collect();
+    // the pieces of the pours of the nets, each with its box
+    let mut pours: Vec<(Side, (f64, f64, f64, f64), crate::zonefill::FillShape)> = vec![];
+    for (s, n, fills) in crate::zonefill::merged_fills(board, &index.conn) {
+        if n.is_empty() || !in_set(nets, &n) {
+            continue;
+        }
+        for sh in fills {
+            let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+            for p in &sh.outer {
+                x0 = x0.min(p.x);
+                x1 = x1.max(p.x);
+                y0 = y0.min(p.y);
+                y1 = y1.max(p.y);
+            }
+            pours.push((s, (x0, x1, y0, y1), sh));
+        }
+    }
+    // the pads and vias on a grid of 2 mm cells, so that a track end looks only at what is near it
+    let cell = |v: f64| (v / 2.0).floor() as i64;
+    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    for &i in &anchors {
+        let (x0, x1, y0, y1) = bbox(&index.items[i].geo);
+        for cx in cell(x0 - 0.02)..=cell(x1 + 0.02) {
+            for cy in cell(y0 - 0.02)..=cell(y1 + 0.02) {
+                grid.entry((cx, cy)).or_default().push(i);
+            }
+        }
+    }
     let anchored = |s: Side, p: Point| {
         let probe = Geo::Cap { a: p, b: p, r: 0.0 };
-        anchors.iter().any(|&i| index.items[i].on(s) && dist(&probe, &index.items[i].geo) <= 0.01)
-            || pours.iter().any(|(ps, f)| *ps == s && f.iter().any(|sh| inside_polygon(&sh.outer, p) && !sh.holes.iter().any(|h| inside_polygon(h, p))))
+        grid.get(&(cell(p.x), cell(p.y))).is_some_and(|v| v.iter().any(|&i| index.items[i].on(s) && dist(&probe, &index.items[i].geo) <= 0.01))
+            || pours.iter().any(|(ps, b, sh)| *ps == s && p.x >= b.0 && p.x <= b.1 && p.y >= b.2 && p.y <= b.3 && inside_polygon(&sh.outer, p) && !sh.holes.iter().any(|h| inside_polygon(h, p)))
     };
     // atomic pieces: each track cut where the end of another track of the nets lies on it
     let mut pieces: Vec<(Side, Point, Point)> = vec![];
+    // the track ends sorted along x, so that a track looks only at the ends within its own span
+    let mut ends: Vec<(f64, usize, Point)> = mine.iter().flat_map(|&j| [(board.tracks[j].a.x, j, board.tracks[j].a), (board.tracks[j].b.x, j, board.tracks[j].b)]).collect();
+    ends.sort_by(|a, b| a.0.total_cmp(&b.0));
     for &i in &mine {
         let t = &board.tracks[i];
         let (dx, dy) = (t.b.x - t.a.x, t.b.y - t.a.y);
         let l2 = dx * dx + dy * dy;
         let mut cuts: Vec<f64> = vec![];
         if l2 > 1e-12 {
-            for &j in mine.iter().filter(|&&j| j != i) {
-                let o = &board.tracks[j];
-                if o.side != t.side {
+            let (lo, hi) = (t.a.x.min(t.b.x) - 0.01, t.a.x.max(t.b.x) + 0.01);
+            let from = ends.partition_point(|e| e.0 < lo);
+            for &(x, j, e) in ends[from..].iter().take_while(|e| e.0 <= hi) {
+                let _ = x;
+                if j == i || board.tracks[j].side != t.side {
                     continue;
                 }
-                for e in [o.a, o.b] {
-                    let f = ((e.x - t.a.x) * dx + (e.y - t.a.y) * dy) / l2;
-                    if f > 1e-6 && f < 1.0 - 1e-6 && Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(e) < 0.01 {
-                        cuts.push(f);
-                    }
+                let f = ((e.x - t.a.x) * dx + (e.y - t.a.y) * dy) / l2;
+                if f > 1e-6 && f < 1.0 - 1e-6 && Point::new(t.a.x + dx * f, t.a.y + dy * f).dist(e) < 0.01 {
+                    cuts.push(f);
                 }
             }
         }

@@ -368,7 +368,9 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
 /// The check and the marks of the table together, on one copper graph (what the editor asks for when the board has changed).
 pub fn analyse(board: &Board) -> (RequirementsReport, Vec<MeasureMark>) {
     let model = needs_model(board).then(|| crate::drc::CopperModel::build(board));
-    (check_with(board, model.as_ref()), measure_marks_with(board, model.as_ref()))
+    // the measures are worked out once, side by side, for the check and for the marks
+    let measured = model.as_ref().filter(|_| !board.measures.is_empty()).map(|m| measure_all(board, m));
+    (check_core(board, model.as_ref(), measured.as_deref()), marks_core(board, model.as_ref(), measured.as_deref()))
 }
 
 /// A number that changes when anything the check reads besides the copper changes: the rows of the table that reached the board and the
@@ -469,6 +471,19 @@ fn needs_model(board: &Board) -> bool {
 
 /// [`check`], with the copper model when the caller has built it (a few ms on a big board; it is shared by all the rows).
 pub fn check_with(board: &Board, model: Option<&crate::drc::CopperModel>) -> RequirementsReport {
+    check_core(board, model, None)
+}
+
+/// Every measure of the table, measured (in the order of the table; the measures do not depend on each other, so the cores share them out).
+/// The copper pours are filled once first, so that the threads do not each fill them.
+fn measure_all(board: &Board, model: &crate::drc::CopperModel) -> Vec<Result<Measured, String>> {
+    if board.measures.len() > 1 {
+        let _ = crate::zonefill::merged_fills(board, &crate::drc::connectivity(board));
+    }
+    crate::par::par_map(&board.measures, |m| measure_one(board, model, m))
+}
+
+fn check_core(board: &Board, model: Option<&crate::drc::CopperModel>, measured: Option<&[Result<Measured, String>]>) -> RequirementsReport {
     let mut rep = RequirementsReport::default();
     let built = (model.is_none() && needs_model(board)).then(|| crate::drc::CopperModel::build(board));
     let model = model.or(built.as_ref());
@@ -479,9 +494,9 @@ pub fn check_with(board: &Board, model: Option<&crate::drc::CopperModel>) -> Req
     }
     // the measures of the copper of a connection (the graph is built once, and only when there is something to measure)
     if let Some(model) = model.filter(|_| !board.measures.is_empty()) {
-        for m in &board.measures {
+        for (k, m) in board.measures.iter().enumerate() {
             rep.checked += 1;
-            match measure_one(board, model, m) {
+            match measured.map_or_else(|| measure_one(board, model, m), |all| all[k].clone()) {
                 Err(why) => {
                     rep.checked -= 1;
                     rep.missing.push(why);
@@ -620,6 +635,10 @@ pub fn measure_marks(board: &Board) -> Vec<MeasureMark> {
 
 /// [`measure_marks`], with the copper graph when the caller has built it.
 pub fn measure_marks_with(board: &Board, model: Option<&crate::drc::CopperModel>) -> Vec<MeasureMark> {
+    marks_core(board, model, None)
+}
+
+fn marks_core(board: &Board, model: Option<&crate::drc::CopperModel>, measured: Option<&[Result<Measured, String>]>) -> Vec<MeasureMark> {
     if board.measures.is_empty() {
         return vec![];
     }
@@ -634,8 +653,9 @@ pub fn measure_marks_with(board: &Board, model: Option<&crate::drc::CopperModel>
     board
         .measures
         .iter()
-        .filter_map(|m| {
-            let v = measure_one(board, g, m).ok()?;
+        .enumerate()
+        .filter_map(|(k, m)| {
+            let v = measured.map_or_else(|| measure_one(board, g, m), |all| all[k].clone()).ok()?;
             let ok = if m.is_min() { v.value >= m.limit - 1e-9 } else { v.value <= m.limit + 1e-9 };
             let waived = board.waivers.iter().any(|w| w.kind == "measure" && w.name == m.name);
             Some(MeasureMark { name: m.name.clone(), ways: v.ways, at: v.at, value: v.value, limit: m.limit, is_min: m.is_min(), unit: m.kind().map_or("", |k| k.1).to_string(), ok, waived })
