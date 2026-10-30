@@ -82,7 +82,9 @@ pub fn slit_checks(board: &Board) -> Vec<Violation> {
 }
 
 /// Fill the slits of `slit_checks` with a short piece of copper across each gap (the "つないで埋める" way out: the two
-/// pieces are one net, so joining them changes no connection). A piece is kept only when the DRC finds nothing new.
+/// pieces are one net, so joining them changes no connection). A piece is kept only when the DRC finds nothing new and
+/// the requirements table (if the board has one) finds nothing new either: a piece laid across the gap beside a pad can
+/// give a sense wire a shorter way into the pad's outer side, which the table's `tap` measure then reports.
 /// Returns how many were put in.
 pub fn fill_slits(board: &mut Board) -> usize {
     let mut put = 0;
@@ -94,11 +96,12 @@ pub fn fill_slits(board: &mut Board) -> usize {
         let mut progress = false;
         for s in slits {
             let before = check(board).len();
+            let req_before = crate::requirements::check(board).findings.len();
             let mut trial = board.clone();
             // a short horizontal blob that covers the gap and a little of both edges
             let m = Point::new((s.p.x + s.q.x) / 2.0, (s.p.y + s.q.y) / 2.0);
             trial.tracks.push(Track { side: s.side, a: Point::new(m.x - 0.05, m.y), b: Point::new(m.x + 0.05, m.y), width: (s.gap + 0.12).max(board.rules.min_track_width) });
-            if check(&trial).len() <= before && slit_gaps(&trial).len() < slit_gaps(board).len() {
+            if check(&trial).len() <= before && crate::requirements::check(&trial).findings.len() <= req_before && slit_gaps(&trial).len() < slit_gaps(board).len() {
                 *board = trial;
                 put += 1;
                 progress = true;

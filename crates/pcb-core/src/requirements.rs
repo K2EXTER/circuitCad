@@ -919,6 +919,34 @@ mod tests {
         assert!((marks[0].value - 0.35).abs() < 1e-6, "{}", marks[0].value);
     }
 
+    /// Filling a slit beside a shunt pad must not give the sense wire a shorter way into the pad's outer side.
+    #[test]
+    fn a_slit_is_not_filled_when_it_would_break_a_requirement() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        for (x, y, w, h, r, pin) in [(28.6, 39.15, 3.0, 2.7, "RS", "1"), (28.6, 35.85, 3.0, 2.7, "RS", "2"), (30.9, 33.5, 0.6, 0.6, "SS", "1")] {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w, h }, None, Side::Top);
+            p.refdes = r.into();
+            p.pin = pin.into();
+            p.net = "N".into();
+            b.pads.push(p);
+        }
+        // the sense wire leaves the pad on its inner side and runs 0.075 mm from the pad's right edge down to the outer side
+        for (a, c) in [((29.9, 38.1), (30.3, 38.1)), ((30.3, 38.1), (30.3, 39.65)), ((30.3, 39.65), (30.65, 39.65)), ((30.65, 39.65), (30.9, 39.4)), ((30.9, 39.4), (30.9, 33.5))] {
+            wire(&mut b, a, c);
+        }
+        assert!(!crate::drc::slit_checks(&b).is_empty());
+        let mut free = b.clone();
+        assert!(crate::drc::fill_slits(&mut free) >= 1, "without a table the slit is filled");
+        let m = design_spec::Measure { name: "tap".into(), what: "tap".into(), pads: ["RS.1", "SS.1", "RS.2"].iter().map(|s| s.to_string()).collect(), op: "max".into(), limit: 0.5, reach: 0.0, except: vec![], note: String::new() };
+        let spec = DesignSpec { measures: vec![m], ..Default::default() };
+        import_requirements(&mut free, &spec);
+        assert_eq!(check(&free).findings.len(), 1, "the filled piece makes the tap 1.85 mm");
+        import_requirements(&mut b, &spec);
+        assert!(check(&b).findings.is_empty());
+        crate::drc::fill_slits(&mut b);
+        assert!(check(&b).findings.is_empty(), "{:?}", check(&b).findings);
+    }
+
     /// The gap between the copper of two nets (names or patterns): the nearest items, edge to edge.
     #[test]
     fn the_gap_between_two_nets_is_measured_edge_to_edge() {
