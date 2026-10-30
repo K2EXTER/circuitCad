@@ -1,8 +1,9 @@
 //! Temperature over time. The power of each part comes from a transient run (a resistor `I²R`, a transistor or diode `I·V`); each part
 //! is one heat-capacity / heat-resistance stage to the surroundings, and two parts can be tied by a heat resistance of their own
 //! (the heat that goes through the board's copper from one to the other). The thermal equations are integrated on the time points of the
-//! transient run. A resistor with a temperature coefficient changes its value with the temperature, which changes the current and the
-//! power, so the electrical run is redone with the values at the temperature the part had while it was dissipating (a loose coupling:
+//! transient run. A resistor with a temperature coefficient changes its value with the temperature, and a transistor or diode its model (the rules
+//! of `temperature.rs`), which changes the current and the power, so the electrical run is redone with the temperature the part had
+//! while it was dissipating (a loose coupling:
 //! the heat moves in seconds, the circuit settles in milliseconds).
 
 use crate::circuit::{Circuit, Element};
@@ -56,6 +57,8 @@ pub struct HeatTran {
     pub rounds: usize,
     /// The last transient run (with the values at the working temperatures).
     pub tran: TranResult,
+    /// The first run, with every part at the surrounding temperature: what the warming changed is the difference between the two.
+    pub cold: TranResult,
 }
 
 /// The parts of a schematic named in `refs` as thermal nodes: all the resistors, diodes, bipolar and MOS transistors inside each part
@@ -188,22 +191,31 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
         }
         ties.push((a, b, l.theta));
     }
-    // heated resistors keep their own coefficients; everything else is taken to the surrounding temperature
+    // heated resistors keep their own coefficients (set below); everything else is taken to the surrounding temperature
     let mut base = circuit.clone();
     base.tempcos.retain(|(n, _, _)| !nodes.iter().any(|nd| nd.heater.elements.contains(n)));
-    let base = base.at_temperature(t_amb);
+    // the transistors and diodes of each part: they follow the part's temperature through the model's own temperature rules
+    let junctions: Vec<Vec<String>> = nodes
+        .iter()
+        .map(|nd| {
+            circuit.elements.iter().filter(|e| matches!(e, Element::Diode { .. } | Element::Bjt { .. } | Element::Mosfet { .. }) && nd.heater.elements.iter().any(|n| n == e.name())).map(|e| e.name().to_string()).collect()
+        })
+        .collect();
     let nominal = |name: &str| -> f64 {
         circuit.elements.iter().find_map(|e| match e {
             Element::Resistor { name: n, r, .. } if n == name => Some(*r),
             _ => None,
         }).unwrap_or(0.0)
     };
-    let feedback = nodes.iter().any(|n| n.heater.tc1 != 0.0 || n.heater.tc2 != 0.0);
+    let follows = |k: usize| nodes[k].heater.tc1 != 0.0 || nodes[k].heater.tc2 != 0.0 || !junctions[k].is_empty();
+    let feedback = (0..nodes.len()).any(follows);
     let mut temps = vec![t_amb; nodes.len()];
     let mut rounds = 0;
+    let mut cold: Option<TranResult> = None;
     loop {
         rounds += 1;
-        let mut c = base.clone();
+        let own: Vec<(String, f64)> = junctions.iter().zip(&temps).flat_map(|(names, &t)| names.iter().map(move |n| (n.clone(), t))).collect();
+        let mut c = base.at_temperatures(t_amb, &own);
         for (nd, &t) in nodes.iter().zip(&temps) {
             for e in &mut c.elements {
                 if let Element::Resistor { name, r, .. } = e {
@@ -214,6 +226,9 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
             }
         }
         let tr = transient(&c, s)?;
+        if cold.is_none() {
+            cold = Some(tr.clone());
+        }
         let power: Vec<Vec<f64>> = nodes
             .iter()
             .map(|nd| {
@@ -241,7 +256,7 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
                 if wp > 0.0 { t_amb + wt / wp } else { t_amb }
             })
             .collect();
-        let moved = (0..nodes.len()).map(|k| if nodes[k].heater.tc1 != 0.0 || nodes[k].heater.tc2 != 0.0 { (weighted[k] - temps[k]).abs() } else { 0.0 }).fold(0.0, f64::max);
+        let moved = (0..nodes.len()).map(|k| if follows(k) { (weighted[k] - temps[k]).abs() } else { 0.0 }).fold(0.0, f64::max);
         if !feedback || moved < 1e-3 || rounds >= 8 {
             let parts = nodes
                 .iter()
@@ -267,7 +282,8 @@ pub fn heat_tran(circuit: &Circuit, nodes: &[ThermalNode], links: &[ThermalLink]
                     }
                 })
                 .collect();
-            return Ok(HeatTran { time: tr.time.clone(), parts, rounds, tran: tr });
+            let cold = cold.unwrap_or_else(|| tr.clone());
+            return Ok(HeatTran { time: tr.time.clone(), parts, rounds, tran: tr, cold });
         }
         temps = weighted;
     }
@@ -318,5 +334,22 @@ mod tests {
         // R1: 0.25 W into θ=100 in parallel with 100+100 → 100‖200 = 66.7 K/W → 16.7 K; X sits at half of that (divider 100/200)
         assert!((hot.rise_peak - 16.67).abs() < 0.3 && (x.rise_peak - 8.33).abs() < 0.3, "{} {}", hot.rise_peak, x.rise_peak);
         assert!(hot.rise_alone > hot.rise_peak + 5.0);
+    }
+
+    #[test]
+    fn a_diode_that_warms_itself_drops_less_voltage() {
+        // 5 V pulse into 100 ohm and a diode: ~40 mW in the diode; with 500 K/W and a small capacity it warms by tens of K, and a silicon
+        // junction gives up about 2 mV per K
+        let mut c = Circuit::new();
+        let (a, o) = (c.node("a"), c.node("o"));
+        c.add(Element::VSource { name: "V1".into(), p: a, n: 0, wave: crate::waveform::Waveform::Pulse { v1: 0.0, v2: 5.0, td: 0.0, tr: 1e-6, tf: 1e-6, pw: 1e3, per: 1e4 }, ac: None });
+        c.add(Element::Resistor { name: "R1".into(), a, b: o, r: 100.0 });
+        c.add(Element::Diode { name: "D1".into(), a: o, k: 0, model: crate::circuit::DiodeModel::default() });
+        let hot = ThermalNode { heater: Heater { name: "D1".into(), elements: vec!["D1".into()], theta: 500.0, tc1: 0.0, tc2: 0.0 }, cth: 0.002 };
+        let r = heat_tran(&c, &[hot], &[], 27.0, &TranSettings { tstop: 6.0, tstep: 0.05, uic: false }).unwrap();
+        let (cold_v, warm_v) = (*r.cold.signal("V(o)").unwrap().values.last().unwrap(), *r.tran.signal("V(o)").unwrap().values.last().unwrap());
+        let rise = r.parts[0].rise_end;
+        assert!(rise > 10.0, "{rise}");
+        assert!(r.rounds > 1 && cold_v - warm_v > 0.001 * rise, "{cold_v} {warm_v} {rise}");
     }
 }

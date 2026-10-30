@@ -434,9 +434,29 @@ impl Session {
         if links.is_empty() && r.parts.len() > 1 {
             notes.push("no couple=: the parts do not warm each other".to_string());
         }
-        notes.push("the value of a resistor with a temperature coefficient is worked out at the temperature it had while it dissipated; transistors and diodes are not changed by their temperature".to_string());
+        notes.push("a resistor's value and a transistor's or diode's model follow the temperature the part had on average while it dissipated (the model's own temperature rules: a junction gives up about 2 mV per K, a MOSFET threshold about 2 mV per K), so the circuit is run again at that temperature".to_string());
+        // what the warming moved: the node voltages of the first (cold) run against the last, at the time of the highest rise
+        // (the highest rise comes just as the power ends, so the time looked at is the last one with at least half of the part's peak power)
+        let t_at = r.parts.iter().max_by(|a, b| a.rise_peak.total_cmp(&b.rise_peak)).map_or(0.0, |p| p.power.iter().rposition(|&w| w >= 0.5 * p.power_peak).map_or(p.peak_time, |i| r.time[i]));
+        let interp = |tr: &sim_core::TranResult, v: &[f64]| -> f64 {
+            let i = tr.time.partition_point(|&t| t < t_at).clamp(1, tr.time.len().saturating_sub(1).max(1));
+            if tr.time.len() < 2 { return v.first().copied().unwrap_or(0.0) }
+            let (t0, t1) = (tr.time[i - 1], tr.time[i]);
+            let f = if t1 > t0 { ((t_at - t0) / (t1 - t0)).clamp(0.0, 1.0) } else { 0.0 };
+            v[i - 1] + f * (v[i] - v[i - 1])
+        };
+        let mut moved: Vec<(String, f64, f64)> = r
+            .tran
+            .signals
+            .iter()
+            .filter(|s| s.name.starts_with("V(") && !s.name.contains('.'))
+            .filter_map(|s| r.cold.signal(&s.name).map(|c| (s.name.clone(), interp(&r.cold, &c.values), interp(&r.tran, &s.values))))
+            .filter(|(_, a, b)| (a - b).abs() > 1e-9)
+            .collect();
+        moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
+        let nets: Vec<Value> = moved.iter().take(8).map(|(n, a, b)| json!({"signal": n, "cold": a, "warm": b, "shift": b - a})).collect();
         notes.extend(gate);
-        Ok(obj(json!({"ambient_c": temp, "tstop": tstop, "rounds": r.rounds, "parts": rows, "notes": notes})))
+        Ok(obj(json!({"ambient_c": temp, "tstop": tstop, "rounds": r.rounds, "parts": rows, "moved_at_s": t_at, "moved": nets, "notes": notes})))
     }
 
     /// `heat [temp=27] [top=10]`: the DC point with the resistors warmed by their own power (`sim_core::self_heat`): per part the power,

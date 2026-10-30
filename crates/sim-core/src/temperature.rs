@@ -21,51 +21,63 @@ const K_OVER_Q: f64 = 8.617333e-5; // V/K
 impl Circuit {
     /// A copy of the circuit whose semiconductors behave as at `temp_c` degrees Celsius.
     pub fn at_temperature(&self, temp_c: f64) -> Circuit {
+        self.at_temperatures(temp_c, &[])
+    }
+
+    /// Like `at_temperature`, but the elements named in `own` (element name, °C) are at their own temperature instead of `base`: a part that
+    /// warms itself is hotter than the air around it.
+    pub fn at_temperatures(&self, base: f64, own: &[(String, f64)]) -> Circuit {
         let mut c = self.clone();
-        if (temp_c - T_NOM_C).abs() < 1e-9 {
-            return c;
-        }
-        let (t, tn) = (temp_c + 273.15, T_NOM_C + 273.15);
-        let ratio = t / tn;
-        let vt = K_OVER_Q * t;
-        // saturation current of a junction with emission coefficient n, band gap eg and temperature exponent xti
-        let is_at = |is: f64, n: f64, xti: f64, eg: f64| is * ratio.powf(xti / n) * ((eg / (n * vt)) * (ratio - 1.0)).exp();
-        let d_t = temp_c - T_NOM_C;
-        let scale = |tcs: &[(String, f64, f64)], name: &str| tcs.iter().find(|(n, _, _)| n == name).map_or(1.0, |(_, a, b)| (1.0 + a * d_t + b * d_t * d_t).max(0.01));
         let tcs = std::mem::take(&mut c.tempcos);
         for e in &mut c.elements {
-            match e {
-                Element::Resistor { name, r, .. } => *r *= scale(&tcs, name),
-                Element::Capacitor { name, c: cap, .. } => *cap *= scale(&tcs, name),
-                Element::Inductor { name, l, .. } => *l *= scale(&tcs, name),
-                Element::Diode { model, .. } => {
-                    model.is = is_at(model.is, model.n, model.xti, model.eg);
-                    model.isr = is_at(model.isr, model.nr, model.xti, model.eg);
-                    model.n *= ratio;
-                    model.nr *= ratio;
-                }
-                Element::Bjt { model, .. } => {
-                    model.is = is_at(model.is, model.nf, model.xti, model.eg);
-                    model.ise = is_at(model.ise, model.ne, model.xti, model.eg);
-                    model.isc = is_at(model.isc, model.nc, model.xti, model.eg);
-                    model.bf *= ratio.powf(model.xtb);
-                    model.nf *= ratio;
-                    model.nr *= ratio;
-                    model.ne *= ratio;
-                    model.nc *= ratio;
-                }
-                Element::Mosfet { model, .. } if !model.jfet => {
-                    model.kp *= ratio.powf(-1.5);
-                    let shrink = 0.002 * (temp_c - T_NOM_C);
-                    model.vto = model.vto.signum() * (model.vto.abs() - shrink).max(0.05);
-                }
-                Element::BSource { expr, .. } => *expr = expr.at_temperature(temp_c),
-                Element::ChargeCap { q, .. } => *q = q.at_temperature(temp_c),
-                _ => {}
-            }
+            let temp = own.iter().find(|(n, _)| n == e.name()).map_or(base, |x| x.1);
+            retemper(e, temp, &tcs);
         }
         c.tempcos = tcs;
         c
+    }
+}
+
+/// One element rewritten for the temperature `temp_c` (see the module comment).
+fn retemper(e: &mut Element, temp_c: f64, tcs: &[(String, f64, f64)]) {
+    if (temp_c - T_NOM_C).abs() < 1e-9 {
+        return;
+    }
+    let (t, tn) = (temp_c + 273.15, T_NOM_C + 273.15);
+    let ratio = t / tn;
+    let vt = K_OVER_Q * t;
+    // saturation current of a junction with emission coefficient n, band gap eg and temperature exponent xti
+    let is_at = |is: f64, n: f64, xti: f64, eg: f64| is * ratio.powf(xti / n) * ((eg / (n * vt)) * (ratio - 1.0)).exp();
+    let d_t = temp_c - T_NOM_C;
+    let scale = |name: &str| tcs.iter().find(|(n, _, _)| n == name).map_or(1.0, |(_, a, b)| (1.0 + a * d_t + b * d_t * d_t).max(0.01));
+    match e {
+        Element::Resistor { name, r, .. } => *r *= scale(name),
+        Element::Capacitor { name, c: cap, .. } => *cap *= scale(name),
+        Element::Inductor { name, l, .. } => *l *= scale(name),
+        Element::Diode { model, .. } => {
+            model.is = is_at(model.is, model.n, model.xti, model.eg);
+            model.isr = is_at(model.isr, model.nr, model.xti, model.eg);
+            model.n *= ratio;
+            model.nr *= ratio;
+        }
+        Element::Bjt { model, .. } => {
+            model.is = is_at(model.is, model.nf, model.xti, model.eg);
+            model.ise = is_at(model.ise, model.ne, model.xti, model.eg);
+            model.isc = is_at(model.isc, model.nc, model.xti, model.eg);
+            model.bf *= ratio.powf(model.xtb);
+            model.nf *= ratio;
+            model.nr *= ratio;
+            model.ne *= ratio;
+            model.nc *= ratio;
+        }
+        Element::Mosfet { model, .. } if !model.jfet => {
+            model.kp *= ratio.powf(-1.5);
+            let shrink = 0.002 * (temp_c - T_NOM_C);
+            model.vto = model.vto.signum() * (model.vto.abs() - shrink).max(0.05);
+        }
+        Element::BSource { expr, .. } => *expr = expr.at_temperature(temp_c),
+        Element::ChargeCap { q, .. } => *q = q.at_temperature(temp_c),
+        _ => {}
     }
 }
 
