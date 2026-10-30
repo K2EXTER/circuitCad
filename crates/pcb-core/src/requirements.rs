@@ -244,6 +244,20 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
         let cover = crate::drc::guard_cover_in(&model.index, board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
         return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
     }
+    if m.what == "return" {
+        let (Some(from), Some(to)) = (m.pads.first().and_then(|p| PadRef::parse(p)), m.pads.get(1).and_then(|p| PadRef::parse(p))) else { return Err(format!("測定「{}」の1つ目と2つ目には、道筋の両端のパッド (部品.ピン) を書いてください", m.name)) };
+        let ground = m.pads.get(2).map(|p| crate::drc::net_set(p)).unwrap_or_default();
+        if m.pads.len() != 3 || ground.is_empty() {
+            return Err(format!("測定「{}」には、道筋の両端のパッド 2 個とグラウンドのネットが要ります", m.name));
+        }
+        let way = g.path(&from, &to).ok_or_else(|| format!("測定「{}」: {from} と {to} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name))?;
+        let signal = way.length;
+        // no run through the ground (it is cut, or too far away) is counted as 1000 %
+        return Ok(match crate::drc::return_path(&model.index, board, &way.points, &ground) {
+            Some(r) => Measured { value: 100.0 * r.length / signal.max(r.chord).max(0.5), ways: vec![r.points], at: None },
+            None => Measured { value: 1000.0, ways: vec![way.points.iter().map(|(_, q)| *q).collect()], at: None },
+        });
+    }
     if m.what == "under" {
         let (Some(from), Some(to)) = (m.pads.first().and_then(|p| PadRef::parse(p)), m.pads.get(1).and_then(|p| PadRef::parse(p))) else { return Err(format!("測定「{}」の1つ目と2つ目には、道筋の両端のパッド (部品.ピン) を書いてください", m.name)) };
         let ground = m.pads.get(2).map(|p| crate::drc::net_set(p)).unwrap_or_default();
@@ -291,6 +305,16 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
             let p = way(&pads[0], &pads[1])?;
             let (ohm, at) = crate::drc::way_resistance(board, &p.points, 35.0);
             Ok(Measured { value: ohm * 1000.0, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at })
+        }
+        "drop" => {
+            let p = way(&pads[0], &pads[1])?;
+            let net = board.pads.iter().find(|q| q.refdes == pads[0].refdes && q.pin == pads[0].pin).map(|q| q.net.clone()).unwrap_or_default();
+            let amps = if m.reach > 0.0 { m.reach } else { board.net_currents.get(&net).copied().unwrap_or(0.0) };
+            if amps <= 0.0 {
+                return Err(format!("測定「{}」: 電流が分かりません。「近さ」の欄に電流 (A) を書くか、ネット {net} の電流を設定してください", m.name));
+            }
+            let (ohm, at) = crate::drc::way_resistance(board, &p.points, 35.0);
+            Ok(Measured { value: ohm * amps * 1000.0, ways: vec![p.points.iter().map(|(_, q)| *q).collect()], at })
         }
         "width" => {
             let p = way(&pads[0], &pads[1])?;
@@ -976,6 +1000,42 @@ mod tests {
         let o = measure_one(&b, &model, &m("overlap", &["N", "GND"])).unwrap();
         assert!(o.value > 1.0 && o.value < 3.0 && o.at.is_some(), "{}", o.value);
         assert_eq!(measure_one(&b, &model, &m("overlap", &["N", "N"])).unwrap().value, 0.0);
+    }
+
+    /// `drop` is the resistance times the current, `return` compares the run through the ground next to the way with the way: about 100 % for a
+    /// ground track alongside it, 1000 % when the ground is cut in two.
+    #[test]
+    fn the_drop_of_a_way_and_the_detour_of_its_return_are_measured() {
+        let th = |b: &mut Board, x: f64, y: f64, pin: &str| {
+            let mut g = Pad::new(Point::new(x, y), PadShape::Circle { d: 1.2 }, Some(0.5), Side::Top);
+            g.refdes = "G".into();
+            g.pin = pin.into();
+            g.net = "GND".into();
+            b.pads.push(g);
+        };
+        let bottom = |b: &mut Board, a: (f64, f64), c: (f64, f64)| b.tracks.push(Track { side: Side::Bottom, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.25 });
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "U", "1");
+        pad_at(&mut b, 15.0, 5.0, "C", "1");
+        wire(&mut b, (5.0, 5.0), (15.0, 5.0));
+        th(&mut b, 3.0, 7.0, "1");
+        bottom(&mut b, (3.0, 7.0), (17.0, 7.0));
+        let m = |what: &str, pads: &[&str], reach: f64| design_spec::Measure { name: "m".into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: "max".into(), limit: 1.0, reach, except: vec![], note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        let d = measure_one(&b, &model, &m("drop", &["U.1", "C.1"], 2.0)).unwrap();
+        assert!((d.value - 39.31).abs() < 0.1, "{}", d.value);
+        assert!(measure_one(&b, &model, &m("drop", &["U.1", "C.1"], 0.0)).is_err(), "no current known");
+        b.net_currents.insert("N".into(), 1.0);
+        assert!((measure_one(&b, &model, &m("drop", &["U.1", "C.1"], 0.0)).unwrap().value - 19.66).abs() < 0.1);
+        let r = measure_one(&b, &model, &m("return", &["U.1", "C.1", "GND"], 0.0)).unwrap();
+        assert!(r.value > 95.0 && r.value < 115.0 && !r.ways[0].is_empty(), "{}", r.value);
+        // the ground cut in the middle: two tracks and a gap of 2 mm
+        b.tracks.retain(|t| t.side == Side::Top);
+        bottom(&mut b, (3.0, 7.0), (9.0, 7.0));
+        th(&mut b, 17.0, 7.0, "2");
+        bottom(&mut b, (11.0, 7.0), (17.0, 7.0));
+        let model = crate::drc::CopperModel::build(&b);
+        assert_eq!(measure_one(&b, &model, &m("return", &["U.1", "C.1", "GND"], 0.0)).unwrap().value, 1000.0);
     }
 
     /// `thermal_vias` counts the vias in a pad, `loop` adds the two legs of a loop, `match` is the difference of two ways, `ring` is how much of

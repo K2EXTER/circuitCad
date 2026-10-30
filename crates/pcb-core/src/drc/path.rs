@@ -866,6 +866,168 @@ pub fn ring_cover(index: &CopperIndex, board: &Board, pad: &PadRef, guard: &[Str
     Some(100.0 * covered as f64 / steps as f64)
 }
 
+/// The way the return current can take: the shortest run through the ground copper (tracks, pads, vias and pours of the `ground` nets) on the
+/// layers next to the layers of the way, from the ground nearest its start to the ground nearest its end. The copper is laid on a grid
+/// (0.3 mm, coarser for a big area) and the run goes cell to cell in 8 directions, so it is longer than the real one by up to 8 %; the
+/// layers next to the way are taken as one copper (they are taken to be stitched together).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReturnPath {
+    /// Length (mm) of the run.
+    pub length: f64,
+    /// The straight distance (mm) between the two ends of the run (what the run is compared with when the way itself is shorter).
+    pub chord: f64,
+    /// The run as points (every few cells).
+    pub points: Vec<Point>,
+}
+
+/// None when there is no ground within 3 mm of an end of the way, or the ground copper is in pieces so that no run joins the two ends.
+pub fn return_path(index: &CopperIndex, board: &Board, way: &[(Side, Point)], ground: &[String]) -> Option<ReturnPath> {
+    use crate::zonefill::merged_fills;
+    let layers = board.copper_layers();
+    let mut next: Vec<Side> = vec![];
+    for &(s, _) in way {
+        let Some(i) = layers.iter().position(|&l| l == s) else { continue };
+        for k in [i.checked_sub(1), Some(i + 1)].into_iter().flatten() {
+            if let Some(&l) = layers.get(k) && !next.contains(&l) {
+                next.push(l);
+            }
+        }
+    }
+    let (start, end) = (way.first()?.1, way.last()?.1);
+    // the area looked at: the way and 5 mm round it
+    let (mut x0, mut x1, mut y0, mut y1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+    for &(_, p) in way {
+        x0 = x0.min(p.x);
+        x1 = x1.max(p.x);
+        y0 = y0.min(p.y);
+        y1 = y1.max(p.y);
+    }
+    let margin = 5.0;
+    let (x0, y0, x1, y1) = (x0 - margin, y0 - margin, x1 + margin, y1 + margin);
+    let step = 0.3_f64.max((((x1 - x0) * (y1 - y0)) / 40000.0).sqrt());
+    let (nx, ny) = (((x1 - x0) / step).ceil() as usize + 1, ((y1 - y0) / step).ceil() as usize + 1);
+    let mut cover = vec![false; nx * ny];
+    let cell_range = |lo: f64, hi: f64, o: f64, n: usize| -> std::ops::Range<usize> {
+        let a = (((lo - o) / step).floor().max(0.0)) as usize;
+        let b = ((((hi - o) / step).ceil().max(0.0)) as usize + 1).min(n);
+        a.min(n)..b
+    };
+    // tracks, pads and vias of the ground nets: every cell within half a cell of the copper
+    let (items, item_net) = (&index.items, &index.nets);
+    for (i, it) in items.iter().enumerate() {
+        if !item_net[i].as_deref().is_some_and(|n| in_set(ground, n)) || !next.iter().any(|&l| it.on(l)) {
+            continue;
+        }
+        let (bx0, bx1, by0, by1) = bbox(&it.geo);
+        if bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1 {
+            continue;
+        }
+        for cy in cell_range(by0 - step, by1 + step, y0, ny) {
+            for cx in cell_range(bx0 - step, bx1 + step, x0, nx) {
+                let q = Point::new(x0 + cx as f64 * step, y0 + cy as f64 * step);
+                if !cover[cy * nx + cx] && dist(&Geo::Cap { a: q, b: q, r: step * 0.5 }, &it.geo) <= 1e-6 {
+                    cover[cy * nx + cx] = true;
+                }
+            }
+        }
+    }
+    // the pours of the ground nets
+    for (side, net, fills) in merged_fills(board, &index.conn) {
+        if net.is_empty() || !in_set(ground, &net) || !next.contains(&side) {
+            continue;
+        }
+        for sh in &fills {
+            let (mut bx0, mut bx1, mut by0, mut by1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+            for p in &sh.outer {
+                bx0 = bx0.min(p.x);
+                bx1 = bx1.max(p.x);
+                by0 = by0.min(p.y);
+                by1 = by1.max(p.y);
+            }
+            if bx1 < x0 || bx0 > x1 || by1 < y0 || by0 > y1 {
+                continue;
+            }
+            for cy in cell_range(by0, by1, y0, ny) {
+                for cx in cell_range(bx0, bx1, x0, nx) {
+                    let q = Point::new(x0 + cx as f64 * step, y0 + cy as f64 * step);
+                    if !cover[cy * nx + cx] && inside_polygon(&sh.outer, q) && !sh.holes.iter().any(|h| inside_polygon(h, q)) {
+                        cover[cy * nx + cx] = true;
+                    }
+                }
+            }
+        }
+    }
+    // the covered cell nearest a point, within 3 mm
+    let nearest = |p: Point| -> Option<usize> {
+        let (px, py) = (((p.x - x0) / step).round() as i64, ((p.y - y0) / step).round() as i64);
+        let reach = (3.0 / step).ceil() as i64;
+        let mut best: Option<(f64, usize)> = None;
+        for dy in -reach..=reach {
+            for dx in -reach..=reach {
+                let (cx, cy) = (px + dx, py + dy);
+                if cx < 0 || cy < 0 || cx >= nx as i64 || cy >= ny as i64 || !cover[cy as usize * nx + cx as usize] {
+                    continue;
+                }
+                let d = ((dx * dx + dy * dy) as f64).sqrt() * step;
+                if d <= 3.0 && best.is_none_or(|b| d < b.0) {
+                    best = Some((d, cy as usize * nx + cx as usize));
+                }
+            }
+        }
+        best.map(|b| b.1)
+    };
+    let (s, e) = (nearest(start)?, nearest(end)?);
+    // the shortest run, 8 directions (costs in units of 0.001 mm)
+    let unit = |d: f64| (d * step * 1000.0).round() as u64;
+    let (straight, diagonal) = (unit(1.0), unit(std::f64::consts::SQRT_2));
+    let mut best = vec![u64::MAX; nx * ny];
+    let mut from = vec![usize::MAX; nx * ny];
+    let mut heap = BinaryHeap::new();
+    best[s] = 0;
+    heap.push(Reverse((0u64, s)));
+    while let Some(Reverse((d, c))) = heap.pop() {
+        if d > best[c] {
+            continue;
+        }
+        if c == e {
+            break;
+        }
+        let (cx, cy) = ((c % nx) as i64, (c / nx) as i64);
+        for dy in -1i64..=1 {
+            for dx in -1i64..=1 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let (qx, qy) = (cx + dx, cy + dy);
+                if qx < 0 || qy < 0 || qx >= nx as i64 || qy >= ny as i64 {
+                    continue;
+                }
+                let q = qy as usize * nx + qx as usize;
+                if !cover[q] {
+                    continue;
+                }
+                let nd = d + if dx != 0 && dy != 0 { diagonal } else { straight };
+                if nd < best[q] {
+                    best[q] = nd;
+                    from[q] = c;
+                    heap.push(Reverse((nd, q)));
+                }
+            }
+        }
+    }
+    if best[e] == u64::MAX {
+        return None;
+    }
+    let mut cells = vec![e];
+    while *cells.last()? != s {
+        cells.push(from[*cells.last()?]);
+    }
+    cells.reverse();
+    let points: Vec<Point> = cells.iter().enumerate().filter(|(k, _)| k % 3 == 0 || *k + 1 == cells.len()).map(|(_, &c)| Point::new(x0 + (c % nx) as f64 * step, y0 + (c / nx) as f64 * step)).collect();
+    let chord = Point::new(x0 + (s % nx) as f64 * step, y0 + (s / nx) as f64 * step).dist(Point::new(x0 + (e % nx) as f64 * step, y0 + (e / nx) as f64 * step));
+    Some(ReturnPath { length: best[e] as f64 / 1000.0, chord, points })
+}
+
 /// How long two sets of nets run side by side.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ParallelRun {
