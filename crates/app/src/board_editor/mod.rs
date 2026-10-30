@@ -300,6 +300,8 @@ pub struct BoardEditor {
     /// that have moved since is not shown (it would stay where they were).
     finish_tracks: std::cell::Cell<u64>,
     finish_job_tracks: std::cell::Cell<u64>,
+    /// The tracks followed into chains and the finish's polygons cut into triangles, kept until the copper changes (`draw_copper`).
+    copper_cache: std::cell::RefCell<Option<ribbon::CopperCache>>,
     /// The routing preview's verdict for the last cursor position: (key, tracks pushed, rule broken).
     preview_cache: std::cell::RefCell<Option<shoving::PreviewCache>>,
     pub status: String,
@@ -469,6 +471,7 @@ impl Default for BoardEditor {
             finish_job: Default::default(),
             finish_tracks: Default::default(),
             finish_job_tracks: Default::default(),
+            copper_cache: Default::default(),
             preview_cache: Default::default(),
             status: "基板パターン: 「回路図から取り込み」で部品を配置します".into(),
             help_request: None,
@@ -587,6 +590,7 @@ mod actions;
 mod canvas;
 mod interact;
 mod draw;
+mod ribbon;
 pub(crate) use draw::capsule;
 mod order;
 mod ruler;

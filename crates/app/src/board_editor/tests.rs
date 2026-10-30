@@ -1424,6 +1424,149 @@ fn zone_frame_cost() {
     let t1 = e.board.tracks[1].clone();
     e.board.tracks.push(pcb_core::model::Track { a: Point::new(t1.a.x + 0.4, t1.a.y), b: Point::new(t1.a.x + 0.9, t1.a.y), ..t1 });
     frame(&mut e, "zones hidden, after an edit");
+    // the glow of the biggest pour's net under the pointer (drawn every frame while the pointer is on it)
+    e.vis.zones = true;
+    frame(&mut e, "zones shown, settled");
+    let net = e.zone_cache.borrow().as_ref().and_then(|(_, f)| f.iter().max_by_key(|(_, _, sh, _)| sh.iter().map(|s| s.outer.len() + s.holes.iter().map(Vec::len).sum::<usize>()).sum::<usize>()).map(|(_, n, _, _)| n.clone())).unwrap();
+    let net = std::env::var("CCAD_GLOW").unwrap_or(net);
+    e.hover_net = Some((net.clone(), egui::pos2(700.0, 450.0)));
+    println!("glow on {net}");
+    let hn = e.hover_net.clone();
+    let ctx2 = ctx.clone();
+    let (mut worst, mut total) = (0.0f64, 0.0);
+    for _ in 0..10 {
+        let t = std::time::Instant::now();
+        let mut out = ctx2.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+            e.hover_net = hn.clone();
+            let rect = ui.max_rect();
+            let painter = ui.painter().clone();
+            e.draw_net_focus(&painter, rect);
+        });
+        out.textures_delta.clear();
+        let n_shapes = out.shapes.len();
+        let prims = ctx2.tessellate(out.shapes, out.pixels_per_point);
+        let tris: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+        if worst == 0.0 {
+            println!("  glow shapes {n_shapes}, triangles {tris}");
+        }
+        let dt = t.elapsed().as_secs_f64() * 1000.0;
+        worst = worst.max(dt);
+        total += dt;
+    }
+    let tn = std::time::Instant::now();
+    for i in 0..200 {
+        let _ = e.net_under(Point::new(20.0 + i as f64 * 0.3, 40.0));
+    }
+    println!("net_under x200: {:.1} ms", tn.elapsed().as_secs_f64() * 1e3);
+    println!("net glow only: avg {:.1} ms, worst {:.1} ms", total / 10.0, worst);
+}
+
+/// Where the triangles and the time of a frame go, by kind of drawing, on a real board (set CCAD_BOARD):
+/// `cargo test --release -p app frame_breakdown -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn frame_breakdown() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(screen);
+    let ctx = egui::Context::default();
+    println!(
+        "tracks {} vias {} pads {} parts {} zones {} silk {} texts {}",
+        e.board.tracks.len(),
+        e.board.vias.len(),
+        e.board.pads.len(),
+        e.board.parts.len(),
+        e.board.zones.len(),
+        e.board.silk.len(),
+        e.board.texts.len()
+    );
+    println!("finish active {}", pcb_core::smooth::finish_active(&e.board));
+    if let Some(f) = pcb_core::smooth::finished(&e.board) {
+        let pv: usize = f.patches.iter().map(|p| p.outline.len()).sum();
+        println!("finished: tracks {} patches {} (patch vertices {pv})", f.board.tracks.len(), f.patches.len());
+    }
+    // (shapes, triangles, vertices, avg ms over 10 settled frames)
+    let measure = |e: &mut BoardEditor| -> (usize, usize, usize, f64) {
+        let (mut shapes, mut tris, mut verts, mut total) = (0, 0, 0, 0.0f64);
+        for i in 0..14 {
+            let t = std::time::Instant::now();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            shapes = out.shapes.len();
+            let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+            tris = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+            verts = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.vertices.len(), _ => 0 }).sum();
+            if i >= 4 {
+                total += t.elapsed().as_secs_f64() * 1000.0;
+            }
+        }
+        (shapes, tris, verts, total / 10.0)
+    };
+    let set = |e: &mut BoardEditor, which: &str| {
+        e.vis.top = true;
+        e.vis.bottom = true;
+        e.vis.silk = which == "silk";
+        e.vis.parts = which == "parts";
+        e.vis.airwires = which == "airwires";
+        e.vis.nets = which == "nets";
+        e.vis.zones = which == "zones";
+        e.vis.ruler = false;
+        e.vis.tracks = which == "tracks";
+        e.vis.vias = which == "vias";
+    };
+    // let the pours come in before timing anything
+    set(&mut e, "zones");
+    for _ in 0..40 {
+        measure(&mut e);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    }
+    for which in ["none", "tracks", "vias", "zones", "silk", "parts", "airwires", "nets"] {
+        set(&mut e, which);
+        let (s, t, v, ms) = measure(&mut e);
+        println!("{which:>9}: shapes {s:>6} triangles {t:>8} vertices {v:>8}  {ms:.1} ms");
+    }
+    // each of those with only one side shown, to see what the semi-transparent other side costs
+    for side in ["top only", "bottom only"] {
+        set(&mut e, "tracks");
+        e.vis.top = side == "top only";
+        e.vis.bottom = side == "bottom only";
+        let (s, t, v, ms) = measure(&mut e);
+        println!("tracks, {side}: shapes {s} triangles {t} vertices {v}  {ms:.1} ms");
+        set(&mut e, "zones");
+        e.vis.top = side == "top only";
+        e.vis.bottom = side == "bottom only";
+        let (s, t, v, ms) = measure(&mut e);
+        println!("zones,  {side}: shapes {s} triangles {t} vertices {v}  {ms:.1} ms");
+    }
+    if let Some(c) = e.copper_cache.borrow().as_ref() {
+        let pts: usize = c.chains.iter().map(|ch| ch.pts.len()).sum();
+        let one = c.chains.iter().filter(|ch| ch.pts.len() <= 2).count();
+        let mut widths: Vec<u64> = c.chains.iter().map(|ch| ch.width.to_bits()).collect();
+        widths.sort();
+        widths.dedup();
+        let lod = c.lod(e.zoom);
+        let (lp, lt): (usize, usize) = (lod.chains.iter().map(Vec::len).sum(), lod.patches.iter().map(Vec::len).sum());
+        println!("copper: chains {} (with at most 2 points: {one}), points {pts} (at this zoom {lp}), widths {}, patches {} with {lt} triangles at this zoom", c.chains.len(), widths.len(), c.patches.len());
+    }
+    // the zones' own geometry: how many vertices, and how many belong to holes
+    if let Some((_, fills)) = e.zone_cache.borrow().as_ref() {
+        let (mut outer, mut holes, mut nholes, mut nshapes, mut tri) = (0, 0, 0, 0, 0);
+        for (_, _, shapes, tris) in fills {
+            for sh in shapes {
+                nshapes += 1;
+                outer += sh.outer.len();
+                nholes += sh.holes.len();
+                holes += sh.holes.iter().map(Vec::len).sum::<usize>();
+            }
+            tri += tris.iter().map(Vec::len).sum::<usize>();
+        }
+        println!("zone geometry: shapes {nshapes}, outer vertices {outer}, holes {nholes} with {holes} vertices, fill triangles {tri}");
+    }
 }
 
 /// Frame time while the pointer moves, drags a part and routes: `cargo test -p app board_interaction_time -- --ignored --nocapture`

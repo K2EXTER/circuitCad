@@ -240,29 +240,53 @@ impl BoardEditor {
         }
         // with the finish on, the copper is drawn as it will be made
         let finished = self.finished_async(painter.ctx());
-        // inactive layer first, so the active one is on top
-        for s in self.layer_order() {
-            if !self.side_visible(s) {
-                continue;
-            }
-            let alpha = if s == self.side { 255 } else { 60 };
-            let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
-            for t in finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice()).iter().filter(|t| t.side == s && self.vis.tracks && self.near_screen(rect, &[t.a, t.b], t.width)) {
-                painter.line_segment([self.to_screen(rect, t.a), self.to_screen(rect, t.b)], Stroke::new((t.width as f32 * z).max(1.0), col));
-                // round ends, like the Gerber aperture
-                for e in [t.a, t.b] {
-                    painter.circle_filled(self.to_screen(rect, e), (t.width as f32 * z / 2.0).max(0.5), col);
+        // the tracks that join end to end are drawn as one strip (see `ribbon`), the polygons of the finish as one mesh a layer
+        if self.vis.tracks {
+            let tracks = finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice());
+            {
+                let mut cache = self.copper_cache.borrow_mut();
+                if !cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref())) {
+                    *cache = Some(ribbon::CopperCache::new(tracks, finished.as_ref()));
                 }
             }
-            for patch in finished.iter().flat_map(|f| f.patches.iter()).filter(|p| p.side == s && self.vis.tracks && self.near_screen(rect, &p.outline, 0.0)) {
-                let shape = pcb_core::zonefill::FillShape { outer: patch.outline.clone(), holes: vec![] };
+            let cache = self.copper_cache.borrow();
+            let copper = cache.as_ref().expect("made above");
+            let lod = copper.lod(z);
+            // inactive layer first, so the active one is on top
+            for s in self.layer_order() {
+                if !self.side_visible(s) {
+                    continue;
+                }
+                let alpha = if s == self.side { 255 } else { 60 };
+                let col = self.side_color(s).gamma_multiply(alpha as f32 / 255.0);
                 let mut mesh = egui::Mesh::default();
-                for t in shape.triangles() {
-                    let base = mesh.vertices.len() as u32;
-                    for p in t {
-                        mesh.colored_vertex(self.to_screen(rect, p), col);
+                // a mesh of more than 60000 corners is sent in pieces
+                let flush = |mesh: &mut egui::Mesh| {
+                    if mesh.vertices.len() > 60_000 {
+                        painter.add(egui::Shape::mesh(std::mem::take(mesh)));
                     }
-                    mesh.add_triangle(base, base + 1, base + 2);
+                };
+                for (ch, pts) in copper.chains.iter().zip(&lod.chains).filter(|(c, _)| c.side == s) {
+                    let (lo, hi) = (self.to_screen(rect, ch.lo), self.to_screen(rect, ch.hi));
+                    if !ribbon::on_screen(rect, lo, hi, ch.width as f32 * z / 2.0 + 4.0) {
+                        continue;
+                    }
+                    let pts: Vec<Pos2> = pts.iter().map(|p| self.to_screen(rect, *p)).collect();
+                    ribbon::add_chain(&mut mesh, &pts, ch.width as f32 * z, col);
+                    flush(&mut mesh);
+                }
+                for (patch, tris) in copper.patches.iter().zip(&lod.patches).filter(|(p, _)| p.side == s) {
+                    if !ribbon::on_screen(rect, self.to_screen(rect, patch.lo), self.to_screen(rect, patch.hi), 4.0) {
+                        continue;
+                    }
+                    for t in tris {
+                        let base = mesh.vertices.len() as u32;
+                        for p in t {
+                            mesh.colored_vertex(self.to_screen(rect, *p), col);
+                        }
+                        mesh.add_triangle(base, base + 1, base + 2);
+                    }
+                    flush(&mut mesh);
                 }
                 painter.add(egui::Shape::mesh(mesh));
             }
