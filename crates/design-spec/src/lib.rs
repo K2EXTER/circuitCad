@@ -97,7 +97,7 @@ pub struct Bypass {
 #[serde(default)]
 pub struct Measure {
     pub name: String,
-    /// One of `MEASURES`: "length", "vias", "fork", "gap", "guard" or "tap".
+    /// One of `MEASURES`: "length", "vias", "fork", "gap", "guard", "tap" or "area".
     pub what: String,
     /// Pads as "PART.PIN": length and vias take two (from, to), fork takes three (the pad the ways start at, and the two they go to).
     pub pads: Vec<String>,
@@ -107,11 +107,15 @@ pub struct Measure {
     /// Guard only: how far (mm) the guard's edge may be from the edge of the track it guards (0 = 1 mm).
     #[serde(skip_serializing_if = "is_zero")]
     pub reach: f64,
+    /// Gap only: parts (by name) whose pads are left out of the gap; "pads" leaves out every pad, so only tracks and vias count (the pins of an
+    /// IC are always close to its own supply pins: what the rule is about is the wiring).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub except: Vec<String>,
     pub note: String,
 }
 
 /// The kinds of measure: (key, what the table calls it, unit, pads needed).
-pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("tap", "検出の線のつなぎ目 (内側の縁から)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2)];
+pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("tap", "検出の線のつなぎ目 (内側の縁から)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2), ("area", "パッドにつながった銅の面積", "mm²", 1)];
 
 impl Measure {
     pub fn is_min(&self) -> bool {
@@ -233,7 +237,7 @@ impl DesignSpec {
         }
         for m in &self.measures {
             match m.kind() {
-                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork / gap / guard / tap のどれかにしてください", m.name, m.what)),
+                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork / gap / guard / tap / area のどれかにしてください", m.name, m.what)),
                 Some((_, _, need)) if m.pads.len() != need => out.push(format!("測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります (いま {} 個)", m.name, m.pads.len())),
                 Some(_) => {}
             }
@@ -331,9 +335,9 @@ mod tests {
     fn a_measure_is_checked_for_its_kind_and_pads_and_can_be_waived() {
         let mut spec = DesignSpec {
             measures: vec![
-                Measure { name: "検出線".into(), what: "fork".into(), pads: vec!["RS1.1".into(), "Q1.3".into(), "UAB.2".into()], op: "max".into(), limit: 0.5, reach: 0.0, note: "ケルビン".into() },
+                Measure { name: "検出線".into(), what: "fork".into(), pads: vec!["RS1.1".into(), "Q1.3".into(), "UAB.2".into()], op: "max".into(), limit: 0.5, reach: 0.0, except: vec![], note: "ケルビン".into() },
                 Measure { name: "短く".into(), what: "length".into(), pads: vec!["RS1.1".into()], limit: 10.0, ..Default::default() },
-                Measure { name: "変".into(), what: "area".into(), pads: vec![], ..Default::default() },
+                Measure { name: "変".into(), what: "volume".into(), pads: vec![], ..Default::default() },
             ],
             ..Default::default()
         };

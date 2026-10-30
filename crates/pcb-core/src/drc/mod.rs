@@ -9,6 +9,7 @@ use crate::model::*;
 use std::collections::HashMap;
 
 mod acute;
+mod area;
 mod connectivity;
 mod decoupling;
 pub(crate) mod geo;
@@ -22,6 +23,7 @@ mod tests;
 mod thermal;
 
 pub use acute::*;
+pub use area::*;
 pub use connectivity::*;
 pub use decoupling::*;
 pub use geo::*;

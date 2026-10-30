@@ -506,9 +506,27 @@ pub fn net_gap(board: &Board, a: &[String], b: &[String]) -> Option<(f64, Point,
 
 /// [`net_gap`] on an index that is already built.
 pub fn net_gap_in(index: &CopperIndex, a: &[String], b: &[String]) -> Option<(f64, Point, Point)> {
+    net_gap_except(index, None, a, b, &[])
+}
+
+/// [`net_gap_in`] with the pads of some parts left out (`except`: part names, or "pads" for every pad: only tracks and vias are looked at).
+/// `board` is where the pads' parts are read from; without it nothing is left out.
+pub fn net_gap_except(index: &CopperIndex, board: Option<&Board>, a: &[String], b: &[String], except: &[String]) -> Option<(f64, Point, Point)> {
     let (items, nets) = (&index.items, &index.nets);
+    let left_out = |i: usize| -> bool {
+        let Some(board) = board else { return false };
+        let (nt, np) = (board.tracks.len(), board.pads.len());
+        if except.is_empty() || i < nt || i >= nt + np {
+            return false;
+        }
+        let part = board.pads[i - nt].refdes.as_str();
+        except.iter().any(|e| e == "pads" || e == part)
+    };
     let (mut left, mut right) = (vec![], vec![]);
     for (i, n) in nets.iter().enumerate() {
+        if left_out(i) {
+            continue;
+        }
         match n.as_deref() {
             Some(n) if in_set(a, n) => left.push(i),
             Some(n) if in_set(b, n) => right.push(i),

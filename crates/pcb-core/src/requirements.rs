@@ -226,7 +226,7 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
         }
         if m.what == "gap" {
             // the nearest copper of the two sets of nets (the line to draw runs between the two items)
-            let (d, pa, pb) = crate::drc::net_gap_in(&model.index, &a, &b).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
+            let (d, pa, pb) = crate::drc::net_gap_except(&model.index, Some(board), &a, &b, &m.except).ok_or_else(|| format!("測定「{}」: {} と {} の銅が、基板にありません", m.name, m.pads[0], m.pads[1]))?;
             return Ok(Measured { value: d, ways: vec![vec![pa, pb]], at: None });
         }
         // a guard: how much of the tracks of the sensitive nets has the guard on both sides; the runs without are drawn
@@ -235,6 +235,11 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
         }
         let cover = crate::drc::guard_cover_in(&model.index, board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
         return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
+    }
+    if m.what == "area" {
+        let Some(pad) = m.pads.first().and_then(|p| PadRef::parse(p)) else { return Err(format!("測定「{}」には、パッドが 1 個 (部品.ピン) 要ります", m.name)) };
+        let (area, at) = crate::drc::pad_copper_area(board, &pad).ok_or_else(|| format!("測定「{}」: {pad} のパッドが、基板にありません", m.name))?;
+        return Ok(Measured { value: area, ways: vec![], at: Some(at) });
     }
     let pads: Vec<PadRef> = m.pads.iter().filter_map(|p| PadRef::parse(p)).collect();
     if pads.len() != need || m.pads.len() != need {
@@ -741,7 +746,7 @@ mod tests {
         pad_at(&mut b, 40.0, 40.0, "Z", "1");
         wire(&mut b, (5.0, 5.0), (25.0, 5.0));
         wire(&mut b, (8.0, 5.0), (8.0, 15.0));
-        let m = |name: &str, what: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, note: String::new() };
+        let m = |name: &str, what: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, except: vec![], note: String::new() };
         let spec = DesignSpec {
             measures: vec![
                 m("検出線", "fork", &["R.1", "F.1", "S.1"], "max", 0.5),
@@ -785,7 +790,7 @@ mod tests {
             p.net = "N".into();
             b.pads.push(p);
         }
-        let m = |name: &str, limit: f64| design_spec::Measure { name: name.into(), what: "tap".into(), pads: ["RS.1", "SS.1", "RS.2"].iter().map(|s| s.to_string()).collect(), op: "max".into(), limit, reach: 0.0, note: String::new() };
+        let m = |name: &str, limit: f64| design_spec::Measure { name: name.into(), what: "tap".into(), pads: ["RS.1", "SS.1", "RS.2"].iter().map(|s| s.to_string()).collect(), op: "max".into(), limit, reach: 0.0, except: vec![], note: String::new() };
         // the sense wire starts at the outer side of the pad (y 20.5 is 0.5 below the centre, away from the partner above): 1.35 + 0.5 = 1.85 mm
         wire(&mut b, (10.0, 20.5), (30.0, 20.5));
         wire(&mut b, (30.0, 20.5), (30.0, 20.0));
@@ -818,7 +823,7 @@ mod tests {
         b.pads[3].net = "SW1".into();
         wire(&mut b, (5.0, 5.0), (25.0, 5.0));
         wire(&mut b, (5.0, 8.0), (25.0, 8.0));
-        let m = |name: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: "gap".into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, note: String::new() };
+        let m = |name: &str, pads: &[&str], op: &str, limit: f64| design_spec::Measure { name: name.into(), what: "gap".into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, except: vec![], note: String::new() };
         let spec = DesignSpec {
             measures: vec![m("検出を離す", &["SA", "SW*"], "min", 5.0), m("十分", &["SA", "SW1"], "min", 1.0), m("なし", &["SA", "ZZ"], "min", 1.0)],
             ..Default::default()
@@ -832,6 +837,32 @@ mod tests {
         let marks = measure_marks(&b);
         assert_eq!(marks.len(), 2);
         assert_eq!(marks[0].ways[0].len(), 2, "a line between the two nearest items");
+    }
+
+    /// A gap can leave the pads of some parts out (or all pads): what is left is the wiring.
+    #[test]
+    fn a_gap_can_leave_pads_out_and_an_area_is_measured() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "A", "1");
+        pad_at(&mut b, 25.0, 5.0, "A", "2");
+        pad_at(&mut b, 5.0, 8.0, "B", "1");
+        pad_at(&mut b, 25.0, 8.0, "B", "2");
+        for (k, net) in ["SA", "SA", "SW1", "SW1"].iter().enumerate() {
+            b.pads[k].net = (*net).into();
+        }
+        wire(&mut b, (5.0, 5.0), (25.0, 5.0));
+        wire(&mut b, (5.0, 8.0), (25.0, 8.0));
+        let m = |what: &str, pads: &[&str], except: &[&str], op: &str, limit: f64| design_spec::Measure { name: "m".into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: op.into(), limit, reach: 0.0, except: except.iter().map(|s| s.to_string()).collect(), note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        // pads count: the nearest copper is the pads (2.00 mm); without any pad, the tracks (2.75 mm); without the pads of B, the pad of A against the track of B (2.375 mm)
+        let all = measure_one(&b, &model, &m("gap", &["SA", "SW1"], &[], "min", 1.0)).unwrap().value;
+        let wiring = measure_one(&b, &model, &m("gap", &["SA", "SW1"], &["pads"], "min", 1.0)).unwrap().value;
+        let part = measure_one(&b, &model, &m("gap", &["SA", "SW1"], &["B"], "min", 1.0)).unwrap().value;
+        assert!((all - 2.0).abs() < 0.01 && (wiring - 2.75).abs() < 0.01 && (part - 2.375).abs() < 0.01, "{all} {wiring} {part}");
+        // the area of the copper at a pad: the pad (1 x 1 mm, as pad_at makes it) and the track of 20 mm by its width
+        let a = measure_one(&b, &model, &m("area", &["A.1"], &[], "min", 10.0)).unwrap().value;
+        assert!(a > 1.0 && a < 40.0, "{a}");
+        assert!(measure_one(&b, &model, &m("area", &["Z.9"], &[], "min", 10.0)).is_err());
     }
 
     /// The properties of a net class that the copper can break: tracks on a layer the class does not allow, and a net with more track than

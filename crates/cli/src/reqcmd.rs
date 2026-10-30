@@ -77,7 +77,7 @@ impl Session {
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
-            "measures": r.measures.iter().map(|m| json!({"name": m.name, "what": m.what, "pads": m.pads, "op": if m.is_min() { "min" } else { "max" }, "limit": m.limit, "reach": m.reach, "note": m.note})).collect::<Vec<Value>>(),
+            "measures": r.measures.iter().map(|m| json!({"name": m.name, "what": m.what, "pads": m.pads, "op": if m.is_min() { "min" } else { "max" }, "limit": m.limit, "reach": m.reach, "except": m.except, "note": m.note})).collect::<Vec<Value>>(),
             "waivers": r.waivers.iter().map(|w| json!({"kind": w.kind, "name": w.name, "item": w.item, "note": w.note})).collect::<Vec<Value>>(),
             "problems": self.sch.requirement_problems(),
             "unexplained": r.unexplained(),
@@ -206,7 +206,7 @@ impl Session {
                 let k = match req.measures.iter().position(|m| m.name == name) {
                     Some(k) => k,
                     None => {
-                        let usage = "req measure NAME what=length|vias|fork|gap|guard|tap pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [reason=...]  (length and vias take 2 pads, fork and tap take 3: the start and the two ends / the shunt pad, where the sense wire goes and the other pad of the shunt)";
+                        let usage = "req measure NAME what=length|vias|fork|gap|guard|tap|area pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [except=U1,pads] [reason=...]  (length and vias take 2 pads, fork and tap take 3: the start and the two ends / the shunt pad, where the sense wire goes and the other pad of the shunt; area takes 1 pad; gap and guard take 2 nets; except= leaves the pads of those parts out of a gap, pads = every pad)";
                         let what = what.clone().filter(|w| design_spec::MEASURES.iter().any(|(k, ..)| k == w)).ok_or(usage)?;
                         let need = design_spec::MEASURES.iter().find(|(k, ..)| *k == what).map_or(2, |m| m.3);
                         let pads = pads.clone().filter(|p| p.len() == need).ok_or(usage)?;
@@ -226,6 +226,9 @@ impl Session {
                 }
                 if let Some(v) = reach {
                     m.reach = v;
+                }
+                if let Some(list) = opt(&kv, "except") {
+                    m.except = if list == "-" { vec![] } else { names(list) };
                 }
                 if let Some(v) = max {
                     (m.op, m.limit) = ("max".into(), v);
