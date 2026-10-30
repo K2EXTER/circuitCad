@@ -2369,7 +2369,7 @@ fn applied_pin_trades_leave_the_board_and_come_back_with_undo() {
 fn the_requirements_answer_is_kept_until_the_board_or_the_table_changes() {
     let mut e = BoardEditor::default();
     for (x, name) in [(10.0, "R1"), (20.0, "R2")] {
-        e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top });
+        let _ = e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top });
     }
     e.board.keep_apart.push(design_spec::KeepApart { name: "離す".into(), a: vec!["R1".into()], b: vec!["R2".into()], min_dist: 500.0, ..Default::default() });
     let a = e.cached_requirements();
@@ -2387,7 +2387,7 @@ fn the_requirements_answer_is_kept_until_the_board_or_the_table_changes() {
 fn ctrl_adds_an_object_to_the_selection_and_takes_it_out() {
     let mut e = BoardEditor::default();
     for (x, name) in [(10.0, "R1"), (20.0, "R2"), (30.0, "R3")] {
-        e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top });
+        let _ = e.board.set_part(pcb_core::Part { refdes: name.into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(x, 10.0), rot: 0, side: Side::Top });
     }
     e.set_selection(vec![Item::Part(0)]);
     e.toggle_in_selection(&[Item::Part(1)]);
@@ -2410,7 +2410,7 @@ fn ctrl_adds_an_object_to_the_selection_and_takes_it_out() {
 #[test]
 fn a_rubber_band_takes_the_back_wiring_and_the_group_moves_with_it() {
     let mut e = BoardEditor::default();
-    e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top });
+    let _ = e.board.set_part(pcb_core::Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: p(10.0, 10.0), rot: 0, side: Side::Top });
     e.board.tracks.push(pcb_core::Track { side: Side::Top, a: p(8.0, 14.0), b: p(14.0, 14.0), width: 0.25 });
     e.board.tracks.push(pcb_core::Track { side: Side::Bottom, a: p(8.0, 16.0), b: p(14.0, 16.0), width: 0.25 });
     assert!(e.pick.active_side_only && e.side == Side::Top, "the defaults: front, the other side locked");

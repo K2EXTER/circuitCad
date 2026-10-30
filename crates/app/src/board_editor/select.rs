@@ -80,10 +80,10 @@ impl BoardEditor {
     /// Everything that is selected, one or many.
     pub(super) fn selection_items(&self) -> Vec<Item> {
         let mut all = self.multi.clone();
-        for it in self.selected {
-            if !all.contains(&it) {
-                all.push(it);
-            }
+        if let Some(it) = self.selected
+            && !all.contains(&it)
+        {
+            all.push(it);
         }
         all
     }

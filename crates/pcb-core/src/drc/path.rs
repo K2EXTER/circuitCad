@@ -1467,8 +1467,8 @@ mod tests {
         };
         println!("check: {:?}", time(&|| drop(crate::requirements::check(&b))));
         println!("marks: {:?}", time(&|| drop(crate::requirements::marks(&b))));
-        println!("requirements_hash: {:?}", time(&|| drop(crate::requirements::requirements_hash(&b))));
-        println!("geometry_key: {:?}", time(&|| drop(crate::zonefill::geometry_key(&b))));
+        println!("requirements_hash: {:?}", time(&|| { std::hint::black_box(crate::requirements::requirements_hash(&b)); }));
+        println!("geometry_key: {:?}", time(&|| { std::hint::black_box(crate::zonefill::geometry_key(&b)); }));
         println!("measure_marks: {:?}", time(&|| drop(crate::requirements::measure_marks(&b))));
         b.measures.clear();
         println!("check without measures: {:?}", time(&|| drop(crate::requirements::check(&b))));
@@ -1500,7 +1500,7 @@ mod tests {
         time("drc::check_final", &|| drop(check_final(&b)));
         time("quality::measure", &|| drop(crate::quality::measure(&b)));
         time("requirements::check", &|| drop(crate::requirements::check(&b)));
-        time("zonefill geometry_key", &|| drop(crate::zonefill::geometry_key(&b)));
+        time("zonefill geometry_key", &|| { std::hint::black_box(crate::zonefill::geometry_key(&b)); });
     }
 }
 
