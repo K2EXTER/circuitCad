@@ -81,8 +81,9 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
     let mut first: Vec<String> = vec![];
     'search: for &slide in modes {
         for _ in 0..3 {
+            let used = first.clone();
             let mut trial = board.clone();
-            let report = autoroute_mode(&mut trial, opt, only_net, slide, &first);
+            let report = autoroute_mode(&mut trial, opt, only_net, slide, &used);
             let done = report.failed.is_empty();
             for w in &report.failed {
                 if !first.contains(&w.net) {
@@ -94,6 +95,10 @@ pub fn autoroute(board: &mut Board, opt: &RouteOptions, only_net: Option<&str>) 
             }
             if done || start.elapsed() > RETRY_BUDGET {
                 break 'search;
+            }
+            // no net failed that was not put first already: the next run would go in the same order and end the same, so it is not made
+            if first == used {
+                break;
             }
         }
     }
@@ -312,11 +317,23 @@ fn route_airwire_mode(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide:
         (true, false) => &[(opt, false, true), (&plain, false, true), (&plain, false, false)],
         _ => &[(opt, false, false)],
     };
-    attempts.iter().any(|&(o, slide, tidy)| route_airwire_with(board, w, o, slide, tidy))
+    let Some((&(o, slide, tidy), rest)) = attempts.split_first() else { return false };
+    if route_airwire_with(board, w, o, slide, tidy) {
+        return true;
+    }
+    // the others search the same board on their own, so they are searched side by side (a connection that cannot be made costs one search,
+    // not one for each); the first of them, in the order above, whose route is good is taken, as when they were tried one after the other
+    let found = crate::par::par_map(rest, |&(o, slide, tidy)| find_route(board, w, o, slide, tidy));
+    found.into_iter().flatten().any(|(tracks, vias)| add_route(board, w, tracks, vias))
 }
 
 fn route_airwire_with(board: &mut Board, w: &Airwire, opt: &RouteOptions, slide: bool, tidy: bool) -> bool {
     let Some((tracks, vias)) = find_route(board, w, opt, slide, tidy) else { return false };
+    add_route(board, w, tracks, vias)
+}
+
+/// Put a found route on the board when it breaks no rule and joins the two pads (otherwise the board is left as it is).
+fn add_route(board: &mut Board, w: &Airwire, tracks: Vec<Track>, vias: Vec<Via>) -> bool {
     let (tracks_before, vias_before) = (board.tracks.len(), board.vias.len());
     let mut trial = board.clone();
     trial.tracks.extend(tracks);
