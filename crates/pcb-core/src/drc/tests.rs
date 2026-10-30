@@ -183,6 +183,38 @@ mod drc_tests {
     }
 
     #[test]
+    fn a_pour_covered_by_a_later_pour_of_another_net_is_reported() {
+        let mut b = board();
+        let z = |net: &str, x0: f64, y0: f64, x1: f64, y1: f64| Zone::new(net, Side::Top, vec![Point::new(x0, y0), Point::new(x1, y0), Point::new(x1, y1), Point::new(x0, y1)]);
+        let pad = |x: f64, y: f64, net: &str| {
+            let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
+            p.net = net.into();
+            p
+        };
+        b.pads.push(pad(10.0, 10.0, "DRN"));
+        b.pads.push(pad(30.0, 10.0, "GND"));
+        // a DRN pour first, a GND pour over all of it afterwards
+        b.zones.push(z("DRN", 5.0, 5.0, 15.0, 15.0));
+        b.zones.push(z("GND", 3.0, 3.0, 20.0, 20.0));
+        let found = crate::zonefill::pours_covered_by_later(&b);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!((found[0].lost - 100.0).abs() < 0.01 && found[0].by == vec!["GND".to_string()], "{found:?}");
+        let v = zone_checks(&b);
+        assert!(v.iter().any(|x| x.message.contains("上書き") && x.message.contains("DRN")), "{v:?}");
+        // the other order (the small pour last) is a normal patch: nothing reported
+        b.zones.reverse();
+        let f = crate::zonefill::pours_covered_by_later(&b);
+        assert!(f.len() == 1 && f[0].lost < 0.5 * f[0].area, "{f:?}");
+        assert!(!zone_checks(&b).iter().any(|x| x.message.contains("上書き")));
+        // a small corner taken is below the share
+        b.zones.clear();
+        b.zones.push(z("DRN", 5.0, 5.0, 15.0, 15.0));
+        b.zones.push(z("GND", 12.0, 12.0, 20.0, 20.0));
+        assert_eq!(crate::zonefill::pours_covered_by_later(&b).len(), 1);
+        assert!(!zone_checks(&b).iter().any(|x| x.message.contains("上書き")));
+    }
+
+    #[test]
     fn thermal_vias_are_placed_in_the_heat_pad() {
         let mut b = board();
         for (x, y, w, h, pin) in [(10.0, 10.0, 2.0, 1.5, "1"), (10.0, 12.3, 2.0, 1.5, "2"), (16.0, 11.0, 2.0, 3.8, "3")] {

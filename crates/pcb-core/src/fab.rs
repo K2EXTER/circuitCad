@@ -357,7 +357,10 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     }
 
     // slivers and islands of the copper pours
-    let pours = drc::zone_checks(board);
+    let (covered, pours): (Vec<_>, Vec<_>) = drc::zone_checks(board).into_iter().partition(|x| x.message.contains("上書き"));
+    if let Some(first) = covered.first() {
+        out.push(check(Level::Warn, format!("ベタ (ゾーン) が、あとから置いた別のネットのベタに上書きされている所が {} 個あります", covered.len()), format!("例: {}", first.message), Some(first.at)).with_also(covered.iter().map(|x| x.at)));
+    }
     if let Some(first) = pours.first() {
         out.push(check(Level::Warn, format!("ベタ (ゾーン) に、気になる所が {} 箇所あります (細いかけら・孤立した島・他のネットで分断されて、つながっていないパッド)", pours.len()), format!("例: {}", first.message), Some(first.at)).with_also(pours.iter().map(|x| x.at)));
     }

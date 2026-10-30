@@ -376,6 +376,83 @@ pub fn clear_zone_holes(board: &mut Board, side: Side, net: Option<&str>) -> usi
     n
 }
 
+/// What of `a` is left once the shapes of `b` are taken out.
+fn difference(a: &[FillShape], b: &[FillShape]) -> Vec<FillShape> {
+    let contours = |shapes: &[FillShape]| -> Vec<Path> {
+        let mut out = vec![];
+        for s in shapes {
+            out.push(ccw(&s.outer));
+            for h in &s.holes {
+                let mut p = ccw(h);
+                p.reverse();
+                out.push(p);
+            }
+        }
+        out
+    };
+    contours(a)
+        .overlay(&contours(b), OverlayRule::Difference, FillRule::NonZero)
+        .into_iter()
+        .filter_map(|shape| {
+            let mut it = shape.into_iter();
+            let outer = to_points(&it.next()?);
+            (signed_area(&outer).abs() >= 1e-6).then(|| FillShape { outer, holes: it.map(|h| to_points(&h)).collect() })
+        })
+        .collect()
+}
+
+/// The area of pieces (mm²), holes taken out.
+pub fn fill_area(shapes: &[FillShape]) -> f64 {
+    shapes.iter().map(|s| signed_area(&s.outer).abs() - s.holes.iter().map(|h| signed_area(h).abs()).sum::<f64>()).sum()
+}
+
+/// A pour whose area is partly taken by pours of other nets that come after it on the same layer (a later pour wins where they overlap).
+#[derive(Clone, Debug)]
+pub struct CoveredPour {
+    /// Index in `board.zones`.
+    pub zone: usize,
+    /// The area of the pour as drawn (mm²) and how much of it a later pour takes.
+    pub area: f64,
+    pub lost: f64,
+    /// The nets of the pours that take it.
+    pub by: Vec<String>,
+}
+
+/// Every pour that a later pour of another net takes some of (before tracks and pads cut it): the outline of such a pour says more
+/// copper than the board gets.
+pub fn pours_covered_by_later(board: &Board) -> Vec<CoveredPour> {
+    let mut out = vec![];
+    for (i, z) in board.zones.iter().enumerate() {
+        let later: Vec<&Zone> = board.zones[i + 1..].iter().filter(|o| o.side == z.side && o.net != z.net).collect();
+        if later.is_empty() {
+            continue;
+        }
+        let mine = z.region();
+        let area = fill_area(&mine);
+        if area <= 0.0 {
+            continue;
+        }
+        let mut by: Vec<String> = vec![];
+        let mut taken: Vec<FillShape> = vec![];
+        for o in later {
+            let o_region = o.region();
+            if fill_area(&difference(&mine, &o_region)) < area - 1e-6 {
+                let name = if o.net.is_empty() { "ネットなし".to_string() } else { o.net.clone() };
+                if !by.contains(&name) {
+                    by.push(name);
+                }
+                taken.extend(o_region);
+            }
+        }
+        if by.is_empty() {
+            continue;
+        }
+        let lost = area - fill_area(&difference(&mine, &union(&taken)));
+        out.push(CoveredPour { zone: i, area, lost, by });
+    }
+    out
+}
+
 /// The pieces merged where they touch or overlap.
 fn union(shapes: &[FillShape]) -> Vec<FillShape> {
     // outer contours counter-clockwise, holes clockwise, so the holes are subtracted

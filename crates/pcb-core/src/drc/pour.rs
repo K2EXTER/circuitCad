@@ -1,5 +1,8 @@
 use super::*;
 
+/// A pour that loses at least this share of its area to later pours of other nets is reported.
+pub const COVERED_SHARE: f64 = 0.5;
+
 /// A copper pour piece thinner than this (mm, as an equivalent strip width) is a sliver.
 pub const MIN_POUR_WIDTH: f64 = 0.2;
 
@@ -15,6 +18,7 @@ pub fn zone_checks(board: &Board) -> Vec<Violation> {
     }
     let conn = connectivity(board);
     out.extend(split_pour_checks(board));
+    out.extend(covered_pour_checks(board));
     for z in &board.zones {
         let side = side_name(z.side);
         let name = if z.net.is_empty() { "ネットなし".to_string() } else { z.net.clone() };
@@ -175,4 +179,29 @@ pub fn missing_ground_fill(board: &Board) -> bool {
     let has_ground = board.pads.iter().any(|p| is_ground_net(&p.net));
     let has_fill = board.zones.iter().any(|z| is_ground_net(&z.net));
     has_ground && !has_fill && board.pads.iter().filter(|p| !p.net.is_empty()).count() >= 4
+}
+
+/// A pour whose outline is mostly covered by a pour of another net that comes after it on the same layer (the later one wins where
+/// they overlap): the copper the outline promises is not there, and the vias and pads that were counting on it join nothing.
+fn covered_pour_checks(board: &Board) -> Vec<Violation> {
+    crate::zonefill::pours_covered_by_later(board)
+        .into_iter()
+        .filter(|c| c.lost >= COVERED_SHARE * c.area)
+        .filter_map(|c| {
+            let z = &board.zones[c.zone];
+            let name = if z.net.is_empty() { "ネットなし".to_string() } else { z.net.clone() };
+            let at = z.region().first().map(|s| s.outer[0])?;
+            Some(v(
+                format!(
+                    "{}のゾーン ({name}) の {:.0}% ({:.1} / {:.1} mm²) が、あとから置いたゾーン ({}) に上書きされています。輪郭どおりの銅は残らないので、ビアやパッドをつないでも放熱や電流の道になりません。上書きしているゾーンの形を変える (その部分をくり抜く)、このゾーンを後に置く、のどちらかにしましょう",
+                    side_name(z.side),
+                    100.0 * c.lost / c.area,
+                    c.lost,
+                    c.area,
+                    c.by.join("・")
+                ),
+                at,
+            ))
+        })
+        .collect()
 }
