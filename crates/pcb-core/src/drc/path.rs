@@ -674,8 +674,13 @@ pub fn ring_cover(index: &CopperIndex, board: &Board, pad: &PadRef, guard: &[Str
     let p = board.pads.iter().find(|p| p.refdes == pad.refdes && p.pin == pad.pin)?;
     let (w, h) = p.shape.size();
     let (items, item_net) = (&index.items, &index.nets);
-    let guards: Vec<usize> = (0..items.len()).filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(guard, n))).collect();
     let layers: Vec<Side> = if p.drill.is_some() { vec![Side::Top, Side::Bottom] } else { vec![p.side] };
+    // only the guard copper on the pad's layers that lies within reach of the pad at all (every probe point is within this of the middle)
+    let around = w.hypot(h) / 2.0 + reach + 0.2;
+    let middle = Geo::Cap { a: p.pos, b: p.pos, r: 0.0 };
+    let guards: Vec<usize> = (0..items.len())
+        .filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(guard, n)) && layers.iter().any(|&l| items[i].on(l)) && dist(&middle, &items[i].geo) <= around)
+        .collect();
     let steps = 72;
     let mut covered = 0;
     for k in 0..steps {
@@ -688,7 +693,7 @@ pub fn ring_cover(index: &CopperIndex, board: &Board, pad: &PadRef, guard: &[Str
         while t <= edge + reach {
             let q = Point::new(p.pos.x + c * t, p.pos.y + s * t);
             let probe = Geo::Cap { a: q, b: q, r: 0.0 };
-            if guards.iter().any(|&g| layers.iter().any(|&l| items[g].on(l)) && dist(&probe, &items[g].geo) <= 1e-6) {
+            if guards.iter().any(|&g| dist(&probe, &items[g].geo) <= 1e-6) {
                 hit = true;
                 break;
             }
