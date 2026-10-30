@@ -206,7 +206,7 @@ impl Session {
                 let k = match req.measures.iter().position(|m| m.name == name) {
                     Some(k) => k,
                     None => {
-                        let usage = "req measure NAME what=length|vias|fork|gap|guard|tap|area|width|parallel pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [except=U1,pads] [reason=...]  (length, vias and width take 2 pads, fork and tap take 3: the start and the two ends / the shunt pad, where the sense wire goes and the other pad of the shunt; area takes 1 pad, reach= is its radius; gap, guard and parallel take 2 nets, reach= is how near; except= leaves the pads of those parts out of a gap or a parallel run, pads = every pad)";
+                        let usage = "req measure NAME what=length|vias|fork|gap|guard|tap|area|width|parallel|thermal_vias|loop|match|ring pads=A.1,B.1[,C.1] max=N|min=N [reach=mm] [except=U1,pads] [reason=...]  (length, vias and width take 2 pads, loop and match take 4 (two ways: from,to,from,to), thermal_vias takes 1 pad, ring takes a pad and the guard nets, fork and tap take 3: the start and the two ends / the shunt pad, where the sense wire goes and the other pad of the shunt; area takes 1 pad, reach= is its radius; gap, guard and parallel take 2 nets, reach= is how near; except= leaves the pads of those parts out of a gap or a parallel run, pads = every pad)";
                         let what = what.clone().filter(|w| design_spec::MEASURES.iter().any(|(k, ..)| k == w)).ok_or(usage)?;
                         let need = design_spec::MEASURES.iter().find(|(k, ..)| *k == what).map_or(2, |m| m.3);
                         let pads = pads.clone().filter(|p| p.len() == need).ok_or(usage)?;

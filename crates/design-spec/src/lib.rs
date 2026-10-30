@@ -97,14 +97,14 @@ pub struct Bypass {
 #[serde(default)]
 pub struct Measure {
     pub name: String,
-    /// One of `MEASURES`: "length", "vias", "fork", "gap", "guard", "tap", "area", "width" or "parallel".
+    /// One of `MEASURES`: "length", "vias", "fork", "gap", "guard", "tap", "area", "width", "parallel", "thermal_vias", "loop", "match" or "ring".
     pub what: String,
     /// Pads as "PART.PIN": length and vias take two (from, to), fork takes three (the pad the ways start at, and the two they go to).
     pub pads: Vec<String>,
     /// "max" (the value must not exceed `limit`, the default) or "min".
     pub op: String,
     pub limit: f64,
-    /// Guard and parallel: how far (mm) the other copper's edge may be from the edge of the track (0 = 1 mm). Area: the radius (mm) round the
+    /// Guard, parallel and ring: how far (mm) the other copper's edge may be from the edge of the track or the pad (0 = 1 mm). Area: the radius (mm) round the
     /// pad that is looked at (0 = all the copper that joins it).
     #[serde(skip_serializing_if = "is_zero")]
     pub reach: f64,
@@ -116,7 +116,7 @@ pub struct Measure {
 }
 
 /// The kinds of measure: (key, what the table calls it, unit, pads needed).
-pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("tap", "検出の線のつなぎ目 (内側の縁から)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2), ("area", "パッドにつながった銅の面積", "mm²", 1), ("width", "配線の最小の太さ", "mm", 2), ("parallel", "並走する長さ", "mm", 2)];
+pub const MEASURES: &[(&str, &str, &str, usize)] = &[("length", "長さ", "mm", 2), ("vias", "ビアの数", "個", 2), ("fork", "分かれ目 (一緒に走る長さ)", "mm", 3), ("tap", "検出の線のつなぎ目 (内側の縁から)", "mm", 3), ("gap", "ネット間の間隔", "mm", 2), ("guard", "ガードの被覆", "%", 2), ("area", "パッドにつながった銅の面積", "mm²", 1), ("width", "配線の最小の太さ", "mm", 2), ("parallel", "並走する長さ", "mm", 2), ("thermal_vias", "パッドの下のビアの数", "個", 1), ("loop", "ループの長さ (行き + 帰り)", "mm", 4), ("match", "2つの道筋の長さの差", "mm", 4), ("ring", "ピンのまわりのガードの囲み", "%", 2)];
 
 impl Measure {
     pub fn is_min(&self) -> bool {
@@ -238,12 +238,13 @@ impl DesignSpec {
         }
         for m in &self.measures {
             match m.kind() {
-                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork / gap / guard / tap / area / width / parallel のどれかにしてください", m.name, m.what)),
+                None => out.push(format!("測定「{}」の種類 `{}` は、length / vias / fork / gap / guard / tap / area / width / parallel / thermal_vias / loop / match / ring のどれかにしてください", m.name, m.what)),
                 Some((_, _, need)) if m.pads.len() != need => out.push(format!("測定「{}」には、パッドが {need} 個 (部品.ピン) 要ります (いま {} 個)", m.name, m.pads.len())),
                 Some(_) => {}
             }
-            for pad in &m.pads {
-                if m.what == "gap" || m.what == "guard" || m.what == "parallel" {
+            for (pi, pad) in m.pads.iter().enumerate() {
+                // a ring is round a pad: its first entry is the pad, its second the guard nets
+                if m.what == "gap" || m.what == "guard" || m.what == "parallel" || (m.what == "ring" && pi == 1) {
                     // a gap, a guard and a parallel run are between nets (several joined by `+`)
                     for n in pad.split('+').map(str::trim).filter(|n| !n.is_empty()) {
                         if !net_known(n) {

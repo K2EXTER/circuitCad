@@ -667,6 +667,40 @@ pub fn narrowest_on_way(board: &Board, way: &[(Side, Point)]) -> Option<(f64, Po
     best
 }
 
+/// How much of the way round a pad has copper of the guard nets within `reach` mm of its edge: 72 directions from the pad's middle, and in
+/// each the copper of the guard nets on the pad's layer (both layers for a through-hole pad) must be met within `reach` of the pad's edge.
+/// Percent (a track that leaves the pad leaves a gap). None when the pad is not on the board.
+pub fn ring_cover(index: &CopperIndex, board: &Board, pad: &PadRef, guard: &[String], reach: f64) -> Option<f64> {
+    let p = board.pads.iter().find(|p| p.refdes == pad.refdes && p.pin == pad.pin)?;
+    let (w, h) = p.shape.size();
+    let (items, item_net) = (&index.items, &index.nets);
+    let guards: Vec<usize> = (0..items.len()).filter(|&i| item_net[i].as_deref().is_some_and(|n| in_set(guard, n))).collect();
+    let layers: Vec<Side> = if p.drill.is_some() { vec![Side::Top, Side::Bottom] } else { vec![p.side] };
+    let steps = 72;
+    let mut covered = 0;
+    for k in 0..steps {
+        let a = 2.0 * std::f64::consts::PI * k as f64 / steps as f64;
+        let (c, s) = (a.cos(), a.sin());
+        // where the ray leaves the pad's box
+        let edge = (w / 2.0 / c.abs().max(1e-9)).min(h / 2.0 / s.abs().max(1e-9));
+        let mut t = edge + 0.05;
+        let mut hit = false;
+        while t <= edge + reach {
+            let q = Point::new(p.pos.x + c * t, p.pos.y + s * t);
+            let probe = Geo::Cap { a: q, b: q, r: 0.0 };
+            if guards.iter().any(|&g| layers.iter().any(|&l| items[g].on(l)) && dist(&probe, &items[g].geo) <= 1e-6) {
+                hit = true;
+                break;
+            }
+            t += 0.1;
+        }
+        if hit {
+            covered += 1;
+        }
+    }
+    Some(100.0 * covered as f64 / steps as f64)
+}
+
 /// How long two sets of nets run side by side.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ParallelRun {

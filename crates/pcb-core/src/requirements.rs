@@ -240,6 +240,23 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
         let cover = crate::drc::guard_cover_in(&model.index, board, &a, &b, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {} に配線がありません (先に配線してください)", m.name, m.pads[0]))?;
         return Ok(Measured { value: cover.percent(), ways: cover.bare, at: None });
     }
+    if m.what == "thermal_vias" {
+        let Some(pad) = m.pads.first().and_then(|p| PadRef::parse(p)) else { return Err(format!("測定「{}」には、パッドが 1 個 (部品.ピン) 要ります", m.name)) };
+        let (n, at) = crate::drc::pad_via_count(board, &pad).ok_or_else(|| format!("測定「{}」: {pad} のパッドが、基板にありません", m.name))?;
+        return Ok(Measured { value: n as f64, ways: vec![], at: Some(at) });
+    }
+    if m.what == "ring" {
+        let Some(pad) = m.pads.first().and_then(|p| PadRef::parse(p)) else { return Err(format!("測定「{}」の1つ目には、パッド (部品.ピン) を書いてください", m.name)) };
+        if m.pads.len() != 2 {
+            return Err(format!("測定「{}」には、パッドとガードのネットが要ります", m.name));
+        }
+        let guard = crate::drc::net_set(&m.pads[1]);
+        if guard.is_empty() {
+            return Err(format!("測定「{}」には、パッドとガードのネットが要ります", m.name));
+        }
+        let pct = crate::drc::ring_cover(&model.index, board, &pad, &guard, m.guard_reach()).ok_or_else(|| format!("測定「{}」: {pad} のパッドが、基板にありません", m.name))?;
+        return Ok(Measured { value: pct, ways: vec![], at: board.pads.iter().find(|p| p.refdes == pad.refdes && p.pin == pad.pin).map(|p| p.pos) });
+    }
     if m.what == "area" {
         let Some(pad) = m.pads.first().and_then(|p| PadRef::parse(p)) else { return Err(format!("測定「{}」には、パッドが 1 個 (部品.ピン) 要ります", m.name)) };
         let (area, at) = crate::drc::pad_copper_area(board, &pad, m.reach).ok_or_else(|| format!("測定「{}」: {pad} のパッドが、基板にありません", m.name))?;
@@ -251,6 +268,11 @@ pub fn measure_one(board: &Board, model: &crate::drc::CopperModel, m: &design_sp
     }
     let way = |a: &PadRef, b: &PadRef| g.path(a, b).ok_or_else(|| format!("測定「{}」: {a} と {b} をつなぐ銅の道筋がありません (未配線か、ベタだけでつながっています)", m.name));
     match m.what.as_str() {
+        "loop" | "match" => {
+            let (a, b) = (way(&pads[0], &pads[1])?, way(&pads[2], &pads[3])?);
+            let value = if m.what == "loop" { a.length + b.length } else { (a.length - b.length).abs() };
+            Ok(Measured { value, ways: vec![a.points.iter().map(|(_, q)| *q).collect(), b.points.iter().map(|(_, q)| *q).collect()], at: None })
+        }
         "width" => {
             let p = way(&pads[0], &pads[1])?;
             let (w, at) = crate::drc::narrowest_on_way(board, &p.points).ok_or_else(|| format!("測定「{}」: {} と {} の間に配線がありません", m.name, pads[0], pads[1]))?;
@@ -906,6 +928,52 @@ mod tests {
         assert!((measure_one(&b, &model, &pm).unwrap().value - 20.0).abs() < 0.3);
         // a net with no track cannot be measured
         assert!(measure_one(&b, &model, &m("parallel", &["ZZ", "SW1"], 1.0, "max", 0.0)).is_err());
+    }
+
+    /// `thermal_vias` counts the vias in a pad, `loop` adds the two legs of a loop, `match` is the difference of two ways, `ring` is how much of
+    /// the way round a pad has guard copper.
+    #[test]
+    fn the_vias_in_a_pad_a_loop_a_match_and_a_ring_are_measured() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        // a loop: IC pin 1 to the cap's plus pad 5 mm, the cap's minus pad to IC pin 2 5 mm; a second way of 8 mm for the match
+        pad_at(&mut b, 5.0, 5.0, "U", "1");
+        pad_at(&mut b, 10.0, 5.0, "C", "1");
+        pad_at(&mut b, 10.0, 8.0, "C", "2");
+        pad_at(&mut b, 5.0, 8.0, "U", "2");
+        pad_at(&mut b, 5.0, 20.0, "P", "1");
+        pad_at(&mut b, 13.0, 20.0, "P", "2");
+        for (k, net) in ["V", "V", "G", "G", "X", "X"].iter().enumerate() {
+            b.pads[k].net = (*net).into();
+        }
+        wire(&mut b, (5.0, 5.0), (10.0, 5.0));
+        wire(&mut b, (10.0, 8.0), (5.0, 8.0));
+        wire(&mut b, (5.0, 20.0), (13.0, 20.0));
+        let m = |what: &str, pads: &[&str], reach: f64| design_spec::Measure { name: "m".into(), what: what.into(), pads: pads.iter().map(|s| s.to_string()).collect(), op: "max".into(), limit: 1.0, reach, except: vec![], note: String::new() };
+        let model = crate::drc::CopperModel::build(&b);
+        let l = measure_one(&b, &model, &m("loop", &["U.1", "C.1", "C.2", "U.2"], 0.0)).unwrap();
+        assert!((l.value - 10.0).abs() < 1e-6 && l.ways.len() == 2, "{}", l.value);
+        let d = measure_one(&b, &model, &m("match", &["U.1", "C.1", "P.1", "P.2"], 0.0)).unwrap();
+        assert!((d.value - 3.0).abs() < 1e-6, "{}", d.value);
+        // vias in a pad: two in the 1 mm pad of U.1, one outside
+        for (x, y) in [(5.0, 5.0), (5.2, 4.8), (30.0, 30.0)] {
+            b.vias.push(Via { pos: Point::new(x, y), diameter: 0.6, drill: 0.3, net: String::new() });
+        }
+        let model = crate::drc::CopperModel::build(&b);
+        assert_eq!(measure_one(&b, &model, &m("thermal_vias", &["U.1"], 0.0)).unwrap().value, 2.0);
+        assert!(measure_one(&b, &model, &m("thermal_vias", &["Z.1"], 0.0)).is_err());
+        // a ring: a guard net (pad G9 at the corner) with a closed square of track 1.5 mm from the edge of the pad C.1 at (10, 5)
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 25.0, 25.0, "C", "1");
+        pad_at(&mut b, 22.0, 22.0, "G", "9");
+        b.pads[0].net = "SET".into();
+        b.pads[1].net = "GRD".into();
+        for (a, c) in [((22.0, 22.0), (28.0, 22.0)), ((28.0, 22.0), (28.0, 28.0)), ((28.0, 28.0), (22.0, 28.0)), ((22.0, 28.0), (22.0, 22.0))] {
+            wire(&mut b, a, c);
+        }
+        let model = crate::drc::CopperModel::build(&b);
+        let full = measure_one(&b, &model, &m("ring", &["C.1", "GRD"], 4.0)).unwrap().value;
+        let none = measure_one(&b, &model, &m("ring", &["C.1", "GRD"], 0.5)).unwrap().value;
+        assert!(full > 95.0 && none < 1.0, "{full} {none}");
     }
 
     /// The properties of a net class that the copper can break: tracks on a layer the class does not allow, and a net with more track than

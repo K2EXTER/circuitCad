@@ -88,6 +88,23 @@ pub fn pad_copper_area(board: &Board, r: &PadRef, radius: f64) -> Option<(f64, P
     Some((area, centre))
 }
 
+/// How many vias lie in the copper of the pad(s) `r` (the bounding box of each pad): the thermal vias of a heat pad. None when the board has no such pad.
+pub fn pad_via_count(board: &Board, r: &PadRef) -> Option<(usize, Point)> {
+    let pads: Vec<&Pad> = board.pads.iter().filter(|p| p.refdes == r.refdes && p.pin == r.pin).collect();
+    let first = pads.first()?;
+    let n = board
+        .vias
+        .iter()
+        .filter(|v| {
+            pads.iter().any(|p| {
+                let (w, h) = p.shape.size();
+                (v.pos.x - p.pos.x).abs() <= w / 2.0 + 1e-6 && (v.pos.y - p.pos.y).abs() <= h / 2.0 + 1e-6
+            })
+        })
+        .count();
+    Some((n, first.pos))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
