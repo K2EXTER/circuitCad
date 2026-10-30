@@ -1526,6 +1526,26 @@ fn frame_breakdown() {
         measure(&mut e);
         std::thread::sleep(std::time::Duration::from_millis(40));
     }
+    // the two halves of a frame: building the shapes (`canvas`), and egui cutting them into triangles
+    for which in ["tracks", "zones", "parts+silk", "all"] {
+        set(&mut e, which);
+        let (mut build, mut cut) = (0.0f64, 0.0f64);
+        for i in 0..14 {
+            let t = std::time::Instant::now();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let t1 = t.elapsed().as_secs_f64() * 1000.0;
+            let t = std::time::Instant::now();
+            let _ = ctx.tessellate(out.shapes, out.pixels_per_point);
+            if i >= 4 {
+                build += t1;
+                cut += t.elapsed().as_secs_f64() * 1000.0;
+            }
+        }
+        println!("{which:>9}: building shapes {:.2} ms, egui cutting them up {:.2} ms", build / 10.0, cut / 10.0);
+    }
     for which in ["none", "tracks", "vias", "zones", "silk", "parts", "parts+silk", "airwires", "nets", "all"] {
         set(&mut e, which);
         let (s, t, v, ms) = measure(&mut e);
