@@ -158,6 +158,16 @@ pub struct Component {
     /// pin 1 first. Empty or short: the pins without a name are left unlabelled. The wiring and the netlist do not use it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pin_names: Vec<String>,
+    /// Heat resistance (K/W) from the part to the surroundings, for the self-heating run; 0 = a guess from the package.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub theta: f64,
+    /// Temperature coefficient of a resistor (ppm/K) for the self-heating run; 0 = the model's own (`TC=`), or none.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub tc_ppm: f64,
+}
+
+fn is_zero_f64(x: &f64) -> bool {
+    *x == 0.0
 }
 
 pub fn rotate(p: Pt, rot: u8) -> Pt {
@@ -428,6 +438,8 @@ impl Schematic {
             custom: None,
             sim_only: false,
             pin_names: vec![],
+            theta: 0.0,
+            tc_ppm: 0.0,
         });
         self.components.len() - 1
     }
@@ -445,6 +457,8 @@ impl Schematic {
             custom: Some(sym),
             sim_only: false,
             pin_names: vec![],
+            theta: 0.0,
+            tc_ppm: 0.0,
         });
         self.components.len() - 1
     }

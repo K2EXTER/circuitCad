@@ -1444,3 +1444,25 @@ board currents declared widen
     assert_eq!(a_net["too_thin"], false, "{a_net}");
     assert_eq!(a_net["amps"], 3.0, "the declared current is kept");
 }
+
+/// `heat` warms the resistors by their own power: a 100 ohm part with +1000 ppm/K and 100 K/W under 10 V across 200 ohm settles near 25 K up
+/// (a little less, its value rises), and the nodes that move are listed; a part without a coefficient still warms but keeps its value.
+#[test]
+fn heat_warms_a_resistor_by_its_own_power_and_moves_the_nets() {
+    let (a, ok) = run("new\nadd V 10 as=V1\nadd R 100 as=R1\nadd R 100 as=R2\nnet VIN V1.+ R1.1\nnet MID R1.2 R2.1\nnet GND V1.- R2.2\nthermal R1 theta=100 tc=1000\nthermal R2 theta=100\nheat temp=27\n");
+    assert!(ok, "{a:?}");
+    let h = last(&a, "heat");
+    let part = |n: &str| h["parts"].as_array().unwrap().iter().find(|p| p["part"] == n).unwrap_or_else(|| panic!("{n}: {h}"));
+    let (r1, r2) = (part("R1"), part("R2"));
+    let rise = r1["rise_k"].as_f64().unwrap();
+    assert!(rise > 20.0 && rise < 25.0, "{rise}");
+    assert!((r1["rise_k"].as_f64().unwrap() - 100.0 * r1["power_w"].as_f64().unwrap()).abs() < 1e-3);
+    assert!(r1["change_ppm"].as_f64().unwrap() > 20000.0);
+    assert!(r2["change_ppm"].as_f64().unwrap().abs() < 1e-9 && r2["rise_k"].as_f64().unwrap() > 20.0, "{r2}");
+    let mid = h["nodes"].as_array().unwrap().iter().find(|n| n["net"] == "MID").expect("MID moves");
+    assert!(mid["shift_v"].as_f64().unwrap() < 0.0, "{mid}");
+    assert!(h["notes"].as_array().unwrap().iter().any(|n| n.as_str().unwrap().contains("R2")));
+    // a wrong value is refused
+    let (_, ok) = run("new\nadd R 1k as=R1\nthermal R1 theta=-3\n");
+    assert!(!ok);
+}

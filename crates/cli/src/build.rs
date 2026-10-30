@@ -363,6 +363,57 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "pins": n, "names": c.pin_names})))
     }
 
+    /// `thermal REF [theta=K/W] [tc=ppm]`: the heat resistance and the temperature coefficient of a resistor for `heat` (0 = back to the guess).
+    pub fn thermal(&mut self, args: &[String]) -> Res {
+        let usage = "thermal REF [theta=K/W] [tc=ppm/K]   (0 puts a value back to the default: theta from the package, tc from the model)";
+        let (pos, kv) = options(args);
+        let [r] = pos.as_slice() else { return Err(usage.into()) };
+        let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k != "theta" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "theta" { " (zero or more)" } else { "" }))).transpose();
+        let (theta, tc) = (num("theta")?, num("tc")?);
+        if theta.is_none() && tc.is_none() {
+            return Err(usage.into());
+        }
+        let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        if let Some(x) = theta {
+            c.theta = x;
+        }
+        if let Some(x) = tc {
+            c.tc_ppm = x;
+        }
+        Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm})))
+    }
+
+    /// `heat [temp=27] [top=10]`: the DC point with the resistors warmed by their own power (`sim_core::self_heat`): per part the power,
+    /// the rise, the temperature and the change of its value, and the nodes that move because of it.
+    pub fn heat(&mut self, args: &[String]) -> Res {
+        let gate = self.erc_gate()?;
+        let (_, kv) = options(args);
+        let num = |k: &str, d: f64| opt(&kv, k).map_or(Ok(d), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("{k}={s} is not a number")));
+        let (temp, top) = (num("temp", 27.0)?, num("top", 10.0)? as usize);
+        let c = self.circuit()?;
+        let heaters = sim_core::heaters_from_schematic(&self.sch, &c);
+        let r = sim_core::self_heat(&c, &heaters, temp).map_err(|e| dc_fail(&c, e))?;
+        self.last_dc = Some(r.warm.clone());
+        let mut parts: Vec<&sim_core::HeatedPart> = r.parts.iter().filter(|p| p.power > 1e-9).collect();
+        parts.sort_by(|a, b| b.rise.total_cmp(&a.rise));
+        let rows: Vec<Value> = parts
+            .iter()
+            .take(top)
+            .map(|p| json!({"part": p.name, "power_w": p.power, "rise_k": p.rise, "temp_c": p.temp_c, "change_ppm": p.change * 1e6, "theta_k_per_w": p.theta, "tc_ppm_per_k": p.tc1 * 1e6}))
+            .collect();
+        let mut moved: Vec<(String, f64, f64)> = r.warm.voltages.iter().filter(|(n, _)| !n.contains('.')).filter_map(|(n, v)| r.cold.voltage(n).map(|c0| (n.clone(), c0, *v))).filter(|(_, a, b)| (a - b).abs() > 1e-12).collect();
+        moved.sort_by(|a, b| (b.2 - b.1).abs().total_cmp(&(a.2 - a.1).abs()));
+        let nodes: Vec<Value> = moved.iter().take(top).map(|(n, a, b)| json!({"net": n, "cold_v": a, "warm_v": b, "shift_v": b - a})).collect();
+        let mut notes = vec![];
+        let hot: Vec<&str> = parts.iter().filter(|p| p.tc1 == 0.0 && p.tc2 == 0.0).map(|p| p.name.as_str()).collect();
+        if !hot.is_empty() {
+            notes.push(format!("{} warm up but have no temperature coefficient, so their value does not change (set one: thermal REF tc=PPM): the rise is still real, for the neighbours and the thermal EMF", hot.join(", ")));
+        }
+        notes.push("theta is a guess from the package unless set (thermal REF theta=K/W): it is the heat resistance from the resistor to the air, board copper included".to_string());
+        notes.extend(gate);
+        Ok(obj(json!({"ambient_c": temp, "rounds": r.rounds, "parts": rows, "nodes": nodes, "notes": notes})))
+    }
+
     /// The points of the pins `REF.PIN` stands for (a pin name shared by several pins means all of them).
     fn pin_points(&self, spec: &str) -> Result<Vec<Pt>, String> {
         let (r, p) = spec.split_once('.').ok_or_else(|| format!("'{spec}': write REF.PIN, for example R1.1 or U1.GND"))?;

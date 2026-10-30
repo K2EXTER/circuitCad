@@ -66,6 +66,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         frequency response (needs a source with an AC magnitude, e.g. value V1 \"0 AC 1\"):
                                         gain and phase per decade, -3 dB frequency, phase margin
   sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or sweep REF list=1,2,5)
+  heat [temp=27] [top=10]               the DC point with every resistor warmed by its own power (a steady state): per part the power, rise, temperature and
+                                        change of its value, and the nets that move because of it. thermal REF theta=K/W tc=ppm sets a part's heat resistance / coefficient
   sens probe=V(out) [step=1] [parts=R1,R2 | kinds=R,V,I,C,L] [top=15]
                                         sensitivity: moves each part's value by step % and says how far the probe moves (per_percent,
                                         elasticity), the biggest first; names the parts that decide an accuracy
@@ -233,6 +235,8 @@ impl Session {
             "list" => Ok(self.list()),
             "erc" => self.erc(),
             "coverage" => self.coverage(),
+            "heat" => self.heat(args),
+            "thermal" => self.thermal(args),
             "spice" => Ok(obj(json!({"text": sch_core::to_spice(&self.sch, "ccad")}))),
             "dc" => self.dc(args),
             "tran" => self.tran(args),

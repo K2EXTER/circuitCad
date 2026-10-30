@@ -214,6 +214,9 @@ pub struct SchEditor {
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
     sec_gen: u32,
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
+    /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
+    heat_view: Option<Result<selfheat::HeatView, String>>,
+    heat_ambient: String,
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     sec_mode: u8,
     fault_part: String,
@@ -505,6 +508,8 @@ impl Default for SchEditor {
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,
+            heat_view: None,
+            heat_ambient: "27".into(),
             coverage_cache: None,
             sec_mode: 0,
             fault_part: String::new(),
@@ -619,6 +624,7 @@ mod draw;
 mod interact;
 mod panel;
 mod coverage;
+mod selfheat;
 mod fault;
 mod spec_table;
 mod power_ui;

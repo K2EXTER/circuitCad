@@ -1057,3 +1057,19 @@ fn the_dc_currents_of_the_buck_sample_suggest_what_the_table_lacks() {
     assert!(e.sch.requirements.net_rules.iter().any(|r| r.current > 0.0));
     assert!(design_spec::suggest_from_currents(&e.sch.requirements, &currents).is_empty(), "nothing is left to suggest");
 }
+
+/// The self-heating section: the warm resistors are listed with the hottest first, a coefficient typed for a part moves its value, and
+/// a bad temperature is explained.
+#[test]
+fn the_self_heating_section_lists_the_warm_resistors() {
+    let mut e = editor_with("led.schjson");
+    let v = e.run_self_heat().expect("a DC point");
+    assert!(!v.parts.is_empty() && v.parts.windows(2).all(|w| w[0].rise >= w[1].rise), "{:?}", v.parts);
+    let name = v.parts[0].name.clone();
+    assert!(v.parts[0].rise > 0.0 && v.parts[0].change == 0.0, "no coefficient: it warms but keeps its value");
+    e.sch.components.iter_mut().find(|c| c.refdes == name).unwrap().tc_ppm = 1000.0;
+    let w = e.run_self_heat().unwrap();
+    assert!(w.parts.iter().find(|p| p.name == name).unwrap().change > 0.0);
+    e.heat_ambient = "abc".into();
+    assert!(e.run_self_heat().is_err());
+}
