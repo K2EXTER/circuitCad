@@ -7,6 +7,19 @@ use pcb_core::requirements::FindingKind;
 /// Dark outline under the requirement frames and lines, so they stand out from the copper colours (top red, inner green, bottom blue).
 const HALO: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 200);
 
+/// The ends of a line pushed out by 2 pixels: the dark strip under a line has flat ends, and the round end of the coloured one must not reach past it.
+fn longer(pts: &[Pos2]) -> Vec<Pos2> {
+    let mut v = pts.to_vec();
+    if let [a, b, ..] = pts {
+        v[0] = *a + (*a - *b).normalized() * 2.0;
+    }
+    if let [.., a, b] = pts {
+        let n = v.len();
+        v[n - 1] = *b + (*b - *a).normalized() * 2.0;
+    }
+    v
+}
+
 impl BoardEditor {
     /// The groups as frames (green when the farthest two parts are within the limit, pink when not, a tag with the name and the numbers) and the
     /// distances to keep as a line between the nearest two pads (green when long enough, pink when too short, the distance at the middle).
@@ -51,10 +64,10 @@ impl BoardEditor {
         for b in marks.bypass.iter().filter(|_| self.show_req_lines) {
             let col = if b.ok { good } else if b.waived { accepted } else { bad };
             let (p, q) = (self.to_screen(rect, b.a), self.to_screen(rect, b.b));
-            ribbon::add_chain(&mut mesh, &[p, q], if b.ok { 3.0 } else { 4.5 }, HALO);
+            ribbon::add_flat_chain(&mut mesh, &longer(&[p, q]), if b.ok { 3.0 } else { 4.5 }, HALO);
             ribbon::add_chain(&mut mesh, &[p, q], if b.ok { 1.0 } else { 2.0 }, col);
-            ribbon::add_ring(&mut mesh, q, 4.0, 3.5, HALO);
-            ribbon::add_ring(&mut mesh, q, 4.0, 1.5, col);
+            ribbon::add_ring(&mut mesh, q, 4.0, 3.5, HALO, true);
+            ribbon::add_ring(&mut mesh, q, 4.0, 1.5, col, false);
             ribbon::flush(painter, &mut mesh);
             if !b.ok || self.zoom >= 14.0 {
                 let galley = painter.layout_no_wrap(format!("{}→{} {:.1} mm{}", b.cap, b.ic, b.actual, if b.waived && !b.ok { " (承知)" } else { "" }), egui::FontId::proportional(11.0), Color32::BLACK);
@@ -75,13 +88,13 @@ impl BoardEditor {
             for way in &m.ways {
                 // a way is one strip (the halo first, then the colour), not a line for every piece
                 let pts: Vec<Pos2> = way.iter().map(|p| self.to_screen(rect, *p)).collect();
-                ribbon::add_chain(&mut mesh, &pts, wide + 2.0, HALO);
+                ribbon::add_flat_chain(&mut mesh, &longer(&pts), wide + 2.0, HALO);
                 ribbon::add_chain(&mut mesh, &pts, wide, col);
             }
             if let Some(at) = m.at {
                 let c = self.to_screen(rect, at);
-                ribbon::add_ring(&mut mesh, c, 7.0, 4.0, HALO);
-                ribbon::add_ring(&mut mesh, c, 7.0, 2.0, col);
+                ribbon::add_ring(&mut mesh, c, 7.0, 4.0, HALO, true);
+                ribbon::add_ring(&mut mesh, c, 7.0, 2.0, col, false);
             }
             ribbon::flush(painter, &mut mesh);
             if !m.ok || self.zoom >= 14.0 {
@@ -98,7 +111,7 @@ impl BoardEditor {
         for a in marks.apart.iter().filter(|_| self.show_req_lines) {
             let col = if a.ok { good } else if a.waived { accepted } else { bad };
             let (p, q) = (self.to_screen(rect, a.a), self.to_screen(rect, a.b));
-            ribbon::add_chain(&mut mesh, &[p, q], if a.ok { 3.0 } else { 4.5 }, HALO);
+            ribbon::add_flat_chain(&mut mesh, &longer(&[p, q]), if a.ok { 3.0 } else { 4.5 }, HALO);
             ribbon::add_chain(&mut mesh, &[p, q], if a.ok { 1.0 } else { 2.0 }, col);
             // a one-point chain is a disc
             for e in [p, q] {

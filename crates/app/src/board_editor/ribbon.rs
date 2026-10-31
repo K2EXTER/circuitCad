@@ -357,6 +357,15 @@ fn unit(a: Point, b: Point) -> (f64, f64) {
 
 /// One chain as a strip, `width` pixels wide (at least a pixel), with round caps; `pts` are on the screen.
 pub(super) fn add_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32) {
+    add_strip(mesh, pts, width, col, true);
+}
+
+/// The same with a flat end (a strip that lies under another one, which has the round ends).
+pub(super) fn add_flat_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32) {
+    add_strip(mesh, pts, width, col, false);
+}
+
+fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, round_ends: bool) {
     let mut p: Vec<Pos2> = vec![];
     for &q in pts {
         if p.last().is_none_or(|l| (*l - q).length() > 1e-3) {
@@ -403,7 +412,7 @@ pub(super) fn add_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32)
         prev_row = Some(row);
     }
     // a line that is only a pixel or two wide has an end that no one can tell from a round one
-    if width < ROUND_ENDS_FROM {
+    if !round_ends || width < ROUND_ENDS_FROM {
         return;
     }
     cap(mesh, p[0], -dirs[0], core, outer, col);
@@ -452,11 +461,27 @@ pub(super) fn add_frame(mesh: &mut Mesh, r: Rect, width: f32, col: Color32) {
     add_chain(mesh, &[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], width, col);
 }
 
-/// A circle line `width` pixels wide round `c`, as a closed strip of a few corners (a small ring needs no more than 8 to 12).
-pub(super) fn add_ring(mesh: &mut Mesh, c: Pos2, radius: f32, width: f32, col: Color32) {
-    let n = ((radius.sqrt() * 3.0).ceil() as usize).clamp(8, 32);
-    let pts: Vec<Pos2> = (0..=n).map(|i| c + Vec2::angled(std::f32::consts::TAU * i as f32 / n as f32) * radius).collect();
-    add_chain(mesh, &pts, width, col);
+/// A circle line `width` pixels wide round `c`: a ring of a few corners, two triangles a corner, with no join and no cap. With `fade` its outer
+/// edge fades out over a pixel like the other strips (the ring that lies on the dark halo of another needs none: the halo hides the steps).
+pub(super) fn add_ring(mesh: &mut Mesh, c: Pos2, radius: f32, width: f32, col: Color32, fade: bool) {
+    let n = ((radius.sqrt() * 3.5).ceil() as usize).clamp(8, 32);
+    let half = width.max(1.0) / 2.0;
+    let rows: &[(f32, Color32)] = if fade { &[(radius + half + 0.5, Color32::TRANSPARENT), (radius + half - 0.5, col), (radius - half, col)] } else { &[(radius + half, col), (radius - half, col)] };
+    let base = mesh.vertices.len() as u32;
+    for i in 0..n {
+        let u = Vec2::angled(std::f32::consts::TAU * i as f32 / n as f32);
+        for &(r, k) in rows {
+            mesh.colored_vertex(c + u * r.max(0.0), k);
+        }
+    }
+    let m = rows.len() as u32;
+    for i in 0..n as u32 {
+        let (p, q) = (base + i * m, base + (i + 1) % n as u32 * m);
+        for j in 0..m - 1 {
+            mesh.add_triangle(p + j, p + j + 1, q + j);
+            mesh.add_triangle(p + j + 1, q + j + 1, q + j);
+        }
+    }
 }
 
 /// Hands the mesh to the painter (when there is anything in it) and starts a new one: what is added to the painter afterwards, such as a tag,
@@ -629,7 +654,7 @@ mod tests {
         add_rect(&mut m, Rect::from_min_size(Pos2::ZERO, Vec2::new(40.0, 30.0)), Color32::RED);
         assert_eq!(m.indices.len() / 3, 2);
         let mut m = Mesh::default();
-        add_ring(&mut m, Pos2::new(50.0, 50.0), 7.0, 2.0, Color32::RED);
+        add_ring(&mut m, Pos2::new(50.0, 50.0), 7.0, 2.0, Color32::RED, true);
         assert!(m.indices.len() / 3 < 80, "{}", m.indices.len() / 3);
         assert!(m.indices.iter().all(|&i| (i as usize) < m.vertices.len()));
         let mut m = Mesh::default();

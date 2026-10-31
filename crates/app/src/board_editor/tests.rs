@@ -2625,6 +2625,8 @@ fn part_triangle_breakdown() {
     for (name, f) in [("sheet tints", (|e: &mut BoardEditor| e.show_sheets = false) as fn(&mut BoardEditor)), ("requirement marks", |e| e.show_req_marks = false), ("requirement lines", |e| e.show_req_lines = false)] {
         e.board = board.clone();
         e.vis = base_vis;
+        // the pours are worked out on another thread and may or may not be ready, which would blur a difference this small
+        e.vis.zones = false;
         e.show_sheets = true;
         e.show_req_marks = true;
         e.show_req_lines = true;
