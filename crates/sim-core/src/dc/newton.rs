@@ -142,8 +142,8 @@ impl Compiled {
             }
         }
         REFAC.with(|c| c.set([c.get()[0], c.get()[1] + 1]));
-        let (f, sym) = linalg::factor_sym(n, rows)?;
-        if n >= REFACTOR_MIN_SIZE {
+        let (f, sym) = linalg::factor_planned(n, rows, n >= REFACTOR_MIN_SIZE)?;
+        if let Some(sym) = sym {
             *self.plan.borrow_mut() = Some(std::rc::Rc::new(sym));
         }
         let mut x = b;

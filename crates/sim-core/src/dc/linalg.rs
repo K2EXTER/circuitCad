@@ -93,13 +93,20 @@ impl Symbolic {
 /// Gaussian elimination column by column; the pivot is the sparsest row among those within a
 /// tenth of the largest entry (threshold pivoting), which keeps fill-in small.
 pub(super) fn factor(n: usize, rows: Vec<Vec<(usize, f64)>>) -> Result<Factor, SimError> {
-    factor_sym(n, rows).map(|(f, _)| f)
+    factor_planned(n, rows, false).map(|(f, _)| f)
 }
 
 /// `factor`, and the plan for `refactor`.
-pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(Factor, Symbolic), SimError> {
+#[cfg(test)]
+pub(super) fn factor_sym(n: usize, rows: Vec<Vec<(usize, f64)>>) -> Result<(Factor, Symbolic), SimError> {
+    factor_planned(n, rows, true).map(|(f, sym)| (f, sym.expect("the plan was asked for")))
+}
+
+/// `factor_sym`, with the plan only when `want_plan`: the plan repeats the whole elimination on the pattern, which is wasted when
+/// the caller will never refactor (a small system is always factored from scratch).
+pub(super) fn factor_planned(n: usize, mut rows: Vec<Vec<(usize, f64)>>, want_plan: bool) -> Result<(Factor, Option<Symbolic>), SimError> {
     const THRESHOLD: f64 = 0.1;
-    let orig_pattern: Vec<Vec<usize>> = rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect();
+    let orig_pattern: Vec<Vec<usize>> = if want_plan || n >= ORDER_MIN_SIZE { rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect() } else { vec![] };
     // A big system is eliminated in a minimum-degree order of its unknowns: in the natural order a circuit of a few hundred nodes
     // fills in to fifteen times its entries, and the factorisation is most of the time of a DC solve. A small one keeps the natural
     // order (a latch there is sensitive to the pivots chosen).
@@ -114,7 +121,7 @@ pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(
     } else {
         (vec![], vec![])
     };
-    let pattern: Vec<Vec<usize>> = rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect();
+    let pattern: Vec<Vec<usize>> = if want_plan { rows.iter().map(|r| r.iter().map(|e| e.0).collect()).collect() } else { vec![] };
     // rows that have (or once had) an entry in each column
     let mut col_rows: Vec<Vec<usize>> = vec![vec![]; n];
     for (r, row) in rows.iter().enumerate() {
@@ -187,10 +194,13 @@ pub(super) fn factor_sym(n: usize, mut rows: Vec<Vec<(usize, f64)>>) -> Result<(
         }
         rows[p] = prow;
     }
-    let mut sym = Symbolic::plan(n, pattern, pivot_row.clone());
-    sym.pattern = orig_pattern;
-    sym.perm = perm.clone();
-    sym.pos = pos;
+    let sym = want_plan.then(|| {
+        let mut sym = Symbolic::plan(n, pattern, pivot_row.clone());
+        sym.pattern = orig_pattern;
+        sym.perm = perm.clone();
+        sym.pos = pos;
+        sym
+    });
     Ok((Factor { n, pivot_row, ops, u: rows, perm }, sym))
 }
 
