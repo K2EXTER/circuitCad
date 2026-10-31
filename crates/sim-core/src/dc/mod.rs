@@ -208,8 +208,11 @@ pub(crate) enum Strategy {
 /// rely on a bistable or oscillating circuit reporting "no operating point" and starting from zero.
 pub(crate) const DC_ORDER: [Strategy; 4] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::GminLong];
 
-/// `dc_op` (the DC panel) also tries `Widen`, so that a latch settles into one of its stable states.
-pub(crate) const DC_ORDER_WIDEN: [Strategy; 5] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::Widen, Strategy::GminLong];
+/// `dc_op` (the DC panel) also tries `Widen`, so that a latch settles into one of its stable states. It comes right after `Direct`: it
+/// solved all 67 bundled examples in 0.22 s where gmin stepping took 0.7 s (and failed two), with the same answers
+/// (`tests_bench::bench_dc_strategies_all`). `DC_ORDER` (a transient, AC or noise run) has no `Widen`: an oscillator or latch must be
+/// allowed to report "no operating point" there.
+pub(crate) const DC_ORDER_WIDEN: [Strategy; 5] = [Strategy::Direct, Strategy::Widen, Strategy::Gmin, Strategy::Source, Strategy::GminLong];
 
 impl Compiled {
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
@@ -349,7 +352,17 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
     newton::LIMITED_USED.with(|c| c.set(false));
     newton::STUCK.with(|s| s.set(None));
     let mut last = SimError::NoConvergence;
-    for &which in order {
+    // The guesses of the user (`nodeset`) are only honoured by gmin stepping, which pulls the nodes to them: a latch settles into the state
+    // that was asked for. Switch widening ignores them, so with guesses it keeps its old place after source stepping.
+    let mut order = order.to_vec();
+    if !cm.seed.is_empty()
+        && let Some(w) = order.iter().position(|s| *s == Strategy::Widen)
+    {
+        order.remove(w);
+        let after = order.iter().position(|s| *s == Strategy::Source).map_or(order.len(), |i| i + 1);
+        order.insert(after, Strategy::Widen);
+    }
+    for &which in &order {
         // a circuit with `nodesets` is solved with gmin stepping (which pulls the nodes to the seeds): a direct solve would ignore them
         if !cm.seed.is_empty() && matches!(which, Strategy::Direct) {
             continue;
