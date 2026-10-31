@@ -81,7 +81,7 @@ impl SchEditor {
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
         let ghost = self.ac.as_ref().and_then(|v| v.ghost.clone());
-        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: true });
+        self.ac = Some(AcView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), ghost, signature: self.signature(), loop_run: true, pz_run: false });
         self.wave_mode = WaveMode::Ac;
     }
 
@@ -100,6 +100,7 @@ impl SchEditor {
                 self.loop_pick = !self.loop_pick;
                 self.noise_pick = self.loop_pick;
                 self.z_pick = false;
+                self.pz_pick = false;
                 self.pick_probe = false;
                 self.pick_hover = None;
                 if self.loop_pick {

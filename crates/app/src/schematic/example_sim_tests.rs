@@ -1161,6 +1161,22 @@ fn worst_case_spec_uses_the_variation_tolerances_and_the_cache() {
     assert!(e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "").is_err());
 }
 
+/// The RLC low-pass sample: one pair of complex poles at 1/(2 pi sqrt(LC)) with Q = sqrt(L/C)/R, no zero, found from the AC sweep.
+#[test]
+fn rlc_poles_sample_gives_the_resonance_and_q_of_the_formulas() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "rlc_poles.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let tf = sim_core::transfer_function(&c, "OUT", Some("IN"), &AcSettings { fstart: 10.0, fstop: 1e6, sweep: AcSweep::Decade(20) }, 6, 0.02).unwrap();
+    assert_eq!(tf.pz.poles.len(), 1);
+    assert!(tf.pz.zeros.is_empty());
+    let (l, cap, r) = (1e-3f64, 1e-6f64, 10.0f64);
+    let f0 = 1.0 / (2.0 * std::f64::consts::PI * (l * cap).sqrt());
+    let q = (l / cap).sqrt() / r;
+    assert!((tf.pz.poles[0].freq_hz() / f0 - 1.0).abs() < 0.01, "{:?} vs {f0}", tf.pz.poles);
+    assert!((tf.pz.poles[0].q().unwrap() / q - 1.0).abs() < 0.02, "{:?} vs {q}", tf.pz.poles);
+    assert!((tf.pz.dc_gain - 1.0).abs() < 1e-3);
+}
+
 /// The series regulator with a 10 uF capacitor and a 100 ohm load on its output: the output stage's resistance and the capacitor make a
 /// second pole inside the loop, and the phase margin falls from 90 degrees to about 10.
 #[test]

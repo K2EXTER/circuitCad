@@ -266,6 +266,37 @@ impl Session {
         })))
     }
 
+    /// `pz OUT F0 F1 [in=NET] [ppd=20] [poles=6]`: poles and zeros of V(OUT)/V(in) by fitting a rational function to the AC response.
+    pub fn pz(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        if pos.len() < 3 {
+            return Err("pz OUT FSTART FSTOP [in=NET] [ppd=20] [poles=6]   (OUT: the output net; in=: the input net the AC source drives, else V(OUT) alone is used and the source should be 1 V AC; cover the whole range where the response bends)".into());
+        }
+        let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("'{s}' is not a positive frequency (write 10, 1k, 100k ...)"));
+        let (f0, f1) = (num(&pos[1])?, num(&pos[2])?);
+        let ppd: usize = opt(&kv, "ppd").and_then(|s| s.parse().ok()).unwrap_or(20);
+        let max_poles: usize = opt(&kv, "poles").and_then(|s| s.parse().ok()).unwrap_or(6);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let tf = sim_core::transfer_function(&c, pos[0].trim(), opt(&kv, "in").map(|s| s.trim()), &sim_core::AcSettings { fstart: f0, fstop: f1, sweep: sim_core::AcSweep::Decade(ppd) }, max_poles, 0.02).map_err(|e| e.to_string())?;
+        let root = |r: &sim_core::Root| json!({"hz": r.freq_hz(), "real_rad_s": r.re, "imag_rad_s": r.im, "complex_pair": r.pair, "q": r.q(), "damping": r.damping(), "right_half_plane": r.right_half()});
+        let pz = &tf.pz;
+        let unstable = pz.poles.iter().any(|p| p.right_half());
+        let verdict = if unstable {
+            "a pole is in the right half plane (the circuit is unstable by itself)"
+        } else if pz.poles.iter().any(|p| p.damping().is_some_and(|d| d < 0.3)) {
+            "stable, but a complex pole pair has low damping (the response rings)"
+        } else {
+            "all poles are in the left half plane (stable)"
+        };
+        Ok(obj(json!({
+            "circuit_ok": gate.is_none(), "order": pz.order(), "dc_gain": pz.dc_gain, "dc_gain_db": 20.0 * pz.dc_gain.abs().max(1e-15).log10(),
+            "poles": pz.poles.iter().map(root).collect::<Vec<_>>(), "zeros": pz.zeros.iter().map(root).collect::<Vec<_>>(),
+            "fit_error_percent": pz.error * 100.0, "fit_ok": pz.error < 0.02, "verdict": verdict,
+            "warnings": tf.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()
+        })))
+    }
+
     /// `zout NET F0 F1 [ppd=10] [ref=NET] [remove=RL,V1]`: the impedance seen from a net (every source off, a 1 A test current).
     pub fn zout(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

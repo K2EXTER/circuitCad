@@ -171,3 +171,6 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 
 ## 熱の結合の保存(2026-10-31)
 部品どうしの熱抵抗 `A:B:K/W` は `Schematic.thermal_links`(`sch-core`。空なら書かない。シート全体で1つ。`set_thermal_link` は順序・大文字小文字を問わず置き換え、0 以下で消す)に持つ。画面の「結合」の欄(`htran_links`)は、欄を離れたとき(`lost_focus`、読める時だけ)と「温度の変化を計算」で `store_links` が回路図へ書く。回路図側が欄の元(`htran_links_seen`)と違う(ファイルを開いた・元に戻した)ときは、`panel_heat_tran` の先頭で欄を回路図に合わせる。CLI は `thermal link=Q1:RS1:150`(0 で消す)で保存し、`heattran` は `couple=` を省くと保存分を使う。
+
+## 極と零(schematic/polezero.rs、2026-10-31)
+解析タブの「極と零 (伝達関数)」。出力・入力のネット(「回路図で選ぶ」はクリック=出力、Shift+クリック=入力。`pz_pick` は `noise_pick` を共用して `pick_noise_node` から `pick_pz_node` へ)。`run_pz` が `sim_core::transfer_function` を呼び、`AcView`(`pz_run: true`)に「H 回路の応答」と「H 当てはめ」を入れて AC のボード線図で重ねる(自動で再計算するときは `run_pz` をやり直す)。パネルの下に `PzSummary`(極・零の一覧、複素数の対は Q と減衰、右半面は赤、当てはめの誤差が 2% 以上なら警告、安定の一言)。起動引数 `--pz 出力 入力|- [f0 f1 ppd]`。

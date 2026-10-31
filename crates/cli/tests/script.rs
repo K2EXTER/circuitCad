@@ -855,6 +855,37 @@ loopgain rf 1 10Meg from=GND
 }
 
 #[test]
+fn pz_finds_the_poles_of_two_rc_stages_and_a_resonance() {
+    // two buffered-free RC stages: poles are not the plain RC corners (the second stage loads the first)
+    let (a, ok) = run("new
+add V as=V1
+value V1 \"0 AC 1\"
+add R 1k as=R1
+add C 100n as=C1
+add R 10k as=R2
+add C 1n as=C2
+net IN V1.+ R1.1
+net N1 R1.2 C1.1 R2.1
+net OUT R2.2 C2.1
+net GND V1.- C1.2 C2.2
+pz out 10 10Meg in=in
+");
+    assert!(ok, "{a:?}");
+    let r = a.last().unwrap();
+    assert_eq!(r["order"], 2, "{r}");
+    assert!(r["fit_ok"].as_bool().unwrap(), "{r}");
+    let poles = r["poles"].as_array().unwrap();
+    assert_eq!(poles.len(), 2);
+    // product of the poles (in rad/s) = 1/(R1 C1 R2 C2), the sum = (R1C1 + R2C2 + R1C2)/(R1C1 R2C2)
+    let p: Vec<f64> = poles.iter().map(|p| p["real_rad_s"].as_f64().unwrap()).collect();
+    let prod = p[0] * p[1];
+    let exact = 1.0 / (1e3 * 100e-9 * 1e4 * 1e-9);
+    assert!((prod / exact - 1.0).abs() < 1e-3, "{prod} {exact}");
+    assert!((r["dc_gain"].as_f64().unwrap() - 1.0).abs() < 1e-3);
+    assert!(r["zeros"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

@@ -162,6 +162,11 @@ pub struct SchEditor {
     z_remove: String,
     /// Waiting for a click on the canvas to choose the net of the impedance analysis (shares `noise_pick` for the canvas).
     z_pick: bool,
+    /// The poles-and-zeros box: output net, input net, waiting for a click (shares `noise_pick`), and the last result for the list.
+    pz_out: String,
+    pz_in: String,
+    pz_pick: bool,
+    pz: Option<polezero::PzSummary>,
     /// The loop gain box: the part to cut, the net on its output side, and waiting for a click to choose them (shares `noise_pick`).
     loop_part: String,
     loop_from: String,
@@ -368,6 +373,8 @@ struct AcView {
     signature: String,
     /// The curve is a loop gain (`run_loop`), not an AC sweep: a recompute redoes that.
     loop_run: bool,
+    /// The curves are a transfer function and its fit (`run_pz`): a recompute redoes that.
+    pz_run: bool,
 }
 
 /// A finished transient run with the waveform viewer state.
@@ -502,6 +509,10 @@ impl Default for SchEditor {
             z_ref: String::new(),
             z_remove: String::new(),
             z_pick: false,
+            pz_out: String::new(),
+            pz_in: String::new(),
+            pz_pick: false,
+            pz: None,
             loop_part: String::new(),
             loop_from: String::new(),
             loop_pick: false,
@@ -650,6 +661,7 @@ mod lessons;
 mod noise;
 mod loopgain;
 mod impedance;
+mod polezero;
 mod variation;
 mod tran;
 mod dc;

@@ -94,6 +94,7 @@ impl SchEditor {
                 self.z_pick = !self.z_pick;
                 self.noise_pick = self.z_pick;
                 self.loop_pick = false;
+                self.pz_pick = false;
                 self.pick_probe = false;
                 self.pick_hover = None;
                 if self.z_pick {

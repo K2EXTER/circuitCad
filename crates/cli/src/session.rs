@@ -248,6 +248,7 @@ impl Session {
             "noise" => self.noise(args),
             "zout" => self.zout(args),
             "loopgain" => self.loopgain(args),
+            "pz" => self.pz(args),
             "worst" => self.worst(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

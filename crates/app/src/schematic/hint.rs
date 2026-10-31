@@ -11,6 +11,9 @@ impl SchEditor {
         if self.loop_pick {
             return "ループを切りたい部品の本体をクリックします (帰還の抵抗が一番かんたん)。ピンや配線をクリックすると、出力側のネットになります。Esc で中止".into();
         }
+        if self.pz_pick {
+            return "伝達関数の出力にしたいネットをクリックします。Shift+クリックで入力のネット、Esc で中止".into();
+        }
         if self.z_pick {
             return "インピーダンスを見たいネットをクリックします。Shift+クリックで基準のネット、Esc で中止".into();
         }

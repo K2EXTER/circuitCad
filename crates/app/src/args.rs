@@ -177,6 +177,16 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.analyze_impedance();
             }
         }
+        if let Some(i) = args.iter().position(|a| a == "--pz")
+            && let Some(out) = args.get(i + 1) {
+                // --pz <output net> <input net or -> [f0 f1 ppd]  (poles and zeros; uses the given frequency range, or the defaults)
+                if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 3), args.get(i + 4), args.get(i + 5))
+                    && !f0.starts_with("--") {
+                    app.sch.set_ac_settings(f0, f1, p);
+                }
+                app.sch.set_pz_settings(out, args.get(i + 2).filter(|a| !a.starts_with("--") && *a != "-").map_or("", |a| a.as_str()));
+                app.sch.analyze_pz();
+            }
         if let Some(i) = args.iter().position(|a| a == "--mc")
             && let Some(node) = args.get(i + 1) {
                 // --mc <node> [ac]  (the variation analysis; AC measures the -3 dB frequency and uses the --ac range)

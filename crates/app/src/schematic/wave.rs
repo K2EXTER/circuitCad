@@ -77,6 +77,8 @@ impl SchEditor {
                 let old = self.ac.take();
                 if old.as_ref().is_some_and(|o| o.loop_run) {
                     self.run_loop();
+                } else if old.as_ref().is_some_and(|o| o.pz_run) {
+                    self.run_pz();
                 } else {
                     self.run_ac();
                 }

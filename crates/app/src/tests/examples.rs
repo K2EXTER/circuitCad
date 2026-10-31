@@ -495,6 +495,40 @@ fn write_loop_cap_load_example() {
     std::fs::write(root.join("loop_cap_load.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/rlc_poles.schjson: a 10 ohm / 1 mH / 1 uF low-pass (AC source 1 V) whose pair of complex poles is at
+/// 5.03 kHz with Q = 3.16, for the poles-and-zeros section: `cargo test -p app write_rlc_poles_example -- --ignored`
+#[test]
+#[ignore]
+fn write_rlc_poles_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "0 AC 1".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    let r = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[r].value = "10".into();
+    label(&mut s, r, "1", "IN");
+    label(&mut s, r, "2", "N1");
+    let l = s.add(Kind::Inductor, (36, 0), 1);
+    s.components[l].value = "1m".into();
+    label(&mut s, l, "1", "N1");
+    label(&mut s, l, "2", "OUT");
+    let c = s.add(Kind::Capacitor, (52, 0), 1);
+    s.components[c].value = "1u".into();
+    label(&mut s, c, "1", "OUT");
+    label(&mut s, c, "2", "GND");
+    std::fs::write(root.join("rlc_poles.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

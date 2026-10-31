@@ -32,6 +32,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標・整定時間(`settling_times`。CLI の `tran settle=`) / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
 - `worstcase.rs` 最悪ケース解析(全部品を許容差の端に置いた角を実際に解く。CLI `worst`、画面はばらつき解析の窓の「最悪ケース」。スペックの合否には `SpecKind::*Worst`)
 - `loopgain.rs` ループゲイン(ループを1か所切って電圧・電流を1回ずつ注入する Middlebrook 法。位相余裕。CLI `loopgain`、画面は解析タブの「ループゲイン」)
+- `polezero.rs` 極と零(AC応答に分数の式を当てはめて根を求める。CLI `pz`、画面は解析タブの「極と零」)
 - `impedance.rs` ネットから見たインピーダンス(電源をすべて切り 1 A の試験電流を入れる。山・谷の検出。CLI `zout`、画面は解析タブの「インピーダンス」)
 - `ratings.rs` 定格チェック / `ripple.rs` 電解コンデンサのリップルと寿命
 - `fault.rs` 故障シミュレーション / `chain.rs` 連鎖故障
