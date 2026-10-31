@@ -131,3 +131,33 @@ fn bench_dc_strategies() {
         }
     }
 }
+
+/// Every bundled example, solved by each strategy alone: how many each one solves and the time it spends (failures included).
+#[test]
+#[ignore]
+fn bench_dc_strategies_all() {
+    use crate::dc::{Strategy, dc_op_with};
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut circuits = vec![];
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.extension().is_some_and(|x| x == "schjson")
+            && let Ok(sch) = serde_json::from_str::<sch_core::Schematic>(&std::fs::read_to_string(&p).unwrap())
+            && let Ok(c) = from_schematic(&sch)
+        {
+            circuits.push((p.file_stem().unwrap().to_string_lossy().into_owned(), c));
+        }
+    }
+    println!("BENCH dc strategies over {} examples", circuits.len());
+    for (label, which) in [("direct", Strategy::Direct), ("gmin", Strategy::Gmin), ("gmin long", Strategy::GminLong), ("source", Strategy::Source), ("widen", Strategy::Widen)] {
+        let t = Instant::now();
+        let (mut solved, mut failed) = (0, vec![]);
+        for (name, c) in &circuits {
+            match dc_op_with(c, &[which]) {
+                Ok(_) => solved += 1,
+                Err(_) => failed.push(name.as_str()),
+            }
+        }
+        println!("BENCH   {label}: solved {solved}, {:.2} s, failed {failed:?}", t.elapsed().as_secs_f64());
+    }
+}
