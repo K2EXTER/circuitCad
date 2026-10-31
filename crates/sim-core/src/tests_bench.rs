@@ -1,5 +1,5 @@
-//! Timings of the analyses that repeat independent work (candidates for running on several threads). Run with
-//! `cargo test -p sim-core bench_ -- --ignored --nocapture --test-threads=1` and read the `BENCH` lines.
+//! Timings of the analyses, one `BENCH` line each (an `Err` shows in the line). Run, in release, with
+//! `cargo test --release -p sim-core tests_bench -- --ignored --nocapture --test-threads=1`.
 
 use crate::fault::applicable;
 use crate::*;
@@ -12,11 +12,10 @@ fn example(name: &str) -> Circuit {
     from_schematic(&sch).unwrap()
 }
 
-fn timed<T: std::fmt::Debug>(label: &str, f: impl FnOnce() -> T) -> T {
+fn timed<T: std::fmt::Debug>(label: &str, f: impl FnOnce() -> T) {
     let t = Instant::now();
     let r = f();
     println!("BENCH {label}: {:.3} s  -> {r:?}", t.elapsed().as_secs_f64());
-    r
 }
 
 #[test]
@@ -39,8 +38,8 @@ fn bench_fault_scan() {
     for name in ["series_regulator", "power_supply", "regulator_78xx", "emitter_follower"] {
         let c = example(name);
         let parts = breakable(&c);
-        let n = timed(&format!("fault scan DC, {name}, {} parts", parts.len()), || {
-            let mut n = 0;
+        let mut n = 0;
+        timed(&format!("fault scan DC, {name}, {} parts", parts.len()), || {
             for p in &parts {
                 let e = c.elements.iter().find(|e| e.name() == p).unwrap();
                 for f in applicable(e) {
@@ -83,19 +82,22 @@ fn bench_sweeps() {
 #[test]
 #[ignore]
 fn bench_transients() {
-    for (name, tstop, tstep) in [("led_blinker", 5.0, 2e-3), ("ne555_blinker", 0.05, 5e-6), ("buck_converter", 2e-3, 2e-7)] {
+    for (name, tstop, tstep, uic) in [("led_blinker", 5.0, 2e-3, false), ("logic_blinker", 2.0, 1e-3, true), ("ne555_blinker", 0.05, 5e-6, false), ("buck_converter", 2e-3, 2e-7, false), ("cmos_inverter", 1e-4, 1e-7, true)] {
         let c = example(name);
-        timed(&format!("transient {name}, tstop {tstop}"), || transient(&c, &TranSettings { tstop, tstep, uic: false }).map(|r| r.time.len()));
+        timed(&format!("transient {name}, tstop {tstop}"), || transient(&c, &TranSettings { tstop, tstep, uic }).map(|r| r.time.len()));
     }
 }
 
 /// The fault scan of the 41-part demo: 118 faults took 361 s one after the other when every fault solved the healthy circuit again.
+/// Four minutes, so it runs only with `BENCH_BIG=1`; the `dc_op` line (about 2 s) is the cost of one fault.
 #[test]
 #[ignore]
 fn bench_fault_scan_big() {
     let c = example("mixed_signal");
-    let base = timed("dc_op mixed_signal (the healthy circuit)", || dc_op(&c).map(|r| r.iterations));
-    let _ = base;
+    timed("dc_op mixed_signal (the healthy circuit)", || dc_op(&c).map(|r| r.iterations));
+    if std::env::var_os("BENCH_BIG").is_none() {
+        return;
+    }
     let baseline = dc_op(&c).unwrap();
     let parts = breakable(&c);
     let mut n = 0;

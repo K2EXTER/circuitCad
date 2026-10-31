@@ -128,4 +128,6 @@ mod tests_tran;
 #[cfg(test)]
 mod tests_variation;
 #[cfg(test)]
+mod tests_bench;
+#[cfg(test)]
 mod tests_perf;
