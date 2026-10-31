@@ -284,7 +284,7 @@ impl SchEditor {
             painter.text(
                 banner.left_center() + Vec2::new(10.0, 0.0),
                 Align2::LEFT_CENTER,
-                if self.z_pick { "インピーダンスを見たいネットをクリック (Shift+クリック: 基準のネット / Esc: 中止)" } else { "ノイズを測りたいノードをクリック (Shift+クリック: 基準ノード / Esc: 中止)" },
+                if self.loop_pick { "ループを切る部品の本体をクリック (ピン・配線: 出力側のネット / Esc: 中止)" } else if self.z_pick { "インピーダンスを見たいネットをクリック (Shift+クリック: 基準のネット / Esc: 中止)" } else { "ノイズを測りたいノードをクリック (Shift+クリック: 基準ノード / Esc: 中止)" },
                 FontId::proportional(14.0),
                 Color32::WHITE,
             );

@@ -162,6 +162,10 @@ pub struct SchEditor {
     z_remove: String,
     /// Waiting for a click on the canvas to choose the net of the impedance analysis (shares `noise_pick` for the canvas).
     z_pick: bool,
+    /// The loop gain box: the part to cut, the net on its output side, and waiting for a click to choose them (shares `noise_pick`).
+    loop_part: String,
+    loop_from: String,
+    loop_pick: bool,
     /// Waiting for a click on the canvas to choose the noise output node.
     /// The voltage-source form for the selected source: (component index, the value text it was
     /// read from, the form). Read again whenever the text changes from elsewhere.
@@ -360,6 +364,8 @@ struct AcView {
     ghost: Option<Ghost>,
     /// The schematic this result was computed from.
     signature: String,
+    /// The curve is a loop gain (`run_loop`), not an AC sweep: a recompute redoes that.
+    loop_run: bool,
 }
 
 /// A finished transient run with the waveform viewer state.
@@ -494,6 +500,9 @@ impl Default for SchEditor {
             z_ref: String::new(),
             z_remove: String::new(),
             z_pick: false,
+            loop_part: String::new(),
+            loop_from: String::new(),
+            loop_pick: false,
             src_form: None,
             sweep: None,
             temp_c: "27".into(),
@@ -636,6 +645,7 @@ mod sweep;
 mod challenge;
 mod lessons;
 mod noise;
+mod loopgain;
 mod impedance;
 mod variation;
 mod tran;

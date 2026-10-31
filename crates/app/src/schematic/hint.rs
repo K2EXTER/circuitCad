@@ -8,6 +8,9 @@ impl SchEditor {
         if self.noise_pick && self.pick_probe {
             return "ピンや配線をクリックで電圧、部品の本体をクリックで電流の波形を追加します (Shift+ピンでも電流)。続けて何か所でも追加できます。Esc か右クリックで終了".into();
         }
+        if self.loop_pick {
+            return "ループを切りたい部品の本体をクリックします (帰還の抵抗が一番かんたん)。ピンや配線をクリックすると、出力側のネットになります。Esc で中止".into();
+        }
         if self.z_pick {
             return "インピーダンスを見たいネットをクリックします。Shift+クリックで基準のネット、Esc で中止".into();
         }

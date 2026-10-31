@@ -479,6 +479,22 @@ fn write_amp_clipping_example() {
     std::fs::write(root.join("amp_clipping.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/loop_cap_load.schjson: `series_regulator` with C5 = 10 uF on VOUT and R2 = 100 ohm as the load, a regulator whose
+/// feedback loop has too little phase margin: `cargo test -p app write_loop_cap_load_example -- --ignored`
+#[test]
+#[ignore]
+fn write_loop_cap_load_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join("series_regulator.schjson")).unwrap()).unwrap();
+    s.components.iter_mut().find(|c| c.refdes == "R2").unwrap().value = "100".into();
+    let c = s.add(Kind::Capacitor, (60, 40), 1);
+    s.components[c].value = "10u".into();
+    let (p1, p2) = (s.components[c].pins()[0].1, s.components[c].pins()[1].1);
+    s.labels.push(sch_core::Label { pos: p1, text: "VOUT".into() });
+    s.labels.push(sch_core::Label { pos: p2, text: "GND".into() });
+    std::fs::write(root.join("loop_cap_load.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

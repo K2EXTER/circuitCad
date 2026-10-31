@@ -823,6 +823,38 @@ thermal RS2 theta=100 cth=0.1
 }
 
 #[test]
+fn loopgain_of_an_opamp_amplifier_is_large_at_dc_and_stable() {
+    let head = "new
+add V 5 as=V1
+add V 0.1 as=VIN
+add LM358 as=U1
+add R 10k as=RF
+add R 1k as=RG
+net VCC V1.+ U1.V+
+net IN VIN.+ U1.IN+
+net FB U1.IN- RF.1 RG.1
+net OUT U1.OUT RF.2
+net GND V1.- VIN.- RG.2 U1.V-
+erc
+";
+    let (a, ok) = run(&format!("{head}loopgain rf 1 10Meg from=out
+loopgain rf 1 10Meg
+loopgain rf 1 10Meg from=GND
+"));
+    assert!(!ok, "the last one is wrong");
+    let rows: Vec<&Value> = a.iter().filter(|v| v.get("cut_part").is_some()).collect();
+    assert_eq!(rows.len(), 2, "{a:?}");
+    for r in &rows {
+        // 100 dB op-amp / 11: about 79 dB; a single pole keeps the phase margin large
+        assert!((r["dc_gain_db"].as_f64().unwrap() - 79.0).abs() < 3.0, "{r}");
+        assert!(r["phase_margin_deg"].as_f64().unwrap() > 60.0, "{r}");
+        assert_eq!(r["signal_goes_from"], "OUT", "{r}");
+    }
+    assert!((rows[0]["dc_gain_db"].as_f64().unwrap() - rows[1]["dc_gain_db"].as_f64().unwrap()).abs() < 1e-6, "auto finds the same direction");
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("from= must be one of them"));
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

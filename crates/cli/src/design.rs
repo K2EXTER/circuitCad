@@ -208,6 +208,64 @@ impl Session {
         })))
     }
 
+    /// `loopgain PART F0 F1 [ppd=10] [from=NET]`: the loop gain of a feedback circuit, cutting the loop at a resistor, capacitor or coil.
+    pub fn loopgain(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        if pos.len() < 3 {
+            return Err("loopgain PART FSTART FSTOP [ppd=10] [from=NET]   (PART: a resistor, capacitor or coil in the feedback loop, the feedback resistor is the easiest; from= names the net on its OUTPUT side so the direction is known, else both are tried)".into());
+        }
+        let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("'{s}' is not a positive frequency (write 10, 1k, 100k ...)"));
+        let (f0, f1) = (num(&pos[1])?, num(&pos[2])?);
+        let ppd: usize = opt(&kv, "ppd").and_then(|s| s.parse().ok()).unwrap_or(10);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        // from=NET: the net on the output side picks the direction
+        let dir = match opt(&kv, "from") {
+            None => sim_core::BreakDirection::Auto,
+            Some(net) => {
+                let e = c.elements.iter().find(|e| e.name().eq_ignore_ascii_case(pos[0].trim())).ok_or_else(|| format!("no part {}", pos[0]))?;
+                let (a, b) = match e {
+                    sim_core::Element::Resistor { a, b, .. } | sim_core::Element::Capacitor { a, b, .. } | sim_core::Element::Inductor { a, b, .. } => (*a, *b),
+                    _ => return Err(format!("{} cannot be cut (use a resistor, capacitor or coil in the loop)", pos[0])),
+                };
+                if c.names[a].eq_ignore_ascii_case(net.trim()) {
+                    sim_core::BreakDirection::AToB
+                } else if c.names[b].eq_ignore_ascii_case(net.trim()) {
+                    sim_core::BreakDirection::BToA
+                } else {
+                    return Err(format!("from={net}: {} is between {} and {}, so from= must be one of them", pos[0], c.names[a], c.names[b]));
+                }
+            }
+        };
+        let r = sim_core::loop_gain(&c, &pos[0], dir, &sim_core::AcSettings { fstart: f0, fstop: f1, sweep: sim_core::AcSweep::Decade(ppd) }).map_err(|e| e.to_string())?;
+        let (db, ph) = (r.db(), r.phase_deg());
+        let at = |f: f64| {
+            let i = r.freq.iter().enumerate().min_by(|a, b| (a.1 / f).ln().abs().total_cmp(&(b.1 / f).ln().abs())).map(|(i, _)| i).unwrap_or(0);
+            json!({"hz": round6(r.freq[i]), "db": db[i], "phase_deg": ph[i]})
+        };
+        let mut decades = vec![];
+        let mut f = f0;
+        while f <= f1 * 1.0001 {
+            decades.push(at(f));
+            f *= 10.0;
+        }
+        let m = sim_core::stability_margins(&r.freq, &db, &ph);
+        let verdict = match m.as_ref().and_then(|m| m.phase_margin.filter(|_| m.gain_crossover.is_some())) {
+            Some(pm) if pm >= 45.0 => "stable with room (phase margin 45 degrees or more)",
+            Some(pm) if pm >= 30.0 => "stable but ringing (phase margin 30 to 45 degrees)",
+            Some(pm) if pm > 0.0 => "barely stable (phase margin under 30 degrees)",
+            Some(_) => "unstable (phase margin below zero)",
+            None => "the gain never crosses 0 dB in this range (widen the range, or the loop gain is below 1 everywhere)",
+        };
+        Ok(obj(json!({
+            "circuit_ok": gate.is_none(), "cut_part": r.element, "signal_goes_from": r.from_net, "signal_goes_to": r.to_net, "points": r.freq.len(),
+            "per_decade": decades, "dc_gain_db": db[0],
+            "gain_crossover_hz": m.as_ref().and_then(|m| m.gain_crossover), "phase_margin_deg": m.as_ref().and_then(|m| m.phase_margin.filter(|_| m.gain_crossover.is_some())),
+            "phase_crossover_hz": m.as_ref().and_then(|m| m.phase_crossover), "gain_margin_db": m.as_ref().and_then(|m| m.gain_margin.filter(|_| m.phase_crossover.is_some())),
+            "verdict": verdict, "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()
+        })))
+    }
+
     /// `zout NET F0 F1 [ppd=10] [ref=NET] [remove=RL,V1]`: the impedance seen from a net (every source off, a 1 A test current).
     pub fn zout(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

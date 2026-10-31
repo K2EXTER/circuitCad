@@ -75,7 +75,11 @@ impl SchEditor {
             }
             WaveMode::Ac if self.ac.is_some() => {
                 let old = self.ac.take();
-                self.run_ac();
+                if old.as_ref().is_some_and(|o| o.loop_run) {
+                    self.run_loop();
+                } else {
+                    self.run_ac();
+                }
                 if let (Some(o), Some(n)) = (old, self.ac.as_mut())
                     && o.outcome.is_ok() {
                         if let Err(msgs) = &n.outcome {

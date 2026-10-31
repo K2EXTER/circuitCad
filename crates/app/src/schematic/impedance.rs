@@ -93,6 +93,7 @@ impl SchEditor {
             if ui.selectable_label(self.z_pick, label).on_hover_text("押してから回路図のピンや配線をクリックすると、そのネットを見て、すぐ解析します。\nShift+クリックで基準のネット").clicked() {
                 self.z_pick = !self.z_pick;
                 self.noise_pick = self.z_pick;
+                self.loop_pick = false;
                 self.pick_probe = false;
                 self.pick_hover = None;
                 if self.z_pick {

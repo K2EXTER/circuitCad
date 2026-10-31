@@ -1160,3 +1160,19 @@ fn worst_case_spec_uses_the_variation_tolerances_and_the_cache() {
     assert!(b.max - b.min < 0.5 * (a.max - a.min), "{} vs {}", b.max - b.min, a.max - a.min);
     assert!(e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "").is_err());
 }
+
+/// The series regulator with a 10 uF capacitor and a 100 ohm load on its output: the output stage's resistance and the capacitor make a
+/// second pole inside the loop, and the phase margin falls from 90 degrees to about 10.
+#[test]
+fn loop_cap_load_sample_has_a_small_phase_margin_and_the_plain_regulator_a_large_one() {
+    let margin = |name: &str| {
+        let sch = example_schematics().into_iter().find(|(n, _)| n == name).unwrap().1;
+        let c = from_schematic(&sch).unwrap();
+        let r = sim_core::loop_gain(&c, "R3", sim_core::BreakDirection::Auto, &AcSettings { fstart: 1.0, fstop: 1e8, sweep: AcSweep::Decade(20) }).unwrap();
+        assert_eq!(r.from_net, "VOUT");
+        sim_core::stability_margins(&r.freq, &r.db(), &r.phase_deg()).unwrap().phase_margin.unwrap()
+    };
+    assert!(margin("series_regulator.schjson") > 80.0);
+    let small = margin("loop_cap_load.schjson");
+    assert!((5.0..20.0).contains(&small), "{small}");
+}

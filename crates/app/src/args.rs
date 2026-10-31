@@ -1,6 +1,6 @@
 use super::*;
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
 /// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -155,6 +155,16 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.analyze_param();
             }
         }
+        if let Some(i) = args.iter().position(|a| a == "--loop")
+            && let Some(part) = args.get(i + 1) {
+                // --loop <part> [output-side net]  (the loop gain; uses the --ac frequency range, or the defaults)
+                if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 3), args.get(i + 4), args.get(i + 5))
+                    && !f0.starts_with("--") {
+                    app.sch.set_ac_settings(f0, f1, p);
+                }
+                app.sch.set_loop_settings(part, args.get(i + 2).filter(|a| !a.starts_with("--") && *a != "-").map_or("", |a| a.as_str()));
+                app.sch.analyze_loop();
+            }
         if let Some(i) = args.iter().position(|a| a == "--z") {
             // --z <net> <reference net or -> <parts to take out, comma separated, or -> (uses the --ac frequency range)
             if let (Some(node), Some(rf), Some(rm)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {

@@ -1,0 +1,645 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "9",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        14,
+        -10
+      ],
+      "rot": 0,
+      "footprint": "R_1206",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N4728A",
+      "pos": [
+        28,
+        0
+      ],
+      "rot": 1,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N4728A",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N4728A",
+          "text": ".model 1N4728A D(IS=50f N=1 RS=10 BV=3.3 IBV=76m)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "降伏電圧つきのダイオードのモデルです。電流を増やしたときのツェナー電圧の変化 (ツェナーインピーダンス) は簡易な式で、実物とずれます。",
+            "ツェナー電圧は温度で変わらない値です。実物は温度で変わります。",
+            "接合容量と逆回復時間は扱いません。許容損失 (W) を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "i_max": 0.276,
+          "p_max": 1.0,
+          "rows": [
+            {
+              "name": "ツェナー電圧",
+              "value": "3.3V ±5%",
+              "condition": "IZT = 76mA"
+            },
+            {
+              "name": "ツェナーインピーダンス",
+              "value": "10Ω (最大)",
+              "condition": "IZT = 76mA"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM358",
+      "pos": [
+        44,
+        -4
+      ],
+      "rot": 0,
+      "footprint": "SOIC-8_P1.27",
+      "custom": {
+        "name": "LM358",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "IN+",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "IN-",
+            "side": "left"
+          },
+          {
+            "number": "1",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "8",
+            "name": "V+",
+            "side": "top"
+          },
+          {
+            "number": "4",
+            "name": "V-",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM358",
+          "text": ".subckt LM358 inp inn out vp vn\nRin inp inn 2Meg\nEop m 0 inp inn 100k\nRp m n0 1k\nCp n0 0 16u\nEu u 0 vp 0 1\nVhu u uh DC 1.5\nEx1 x1 0 n0 uh 1000\nD1 x1 y1 DLIM\nRy1 y1 0 1k\nEy1 y1k 0 y1 0 0.001\nEc1 n1 0 n0 y1k 1\nEl l 0 vn 0 1\nVhl lh l DC 0.02\nEx2 x2 0 lh n1 1000\nD2 x2 y2 DLIM\nRy2 y2 0 1k\nEy2 y2k 0 0 y2 0.001\nEc2 n 0 n1 y2k 1\nEo o 0 n 0 1\nRo o out 50\n.model DLIM D(IS=1e-12 N=1)\n.ends LM358",
+          "pins": [
+            "3",
+            "2",
+            "1",
+            "8",
+            "4"
+          ],
+          "params": {
+            "gain_dc": 100000.0,
+            "gbw": 1000000.0
+          },
+          "limits": [
+            "開ループ利得、1次の極 (GBW)、入力抵抗、出力抵抗、出力の振れ幅 (電源からの余裕) を再現する簡易マクロモデルです。チャネル1のみ記号にしてあります。",
+            "扱わないもの: 入力オフセット電圧、入力バイアス電流、スルーレート、電源電流、入力できる電圧の範囲、出力電流の限界、容量性の負荷での発振 (位相余裕)、電源電圧による GBW の変化。",
+            "電源ピンをつながないと、出力は 0V に張り付きます。"
+          ]
+        },
+        "ratings": {
+          "v_max": 32.0,
+          "rows": [
+            {
+              "name": "利得帯域幅積",
+              "value": "1MHz (代表)"
+            },
+            {
+              "name": "入力オフセット電圧",
+              "value": "2mV (代表)"
+            },
+            {
+              "name": "電源電圧",
+              "value": "3〜32V (単電源)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N3904",
+      "pos": [
+        62,
+        -8
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "2N3904",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "B",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "C",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "E",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "Q",
+          "name": "2N3904",
+          "text": ".model 2N3904 NPN(IS=6.7f BF=300 BR=7.5 RB=10)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ],
+          "params": {},
+          "limits": [
+            "電流増幅率 hFE (BF) は、電流によらず一定です。実物は、電流が小さいときと大きいときに下がり、個体差も大きいです。温度では少し変わるようにしてあります。",
+            "内部の容量と蓄積時間を含みません。そのため、ON/OFF の速さは実物より速く出ます。高速にスイッチする回路の見積もりには使えません。",
+            "耐圧・定格電流・許容損失を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 40.0,
+          "i_max": 0.2,
+          "p_max": 0.625,
+          "rows": [
+            {
+              "name": "電流増幅率 hFE",
+              "value": "100〜300",
+              "condition": "IC = 10mA, VCE = 1V"
+            },
+            {
+              "name": "コレクタ飽和電圧",
+              "value": "0.2V (最大)",
+              "condition": "IC = 10mA, IB = 1mA"
+            },
+            {
+              "name": "トランジション周波数",
+              "value": "300MHz"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        78,
+        4
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "5.1k",
+      "pos": [
+        62,
+        10
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        50,
+        14
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10u",
+      "pos": [
+        60,
+        40
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -10
+      ],
+      "b": [
+        9,
+        -10
+      ]
+    },
+    {
+      "a": [
+        16,
+        -10
+      ],
+      "b": [
+        19,
+        -10
+      ]
+    },
+    {
+      "a": [
+        28,
+        4
+      ],
+      "b": [
+        28,
+        7
+      ]
+    },
+    {
+      "a": [
+        28,
+        -4
+      ],
+      "b": [
+        28,
+        -7
+      ]
+    },
+    {
+      "a": [
+        40,
+        -5
+      ],
+      "b": [
+        37,
+        -5
+      ]
+    },
+    {
+      "a": [
+        40,
+        -3
+      ],
+      "b": [
+        37,
+        -3
+      ]
+    },
+    {
+      "a": [
+        48,
+        -4
+      ],
+      "b": [
+        51,
+        -4
+      ]
+    },
+    {
+      "a": [
+        44,
+        -8
+      ],
+      "b": [
+        44,
+        -11
+      ]
+    },
+    {
+      "a": [
+        44,
+        0
+      ],
+      "b": [
+        44,
+        3
+      ]
+    },
+    {
+      "a": [
+        62,
+        -12
+      ],
+      "b": [
+        62,
+        -15
+      ]
+    },
+    {
+      "a": [
+        58,
+        -8
+      ],
+      "b": [
+        55,
+        -8
+      ]
+    },
+    {
+      "a": [
+        62,
+        -4
+      ],
+      "b": [
+        62,
+        -1
+      ]
+    },
+    {
+      "a": [
+        62,
+        8
+      ],
+      "b": [
+        62,
+        5
+      ]
+    },
+    {
+      "a": [
+        62,
+        12
+      ],
+      "b": [
+        62,
+        15
+      ]
+    },
+    {
+      "a": [
+        50,
+        12
+      ],
+      "b": [
+        50,
+        9
+      ]
+    },
+    {
+      "a": [
+        50,
+        16
+      ],
+      "b": [
+        50,
+        19
+      ]
+    },
+    {
+      "a": [
+        78,
+        2
+      ],
+      "b": [
+        78,
+        -1
+      ]
+    },
+    {
+      "a": [
+        78,
+        6
+      ],
+      "b": [
+        78,
+        9
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        9,
+        -10
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        19,
+        -10
+      ],
+      "text": "VREF"
+    },
+    {
+      "pos": [
+        28,
+        7
+      ],
+      "text": "VREF"
+    },
+    {
+      "pos": [
+        28,
+        -7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        -5
+      ],
+      "text": "VREF"
+    },
+    {
+      "pos": [
+        37,
+        -3
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        51,
+        -4
+      ],
+      "text": "DRIVE"
+    },
+    {
+      "pos": [
+        44,
+        -11
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        44,
+        3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        62,
+        -15
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        55,
+        -8
+      ],
+      "text": "DRIVE"
+    },
+    {
+      "pos": [
+        62,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        62,
+        5
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        62,
+        15
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        50,
+        9
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        50,
+        19
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        78,
+        -1
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        78,
+        9
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        38
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        60,
+        42
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

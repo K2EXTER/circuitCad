@@ -20,6 +20,10 @@ impl SchEditor {
             self.probe_node(g, pt, shift);
             return;
         }
+        if self.loop_pick {
+            self.pick_loop(g, pt);
+            return;
+        }
         if self.z_pick {
             self.pick_z_node(pt, shift);
             return;

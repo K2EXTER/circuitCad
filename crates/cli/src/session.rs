@@ -247,6 +247,7 @@ impl Session {
             "ac" => self.ac(args),
             "noise" => self.noise(args),
             "zout" => self.zout(args),
+            "loopgain" => self.loopgain(args),
             "worst" => self.worst(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),

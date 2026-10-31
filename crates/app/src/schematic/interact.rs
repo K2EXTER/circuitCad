@@ -174,6 +174,7 @@ impl SchEditor {
             if self.noise_pick {
                 self.noise_pick = false;
                 self.z_pick = false;
+                self.loop_pick = false;
                 self.pick_probe = false;
                 self.status = "ノードの選択を終了しました".into();
                 return;
