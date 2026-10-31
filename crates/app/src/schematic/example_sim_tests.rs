@@ -1091,9 +1091,18 @@ fn the_heat_over_time_block_warms_a_part_less_than_the_steady_state() {
     assert!(p.rise_peak > 0.0 && p.rise_peak < 0.5 * p.power_peak * p.theta, "{} {}", p.rise_peak, p.power_peak * p.theta);
     e.htran_parts = String::new();
     assert!(e.run_heat_tran().is_err());
-    e.htran_parts = name;
+    e.htran_parts = name.clone();
     e.htran_links = "A:B".into();
     assert!(e.run_heat_tran().is_err());
+    assert!(e.sch.thermal_links.is_empty(), "a link that does not read is not kept");
+    // a run keeps the links in the schematic, so the file has them
+    let other = e.sch.components.iter().map(|c| c.refdes.clone()).find(|r| *r != name && !r.starts_with('#')).unwrap();
+    e.htran_links = format!("{name}:{other}:120");
+    let _ = e.run_heat_tran();
+    assert_eq!(e.sch.thermal_links, vec![(name.clone(), other.clone(), 120.0)]);
+    assert_eq!(e.htran_links_seen, e.sch.thermal_links);
+    let back: sch_core::Schematic = serde_json::from_str(&serde_json::to_string(&e.sch).unwrap()).unwrap();
+    assert_eq!(back.thermal_links, e.sch.thermal_links);
 }
 
 /// The rail sample seen from net RAIL: the cable's 50 mohm at low frequency, then the cable's coil against the capacitors makes a

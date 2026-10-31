@@ -365,8 +365,24 @@ impl Session {
 
     /// `thermal REF [theta=K/W] [tc=ppm] [cth=J/K]`: the heat resistance, the temperature coefficient and the heat capacity of a part for `heat` / `heattran` (0 = back to the guess).
     pub fn thermal(&mut self, args: &[String]) -> Res {
-        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity)";
+        let usage = "thermal REF [theta=K/W] [tc=ppm/K] [cth=J/K]   (0 puts a value back to the default: theta from the package, tc from the model, no heat capacity)
+thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts through the board's copper, kept in the file and used by heattran; K/W of 0 removes it)";
         let (pos, kv) = options(args);
+        if let Some(spec) = opt(&kv, "link") {
+            for item in spec.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+                let w: Vec<&str> = item.split(':').collect();
+                let [a, b, th] = w.as_slice() else { return Err(format!("link '{item}': write PART:PART:K/W, for example Q1:RS1:150")) };
+                for p in [a, b] {
+                    if !self.sch.components.iter().any(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(p.trim())) {
+                        return Err(format!("no part {}", p.trim()));
+                    }
+                }
+                let theta = sim_core::parse_value(th).filter(|x| *x >= 0.0 && x.is_finite()).ok_or_else(|| format!("link '{item}': '{th}' is not a heat resistance (K/W, 0 removes the link)"))?;
+                self.sch.set_thermal_link(a.trim(), b.trim(), theta);
+            }
+            let all: Vec<String> = self.sch.thermal_links.iter().map(|(a, b, t)| format!("{a}:{b}:{t}")).collect();
+            return Ok(obj(json!({"links": all})));
+        }
         let [r] = pos.as_slice() else { return Err(usage.into()) };
         let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && (k == "tc" || *x >= 0.0)).ok_or_else(|| format!("{k}={s} is not a number{}", if k == "tc" { "" } else { " (zero or more)" }))).transpose();
         let (theta, tc, cth) = (num("theta")?, num("tc")?, num("cth")?);
@@ -386,7 +402,7 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "theta": c.theta, "tc_ppm": c.tc_ppm, "cth_j_per_k": c.cth})))
     }
 
-    /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
+    /// `heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300,...] (else the links kept by `thermal link=`) [tstep=] [temp=27] [uic] [samples=8]`: a transient run whose power becomes
     /// temperatures over time (`sim_core::heat_tran`). Each part is one heat resistance (`thermal REF theta=`) and heat capacity
     /// (`thermal REF cth=`) to the surroundings; `couple=A:B:K/W` ties two parts by a heat resistance of their own.
     pub fn heattran(&mut self, args: &[String]) -> Res {
@@ -399,7 +415,8 @@ impl Session {
         let temp = opt(&kv, "temp").map_or(Ok(27.0), |s| sim_core::parse_value(s).filter(|x| x.is_finite()).ok_or_else(|| format!("temp={s} is not a number")))?;
         let samples: usize = opt(&kv, "samples").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(2, 200);
         let refs: Vec<String> = opt(&kv, "parts").ok_or(usage)?.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
-        let mut links = vec![];
+        // links given here are for this run; without them, the ones kept in the schematic (`thermal link=`)
+        let mut links: Vec<sim_core::ThermalLink> = if opt(&kv, "couple").is_none() { self.sch.thermal_links.iter().map(|(a, b, theta)| sim_core::ThermalLink { a: a.clone(), b: b.clone(), theta: *theta }).collect() } else { vec![] };
         for spec in opt(&kv, "couple").map(|c| c.split(',').collect::<Vec<_>>()).unwrap_or_default() {
             let w: Vec<&str> = spec.split(':').collect();
             let [a, b, th] = w.as_slice() else { return Err(format!("couple '{spec}': write PART:PART:K/W, for example Q1:RS1:300")) };

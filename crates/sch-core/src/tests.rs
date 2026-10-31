@@ -564,3 +564,17 @@ fn the_simulation_only_mark_is_saved_only_when_set() {
     let old: Schematic = serde_json::from_str(&plain).unwrap();
     assert!(!old.components[0].sim_only);
 }
+
+#[test]
+fn thermal_links_are_kept_in_the_file_and_replaced_in_either_order() {
+    let mut s = Schematic::default();
+    assert!(!serde_json::to_string(&s).unwrap().contains("thermal_links"), "an empty list is not written");
+    s.set_thermal_link("Q1", "RS1", 150.0);
+    s.set_thermal_link("rs1", "q1", 200.0);
+    assert_eq!(s.thermal_links.len(), 1);
+    assert_eq!(s.thermal_links[0].2, 200.0);
+    let back: Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+    assert_eq!(back.thermal_links, s.thermal_links);
+    s.set_thermal_link("Q1", "RS1", 0.0);
+    assert!(s.thermal_links.is_empty());
+}

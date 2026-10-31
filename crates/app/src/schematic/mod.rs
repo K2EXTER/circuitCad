@@ -228,6 +228,8 @@ pub struct SchEditor {
     htran_parts: String,
     htran_stop: String,
     htran_links: String,
+    /// The links the text box was last made from or written to (when the schematic holds others, a file was opened or an undo happened: the text follows).
+    htran_links_seen: Vec<(String, String, f64)>,
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     sec_mode: u8,
     fault_part: String,
@@ -536,6 +538,7 @@ impl Default for SchEditor {
             htran: None,
             htran_parts: String::new(),
             htran_stop: "0.6".into(),
+            htran_links_seen: vec![],
             htran_links: String::new(),
             coverage_cache: None,
             sec_mode: 0,

@@ -247,6 +247,9 @@ pub struct Schematic {
     /// Pins left unconnected on purpose, as (part reference designator, pin number): ERC does not ask about them (and asks when one of them is wired).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub no_connects: Vec<(String, String)>,
+    /// Heat resistance (K/W) tying two parts (reference designators) through the board's copper, for the temperature-over-time run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub thermal_links: Vec<(String, String, f64)>,
     /// Several sheets: every sheet, the one being edited (`active_sheet`) as an empty place (it is in the fields above). Empty = one sheet.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sheets: Vec<Sheet>,
@@ -260,7 +263,7 @@ fn is_zero(n: &usize) -> bool {
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], sheets: vec![], active_sheet: 0 }
+        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], active_sheet: 0 }
     }
 }
 
@@ -282,6 +285,8 @@ struct RawSchematic {
     #[serde(default)]
     no_connects: Vec<(String, String)>,
     #[serde(default)]
+    thermal_links: Vec<(String, String, f64)>,
+    #[serde(default)]
     sheets: Vec<Sheet>,
     #[serde(default)]
     active_sheet: usize,
@@ -289,13 +294,22 @@ struct RawSchematic {
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, sheets: r.sheets, active_sheet: r.active_sheet };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, active_sheet: r.active_sheet };
         s.migrate();
         s
     }
 }
 
 impl Schematic {
+    /// Ties two parts by `theta` K/W (replacing an earlier link between the same two, in either order); `theta` of 0 or less removes it.
+    pub fn set_thermal_link(&mut self, a: &str, b: &str, theta: f64) {
+        let same = |x: &(String, String, f64)| (x.0.eq_ignore_ascii_case(a) && x.1.eq_ignore_ascii_case(b)) || (x.0.eq_ignore_ascii_case(b) && x.1.eq_ignore_ascii_case(a));
+        self.thermal_links.retain(|x| !same(x));
+        if theta > 0.0 && theta.is_finite() {
+            self.thermal_links.push((a.to_string(), b.to_string(), theta));
+        }
+    }
+
     /// Bring an old sheet up to date. Version 0 drew two-lead glyph parts with leads 4 grid steps
     /// long; now they are 2, like the basic symbols. Wire ends and labels on the old pin move to the
     /// new one; a wire that would turn diagonal gets a short stub to the old spot instead.

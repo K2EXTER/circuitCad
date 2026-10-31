@@ -168,3 +168,6 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 
 ## 最悪ケース(schematic/variation.rs、2026-10-31)
 `run_mc` が `monte_carlo` のあとに同じ設定で `worst_case` を呼び、`McView.worst` に持つ。ばらつき解析の窓の左に「最悪ケース」(最小・最大と設計値からの%、ホバーで部品の組み合わせ、「現実的な範囲」の一行)、ヒストグラムに赤い縦線(軸も最悪ケースまで広げる)。電源の許容差は画面には無い(CLI の `tol_v` だけ)。
+
+## 熱の結合の保存(2026-10-31)
+部品どうしの熱抵抗 `A:B:K/W` は `Schematic.thermal_links`(`sch-core`。空なら書かない。シート全体で1つ。`set_thermal_link` は順序・大文字小文字を問わず置き換え、0 以下で消す)に持つ。画面の「結合」の欄(`htran_links`)は、欄を離れたとき(`lost_focus`、読める時だけ)と「温度の変化を計算」で `store_links` が回路図へ書く。回路図側が欄の元(`htran_links_seen`)と違う(ファイルを開いた・元に戻した)ときは、`panel_heat_tran` の先頭で欄を回路図に合わせる。CLI は `thermal link=Q1:RS1:150`(0 で消す)で保存し、`heattran` は `couple=` を省くと保存分を使う。

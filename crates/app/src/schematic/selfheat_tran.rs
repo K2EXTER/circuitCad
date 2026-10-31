@@ -14,7 +14,31 @@ pub(super) struct HeatTranView {
     pub moved: Vec<(String, f64, f64)>,
 }
 
+/// "Q1:RS1:150, ..." -> (part, part, K/W) per link.
+fn parse_links(text: &str) -> Result<Vec<(String, String, f64)>, String> {
+    let mut links = vec![];
+    for spec in text.split(',').map(str::trim).filter(|x| !x.is_empty()) {
+        let w: Vec<&str> = spec.split(':').collect();
+        let [a, b, th] = w.as_slice() else { return Err(format!("結合「{spec}」は 部品:部品:K/W の形で入力してください (例: Q1:RS1:150)")) };
+        let theta = sim_core::parse_value(th).filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("結合「{spec}」の熱抵抗は 0 より大きい数 (K/W) にしてください"))?;
+        links.push((a.trim().to_string(), b.trim().to_string(), theta));
+    }
+    Ok(links)
+}
+
+fn links_text(links: &[(String, String, f64)]) -> String {
+    links.iter().map(|(a, b, t)| format!("{a}:{b}:{t}")).collect::<Vec<_>>().join(", ")
+}
+
 impl SchEditor {
+    /// Keeps the links in the schematic (so the file has them); the text box shows the same.
+    fn store_links(&mut self, links: Vec<(String, String, f64)>) {
+        if self.sch.thermal_links != links {
+            self.sch.thermal_links = links.clone();
+        }
+        self.htran_links_seen = links;
+    }
+
     pub(super) fn run_heat_tran(&mut self) -> Result<HeatTranView, String> {
         let ambient: f64 = self.heat_ambient.trim().parse().ok().filter(|t: &f64| *t > -273.0 && *t < 1000.0).ok_or("周囲の温度を数値(℃)で入力してください (例: 27)")?;
         let tstop = sim_core::parse_value(self.htran_stop.trim()).filter(|t| *t > 0.0 && t.is_finite()).ok_or("時間を、0 より大きい数で入力してください (例: 0.6 や 600m。秒)")?;
@@ -22,13 +46,10 @@ impl SchEditor {
         if refs.is_empty() {
             return Err("温度を見たい部品の名前を入力してください (例: Q1,RS1。コンマで区切る)".into());
         }
-        let mut links = vec![];
-        for spec in self.htran_links.split(',').map(str::trim).filter(|x| !x.is_empty()) {
-            let w: Vec<&str> = spec.split(':').collect();
-            let [a, b, th] = w.as_slice() else { return Err(format!("結合「{spec}」は 部品:部品:K/W の形で入力してください (例: Q1:RS1:150)")) };
-            let theta = sim_core::parse_value(th).filter(|x| *x > 0.0 && x.is_finite()).ok_or_else(|| format!("結合「{spec}」の熱抵抗は 0 より大きい数 (K/W) にしてください"))?;
-            links.push(sim_core::ThermalLink { a: a.trim().to_string(), b: b.trim().to_string(), theta });
-        }
+        let parsed = parse_links(&self.htran_links)?;
+        // what was run is what the file keeps
+        self.store_links(parsed.clone());
+        let links: Vec<sim_core::ThermalLink> = parsed.into_iter().map(|(a, b, theta)| sim_core::ThermalLink { a, b, theta }).collect();
         let c = sim_core::from_schematic_with_layout(&self.sch, &self.wiring, &self.couplings).map_err(|e| e.first().map(|x| x.to_string()).unwrap_or_default())?;
         let nodes = sim_core::thermal_nodes_from_schematic(&self.sch, &c, &refs)?;
         let r = sim_core::heat_tran(&c, &nodes, &links, ambient, &sim_core::TranSettings { tstop, tstep: sim_core::auto_tstep(tstop), uic: false }).map_err(|e| e.to_string())?;
@@ -37,6 +58,11 @@ impl SchEditor {
     }
 
     pub(super) fn panel_heat_tran(&mut self, ui: &mut egui::Ui) {
+        // a file that was opened (or an undo) brings other links than the box shows: the box follows the schematic
+        if self.sch.thermal_links != self.htran_links_seen {
+            self.htran_links = links_text(&self.sch.thermal_links);
+            self.htran_links_seen = self.sch.thermal_links.clone();
+        }
         ui.separator();
         ui.label(egui::RichText::new("温度の時間変化 (短い通電)").strong())
             .on_hover_text("過渡解析の電力から、部品の温度が時間とともにどう上がるかを計算します。短い通電では、定常の温度より低くなります (熱容量があるため)。2つの部品が基板の銅を通じてお互いを温める分も入れられます");
@@ -49,9 +75,15 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.htran_stop).desired_width(60.0)).on_hover_text("計算する長さ (秒)。電源のパルスや波形は、この間の動きを使います (例: 0.6 や 600m)");
             ui.end_row();
             ui.label("結合");
-            ui.add(egui::TextEdit::singleline(&mut self.htran_links).desired_width(150.0).hint_text("Q1:RS1:150")).on_hover_text(
+            let links_box = ui.add(egui::TextEdit::singleline(&mut self.htran_links).desired_width(150.0).hint_text("Q1:RS1:150")).on_hover_text(
                 "2つの部品の間の熱抵抗 (K/W)。部品:部品:K/W の形で、コンマで複数。基板の銅を通って熱が行き来します。空欄なら、お互いは温め合いません。値の目安は、距離が遠いほど大きく (数百 K/W)、同じ銅でつながっていれば小さくなります。データシートにはないので、推測で入れてください",
             );
+            // leaving the box with links that read is enough to keep them (a half-typed one is kept as text only)
+            if links_box.lost_focus()
+                && let Ok(l) = parse_links(&self.htran_links)
+            {
+                self.store_links(l);
+            }
             ui.end_row();
         });
         if self

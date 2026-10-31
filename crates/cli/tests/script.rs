@@ -788,6 +788,41 @@ spec dc_voltage_worst mid 2.48 2.6 tol_r=1
 }
 
 #[test]
+fn thermal_links_are_kept_and_used_by_heattran_without_couple() {
+    let head = "new
+add V 5 as=V1
+add R 100 as=RS1
+add R 1Meg as=RS2
+net VIN V1.+ RS1.1 RS2.1
+net GND V1.- RS1.2 RS2.2
+erc
+";
+    let (a, ok) = run(&format!("{head}thermal link=RS1:RS2:50
+thermal link=rs2:rs1:80
+thermal link=RS1:NOPE:10
+"));
+    assert!(!ok);
+    let kept = a.iter().rev().find(|v| v.get("links").is_some()).unwrap();
+    assert_eq!(kept["links"], serde_json::json!(["rs2:rs1:80"]), "{kept}");
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("no part NOPE"));
+    // with a link kept, RS2 is warmed by RS1 in a run without couple=; with the link removed it is not
+    let run_it = |extra: &str| {
+        let (a, ok) = run(&format!("{head}thermal RS1 theta=100 cth=0.1
+thermal RS2 theta=100 cth=0.1
+{extra}heattran 2 parts=RS1,RS2 temp=25
+"));
+        assert!(ok, "{a:?}");
+        a.last().unwrap().clone()
+    };
+    let linked = run_it("thermal link=RS1:RS2:20
+");
+    let alone = run_it("");
+    let rise = |v: &Value, k: usize| v["parts"][k]["rise_peak_k"].as_f64().unwrap();
+    // RS2 carries almost no current: its warmth comes only through the link
+    assert!(rise(&alone, 1) < 0.01 && rise(&linked, 1) > 0.5, "{linked} {alone}");
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

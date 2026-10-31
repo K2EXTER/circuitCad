@@ -67,8 +67,8 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         gain and phase per decade, -3 dB frequency, phase margin
   sweep REF START STOP [steps=11] [log=1] probe=V(out),I(R1)   (or sweep REF list=1,2,5)
   heat [temp=27] [top=10]               the DC point with every resistor warmed by its own power (a steady state): per part the power, rise, temperature and
-                                        change of its value, and the nets that move because of it. thermal REF theta=K/W tc=ppm cth=J/K sets a part's heat resistance / coefficient / capacity
-  heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300] [tstep=] [temp=27] [uic] [samples=8]
+                                        change of its value, and the nets that move because of it. thermal REF theta=K/W tc=ppm cth=J/K sets a part's heat resistance / coefficient / capacity; thermal link=Q1:RS1:150 keeps a heat resistance between two parts
+  heattran TSTOP parts=Q1,RS1 [couple=Q1:RS1:300 (else the saved links)] [tstep=] [temp=27] [uic] [samples=8]
                                         a transient run whose power (I^2 R, I Vds) becomes temperatures over time: a pulse warms a part less than the
                                         steady state by its time constant (theta cth); couple=A:B:K/W lets two parts warm each other; a resistor's value follows its temperature
   sens probe=V(out) [step=1] [parts=R1,R2 | kinds=R,V,I,C,L] [top=15]
