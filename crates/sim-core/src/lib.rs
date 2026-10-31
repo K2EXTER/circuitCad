@@ -37,6 +37,7 @@ mod stepmetrics;
 mod temperature;
 #[cfg(test)]
 pub(crate) mod tran;
+mod worstcase;
 #[cfg(not(test))]
 mod tran;
 mod value;
@@ -45,6 +46,7 @@ mod waveform;
 pub use coverage::{model_coverage, ModelCoverage, PartNote};
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use expr::Expr;
+pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};
 pub use impedance::{character as z_character, impedance_analysis, z_extrema, ImpedanceResult, ZExtremum};
 pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SeqKind, SeqLevels, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};

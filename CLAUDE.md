@@ -30,6 +30,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `from_schematic.rs` 部品→素子の変換 (新しい部品種別はここ) / `waveform.rs` 電源波形 / `value.rs` SPICE数値 / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `options.rs` 計算精度 `SimOptions` / `par.rs` 独立な計算を全コアで並列(`par_map`。ばらつき解析・パラメータスイープ・故障・CLI の `sens`) / `diagnose.rs` 失敗時の原因と直し方
 - `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標・整定時間(`settling_times`。CLI の `tran settle=`) / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
+- `worstcase.rs` 最悪ケース解析(全部品を許容差の端に置いた角を実際に解く。CLI `worst`、画面はばらつき解析の窓の「最悪ケース」)
 - `impedance.rs` ネットから見たインピーダンス(電源をすべて切り 1 A の試験電流を入れる。山・谷の検出。CLI `zout`、画面は解析タブの「インピーダンス」)
 - `ratings.rs` 定格チェック / `ripple.rs` 電解コンデンサのリップルと寿命
 - `fault.rs` 故障シミュレーション / `chain.rs` 連鎖故障

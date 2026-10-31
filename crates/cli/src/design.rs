@@ -124,6 +124,66 @@ impl Session {
         Ok(obj(json!({"circuit_ok": gate.is_none(), "models": self.model_gaps(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).chain(self.skin_warning(f1)).collect::<Vec<_>>()})))
     }
 
+    /// `worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]`:
+    /// the smallest and the largest value one result can take when every part sits at an end of its tolerance.
+    pub fn worst(&mut self, args: &[String]) -> Res {
+        use sim_core::{McMeasure, TranMetric};
+        let (pos, kv) = options(args);
+        let usage = "worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]   (tolerances in percent; NET is the net measured)";
+        let net = pos.first().ok_or_else(|| usage.to_string())?.trim().to_string();
+        let tol = |key: &str, default: f64| -> Result<f64, String> {
+            match opt(&kv, key) {
+                Some(s) => s.parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0).ok_or_else(|| format!("{key}={s}: a percentage from 0 to 100 (5 = ±5 %)")),
+                None => Ok(default / 100.0),
+            }
+        };
+        let (tol_r, tol_c, tol_l, tol_v) = (tol("tol_r", 1.0)?, tol("tol_c", 10.0)?, tol("tol_l", 10.0)?, tol("tol_v", 0.0)?);
+        let pair = |key: &str, default: (f64, f64)| -> Result<(f64, f64), String> {
+            match opt(&kv, key) {
+                Some(s) => {
+                    let (a, b) = s.split_once(':').ok_or_else(|| format!("{key}={s}: write two values with a colon (like 10:1Meg)"))?;
+                    Ok((sim_core::parse_value(a).ok_or_else(|| format!("{key}: '{a}' is not a number"))?, sim_core::parse_value(b).ok_or_else(|| format!("{key}: '{b}' is not a number"))?))
+                }
+                None => Ok(default),
+            }
+        };
+        let how = opt(&kv, "measure").unwrap_or("dc").to_ascii_lowercase();
+        let measure = match how.as_str() {
+            "dc" => McMeasure::DcVoltage,
+            "cutoff" => {
+                let (f0, f1) = pair("f", (10.0, 1e6))?;
+                McMeasure::Cutoff { fstart: f0, fstop: f1, points_per_decade: 50 }
+            }
+            "rise" | "overshoot" | "settle" | "final" => {
+                let (tstop, tstep) = pair("tran", (10e-3, 10e-6))?;
+                let metric = match how.as_str() {
+                    "rise" => TranMetric::RiseTime,
+                    "overshoot" => TranMetric::Overshoot,
+                    "settle" => TranMetric::SettlingTime,
+                    _ => TranMetric::FinalValue,
+                };
+                McMeasure::Tran { tstop, tstep, uic: false, metric }
+            }
+            other => return Err(format!("measure={other}: use dc, cutoff, rise, overshoot, settle or final")),
+        };
+        let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let w = sim_core::worst_case(&c, &sim_core::WcSettings { tol_r, tol_c, tol_l, tol_v, output: net, measure }).map_err(|e| e.to_string())?;
+        let corner = |v: &[(String, bool)]| -> Vec<String> { v.iter().map(|(n, h)| format!("{n}{}", if *h { "+" } else { "-" })).collect() };
+        let parts: Vec<Value> = w.parts.iter().take(top).map(|p| json!({"part": p.name, "tolerance_percent": round6(p.tol * 100.0), "at_low_end": p.low, "at_high_end": p.high})).collect();
+        let pct = |v: f64| if w.nominal.abs() > 1e-30 { Some(round6((v - w.nominal) / w.nominal.abs() * 100.0)) } else { None };
+        Ok(obj(json!({
+            "circuit_ok": gate.is_none(), "net": w.output, "unit": w.unit, "nominal": w.nominal,
+            "min": w.min, "max": w.max, "min_percent_from_nominal": pct(w.min), "max_percent_from_nominal": pct(w.max),
+            "sum_of_parts": {"min": w.min_sum, "max": w.max_sum}, "likely_at_worst": {"min": w.min_rss, "max": w.max_rss},
+            "min_corner": corner(&w.min_corner), "max_corner": corner(&w.max_corner),
+            "parts": parts, "unsolved_parts": w.unsolved,
+            "meaning": "min/max are solved circuits with every part at one end of its tolerance (+ = high end, - = low end); likely_at_worst treats the parts as independent",
+            "warnings": gate.into_iter().collect::<Vec<_>>()
+        })))
+    }
+
     /// `zout NET F0 F1 [ppd=10] [ref=NET] [remove=RL,V1]`: the impedance seen from a net (every source off, a 1 A test current).
     pub fn zout(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

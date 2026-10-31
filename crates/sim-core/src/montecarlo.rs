@@ -126,11 +126,12 @@ fn tolerance(e: &Element, s: &McSettings) -> Option<f64> {
     (t > 0.0).then_some(t)
 }
 
-fn scale(e: &mut Element, f: f64) {
+pub(crate) fn scale(e: &mut Element, f: f64) {
     match e {
         Element::Resistor { r, .. } => *r *= f,
         Element::Capacitor { c, .. } => *c *= f,
         Element::Inductor { l, .. } => *l *= f,
+        Element::VSource { wave: crate::waveform::Waveform::Dc(v), .. } => *v *= f,
         _ => {}
     }
 }
@@ -154,7 +155,7 @@ pub fn minus_3db(freq: &[f64], mag: &[f64]) -> Option<f64> {
     before.or(after)
 }
 
-fn measure(c: &Circuit, node: &str, how: &McMeasure) -> Result<f64, SimError> {
+pub(crate) fn measure(c: &Circuit, node: &str, how: &McMeasure) -> Result<f64, SimError> {
     match how {
         McMeasure::DcVoltage => {
             let r = dc_op(c)?;

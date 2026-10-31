@@ -715,6 +715,31 @@ zout out 1 100 remove=R2
 }
 
 #[test]
+fn worst_gives_the_limits_of_a_divider_and_names_the_corner() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 10k as=R1
+add R 10k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+erc
+worst mid tol_r=1
+worst mid tol_r=1 tol_v=5
+worst mid measure=nope
+");
+    assert!(!ok);
+    let rows: Vec<&Value> = a.iter().filter(|v| v.get("min_corner").is_some()).collect();
+    assert_eq!(rows.len(), 2, "{a:?}");
+    let w = rows[0];
+    assert!((w["max"].as_f64().unwrap() - 2.525).abs() < 1e-5 && (w["min"].as_f64().unwrap() - 2.475).abs() < 1e-5, "{w}");
+    assert!(w["max_corner"].as_array().unwrap().iter().any(|c| c == "R2+") && w["max_corner"].as_array().unwrap().iter().any(|c| c == "R1-"), "{w}");
+    // the supply's 5 % matters more than the resistors' 1 %
+    assert_eq!(rows[1]["parts"][0]["part"], "V1", "{}", rows[1]);
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("measure=nope"));
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

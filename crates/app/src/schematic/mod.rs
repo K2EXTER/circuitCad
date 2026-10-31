@@ -319,6 +319,8 @@ enum McKind {
 /// A finished Monte Carlo run.
 struct McView {
     outcome: Result<McResult, Vec<String>>,
+    /// The worst case of the same circuit and tolerances (every part at an end of its tolerance).
+    worst: Option<sim_core::WorstCase>,
 }
 
 /// A finished noise analysis: output density plot plus the per-element breakdown.

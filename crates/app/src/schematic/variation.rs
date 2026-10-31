@@ -49,6 +49,13 @@ impl SchEditor {
         self.wave_mode = WaveMode::Sweep;
     }
 
+    /// For screenshots and tests: the variation analysis of `node` (`ac` = the -3 dB frequency, else the DC voltage).
+    pub fn analyze_variation(&mut self, node: &str, ac: bool) {
+        self.mc_out = node.into();
+        self.mc_kind = if ac { McKind::Ac } else { McKind::Dc };
+        self.run_mc();
+    }
+
     /// Random part values inside their tolerances; the spread of one node voltage.
     pub(super) fn run_mc(&mut self) {
         let (Some(tol_r), Some(tol_c), Some(tol_l)) = (percent(&self.mc_tol_r), percent(&self.mc_tol_c), percent(&self.mc_tol_l)) else {
@@ -90,7 +97,12 @@ impl SchEditor {
             Ok(r) => format!("ばらつき解析: {} 回完了{}", r.values.len(), if r.failed > 0 { format!(" ({} 回は収束せず)", r.failed) } else { String::new() }),
             Err(e) => format!("ばらつき解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
-        self.mc = Some(McView { outcome });
+        // the limits for the same parts and tolerances: not a chance, a guarantee
+        let worst = match (&outcome, self.sim_circuit()) {
+            (Ok(_), Ok(c)) => sim_core::worst_case(&c, &sim_core::WcSettings::from(&settings)).ok(),
+            _ => None,
+        };
+        self.mc = Some(McView { outcome, worst });
         self.wave_mode = WaveMode::Mc;
     }
 
@@ -101,6 +113,7 @@ impl SchEditor {
 
     pub(super) fn mc_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.mc.as_ref() else { return };
+        let worst = view.worst.clone();
         let mut close = false;
         ui.horizontal(|ui| {
             ui.strong(match view.outcome.as_ref().map(|r| r.unit) {
@@ -146,6 +159,20 @@ impl SchEditor {
                         if res.failed > 0 {
                             ui.colored_label(Color32::from_rgb(220, 160, 40), format!("{} 回は計算が収束しませんでした", res.failed));
                         }
+                        if let Some(w) = &worst {
+                            ui.separator();
+                            ui.label("最悪ケース (全部品が誤差の端にあるとき)").on_hover_text("ランダムではなく、結果がいちばん小さく (大きく) なるように、すべての部品を許容差の端に置いて計算した値です。ばらつき解析の最小・最大は「たまたま出た値」ですが、これは「これより外には出ない」値です");
+                            egui::Grid::new("mc_worst").num_columns(2).show(ui, |ui| {
+                                for (label, v, corner) in [("最小", w.min, &w.min_corner), ("最大", w.max, &w.max_corner)] {
+                                    let tip: Vec<String> = corner.iter().map(|(n, h)| format!("{n}{}", if *h { " 大" } else { " 小" })).collect();
+                                    let pct = if w.nominal.abs() > 1e-12 { format!(" ({:+.1}%)", (v - w.nominal) / w.nominal.abs() * 100.0) } else { String::new() };
+                                    ui.label(label).on_hover_text(format!("そうなる部品の組み合わせ: {}", tip.join("・")));
+                                    ui.label(format!("{}{pct}", fmt_unit(v, w.unit))).on_hover_text(format!("そうなる部品の組み合わせ: {}", tip.join("・")));
+                                    ui.end_row();
+                                }
+                            });
+                            ui.small(format!("部品が無関係にずれるなら、現実的には {} 〜 {} の範囲に収まります", fmt_unit(w.min_rss, w.unit), fmt_unit(w.max_rss, w.unit))).on_hover_text("各部品の効きを二乗して足した平方根 (RSS)。全部がいっぺんに最悪になることはまずない、という見積もりです");
+                        }
                         ui.separator();
                         ui.label("効いている部品").on_hover_text("その部品だけが許容差ぶん大きくなったとき、結果がどれだけ変わるか。上にある部品ほど効きます");
                         egui::Grid::new("mc_sens").num_columns(2).show(ui, |ui| {
@@ -160,7 +187,7 @@ impl SchEditor {
                         }
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
-                    draw_histogram(ui, rect, res, &st);
+                    draw_histogram(ui, rect, res, &st, worst.as_ref());
                 });
             }
         }
@@ -170,7 +197,7 @@ impl SchEditor {
     }
 }
 
-fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McStats) {
+fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McStats, worst: Option<&sim_core::WorstCase>) {
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 0.0, Color32::from_rgb(18, 22, 18));
     let (lo, hi, bins) = res.histogram(24);
@@ -178,10 +205,10 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     let plot = Rect::from_min_max(rect.min + Vec2::new(40.0, 14.0), rect.max - Vec2::new(14.0, 30.0));
     let x_of = |v: f64| {
         // the axis also has to hold the design value
-        let (a, b) = (lo.min(res.nominal), hi.max(res.nominal));
+        let (a, b) = (lo.min(res.nominal).min(worst.map_or(f64::MAX, |w| w.min)), hi.max(res.nominal).max(worst.map_or(f64::MIN, |w| w.max)));
         plot.left() + ((v - a) / (b - a).max(1e-15)) as f32 * plot.width()
     };
-    let (a, b) = (lo.min(res.nominal), hi.max(res.nominal));
+    let (a, b) = (lo.min(res.nominal).min(worst.map_or(f64::MAX, |w| w.min)), hi.max(res.nominal).max(worst.map_or(f64::MIN, |w| w.max)));
     let bin_w = (hi - lo) / bins.len() as f64;
     for (k, n) in bins.iter().enumerate() {
         let (x0, x1) = (x_of(lo + bin_w * k as f64), x_of(lo + bin_w * (k + 1) as f64));
@@ -193,10 +220,16 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
         let x = x_of(v);
         p.line_segment([Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())], Stroke::new(1.5, color));
         let y = if above { plot.top() - 1.0 } else { plot.top() + 11.0 };
-        p.text(Pos2::new(x + 3.0, y), Align2::LEFT_BOTTOM, label, FontId::proportional(11.0), color);
+        // near the right edge the label goes to the left of its line
+        let (dx, al) = if x > plot.center().x + plot.width() * 0.35 { (-3.0, Align2::RIGHT_BOTTOM) } else { (3.0, Align2::LEFT_BOTTOM) };
+        p.text(Pos2::new(x + dx, y), al, label, FontId::proportional(11.0), color);
     };
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
+    if let Some(w) = worst {
+        mark(w.min, Color32::from_rgb(230, 80, 80), "最悪(小)", true);
+        mark(w.max, Color32::from_rgb(230, 80, 80), "最悪(大)", true);
+    }
     let f = FontId::proportional(11.0);
     p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, fmt_unit(a, res.unit), f.clone(), Color32::from_gray(190));
     p.text(Pos2::new(plot.right(), plot.bottom() + 4.0), Align2::RIGHT_TOP, fmt_unit(b, res.unit), f.clone(), Color32::from_gray(190));

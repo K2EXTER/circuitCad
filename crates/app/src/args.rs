@@ -1,6 +1,6 @@
 use super::*;
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
 /// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -167,6 +167,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.analyze_impedance();
             }
         }
+        if let Some(i) = args.iter().position(|a| a == "--mc")
+            && let Some(node) = args.get(i + 1) {
+                // --mc <node> [ac]  (the variation analysis; AC measures the -3 dB frequency and uses the --ac range)
+                app.sch.analyze_variation(node, args.get(i + 2).is_some_and(|m| m == "ac"));
+            }
         if let Some(i) = args.iter().position(|a| a == "--noise") {
             // --noise <out node> <input source or -> <temp C> (uses the --ac frequency range)
             if let (Some(out), Some(inp), Some(t)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
