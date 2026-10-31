@@ -156,6 +156,12 @@ pub struct SchEditor {
     noise_out: String,
     noise_in: String,
     noise_temp: String,
+    z: Option<impedance::ZView>,
+    z_node: String,
+    z_ref: String,
+    z_remove: String,
+    /// Waiting for a click on the canvas to choose the net of the impedance analysis (shares `noise_pick` for the canvas).
+    z_pick: bool,
     /// Waiting for a click on the canvas to choose the noise output node.
     /// The voltage-source form for the selected source: (component index, the value text it was
     /// read from, the form). Read again whenever the text changes from elsewhere.
@@ -273,6 +279,7 @@ enum WaveMode {
     Tran,
     Ac,
     Noise,
+    Impedance,
     Sweep,
     Mc,
     Param,
@@ -474,6 +481,11 @@ impl Default for SchEditor {
             noise_out: String::new(),
             noise_in: String::new(),
             noise_temp: "27".into(),
+            z: None,
+            z_node: String::new(),
+            z_ref: String::new(),
+            z_remove: String::new(),
+            z_pick: false,
             src_form: None,
             sweep: None,
             temp_c: "27".into(),
@@ -614,6 +626,7 @@ mod sweep;
 mod challenge;
 mod lessons;
 mod noise;
+mod impedance;
 mod variation;
 mod tran;
 mod dc;

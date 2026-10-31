@@ -8,6 +8,9 @@ impl SchEditor {
         if self.noise_pick && self.pick_probe {
             return "ピンや配線をクリックで電圧、部品の本体をクリックで電流の波形を追加します (Shift+ピンでも電流)。続けて何か所でも追加できます。Esc か右クリックで終了".into();
         }
+        if self.z_pick {
+            return "インピーダンスを見たいネットをクリックします。Shift+クリックで基準のネット、Esc で中止".into();
+        }
         if self.noise_pick {
             return "ノイズを測りたいノードをクリックします。Shift+クリックで基準ノード、Esc で中止".into();
         }
@@ -38,6 +41,9 @@ impl SchEditor {
         }
         if self.noise.is_some() && self.wave_mode == WaveMode::Noise {
             return "ノイズ一覧の素子名にカーソルを合わせると原因と対策が出ます。抵抗値を変えて再実行すると、雑音が √(抵抗値) に比例して変わるのが分かります".into();
+        }
+        if self.z.is_some() && self.wave_mode == WaveMode::Impedance {
+            return "インピーダンス: 谷は、コンデンサがよく効く周波数 (電源の揺れを吸う)。山は、コイルとコンデンサが打ち消し合って高くなる所で、電圧が揺れやすい周波数です。コンデンサを足す・容量を変えて再実行して、山と谷の動きを見ましょう".into();
         }
         if self.ac.is_some() && self.wave_mode == WaveMode::Ac {
             return "ボード線図: 上が大きさ(dB)、下が位相。-3 dB になる周波数がカットオフ周波数です。グラフはドラッグで移動、ホイールで拡大縮小".into();

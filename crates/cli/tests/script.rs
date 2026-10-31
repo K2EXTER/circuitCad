@@ -687,6 +687,34 @@ fn noise_of_an_rc_filter_is_the_kt_over_c_value_and_names_the_resistor() {
 }
 
 #[test]
+fn zout_of_a_divider_with_a_capacitor_is_the_parallel_resistance_and_falls_with_frequency() {
+    // the source is off: OUT sees R1 || R2 (500 ohm) at low frequency and the 1 uF below that above 3 kHz
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 1k as=R1
+add R 1k as=R2
+add C 1u as=C1
+net VIN V1.+ R1.1
+net OUT R1.2 R2.1 C1.1
+net GND V1.- R2.2 C1.2
+erc
+zout out 1 1Meg ppd=10
+zout out 1 100 remove=R2
+");
+    assert!(ok, "{a:?}");
+    let z = a.iter().rev().find(|v| v.get("per_decade").is_some() && v["min_ohm"].as_f64().unwrap() < 10.0).unwrap();
+    let first = &z["per_decade"][0];
+    assert!((first["ohm"].as_f64().unwrap() - 500.0).abs() < 1.0, "{first}");
+    assert_eq!(first["looks_like"], "resistive");
+    let last_d = z["per_decade"].as_array().unwrap().last().unwrap();
+    assert_eq!(last_d["looks_like"], "capacitive");
+    assert!(last_d["ohm"].as_f64().unwrap() < 0.2, "{last_d}");
+    // with R2 taken out only R1 is left
+    let r = a.last().unwrap();
+    assert!((r["per_decade"][0]["ohm"].as_f64().unwrap() - 1000.0).abs() < 2.0, "{r}");
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

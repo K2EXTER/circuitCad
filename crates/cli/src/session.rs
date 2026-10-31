@@ -246,6 +246,7 @@ impl Session {
             "tran" => self.tran(args),
             "ac" => self.ac(args),
             "noise" => self.noise(args),
+            "zout" => self.zout(args),
             "models" | "murata" => self.models(args),
             "calc" => self.calc(args),
             "spec" => self.spec(args),

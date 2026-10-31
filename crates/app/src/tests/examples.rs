@@ -426,6 +426,48 @@ fn write_cap_impedance_example() {
     std::fs::write(root.join("cap_impedance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/rail_impedance.schjson: a 5 V rail seen through a cable (L1 100 nH, R1 50 mohm) with an electrolytic,
+/// a 10 uF and a 100 nF ceramic on it and a 1 kohm load. The impedance analysis of net RAIL shows the dips of the three
+/// capacitors and the peaks between them: `cargo test -p app write_rail_impedance_example -- --ignored`
+#[test]
+#[ignore]
+fn write_rail_impedance_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+    let (elec, cer, small) = (find("CE_100u_16V"), find("C_10u_0805"), find("C_100n_0603"));
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "5".into();
+    label(&mut s, v, "+", "VIN");
+    label(&mut s, v, "-", "GND");
+    let l = s.add(Kind::Inductor, (20, 0), 1);
+    s.components[l].value = "100n".into();
+    label(&mut s, l, "1", "VIN");
+    label(&mut s, l, "2", "CABLE");
+    let r = s.add(Kind::Resistor, (36, 0), 1);
+    s.components[r].value = "50m".into();
+    label(&mut s, r, "1", "CABLE");
+    label(&mut s, r, "2", "RAIL");
+    for (def, x) in [(&elec, 52), (&cer, 66), (&small, 80)] {
+        let c = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (x, 0), 1);
+        label(&mut s, c, "1", "RAIL");
+        label(&mut s, c, "2", "GND");
+    }
+    let load = s.add(Kind::Resistor, (94, 0), 1);
+    s.components[load].value = "1k".into();
+    label(&mut s, load, "1", "RAIL");
+    label(&mut s, load, "2", "GND");
+    std::fs::write(root.join("rail_impedance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

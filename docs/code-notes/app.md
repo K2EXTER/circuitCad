@@ -162,3 +162,6 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 
 - シートごとの色分け(`board_editor/sheets.rs`): 回路図が複数シートのとき、取り込みで `Board.part_sheets`(部品番号→シート名。`netlist::import_sheets`。1シートだけなら空)に入れる。`draw_sheet_groups` が部品のまわりをシートの色(8色の輪)で囲み、グループの左上にシート名を出す。左パネルの `sheet_legend` に、色・シート名・個数のボタン(押すとそのシートの部品をまとめて選ぶ)と「シートごとに色分け」(`show_sheets`)。テスト `each_sheet_of_the_circuit_gets_its_own_colour`
 - ゲートの入れ替え: 左パネルの「ゲートを入れ替えて交差を減らす」(`actions.rs` の `swap_gates`。`Board.swap_specs` があるときだけ出る)。詳しくは `pcb-core.md` の `swap.rs`
+
+## インピーダンス(schematic/impedance.rs、2026-10-31)
+解析タブの「インピーダンス (ネットから見た値)」。入力は `z_node`・`z_ref`・`z_remove`(外す部品)で、周波数は AC解析の欄を共用。結果 `ZView` は下の波形欄に |Z|(dBΩ)と位相の2段、左に両端の「何に見えるか」と山・谷の表。「回路図で選ぶ」は `noise_pick`(キャンバスの取り込み・Esc・バナー)を立てて `z_pick` で区別し、`pick_noise_node` から `pick_z_node` に回す。起動引数は `--z ネット 基準|- 外す部品|- [f0 f1 ppd]`。

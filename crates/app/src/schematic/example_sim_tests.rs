@@ -1095,3 +1095,20 @@ fn the_heat_over_time_block_warms_a_part_less_than_the_steady_state() {
     e.htran_links = "A:B".into();
     assert!(e.run_heat_tran().is_err());
 }
+
+/// The rail sample seen from net RAIL: the cable's 50 mohm at low frequency, then the cable's coil against the capacitors makes a
+/// peak a few hundred kHz up, the 10 uF ceramic gives a dip near 2 MHz, and above 10 MHz everything looks like a coil.
+#[test]
+fn rail_impedance_sample_has_a_resonance_peak_and_a_ceramic_dip() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "rail_impedance.schjson").unwrap().1;
+    let c = from_schematic(&sch).unwrap();
+    let r = sim_core::impedance_analysis(&c, "RAIL", None, &[], &AcSettings { fstart: 10.0, fstop: 1e9, sweep: AcSweep::Decade(20) }).unwrap();
+    let (m, ph) = (r.mag(), r.phase_deg());
+    assert!((m[0] - 0.05).abs() < 0.002 && sim_core::z_character(ph[0]) == "resistive", "{} ohm", m[0]);
+    let ex = sim_core::z_extrema(&r.freq, &m, 3.0);
+    let peak = ex.iter().find(|e| e.peak && (1e5..1e6).contains(&e.freq)).expect("a parallel resonance between 100 kHz and 1 MHz");
+    assert!(peak.ohm > 2.0 * m[0], "{peak:?}");
+    let dip = ex.iter().find(|e| !e.peak && (1e6..5e6).contains(&e.freq)).expect("the ceramic's series resonance");
+    assert!(dip.ohm < 0.02, "{dip:?}");
+    assert_eq!(sim_core::z_character(*ph.last().unwrap()), "inductive");
+}

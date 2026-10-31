@@ -1,0 +1,465 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "100n",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "50m",
+      "pos": [
+        36,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Custom",
+      "value": "100u",
+      "pos": [
+        52,
+        0
+      ],
+      "rot": 1,
+      "footprint": "CP_Radial_D5_P2.0",
+      "custom": {
+        "name": "CE_100u_16V",
+        "prefix": "C",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "CE_100u_16V",
+          "text": ".subckt CE_100u_16V 1 2\nResr 1 n_esr 300m\nLesl n_esr n_esl 15n\nC1 n_esl 2 100u\n.ends",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "温度による値の変化は扱いません。",
+            "セラミックコンデンサは、直流の電圧をかけると容量が下がります。このモデルは下がりません (「DCバイアスで下がる量」に入れると反映できます)。"
+          ]
+        },
+        "ratings": {
+          "v_max": 16.0,
+          "ripple": {
+            "i_rms": 0.3,
+            "freq_hz": 100000.0,
+            "coeffs": [
+              [
+                120.0,
+                0.55
+              ],
+              [
+                1000.0,
+                0.77
+              ],
+              [
+                10000.0,
+                0.94
+              ],
+              [
+                100000.0,
+                1.0
+              ]
+            ]
+          },
+          "life": {
+            "hours": 6000.0,
+            "temp_c": 105.0
+          }
+        },
+        "glyph": "electrolytic"
+      }
+    },
+    {
+      "refdes": "C2",
+      "kind": "Custom",
+      "value": "10u",
+      "pos": [
+        66,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": {
+        "name": "C_10u_0805",
+        "prefix": "C",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "C_10u_0805",
+          "text": ".subckt C_10u_0805 1 2\nResr 1 n_esr 5m\nLesl n_esr n_esl 1n\nC1 n_esl 2 6u\n.ends",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "温度による値の変化は扱いません。",
+            "容量は、かける電圧で下がった値 (6u) の一定値として扱います。電圧が変わっても動きません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 10.0
+        },
+        "glyph": "capacitor",
+        "shops": {
+          "lcsc": "C15850"
+        }
+      }
+    },
+    {
+      "refdes": "C3",
+      "kind": "Custom",
+      "value": "100n",
+      "pos": [
+        80,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0603",
+      "custom": {
+        "name": "C_100n_0603",
+        "prefix": "C",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "C_100n_0603",
+          "text": ".subckt C_100n_0603 1 2\nResr 1 n_esr 30m\nLesl n_esr n_esl 600p\nC1 n_esl 2 100n\n.ends",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "温度による値の変化は扱いません。",
+            "セラミックコンデンサは、直流の電圧をかけると容量が下がります。このモデルは下がりません (「DCバイアスで下がる量」に入れると反映できます)。"
+          ]
+        },
+        "ratings": {
+          "v_max": 16.0
+        },
+        "glyph": "capacitor",
+        "shops": {
+          "lcsc": "C14663"
+        }
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        94,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        -2
+      ],
+      "b": [
+        36,
+        -5
+      ]
+    },
+    {
+      "a": [
+        36,
+        2
+      ],
+      "b": [
+        36,
+        5
+      ]
+    },
+    {
+      "a": [
+        52,
+        -2
+      ],
+      "b": [
+        52,
+        -5
+      ]
+    },
+    {
+      "a": [
+        52,
+        2
+      ],
+      "b": [
+        52,
+        5
+      ]
+    },
+    {
+      "a": [
+        66,
+        -2
+      ],
+      "b": [
+        66,
+        -5
+      ]
+    },
+    {
+      "a": [
+        66,
+        2
+      ],
+      "b": [
+        66,
+        5
+      ]
+    },
+    {
+      "a": [
+        80,
+        -2
+      ],
+      "b": [
+        80,
+        -5
+      ]
+    },
+    {
+      "a": [
+        80,
+        2
+      ],
+      "b": [
+        80,
+        5
+      ]
+    },
+    {
+      "a": [
+        94,
+        -2
+      ],
+      "b": [
+        94,
+        -5
+      ]
+    },
+    {
+      "a": [
+        94,
+        2
+      ],
+      "b": [
+        94,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "CABLE"
+    },
+    {
+      "pos": [
+        36,
+        -5
+      ],
+      "text": "CABLE"
+    },
+    {
+      "pos": [
+        36,
+        5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        52,
+        -5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        52,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        66,
+        -5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        66,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        80,
+        -5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        80,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        94,
+        -5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        94,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -20,6 +20,10 @@ impl SchEditor {
             self.probe_node(g, pt, shift);
             return;
         }
+        if self.z_pick {
+            self.pick_z_node(pt, shift);
+            return;
+        }
         let Some(name) = net_at(&self.sch, pt) else {
             self.status = "そこには接続された配線・ピンがありません。部品のピンか配線の上をクリックしてください".into();
             return;

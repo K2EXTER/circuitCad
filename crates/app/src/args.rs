@@ -1,6 +1,6 @@
 use super::*;
 
-/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
+/// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
 /// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
@@ -153,6 +153,18 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             if let (Some(part), Some(a), Some(b), Some(n), Some(node)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3), args.get(i + 4), args.get(i + 5)) {
                 app.sch.set_param_settings(part, a, b, n, node, args.get(i + 6).is_none_or(|m| m != "tran"));
                 app.sch.analyze_param();
+            }
+        }
+        if let Some(i) = args.iter().position(|a| a == "--z") {
+            // --z <net> <reference net or -> <parts to take out, comma separated, or -> (uses the --ac frequency range)
+            if let (Some(node), Some(rf), Some(rm)) = (args.get(i + 1), args.get(i + 2), args.get(i + 3)) {
+                let dash = |s: &String| if s == "-" { String::new() } else { s.clone() };
+                if let (Some(f0), Some(f1), Some(p)) = (args.get(i + 4), args.get(i + 5), args.get(i + 6))
+                    && !f0.starts_with("--") {
+                    app.sch.set_ac_settings(f0, f1, p);
+                }
+                app.sch.set_impedance_settings(node, &dash(rf), &dash(rm));
+                app.sch.analyze_impedance();
             }
         }
         if let Some(i) = args.iter().position(|a| a == "--noise") {
