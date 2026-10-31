@@ -2625,7 +2625,7 @@ fn part_triangle_breakdown() {
     for (name, f) in [("sheet tints", (|e: &mut BoardEditor| e.show_sheets = false) as fn(&mut BoardEditor)), ("requirement marks", |e| e.show_req_marks = false), ("requirement lines", |e| e.show_req_lines = false)] {
         e.board = board.clone();
         e.vis = base_vis;
-        // the pours are worked out on another thread and may or may not be ready, which would blur a difference this small
+        // with the pours out the counts of one run are the same every time (what changes from frame to frame is in `triangle_settling`)
         e.vis.zones = false;
         e.show_sheets = true;
         e.show_req_marks = true;
@@ -2650,4 +2650,65 @@ fn overlay_counts() {
     let answer = e.cached_requirements();
     let segs: usize = answer.1.iter().flat_map(|m| m.ways.iter()).map(|w| w.len().saturating_sub(1)).sum();
     println!("sheet boxes {} (sheets {}), groups {}, bypass {}, apart {}, measured {} with {} ways / {segs} segments", e.board.part_sheets.len(), e.sheet_colors().len(), marks.groups.len(), marks.bypass.len(), marks.apart.len(), answer.1.len(), answer.1.iter().map(|m| m.ways.len()).sum::<usize>());
+}
+
+/// The triangle count frame by frame after the board changed, to see the pours and the finish come in from their threads (set CCAD_BOARD): `cargo test --release -p app triangle_settling -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn triangle_settling() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    println!("finish active: {}", pcb_core::smooth::finish_active(&board));
+    let mut e = BoardEditor::default();
+    e.board = board;
+    // CCAD_NOZONES=1 leaves the pours out, CCAD_NOFINISH=1 draws the plain tracks
+    e.vis.zones = std::env::var("CCAD_NOZONES").is_err();
+    // CCAD_OFF=silk,parts,tracks,vias,airwires,nets,ruler,tracks switches display items off
+    for k in std::env::var("CCAD_OFF").unwrap_or_default().split(',') {
+        match k {
+            "silk" => e.vis.silk = false,
+            "parts" => e.vis.parts = false,
+            "tracks" => e.vis.tracks = false,
+            "vias" => e.vis.vias = false,
+            "airwires" => e.vis.airwires = false,
+            "nets" => e.vis.nets = false,
+            "ruler" => e.vis.ruler = false,
+            _ => {}
+        }
+    }
+    if std::env::var("CCAD_NOFINISH").is_ok() {
+        let f = e.board.finish;
+        e.board.finish = pcb_core::smooth::Finish { corners: false, tapers: false, forks: false, slots: false, ..f };
+        for c in &mut e.board.net_classes {
+            c.finish = pcb_core::smooth::FinishOverride::off();
+        }
+        println!("finish active after switching it off: {}", pcb_core::smooth::finish_active(&e.board));
+    }
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let ctx = egui::Context::default();
+    let mut frame = |e: &mut BoardEditor| -> usize {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+            e.canvas(ui);
+        });
+        out.textures_delta.clear();
+        let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+        prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum()
+    };
+    let t = std::time::Instant::now();
+    let first = frame(&mut e);
+    println!("first frame (everything made on the spot): {first} in {:?}", t.elapsed());
+    for _ in 0..6 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        frame(&mut e);
+    }
+    println!("settled: {}", frame(&mut e));
+    // a small edit, like the one the other tests make
+    let t0 = e.board.tracks[0].clone();
+    e.board.tracks.push(pcb_core::model::Track { a: Point::new(t0.a.x + 0.4, t0.a.y), b: Point::new(t0.a.x + 0.9, t0.a.y), ..t0 });
+    let t = std::time::Instant::now();
+    for i in 0..14 {
+        let n = frame(&mut e);
+        println!("  after the edit, frame {i:2} at {:5.0} ms: {n}", t.elapsed().as_secs_f64() * 1000.0);
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }
