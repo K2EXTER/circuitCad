@@ -2468,3 +2468,184 @@ fn an_import_forgets_the_marks_of_lands_that_were_checked_since() {
     e.import_from_schematic(&sch);
     assert!(!e.board.land_unverified.contains_key(&fp), "{:?}", e.board.land_unverified);
 }
+
+/// Writes every triangle egui would draw for a board to a text file (x1 y1 x2 y2 x3 y3 rgba per line), so they can be drawn as a wireframe: `CCAD_BOARD=... CCAD_TRI_OUT=... cargo test --release -p app dump_triangles -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn dump_triangles() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let out_path = std::env::var("CCAD_TRI_OUT").unwrap_or_else(|_| "triangles.txt".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let ctx = egui::Context::default();
+    let mut text = String::new();
+    for i in 0..4 {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+            e.canvas(ui);
+        });
+        out.textures_delta.clear();
+        let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+        if i < 3 {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            continue;
+        }
+        for p in &prims {
+            if let egui::epaint::Primitive::Mesh(m) = &p.primitive {
+                for t in m.indices.chunks(3) {
+                    let v: Vec<_> = t.iter().map(|&k| m.vertices[k as usize]).collect();
+                    let c = v[0].color;
+                    text.push_str(&format!("{:.1} {:.1} {:.1} {:.1} {:.1} {:.1} {} {} {}\n", v[0].pos.x, v[0].pos.y, v[1].pos.x, v[1].pos.y, v[2].pos.x, v[2].pos.y, c.r(), c.g(), c.b()));
+                }
+            }
+        }
+    }
+    println!("triangles {}", text.lines().count());
+    std::fs::write(out_path, text).unwrap();
+}
+
+/// Triangles per kind of element, found by switching one display item off at a time (set CCAD_BOARD): `cargo test --release -p app triangle_breakdown -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn triangle_breakdown() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let ctx = egui::Context::default();
+    let count = |e: &mut BoardEditor| -> usize {
+        let mut n = 0;
+        for i in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+            n = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+            if i < 2 {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+            }
+        }
+        n
+    };
+    let all = count(&mut e);
+    println!("all on: {all}");
+    let base = e.vis;
+    type Off = (&'static str, fn(&mut Visible));
+    let offs: [Off; 10] = [
+        ("silk", |v| v.silk = false),
+        ("parts (pads, outlines, designators)", |v| v.parts = false),
+        ("airwires", |v| v.airwires = false),
+        ("zones (pours)", |v| v.zones = false),
+        ("ruler", |v| v.ruler = false),
+        ("tracks", |v| v.tracks = false),
+        ("vias", |v| v.vias = false),
+        ("net names", |v| v.nets = false),
+        ("top copper layer", |v| v.top = false),
+        ("bottom copper layer", |v| v.bottom = false),
+    ];
+    for (name, f) in offs {
+        e.vis = base;
+        f(&mut e.vis);
+        let n = count(&mut e);
+        println!("{name:40} off: {n:7}  ->  {:7} ({:.1}%)", all as i64 - n as i64, (all as f64 - n as f64) * 100.0 / all as f64);
+    }
+    e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, inner_hidden: u32::MAX };
+    println!("everything off (frame, grid, outline, panels): {}", count(&mut e));
+}
+
+/// Triangles of the parts, split into pads (by kind), designator texts and the rest of the part silk (set CCAD_BOARD): `cargo test --release -p app part_triangle_breakdown -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn part_triangle_breakdown() {
+    use pcb_core::model::PadShape;
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board.clone();
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let ctx = egui::Context::default();
+    let count = |e: &mut BoardEditor| -> usize {
+        let mut n = 0;
+        for i in 0..3 {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+            n = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+            if i < 2 {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+            }
+        }
+        n
+    };
+    let base_vis = e.vis;
+    let mut with = |e: &mut BoardEditor, b: &pcb_core::Board, parts: bool, silk: bool| {
+        e.board = b.clone();
+        e.vis = base_vis;
+        e.vis.parts = parts;
+        e.vis.silk = silk;
+        // the tints and marks are boxed round the pads: leave them out so that taking pads away does not take them too
+        (e.show_sheets, e.show_req_marks, e.show_req_lines) = (false, false, false);
+        count(e)
+    };
+    let all = with(&mut e, &board, true, true);
+    let ps = all;
+    let p_nos = with(&mut e, &board, true, false);
+    let nop_s = with(&mut e, &board, false, true);
+    let nop_nos = with(&mut e, &board, false, false);
+    let part_total = all - nop_s;
+    let pads_and_copper = p_nos - nop_nos;
+    let part_silk = ps - p_nos - (nop_s - nop_nos);
+    println!("all {all}; parts {} ({:.1}%): pads+part copper {pads_and_copper}, part silk {part_silk} (rest {})", part_total, part_total as f64 * 100.0 / all as f64, part_total as i64 - pads_and_copper as i64 - part_silk as i64);
+    // the designator texts alone
+    let mut b = board.clone();
+    b.texts.retain(|t| t.refdes.is_empty());
+    let no_refdes = with(&mut e, &b, true, true);
+    let n_ref = board.texts.iter().filter(|t| !t.refdes.is_empty()).count();
+    println!("designator texts: {} triangles, {} texts ({:.0} each)", all - no_refdes, n_ref, (all - no_refdes) as f64 / n_ref.max(1) as f64);
+    // the pads, by kind
+    let kinds: [(&str, fn(&pcb_core::Pad) -> bool); 5] = [
+        ("SMD rect pads", |p| p.drill.is_none() && matches!(p.shape, PadShape::Rect { .. })),
+        ("SMD oval pads", |p| p.drill.is_none() && matches!(p.shape, PadShape::Oval { .. })),
+        ("SMD round pads", |p| p.drill.is_none() && matches!(p.shape, PadShape::Circle { .. })),
+        ("through-hole pads, round", |p| p.drill.is_some() && matches!(p.shape, PadShape::Circle { .. })),
+        ("through-hole pads, rect/oval", |p| p.drill.is_some() && !matches!(p.shape, PadShape::Circle { .. })),
+    ];
+    for (name, f) in kinds {
+        let mut b = board.clone();
+        let n_pads = b.pads.iter().filter(|p| f(p)).count();
+        b.pads.retain(|p| !f(p));
+        let n = with(&mut e, &b, true, true);
+        println!("{name:32} {:6} triangles, {n_pads:4} pads ({:.1} each)", all - n, (all - n) as f64 / n_pads.max(1) as f64);
+    }
+    for (name, f) in [("sheet tints", (|e: &mut BoardEditor| e.show_sheets = false) as fn(&mut BoardEditor)), ("requirement marks", |e| e.show_req_marks = false), ("requirement lines", |e| e.show_req_lines = false)] {
+        e.board = board.clone();
+        e.vis = base_vis;
+        e.show_sheets = true;
+        e.show_req_marks = true;
+        e.show_req_lines = true;
+        let on = count(&mut e);
+        f(&mut e);
+        let n = count(&mut e);
+        println!("{name:32} {:6} triangles (of {on} with all three on)", on - n);
+    }
+    println!("board: {} parts, {} pads, {} silk lines, {} texts", board.parts.len(), board.pads.len(), board.silk.len(), board.texts.len());
+}
+
+/// How many sheet boxes and requirement marks are drawn on a real board (set CCAD_BOARD): `cargo test --release -p app overlay_counts -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn overlay_counts() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let marks = pcb_core::requirements::marks(&e.board);
+    let answer = e.cached_requirements();
+    let segs: usize = answer.1.iter().flat_map(|m| m.ways.iter()).map(|w| w.len().saturating_sub(1)).sum();
+    println!("sheet boxes {} (sheets {}), groups {}, bypass {}, apart {}, measured {} with {} ways / {segs} segments", e.board.part_sheets.len(), e.sheet_colors().len(), marks.groups.len(), marks.bypass.len(), marks.apart.len(), answer.1.len(), answer.1.iter().map(|m| m.ways.len()).sum::<usize>());
+}

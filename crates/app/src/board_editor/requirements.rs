@@ -18,6 +18,8 @@ impl BoardEditor {
         let (good, bad) = (Color32::from_rgb(70, 190, 100), Color32::from_rgb(255, 60, 200));
         // not kept, but the table accepts it (a waiver with its reason)
         let accepted = Color32::from_rgb(210, 190, 90);
+        // the frames and lines go into one mesh and are handed over before each tag, so that the tags lie over them
+        let mut mesh = egui::Mesh::default();
         // a dark halo under every line and frame: the top copper is red and the inner layers green, so the colour alone is not enough
         for g in marks.groups.iter().filter(|_| self.show_req_marks) {
             let col = if g.ok { good } else if g.waived { accepted } else { bad };
@@ -34,8 +36,9 @@ impl BoardEditor {
             if !r.intersects(rect) {
                 continue;
             }
-            painter.rect_stroke(r, 3.0, Stroke::new(4.5, HALO), egui::StrokeKind::Outside);
-            painter.rect_stroke(r, 3.0, Stroke::new(2.0, col), egui::StrokeKind::Outside);
+            ribbon::add_frame(&mut mesh, r.expand(2.25), 4.5, HALO);
+            ribbon::add_frame(&mut mesh, r.expand(1.0), 2.0, col);
+            ribbon::flush(painter, &mut mesh);
             let text = if g.limit > 0.0 { format!("組「{}」 {:.1} / {} mm{}", g.name, g.actual, g.limit, if g.waived && !g.ok { " (承知)" } else { "" }) } else { format!("組「{}」", g.name) };
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(12.0), Color32::BLACK);
             let size = galley.size() + Vec2::new(8.0, 3.0);
@@ -48,10 +51,11 @@ impl BoardEditor {
         for b in marks.bypass.iter().filter(|_| self.show_req_lines) {
             let col = if b.ok { good } else if b.waived { accepted } else { bad };
             let (p, q) = (self.to_screen(rect, b.a), self.to_screen(rect, b.b));
-            painter.line_segment([p, q], Stroke::new(if b.ok { 3.0 } else { 4.5 }, HALO));
-            painter.line_segment([p, q], Stroke::new(if b.ok { 1.0 } else { 2.0 }, col));
-            painter.circle_stroke(q, 4.0, Stroke::new(3.5, HALO));
-            painter.circle_stroke(q, 4.0, Stroke::new(1.5, col));
+            ribbon::add_chain(&mut mesh, &[p, q], if b.ok { 3.0 } else { 4.5 }, HALO);
+            ribbon::add_chain(&mut mesh, &[p, q], if b.ok { 1.0 } else { 2.0 }, col);
+            ribbon::add_ring(&mut mesh, q, 4.0, 3.5, HALO);
+            ribbon::add_ring(&mut mesh, q, 4.0, 1.5, col);
+            ribbon::flush(painter, &mut mesh);
             if !b.ok || self.zoom >= 14.0 {
                 let galley = painter.layout_no_wrap(format!("{}→{} {:.1} mm{}", b.cap, b.ic, b.actual, if b.waived && !b.ok { " (承知)" } else { "" }), egui::FontId::proportional(11.0), Color32::BLACK);
                 let tag = Rect::from_center_size(p.lerp(q, 0.5), galley.size() + Vec2::new(6.0, 2.0));
@@ -69,19 +73,17 @@ impl BoardEditor {
             let col = if m.ok { good } else if m.waived { accepted } else { bad };
             let wide = if m.ok { 1.5 } else { 3.0 };
             for way in &m.ways {
+                // a way is one strip (the halo first, then the colour), not a line for every piece
                 let pts: Vec<Pos2> = way.iter().map(|p| self.to_screen(rect, *p)).collect();
-                for w in pts.windows(2) {
-                    painter.line_segment([w[0], w[1]], Stroke::new(wide + 2.0, HALO));
-                }
-                for w in pts.windows(2) {
-                    painter.line_segment([w[0], w[1]], Stroke::new(wide, col));
-                }
+                ribbon::add_chain(&mut mesh, &pts, wide + 2.0, HALO);
+                ribbon::add_chain(&mut mesh, &pts, wide, col);
             }
             if let Some(at) = m.at {
                 let c = self.to_screen(rect, at);
-                painter.circle_stroke(c, 7.0, Stroke::new(4.0, HALO));
-                painter.circle_stroke(c, 7.0, Stroke::new(2.0, col));
+                ribbon::add_ring(&mut mesh, c, 7.0, 4.0, HALO);
+                ribbon::add_ring(&mut mesh, c, 7.0, 2.0, col);
             }
+            ribbon::flush(painter, &mut mesh);
             if !m.ok || self.zoom >= 14.0 {
                 let anchor = m.at.or_else(|| m.ways.first().and_then(|w| w.get(w.len() / 2).copied()));
                 if let Some(a) = anchor {
@@ -96,12 +98,14 @@ impl BoardEditor {
         for a in marks.apart.iter().filter(|_| self.show_req_lines) {
             let col = if a.ok { good } else if a.waived { accepted } else { bad };
             let (p, q) = (self.to_screen(rect, a.a), self.to_screen(rect, a.b));
-            painter.line_segment([p, q], Stroke::new(if a.ok { 3.0 } else { 4.5 }, HALO));
-            painter.line_segment([p, q], Stroke::new(if a.ok { 1.0 } else { 2.0 }, col));
+            ribbon::add_chain(&mut mesh, &[p, q], if a.ok { 3.0 } else { 4.5 }, HALO);
+            ribbon::add_chain(&mut mesh, &[p, q], if a.ok { 1.0 } else { 2.0 }, col);
+            // a one-point chain is a disc
             for e in [p, q] {
-                painter.circle_filled(e, 4.5, HALO);
-                painter.circle_filled(e, 3.0, col);
+                ribbon::add_chain(&mut mesh, &[e], 9.0, HALO);
+                ribbon::add_chain(&mut mesh, &[e], 6.0, col);
             }
+            ribbon::flush(painter, &mut mesh);
             let text = if a.ok { format!("「{}」 {:.1} mm (下限 {})", a.name, a.actual, a.limit) } else { format!("「{}」 {:.1} mm しかない (下限 {}){}", a.name, a.actual, a.limit, if a.waived { " (承知)" } else { "" }) };
             let galley = painter.layout_no_wrap(text, egui::FontId::proportional(12.0), Color32::BLACK);
             let tag = Rect::from_center_size(p.lerp(q, 0.5), galley.size() + Vec2::new(8.0, 3.0));

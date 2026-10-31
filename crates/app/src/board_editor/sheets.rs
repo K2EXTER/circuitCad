@@ -47,6 +47,8 @@ impl BoardEditor {
             return;
         }
         let colors = self.sheet_colors();
+        // the boxes of all the parts are one mesh (a box is two triangles and a hairline), the tags lie over it
+        let mut mesh = egui::Mesh::default();
         for (name, col) in &colors {
             let mut group: Option<(Point, Point)> = None;
             for (refdes, sheet) in self.board.part_sheets.iter().filter(|(_, s)| *s == name) {
@@ -54,8 +56,8 @@ impl BoardEditor {
                 let m = 0.4;
                 let r = Rect::from_two_pos(self.to_screen(rect, Point::new(lo.x - m, lo.y - m)), self.to_screen(rect, Point::new(hi.x + m, hi.y + m)));
                 if r.intersects(rect) {
-                    painter.rect_filled(r, 2.0, col.gamma_multiply(0.22));
-                    painter.rect_stroke(r, 2.0, Stroke::new(1.0, col.gamma_multiply(0.7)), egui::StrokeKind::Inside);
+                    ribbon::add_rect(&mut mesh, r, col.gamma_multiply(0.22));
+                    ribbon::add_hairline_ring(&mut mesh, &[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()], col.gamma_multiply(0.7));
                 }
                 let _ = sheet;
                 group = Some(match group {
@@ -66,12 +68,14 @@ impl BoardEditor {
             if let Some((lo, hi)) = group {
                 // y is up on the board: the top left corner of the group on the screen
                 let at = self.to_screen(rect, Point::new(lo.x, hi.y));
+                ribbon::flush(painter, &mut mesh);
                 let galley = painter.layout_no_wrap(name.clone(), egui::FontId::proportional(13.0), Color32::BLACK);
                 let tag = Rect::from_min_size(at + Vec2::new(0.0, -galley.size().y - 6.0), galley.size() + Vec2::new(8.0, 3.0));
                 painter.rect_filled(tag, 3.0, *col);
                 painter.galley(tag.min + Vec2::new(4.0, 1.5), galley, Color32::BLACK);
             }
         }
+        ribbon::flush(painter, &mut mesh);
     }
 
     /// The list of the sheets in the panel: a colour, the name, the number of parts and a button that selects them.

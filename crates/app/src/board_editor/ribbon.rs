@@ -3,7 +3,7 @@
 //! tracks (the round corners of the finish) is then two triangles a piece, and the joins between pieces are mitred, so nothing is drawn
 //! twice. The edge of the strip fades out over a pixel, like the lines of egui, so it is not stepped.
 
-use eframe::egui::{Color32, Mesh, Pos2, Rect, Vec2};
+use eframe::egui::{Color32, Mesh, Painter, Pos2, Rect, Shape, Vec2};
 use pcb_core::smooth::Finished;
 use pcb_core::{Point, Side, Track};
 use std::collections::HashMap;
@@ -437,6 +437,36 @@ pub(super) fn add_hairline_ring(mesh: &mut Mesh, pts: &[Pos2], col: Color32) {
     }
 }
 
+/// A filled rectangle, two triangles.
+pub(super) fn add_rect(mesh: &mut Mesh, r: Rect, col: Color32) {
+    let base = mesh.vertices.len() as u32;
+    for q in [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom()] {
+        mesh.colored_vertex(q, col);
+    }
+    mesh.add_triangle(base, base + 1, base + 2);
+    mesh.add_triangle(base, base + 2, base + 3);
+}
+
+/// The outline of a rectangle as a strip `width` pixels wide centred on its edges.
+pub(super) fn add_frame(mesh: &mut Mesh, r: Rect, width: f32, col: Color32) {
+    add_chain(mesh, &[r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()], width, col);
+}
+
+/// A circle line `width` pixels wide round `c`, as a closed strip of a few corners (a small ring needs no more than 8 to 12).
+pub(super) fn add_ring(mesh: &mut Mesh, c: Pos2, radius: f32, width: f32, col: Color32) {
+    let n = ((radius.sqrt() * 3.0).ceil() as usize).clamp(8, 32);
+    let pts: Vec<Pos2> = (0..=n).map(|i| c + Vec2::angled(std::f32::consts::TAU * i as f32 / n as f32) * radius).collect();
+    add_chain(mesh, &pts, width, col);
+}
+
+/// Hands the mesh to the painter (when there is anything in it) and starts a new one: what is added to the painter afterwards, such as a tag,
+/// lies over it.
+pub(super) fn flush(painter: &Painter, mesh: &mut Mesh) {
+    if !mesh.is_empty() {
+        painter.add(Shape::mesh(std::mem::take(mesh)));
+    }
+}
+
 /// A half disc round `c`, bulging towards `dir`, from the left edge of a strip to its right edge.
 fn cap(mesh: &mut Mesh, c: Pos2, dir: Vec2, core: f32, outer: f32, col: Color32) {
     // an even number of steps, so that the middle of the cap is a corner (the cap then reaches out by the full radius)
@@ -591,6 +621,20 @@ mod tests {
         };
         assert_eq!(n(1.5), 6, "a strip and its fade, nothing else");
         assert!(n(6.0) > 6 + 2 * 6, "caps are added");
+    }
+
+    #[test]
+    fn a_box_a_frame_and_a_ring_stay_few_triangles() {
+        let mut m = Mesh::default();
+        add_rect(&mut m, Rect::from_min_size(Pos2::ZERO, Vec2::new(40.0, 30.0)), Color32::RED);
+        assert_eq!(m.indices.len() / 3, 2);
+        let mut m = Mesh::default();
+        add_ring(&mut m, Pos2::new(50.0, 50.0), 7.0, 2.0, Color32::RED);
+        assert!(m.indices.len() / 3 < 80, "{}", m.indices.len() / 3);
+        assert!(m.indices.iter().all(|&i| (i as usize) < m.vertices.len()));
+        let mut m = Mesh::default();
+        add_frame(&mut m, Rect::from_min_size(Pos2::ZERO, Vec2::new(40.0, 30.0)), 2.0, Color32::RED);
+        assert!(m.indices.len() / 3 < 40, "{}", m.indices.len() / 3);
     }
 
     #[test]
