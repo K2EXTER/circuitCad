@@ -241,6 +241,8 @@ pub struct SchEditor {
     fault_wave: Option<fault::FaultWaveView>,
     /// Targets for the design (pass / fail table); kept for the session.
     specs: Vec<spec_table::SpecRow>,
+    /// Worst cases computed for the spec table, by what they were computed from (circuit, tolerances, node): at most a few.
+    worst_spec_cache: Vec<(String, Result<sim_core::WorstCase, String>)>,
     /// The spec table as last saved or opened (a changed table counts as an unsaved change).
     saved_specs: Vec<spec_table::SpecItem>,
     fault_kind: usize,
@@ -545,6 +547,7 @@ impl Default for SchEditor {
             fault_node: String::new(),
             fault_wave: None,
             specs: vec![],
+            worst_spec_cache: vec![],
             saved_specs: vec![],
             fault_kind: 0,
             fault_view: None,

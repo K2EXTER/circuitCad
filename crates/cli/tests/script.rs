@@ -766,6 +766,28 @@ thd probe=V(out) f=1k harmonics=5
 }
 
 #[test]
+fn spec_worst_judges_the_whole_range_of_the_tolerances() {
+    let head = "new
+add V 5 as=V1
+add R 10k as=R1
+add R 10k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+erc
+";
+    // 1 % resistors: 2.475 ... 2.525 V
+    let (a, ok) = run(&format!("{head}spec dc_voltage_worst mid 2.4 2.6 tol_r=1
+spec dc_voltage_worst mid 2.48 2.6 tol_r=1
+"));
+    assert!(ok, "{a:?}");
+    let n = a.len();
+    assert_eq!(a[n - 2]["pass"], true, "{}", a[n - 2]);
+    assert_eq!(a[n - 1]["pass"], false, "{}", a[n - 1]);
+    assert!(a[n - 1]["note"].as_str().unwrap().contains("最小"), "{}", a[n - 1]);
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

@@ -1,7 +1,7 @@
 //! Pass / fail checks of a design against target values (a "spec table").
 //! Each spec reads one number from an analysis result that already exists and compares it with a range.
 
-use crate::{minus_3db, stability_margins, stats, wave_measure, AcResult, DcResult, TranResult};
+use crate::{minus_3db, stability_margins, stats, wave_measure, AcResult, DcResult, TranResult, WorstCase};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SpecKind {
@@ -23,10 +23,15 @@ pub enum SpecKind {
     AcGainAt,
     /// Phase margin of an AC loop-gain signal.
     PhaseMargin,
+    /// Voltage of a node in the DC operating point at the worst case of the part tolerances: passes only when the smallest and
+    /// the largest value both lie inside the range.
+    DcVoltageWorst,
+    /// -3 dB frequency at the worst case of the part tolerances.
+    AcCutoffWorst,
 }
 
 impl SpecKind {
-    pub const ALL: [SpecKind; 9] = [
+    pub const ALL: [SpecKind; 11] = [
         SpecKind::DcVoltage,
         SpecKind::DcCurrent,
         SpecKind::TranMean,
@@ -36,6 +41,8 @@ impl SpecKind {
         SpecKind::AcCutoff,
         SpecKind::AcGainAt,
         SpecKind::PhaseMargin,
+        SpecKind::DcVoltageWorst,
+        SpecKind::AcCutoffWorst,
     ];
 
     /// Stable name used in saved files (never rename; the labels may change).
@@ -50,6 +57,8 @@ impl SpecKind {
             SpecKind::AcCutoff => "ac_cutoff",
             SpecKind::AcGainAt => "ac_gain_at",
             SpecKind::PhaseMargin => "phase_margin",
+            SpecKind::DcVoltageWorst => "dc_voltage_worst",
+            SpecKind::AcCutoffWorst => "ac_cutoff_worst",
         }
     }
 
@@ -68,14 +77,16 @@ impl SpecKind {
             SpecKind::AcCutoff => "-3dB点 (AC)",
             SpecKind::AcGainAt => "ゲイン (AC・ある周波数)",
             SpecKind::PhaseMargin => "位相余裕 (AC)",
+            SpecKind::DcVoltageWorst => "DC電圧 (最悪ケース)",
+            SpecKind::AcCutoffWorst => "-3dB点 (最悪ケース)",
         }
     }
 
     pub fn unit(self) -> &'static str {
         match self {
-            SpecKind::DcVoltage | SpecKind::TranMean | SpecKind::TranPp | SpecKind::TranMax | SpecKind::TranMin => "V",
+            SpecKind::DcVoltage | SpecKind::DcVoltageWorst | SpecKind::TranMean | SpecKind::TranPp | SpecKind::TranMax | SpecKind::TranMin => "V",
             SpecKind::DcCurrent => "A",
-            SpecKind::AcCutoff => "Hz",
+            SpecKind::AcCutoff | SpecKind::AcCutoffWorst => "Hz",
             SpecKind::AcGainAt => "dB",
             SpecKind::PhaseMargin => "°",
         }
@@ -87,7 +98,13 @@ impl SpecKind {
             SpecKind::DcVoltage | SpecKind::DcCurrent => "DC動作点",
             SpecKind::TranMean | SpecKind::TranPp | SpecKind::TranMax | SpecKind::TranMin => "過渡解析",
             SpecKind::AcCutoff | SpecKind::AcGainAt | SpecKind::PhaseMargin => "AC解析",
+            SpecKind::DcVoltageWorst | SpecKind::AcCutoffWorst => "最悪ケース解析 (回路図から直接。許容差は「温度とばらつき」の欄)",
         }
+    }
+
+    /// Judged on the worst case of the part tolerances (`evaluate_worst`), not from an analysis result on screen.
+    pub fn is_worst(self) -> bool {
+        matches!(self, SpecKind::DcVoltageWorst | SpecKind::AcCutoffWorst)
     }
 
     /// The kind's target is a part name (otherwise a node / signal name).
@@ -157,6 +174,7 @@ fn db_at(freq: &[f64], db: &[f64], f: f64) -> Option<f64> {
 pub fn measure(spec: &Spec, inp: &Inputs) -> Result<f64, String> {
     let need = |what: &str| format!("{what}を実行すると測れます");
     match spec.kind {
+        SpecKind::DcVoltageWorst | SpecKind::AcCutoffWorst => Err("最悪ケースは回路図から直接計算します (画面の表と、CLI の `worst` コマンド)".into()),
         SpecKind::DcVoltage => {
             let dc = inp.dc.ok_or_else(|| need("DC動作点"))?;
             dc.voltage(&spec.target).ok_or_else(|| format!("ノード {} が結果にありません", spec.target))
@@ -190,6 +208,23 @@ pub fn measure(spec: &Spec, inp: &Inputs) -> Result<f64, String> {
             }
         }
     }
+}
+
+/// Judges a worst-case spec: it passes only when the whole range from the smallest to the largest value is inside `[lo, hi]`.
+/// `value` is the nominal value; the note says what the range is and, on a miss, which end gets out and by how much.
+pub fn evaluate_worst(spec: &Spec, w: &WorstCase) -> SpecEval {
+    let unit = spec.kind.unit();
+    let show = |v: f64| crate::format_value(v) + unit;
+    let range = format!("最悪ケース {} 〜 {}", show(w.min), show(w.max));
+    let (lo_ok, lo_note) = in_range(w.min, spec.lo, None, unit);
+    let (hi_ok, hi_note) = in_range(w.max, None, spec.hi, unit);
+    let note = match (lo_ok, hi_ok) {
+        (true, true) => range,
+        (false, true) => format!("{range} (最小が{lo_note})"),
+        (true, false) => format!("{range} (最大が{hi_note})"),
+        (false, false) => format!("{range} (最小が{lo_note}、最大が{hi_note})"),
+    };
+    SpecEval { value: Some(w.nominal), pass: Some(lo_ok && hi_ok), note }
 }
 
 pub fn evaluate(spec: &Spec, inp: &Inputs) -> SpecEval {
@@ -231,12 +266,12 @@ pub struct MeasuredCompare {
 fn allowance(kind: SpecKind) -> ((f64, f64), (f64, f64)) {
     match kind {
         // 1 % + a few digits of a hand-held meter; a 78xx alone is +/-4 %
-        SpecKind::DcVoltage | SpecKind::TranMean | SpecKind::TranMax | SpecKind::TranMin => ((0.02, 0.02), (0.08, 0.08)),
+        SpecKind::DcVoltage | SpecKind::DcVoltageWorst | SpecKind::TranMean | SpecKind::TranMax | SpecKind::TranMin => ((0.02, 0.02), (0.08, 0.08)),
         // a meter's current range drops a few 100 mV across itself
         SpecKind::DcCurrent => ((0.05, 2e-4), (0.15, 1e-3)),
         // an oscilloscope's bandwidth, probe and ground lead decide a ripple reading
         SpecKind::TranPp => ((0.25, 5e-3), (0.6, 2e-2)),
-        SpecKind::AcCutoff => ((0.10, 0.0), (0.30, 0.0)),
+        SpecKind::AcCutoff | SpecKind::AcCutoffWorst => ((0.10, 0.0), (0.30, 0.0)),
         // in dB and degrees the allowance is absolute
         SpecKind::AcGainAt => ((0.0, 1.0), (0.0, 3.0)),
         SpecKind::PhaseMargin => ((0.0, 5.0), (0.0, 15.0)),
@@ -248,7 +283,7 @@ fn hints_for(kind: SpecKind, level: Agreement, measured_is_more: bool) -> Vec<&'
         return vec![];
     }
     let mut v: Vec<&'static str> = match kind {
-        SpecKind::DcVoltage | SpecKind::TranMean | SpecKind::TranMax | SpecKind::TranMin => vec![
+        SpecKind::DcVoltage | SpecKind::DcVoltageWorst | SpecKind::TranMean | SpecKind::TranMax | SpecKind::TranMin => vec![
             "部品の誤差: 抵抗は ±1〜5%、ツェナーや基準電圧は ±5% ほど、7805 は ±4% ほどあります (データシートの範囲を見ます)",
             "測り方: テスタの精度 (±0.5〜1% + 数桁)、テスタ棒の接触、基準 (GND) の取り方を確かめます",
             "電源側: 電池や AC アダプタは、負荷をつなぐと電圧が下がります。つないだ状態で入力電圧も測ります",
@@ -264,7 +299,7 @@ fn hints_for(kind: SpecKind, level: Agreement, measured_is_more: bool) -> Vec<&'
             "部品: 電解コンデンサの容量は −20〜+20% ずれ、古いものや低温で ESR が増えます (シミュレーションの ESR と比べます)",
             "テスタの交流レンジでは、リップルの形と大きさは測れません (実効値の目安だけです)",
         ],
-        SpecKind::AcCutoff | SpecKind::AcGainAt => vec![
+        SpecKind::AcCutoff | SpecKind::AcCutoffWorst | SpecKind::AcGainAt => vec![
             "部品の誤差: コンデンサは ±10〜20%、抵抗は ±1〜5%。カットオフ周波数にそのまま出ます",
             "測る機器の入力: オシロやテスタの入力容量・抵抗が、回路につながって周波数特性を変えます",
             "高い周波数では、ブレッドボードの浮遊容量や配線のインダクタンスが効きます",
@@ -278,7 +313,7 @@ fn hints_for(kind: SpecKind, level: Agreement, measured_is_more: bool) -> Vec<&'
         v.insert(0, "差が大きいときは、まず配線の間違い (つなぎ違い、抜けた脚、極性) と、測っている場所がシミュレーションと同じかを確かめます");
         v.push("それでも合わないときは、シミュレーションの部品値が、実際に使った部品と同じか確かめます (回路図の値を、手元の部品に合わせます)");
     }
-    if kind == SpecKind::DcVoltage && measured_is_more && level != Agreement::Close {
+    if matches!(kind, SpecKind::DcVoltage | SpecKind::DcVoltageWorst) && measured_is_more && level != Agreement::Close {
         v.push("測った値のほうが大きいとき: 負荷が軽い (つないだ抵抗が大きい)、または入力電圧が想定より高いことがあります");
     }
     v
@@ -411,5 +446,35 @@ mod tests {
         assert_eq!(evaluate(&g, &inp).pass, Some(true));
         g.at = 1e9;
         assert_eq!(evaluate(&g, &inp).pass, None, "out of range");
+    }
+
+    #[test]
+    fn a_worst_case_spec_passes_only_when_the_whole_range_fits() {
+        let w = WorstCase {
+            output: "OUT".into(),
+            unit: "V",
+            nominal: 5.0,
+            min: 4.8,
+            max: 5.2,
+            min_sum: 4.8,
+            max_sum: 5.2,
+            min_rss: 4.9,
+            max_rss: 5.1,
+            parts: vec![],
+            min_corner: vec![],
+            max_corner: vec![],
+            unsolved: vec![],
+        };
+        let spec = |lo, hi| Spec { kind: SpecKind::DcVoltageWorst, target: "OUT".into(), at: 0.0, lo, hi };
+        assert_eq!(evaluate_worst(&spec(Some(4.75), Some(5.25)), &w).pass, Some(true));
+        let low = evaluate_worst(&spec(Some(4.9), Some(5.25)), &w);
+        assert_eq!(low.pass, Some(false));
+        assert!(low.note.contains("最小") && !low.note.contains("最大"), "{}", low.note);
+        let both = evaluate_worst(&spec(Some(4.9), Some(5.1)), &w);
+        assert!(both.note.contains("最小") && both.note.contains("最大"), "{}", both.note);
+        // one side only
+        assert_eq!(evaluate_worst(&spec(None, Some(5.25)), &w).pass, Some(true));
+        // the plain `measure` does not read it from an analysis result
+        assert!(measure(&spec(None, None), &Inputs::default()).is_err());
     }
 }

@@ -8,7 +8,7 @@ fn fmt_unit(v: f64, unit: &str) -> String {
 }
 
 /// Tolerance text ("5" = ±5 %) -> fraction.
-fn percent(s: &str) -> Option<f64> {
+pub(super) fn percent(s: &str) -> Option<f64> {
     s.trim().trim_end_matches('%').parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0)
 }
 

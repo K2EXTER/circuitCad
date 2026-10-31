@@ -289,11 +289,11 @@ impl Session {
     }
 
     /// `spec KIND TARGET LO HI [at=Hz]`: a pass / fail check of the last `dc` / `tran` / `ac` answer.
-    pub fn spec(&self, args: &[String]) -> Res {
+    pub fn spec(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);
         if pos.is_empty() {
             let kinds: Vec<Value> = SpecKind::ALL.iter().map(|k| json!({"kind": k.key(), "measures": k.label(), "unit": k.unit(), "needs": k.needs()})).collect();
-            return Ok(obj(json!({"kinds": kinds, "usage": "spec KIND TARGET LO HI [at=Hz]   LO or HI may be '-' (no limit). Run the analysis first: dc, tran or ac"})));
+            return Ok(obj(json!({"kinds": kinds, "usage": "spec KIND TARGET LO HI [at=Hz]   LO or HI may be '-' (no limit). Run the analysis first: dc, tran or ac. The *_worst kinds need no analysis: they solve the circuit with every part at an end of its tolerance (tol_r=1 tol_c=10 tol_l=10 tol_v=0 in percent, f=10:1Meg for the cutoff)"})));
         }
         if pos.len() != 4 {
             return Err("spec KIND TARGET LO HI [at=Hz]   (LO / HI: a number, or '-' for no limit; 'spec' alone lists the kinds)".into());
@@ -308,6 +308,27 @@ impl Session {
         let target = self.canonical_target(kind, &pos[1]);
         let spec = sim_core::Spec { kind, target: target.clone(), at, lo, hi };
         let inputs = SpecInputs { dc: self.last_dc.as_ref(), tran: self.last_tran.as_ref(), ac: self.last_ac.as_ref() };
+        if kind.is_worst() {
+            let pct = |key: &str, default: f64| -> Result<f64, String> {
+                match opt(&kv, key) {
+                    Some(s) => s.parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0).ok_or_else(|| format!("{key}={s}: a percentage from 0 to 100")),
+                    None => Ok(default / 100.0),
+                }
+            };
+            let (tol_r, tol_c, tol_l, tol_v) = (pct("tol_r", 1.0)?, pct("tol_c", 10.0)?, pct("tol_l", 10.0)?, pct("tol_v", 0.0)?);
+            let measure = if kind == SpecKind::AcCutoffWorst {
+                let (a, b) = opt(&kv, "f").unwrap_or("10:1Meg").split_once(':').ok_or("f=10:1Meg: two frequencies with a colon")?;
+                let num = |s: &str| sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("f: '{s}' is not a positive frequency"));
+                sim_core::McMeasure::Cutoff { fstart: num(a)?, fstop: num(b)?, points_per_decade: 50 }
+            } else {
+                sim_core::McMeasure::DcVoltage
+            };
+            let c = self.circuit()?;
+            let node = c.names.iter().find(|n| n.eq_ignore_ascii_case(target.trim())).cloned().unwrap_or(target.clone());
+            let w = sim_core::worst_case(&c, &sim_core::WcSettings { tol_r, tol_c, tol_l, tol_v, output: node, measure }).map_err(|e| e.to_string())?;
+            let e = sim_core::evaluate_worst_spec(&spec, &w);
+            return Ok(obj(json!({"kind": kind.key(), "target": target, "lo": lo, "hi": hi, "min": w.min, "max": w.max, "nominal": w.nominal, "unit": kind.unit(), "pass": e.pass, "note": e.note})));
+        }
         let e = sim_core::evaluate_spec(&spec, &inputs);
         Ok(obj(json!({"kind": kind.key(), "target": target, "lo": lo, "hi": hi, "value": e.value, "unit": kind.unit(), "pass": e.pass, "note": e.note})))
     }

@@ -1,7 +1,7 @@
 //! "スペック (合否)" section: targets for the design, checked against the analyses on screen.
 
 use super::*;
-use sim_core::{compare_measured, evaluate_spec, measure_spec, Agreement, Spec, SpecInputs, SpecKind};
+use sim_core::{compare_measured, evaluate_spec, evaluate_worst_spec, measure_spec, Agreement, Spec, SpecEval, SpecInputs, SpecKind};
 
 /// One row of the table: the spec plus the text boxes it is typed in (kept so typing is not overwritten).
 pub(super) struct SpecRow {
@@ -16,12 +16,12 @@ pub(super) struct SpecRow {
 impl SpecRow {
     fn new(kind: SpecKind, target: &str) -> Self {
         let (lo, hi, at) = match kind {
-            SpecKind::DcVoltage | SpecKind::TranMean => ("4.75", "5.25", ""),
+            SpecKind::DcVoltage | SpecKind::DcVoltageWorst | SpecKind::TranMean => ("4.75", "5.25", ""),
             SpecKind::TranPp => ("", "50m", ""),
             SpecKind::TranMax => ("", "5.5", ""),
             SpecKind::TranMin => ("4.5", "", ""),
             SpecKind::DcCurrent => ("", "20m", ""),
-            SpecKind::AcCutoff => ("900", "1.1k", ""),
+            SpecKind::AcCutoff | SpecKind::AcCutoffWorst => ("900", "1.1k", ""),
             SpecKind::AcGainAt => ("-23", "-17", "10k"),
             SpecKind::PhaseMargin => ("45", "", ""),
         };
@@ -175,8 +175,44 @@ impl SchEditor {
         }
     }
 
+    /// The worst case behind a worst-case row: the tolerances of the variation box, on the circuit as drawn. Kept until the circuit,
+    /// the tolerances or the node change (it is a few dozen solutions, not something for every frame).
+    pub(super) fn worst_for_spec(&mut self, kind: SpecKind, node: &str) -> Result<sim_core::WorstCase, String> {
+        use sim_core::{McMeasure, WcSettings};
+        let key = format!("{}|{:?}|{node}|{}|{}|{}|{}|{}|{}", self.signature_cached(), kind, self.mc_tol_r, self.mc_tol_c, self.mc_tol_l, self.ac_fstart, self.ac_fstop, self.ac_ppd);
+        if let Some((_, r)) = self.worst_spec_cache.iter().find(|(k, _)| *k == key) {
+            return r.clone();
+        }
+        let result = (|| {
+            if node.trim().is_empty() {
+                return Err("測るノードを選んでください".to_string());
+            }
+            let (Some(tol_r), Some(tol_c), Some(tol_l)) = (variation::percent(&self.mc_tol_r), variation::percent(&self.mc_tol_c), variation::percent(&self.mc_tol_l)) else {
+                return Err("許容差は「温度とばらつき」の欄に % の数値で入力してください (例: 5)".to_string());
+            };
+            let measure = if kind == SpecKind::AcCutoffWorst {
+                let (Some(fstart), Some(fstop), Some(ppd)) = (parse_value(&self.ac_fstart), parse_value(&self.ac_fstop), parse_value(&self.ac_ppd)) else {
+                    return Err("AC解析の欄の周波数と点数を数値で入力してください".to_string());
+                };
+                McMeasure::Cutoff { fstart, fstop, points_per_decade: ppd.max(1.0) as usize }
+            } else {
+                McMeasure::DcVoltage
+            };
+            let c = self.sim_circuit().map_err(|e| e.first().cloned().unwrap_or_default())?;
+            sim_core::worst_case(&c, &WcSettings { tol_r, tol_c, tol_l, tol_v: 0.0, output: node.trim().to_string(), measure }).map_err(|e| e.to_string())
+        })();
+        if self.worst_spec_cache.len() >= 12 {
+            let _ = self.worst_spec_cache.remove(0);
+        }
+        self.worst_spec_cache.push((key, result.clone()));
+        result
+    }
+
     pub(super) fn panel_spec(&mut self, ui: &mut egui::Ui) {
         crate::icons::help_small(ui, "目標値と合否の見方", "作りたい回路の目標値を書いておくと、解析の結果が合格か ✓/× で分かります。値を変えて計算し直すと、表も変わります");
+        // the worst-case rows are judged on the circuit itself (not on a result on screen); the others on the results
+        let worst_rows: Vec<(usize, SpecKind, String)> = self.specs.iter().enumerate().filter(|(_, r)| r.spec.kind.is_worst()).map(|(i, r)| (i, r.spec.kind, r.spec.target.clone())).collect();
+        let worst_results: Vec<(usize, Result<sim_core::WorstCase, String>)> = worst_rows.into_iter().map(|(i, k, t)| (i, self.worst_for_spec(k, &t))).collect();
         // names to pick from, taken from the results that are on screen
         let dc = self.dc.as_ref().and_then(|v| v.outcome.as_ref().ok());
         let tran = self.tran.as_ref().and_then(|v| v.outcome.as_ref().ok());
@@ -186,8 +222,10 @@ impl SchEditor {
         let parts: Vec<String> = dc.map(|r| r.elements.iter().map(|e| e.name.clone()).collect()).unwrap_or_default();
         let tran_names: Vec<String> = tran.map(|r| r.signals.iter().map(|s| s.name.clone()).filter(|n| !n.contains('.')).collect()).unwrap_or_default();
         let ac_names: Vec<String> = ac.map(|r| r.signals.iter().map(|s| s.name.clone()).filter(|n| !n.contains('.')).collect()).unwrap_or_default();
+        let worst_nodes: Vec<String> = if self.specs.iter().any(|r| r.spec.kind.is_worst()) { extract(&self.sch).iter().map(|n| n.name.clone()).filter(|n| n != "GND").collect() } else { vec![] };
         let choices = |k: SpecKind| -> &Vec<String> {
             match k {
+                SpecKind::DcVoltageWorst | SpecKind::AcCutoffWorst => &worst_nodes,
                 SpecKind::DcVoltage => &nodes,
                 SpecKind::DcCurrent => &parts,
                 SpecKind::TranMean | SpecKind::TranPp | SpecKind::TranMax | SpecKind::TranMin => &tran_names,
@@ -195,10 +233,16 @@ impl SchEditor {
             }
         };
 
-        let evals: Vec<_> = self.specs.iter_mut().map(|r| {
+        let mut evals: Vec<SpecEval> = self.specs.iter_mut().map(|r| {
             r.sync();
             evaluate_spec(&r.spec, &inputs)
         }).collect();
+        for (i, res) in &worst_results {
+            evals[*i] = match res {
+                Ok(w) => evaluate_worst_spec(&self.specs[*i].spec, w),
+                Err(note) => SpecEval { value: None, pass: None, note: note.clone() },
+            };
+        }
         let judged = evals.iter().filter(|e| e.pass.is_some()).count();
         let passed = evals.iter().filter(|e| e.pass == Some(true)).count();
         if !self.specs.is_empty() {
@@ -269,6 +313,8 @@ impl SchEditor {
                 ui.label(unit);
             });
             let detail = match (ev.value, ev.pass) {
+                // a worst-case row shows the whole range it judged, pass or fail
+                _ if row.spec.kind.is_worst() => egui::RichText::new(format!("  {}", ev.note)).color(match ev.pass { Some(true) => PASS, Some(false) => FAIL, None => Color32::from_gray(150) }),
                 (Some(v), Some(true)) => egui::RichText::new(format!("  測った値 {}", eng(v, row.spec.kind.unit()))).color(PASS),
                 (Some(v), _) => egui::RichText::new(format!("  測った値 {}  ({})", eng(v, row.spec.kind.unit()), ev.note)).color(FAIL),
                 (None, _) => egui::RichText::new(format!("  {}", ev.note)).color(Color32::from_gray(150)),

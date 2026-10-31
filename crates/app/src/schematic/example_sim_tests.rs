@@ -1133,3 +1133,21 @@ fn amp_clipping_sample_is_clean_when_small_and_distorted_when_clipped() {
     // the top and the bottom of the wave are not cut the same way: the even harmonics show too
     assert!(hard.harmonics[1].amp > 0.05 * hard.fundamental(), "{:?}", hard.harmonics);
 }
+
+/// The worst-case rows of the spec table: the range comes from the tolerances of the variation box, and is kept until something changes.
+#[test]
+fn worst_case_spec_uses_the_variation_tolerances_and_the_cache() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "series_regulator.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    let a = e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "VOUT").unwrap();
+    assert!(a.min < a.nominal && a.nominal < a.max && a.max - a.min > 0.1, "{} {} {}", a.min, a.nominal, a.max);
+    assert_eq!(e.worst_spec_cache.len(), 1);
+    e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "VOUT").unwrap();
+    assert_eq!(e.worst_spec_cache.len(), 1, "the same question is answered from the cache");
+    // tighter parts, narrower range
+    e.mc_tol_r = "1".into();
+    let b = e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "VOUT").unwrap();
+    assert!(b.max - b.min < 0.5 * (a.max - a.min), "{} vs {}", b.max - b.min, a.max - a.min);
+    assert!(e.worst_for_spec(sim_core::SpecKind::DcVoltageWorst, "").is_err());
+}
