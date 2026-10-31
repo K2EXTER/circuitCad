@@ -307,7 +307,7 @@ fn strategy_debug() {
         crate::options::set_options(o);
     }
     use crate::dc::Strategy::*;
-    for (label, s) in [("direct", Direct), ("gmin", Gmin), ("source", Source), ("widen", Widen)] {
+    for (label, s) in [("direct", Direct), ("gmin", Gmin), ("gmin long", GminLong), ("source", Source), ("widen", Widen)] {
         let r = crate::dc::dc_op_with(&c, &[s]);
         println!("{label}: {:?}", r.as_ref().map(|_| ()).map_err(|e| format!("{e:?}")));
     }

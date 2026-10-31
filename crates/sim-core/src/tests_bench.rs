@@ -117,3 +117,17 @@ fn bench_fault_scan_big() {
     times.sort_by(|a, b| b.total_cmp(a));
     println!("BENCH fault scan mixed_signal with the healthy circuit solved once: {n} faults, total {:.1} s, slowest {:.2} s, median {:.2} s", t0.elapsed().as_secs_f64(), times[0], times[times.len() / 2]);
 }
+
+/// Which strategy of the operating point solves a circuit, and what each one costs when it is the only one tried.
+#[test]
+#[ignore]
+fn bench_dc_strategies() {
+    use crate::dc::{Strategy, dc_op_with};
+    for name in ["mixed_signal", "series_regulator", "logic_blinker", "ldo_compare"] {
+        let c = example(name);
+        timed(&format!("dc_op {name} (all strategies in order)"), || dc_op(&c).map(|r| (r.strategy, r.iterations)));
+        for (label, which) in [("direct", Strategy::Direct), ("gmin", Strategy::Gmin), ("gmin long", Strategy::GminLong), ("source", Strategy::Source), ("widen", Strategy::Widen)] {
+            timed(&format!("dc_op {name}, only {label}"), || dc_op_with(&c, &[which]).map(|r| (r.strategy, r.iterations)));
+        }
+    }
+}

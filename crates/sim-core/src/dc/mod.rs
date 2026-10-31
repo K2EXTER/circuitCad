@@ -193,7 +193,11 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum Strategy {
     Direct,
+    /// Gmin stepping that gives up on a decade it cannot split small enough.
     Gmin,
+    /// `Gmin`, which then goes on with forty times the iteration limit (a circuit that only crawls to its solution). Tried after the
+    /// others: when it fails it takes a second or more, and the others usually settle the circuits it fails on in a few dozen ms.
+    GminLong,
     Source,
     /// Switches start with wide transitions that narrow step by step to the modelled width
     /// (latches and comparators built from switches have no usable gradient otherwise).
@@ -202,10 +206,10 @@ pub(crate) enum Strategy {
 
 /// The order in which the operating point is attempted before a transient, AC or noise run. Those
 /// rely on a bistable or oscillating circuit reporting "no operating point" and starting from zero.
-pub(crate) const DC_ORDER: [Strategy; 3] = [Strategy::Direct, Strategy::Gmin, Strategy::Source];
+pub(crate) const DC_ORDER: [Strategy; 4] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::GminLong];
 
 /// `dc_op` (the DC panel) also tries `Widen`, so that a latch settles into one of its stable states.
-pub(crate) const DC_ORDER_WIDEN: [Strategy; 4] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::Widen];
+pub(crate) const DC_ORDER_WIDEN: [Strategy; 5] = [Strategy::Direct, Strategy::Gmin, Strategy::Source, Strategy::Widen, Strategy::GminLong];
 
 impl Compiled {
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
@@ -216,7 +220,7 @@ impl Compiled {
         let zero_vj = vec![0.0; self.n_slots];
         match which {
             Strategy::Direct => self.newton(zero_x, zero_vj, &Ctx::dc(crate::options::options().gmin, 1.0)),
-            Strategy::Gmin => {
+            Strategy::Gmin | Strategy::GminLong => {
                 // gmin from 1e-2 down to 1e-12 (a decade at a time), each step starting from the previous solution. A step
                 // that does not converge is split into smaller ones: a latch or a current-limited output stage can need
                 // hundreds of iterations for a decade, but only a few for a third of it.
@@ -237,6 +241,7 @@ impl Compiled {
                         Err(_) if de >= 1.0 / 8.0 => de /= 2.0,
                         // already a small step: a circuit with saturating gates (current-limited output stages, latches built
                         // from them) can crawl towards the solution for hundreds of iterations, so give it forty times as many
+                        Err(f) if which == Strategy::Gmin => return Err(f),
                         Err(f) => {
                             let a = self.newton_long(x.clone(), vj.clone(), &ctx).map_err(|_| f)?;
                             // a "solution" with a node at a million volts is a runaway that only looks converged (relative tolerances)
@@ -366,7 +371,7 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
                 }
                 let name = match which {
                     Strategy::Direct => "direct",
-                    Strategy::Gmin => "gmin stepping",
+                    Strategy::Gmin | Strategy::GminLong => "gmin stepping",
                     Strategy::Source => "source stepping",
                     Strategy::Widen => "switch widening",
                 };
