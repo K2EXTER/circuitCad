@@ -166,6 +166,8 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_c).desired_width(26.0)).on_hover_text("コンデンサの誤差。セラミック (X7R) は 10〜20%、電解は 20% ほどです");
             ui.label("L");
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_l).desired_width(26.0)).on_hover_text("コイルの誤差。10〜20% が一般的です");
+            ui.label("電源");
+            ui.add(egui::TextEdit::singleline(&mut self.mc_tol_v).desired_width(26.0)).on_hover_text("直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5");
         });
         if self.lit(ui.button("ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
 「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります").clicked() {

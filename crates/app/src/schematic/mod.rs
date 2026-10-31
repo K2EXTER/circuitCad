@@ -186,6 +186,8 @@ pub struct SchEditor {
     mc_tol_r: String,
     mc_tol_c: String,
     mc_tol_l: String,
+    /// DC supply tolerance in %; used by the worst case only (the random run keeps supplies as they are)
+    mc_tol_v: String,
     mc_seed: u64,
     /// What the Monte Carlo run measures.
     mc_kind: McKind,
@@ -517,6 +519,7 @@ impl Default for SchEditor {
             mc_tol_r: "5".into(),
             mc_tol_c: "10".into(),
             mc_tol_l: "10".into(),
+            mc_tol_v: "0".into(),
             mc_seed: 1,
             mc_kind: McKind::Dc,
             panel_tab: PanelTab::Draw,

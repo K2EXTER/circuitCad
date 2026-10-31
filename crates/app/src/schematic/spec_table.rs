@@ -179,7 +179,7 @@ impl SchEditor {
     /// the tolerances or the node change (it is a few dozen solutions, not something for every frame).
     pub(super) fn worst_for_spec(&mut self, kind: SpecKind, node: &str) -> Result<sim_core::WorstCase, String> {
         use sim_core::{McMeasure, WcSettings};
-        let key = format!("{}|{:?}|{node}|{}|{}|{}|{}|{}|{}", self.signature_cached(), kind, self.mc_tol_r, self.mc_tol_c, self.mc_tol_l, self.ac_fstart, self.ac_fstop, self.ac_ppd);
+        let key = format!("{}|{:?}|{node}|{}|{}|{}|{}|{}|{}|{}", self.signature_cached(), kind, self.mc_tol_r, self.mc_tol_c, self.mc_tol_l, self.mc_tol_v, self.ac_fstart, self.ac_fstop, self.ac_ppd);
         if let Some((_, r)) = self.worst_spec_cache.iter().find(|(k, _)| *k == key) {
             return r.clone();
         }
@@ -199,7 +199,7 @@ impl SchEditor {
                 McMeasure::DcVoltage
             };
             let c = self.sim_circuit().map_err(|e| e.first().cloned().unwrap_or_default())?;
-            sim_core::worst_case(&c, &WcSettings { tol_r, tol_c, tol_l, tol_v: 0.0, output: node.trim().to_string(), measure }).map_err(|e| e.to_string())
+            sim_core::worst_case(&c, &WcSettings { tol_r, tol_c, tol_l, tol_v: variation::percent(&self.mc_tol_v).unwrap_or(0.0), output: node.trim().to_string(), measure }).map_err(|e| e.to_string())
         })();
         if self.worst_spec_cache.len() >= 12 {
             let _ = self.worst_spec_cache.remove(0);

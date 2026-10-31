@@ -99,7 +99,11 @@ impl SchEditor {
         };
         // the limits for the same parts and tolerances: not a chance, a guarantee
         let worst = match (&outcome, self.sim_circuit()) {
-            (Ok(_), Ok(c)) => sim_core::worst_case(&c, &sim_core::WcSettings::from(&settings)).ok(),
+            (Ok(_), Ok(c)) => {
+                let mut w = sim_core::WcSettings::from(&settings);
+                w.tol_v = percent(&self.mc_tol_v).unwrap_or(0.0);
+                sim_core::worst_case(&c, &w).ok()
+            }
             _ => None,
         };
         self.mc = Some(McView { outcome, worst });
