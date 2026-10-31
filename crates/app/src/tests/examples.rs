@@ -468,6 +468,17 @@ fn write_rail_impedance_example() {
     std::fs::write(root.join("rail_impedance.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/amp_clipping.schjson: the op-amp amplifier (gain 11) with a 0.4 V, 1 kHz sine, which is more than the
+/// 5 V supply allows at the output, so the wave is clipped: `cargo test -p app write_amp_clipping_example -- --ignored`
+#[test]
+#[ignore]
+fn write_amp_clipping_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join("opamp_amp.schjson")).unwrap()).unwrap();
+    s.components.iter_mut().find(|c| c.refdes == "V1").unwrap().value = "SIN(0 0.4 1k)".into();
+    std::fs::write(root.join("amp_clipping.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

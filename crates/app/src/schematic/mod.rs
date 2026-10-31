@@ -369,6 +369,8 @@ struct TranView {
     spec_t1: String,
     spec_plot: Option<PlotState>,
     spec_cache: Option<(String, Vec<(String, Spectrum)>)>,
+    /// Base frequency typed for the distortion box (empty = found from the waveform).
+    thd_f0: String,
     ghost: Option<Ghost>,
     /// Signals picked in the power box: input V, input I, output V, output I.
     power: [String; 4],

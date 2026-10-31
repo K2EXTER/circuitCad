@@ -92,6 +92,7 @@ impl SchEditor {
             spec_t1: format!("{:.6e}", tstop),
             spec_plot: None,
             spec_cache: None,
+            thd_f0: String::new(),
             signature: self.signature(),
         });
         self.wave_mode = WaveMode::Tran;
@@ -104,7 +105,7 @@ impl SchEditor {
         let mut start_probe = false;
         let mut open_help = false;
         let mut longer = false;
-        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, ghost, power, parts, .. } = view;
+        let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
             if ui.button("閉じる").clicked() {
@@ -271,6 +272,57 @@ impl SchEditor {
                                 });
                             });
                         }
+                        egui::CollapsingHeader::new("ひずみ率 (THD)").show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("基本周波数");
+                                ui.add(egui::TextEdit::singleline(thd_f0).hint_text("自動").desired_width(60.0)).on_hover_text("入力の正弦波の周波数 (例 1k)。空欄なら波形から自動で見つけます。範囲は、ちょうど整数周期ぶんに切って計算します");
+                            });
+                            ui.small(if *spectrum { "スペクトルの「解析範囲」の時間で計算します" } else { "いま表示している時間の範囲で計算します。立ち上がりを除いて、数周期〜数十周期が入るようにします" });
+                            let f0 = if thd_f0.trim().is_empty() { None } else { parse_value(thd_f0) };
+                            if f0.is_none() && !thd_f0.trim().is_empty() {
+                                ui.colored_label(Color32::from_rgb(230, 60, 60), "基本周波数を数値で入力してください (例: 1k)");
+                            } else {
+                                let mut results = vec![];
+                                let mut failed = vec![];
+                                for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
+                                    let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
+                                    match sim_core::thd(&res.time, &sg.values, f0, w0, w1, 10) {
+                                        Ok(t) => results.push((name.to_string(), t)),
+                                        Err(why) => failed.push(format!("{name}: {why}")),
+                                    }
+                                }
+                                if !results.is_empty() {
+                                    egui::Grid::new("thd_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                        ui.label("");
+                                        for (name, _) in &results {
+                                            ui.strong(name);
+                                        }
+                                        ui.end_row();
+                                        let pct = |r: f64| if r >= 0.01 { format!("{:.2} %", r * 100.0) } else { format!("{:.4} %", r * 100.0) };
+                                        let rows: [(&str, &str, Box<dyn Fn(&sim_core::Thd) -> String>); 5] = [
+                                            ("基本周波数", "基本波の周波数です", Box::new(|t| eng(t.f0, "Hz"))),
+                                            ("THD", "全高調波ひずみ率: 2次以上の高調波を二乗して足した平方根 ÷ 基本波の振幅。小さいほど元の正弦波に近く、オーディオアンプなら 0.1% 以下が目安です", Box::new(|t| format!("{} ({:.1} dB)", pct(t.thd), 20.0 * t.thd.max(1e-12).log10()))),
+                                            ("THD+N", "高調波に、ノイズや他の成分も足したもの (基本波以外のすべて ÷ 基本波)", Box::new(|t| pct(t.thd_n))),
+                                            ("2次", "基本周波数の2倍の成分 (基本波との比)。波の上下が非対称にゆがむと出ます", Box::new(|t| format!("{:.1} dB", 20.0 * (t.harmonics[1].amp / t.fundamental()).max(1e-12).log10()))),
+                                            ("3次", "基本周波数の3倍の成分 (基本波との比)。波の頭が上下とも削られる (クリップ) と出ます", Box::new(|t| format!("{:.1} dB", 20.0 * (t.harmonics[2].amp / t.fundamental()).max(1e-12).log10()))),
+                                        ];
+                                        for (label, tip, f) in rows.iter() {
+                                            ui.label(*label).on_hover_text(*tip);
+                                            for (_, t) in &results {
+                                                ui.label(f(t));
+                                            }
+                                            ui.end_row();
+                                        }
+                                    });
+                                    if results.iter().any(|(_, t)| t.points_per_period < 40.0) {
+                                        ui.colored_label(Color32::from_rgb(220, 160, 40), "1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください");
+                                    }
+                                }
+                                for f in &failed {
+                                    ui.small(f);
+                                }
+                            }
+                        });
                         egui::CollapsingHeader::new("ステップ応答の指標").show(ui, |ui| {
                             ui.small("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)");
                             // one column per signal, one row per figure (same layout as the table above)

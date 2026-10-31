@@ -38,6 +38,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `heat_tran.rs` 温度の時間変化(過渡解析の電力 → 部品ごとの熱容量・熱抵抗 → 温度。部品どうしの熱の結合。半導体・抵抗は温度で値・モデルが戻る。CLI `heattran`、画面は解析タブの「自己発熱」の下)
 - `coverage.rs` シミュレーションが知らないこと(モデルがない部品・汎用の標準値の部品・モデルの注意書き・試験用。CLI `coverage`、画面は解析タブの「モデルの前提」)
 - `designcalc.rs` 初学者向けの値の計算 (足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)
+- `spectrum.rs` の `thd` ひずみ率(整数周期に切ってフーリエ和。CLI `thd`、画面は過渡解析の波形の「ひずみ率 (THD)」)
 - `tests_*.rs` は機能別 (555, logic, ac, noise, thermal ...)
 
 ## pcb-core (`crates/pcb-core/src`) — 詳細: `docs/code-notes/pcb-core.md`

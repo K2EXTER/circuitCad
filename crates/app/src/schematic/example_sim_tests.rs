@@ -1112,3 +1112,24 @@ fn rail_impedance_sample_has_a_resonance_peak_and_a_ceramic_dip() {
     assert!(dip.ohm < 0.02, "{dip:?}");
     assert_eq!(sim_core::z_character(*ph.last().unwrap()), "inductive");
 }
+
+/// The clipping sample (the op-amp amplifier driven hard enough to reach its rails): clean at a small input, a flat-topped
+/// wave with odd and even harmonics at 0.4 V.
+#[test]
+fn amp_clipping_sample_is_clean_when_small_and_distorted_when_clipped() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "amp_clipping.schjson").unwrap().1;
+    let run = |amp: &str| {
+        let mut s = sch.clone();
+        s.components.iter_mut().find(|c| c.refdes == "V1").unwrap().value = format!("SIN(0 {amp} 1k)");
+        let c = from_schematic(&s).unwrap();
+        let r = sim_core::transient(&c, &sim_core::TranSettings { tstop: 20e-3, tstep: 5e-6, uic: false }).unwrap();
+        let sg = r.signal("V(OUT)").unwrap();
+        sim_core::thd(&r.time, &sg.values, None, 4e-3, 20e-3, 10).unwrap()
+    };
+    let (clean, hard) = (run("0.1"), run("0.4"));
+    assert!((clean.f0 - 1000.0).abs() < 2.0 && (clean.fundamental() - 1.1).abs() < 0.02, "{} {}", clean.f0, clean.fundamental());
+    assert!(clean.thd < 1e-4, "{}", clean.thd);
+    assert!((0.08..0.30).contains(&hard.thd), "{}", hard.thd);
+    // the top and the bottom of the wave are not cut the same way: the even harmonics show too
+    assert!(hard.harmonics[1].amp > 0.05 * hard.fundamental(), "{:?}", hard.harmonics);
+}

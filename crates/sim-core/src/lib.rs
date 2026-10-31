@@ -73,7 +73,7 @@ pub use tran::{auto_tstep, transient, Signal, TranResult, TranSettings};
 pub use stepmetrics::{settling_times, step_metrics, Settling, StepMetrics};
 pub use power::{efficiency, mean_power};
 pub use spec::{compare_measured, evaluate as evaluate_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};
-pub use spectrum::{spectrum, stats, Spectrum, Stats};
+pub use spectrum::{estimate_frequency, spectrum, stats, thd, Harmonic, Spectrum, Stats, Thd};
 pub use value::{format_value, parse_part_value, parse_value};
 pub use waveform::{parse_source, parse_source_full, Source, Waveform};
 

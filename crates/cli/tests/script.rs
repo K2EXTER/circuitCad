@@ -740,6 +740,32 @@ worst mid measure=nope
 }
 
 #[test]
+fn thd_reads_a_clipped_sine_and_asks_for_tran_first() {
+    let head = "new
+add V 0 as=V1
+value V1 SIN(0 2 1k)
+add R 1k as=R1
+add R 1k as=R2
+net VIN V1.+ R1.1
+net OUT R1.2 R2.1
+net GND V1.- R2.2
+erc
+";
+    let (a, ok) = run(&format!("{head}thd probe=V(out)
+"));
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("run 'tran' first"), "{a:?}");
+    // a plain divider does not distort
+    let (a, ok) = run(&format!("{head}tran 20m 10u
+thd probe=V(out) f=1k harmonics=5
+"));
+    assert!(ok, "{a:?}");
+    let t = a.last().unwrap();
+    assert!(t["thd_percent"].as_f64().unwrap() < 0.05, "{t}");
+    assert!((t["harmonics"][0]["amplitude"].as_f64().unwrap() - 1.0).abs() < 0.01, "{t}");
+    assert_eq!(t["harmonics"].as_array().unwrap().len(), 5);
+}
+
+#[test]
 fn noise_names_the_nets_it_could_have_used() {
     let (a, ok) = run("new\nadd V 0 as=V1\nadd R 10k as=R1\nnet VIN V1.+ R1.1\nnet GND V1.- R1.2\nnoise nowhere 1 1k\n");
     assert!(!ok);

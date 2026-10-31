@@ -124,6 +124,30 @@ impl Session {
         Ok(obj(json!({"circuit_ok": gate.is_none(), "models": self.model_gaps(), "points": r.freq.len(), "signals": sigs, "available": names, "hint": hint, "warnings": r.warnings.iter().cloned().chain(gate).chain(self.skin_warning(f1)).collect::<Vec<_>>()})))
     }
 
+    /// `thd probe=V(out) [f=1k] [t0=] [t1=] [harmonics=10]`: harmonic distortion of a signal of the last `tran` run.
+    pub fn thd(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        let usage = "thd probe=V(out) [f=1k] [t0=SEC] [t1=SEC] [harmonics=10]   (after 'tran' with a sine source; the base frequency is found by itself when f= is left out; the window is cut to whole periods and starts after the first fifth of the run unless t0= says)";
+        let probe = opt(&kv, "probe").map(str::to_string).or_else(|| pos.first().cloned()).ok_or_else(|| usage.to_string())?;
+        let r = self.last_tran.as_ref().ok_or("thd: run 'tran' first (the distortion is read from its result; a sine source and a few dozen periods)")?;
+        let sg = r.signals.iter().find(|s| s.name.eq_ignore_ascii_case(probe.trim())).ok_or_else(|| {
+            let names: Vec<&str> = r.signals.iter().map(|s| s.name.as_str()).filter(|n| n.starts_with("V(")).take(30).collect();
+            format!("no signal {probe} in the last tran run (voltage signals: {})", names.join(", "))
+        })?;
+        let end = r.time.last().copied().unwrap_or(0.0);
+        let num = |key: &str, default: f64| -> Result<f64, String> { match opt(&kv, key) { Some(s) => sim_core::parse_value(s).ok_or_else(|| format!("{key}={s} is not a number")), None => Ok(default) } };
+        let (t0, t1) = (num("t0", end * 0.2)?, num("t1", end)?);
+        let f0 = match opt(&kv, "f") { Some(s) => Some(sim_core::parse_value(s).filter(|v| *v > 0.0).ok_or_else(|| format!("f={s} is not a positive frequency"))?), None => None };
+        let n: usize = opt(&kv, "harmonics").and_then(|s| s.parse().ok()).unwrap_or(10);
+        let t = sim_core::thd(&r.time, &sg.values, f0, t0, t1, n)?;
+        let rows: Vec<Value> = t.harmonics.iter().map(|h| json!({"order": h.order, "hz": round6(h.freq), "amplitude": h.amp, "db_below_fundamental": if t.fundamental() > 0.0 && h.amp > 0.0 { Some(20.0 * (h.amp / t.fundamental()).log10()) } else { None }})).collect();
+        let mut warnings: Vec<String> = vec![];
+        if t.points_per_period < 40.0 {
+            warnings.push(format!("only {:.0} waveform points per period: the straight lines between them add distortion of their own. Use a smaller step in 'tran' (a few hundred points per period)", t.points_per_period));
+        }
+        Ok(obj(json!({"probe": sg.name, "unit": sg.unit, "fundamental_hz": t.f0, "periods_used": t.periods, "window": [t.t0, t.t1], "dc": t.dc, "thd_percent": t.thd * 100.0, "thd_db": if t.thd > 0.0 { Some(20.0 * t.thd.log10()) } else { None }, "thd_plus_noise_percent": t.thd_n * 100.0, "harmonics": rows, "warnings": warnings})))
+    }
+
     /// `worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]`:
     /// the smallest and the largest value one result can take when every part sits at an end of its tolerance.
     pub fn worst(&mut self, args: &[String]) -> Res {
