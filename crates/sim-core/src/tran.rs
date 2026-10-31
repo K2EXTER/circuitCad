@@ -166,6 +166,13 @@ type Sample = (f64, Vec<f64>, Vec<f64>);
 /// difference of the platform's maths put one step just past 40 iterations.
 const CAPPED_TRIES: usize = 6;
 
+/// A step that fails while it is already this many times the smallest step (`tstep * 1e-4`) is at an instant switching event (a
+/// multivibrator or latch snapping over: a loop of gain above one with only capacitors to slow it, so no state exists close to the old
+/// one). Shrinking further only finds the edge to the nanosecond at the price of four failed solves per level (the failures near
+/// such an edge wander for the whole 150 iterations); the largest step is tried at once instead, as after the fourth failure. The
+/// edge is then placed within this size, below a thousandth of the largest step, and the led blinker takes 0.8 s, not 3.2 s.
+const SNAP_EARLY: f64 = 64.0;
+
 fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], abs_v: &[f64], il: &[f64], trap: bool, rel: f64) -> Option<f64> {
     let need = if trap { 3 } else { 2 };
     if hist.len() < need {
@@ -338,6 +345,8 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
             let mut tries = 0;
             let mut h_back = 0.0;
             let h_first = h;
+            // the largest step was tried after a failure: if it lands, the circuit has flipped (see `SNAP_EARLY`)
+            let mut jumped = false;
             let att: Attempt = loop {
                 let trap = !(force_be || retried);
                 let ctx = Ctx {
@@ -357,11 +366,12 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                         // the trapezoidal rule keeps the old capacitor current, which for a fast
                         // switching event no step size can fix: retry with backward Euler
                         retried = true;
-                        if tries == 4 && h * 16.0 < s.tstep.min(s.tstop - t) {
+                        if (tries == 4 || (tries == 1 && h_first <= SNAP_EARLY * h_min)) && h * 16.0 < s.tstep.min(s.tstop - t) {
                             // An instant switching event (a latch, a logic gate) may have no solution
                             // close to the old state at all, yet one far away that a big step lands on:
                             // shrinking never helps there, so try the largest step once, then go on shrinking.
                             h_back = h / 4.0;
+                            jumped = true;
                             h = s.tstep.min(s.tstop - t);
                             if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
                                 h = bps[bp_idx] - t;
@@ -392,7 +402,9 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
             let ratio = step_error_ratio(&hist, t + h, &cv, &abs_v, &il, trap, lte_rel);
             match ratio {
                 // too inaccurate: redo this step with a smaller one (unless it is already tiny)
-                Some(r) if r > 1.0 && h > h_min && rejects < 12 => {
+                // (not after a step that landed beyond a flip: its error estimate spans the jump, and redoing the step only repeats
+                // the search for the edge, as many times as `rejects` allows, to land on the same step again)
+                Some(r) if r > 1.0 && h > h_min && rejects < 12 && !(jumped && h > 4.0 * h_first) => {
                     rejects += 1;
                     result.rejected += 1;
                     lands_on_bp = false;
