@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--smooth] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -75,7 +75,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                         app.sch.set_tran_signals(n);
                     }
             }
-        if ["--drc", "--finish", "--smooth", "--3d", "--order", "--export", "--ir", "--select-track"].iter().any(|f| args.iter().any(|a| a == f)) {
+        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);
         }
@@ -252,9 +252,6 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     }
     if args.iter().any(|a| a == "--finish") {
         app.board_ed.set_finish(true);
-    }
-    if args.iter().any(|a| a == "--smooth") {
-        app.board_ed.smooth_tracks();
     }
     if args.iter().any(|a| a == "--autoplace") {
         app.board_ed.autoplace();

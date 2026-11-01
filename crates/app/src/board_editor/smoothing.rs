@@ -3,7 +3,7 @@
 //! drawn; the buttons bake the track part of it into the tracks.
 
 use super::*;
-use pcb_core::smooth::{self, Finish, Finished, SmoothReport};
+use pcb_core::smooth::{self, Finish, Finished};
 use std::rc::Rc;
 
 impl BoardEditor {
@@ -128,10 +128,6 @@ impl BoardEditor {
         if ui.button("パッドの根元をそろえる").on_hover_text("すべての配線の、四角いパッドへの根元を、パッドの辺に垂直な短い区間にそろえます。配線の経路が、パッドの近くだけ少し変わります。ルール違反が増える所と、接続が切れる所は変えません。整えを切ったネットクラスのネットは除きます。自動配線の直後には、新しい配線に自動で行います (②の「パッドに垂直に出入り」が入っているとき)。元に戻すで取り消せます").clicked() {
             self.align_pad_entries_button();
         }
-        let any = f.corners || f.tapers;
-        if ui.add_enabled(any, egui::Button::new("整えた形を配線に確定する")).on_hover_text("角の丸みと段差を、配線そのものに書き込みます (確定すると、ほかの CAD にも渡せます。あとから配線を動かしても、丸めた角は自動では直りません)。ルール違反が増える所と、接続が切れる所は変えません。分かれ目の丸みとパッドの根元の肉づけ (凹んだ円弧) は、線では表せないので確定できません (パッドの根元は段の涙型になります)。これらを残したいときは確定せず、「配線を整える」の設定を入れたままにします。元に戻すで取り消せます").clicked() {
-            self.smooth_tracks();
-        }
     }
 
     /// Select track `i` (for screenshots).
@@ -143,22 +139,5 @@ impl BoardEditor {
     pub fn set_finish(&mut self, on: bool) {
         let f = &mut self.board.finish;
         (f.corners, f.tapers, f.forks) = (on, on, on);
-    }
-
-    pub fn smooth_tracks(&mut self) {
-        self.checkpoint();
-        let opts = self.board.finish;
-        let r = smooth::smooth_tracks(&mut self.board, &opts);
-        self.report_smooth(r);
-    }
-
-    fn report_smooth(&mut self, SmoothReport { corners, tapers, .. }: SmoothReport) {
-        self.violations.clear();
-        self.status = if corners + tapers == 0 {
-            self.undo.pop(); // nothing changed: no undo step
-            "確定できる所がありませんでした (角がない、短くて入らない、またはルール違反になる所だけです)".into()
-        } else {
-            format!("角を {corners} か所丸め、太さの段差を {tapers} か所なだらかにして、配線に確定しました (分かれ目の丸みとパッドの肉づけは確定できないので、残すなら、そのままに)")
-        };
     }
 }
