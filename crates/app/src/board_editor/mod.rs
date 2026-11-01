@@ -598,6 +598,12 @@ mod canvas;
 mod interact;
 mod draw;
 mod ribbon;
+
+/// The window is multisampled: the lines of the board are drawn with a hard edge (fewer triangles). See `ribbon::set_plain_strips`.
+pub fn set_multisampled(on: bool) {
+    ribbon::set_plain_strips(on);
+}
+
 pub(crate) use draw::capsule;
 mod order;
 mod ruler;

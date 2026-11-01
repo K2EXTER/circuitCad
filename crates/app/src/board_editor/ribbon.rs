@@ -565,6 +565,40 @@ fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, caps: (boo
         return;
     }
     let half = width.max(1.0) / 2.0;
+    // with multisampling the strip needs no faded edge: two triangles a piece, not six
+    if plain_strips() && p.len() > 1 {
+        let dirs: Vec<Vec2> = p.windows(2).map(|w| (w[1] - w[0]).normalized()).collect();
+        let normal = |d: Vec2| Vec2::new(-d.y, d.x);
+        let mut prev: Option<[u32; 2]> = None;
+        for (k, &q) in p.iter().enumerate() {
+            let m = match (k.checked_sub(1).map(|i| dirs[i]), dirs.get(k).copied()) {
+                (Some(a), Some(b)) => {
+                    let (n0, n1) = (normal(a), normal(b));
+                    (n0 + n1) / (1.0 + n0.dot(n1)).max(0.5)
+                }
+                (Some(a), None) => normal(a),
+                (None, Some(b)) => normal(b),
+                (None, None) => unreachable!(),
+            };
+            let base = mesh.vertices.len() as u32;
+            mesh.colored_vertex(q + m * half, col);
+            mesh.colored_vertex(q - m * half, col);
+            if let Some(r) = prev {
+                mesh.add_triangle(r[0], r[1], base);
+                mesh.add_triangle(r[1], base + 1, base);
+            }
+            prev = Some([base, base + 1]);
+        }
+        if width >= ROUND_ENDS_FROM {
+            if caps.0 {
+                cap_plain(mesh, p[0], -dirs[0], half, col);
+            }
+            if caps.1 {
+                cap_plain(mesh, p[p.len() - 1], dirs[dirs.len() - 1], half, col);
+            }
+        }
+        return;
+    }
     let (core, outer) = ((half - 0.5).max(0.0), half + 0.5);
     let clear = Color32::TRANSPARENT;
     if p.len() == 1 {
@@ -641,6 +675,20 @@ pub(super) fn add_hairline_ring(mesh: &mut Mesh, pts: &[Pos2], col: Color32) {
     }
 }
 
+thread_local! {
+    static PLAIN_STRIPS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Draw the strips with a hard edge (two triangles a piece, and a cap of a fan) instead of an edge that fades out over a pixel. Only right
+/// when the window is multisampled (the edge is then smoothed by the graphics card); set by the app on the thread that draws.
+pub fn set_plain_strips(on: bool) {
+    PLAIN_STRIPS.with(|p| p.set(on));
+}
+
+fn plain_strips() -> bool {
+    PLAIN_STRIPS.with(|p| p.get())
+}
+
 /// A filled rectangle, two triangles.
 pub(super) fn add_rect(mesh: &mut Mesh, r: Rect, col: Color32) {
     let base = mesh.vertices.len() as u32;
@@ -687,6 +735,21 @@ pub(super) fn flush(painter: &Painter, mesh: &mut Mesh) {
     }
 }
 
+fn cap_plain(mesh: &mut Mesh, c: Pos2, dir: Vec2, r: f32, col: Color32) {
+    let n = ((r.sqrt() * 0.8).ceil() * 2.0).clamp(2.0, 24.0) as usize;
+    let theta = dir.y.atan2(dir.x);
+    let centre = mesh.vertices.len() as u32;
+    mesh.colored_vertex(c, col);
+    for j in 0..=n {
+        let a = theta + std::f32::consts::FRAC_PI_2 - std::f32::consts::PI * j as f32 / n as f32;
+        mesh.colored_vertex(c + Vec2::new(a.cos(), a.sin()) * r, col);
+        if j > 0 {
+            let i = mesh.vertices.len() as u32;
+            mesh.add_triangle(centre, i - 2, i - 1);
+        }
+    }
+}
+
 /// A half disc round `c`, bulging towards `dir`, from the left edge of a strip to its right edge.
 fn cap(mesh: &mut Mesh, c: Pos2, dir: Vec2, core: f32, outer: f32, col: Color32) {
     // an even number of steps, so that the middle of the cap is a corner (the cap then reaches out by the full radius)
@@ -726,6 +789,28 @@ mod tests {
 
     fn caps_of(c: &[Chain]) -> usize {
         c.iter().map(|c| c.cap_start as usize + c.cap_end as usize).sum()
+    }
+
+    #[test]
+    fn a_plain_strip_is_two_triangles_a_piece_and_is_as_wide_as_asked() {
+        set_plain_strips(true);
+        let pts = [Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0), Pos2::new(20.0, 5.0), Pos2::new(30.0, 5.0)];
+        let mut flat = Mesh::default();
+        add_capped_chain(&mut flat, &pts, 4.0, Color32::RED, (false, false));
+        assert_eq!(flat.indices.len() / 3, 3 * 2, "two triangles for each of the three pieces");
+        assert!(flat.vertices.iter().all(|v| v.color == Color32::RED), "no faded edge");
+        // the strip reaches 2 px to each side of the line
+        let (lo, hi) = flat.vertices.iter().fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(v.pos.y), hi.max(v.pos.y)));
+        assert!((lo + 2.0).abs() < 0.01 && (hi - 7.0).abs() < 0.01, "{lo} {hi}");
+        // a cap is a fan: well under what the faded one costs
+        let mut capped = Mesh::default();
+        add_capped_chain(&mut capped, &pts, 4.0, Color32::RED, (true, true));
+        assert!(capped.indices.len() / 3 <= 6 + 2 * 8, "{}", capped.indices.len() / 3);
+        assert!(capped.indices.iter().all(|&i| (i as usize) < capped.vertices.len()));
+        set_plain_strips(false);
+        let mut faded = Mesh::default();
+        add_capped_chain(&mut faded, &pts, 4.0, Color32::RED, (false, false));
+        assert_eq!(faded.indices.len() / 3, 3 * 6, "six for each piece with the faded edge");
     }
 
     #[test]

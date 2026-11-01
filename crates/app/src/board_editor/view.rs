@@ -6,6 +6,13 @@ use super::*;
 const OVERLAY_PANEL_PX: f32 = 230.0;
 
 impl BoardEditor {
+    /// Looks at the board at `zoom` pixels to the mm with `(x, y)` mm at the middle (the `--view` start option).
+    pub fn set_view(&mut self, x: f32, y: f32, zoom: f32) {
+        self.pan = Vec2::new(x, y);
+        self.zoom = zoom;
+        self.fit_pending = false;
+    }
+
     pub(super) fn to_screen(&self, rect: Rect, p: Point) -> Pos2 {
         let c = rect.center();
         Pos2::new(c.x + (p.x as f32 - self.pan.x) * self.zoom, c.y - (p.y as f32 - self.pan.y) * self.zoom)

@@ -244,6 +244,12 @@ fn apply_board_args(app: &mut App, args: &[String]) {
         && let Some(n) = args.get(i + 1).and_then(|n| n.parse::<usize>().ok()) {
             app.board_ed.select_track(n);
         }
+    if let Some(i) = args.iter().position(|a| a == "--view")
+        && let (Some(x), Some(y), Some(z)) = (args.get(i + 1).and_then(|v| v.parse::<f32>().ok()), args.get(i + 2).and_then(|v| v.parse::<f32>().ok()), args.get(i + 3).and_then(|v| v.parse::<f32>().ok()))
+    {
+        // --view <x mm> <y mm> <pixels per mm>: where to look (for a screenshot of a spot)
+        app.board_ed.set_view(x, y, z);
+    }
     if args.iter().any(|a| a == "--finish") {
         app.board_ed.set_finish(true);
     }

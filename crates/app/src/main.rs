@@ -53,6 +53,9 @@ struct App {
     board_ed: BoardEditor,
     /// The three switches of the requirements' frames and lines as last written to the settings (the file is written when one changes).
     req_view: (bool, bool, bool, bool),
+    /// Multisampling the window was made with, and the setting for the next start (the menu changes only the second).
+    smooth_edges_running: bool,
+    smooth_edges: bool,
     /// Where the screenshot being taken goes (the capture arrives a frame after the request).
     shot_path: Option<std::path::PathBuf>,
     help: help::Help,
@@ -97,7 +100,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
     }
 }
 
@@ -442,10 +445,18 @@ impl eframe::App for App {
                         icons::set_icon_only(only);
                         changed = true;
                     }
-                    // these two survive a restart
+                    let note = if self.smooth_edges != self.smooth_edges_running { " (次の起動から)" } else { "" };
+                    if ui
+                        .checkbox(&mut self.smooth_edges, format!("線の縁をなめらかにする{note}"))
+                        .on_hover_text("画面の描画を4倍のマルチサンプリング(MSAA)にして、配線やシルクの縁をなめらかに見せます。オンのほうが、描く三角形が少なく軽くなります。起動のときに決まるので、変えると次の起動から効きます。画面が崩れる、極端に重いなど、グラフィックスカードとの相性が悪いときはオフにしてください (起動のときに --no-msaa を付けても、その回だけオフになります)")
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    // these survive a restart
                     if changed {
                         let file = prefs::Prefs::default_file();
-                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints, ..prefs::Prefs::load(&file) }.save(&file);
+                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints, smooth_edges: self.smooth_edges, ..prefs::Prefs::load(&file) }.save(&file);
                         if let Err(e) = saved {
                             self.sch.status = e;
                         }
@@ -513,10 +524,14 @@ fn main() -> eframe::Result {
     if xcheck::run_cli(&std::env::args().skip(1).collect::<Vec<_>>()) {
         return Ok(());
     }
+    // multisampling is fixed when the window is made: read the setting before it (`--no-msaa` leaves it out for this start)
+    let smooth_edges = prefs::Prefs::load(&prefs::Prefs::default_file()).smooth_edges && !std::env::args().any(|a| a == "--no-msaa");
+    board_editor::set_multisampled(smooth_edges);
     eframe::run_native(
         "circuitCad",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_maximized(true).with_title("circuitCad"),
+            multisampling: if smooth_edges { 4 } else { 0 },
             ..Default::default()
         },
         Box::new(|cc| {
@@ -525,6 +540,7 @@ fn main() -> eframe::Result {
             app.progress = learn::Progress::load(&learn::Progress::default_file());
             let prefs = prefs::Prefs::load(&prefs::Prefs::default_file());
             app.show_hints = prefs.show_hints;
+            (app.smooth_edges_running, app.smooth_edges) = (smooth_edges, prefs.smooth_edges);
             icons::set_icon_only(prefs.icon_only);
             (app.sch.req_frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines, app.board_ed.show_sheets) = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);

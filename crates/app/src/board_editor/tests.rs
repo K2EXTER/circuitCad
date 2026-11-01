@@ -2885,3 +2885,111 @@ fn cap_ends() {
     println!("not at a pad, one other chain end here: {joint2:?}; otherwise: {joint_other:?}");
     println!("ends without a cap {none}; with a cap {total}: inside a pad {on_pad}, inside a via {on_via}, elsewhere {free} (wide enough to be round: {wide_free})");
 }
+
+/// What the chain mesh would cost with a coarser thinning of the points and with other strips (set CCAD_BOARD): `cargo test --release -p app chain_mesh_options -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn chain_mesh_options() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(view);
+    let finished = e.finished();
+    let tracks = finished.as_ref().map_or(e.board.tracks.as_slice(), |f| f.board.tracks.as_slice());
+    let copper = ribbon::CopperCache::new(tracks, finished.as_ref(), &ribbon::Covers::of(&e.board, true, true));
+    println!("zoom {:.1} px/mm, {} chains, {} tracks in them", e.zoom, copper.chains.len(), tracks.len());
+    // thinning at a quarter pixel (now), half a pixel, a pixel
+    for (name, scale) in [("quarter pixel (now)", 1.0f32), ("half a pixel", 0.5), ("one pixel", 0.25)] {
+        let lod = copper.lod(e.zoom * scale);
+        let (mut tris, mut segs, mut pts_in) = (0usize, 0usize, 0usize);
+        let mut by_width = [0usize; 4]; // segments: < 1.5 px, < 2.5 px, < 5 px, wider
+        for (ch, pts) in copper.chains.iter().zip(&lod.chains) {
+            let (lo, hi) = (e.to_screen(view, ch.lo), e.to_screen(view, ch.hi));
+            if !ribbon::on_screen(view, lo, hi, ch.width as f32 * e.zoom / 2.0 + 4.0) {
+                continue;
+            }
+            let p: Vec<egui::Pos2> = pts.iter().map(|q| e.to_screen(view, *q)).collect();
+            let mut mesh = egui::Mesh::default();
+            ribbon::add_capped_chain(&mut mesh, &p, ch.width as f32 * e.zoom, egui::Color32::RED, (ch.cap_start, ch.cap_end));
+            tris += mesh.indices.len() / 3;
+            segs += p.len().saturating_sub(1);
+            pts_in += p.len();
+            let wpx = ch.width as f32 * e.zoom;
+            by_width[if wpx < 1.5 { 0 } else if wpx < 2.5 { 1 } else if wpx < 5.0 { 2 } else { 3 }] += p.len().saturating_sub(1);
+        }
+        println!("{name:22}: {tris:6} triangles, {segs} segments, {pts_in} points; segments by width (<1.5 px, <2.5, <5, wider): {by_width:?}");
+    }
+    // the same segments as flat quads (2 triangles) and as the strip now (6)
+    let lod = copper.lod(e.zoom);
+    let segs: usize = copper.chains.iter().zip(&lod.chains).filter(|(ch, _)| {
+        let (lo, hi) = (e.to_screen(view, ch.lo), e.to_screen(view, ch.hi));
+        ribbon::on_screen(view, lo, hi, ch.width as f32 * e.zoom / 2.0 + 4.0)
+    }).map(|(_, p)| p.len().saturating_sub(1)).sum();
+    println!("segments now {segs}: as they are 6 triangles each = {}, as plain quads 2 each = {}, with one fade edge 4 each = {}", segs * 6, segs * 2, segs * 4);
+}
+
+/// Where to look at the copper zoomed in: the chain with the most corners and a long diagonal piece (set CCAD_BOARD): `cargo test --release -p app view_spots -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn view_spots() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let finished = e.finished();
+    let tracks = finished.as_ref().map_or(e.board.tracks.as_slice(), |f| f.board.tracks.as_slice());
+    let copper = ribbon::CopperCache::new(tracks, finished.as_ref(), &ribbon::Covers::of(&e.board, true, true));
+    let mut by_pts: Vec<&ribbon::Chain> = copper.chains.iter().collect();
+    by_pts.sort_by_key(|c| std::cmp::Reverse(c.pts.len()));
+    for c in by_pts.iter().take(3) {
+        println!("many corners: {} points, width {:.2}, centre ({:.1}, {:.1})", c.pts.len(), c.width, (c.lo.x + c.hi.x) / 2.0, (c.lo.y + c.hi.y) / 2.0);
+    }
+    let diag = copper.chains.iter().flat_map(|c| c.pts.windows(2).map(move |w| (c.width, w[0], w[1]))).filter(|(_, a, b)| {
+        let (dx, dy) = ((b.x - a.x).abs(), (b.y - a.y).abs());
+        dx > 0.3 && dy > 0.3 && (dx / dy - 1.0).abs() < 0.15
+    }).max_by(|a, b| a.1.dist(a.2).total_cmp(&b.1.dist(b.2)));
+    if let Some((w, a, b)) = diag {
+        println!("diagonal piece: width {w:.2}, length {:.1}, centre ({:.1}, {:.1})", a.dist(b), (a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+    }
+}
+
+/// Triangles and CPU time of a frame with the faded edges and with the hard ones used with multisampling (set CCAD_BOARD): `cargo test --release -p app plain_strips_frame_cost -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn plain_strips_frame_cost() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let ctx = egui::Context::default();
+    for plain in [false, true, false, true] {
+        set_multisampled(plain);
+        // the first frames make the caches and the threads' answers
+        let mut run = |e: &mut BoardEditor| {
+            let t = std::time::Instant::now();
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+            let tris: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+            (tris, t.elapsed().as_secs_f64() * 1000.0)
+        };
+        for _ in 0..3 {
+            run(&mut e);
+            std::thread::sleep(std::time::Duration::from_millis(400));
+        }
+        let (mut tris, mut total, mut worst) = (0, 0.0, 0.0f64);
+        for _ in 0..30 {
+            let (n, ms) = run(&mut e);
+            tris = n;
+            total += ms;
+            worst = worst.max(ms);
+        }
+        println!("{}: {tris} triangles, CPU (draw + tessellate) avg {:.2} ms, worst {:.2} ms", if plain { "hard edges (MSAA)" } else { "faded edges     " }, total / 30.0, worst);
+    }
+    set_multisampled(false);
+}
