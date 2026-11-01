@@ -470,9 +470,9 @@ fn a_baked_width_change_goes_in_steps_too_fine_to_show() {
     let mut widths: Vec<f64> = b.tracks.iter().map(|t| t.width).collect();
     widths.sort_by(|a, b| a.partial_cmp(b).unwrap());
     widths.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
-    // from 0.25 to 0.5 in steps of 0.005 mm at most
+    // from 0.25 to 0.5 in steps of 0.02 mm at most
     let biggest = widths.windows(2).map(|w| w[1] - w[0]).fold(0.0f64, f64::max);
-    assert!(biggest <= 0.005 + 1e-9, "{widths:?}");
+    assert!(biggest <= 0.02 + 1e-9, "{widths:?}");
     assert!(ratsnest(&b).is_empty() && drc::check(&b).is_empty());
 }
 

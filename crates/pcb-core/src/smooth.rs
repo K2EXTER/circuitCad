@@ -135,7 +135,7 @@ enum Kind {
 /// Width differences up to this are left as they are, and no step of a taper is larger (so a taper is not tapered again).
 const MIN_STEP: f64 = 0.1;
 /// The width steps of a taper that is baked into the tracks (mm): fine enough that the round ends of the pieces do not show.
-const BAKE_STEP: f64 = 0.005;
+const BAKE_STEP: f64 = 0.02;
 /// Corners that turn less than this are left as they are (the pieces of an arc turn 22.5° each, so an arc is not rounded again).
 const MIN_TURN: f64 = 30.0;
 const MIN_LEN: f64 = 0.05;
