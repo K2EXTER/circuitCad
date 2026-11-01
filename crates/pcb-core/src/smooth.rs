@@ -760,7 +760,14 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
         b: at(neck + ramp * (k + 1) as f64 / n as f64),
         width: short + dw * (k + 1) as f64 / n as f64,
     }));
-    Some(Edit { trims: vec![(i, is_a, at(neck + ramp))], pieces, patch: None, live: None, kind: Kind::Taper, touches: vec![i] })
+    // live: the neck, then a smooth band that widens from the pad's width to the track's (not steps)
+    let outline = band(v, (ux, uy), neck - 0.02, neck + ramp + 0.02, (neck, neck + ramp), (short, t.width));
+    let live = Live {
+        trims: vec![(i, is_a, at(neck + ramp))],
+        pieces: vec![Track { side: t.side, a: v, b: at(neck), width: short }],
+        patch: Patch { side: t.side, outline, track: i },
+    };
+    Some(Edit { trims: vec![(i, is_a, at(neck + ramp))], pieces, patch: None, live: Some(live), kind: Kind::Taper, touches: vec![i] })
 }
 
 /// The end of a trunk (`trunk.rs`: two thin necks that leave two side by side pads and run into one wide track): the space in front of the

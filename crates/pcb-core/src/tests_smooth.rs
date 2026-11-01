@@ -501,6 +501,12 @@ fn a_wide_track_on_a_narrow_pad_gets_a_neck_as_wide_as_the_pad() {
     assert!(f.board.tracks.iter().any(|t| (t.width - 0.6).abs() < 1e-9));
     assert!(ratsnest(&f.board).is_empty(), "still connected");
     assert!(drc::check(&f.board).is_empty(), "{:?}", drc::check(&f.board));
+    // the widening is one polygon, not a run of short tracks that step up (the shown shape has no stairs)
+    assert!(!f.patches.is_empty(), "no polygon for the widening");
+    let mut widths: Vec<f64> = f.board.tracks.iter().map(|t| t.width).collect();
+    widths.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    widths.dedup_by(|a, b| (*a - *b).abs() < 1e-9);
+    assert_eq!(widths.len(), 2, "{widths:?}");
     // a pad as wide as the track needs no neck
     let mut wide = Board::new("t", 40.0, 30.0);
     let mut p2 = Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top);
