@@ -5,6 +5,21 @@ use super::*;
 /// How far (pixels) a corner of a pour may be off the line it is thinned to.
 const POUR_THIN_PX: f64 = 1.0;
 
+/// The radius (pixels) from which egui makes a filled circle of a polygon (97 triangles and more); under it egui draws it as one textured
+/// quad (2 triangles), which nothing beats.
+const EGUI_POLYGON_CIRCLE_FROM: f32 = 7.0;
+
+/// A filled disc: a fan of plain triangles added to `shapes` when the window is multisampled and the disc is big, egui's own circle otherwise
+/// (what is in `shapes` goes first, to keep the order of drawing).
+fn disc(painter: &egui::Painter, shapes: &mut egui::Mesh, plain: bool, c: Pos2, r: f32, col: Color32) {
+    if plain && r >= EGUI_POLYGON_CIRCLE_FROM {
+        ribbon::add_disc(shapes, c, r, col);
+    } else {
+        ribbon::flush(painter, shapes);
+        painter.circle_filled(c, r, col);
+    }
+}
+
 impl BoardEditor {
     pub(super) fn draw_grid(&self, painter: &egui::Painter, rect: Rect) {
         if self.grid > 0.0 && self.grid as f32 * self.zoom >= 6.0 {
@@ -335,6 +350,10 @@ impl BoardEditor {
                 painter.add(egui::Shape::mesh(mesh));
             }
         }
+        // with multisampling the discs and boxes of the pads and vias are made of a few plain triangles in one mesh (the order of drawing is the
+        // order in the mesh: a pad, then the hole in it)
+        let plain = ribbon::plain_strips();
+        let mut shapes = egui::Mesh::default();
         for p in &self.board.pads {
             let visible = p.drill.is_some() && (self.vis.top || self.vis.bottom) || p.drill.is_none() && self.side_visible(p.side);
             if !visible || (!self.vis.parts && !p.refdes.is_empty()) {
@@ -346,25 +365,28 @@ impl BoardEditor {
             let (w, h) = p.shape.size();
             let sz = Vec2::new(w as f32 * z, h as f32 * z);
             match p.shape {
-                PadShape::Circle { .. } => {
-                    painter.circle_filled(c, sz.x / 2.0, col);
-                }
+                PadShape::Circle { .. } => disc(painter, &mut shapes, plain, c, sz.x / 2.0, col),
+                PadShape::Rect { .. } if plain => ribbon::add_rect(&mut shapes, Rect::from_center_size(c, sz), col),
                 PadShape::Rect { .. } => {
                     painter.rect_filled(Rect::from_center_size(c, sz), 0.0, col);
                 }
                 PadShape::Oval { .. } => {
+                    // (a rounded box: egui's, so the mesh so far goes first to keep the order)
+                    ribbon::flush(painter, &mut shapes);
                     painter.rect_filled(Rect::from_center_size(c, sz), sz.min_elem() / 2.0, col);
                 }
             }
             if let Some(d) = p.drill {
                 if p.slot > d + 1e-9 {
+                    ribbon::flush(painter, &mut shapes);
                     let (a, b) = pcb_core::slot_ends(p.pos, d, p.slot, p.slot_v);
                     capsule(painter, self.to_screen(rect, a), self.to_screen(rect, b), d as f32 * z / 2.0, BG, None);
                 } else {
-                    painter.circle_filled(c, d as f32 * z / 2.0, BG);
+                    disc(painter, &mut shapes, plain, c, d as f32 * z / 2.0, BG);
                 }
             }
         }
+        ribbon::flush(painter, &mut shapes);
         // a small padlock at the corner of every fixed part
         for part in self.board.parts.iter().filter(|p| self.board.is_locked(&p.refdes) && self.side_visible(p.side)) {
             let pads: Vec<&pcb_core::Pad> = self.board.pads.iter().filter(|q| q.refdes == part.refdes).collect();
@@ -380,9 +402,10 @@ impl BoardEditor {
         }
         for v in self.board.vias.iter().filter(|_| self.vis.vias) {
             let c = self.to_screen(rect, v.pos);
-            painter.circle_filled(c, v.diameter as f32 * z / 2.0, Color32::from_rgb(60, 170, 90));
-            painter.circle_filled(c, v.drill as f32 * z / 2.0, BG);
+            disc(painter, &mut shapes, plain, c, v.diameter as f32 * z / 2.0, Color32::from_rgb(60, 170, 90));
+            disc(painter, &mut shapes, plain, c, v.drill as f32 * z / 2.0, BG);
         }
+        ribbon::flush(painter, &mut shapes);
         for h in &self.board.holes {
             let (a, b) = h.ends();
             capsule(painter, self.to_screen(rect, a), self.to_screen(rect, b), h.drill as f32 * z / 2.0, Color32::TRANSPARENT, Some(Stroke::new(1.5, Color32::LIGHT_GRAY)));

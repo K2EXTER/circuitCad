@@ -2568,6 +2568,7 @@ fn part_triangle_breakdown() {
     let mut e = BoardEditor::default();
     e.board = board.clone();
     e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    set_multisampled(std::env::var("CCAD_FADED").is_err());
     let ctx = egui::Context::default();
     let count = |e: &mut BoardEditor| -> usize {
         let mut n = 0;
@@ -3097,5 +3098,61 @@ fn pour_thinning() {
             }
         }
         println!("thinned at {px:>4} px (level {level}, {:.3} mm = {:.2} px): corners {corners_in} -> {pieces}; fill triangles {tris} (made in {:.1} ms); outline triangles {}", tol, tol * e.zoom as f64, t0.as_secs_f64() * 1000.0, pieces * 2);
+    }
+}
+
+/// What thinning the points of the silk (text strokes and lines) would save (set CCAD_BOARD): `cargo test --release -p app silk_thinning -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn silk_thinning() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(view);
+    set_multisampled(true);
+    let cache = ribbon::SilkCache::new(&e.board);
+    let text_h: Vec<f64> = e.board.texts.iter().map(|t| t.height).collect();
+    println!("zoom {:.1} px/mm; texts {} (height {:.2} to {:.2} mm = {:.1} to {:.1} px)", e.zoom, text_h.len(), text_h.iter().cloned().fold(f64::MAX, f64::min), text_h.iter().cloned().fold(0.0, f64::max), text_h.iter().cloned().fold(f64::MAX, f64::min) * e.zoom as f64, text_h.iter().cloned().fold(0.0, f64::max) * e.zoom as f64);
+    for (name, chains) in [("plain (board silk and texts)", &cache.plain), ("of parts (outlines, designators)", &cache.of_parts)] {
+        for px in [0.0f64, 0.25, 0.5, 1.0] {
+            let tol = if px == 0.0 { 0.0 } else { ribbon::lod_tolerance(ribbon::lod_level_px(e.zoom, px)) };
+            let (mut tris, mut pts_n, mut chains_n) = (0usize, 0usize, 0usize);
+            for ch in chains.iter() {
+                let (lo, hi) = (e.to_screen(view, ch.lo), e.to_screen(view, ch.hi));
+                if !ribbon::on_screen(view, lo, hi, ch.width as f32 * e.zoom / 2.0 + 4.0) {
+                    continue;
+                }
+                let pts = if tol > 0.0 { ribbon::simplify_open(&ch.pts, tol) } else { ch.pts.clone() };
+                let p: Vec<egui::Pos2> = pts.iter().map(|q| e.to_screen(view, *q)).collect();
+                let mut mesh = egui::Mesh::default();
+                ribbon::add_capped_chain(&mut mesh, &p, ch.width as f32 * e.zoom, egui::Color32::WHITE, (ch.cap_start, ch.cap_end));
+                tris += mesh.indices.len() / 3;
+                pts_n += p.len();
+                chains_n += 1;
+            }
+            println!("{name:34} thinned at {px:>4} px ({:.3} mm): {chains_n} chains, {pts_n} points, {tris} triangles", tol);
+        }
+    }
+    println!("silk line widths (micrometres) {:?}", cache.plain.iter().chain(&cache.of_parts).map(|c| (c.width * 1000.0).round() as i64).collect::<std::collections::BTreeSet<_>>().into_iter().take(6).collect::<Vec<_>>());
+    set_multisampled(false);
+}
+
+/// How many triangles egui makes for a filled circle of a given radius, against the fan of `ribbon::add_disc` (`cargo test --release -p app disc_cost -- --ignored --nocapture`)
+#[test]
+#[ignore]
+fn disc_cost() {
+    let ctx = egui::Context::default();
+    for r in [5.0f32, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 9.0] {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 400.0))), ..Default::default() }, |ui| {
+            ui.painter().circle_filled(egui::pos2(100.0, 100.0), r, egui::Color32::RED);
+        });
+        out.textures_delta.clear();
+        let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+        let egui_tris: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+        let mut m = egui::Mesh::default();
+        ribbon::add_disc(&mut m, egui::pos2(100.0, 100.0), r, egui::Color32::RED);
+        println!("radius {r:>5}: egui {egui_tris:3} triangles, fan {:3}", m.indices.len() / 3);
     }
 }

@@ -685,8 +685,25 @@ pub fn set_plain_strips(on: bool) {
     PLAIN_STRIPS.with(|p| p.set(on));
 }
 
-fn plain_strips() -> bool {
+pub(super) fn plain_strips() -> bool {
     PLAIN_STRIPS.with(|p| p.get())
+}
+
+/// A filled disc as a fan of triangles, as many corners as keep the edge within about a sixth of a pixel of the circle (for use with
+/// multisampling: egui's own disc has a faded rim of its own).
+pub(super) fn add_disc(mesh: &mut Mesh, c: Pos2, r: f32, col: Color32) {
+    if r <= 0.0 {
+        return;
+    }
+    let n = ((std::f32::consts::PI / (1.0 - 0.17 / r).clamp(-1.0, 0.999).acos()).ceil() as usize).clamp(6, 48);
+    let centre = mesh.vertices.len() as u32;
+    mesh.colored_vertex(c, col);
+    for i in 0..n {
+        mesh.colored_vertex(c + Vec2::angled(std::f32::consts::TAU * i as f32 / n as f32) * r, col);
+    }
+    for i in 0..n as u32 {
+        mesh.add_triangle(centre, centre + 1 + i, centre + 1 + (i + 1) % n as u32);
+    }
 }
 
 /// A filled rectangle, two triangles.
@@ -811,6 +828,25 @@ mod tests {
         let mut faded = Mesh::default();
         add_capped_chain(&mut faded, &pts, 4.0, Color32::RED, (false, false));
         assert_eq!(faded.indices.len() / 3, 3 * 6, "six for each piece with the faded edge");
+    }
+
+    #[test]
+    fn a_disc_is_a_fan_with_a_round_edge_and_few_triangles() {
+        let c = Pos2::new(50.0, 40.0);
+        for r in [7.0f32, 12.0, 30.0] {
+            let mut m = Mesh::default();
+            add_disc(&mut m, c, r, Color32::RED);
+            let n = m.indices.len() / 3;
+            assert!((12..=48).contains(&n), "r {r}: {n} triangles");
+            // every corner on the circle, and the edge is within a fifth of a pixel of it
+            assert!(m.vertices.iter().skip(1).all(|v| ((v.pos - c).length() - r).abs() < 1e-3));
+            let mid = (m.vertices[1].pos + m.vertices[2].pos.to_vec2()).to_vec2() / 2.0 - c.to_vec2();
+            assert!(r - mid.length() < 0.2, "r {r}: the chord is {} off", r - mid.length());
+            assert!(m.indices.iter().all(|&i| (i as usize) < m.vertices.len()));
+        }
+        let mut m = Mesh::default();
+        add_disc(&mut m, c, 0.0, Color32::RED);
+        assert!(m.is_empty());
     }
 
     #[test]
