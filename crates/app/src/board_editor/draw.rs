@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// How far (pixels) a corner of a pour may be off the line it is thinned to.
+const POUR_THIN_PX: f64 = 1.0;
+
 impl BoardEditor {
     pub(super) fn draw_grid(&self, painter: &egui::Painter, rect: Rect) {
         if self.grid > 0.0 && self.grid as f32 * self.zoom >= 6.0 {
@@ -91,11 +94,11 @@ impl BoardEditor {
         }
     }
 
-    /// The outlines of the pours (for each pour, each shape: the outer line, then the holes) thinned to the zoom; kept until the pours or the
-    /// level of detail change.
-    pub(super) fn pour_outlines(&self, key: u64, fills: &[PourCache]) -> std::rc::Rc<Vec<Vec<Vec<Vec<Point>>>>> {
+    /// The pours' outlines and fill triangles (see [`PourLod`]) thinned to the zoom: the corners that are under half a pixel off the line are
+    /// dropped. Kept until the pours or the level of detail change; a new level costs a few ms (the fill is triangulated again).
+    pub(super) fn pour_lod(&self, key: u64, fills: &[PourCache]) -> std::rc::Rc<PourLod> {
         // a one pixel line can be half a pixel off the fill
-        let level = ribbon::lod_level_px(self.zoom, 0.5);
+        let level = ribbon::lod_level_px(self.zoom, POUR_THIN_PX);
         if let Some((k, l, v)) = self.zone_outline_lod.borrow().as_ref()
             && *k == key
             && *l == level
@@ -104,8 +107,19 @@ impl BoardEditor {
         }
         let tol = ribbon::lod_tolerance(level);
         let thin = |c: &Vec<Point>| if tol > 0.0 { ribbon::simplify_closed(c, tol) } else { c.clone() };
-        let v: Vec<Vec<Vec<Vec<Point>>>> =
-            fills.iter().map(|(_, _, shapes, _)| shapes.iter().map(|sh| std::iter::once(&sh.outer).chain(sh.holes.iter()).map(thin).collect()).collect()).collect();
+        let mut v = PourLod { outlines: vec![], tris: vec![] };
+        for (_, _, shapes, full) in fills {
+            let (mut outlines, mut tris) = (vec![], vec![]);
+            for (sh, full_tris) in shapes.iter().zip(full) {
+                let thinned = pcb_core::zonefill::FillShape { outer: thin(&sh.outer), holes: sh.holes.iter().map(thin).collect() };
+                let t = if tol > 0.0 { thinned.triangles() } else { full_tris.clone() };
+                // a thinned shape that can not be cut into triangles is drawn from the full one
+                tris.push(if t.is_empty() && !full_tris.is_empty() { full_tris.clone() } else { t });
+                outlines.push(std::iter::once(thinned.outer).chain(thinned.holes).collect());
+            }
+            v.outlines.push(outlines);
+            v.tris.push(tris);
+        }
         let v = std::rc::Rc::new(v);
         *self.zone_outline_lod.borrow_mut() = Some((key, level, v.clone()));
         v
@@ -120,7 +134,7 @@ impl BoardEditor {
         self.refresh_zone_caches(painter.ctx(), conn);
         let cache = self.zone_cache.borrow();
         let Some((key, fills)) = cache.as_ref() else { return };
-        let outlines = self.pour_outlines(*key, fills);
+        let lod = self.pour_lod(*key, fills);
         let area = rect.expand(4.0);
         for s in self.layer_order() {
             if !self.side_visible(s) {
@@ -131,14 +145,14 @@ impl BoardEditor {
             let edge = self.side_color(s).gamma_multiply(if s == self.side { 0.8 } else { 0.35 });
             let mut edges = egui::Mesh::default();
             for (fi, (_, net, shapes, tris)) in fills.iter().enumerate().filter(|(_, (side, _, _, _))| *side == s) {
-                for (si, (shape, tris)) in shapes.iter().zip(tris).enumerate() {
+                for (si, (shape, full_tris)) in shapes.iter().zip(tris).enumerate() {
                     if !self.shape_on_screen(rect, shape) {
                         continue;
                     }
                     // only what is on the screen: a big pour is one shape, and its triangles and its many small holes (the clearance
                     // round each pad) mostly lie outside the view when zoomed in, or are a pixel or two wide when zoomed out
                     let mut mesh = egui::Mesh::default();
-                    for t in tris {
+                    for t in &lod.tris[fi][si] {
                         let s = [self.to_screen(rect, t[0]), self.to_screen(rect, t[1]), self.to_screen(rect, t[2])];
                         if !Rect::from_points(&s).intersects(area) {
                             continue;
@@ -152,7 +166,7 @@ impl BoardEditor {
                     painter.add(egui::Shape::mesh(mesh));
                     // the lines are the outlines thinned to the zoom (a corner that is under half a pixel off the line is dropped), all
                     // of a layer in one mesh of thin quads
-                    for (k, contour) in outlines[fi][si].iter().enumerate() {
+                    for (k, contour) in lod.outlines[fi][si].iter().enumerate() {
                         let pts: Vec<Pos2> = contour.iter().map(|p| self.to_screen(rect, *p)).collect();
                         let bb = Rect::from_points(&pts);
                         if !bb.intersects(area) || (k > 0 && bb.width().max(bb.height()) < 3.0) {
@@ -163,7 +177,7 @@ impl BoardEditor {
                             painter.add(egui::Shape::mesh(std::mem::take(&mut edges)));
                         }
                     }
-                    self.draw_pour_name(painter, rect, net, shape, tris);
+                    self.draw_pour_name(painter, rect, net, shape, full_tris);
                 }
             }
             painter.add(egui::Shape::mesh(edges));

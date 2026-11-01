@@ -212,6 +212,13 @@ pub enum CurrentSource {
     Tran,
 }
 
+/// The pours' shapes thinned to the zoom: for each pour, each shape, the outlines (the outer line, then the holes) and the triangles of the fill
+/// made from the same thinned corners (so the fill and the line agree, and a small hole is not made of dozens of triangles).
+pub(super) struct PourLod {
+    pub outlines: Vec<Vec<Vec<Vec<Point>>>>,
+    pub tris: Vec<Vec<Vec<[Point; 3]>>>,
+}
+
 /// The merged pours of the board, with the key they were made for (`zonefill::geometry_key`).
 /// Per pour: its layer, its net, its pieces and the triangles of each piece (worked out once, not every frame).
 type PourCache = (Side, String, Vec<pcb_core::zonefill::FillShape>, Vec<Vec<[Point; 3]>>);
@@ -373,7 +380,7 @@ pub struct BoardEditor {
     island_cache: std::cell::RefCell<Option<(u64, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>>,
     /// The outlines of the pours (the outer line and the holes of every shape) thinned to a level of detail (`ribbon::lod_level`) of the
     /// zoom, for the key of `zone_cache` they were made from.
-    zone_outline_lod: std::cell::RefCell<Option<(u64, usize, std::rc::Rc<Vec<Vec<Vec<Vec<Point>>>>>)>>,
+    zone_outline_lod: std::cell::RefCell<Option<(u64, usize, std::rc::Rc<PourLod>)>>,
     /// How many heat pads lack thermal vias, with the geometry key it was counted for: the count fills every pour, so it is not worked out every frame.
     thermal_cache: std::cell::Cell<Option<(u64, usize)>>,
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).

@@ -1592,7 +1592,7 @@ fn frame_breakdown() {
         }
         println!("zone geometry: shapes {nshapes}, outer vertices {outer}, holes {nholes} with {holes} vertices, fill triangles {tri}");
         let key = pcb_core::zonefill::geometry_key(&e.board);
-        let thin = e.pour_outlines(key, fills);
+        let thin = &e.pour_lod(key, fills).outlines;
         let kept: usize = thin.iter().flatten().flatten().map(Vec::len).sum();
         let big = thin.iter().flatten().flatten().filter(|c| c.len() > 200).count();
         println!("zoom {:.1} px/mm, level {}, outline vertices after thinning {kept}, contours over 200 vertices {big}", e.zoom, ribbon::lod_level(e.zoom));
@@ -2514,6 +2514,8 @@ fn triangle_breakdown() {
     let mut e = BoardEditor::default();
     e.board = board;
     e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    // the app now starts with multisampling on (hard-edged lines); CCAD_FADED=1 measures the old way
+    set_multisampled(std::env::var("CCAD_FADED").is_err());
     let ctx = egui::Context::default();
     let count = |e: &mut BoardEditor| -> usize {
         let mut n = 0;
@@ -2992,4 +2994,108 @@ fn plain_strips_frame_cost() {
         println!("{}: {tris} triangles, CPU (draw + tessellate) avg {:.2} ms, worst {:.2} ms", if plain { "hard edges (MSAA)" } else { "faded edges     " }, total / 30.0, worst);
     }
     set_multisampled(false);
+}
+
+/// Where the triangles of the pours go: fills, outlines, holes (set CCAD_BOARD): `cargo test --release -p app pour_triangle_split -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn pour_triangle_split() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(view);
+    let ctx = egui::Context::default();
+    ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+    let cache = e.zone_cache.borrow();
+    let (key, fills) = cache.as_ref().expect("pours made");
+    let lod = e.pour_lod(*key, fills);
+    let outlines = &lod.outlines;
+    let area = view.expand(4.0);
+    let (mut shapes, mut holes, mut fill_tris, mut fill_drawn, mut sliver_tris) = (0, 0, 0usize, 0usize, 0usize);
+    let (mut ring_segs, mut rings_drawn, mut ring_small_skipped) = (0usize, 0usize, 0usize);
+    let mut hole_sizes = [0usize; 4]; // hole outlines by corner count: <= 8, <= 16, <= 32, more
+    let mut by_pour: Vec<(String, usize, usize, usize)> = vec![];
+    for (fi, (side, net, shs, tris)) in fills.iter().enumerate() {
+        let (mut t_all, mut t_drawn, mut segs) = (0usize, 0usize, 0usize);
+        for (si, (sh, ts)) in shs.iter().zip(tris).enumerate() {
+            shapes += 1;
+            holes += sh.holes.len();
+            t_all += ts.len();
+            for t in ts {
+                let s = [e.to_screen(view, t[0]), e.to_screen(view, t[1]), e.to_screen(view, t[2])];
+                let r = egui::Rect::from_points(&s);
+                if r.intersects(area) {
+                    t_drawn += 1;
+                    fill_drawn += 1;
+                    // a triangle thinner than a pixel adds nothing to the picture
+                    let a2 = ((s[1].x - s[0].x) * (s[2].y - s[0].y) - (s[2].x - s[0].x) * (s[1].y - s[0].y)).abs();
+                    if a2 < 1.0 {
+                        sliver_tris += 1;
+                    }
+                }
+            }
+            for (k, contour) in outlines[fi][si].iter().enumerate() {
+                let pts: Vec<egui::Pos2> = contour.iter().map(|p| e.to_screen(view, *p)).collect();
+                let bb = egui::Rect::from_points(&pts);
+                if !bb.intersects(area) {
+                    continue;
+                }
+                if k > 0 && bb.width().max(bb.height()) < 3.0 {
+                    ring_small_skipped += 1;
+                    continue;
+                }
+                rings_drawn += 1;
+                segs += pts.len();
+                if k > 0 {
+                    hole_sizes[if pts.len() <= 8 { 0 } else if pts.len() <= 16 { 1 } else if pts.len() <= 32 { 2 } else { 3 }] += 1;
+                }
+            }
+        }
+        ring_segs += segs;
+        fill_tris += t_all;
+        by_pour.push((format!("{net} {side:?}"), t_all, t_drawn, segs));
+    }
+    println!("pours {}, shapes {shapes}, holes {holes}", fills.len());
+    println!("fill triangles: {fill_tris} made, {fill_drawn} drawn (of those under 1 px^2: {sliver_tris})");
+    println!("outlines: {rings_drawn} drawn, {ring_segs} pieces = {} triangles; {ring_small_skipped} small holes skipped; hole outlines by corners (<=8, <=16, <=32, more): {hole_sizes:?}", ring_segs * 2);
+    by_pour.sort_by_key(|p| std::cmp::Reverse(p.2));
+    for (n, all, drawn, segs) in by_pour.iter().take(6) {
+        println!("  {n:14} fill {all} (drawn {drawn}), outline pieces {segs}");
+    }
+}
+
+/// What thinning the corners of the pours' shapes more would save, for the fills and for the outlines (set CCAD_BOARD): `cargo test --release -p app pour_thinning -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn pour_thinning() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(view);
+    let ctx = egui::Context::default();
+    ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+    let cache = e.zone_cache.borrow();
+    let (_, fills) = cache.as_ref().expect("pours made");
+    println!("zoom {:.1} px/mm", e.zoom);
+    for px in [0.0f64, 0.25, 0.5, 1.0, 1.5, 2.0] {
+        let level = if px == 0.0 { 0 } else { ribbon::lod_level_px(e.zoom, px) };
+        let tol = ribbon::lod_tolerance(level);
+        let thin = |c: &Vec<Point>| if tol > 0.0 { ribbon::simplify_closed(c, tol) } else { c.clone() };
+        let (mut pieces, mut tris, mut corners_in, mut t0) = (0usize, 0usize, 0usize, std::time::Duration::ZERO);
+        for (_, _, shs, _) in fills.iter() {
+            for sh in shs {
+                let thinned = pcb_core::zonefill::FillShape { outer: thin(&sh.outer), holes: sh.holes.iter().map(&thin).collect() };
+                pieces += thinned.outer.len() + thinned.holes.iter().map(|h| h.len()).sum::<usize>();
+                corners_in += sh.outer.len() + sh.holes.iter().map(|h| h.len()).sum::<usize>();
+                let t = std::time::Instant::now();
+                tris += thinned.triangles().len();
+                t0 += t.elapsed();
+            }
+        }
+        println!("thinned at {px:>4} px (level {level}, {:.3} mm = {:.2} px): corners {corners_in} -> {pieces}; fill triangles {tris} (made in {:.1} ms); outline triangles {}", tol, tol * e.zoom as f64, t0.as_secs_f64() * 1000.0, pieces * 2);
+    }
 }
