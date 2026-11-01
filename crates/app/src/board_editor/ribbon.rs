@@ -213,7 +213,7 @@ impl SilkCache {
 
 fn silk_hash(board: &pcb_core::Board) -> u64 {
     use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = pcb_core::zonefill::FastHasher::default();
     for l in &board.silk {
         (l.a.x.to_bits(), l.a.y.to_bits(), l.b.x.to_bits(), l.b.y.to_bits(), l.width.to_bits(), l.side, l.refdes.is_empty()).hash(&mut h);
     }
@@ -225,7 +225,7 @@ fn silk_hash(board: &pcb_core::Board) -> u64 {
 
 fn tracks_hash(tracks: &[Track]) -> u64 {
     use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = pcb_core::zonefill::FastHasher::default();
     tracks.len().hash(&mut h);
     for t in tracks {
         (t.a.x.to_bits(), t.a.y.to_bits(), t.b.x.to_bits(), t.b.y.to_bits(), t.width.to_bits(), t.side).hash(&mut h);
@@ -303,7 +303,7 @@ impl Covers {
                 items.push(Cover { side: None, at: v.pos, shape: CoverShape::Circle(v.diameter / 2.0) });
             }
         }
-        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let mut h = pcb_core::zonefill::FastHasher::default();
         items.len().hash(&mut h);
         for c in &items {
             (c.side, c.at.x.to_bits(), c.at.y.to_bits()).hash(&mut h);

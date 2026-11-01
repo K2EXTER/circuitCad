@@ -708,13 +708,58 @@ fn touches_net(board: &Board, zone: &Zone, conn: &Connectivity, shape: &FillShap
         || board.tracks.iter().enumerate().any(|(i, t)| t.side == zone.side && conn.track_net(i) == net && (inside(t.a) || inside(t.b)))
 }
 
+/// A quick hasher for the keys that tell whether something changed (not for anything kept or sent anywhere, and not against an attacker): one
+/// multiplication a word, about four times as fast as the standard one, which matters for the keys worked out every frame.
+#[derive(Default, Clone, Copy)]
+pub struct FastHasher(u64);
+
+impl std::hash::Hasher for FastHasher {
+    fn write(&mut self, bytes: &[u8]) {
+        for c in bytes.chunks(8) {
+            let mut b = [0u8; 8];
+            b[..c.len()].copy_from_slice(c);
+            // the length too, so that "a" and "a " differ
+            self.write_u64(u64::from_le_bytes(b) ^ ((c.len() as u64) << 56));
+        }
+    }
+
+    fn write_u64(&mut self, v: u64) {
+        self.0 = (self.0.rotate_left(5) ^ v).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+
+    fn write_u8(&mut self, v: u8) {
+        self.write_u64(v as u64);
+    }
+
+    fn write_u32(&mut self, v: u32) {
+        self.write_u64(v as u64);
+    }
+
+    fn write_usize(&mut self, v: usize) {
+        self.write_u64(v as u64);
+    }
+
+    fn write_i64(&mut self, v: i64) {
+        self.write_u64(v as u64);
+    }
+
+    fn finish(&self) -> u64 {
+        // one more mixing, so that the last word moves every bit
+        let mut x = self.0;
+        x ^= x >> 33;
+        x = x.wrapping_mul(0xff51_afd7_ed55_8ccd);
+        x ^= x >> 33;
+        x
+    }
+}
+
 /// A number that changes whenever something a pour depends on changes (zones, copper, holes, outline,
 /// nets), so a drawn pour can be kept until then.
 pub fn geometry_key(board: &Board) -> u64 {
     use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    let f = |h: &mut std::collections::hash_map::DefaultHasher, v: f64| v.to_bits().hash(h);
-    let pt = |h: &mut std::collections::hash_map::DefaultHasher, p: Point| {
+    let mut h = FastHasher::default();
+    let f = |h: &mut FastHasher, v: f64| v.to_bits().hash(h);
+    let pt = |h: &mut FastHasher, p: Point| {
         p.x.to_bits().hash(h);
         p.y.to_bits().hash(h);
     };
@@ -765,6 +810,38 @@ pub fn geometry_key(board: &Board) -> u64 {
     }
     f(&mut h, board.rules.edge_clearance);
     h.finish()
+}
+
+#[cfg(test)]
+mod fast_key_tests {
+    use super::*;
+    use std::hash::{Hash, Hasher};
+
+    #[test]
+    fn the_fast_hasher_tells_values_and_lengths_apart() {
+        let h = |f: &dyn Fn(&mut FastHasher)| {
+            let mut x = FastHasher::default();
+            f(&mut x);
+            x.finish()
+        };
+        assert_eq!(h(&|x| 1.5f64.to_bits().hash(x)), h(&|x| 1.5f64.to_bits().hash(x)));
+        assert_ne!(h(&|x| 1.5f64.to_bits().hash(x)), h(&|x| 1.5000000000000002f64.to_bits().hash(x)));
+        assert_ne!(h(&|x| "a".hash(x)), h(&|x| "a ".hash(x)));
+        assert_ne!(h(&|x| ("ab", "c").hash(x)), h(&|x| ("a", "bc").hash(x)));
+    }
+
+    #[test]
+    fn the_geometry_key_follows_the_copper() {
+        let mut b = Board::new("t", 30.0, 20.0);
+        b.pads.push(Pad::new(Point::new(5.0, 5.0), PadShape::Circle { d: 1.0 }, None, Side::Top));
+        let k0 = geometry_key(&b);
+        assert_eq!(k0, geometry_key(&b));
+        b.pads[0].pos.x += 0.001;
+        assert_ne!(k0, geometry_key(&b), "a pad moved by a micrometre");
+        let k1 = geometry_key(&b);
+        b.tracks.push(Track { side: Side::Top, a: Point::new(0.0, 0.0), b: Point::new(1.0, 0.0), width: 0.2 });
+        assert_ne!(k1, geometry_key(&b));
+    }
 }
 
 #[cfg(test)]

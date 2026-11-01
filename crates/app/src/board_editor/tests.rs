@@ -2556,6 +2556,10 @@ fn triangle_breakdown() {
     }
     e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, inner_hidden: u32::MAX };
     println!("everything off (frame, grid, outline, panels): {}", count(&mut e));
+    let grid = e.grid;
+    e.grid = 0.0;
+    println!("  and the grid off too: {}", count(&mut e));
+    e.grid = grid;
 }
 
 /// Triangles of the parts, split into pads (by kind), designator texts and the rest of the part silk (set CCAD_BOARD): `cargo test --release -p app part_triangle_breakdown -- --ignored --nocapture`
@@ -3155,4 +3159,110 @@ fn disc_cost() {
         ribbon::add_disc(&mut m, egui::pos2(100.0, 100.0), r, egui::Color32::RED);
         println!("radius {r:>5}: egui {egui_tris:3} triangles, fan {:3}", m.indices.len() / 3);
     }
+}
+
+/// The triangles of the frame with every display item off, by kind of shape and the biggest single ones (set CCAD_BOARD): `cargo test --release -p app fixed_part_split -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn fixed_part_split() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    set_multisampled(true);
+    let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(view);
+    e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, inner_hidden: u32::MAX };
+    let ctx = egui::Context::default();
+    let mut shapes = vec![];
+    for _ in 0..3 {
+        let out = ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+        shapes = out.shapes;
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+    let ppp = 1.0;
+    let mut by_kind: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    let mut big: Vec<(usize, String)> = vec![];
+    fn kind(s: &egui::Shape) -> String {
+        match s {
+            egui::Shape::Noop => "noop".into(),
+            egui::Shape::Vec(v) => format!("vec[{}]", v.iter().map(kind).collect::<Vec<_>>().join(",")),
+            egui::Shape::Circle(_) => "circle".into(),
+            egui::Shape::Ellipse(_) => "ellipse".into(),
+            egui::Shape::LineSegment { .. } => "line_segment".into(),
+            egui::Shape::Path(_) => "path".into(),
+            egui::Shape::Rect(_) => "rect".into(),
+            egui::Shape::Text(_) => "text".into(),
+            egui::Shape::Mesh(_) => "mesh".into(),
+            egui::Shape::QuadraticBezier(_) => "bezier".into(),
+            egui::Shape::CubicBezier(_) => "bezier".into(),
+            egui::Shape::Callback(_) => "callback".into(),
+        }
+    }
+    for cs in shapes {
+        let k = kind(&cs.shape);
+        let desc = format!("{k} clip {:?}", cs.clip_rect);
+        let prims = ctx.tessellate(vec![cs], ppp);
+        let n: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+        let ent = by_kind.entry(k).or_default();
+        ent.0 += 1;
+        ent.1 += n;
+        big.push((n, desc));
+    }
+    println!("by kind (shapes, triangles): {by_kind:?}");
+    big.sort_by_key(|b| std::cmp::Reverse(b.0));
+    for (n, d) in big.iter().take(8) {
+        println!("  {n:5} {d}");
+    }
+    set_multisampled(false);
+}
+
+/// What the per-frame keys cost (set CCAD_BOARD): `cargo test --release -p app key_costs -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn key_costs() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let time = |name: &str, f: &dyn Fn() -> u64| {
+        let t = std::time::Instant::now();
+        let mut x = 0u64;
+        for _ in 0..200 {
+            x ^= f();
+        }
+        println!("{name:28} {:7.1} us  ({x})", t.elapsed().as_secs_f64() * 1e6 / 200.0);
+    };
+    time("geometry_key", &|| pcb_core::zonefill::geometry_key(&board));
+    time("requirements_hash", &|| pcb_core::requirements::requirements_hash(&board));
+    let t = std::time::Instant::now();
+    for _ in 0..200 {
+        let _ = pcb_core::requirements::marks(&board);
+    }
+    println!("{:28} {:7.1} us", "requirements::marks", t.elapsed().as_secs_f64() * 1e6 / 200.0);
+    let mut e = BoardEditor::default();
+    e.board = board.clone();
+    let t = std::time::Instant::now();
+    for _ in 0..200 {
+        let _ = e.part_boxes();
+    }
+    println!("{:28} {:7.1} us", "part_boxes (kept, the key)", t.elapsed().as_secs_f64() * 1e6 / 200.0);
+}
+
+#[test]
+fn the_part_boxes_are_kept_until_a_pad_or_an_outline_moves() {
+    let mut e = BoardEditor::default();
+    e.board = Board::new("t", 40.0, 30.0);
+    e.board.pads.push(pcb_core::Pad { refdes: "R1".into(), ..pcb_core::Pad::new(Point::new(10.0, 10.0), pcb_core::PadShape::Rect { w: 1.0, h: 1.0 }, None, pcb_core::Side::Top) });
+    e.board.pads.push(pcb_core::Pad { refdes: "R1".into(), ..pcb_core::Pad::new(Point::new(12.0, 10.0), pcb_core::PadShape::Rect { w: 1.0, h: 1.0 }, None, pcb_core::Side::Top) });
+    e.board.pads.push(pcb_core::Pad { refdes: "C1".into(), ..pcb_core::Pad::new(Point::new(20.0, 20.0), pcb_core::PadShape::Rect { w: 2.0, h: 1.0 }, None, pcb_core::Side::Top) });
+    let boxes = e.part_boxes();
+    assert_eq!(boxes.len(), 2);
+    assert_eq!(boxes["R1"], (Point::new(9.5, 9.5), Point::new(12.5, 10.5)));
+    assert!(std::rc::Rc::ptr_eq(&boxes, &e.part_boxes()), "the same state: the same boxes, not worked out again");
+    // a pad moves: new boxes
+    e.board.pads[1].pos.x = 15.0;
+    assert_eq!(e.part_boxes()["R1"], (Point::new(9.5, 9.5), Point::new(15.5, 10.5)));
+    // a line of the outline of a part grows the box
+    e.board.silk.push(pcb_core::SilkLine { a: Point::new(8.0, 9.0), b: Point::new(8.0, 11.0), width: 0.15, side: pcb_core::Side::Top, refdes: "R1".into() });
+    assert_eq!(e.part_boxes()["R1"].0, Point::new(8.0, 9.0));
+    assert!(!e.part_boxes().contains_key("U9"));
 }

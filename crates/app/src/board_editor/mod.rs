@@ -374,6 +374,10 @@ pub struct BoardEditor {
     calc_cache: std::cell::RefCell<CalcCache>,
     /// The requirements check and the measures of the table, with the key of the board they were worked out for.
     req_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<ReqAnswer>)>>,
+    /// The groups, bypass lines and distances drawn over the board (`requirements::marks`), with the key of the board they were made for.
+    marks_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::requirements::Marks>)>>,
+    /// The box round every part (its pads and outline), with the key of the pads and outlines it was made from.
+    part_box_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<std::collections::HashMap<String, (Point, Point)>>)>>,
     zone_cache: std::cell::RefCell<ZoneCache>,
     zone_job: std::cell::RefCell<ZoneJob>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
@@ -523,6 +527,8 @@ impl Default for BoardEditor {
             order_preview_src: None,
             calc_cache: std::cell::RefCell::new(CalcCache::default()),
             req_cache: std::cell::RefCell::new(None),
+            marks_cache: std::cell::RefCell::new(None),
+            part_box_cache: std::cell::RefCell::new(None),
             zone_cache: std::cell::RefCell::new(None),
             zone_job: Default::default(),
             island_cache: std::cell::RefCell::new(None),

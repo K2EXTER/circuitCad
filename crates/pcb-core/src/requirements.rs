@@ -377,7 +377,7 @@ pub fn analyse(board: &Board) -> (RequirementsReport, Vec<MeasureMark>) {
 /// net classes (the editor keeps the answer of `analyse` until the copper or this changes).
 pub fn requirements_hash(board: &Board) -> u64 {
     use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
+    let mut h = crate::zonefill::FastHasher::default();
     let parts = (&board.place_groups, &board.keep_apart, &board.bypass, &board.waivers, &board.measures, &board.net_classes);
     serde_json::to_string(&parts).unwrap_or_default().hash(&mut h);
     h.finish()

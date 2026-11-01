@@ -27,7 +27,8 @@ impl BoardEditor {
         if (!self.show_req_marks && !self.show_req_lines) || !self.vis.parts || !pcb_core::requirements::any(&self.board) {
             return;
         }
-        let marks = pcb_core::requirements::marks(&self.board);
+        let marks = self.cached_marks();
+        let boxes = self.part_boxes();
         let (good, bad) = (Color32::from_rgb(70, 190, 100), Color32::from_rgb(255, 60, 200));
         // not kept, but the table accepts it (a waiver with its reason)
         let accepted = Color32::from_rgb(210, 190, 90);
@@ -37,7 +38,7 @@ impl BoardEditor {
         for g in marks.groups.iter().filter(|_| self.show_req_marks) {
             let col = if g.ok { good } else if g.waived { accepted } else { bad };
             let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
-            for (a, b) in g.parts.iter().filter_map(|r| self.part_box(r)) {
+            for (a, b) in g.parts.iter().filter_map(|r| boxes.get(r.as_str()).copied()) {
                 lo = Point::new(lo.x.min(a.x), lo.y.min(a.y));
                 hi = Point::new(hi.x.max(b.x), hi.y.max(b.y));
             }

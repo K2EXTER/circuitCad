@@ -297,3 +297,119 @@ fn mixed_signal_oscillator() {
     let p = periods(&up);
     println!("OSC ngspice: {} rising edges, mean period {:.4} ms (first {:.4}, last {:.4}), {ng_secs:.2} s, {} points", up.len(), p.iter().sum::<f64>() / p.len().max(1) as f64 * 1e3, p.first().copied().unwrap_or(0.0) * 1e3, p.last().copied().unwrap_or(0.0) * 1e3, t.len());
 }
+
+/// Triangles of a whole window (panels, icons and all), by where on the screen they are and by kind of shape (set CCAD_BOARD): `cargo test --release -p app app_frame_triangles -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn app_frame_triangles() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut app = App::default();
+    app.board_ed.board = board;
+    app.mode = Mode::Board;
+    board_editor::set_multisampled(true);
+    let ctx = egui::Context::default();
+    crate::startup::install_japanese_font(&ctx);
+    let mut frame = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920.0, 1000.0));
+    let mut shapes = vec![];
+    for _ in 0..4 {
+        let out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            eframe::App::ui(&mut app, ui, &mut frame);
+        });
+        shapes = out.shapes;
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+    fn cs_extra(_n: &usize) -> String {
+        String::new()
+    }
+    fn kind(s: &egui::Shape) -> &'static str {
+        match s {
+            egui::Shape::Noop => "noop",
+            egui::Shape::Vec(_) => "vec",
+            egui::Shape::Circle(_) => "circle",
+            egui::Shape::Ellipse(_) => "ellipse",
+            egui::Shape::LineSegment { .. } => "line_segment",
+            egui::Shape::Path(_) => "path",
+            egui::Shape::Rect(_) => "rect",
+            egui::Shape::Text(_) => "text",
+            egui::Shape::Mesh(_) => "mesh",
+            egui::Shape::QuadraticBezier(_) => "bezier",
+            egui::Shape::CubicBezier(_) => "bezier",
+            egui::Shape::Callback(_) => "callback",
+        }
+    }
+    // the left panel is the first 400 pixels, the window of the layers is at the top right
+    let mut by: std::collections::BTreeMap<(&str, &str), (usize, usize)> = Default::default();
+    let mut total = 0;
+    let mut biggest: Vec<(usize, String)> = vec![];
+    for cs in shapes {
+        let k = kind(&cs.shape);
+        let bb = cs.shape.visual_bounding_rect();
+        let c = bb.center();
+        let region = if c.x < 400.0 { "left panel" } else if c.y < 60.0 { "menu/top" } else if c.y > 960.0 { "status bar" } else if c.x > 1650.0 && c.y < 520.0 { "layer window" } else { "canvas" };
+        let prims = ctx.tessellate(vec![cs], 1.0);
+        let n: usize = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+        if region != "canvas" {
+            let extra = match &cs_extra(&n) { s => s.clone() };
+            biggest.push((n, format!("{region} {k} {:.0}x{:.0} at ({:.0},{:.0}){extra}", bb.width(), bb.height(), bb.min.x, bb.min.y)));
+        }
+        let e = by.entry((region, k)).or_default();
+        e.0 += 1;
+        e.1 += n;
+        total += n;
+    }
+    biggest.sort_by_key(|b| std::cmp::Reverse(b.0));
+    for (n, d) in biggest.iter().take(10) {
+        println!("  biggest {n:4} {d}");
+    }
+    println!("whole window: {total} triangles");
+    let mut by_region: std::collections::BTreeMap<&str, usize> = Default::default();
+    for ((r, _), (_, n)) in &by {
+        *by_region.entry(r).or_default() += n;
+    }
+    println!("by region: {by_region:?}");
+    for ((r, k), (shapes, n)) in &by {
+        if *r != "canvas" {
+            println!("  {r:13} {k:13} {shapes:4} shapes {n:6} triangles");
+        }
+    }
+    board_editor::set_multisampled(false);
+}
+
+/// Where the time of a whole-window frame goes: building the shapes (the app's drawing code) or cutting them into triangles (set CCAD_BOARD): `cargo test --release -p app app_frame_split_time -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn app_frame_split_time() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut app = App::default();
+    app.board_ed.board = board;
+    app.mode = Mode::Board;
+    board_editor::set_multisampled(true);
+    let ctx = egui::Context::default();
+    crate::startup::install_japanese_font(&ctx);
+    let mut frame = eframe::Frame::_new_kittest();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920.0, 1000.0));
+    let (mut build, mut cut, mut tris) = (0.0f64, 0.0f64, 0usize);
+    for i in 0..44 {
+        let t = std::time::Instant::now();
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            eframe::App::ui(&mut app, ui, &mut frame);
+        });
+        let b = t.elapsed().as_secs_f64() * 1000.0;
+        out.textures_delta.clear();
+        let t = std::time::Instant::now();
+        let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+        let c = t.elapsed().as_secs_f64() * 1000.0;
+        if i < 4 {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            continue;
+        }
+        build += b;
+        cut += c;
+        tris = prims.iter().map(|p| match &p.primitive { egui::epaint::Primitive::Mesh(m) => m.indices.len() / 3, _ => 0 }).sum();
+    }
+    println!("whole window, {tris} triangles: building the shapes {:.2} ms, cutting into triangles {:.2} ms (average of 40 frames)", build / 40.0, cut / 40.0);
+    board_editor::set_multisampled(false);
+}

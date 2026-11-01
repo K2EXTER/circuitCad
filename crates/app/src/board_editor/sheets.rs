@@ -23,22 +23,42 @@ impl BoardEditor {
         names.into_iter().enumerate().map(|(k, n)| (n.clone(), COLORS[k % COLORS.len()])).collect()
     }
 
-    /// The box round a part's pads and outline.
-    pub(super) fn part_box(&self, refdes: &str) -> Option<(Point, Point)> {
-        let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));
-        let mut grow = |p: Point, mx: f64, my: f64| {
-            lo = Point::new(lo.x.min(p.x - mx), lo.y.min(p.y - my));
-            hi = Point::new(hi.x.max(p.x + mx), hi.y.max(p.y + my));
+    /// The boxes round all the parts' pads and outlines, worked out once for a state of the pads and the silk (a part's box is asked for from a
+    /// loop over all the parts, every frame: `part_box` for each would go through every pad and every line each time).
+    pub(super) fn part_boxes(&self) -> std::rc::Rc<std::collections::HashMap<String, (Point, Point)>> {
+        use std::hash::{Hash, Hasher};
+        let mut h = pcb_core::zonefill::FastHasher::default();
+        for p in &self.board.pads {
+            (&p.refdes, p.pos.x.to_bits(), p.pos.y.to_bits()).hash(&mut h);
+            let (w, hh) = p.shape.size();
+            (w.to_bits(), hh.to_bits()).hash(&mut h);
+        }
+        for s in self.board.silk.iter().filter(|s| !s.refdes.is_empty()) {
+            (&s.refdes, s.a.x.to_bits(), s.a.y.to_bits(), s.b.x.to_bits(), s.b.y.to_bits()).hash(&mut h);
+        }
+        let key = h.finish();
+        if let Some((k, m)) = self.part_box_cache.borrow().as_ref()
+            && *k == key
+        {
+            return m.clone();
+        }
+        let mut boxes: std::collections::HashMap<String, (Point, Point)> = Default::default();
+        let mut grow = |refdes: &str, p: Point, mx: f64, my: f64| {
+            let e = boxes.entry(refdes.to_string()).or_insert((Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN)));
+            e.0 = Point::new(e.0.x.min(p.x - mx), e.0.y.min(p.y - my));
+            e.1 = Point::new(e.1.x.max(p.x + mx), e.1.y.max(p.y + my));
         };
-        for p in self.board.pads.iter().filter(|p| p.refdes == refdes) {
-            let (w, h) = p.shape.size();
-            grow(p.pos, w / 2.0, h / 2.0);
+        for p in &self.board.pads {
+            let (w, hh) = p.shape.size();
+            grow(&p.refdes, p.pos, w / 2.0, hh / 2.0);
         }
-        for s in self.board.silk.iter().filter(|s| s.refdes == refdes) {
-            grow(s.a, 0.0, 0.0);
-            grow(s.b, 0.0, 0.0);
+        for s in self.board.silk.iter().filter(|s| !s.refdes.is_empty()) {
+            grow(&s.refdes, s.a, 0.0, 0.0);
+            grow(&s.refdes, s.b, 0.0, 0.0);
         }
-        (lo.x <= hi.x).then_some((lo, hi))
+        let m = std::rc::Rc::new(boxes);
+        *self.part_box_cache.borrow_mut() = Some((key, m.clone()));
+        m
     }
 
     /// A tint round every part in the colour of its sheet, and the sheet's name over the corner of the group.
@@ -47,12 +67,13 @@ impl BoardEditor {
             return;
         }
         let colors = self.sheet_colors();
+        let boxes = self.part_boxes();
         // the boxes of all the parts are one mesh (a box is two triangles and a hairline), the tags lie over it
         let mut mesh = egui::Mesh::default();
         for (name, col) in &colors {
             let mut group: Option<(Point, Point)> = None;
             for (refdes, sheet) in self.board.part_sheets.iter().filter(|(_, s)| *s == name) {
-                let Some((lo, hi)) = self.part_box(refdes) else { continue };
+                let Some(&(lo, hi)) = boxes.get(refdes.as_str()) else { continue };
                 let m = 0.4;
                 let r = Rect::from_two_pos(self.to_screen(rect, Point::new(lo.x - m, lo.y - m)), self.to_screen(rect, Point::new(hi.x + m, hi.y + m)));
                 if r.intersects(rect) {

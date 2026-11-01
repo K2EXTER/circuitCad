@@ -12,7 +12,7 @@ impl BoardEditor {
     fn finish_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
         let f = &self.board.finish;
-        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let mut h = pcb_core::zonefill::FastHasher::default();
         pcb_core::zonefill::geometry_key(&self.board).hash(&mut h);
         (f.corners, f.tapers, f.forks, f.slots, f.radius.to_bits()).hash(&mut h);
         for c in &self.board.net_classes {
@@ -25,7 +25,7 @@ impl BoardEditor {
     /// Where the tracks and vias are (what a finish is made from).
     fn tracks_key(&self) -> u64 {
         use std::hash::{Hash, Hasher};
-        let mut h = std::collections::hash_map::DefaultHasher::new();
+        let mut h = pcb_core::zonefill::FastHasher::default();
         for t in &self.board.tracks {
             (t.a.x.to_bits(), t.a.y.to_bits(), t.b.x.to_bits(), t.b.y.to_bits(), t.width.to_bits(), t.side).hash(&mut h);
         }
