@@ -2627,7 +2627,7 @@ fn part_triangle_breakdown() {
         let n_pads = b.pads.iter().filter(|p| f(p)).count();
         b.pads.retain(|p| !f(p));
         let n = with(&mut e, &b, true, true);
-        println!("{name:32} {:6} triangles, {n_pads:4} pads ({:.1} each)", all - n, (all - n) as f64 / n_pads.max(1) as f64);
+        println!("{name:32} {:6} triangles, {n_pads:4} pads ({:.1} each)", all as i64 - n as i64, (all as i64 - n as i64) as f64 / n_pads.max(1) as f64);
     }
     for (name, f) in [("sheet tints", (|e: &mut BoardEditor| e.show_sheets = false) as fn(&mut BoardEditor)), ("requirement marks", |e| e.show_req_marks = false), ("requirement lines", |e| e.show_req_lines = false)] {
         e.board = board.clone();
@@ -2640,7 +2640,7 @@ fn part_triangle_breakdown() {
         let on = count(&mut e);
         f(&mut e);
         let n = count(&mut e);
-        println!("{name:32} {:6} triangles (of {on} with all three on)", on - n);
+        println!("{name:32} {:6} triangles (of {on} with all three on)", on as i64 - n as i64);
     }
     println!("board: {} parts, {} pads, {} silk lines, {} texts", board.parts.len(), board.pads.len(), board.silk.len(), board.texts.len());
 }
@@ -3122,7 +3122,7 @@ fn silk_thinning() {
     let text_h: Vec<f64> = e.board.texts.iter().map(|t| t.height).collect();
     println!("zoom {:.1} px/mm; texts {} (height {:.2} to {:.2} mm = {:.1} to {:.1} px)", e.zoom, text_h.len(), text_h.iter().cloned().fold(f64::MAX, f64::min), text_h.iter().cloned().fold(0.0, f64::max), text_h.iter().cloned().fold(f64::MAX, f64::min) * e.zoom as f64, text_h.iter().cloned().fold(0.0, f64::max) * e.zoom as f64);
     for (name, chains) in [("plain (board silk and texts)", &cache.plain), ("of parts (outlines, designators)", &cache.of_parts)] {
-        for px in [0.0f64, 0.25, 0.5, 1.0] {
+        for px in [0.0f64, 0.25, 0.5, 1.0, 1.5, 2.0] {
             let tol = if px == 0.0 { 0.0 } else { ribbon::lod_tolerance(ribbon::lod_level_px(e.zoom, px)) };
             let (mut tris, mut pts_n, mut chains_n) = (0usize, 0usize, 0usize);
             for ch in chains.iter() {
