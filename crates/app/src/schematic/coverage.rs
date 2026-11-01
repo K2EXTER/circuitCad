@@ -36,7 +36,7 @@ impl SchEditor {
                 for p in list {
                     ui.label(egui::RichText::new(format!("{} ({})", p.refdes, p.value)).strong());
                     for n in &p.notes {
-                        ui.label(egui::RichText::new(format!("・{n}")).small());
+                        ui.label(format!("・{n}"));
                     }
                 }
             }).header_response.on_hover_text(tip);

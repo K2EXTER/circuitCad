@@ -586,6 +586,9 @@ impl SchEditor {
             ui.horizontal(|ui| {
                 crate::icons::icon_switch(ui, crate::icons::Icon::Eye, crate::icons::Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。明るい四角が「出している」です。表を開かなくても、回路図を見た人に設計の意図が伝わります");
                 ui.label("設計の要件の枠");
+                if ui.small_button("表を開く…").on_hover_text("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「学ぶ」メニューの「設計の要件 (表)」と同じ)").clicked() {
+                    self.open_requirements();
+                }
             });
         }
         if self.lit(ui.button("ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
@@ -618,7 +621,7 @@ impl SchEditor {
             }
             if self.erc_focus == Some(k) {
                 ui.indent(("erc_hint", k), |ui| {
-                    ui.small(&p.hint);
+                    ui.label(&p.hint);
                     if let Some((refdes, pin)) = &p.pin
                         && ui.small_button("使わないピン (NC) にする").on_hover_text("このピンは、つながないのが正しいときに押します (使わない出力、データシートが開放と言うピンなど)。印の × が付いて、ERC はこのピンを聞かなくなります。つなぎ忘れなら、押さずに配線しましょう").clicked()
                     {
