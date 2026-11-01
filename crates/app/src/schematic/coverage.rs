@@ -20,10 +20,10 @@ impl SchEditor {
         let cov = self.model_coverage();
         ui.label(egui::RichText::new(format!("計算に入る部品 {} 個 (記号・ピンヘッダを除く)", cov.total)).small());
         if cov.is_clean() {
-            ui.colored_label(egui::Color32::from_rgb(70, 190, 100), "モデルのない部品も、汎用の値で計算している部品も、注意書きのあるモデルもありません")
+            ui.colored_label(crate::theme::OK, "モデルのない部品も、汎用の値で計算している部品も、注意書きのあるモデルもありません")
                 .on_hover_text("抵抗・コンデンサ・コイルは理想の素子 (ESR などは値の欄に書いたぶんだけ) で計算します");
         }
-        let orange = egui::Color32::from_rgb(240, 170, 20);
+        let orange = crate::theme::WARN;
         let section = |ui: &mut egui::Ui, id: &str, title: String, tip: &str, open: bool, color: Option<egui::Color32>, list: &[sim_core::PartNote]| {
             if list.is_empty() {
                 return;

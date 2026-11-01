@@ -189,7 +189,7 @@ fn field(ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str) -> bool {
         let bad = !text.trim().is_empty() && parse_value(text).is_none();
         let mut edit = egui::TextEdit::singleline(text).desired_width(70.0);
         if bad {
-            edit = edit.text_color(egui::Color32::from_rgb(230, 60, 60));
+            edit = edit.text_color(crate::theme::ERROR);
         }
         changed = ui.add(edit).on_hover_text(tip).changed();
     });

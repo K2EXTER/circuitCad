@@ -26,8 +26,8 @@ pub struct Guide {
     pub limits: &'static str,
 }
 
-const WARN: Color32 = Color32::from_rgb(230, 150, 40);
-const OK: Color32 = Color32::from_rgb(60, 160, 90);
+const WARN: Color32 = crate::theme::WARN;
+const OK: Color32 = crate::theme::OK;
 
 pub const SOLDER: Guide = Guide {
     id: "solder",

@@ -223,9 +223,9 @@ impl SchEditor {
             ui.separator();
             for (k, step) in lesson.steps.iter().enumerate() {
                 let (mark, color) = if done[k] {
-                    ("✔", Color32::from_rgb(60, 160, 90))
+                    ("✔", crate::theme::OK)
                 } else if Some(k) == cur {
-                    ("▶", Color32::from_rgb(220, 150, 40))
+                    ("▶", crate::theme::WARN)
                 } else {
                     ("○", Color32::from_gray(140))
                 };
@@ -274,7 +274,7 @@ impl SchEditor {
             }
             if cur.is_none() {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label(lesson.summary);
                 if idx + 1 < LESSONS.len() && ui.button(format!("次のレッスンへ: {}", LESSONS[idx + 1].title)).on_hover_text("このレッスンを終えて、次のレッスンのサンプル回路を開きます").clicked() {
                     next = Some(idx + 1);

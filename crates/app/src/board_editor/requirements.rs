@@ -29,7 +29,7 @@ impl BoardEditor {
         }
         let marks = self.cached_marks();
         let boxes = self.part_boxes();
-        let (good, bad) = (Color32::from_rgb(70, 190, 100), Color32::from_rgb(255, 60, 200));
+        let (good, bad) = (crate::theme::OK, Color32::from_rgb(255, 60, 200));
         // not kept, but the table accepts it (a waiver with its reason)
         let accepted = Color32::from_rgb(210, 190, 90);
         // the frames and lines go into one mesh and are handed over before each tag, so that the tags lie over them

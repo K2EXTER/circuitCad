@@ -28,6 +28,7 @@ mod schematic;
 mod screenshot;
 mod source_form;
 mod startup;
+mod theme;
 mod tips;
 mod xcheck;
 mod xcheck_ac;

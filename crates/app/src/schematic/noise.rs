@@ -154,12 +154,12 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(res) => {
                 for w in &res.warnings {
-                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    ui.colored_label(crate::theme::WARN, w);
                 }
                 let to_db = |psd: &[f64]| -> Vec<f64> { psd.iter().map(|p| 10.0 * (p.max(1e-60) / 1e-18).log10()).collect() };
                 let mut order: Vec<(String, f64)> = vec![("合計".to_string(), res.out_rms)];
@@ -176,7 +176,7 @@ impl SchEditor {
                         }
                         if let Some((top, share)) = res.dominant() {
                             let info = describe_source(&top.name);
-                            ui.colored_label(Color32::from_rgb(220, 150, 40), format!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
+                            ui.colored_label(crate::theme::WARN, format!("最大の原因: {} ({}) — 全体の約 {:.0}%", top.name, info.title, share * 100.0));
                             if !info.remedy.is_empty() {
                                 ui.small(format!("対策: {}", info.remedy));
                             }

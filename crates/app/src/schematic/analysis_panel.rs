@@ -181,15 +181,15 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
         let mut go_tran = false;
         if let Some(dc) = &self.dc {
             if stale {
-                ui.colored_label(Color32::from_rgb(220, 160, 40), "回路が変更されました。再度解析してください");
+                ui.colored_label(crate::theme::WARN, "回路が変更されました。再度解析してください");
             }
             if let Some(f) = &dc.fault {
-                ui.colored_label(Color32::from_rgb(230, 90, 70), format!("⚠ これは「{f}」と仮定した結果です (実際の回路ではありません)"));
+                ui.colored_label(crate::theme::ERROR, format!("⚠ これは「{f}」と仮定した結果です (実際の回路ではありません)"));
             }
             match &dc.outcome {
                 Err(msgs) => {
                     for m in msgs {
-                        ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                        ui.colored_label(crate::theme::ERROR, m);
                     }
                     // an oscillator or latch has no single operating point: its waveform is the answer
                     if msgs.iter().any(|m| m.contains("過渡解析")) && self.lit(ui.button("過渡解析を実行"), "過渡解析を実行").on_hover_text("DCの1点ではなく、時間を追った波形を計算します。発振回路や2つの状態を持つ回路は、ここで動きが見えます (終了時間と刻みは「過渡解析」の設定が使われます)").clicked() {
@@ -198,13 +198,13 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                 }
                 Ok(res) => {
                     for w in &res.warnings {
-                        ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                        ui.colored_label(crate::theme::WARN, w);
                     }
                     for r in &dc.ratings {
                         let (mark, col) = if r.level == sim_core::RatingLevel::Over {
-                            ("⚠ 定格超え", Color32::from_rgb(230, 60, 60))
+                            ("⚠ 定格超え", crate::theme::ERROR)
                         } else {
-                            ("⚠ 余裕が少ない", Color32::from_rgb(220, 160, 40))
+                            ("⚠ 余裕が少ない", crate::theme::WARN)
                         };
                         ui.colored_label(col, format!("{mark}: {}", r.message)).on_hover_text(&r.hint);
                     }

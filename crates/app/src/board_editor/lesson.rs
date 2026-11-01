@@ -526,9 +526,9 @@ impl BoardEditor {
             ui.separator();
             for (k, step) in steps.iter().enumerate() {
                 let (mark, color) = if done[k] {
-                    ("✔", Color32::from_rgb(60, 160, 90))
+                    ("✔", crate::theme::OK)
                 } else if Some(k) == cur {
-                    ("▶", Color32::from_rgb(220, 150, 40))
+                    ("▶", crate::theme::WARN)
                 } else {
                     ("○", Color32::from_gray(140))
                 };
@@ -559,27 +559,27 @@ impl BoardEditor {
             }
             if cur.is_none() && copper {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label("配線は銅の抵抗を持ち、電流が大きいほど、細く長いほど、電圧が落ちます。流れる電流から必要な太さを決め (IPC-2221)、シミュレーションで確かめる、という順で考えます。この見積もりはDCの電流だけで、スイッチングの瞬間の大きな電流や、配線のインダクタンスは入っていません。余裕を見て、実機でも測りましょう。");
             } else if cur.is_none() && fix {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "チャレンジ達成!");
+                ui.colored_label(crate::theme::OK, "チャレンジ達成!");
                 ui.label("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。");
             } else if cur.is_none() && mega {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label("自動配線が通せなかった線は、人が仕上げます。足の間が狭い IC では、「先に通したい線から引く」「邪魔な線を一度消して引き直す」「ビアで裏面へ渡す」「部品の位置を直す」の順に考えます。発注の前には、未配線が 0 本で、DRC が 0 件であることを、必ず確かめてください (未配線のまま発注すると、基板は動きません)。");
             } else if cur.is_none() && usb {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label("USB の配線の基本は、「D+ と D− を並べて、同じ長さで、短く」「ビアや枝分かれを避ける」「ESD 保護部品はコネクタのそば」「下の層を GND のベタにする」です。高速 (ハイスピード 480Mbit/s) では、差動インピーダンス 90Ω の設計が必須で、基板の積層を決めてから配線します。");
             } else if cur.is_none() && arduino {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label("マイコンの基板では、「水晶は近く」「バイパスコンデンサは電源ピンのそば」「通らない線は、グリッドを細かくするか、手で引く」の 3 つが基本です。ほかにも、GND はベタで広く取る、リセットやクロックの線にノイズの源 (スイッチング電源など) を近づけない、があります。実機で動かないときは、まずこれらを疑いましょう。");
             } else if cur.is_none() {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "レッスン完了!");
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label("基板づくりの流れは「回路図 → 取り込み → 配置 → 配線 → DRC → 発注データ」です。DRC に通らないと発注データは書き出せないので、配線のあとは必ず DRC を実行する習慣をつけましょう。実際に注文するときは、発注先のページで最新の条件を確かめてください。");
             }
             ui.separator();

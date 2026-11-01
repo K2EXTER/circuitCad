@@ -42,7 +42,7 @@ impl SchEditor {
         };
         match &view {
             Err(e) => {
-                ui.colored_label(egui::Color32::from_rgb(230, 90, 70), e).on_hover_text("電源や電流の流れ方を確認してください。DC解析が収束しない回路は計算できません");
+                ui.colored_label(crate::theme::ERROR, e).on_hover_text("電源や電流の流れ方を確認してください。DC解析が収束しない回路は計算できません");
             }
             Ok(v) => {
                 if v.parts.is_empty() {

@@ -74,14 +74,14 @@ impl PartForm {
                     }
                 }
                 Err(e) => {
-                    ui.colored_label(Color32::from_rgb(230, 160, 40), e);
+                    ui.colored_label(crate::theme::WARN, e);
                 }
             }
         });
         // a hole that is too tight for the lead typed above
         let tight = self.thru_number("", &self.thru_lead).ok().filter(|lead| self.pkg == PkgKind::Row && self.fp_preset.is_empty() && self.drill < lead + 0.15);
         if let Some(lead) = tight {
-            ui.colored_label(Color32::from_rgb(230, 160, 40), format!("穴径 {:.2}mm は、リード径 {lead:.3}mm に対して余裕が {:.2}mm しかありません。リードが入らなかったり、はんだが流れなかったりします (目安は リード径 + 0.25mm)", self.drill, self.drill - lead));
+            ui.colored_label(crate::theme::WARN, format!("穴径 {:.2}mm は、リード径 {lead:.3}mm に対して余裕が {:.2}mm しかありません。リードが入らなかったり、はんだが流れなかったりします (目安は リード径 + 0.25mm)", self.drill, self.drill - lead));
         }
     }
 }

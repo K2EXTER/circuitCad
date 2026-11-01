@@ -168,10 +168,10 @@ impl PartForm {
         }
         match &self.dio_message {
             Some(Ok(m)) => {
-                ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                ui.colored_label(crate::theme::OK, m);
             }
             Some(Err(e)) => {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
             }
             None => {}
         }
@@ -217,7 +217,7 @@ impl PartForm {
         }).filter(|p| plot.expand(2.0).contains(*p)).collect();
         painter.add(egui::Shape::line(curve, Stroke::new(2.0, Color32::from_rgb(70, 140, 230))));
         for (i, v) in &pts {
-            painter.circle_filled(to(*v, *i), 4.0, Color32::from_rgb(230, 90, 60));
+            painter.circle_filled(to(*v, *i), 4.0, crate::theme::ERROR);
         }
         ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
         if !pts.is_empty() {

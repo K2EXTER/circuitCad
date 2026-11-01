@@ -67,12 +67,12 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(res) => {
                 for w in &res.warnings {
-                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    ui.colored_label(crate::theme::WARN, w);
                 }
                 let names: Vec<&DcSweepSignal> = res.signals.iter().filter(|s| !s.name.contains('.')).collect();
                 // key numbers of the first selected voltage that is an inverting curve
@@ -81,7 +81,7 @@ impl SchEditor {
                     ui.vertical(|ui| {
                         ui.set_width(260.0);
                         if let Some((name, m)) = &metrics {
-                            ui.colored_label(Color32::from_rgb(220, 150, 40), format!("{name} は反転する特性です"));
+                            ui.colored_label(crate::theme::WARN, format!("{name} は反転する特性です"));
                             egui::Grid::new("inv_metrics").num_columns(2).show(ui, |ui| {
                                 let row = |ui: &mut egui::Ui, label: &str, val: String, tip: &str| {
                                     ui.label(label).on_hover_text(tip);

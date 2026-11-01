@@ -6,7 +6,7 @@ impl PartForm {
         let def = match built {
             Ok(d) => d,
             Err(e) => {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
                 return None;
             }
         };
@@ -25,11 +25,11 @@ impl PartForm {
                 ui.small("赤い項目を直すと、保存できます");
             }
             if issues.is_empty() {
-                ui.colored_label(Color32::from_rgb(60, 170, 90), "✔ 問題は見つかりません");
+                ui.colored_label(crate::theme::OK, "✔ 問題は見つかりません");
             }
             for i in &issues {
                 // an "error" here only means "cannot be saved yet": a blank form starts with some, so it is worded as a to-do
-                let (c, mark) = if i.error { (Color32::from_rgb(215, 90, 70), "保存前に直す") } else { (Color32::from_rgb(220, 160, 40), "注意") };
+                let (c, mark) = if i.error { (Color32::from_rgb(215, 90, 70), "保存前に直す") } else { (crate::theme::WARN, "注意") };
                 ui.colored_label(c, format!("{mark}: {}", i.message));
             }
         });
@@ -105,7 +105,7 @@ pub(super) fn footprint_preview(ui: &mut egui::Ui, fp: &pcb_core::footprints::Fo
         let (w, h) = p.shape.size();
         let ctr = to(p.pos.x, p.pos.y);
         let size = Vec2::new(w as f32 * scale, h as f32 * scale);
-        let col = if p.pin == "1" { Color32::from_rgb(240, 120, 60) } else { Color32::from_rgb(220, 60, 60) };
+        let col = if p.pin == "1" { Color32::from_rgb(240, 120, 60) } else { crate::theme::ERROR };
         match p.shape {
             pcb_core::PadShape::Circle { .. } => {
                 painter.circle_filled(ctr, size.x / 2.0, col);

@@ -125,7 +125,7 @@ impl SchEditor {
         ui.separator();
         ui.label(format!("{} の伝達関数{}", s.label, if stale { " (回路が変わりました。もう一度実行してください)" } else { "" }));
         if s.pz.error >= 0.02 {
-            ui.colored_label(Color32::from_rgb(220, 160, 40), format!("当てはめの誤差が {:.1}% あります。この範囲の応答は、6次までの分数の式では表せないか、周波数が足りません。範囲を狭める・点数を増やすと良くなることがあります", s.pz.error * 100.0));
+            ui.colored_label(crate::theme::WARN, format!("当てはめの誤差が {:.1}% あります。この範囲の応答は、6次までの分数の式では表せないか、周波数が足りません。範囲を狭める・点数を増やすと良くなることがあります", s.pz.error * 100.0));
         }
         let db = 20.0 * s.pz.dc_gain.abs().max(1e-15).log10();
         ui.label(format!("低い周波数のゲイン: {:.3} 倍 ({:.1} dB)", s.pz.dc_gain, db)).on_hover_text("周波数が一番低いところの値に近い、直流のゲインです");

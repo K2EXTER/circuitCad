@@ -107,7 +107,7 @@ impl BoardEditor {
             });
             // (the rotate / pan / zoom operations are in the guide)
             if let Some(e) = &v.error {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
                 return;
             }
             let Some(scene) = &v.scene else { return };
@@ -123,11 +123,11 @@ impl BoardEditor {
             if v.check_height {
                 let over = scene.over_list();
                 if over.is_empty() {
-                    ui.colored_label(Color32::from_rgb(70, 190, 100), "✔ どの部品もケースの高さに収まっています");
+                    ui.colored_label(crate::theme::OK, "✔ どの部品もケースの高さに収まっています");
                 } else {
                     let names: Vec<String> = over.iter().take(6).map(|(r, o)| format!("{r} (+{o:.1} mm)")).collect();
                     let more = if over.len() > 6 { format!(" ほか {} 個", over.len() - 6) } else { String::new() };
-                    ui.colored_label(Color32::from_rgb(230, 70, 60), format!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
+                    ui.colored_label(crate::theme::ERROR, format!("⚠ ケースの高さを超える部品 (赤): {}{more}", names.join(", ")));
                 }
             }
             let size = ui.available_size().max(Vec2::new(300.0, 240.0));
@@ -250,7 +250,7 @@ impl BoardEditor {
                             ui.label(format!("フットプリント: {}", if fp.is_empty() { "—" } else { fp }));
                             ui.label(format!("高さの目安: {hh:.1} mm"));
                             if let Some(o) = scene.over.get(i).filter(|o| **o > 1e-6) {
-                                ui.colored_label(Color32::from_rgb(230, 70, 60), format!("ケースの高さを {o:.1} mm 超えています"));
+                                ui.colored_label(crate::theme::ERROR, format!("ケースの高さを {o:.1} mm 超えています"));
                             }
                         });
                     });

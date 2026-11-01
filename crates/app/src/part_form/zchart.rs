@@ -176,7 +176,7 @@ impl PartForm {
         let curve: Vec<Pos2> = zs.iter().enumerate().map(|(k, z)| to(10f64.powf(d_lo + (d_hi - d_lo) * k as f64 / 240.0), *z)).collect();
         painter.add(egui::Shape::line(curve, Stroke::new(2.0, Color32::from_rgb(70, 140, 230))));
         for (f, z) in &pts {
-            painter.circle_filled(to(*f, *z), 4.0, Color32::from_rgb(230, 90, 60));
+            painter.circle_filled(to(*f, *z), 4.0, crate::theme::ERROR);
         }
         ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
         self.pas_sliders(ui);
@@ -320,7 +320,7 @@ impl PartForm {
             painter.add(egui::Shape::line(curve, Stroke::new(2.0, Color32::from_rgb(70, 140, 230))));
         }
         for (i, p) in &pts {
-            painter.circle_filled(to(*i, 100.0 + p), 4.0, Color32::from_rgb(230, 90, 60));
+            painter.circle_filled(to(*i, 100.0 + p), 4.0, crate::theme::ERROR);
         }
         ui.label(egui::RichText::new("● 赤い点: データシートの点    ─ 青い線: モデルの曲線").size(13.5));
     }

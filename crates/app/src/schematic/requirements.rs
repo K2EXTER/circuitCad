@@ -138,13 +138,13 @@ impl SchEditor {
             if !self.req_problems.is_empty() {
                 ui.separator();
                 for p in &self.req_problems {
-                    ui.colored_label(egui::Color32::from_rgb(220, 140, 30), format!("⚠ {p}"));
+                    ui.colored_label(crate::theme::WARN, format!("⚠ {p}"));
                 }
             }
             ui.checkbox(&mut self.req_frames, "回路図の上に枠を出す").on_hover_text("近くに置く組を色つきの枠で囲み、離す組を A・B の二重の枠で囲んで、名前と距離を書きます。この表を開かなくても、回路図を見た人に設計の意図が伝わります。回路図にある部品だけが囲まれます (ネット名で書いた側は囲みません)");
             let unexplained = self.sch.requirements.unexplained();
             if !unexplained.is_empty() {
-                ui.colored_label(egui::Color32::from_rgb(220, 140, 30), format!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
+                ui.colored_label(crate::theme::WARN, format!("⚠ 理由が空の行が {} 件あります: {}", unexplained.len(), unexplained.join("、")))
                     .on_hover_text("数字だけでは、あとで読む人に「なぜその値か」が伝わりません。「理由」の欄に、なぜそうするかを一言書いておきましょう (例: ループを小さくしてノイズを減らすため)");
             }
             ui.separator();

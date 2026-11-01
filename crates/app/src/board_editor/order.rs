@@ -216,10 +216,10 @@ impl BoardEditor {
             let mut number = 0;
             for (idx, c) in self.order.checks.iter().enumerate() {
                 let (mark, color) = match c.level {
-                    Level::Ok => ("✔", Color32::from_rgb(60, 160, 90)),
+                    Level::Ok => ("✔", crate::theme::OK),
                     Level::Info => ("ℹ", Color32::from_gray(150)),
-                    Level::Warn => ("▲", Color32::from_rgb(210, 150, 20)),
-                    Level::Error => ("✖", Color32::from_rgb(220, 40, 60)),
+                    Level::Warn => ("▲", crate::theme::WARN),
+                    Level::Error => ("✖", crate::theme::ERROR),
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, mark);
@@ -247,9 +247,9 @@ impl BoardEditor {
             let ready = fab::ready(&self.order.checks);
             if self.order.ran {
                 if ready {
-                    ui.colored_label(Color32::from_rgb(60, 160, 90), "直すところはありません。次に進めます");
+                    ui.colored_label(crate::theme::OK, "直すところはありません。次に進めます");
                 } else {
-                    ui.colored_label(Color32::from_rgb(220, 40, 60), "赤い ✖ の項目を直してから、もう一度チェックしてください");
+                    ui.colored_label(crate::theme::ERROR, "赤い ✖ の項目を直してから、もう一度チェックしてください");
                 }
             }
 
@@ -302,8 +302,8 @@ impl BoardEditor {
                 ui.small("チェックの ✖ を直すと押せます");
             }
             if let Some(dir) = &self.order.exported_to {
-                ui.colored_label(Color32::from_rgb(60, 160, 90), format!("書き出しました: {}", dir.display()));
-                ui.colored_label(Color32::from_rgb(60, 160, 90), format!("発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)", self.board.name));
+                ui.colored_label(crate::theme::OK, format!("書き出しました: {}", dir.display()));
+                ui.colored_label(crate::theme::OK, format!("発注先に渡すのは「{}_gerber.zip」の1つです (部品の実装も頼むときは、BOM と CPL の csv も)", self.board.name));
                 egui::CollapsingHeader::new("ファイルの中身").show(ui, |ui| {
                     for (suffix, what) in FILE_KINDS {
                         ui.small(format!("{}{suffix}  …  {what}", self.board.name));

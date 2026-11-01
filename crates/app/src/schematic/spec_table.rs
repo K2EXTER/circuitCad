@@ -80,7 +80,7 @@ pub fn take_specs(sheet: &mut serde_json::Value) -> Vec<SpecItem> {
 }
 
 const PASS: Color32 = Color32::from_rgb(90, 190, 110);
-const FAIL: Color32 = Color32::from_rgb(230, 70, 60);
+const FAIL: Color32 = crate::theme::ERROR;
 
 impl SchEditor {
     /// The table as it is saved with the sheet.

@@ -128,7 +128,7 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(res) => {
@@ -137,7 +137,7 @@ impl SchEditor {
                     if w.contains("普通のことです") {
                         ui.colored_label(Color32::from_rgb(130, 170, 210), format!("ⓘ {w}"));
                     } else {
-                        ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                        ui.colored_label(crate::theme::WARN, w);
                     }
                 }
                 // a picture that does not move in its second half: the end time may be too short for what the circuit does (a blinker
@@ -164,9 +164,9 @@ impl SchEditor {
                     egui::CollapsingHeader::new("部品の定格 (リップル電流・寿命)").default_open(true).show(ui, |ui| {
                         for r in parts.iter() {
                             let color = match r.level {
-                                Some(sim_core::RatingLevel::Over) => Color32::from_rgb(230, 60, 60),
-                                Some(sim_core::RatingLevel::Caution) => Color32::from_rgb(220, 160, 40),
-                                None => Color32::from_rgb(60, 170, 90),
+                                Some(sim_core::RatingLevel::Over) => crate::theme::ERROR,
+                                Some(sim_core::RatingLevel::Caution) => crate::theme::WARN,
+                                None => crate::theme::OK,
                             };
                             ui.colored_label(color, r.message());
                             if !r.hint().is_empty() {
@@ -280,7 +280,7 @@ impl SchEditor {
                             ui.small(if *spectrum { "スペクトルの「解析範囲」の時間で計算します" } else { "いま表示している時間の範囲で計算します。立ち上がりを除いて、数周期〜数十周期が入るようにします" });
                             let f0 = if thd_f0.trim().is_empty() { None } else { parse_value(thd_f0) };
                             if f0.is_none() && !thd_f0.trim().is_empty() {
-                                ui.colored_label(Color32::from_rgb(230, 60, 60), "基本周波数を数値で入力してください (例: 1k)");
+                                ui.colored_label(crate::theme::ERROR, "基本周波数を数値で入力してください (例: 1k)");
                             } else {
                                 let mut results = vec![];
                                 let mut failed = vec![];
@@ -315,7 +315,7 @@ impl SchEditor {
                                         }
                                     });
                                     if results.iter().any(|(_, t)| t.points_per_period < 40.0) {
-                                        ui.colored_label(Color32::from_rgb(220, 160, 40), "1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください");
+                                        ui.colored_label(crate::theme::WARN, "1周期の波形の点が少なく、点を結ぶ直線のひずみが入っています。過渡解析の「刻み」を小さくして計算し直してください");
                                     }
                                 }
                                 for f in &failed {
@@ -413,7 +413,7 @@ impl SchEditor {
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
                     if *spectrum {
                         let (Some(t0), Some(t1)) = (parse_value(spec_t0), parse_value(spec_t1)) else {
-                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "解析範囲を数値で入力してください", FontId::proportional(14.0), Color32::from_rgb(230, 60, 60));
+                            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "解析範囲を数値で入力してください", FontId::proportional(14.0), crate::theme::ERROR);
                             return;
                         };
                         let key = format!("{t0:e}|{t1:e}|{selected:?}");

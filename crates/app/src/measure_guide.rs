@@ -16,7 +16,7 @@ pub enum GuideAction {
     AddRows,
 }
 
-const WARN: Color32 = Color32::from_rgb(230, 150, 40);
+const WARN: Color32 = crate::theme::WARN;
 
 impl MeasureGuide {
     pub fn show(&mut self, ctx: &egui::Context, done: bool, compared: usize) -> Option<GuideAction> {
@@ -61,7 +61,7 @@ impl MeasureGuide {
             ui.separator();
 
             if done {
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "✔ 完了しました。実測が 3 項目以上、シミュレーションと比べられています");
+                ui.colored_label(crate::theme::OK, "✔ 完了しました。実測が 3 項目以上、シミュレーションと比べられています");
             } else {
                 ui.label(spaced(&format!("完了の条件: 実測を 3 項目以上、シミュレーションと比べる (いま {compared} / 3)")).color(NOTE));
             }

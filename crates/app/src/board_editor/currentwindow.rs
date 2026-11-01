@@ -74,7 +74,7 @@ impl BoardEditor {
                                 ui.label(format!("{:.2} mm", round_up_width(w.needed)));
                                 match w.thinnest {
                                     None => ui.colored_label(Color32::from_gray(160), "配線なし"),
-                                    Some(t) if w.too_thin() => ui.colored_label(Color32::from_rgb(230, 90, 70), format!("{t:.2} mm ✖ 足りません")),
+                                    Some(t) if w.too_thin() => ui.colored_label(crate::theme::ERROR, format!("{t:.2} mm ✖ 足りません")),
                                     Some(t) => ui.colored_label(Color32::from_rgb(90, 190, 110), format!("{t:.2} mm ✔")),
                                 };
                             }
@@ -90,7 +90,7 @@ impl BoardEditor {
                                     ui.label(format!("{:.3} A", s.burst_rms));
                                     let txt = format!("{:.3} A{}", s.peak, if s.spiky() { " ⚠" } else { "" });
                                     if s.spiky() {
-                                        ui.colored_label(Color32::from_rgb(220, 160, 40), txt).on_hover_text("ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります");
+                                        ui.colored_label(crate::theme::WARN, txt).on_hover_text("ピークが実効値の10倍以上です。起動時のサージやスパイクかもしれません。実物では電源の内部抵抗・ESR・ソフトスタートが抑えるので、そのまま太さにすると必要以上に太くなります");
                                     } else {
                                         ui.label(txt);
                                     }

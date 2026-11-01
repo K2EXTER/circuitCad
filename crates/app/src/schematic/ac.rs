@@ -57,12 +57,12 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(res) => {
                 for w in &res.warnings {
-                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    ui.colored_label(crate::theme::WARN, w);
                 }
                 plot::scale_bar(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
                 ui.horizontal_top(|ui| {
@@ -129,8 +129,8 @@ impl SchEditor {
                             if !margins.is_empty() {
                                 // one column per signal; the colour says whether the margin is enough
                                 let green = Color32::from_rgb(90, 190, 110);
-                                let amber = Color32::from_rgb(220, 160, 40);
-                                let red = Color32::from_rgb(230, 60, 60);
+                                let amber = crate::theme::WARN;
+                                let red = crate::theme::ERROR;
                                 egui::Grid::new("ac_margin_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
                                     ui.label("");
                                     for (name, _) in &margins {
@@ -141,7 +141,7 @@ impl SchEditor {
                                     for (_, m) in &margins {
                                         match m.phase_margin.filter(|_| m.gain_crossover.is_some()) {
                                             Some(pm) => {
-                                                let (word, col) = if pm >= 45.0 { ("十分", green) } else if pm >= 30.0 { ("やや不足", amber) } else if pm > 0.0 { ("不足", Color32::from_rgb(230, 90, 70)) } else { ("不安定", red) };
+                                                let (word, col) = if pm >= 45.0 { ("十分", green) } else if pm >= 30.0 { ("やや不足", amber) } else if pm > 0.0 { ("不足", crate::theme::ERROR) } else { ("不安定", red) };
                                                 let cell = ui.label(egui::RichText::new(format!("{pm:.1}° ({word})")).color(col));
                                                 if word == "不足" {
                                                     cell.on_hover_text("不足: 振動しやすい状態です");
@@ -162,7 +162,7 @@ impl SchEditor {
                                     for (_, m) in &margins {
                                         match (m.gain_margin, m.phase_crossover) {
                                             (Some(gm), Some(_)) => {
-                                                let col = if gm >= 6.0 { green } else if gm > 0.0 { Color32::from_rgb(230, 90, 70) } else { red };
+                                                let col = if gm >= 6.0 { green } else if gm > 0.0 { crate::theme::ERROR } else { red };
                                                 ui.label(egui::RichText::new(format!("{gm:.1} dB")).color(col));
                                             }
                                             _ => {

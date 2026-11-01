@@ -176,10 +176,10 @@ impl PartForm {
             }
             self.vendor_load();
             for e in &self.mu.errors {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
             }
             if let Some(Err(e)) = &self.mu.message {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
             }
             if self.mu.indexes.is_empty() {
                 if zips.is_empty() {
@@ -229,7 +229,7 @@ impl PartForm {
             let filter = match self.vendor_filter() {
                 Ok(f) => f,
                 Err(e) => {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                    ui.colored_label(crate::theme::ERROR, e);
                     return;
                 }
             };
@@ -254,7 +254,7 @@ impl PartForm {
                 self.mu.message = Some(self.apply_vendor(n, &e));
             }
             if let Some(Ok(m)) = &self.mu.message {
-                ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                ui.colored_label(crate::theme::OK, m);
             }
         });
     }

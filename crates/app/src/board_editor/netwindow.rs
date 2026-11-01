@@ -147,7 +147,7 @@ impl BoardEditor {
                         ui.small("このネットの配線は、まだありません。配線するときの線幅に使えます");
                     }
                     Some(t) if t + 1e-9 < rec => {
-                        ui.colored_label(Color32::from_rgb(230, 90, 70), format!("今の最も細い配線は {t:.2} mm で、足りません"));
+                        ui.colored_label(crate::theme::ERROR, format!("今の最も細い配線は {t:.2} mm で、足りません"));
                     }
                     Some(t) => {
                         ui.colored_label(Color32::from_rgb(90, 190, 110), format!("今の最も細い配線は {t:.2} mm で、足ります ✔"));
@@ -272,7 +272,7 @@ impl BoardEditor {
                             ui.colored_label(Color32::from_rgb(90, 190, 110), format!("推奨 {r:.2} mm 以上で、足ります ✔"));
                         } else {
                             ui.horizontal(|ui| {
-                                ui.colored_label(Color32::from_rgb(230, 90, 70), format!("推奨 {r:.2} mm に足りません"));
+                                ui.colored_label(crate::theme::ERROR, format!("推奨 {r:.2} mm に足りません"));
                                 if ui.small_button("推奨まで上げる").on_hover_text("スライダーを、推奨の線幅にします").clicked() {
                                     new_width = Some(r);
                                 }
@@ -313,7 +313,7 @@ impl BoardEditor {
                         && let Some(zt) = classes[k].impedance
                         && (z - zt).abs() / zt > 0.1
                     {
-                        ui.colored_label(Color32::from_rgb(230, 160, 40), format!("クラスの目標 {zt:.0} Ω から {:.0}% ずれています", (z - zt).abs() / zt * 100.0));
+                        ui.colored_label(crate::theme::WARN, format!("クラスの目標 {zt:.0} Ω から {:.0}% ずれています", (z - zt).abs() / zt * 100.0));
                     }
                 }
             }

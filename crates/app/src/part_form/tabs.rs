@@ -137,12 +137,12 @@ impl PartForm {
             let (max_given, rows_given, rows_open) = self.ratings_progress();
             let summary = format!("入力済み: 最大定格 {max_given} / 3 項目、そのほかの情報 {rows_given} 行{}", if rows_open > 0 { format!(" (まだ調べていない項目 {rows_open} 行)") } else { String::new() });
             if max_given == 0 && rows_given == 0 {
-                ui.colored_label(Color32::from_rgb(220, 160, 40), "データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう");
+                ui.colored_label(crate::theme::WARN, "データシートの情報が空です。空のまま保存もできますが、定格のチェックと「部品選びのヒント」が使えません。データシートを開いて、調べてみましょう");
             } else {
                 ui.label(summary);
             }
             if self.datasheet.trim().is_empty() && (max_given > 0 || rows_given > 0) {
-                ui.colored_label(Color32::from_rgb(220, 160, 40), "データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)");
+                ui.colored_label(crate::theme::WARN, "データシートの URL が空です。調べた元を残しておくと、あとで見返せます (上の「データシートURL」)");
             }
     }
 
@@ -192,22 +192,22 @@ impl PartForm {
             }
             match &self.trial_message {
                 Some(super::trial::Trial::Ok(m)) => {
-                    ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                    ui.colored_label(crate::theme::OK, m);
                 }
                 Some(super::trial::Trial::Warn(m)) => {
-                    ui.colored_label(Color32::from_rgb(220, 160, 40), m);
+                    ui.colored_label(crate::theme::WARN, m);
                 }
                 Some(super::trial::Trial::Err(m)) => {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
                 None => {}
             }
             match &self.spice_message {
                 Some(Ok(m)) => {
-                    ui.colored_label(Color32::from_rgb(60, 170, 90), m);
+                    ui.colored_label(crate::theme::OK, m);
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                    ui.colored_label(crate::theme::ERROR, e);
                 }
                 None => {}
             }

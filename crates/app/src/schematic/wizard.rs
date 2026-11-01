@@ -276,7 +276,7 @@ impl SchEditor {
             ui.separator();
             match self.wizard_result() {
                 Err(msg) => {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), msg);
+                    ui.colored_label(crate::theme::ERROR, msg);
                 }
                 Ok(out) => {
                     egui::Grid::new("wiz_rows").num_columns(2).spacing([14.0, 4.0]).show(ui, |ui| {

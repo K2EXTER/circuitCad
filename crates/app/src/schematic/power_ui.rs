@@ -43,7 +43,7 @@ pub(super) fn power_ui(ui: &mut egui::Ui, res: &TranResult, order: &[&str], w: (
     if let (Some(a), Some(b)) = (pin, pout) {
         match efficiency(a, b) {
             Some(e) => {
-                let col = if e > 1.02 { Color32::from_rgb(230, 70, 60) } else if e >= 0.8 { Color32::from_rgb(90, 190, 110) } else { Color32::from_rgb(220, 160, 40) };
+                let col = if e > 1.02 { crate::theme::ERROR } else if e >= 0.8 { Color32::from_rgb(90, 190, 110) } else { crate::theme::WARN };
                 let loss = (a - b).max(0.0);
                 ui.label(egui::RichText::new(format!("  効率 {:.1} %   損失 {}", e * 100.0, eng(loss, "W"))).color(col))
                     .on_hover_text("効率 = 出力の電力 ÷ 入力の電力。損失は熱になります (スイッチング電源は 80〜95%、リニアレギュレータは 出力電圧÷入力電圧 くらい)");

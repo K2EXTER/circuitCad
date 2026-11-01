@@ -89,7 +89,7 @@ impl SchEditor {
                 add = true;
             }
             if !k.msg.is_empty() {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), &k.msg);
+                ui.colored_label(crate::theme::ERROR, &k.msg);
             }
         });
         if add && let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {

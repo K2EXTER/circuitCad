@@ -132,12 +132,12 @@ impl SchEditor {
         match &view.outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(res) => {
                 let Some(st) = res.stats() else {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), "どの回も収束しませんでした");
+                    ui.colored_label(crate::theme::ERROR, "どの回も収束しませんでした");
                     return;
                 };
                 ui.horizontal_top(|ui| {
@@ -161,7 +161,7 @@ impl SchEditor {
                             ui.label(format!("設計値からのずれ: {lo:+.1}% 〜 {hi:+.1}%"));
                         }
                         if res.failed > 0 {
-                            ui.colored_label(Color32::from_rgb(220, 160, 40), format!("{} 回は計算が収束しませんでした", res.failed));
+                            ui.colored_label(crate::theme::WARN, format!("{} 回は計算が収束しませんでした", res.failed));
                         }
                         if let Some(w) = &worst {
                             ui.separator();
@@ -231,8 +231,8 @@ fn draw_histogram(ui: &egui::Ui, rect: Rect, res: &McResult, st: &sim_core::McSt
     mark(res.nominal, Color32::WHITE, "設計値", true);
     mark(st.mean, Color32::from_rgb(240, 200, 60), "平均", false);
     if let Some(w) = worst {
-        mark(w.min, Color32::from_rgb(230, 80, 80), "最悪(小)", true);
-        mark(w.max, Color32::from_rgb(230, 80, 80), "最悪(大)", true);
+        mark(w.min, crate::theme::ERROR, "最悪(小)", true);
+        mark(w.max, crate::theme::ERROR, "最悪(大)", true);
     }
     let f = FontId::proportional(11.0);
     p.text(Pos2::new(plot.left(), plot.bottom() + 4.0), Align2::LEFT_TOP, fmt_unit(a, res.unit), f.clone(), Color32::from_gray(190));

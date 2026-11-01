@@ -530,7 +530,7 @@ impl BoardEditor {
             number += 1;
             let color = match c.level {
                 Level::Error => Color32::from_rgb(235, 50, 70),
-                Level::Warn => Color32::from_rgb(240, 170, 20),
+                Level::Warn => crate::theme::WARN,
                 _ => Color32::from_rgb(120, 170, 230),
             };
             // the other places of the same note: a smaller ring with the same number

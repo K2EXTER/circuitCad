@@ -309,7 +309,7 @@ impl SchEditor {
         match report {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(r) => {
@@ -653,7 +653,7 @@ impl SchEditor {
         match &self.fault_chain {
             Some(Err(msgs)) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Some(Ok(r)) => {
@@ -677,7 +677,7 @@ impl SchEditor {
             match &view.report {
                 Err(msgs) => {
                     for m in msgs {
-                        ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                        ui.colored_label(crate::theme::ERROR, m);
                     }
                 }
                 Ok(r) => {
@@ -691,7 +691,7 @@ impl SchEditor {
                     }
                     let safety = assess_safety(&self.sch, r);
                     let col = match safety.level {
-                        Danger::Danger => Color32::from_rgb(230, 70, 60),
+                        Danger::Danger => crate::theme::ERROR,
                         Danger::Caution => Color32::from_rgb(230, 170, 50),
                         Danger::Safe => Color32::from_rgb(90, 180, 110),
                     };
@@ -737,7 +737,7 @@ impl SchEditor {
                             Danger::Safe => String::new(),
                         };
                         let text = format!("{} {}: {}{}", row.part, row.label, effect, mark);
-                        let col = if row.severity.is_infinite() || row.danger == Danger::Danger { Color32::from_rgb(230, 90, 70) } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
+                        let col = if row.severity.is_infinite() || row.danger == Danger::Danger { crate::theme::ERROR } else if row.severity < 0.01 { Color32::from_gray(140) } else { Color32::from_rgb(220, 190, 80) };
                         if ui.selectable_label(false, egui::RichText::new(text).color(col)).on_hover_text("クリックで、この故障の詳しい結果を表示します").clicked() {
                             pick = Some(k);
                         }

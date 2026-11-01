@@ -120,12 +120,12 @@ impl SchEditor {
         match outcome {
             Err(msgs) => {
                 for m in msgs {
-                    ui.colored_label(Color32::from_rgb(230, 60, 60), m);
+                    ui.colored_label(crate::theme::ERROR, m);
                 }
             }
             Ok(res) => {
                 for w in &res.warnings {
-                    ui.colored_label(Color32::from_rgb(220, 160, 40), w);
+                    ui.colored_label(crate::theme::WARN, w);
                 }
                 let (mag, db, ph) = (res.mag(), res.db(), res.phase_deg());
                 ui.horizontal_top(|ui| {

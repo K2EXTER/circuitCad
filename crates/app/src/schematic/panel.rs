@@ -104,7 +104,7 @@ impl SchEditor {
                 let cov = self.model_coverage();
                 if !cov.ignored.is_empty() {
                     let names: Vec<&str> = cov.ignored.iter().map(|p| p.refdes.as_str()).collect();
-                    ui.colored_label(egui::Color32::from_rgb(240, 170, 20), format!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
+                    ui.colored_label(crate::theme::WARN, format!("⚠ モデルがなく、計算に入っていない部品: {}", names.join("・")))
                         .on_hover_text("この部品は、回路にないものとして計算されます。動作や電流に関わる部品なら、結果は実物と違います。下の「モデルの前提」で、ほかの注意もまとめて見られます");
                 }
                 let lesson = self.lesson.is_some();
@@ -365,7 +365,7 @@ impl SchEditor {
             });
             ui.small("保存先: ライブラリのフォルダ").on_hover_text(self.lib_dir.display().to_string());
             for e in &self.lib_errors {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
             }
         });
         if let Some(i) = chosen {
@@ -489,11 +489,11 @@ impl SchEditor {
                                     *text = t;
                                 }
                                 Err(msg) => {
-                                    ui.colored_label(Color32::from_rgb(230, 60, 60), msg);
+                                    ui.colored_label(crate::theme::ERROR, msg);
                                 }
                             }
                         } else if let Err(msg) = form.to_text() {
-                            ui.colored_label(Color32::from_rgb(230, 60, 60), msg);
+                            ui.colored_label(crate::theme::ERROR, msg);
                         }
                     }
                 }
@@ -513,7 +513,7 @@ impl SchEditor {
                             limits_ui(ui, if m.limits.is_empty() { from_library.map_or(&[][..], |l| l.as_slice()) } else { &m.limits }, "placed_limits");
                         }
                         None => {
-                            ui.colored_label(Color32::from_rgb(220, 160, 40), "シミュレーションモデルなし");
+                            ui.colored_label(crate::theme::WARN, "シミュレーションモデルなし");
                         }
                     }
                 } else if !c.kind.is_power_symbol() {
@@ -601,15 +601,15 @@ impl SchEditor {
         }
         self.erc_skip_ui(ui);
         if self.erc_ran && self.problems.is_empty() {
-            ui.colored_label(Color32::from_rgb(60, 160, 90), "✔ 問題は見つかりませんでした");
+            ui.colored_label(crate::theme::OK, "✔ 問題は見つかりませんでした");
         }
         let mut jump = None;
         let mut jump_sheet = 0;
         let mut make_nc: Option<(String, String)> = None;
         for (k, p) in self.problems.iter().enumerate() {
             let (mark, color) = match p.severity {
-                Severity::Error => ("✖", Color32::from_rgb(220, 40, 60)),
-                Severity::Warning => ("▲", Color32::from_rgb(210, 150, 20)),
+                Severity::Error => ("✖", crate::theme::ERROR),
+                Severity::Warning => ("▲", crate::theme::WARN),
             };
             let sheet = if self.sch.sheet_count() > 1 && p.at.is_some() { format!("[{}] ", self.sch.sheet_name(p.sheet)) } else { String::new() };
             let label = egui::RichText::new(format!("{mark} {sheet}{}", p.message)).color(color);
@@ -783,7 +783,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
             return;
         };
         if !fresh {
-            ui.colored_label(Color32::from_rgb(220, 160, 40), "回路を変えたので、いまは前の解析結果です。DC動作点をもう一度解析してください");
+            ui.colored_label(crate::theme::WARN, "回路を変えたので、いまは前の解析結果です。DC動作点をもう一度解析してください");
         }
         let st = sim_core::stress(res, &c.refdes);
         let (Some(i), Some(p)) = (st.i, st.p) else {
@@ -809,7 +809,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
         match ratings.filter(|r| !r.is_empty()) {
             Some(r) => {
                 let ok = sim_core::meets(&req, r, true);
-                let (text, color) = if ok { ("✔ この部品は、2 倍の余裕を満たしています", Color32::from_rgb(60, 160, 90)) } else { ("✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)", Color32::from_rgb(230, 90, 70)) };
+                let (text, color) = if ok { ("✔ この部品は、2 倍の余裕を満たしています", crate::theme::OK) } else { ("✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)", crate::theme::ERROR) };
                 ui.colored_label(color, text);
             }
             None => {

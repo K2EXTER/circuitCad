@@ -30,8 +30,8 @@ impl SchEditor {
             }
             for r in results.iter() {
                 let (mark, color) = match r.ok {
-                    Some(true) => ("✔", Color32::from_rgb(60, 160, 90)),
-                    Some(false) => ("✖", Color32::from_rgb(230, 90, 70)),
+                    Some(true) => ("✔", crate::theme::OK),
+                    Some(false) => ("✖", crate::theme::ERROR),
                     None => ("○", Color32::from_gray(140)),
                 };
                 ui.horizontal_wrapped(|ui| {
@@ -46,7 +46,7 @@ impl SchEditor {
             }
             if passed {
                 ui.separator();
-                ui.colored_label(Color32::from_rgb(60, 160, 90), "できました!");
+                ui.colored_label(crate::theme::OK, "できました!");
                 ui.label("自分で作った回路が、判定のすべての条件を満たしています。値や部品を変えても通るか (答えは 1 つではありません)、条件のぎりぎりを探してみましょう");
             }
             for (k, h) in ch.hints.iter().enumerate().take(hints) {

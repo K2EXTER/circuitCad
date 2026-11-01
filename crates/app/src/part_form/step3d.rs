@@ -223,7 +223,7 @@ fn mesh_view(ui: &mut egui::Ui, m: &Mesh3d, pads: &[(f64, f64, f64, f64)], front
     painter.add(egui::Shape::mesh(mesh));
     if front {
         // the board face
-        painter.line_segment([to(x0, 0.0), to(x1, 0.0)], Stroke::new(1.5, Color32::from_rgb(60, 170, 90)));
+        painter.line_segment([to(x0, 0.0), to(x1, 0.0)], Stroke::new(1.5, crate::theme::OK));
     } else {
         for p in pads {
             let rect = Rect::from_two_pos(to(p.0 - p.2 / 2.0, p.1 - p.3 / 2.0), to(p.0 + p.2 / 2.0, p.1 + p.3 / 2.0));

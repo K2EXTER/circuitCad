@@ -515,7 +515,7 @@ impl LearnWindow {
             if let Some(next) = next_item(path, progress) {
                 ui.horizontal_wrapped(|ui| {
                     ui.label("次のおすすめ:");
-                    ui.colored_label(Color32::from_rgb(220, 150, 40), next.title);
+                    ui.colored_label(crate::theme::WARN, next.title);
                     if next_ids.len() > 1 {
                         ui.label(format!("(ほかに {} 件、すぐ学べます)", next_ids.len() - 1));
                     }
@@ -524,7 +524,7 @@ impl LearnWindow {
                 if available == 0 {
                     ui.label(spaced("このパスのレッスンは準備中です。道すじ (地図) だけ先に見られます").color(NOTE));
                 } else {
-                    ui.colored_label(Color32::from_rgb(60, 160, 90), "いま学べるレッスンは、すべて完了しました。残りは準備中です");
+                    ui.colored_label(crate::theme::OK, "いま学べるレッスンは、すべて完了しました。残りは準備中です");
                 }
             }
             // the lessons are done (or none is left to do): the way on is shown open
@@ -546,8 +546,8 @@ impl LearnWindow {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 18.0;
                         ui.colored_label(Color32::from_rgb(255, 205, 70), "★ 次はこれ");
-                        ui.colored_label(Color32::from_rgb(220, 150, 40), "橙の枠 = いま学べる");
-                        ui.colored_label(Color32::from_rgb(60, 160, 90), "緑 = 完了");
+                        ui.colored_label(crate::theme::WARN, "橙の枠 = いま学べる");
+                        ui.colored_label(crate::theme::OK, "緑 = 完了");
                         ui.colored_label(Color32::from_gray(190), "灰色の枠 = 先に済ませるレッスンがある");
                         ui.colored_label(Color32::from_gray(130), "暗い灰色 = 準備中");
                     });
@@ -567,8 +567,8 @@ impl LearnWindow {
                     let done = item_done(progress, item);
                     let (mark, color) = match item.kind {
                         Kind::Planned => ("…", Color32::from_gray(120)),
-                        _ if done => ("✔", Color32::from_rgb(60, 160, 90)),
-                        _ if next_ids.contains(&item.id) => ("▶", Color32::from_rgb(220, 150, 40)),
+                        _ if done => ("✔", crate::theme::OK),
+                        _ if next_ids.contains(&item.id) => ("▶", crate::theme::WARN),
                         _ => ("○", Color32::from_gray(150)),
                     };
                     ui.horizontal_wrapped(|ui| {
@@ -610,7 +610,7 @@ impl LearnWindow {
             ui.separator();
             ui.label(spaced("[実験あり] = 実機で確かめられる実験があります (ポインタを置くと内容が出ます)。実験は、安全のため低い電圧 (12V 以下) だけで行い、商用電源 (100V) の配線は行いません"));
             if let Some(e) = &progress.error {
-                ui.colored_label(Color32::from_rgb(230, 60, 60), e);
+                ui.colored_label(crate::theme::ERROR, e);
             }
             if ui.small_button("進み具合をリセット").on_hover_text("完了の印をすべて消して、最初からやり直します").clicked() {
                 progress.reset();
@@ -676,9 +676,9 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         let (fill, stroke, text) = if item.kind == Kind::Planned {
             (Color32::from_gray(60), Color32::from_gray(90), Color32::from_gray(150))
         } else if item_done(progress, item) {
-            (Color32::from_rgb(40, 100, 60), Color32::from_rgb(60, 160, 90), Color32::WHITE)
+            (Color32::from_rgb(40, 100, 60), crate::theme::OK, Color32::WHITE)
         } else if next_ids.contains(&item.id) {
-            (Color32::from_gray(45), Color32::from_rgb(220, 150, 40), Color32::WHITE)
+            (Color32::from_gray(45), crate::theme::WARN, Color32::WHITE)
         } else {
             (Color32::from_gray(45), Color32::from_gray(120), Color32::from_gray(210))
         };

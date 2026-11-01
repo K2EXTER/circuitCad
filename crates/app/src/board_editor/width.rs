@@ -72,7 +72,7 @@ impl BoardEditor {
                     self.current_win_open = true;
                 }
                 if thin > 0 {
-                    ui.colored_label(egui::Color32::from_rgb(230, 90, 70), format!("電流に対して細いネット {thin} 本"));
+                    ui.colored_label(crate::theme::ERROR, format!("電流に対して細いネット {thin} 本"));
                 }
             });
             self.ir_drop_ui(ui);
@@ -134,7 +134,7 @@ impl BoardEditor {
             return;
         };
         if (made_for - fp).abs() > 1e-9 {
-            ui.colored_label(egui::Color32::from_rgb(220, 160, 40), "配線か電流が変わりました。「計算する」で更新してください");
+            ui.colored_label(crate::theme::WARN, "配線か電流が変わりました。「計算する」で更新してください");
         }
         if nets.is_empty() {
             ui.small("電流が入っているネットがありません (上の欄に A を入れてください)");
@@ -148,7 +148,7 @@ impl BoardEditor {
             match nd.worst() {
                 Some(w) => {
                     let v = w.drop_v.unwrap_or(0.0);
-                    let col = if v >= 0.1 { egui::Color32::from_rgb(230, 70, 60) } else if v >= 0.03 { egui::Color32::from_rgb(220, 160, 40) } else { egui::Color32::from_rgb(90, 190, 110) };
+                    let col = if v >= 0.1 { crate::theme::ERROR } else if v >= 0.03 { crate::theme::WARN } else { egui::Color32::from_rgb(90, 190, 110) };
                     let line = format!("{}: 最大 {:.0} mV ({} まで, {:.0} mΩ, {:.0} nH)", nd.net, v * 1000.0, format_args!("{}.{}", w.refdes, w.pin), w.ohm.unwrap_or(0.0) * 1000.0, w.henry.unwrap_or(0.0) * 1e9);
                     let r = ui.colored_label(col, line);
                     r.on_hover_text(self.ir_detail(nd, &src));
@@ -159,7 +159,7 @@ impl BoardEditor {
             }
             if nd.pads.iter().any(|p| p.ohm.is_none()) {
                 let names: Vec<String> = nd.pads.iter().filter(|p| p.ohm.is_none()).map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
-                ui.colored_label(egui::Color32::from_rgb(230, 70, 60), format!("  つながっていない: {}", names.join(", ")));
+                ui.colored_label(crate::theme::ERROR, format!("  つながっていない: {}", names.join(", ")));
             }
         }
         ui.small("目安: 30 mV 未満は問題なし、100 mV 以上は電源の電圧が目に見えて下がります。電源とGNDの降下は足し算で効きます");

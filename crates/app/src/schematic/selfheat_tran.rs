@@ -99,7 +99,7 @@ impl SchEditor {
         let Some(view) = self.htran.take() else { return };
         match &view {
             Err(e) => {
-                ui.colored_label(egui::Color32::from_rgb(230, 90, 70), e).on_hover_text("部品の名前・時間・電源を確認してください。過渡解析が通らない回路は計算できません");
+                ui.colored_label(crate::theme::ERROR, e).on_hover_text("部品の名前・時間・電源を確認してください。過渡解析が通らない回路は計算できません");
             }
             Ok(v) => {
                 let mut edits: Vec<(String, f64, f64)> = vec![];
