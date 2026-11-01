@@ -2712,3 +2712,176 @@ fn triangle_settling() {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
+
+/// Triangles of the copper (tracks as the finish makes them), split into straight pieces, bends and curves, caps and patches (set CCAD_BOARD): `cargo test --release -p app track_triangle_split -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn track_triangle_split() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(view);
+    let finished = e.finished();
+    let tracks = finished.as_ref().map_or(e.board.tracks.as_slice(), |f| f.board.tracks.as_slice());
+    println!("tracks drawn from: {} ({} pieces, plain board has {})", if finished.is_some() { "the finish" } else { "the plain tracks" }, tracks.len(), e.board.tracks.len());
+    let copper = ribbon::CopperCache::new(tracks, finished.as_ref(), &ribbon::Covers::of(&e.board, true, true));
+    let lod = copper.lod(e.zoom);
+    // a turn of more than this between two pieces makes both of them part of a curve
+    let bend = 1.0f32.to_radians();
+    let (mut straight, mut curved, mut caps, mut chains, mut seg_s, mut seg_c) = (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
+    let mut by_len: [(usize, usize); 3] = [(0, 0); 3]; // curved pieces: (count, triangles) for < 3 px, < 12 px, longer
+    let mut total_mesh = 0usize;
+    for (ch, pts) in copper.chains.iter().zip(&lod.chains) {
+        let (lo, hi) = (e.to_screen(view, ch.lo), e.to_screen(view, ch.hi));
+        if !ribbon::on_screen(view, lo, hi, ch.width as f32 * e.zoom / 2.0 + 4.0) {
+            continue;
+        }
+        let p: Vec<egui::Pos2> = pts.iter().map(|q| e.to_screen(view, *q)).collect();
+        let mut mesh = egui::Mesh::default();
+        ribbon::add_capped_chain(&mut mesh, &p, ch.width as f32 * e.zoom, egui::Color32::RED, (ch.cap_start, ch.cap_end));
+        let n = mesh.indices.len() / 3;
+        total_mesh += n;
+        chains += 1;
+        // the pieces of the chain as add_chain sees them (points that lie on each other are one)
+        let mut q: Vec<egui::Pos2> = vec![];
+        for &s in &p {
+            if q.last().is_none_or(|l| (*l - s).length() > 1e-3) {
+                q.push(s);
+            }
+        }
+        if q.len() < 2 {
+            caps += n;
+            continue;
+        }
+        let dirs: Vec<egui::Vec2> = q.windows(2).map(|w| (w[1] - w[0]).normalized()).collect();
+        let turn = |i: usize| -> f32 { dirs[i].dot(dirs[i + 1]).clamp(-1.0, 1.0).acos() };
+        let mut chain_pieces = 0;
+        for i in 0..dirs.len() {
+            let curve = (i > 0 && turn(i - 1) > bend) || (i + 1 < dirs.len() && turn(i) > bend);
+            chain_pieces += 1;
+            let len = (q[i + 1] - q[i]).length();
+            if curve {
+                curved += 6;
+                seg_c += 1;
+                let k = if len < 3.0 { 0 } else if len < 12.0 { 1 } else { 2 };
+                by_len[k].0 += 1;
+                by_len[k].1 += 6;
+            } else {
+                straight += 6;
+                seg_s += 1;
+            }
+        }
+        caps += n - chain_pieces * 6;
+    }
+    let mut patch_tris = 0;
+    let mut patches = 0;
+    for (patch, tris) in copper.patches.iter().zip(&lod.patches) {
+        if ribbon::on_screen(view, e.to_screen(view, patch.lo), e.to_screen(view, patch.hi), 4.0) {
+            patch_tris += tris.len();
+            patches += 1;
+        }
+    }
+    println!("zoom {:.1} px/mm; chains on screen {chains}; mesh of the chains {total_mesh} triangles", e.zoom);
+    println!("straight pieces: {seg_s} pieces, {straight} triangles");
+    println!("curved/bent pieces: {seg_c} pieces, {curved} triangles");
+    for (name, (n, t)) in ["  shorter than 3 px", "  3 to 12 px", "  12 px and longer"].iter().zip(by_len) {
+        println!("{name}: {n} pieces, {t} triangles");
+    }
+    println!("round caps: {caps} triangles");
+    println!("patches (polygons of the finish): {patches} patches, {patch_tris} triangles");
+    println!("all: {}", total_mesh + patch_tris);
+}
+
+/// Where the chain ends that still have a cap lie: on a pad, on a via or free (set CCAD_BOARD): `cargo test --release -p app cap_ends -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn cap_ends() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
+    let finished = e.finished();
+    let tracks = finished.as_ref().map_or(e.board.tracks.as_slice(), |f| f.board.tracks.as_slice());
+    let copper = ribbon::CopperCache::new(tracks, finished.as_ref(), &ribbon::Covers::of(&e.board, true, true));
+    let (mut on_pad, mut on_via, mut free, mut total, mut none) = (0, 0, 0, 0, 0);
+    // of the ones elsewhere: the end is inside a pad but the disc does not fit / near a pad / on or near other copper / alone
+    let (mut in_pad_big, mut near_pad, mut near_copper, mut alone) = (0, 0, 0, 0);
+    let mut widths: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut joint2: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut joint_other: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut wide_free = 0;
+    for c in &copper.chains {
+        for (cap, p) in [(c.cap_start, c.pts[0]), (c.cap_end, c.pts[c.pts.len() - 1])] {
+            if !cap {
+                none += 1;
+                continue;
+            }
+            total += 1;
+            let r = c.width / 2.0;
+            let pad = e.board.pads.iter().any(|q| {
+                let (w, h) = q.shape.size();
+                (q.drill.is_some() || q.side == c.side) && (p.x - q.pos.x).abs() + r <= w / 2.0 + 1e-6 && (p.y - q.pos.y).abs() + r <= h / 2.0 + 1e-6
+            });
+            let via = e.board.vias.iter().any(|v| p.dist(v.pos) + r <= v.diameter / 2.0 + 1e-6);
+            if pad {
+                on_pad += 1;
+            } else if via {
+                on_via += 1;
+            } else {
+                let inside = e.board.pads.iter().any(|q| {
+                    let (w, h) = q.shape.size();
+                    (q.drill.is_some() || q.side == c.side) && (p.x - q.pos.x).abs() <= w / 2.0 && (p.y - q.pos.y).abs() <= h / 2.0
+                });
+                let near = e.board.pads.iter().any(|q| {
+                    let (w, h) = q.shape.size();
+                    (q.drill.is_some() || q.side == c.side) && (p.x - q.pos.x).abs() <= w / 2.0 + c.width && (p.y - q.pos.y).abs() <= h / 2.0 + c.width
+                });
+                let other = copper.chains.iter().any(|o| {
+                    o.side == c.side && !std::ptr::eq(o, c) && o.pts.windows(2).any(|w| {
+                        let (dx, dy) = (w[1].x - w[0].x, w[1].y - w[0].y);
+                        let l2 = (dx * dx + dy * dy).max(1e-18);
+                        let t = (((p.x - w[0].x) * dx + (p.y - w[0].y) * dy) / l2).clamp(0.0, 1.0);
+                        p.dist(Point::new(w[0].x + dx * t, w[0].y + dy * t)) <= (o.width + c.width) / 2.0 + 1e-6
+                    })
+                });
+                // what else ends at this point (same layer), and how far the chains turn there
+                let mates: Vec<&ribbon::Chain> = copper.chains.iter().filter(|o| o.side == c.side && !std::ptr::eq(*o, c) && (o.pts[0].dist(p) < 1e-3 || o.pts[o.pts.len() - 1].dist(p) < 1e-3)).collect();
+                if !inside && !near && mates.len() == 1 {
+                    let dir = |ch: &ribbon::Chain| -> (f64, f64) {
+                        let (a, b) = if ch.pts[0].dist(p) < 1e-3 { (ch.pts[0], ch.pts[1]) } else { (ch.pts[ch.pts.len() - 1], ch.pts[ch.pts.len() - 2]) };
+                        let l = a.dist(b).max(1e-12);
+                        ((b.x - a.x) / l, (b.y - a.y) / l)
+                    };
+                    let (d0, d1) = (dir(c), dir(mates[0]));
+                    // the angle between the two ways out of the joint: 180 degrees is a straight line on
+                    let ang = (d0.0 * d1.0 + d0.1 * d1.1).clamp(-1.0, 1.0).acos().to_degrees();
+                    let k = if ang > 160.0 { "straight on (turn < 20)" } else if ang > 135.0 { "turn 20-45" } else if ang > 90.0 { "turn 45-90" } else { "turn > 90" };
+                    *joint2.entry(k.to_string()).or_default() += 1;
+                } else if !inside && !near {
+                    *joint_other.entry(format!("{} mates", mates.len())).or_default() += 1;
+                }
+                if inside {
+                    in_pad_big += 1;
+                } else if near {
+                    near_pad += 1;
+                } else if other {
+                    near_copper += 1;
+                } else {
+                    alone += 1;
+                }
+                *widths.entry(format!("{:.2} mm", c.width)).or_default() += 1;
+                free += 1;
+                if c.width * e.zoom as f64 >= 2.5 {
+                    wide_free += 1;
+                }
+            }
+        }
+    }
+    println!("elsewhere: inside a pad but the disc does not fit {in_pad_big}; just outside a pad {near_pad}; touching other copper {near_copper}; alone {alone}");
+    let _ = widths;
+    println!("not at a pad, one other chain end here: {joint2:?}; otherwise: {joint_other:?}");
+    println!("ends without a cap {none}; with a cap {total}: inside a pad {on_pad}, inside a via {on_via}, elsewhere {free} (wide enough to be round: {wide_free})");
+}

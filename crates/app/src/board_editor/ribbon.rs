@@ -17,6 +17,10 @@ pub(super) struct Chain {
     /// The corners of the box round the points (not grown by the width).
     pub lo: Point,
     pub hi: Point,
+    /// Does the first / the last point need a round cap? Not where the end lies in the cap or in the body of a chain that is as wide
+    /// (see [`mark_caps`]): there it would be drawn twice.
+    pub cap_start: bool,
+    pub cap_end: bool,
 }
 
 /// A polygon of the finish (a teardrop, a notch).
@@ -30,6 +34,8 @@ pub(super) struct PatchTris {
 /// The copper of the tracks ready to be drawn: what the chains and patches were made from is kept to know when they are out of date.
 pub(super) struct CopperCache {
     source: Source,
+    /// The pads and vias the caps were left out under (a different set is a different cache).
+    covers_key: u64,
     pub chains: Vec<Chain>,
     pub patches: Vec<PatchTris>,
     /// The points of the chains and the triangles of the patches, with the corners left out that are less than a tolerance off the line
@@ -55,7 +61,10 @@ enum Source {
 
 impl CopperCache {
     /// Is this cache made from this copper?
-    pub fn is_for(&self, tracks: &[Track], finished: Option<&Rc<Finished>>) -> bool {
+    pub fn is_for(&self, tracks: &[Track], finished: Option<&Rc<Finished>>, covers: &Covers) -> bool {
+        if self.covers_key != covers.key {
+            return false;
+        }
         match (&self.source, finished) {
             (Source::Finished(a), Some(b)) => Rc::ptr_eq(a, b),
             (Source::Plain(k), None) => *k == tracks_hash(tracks),
@@ -63,7 +72,7 @@ impl CopperCache {
         }
     }
 
-    pub fn new(tracks: &[Track], finished: Option<&Rc<Finished>>) -> Self {
+    pub fn new(tracks: &[Track], finished: Option<&Rc<Finished>>, covers: &Covers) -> Self {
         match finished {
             Some(f) => {
                 let patches = f
@@ -75,9 +84,9 @@ impl CopperCache {
                         PatchTris { side: p.side, lo, hi, outline: p.outline.clone() }
                     })
                     .collect();
-                CopperCache { source: Source::Finished(f.clone()), chains: chains(&f.board.tracks), patches, levels: Default::default() }
+                CopperCache { source: Source::Finished(f.clone()), covers_key: covers.key, chains: chains_over(&f.board.tracks, covers), patches, levels: Default::default() }
             }
-            None => CopperCache { source: Source::Plain(tracks_hash(tracks)), chains: chains(tracks), patches: vec![], levels: Default::default() },
+            None => CopperCache { source: Source::Plain(tracks_hash(tracks)), covers_key: covers.key, chains: chains_over(tracks, covers), patches: vec![], levels: Default::default() },
         }
     }
 
@@ -243,8 +252,109 @@ fn node_key(t: &Track, p: Point) -> NodeKey {
 /// A turn of more than 120 degrees would need a mitre of more than twice the half width: there the chain is cut and both pieces get a cap.
 const SHARPEST_TURN_DOT: f64 = -0.5;
 
+/// What is drawn over the copper (pads and vias), where a round cap is not seen.
+pub(super) struct Covers {
+    items: Vec<Cover>,
+    key: u64,
+}
+
+struct Cover {
+    /// `None`: a hole through the board, over every layer.
+    side: Option<Side>,
+    at: Point,
+    /// Circle: `along` is 0 and `across` the radius. Rect: half width and half height. Oval: the half length of the core line (along x or y,
+    /// whichever the pad is longer in) and the radius.
+    shape: CoverShape,
+}
+
+enum CoverShape {
+    Circle(f64),
+    Rect(f64, f64),
+    /// The core line from `at - d` to `at + d`, and the radius.
+    Capsule((f64, f64), f64),
+}
+
+impl Covers {
+    pub fn none() -> Self {
+        Covers { items: vec![], key: 0 }
+    }
+
+    /// The pads and the vias of the board, as far as they are shown.
+    pub fn of(board: &pcb_core::Board, pads: bool, vias: bool) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut items = vec![];
+        if pads {
+            for q in &board.pads {
+                let (w, h) = q.shape.size();
+                let shape = match q.shape {
+                    pcb_core::PadShape::Circle { .. } => CoverShape::Circle(w / 2.0),
+                    pcb_core::PadShape::Rect { .. } => CoverShape::Rect(w / 2.0, h / 2.0),
+                    pcb_core::PadShape::Oval { .. } => {
+                        let r = w.min(h) / 2.0;
+                        let d = (w.max(h) / 2.0 - r).max(0.0);
+                        CoverShape::Capsule(if w >= h { (d, 0.0) } else { (0.0, d) }, r)
+                    }
+                };
+                items.push(Cover { side: if q.drill.is_some() { None } else { Some(q.side) }, at: q.pos, shape });
+            }
+        }
+        if vias {
+            for v in &board.vias {
+                items.push(Cover { side: None, at: v.pos, shape: CoverShape::Circle(v.diameter / 2.0) });
+            }
+        }
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        items.len().hash(&mut h);
+        for c in &items {
+            (c.side, c.at.x.to_bits(), c.at.y.to_bits()).hash(&mut h);
+            match c.shape {
+                CoverShape::Circle(r) => (0u8, r.to_bits(), 0u64, 0u64).hash(&mut h),
+                CoverShape::Rect(a, b) => (1u8, a.to_bits(), b.to_bits(), 0u64).hash(&mut h),
+                CoverShape::Capsule((a, b), r) => (2u8, a.to_bits(), b.to_bits(), r.to_bits()).hash(&mut h),
+            }
+        }
+        Covers { items, key: h.finish() | 1 }
+    }
+
+    /// Is the disc of radius `r` round `p` on `side` all under one of them?
+    fn hides(&self, side: Side, p: Point, r: f64) -> bool {
+        self.items.iter().any(|c| c.side.is_none_or(|s| s == side) && c.holds_disc(p, r))
+    }
+
+    /// Is the half disc of a cap at `p`, the half towards `dir` (the way out of the end), all under one of them? (Their shapes are convex, so
+    /// the points of the arc are enough.)
+    fn hides_cap(&self, side: Side, p: Point, dir: (f64, f64), r: f64) -> bool {
+        let perp = (-dir.1, dir.0);
+        self.items.iter().any(|c| {
+            c.side.is_none_or(|s| s == side)
+                && (0..=12).all(|k| {
+                    let a = std::f64::consts::PI * (k as f64 / 12.0 - 0.5);
+                    let (u, v) = (a.cos() * r, a.sin() * r);
+                    c.holds_disc(Point::new(p.x + dir.0 * u + perp.0 * v, p.y + dir.1 * u + perp.1 * v), 0.0)
+                })
+        })
+    }
+}
+
+impl Cover {
+    fn holds_disc(&self, p: Point, r: f64) -> bool {
+        const EPS: f64 = 1e-6;
+        let (dx, dy) = ((p.x - self.at.x).abs(), (p.y - self.at.y).abs());
+        match self.shape {
+            CoverShape::Circle(cr) => dx.hypot(dy) + r <= cr + EPS,
+            CoverShape::Rect(hw, hh) => dx + r <= hw + EPS && dy + r <= hh + EPS,
+            CoverShape::Capsule((ax, ay), cr) => (dx - ax).max(0.0).hypot((dy - ay).max(0.0)) + r <= cr + EPS,
+        }
+    }
+}
+
 /// The tracks followed into chains: through every joint where exactly two track ends meet.
 pub(super) fn chains(tracks: &[Track]) -> Vec<Chain> {
+    chains_over(tracks, &Covers::none())
+}
+
+/// [`chains`], with the caps left out that lie under what is drawn over the copper.
+pub(super) fn chains_over(tracks: &[Track], covers: &Covers) -> Vec<Chain> {
     let mut at: HashMap<NodeKey, Vec<(usize, bool)>> = HashMap::new();
     for (i, t) in tracks.iter().enumerate() {
         at.entry(node_key(t, t.a)).or_default().push((i, false));
@@ -280,7 +390,7 @@ pub(super) fn chains(tracks: &[Track]) -> Vec<Chain> {
     let push = |side: Side, width: f64, pts: Vec<Point>, out: &mut Vec<Chain>| {
         for piece in cut_sharp(&dedup(pts)) {
             let (lo, hi) = bounds(&piece);
-            out.push(Chain { side, width, pts: piece, lo, hi });
+            out.push(Chain { side, width, pts: piece, lo, hi, cap_start: true, cap_end: true });
         }
     };
     // chains start at the ends that are not a plain joint of two
@@ -303,7 +413,81 @@ pub(super) fn chains(tracks: &[Track]) -> Vec<Chain> {
             push(t.side, t.width, pts, &mut out);
         }
     }
+    mark_caps(&mut out, covers);
     out
+}
+
+/// Takes the cap off the ends where it is not seen, so that the same disc is not made of triangles twice:
+/// - where ends of several chains meet and two of them run on in a line (a turn of under 20 degrees, both at least three quarters as wide as the
+///   widest: a step of a taper, a T) there is no cap: the strips cover the disc, and a flat end shows no step the eye can find;
+/// - where ends meet otherwise (a width change, a turn too sharp for a mitre, a branch), only the widest one keeps its cap; the others are
+///   narrower, and a flat end at the joint lies inside that disc;
+/// - an end on the middle of a chain of the same layer that is as wide has none: the body is under it;
+/// - an end under a pad or a via has none when the half disc of the cap (the whole disc where chains meet) fits in it.
+fn mark_caps(chains: &mut [Chain], covers: &Covers) {
+    const SAME: f64 = 1e-3;
+    // the way out of the chain at its end (first point or last)
+    let out = |i: usize, last: bool| -> (f64, f64) {
+        let c = &chains[i];
+        let n = c.pts.len();
+        let (a, b) = if last { (c.pts[n - 1], c.pts[n - 2]) } else { (c.pts[0], c.pts[1]) };
+        let l = a.dist(b).max(1e-12);
+        ((a.x - b.x) / l, (a.y - b.y) / l)
+    };
+    // (chain, is the last point, the point); a chain of one point has no direction and no cap
+    let ends: Vec<(usize, bool, Point)> =
+        chains.iter().enumerate().filter(|(_, c)| c.pts.len() >= 2).flat_map(|(i, c)| [(i, false, c.pts[0]), (i, true, c.pts[c.pts.len() - 1])]).collect();
+    let mut flags: Vec<(bool, bool)> = vec![(true, true); chains.len()];
+    for &(i, last, p) in &ends {
+        let c = &chains[i];
+        let mates: Vec<(usize, bool)> = ends.iter().filter(|&&(j, lj, q)| !(j == i && lj == last) && chains[j].side == c.side && p.dist(q) <= SAME).map(|&(j, lj, _)| (j, lj)).collect();
+        let widest = mates.iter().map(|&(j, _)| chains[j].width).fold(c.width, f64::max);
+        let mut cap = true;
+        if !mates.is_empty() {
+            // two of the ends run on in a line
+            let all: Vec<(usize, bool)> = mates.iter().copied().chain([(i, last)]).collect();
+            let straight = all.iter().enumerate().any(|(x, &(u, lu))| {
+                all[x + 1..].iter().any(|&(v, lv)| {
+                    let (du, dv) = (out(u, lu), out(v, lv));
+                    du.0 * dv.0 + du.1 * dv.1 < -0.94 && chains[u].width.min(chains[v].width) >= 0.75 * widest
+                })
+            });
+            // otherwise the widest keeps it (for the same width, the lowest chain, and a start before an end)
+            cap = !straight && mates.iter().all(|&(j, lj)| {
+                let o = &chains[j];
+                !(o.width > c.width + 1e-9 || (o.width >= c.width - 1e-9 && (j, lj) < (i, last)))
+            });
+        }
+        if cap {
+            // on the body of a chain that is as wide as the widest end here, and not near its ends (the cap of that end covers those)
+            cap = !chains.iter().enumerate().any(|(j, o)| {
+                j != i
+                    && o.side == c.side
+                    && o.width >= widest - 1e-9
+                    && o.pts.len() >= 2
+                    && p.x >= o.lo.x - SAME
+                    && p.x <= o.hi.x + SAME
+                    && p.y >= o.lo.y - SAME
+                    && p.y <= o.hi.y + SAME
+                    && p.dist(o.pts[0]) > o.width / 2.0
+                    && p.dist(o.pts[o.pts.len() - 1]) > o.width / 2.0
+                    && o.pts.windows(2).any(|w| off_segment(p, w[0], w[1]) < SAME)
+            });
+        }
+        // under a pad or a via (drawn over the copper)
+        if cap {
+            cap = if mates.is_empty() { !covers.hides_cap(c.side, p, out(i, last), widest / 2.0) } else { !covers.hides(c.side, p, widest / 2.0) };
+        }
+        if last {
+            flags[i].1 = cap;
+        } else {
+            flags[i].0 = cap;
+        }
+    }
+    for (c, (a, b)) in chains.iter_mut().zip(flags) {
+        c.cap_start = a;
+        c.cap_end = b;
+    }
 }
 
 /// The points with the repeated ones and those on the straight line between the neighbours left out.
@@ -357,15 +541,20 @@ fn unit(a: Point, b: Point) -> (f64, f64) {
 
 /// One chain as a strip, `width` pixels wide (at least a pixel), with round caps; `pts` are on the screen.
 pub(super) fn add_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32) {
-    add_strip(mesh, pts, width, col, true);
+    add_strip(mesh, pts, width, col, (true, true));
+}
+
+/// A chain with a round cap at the ends that are asked for (see [`Chain::cap_start`]).
+pub(super) fn add_capped_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, caps: (bool, bool)) {
+    add_strip(mesh, pts, width, col, caps);
 }
 
 /// The same with a flat end (a strip that lies under another one, which has the round ends).
 pub(super) fn add_flat_chain(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32) {
-    add_strip(mesh, pts, width, col, false);
+    add_strip(mesh, pts, width, col, (false, false));
 }
 
-fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, round_ends: bool) {
+fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, caps: (bool, bool)) {
     let mut p: Vec<Pos2> = vec![];
     for &q in pts {
         if p.last().is_none_or(|l| (*l - q).length() > 1e-3) {
@@ -379,8 +568,10 @@ fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, round_ends
     let (core, outer) = ((half - 0.5).max(0.0), half + 0.5);
     let clear = Color32::TRANSPARENT;
     if p.len() == 1 {
-        cap(mesh, p[0], Vec2::new(1.0, 0.0), core, outer, col);
-        cap(mesh, p[0], Vec2::new(-1.0, 0.0), core, outer, col);
+        if caps.0 || caps.1 {
+            cap(mesh, p[0], Vec2::new(1.0, 0.0), core, outer, col);
+            cap(mesh, p[0], Vec2::new(-1.0, 0.0), core, outer, col);
+        }
         return;
     }
     let dirs: Vec<Vec2> = p.windows(2).map(|w| (w[1] - w[0]).normalized()).collect();
@@ -412,11 +603,15 @@ fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, round_ends
         prev_row = Some(row);
     }
     // a line that is only a pixel or two wide has an end that no one can tell from a round one
-    if !round_ends || width < ROUND_ENDS_FROM {
+    if width < ROUND_ENDS_FROM {
         return;
     }
-    cap(mesh, p[0], -dirs[0], core, outer, col);
-    cap(mesh, p[p.len() - 1], dirs[dirs.len() - 1], core, outer, col);
+    if caps.0 {
+        cap(mesh, p[0], -dirs[0], core, outer, col);
+    }
+    if caps.1 {
+        cap(mesh, p[p.len() - 1], dirs[dirs.len() - 1], core, outer, col);
+    }
 }
 
 /// The width (pixels) from which the end of a strip is drawn round.
@@ -527,6 +722,87 @@ mod tests {
 
     fn tr(side: Side, w: f64, a: (f64, f64), b: (f64, f64)) -> Track {
         Track { side, a: Point::new(a.0, a.1), b: Point::new(b.0, b.1), width: w }
+    }
+
+    fn caps_of(c: &[Chain]) -> usize {
+        c.iter().map(|c| c.cap_start as usize + c.cap_end as usize).sum()
+    }
+
+    #[test]
+    fn a_free_end_has_a_cap_and_a_joint_of_two_chains_has_one() {
+        // a chain: both ends are free
+        let t = vec![tr(Side::Top, 0.3, (0.0, 0.0), (5.0, 0.0))];
+        assert_eq!(caps_of(&chains(&t)), 2);
+        // two tracks that turn back on themselves are cut into two chains that meet at one point: that point has one cap, the other ends two
+        let t = vec![tr(Side::Top, 0.3, (0.0, 0.0), (5.0, 0.0)), tr(Side::Top, 0.3, (5.0, 0.0), (0.5, 0.2))];
+        let c = chains(&t);
+        assert_eq!(c.len(), 2);
+        assert_eq!(caps_of(&c), 3, "{:?}", c.iter().map(|c| (c.cap_start, c.cap_end)).collect::<Vec<_>>());
+        // the one that stays is the wider
+        let t = vec![tr(Side::Top, 0.2, (0.0, 0.0), (5.0, 0.0)), tr(Side::Top, 0.5, (5.0, 0.0), (0.5, 0.2))];
+        let c = chains(&t);
+        let wide = c.iter().find(|c| c.width > 0.4).unwrap();
+        let joint = Point::new(5.0, 0.0);
+        let (wide_cap, narrow_cap) = (if wide.pts[0] == joint { wide.cap_start } else { wide.cap_end }, c.iter().filter(|c| c.width < 0.4).any(|c| if c.pts[0] == joint { c.cap_start } else { c.cap_end }));
+        assert!(wide_cap && !narrow_cap);
+    }
+
+    #[test]
+    fn an_end_on_the_body_of_a_chain_that_is_as_wide_has_no_cap() {
+        let main = tr(Side::Top, 0.3, (0.0, 0.0), (10.0, 0.0));
+        // a T on the same layer: the branch ends on the body
+        let t = vec![main.clone(), tr(Side::Top, 0.3, (5.0, 0.0), (5.0, 4.0))];
+        let c = chains(&t);
+        let branch = c.iter().find(|c| c.pts.iter().any(|p| p.y > 1.0)).unwrap();
+        let on_body = if branch.pts[0].y == 0.0 { branch.cap_start } else { branch.cap_end };
+        assert!(!on_body, "the end on the body");
+        // a wider branch on a narrow chain keeps its cap
+        let t = vec![main.clone(), tr(Side::Top, 0.6, (5.0, 0.0), (5.0, 4.0))];
+        let c = chains(&t);
+        let branch = c.iter().find(|c| c.pts.iter().any(|p| p.y > 1.0)).unwrap();
+        assert!(if branch.pts[0].y == 0.0 { branch.cap_start } else { branch.cap_end });
+        // the same on another layer is not a cover
+        let t = vec![main, tr(Side::Bottom, 0.3, (5.0, 0.0), (5.0, 4.0))];
+        assert_eq!(caps_of(&chains(&t)), 4);
+    }
+
+    #[test]
+    fn a_step_of_a_taper_and_a_straight_through_t_have_no_cap_at_the_joint() {
+        // 0.25 then 0.27 mm in a line: only the two free ends are round
+        let t = vec![tr(Side::Top, 0.25, (0.0, 0.0), (5.0, 0.0)), tr(Side::Top, 0.27, (5.0, 0.0), (10.0, 0.0))];
+        let c = chains(&t);
+        assert_eq!(c.len(), 2);
+        assert_eq!(caps_of(&c), 2);
+        // a big step (the wide end is not three quarters of the narrow) is a real step: the wide chain keeps its cap
+        let t = vec![tr(Side::Top, 0.2, (0.0, 0.0), (5.0, 0.0)), tr(Side::Top, 0.5, (5.0, 0.0), (10.0, 0.0))];
+        assert_eq!(caps_of(&chains(&t)), 3);
+        // two chains in a line and a branch off them: three free ends and no cap at the joint
+        let t = vec![tr(Side::Top, 0.3, (0.0, 0.0), (5.0, 0.0)), tr(Side::Top, 0.3, (5.0, 0.0), (10.0, 0.0)), tr(Side::Top, 0.3, (5.0, 0.0), (5.0, 4.0))];
+        let c = chains(&t);
+        assert_eq!(c.len(), 3);
+        assert_eq!(caps_of(&c), 3);
+        // a turn of 90 degrees is not on in a line: the joint keeps one cap
+        let t = vec![tr(Side::Top, 0.3, (0.0, 0.0), (5.0, 0.0)), tr(Side::Top, 0.4, (5.0, 0.0), (5.0, 4.0))];
+        assert_eq!(caps_of(&chains(&t)), 3);
+    }
+
+    #[test]
+    fn an_end_under_a_pad_or_a_via_has_no_cap_when_the_disc_fits() {
+        let mut b = pcb_core::Board::new("t", 30.0, 20.0);
+        b.pads.push(pcb_core::Pad::new(Point::new(0.0, 0.0), pcb_core::PadShape::Rect { w: 1.0, h: 1.0 }, None, Side::Top));
+        b.vias.push(pcb_core::Via { pos: Point::new(10.0, 0.0), diameter: 0.6, drill: 0.3, net: String::new() });
+        let covers = Covers::of(&b, true, true);
+        let t = vec![tr(Side::Top, 0.3, (0.0, 0.0), (10.0, 0.0))];
+        assert_eq!(caps_of(&chains_over(&t, &covers)), 0, "a pad at one end and a via at the other");
+        // a track wider than the via does not hide under it
+        let t = vec![tr(Side::Top, 0.8, (0.0, 0.0), (10.0, 0.0))];
+        assert_eq!(caps_of(&chains_over(&t, &covers)), 1);
+        // a pad on the other layer does not
+        let t = vec![tr(Side::Bottom, 0.3, (0.0, 0.0), (5.0, 0.0))];
+        assert_eq!(caps_of(&chains_over(&t, &covers)), 2);
+        // pads hidden: the caps come back
+        assert_eq!(caps_of(&chains_over(&[tr(Side::Top, 0.3, (0.0, 0.0), (5.0, 0.0))], &Covers::of(&b, false, false))), 2);
+        assert_ne!(Covers::of(&b, true, true).key, Covers::of(&b, false, true).key);
     }
 
     #[test]

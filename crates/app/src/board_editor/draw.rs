@@ -273,8 +273,10 @@ impl BoardEditor {
             let tracks = finished.as_ref().map_or(self.board.tracks.as_slice(), |f| f.board.tracks.as_slice());
             {
                 let mut cache = self.copper_cache.borrow_mut();
-                if !cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref())) {
-                    *cache = Some(ribbon::CopperCache::new(tracks, finished.as_ref()));
+                // the pads and vias are drawn over the copper: no cap is made under them (when they are hidden the caps come back)
+                let covers = ribbon::Covers::of(&self.board, self.vis.parts, self.vis.vias);
+                if !cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref(), &covers)) {
+                    *cache = Some(ribbon::CopperCache::new(tracks, finished.as_ref(), &covers));
                 }
             }
             let cache = self.copper_cache.borrow();
@@ -300,7 +302,7 @@ impl BoardEditor {
                         continue;
                     }
                     let pts: Vec<Pos2> = pts.iter().map(|p| self.to_screen(rect, *p)).collect();
-                    ribbon::add_chain(&mut mesh, &pts, ch.width as f32 * z, col);
+                    ribbon::add_capped_chain(&mut mesh, &pts, ch.width as f32 * z, col, (ch.cap_start, ch.cap_end));
                     flush(&mut mesh);
                 }
                 for (patch, tris) in copper.patches.iter().zip(&lod.patches).filter(|(p, _)| p.side == s) {
@@ -390,7 +392,7 @@ impl BoardEditor {
                     continue;
                 }
                 let pts: Vec<Pos2> = ch.pts.iter().map(|p| self.to_screen(rect, *p)).collect();
-                ribbon::add_chain(&mut mesh, &pts, ch.width as f32 * z, silk);
+                ribbon::add_capped_chain(&mut mesh, &pts, ch.width as f32 * z, silk, (ch.cap_start, ch.cap_end));
                 if mesh.vertices.len() > 60_000 {
                     painter.add(egui::Shape::mesh(std::mem::take(&mut mesh)));
                 }
