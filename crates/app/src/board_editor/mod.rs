@@ -341,6 +341,8 @@ pub struct BoardEditor {
     saved_rev: u64,
     /// How the schematic differs from this board, with the (schematic rev, board rev) it was worked out for.
     sync_cache: Option<((u64, u64), file::SchDiff)>,
+    /// The table of requirements the board last took (None: not known yet).
+    req_synced: Option<design_spec::DesignSpec>,
     undo: Vec<Board>,
     redo: Vec<Board>,
     vis: Visible,
@@ -506,6 +508,7 @@ impl Default for BoardEditor {
             rev: 0,
             saved_rev: 0,
             sync_cache: None,
+            req_synced: None,
             undo: vec![],
             redo: vec![],
             pick: Pickable::ALL,

@@ -632,6 +632,7 @@ impl SchEditor {
             changed = true;
         }
         if changed {
+            self.req_dirty = true;
             self.req_problems = self.sch.requirement_problems();
         }
         self.req_open = open;

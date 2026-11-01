@@ -508,6 +508,7 @@ impl eframe::App for App {
             self.sch.part_popup_window(ui.ctx());
             return;
         }
+        self.board_ed.sync_requirements(&mut self.sch);
         self.board_ed.note_schematic_diff(&self.sch);
         self.board_ed.dc_currents_ready = self.sch.dc_currents_ready();
         self.board_ed.order_window(ui.ctx());

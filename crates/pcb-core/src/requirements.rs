@@ -17,6 +17,19 @@ pub struct RequirementsImport {
     pub links: usize,
     /// Capacitors that the table places at an IC.
     pub bypass: usize,
+    /// Net rules that reached nothing: none of their nets has a pad on the board (or the row has no name).
+    pub unmatched: Vec<String>,
+    /// Layers a net rule names that the board does not have ("rule: layer"); they are left out of the class.
+    pub dropped_layers: Vec<String>,
+}
+
+impl RequirementsImport {
+    /// One sentence for each row or layer that did not arrive, for the status line and the CLI (empty when all arrived).
+    pub fn warnings(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.unmatched.iter().map(|n| format!("設計の要件のネットの役割「{n}」: 基板にそのネットのパッドがないので、取り込めませんでした (ネット名か、回路図の取り込みを確かめてください)")).collect();
+        out.extend(self.dropped_layers.iter().map(|l| format!("設計の要件のネットの役割 {l} は、この基板にない層です (層の数を確かめてください)。その層は外しました")));
+        out
+    }
 }
 
 /// The nets of the board that a rule's names stand for (the names ending in `*` count as prefixes).
@@ -34,7 +47,11 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
     for rule in &spec.net_rules {
         let nets = nets_matching(board, &rule.nets);
         if nets.is_empty() || rule.name.is_empty() {
+            out.unmatched.push(if rule.name.is_empty() { rule.nets.join(", ") } else { rule.name.clone() });
             continue;
+        }
+        for k in rule.layers.iter().filter(|k| !Side::from_key(k).is_some_and(|s| copper.contains(&s))) {
+            out.dropped_layers.push(format!("「{}」の {k}", rule.name));
         }
         for c in board.net_classes.iter_mut().filter(|c| c.name != rule.name) {
             c.nets.retain(|n| !nets.contains(n));
@@ -945,6 +962,21 @@ mod tests {
         assert!(check(&b).findings.is_empty());
         crate::drc::fill_slits(&mut b);
         assert!(check(&b).findings.is_empty(), "{:?}", check(&b).findings);
+    }
+
+    /// A net rule whose nets are not on the board, and a layer the board lacks, are reported instead of vanishing.
+    #[test]
+    fn rows_that_reach_nothing_are_reported() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "A", "1");
+        b.pads[0].net = "SA".into();
+        let rule = |name: &str, nets: &[&str], layers: &[&str]| design_spec::NetRule { name: name.into(), nets: nets.iter().map(|s| s.to_string()).collect(), layers: layers.iter().map(|s| s.to_string()).collect(), ..Default::default() };
+        let spec = DesignSpec { net_rules: vec![rule("検出", &["SA"], &["inner1"]), rule("幻", &["NOPE"], &[])], ..Default::default() };
+        let r = import_requirements(&mut b, &spec);
+        assert_eq!(r.unmatched, vec!["幻".to_string()]);
+        assert_eq!(r.dropped_layers.len(), 1, "{:?}", r.dropped_layers);
+        assert_eq!(r.warnings().len(), 2);
+        assert!(import_requirements(&mut b, &DesignSpec::default()).warnings().is_empty());
     }
 
     /// The gap between the copper of two nets (names or patterns): the nearest items, edge to edge.

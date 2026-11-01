@@ -134,6 +134,28 @@ impl BoardEditor {
         &self.sync_cache.as_ref().unwrap().1
     }
 
+    /// Take the schematic's table of requirements again after an event told that it may differ (`SchEditor::req_dirty`: the table was
+    /// edited, or a circuit was opened); with no event it does nothing. Only the table is taken, not the parts. A board whose last taking
+    /// is not known (just opened) is compared with the rows it keeps: when they agree the table is taken as already in.
+    pub fn sync_requirements(&mut self, sch_ed: &mut SchEditor) {
+        if !std::mem::take(&mut sch_ed.req_dirty) || self.board.parts.is_empty() || sch_ed.sch.components.is_empty() {
+            return;
+        }
+        let spec = &sch_ed.sch.requirements;
+        let b = &self.board;
+        let stale = match &self.req_synced {
+            Some(last) => last != spec,
+            None => b.place_groups != spec.groups || b.keep_apart != spec.apart || b.bypass != spec.bypass || b.waivers != spec.waivers || b.measures != spec.measures,
+        };
+        if stale {
+            self.checkpoint();
+            let rep = pcb_core::requirements::import_requirements(&mut self.board, spec);
+            let warn = rep.warnings();
+            self.status = if warn.is_empty() { "回路図の「設計の要件」の変更を、基板に取り込みました".into() } else { format!("設計の要件を取り込みました。{}", warn.join(" / ")) };
+        }
+        self.req_synced = Some(spec.clone());
+    }
+
     fn diff_against(&self, sch: &sch_core::Schematic) -> SchDiff {
         let (parts, nets) = Self::netlist_of(sch);
         netlist::diff(&self.board, &parts, &nets)
@@ -188,7 +210,8 @@ impl BoardEditor {
         netlist::import_swaps(&mut self.board, &swaps);
         let sheets: Vec<(String, String)> = sch.components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), sch_ed.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();
         netlist::import_sheets(&mut self.board, &sheets);
-        netlist::import_hints(&mut self.board, &netlist::NetHints { currents: sch.net_currents.clone().into_iter().collect(), pairs: sch.diff_pairs.clone(), requirements: sch.requirements.clone() });
+        let (_, _, req) = netlist::import_hints_report(&mut self.board, &netlist::NetHints { currents: sch.net_currents.clone().into_iter().collect(), pairs: sch.diff_pairs.clone(), requirements: sch.requirements.clone() });
+        self.req_synced = Some(sch.requirements.clone());
         self.selected = None;
         self.multi.clear();
         self.currents_tried = false; // the circuit may have changed: the next route asks for the currents again if none are declared
@@ -198,6 +221,7 @@ impl BoardEditor {
             .iter()
             .map(|w| if w.contains("フットプリント") && w.contains("見つかりません") { format!("{w} (部品ライブラリにこの部品がありません。回路図の「ライブラリ」の「再読み込み」を押すか、部品を作り直してから、もう一度取り込んでください)") } else { w.clone() })
             .collect();
+        self.import_notes.extend(req.warnings());
         // new parts land beside the outline: show the whole board with them, not a corner of it under the panel on the right
         if !rep.added.is_empty() {
             self.fit_pending = true;

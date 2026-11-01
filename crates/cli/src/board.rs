@@ -56,8 +56,8 @@ impl Session {
                 netlist::import_swaps(board, &swaps);
                 let sheets: Vec<(String, String)> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), self.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();
                 netlist::import_sheets(board, &sheets);
-                netlist::import_hints(board, &netlist::NetHints { currents: self.sch.net_currents.clone().into_iter().collect(), pairs: self.sch.diff_pairs.clone(), requirements: self.sch.requirements.clone() });
-                Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
+                let (_, _, req) = netlist::import_hints_report(board, &netlist::NetHints { currents: self.sch.net_currents.clone().into_iter().collect(), pairs: self.sch.diff_pairs.clone(), requirements: self.sch.requirements.clone() });
+                Ok(obj(json!({"circuit_ok": circuit_ok, "added": rep.added, "removed": rep.removed, "updated": rep.updated, "warnings": rep.warnings.iter().cloned().chain(gate).chain(req.warnings()).collect::<Vec<_>>()})))
             }
             "swap" => {
                 // board swap [dry=1]: trade the nets of alike gates and alike inputs of logic ICs so that the airwires get shorter

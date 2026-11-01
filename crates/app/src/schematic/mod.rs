@@ -222,6 +222,8 @@ pub struct SchEditor {
     req_bp_msg: String,
     req_buf: requirements::Buffers,
     req_problems: Vec<String>,
+    /// The table of requirements was changed, or another circuit was opened, since the board last took it (the board editor clears it).
+    pub req_dirty: bool,
     /// What the last DC analysis suggests for the table (ticked or not), the currents it came from, and a sentence about the run.
     req_suggest: Vec<(bool, design_spec::Suggestion)>,
     req_currents: Vec<(String, f64)>,
@@ -550,6 +552,7 @@ impl Default for SchEditor {
             req_bp_msg: String::new(),
             req_buf: Default::default(),
             req_problems: vec![],
+            req_dirty: false,
             req_suggest: vec![],
             req_currents: vec![],
             req_suggest_msg: String::new(),

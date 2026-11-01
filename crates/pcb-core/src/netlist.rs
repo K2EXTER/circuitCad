@@ -61,6 +61,12 @@ pub struct NetHints {
 /// for that net; a pair is added unless the board has it already. What the board declares for other nets stays.
 /// Returns how many currents and pairs were taken.
 pub fn import_hints(board: &mut Board, hints: &NetHints) -> (usize, usize) {
+    let (nc, np, _) = import_hints_report(board, hints);
+    (nc, np)
+}
+
+/// `import_hints`, and also what became of the table of requirements (the rows that reached nothing are in `unmatched`).
+pub fn import_hints_report(board: &mut Board, hints: &NetHints) -> (usize, usize, crate::requirements::RequirementsImport) {
     let on_board = |n: &str| board.pads.iter().any(|p| p.net == n);
     let currents: Vec<&(String, f64)> = hints.currents.iter().filter(|(n, a)| *a > 0.0 && on_board(n)).collect();
     let pairs: Vec<&(String, String)> = hints.pairs.iter().filter(|(p, n)| on_board(p) && on_board(n)).collect();
@@ -76,8 +82,8 @@ pub fn import_hints(board: &mut Board, hints: &NetHints) -> (usize, usize) {
             np += 1;
         }
     }
-    crate::requirements::import_requirements(board, &hints.requirements);
-    (nc, np)
+    let req = crate::requirements::import_requirements(board, &hints.requirements);
+    (nc, np, req)
 }
 
 /// Synchronise the board with the netlist: add new parts (outside the board, ready to be

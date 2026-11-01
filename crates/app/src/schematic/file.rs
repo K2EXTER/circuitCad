@@ -64,6 +64,7 @@ impl SchEditor {
     /// Make `s` the sheet being edited (from a file, or from a project; `path` is None for a project).
     pub fn adopt(&mut self, s: Schematic, path: Option<PathBuf>) {
         self.sch = s;
+        self.req_dirty = true;
         self.reset_history();
         self.path = path;
         self.selected = None;
