@@ -169,7 +169,7 @@ impl BenchGuide {
         let mut open = true;
         let mut finished = None;
         let at = egui::pos2((ctx.content_rect().right() - 600.0).max(0.0), 40.0);
-        egui::Window::new(g.title).open(&mut open).default_pos(at).default_width(580.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new(g.title).open(&mut open).default_pos(at).default_pos(crate::widgets::beside_panel()).default_width(580.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
             ui.label(spaced(g.intro));
             ui.add_space(4.0);
             ui.colored_label(WARN, g.safety);

@@ -29,7 +29,7 @@ impl SchEditor {
         }
         let mut open = true;
         let mut o = self.sim_opts;
-        egui::Window::new("シミュレーション設定").open(&mut open).default_width(380.0).show(ctx, |ui| {
+        egui::Window::new("シミュレーション設定").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(380.0).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.button("標準").on_hover_text("初期値に戻します").clicked() {
                     o = SimOptions::default();

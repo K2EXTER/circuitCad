@@ -11,3 +11,9 @@ use eframe::egui;
 pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
     ui.button("閉じる").on_hover_text(format!("{what}を閉じます")).clicked()
 }
+
+/// Where a guide or table window first opens: just right of the left panel, so the panel it talks about ("左の…") stays in view
+/// and the buttons in it can still be pressed (egui would open it in the top-left corner, on top of the panel).
+pub fn beside_panel() -> egui::Pos2 {
+    egui::pos2(crate::PANEL_WIDTH + 14.0, 56.0)
+}

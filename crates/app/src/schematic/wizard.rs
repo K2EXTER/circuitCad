@@ -252,7 +252,7 @@ impl SchEditor {
             _ => None,
         };
         let mut apply = None;
-        egui::Window::new("値の決め方").open(&mut open).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("値の決め方").open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([480.0, 600.0]).vscroll(true).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 for (k, c) in CALCS.iter().enumerate() {
                     if ui.selectable_label(self.wiz_kind == k, c.title).clicked() && self.wiz_kind != k {

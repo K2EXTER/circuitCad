@@ -37,7 +37,7 @@ impl SchEditor {
         let Some(mut k) = self.kicad.take() else { return };
         let mut open = true;
         let mut add = false;
-        egui::Window::new("KiCadから取り込み").open(&mut open).default_width(460.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("KiCadから取り込み").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(460.0).vscroll(true).show(ctx, |ui| {
             ui.label(format!("{} ({} 個の部品)", k.file, k.syms.len()));
             ui.small("ピン配置とフットプリントのパッドを取り込みます。KiCad の記号の絵とシミュレーションモデルは取り込みません (記号は箱になります)。");
             ui.horizontal(|ui| {

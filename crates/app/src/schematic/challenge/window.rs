@@ -12,7 +12,7 @@ impl SchEditor {
         let mut show_answer = false;
         let mut back = false;
         let mut close = false;
-        egui::Window::new(format!("作ってみよう: {}", ch.title)).default_width(400.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
+        egui::Window::new(format!("作ってみよう: {}", ch.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(ch.goal);
             ui.horizontal(|ui| {
                 ui.label("むずかしさ");

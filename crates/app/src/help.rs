@@ -283,7 +283,7 @@ impl Help {
         let mut open = true;
         let current = self.tab.unwrap_or(HelpTab::Schematic);
         let mut next = current;
-        egui::Window::new("操作ガイド").open(&mut open).default_width(640.0).default_height(560.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("操作ガイド").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(640.0).default_height(560.0).vscroll(true).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 for (t, name) in TABS {
                     ui.selectable_value(&mut next, *t, *name);

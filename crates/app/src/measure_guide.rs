@@ -27,7 +27,7 @@ impl MeasureGuide {
         let mut action = None;
         // on the right, so the left panel (where the spec table is) stays in view
         let at = egui::pos2((ctx.content_rect().right() - 580.0).max(0.0), 40.0);
-        egui::Window::new("組み立てて、性能を測る").open(&mut open).default_pos(at).default_width(560.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("組み立てて、性能を測る").open(&mut open).default_pos(at).default_pos(crate::widgets::beside_panel()).default_width(560.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
             ui.label(spaced("自分で設計した電源 (学習パスの「安定化電源の回路図を自分で設計する」の回路) を実際に作って、シミュレーションとの差を調べます。差が出るのは普通のことで、その理由を考えるのが、このステップの中身です。"));
             ui.add_space(4.0);
             ui.colored_label(WARN, "安全: 実験は 12V 以下の直流 (電池や小さな AC アダプタ) だけで行います。商用電源 (100V) の配線は行いません。電源は、つなぐ前に極性 (+ と −) を確かめ、できればヒューズや電流制限をつけます。");

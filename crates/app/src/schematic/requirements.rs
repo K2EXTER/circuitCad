@@ -132,7 +132,7 @@ impl SchEditor {
         let mut changed = false;
         let (mut run_dc, mut apply_now) = (false, false);
         let (mut run_bp, mut apply_bp) = (false, false);
-        egui::Window::new("設計の要件").open(&mut open).default_size([1200.0, 620.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
+        egui::Window::new("設計の要件").open(&mut open).default_pos(crate::widgets::beside_panel()).default_size([1200.0, 620.0]).vscroll(true).hscroll(true).show(ctx, |ui| {
             ui.label("回路の「こう作りたい」を、ここに表で書いておきます。全シートで1つの表です。基板に取り込むと、ネットのクラス・電流・部品の組・距離のチェックになります。")
                 .on_hover_text("回路図の上に記号を置く方式ではなく、表で持ちます。どのネットがどんな役割で、どの部品を近くに置き、どれとどれを離すかを、あとから読み返せます");
             if !self.req_problems.is_empty() {

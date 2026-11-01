@@ -176,7 +176,7 @@ impl BoardEditor {
         let mut export_now = false;
         let mut make_preview = false;
         let mut repaint = false;
-        egui::Window::new("発注の準備").open(&mut open).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new("発注の準備").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
             ui.label("基板を発注する前の確認です。上から順に見ていきましょう。");
             ui.separator();
             ui.strong("1. 発注先を選ぶ");
