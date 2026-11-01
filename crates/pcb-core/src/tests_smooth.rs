@@ -575,3 +575,23 @@ fn old_files_with_excluded_nets_get_a_class_that_turns_the_finish_off() {
     assert_eq!(b.class_of("A").unwrap().finish, FinishOverride::off());
     assert_eq!(b.class_of("A").unwrap().track_width, 0.25);
 }
+
+/// A wide track coming straight into the face of a pad that is wider across than deep: the neck is as wide as the face (no step at the pad's
+/// edge), and its round end does not reach past the far face.
+#[test]
+fn the_neck_is_as_wide_as_the_face_the_track_enters_by() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    let mut p = Pad::new(Point::new(10.0, 10.0), PadShape::Rect { w: 0.9, h: 0.8 }, None, Side::Top);
+    p.net = "A".into();
+    b.pads.push(p);
+    let mut far = Pad::new(Point::new(10.0, 25.0), PadShape::Rect { w: 3.0, h: 3.0 }, None, Side::Top);
+    far.net = "A".into();
+    b.pads.push(far);
+    b.tracks.push(trk((10.0, 10.0), (10.0, 25.0), 1.2));
+    let f = finished(&b).unwrap();
+    let neck = f.board.tracks.iter().find(|t| t.a.x == 10.0 && t.a.y < 10.4 && t.width < 1.0).expect("a neck");
+    assert!((neck.width - 0.9).abs() < 1e-9, "as wide as the face: {neck:?}");
+    // the round end stays inside the pad's depth (0.8): its far point is no further than the pad's far face
+    assert!(neck.a.y - neck.width / 2.0 >= 10.0 - 0.4 - 1e-9, "{neck:?}");
+    assert!(ratsnest(&f.board).is_empty());
+}

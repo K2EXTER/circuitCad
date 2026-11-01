@@ -730,9 +730,21 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     // its centre, less when it ends off centre: a track that comes in from the side may end at the pad's edge)
     let (w, h) = pad.shape.size();
     let (dx, dy) = ((v.x - pad.pos.x).abs(), (v.y - pad.pos.y).abs());
+    // a track that comes straight into a face of a rectangular pad: the neck is as wide as that face (across the track), so it
+    // meets the pad's edge with no step. The round end may then reach past the far face: the neck starts further in (`shift`).
+    let axis_x = ux.abs() > 0.9999;
+    let straight = matches!(pad.shape, PadShape::Rect { .. }) && (axis_x || uy.abs() > 0.9999);
     let short = match pad.shape {
         PadShape::Circle { d } => d - 2.0 * v.dist(pad.pos),
+        _ if straight => 2.0 * if axis_x { h / 2.0 - dy } else { w / 2.0 - dx },
         _ => 2.0 * (w / 2.0 - dx).min(h / 2.0 - dy),
+    };
+    let shift = if straight {
+        let depth = if axis_x { w } else { h };
+        let c = (v.x - pad.pos.x) * -ux + (v.y - pad.pos.y) * -uy;
+        (short / 2.0 - (depth / 2.0 - c)).max(0.0)
+    } else {
+        0.0
     };
     // an end that is at the edge of the pad (the base of a teardrop that was baked into the tracks) has no room for a neck: it is left, so
     // that finishing twice is the same as once
@@ -748,12 +760,12 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     let room = len - 0.05;
     let neck = NECK_LEN.min(room * 0.45);
     let ramp = (dw * 1.5).min(room - neck);
-    if neck < 0.1 || ramp < 0.1 {
+    if neck < 0.1 || ramp < 0.1 || shift > neck - 0.05 {
         return None;
     }
     let n = ((dw / BAKE_STEP).ceil() as usize).max(2);
     let at = |s: f64| Point::new(v.x + ux * s, v.y + uy * s);
-    let mut pieces = vec![Track { side: t.side, a: v, b: at(neck), width: short }];
+    let mut pieces = vec![Track { side: t.side, a: at(shift), b: at(neck), width: short }];
     pieces.extend((0..n).map(|k| Track {
         side: t.side,
         a: at(neck + ramp * k as f64 / n as f64),
@@ -764,7 +776,7 @@ fn pad_neck(board: &Board, i: usize, is_a: bool) -> Option<Edit> {
     let outline = band(v, (ux, uy), neck - 0.02, neck + ramp + 0.02, (neck, neck + ramp), (short, t.width));
     let live = Live {
         trims: vec![(i, is_a, at(neck + ramp))],
-        pieces: vec![Track { side: t.side, a: v, b: at(neck), width: short }],
+        pieces: vec![Track { side: t.side, a: at(shift), b: at(neck), width: short }],
         patch: Patch { side: t.side, outline, track: i },
     };
     Some(Edit { trims: vec![(i, is_a, at(neck + ramp))], pieces, patch: None, live: Some(live), kind: Kind::Taper, touches: vec![i] })
