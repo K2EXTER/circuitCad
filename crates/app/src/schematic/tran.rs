@@ -108,7 +108,7 @@ impl SchEditor {
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
             ui.strong("過渡解析の波形");
-            if ui.button("閉じる").clicked() {
+            if crate::widgets::close_button(ui, "波形") {
                 close = true;
             }
             ui.checkbox(spectrum, "スペクトル表示").on_hover_text("波形を周波数ごとの成分 (スペクトル) に分けて表示します。ノイズやリップルの周波数、ひずみを調べるときに使います");

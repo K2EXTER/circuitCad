@@ -583,7 +583,7 @@ impl BoardEditor {
                 ui.label("基板づくりの流れは「回路図 → 取り込み → 配置 → 配線 → DRC → 発注データ」です。DRC に通らないと発注データは書き出せないので、配線のあとは必ず DRC を実行する習慣をつけましょう。実際に注文するときは、発注先のページで最新の条件を確かめてください。");
             }
             ui.separator();
-            if ui.button("閉じる").clicked() {
+            if crate::widgets::close_button(ui, "レッスン") {
                 close = true;
             }
         });

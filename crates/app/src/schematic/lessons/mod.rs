@@ -285,7 +285,7 @@ impl SchEditor {
                 if ui.button("最初の回路に戻す").on_hover_text("回路を、このレッスンの最初の状態にします").clicked() {
                     restart = true;
                 }
-                if ui.button("閉じる").clicked() {
+                if crate::widgets::close_button(ui, "レッスンの窓") {
                     close = true;
                 }
             });

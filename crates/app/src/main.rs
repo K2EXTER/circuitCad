@@ -30,6 +30,7 @@ mod source_form;
 mod startup;
 mod theme;
 mod tips;
+mod widgets;
 mod xcheck;
 mod xcheck_ac;
 mod xcheck_tran;

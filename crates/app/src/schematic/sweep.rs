@@ -57,7 +57,7 @@ impl SchEditor {
         let mut close = false;
         ui.horizontal(|ui| {
             ui.strong(if view.temp { "温度スイープ (温度を変えたときの動作点)" } else { "DCスイープ (入力を変えたときの出力)" });
-            if ui.button("閉じる").clicked() {
+            if crate::widgets::close_button(ui, "スイープの表示") {
                 close = true;
             }
             ui.small(if view.temp { "横軸: 回路の温度 (℃)。縦軸: 各ノードの電圧 (上) と電流 (下)" } else { "横軸: スイープした電源の電圧。縦軸: 各ノードの電圧 (上) と電流 (下)" });
@@ -109,7 +109,7 @@ impl SchEditor {
                         if !temp {
                             ui.checkbox(show_diag, "「出力 = 入力」の線").on_hover_text("この線と曲線が交わる所が切替電圧 Vth です");
                         }
-                        if ui.button("選択をクリア").clicked() {
+                        if ui.button("選択をクリア").on_hover_text("選んだ信号を、すべて外します").clicked() {
                             selected.clear();
                         }
                         egui::ScrollArea::vertical().show(ui, |ui| {

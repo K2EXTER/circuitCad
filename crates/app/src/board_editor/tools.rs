@@ -208,7 +208,7 @@ impl BoardEditor {
             self.finish_polygon();
             ui.close();
         }
-        if ui.button("描きかけを取り消す (Esc)").clicked() {
+        if ui.button("描きかけを取り消す (Esc)").on_hover_text("いま描いている図形を、置かずにやめます。すでに置いたものは消えません").clicked() {
             self.poly.clear();
             self.poly_verts.clear();
             self.arc_mid = None;

@@ -70,7 +70,7 @@ impl SchEditor {
                 if ui.button("レッスンに戻る").on_hover_text("このチャレンジをやめて、レッスンの手順に戻ります").clicked() {
                     back = true;
                 }
-                if ui.button("閉じる").clicked() {
+                if crate::widgets::close_button(ui, "チャレンジの窓") {
                     close = true;
                 }
             });

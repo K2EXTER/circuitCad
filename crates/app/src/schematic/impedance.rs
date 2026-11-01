@@ -112,7 +112,7 @@ impl SchEditor {
         let mut close = false;
         ui.horizontal(|ui| {
             ui.strong(format!("インピーダンス: {}", view.label)).on_hover_text("0 dB = 1 Ω、20 dB = 10 Ω、-20 dB = 0.1 Ω。電源ラインでは、低いほど電圧が揺れにくく、山は「そこで電圧が揺れやすい周波数」です");
-            if ui.button("閉じる").clicked() {
+            if crate::widgets::close_button(ui, "インピーダンスの表示") {
                 close = true;
             }
         });

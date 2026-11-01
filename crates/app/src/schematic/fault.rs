@@ -301,7 +301,7 @@ impl SchEditor {
                 Ok(FaultWave::Ac(_)) => "故障シミュレーション (AC): 周波数特性の比較",
                 _ => "故障シミュレーション (過渡): 正常と故障の比較",
             });
-            if ui.button("閉じる").clicked() {
+            if crate::widgets::close_button(ui, "故障の比較") {
                 close = true;
             }
             ui.small("白い線 = 正常な回路 / 色つきの線 = 部品を壊した回路。クリックで測定カーソル");

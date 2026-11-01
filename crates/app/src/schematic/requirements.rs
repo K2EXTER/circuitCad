@@ -189,7 +189,7 @@ impl SchEditor {
                             r.note = t;
                             changed = true;
                         }
-                        if ui.button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -321,7 +321,7 @@ impl SchEditor {
                             g.note = t;
                             changed = true;
                         }
-                        if ui.button("削除").on_hover_text("この組を消します").clicked() {
+                        if ui.small_button("削除").on_hover_text("この組を消します").clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -376,7 +376,7 @@ impl SchEditor {
                             b.note = t;
                             changed = true;
                         }
-                        if ui.button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -435,7 +435,7 @@ impl SchEditor {
                             a.note = t;
                             changed = true;
                         }
-                        if ui.button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -533,7 +533,7 @@ impl SchEditor {
                             m.note = t;
                             changed = true;
                         }
-                        if ui.button("削除").on_hover_text("この行を消します").clicked() {
+                        if ui.small_button("削除").on_hover_text("この行を消します").clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
@@ -584,7 +584,7 @@ impl SchEditor {
                             w.note = t;
                             changed = true;
                         }
-                        if ui.button("削除").on_hover_text("この例外を消します。基板の点検で、また指摘に戻ります").clicked() {
+                        if ui.small_button("削除").on_hover_text("この例外を消します。基板の点検で、また指摘に戻ります").clicked() {
                             remove = Some(k);
                         }
                         ui.end_row();
