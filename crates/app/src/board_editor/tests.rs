@@ -3012,7 +3012,8 @@ fn pour_triangle_split() {
     let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
     e.fit_view(view);
     let ctx = egui::Context::default();
-    ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+    out.textures_delta.clear();
     let cache = e.zone_cache.borrow();
     let (key, fills) = cache.as_ref().expect("pours made");
     let lod = e.pour_lod(*key, fills);
@@ -3082,7 +3083,8 @@ fn pour_thinning() {
     let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
     e.fit_view(view);
     let ctx = egui::Context::default();
-    ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+    let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(view), ..Default::default() }, |ui| e.canvas(ui));
+    out.textures_delta.clear();
     let cache = e.zone_cache.borrow();
     let (_, fills) = cache.as_ref().expect("pours made");
     println!("zoom {:.1} px/mm", e.zoom);
