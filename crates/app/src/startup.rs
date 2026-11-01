@@ -50,6 +50,8 @@ pub(super) fn install_japanese_font(ctx: &egui::Context) {
         for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
             style.text_styles.insert(ts, egui::FontId::proportional(14.0));
         }
+        // egui's default for small text is 9 px, hard to read next to the 14 px body (notes, hints and captions use it in many places)
+        style.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(12.0));
         // the same for monospace text (tables typed into the part form: "-55 -3" must keep its minus signs)
         style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::monospace(14.0));
     });
