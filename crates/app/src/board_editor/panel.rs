@@ -218,6 +218,7 @@ impl BoardEditor {
                     self.run_drc();
                 }
                 self.requirements_check(ui);
+                self.requirements_table(ui, &sch.sch.requirements);
                 let mut jump = None;
                 for v in &self.violations {
                     if ui.link(format!("({:.1}, {:.1}) {}", v.at.x, v.at.y, v.message)).clicked() {

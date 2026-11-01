@@ -326,6 +326,8 @@ pub struct BoardEditor {
     pub waive_reason: String,
     /// A waiver added (true) or taken back (false) in the list of the check: `main.rs` writes it into the schematic's table too.
     pub waiver_request: Option<(bool, design_spec::Waiver)>,
+    /// "回路図で表を開く" was pressed in the board's list of the table: `main.rs` switches to the schematic and opens the table.
+    pub open_sch_requirements: bool,
     /// Set when "全部" found no declared currents and asked for the schematic's DC currents first: the route (all nets, or
     /// the named one) is made when `App` has answered. `currents_tried` stops it from asking twice.
     pub route_after_currents: Option<Option<String>>,
@@ -499,6 +501,7 @@ impl Default for BoardEditor {
             to_schematic_request: false,
             waive_reason: String::new(),
             waiver_request: None,
+            open_sch_requirements: false,
             route_after_currents: None,
             currents_tried: false,
             current_stats: vec![],

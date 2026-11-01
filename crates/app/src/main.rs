@@ -174,6 +174,10 @@ impl eframe::App for App {
                 list.retain(|x| !same(x));
             }
         }
+        if std::mem::take(&mut self.board_ed.open_sch_requirements) {
+            self.mode = Mode::Schematic;
+            self.sch.open_requirements();
+        }
         if let Some(on) = self.board_ed.post_layout_request.take() {
             self.apply_post_layout(on);
         }

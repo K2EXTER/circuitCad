@@ -128,6 +128,65 @@ impl BoardEditor {
         }
     }
 
+    /// The schematic's table, row by row, with whether the board has taken each row (read only: it is edited in the schematic, so
+    /// that the table has one owner). A net rule counts as taken when a class of its name holds nets of the board.
+    pub(super) fn requirements_table(&mut self, ui: &mut egui::Ui, spec: &design_spec::DesignSpec) {
+        if spec.net_rules.is_empty() && spec.groups.is_empty() && spec.apart.is_empty() && spec.bypass.is_empty() && spec.measures.is_empty() {
+            return;
+        }
+        let b = &self.board;
+        // (kind, name, what it says, taken, why)
+        let mut rows: Vec<(&str, String, String, bool, &str)> = vec![];
+        for r in &spec.net_rules {
+            let got = !r.name.is_empty() && b.net_classes.iter().any(|c| c.name == r.name && !c.nets.is_empty());
+            let mut what = r.nets.join(", ");
+            if r.width > 0.0 {
+                what += &format!(" / 幅 {} mm", r.width);
+            }
+            if r.current > 0.0 {
+                what += &format!(" / {} A", r.current);
+            }
+            rows.push(("ネット", r.name.clone(), what, got, &r.note));
+        }
+        for g in &spec.groups {
+            let what = format!("{}{}", g.parts.join(", "), if g.max_dist > 0.0 { format!(" / {} mm 以内", g.max_dist) } else { String::new() });
+            rows.push(("組", g.name.clone(), what, b.place_groups.iter().any(|x| x == g), &g.note));
+        }
+        for a in &spec.apart {
+            let what = format!("{} と {} / {} mm 以上", a.a.join(", "), a.b.join(", "), a.min_dist);
+            rows.push(("離す", a.name.clone(), what, b.keep_apart.iter().any(|x| x == a), &a.note));
+        }
+        for x in &spec.bypass {
+            rows.push(("バイパス", x.ic.clone(), x.caps.join(", "), b.bypass.iter().any(|y| y == x), &x.note));
+        }
+        for m in &spec.measures {
+            let what = format!("{} {} {}", m.what, if m.is_min() { "≥" } else { "≤" }, m.limit);
+            rows.push(("測定", m.name.clone(), what, b.measures.iter().any(|y| y == m), &m.note));
+        }
+        let lost = rows.iter().filter(|r| !r.3).count();
+        let title = if lost == 0 { format!("設計の要件の表 ({} 行)", rows.len()) } else { format!("設計の要件の表 ({} 行、基板に届かない {lost} 行)", rows.len()) };
+        let mut open_sch = false;
+        egui::CollapsingHeader::new(title).id_salt("req_table").default_open(lost > 0).show(ui, |ui| {
+            for (kind, name, what, got, why) in &rows {
+                ui.horizontal_wrapped(|ui| {
+                    if *got {
+                        ui.colored_label(crate::theme::OK, "✔").on_hover_text("基板に取り込まれています");
+                    } else {
+                        ui.colored_label(crate::theme::ERROR, "✖").on_hover_text("基板に届いていません。ネットのパッドが基板にない、部品を取り込んでいない、などが考えられます。名前を確かめて、回路図から取り込み直してください");
+                    }
+                    ui.label(format!("{kind}「{name}」")).on_hover_text(if why.trim().is_empty() { "(理由が書かれていません)" } else { why });
+                    ui.label(egui::RichText::new(what).small().color(Color32::GRAY));
+                });
+            }
+            if ui.small_button("回路図で表を開く").on_hover_text("表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます").clicked() {
+                open_sch = true;
+            }
+        });
+        if open_sch {
+            self.open_sch_requirements = true;
+        }
+    }
+
     pub(super) fn requirements_check(&mut self, ui: &mut egui::Ui) {
         if !pcb_core::requirements::any(&self.board) {
             return;
