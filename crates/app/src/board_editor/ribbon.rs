@@ -570,7 +570,39 @@ fn add_strip(mesh: &mut Mesh, pts: &[Pos2], width: f32, col: Color32, caps: (boo
         let dirs: Vec<Vec2> = p.windows(2).map(|w| (w[1] - w[0]).normalized()).collect();
         let normal = |d: Vec2| Vec2::new(-d.y, d.x);
         let mut prev: Option<[u32; 2]> = None;
+        let round_joins = width >= ROUND_ENDS_FROM;
         for (k, &q) in p.iter().enumerate() {
+            if round_joins && k > 0 && k + 1 < p.len() {
+                // a turn: the two segments end square at the point, and the wedge on the outside of the turn is a fan of a few
+                // triangles, so the outer corner is round (as the round ends of the single tracks and the Gerber file make it)
+                let (n0, n1) = (normal(dirs[k - 1]), normal(dirs[k]));
+                let base = mesh.vertices.len() as u32;
+                for v in [q + n0 * half, q - n0 * half, q + n1 * half, q - n1 * half] {
+                    mesh.colored_vertex(v, col);
+                }
+                if let Some(r) = prev {
+                    mesh.add_triangle(r[0], r[1], base);
+                    mesh.add_triangle(r[1], base + 1, base);
+                }
+                let turn = dirs[k - 1].x * dirs[k].y - dirs[k - 1].y * dirs[k].x;
+                let s = if turn > 0.0 { -1.0 } else { 1.0 };
+                let (o0, o1) = (n0 * s, n1 * s);
+                let angle = (o0.x * o1.y - o0.y * o1.x).atan2(o0.dot(o1));
+                let step = 2.0 * (1.0 - 0.17 / half).clamp(-1.0, 0.999).acos();
+                let n = ((angle.abs() / step.max(1e-3)).ceil() as usize).clamp(1, 24);
+                let centre = mesh.vertices.len() as u32;
+                mesh.colored_vertex(q, col);
+                for j in 0..=n {
+                    let a = angle * j as f32 / n as f32;
+                    let (c, sn) = (a.cos(), a.sin());
+                    mesh.colored_vertex(q + Vec2::new(o0.x * c - o0.y * sn, o0.x * sn + o0.y * c) * half, col);
+                }
+                for j in 0..n as u32 {
+                    mesh.add_triangle(centre, centre + 1 + j, centre + 2 + j);
+                }
+                prev = Some([base + 2, base + 3]);
+                continue;
+            }
             let m = match (k.checked_sub(1).map(|i| dirs[i]), dirs.get(k).copied()) {
                 (Some(a), Some(b)) => {
                     let (n0, n1) = (normal(a), normal(b));
@@ -814,7 +846,7 @@ mod tests {
         let pts = [Pos2::new(0.0, 0.0), Pos2::new(10.0, 0.0), Pos2::new(20.0, 5.0), Pos2::new(30.0, 5.0)];
         let mut flat = Mesh::default();
         add_capped_chain(&mut flat, &pts, 4.0, Color32::RED, (false, false));
-        assert_eq!(flat.indices.len() / 3, 3 * 2, "two triangles for each of the three pieces");
+        assert_eq!(flat.indices.len() / 3, 3 * 2 + 2, "two triangles for each of the three pieces, and a wedge at each of the two turns");
         assert!(flat.vertices.iter().all(|v| v.color == Color32::RED), "no faded edge");
         // the strip reaches 2 px to each side of the line
         let (lo, hi) = flat.vertices.iter().fold((f32::MAX, f32::MIN), |(lo, hi), v| (lo.min(v.pos.y), hi.max(v.pos.y)));
@@ -822,12 +854,25 @@ mod tests {
         // a cap is a fan: well under what the faded one costs
         let mut capped = Mesh::default();
         add_capped_chain(&mut capped, &pts, 4.0, Color32::RED, (true, true));
-        assert!(capped.indices.len() / 3 <= 6 + 2 * 8, "{}", capped.indices.len() / 3);
+        assert!(capped.indices.len() / 3 <= 8 + 2 * 8, "{}", capped.indices.len() / 3);
         assert!(capped.indices.iter().all(|&i| (i as usize) < capped.vertices.len()));
         set_plain_strips(false);
         let mut faded = Mesh::default();
         add_capped_chain(&mut faded, &pts, 4.0, Color32::RED, (false, false));
         assert_eq!(faded.indices.len() / 3, 3 * 6, "six for each piece with the faded edge");
+    }
+
+    #[test]
+    fn the_outer_corner_of_a_turn_is_round_not_a_mitre() {
+        set_plain_strips(true);
+        // a wide track turning by 90 degrees at (100, 0): the sharp corner would be at (120, -20), 28 px from the point
+        let pts = [Pos2::new(0.0, 0.0), Pos2::new(100.0, 0.0), Pos2::new(100.0, 100.0)];
+        let mut m = Mesh::default();
+        add_capped_chain(&mut m, &pts, 40.0, Color32::RED, (false, false));
+        let far = m.vertices.iter().map(|v| (v.pos - Pos2::new(100.0, 0.0)).length()).filter(|d| *d < 60.0).fold(0.0f32, f32::max);
+        assert!(far <= 20.0 + 0.01, "no vertex beyond the half width from the turn: {far}");
+        assert!(m.indices.iter().all(|&i| (i as usize) < m.vertices.len()));
+        set_plain_strips(false);
     }
 
     #[test]
