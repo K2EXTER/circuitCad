@@ -440,6 +440,32 @@ pub struct NetClass {
     /// The most track (mm) a net of the class may have in all (0: no limit); the check finds a net with more.
     #[serde(skip_serializing_if = "is_zero")]
     pub max_length: f64,
+    /// Stretches of track that keep their own width, though the class asks for another (a thin stretch into the pins of a fine-pitch part, say).
+    /// The slider of the net's width, "recommended width", the current check and the impedance check leave them alone.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub width_exceptions: Vec<WidthException>,
+}
+
+/// A stretch of track of one net that keeps its own width: the tracks that lie along the segment `a`–`b`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WidthException {
+    pub net: String,
+    pub a: Point,
+    pub b: Point,
+    pub width: f64,
+}
+
+impl WidthException {
+    /// Does the track lie along this stretch (both ends on the segment, within 0.05 mm)?
+    pub fn covers(&self, t: &Track) -> bool {
+        let near = |p: Point| {
+            let (dx, dy) = (self.b.x - self.a.x, self.b.y - self.a.y);
+            let l2 = dx * dx + dy * dy;
+            let s = if l2 < 1e-18 { 0.0 } else { (((p.x - self.a.x) * dx + (p.y - self.a.y) * dy) / l2).clamp(0.0, 1.0) };
+            p.dist(Point::new(self.a.x + s * dx, self.a.y + s * dy)) <= 0.05
+        };
+        near(t.a) && near(t.b)
+    }
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -540,7 +566,7 @@ impl Role {
 
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0 }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0, width_exceptions: vec![] }
     }
 }
 

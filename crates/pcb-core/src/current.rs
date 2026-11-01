@@ -105,6 +105,12 @@ pub fn is_neck(board: &Board, conn: &Connectivity, i: usize) -> bool {
     (on_pad(t.a) && joins_wider(t.b)) || (on_pad(t.b) && joins_wider(t.a))
 }
 
+/// Is track `i` (of `net`) a stretch the net's class lets keep its own width (`NetClass::width_exceptions`)?
+pub fn is_excepted(board: &Board, net: &str, i: usize) -> bool {
+    let t = &board.tracks[i];
+    board.net_classes.iter().filter(|c| c.nets.iter().any(|n| n == net)).any(|c| c.width_exceptions.iter().any(|e| e.net == net && e.covers(t)))
+}
+
 /// For every net with a current in `board.net_currents`: the needed width against the tracks drawn (the necks of a trunk are left out).
 pub fn net_widths(board: &Board, conn: &Connectivity, spec: &CopperSpec) -> Vec<NetWidth> {
     board
@@ -114,7 +120,7 @@ pub fn net_widths(board: &Board, conn: &Connectivity, spec: &CopperSpec) -> Vec<
         .map(|(net, amps)| {
             let mut thinnest: Option<(f64, Point)> = None;
             for (i, t) in board.tracks.iter().enumerate() {
-                if conn.track_net(i) == Some(net.as_str()) && thinnest.is_none_or(|(w, _)| t.width < w) && !is_neck(board, conn, i) {
+                if conn.track_net(i) == Some(net.as_str()) && thinnest.is_none_or(|(w, _)| t.width < w) && !is_neck(board, conn, i) && !is_excepted(board, net, i) {
                     thinnest = Some((t.width, t.a));
                 }
             }
@@ -140,7 +146,7 @@ pub fn set_net_currents(board: &mut Board, currents: &[(String, f64)]) -> usize 
 pub fn widen_net(board: &mut Board, conn: &Connectivity, net: &str, width: f64) -> usize {
     let mut n = 0;
     // the necks of a trunk stay as thin as they are
-    let necks: Vec<bool> = (0..board.tracks.len()).map(|i| conn.track_net(i) == Some(net) && is_neck(board, conn, i)).collect();
+    let necks: Vec<bool> = (0..board.tracks.len()).map(|i| conn.track_net(i) == Some(net) && (is_neck(board, conn, i) || is_excepted(board, net, i))).collect();
     for (i, t) in board.tracks.iter_mut().enumerate() {
         if conn.track_net(i) == Some(net) && t.width + 1e-9 < width && !necks[i] {
             t.width = width;

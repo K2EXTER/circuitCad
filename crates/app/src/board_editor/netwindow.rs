@@ -4,7 +4,7 @@
 
 use super::*;
 use pcb_core::current::{net_widths, round_up_width, width_for_current, CopperSpec};
-use pcb_core::NetClass;
+use pcb_core::{NetClass, WidthException};
 use pcb_core::model::Role;
 
 /// Did the slider move the value (not just rounding of what it shows)?
@@ -56,6 +56,69 @@ fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverrid
 }
 
 impl BoardEditor {
+    /// "線幅の例外": the stretches of this net that keep their own width. A stretch is added from the selected tracks; its width can be changed
+    /// (the tracks along it follow) and it can be taken away (the tracks keep the width they have).
+    fn width_exceptions_ui(&mut self, ui: &mut egui::Ui, net: &str, c: &mut NetClass) {
+        let min_w = self.board.rules.min_track_width;
+        let count = c.width_exceptions.iter().filter(|e| e.net == net).count();
+        // the selected tracks of this net that are not a stretch yet
+        let picks: Vec<usize> = {
+            let conn = self.cached_connectivity();
+            let chosen = self.selected.into_iter().chain(self.multi.iter().copied());
+            let mut v: Vec<usize> = chosen.filter_map(|it| if let Item::Track(i) = it { Some(i) } else { None }).filter(|&i| i < self.board.tracks.len() && conn.track_net(i) == Some(net)).collect();
+            v.sort_unstable();
+            v.dedup();
+            v.retain(|&i| !c.width_exceptions.iter().any(|e| e.net == net && e.covers(&self.board.tracks[i])));
+            v
+        };
+        let mut remove: Option<usize> = None;
+        let mut apply: Vec<(Vec<usize>, f64)> = vec![];
+        let mut add = false;
+        egui::CollapsingHeader::new(format!("線幅の例外 ({count} か所)")).id_salt("net_window_width_exceptions").default_open(count > 0).show(ui, |ui| {
+            ui.small("クラスの線幅とは別の太さにしたい区間 (ピッチの細い IC のピンに入る所だけ細くする、など) を登録します。登録した区間は、上のスライダー・「配線を推奨幅にする」・電流とインピーダンスのチェックの対象になりません。区間は基板上の位置で決まるので、その配線を動かすと例外から外れます");
+            for (k, e) in c.width_exceptions.iter_mut().enumerate().filter(|(_, e)| e.net == net) {
+                let covered: Vec<usize> = self.board.tracks.iter().enumerate().filter(|(_, t)| e.covers(t)).map(|(i, _)| i).collect();
+                ui.horizontal(|ui| {
+                    ui.label(format!("({:.1}, {:.1}) → ({:.1}, {:.1})", e.a.x, e.a.y, e.b.x, e.b.y)).on_hover_text("例外にした区間の両端の位置 (mm)");
+                    let before = e.width;
+                    ui.add(egui::DragValue::new(&mut e.width).speed(0.01).range(min_w..=5.0).suffix(" mm")).on_hover_text("この区間の線幅。変えると、区間に沿った配線の太さも変わります。発注先の最小線幅より細くはできません");
+                    if (e.width - before).abs() > 1e-9 {
+                        apply.push((covered.clone(), e.width));
+                    }
+                    if covered.is_empty() {
+                        ui.small("該当する配線なし").on_hover_text("この区間に沿った配線が、いまはありません (配線を動かしたか消しました)。不要なら × で消します");
+                    } else {
+                        ui.small(format!("{} 本", covered.len()));
+                    }
+                    if ui.small_button("×").on_hover_text("例外をやめます。配線の太さは、いまのままです").clicked() {
+                        remove = Some(k);
+                    }
+                });
+            }
+            if ui.add_enabled(!picks.is_empty(), egui::Button::new(format!("選んだ配線を例外にする ({} 本)", picks.len()))).on_hover_text("基板で選んだ、このネットの配線を、いまの太さのまま例外にします。選択ツールで配線をクリック (Shift で複数) してから押します").clicked() {
+                add = true;
+            }
+        });
+        if let Some(k) = remove {
+            c.width_exceptions.remove(k);
+        }
+        if add {
+            for &i in &picks {
+                let t = &self.board.tracks[i];
+                c.width_exceptions.push(WidthException { net: net.to_string(), a: t.a, b: t.b, width: t.width });
+            }
+            self.status = format!("ネット {net}: 配線 {} 本を線幅の例外にしました", picks.len());
+        }
+        if !apply.is_empty() {
+            self.checkpoint_once();
+            for (tracks, w) in apply {
+                for i in tracks {
+                    self.board.tracks[i].width = w;
+                }
+            }
+        }
+    }
+
     /// Put the classes in the board when they differ (one undo step for a whole drag of a value).
     pub(super) fn commit_classes(&mut self, classes: Vec<NetClass>, pointer_down: bool) {
         if classes != self.board.net_classes {
@@ -230,12 +293,13 @@ impl BoardEditor {
                     if let Some(w) = set_width {
                         c.track_width = w;
                     }
+                    self.width_exceptions_ui(ui, &net, &mut classes[k]);
                 }
                 None => {
                     ui.small(format!("いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます", self.track_width, self.via_dia, self.via_drill));
                     if ui.button("このネット専用のクラスを作る").on_hover_text("このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます").clicked() {
                         let width = set_width.or_else(|| self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)))).unwrap_or(self.track_width).max(rules.min_track_width);
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0 });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0, width_exceptions: vec![] });
                     } else if let Some(w) = set_width {
                         self.track_width = w;
                         self.status = format!("線幅を {w:.2} mm にしました");
@@ -248,7 +312,7 @@ impl BoardEditor {
             let idx: Vec<usize> = {
                 let conn = self.cached_connectivity();
                 // (the necks of a trunk keep their width: they are thin so that the solder stays on the small pads)
-                (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str()) && !pcb_core::current::is_neck(&self.board, &conn, i)).collect()
+                (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str()) && !pcb_core::current::is_neck(&self.board, &conn, i) && !pcb_core::current::is_excepted(&self.board, &net, i)).collect()
             };
             let class_k = classes.iter().position(|c| c.nets.contains(&net));
             let start = class_k.map(|k| classes[k].track_width).or_else(|| idx.iter().map(|&i| self.board.tracks[i].width).reduce(f64::max));
@@ -325,7 +389,7 @@ impl BoardEditor {
                 let k = match class_k {
                     Some(k) => k,
                     None if new_target.is_some() => {
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0 });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0, width_exceptions: vec![] });
                         classes.len() - 1
                     }
                     None => usize::MAX,

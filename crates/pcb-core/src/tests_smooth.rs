@@ -595,3 +595,27 @@ fn the_neck_is_as_wide_as_the_face_the_track_enters_by() {
     assert!(neck.a.y - neck.width / 2.0 >= 10.0 - 0.4 - 1e-9, "{neck:?}");
     assert!(ratsnest(&f.board).is_empty());
 }
+
+/// A stretch the class lets keep its own width is left out of the current check and the widening, and it follows the segment, not the track.
+#[test]
+fn a_width_exception_is_left_out_of_the_current_check() {
+    use crate::current::{is_excepted, net_widths, widen_net, CopperSpec};
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 5.0, 5.0, "A");
+    pad(&mut b, 25.0, 5.0, "A");
+    b.tracks.push(trk((5.0, 5.0), (15.0, 5.0), 0.5));
+    b.tracks.push(trk((15.0, 5.0), (25.0, 5.0), 0.1));
+    b.net_currents.insert("A".into(), 3.0);
+    let conn = drc::connectivity(&b);
+    let before = net_widths(&b, &conn, &CopperSpec::default());
+    assert_eq!(before[0].thinnest, Some(0.1));
+    b.net_classes.push(crate::NetClass { name: "A".into(), nets: vec!["A".into()], width_exceptions: vec![crate::WidthException { net: "A".into(), a: Point::new(15.0, 5.0), b: Point::new(25.0, 5.0), width: 0.1 }], ..Default::default() });
+    assert!(is_excepted(&b, "A", 1) && !is_excepted(&b, "A", 0));
+    assert_eq!(net_widths(&b, &conn, &CopperSpec::default())[0].thinnest, Some(0.5));
+    widen_net(&mut b, &conn, "A", 1.0);
+    assert_eq!(b.tracks[1].width, 0.1, "the exception keeps its width");
+    assert_eq!(b.tracks[0].width, 1.0);
+    // the file keeps it
+    let back: crate::NetClass = serde_json::from_str(&serde_json::to_string(&b.net_classes[0]).unwrap()).unwrap();
+    assert_eq!(back.width_exceptions.len(), 1);
+}

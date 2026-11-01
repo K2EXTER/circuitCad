@@ -160,7 +160,9 @@ pub fn check_targets(board: &Board, tolerance: f64) -> Vec<ImpedanceIssue> {
         for net in &class.nets {
             let mut worst: Option<(f64, f64, crate::model::Point)> = None;
             for (i, t) in board.tracks.iter().enumerate().filter(|(i, _)| conn.track_net(*i) == Some(net.as_str())) {
-                let _ = i;
+                if crate::current::is_excepted(board, net, i) {
+                    continue;
+                }
                 let z = single_ended(&board.stackup, Kind::of(t.side), t.width);
                 if (z - target).abs() / target > tolerance && worst.is_none_or(|w| (z - target).abs() > (w.0 - target).abs()) {
                     worst = Some((z, t.width, t.a));
