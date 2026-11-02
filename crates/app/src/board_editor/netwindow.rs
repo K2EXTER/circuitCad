@@ -56,7 +56,8 @@ fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverrid
 }
 
 impl BoardEditor {
-    /// "線幅の例外": the stretches of this net that keep their own width. A stretch is added from the selected tracks; its width can be changed
+    /// "線幅の例外": the stretches of this net that keep their own width (for a net with no class, `c` is the class made for it when the first
+    /// stretch is added). A stretch is added from the selected tracks; its width can be changed
     /// (the tracks along it follow) and it can be taken away (the tracks keep the width they have).
     fn width_exceptions_ui(&mut self, ui: &mut egui::Ui, net: &str, c: &mut NetClass) {
         let min_w = self.board.rules.min_track_width;
@@ -368,7 +369,13 @@ impl BoardEditor {
                     match class_k {
                         Some(k) => self.width_exceptions_ui(ui, &net, &mut classes[k]),
                         None => {
-                            ui.small("線幅の例外は、このネットをクラスに入れると使えます (上のクラスの選択か、「クラス」タブ)");
+                            // no class yet: one for this net alone is made when the first stretch is added (what "このネット専用のクラスを作る" makes)
+                            let width = self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec))).unwrap_or(self.track_width).max(rules.min_track_width);
+                            let mut own = NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, ..Default::default() };
+                            self.width_exceptions_ui(ui, &net, &mut own);
+                            if !own.width_exceptions.is_empty() {
+                                classes.push(own);
+                            }
                         }
                     }
                 }
