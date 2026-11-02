@@ -3287,3 +3287,43 @@ fn the_pairs_lesson_goes_from_unequal_pairs_to_equal_ones_and_ends_with_a_clean_
     assert_eq!(e.lesson_progress(), 3);
     assert_eq!(e.finished_board_lesson(), Some("board_pairs"));
 }
+
+#[test]
+fn the_repair_lesson_breaks_a_good_board_and_ends_when_the_checks_agree_again() {
+    let mut sch = crate::schematic::SchEditor::default();
+    assert!(sch.load_sample(BoardEditor::repair_lesson_circuit()));
+    let mut e = BoardEditor::default();
+    e.adopt(serde_json::from_str(BoardEditor::repair_lesson_board()).unwrap(), None);
+    e.start_repair_lesson();
+    assert_eq!(e.lesson_progress(), 0);
+    assert_eq!(e.repair_faults().len(), 5, "this board can have every kind of fault");
+    let good = e.board.clone();
+    // a fault goes in: one undo step, the symptom on the status line, the checks find something
+    let undo = e.undo.len();
+    e.repair_inject(3);
+    assert!(e.repair.is_some());
+    assert_eq!(e.undo.len(), undo + 1);
+    assert!(e.status.contains("症状"), "{}", e.status);
+    assert_eq!(e.lesson_progress(), 1);
+    // the learner looks with a check
+    e.run_drc();
+    assert_eq!(e.lesson_progress(), 2);
+    // asked too early: not mended yet
+    e.repair_check();
+    assert!(!e.repair.as_ref().unwrap().fixed);
+    assert_eq!(e.lesson_progress(), 2);
+    // the answer names the cause and puts a mark on the board
+    e.repair_reveal();
+    assert_eq!(e.violations.len(), 1);
+    // mended (the board as it was stands in for the hand work)
+    e.checkpoint();
+    e.board = good.clone();
+    e.repair_check();
+    assert!(e.repair.as_ref().unwrap().fixed, "{}", e.status);
+    assert_eq!(e.lesson_progress(), 3);
+    assert_eq!(e.finished_board_lesson(), Some("board_repair"));
+    // another fault: the board goes back to the good one first, and the fault is a different one for the next seed
+    e.repair_again();
+    assert!(!e.repair.as_ref().unwrap().fixed);
+    assert!(pcb_core::breakage::health(&e.board).total() > 0);
+}

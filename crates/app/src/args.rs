@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0|1] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -11,6 +11,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--board-lesson") {
         // --board-lesson [0|1]: 0 = schematic to order files, 1 = copper width and voltage drop
         app.start_board_lesson(args.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(0));
+    }
+    if let Some(i) = args.iter().position(|a| a == "--repair") {
+        // --board-lesson 7 --repair [seed]: put a fault into the board of the repair lesson (the seed picks the kind: 0..4 are the five kinds)
+        app.board_ed.repair_inject(args.get(i + 1).and_then(|n| n.parse().ok()).unwrap_or(1));
     }
     if let Some(i) = args.iter().position(|a| a == "--challenge")
         && let Some(id) = args.get(i + 1) {

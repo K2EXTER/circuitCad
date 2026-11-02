@@ -195,6 +195,7 @@ const POWER_PATH: LearningPath = LearningPath {
                 Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: Some(&["draw_psu"]), build: false, real: Some("発注するなら、少量・少額で試します") },
                 Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), requires: Some(&["board"]), build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
                 Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), requires: Some(&["board"]), build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") },
+                Item { id: "board_repair", title: "壊れた基板を直す (修理屋)", about: "ちゃんと動く基板に故障を 1 つ仕込み、症状から原因を探して直す。バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外。何度でも、別の故障で練習できる", kind: Kind::Board(7), build: false, requires: Some(&["board_fix"]), real: None },
                 Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, requires: Some(&["board_fix", "board_copper"]), build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
             ],
         },

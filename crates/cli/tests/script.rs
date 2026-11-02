@@ -1742,3 +1742,27 @@ fn matchpairs_lengthens_the_shorter_pair() {
     assert!((added - 10.0).abs() < 0.3, "{first}");
     std::fs::remove_file(&path).ok();
 }
+
+/// `board break` puts a fault into a good board, `board health` says it is not mended until the checks agree with the board before the fault again.
+#[test]
+fn break_health_and_reveal_work_as_a_repair_practice() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/work_in_progress/attiny_blinker_board.pcbjson");
+    let p = path.display();
+    let (a, ok) = run(&format!("board open {p}\nboard health\nboard break fault=cut seed=3\nboard health\nboard reveal\nboard open {p}\nboard health\n"));
+    assert!(ok, "{a:?}");
+    let healths: Vec<&Value> = a.iter().filter(|v| v["health"].is_object() && v.get("repaired").is_some()).collect();
+    // before the fault: nothing to find, nothing to compare with
+    assert_eq!(healths[0]["health"]["total"], 0, "{:?}", healths[0]);
+    assert_eq!(healths[0]["repaired"], Value::Null);
+    // `board break` answers with the symptom and what the checks find now
+    let broke = a.iter().find(|v| v["symptom"].is_string()).expect("an answer of break");
+    assert!(broke["health"]["total"].as_u64().unwrap() > 0, "{broke}");
+    // the next health says: not mended
+    let after = healths.iter().find(|v| v["repaired"] == Value::Bool(false)).expect("not mended");
+    assert!(after["health"]["total"].as_u64().unwrap() > 0);
+    // the cause is told only when asked
+    let reveal = a.iter().find(|v| v["cause"].is_string()).expect("reveal");
+    assert!(reveal["cause"].as_str().unwrap().contains("切れて"), "{reveal}");
+    // the good board again: mended
+    assert!(a.iter().any(|v| v["repaired"] == Value::Bool(true)), "{a:?}");
+}

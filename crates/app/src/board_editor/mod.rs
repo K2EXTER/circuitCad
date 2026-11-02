@@ -435,6 +435,8 @@ pub struct BoardEditor {
     last_export_dir: Option<PathBuf>,
     /// The running guided lesson, and whether the DRC has been run since the last edit.
     lesson: Option<lesson::BoardLesson>,
+    /// The fault of the repair practice (board lesson 8), while there is one.
+    repair: Option<repair::RepairState>,
     drc_ran: bool,
 }
 
@@ -564,6 +566,7 @@ impl Default for BoardEditor {
             via_net: None,
             last_export_dir: None,
             lesson: None,
+            repair: None,
             drc_ran: false,
         }
     }
@@ -602,6 +605,7 @@ mod padlead;
 mod livepath;
 mod lengths;
 mod pairs;
+mod repair;
 mod align;
 mod tools;
 mod zoneedit;

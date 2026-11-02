@@ -45,10 +45,17 @@ pub const PAIRS_ID: &str = "board_pairs";
 const PAIRS_CIRCUIT: &str = include_str!("../../../../docs/examples/diff_lanes.schjson");
 const PAIRS_BOARD: &str = include_str!("../../../../docs/examples/work_in_progress/diff_lanes_routed.pcbjson");
 
+/// The eighth lesson: a board that works (`docs/examples/attiny_blinker.schjson` and `work_in_progress/attiny_blinker_board.pcbjson`) is
+/// broken on purpose, one fault at a time (`pcb_core::breakage`), and the learner finds the cause from the symptom and mends it.
+pub const REPAIR_TITLE: &str = "基板編8. 壊れた基板を直す (修理屋)";
+pub const REPAIR_ID: &str = "board_repair";
+const REPAIR_CIRCUIT: &str = include_str!("../../../../docs/examples/attiny_blinker.schjson");
+const REPAIR_BOARD: &str = include_str!("../../../../docs/examples/work_in_progress/attiny_blinker_board.pcbjson");
+
 pub(super) struct BoardLesson {
     /// 0 = from a schematic to the files to order, 1 = the copper lesson, 2 = the pre-order check challenge,
     /// 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson,
-    /// 5 = finishing the Mega board by hand, 6 = bringing differential pairs to the same length.
+    /// 5 = finishing the Mega board by hand, 6 = bringing differential pairs to the same length, 7 = the repair practice.
     which: usize,
     done: Vec<bool>,
 }
@@ -136,6 +143,21 @@ fn lanes_checked(e: &BoardEditor) -> bool {
 /// it names nothing: the pairs bent together keep their gap.
 fn lanes_rechecked(e: &BoardEditor) -> bool {
     lanes_same_length(e) && e.drc_ran && e.violations.is_empty()
+}
+
+/// A fault has been put into the board.
+fn repair_started(e: &BoardEditor) -> bool {
+    e.repair.is_some()
+}
+
+/// The learner has used a check to look for the cause (DRC, or the pre-order check).
+fn repair_looked(e: &BoardEditor) -> bool {
+    e.repair.is_some() && (e.drc_ran || e.order.open)
+}
+
+/// The checks find no more than before the fault.
+fn repair_fixed(e: &BoardEditor) -> bool {
+    e.repair.as_ref().is_some_and(|r| r.fixed)
 }
 
 fn order_opened(e: &BoardEditor) -> bool {
@@ -383,6 +405,24 @@ const PAIRS_STEPS: &[Step] = &[
     },
 ];
 
+const REPAIR_STEPS: &[Step] = &[
+    Step {
+        title: "故障を仕込む",
+        detail: "下の「故障を仕込む」を押します。このボード (ATtiny85 の LED 点滅) は、いまは正しく作ってあります。そこへ故障が 1 つ仕込まれます。何が壊れたかは、先に見せません。実機で見えること (症状) だけが出ます。",
+        done: repair_started,
+    },
+    Step {
+        title: "点検で、手がかりを探す",
+        detail: "症状から、疑う所を考えます。手がかりは、「DRC を実行」(赤い印)、基板の上の黄色の線 (未配線)、「発注の準備…」のチェック、部品の位置です。どれかを使って、いつもと違う所を探します。",
+        done: repair_looked,
+    },
+    Step {
+        title: "直して、直ったか確かめる",
+        detail: "原因が分かったら直します (部品を動かす・配線をつなぐ・余計な配線を消す・配線を太くする)。直したら「直ったか確かめる」を押します。点検の結果が、故障の前と同じか、それ以下なら、直ったことになります。分からないときは「答えを見る」で、原因と場所が出ます (見ても、直す練習になります)。",
+        done: repair_fixed,
+    },
+];
+
 const MEGA_STEPS: &[Step] = &[
     Step {
         title: "いまの基板の状態を確かめる",
@@ -525,6 +565,24 @@ impl BoardEditor {
         self.status = format!("レッスン「{PAIRS_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
+    /// The sample circuit of the repair lesson.
+    pub fn repair_lesson_circuit() -> &'static str {
+        REPAIR_CIRCUIT
+    }
+
+    /// The board of the repair lesson (JSON): a good one, that gets broken.
+    pub fn repair_lesson_board() -> &'static str {
+        REPAIR_BOARD
+    }
+
+    /// Starts the repair lesson on the board that was just adopted (the app loads the circuit and the board first).
+    pub fn start_repair_lesson(&mut self) {
+        self.drc_ran = false;
+        self.repair = None;
+        self.lesson = Some(BoardLesson { which: 7, done: vec![false; REPAIR_STEPS.len()] });
+        self.status = format!("レッスン「{REPAIR_TITLE}」を始めました。右の案内に沿って操作してみましょう");
+    }
+
     fn lesson_steps(&self) -> &'static [Step] {
         match self.lesson.as_ref().map(|l| l.which) {
             Some(1) => COPPER_STEPS,
@@ -533,6 +591,7 @@ impl BoardEditor {
             Some(4) => USB_STEPS,
             Some(5) => MEGA_STEPS,
             Some(6) => PAIRS_STEPS,
+            Some(7) => REPAIR_STEPS,
             _ => STEPS,
         }
     }
@@ -552,6 +611,7 @@ impl BoardEditor {
             4 => USB_ID,
             5 => MEGA_ID,
             6 => PAIRS_ID,
+            7 => REPAIR_ID,
             _ => "board",
         })
     }
@@ -591,11 +651,14 @@ impl BoardEditor {
         let usb = l.which == 4;
         let mega = l.which == 5;
         let pairs = l.which == 6;
+        let repair = l.which == 7;
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else if pairs { PAIRS_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
-            ui.label(if pairs {
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else if pairs { PAIRS_TITLE } else if repair { REPAIR_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+            ui.label(if repair {
+                "ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、直します。DRC・未配線・発注前チェックなど、いままでの道具が手がかりです。何度でも、別の故障で練習できます"
+            } else if pairs {
                 "2 つのヘッダの間を、2 組の差動ペア (2 レーン) が走っています。2 組が同時に届くように、ペアどうしの長さを揃えます。蛇行は、2 本をいっしょに曲げるので、2 本の間隔が保たれます"
             } else if mega {
                 "ATmega2560 (100 ピン、0.5mm ピッチ) の基板です。自動配線は、通せる所まで配線して、18 本のネットを残しました。残りを、手で引く・ビアで渡す・邪魔な線を引き直す・部品を動かす、で仕上げる練習です"
@@ -630,8 +693,11 @@ impl BoardEditor {
                     });
                 }
             }
+            if repair {
+                self.repair_ui(ui);
+            }
             ui.separator();
-            if !copper && !fix && !arduino && !usb && !mega && !pairs {
+            if !copper && !fix && !arduino && !usb && !mega && !pairs && !repair {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
@@ -657,6 +723,10 @@ impl BoardEditor {
                 ui.separator();
                 ui.colored_label(crate::theme::OK, "レッスン完了!");
                 ui.label("2 組以上の差動ペアを同時に届けたいときは、ペアの長さ (2 本の平均) を揃えます。長さ合わせの蛇行は、2 本を入れ子の山でいっしょに曲げると、間隔 (結合) が保たれます。1 本だけを曲げると、その所で 2 本が離れて、DRC に「間隔のずれ」が出ます。ペアの中の長さの差は、2 本をいっしょに曲げても直らないので、短いほうの 1 本を曲げます (そこは間隔が少しずれます)。速い信号では、拡大して、蛇行が間隔を保っているかを目で確かめましょう。");
+            } else if cur.is_none() && repair {
+                ui.separator();
+                ui.colored_label(crate::theme::OK, "直りました!");
+                ui.label("故障を見つける順番は、「症状から、疑う所の見当をつける」→「点検の道具で確かめる」→「直して、もう一度点検」です。「別の故障で練習」で、ほかの種類の故障 (バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外) も試せます。");
             } else if cur.is_none() && mega {
                 ui.separator();
                 ui.colored_label(crate::theme::OK, "レッスン完了!");

@@ -122,9 +122,19 @@ impl App {
     }
 
     /// Opens a board lesson: 0 = schematic to order files (with its sample circuit), 1 = copper width and voltage drop,
-    /// 2 = the pre-order check challenge (each with its sample project), 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson, 5 = the Mega board to finish by hand, 6 = bringing differential pairs to the same length.
+    /// 2 = the pre-order check challenge (each with its sample project), 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson, 5 = the Mega board to finish by hand, 6 = bringing differential pairs to the same length, 7 = the repair practice.
     pub(super) fn start_board_lesson(&mut self, which: usize) {
         self.mode = Mode::Board;
+        if which == 7 {
+            match serde_json::from_str::<pcb_core::Board>(board_editor::BoardEditor::repair_lesson_board()) {
+                Ok(b) if self.sch.load_sample(board_editor::BoardEditor::repair_lesson_circuit()) => {
+                    self.board_ed.adopt(b, None);
+                    self.board_ed.start_repair_lesson();
+                }
+                _ => self.board_ed.status = "レッスンの基板を読み込めませんでした".into(),
+            }
+            return;
+        }
         if which == 6 {
             match serde_json::from_str::<pcb_core::Board>(board_editor::BoardEditor::pairs_lesson_board()) {
                 Ok(b) if self.sch.load_sample(board_editor::BoardEditor::pairs_lesson_circuit()) => {

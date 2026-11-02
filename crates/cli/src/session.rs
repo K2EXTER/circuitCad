@@ -119,6 +119,8 @@ pub struct Session {
     /// The folder the library was read from (`lib reload` reads it again).
     pub lib_dir: std::path::PathBuf,
     pub board: Option<Board>,
+    /// The board before a fault was put into it (`board break`) with what the checks found then, and what was done.
+    pub(crate) broken: Option<(pcb_core::breakage::Health, pcb_core::breakage::Injected)>,
     /// Where the next part goes: (x, y, tallest part of the row).
     pub cursor: (i32, i32, i32),
     pub lib_errors: Vec<String>,
@@ -188,7 +190,7 @@ impl Session {
         // like the app: the bundled parts are copied to the library folder the first time
         let _ = part_lib::install_examples(&dir);
         let (lib, lib_errors) = part_lib::load_dir(&dir);
-        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
+        Session { sch: Schematic::default(), lib, lib_dir: dir, board: None, broken: None, cursor: (8, 8, 0), lib_errors, strict: false, last_dc: None, last_tran: None, last_ac: None, post_layout: false }
     }
 
     pub fn run(&mut self, w: &[String]) -> Res {

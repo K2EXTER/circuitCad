@@ -414,6 +414,11 @@ impl eframe::App for App {
                             self.start_board_lesson(6);
                             ui.close();
                         }
+                        let repair_mark = if self.progress.is_done(board_editor::lesson::REPAIR_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{repair_mark}{}", board_editor::lesson::REPAIR_TITLE)).on_hover_text("ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します。何度でも、別の故障で練習できます").clicked() {
+                            self.start_board_lesson(7);
+                            ui.close();
+                        }
                         let mega_mark = if self.progress.is_done(board_editor::lesson::MEGA_ID) { "✔ " } else { "　 " };
                         if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます").clicked() {
                             self.start_board_lesson(5);

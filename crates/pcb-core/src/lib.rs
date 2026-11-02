@@ -34,6 +34,7 @@ pub mod model;
 pub mod model3d;
 pub mod nudge;
 pub mod breakout;
+pub mod breakage;
 pub mod orient;
 pub mod netlist;
 pub mod outline;
@@ -78,6 +79,8 @@ mod tests_router;
 mod tests_shove;
 #[cfg(test)]
 mod tests_smooth;
+#[cfg(test)]
+mod tests_breakage;
 #[cfg(test)]
 mod tests_diffpair;
 #[cfg(test)]
