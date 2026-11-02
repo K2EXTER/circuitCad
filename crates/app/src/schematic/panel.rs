@@ -219,18 +219,6 @@ impl SchEditor {
                 }
             }
         });
-        // outside the (closed by default) library list, so a newcomer can find it without opening anything
-        ui.horizontal_wrapped(|ui| {
-            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
-                self.form = Some(PartForm::default());
-            }
-            if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
-                self.import_part_json();
-            }
-            if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
-                self.open_kicad_import();
-            }
-        });
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(false).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
@@ -362,6 +350,18 @@ impl SchEditor {
             ui.small("保存先: ライブラリのフォルダ").on_hover_text(self.lib_dir.display().to_string());
             for e in &self.lib_errors {
                 ui.colored_label(crate::theme::ERROR, e);
+            }
+        });
+        // below the (closed by default) library list, outside it, so a newcomer can find them without opening anything
+        ui.horizontal_wrapped(|ui| {
+            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
+                self.form = Some(PartForm::default());
+            }
+            if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
+                self.import_part_json();
+            }
+            if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
+                self.open_kicad_import();
             }
         });
         if let Some(i) = chosen {
