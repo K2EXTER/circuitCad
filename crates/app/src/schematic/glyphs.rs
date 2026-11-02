@@ -29,7 +29,7 @@ pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
 /// A mark drawn inside the ordinary box (the box, the leads and the pin names stay): a logic gate in the middle of
 /// a gate IC, the DC mark of a regulator. The glyph of the part when it names one, else a guess like `body_glyph`.
 pub(super) fn overlay_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 9] = ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer"];
+    const KNOWN: [&str; 12] = ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg"];
     let g = if sym.glyph.is_empty() { sym.inferred_glyph() } else { sym.glyph.as_str() };
     KNOWN.iter().find(|k| **k == g).copied()
 }
@@ -39,7 +39,7 @@ pub(crate) fn glyph_fits(glyph: &str, sym: &CustomSymbol) -> bool {
     let mut sym = sym.clone();
     sym.glyph = glyph.to_string();
     match glyph {
-        "" | "box" | "regulator" | "gate_and" | "gate_or" | "gate_not" | "gate_nand" | "gate_nor" | "gate_xor" | "gate_schmitt" | "gate_buffer" => true,
+        "" | "box" | "regulator" | "gate_and" | "gate_or" | "gate_not" | "gate_nand" | "gate_nor" | "gate_xor" | "gate_schmitt" | "gate_buffer" | "ff_d" | "counter" | "shift_reg" => true,
         "capacitor" | "electrolytic" | "resistor" | "inductor" => sym.is_two_lead_glyph(),
         g => body(g, &sym.layout()).is_some(),
     }
@@ -105,6 +105,18 @@ pub(super) fn overlay(glyph: &str, l: &SymLayout) -> Vec<Sh> {
             }
         }
         _ => {}
+    }
+    // flip-flop, counter, shift register: a small block with the clock wedge (a triangle on the left edge), and what the
+    // part does inside it: nothing more for a flip-flop, a rising staircase for a counter, an arrow for a shift register
+    if matches!(glyph, "ff_d" | "counter" | "shift_reg") {
+        let (x, y) = (0.7f32, 0.8f32);
+        v.extend([L(-x, -y, x, -y), L(x, -y, x, y), L(x, y, -x, y), L(-x, y, -x, -y)]);
+        v.extend([L(-x, 0.25, -x + 0.35, 0.5), L(-x + 0.35, 0.5, -x, 0.75)]);
+        match glyph {
+            "counter" => v.extend([L(-0.1, 0.55, 0.15, 0.55), L(0.15, 0.55, 0.15, 0.2), L(0.15, 0.2, 0.4, 0.2), L(0.4, 0.2, 0.4, -0.15), L(0.4, -0.15, 0.55, -0.15), L(0.55, -0.15, 0.55, -0.5)]),
+            "shift_reg" => v.extend(arrow((-0.2, -0.35), (0.5, -0.35))),
+            _ => {}
+        }
     }
     if glyph.starts_with("gate_") {
         // drawn 1.6 wide above; a little larger reads better and still clears the pin names at the sides
@@ -593,13 +605,13 @@ mod gate_tests {
     /// The gate ICs, the three-terminal regulators and the comparator get their marks from the name and pins alone.
     #[test]
     fn gates_regulators_and_comparators_are_recognised() {
-        for (part, g) in [("74HC00", "gate_nand"), ("74HC02", "gate_nor"), ("74HC04", "gate_not"), ("74HC08", "gate_and"), ("74HC14_DIP", "gate_schmitt"), ("74HC32_DIP", "gate_or"), ("74HC86", "gate_xor"), ("LM7805", "regulator"), ("AMS1117-3.3", "regulator"), ("L78L05", "regulator"), ("MCP1700", "regulator")] {
+        for (part, g) in [("74HC00", "gate_nand"), ("74HC02", "gate_nor"), ("74HC04", "gate_not"), ("74HC08", "gate_and"), ("74HC14_DIP", "gate_schmitt"), ("74HC32_DIP", "gate_or"), ("74HC86", "gate_xor"), ("74HC74", "ff_d"), ("74HC4017_DIP", "counter"), ("74HC595", "shift_reg"), ("LM7805", "regulator"), ("AMS1117-3.3", "regulator"), ("L78L05", "regulator"), ("MCP1700", "regulator")] {
             assert_eq!(overlay_glyph(&sym(part)), Some(g), "{part}");
         }
         assert_eq!(body_glyph(&sym("LM393")), Some("comparator"));
         assert_eq!(body_glyph(&sym("LM358")), Some("opamp"));
         // a mark never sticks out of the box
-        for g in ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer"] {
+        for g in ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg"] {
             let l = sym("74HC00").layout();
             for s in overlay(g, &l) {
                 let pts = match s {

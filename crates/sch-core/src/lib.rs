@@ -746,6 +746,12 @@ impl CustomSymbol {
                 return g;
             }
         }
+        // flip-flops, counters and shift registers: a mark of their kind in the box
+        for (nums, g) in [(&["74"][..], "ff_d"), (&["4017", "4020", "4040", "161", "163", "393"][..], "counter"), (&["595", "164"][..], "shift_reg")] {
+            if nums.iter().any(|n| ["74HC", "74HCT", "74LS", "CD"].iter().any(|f| base == format!("{f}{n}"))) {
+                return g;
+            }
+        }
         let has = |n: &str| self.pins.iter().any(|p| p.name == n);
         if self.pins.len() == 4 && has("P1") && has("P2") && has("S1") && has("S2") {
             return "transformer";

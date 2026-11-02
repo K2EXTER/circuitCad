@@ -86,9 +86,9 @@ pub struct Issue {
 }
 
 /// Glyphs that draw a standard body (diode, transistor ...) inside the box; the pins keep their box positions.
-pub const BODY_GLYPHS: [&str; 28] = [
+pub const BODY_GLYPHS: [&str; 31] = [
     "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal", "comparator", "regulator",
-    "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer",
+    "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer", "ff_d", "counter", "shift_reg",
     // "box" = the plain box with the pin names, whatever the name and pins suggest
     "box",
 ];
