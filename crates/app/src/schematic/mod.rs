@@ -211,6 +211,8 @@ pub struct SchEditor {
     part_popup: Option<(usize, egui::Pos2, u32)>,
     popup_serial: u32,
     lesson_base: Schematic,
+    /// The fault that the repair lesson put into its circuit (an index of its list).
+    debug_fault: Option<u64>,
     /// Why the lesson step on hand is not ticked (written by the step's condition each time it is checked).
     lesson_unmet: std::cell::RefCell<Option<lessons::Unmet>>,
     /// "値の決め方" window: open flag, which calculator, its input texts.
@@ -549,6 +551,7 @@ impl Default for SchEditor {
             show_sim_opts: false,
             popup_serial: 0,
             lesson_base: Schematic::default(),
+            debug_fault: None,
             lesson_unmet: Default::default(),
             wiz_open: false,
             req_open: false,

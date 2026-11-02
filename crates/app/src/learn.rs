@@ -200,6 +200,7 @@ const POWER_PATH: LearningPath = LearningPath {
                 Item { build: true, requires: Some(&["diode_curve", "divider"]), ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },
                 Item { requires: Some(&["led"]), ..I_BJT_SWITCH },
                 Item { build: true, requires: Some(&["zener", "bjt_switch"]), ..lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")) },
+                Item { requires: Some(&["zener"]), ..lesson("debug_circuit", "動かない回路を直す (デバッグ)", "ツェナーの電源に故障が 1 つ仕込まれている。電圧を順に見て原因を探し、直す。故障は始めるたびに変わる", None) },
             ],
         },
         Stage {

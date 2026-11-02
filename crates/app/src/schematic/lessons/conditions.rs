@@ -22,6 +22,8 @@ pub(in crate::schematic) enum Unmet {
         /// What it is now (as written in the part), if there is such a part.
         have: Option<String>,
     },
+    /// A sentence of the lesson's own (the repair lesson tells where to look).
+    Note(String),
 }
 
 impl Unmet {
@@ -33,6 +35,7 @@ impl Unmet {
             }
             Unmet::Analysis { button, stale: false } => format!("この手順は「{button}」の結果で判定します。まだ押していなければ、押してみましょう"),
             Unmet::Value { refdes, want, have: Some(have) } => format!("{refdes} を {want}にします (いまは {have})。{refdes} を選んで、左パネルの「値」を変えます"),
+            Unmet::Note(text) => text.clone(),
             Unmet::Value { refdes, want, have: None } => format!("{refdes} を {want}にします。{refdes} を選んで、左パネルの「値」を変えます"),
         }
     }

@@ -1765,3 +1765,50 @@ fn a_guess_about_an_ac_or_noise_number_is_judged_too() {
     let v = e.lesson.as_ref().unwrap().verdicts[1].clone().expect("a verdict");
     assert!(!v.right && v.chosen == 1 && (v.actual - 5.6).abs() < 0.5, "{v:?}");
 }
+
+#[test]
+fn the_repair_lesson_starts_broken_and_each_fault_can_be_mended() {
+    let idx = lesson_ids().iter().position(|l| *l == "debug_circuit").unwrap();
+    let wire = |e: &mut SchEditor, a: (i32, i32), b: (i32, i32)| e.sch.wires.push(sch_core::Wire { a, b });
+    for seed in 0..5u64 {
+        let mut e = SchEditor::default();
+        e.start_lesson(idx);
+        e.debug_inject(seed);
+        e.run_dc();
+        e.update_lesson();
+        e.update_lesson();
+        assert_eq!(progress(&e), 1, "seed {seed}: the first step is only to look");
+        // broken: the output is not where the Zener holds it, and the hint says where to look
+        assert!(e.lesson_unmet.borrow().is_some(), "seed {seed}");
+        assert!(e.debug_cause().is_some());
+        match seed {
+            0 => set_value(&mut e, "R1", "150"),
+            1 => set_value(&mut e, "R2", "1k"),
+            2 => set_value(&mut e, "V1", "9"),
+            3 => wire(&mut e, (16, -8), (19, -8)),
+            _ => wire(&mut e, (28, -2), (28, -5)),
+        }
+        e.update_lesson();
+        assert_eq!(progress(&e), 1, "seed {seed}: the result is old");
+        e.run_dc();
+        e.update_lesson();
+        assert_eq!(progress(&e), 2, "seed {seed}: {}", e.status);
+        set_value(&mut e, "V1", "12");
+        e.run_dc();
+        e.update_lesson();
+        assert_eq!(progress(&e), 3, "seed {seed}");
+    }
+}
+
+#[test]
+fn the_repair_lesson_names_the_kind_of_place_in_its_hint() {
+    let idx = lesson_ids().iter().position(|l| *l == "debug_circuit").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.debug_inject(3);
+    e.run_dc();
+    e.update_lesson();
+    e.update_lesson();
+    let hint = e.lesson_unmet.borrow().as_ref().map(|u| u.message()).unwrap();
+    assert!(hint.contains("VOUT") && hint.contains("ERC"), "{hint}");
+}

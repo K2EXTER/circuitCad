@@ -52,6 +52,7 @@ struct Lesson {
 mod analog;
 mod basics;
 mod conditions;
+mod debug;
 mod devices;
 mod micro;
 mod models;
@@ -118,6 +119,7 @@ const LESSONS: &[Lesson] = &[
     signals::POLES,
     signals::PHASE_MARGIN,
     signals::NOISE,
+    debug::DEBUG,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.
@@ -273,6 +275,8 @@ impl SchEditor {
         let mut build = None;
         let mut pick: Option<(usize, usize)> = None;
         let hint = self.stuck_hint(ctx, cur);
+        // the repair lesson says what was wrong once the learner has mended it
+        let cause = self.debug_cause().filter(|_| lesson.id == "debug_circuit" && done.get(1) == Some(&true));
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
@@ -330,6 +334,13 @@ impl SchEditor {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(crate::theme::WARN, "ヒント");
                     ui.label(text);
+                });
+            }
+            if let Some(cause) = cause {
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(crate::theme::OK, "仕込まれていた故障");
+                    ui.label(cause);
                 });
             }
             ui.separator();
