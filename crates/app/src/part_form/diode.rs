@@ -46,7 +46,7 @@ impl PartForm {
         let pins = self.parse_pins()?;
         let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
         let (Some(a), Some(k)) = (find("A"), find("K")) else {
-            return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「② ピン」で、名前を A と K にしてください)".into());
+            return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「③ ピン」で、名前を A と K にしてください)".into());
         };
         let num = |label: &str, t: &str| -> Result<Option<f64>, String> {
             let t = t.trim();
@@ -87,10 +87,10 @@ impl PartForm {
         }
         if let (Some(v), true) = (vrrm, self.rt_v.trim().is_empty()) {
             self.rt_v = passive::eng(v);
-            notes.push("逆耐圧を「⑤ 定格」の最大電圧にも入れました");
+            notes.push("逆耐圧を「② 定格」の最大電圧にも入れました");
         }
         let tail = if notes.is_empty() { String::new() } else { format!("。{}", notes.join("。")) };
-        Ok(format!("モデルを「④ シミュレーション」に入れました。そちらの「試し読み」で確かめられます{tail}"))
+        Ok(format!("モデルを「⑤ シミュレーション」に入れました。そちらの「試し読み」で確かめられます{tail}"))
     }
 
     pub(super) fn diode_ui(&mut self, ui: &mut egui::Ui) {
@@ -108,7 +108,7 @@ impl PartForm {
                 ui.label(egui::RichText::new(format!("・{t}")).small());
             }
         });
-        crate::icons::help_label(ui, "① 順方向特性の点", "① データシートの「順方向特性 (Forward Characteristics)」のグラフから、電流と電圧の点を読みます (1行に「電流 電圧」、電流が離れた 3 点がおすすめ)");
+        crate::icons::help_label(ui, "手順1: 順方向特性の点", "手順1: データシートの「順方向特性 (Forward Characteristics)」のグラフから、電流と電圧の点を読みます (1行に「電流 電圧」、電流が離れた 3 点がおすすめ)");
         ui.add(egui::TextEdit::multiline(&mut self.dio_points).desired_rows(3).desired_width(220.0).font(egui::TextStyle::Monospace).hint_text("10m 0.70\n100m 0.79\n1 0.92"))
             .on_hover_text("グラフの縦軸 (電流) と横軸 (電圧) を読みます。電流は小・中・大の 3 点 (10mA・100mA・定格電流など)。m は 1000 分の 1。例: 100m 0.79 は 100mA のとき 0.79V");
         ui.horizontal(|ui| {
@@ -118,7 +118,7 @@ impl PartForm {
                 self.dio_ir = "5u".into();
                 self.dio_message = Some(self.dio_fit());
             }
-            if ui.button("② 点から IS・N・RS を求める").on_hover_text("点を通る曲線になるように、IS・N・RS を計算します。点が 2 つなら IS と N、3 つ以上なら RS も決まります").clicked() {
+            if ui.button("手順2: 点から IS・N・RS を求める").on_hover_text("点を通る曲線になるように、IS・N・RS を計算します。点が 2 つなら IS と N、3 つ以上なら RS も決まります").clicked() {
                 self.dio_message = Some(self.dio_fit());
             }
         });
@@ -135,7 +135,7 @@ impl PartForm {
             ui.end_row();
         });
         self.dio_chart(ui);
-        ui.label("③ 表から、逆耐圧と漏れ電流を写します (空でも作れます)");
+        ui.label("手順3: 表から、逆耐圧と漏れ電流を写します (空でも作れます)");
         egui::Grid::new("dio_rev").num_columns(2).show(ui, |ui| {
             ui.label("逆耐圧 VRRM [V]").on_hover_text("「絶対最大定格」の Peak Repetitive Reverse Voltage。型番ごとに違うので、表で自分の型番の列を読みます (1N4007 は 1000)");
             ui.add(egui::TextEdit::singleline(&mut self.dio_vrrm).desired_width(80.0).hint_text("1000"));
@@ -144,7 +144,7 @@ impl PartForm {
             ui.add(egui::TextEdit::singleline(&mut self.dio_ir).desired_width(80.0).hint_text("5u"));
             ui.end_row();
         });
-        crate::icons::help_label(ui, "④ 高い周波数で効く値", "④ 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
+        crate::icons::help_label(ui, "手順4: 高い周波数で効く値", "手順4: 高い周波数で効く値 (空でも作れます。スイッチング電源や整流の高速な切り替えで効きます)");
         egui::Grid::new("dio_charge").num_columns(2).show(ui, |ui| {
             ui.label("接合容量 Cj [F]").on_hover_text("データシートの Typical Junction Capacitance。測った逆電圧とセットで読みます (1N4007 は 8pF 〜 15pF、1MHz、逆電圧 4V)");
             ui.horizontal(|ui| {
@@ -163,7 +163,7 @@ impl PartForm {
             });
             ui.end_row();
         });
-        if ui.button("⑤ このモデルを「④ シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、④ のシミュレーションの欄に入れます。逆耐圧は ⑤ の最大電圧にも入ります").clicked() {
+        if ui.button("手順5: このモデルを「⑤ シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、⑤ のシミュレーションの欄に入れます。逆耐圧は ② の最大電圧にも入ります").clicked() {
             self.dio_message = Some(self.dio_apply());
         }
         match &self.dio_message {

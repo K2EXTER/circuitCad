@@ -48,10 +48,10 @@ impl PartForm {
             Some(PartType::Ic) => {
                 ui.label(egui::RichText::new("かんたん作成 (ひな形)").strong());
                 self.template_ui(ui);
-                crate::icons::help_small(ui, "入力の順番", "ほかの IC は、② ピン → ③ 基板の形 → ④ シミュレーション の順に入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
+                crate::icons::help_small(ui, "入力の順番", "ほかの IC は、② 定格 → ③ ピン → ④ 基板の形 → ⑤ シミュレーション の順に入れます。SPICE モデルは ⑤ に貼ると、自動入力と試し読みができます");
             }
             Some(PartType::Transistor | PartType::Diode | PartType::Connector) if !diode => {
-                crate::icons::help_small(ui, "入力の順番", "② ピン → ③ 基板の形 → ④ シミュレーション の順に、データシートを見ながら入れます。SPICE モデルは ④ に貼ると、自動入力と試し読みができます");
+                crate::icons::help_small(ui, "入力の順番", "② 定格 → ③ ピン → ④ 基板の形 → ⑤ シミュレーション の順に、データシートを見ながら入れます。SPICE モデルは ⑤ に貼ると、自動入力と試し読みができます");
             }
             Some(_) => {}
             None => {
