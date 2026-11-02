@@ -5,6 +5,11 @@
 //! pushing end gives a corner, and the corner is solved as a real circuit (so a result that does not move in a straight line
 //! with the parts is still right). One round of trying the other end of each part then catches the parts that do not push the same
 //! way in the corner as alone.
+//!
+//! This is a short cut, not an exact search: with wide tolerances it can miss a corner, a little (checked against every one of
+//! the 2^n corners in `tests_worstcase.rs`: none missed at +-5 % in 2000 random networks, 0.1 % of them by up to 0.12 % of the
+//! span at +-30 %, 1.1 % of them by up to 1 % at +-60 %). Corners are the ends of the tolerance; random circuits from inside the
+//! box never went beyond them. A transient measure needs a run long enough to settle, or it is not steady and neither are the limits.
 
 use crate::circuit::{Circuit, Element};
 use crate::dc::SimError;
@@ -67,7 +72,7 @@ pub struct WorstCase {
     pub unsolved: Vec<String>,
 }
 
-fn tolerance(e: &Element, s: &WcSettings) -> Option<f64> {
+pub(crate) fn tolerance(e: &Element, s: &WcSettings) -> Option<f64> {
     if e.name().contains('.') {
         return None;
     }
@@ -81,7 +86,7 @@ fn tolerance(e: &Element, s: &WcSettings) -> Option<f64> {
     (t > 0.0).then_some(t)
 }
 
-fn corner(circuit: &Circuit, parts: &[(usize, f64)], high: &[bool]) -> Circuit {
+pub(crate) fn corner(circuit: &Circuit, parts: &[(usize, f64)], high: &[bool]) -> Circuit {
     let mut c = circuit.clone();
     for (&(i, tol), &h) in parts.iter().zip(high) {
         scale(&mut c.elements[i], 1.0 + if h { tol } else { -tol });

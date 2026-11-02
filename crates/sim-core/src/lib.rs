@@ -139,3 +139,5 @@ mod tests_variation;
 mod tests_bench;
 #[cfg(test)]
 mod tests_perf;
+#[cfg(test)]
+mod tests_worstcase;
