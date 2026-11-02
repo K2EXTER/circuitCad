@@ -1,4 +1,4 @@
-//! The table of the extra pads and holes (shield legs, locating holes, slots) in the "⑤ 部品の形" tab. As in the pin table
+//! The table of the extra pads and holes (shield legs, locating holes, slots) in the "④ 部品の形" tab. As in the pin table
 //! (`pintable.rs`), the text in `extras` stays the stored form: rows are read from it and written back when a row is edited.
 
 use super::*;
@@ -105,7 +105,7 @@ impl PartForm {
         let mut remove: Option<usize> = None;
         let mut swap: Option<(usize, usize)> = None;
         if n > 0 {
-            ui.small("座標は部品の中心から (右が +X、上が +Y)、単位は mm。ピン名は「④ ピン」の番号と同じにします");
+            ui.small("座標は部品の中心から (右が +X、上が +Y)、単位は mm。ピン名は「③ ピン」の番号と同じにします");
             egui::Grid::new("extras_table").num_columns(10).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                 for h in ["種類", "ピン名", "X", "Y", "幅", "高さ", "穴径", "長穴の長さ", "縦", ""] {
                     ui.small(h);
@@ -133,7 +133,7 @@ impl PartForm {
                         let field = |ui: &mut egui::Ui, v: &mut String, on: bool, w: f32, tip: &str| {
                             ui.add_enabled(on, egui::TextEdit::singleline(v).desired_width(w).font(egui::TextStyle::Monospace)).on_hover_text(tip);
                         };
-                        field(ui, &mut rows[i].pin, has_pin, 44.0, "ピン名 (「④ ピン」の番号と同じ。例: SH)");
+                        field(ui, &mut rows[i].pin, has_pin, 44.0, "ピン名 (「③ ピン」の番号と同じ。例: SH)");
                         field(ui, &mut rows[i].x, true, 46.0, "X (mm)。部品の中心から右が +");
                         field(ui, &mut rows[i].y, true, 46.0, "Y (mm)。部品の中心から上が +");
                         field(ui, &mut rows[i].w, has_size, 46.0, "パッドの幅 (mm)");

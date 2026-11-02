@@ -114,7 +114,7 @@ impl PartForm {
     pub fn show_tab(&mut self, name: &str) {
         self.tab = match name {
             "basic" => FormTab::Basic,
-            "ratings" => FormTab::Ratings,
+            "ratings" => FormTab::Basic,
             "sim" => FormTab::Sim,
             "pins" => FormTab::Pins,
             "package" => FormTab::Package,

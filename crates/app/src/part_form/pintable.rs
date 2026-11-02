@@ -1,4 +1,4 @@
-//! The pin table of the "④ ピン" tab: one row per pin (number, name, side, the terminal of the SPICE model it is). The text in
+//! The pin table of the "③ ピン" tab: one row per pin (number, name, side, the terminal of the SPICE model it is). The text in
 //! `pins_text` (and `sim_pins`) stays the stored form, so the templates, the data sheet import and the saved parts keep working;
 //! the rows are read from the text and written back to it when a row is edited.
 

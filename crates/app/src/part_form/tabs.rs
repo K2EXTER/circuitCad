@@ -68,10 +68,10 @@ impl PartForm {
             Some(PartType::Ic) => {
                 ui.label(egui::RichText::new("かんたん作成 (ひな形)").strong());
                 self.template_ui(ui);
-                crate::icons::help_small(ui, "入力の順番", "ほかの IC は、② 定格 → ③ シミュレーション → ④ ピン → ⑤ 部品の形 の順に入れます。SPICE モデルを ③ に貼ると、ピンも自動で入るので、④ では確かめるだけで済みます");
+                crate::icons::help_small(ui, "入力の順番", "ほかの IC は、この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます");
             }
             Some(PartType::Transistor | PartType::Diode | PartType::Connector) if !diode => {
-                crate::icons::help_small(ui, "入力の順番", "② 定格 → ③ シミュレーション → ④ ピン → ⑤ 部品の形 の順に、データシートを見ながら入れます。SPICE モデルを ③ に貼ると、ピンも自動で入るので、④ では確かめるだけで済みます");
+                crate::icons::help_small(ui, "入力の順番", "この画面の下の「データシートの数字 (定格)」→ ② シミュレーション → ③ ピン → ④ 部品の形 の順に、データシートを見ながら入れます。SPICE モデルを ② に貼ると、ピンも自動で入るので、③ では確かめるだけで済みます");
             }
             Some(_) => {}
             None => {
@@ -81,9 +81,15 @@ impl PartForm {
                 self.template_ui(ui);
             }
         }
+        // the data sheet's figures come after the name and the easy-make box: the same order for every kind of part
+        ui.add_space(8.0);
+        ui.separator();
+        egui::CollapsingHeader::new(egui::RichText::new("データシートの数字 (定格)").strong()).id_salt("ratings_section").default_open(true).show(ui, |ui| {
+            self.tab_ratings(ui);
+        });
     }
 
-    /// The tab of the data sheet's ratings.
+    /// The data sheet's ratings, the last part of the first tab.
     pub(super) fn tab_ratings(&mut self, ui: &mut egui::Ui) {
             crate::icons::help_label(ui, "データシートの調べ方", "部品を追加するときは、メーカーのデータシートを開いて調べます。見る表は 2 つです: 「絶対最大定格 (Absolute Maximum Ratings)」 = 超えると壊れる値、「電気的特性 (Electrical Characteristics)」 = 動作中の代表的な値。調べて入れておくと、回路のシミュレーション結果と比べて、超えそうなときに警告できます");
             // the kind chosen at the top decides which items to look up; only an IC (op-amp, regulator ...) or no choice
@@ -248,7 +254,7 @@ impl PartForm {
                     ui.label("ノード順のピン番号");
                     ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
                 });
-                ui.small("モデルの端子とピンの対応は、「④ ピン」の表の「モデルの端子」の列で選びます。");
+                ui.small("モデルの端子とピンの対応は、「③ ピン」の表の「モデルの端子」の列で選びます。");
                 crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
                 ui.add(
                     egui::TextEdit::multiline(&mut self.sim_limits)

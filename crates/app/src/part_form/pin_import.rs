@@ -124,7 +124,7 @@ impl TablePanel {
         }
         ui.label(format!("ピン ({} 行。直せます)", self.lines()));
         ui.add(egui::TextEdit::multiline(&mut self.text).desired_rows(10).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace))
-            .on_hover_text("1行に「番号 名前」。読み違いがあれば、ここで直してから入れます。向き (left/right) は、入れたあとに「④ ピン」で書き足せます");
+            .on_hover_text("1行に「番号 名前」。読み違いがあれば、ここで直してから入れます。向き (left/right) は、入れたあとに「③ ピン」で書き足せます");
         self.compare_ui(ui, current);
         egui::CollapsingHeader::new("読み取った表").id_salt("pin_import_raw").show(ui, |ui| {
             egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
@@ -140,13 +140,13 @@ impl TablePanel {
         });
         ui.horizontal(|ui| {
             let ok = self.lines() > 0;
-            if ui.add_enabled(ok, egui::Button::new("ピン表に置き換える")).on_hover_text("「④ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます").clicked() {
+            if ui.add_enabled(ok, egui::Button::new("ピン表に置き換える")).on_hover_text("「③ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます").clicked() {
                 action = Action::Apply(PinMode::Replace);
             }
             if ui.add_enabled(ok, egui::Button::new("ピン表のあとに足す")).on_hover_text("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします").clicked() {
                 action = Action::Apply(PinMode::Append);
             }
-            if ui.add_enabled(ok, egui::Button::new("この表と比べるだけ")).on_hover_text("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「④ ピン」で比べ直します").clicked() {
+            if ui.add_enabled(ok, egui::Button::new("この表と比べるだけ")).on_hover_text("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「③ ピン」で比べ直します").clicked() {
                 action = Action::Apply(PinMode::CheckOnly);
             }
             if ui.button("やめる").clicked() {

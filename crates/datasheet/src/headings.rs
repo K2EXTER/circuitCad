@@ -29,11 +29,11 @@ impl Heading {
     /// What it is for, for the hover text.
     pub fn help(self) -> &'static str {
         match self {
-            Heading::PinConfig => "ピンの番号と名前の表 (④ ピン に使います)",
-            Heading::LandPattern => "基板のパッドの推奨寸法 (⑤ 部品の形 に使います)",
-            Heading::Package => "部品本体の外形寸法 (⑤ 部品の形 の本体・高さに使います)",
-            Heading::AbsMax => "超えると壊れる電圧・電流・電力 (② 定格 に使います)",
-            Heading::Electrical => "条件つきの代表的な値 (② 定格 に使います)",
+            Heading::PinConfig => "ピンの番号と名前の表 (③ ピン に使います)",
+            Heading::LandPattern => "基板のパッドの推奨寸法 (④ 部品の形 に使います)",
+            Heading::Package => "部品本体の外形寸法 (④ 部品の形 の本体・高さに使います)",
+            Heading::AbsMax => "超えると壊れる電圧・電流・電力 (① 基本の定格 に使います)",
+            Heading::Electrical => "条件つきの代表的な値 (① 基本の定格 に使います)",
         }
     }
 

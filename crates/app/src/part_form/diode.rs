@@ -46,7 +46,7 @@ impl PartForm {
         let pins = self.parse_pins()?;
         let find = |n: &str| pins.iter().find(|p| p.name.eq_ignore_ascii_case(n)).map(|p| p.number.clone());
         let (Some(a), Some(k)) = (find("A"), find("K")) else {
-            return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「④ ピン」で、名前を A と K にしてください)".into());
+            return Err("ピン表に、アノード A とカソード K の名前のピンが要ります (「③ ピン」で、名前を A と K にしてください)".into());
         };
         let num = |label: &str, t: &str| -> Result<Option<f64>, String> {
             let t = t.trim();
@@ -87,10 +87,10 @@ impl PartForm {
         }
         if let (Some(v), true) = (vrrm, self.rt_v.trim().is_empty()) {
             self.rt_v = passive::eng(v);
-            notes.push("逆耐圧を「② 定格」の最大電圧にも入れました");
+            notes.push("逆耐圧を「① 基本」の定格の最大電圧にも入れました");
         }
         let tail = if notes.is_empty() { String::new() } else { format!("。{}", notes.join("。")) };
-        Ok(format!("モデルを「③ シミュレーション」に入れました。そちらの「試し読み」で確かめられます{tail}"))
+        Ok(format!("モデルを「② シミュレーション」に入れました。そちらの「試し読み」で確かめられます{tail}"))
     }
 
     pub(super) fn diode_ui(&mut self, ui: &mut egui::Ui) {
@@ -163,7 +163,7 @@ impl PartForm {
             });
             ui.end_row();
         });
-        if ui.button("手順5: このモデルを「③ シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、③ のシミュレーションの欄に入れます。逆耐圧は ② の最大電圧にも入ります").clicked() {
+        if ui.button("手順5: このモデルを「② シミュレーション」に入れる").on_hover_text("モデルの文 (.model) を作って、② のシミュレーションの欄に入れます。逆耐圧は ① の定格の最大電圧にも入ります").clicked() {
             self.dio_message = Some(self.dio_apply());
         }
         match &self.dio_message {

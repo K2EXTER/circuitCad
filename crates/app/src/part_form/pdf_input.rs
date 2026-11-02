@@ -23,12 +23,12 @@ impl PartForm {
         self.pin_check = None;
         let read = imp.lines.lines().count();
         self.pick_msg = Some(match imp.mode {
-            PinMode::CheckOnly => (true, format!("ピン表は変えずに、p.{} の表 ({read} 本) と比べます。結果は「④ ピン」に出ます", imp.page + 1)),
+            PinMode::CheckOnly => (true, format!("ピン表は変えずに、p.{} の表 ({read} 本) と比べます。結果は「③ ピン」に出ます", imp.page + 1)),
             mode => {
                 self.pins_text = super::pin_import::merged(&self.pins_text, &imp.lines, mode == PinMode::Append);
                 let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count();
                 let how = if mode == PinMode::Append { "あとに足しました" } else { "入れました" };
-                (true, format!("ピン表に p.{} の {read} 本のピンを{how} (合計 {n} 本)。向き (left/right) は「④ ピン」で書き足せます", imp.page + 1))
+                (true, format!("ピン表に p.{} の {read} 本のピンを{how} (合計 {n} 本)。向き (left/right) は「③ ピン」で書き足せます", imp.page + 1))
             }
         });
     }
