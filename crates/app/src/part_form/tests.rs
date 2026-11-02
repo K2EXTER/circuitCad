@@ -956,3 +956,15 @@ fn thinning_keeps_the_thin_leads_of_a_soic() {
     assert!(hi[1] > 2.9 && lo[1] < -2.9, "the leads are gone: y runs {}..{}", lo[1], hi[1]);
     assert!(leads(&thin) >= 16, "only {} lead triangles are left", leads(&thin));
 }
+
+#[test]
+fn typing_in_the_form_is_noticed_before_a_kind_overwrites_it() {
+    let mut f = PartForm::for_type("ic");
+    let base = f.fingerprint();
+    assert_eq!(base, f.fingerprint(), "nothing typed: the same");
+    f.pins_text.push_str("\n5 NC");
+    assert_ne!(base, f.fingerprint(), "a typed pin is a change");
+    let fresh = PartForm::default().fingerprint();
+    f.apply_type(PartType::Diode);
+    assert_ne!(fresh, f.fingerprint(), "a kind fills in values");
+}

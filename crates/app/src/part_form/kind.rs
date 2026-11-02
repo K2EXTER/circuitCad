@@ -3,14 +3,40 @@ use super::*;
 impl PartForm {
     /// The first question: what kind of part is this. Fills pins, package, body and symbol with a starting point.
     pub(super) fn kind_bar(&mut self, ui: &mut egui::Ui) {
+        // an opened part keeps what it has: the kinds only give a new part its starting values
+        if self.editing().is_some() {
+            return;
+        }
+        if self.type_base.is_none() {
+            self.type_base = Some(if self.ptype.is_some() { self.fingerprint() } else { PartForm::default().fingerprint() });
+        }
         ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new("部品の種類").strong());
             for (t, label, tip) in PART_TYPES {
                 if ui.selectable_label(self.ptype == Some(*t), egui::RichText::new(*label).size(15.0)).on_hover_text(*tip).clicked() {
-                    self.apply_type(*t);
+                    if self.type_base.as_deref() == Some(self.fingerprint().as_str()) {
+                        self.apply_type(*t);
+                        self.type_base = Some(self.fingerprint());
+                    } else {
+                        self.pending_type = Some(*t);
+                    }
                 }
             }
         });
+        if let Some(t) = self.pending_type {
+            let name = PART_TYPES.iter().find(|(k, _, _)| *k == t).map_or("", |(_, l, _)| *l);
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(crate::theme::WARN, format!("「{name}」にすると、入力したピン表・パッケージ・本体などが、{name}の初期値に置き換わります。"));
+                if ui.button("置き換える").on_hover_text("入力した内容を捨てて、選んだ種類の初期値にします").clicked() {
+                    self.apply_type(t);
+                    self.type_base = Some(self.fingerprint());
+                    self.pending_type = None;
+                }
+                if ui.button("やめる").on_hover_text("いまの入力をそのまま残します").clicked() {
+                    self.pending_type = None;
+                }
+            });
+        }
         match self.ptype {
             Some(PartType::Transistor) => {
                 ui.horizontal_wrapped(|ui| {
@@ -69,6 +95,19 @@ impl PartForm {
             }
             _ => {}
         }
+    }
+
+    /// The fields a kind of part fills in, as one text: two equal texts mean nothing was typed in between.
+    pub(super) fn fingerprint(&self) -> String {
+        format!(
+            "{:?}",
+            (
+                (&self.name, &self.category, &self.prefix, &self.value, &self.description, &self.pins_text, &self.glyph, &self.extras),
+                (self.pkg as u8, self.pitch, self.row, self.span, self.len, self.width, self.pad_d, self.drill, self.tht),
+                (self.thermal_on, &self.thermal_pin, self.thermal_w, self.thermal_h),
+                (self.body_on, self.body_circle, self.body_w, self.body_h, self.body_x, self.body_y, self.height, &self.body_pin),
+            )
+        )
     }
 
     /// Shows one tab ("basic", "ratings", "sim", "pins", "package"), for scripts and screenshots.

@@ -93,6 +93,10 @@ pub struct PartForm {
     pub ptype_sub: &'static str,
     /// A polarised capacitor (electrolytic, tantalum): the symbol shows the + and the pins are named + and -.
     pub pas_polar: bool,
+    /// What the form held when the kind was last applied (see `kind_bar`): a click on another kind asks first once it differs.
+    pub(super) type_base: Option<String>,
+    /// A kind clicked after the form was filled in, waiting for the answer to "overwrite?".
+    pub(super) pending_type: Option<PartType>,
     pub name: String,
     pub category: String,
     pub prefix: String,
@@ -239,6 +243,8 @@ impl Default for PartForm {
             tab: FormTab::Basic,
             ptype: None,
             ptype_sub: "",
+            type_base: None,
+            pending_type: None,
             pas_polar: false,
             name: String::new(),
             category: "ユーザー".into(),
