@@ -144,6 +144,38 @@ impl Session {
                     .collect();
                 Ok(obj(json!({"dry": dry, "turned": turned, "tried": r.tried})))
             }
+            "matchpairs" => {
+                // board matchpairs [pairs=D1,D2] [target=MM] [style=square|chamfer|round] [height=MM]: bring differential pairs to the same length (the mean of
+                // their two lines) with a serpentine on both lines of each shorter pair. A pair is done on both lines or not at all.
+                let (_, kv) = options(rest);
+                let only: Option<Vec<String>> = opt(&kv, "pairs").map(|l| l.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect());
+                let target = opt(&kv, "target").and_then(|v| v.parse::<f64>().ok());
+                let mut opts = pcb_core::meander::MeanderOptions::default();
+                match opt(&kv, "style") {
+                    None | Some("square") => {}
+                    Some("chamfer") => opts.style = pcb_core::meander::MeanderStyle::Chamfer,
+                    Some("round") => opts.style = pcb_core::meander::MeanderStyle::Round,
+                    Some(_) => return Err("board matchpairs: style is square, chamfer or round".into()),
+                }
+                if let Some(h) = opt(&kv, "height").and_then(|v| v.parse::<f64>().ok()) {
+                    opts.height_max = h;
+                }
+                let board = self.board_mut()?;
+                let pairs: Vec<_> = board.diff_pairs.iter().filter(|d| only.as_ref().is_none_or(|o| o.contains(&d.name))).cloned().collect();
+                if pairs.is_empty() {
+                    return Err("there are no differential pairs on the board (name pairs in the schematic, or add them in the board editor)".into());
+                }
+                let r = pcb_core::diffpair::match_pairs(board, &pairs, target, &opts);
+                let list: Vec<_> = r
+                    .pairs
+                    .iter()
+                    .map(|(name, len, res)| match res {
+                        Ok(added) => json!({"pair": name, "length_mm": len, "added_mm": added}),
+                        Err(e) => json!({"pair": name, "length_mm": len, "error": e}),
+                    })
+                    .collect();
+                Ok(obj(json!({"target_mm": r.target, "pairs": list})))
+            }
             "autoplace" => {
                 // board autoplace [sheets=1] [arrays=0] [channels=0]: sheets=1 lays each schematic sheet out as a block (off by default), arrays=0 does not repeat the layout of copies (on by default)
                 let (_, kv) = options(rest);

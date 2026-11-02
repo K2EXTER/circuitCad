@@ -1,7 +1,7 @@
 //! The "差動ペア" panel: pick two nets, route them side by side, even out their lengths.
 
 use super::*;
-use pcb_core::diffpair::{pair_report, suggest_pairs, tune_length, DiffPair};
+use pcb_core::diffpair::{match_pairs, pair_report, suggest_pairs, tune_length, DiffPair};
 
 impl BoardEditor {
     pub(super) fn panel_pairs(&mut self, ui: &mut egui::Ui) {
@@ -39,6 +39,7 @@ impl BoardEditor {
             let mut remove = None;
             let mut route = None;
             let mut tune = None;
+            let mut match_all = false;
             for (i, d) in self.board.diff_pairs.iter_mut().enumerate() {
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -77,12 +78,35 @@ impl BoardEditor {
                     r.gap_min.zip(r.gap_max).map_or(String::new(), |(a, b)| format!("  間隔 {:.2}〜{:.2}mm", a.max(0.0), b)),
                 ));
             }
+            if self.board.diff_pairs.len() >= 2 {
+                ui.separator();
+                if ui.button("ペアどうしの長さを合わせる").on_hover_text("いちばん長いペアに、ほかのペアの長さ (2本の平均) をそろえます。短いペアは、2本とも同じだけ蛇行で長くするので、ペアの中の長さの差は変わりません (差は「長さを合わせる」で直します)。蛇行の形は「長さ合わせ (蛇行)」の設定を使います。ルール違反になるペアは、何もしません。元に戻すで取り消せます").clicked() {
+                    match_all = true;
+                }
+            }
             if let Some(i) = remove {
                 self.checkpoint();
                 self.board.diff_pairs.remove(i);
             }
             if let Some(i) = route {
                 self.route_pair_at(i);
+            }
+            if match_all {
+                self.checkpoint();
+                let pairs = self.board.diff_pairs.clone();
+                let report = match_pairs(&mut self.board, &pairs, None, &self.meander);
+                let ok = report.pairs.iter().filter(|(_, _, r)| r.as_ref().is_ok_and(|a| *a > 0.0)).count();
+                let failed: Vec<String> = report.pairs.iter().filter_map(|(n, _, r)| r.as_ref().err().map(|e| format!("{n}: {e}"))).collect();
+                self.violations.clear();
+                if ok == 0 {
+                    self.undo.pop(); // nothing changed: no undo step
+                }
+                self.status = match (ok, failed.is_empty()) {
+                    (0, true) => format!("ペアの長さはもうそろっています ({:.2} mm)", report.target),
+                    (0, false) => format!("ペアの長さを合わせられませんでした。{}", failed.join(" / ")),
+                    (_, true) => format!("目標 {:.2} mm に、{ok} 組のペアを蛇行で合わせました。DRC で確認しましょう", report.target),
+                    (_, false) => format!("目標 {:.2} mm に、{ok} 組のペアを合わせました。できなかったもの: {}", report.target, failed.join(" / ")),
+                };
             }
             if let Some(i) = tune {
                 let d = self.board.diff_pairs[i].clone();

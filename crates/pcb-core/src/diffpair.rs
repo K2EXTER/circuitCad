@@ -186,6 +186,45 @@ pub fn tune_length(board: &mut Board, pair: &DiffPair) -> Result<f64, String> {
     crate::meander::tune_net(board, short, delta, &crate::meander::MeanderOptions::default())
 }
 
+/// What [`match_pairs`] did.
+#[derive(Clone, Debug, Default)]
+pub struct PairMatchReport {
+    /// The length every pair was brought to (mm): the mean of its two lines.
+    pub target: f64,
+    /// Per pair: its name, its length before, and the length added to each of its lines or why it could not be done.
+    pub pairs: Vec<(String, f64, Result<f64, String>)>,
+}
+
+/// Bring pairs to the same length (pair-to-pair matching, for lanes that must arrive together): the length of a
+/// pair is the mean of its two lines, and the shorter pairs get the same serpentine on both lines, so the difference
+/// inside each pair stays what it was (even it out with [`tune_length`]). The target is the longest pair, or `target`
+/// when that is longer. A pair is done on both lines or not at all (the board keeps its tracks when one line fails).
+pub fn match_pairs(board: &mut Board, pairs: &[DiffPair], target: Option<f64>, opts: &crate::meander::MeanderOptions) -> PairMatchReport {
+    let reports: Vec<PairReport> = pairs.iter().map(|d| pair_report(board, d)).collect();
+    let mean = |r: &PairReport| (r.len_p + r.len_n) / 2.0;
+    let routed = |r: &PairReport| r.len_p > 0.0 && r.len_n > 0.0;
+    let longest = reports.iter().filter(|r| routed(r)).map(mean).fold(0.0, f64::max);
+    let target = target.map_or(longest, |t| t.max(longest));
+    let mut out = PairMatchReport { target, pairs: vec![] };
+    for (d, r) in pairs.iter().zip(&reports) {
+        let res = if !routed(r) {
+            Err(format!("差動ペア {} は、両方の線が配線されてから長さを合わせます", d.name))
+        } else if target - mean(r) < 0.01 {
+            Ok(0.0)
+        } else {
+            let extra = target - mean(r);
+            let snapshot = board.clone();
+            let done = crate::meander::tune_net(board, &d.p, extra, opts).and_then(|a| crate::meander::tune_net(board, &d.n, extra, opts).map(|b| (a + b) / 2.0));
+            if done.is_err() {
+                *board = snapshot;
+            }
+            done
+        };
+        out.pairs.push((d.name.clone(), mean(r), res));
+    }
+    out
+}
+
 /// Length of a polyline of tracks (for tests and the panel).
 pub fn total_length(tracks: &[Track]) -> f64 {
     tracks.iter().map(seg_len).sum()

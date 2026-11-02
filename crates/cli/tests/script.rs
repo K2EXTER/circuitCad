@@ -1714,3 +1714,31 @@ fn heattran_warms_a_part_by_the_pulse_not_by_the_steady_state() {
     let (_, ok) = run(&format!("{head}heattran 1.1 parts=R1 couple=R1:R9:50\n"));
     assert!(!ok);
 }
+
+/// `board matchpairs` brings the shorter differential pair to the length of the longer one, on both lines.
+#[test]
+fn matchpairs_lengthens_the_shorter_pair() {
+    use pcb_core::diffpair::DiffPair;
+    use pcb_core::model::*;
+    let mut b = Board::new("t", 60.0, 40.0);
+    for (name, y, len) in [("D1", 10.0, 40.0), ("D2", 25.0, 30.0)] {
+        for (net, dy) in [(format!("{name}_P"), 0.0), (format!("{name}_N"), 0.4)] {
+            for x in [5.0, 5.0 + len] {
+                let mut p = Pad::new(Point::new(x, y + dy), PadShape::Rect { w: 0.3, h: 0.3 }, None, Side::Top);
+                p.net = net.clone();
+                b.pads.push(p);
+            }
+            b.tracks.push(Track { side: Side::Top, a: Point::new(5.0, y + dy), b: Point::new(5.0 + len, y + dy), width: 0.2 });
+        }
+        b.diff_pairs.push(DiffPair::new(name, &format!("{name}_P"), &format!("{name}_N")));
+    }
+    let path = std::env::temp_dir().join(format!("ccad-matchpairs-{}.pcbjson", std::process::id()));
+    std::fs::write(&path, serde_json::to_string(&b).unwrap()).unwrap();
+    let (a, ok) = run(&format!("board open {}\nboard matchpairs\nboard matchpairs pairs=NOPE\n", path.display()));
+    assert!(!ok, "a pair name that does not exist is an error: {a:?}");
+    let first = a.iter().find(|v| v["target_mm"].is_number()).expect("an answer");
+    assert!((first["target_mm"].as_f64().unwrap() - 40.0).abs() < 1e-6, "{first}");
+    let added = first["pairs"][1]["added_mm"].as_f64().expect("D2 was lengthened");
+    assert!((added - 10.0).abs() < 0.3, "{first}");
+    std::fs::remove_file(&path).ok();
+}

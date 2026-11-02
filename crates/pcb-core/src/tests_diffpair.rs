@@ -137,3 +137,61 @@ fn a_pair_is_routed_side_by_side() {
         assert!(pair_report(&b2, &pair).skew <= rep.skew + 1e-9);
     }
 }
+
+/// Two pairs side by side on one board: D1 is 40mm long, D2 is `len2` mm long (both lines of a pair equally long).
+fn two_pairs(len2: f64) -> Board {
+    let mut b = Board::new("t", 60.0, 40.0);
+    for (name, y, len) in [("D1", 10.0, 40.0), ("D2", 25.0, len2)] {
+        let (p, n) = (format!("{name}_P"), format!("{name}_N"));
+        pad(&mut b, 5.0, y, &p);
+        pad(&mut b, 5.0, y + 0.4, &n);
+        pad(&mut b, 5.0 + len, y, &p);
+        pad(&mut b, 5.0 + len, y + 0.4, &n);
+        line(&mut b, (5.0, y), (5.0 + len, y));
+        line(&mut b, (5.0, y + 0.4), (5.0 + len, y + 0.4));
+        b.diff_pairs.push(DiffPair::new(name, &p, &n));
+    }
+    b
+}
+
+#[test]
+fn a_shorter_pair_is_brought_to_the_length_of_the_longest_on_both_lines() {
+    let mut b = two_pairs(30.0);
+    let pairs = b.diff_pairs.clone();
+    let before = drc::check(&b).len();
+    let opts = crate::meander::MeanderOptions::default();
+    let r = match_pairs(&mut b, &pairs, None, &opts);
+    assert!((r.target - 40.0).abs() < 1e-9, "{r:?}");
+    assert!(r.pairs[0].2.as_ref().is_ok_and(|a| *a == 0.0), "the longest pair is left: {r:?}");
+    let added = r.pairs[1].2.as_ref().expect("D2 was tuned");
+    assert!((added - 10.0).abs() < 0.3, "{added}");
+    for d in &pairs {
+        let rep = pair_report(&b, d);
+        assert!((rep.len_p - 40.0).abs() < 0.3 && (rep.len_n - 40.0).abs() < 0.3, "{}: {rep:?}", d.name);
+        assert!(rep.skew < 0.1, "{}: the difference inside the pair stays small: {rep:?}", d.name);
+    }
+    assert!(drc::check(&b).len() <= before, "{:?}", drc::check(&b));
+    assert!(ratsnest::ratsnest(&b).is_empty());
+}
+
+#[test]
+fn a_pair_that_cannot_be_tuned_is_left_as_it_was() {
+    // D2 is 3mm long: no straight run for a serpentine, and 37mm to make up
+    let mut b = two_pairs(3.0);
+    let pairs = b.diff_pairs.clone();
+    let tracks = b.tracks.clone();
+    let r = match_pairs(&mut b, &pairs, None, &crate::meander::MeanderOptions::default());
+    assert!(r.pairs[1].2.is_err(), "{r:?}");
+    let same = b.tracks.len() == tracks.len() && b.tracks.iter().zip(&tracks).all(|(x, y)| x.a == y.a && x.b == y.b && x.width == y.width);
+    assert!(same, "neither line of the failed pair was touched");
+}
+
+#[test]
+fn a_pair_with_one_line_unrouted_is_skipped_and_does_not_set_the_target() {
+    let mut b = two_pairs(30.0);
+    b.tracks.remove(1); // D1's N line
+    let pairs = b.diff_pairs.clone();
+    let r = match_pairs(&mut b, &pairs, None, &crate::meander::MeanderOptions::default());
+    assert!(r.pairs[0].2.is_err(), "{r:?}");
+    assert!((r.target - 30.0).abs() < 1e-9, "{r:?}");
+}
