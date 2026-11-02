@@ -655,6 +655,37 @@ fn board_class_makes_lists_and_removes_classes() {
     assert!(a.iter().any(|v| v["ok"] == false && v["error"].as_str().is_some_and(|e| e.contains("thinner"))), "{a:?}");
 }
 
+/// `board class NAME except=NET from=X,Y to=X,Y` keeps a stretch at its own width; the class lists it, and `except_clear` takes it away.
+#[test]
+fn board_class_width_exceptions() {
+    let (a, ok) = run("board new 40 30
+board track add 5,5 15,5 width=0.5 float=1
+board class pw width=0.5 nets=A except=A from=5,5 to=15,5 except_width=0.2
+");
+    assert!(ok, "{a:?}");
+    let c = last(&a, "board");
+    let e = c["width_exceptions"].as_array().unwrap();
+    assert_eq!(e.len(), 1, "{c}");
+    assert_eq!(e[0]["width"], 0.2);
+    assert_eq!(e[0]["net"], "A");
+    let (a, _) = run("board new 40 30
+board class pw nets=A except_clear=A
+board class pw except=B from=1,1 to=2,2 except_width=0.2
+");
+    assert!(a.iter().any(|v| v["ok"] == false && v["error"].as_str().is_some_and(|e| e.contains("not in the class"))), "{a:?}");
+    let (a, _) = run("board new 40 30
+board class pw nets=A
+board class pw except=A from=1,1 to=2,2
+");
+    assert!(a.iter().any(|v| v["ok"] == false && v["error"].as_str().is_some_and(|e| e.contains("except_width"))), "{a:?}");
+    let (a, ok) = run("board new 40 30
+board class pw nets=A except=A from=1,1 to=2,2 except_width=0.2
+board class pw except_clear=A
+");
+    assert!(ok, "{a:?}");
+    assert_eq!(last(&a, "board")["width_exceptions"].as_array().unwrap().len(), 0);
+}
+
 /// `board impedance` gives the impedance of a width and the width of an impedance, for a track and for a pair.
 #[test]
 fn board_impedance_goes_both_ways() {

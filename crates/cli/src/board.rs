@@ -701,7 +701,7 @@ impl Session {
                 let (pos, kv) = options(rest);
                 let board = self.board_mut()?;
                 let Some(name) = pos.first() else {
-                    let list: Vec<Value> = board.net_classes.iter().map(|c| json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length})).collect();
+                    let list: Vec<Value> = board.net_classes.iter().map(|c| class_json(c)).collect();
                     return Ok(obj(json!({"classes": list})));
                 };
                 if opt(&kv, "remove") == Some("1") {
@@ -778,8 +778,40 @@ impl Session {
                     }
                     board.net_classes[k].nets = nets;
                 }
+                // width exceptions: `except=NET from=X,Y to=X,Y [except_width=mm]` keeps the tracks along that stretch out of the width checks and the
+                // slider (without except_width, with the width of a track that lies along it); `except_clear=NET` takes all of that net's away
+                if let Some(net) = opt(&kv, "except_clear") {
+                    board.net_classes[k].width_exceptions.retain(|e| e.net != net);
+                }
+                if let Some(net) = opt(&kv, "except") {
+                    if !board.net_classes[k].nets.iter().any(|n| n == net) {
+                        return Err(format!("except={net}: the net is not in the class {name} (nets=...)"));
+                    }
+                    let point = |key: &str| -> Result<pcb_core::Point, String> {
+                        let v = opt(&kv, key).ok_or_else(|| format!("except={net} needs from=X,Y to=X,Y"))?;
+                        let (x, y) = v.split_once(',').ok_or_else(|| format!("{key}={v}: use X,Y in mm"))?;
+                        Ok(pcb_core::Point::new(num(x)?, num(y)?))
+                    };
+                    let (a, b) = (point("from")?, point("to")?);
+                    let mut e = pcb_core::WidthException { net: net.to_string(), a, b, width: 0.0 };
+                    let along: Vec<usize> = (0..board.tracks.len()).filter(|&i| e.covers(&board.tracks[i])).collect();
+                    e.width = match opt(&kv, "except_width") {
+                        Some(w) => {
+                            let w = num(w)?;
+                            if w + 1e-9 < floor.min_track_width {
+                                return Err(format!("except_width={w}: thinner than the board's minimum track width {} mm", floor.min_track_width));
+                            }
+                            for &i in &along {
+                                board.tracks[i].width = w;
+                            }
+                            w
+                        }
+                        None => along.first().map(|&i| board.tracks[i].width).ok_or("no track lies along from..to: give except_width=mm")?,
+                    };
+                    board.net_classes[k].width_exceptions.push(e);
+                }
                 let c = &board.net_classes[k];
-                Ok(obj(json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length})))
+                Ok(obj(class_json(c)))
             }
             "labels" => {
                 // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or
@@ -1171,4 +1203,10 @@ fn quality_json(q: &pcb_core::quality::Quality) -> Value {
         "other_angle_mm": r1(q.other_angle),
         "side_by_side_mm": r1(q.side_by_side),
     })
+}
+
+/// A net class as the commands answer it.
+fn class_json(c: &pcb_core::NetClass) -> Value {
+    let exceptions: Vec<Value> = c.width_exceptions.iter().map(|e| json!({"net": e.net, "from": [e.a.x, e.a.y], "to": [e.b.x, e.b.y], "width": e.width})).collect();
+    json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length, "width_exceptions": exceptions})
 }
