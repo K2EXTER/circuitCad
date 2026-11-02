@@ -743,3 +743,76 @@ fn the_74hc_gates_have_swap_rules_even_from_a_library_copy_without_them() {
     assert!(swap_for("74HC4017", &[]).is_none(), "a counter has no alike gates");
     assert!(swap_for("NE555", &[]).is_none());
 }
+
+const LEGACY_LIB: &str = "EESchema-LIBRARY Version 2.3  Date: 21-02-2013 11:13:20
+#encoding utf-8
+#
+# 1N4148TR
+#
+DEF 1N4148TR U 0 10 Y Y 1 F N
+F0 \"U\" 900 400 60 H V C CNN
+F1 \"1N4148TR\" 900 300 60 H V C CNN
+F2 \"SOD27_FAS\" 900 240 60 H I C CNN
+F3 \"~\" 0 0 60 H V C CNN
+$FPLIST
+ SOD27_FAS
+$ENDFPLIST
+DRAW
+X 1 1 0 0 300 R 59 59 1 1 U
+X 2 2 1800 0 300 L 59 59 1 1 U
+P 2 1 1 5 300 200 300 -200 N
+ENDDRAW
+ENDDEF
+#
+#End Library
+";
+
+#[test]
+fn kicad_legacy_lib_pins_and_fields() {
+    let s = kicad::parse_symbol_file(LEGACY_LIB).unwrap();
+    assert_eq!(s.len(), 1);
+    assert_eq!((s[0].name.as_str(), s[0].prefix.as_str(), s[0].footprint.as_str(), s[0].datasheet.as_str()), ("1N4148TR", "U", "SOD27_FAS", ""));
+    // the pin that points right from its connection point is on the left of the body
+    assert_eq!(s[0].pins.iter().map(|p| (p.number.as_str(), p.side)).collect::<Vec<_>>(), [("1", Some(sch_core::PinSide::Left)), ("2", Some(sch_core::PinSide::Right))]);
+    assert!(kicad::parse_legacy_lib("(kicad_symbol_lib)").is_err());
+    let p = kicad::to_part(&s[0], None).unwrap();
+    assert!(p.validate().iter().all(|i| !i.error));
+}
+
+#[test]
+fn kicad_package_zip_is_read() {
+    use std::io::Write;
+    let dir = std::env::temp_dir().join(format!("ccad_kicad_zip_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("pkg.zip");
+    let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    let o = zip::write::SimpleFileOptions::default();
+    z.start_file("KiCAD/x.lib", o).unwrap();
+    z.write_all(LEGACY_LIB.as_bytes()).unwrap();
+    z.start_file("KiCAD/footprints.pretty/FP.kicad_mod", o).unwrap();
+    z.write_all(b"(module FP (pad 1 thru_hole rect (at 0 0) (size 1 1) (drill 0.6)) (pad 2 thru_hole circle (at 5 0) (size 1 1) (drill 0.6)))").unwrap();
+    z.start_file("KiCAD/notes.txt", o).unwrap();
+    z.write_all(b"x").unwrap();
+    z.finish().unwrap();
+    let pkg = kicad::read_package(&path).unwrap();
+    assert_eq!((pkg.symbols.len(), pkg.footprints.len(), pkg.step.is_none()), (1, 1, true));
+    assert_eq!(kicad::pick_footprint(&pkg.symbols[0], &pkg.footprints), Some(0));
+    let part = kicad::to_part(&pkg.symbols[0], pkg.footprints.first()).unwrap();
+    assert!(part.validate().iter().all(|i| !i.error));
+    std::fs::remove_dir_all(&dir).ok();
+    assert!(kicad::read_package(&dir.join("none.zip")).is_err());
+}
+
+/// Reads the maker's zip named by CCAD_KICAD_ZIP (Ultra Librarian / SnapEDA, "KiCad" chosen):
+/// `CCAD_KICAD_ZIP=<file.zip> cargo test -p part-lib import_downloaded_kicad_zip -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn import_downloaded_kicad_zip() {
+    let pkg = kicad::read_package(std::path::Path::new(&std::env::var("CCAD_KICAD_ZIP").expect("CCAD_KICAD_ZIP"))).unwrap();
+    for s in &pkg.symbols {
+        let fp = kicad::pick_footprint(s, &pkg.footprints).map(|i| &pkg.footprints[i]);
+        let part = kicad::to_part(s, fp).unwrap();
+        println!("{} pins {:?} footprint {:?} step {:?} warnings {:?}", s.name, s.pins.iter().map(|p| (&p.number, &p.name, p.side)).collect::<Vec<_>>(), part.footprint_name, pkg.step.as_ref().map(|s| &s.0), pkg.warnings);
+        assert!(part.validate().iter().all(|i| !i.error), "{:?}", part.validate());
+    }
+}

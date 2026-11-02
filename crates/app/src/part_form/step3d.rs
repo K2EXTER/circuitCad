@@ -131,6 +131,22 @@ impl PartForm {
     }
 }
 
+/// The 3D shape of a part from the bytes of a STEP file: thinned out, stood on the board and centred over the pads of the part's
+/// footprint (as the form does it before the shape is turned by hand). For an import that has no form.
+pub(crate) fn mesh_over_pads(bytes: &[u8], def: &PartDef) -> Result<Mesh3d, String> {
+    let m = thin_out(pcb_core::step::read_step(bytes)?, KEEP_TRIANGLES);
+    let (lo, hi) = m.bounds().ok_or("3D の形が空です")?;
+    let (cx, cy) = match def.footprint() {
+        Ok(fp) if !fp.pads.is_empty() => {
+            let (x0, x1) = fp.pads.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p.pos.x), a.1.max(p.pos.x)));
+            let (y0, y1) = fp.pads.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p.pos.y), a.1.max(p.pos.y)));
+            ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+        }
+        _ => (0.0, 0.0),
+    };
+    Ok(m.shifted([cx - (lo[0] + hi[0]) / 2.0, cy - (lo[1] + hi[1]) / 2.0, -lo[2]]))
+}
+
 /// The mesh with at most about `keep` triangles: the vertices are snapped to a grid that gets coarser until it fits, and
 /// the triangles that fall flat are dropped. A preview needs the outline, not every facet.
 pub(crate) fn thin_out(mesh: Mesh3d, keep: usize) -> Mesh3d {

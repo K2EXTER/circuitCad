@@ -321,6 +321,7 @@ mod trial;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use step3d::mesh_over_pads;
 use checklist::*;
 use parse::*;
 

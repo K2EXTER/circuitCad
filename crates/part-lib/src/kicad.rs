@@ -156,6 +156,26 @@ fn collect_pins(sym: &Node, out: &mut Vec<(PinSide, f64, f64, String, String)>) 
     }
 }
 
+/// Pins as (side, x, y, number, name): top to bottom on the left/right, left to right on the top/bottom, as the part file lists them.
+/// A pin number that came twice (another unit of the same part) is kept once.
+fn ordered_pins(raw: Vec<(PinSide, f64, f64, String, String)>) -> Vec<PinDef> {
+    let mut seen = std::collections::HashSet::new();
+    let mut v: Vec<_> = raw.into_iter().filter(|r| seen.insert(r.3.clone())).collect();
+    v.sort_by(|a, b| {
+        let rank = |s: PinSide| match s {
+            PinSide::Left => 0,
+            PinSide::Right => 1,
+            PinSide::Top => 2,
+            PinSide::Bottom => 3,
+        };
+        rank(a.0).cmp(&rank(b.0)).then_with(|| match a.0 {
+            PinSide::Left | PinSide::Right => b.2.total_cmp(&a.2),
+            _ => a.1.total_cmp(&b.1),
+        })
+    });
+    v.into_iter().map(|(side, _, _, number, name)| PinDef { number, name, side: Some(side), sim_only: false }).collect()
+}
+
 fn prop<'a>(sym: &'a Node, key: &str) -> &'a str {
     sym.find_all("property").find(|p| p.arg(0) == Some(key)).and_then(|p| p.arg(1)).unwrap_or("")
 }
@@ -181,22 +201,7 @@ fn symbol_of(all: &[&Node], sym: &Node, depth: usize) -> Option<KicadSymbol> {
     let pins = if let Some(p) = &parent_sym {
         p.pins.clone()
     } else {
-        // Top to bottom on the left/right, left to right on the top/bottom, as the part file lists them.
-        let mut seen = std::collections::HashSet::new();
-        let mut v: Vec<_> = raw.into_iter().filter(|r| seen.insert(r.3.clone())).collect();
-        v.sort_by(|a, b| {
-            let rank = |s: PinSide| match s {
-                PinSide::Left => 0,
-                PinSide::Right => 1,
-                PinSide::Top => 2,
-                PinSide::Bottom => 3,
-            };
-            rank(a.0).cmp(&rank(b.0)).then_with(|| match a.0 {
-                PinSide::Left | PinSide::Right => b.2.total_cmp(&a.2),
-                _ => a.1.total_cmp(&b.1),
-            })
-        });
-        v.into_iter().map(|(side, _, _, number, name)| PinDef { number, name, side: Some(side), sim_only: false }).collect()
+        ordered_pins(raw)
     };
     let nonempty = |s: &str, fallback: &str| if s.is_empty() { fallback.to_string() } else { s.to_string() };
     Some(KicadSymbol {
@@ -223,6 +228,118 @@ pub fn parse_symbols(text: &str) -> Result<Vec<KicadSymbol>, String> {
         return Err("取り込める部品 (ピンのあるシンボル) がありません".into());
     }
     Ok(v)
+}
+
+// ---------------------------------------------------------------- legacy `.lib` symbols
+
+/// The words of a line of a legacy library; a double-quoted word may hold spaces.
+fn words(line: &str) -> Vec<String> {
+    let (mut out, mut cur, mut quoted, mut any) = (vec![], String::new(), false, false);
+    for c in line.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                any = true;
+            }
+            c if c.is_whitespace() && !quoted => {
+                if any || !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                    any = false;
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if any || !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// A legacy (KiCad 4/5, `EESchema-LIBRARY`) `.lib` file, which Ultra Librarian and SnapEDA write for KiCad: the pins (`X` lines) and the
+/// fields. The drawing is not taken; the units are merged as for `.kicad_sym`.
+pub fn parse_legacy_lib(text: &str) -> Result<Vec<KicadSymbol>, String> {
+    if !text.trim_start().starts_with("EESchema-LIBRARY") {
+        return Err("KiCad の旧形式のシンボルライブラリ (.lib) ではありません".into());
+    }
+    let mut out = vec![];
+    // the part being read, and its pins
+    let mut cur: Option<(KicadSymbol, Vec<(PinSide, f64, f64, String, String)>)> = None;
+    let mut in_draw = false;
+    for line in text.lines() {
+        let w = words(line);
+        let Some(head) = w.first().map(String::as_str) else { continue };
+        match head {
+            "DEF" if w.len() >= 8 => {
+                let prefix: String = w[2].chars().take_while(|c| c.is_ascii_alphabetic() || *c == '#').collect();
+                // power symbols (#PWR ...) are not parts
+                cur = (!prefix.starts_with('#')).then(|| {
+                    let name = w[1].trim_start_matches('~').to_string();
+                    let sym = KicadSymbol {
+                        value: name.clone(),
+                        name,
+                        prefix: if prefix.is_empty() { "U".into() } else { prefix },
+                        description: String::new(),
+                        datasheet: String::new(),
+                        footprint: String::new(),
+                        pins: vec![],
+                        units: w[7].parse().unwrap_or(1),
+                    };
+                    (sym, vec![])
+                });
+                in_draw = false;
+            }
+            "DRAW" => in_draw = true,
+            "ENDDRAW" => in_draw = false,
+            "ENDDEF" => {
+                if let Some((mut sym, raw)) = cur.take() {
+                    sym.pins = ordered_pins(raw);
+                    if !sym.pins.is_empty() {
+                        out.push(sym);
+                    }
+                }
+                in_draw = false;
+            }
+            "X" if in_draw && w.len() >= 7 => {
+                let Some((_, pins)) = cur.as_mut() else { continue };
+                // X name number x y length orientation ...: the orientation is the way the pin points from its connection point
+                let (Ok(x), Ok(y)) = (w[3].parse::<f64>(), w[4].parse::<f64>()) else { continue };
+                let number = w[2].trim().to_string();
+                if number.is_empty() || number == "~" {
+                    continue;
+                }
+                let name = w[1].trim_start_matches('~');
+                let name = if name.is_empty() { number.clone() } else { name.to_string() };
+                let side = match w[6].as_str() {
+                    "R" => PinSide::Left,
+                    "L" => PinSide::Right,
+                    "U" => PinSide::Bottom,
+                    _ => PinSide::Top,
+                };
+                pins.push((side, x, y, number, name));
+            }
+            h if !in_draw && h.len() == 2 && h.starts_with('F') && w.len() >= 2 => {
+                let Some((sym, _)) = cur.as_mut() else { continue };
+                let value = w[1].trim_matches('~').to_string();
+                match &h[1..] {
+                    "1" if !value.is_empty() => sym.value = value,
+                    "2" => sym.footprint = value,
+                    "3" => sym.datasheet = value,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    if out.is_empty() {
+        return Err("取り込める部品 (ピンのあるシンボル) がありません".into());
+    }
+    Ok(out)
+}
+
+/// The symbols of a `.kicad_sym` or a legacy `.lib` file, whichever it is.
+pub fn parse_symbol_file(text: &str) -> Result<Vec<KicadSymbol>, String> {
+    if text.trim_start().starts_with("EESchema-LIBRARY") { parse_legacy_lib(text) } else { parse_symbols(text) }
 }
 
 // ---------------------------------------------------------------- footprints
@@ -406,4 +523,80 @@ pub fn to_part(sym: &KicadSymbol, fp: Option<&KicadFootprint>) -> Result<PartDef
         model3d: None,
         swap: None,
     })
+}
+
+// ---------------------------------------------------------------- a maker's zip
+
+/// What a library-maker's zip (Ultra Librarian, SnapEDA ... with "KiCad" chosen) holds.
+#[derive(Clone, Debug, Default)]
+pub struct KicadPackage {
+    pub symbols: Vec<KicadSymbol>,
+    pub footprints: Vec<KicadFootprint>,
+    /// The 3D model (file name, bytes), when the zip has one (the makers add it only when it was asked for at the download).
+    pub step: Option<(String, Vec<u8>)>,
+    /// Files of the zip that could not be read.
+    pub warnings: Vec<String>,
+}
+
+/// The largest file read from a zip (a STEP file is the big one).
+const MAX_ENTRY: u64 = 64 << 20;
+
+/// Reads the symbols (`.kicad_sym` or legacy `.lib`), footprints (`.kicad_mod`) and the STEP model of a zip.
+pub fn read_package(path: &std::path::Path) -> Result<KicadPackage, String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|e| format!("zip を開けませんでした: {e}"))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("zip として読めませんでした: {e}。ダウンロードした zip をそのまま選んでください"))?;
+    let mut pkg = KicadPackage::default();
+    for i in 0..zip.len() {
+        let Ok(f) = zip.by_index(i) else { continue };
+        let name = f.name().to_string();
+        let base = name.rsplit('/').next().unwrap_or(&name).to_string();
+        if f.is_dir() || name.starts_with("__MACOSX") || base.starts_with("._") {
+            continue;
+        }
+        let ext = base.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+        if !matches!(ext.as_str(), "kicad_sym" | "lib" | "kicad_mod" | "step" | "stp") {
+            continue;
+        }
+        if f.size() > MAX_ENTRY {
+            pkg.warnings.push(format!("{base} は大きすぎるので読みませんでした"));
+            continue;
+        }
+        let mut bytes = vec![];
+        if f.take(MAX_ENTRY).read_to_end(&mut bytes).is_err() {
+            pkg.warnings.push(format!("{base} を読めませんでした"));
+            continue;
+        }
+        match ext.as_str() {
+            "step" | "stp" => {
+                if pkg.step.is_none() {
+                    pkg.step = Some((base, bytes));
+                }
+            }
+            "kicad_mod" => match parse_footprint(&String::from_utf8_lossy(&bytes)) {
+                Ok(fp) => pkg.footprints.push(fp),
+                Err(e) => pkg.warnings.push(format!("{base}: {e}")),
+            },
+            // a `.lib` that is not a symbol library (a SPICE library, say) is passed over
+            _ => match parse_symbol_file(&String::from_utf8_lossy(&bytes)) {
+                Ok(s) => pkg.symbols.extend(s),
+                Err(e) if ext == "kicad_sym" => pkg.warnings.push(format!("{base}: {e}")),
+                Err(_) => {}
+            },
+        }
+    }
+    if pkg.symbols.is_empty() {
+        return Err("この zip には KiCad のシンボル (.kicad_sym か、旧形式の .lib) が見つかりませんでした。ダウンロードのとき、形式に「KiCad」を選んだ zip を選んでください".into());
+    }
+    Ok(pkg)
+}
+
+/// The footprint of the package that goes with a symbol: the only one there is, or the one named as the symbol asks for it (or as the
+/// symbol is called).
+pub fn pick_footprint(sym: &KicadSymbol, fps: &[KicadFootprint]) -> Option<usize> {
+    if fps.len() == 1 {
+        return Some(0);
+    }
+    let asked = sym.footprint.rsplit(':').next().unwrap_or("");
+    fps.iter().position(|f| !asked.is_empty() && f.name.eq_ignore_ascii_case(asked)).or_else(|| fps.iter().position(|f| f.name.eq_ignore_ascii_case(&sym.name)))
 }

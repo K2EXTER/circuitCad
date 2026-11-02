@@ -360,7 +360,7 @@ impl SchEditor {
             if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
                 self.import_part_json();
             }
-            if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
+            if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます").clicked() {
                 self.open_kicad_import();
             }
         });
