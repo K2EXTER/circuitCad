@@ -249,7 +249,7 @@ impl PartForm {
     pub(super) fn tab_pins(&mut self, ui: &mut egui::Ui) {
             if self.sheet.has_doc() {
                 ui.horizontal(|ui| {
-                    if ui.button("PDFのピン表を囲んで取り込む").on_hover_text("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます。置き換えと、あとに足すが選べます").clicked() {
+                    if ui.button("PDFのピン表を囲んで取り込む・比べる").on_hover_text("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します").clicked() {
                         self.pick_msg = None;
                         self.sheet.start_pin_select();
                     }
@@ -260,6 +260,7 @@ impl PartForm {
             }
             crate::icons::help_label(ui, "ピン (1行に「番号 名前 [向き]」)", "ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
             ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
+            self.pin_check_ui(ui);
     }
 
     /// The tab of the board shape: package, thermal pad, body, extra pads and holes.
@@ -312,22 +313,9 @@ impl PartForm {
                 }
             });
             {
-                use datasheet_view::Target as T;
-                let mut targets = match self.pkg {
-                    PkgKind::Chip2 => vec![T::Pitch, T::PadLen, T::PadWidth],
-                    PkgKind::Dual if self.tht => vec![T::Pitch, T::Row, T::PadLen, T::PadWidth, T::Drill],
-                    PkgKind::Dual => vec![T::Pitch, T::Row, T::PadLen, T::PadWidth],
-                    PkgKind::Quad => vec![T::Pitch, T::Span, T::PadLen, T::PadWidth],
-                    PkgKind::Row => vec![T::Pitch, T::PadDia, T::Drill],
-                };
-                targets.push(T::Height);
-                if self.body_on {
-                    targets.push(T::BodyW);
-                    if !self.body_circle {
-                        targets.push(T::BodyH);
-                    }
-                }
+                let targets = self.package_targets();
                 self.pick_row(ui, &targets);
+                self.dim_check_ui(ui);
             }
             if self.pkg == PkgKind::Row {
                 self.thru_ui(ui);

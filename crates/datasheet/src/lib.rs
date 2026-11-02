@@ -7,13 +7,15 @@ use hayro::{PixmapSettings, RenderCache, RenderSettings, render};
 use std::cell::OnceCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+mod dimensions;
 mod headings;
 mod pin_table;
 mod suggest;
 mod text;
 mod value;
 pub use headings::{HEADINGS, Heading};
-pub use pin_table::{Table, guess_columns, pin_lines, pins_from, read_table};
+pub use dimensions::{Found, PageLength, find_length};
+pub use pin_table::{PinCompare, PinDiff, PinDiffKind, Table, compare_pins, guess_columns, pin_lines, pins_from, read_table};
 pub use suggest::looks_like_part_number;
 pub use text::{Hit, Query, Rect, Word, normalize};
 pub use value::{Converted, Quantity, Value, convert, is_unit_word, parse_value};
@@ -94,6 +96,17 @@ impl Datasheet {
     /// The words of a page inside a rectangle, as a table (for the pin table of a part).
     pub fn table_in(&self, page: usize, area: Rect) -> Table {
         read_table(self.words(page), area)
+    }
+
+    /// The numbers of a page that can be lengths (in millimetres, or as inches when no unit is written).
+    pub fn lengths_on(&self, page: usize) -> Vec<PageLength> {
+        dimensions::lengths(self.words(page))
+    }
+
+    /// The pages that have a drawing of the land pattern or of the package (not the table of contents).
+    pub fn dimension_pages(&self) -> Vec<usize> {
+        let queries: Vec<Query> = [Heading::LandPattern, Heading::Package].into_iter().flat_map(Heading::queries).collect();
+        (0..self.pages).filter(|&p| self.search_page_any(p, &queries).iter().any(|h| !h.in_contents)).collect()
     }
 
     /// The unit written right after a word on its line ("mm" after "0.65"), if there is one.
@@ -292,6 +305,22 @@ mod tests {
         assert_eq!(t.columns, 4, "{t:?}");
         assert_eq!(guess_columns(&t), Some((1, 0)));
         assert_eq!(pin_lines(&pins_from(&t, 1, 0)), "1 VIN\n2 GND\n3 OUT");
+    }
+
+    #[test]
+    fn lengths_of_a_land_pattern_page_are_read_with_their_units() {
+        let content = "BT /F1 8 Tf 10 85 Td (Recommended Land Pattern) Tj 0 -14 Td (1.27) Tj 30 0 Td (0.60 mm) Tj -30 -14 Td (0.050) Tj 30 0 Td (5.7 A) Tj 40 0 Td (4.0-5.0) Tj ET";
+        let d = Datasheet::open(pdf_with(content, HELVETICA)).unwrap();
+        assert_eq!(d.dimension_pages(), [0]);
+        let l = d.lengths_on(0);
+        // 1.27 is itself, or inches; 0.60 mm is mm; 0.050 may be inches; 5.7 A is not a length; a range gives both ends
+        assert!(find_length(&l, 1.27).is_some());
+        assert!(find_length(&l, 0.6).is_some());
+        assert!(find_length(&l, 0.050 * 25.4).is_some());
+        assert!(find_length(&l, 5.7).is_none());
+        assert!(find_length(&l, 4.0).is_some() && find_length(&l, 5.0).is_some());
+        // a page without such a heading is not a land pattern page
+        assert!(Datasheet::open(text_pdf()).unwrap().dimension_pages().is_empty());
     }
 
     #[test]

@@ -33,10 +33,12 @@ pub enum Target {
     MaxV,
     MaxI,
     MaxP,
+    ThermalW,
+    ThermalH,
 }
 
 impl Target {
-    pub const ALL: [Target; 14] = [
+    pub const ALL: [Target; 16] = [
         Target::Name,
         Target::Pitch,
         Target::Row,
@@ -51,6 +53,8 @@ impl Target {
         Target::MaxV,
         Target::MaxI,
         Target::MaxP,
+        Target::ThermalW,
+        Target::ThermalH,
     ];
 
     pub fn from_label(label: &str) -> Option<Target> {
@@ -73,6 +77,8 @@ impl Target {
             Target::MaxV => "最大電圧",
             Target::MaxI => "最大電流",
             Target::MaxP => "最大電力",
+            Target::ThermalW => "放熱パッドの幅",
+            Target::ThermalH => "放熱パッドの長さ",
         }
     }
 
@@ -102,6 +108,14 @@ pub struct Picked {
     pub page: usize,
 }
 
+/// The numbers of the pages that have a land pattern or package drawing.
+pub struct DimensionPages {
+    pub pages: Vec<usize>,
+    pub lengths: Vec<(usize, Vec<datasheet::PageLength>)>,
+    /// No page had such a heading, so the page that was shown was used.
+    pub fallback: bool,
+}
+
 /// What the first pages suggest, for a person to pick from.
 pub struct Candidates {
     pub names: Vec<String>,
@@ -111,6 +125,8 @@ pub struct Candidates {
 #[derive(Default)]
 pub struct SheetView {
     open: bool,
+    /// The pins in the form now, as (number, name), set by the form every frame (the pin table window compares them).
+    current_pins: Vec<(String, String)>,
     doc: Option<Opened>,
     /// Why the last file could not be opened.
     msg: String,
@@ -236,6 +252,36 @@ impl SheetView {
         }
     }
 
+    /// The form tells the window which pins it has now.
+    pub fn set_current_pins(&mut self, pins: Vec<(String, String)>) {
+        self.current_pins = pins;
+    }
+
+    /// A table cut out of a page again (the same rectangle as when it was accepted).
+    pub fn table_at(&self, page: usize, area: Rect) -> Option<datasheet::Table> {
+        self.doc.as_ref().map(|d| d.ds.table_in(page, area))
+    }
+
+    /// The numbers on the pages that have a land pattern or package drawing, for checking the dimensions typed in:
+    pub fn dimension_lengths(&self) -> Option<DimensionPages> {
+        let d = self.doc.as_ref()?;
+        let mut pages = d.ds.dimension_pages();
+        let fallback = pages.is_empty();
+        if fallback {
+            pages = vec![d.page];
+        }
+        let lengths = pages.iter().map(|&p| (p, d.ds.lengths_on(p))).collect();
+        Some(DimensionPages { pages, lengths, fallback })
+    }
+
+    /// Shows a page (a result of a check is looked at).
+    pub fn go_to_page(&mut self, page: usize) {
+        if let Some(d) = self.doc.as_mut() {
+            d.page = page.min(d.ds.page_count() - 1);
+            self.open = true;
+        }
+    }
+
     /// The pins the person accepted since the last call.
     pub fn take_pins(&mut self) -> Option<PinImport> {
         self.doc.as_mut().and_then(|d| d.pins_out.take())
@@ -306,17 +352,19 @@ impl SheetView {
             d.selecting = false;
         }
         // the window that checks the pins read from the rectangle
+        let current = &self.current_pins;
         if let Some(d) = self.doc.as_mut()
             && let Some(panel) = d.panel.as_mut()
         {
             let mut keep = true;
             let mut action = Action::None;
             egui::Window::new("ピン表の取り込み").open(&mut keep).default_size([440.0, 460.0]).resizable(true).show(ctx, |ui| {
-                action = panel.ui(ui);
+                action = panel.ui(ui, current);
             });
             match action {
-                Action::Apply { append } => {
-                    d.pins_out = Some(PinImport { lines: panel.text.clone(), page: panel.page, append });
+                Action::Apply(mode) => {
+                    let (num_col, name_col) = panel.columns();
+                    d.pins_out = Some(PinImport { lines: panel.text.clone(), mode, page: panel.page, area: panel.area, num_col, name_col });
                     d.panel = None;
                 }
                 Action::Cancel => d.panel = None,
@@ -462,7 +510,7 @@ impl Opened {
                     // a click or a speck is not a table
                     if b.x - a.x > 20.0 && b.y - a.y > 10.0 {
                         let area = Rect { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
-                        self.panel = Some(TablePanel::new(self.page, self.ds.table_in(self.page, area)));
+                        self.panel = Some(TablePanel::new(self.page, area, self.ds.table_in(self.page, area)));
                         self.selecting = false;
                     }
                     self.drag_from = None;

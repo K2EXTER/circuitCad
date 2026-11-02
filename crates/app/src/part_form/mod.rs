@@ -203,6 +203,11 @@ pub struct PartForm {
     pub sources: Vec<pdf_input::Source>,
     /// What the last click in the PDF did: (worked, message).
     pub pick_msg: Option<(bool, String)>,
+    /// The pin table of the data sheet the pins are compared with, and the last comparison.
+    pub pin_ref: Option<pdf_check::PinRef>,
+    pub pin_check: Option<pdf_check::PinCheck>,
+    /// The numbers of the data sheet's drawings, for the dimension check.
+    pub dim_ref: Option<pdf_check::DimRef>,
 }
 
 impl Default for PartForm {
@@ -310,12 +315,16 @@ impl Default for PartForm {
             sheet: datasheet_view::SheetView::default(),
             sources: vec![],
             pick_msg: None,
+            pin_ref: None,
+            pin_check: None,
+            dim_ref: None,
         }
     }
 }
 
 mod checklist;
 mod datasheet_view;
+mod pdf_check;
 mod pdf_input;
 mod pin_import;
 pub use datasheet_view::Target as PickTarget;
@@ -346,6 +355,7 @@ impl PartForm {
         self.sheet.window(ui.ctx());
         self.take_pdf_pick();
         self.take_pdf_pins();
+        self.sync_pdf_checks();
         self.kind_bar(ui);
         ui.separator();
         let labels: Vec<String> = FORM_TABS
@@ -353,7 +363,7 @@ impl PartForm {
             .map(|(tab, label, _)| {
                 let warn = match tab {
                     FormTab::Basic => self.name.trim().is_empty(),
-                    FormTab::Pins => self.parse_pins().is_err(),
+                    FormTab::Pins => self.parse_pins().is_err() || self.pin_mismatches() > 0,
                     FormTab::Package => built.is_err() || built.as_ref().is_ok_and(|d| d.footprint().is_err()),
                     _ => false,
                 };

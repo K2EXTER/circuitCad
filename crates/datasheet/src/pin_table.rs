@@ -206,6 +206,63 @@ pub fn pin_lines(pins: &[(String, String)]) -> String {
     pins.iter().map(|(n, name)| format!("{n} {name}")).collect::<Vec<_>>().join("\n")
 }
 
+/// How a pin of the form differs from the pin table of the data sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PinDiffKind {
+    /// The number is in both, the names differ.
+    Differs,
+    /// The data sheet has the pin, the form does not.
+    MissingInForm,
+    /// The form has the pin, the data sheet does not.
+    ExtraInForm,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PinDiff {
+    pub number: String,
+    pub form: Option<String>,
+    pub pdf: Option<String>,
+    pub kind: PinDiffKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct PinCompare {
+    /// Pins that are the same in both.
+    pub same: usize,
+    pub diffs: Vec<PinDiff>,
+}
+
+/// The name without what a data sheet and a person write differently: case, spaces, the kinds of minus.
+fn name_key(s: &str) -> String {
+    s.chars().filter(|c| !c.is_whitespace()).map(|c| if matches!(c, '\u{2212}' | '\u{2013}' | '\u{2010}') { '-' } else { c }).collect::<String>().to_lowercase()
+}
+
+/// A form name is the same as a data sheet name when the keys are equal, or it is one of the names of a pin that
+/// has several ("RESET/GPIO0").
+fn same_name(form: &str, pdf: &str) -> bool {
+    let (f, p) = (name_key(form), name_key(pdf));
+    f == p || p.split('/').any(|part| part == f)
+}
+
+/// Sets the pins typed in the form against those read from the data sheet, by pin number.
+pub fn compare_pins(form: &[(String, String)], pdf: &[(String, String)]) -> PinCompare {
+    let mut out = PinCompare::default();
+    for (n, name) in pdf {
+        match form.iter().find(|(m, _)| m == n) {
+            Some((_, f)) if same_name(f, name) => out.same += 1,
+            Some((_, f)) => out.diffs.push(PinDiff { number: n.clone(), form: Some(f.clone()), pdf: Some(name.clone()), kind: PinDiffKind::Differs }),
+            None => out.diffs.push(PinDiff { number: n.clone(), form: None, pdf: Some(name.clone()), kind: PinDiffKind::MissingInForm }),
+        }
+    }
+    for (n, f) in form {
+        if !pdf.iter().any(|(m, _)| m == n) {
+            out.diffs.push(PinDiff { number: n.clone(), form: Some(f.clone()), pdf: None, kind: PinDiffKind::ExtraInForm });
+        }
+    }
+    out.diffs.sort_by_key(|d| (d.number.parse::<u32>().unwrap_or(u32::MAX), d.number.clone()));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,6 +333,27 @@ mod tests {
         // a later package column has a number in more rows (the first has blanks for the pins it does not have)
         let t = table(&[&["NAME", "D", "FK", "I/O"], &["1A", "1", "2", "I"], &["1Y", "2", "3", "O"], &["2A", "3", "4", "I"], &["2Y", "4", "6", "O"], &["NC", "", "1", "-"]]);
         assert_eq!(guess_columns(&t), Some((1, 0)));
+    }
+
+    fn pins(s: &[(&str, &str)]) -> Vec<(String, String)> {
+        s.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+
+    #[test]
+    fn compares_the_pins_of_the_form_with_those_of_the_data_sheet() {
+        let pdf = pins(&[("1", "1OUT"), ("2", "1IN-"), ("3", "RESET/GPIO0"), ("4", "GND")]);
+        // the same, with other case / kinds of minus / one of two names
+        let ok = compare_pins(&pins(&[("1", "1out"), ("2", "1IN\u{2212}"), ("3", "reset"), ("4", "GND")]), &pdf);
+        assert_eq!((ok.same, ok.diffs.len()), (4, 0));
+        let bad = compare_pins(&pins(&[("1", "OUT1"), ("2", "1IN-"), ("5", "NC")]), &pdf);
+        assert_eq!(bad.same, 1);
+        let kinds: Vec<(String, PinDiffKind)> = bad.diffs.iter().map(|d| (d.number.clone(), d.kind)).collect();
+        assert_eq!(
+            kinds,
+            [("1".into(), PinDiffKind::Differs), ("3".into(), PinDiffKind::MissingInForm), ("4".into(), PinDiffKind::MissingInForm), ("5".into(), PinDiffKind::ExtraInForm)]
+        );
+        assert_eq!(bad.diffs[0].form.as_deref(), Some("OUT1"));
+        assert_eq!(bad.diffs[0].pdf.as_deref(), Some("1OUT"));
     }
 
     #[test]

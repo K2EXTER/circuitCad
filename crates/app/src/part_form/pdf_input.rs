@@ -16,12 +16,21 @@ impl PartForm {
 
     /// Takes the pins the person accepted in the pin table window, if any, and puts them in the pin box.
     pub(super) fn take_pdf_pins(&mut self) {
-        if let Some(imp) = self.sheet.take_pins() {
-            self.pins_text = super::pin_import::merged(&self.pins_text, &imp.lines, imp.append);
-            let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count();
-            let how = if imp.append { "あとに足しました" } else { "入れました" };
-            self.pick_msg = Some((true, format!("ピン表に p.{} の {} 本のピンを{how} (合計 {n} 本)。向き (left/right) は「④ ピン」で書き足せます", imp.page + 1, imp.lines.lines().count())));
-        }
+        use super::pin_import::PinMode;
+        let Some(imp) = self.sheet.take_pins() else { return };
+        // the table stays the one the pins are compared with from now on
+        self.pin_ref = Some(super::pdf_check::PinRef { page: imp.page, area: imp.area, num_col: imp.num_col, name_col: imp.name_col });
+        self.pin_check = None;
+        let read = imp.lines.lines().count();
+        self.pick_msg = Some(match imp.mode {
+            PinMode::CheckOnly => (true, format!("ピン表は変えずに、p.{} の表 ({read} 本) と比べます。結果は「④ ピン」に出ます", imp.page + 1)),
+            mode => {
+                self.pins_text = super::pin_import::merged(&self.pins_text, &imp.lines, mode == PinMode::Append);
+                let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count();
+                let how = if mode == PinMode::Append { "あとに足しました" } else { "入れました" };
+                (true, format!("ピン表に p.{} の {read} 本のピンを{how} (合計 {n} 本)。向き (left/right) は「④ ピン」で書き足せます", imp.page + 1))
+            }
+        });
     }
 
     /// Puts a clicked word in the field it was asked for. A number goes through the unit conversion; what was
@@ -61,6 +70,8 @@ impl PartForm {
             Target::MaxV => self.rt_v = number_text(x),
             Target::MaxI => self.rt_i = number_text(x),
             Target::MaxP => self.rt_p = number_text(x),
+            Target::ThermalW => self.thermal_w = x,
+            Target::ThermalH => self.thermal_h = x,
             Target::Name => {}
         }
         self.sources.retain(|s| s.0 != p.target);
@@ -123,7 +134,7 @@ impl PartForm {
 }
 
 /// 1.27 -> "1.27", 0.2 -> "0.2", 30.0 -> "30": the number as a person writes it in a box.
-fn number_text(x: f64) -> String {
+pub(super) fn number_text(x: f64) -> String {
     let s = format!("{x:.6}");
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }

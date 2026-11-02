@@ -10,6 +10,8 @@ pub struct Value {
     pub unit: Option<String>,
     /// It was a range ("0.30-0.50"): `number` is the middle.
     pub range: bool,
+    /// The two ends of the range, when it is one.
+    pub ends: Option<(f64, f64)>,
 }
 
 /// What a field of the form takes.
@@ -48,6 +50,7 @@ pub fn parse_value(text: &str) -> Option<Value> {
     let mut rest = rest;
     let mut value = n1;
     let mut range = false;
+    let mut ends = None;
     if let Some(r) = rest.strip_prefix('\u{B1}') {
         // "1.27±0.1": the tolerance is dropped
         rest = number(r).map_or(r, |(_, after)| after);
@@ -56,11 +59,12 @@ pub fn parse_value(text: &str) -> Option<Value> {
     {
         value = (n1 + n2) / 2.0;
         range = true;
+        ends = Some((n1, n2));
         rest = after;
     }
     let unit: String = rest.chars().take_while(|&c| is_unit_char(c)).collect();
     let unit = (!unit.is_empty() && !NOT_UNITS.contains(&unit.to_lowercase().as_str())).then_some(unit);
-    Some(Value { number: sign * value, unit, range })
+    Some(Value { number: sign * value, unit, range, ends: ends.map(|(a, b)| (sign * a, sign * b)) })
 }
 
 /// "12.5abc" -> (12.5, "abc"); ".05" works; None when there is no digit.
@@ -156,9 +160,9 @@ mod tests {
 
     #[test]
     fn reads_numbers_as_data_sheets_write_them() {
-        assert_eq!(p("1.27"), Value { number: 1.27, unit: None, range: false });
+        assert_eq!(p("1.27"), Value { number: 1.27, unit: None, range: false, ends: None });
         assert_eq!(p(".050").number, 0.05);
-        assert_eq!(p("0.65BSC"), Value { number: 0.65, unit: None, range: false });
+        assert_eq!(p("0.65BSC"), Value { number: 0.65, unit: None, range: false, ends: None });
         assert_eq!(p("1.27\u{B1}0.1").number, 1.27);
         assert_eq!(p("4.90mm").unit.as_deref(), Some("mm"));
         assert_eq!(p("5.7A").unit.as_deref(), Some("A"));

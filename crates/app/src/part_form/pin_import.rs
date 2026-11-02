@@ -1,25 +1,51 @@
 //! The window that turns a pin table, cut out of the data sheet with a rectangle, into the pin box of the form.
 
-use datasheet::Table;
+use datasheet::{Rect, Table};
 use eframe::egui;
 
-/// What the window gives to the form: lines of "number name", and how to put them in the pin box.
+/// What to do with the pins read from the table.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PinMode {
+    /// Replace the pins in the box.
+    Replace,
+    /// Add to the pins already in the box (a number that is there stays as it is).
+    Append,
+    /// Leave the box as it is and only compare it with the table, now and after every change.
+    CheckOnly,
+}
+
+/// What the window gives to the form: lines of "number name", and where in the data sheet they came from.
 pub struct PinImport {
     pub lines: String,
-    /// The page (from 0) the table was on.
+    pub mode: PinMode,
+    /// The page (from 0) the table was on, the rectangle that was cut out and the columns that were used, to read
+    /// the same table again later.
     pub page: usize,
-    /// Add to the pins already in the box (a number that is there stays as it is) instead of replacing them.
-    pub append: bool,
+    pub area: Rect,
+    pub num_col: usize,
+    pub name_col: usize,
 }
 
 pub enum Action {
     None,
     Cancel,
-    Apply { append: bool },
+    Apply(PinMode),
+}
+
+/// The pins of a pin box: "number name [side]" per line; empty lines and lines that start with # are left out.
+pub fn parse_pin_lines(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .filter_map(|l| {
+            let mut t = l.split_whitespace();
+            Some((t.next()?.to_string(), t.next()?.to_string()))
+        })
+        .collect()
 }
 
 pub struct TablePanel {
     pub page: usize,
+    pub area: Rect,
     table: Table,
     num_col: usize,
     name_col: usize,
@@ -30,12 +56,17 @@ pub struct TablePanel {
 }
 
 impl TablePanel {
-    pub fn new(page: usize, table: Table) -> Self {
+    pub fn new(page: usize, area: Rect, table: Table) -> Self {
         let guess = datasheet::guess_columns(&table);
         let (num_col, name_col) = guess.unwrap_or((0, 1.min(table.columns.saturating_sub(1))));
-        let mut p = TablePanel { page, table, num_col, name_col, guessed: guess.is_some(), text: String::new() };
+        let mut p = TablePanel { page, area, table, num_col, name_col, guessed: guess.is_some(), text: String::new() };
         p.recompute();
         p
+    }
+
+    /// The columns in use: (number, name).
+    pub fn columns(&self) -> (usize, usize) {
+        (self.num_col, self.name_col)
     }
 
     fn recompute(&mut self) {
@@ -54,7 +85,8 @@ impl TablePanel {
         format!("列{}: {}", c + 1, samples.join(" | "))
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui) -> Action {
+    /// `current` are the pins in the form now, to compare with the table.
+    pub fn ui(&mut self, ui: &mut egui::Ui, current: &[(String, String)]) -> Action {
         let mut action = Action::None;
         if self.table.columns == 0 {
             ui.colored_label(egui::Color32::from_rgb(230, 80, 70), "囲んだ中に文字がありませんでした。表をもう一度、ドラッグで囲んでください (画像の表は読めません)");
@@ -93,6 +125,7 @@ impl TablePanel {
         ui.label(format!("ピン ({} 行。直せます)", self.lines()));
         ui.add(egui::TextEdit::multiline(&mut self.text).desired_rows(10).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace))
             .on_hover_text("1行に「番号 名前」。読み違いがあれば、ここで直してから入れます。向き (left/right) は、入れたあとに「④ ピン」で書き足せます");
+        self.compare_ui(ui, current);
         egui::CollapsingHeader::new("読み取った表").id_salt("pin_import_raw").show(ui, |ui| {
             egui::ScrollArea::both().max_height(160.0).show(ui, |ui| {
                 egui::Grid::new("pin_import_grid").striped(true).show(ui, |ui| {
@@ -108,16 +141,33 @@ impl TablePanel {
         ui.horizontal(|ui| {
             let ok = self.lines() > 0;
             if ui.add_enabled(ok, egui::Button::new("ピン表に置き換える")).on_hover_text("「④ ピン」のピン表を、この内容に置き換えます。いまの内容は消えます").clicked() {
-                action = Action::Apply { append: false };
+                action = Action::Apply(PinMode::Replace);
             }
             if ui.add_enabled(ok, egui::Button::new("ピン表のあとに足す")).on_hover_text("いまのピン表に、この内容を足します。同じ番号の行は、いまのままにします").clicked() {
-                action = Action::Apply { append: true };
+                action = Action::Apply(PinMode::Append);
+            }
+            if ui.add_enabled(ok, egui::Button::new("この表と比べるだけ")).on_hover_text("いまのピン表は変えずに、この表と食い違いがないかを見ます。このあとピン表を直すたびに、「④ ピン」で比べ直します").clicked() {
+                action = Action::Apply(PinMode::CheckOnly);
             }
             if ui.button("やめる").clicked() {
                 action = Action::Cancel;
             }
         });
         action
+    }
+
+    /// How the pins in the form compare with those of the table (as they stand in the box below).
+    fn compare_ui(&self, ui: &mut egui::Ui, current: &[(String, String)]) {
+        let table_pins = parse_pin_lines(&self.text);
+        if table_pins.is_empty() || current.is_empty() {
+            return;
+        }
+        let c = datasheet::compare_pins(current, &table_pins);
+        if c.diffs.is_empty() {
+            ui.colored_label(egui::Color32::from_rgb(90, 190, 120), format!("いまのピン表と比べると、{} 本すべて一致しています", c.same));
+        } else {
+            ui.colored_label(egui::Color32::from_rgb(230, 160, 60), format!("いまのピン表と比べると、一致 {} 本、食い違い {} 件", c.same, c.diffs.len()));
+        }
     }
 }
 
@@ -148,7 +198,7 @@ mod tests {
     #[test]
     fn a_panel_guesses_columns_and_follows_the_choice() {
         let rows: Vec<Vec<String>> = [["Name", "No.", "Alt"], ["VIN", "1", "9"], ["GND", "2", "8"], ["OUT", "3", "7"]].iter().map(|r| r.iter().map(|c| c.to_string()).collect()).collect();
-        let mut p = TablePanel::new(2, Table { cells: rows, columns: 3 });
+        let mut p = TablePanel::new(2, Rect::default(), Table { cells: rows, columns: 3 });
         assert!(p.guessed);
         assert_eq!(p.text, "1 VIN\n2 GND\n3 OUT");
         p.num_col = 2;
@@ -159,8 +209,19 @@ mod tests {
     }
 
     #[test]
+    fn the_pin_box_is_read_as_number_and_name() {
+        let pins = parse_pin_lines("1 IN left
+# a comment
+
+2 GND
+3
+4 OUT right");
+        assert_eq!(pins, [("1".to_string(), "IN".to_string()), ("2".to_string(), "GND".to_string()), ("4".to_string(), "OUT".to_string())]);
+    }
+
+    #[test]
     fn an_empty_table_is_not_a_panel_with_pins() {
-        let p = TablePanel::new(0, Table::default());
+        let p = TablePanel::new(0, Rect::default(), Table::default());
         assert_eq!(p.lines(), 0);
     }
 }
