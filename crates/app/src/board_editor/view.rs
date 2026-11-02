@@ -78,11 +78,31 @@ impl BoardEditor {
         self.moving_parts_only() || self.moving_group()
     }
 
+    /// The airwires while parts are dragged: the copper groups are those of the moment the drag began, and every pad of a dragged part is
+    /// a group of its own (it has left its copper). Pours that are cut in pieces are not looked for; the drop works out the full answer.
+    fn drag_airwires(&self, moving: &[String]) -> Vec<pcb_core::ratsnest::Airwire> {
+        let b = &self.board;
+        let mut base = self.drag_groups.borrow_mut();
+        if base.as_ref().is_none_or(|(m, p, v)| m != moving || p.len() != b.pads.len() || v.len() != b.vias.len()) {
+            let conn = connectivity(b);
+            *base = Some((moving.to_vec(), (0..b.pads.len()).map(|i| conn.pad_group(i)).collect(), (0..b.vias.len()).map(|k| conn.via_group(k)).collect()));
+        }
+        let (_, pads, vias) = base.as_ref().expect("made above");
+        let fresh = pads.iter().chain(vias).copied().max().map_or(0, |m| m + 1);
+        let pads: Vec<usize> = pads.iter().zip(&b.pads).enumerate().map(|(i, (g, p))| if moving.contains(&p.refdes) { fresh + i } else { *g }).collect();
+        pcb_core::ratsnest::ratsnest_with_vias(b, &pads, vias)
+    }
+
     /// The unrouted connections (yellow lines), kept like `cached_connectivity`.
     pub(super) fn cached_airwires(&self) -> std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>> {
         let key = pcb_core::zonefill::geometry_key(&self.board);
         // while parts are dragged, the lines follow the part (they cost milliseconds), but a pour that is in pieces is not looked for
         // (it fills every pour: 150 ms on a board with guards) and the answer is not kept, so the full one is made when the drag ends
+        let moving = self.dragged_parts();
+        if !moving.is_empty() {
+            return std::rc::Rc::new(self.drag_airwires(&moving));
+        }
+        *self.drag_groups.borrow_mut() = None;
         if self.slow_results_kept() {
             return std::rc::Rc::new(ratsnest(&self.board));
         }

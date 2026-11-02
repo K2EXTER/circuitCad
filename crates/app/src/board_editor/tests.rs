@@ -1386,6 +1386,30 @@ fn the_silk_and_copper_caches_are_kept_while_a_part_is_dragged() {
     assert_eq!(e.dragged_parts(), moving);
 }
 
+#[test]
+fn a_dragged_part_gets_airwires_to_the_copper_it_left() {
+    let mut b = pcb_core::Board::new("t", 40.0, 30.0);
+    for (r, x) in [("R1", 10.0), ("R2", 20.0)] {
+        b.set_part(pcb_core::Part { refdes: r.into(), value: "1k".into(), footprint: "R_0603".into(), pos: p(x, 15.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
+    }
+    for pad in &mut b.pads {
+        if pad.pin == "1" {
+            pad.net = "N".into();
+        }
+    }
+    let (a, c) = (b.pads.iter().find(|q| q.refdes == "R1" && q.pin == "1").unwrap().pos, b.pads.iter().find(|q| q.refdes == "R2" && q.pin == "1").unwrap().pos);
+    b.tracks.push(pcb_core::model::Track { side: pcb_core::Side::Top, a, b: c, width: 0.25 });
+    let mut e = BoardEditor::default();
+    e.board = b;
+    e.drag_part = Some(("R1".into(), p(0.0, 0.0)));
+    e.board.place_part("R1", p(10.0, 25.0), 0);
+    let wires = e.cached_airwires();
+    assert_eq!(wires.len(), 1, "the part has left its copper");
+    assert_eq!(wires[0].net, "N");
+    e.drag_part = None;
+    assert_eq!(e.cached_airwires().len(), 1, "the full answer agrees after the drop");
+}
+
 /// Frame time while one part is dragged on a real board (set CCAD_BOARD, CCAD_PART for the designator): the move, then the frame.
 /// `cargo test --release -p app part_drag_frame_cost -- --ignored --nocapture`
 #[test]

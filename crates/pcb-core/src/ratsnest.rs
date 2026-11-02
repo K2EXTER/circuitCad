@@ -54,7 +54,7 @@ pub fn ratsnest_in(board: &Board, grp: &[usize]) -> Vec<Airwire> {
 }
 
 /// [`ratsnest_in`] that also joins the vias placed for a net (`via_grp[k]` for `board.vias[k]`; none given: only pads).
-fn ratsnest_with_vias(board: &Board, grp: &[usize], via_grp: &[usize]) -> Vec<Airwire> {
+pub fn ratsnest_with_vias(board: &Board, grp: &[usize], via_grp: &[usize]) -> Vec<Airwire> {
     let mut by_net: BTreeMap<&str, Vec<(Point, usize)>> = BTreeMap::new();
     for (p, g) in board.pads.iter().zip(grp) {
         if !p.net.is_empty() {

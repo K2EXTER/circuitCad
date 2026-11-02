@@ -382,6 +382,9 @@ pub struct BoardEditor {
     marks_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<pcb_core::requirements::Marks>)>>,
     /// The box round every part (its pads and outline), with the key of the pads and outlines it was made from.
     part_box_cache: std::cell::RefCell<Option<(u64, std::rc::Rc<std::collections::HashMap<String, (Point, Point)>>)>>,
+    /// The copper groups of the pads and vias as they were when a drag of parts began (the tracks stay where they were during it), so the
+    /// airwires of every frame need no new connectivity. Cleared when no part is dragged.
+    drag_groups: std::cell::RefCell<Option<(Vec<String>, Vec<usize>, Vec<usize>)>>,
     zone_cache: std::cell::RefCell<ZoneCache>,
     zone_job: std::cell::RefCell<ZoneJob>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
@@ -539,6 +542,7 @@ impl Default for BoardEditor {
             req_cache: std::cell::RefCell::new(None),
             marks_cache: std::cell::RefCell::new(None),
             part_box_cache: std::cell::RefCell::new(None),
+            drag_groups: Default::default(),
             zone_cache: std::cell::RefCell::new(None),
             zone_job: Default::default(),
             island_cache: std::cell::RefCell::new(None),
