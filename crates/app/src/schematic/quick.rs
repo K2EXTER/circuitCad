@@ -177,7 +177,7 @@ impl SchEditor {
                     q.sel = 0;
                 }
                 if hits.is_empty() {
-                    ui.small("見つかりません。別の言葉で探すか、左の「新規作成…」で部品をつくれます");
+                    ui.small("見つかりません。別の言葉で探すか、左の「＋ 部品を作る…」で部品をつくれます");
                 }
                 for (n, h) in hits.iter().enumerate() {
                     let label = format!("{}    {}", h.title, h.sub);

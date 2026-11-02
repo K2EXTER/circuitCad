@@ -366,7 +366,7 @@ fn write_chip_examples() {
     use crate::passive::{PassiveKind, PassiveTemplate};
     use pcb_core::package::{PackageSpec, PadSpec};
     use sch_core::PartRatings;
-    let note = " 【見本】数値は代表的な例で、実際の部品のデータシートの値ではありません。「新規作成」のチップ部品の欄から、手元の部品の数値でつくり直してください";
+    let note = " 【見本】数値は代表的な例で、実際の部品のデータシートの値ではありません。「＋ 部品を作る」のチップ部品の欄から、手元の部品の数値でつくり直してください";
     let mut cases: Vec<(String, PassiveTemplate, &str, PartRatings)> = vec![];
     let mut c1 = PassiveTemplate::new(PassiveKind::Capacitor, 100e-9);
     c1.esr = Some(0.03);

@@ -220,9 +220,17 @@ impl SchEditor {
             }
         });
         // outside the (closed by default) library list, so a newcomer can find it without opening anything
-        if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
-            self.form = Some(PartForm::default());
-        }
+        ui.horizontal_wrapped(|ui| {
+            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
+                self.form = Some(PartForm::default());
+            }
+            if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
+                self.import_part_json();
+            }
+            if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
+                self.open_kicad_import();
+            }
+        });
         egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(false).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
@@ -347,15 +355,6 @@ impl SchEditor {
             }
             ui.small("◎ = シミュレーションモデルあり");
             ui.horizontal(|ui| {
-                if self.lit(ui.button("新規作成…"), "新規作成…").on_hover_text("ライブラリに、自分で部品 (記号・パッケージ・シミュレーションモデル) を作って追加します").clicked() {
-                    self.form = Some(PartForm::default());
-                }
-                if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
-                    self.import_part_json();
-                }
-                if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。KiCad の公式ライブラリの部品も使えます").clicked() {
-                    self.open_kicad_import();
-                }
                 if self.lit(ui.button("再読み込み"), "再読み込み").on_hover_text("ライブラリのフォルダを読み直します。ファイルを直接直したときに押します").clicked() {
                     self.reload_library();
                 }
@@ -769,7 +768,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
                 ui.label(format!("・{l}"));
             }
         } else if c.custom.is_some() {
-            ui.label("この部品には、定格 (データシートの情報) が入っていません。「新規作成」の部品フォームの「データシートの情報」で入れられます");
+            ui.label("この部品には、定格 (データシートの情報) が入っていません。「＋ 部品を作る」の部品フォームの「データシートの情報」で入れられます");
         }
         let Some(view) = dc else {
             ui.label("DC動作点を解析すると、この回路でこの部品にかかる電流・電力と、必要な定格が出ます");
