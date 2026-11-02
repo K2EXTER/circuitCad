@@ -1,6 +1,7 @@
 //! The data sheet window: a PDF opened beside the part form, to read while typing the numbers in.
 
 use datasheet::{Datasheet, HEADINGS, Hit, Quantity, Query, Rect, looks_like_part_number};
+use super::pin_import::{Action, PinImport, TablePanel};
 use eframe::egui::{self, Vec2};
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -136,6 +137,13 @@ struct Opened {
     target: Option<Target>,
     /// The word that was clicked, for the form to take.
     picked: Option<Picked>,
+    /// The pin table is being cut out: drag a rectangle over it.
+    selecting: bool,
+    drag_from: Option<egui::Pos2>,
+    /// The pins read from the rectangle, being checked.
+    panel: Option<TablePanel>,
+    /// The pins the person accepted, for the form to take.
+    pins_out: Option<PinImport>,
 }
 
 /// A search that goes on a few pages per frame, so that a long data sheet does not freeze the window.
@@ -186,6 +194,10 @@ impl SheetView {
                     viewport: Vec2::ZERO,
                     target: None,
                     picked: None,
+                    selecting: false,
+                    drag_from: None,
+                    panel: None,
+                    pins_out: None,
                 });
                 self.msg.clear();
                 self.open = true;
@@ -212,6 +224,21 @@ impl SheetView {
             d.picked = None;
             self.open = true;
         }
+    }
+
+    /// The form asks for the pin table to be cut out: the window comes forward and waits for a rectangle.
+    pub fn start_pin_select(&mut self) {
+        if let Some(d) = self.doc.as_mut() {
+            d.selecting = true;
+            d.target = None;
+            d.panel = None;
+            self.open = true;
+        }
+    }
+
+    /// The pins the person accepted since the last call.
+    pub fn take_pins(&mut self) -> Option<PinImport> {
+        self.doc.as_mut().and_then(|d| d.pins_out.take())
     }
 
     /// The word that was clicked since the last call, and what it was for.
@@ -276,6 +303,26 @@ impl SheetView {
         self.open = open;
         if !open && let Some(d) = self.doc.as_mut() {
             d.target = None;
+            d.selecting = false;
+        }
+        // the window that checks the pins read from the rectangle
+        if let Some(d) = self.doc.as_mut()
+            && let Some(panel) = d.panel.as_mut()
+        {
+            let mut keep = true;
+            let mut action = Action::None;
+            egui::Window::new("ピン表の取り込み").open(&mut keep).default_size([440.0, 460.0]).resizable(true).show(ctx, |ui| {
+                action = panel.ui(ui);
+            });
+            match action {
+                Action::Apply { append } => {
+                    d.pins_out = Some(PinImport { lines: panel.text.clone(), page: panel.page, append });
+                    d.panel = None;
+                }
+                Action::Cancel => d.panel = None,
+                Action::None if !keep => d.panel = None,
+                Action::None => {}
+            }
         }
     }
 }
@@ -299,8 +346,9 @@ impl Opened {
         if std::mem::take(&mut self.fit) {
             self.zoom = ((ui.available_width() - 24.0) / pw).clamp(ZOOM_MIN, ZOOM_MAX);
         }
-        if self.target.is_some() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if (self.target.is_some() || self.selecting) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.target = None;
+            self.selecting = false;
         }
         ui.horizontal_wrapped(|ui| {
             if ui.add_enabled(self.page > 0, egui::Button::new("◀")).on_hover_text("前のページ").clicked() {
@@ -331,6 +379,14 @@ impl Opened {
                 ui.colored_label(egui::Color32::from_rgb(70, 150, 255), t.ask());
                 if ui.button("やめる").on_hover_text("選ぶのをやめます (Esc キーでも)").clicked() {
                     self.target = None;
+                }
+            });
+        }
+        if self.selecting {
+            ui.horizontal(|ui| {
+                ui.colored_label(egui::Color32::from_rgb(70, 150, 255), "ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)");
+                if ui.button("やめる").on_hover_text("囲むのをやめます (Esc キーでも)").clicked() {
+                    self.selecting = false;
                 }
             });
         }
@@ -374,7 +430,8 @@ impl Opened {
             }
         }
         let Some(tex_id) = self.texture.as_ref().map(|t| t.handle.id()) else { return };
-        let resp = ui.add(egui::Image::new((tex_id, size)).sense(egui::Sense::click()));
+        let sense = if self.selecting { egui::Sense::click_and_drag() } else { egui::Sense::click() };
+        let resp = ui.add(egui::Image::new((tex_id, size)).sense(sense));
         let origin = resp.rect.min;
         let zoom = self.zoom;
         let on_screen = |r: &Rect| egui::Rect::from_min_max(origin + Vec2::new(r.x0 - 1.0, r.y0) * zoom, origin + Vec2::new(r.x1 + 1.0, r.y1) * zoom);
@@ -387,6 +444,32 @@ impl Opened {
                 } else {
                     ui.painter().rect_filled(r, 2.0, egui::Color32::from_rgba_unmultiplied(255, 230, 0, 100));
                 }
+            }
+        }
+        // cutting out the pin table: a rectangle is dragged over it
+        if self.selecting {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            if resp.drag_started() {
+                // where the button went down, not where the pointer is when egui notices the drag
+                self.drag_from = ui.input(|i| i.pointer.press_origin());
+            }
+            if let (Some(from), Some(to)) = (self.drag_from, resp.interact_pointer_pos()) {
+                let r = egui::Rect::from_two_pos(from, to);
+                ui.painter().rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(70, 150, 255, 50));
+                ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(70, 150, 255)), egui::StrokeKind::Inside);
+                if resp.drag_stopped() {
+                    let (a, b) = ((r.min - origin) / zoom, (r.max - origin) / zoom);
+                    // a click or a speck is not a table
+                    if b.x - a.x > 20.0 && b.y - a.y > 10.0 {
+                        let area = Rect { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+                        self.panel = Some(TablePanel::new(self.page, self.ds.table_in(self.page, area)));
+                        self.selecting = false;
+                    }
+                    self.drag_from = None;
+                }
+            }
+            if resp.drag_stopped() {
+                self.drag_from = None;
             }
         }
         // waiting for a word: the one under the pointer is framed, and a click takes it
@@ -433,6 +516,10 @@ impl Opened {
             self.search = Search::new(Query::new(&self.query).into_iter().collect(), None);
         }
         ui.horizontal_wrapped(|ui| {
+            if ui.small_button("ピン表を囲む").on_hover_text("ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます").clicked() {
+                self.selecting = true;
+                self.target = None;
+            }
             ui.small("見出しへ");
             for h in HEADINGS {
                 if ui.small_button(h.label()).on_hover_text(format!("{} (英語・日本語の見出しを探します)", h.help())).clicked() {

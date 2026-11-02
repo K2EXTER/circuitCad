@@ -8,10 +8,12 @@ use std::cell::OnceCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 mod headings;
+mod pin_table;
 mod suggest;
 mod text;
 mod value;
 pub use headings::{HEADINGS, Heading};
+pub use pin_table::{Table, guess_columns, pin_lines, pins_from, read_table};
 pub use suggest::looks_like_part_number;
 pub use text::{Hit, Query, Rect, Word, normalize};
 pub use value::{Converted, Quantity, Value, convert, is_unit_word, parse_value};
@@ -87,6 +89,11 @@ impl Datasheet {
         hits.sort_by(|a, b| a.rect.y0.total_cmp(&b.rect.y0).then(a.rect.x0.total_cmp(&b.rect.x0)));
         hits.dedup_by(|b, a| a.rect == b.rect);
         hits
+    }
+
+    /// The words of a page inside a rectangle, as a table (for the pin table of a part).
+    pub fn table_in(&self, page: usize, area: Rect) -> Table {
+        read_table(self.words(page), area)
     }
 
     /// The unit written right after a word on its line ("mm" after "0.65"), if there is one.
@@ -268,6 +275,23 @@ mod tests {
         // "BSC" is not a unit; a unit on the next line, or far away, does not count
         assert_eq!(d.unit_after(0, &w[2]), None);
         assert_eq!(d.unit_after(0, &w[4]), None);
+    }
+
+    #[test]
+    fn a_caption_across_the_columns_does_not_join_them() {
+        // the caption lies over the two number columns; the body rows are name | number | number | text
+        let cell = |x: u32, y: u32, t: &str| format!("BT /F1 6 Tf {x} {y} Td ({t}) Tj ET ");
+        let mut content = cell(55, 90, "Table 4-1. Pin Functions");
+        for (y, row) in [(75, ["VIN", "1", "9", "Input"]), (65, ["GND", "2", "8", "Ground"]), (55, ["OUT", "3", "7", "Output"])] {
+            for (x, t) in [10, 60, 100, 140].into_iter().zip(row) {
+                content += &cell(x, y, t);
+            }
+        }
+        let d = Datasheet::open(pdf_with(&content, HELVETICA)).unwrap();
+        let t = d.table_in(0, Rect { x0: 0.0, y0: 0.0, x1: 200.0, y1: 100.0 });
+        assert_eq!(t.columns, 4, "{t:?}");
+        assert_eq!(guess_columns(&t), Some((1, 0)));
+        assert_eq!(pin_lines(&pins_from(&t, 1, 0)), "1 VIN\n2 GND\n3 OUT");
     }
 
     #[test]

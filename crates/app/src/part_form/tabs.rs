@@ -247,6 +247,17 @@ impl PartForm {
 
     /// The tab of the pins.
     pub(super) fn tab_pins(&mut self, ui: &mut egui::Ui) {
+            if self.sheet.has_doc() {
+                ui.horizontal(|ui| {
+                    if ui.button("PDFのピン表を囲んで取り込む").on_hover_text("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます。置き換えと、あとに足すが選べます").clicked() {
+                        self.pick_msg = None;
+                        self.sheet.start_pin_select();
+                    }
+                    ui.small("データシートの「ピン配置」の表");
+                });
+            } else {
+                self.pick_row(ui, &[]);
+            }
             crate::icons::help_label(ui, "ピン (1行に「番号 名前 [向き]」)", "ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
             ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
     }

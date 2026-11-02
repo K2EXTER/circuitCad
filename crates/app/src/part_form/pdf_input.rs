@@ -14,6 +14,16 @@ impl PartForm {
         }
     }
 
+    /// Takes the pins the person accepted in the pin table window, if any, and puts them in the pin box.
+    pub(super) fn take_pdf_pins(&mut self) {
+        if let Some(imp) = self.sheet.take_pins() {
+            self.pins_text = super::pin_import::merged(&self.pins_text, &imp.lines, imp.append);
+            let n = self.pins_text.lines().filter(|l| !l.trim().is_empty()).count();
+            let how = if imp.append { "あとに足しました" } else { "入れました" };
+            self.pick_msg = Some((true, format!("ピン表に p.{} の {} 本のピンを{how} (合計 {n} 本)。向き (left/right) は「④ ピン」で書き足せます", imp.page + 1, imp.lines.lines().count())));
+        }
+    }
+
     /// Puts a clicked word in the field it was asked for. A number goes through the unit conversion; what was
     /// assumed or converted is said in `pick_msg`, and a number that cannot be read leaves the field alone.
     pub(super) fn apply_pick(&mut self, p: Picked) {

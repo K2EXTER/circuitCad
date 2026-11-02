@@ -317,6 +317,7 @@ impl Default for PartForm {
 mod checklist;
 mod datasheet_view;
 mod pdf_input;
+mod pin_import;
 pub use datasheet_view::Target as PickTarget;
 mod kind;
 mod parse;
@@ -344,6 +345,7 @@ impl PartForm {
         self.sheet.take_dropped(ui.ctx());
         self.sheet.window(ui.ctx());
         self.take_pdf_pick();
+        self.take_pdf_pins();
         self.kind_bar(ui);
         ui.separator();
         let labels: Vec<String> = FORM_TABS

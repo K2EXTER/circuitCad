@@ -67,6 +67,14 @@ impl Word {
         Some(&self.text[chars[a].0..end])
     }
 
+    pub(crate) fn baseline(&self) -> f32 {
+        self.baseline
+    }
+
+    pub(crate) fn em(&self) -> f32 {
+        self.em
+    }
+
     /// The pieces of the word between separators.
     pub fn tokens(&self) -> impl Iterator<Item = &str> {
         self.text.split(is_separator).filter(|t| !t.is_empty())
