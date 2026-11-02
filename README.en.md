@@ -45,6 +45,12 @@ circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Ge
 
 (Screenshots show the Japanese UI.)
 
+| A board with the design requirements imported | The design-requirements table |
+|---|---|
+| ![PCB editor with frames for parts that go together, lines for distances, and a list of requirements not yet met](docs/images/requirements-board.png) | ![The design-requirements table: net roles, widths and currents, with the reason for each](docs/images/requirements-table.png) |
+
+These two show the author's work-in-progress milliohm meter (3 mΩ to 3 MΩ, 10 ranges, several sheets). Write what you want of the circuit in the table, and on the board it becomes checks for parts that go together, distances and track widths (some tracks are still unrouted and some requirements are not met yet). The design is not verified on hardware and uses makers' models, so its files are not included.
+
 ## Headless use (`ccad`)
 `ccad` runs circuitCad's calculations without opening a window. A script has **one command per line**: build a circuit by part and pin names, run ERC and analyses, make a board and export fabrication files. Every answer is one JSON object per line, so AI agents and automation can use it.
 

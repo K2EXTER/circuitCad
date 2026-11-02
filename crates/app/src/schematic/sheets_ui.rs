@@ -4,7 +4,7 @@ use super::*;
 
 impl SchEditor {
     /// Show sheet `k` (the selection and anything half-done on the old sheet is put away).
-    pub(super) fn show_sheet(&mut self, k: usize) {
+    pub(crate) fn show_sheet(&mut self, k: usize) {
         if k == self.sch.active_sheet || !self.sch.switch_sheet(k) {
             return;
         }

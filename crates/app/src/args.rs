@@ -90,6 +90,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     }
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
+        // `--sheet N`: the Nth sheet (from 1) is the one shown
+        if let Some(i) = args.iter().position(|a| a == "--sheet")
+            && let Some(n) = args.get(i + 1).and_then(|s| s.parse::<usize>().ok()).filter(|n| *n >= 1) {
+                app.sch.show_sheet(n - 1);
+            }
         if args.iter().any(|a| a == "--dc") {
             app.sch.analyze_dc();
         }
