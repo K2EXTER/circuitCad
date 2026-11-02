@@ -75,7 +75,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                         app.sch.set_tran_signals(n);
                     }
             }
-        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track"].iter().any(|f| args.iter().any(|a| a == f)) {
+        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);
         }
@@ -240,6 +240,14 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--drc") {
         app.board_ed.run_drc();
     }
+    if let Some(i) = args.iter().position(|a| a == "--net-window")
+        && let Some(net) = args.get(i + 1) {
+            // --net-window NET [TAB]: the net's settings window, on the tab 0 (width), 1 (class) or 2 (finish)
+            app.board_ed.open_net_window(net);
+            if let Some(t) = args.get(i + 2).and_then(|t| t.parse::<u8>().ok()) {
+                app.board_ed.set_net_tab(t);
+            }
+        }
     if let Some(i) = args.iter().position(|a| a == "--select-track")
         && let Some(n) = args.get(i + 1).and_then(|n| n.parse::<usize>().ok()) {
             app.board_ed.select_track(n);

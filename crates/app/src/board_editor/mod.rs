@@ -397,6 +397,8 @@ pub struct BoardEditor {
     drag_edit: bool,
     /// The net whose window is open (from the right-click menu of its copper with the Select tool).
     net_win: Option<String>,
+    /// The tab of the net window: 0 width, 1 class, 2 finish.
+    net_tab: u8,
     /// The net under the pointer when the right-click menu was opened (Select tool, not on a pour's corner or edge).
     net_menu: Option<String>,
     /// Tint the parts by the schematic sheet they come from.
@@ -543,6 +545,7 @@ impl Default for BoardEditor {
             hover_net: None,
             drag_edit: false,
             net_win: None,
+            net_tab: 0,
             net_menu: None,
             show_sheets: true,
             show_req_marks: true,

@@ -135,6 +135,11 @@ impl BoardEditor {
         self.net_win = Some(net.to_string());
     }
 
+    /// The tab of the net window (command line): 0 width, 1 class, 2 finish.
+    pub fn set_net_tab(&mut self, tab: u8) {
+        self.net_tab = tab.min(2);
+    }
+
     /// The right-click menu on copper of a net (Select tool).
     pub(super) fn net_menu_ui(&mut self, ui: &mut egui::Ui) {
         let Some(net) = self.net_menu.clone() else { return };
@@ -160,86 +165,7 @@ impl BoardEditor {
         let spec = CopperSpec::default();
         egui::Window::new(format!("ネット {net} の設定")).id(egui::Id::new("net_window")).open(&mut open).default_width(360.0).default_pos([420.0, 120.0]).show(ctx, |ui| {
             ui.small(self.net_caption(&net));
-            ui.separator();
-            // --- the current and the width it needs
-            ui.strong("電流と推奨の線幅");
-            let mut amps = self.board.net_currents.get(&net).copied().unwrap_or(0.0);
-            ui.horizontal(|ui| {
-                ui.label("流れる電流");
-                ui.add(egui::DragValue::new(&mut amps).speed(0.05).range(0.0..=30.0).suffix(" A").max_decimals(2)).on_hover_text("このネットに流れる最大の電流。分からなければ、つなぐ部品のデータシートの最大電流を見ます。0 のままなら、推奨の線幅は出しません");
-            });
-            if amps > 0.0 {
-                self.board.net_currents.insert(net.clone(), amps);
-            } else {
-                self.board.net_currents.remove(&net);
-                // no current yet: the schematic's DC analysis is asked for this net's current, once (at once when the answer is at hand;
-                // else on a button, so that the window does not wait for a solve of seconds)
-                if self.net_win_asked.as_deref() != Some(net.as_str()) {
-                    if self.dc_currents_ready {
-                        self.net_win_asked = Some(net.clone());
-                        self.net_current_request = Some(net.clone());
-                    } else if ui.button("回路図の DC 解析で電流を調べる").on_hover_text("回路図のこの回路を DC で解いて、このネットに流れる電流を入れます。回路が大きいと数秒かかります (一度解くと、回路図を変えるまで、ほかのネットはすぐ出ます)").clicked() {
-                        self.net_win_asked = Some(net.clone());
-                        self.net_current_request = Some(net.clone());
-                    }
-                }
-            }
-            if let Some((n, text)) = &self.net_win_note
-                && *n == net
-            {
-                ui.small(text.as_str());
-            }
-            if let Some(s) = self.current_stats.iter().find(|s| s.net == net).cloned() {
-                ui.horizontal_wrapped(|ui| {
-                    ui.small(format!("過渡解析: 実効 {:.3} A / ピーク {:.3} A{}", s.rms, s.peak, if s.spiky() { " ⚠ ピークが実効値の10倍以上" } else { "" }));
-                    if (s.rms - amps).abs() > 1e-6 && s.rms > 1e-6 && ui.small_button("実効値を入れる").on_hover_text("過渡解析の実効値を、このネットの電流にします").clicked() {
-                        amps = s.rms;
-                        self.board.net_currents.insert(net.clone(), amps);
-                    }
-                });
-            }
-            let mut widen = false;
-            let mut set_width: Option<f64> = None;
-            if amps > 0.0 {
-                let rec = round_up_width(width_for_current(amps, &spec));
-                let conn = self.cached_connectivity();
-                let now = net_widths(&self.board, &conn, &spec).into_iter().find(|w| w.net == net).and_then(|w| w.thinnest);
-                ui.label(egui::RichText::new(format!("推奨の線幅: {rec:.2} mm")).strong()).on_hover_text("銅箔 35µm・温度上昇 10℃ の外層で、この電流を流せる太さ (IPC-2221 の式) を、0.05 mm 単位に切り上げたものです。内層や、厚い銅箔、温度上昇を許す場合は、もっと細くできます");
-                match now {
-                    None => {
-                        ui.small("このネットの配線は、まだありません。配線するときの線幅に使えます");
-                    }
-                    Some(t) if t + 1e-9 < rec => {
-                        ui.colored_label(crate::theme::ERROR, format!("今の最も細い配線は {t:.2} mm で、足りません"));
-                    }
-                    Some(t) => {
-                        ui.colored_label(Color32::from_rgb(90, 190, 110), format!("今の最も細い配線は {t:.2} mm で、足ります ✔"));
-                    }
-                }
-                ui.horizontal_wrapped(|ui| {
-                    if now.is_some_and(|t| t + 1e-9 < rec) && ui.button("配線を推奨幅にする").on_hover_text("このネットの、推奨より細い配線を、推奨の太さまで太くします (元に戻せます)。太くしたあと、DRC で間隔が足りているか確かめましょう").clicked() {
-                        widen = true;
-                    }
-                    if ui.button("この幅で引く").on_hover_text("これから引く、このネットの配線の線幅を、推奨の太さにします (ネットクラスがあれば、そのクラスの線幅を変えます)").clicked() {
-                        set_width = Some(rec);
-                    }
-                });
-            } else {
-                ui.small("電流を入れると、推奨の線幅が出ます:");
-                ui.horizontal(|ui| {
-                    for a in [0.5, 1.0, 2.0, 3.0] {
-                        if ui.small_button(format!("{a} A")).on_hover_text("この電流を入れます").clicked() {
-                            self.board.net_currents.insert(net.clone(), a);
-                        }
-                    }
-                });
-            }
-            if widen {
-                self.widen_net_to_need(&net);
-            }
-            ui.separator();
-            // --- the net class
-            ui.strong("このネットの配線ルール (ネットクラス)");
+            // --- the class of the net: on view in every tab
             let rules = self.board.rules.clone();
             let mut classes = self.board.net_classes.clone();
             let current = classes.iter().position(|c| c.nets.contains(&net));
@@ -266,118 +192,231 @@ impl BoardEditor {
                     classes[k].nets.push(net.clone());
                 }
             }
-            let current = classes.iter().position(|c| c.nets.contains(&net));
-            match current {
-                Some(k) => {
-                    let others: Vec<String> = classes[k].nets.iter().filter(|n| **n != net).cloned().collect();
-                    if !others.is_empty() {
-                        ui.small(format!("この値は、同じクラスのネット ({}) にも効きます", others.join("・")));
-                    }
-                    let c = &mut classes[k];
-                    ui.horizontal(|ui| {
-                        ui.label("役割");
-                        egui::ComboBox::from_id_salt("net_window_role").selected_text(c.role.label()).show_ui(ui, |ui| {
-                            for r in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
-                                ui.selectable_value(&mut c.role, r, r.label());
-                            }
-                        }).response.on_hover_text("このクラスのネットの役割です。自動配線は、役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に引きます。「検出」のネットはビアを使わず、パッドと同じ層だけで引きます");
-                    });
-                    ui.horizontal_wrapped(|ui| {
-                        ui.add(egui::DragValue::new(&mut c.track_width).speed(0.01).range(rules.min_track_width..=5.0).prefix("線幅 ").suffix(" mm")).on_hover_text("このクラスのネットを引く線の太さ。発注先の最小線幅より細くはできません");
-                        ui.add(egui::DragValue::new(&mut c.clearance).speed(0.01).range(rules.min_clearance..=5.0).prefix("間隔 ").suffix(" mm")).on_hover_text("ほかのネットの銅が、このクラスの銅から離れる距離");
-                        ui.add(egui::DragValue::new(&mut c.via_diameter).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("このクラスのビアの外径");
-                        ui.add(egui::DragValue::new(&mut c.via_drill).speed(0.05).range(0.2..=2.0).prefix("穴 ").suffix(" mm")).on_hover_text("このクラスのビアの穴径");
-                    });
-                    c.via_drill = c.via_drill.min(c.via_diameter - 0.1).max(0.2);
-                    finish_override_ui(ui, &mut c.finish, &self.board.finish);
-                    if let Some(w) = set_width {
-                        c.track_width = w;
-                    }
-                    self.width_exceptions_ui(ui, &net, &mut classes[k]);
-                }
-                None => {
-                    ui.small(format!("いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます", self.track_width, self.via_dia, self.via_drill));
-                    if ui.button("このネット専用のクラスを作る").on_hover_text("このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます").clicked() {
-                        let width = set_width.or_else(|| self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)))).unwrap_or(self.track_width).max(rules.min_track_width);
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0, width_exceptions: vec![] });
-                    } else if let Some(w) = set_width {
-                        self.track_width = w;
-                        self.status = format!("線幅を {w:.2} mm にしました");
-                    }
+            if let Some(k) = classes.iter().position(|c| c.nets.contains(&net)) {
+                let others: Vec<String> = classes[k].nets.iter().filter(|n| **n != net).cloned().collect();
+                if !others.is_empty() {
+                    ui.small(format!("この値は、同じクラスのネット ({}) にも効きます", others.join("・")));
                 }
             }
-            // --- a slider for the width of the net: its tracks follow it while it is dragged (one undo step), and so does the class
             ui.separator();
-            ui.strong("線幅をスライダーで変える");
-            let idx: Vec<usize> = {
-                let conn = self.cached_connectivity();
-                // (the necks of a trunk keep their width: they are thin so that the solder stays on the small pads)
-                (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str()) && !pcb_core::current::is_neck(&self.board, &conn, i) && !pcb_core::current::is_excepted(&self.board, &net, i)).collect()
-            };
-            let class_k = classes.iter().position(|c| c.nets.contains(&net));
-            let start = class_k.map(|k| classes[k].track_width).or_else(|| idx.iter().map(|&i| self.board.tracks[i].width).reduce(f64::max));
-            let rec = self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)));
-            // the width the slider, a button or the impedance below asks for this frame
+            ui.horizontal(|ui| {
+                for (k, text, hover) in [
+                    (0, "線幅", "電流と推奨の線幅、線幅のスライダー、インピーダンス、例外の区間"),
+                    (1, "クラス", "役割、間隔、ビア。このネットの配線ルール"),
+                    (2, "整え方", "角の丸み・太さの段差・分かれ目の丸み。このクラスだけ基板全体の設定と変えるとき"),
+                ] {
+                    ui.selectable_value(&mut self.net_tab, k, text).on_hover_text(hover);
+                }
+            });
+            ui.separator();
+            let mut set_width: Option<f64> = None;
+            let mut idx: Vec<usize> = vec![];
+            // the width the slider, a button or the impedance asks for this frame
             let mut new_width: Option<f64> = None;
             let mut new_target: Option<f64> = None;
-            match start {
-                None => {
-                    ui.small("このネットには、配線もクラスもまだありません。上の「このネット専用のクラスを作る」か、配線を引くと、スライダーが使えます");
-                }
-                Some(mut v) => {
-                    let hi = rec.map_or(3.0, |r| (r * 2.0).max(3.0));
-                    let slider = ui.add(egui::Slider::new(&mut v, rules.min_track_width..=hi).logarithmic(true).fixed_decimals(2).suffix(" mm"));
-                    slider.on_hover_text("ドラッグすると、このネットの配線の太さが、動かした値にそろって変わります (配線がなければ、これから引く線の太さ)。ネットクラスに入っていれば、クラスの線幅も変わります。元に戻すで、ドラッグの前に戻せます");
-                    if slider_changed(start, v) {
-                        new_width = Some(v);
+            match self.net_tab {
+                0 => {
+                    // --- the current and the width it needs
+                    let mut amps = self.board.net_currents.get(&net).copied().unwrap_or(0.0);
+                    ui.horizontal(|ui| {
+                        ui.label("流れる電流");
+                        ui.add(egui::DragValue::new(&mut amps).speed(0.05).range(0.0..=30.0).suffix(" A").max_decimals(2)).on_hover_text("このネットに流れる最大の電流。分からなければ、つなぐ部品のデータシートの最大電流を見ます。0 のままなら、推奨の線幅は出しません");
+                    });
+                    if amps > 0.0 {
+                        self.board.net_currents.insert(net.clone(), amps);
+                    } else {
+                        self.board.net_currents.remove(&net);
+                        // no current yet: the schematic's DC analysis is asked for this net's current, once (at once when the answer is at hand;
+                        // else on a button, so that the window does not wait for a solve of seconds)
+                        if self.net_win_asked.as_deref() != Some(net.as_str()) {
+                            if self.dc_currents_ready {
+                                self.net_win_asked = Some(net.clone());
+                                self.net_current_request = Some(net.clone());
+                            } else if ui.button("回路図の DC 解析で電流を調べる").on_hover_text("回路図のこの回路を DC で解いて、このネットに流れる電流を入れます。回路が大きいと数秒かかります (一度解くと、回路図を変えるまで、ほかのネットはすぐ出ます)").clicked() {
+                                self.net_win_asked = Some(net.clone());
+                                self.net_current_request = Some(net.clone());
+                            }
+                        }
                     }
-                    if let Some(r) = rec {
-                        if v + 1e-9 >= r {
-                            ui.colored_label(Color32::from_rgb(90, 190, 110), format!("推奨 {r:.2} mm 以上で、足ります ✔"));
-                        } else {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(crate::theme::ERROR, format!("推奨 {r:.2} mm に足りません"));
-                                if ui.small_button("推奨まで上げる").on_hover_text("スライダーを、推奨の線幅にします").clicked() {
-                                    new_width = Some(r);
+                    if let Some((n, text)) = &self.net_win_note
+                        && *n == net
+                    {
+                        ui.small(text.as_str());
+                    }
+                    if let Some(s) = self.current_stats.iter().find(|s| s.net == net).cloned() {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.small(format!("過渡解析: 実効 {:.3} A / ピーク {:.3} A{}", s.rms, s.peak, if s.spiky() { " ⚠ ピークが実効値の10倍以上" } else { "" }));
+                            if (s.rms - amps).abs() > 1e-6 && s.rms > 1e-6 && ui.small_button("実効値を入れる").on_hover_text("過渡解析の実効値を、このネットの電流にします").clicked() {
+                                amps = s.rms;
+                                self.board.net_currents.insert(net.clone(), amps);
+                            }
+                        });
+                    }
+                    let mut widen = false;
+                    if amps > 0.0 {
+                        let rec = round_up_width(width_for_current(amps, &spec));
+                        let conn = self.cached_connectivity();
+                        let now = net_widths(&self.board, &conn, &spec).into_iter().find(|w| w.net == net).and_then(|w| w.thinnest);
+                        ui.label(egui::RichText::new(format!("推奨の線幅: {rec:.2} mm")).strong()).on_hover_text("銅箔 35µm・温度上昇 10℃ の外層で、この電流を流せる太さ (IPC-2221 の式) を、0.05 mm 単位に切り上げたものです。内層や、厚い銅箔、温度上昇を許す場合は、もっと細くできます");
+                        match now {
+                            None => {
+                                ui.small("このネットの配線は、まだありません。配線するときの線幅に使えます");
+                            }
+                            Some(t) if t + 1e-9 < rec => {
+                                ui.colored_label(crate::theme::ERROR, format!("今の最も細い配線は {t:.2} mm で、足りません"));
+                            }
+                            Some(t) => {
+                                ui.colored_label(Color32::from_rgb(90, 190, 110), format!("今の最も細い配線は {t:.2} mm で、足ります ✔"));
+                            }
+                        }
+                        ui.horizontal_wrapped(|ui| {
+                            if now.is_some_and(|t| t + 1e-9 < rec) && ui.button("配線を推奨幅にする").on_hover_text("このネットの、推奨より細い配線を、推奨の太さまで太くします (元に戻せます)。太くしたあと、DRC で間隔が足りているか確かめましょう").clicked() {
+                                widen = true;
+                            }
+                            if ui.button("この幅で引く").on_hover_text("これから引く、このネットの配線の線幅を、推奨の太さにします (ネットクラスがあれば、そのクラスの線幅を変えます)").clicked() {
+                                set_width = Some(rec);
+                            }
+                        });
+                    } else {
+                        ui.small("電流を入れると、推奨の線幅が出ます:");
+                        ui.horizontal(|ui| {
+                            for a in [0.5, 1.0, 2.0, 3.0] {
+                                if ui.small_button(format!("{a} A")).on_hover_text("この電流を入れます").clicked() {
+                                    self.board.net_currents.insert(net.clone(), a);
+                                }
+                            }
+                        });
+                    }
+                    if widen {
+                        self.widen_net_to_need(&net);
+                    }
+                    // --- the one width of the net: its tracks follow the slider while it is dragged (one undo step), and so does the class
+                    ui.separator();
+                    ui.strong("線幅");
+                    idx = {
+                        let conn = self.cached_connectivity();
+                        // (the necks of a trunk keep their width: they are thin so that the solder stays on the small pads; so do the stretches
+                        // the class lets keep their own)
+                        (0..self.board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net.as_str()) && !pcb_core::current::is_neck(&self.board, &conn, i) && !pcb_core::current::is_excepted(&self.board, &net, i)).collect()
+                    };
+                    let class_k = classes.iter().position(|c| c.nets.contains(&net));
+                    let start = class_k.map(|k| classes[k].track_width).or_else(|| idx.iter().map(|&i| self.board.tracks[i].width).reduce(f64::max));
+                    let rec = self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec)));
+                    match start {
+                        None => {
+                            ui.small("このネットには、配線もクラスもまだありません。「クラス」タブの「このネット専用のクラスを作る」か、配線を引くと、スライダーが使えます");
+                        }
+                        Some(mut v) => {
+                            let hi = rec.map_or(3.0, |r| (r * 2.0).max(3.0));
+                            let slider = ui.add(egui::Slider::new(&mut v, rules.min_track_width..=hi).logarithmic(true).fixed_decimals(2).suffix(" mm"));
+                            slider.on_hover_text("ドラッグすると、このネットの配線の太さが、動かした値にそろって変わります (配線がなければ、これから引く線の太さ)。ネットクラスに入っていれば、クラスの線幅も変わります。元に戻すで、ドラッグの前に戻せます");
+                            if slider_changed(start, v) {
+                                new_width = Some(v);
+                            }
+                            if let Some(r) = rec {
+                                if v + 1e-9 >= r {
+                                    ui.colored_label(Color32::from_rgb(90, 190, 110), format!("推奨 {r:.2} mm 以上で、足ります ✔"));
+                                } else {
+                                    ui.horizontal(|ui| {
+                                        ui.colored_label(crate::theme::ERROR, format!("推奨 {r:.2} mm に足りません"));
+                                        if ui.small_button("推奨まで上げる").on_hover_text("スライダーを、推奨の線幅にします").clicked() {
+                                            new_width = Some(r);
+                                        }
+                                    });
+                                }
+                            } else {
+                                ui.small("電流を入れると、推奨の線幅と比べて、足りているか出ます");
+                            }
+                            // --- the impedance of a track of this width (a rule of thumb), and the width for a wanted one
+                            ui.separator();
+                            ui.strong("インピーダンス (目安)");
+                            let side = idx.first().map_or(self.side, |&i| self.board.tracks[i].side);
+                            let kind = pcb_core::impedance::Kind::of(side);
+                            let shown = new_width.unwrap_or(v);
+                            let z = pcb_core::impedance::single_ended(&self.board.stackup, kind, shown);
+                            ui.label(egui::RichText::new(format!("線幅 {shown:.2} mm → 約 {z:.0} Ω")).strong()).on_hover_text(format!("{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成 (層数・材料)」で、その値を入れると近づきます", kind.label()));
+                            let mut target = class_k.and_then(|k| classes[k].impedance).unwrap_or(self.z_target);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label("目標");
+                                if ui.add(egui::DragValue::new(&mut target).speed(0.5).range(10.0..=200.0).suffix(" Ω")).on_hover_text("このネットの配線を、この特性インピーダンスにしたい値。USB や高速信号は 50 Ω (差動なら 90 Ω や 100 Ω) などです").changed() {
+                                    self.z_target = target;
+                                    if class_k.is_some_and(|k| classes[k].impedance.is_some()) {
+                                        new_target = Some(target);
+                                    }
+                                }
+                                if ui.button("目標の線幅にする").on_hover_text("目標のインピーダンスになる線幅を、層構成から求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます").clicked() {
+                                    match pcb_core::impedance::width_for(&self.board.stackup, kind, target) {
+                                        Some(w) if w >= rules.min_track_width => {
+                                            new_width = Some((w * 1000.0).round() / 1000.0);
+                                            new_target = Some(target);
+                                        }
+                                        Some(w) => self.status = format!("目標 {target:.0} Ω の線幅は {w:.3} mm で、基板の最小線幅 {:.2} mm より細くなります。層の間隔を薄くするか、目標を上げてください", rules.min_track_width),
+                                        None => self.status = format!("この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成 (層数・材料)」の値を確かめてください"),
+                                    }
                                 }
                             });
+                            if let Some(k) = class_k
+                                && let Some(zt) = classes[k].impedance
+                                && (z - zt).abs() / zt > 0.1
+                            {
+                                ui.colored_label(crate::theme::WARN, format!("クラスの目標 {zt:.0} Ω から {:.0}% ずれています", (z - zt).abs() / zt * 100.0));
+                            }
                         }
-                    } else {
-                        ui.small("電流を入れると、推奨の線幅と比べて、足りているか出ます");
                     }
-                    // --- the impedance of a track of this width (a rule of thumb), and the width for a wanted one
+                    // --- the stretches that keep their own width
                     ui.separator();
-                    ui.strong("インピーダンス (目安)");
-                    let side = idx.first().map_or(self.side, |&i| self.board.tracks[i].side);
-                    let kind = pcb_core::impedance::Kind::of(side);
-                    let shown = new_width.unwrap_or(v);
-                    let z = pcb_core::impedance::single_ended(&self.board.stackup, kind, shown);
-                    ui.label(egui::RichText::new(format!("線幅 {shown:.2} mm → 約 {z:.0} Ω")).strong()).on_hover_text(format!("{}。教科書の式による目安で、±10% ほどの誤差があります。発注先の積層構成 (基板の厚さ・層の間隔・誘電率) に合わせた値が正確です。左パネルの「層構成 (層数・材料)」で、その値を入れると近づきます", kind.label()));
-                    let mut target = class_k.and_then(|k| classes[k].impedance).unwrap_or(self.z_target);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.label("目標");
-                        if ui.add(egui::DragValue::new(&mut target).speed(0.5).range(10.0..=200.0).suffix(" Ω")).on_hover_text("このネットの配線を、この特性インピーダンスにしたい値。USB や高速信号は 50 Ω (差動なら 90 Ω や 100 Ω) などです").changed() {
-                            self.z_target = target;
-                            if class_k.is_some_and(|k| classes[k].impedance.is_some()) {
-                                new_target = Some(target);
+                    match class_k {
+                        Some(k) => self.width_exceptions_ui(ui, &net, &mut classes[k]),
+                        None => {
+                            ui.small("線幅の例外は、このネットをクラスに入れると使えます (上のクラスの選択か、「クラス」タブ)");
+                        }
+                    }
+                }
+                1 => {
+                    // --- the rules of the class
+                    match classes.iter().position(|c| c.nets.contains(&net)) {
+                        Some(k) => {
+                            let c = &mut classes[k];
+                            ui.horizontal(|ui| {
+                                ui.label("役割");
+                                egui::ComboBox::from_id_salt("net_window_role").selected_text(c.role.label()).show_ui(ui, |ui| {
+                                    for r in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
+                                        ui.selectable_value(&mut c.role, r, r.label());
+                                    }
+                                }).response.on_hover_text("このクラスのネットの役割です。自動配線は、役割の順 (大電流 → スイッチングノード → 検出 → アナログ → ロジック) に引きます。「検出」のネットはビアを使わず、パッドと同じ層だけで引きます");
+                            });
+                            ui.horizontal_wrapped(|ui| {
+                                ui.add(egui::DragValue::new(&mut c.clearance).speed(0.01).range(rules.min_clearance..=5.0).prefix("間隔 ").suffix(" mm")).on_hover_text("ほかのネットの銅が、このクラスの銅から離れる距離");
+                                ui.add(egui::DragValue::new(&mut c.via_diameter).speed(0.05).range(0.3..=3.0).prefix("ビア径 ").suffix(" mm")).on_hover_text("このクラスのビアの外径");
+                                ui.add(egui::DragValue::new(&mut c.via_drill).speed(0.05).range(0.2..=2.0).prefix("穴 ").suffix(" mm")).on_hover_text("このクラスのビアの穴径");
+                            });
+                            c.via_drill = c.via_drill.min(c.via_diameter - 0.1).max(0.2);
+                            ui.small(format!("線幅は「線幅」タブのスライダーで変えます (いま {:.2} mm)", c.track_width));
+                        }
+                        None => {
+                            ui.small(format!("いまは、基板全体の設定 (線幅 {:.2} mm、ビア {:.2}/{:.2} mm) で引きます", self.track_width, self.via_dia, self.via_drill));
+                            if ui.button("このネット専用のクラスを作る").on_hover_text("このネットだけのクラスを作って、入れます。線幅は、推奨の線幅 (電流を入れていれば) か、いまの設定の線幅です。値は、あとで直せます").clicked() {
+                                let width = self.board.net_currents.get(&net).map(|a| round_up_width(width_for_current(*a, &spec))).unwrap_or(self.track_width).max(rules.min_track_width);
+                                classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: width, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, ..Default::default() });
                             }
                         }
-                        if ui.button("目標の線幅にする").on_hover_text("目標のインピーダンスになる線幅を、層構成から求めて、このネットの配線とクラスの線幅にします (クラスがなければ作ります)。そのあと、発注前チェックが、目標から外れた配線を教えます").clicked() {
-                            match pcb_core::impedance::width_for(&self.board.stackup, kind, target) {
-                                Some(w) if w >= rules.min_track_width => {
-                                    new_width = Some((w * 1000.0).round() / 1000.0);
-                                    new_target = Some(target);
-                                }
-                                Some(w) => self.status = format!("目標 {target:.0} Ω の線幅は {w:.3} mm で、基板の最小線幅 {:.2} mm より細くなります。層の間隔を薄くするか、目標を上げてください", rules.min_track_width),
-                                None => self.status = format!("この層構成では、{target:.0} Ω にできる線幅が見つかりません。左パネルの「層構成 (層数・材料)」の値を確かめてください"),
-                            }
-                        }
-                    });
-                    if let Some(k) = class_k
-                        && let Some(zt) = classes[k].impedance
-                        && (z - zt).abs() / zt > 0.1
-                    {
-                        ui.colored_label(crate::theme::WARN, format!("クラスの目標 {zt:.0} Ω から {:.0}% ずれています", (z - zt).abs() / zt * 100.0));
+                    }
+                }
+                _ => match classes.iter().position(|c| c.nets.contains(&net)) {
+                    Some(k) => finish_override_ui(ui, &mut classes[k].finish, &self.board.finish),
+                    None => {
+                        ui.small("整え方は、クラスごとに決めます。「クラス」タブで、このネット専用のクラスを作ってください");
+                    }
+                },
+            }
+            // --- what was asked this frame
+            let class_k = classes.iter().position(|c| c.nets.contains(&net));
+            if let Some(w) = set_width {
+                match class_k {
+                    Some(k) => classes[k].track_width = w,
+                    None => {
+                        self.track_width = w;
+                        self.status = format!("線幅を {w:.2} mm にしました");
                     }
                 }
             }
@@ -389,7 +428,7 @@ impl BoardEditor {
                 let k = match class_k {
                     Some(k) => k,
                     None if new_target.is_some() => {
-                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, impedance: None, finish: Default::default(), role: Default::default(), order: None, no_vias: None, layers: vec![], max_length: 0.0, width_exceptions: vec![] });
+                        classes.push(NetClass { name: net.clone(), nets: vec![net.clone()], track_width: v, clearance: rules.min_clearance, via_diameter: self.via_dia, via_drill: self.via_drill, ..Default::default() });
                         classes.len() - 1
                     }
                     None => usize::MAX,
