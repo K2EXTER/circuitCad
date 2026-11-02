@@ -816,3 +816,20 @@ fn import_downloaded_kicad_zip() {
         assert!(part.validate().iter().all(|i| !i.error), "{:?}", part.validate());
     }
 }
+
+#[test]
+fn a_removed_part_is_gone_from_the_folder_and_stays_gone() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_lib_remove_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    install_examples(&dir).unwrap();
+    // the file of a bundled part is not named like the part ("LM358_SOIC-8.part.json" holds "LM358")
+    assert!(!dir.join(file_name("LM358")).exists());
+    assert_eq!(remove(&dir, "LM358").unwrap(), 1);
+    assert!(load_dir(&dir).0.iter().all(|p| p.name != "LM358"));
+    assert_eq!(load_dir(&dir).0.len(), EXAMPLES.len() - 1, "the others are untouched");
+    assert_eq!(remove(&dir, "LM358").unwrap(), 0, "nothing left to remove");
+    // starting the program again does not bring it back
+    install_examples(&dir).unwrap();
+    assert!(load_dir(&dir).0.iter().all(|p| p.name != "LM358"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

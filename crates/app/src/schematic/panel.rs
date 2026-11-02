@@ -258,6 +258,8 @@ impl SchEditor {
             let favs: Vec<usize> = self.lib_prefs.fav.iter().filter_map(by_name).collect();
             let recents: Vec<usize> = self.lib_prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
             let mut toggle_fav: Option<String> = None;
+            let mut edit_part: Option<PartDef> = None;
+            let mut delete_part: Option<String> = None;
             let mut row = |ui: &mut egui::Ui, i: usize, selected: bool, prefs: &library::LibPrefs| {
                 let d = &self.library[i];
                 ui.horizontal(|ui| {
@@ -325,6 +327,22 @@ impl SchEditor {
                 ui.group(|ui| {
                     ui.strong(&d.name);
                     ui.small(format!("パッケージ: {}", d.footprint_name()));
+                    if ui.small_button("編集…").on_hover_text("この部品を部品作成の窓で開いて、ピン・部品の形・モデル・定格などを直します。保存すると書き換わります (名前を変えると別の部品として追加)").clicked() {
+                        edit_part = Some(d.clone());
+                    }
+                    if self.lib_delete.as_deref() == Some(d.name.as_str()) {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(crate::theme::ERROR, "本当に削除しますか?");
+                            if ui.small_button("削除する").on_hover_text("この部品のファイルをライブラリのフォルダから消します。元に戻せません。回路図や基板に置いた部品は、そのまま残ります").clicked() {
+                                delete_part = Some(d.name.clone());
+                            }
+                            if ui.small_button("やめる").clicked() {
+                                self.lib_delete = None;
+                            }
+                        });
+                    } else if ui.small_button("削除…").on_hover_text("この部品を、ライブラリから消します (押したあとに、もう一度確かめます)。同梱の部品も消せて、消したものは、次に起動しても戻りません。回路図や基板に置いた部品は、そのまま残ります").clicked() {
+                        self.lib_delete = Some(d.name.clone());
+                    }
                     ui.small(&d.description);
                     if let Some(m) = &d.sim {
                         limits_ui(ui, &m.limits, "lib_limits");
@@ -340,6 +358,14 @@ impl SchEditor {
                     });
                     ui.small(if d.sim.is_some() { "シミュレーションモデルあり ◎" } else { "シミュレーションモデルなし (基板設計用)" });
                 });
+            }
+            if let Some(n) = delete_part {
+                self.lib_delete = None;
+                self.delete_library_part(&n);
+            }
+            if let Some(d) = edit_part {
+                self.status = format!("{} を編集します。保存すると書き換わります", d.name);
+                self.form = Some(PartForm::from_def(&d));
             }
             ui.small("◎ = シミュレーションモデルあり");
             ui.horizontal(|ui| {
@@ -638,7 +664,7 @@ impl SchEditor {
         if let Some(mut form) = self.form.take() {
             let mut open = true;
             let mut saved = None;
-            egui::Window::new("部品を作成").open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
+            egui::Window::new(if form.editing().is_some() { "部品を編集" } else { "部品を作成" }).open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
                 saved = form.ui(ui);
             });
             // the file buttons of the form: the library belongs to the editor

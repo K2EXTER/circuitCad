@@ -161,7 +161,7 @@ impl PartForm {
             self.sim_pins = existing.iter().map(|p| p.number.clone()).collect::<Vec<_>>().join(" ");
             return Ok(format!("{} を入力しました。ピンの名前が合わなかったので、ピン表の上から順に端子 ({}) へ対応づけました。順番を確かめてください", g.name, g.roles.join(" ")));
         }
-        Err(format!("モデルの端子は {} 本 ({}) ですが、ピン表は {} 本です。ピン表を端子の数に合わせるか、ピン表を消してからもう一度押してください", g.roles.len(), g.roles.join(" "), existing.len()))
+        Err(format!("モデルの端子は {} 本 ({}) ですが、ピン表は {} 本で、名前も合いません。モデルが使うのが一部のピンだけ (3端子のモデルを8ピンのパッケージに使う、など) なら、このままでかまいません。「ノード順のピン番号」に、モデルの端子の順に、そのピン番号を手で入れてください (使わないピンは書かなくて大丈夫です)。ピン表をモデルの端子だけにしたいときは、ピン表を消してからもう一度押してください", g.roles.len(), g.roles.join(" "), existing.len()))
     }
 
     pub(super) fn parse_pins(&self) -> Result<Vec<PinDef>, String> {
@@ -297,7 +297,7 @@ impl PartForm {
             extra_pads.push(PadSpec { pin: pin.to_string(), x: 0.0, y: 0.0, shape: "rect".into(), w: self.thermal_w, h: self.thermal_h, drill: None, slot: 0.0, slot_v: false });
         }
         // pins that only exist as extra pads (the shell, say) are not part of the package's row of pads
-        let n = pins.iter().filter(|p| !extra_pads.iter().any(|e| e.pin == p.number)).count();
+        let n = self.orig_pad_count(&pins).unwrap_or_else(|| pins.iter().filter(|p| !extra_pads.iter().any(|e| e.pin == p.number)).count());
         let package = match self.pkg {
             PkgKind::Chip2 => PackageSpec::Chip2 { pitch: self.pitch, pad_len: self.len, pad_width: self.width },
             PkgKind::Dual => PackageSpec::Dual {
@@ -310,6 +310,10 @@ impl PartForm {
             },
             PkgKind::Quad => PackageSpec::Quad { pins: n, pitch: self.pitch, span: self.span, pad_len: self.len, pad_width: self.width },
             PkgKind::Row => PackageSpec::SingleRow { pins: n, pitch: self.pitch, pad_d: self.pad_d, drill: self.drill },
+        };
+        let package = match &self.orig {
+            Some(o) if self.keep_package => o.package.clone(),
+            _ => package,
         };
         // a built-in footprint replaces the typed dimensions
         let (package, footprint_name) = match self.fp_preset.trim() {
@@ -342,7 +346,7 @@ impl PartForm {
                 limits: self.sim_limits.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect(),
             }),
         };
-        Ok(PartDef {
+        let mut def = PartDef {
             name: self.name.trim().to_string(),
             category: self.category.trim().to_string(),
             description: self.description.clone(),
@@ -369,6 +373,8 @@ impl PartForm {
             land_unverified: self.land_unverified,
             model3d: self.model3d.clone(),
             swap: None,
-        })
+        };
+        self.keep_hidden(&mut def);
+        Ok(def)
     }
 }

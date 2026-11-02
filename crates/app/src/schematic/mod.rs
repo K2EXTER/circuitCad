@@ -129,6 +129,8 @@ pub struct SchEditor {
     lib_prefs: library::LibPrefs,
     /// The part list takes more height.
     lib_tall: bool,
+    /// The library part the learner pressed 削除 for and has not yet confirmed.
+    lib_delete: Option<String>,
     /// The quick-add box (key A), when open.
     quick: Option<quick::QuickAdd>,
     place_lib: Option<usize>,
@@ -485,6 +487,7 @@ impl Default for SchEditor {
             library,
             lib_prefs,
             lib_tall: false,
+            lib_delete: None,
             quick: None,
             lib_errors,
             lib_dir,
@@ -662,7 +665,7 @@ pub use lessons::{lesson_ids, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
 mod symbols;
 mod glyphs;
-pub(crate) use glyphs::{symbol_lines, symbol_pin_labels};
+pub(crate) use glyphs::{glyph_fits, symbol_lines, symbol_pin_labels};
 mod wave;
 mod ac;
 mod analysis_panel;

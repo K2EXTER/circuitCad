@@ -12,8 +12,8 @@ type P = (f32, f32);
 /// Which body a part gets: the `glyph` of the part when it names one, else a guess from the part
 /// name and pin names (so parts installed before the glyphs existed look right too).
 pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
-    const KNOWN: [&str; 17] = [
-        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal",
+    const KNOWN: [&str; 18] = [
+        "diode", "zener", "schottky", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "led", "tvs", "ac3p", "crystal", "comparator",
     ];
     if let Some(g) = KNOWN.iter().find(|g| **g == sym.glyph) {
         return Some(g);
@@ -24,6 +24,99 @@ pub(super) fn body_glyph(sym: &CustomSymbol) -> Option<&'static str> {
     // saved before the glyphs existed: guess from the name and pins (the box layout stays)
     let g = sym.inferred_glyph();
     KNOWN.iter().find(|k| **k == g).copied()
+}
+
+/// A mark drawn inside the ordinary box (the box, the leads and the pin names stay): a logic gate in the middle of
+/// a gate IC, the DC mark of a regulator. The glyph of the part when it names one, else a guess like `body_glyph`.
+pub(super) fn overlay_glyph(sym: &CustomSymbol) -> Option<&'static str> {
+    const KNOWN: [&str; 9] = ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer"];
+    let g = if sym.glyph.is_empty() { sym.inferred_glyph() } else { sym.glyph.as_str() };
+    KNOWN.iter().find(|k| **k == g).copied()
+}
+
+/// Does the part's pins suit the symbol `glyph` names? (When they do not, the part is drawn as a box.)
+pub(crate) fn glyph_fits(glyph: &str, sym: &CustomSymbol) -> bool {
+    let mut sym = sym.clone();
+    sym.glyph = glyph.to_string();
+    match glyph {
+        "" | "box" | "regulator" | "gate_and" | "gate_or" | "gate_not" | "gate_nand" | "gate_nor" | "gate_xor" | "gate_schmitt" | "gate_buffer" => true,
+        "capacitor" | "electrolytic" | "resistor" | "inductor" => sym.is_two_lead_glyph(),
+        g => body(g, &sym.layout()).is_some(),
+    }
+}
+
+/// Points of a quadratic curve from `a` to `b` bent towards `c`.
+fn curve(a: P, c: P, b: P, v: &mut Vec<Sh>) {
+    let n = 10;
+    let at = |t: f32| ((1.0 - t) * (1.0 - t) * a.0 + 2.0 * (1.0 - t) * t * c.0 + t * t * b.0, (1.0 - t) * (1.0 - t) * a.1 + 2.0 * (1.0 - t) * t * c.1 + t * t * b.1);
+    for i in 0..n {
+        let (p, q) = (at(i as f32 / n as f32), at((i + 1) as f32 / n as f32));
+        v.push(L(p.0, p.1, q.0, q.1));
+    }
+}
+
+/// The overlay of `overlay_glyph`, centred on the origin (the middle of the box). A gate is about 1.9 wide and 1.4 high.
+pub(super) fn overlay(glyph: &str, l: &SymLayout) -> Vec<Sh> {
+    let mut v = vec![];
+    let bubble = |v: &mut Vec<Sh>, x: f32| v.push(C(x + 0.12, 0.0, 0.12));
+    match glyph {
+        "regulator" => {
+            // the DC mark of IEC 60617: a solid line over a dashed one, above the row of the in and out leads
+            let y = -(l.hh as f32) * 0.6;
+            v.push(L(-0.8, y, 0.8, y));
+            for x in [-0.8f32, -0.25, 0.3] {
+                v.push(L(x, y + 0.4, x + 0.35, y + 0.4));
+            }
+        }
+        "gate_and" | "gate_nand" => {
+            let x0 = if glyph == "gate_nand" { -0.9 } else { -0.8 };
+            let x1 = x0 + 1.0;
+            v.extend([L(x0, -0.6, x0, 0.6), L(x0, -0.6, x1, -0.6), L(x0, 0.6, x1, 0.6)]);
+            for i in 0..10 {
+                let (a, b) = (std::f32::consts::PI * (i as f32 / 10.0 - 0.5), std::f32::consts::PI * ((i + 1) as f32 / 10.0 - 0.5));
+                v.push(L(x1 + 0.6 * a.cos(), 0.6 * a.sin(), x1 + 0.6 * b.cos(), 0.6 * b.sin()));
+            }
+            if glyph == "gate_nand" {
+                bubble(&mut v, x1 + 0.6);
+            }
+        }
+        "gate_or" | "gate_nor" | "gate_xor" => {
+            let dx = if glyph == "gate_nor" { -0.1 } else { 0.0 };
+            // the back curves, the two sides running to the point
+            curve((-0.8 + dx, -0.6), (-0.4 + dx, 0.0), (-0.8 + dx, 0.6), &mut v);
+            curve((-0.8 + dx, -0.6), (0.1 + dx, -0.6), (0.7 + dx, 0.0), &mut v);
+            curve((-0.8 + dx, 0.6), (0.1 + dx, 0.6), (0.7 + dx, 0.0), &mut v);
+            if glyph == "gate_xor" {
+                curve((-1.0 + dx, -0.6), (-0.6 + dx, 0.0), (-1.0 + dx, 0.6), &mut v);
+            }
+            if glyph == "gate_nor" {
+                bubble(&mut v, 0.7 + dx);
+            }
+        }
+        "gate_not" | "gate_schmitt" | "gate_buffer" => {
+            let dx = if glyph == "gate_buffer" { 0.0 } else { -0.1 };
+            v.extend([L(-0.7 + dx, -0.6, -0.7 + dx, 0.6), L(-0.7 + dx, -0.6, 0.6 + dx, 0.0), L(-0.7 + dx, 0.6, 0.6 + dx, 0.0)]);
+            if glyph != "gate_buffer" {
+                bubble(&mut v, 0.6 + dx);
+            }
+            if glyph == "gate_schmitt" {
+                // the hysteresis loop inside the triangle
+                v.extend([L(-0.5, 0.2, -0.1, 0.2), L(-0.1, 0.2, -0.1, -0.2), L(-0.1, -0.2, 0.2, -0.2), L(-0.3, 0.2, -0.3, -0.2), L(-0.3, -0.2, -0.5, -0.2)]);
+            }
+        }
+        _ => {}
+    }
+    if glyph.starts_with("gate_") {
+        // drawn 1.6 wide above; a little larger reads better and still clears the pin names at the sides
+        const K: f32 = 1.2;
+        for s in &mut v {
+            *s = match *s {
+                L(a, b, c, d) => L(a * K, b * K, c * K, d * K),
+                C(x, y, r) => C(x * K, y * K, r * K),
+            };
+        }
+    }
+    v
 }
 
 /// Does a chip resistor from the library stand for a thermistor / RTD (a slash is added to the resistor)?
@@ -193,7 +286,7 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
             }
             Some(v)
         }
-        "opamp" => {
+        "opamp" | "comparator" => {
             let out = pt(find(l, &["OUT"])?);
             let plus = find(l, &["IN+"])?;
             let minus = find(l, &["IN-"])?;
@@ -210,6 +303,10 @@ fn body_full(glyph: &str, l: &SymLayout) -> Option<Vec<Sh>> {
                 L(-1.3, pp.1 - 0.3, -1.3, pp.1 + 0.3),
                 L(-1.6, mp.1, -1.0, mp.1),
             ];
+            if glyph == "comparator" {
+                // a step (the output jumps between two levels) near the output
+                v.extend([L(-0.2, 0.45, 0.3, 0.45), L(0.3, 0.45, 0.3, -0.45), L(0.3, -0.45, 0.8, -0.45)]);
+            }
             for p in &l.pins {
                 // power pins come in from the top and bottom edges of the triangle
                 let t = pt(p);
@@ -387,6 +484,9 @@ pub(crate) fn symbol_lines(sym: &CustomSymbol) -> Vec<([f32; 2], [f32; 2])> {
     let (hw, hh) = (l.hw as f32, l.hh as f32);
     add(vec![L(-hw, -hh, hw, -hh), L(hw, -hh, hw, hh), L(hw, hh, -hw, hh), L(-hw, hh, -hw, -hh)]);
     add(l.pins.iter().map(|p| L(p.tip.0 as f32, p.tip.1 as f32, p.edge.0 as f32, p.edge.1 as f32)).collect());
+    if let Some(g) = overlay_glyph(sym) {
+        add(overlay(g, &l));
+    }
     out
 }
 
@@ -464,5 +564,50 @@ mod size_tests {
         assert_eq!(sym_extents(&get("1N4007")), (-2., 2., -1., 1.));
         assert_eq!(sym_extents(&get("CR2032")), (-2., 2., -1., 1.));
         assert_eq!(sym_extents(&get("BC547")), (-2., 2., -2., 2.));
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    fn sym(name: &str) -> CustomSymbol {
+        let text = part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with(name)).unwrap().1;
+        serde_json::from_str::<part_lib::PartDef>(text).unwrap().symbol()
+    }
+
+    /// A glyph chosen by hand wins over the guess; "box" forces the plain box; a glyph the pins do not suit is reported.
+    #[test]
+    fn a_chosen_glyph_wins_over_the_guess() {
+        let mut d: part_lib::PartDef = serde_json::from_str(part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with("LM358")).unwrap().1).unwrap();
+        assert_eq!(body_glyph(&d.symbol()), Some("opamp"));
+        d.glyph = "box".into();
+        assert!(!d.has_errors());
+        assert_eq!((body_glyph(&d.symbol()), overlay_glyph(&d.symbol())), (None, None));
+        d.glyph = "comparator".into();
+        assert_eq!(body_glyph(&d.symbol()), Some("comparator"));
+        assert!(glyph_fits("opamp", &d.symbol()) && glyph_fits("gate_and", &d.symbol()));
+        assert!(!glyph_fits("npn", &d.symbol()) && !glyph_fits("resistor", &d.symbol()));
+    }
+
+    /// The gate ICs, the three-terminal regulators and the comparator get their marks from the name and pins alone.
+    #[test]
+    fn gates_regulators_and_comparators_are_recognised() {
+        for (part, g) in [("74HC00", "gate_nand"), ("74HC02", "gate_nor"), ("74HC04", "gate_not"), ("74HC08", "gate_and"), ("74HC14_DIP", "gate_schmitt"), ("74HC32_DIP", "gate_or"), ("74HC86", "gate_xor"), ("LM7805", "regulator"), ("AMS1117-3.3", "regulator"), ("L78L05", "regulator"), ("MCP1700", "regulator")] {
+            assert_eq!(overlay_glyph(&sym(part)), Some(g), "{part}");
+        }
+        assert_eq!(body_glyph(&sym("LM393")), Some("comparator"));
+        assert_eq!(body_glyph(&sym("LM358")), Some("opamp"));
+        // a mark never sticks out of the box
+        for g in ["regulator", "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer"] {
+            let l = sym("74HC00").layout();
+            for s in overlay(g, &l) {
+                let pts = match s {
+                    L(a, b, c, d) => vec![(a, b), (c, d)],
+                    C(x, y, r) => vec![(x - r, y), (x + r, y)],
+                };
+                assert!(pts.iter().all(|p| p.0.abs() <= l.hw as f32 && p.1.abs() <= l.hh as f32), "{g} sticks out");
+            }
+        }
     }
 }

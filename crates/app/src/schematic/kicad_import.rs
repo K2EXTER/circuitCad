@@ -17,6 +17,11 @@ pub(super) struct KicadImport {
     use_step: bool,
     filter: String,
     sel: Option<usize>,
+    /// The symbol to draw with (empty = decided from the name and pins).
+    glyph: String,
+    /// Parts added from this window, and what the last add did.
+    added: Vec<String>,
+    done: Option<String>,
     msg: String,
 }
 
@@ -25,6 +30,7 @@ impl KicadImport {
     fn select(&mut self, i: usize) {
         self.sel = Some(i);
         self.msg.clear();
+        self.done = None;
         if let Some(f) = self.syms.get(i).and_then(|s| kicad::pick_footprint(s, &self.zip_fps)) {
             self.fp_file = self.zip_fps[f].name.clone();
             self.fp = Some(self.zip_fps[f].clone());
@@ -49,6 +55,9 @@ impl SchEditor {
                 let mut k = KicadImport {
                     file: p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
                     sel: None,
+                    glyph: String::new(),
+                    added: vec![],
+                    done: None,
                     syms: pkg.symbols,
                     fp: None,
                     fp_file: String::new(),
@@ -86,7 +95,7 @@ impl SchEditor {
                     if !f.is_empty() && !s.name.to_lowercase().contains(&f) && !s.description.to_lowercase().contains(&f) {
                         continue;
                     }
-                    let label = format!("{} ({}ピン)", s.name, s.pins.len());
+                    let label = format!("{}{} ({}ピン)", if k.added.contains(&s.name) { "✔ " } else { "" }, s.name, s.pins.len());
                     if ui.selectable_label(k.sel == Some(i), label).on_hover_text(&s.description).clicked() {
                         clicked = Some(i);
                     }
@@ -142,8 +151,18 @@ impl SchEditor {
             } else if k.from_zip {
                 ui.small("この zip には 3D モデル (STEP) が入っていません。ダウンロードのとき STEP も選ぶと、3D の形まで取り込めます").on_hover_text("Ultra Librarian や SnapEDA は、ダウンロードの画面で 3D モデルにチェックを入れたときだけ STEP を zip に入れます");
             }
+            if let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {
+                ui.horizontal(|ui| {
+                    ui.label("記号の形");
+                    let sym = kicad::to_part(s, None).ok().map(|d| d.symbol());
+                    crate::part_form::glyph_combo(ui, "kicad_glyph", &mut k.glyph, sym.as_ref());
+                });
+            }
             if ui.add_enabled(k.sel.is_some(), egui::Button::new("ライブラリに追加")).on_hover_text("選んだ部品を、ライブラリに保存します").clicked() {
                 add = true;
+            }
+            if let Some(d) = &k.done {
+                ui.colored_label(crate::theme::OK, d);
             }
             if !k.msg.is_empty() {
                 ui.colored_label(crate::theme::ERROR, &k.msg);
@@ -151,13 +170,22 @@ impl SchEditor {
         });
         if add && let Some(s) = k.sel.and_then(|i| k.syms.get(i)) {
             match make_part(&k, s) {
-                Err(e) => k.msg = e,
+                Err(e) => {
+                    k.msg = e;
+                    k.done = None;
+                }
                 Ok(def) => match part_lib::save(&self.lib_dir, &def) {
                     Ok(_) => {
                         self.reload_library();
+                        k.msg.clear();
+                        k.done = Some(format!("✔ ライブラリに追加しました: {}{}", def.name, if def.model3d.is_some() { " (3D の形つき)" } else { "" }));
+                        k.added.push(def.name.clone());
                         self.status = format!("ライブラリに追加しました: {} (KiCad{})", def.name, if def.model3d.is_some() { "、3D の形つき" } else { "" });
                     }
-                    Err(e) => k.msg = format!("保存失敗: {e}"),
+                    Err(e) => {
+                        k.msg = format!("保存失敗: {e}");
+                        k.done = None;
+                    }
                 },
             }
         }
@@ -170,6 +198,9 @@ impl SchEditor {
 /// The part for the chosen symbol, with the footprint and (if asked for) the STEP model, checked.
 fn make_part(k: &KicadImport, s: &KicadSymbol) -> Result<part_lib::PartDef, String> {
     let mut def = kicad::to_part(s, k.fp.as_ref())?;
+    if !k.glyph.is_empty() {
+        def.glyph = k.glyph.clone();
+    }
     if let (true, Some((_, bytes))) = (k.use_step, &k.step) {
         let mesh = crate::part_form::mesh_over_pads(bytes, &def).map_err(|e| format!("3D の形 (STEP) を読めません: {e}。チェックを外せば、3D の形なしで追加できます"))?;
         if def.height.is_none() {
@@ -202,6 +233,9 @@ mod tests {
             use_step: false,
             filter: String::new(),
             sel: None,
+            glyph: String::new(),
+            added: vec![],
+            done: None,
             msg: String::new(),
         };
         k.select(0);

@@ -86,8 +86,11 @@ pub struct Issue {
 }
 
 /// Glyphs that draw a standard body (diode, transistor ...) inside the box; the pins keep their box positions.
-pub const BODY_GLYPHS: [&str; 17] = [
-    "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal",
+pub const BODY_GLYPHS: [&str; 28] = [
+    "diode", "zener", "schottky", "tvs", "led", "npn", "pnp", "nmos", "pmos", "opamp", "transformer", "battery", "ldr", "photodiode", "shunt_reg", "ac3p", "crystal", "comparator", "regulator",
+    "gate_and", "gate_or", "gate_not", "gate_nand", "gate_nor", "gate_xor", "gate_schmitt", "gate_buffer",
+    // "box" = the plain box with the pin names, whatever the name and pins suggest
+    "box",
 ];
 
 impl PartDef {
@@ -316,6 +319,24 @@ pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
     let path = dir.join(file_name(&part.name));
     std::fs::write(&path, serde_json::to_string_pretty(part).map_err(std::io::Error::other)?)?;
     Ok(path)
+}
+
+/// Delete the library files that hold the part named `name` (the file may have another name than the part, as the bundled ones do).
+/// Returns how many files were removed. A bundled part stays deleted: `install_examples` remembers it was installed.
+pub fn remove(dir: &Path, name: &str) -> std::io::Result<usize> {
+    let mut n = 0;
+    for e in std::fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+        let path = e.path();
+        if !path.to_string_lossy().ends_with(FILE_SUFFIX) {
+            continue;
+        }
+        let part = std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str::<PartDef>(&s).ok());
+        if part.is_some_and(|p| p.name == name) {
+            std::fs::remove_file(&path)?;
+            n += 1;
+        }
+    }
+    Ok(n)
 }
 
 /// The pin-trading rules of the part named `name` (the symbol's name in the schematic): the library's own, else the built-in ones of

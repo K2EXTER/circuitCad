@@ -727,7 +727,8 @@ impl CustomSymbol {
             (&["2N3906", "BD140", "S8550", "TIP125"], "pnp"),
             (&["2N7000", "BSS138", "AO3400A", "IRF540N", "IRFZ44N", "IRLZ44N"], "nmos"),
             (&["AO3401A", "IRF9540N"], "pmos"),
-            (&["LM324", "LM358", "LM393", "MCP6001", "MCP6002", "NE5532", "TL072"], "opamp"),
+            (&["LM324", "LM358", "MCP6001", "MCP6002", "NE5532", "TL072"], "opamp"),
+            (&["LM393", "LM339", "LM311", "LM2903"], "comparator"),
             (&["LDR_GL5528"], "ldr"),
             (&["BPW34"], "photodiode"),
             (&["TL431"], "shunt_reg"),
@@ -738,12 +739,23 @@ impl CustomSymbol {
         if self.name.starts_with("XTAL") {
             return "crystal";
         }
+        // the 74HC gates (also "74HC32D" / "74HC00N"): one mark of the gate in the middle of the box
+        let base = self.name.trim_end_matches(['D', 'N']);
+        for (num, g) in [("00", "gate_nand"), ("02", "gate_nor"), ("04", "gate_not"), ("08", "gate_and"), ("14", "gate_schmitt"), ("32", "gate_or"), ("86", "gate_xor")] {
+            if base == format!("74HC{num}") || base == format!("74HCT{num}") || base == format!("74LS{num}") {
+                return g;
+            }
+        }
         let has = |n: &str| self.pins.iter().any(|p| p.name == n);
         if self.pins.len() == 4 && has("P1") && has("P2") && has("S1") && has("S2") {
             return "transformer";
         }
         if self.pins.len() == 2 && has("+") && has("-") {
             return "battery";
+        }
+        // a three-terminal regulator: input, output and ground
+        if self.pins.len() == 3 && has("GND") && (has("IN") || has("VIN")) && (has("OUT") || has("VOUT")) {
+            return "regulator";
         }
         ""
     }

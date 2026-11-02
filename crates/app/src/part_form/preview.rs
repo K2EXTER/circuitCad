@@ -34,7 +34,16 @@ impl PartForm {
             }
         });
         let ok = !def.has_errors();
-        if ui.add_enabled(ok, egui::Button::new(egui::RichText::new("保存してライブラリに追加").size(15.0))).on_hover_text("この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません").clicked() {
+        let replaces = self.editing() == Some(def.name.as_str());
+        let (label, tip) = if replaces {
+            ("保存して上書き", "「{}」をこの内容で書き換えます。すでに回路図に置いた部品は、そのままです (新しく置く部品から変わります)。名前を変えて押すと、別の部品として追加します。エラーが残っていると押せません")
+        } else {
+            ("保存してライブラリに追加", "この部品をライブラリに保存して、すぐに回路図で使えるようにします。エラーが残っていると押せません")
+        };
+        if let Some(n) = self.editing().filter(|_| !replaces) {
+            ui.small(format!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
+        }
+        if ui.add_enabled(ok, egui::Button::new(egui::RichText::new(label).size(15.0))).on_hover_text(tip.replace("{}", &def.name)).clicked() {
             return Some(def.clone());
         }
         None

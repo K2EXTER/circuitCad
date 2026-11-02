@@ -2,8 +2,9 @@
 //!
 //! What is read: the solids (`MANIFOLD_SOLID_BREP`, `BREP_WITH_VOIDS`, `SHELL_BASED_SURFACE_MODEL`) with their faces on planes,
 //! cylinders, cones, spheres, tori and anything else (a flat patch through the outline), edges that are lines, circles,
-//! ellipses and B-splines, the length unit and the colours (`STYLED_ITEM`). Not read: assembly placements (parts that are
-//! moved inside the file), curved faces whose inside has no outline point (a full sphere), and anything but the shape.
+//! ellipses and B-splines, the length unit, the colours (`STYLED_ITEM`) and the placements of an assembly (a lead that the
+//! file defines once and places eight times: `MAPPED_ITEM`, or `ITEM_DEFINED_TRANSFORMATION` between two representations).
+//! Not read: curved faces whose inside has no outline point (a full sphere), and anything but the shape.
 //! Curved surfaces are cut along their outline only, so a dome or a fillet shows as a few flat facets.
 
 use crate::mesh::Mesh3d;
@@ -253,6 +254,117 @@ impl Step {
         Some(Frame::new(o, z, hint))
     }
 
+    /// The items (solids, mapped items) a representation holds.
+    fn rep_items(&self, rep: u32) -> Vec<u32> {
+        let Some(parts) = self.ents.get(&rep) else { return vec![] };
+        parts
+            .iter()
+            .filter(|p| p.0.ends_with("REPRESENTATION"))
+            .find_map(|p| match p.1.get(1) {
+                Some(Val::List(l)) => Some(l.iter().filter_map(r#ref).collect()),
+                _ => None,
+            })
+            .unwrap_or_default()
+    }
+
+    /// Every instance of every solid: the placements that carry it from its own frame to the file's. An assembly defines a
+    /// lead once and places it again and again, by `MAPPED_ITEM` or by a relationship with a transformation between two
+    /// representations. Empty when the file has no placements (every solid is then where its coordinates say).
+    fn placements(&self) -> HashMap<u32, Vec<Chain>> {
+        let mut children: HashMap<u32, Vec<(u32, (Frame, Frame))>> = HashMap::new();
+        let mut is_child = std::collections::HashSet::new();
+        let mut ids: Vec<u32> = self.ents.keys().copied().collect();
+        ids.sort_unstable();
+        // product definition (or assembly usage) -> its shape representation
+        let mut def_rep: HashMap<u32, u32> = HashMap::new();
+        for &id in &ids {
+            if let Some(a) = self.part(id, "SHAPE_DEFINITION_REPRESENTATION")
+                && let (Some(shape), Some(rep)) = (a.first().and_then(r#ref), a.get(1).and_then(r#ref))
+                && let Some(def) = self.args(shape).get(2).and_then(r#ref)
+            {
+                def_rep.insert(def, rep);
+            }
+        }
+        // the relationship of two representations -> the assembly usage it belongs to
+        let mut usage: HashMap<u32, u32> = HashMap::new();
+        for &id in &ids {
+            if let Some(a) = self.part(id, "CONTEXT_DEPENDENT_SHAPE_REPRESENTATION")
+                && let (Some(rel), Some(pds)) = (a.first().and_then(r#ref), a.get(1).and_then(r#ref))
+                && let Some(nauo) = self.args(pds).get(2).and_then(r#ref)
+            {
+                usage.insert(rel, nauo);
+            }
+        }
+        for &id in &ids {
+            // simple: REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(name, description, rep1, rep2, transformation);
+            // complex: (REPRESENTATION_RELATIONSHIP(name, description, rep1, rep2) REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(transformation) ...)
+            let (reps, tf) = if let Some(a) = self.part(id, "REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION").filter(|a| a.len() >= 5) {
+                ((a.get(2).and_then(r#ref), a.get(3).and_then(r#ref)), a.get(4).and_then(r#ref))
+            } else if let (Some(r), Some(t)) = (self.part(id, "REPRESENTATION_RELATIONSHIP"), self.part(id, "REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION")) {
+                ((r.get(2).and_then(r#ref), r.get(3).and_then(r#ref)), t.first().and_then(r#ref))
+            } else {
+                continue;
+            };
+            let (Some(r1), Some(r2), Some(tf)) = (reps.0, reps.1, tf) else { continue };
+            let Some(t) = self.part(tf, "ITEM_DEFINED_TRANSFORMATION") else { continue };
+            let (Some(a), Some(b)) = (t.get(2).and_then(r#ref).and_then(|f| self.frame(f)), t.get(3).and_then(r#ref).and_then(|f| self.frame(f))) else { continue };
+            // which side is the part: the assembly usage says (relating = the assembly, related = the part); else rep1 is the part
+            let by_usage = usage.get(&id).and_then(|n| {
+                let u = self.args(*n);
+                Some((def_rep.get(&u.get(4).and_then(r#ref)?).copied()?, def_rep.get(&u.get(3).and_then(r#ref)?).copied()?))
+            });
+            let (child, parent, xf) = match by_usage {
+                Some((c, p)) if c == r2 && p == r1 => (r2, r1, (b, a)),
+                _ => (r1, r2, (a, b)),
+            };
+            children.entry(parent).or_default().push((child, xf));
+            is_child.insert(child);
+        }
+        // a mapped item inside a representation: the map's origin is moved onto the item's target
+        let mut owner: HashMap<u32, u32> = HashMap::new();
+        for &id in &ids {
+            for item in self.rep_items(id) {
+                owner.insert(item, id);
+            }
+        }
+        for &id in &ids {
+            let Some(a) = self.part(id, "MAPPED_ITEM") else { continue };
+            let (Some(map), Some(target)) = (a.get(1).and_then(r#ref), a.get(2).and_then(r#ref)) else { continue };
+            let m = self.args(map);
+            let (Some(origin), Some(rep)) = (m.first().and_then(r#ref).and_then(|f| self.frame(f)), m.get(1).and_then(r#ref)) else { continue };
+            let (Some(target), Some(&parent)) = (self.frame(target), owner.get(&id)) else { continue };
+            children.entry(parent).or_default().push((rep, (origin, target)));
+            is_child.insert(rep);
+        }
+        if children.is_empty() {
+            return HashMap::new();
+        }
+        // from every assembly nobody places: its solids, and the representations placed in it (a representation that places
+        // nothing and is placed by nobody is a copy of a part, not the assembly: a solid is drawn where the assembly puts it)
+        let mut out: HashMap<u32, Vec<Chain>> = HashMap::new();
+        let mut budget = 20_000usize;
+        let mut stack: Vec<(u32, Chain)> = ids.iter().filter(|id| !is_child.contains(id) && children.contains_key(id)).map(|&id| (id, vec![])).collect();
+        stack.reverse();
+        while let Some((rep, chain)) = stack.pop() {
+            budget = budget.saturating_sub(1);
+            if budget == 0 || chain.len() > 12 {
+                continue;
+            }
+            for item in self.rep_items(rep) {
+                if matches!(self.name(item), "MANIFOLD_SOLID_BREP" | "BREP_WITH_VOIDS" | "SHELL_BASED_SURFACE_MODEL") {
+                    out.entry(item).or_default().push(chain.clone());
+                }
+            }
+            for (child, xf) in children.get(&rep).into_iter().flatten() {
+                // the part's own placement first, then the placements of the assembly it stands in
+                let mut c = vec![*xf];
+                c.extend(chain.iter().copied());
+                stack.push((*child, c));
+            }
+        }
+        out
+    }
+
     /// Millimetres per unit of the file's length unit.
     fn unit_mm(&self) -> f64 {
         // the units the file's geometry context names come first (a file can hold other length units too, a metre for a
@@ -377,6 +489,18 @@ fn unit(a: V3) -> Option<V3> {
 
 fn dist(a: V3, b: V3) -> f64 {
     dot(sub(a, b), sub(a, b)).sqrt()
+}
+
+/// Where a solid stands in the file: placements from the solid's own frame outwards, each a frame in the part and the frame
+/// it is moved onto in the assembly.
+type Chain = Vec<(Frame, Frame)>;
+
+/// The point `p` moved along the chain.
+fn place(chain: &Chain, p: V3) -> V3 {
+    chain.iter().fold(p, |p, (from, to)| {
+        let (x, y, z) = from.rel(p);
+        add(to.o, add(mul(to.x, x), add(mul(to.y, y), mul(to.z, z))))
+    })
 }
 
 /// An origin and three perpendicular unit vectors.
@@ -718,6 +842,8 @@ fn d2(a: [f64; 2], b: [f64; 2]) -> f64 {
 
 struct Builder {
     mesh: Mesh3d,
+    /// Where the solid being read stands (see `Step::placements`); empty = at its own coordinates.
+    chain: Chain,
 }
 
 impl Builder {
@@ -764,13 +890,15 @@ impl Step {
         }
         let uv = flatten(surf, &loops);
         let flat_pts: Vec<V3> = loops.iter().flatten().copied().collect();
+        // the corners are moved to where the solid stands; the sides of the triangles are judged in the solid's own frame
+        let placed: Vec<V3> = flat_pts.iter().map(|p| place(&b.chain, *p)).collect();
         let tris = triangulate(&uv);
         if tris.is_empty() {
             return;
         }
         let ci = b.colour(colour);
         let base = b.mesh.vertices.len() as u32;
-        b.mesh.vertices.extend(flat_pts.iter().map(|p| mul(*p, scale).map(|x| x as f32)));
+        b.mesh.vertices.extend(placed.iter().map(|p| mul(*p, scale).map(|x| x as f32)));
         let sign = if same { 1.0 } else { -1.0 };
         for t in tris {
             let (pa, pb, pc) = (flat_pts[t[0]], flat_pts[t[1]], flat_pts[t[2]]);
@@ -804,11 +932,12 @@ pub fn read_step(data: &[u8]) -> Result<Mesh3d, String> {
     let s = Step::parse(data)?;
     let scale = s.unit_mm();
     let colours = s.colours();
-    let mut b = Builder { mesh: Mesh3d::default() };
+    let mut b = Builder { mesh: Mesh3d::default(), chain: vec![] };
     let mut ids: Vec<u32> = s.ents.keys().copied().collect();
     ids.sort_unstable();
     let default = [140u8, 140, 140];
     let mut solids = 0;
+    let placed = s.placements();
     for id in ids {
         let shells: Vec<u32> = match s.name(id) {
             "MANIFOLD_SOLID_BREP" => s.args(id).get(1).and_then(r#ref).into_iter().collect(),
@@ -820,7 +949,10 @@ pub fn read_step(data: &[u8]) -> Result<Mesh3d, String> {
             _ => continue,
         };
         let solid_colour = colours.get(&id).copied();
-        for sh in shells {
+        // a solid the assembly places several times is read once for each place
+        for chain in placed.get(&id).cloned().unwrap_or_else(|| vec![vec![]]) {
+        b.chain = chain;
+        for sh in shells.iter().copied() {
             let Some(Val::List(faces)) = s.args(sh).get(1) else { continue };
             for f in faces.iter().filter_map(r#ref) {
                 if !matches!(s.name(f), "ADVANCED_FACE" | "FACE_SURFACE") {
@@ -832,6 +964,7 @@ pub fn read_step(data: &[u8]) -> Result<Mesh3d, String> {
                     return Err(format!("このSTEPは大きすぎます (三角形が {MAX_TRIANGLES} を超えました)。部品1個のデータか確かめてください"));
                 }
             }
+        }
         }
         solids += 1;
     }
@@ -916,6 +1049,92 @@ mod tests {
         let (lo, hi) = m.bounds().unwrap();
         assert_eq!(lo.map(|x| x.round()), [0.0, 0.0, 0.0]);
         assert_eq!(hi.map(|x| x.round()), [10.0, 6.0, 3.0]);
+    }
+
+    /// The frames the assembly tests place a part with: the origin, and the same orientation moved to x = 10 and x = 20.
+    const FRAMES: &str = "#910=CARTESIAN_POINT('',(0.,0.,0.));
+#911=DIRECTION('',(0.,0.,1.));
+#912=DIRECTION('',(1.,0.,0.));
+#913=AXIS2_PLACEMENT_3D('',#910,#911,#912);
+#914=CARTESIAN_POINT('',(10.,0.,0.));
+#915=AXIS2_PLACEMENT_3D('',#914,#911,#912);
+#916=CARTESIAN_POINT('',(20.,0.,0.));
+#917=AXIS2_PLACEMENT_3D('',#916,#911,#912);
+";
+
+    #[test]
+    fn a_part_placed_twice_by_a_relationship_stands_in_both_places() {
+        // the part (a 2 mm cube at the origin) is defined once; the assembly places it at x = 10 and x = 20
+        let asm = format!(
+            "{FRAMES}#920=SHAPE_REPRESENTATION('part',(#913,@SOLID),#999);
+#921=SHAPE_REPRESENTATION('asm',(#913),#999);
+#930=ITEM_DEFINED_TRANSFORMATION('','',#913,#915);
+#931=(REPRESENTATION_RELATIONSHIP('','',#920,#921)REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#930)SHAPE_REPRESENTATION_RELATIONSHIP());
+#932=ITEM_DEFINED_TRANSFORMATION('','',#913,#917);
+#933=(REPRESENTATION_RELATIONSHIP('','',#920,#921)REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#932)SHAPE_REPRESENTATION_RELATIONSHIP());
+"
+        );
+        let m = rs(&box_step(2.0, 2.0, 2.0, &asm)).unwrap();
+        assert_eq!(m.triangles.len(), 24, "one cube for each place");
+        let (lo, hi) = m.bounds().unwrap();
+        assert!((lo[0] - 10.0).abs() < 1e-4 && (hi[0] - 22.0).abs() < 1e-4, "x runs {}..{}", lo[0], hi[0]);
+        assert!((m.volume() - 16.0).abs() < 1e-3, "volume {}", m.volume());
+    }
+
+    #[test]
+    fn a_copy_of_the_part_that_nobody_places_is_not_drawn_at_the_origin() {
+        // files often hold the part's shape twice (a plain and an advanced-brep representation of it); only the one the assembly
+        // places counts, or an unplaced lead would stand in the middle next to the placed ones
+        let asm = format!(
+            "{FRAMES}#920=SHAPE_REPRESENTATION('part',(#913,@SOLID),#999);
+#921=SHAPE_REPRESENTATION('asm',(#913),#999);
+#960=ADVANCED_BREP_SHAPE_REPRESENTATION('',(#913,@SOLID),#999);
+#930=ITEM_DEFINED_TRANSFORMATION('','',#913,#915);
+#931=(REPRESENTATION_RELATIONSHIP('','',#920,#921)REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#930)SHAPE_REPRESENTATION_RELATIONSHIP());
+#932=ITEM_DEFINED_TRANSFORMATION('','',#913,#917);
+#933=(REPRESENTATION_RELATIONSHIP('','',#920,#921)REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#932)SHAPE_REPRESENTATION_RELATIONSHIP());
+"
+        );
+        let m = rs(&box_step(2.0, 2.0, 2.0, &asm)).unwrap();
+        let (lo, _) = m.bounds().unwrap();
+        assert_eq!(m.triangles.len(), 24, "two places, no copy at the origin");
+        assert!((lo[0] - 10.0).abs() < 1e-4, "something stands at x = {}", lo[0]);
+    }
+
+    #[test]
+    fn a_mapped_item_places_the_part_where_its_target_is() {
+        let asm = format!(
+            "{FRAMES}#920=SHAPE_REPRESENTATION('part',(#913,@SOLID),#999);
+#950=REPRESENTATION_MAP(#913,#920);
+#940=MAPPED_ITEM('',#950,#915);
+#941=MAPPED_ITEM('',#950,#917);
+#921=SHAPE_REPRESENTATION('asm',(#940,#941),#999);
+"
+        );
+        let m = rs(&box_step(2.0, 2.0, 2.0, &asm)).unwrap();
+        assert_eq!(m.triangles.len(), 24);
+        let (lo, hi) = m.bounds().unwrap();
+        assert!((lo[0] - 10.0).abs() < 1e-4 && (hi[0] - 22.0).abs() < 1e-4, "x runs {}..{}", lo[0], hi[0]);
+    }
+
+    #[test]
+    fn a_turned_placement_turns_the_part() {
+        // the placement's x axis is the file's y axis: a 4 x 2 mm part lies along y afterwards, and its faces still point outwards
+        let asm = "#910=CARTESIAN_POINT('',(0.,0.,0.));
+#911=DIRECTION('',(0.,0.,1.));
+#912=DIRECTION('',(1.,0.,0.));
+#913=AXIS2_PLACEMENT_3D('',#910,#911,#912);
+#914=DIRECTION('',(0.,1.,0.));
+#915=AXIS2_PLACEMENT_3D('',#910,#911,#914);
+#920=SHAPE_REPRESENTATION('part',(#913,@SOLID),#999);
+#921=SHAPE_REPRESENTATION('asm',(#913),#999);
+#930=ITEM_DEFINED_TRANSFORMATION('','',#913,#915);
+#931=(REPRESENTATION_RELATIONSHIP('','',#920,#921)REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#930)SHAPE_REPRESENTATION_RELATIONSHIP());
+";
+        let m = rs(&box_step(4.0, 2.0, 1.0, asm)).unwrap();
+        let (lo, hi) = m.bounds().unwrap();
+        assert!((hi[1] - lo[1] - 4.0).abs() < 1e-4 && (hi[0] - lo[0] - 2.0).abs() < 1e-4, "size {:?}", [hi[0] - lo[0], hi[1] - lo[1]]);
+        assert!((m.volume() - 8.0).abs() < 1e-3, "volume {}", m.volume());
     }
 
     #[test]

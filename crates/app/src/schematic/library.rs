@@ -53,6 +53,21 @@ impl SchEditor {
         self.place_lib = None;
     }
 
+    /// Remove the part from the library folder (the files, and its star and place in the recent list).
+    pub(super) fn delete_library_part(&mut self, name: &str) {
+        self.status = match part_lib::remove(&self.lib_dir, name) {
+            Ok(0) => format!("{name} のファイルが見つかりませんでした。「再読み込み」を押してから、もう一度ためしてください"),
+            Ok(_) => {
+                self.lib_prefs.fav.retain(|n| n != name);
+                self.lib_prefs.recent.retain(|n| n != name);
+                self.lib_prefs.save(&self.lib_dir);
+                self.reload_library();
+                format!("ライブラリから削除しました: {name} (回路図に置いた部品は、そのまま残ります)")
+            }
+            Err(e) => format!("削除できませんでした: {e}"),
+        };
+    }
+
     pub(super) fn import_part_json(&mut self) {
         let Some(p) = rfd::FileDialog::new().add_filter("部品定義 JSON", &["json"]).pick_file() else { return };
         let def: Result<PartDef, String> =

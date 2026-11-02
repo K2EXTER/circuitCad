@@ -856,3 +856,103 @@ fn attach_boxes_to_library_part() {
     def.model3d = Some(m);
     std::fs::write(&part, serde_json::to_string_pretty(&def).unwrap()).unwrap();
 }
+
+#[test]
+fn every_bundled_part_survives_opening_for_edit() {
+    let mut bad = vec![];
+    for (name, text) in part_lib::EXAMPLES {
+        let def: PartDef = serde_json::from_str(text).unwrap();
+        match PartForm::from_def(&def).to_def() {
+            Ok(back) if back == def => {}
+            Ok(_) => bad.push(format!("{name}: changed")),
+            Err(e) => bad.push(format!("{name}: {e}")),
+        }
+    }
+    assert!(bad.is_empty(), "{} parts change when opened and saved:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
+fn turning_the_saved_3d_shape_of_an_opened_part_keeps_it() {
+    let mut def: PartDef = serde_json::from_str(part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with("LM358")).unwrap().1).unwrap();
+    // a flat plate 4 x 2 x 1 stood on the board
+    let v = |x: f32, y: f32, z: f32| [x, y, z];
+    def.model3d = Some(pcb_core::mesh::Mesh3d {
+        vertices: vec![v(0.0, 0.0, 0.0), v(4.0, 0.0, 0.0), v(4.0, 2.0, 0.0), v(0.0, 2.0, 1.0)],
+        triangles: vec![[0, 1, 2], [0, 2, 3]],
+        tri_color: vec![0, 0],
+        palette: vec![[140, 140, 140]],
+    });
+    let mut f = PartForm::from_def(&def);
+    assert!(f.step_base.is_some());
+    f.step_rot[2] = 1;
+    f.step_apply();
+    let m = f.model3d.as_ref().expect("turning must not drop the saved shape");
+    let (lo, hi) = m.bounds().unwrap();
+    // turned a quarter about z: the 4 mm side now runs along y
+    assert!((hi[1] - lo[1] - 4.0).abs() < 1e-3 && (hi[0] - lo[0] - 2.0).abs() < 1e-3);
+    assert!(f.to_def().unwrap().model3d.is_some());
+}
+
+#[test]
+fn the_pin_map_lists_every_terminal_of_the_model_and_leaves_the_sim_pins_alone_until_picked() {
+    // a 3-terminal model on an 8-pin part
+    let mut f = PartForm {
+        sim: SimChoice::Subckt,
+        sim_text: ".subckt LM317 in adj out\nR1 in out 1k\n.ends LM317".into(),
+        sim_name: "LM317".into(),
+        sim_pins: "3 1 2".into(),
+        pins_text: "1 ADJ\n2 OUT\n3 IN\n4 NC\n5 NC2\n6 NC3\n7 NC4\n8 OUT2".into(),
+        ..PartForm::default()
+    };
+    let ctx = egui::Context::default();
+    let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 700.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input, |ui| f.pin_map_ui(ui));
+    out.textures_delta.clear();
+    assert_eq!(f.sim_pins, "3 1 2");
+    let def = f.to_def().unwrap();
+    assert!(!def.has_errors() || def.validate().iter().all(|i| !i.message.contains("sim.pins")));
+}
+
+/// A SOIC-like shape: a body, a densely tessellated bump on it (a logo, a rounded edge) and thin leads at both sides.
+fn soic_like(dense: usize) -> pcb_core::mesh::Mesh3d {
+    let mut m = pcb_core::mesh::Mesh3d { palette: vec![[40, 40, 40], [200, 200, 200]], ..Default::default() };
+    let mut quad = |m: &mut pcb_core::mesh::Mesh3d, a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3], col: u8| {
+        let n = m.vertices.len() as u32;
+        m.vertices.extend([a, b, c, d]);
+        m.triangles.extend([[n, n + 1, n + 2], [n, n + 2, n + 3]]);
+        m.tri_color.extend([col, col]);
+    };
+    // the body: 4.9 x 3.9 x 1.5 mm (only its top, for the test)
+    quad(&mut m, [-2.45, -1.95, 1.5], [2.45, -1.95, 1.5], [2.45, 1.95, 1.5], [-2.45, 1.95, 1.5], 0);
+    // the dense part: small triangles on the top
+    let side = (dense as f32 / 2.0).sqrt().ceil() as usize;
+    for k in 0..dense {
+        let (x, y) = ((k % side) as f32 / side as f32 * 3.0 - 1.5, (k / side) as f32 / side as f32 * 3.0 - 1.5);
+        let n = m.vertices.len() as u32;
+        m.vertices.extend([[x, y, 1.5], [x + 0.002, y, 1.5], [x, y + 0.002, 1.5]]);
+        m.triangles.push([n, n + 1, n + 2]);
+        m.tri_color.push(0);
+    }
+    // 2 x 4 leads, 0.2 mm thick and 0.4 wide, reaching from the body out to y = +-3.0
+    for side in [-1.0f32, 1.0] {
+        for i in 0..4 {
+            let x = -1.905 + 1.27 * i as f32;
+            let (y0, y1) = (side * 1.95, side * 3.0);
+            quad(&mut m, [x - 0.2, y0, 0.0], [x + 0.2, y0, 0.0], [x + 0.2, y1, 0.0], [x - 0.2, y1, 0.0], 1);
+            quad(&mut m, [x - 0.2, y0, 0.2], [x + 0.2, y0, 0.2], [x + 0.2, y1, 0.2], [x - 0.2, y1, 0.2], 1);
+        }
+    }
+    m
+}
+
+#[test]
+fn thinning_keeps_the_thin_leads_of_a_soic() {
+    let m = soic_like(40_000);
+    let leads = |m: &pcb_core::mesh::Mesh3d| m.triangles.iter().filter(|t| t.iter().all(|&i| m.vertices[i as usize][1].abs() > 1.9 && m.vertices[i as usize][2] < 0.3)).count();
+    assert_eq!(leads(&m), 32);
+    let thin = super::step3d::thin_out(m, 12_000);
+    assert!(thin.triangles.len() <= 12_000, "{}", thin.triangles.len());
+    let (lo, hi) = thin.bounds().unwrap();
+    assert!(hi[1] > 2.9 && lo[1] < -2.9, "the leads are gone: y runs {}..{}", lo[1], hi[1]);
+    assert!(leads(&thin) >= 16, "only {} lead triangles are left", leads(&thin));
+}

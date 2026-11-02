@@ -339,6 +339,9 @@ impl SchEditor {
             let (a, b) = (corners[i], corners[(i + 1) % 4]);
             painter.line_segment([tr(a.0, a.1), tr(b.0, b.1)], stroke);
         }
+        if let Some(g) = super::glyphs::overlay_glyph(sym) {
+            self.draw_shapes(painter, rect, super::glyphs::overlay(g, &l), pos, rot, color);
+        }
         let name_font = FontId::proportional((self.zoom * 0.42).clamp(7.0, 14.0));
         let num_font = FontId::proportional((self.zoom * 0.34).clamp(6.0, 11.0));
         for p in &l.pins {

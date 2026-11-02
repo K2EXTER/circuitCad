@@ -39,6 +39,10 @@ impl PartForm {
             ui.label("値 (省略で部品名)");
             ui.text_edit_singleline(&mut self.value).on_hover_text("回路図に表示する値。空なら部品名が入ります");
             ui.end_row();
+            ui.label("記号の形");
+            let sym = self.to_def().ok().map(|d| d.symbol());
+            glyph_pick::glyph_combo(ui, "part_glyph", &mut self.glyph, sym.as_ref());
+            ui.end_row();
             ui.label("説明");
             ui.text_edit_singleline(&mut self.description).on_hover_text("一覧で部品にポインタを置いたときに出る説明");
             ui.end_row();
@@ -244,6 +248,7 @@ impl PartForm {
                     ui.label("ノード順のピン番号");
                     ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
                 });
+                self.pin_map_ui(ui);
                 crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
                 ui.add(
                     egui::TextEdit::multiline(&mut self.sim_limits)
@@ -276,6 +281,14 @@ impl PartForm {
 
     /// The tab of the board shape: package, thermal pad, body, extra pads and holes.
     pub(super) fn tab_package(&mut self, ui: &mut egui::Ui) {
+            if self.keep_package {
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(crate::theme::WARN, "この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。");
+                    if ui.small_button("寸法で作り直す").on_hover_text("いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます").clicked() {
+                        self.keep_package = false;
+                    }
+                });
+            }
             crate::icons::help_label(ui, "パッケージ", "パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
