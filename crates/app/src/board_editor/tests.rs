@@ -1368,46 +1368,110 @@ fn the_silk_and_copper_caches_are_kept_while_a_part_is_dragged() {
     for (r, x) in [("R1", 10.0), ("R2", 20.0)] {
         b.set_part(pcb_core::Part { refdes: r.into(), value: "1k".into(), footprint: "R_0603".into(), pos: p(x, 15.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
     }
+    b.tracks.push(pcb_core::model::Track { side: pcb_core::Side::Top, a: p(10.0, 15.0), b: p(20.0, 15.0), width: 0.25 });
     let mut e = BoardEditor::default();
     e.board = b;
-    let moving = vec!["R1".to_string()];
-    let silk = ribbon::SilkCache::new(&e.board, &moving);
-    let covers = ribbon::Covers::of_except(&e.board, true, true, &moving);
+    let mut silk = ribbon::SilkCache::new(&e.board);
+    let tracks = e.board.tracks.clone();
+    let copper = ribbon::CopperCache::new(&tracks, None, &ribbon::Covers::of(&e.board, true, true));
     e.board.place_part("R1", p(12.0, 16.0), 0);
-    assert!(silk.is_for(&e.board, &moving), "the silk of the other parts is as it was");
-    assert_eq!(covers.key(), ribbon::Covers::of_except(&e.board, true, true, &moving).key(), "so are the pads that cover the copper");
-    // the dragged part's own silk is still made, and follows it
-    let own = ribbon::SilkCache::only(&e.board, &moving);
-    assert!(!own.of_parts.is_empty() && own.plain.is_empty());
-    e.board.place_part("R2", p(25.0, 15.0), 0);
-    assert!(!silk.is_for(&e.board, &moving), "another part that moves is a change");
+    assert_eq!(silk.update(&e.board), 1, "only the silk of the part that moved is made again");
+    let moved = ribbon::Covers::of(&e.board, true, true);
+    assert!(!copper.is_for(&tracks, None, &moved, false), "the pads moved: the caps under them change");
+    assert!(copper.is_for(&tracks, None, &moved, true), "but not while the part is dragged");
+    e.board.tracks[0].b = p(21.0, 15.0);
+    assert!(!copper.is_for(&e.board.tracks, None, &moved, true), "a track that changed is a change in any case");
     assert!(e.dragged_parts().is_empty(), "nothing is dragged");
     e.drag_part = Some(("R1".into(), p(0.0, 0.0)));
-    assert_eq!(e.dragged_parts(), moving);
+    assert_eq!(e.dragged_parts(), vec!["R1".to_string()]);
 }
 
+/// The first frame after a part is picked up, with one display item off at a time (set CCAD_BOARD):
+/// `cargo test --release -p app drag_start_cost -- --ignored --nocapture`
 #[test]
-fn a_dragged_part_gets_airwires_to_the_copper_it_left() {
-    let mut b = pcb_core::Board::new("t", 40.0, 30.0);
-    for (r, x) in [("R1", 10.0), ("R2", 20.0)] {
-        b.set_part(pcb_core::Part { refdes: r.into(), value: "1k".into(), footprint: "R_0603".into(), pos: p(x, 15.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
-    }
-    for pad in &mut b.pads {
-        if pad.pin == "1" {
-            pad.net = "N".into();
+#[ignore]
+fn drag_start_cost() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    let variants: [(&str, fn(&mut BoardEditor)); 7] = [
+        ("everything", |_| {}),
+        ("no tracks", |e| e.vis.tracks = false),
+        ("no zones", |e| e.vis.zones = false),
+        ("no airwires", |e| e.vis.airwires = false),
+        ("no silk", |e| e.vis.silk = false),
+        ("no parts", |e| e.vis.parts = false),
+        ("no vias", |e| e.vis.vias = false),
+    ];
+    for (label, change) in variants {
+        let mut e = BoardEditor::default();
+        e.board = board.clone();
+        e.fit_view(screen);
+        let ctx = egui::Context::default();
+        let mut run = |e: &mut BoardEditor| {
+            let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+                e.canvas(ui);
+            });
+            out.textures_delta.clear();
+            let _ = ctx.tessellate(out.shapes, out.pixels_per_point);
+        };
+        for _ in 0..8 {
+            run(&mut e);
         }
+        change(&mut e);
+        for _ in 0..3 {
+            run(&mut e);
+        }
+        e.drag_part = Some((e.board.parts[e.board.parts.len() / 2].refdes.clone(), Point::new(0.0, 0.0)));
+        let t = std::time::Instant::now();
+        run(&mut e);
+        println!("{label:14} first frame of the drag {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
     }
-    let (a, c) = (b.pads.iter().find(|q| q.refdes == "R1" && q.pin == "1").unwrap().pos, b.pads.iter().find(|q| q.refdes == "R2" && q.pin == "1").unwrap().pos);
-    b.tracks.push(pcb_core::model::Track { side: pcb_core::Side::Top, a, b: c, width: 0.25 });
-    let mut e = BoardEditor::default();
-    e.board = b;
-    e.drag_part = Some(("R1".into(), p(0.0, 0.0)));
-    e.board.place_part("R1", p(10.0, 25.0), 0);
-    let wires = e.cached_airwires();
-    assert_eq!(wires.len(), 1, "the part has left its copper");
-    assert_eq!(wires[0].net, "N");
-    e.drag_part = None;
-    assert_eq!(e.cached_airwires().len(), 1, "the full answer agrees after the drop");
+}
+
+/// What making the copper and silk caches again costs (the hitch at the start and the end of a drag), on a real board (set CCAD_BOARD):
+/// `cargo test --release -p app cache_rebuild_cost -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn cache_rebuild_cost() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let time = |label: &str, f: &mut dyn FnMut()| {
+        let t = std::time::Instant::now();
+        for _ in 0..5 {
+            f();
+        }
+        println!("{label:28} {:.2} ms", t.elapsed().as_secs_f64() * 1e3 / 5.0);
+    };
+    time("Covers::of", &mut || {
+        let _ = ribbon::Covers::of(&board, true, true);
+    });
+    let covers = ribbon::Covers::of(&board, true, true);
+    time("chains_over (with covers)", &mut || {
+        let _ = ribbon::chains_over(&board.tracks, &covers);
+    });
+    time("chains (no covers)", &mut || {
+        let _ = ribbon::chains(&board.tracks);
+    });
+    time("connectivity", &mut || {
+        let _ = pcb_core::drc::connectivity(&board);
+    });
+    time("ratsnest", &mut || {
+        let _ = pcb_core::ratsnest::ratsnest(&board);
+    });
+    time("open_connections", &mut || {
+        let _ = pcb_core::ratsnest::open_connections(&board);
+    });
+    time("CopperCache::new + lod", &mut || {
+        let c = ribbon::CopperCache::new(&board.tracks, None, &covers);
+        let _ = c.lod(30.0);
+    });
+    time("CopperCache::new only", &mut || {
+        let _ = ribbon::CopperCache::new(&board.tracks, None, &covers);
+    });
+    time("SilkCache::new", &mut || {
+        let _ = ribbon::SilkCache::new(&board);
+    });
 }
 
 /// Frame time while one part is dragged on a real board (set CCAD_BOARD, CCAD_PART for the designator): the move, then the frame.
@@ -1440,7 +1504,18 @@ fn part_drag_frame_cost() {
         run(&mut e);
     }
     println!("still frame avg {:.2} ms", t.elapsed().as_secs_f64() * 1e3 / 20.0);
+    let t = std::time::Instant::now();
     e.drag_part = Some((refdes.clone(), Point::new(0.0, 0.0)));
+    run(&mut e);
+    println!("drag state set, board not moved: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+    let t = std::time::Instant::now();
+    e.board.place_part(&refdes, Point::new(part.pos.x + 0.5, part.pos.y), part.rot);
+    run(&mut e);
+    println!("first move: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+    let t = std::time::Instant::now();
+    e.board.place_part(&refdes, Point::new(part.pos.x + 1.0, part.pos.y), part.rot);
+    run(&mut e);
+    println!("second move: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
     let mut drag = |e: &mut BoardEditor, label: &str| {
         let (mut mv, mut fr, mut worst) = (0.0f64, 0.0f64, 0.0f64);
         let n = 30;
@@ -1451,6 +1526,9 @@ fn part_drag_frame_cost() {
             let t = std::time::Instant::now();
             run(e);
             let b = t.elapsed().as_secs_f64() * 1e3;
+            if i < 3 {
+                println!("  {label}: frame {i} {:.1} ms", a + b);
+            }
             mv += a;
             fr += b;
             worst = worst.max(a + b);
@@ -1458,6 +1536,13 @@ fn part_drag_frame_cost() {
         println!("{label:24} place_part avg {:.2} ms, frame avg {:.2} ms, worst total {:.2} ms", mv / n as f64, fr / n as f64, worst);
     };
     drag(&mut e, "everything");
+    e.drag_part = None;
+    for k in 0..4 {
+        let t = std::time::Instant::now();
+        run(&mut e);
+        println!("after the drop, frame {k}: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+    }
+    e.drag_part = Some((refdes.clone(), Point::new(0.0, 0.0)));
     e.vis.silk = false;
     drag(&mut e, "no silk");
     e.vis.parts = false;
@@ -1663,8 +1748,8 @@ fn frame_breakdown() {
         println!("zones,  {side}: shapes {s} triangles {t} vertices {v}  {ms:.1} ms");
     }
     if let Some(c) = e.silk_cache.borrow().as_ref() {
-        let seg = |v: &[ribbon::Chain]| (v.len(), v.iter().map(|c| c.pts.len().saturating_sub(1)).sum::<usize>(), v.iter().filter(|c| c.pts.len() <= 2).count());
-        println!("silk (chains, pieces, chains of one piece): plain {:?}, of parts {:?}; silk lines {}, texts {}", seg(&c.plain), seg(&c.of_parts), e.board.silk.len(), e.board.texts.len());
+        let seg = |v: Vec<&ribbon::Chain>| (v.len(), v.iter().map(|c| c.pts.len().saturating_sub(1)).sum::<usize>(), v.iter().filter(|c| c.pts.len() <= 2).count());
+        println!("silk (chains, pieces, chains of one piece): plain {:?}, of parts {:?}; silk lines {}, texts {}", seg(c.plain.iter().collect()), seg(c.of_parts().collect()), e.board.silk.len(), e.board.texts.len());
     }
     if let Some(c) = e.copper_cache.borrow().as_ref() {
         let pts: usize = c.chains.iter().map(|ch| ch.pts.len()).sum();
@@ -3216,10 +3301,10 @@ fn silk_thinning() {
     let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
     e.fit_view(view);
     set_multisampled(true);
-    let cache = ribbon::SilkCache::new(&e.board, &[]);
+    let cache = ribbon::SilkCache::new(&e.board);
     let text_h: Vec<f64> = e.board.texts.iter().map(|t| t.height).collect();
     println!("zoom {:.1} px/mm; texts {} (height {:.2} to {:.2} mm = {:.1} to {:.1} px)", e.zoom, text_h.len(), text_h.iter().cloned().fold(f64::MAX, f64::min), text_h.iter().cloned().fold(0.0, f64::max), text_h.iter().cloned().fold(f64::MAX, f64::min) * e.zoom as f64, text_h.iter().cloned().fold(0.0, f64::max) * e.zoom as f64);
-    for (name, chains) in [("plain (board silk and texts)", &cache.plain), ("of parts (outlines, designators)", &cache.of_parts)] {
+    for (name, chains) in [("plain (board silk and texts)", cache.plain.iter().collect::<Vec<_>>()), ("of parts (outlines, designators)", cache.of_parts().collect())] {
         for px in [0.0f64, 0.25, 0.5, 1.0, 1.5, 2.0] {
             let tol = if px == 0.0 { 0.0 } else { ribbon::lod_tolerance(ribbon::lod_level_px(e.zoom, px)) };
             let (mut tris, mut pts_n, mut chains_n) = (0usize, 0usize, 0usize);
@@ -3239,7 +3324,7 @@ fn silk_thinning() {
             println!("{name:34} thinned at {px:>4} px ({:.3} mm): {chains_n} chains, {pts_n} points, {tris} triangles", tol);
         }
     }
-    println!("silk line widths (micrometres) {:?}", cache.plain.iter().chain(&cache.of_parts).map(|c| (c.width * 1000.0).round() as i64).collect::<std::collections::BTreeSet<_>>().into_iter().take(6).collect::<Vec<_>>());
+    println!("silk line widths (micrometres) {:?}", cache.plain.iter().chain(cache.of_parts()).map(|c| (c.width * 1000.0).round() as i64).collect::<std::collections::BTreeSet<_>>().into_iter().take(6).collect::<Vec<_>>());
     set_multisampled(false);
 }
 

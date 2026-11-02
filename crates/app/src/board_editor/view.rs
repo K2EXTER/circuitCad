@@ -84,7 +84,7 @@ impl BoardEditor {
         let b = &self.board;
         let mut base = self.drag_groups.borrow_mut();
         if base.as_ref().is_none_or(|(m, p, v)| m != moving || p.len() != b.pads.len() || v.len() != b.vias.len()) {
-            let conn = connectivity(b);
+            let conn = self.cached_connectivity();
             *base = Some((moving.to_vec(), (0..b.pads.len()).map(|i| conn.pad_group(i)).collect(), (0..b.vias.len()).map(|k| conn.via_group(k)).collect()));
         }
         let (_, pads, vias) = base.as_ref().expect("made above");

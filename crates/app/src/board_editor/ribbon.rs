@@ -60,9 +60,10 @@ enum Source {
 }
 
 impl CopperCache {
-    /// Is this cache made from this copper?
-    pub fn is_for(&self, tracks: &[Track], finished: Option<&Rc<Finished>>, covers: &Covers) -> bool {
-        if self.covers_key != covers.key {
+    /// Is this cache made from this copper? With `moving_pads` (parts are dragged: the tracks stay, the pads under their ends leave) a
+    /// cache made for other pads does: the caps that are left out or drawn wrongly under a pad that moved are made right when it is dropped.
+    pub fn is_for(&self, tracks: &[Track], finished: Option<&Rc<Finished>>, covers: &Covers, moving_pads: bool) -> bool {
+        if self.covers_key != covers.key && !moving_pads {
             return false;
         }
         match (&self.source, finished) {
@@ -180,59 +181,78 @@ pub(super) fn simplify_closed(pts: &[Point], tol: f64) -> Vec<Point> {
     if a.len() < 3 { pts.to_vec() } else { a }
 }
 
-/// The silkscreen (lines and the strokes of the texts) followed into chains like the tracks, kept until the silk changes. The lines and
-/// texts of parts are apart from the others: they are shown with the parts.
+/// The silkscreen (lines and the strokes of the texts) followed into chains like the tracks, kept per part: when a part moves (or its
+/// text) only its own chains are made again. The lines and texts of parts are apart from the others: they are shown with the parts.
+#[derive(Default)]
 pub(super) struct SilkCache {
-    key: u64,
+    /// The chains of the silk that belongs to no part, with the hash of what they were made from.
+    plain_key: u64,
     pub plain: Vec<Chain>,
-    pub of_parts: Vec<Chain>,
+    /// The chains of each part's silk, with the hash of what they were made from.
+    parts: HashMap<String, (u64, Vec<Chain>)>,
 }
 
 impl SilkCache {
-    pub fn is_for(&self, board: &pcb_core::Board, moving: &[String]) -> bool {
-        self.key == silk_hash(board, moving)
+    pub fn new(board: &pcb_core::Board) -> Self {
+        let mut c = SilkCache::default();
+        c.update(board);
+        c
     }
 
-    /// The silk of the board, but for that of the parts in `moving` (the parts being dragged, drawn apart by [`only`](Self::only)).
-    pub fn new(board: &pcb_core::Board, moving: &[String]) -> Self {
-        Self::build(board, silk_hash(board, moving), |refdes| !moving.contains(&refdes.to_string()))
+    /// The chains of all parts' silk.
+    pub fn of_parts(&self) -> impl Iterator<Item = &Chain> {
+        self.parts.values().flat_map(|(_, c)| c.iter())
     }
 
-    /// Only the silk of the parts in `moving`: small, made again for every frame of a drag.
-    pub fn only(board: &pcb_core::Board, moving: &[String]) -> Self {
-        Self::build(board, 0, |refdes| !refdes.is_empty() && moving.contains(&refdes.to_string()))
-    }
-
-    fn build(board: &pcb_core::Board, key: u64, keep: impl Fn(&str) -> bool) -> Self {
-        let (mut plain, mut of_parts): (Vec<Track>, Vec<Track>) = (vec![], vec![]);
-        for l in board.silk.iter().filter(|l| keep(&l.refdes)) {
-            let t = Track { side: l.side, a: l.a, b: l.b, width: l.width };
-            if l.refdes.is_empty() { plain.push(t) } else { of_parts.push(t) }
+    /// Make again the chains of what changed since the last time. Returns how many groups (the plain silk, a part) that was.
+    pub fn update(&mut self, board: &pcb_core::Board) -> usize {
+        let keys = silk_keys(board);
+        self.parts.retain(|r, _| keys.contains_key(r));
+        let stale = |have: Option<u64>, r: &str| keys.get(r).is_some_and(|k| have != Some(*k));
+        let mut dirty: std::collections::HashSet<&str> = keys.keys().map(String::as_str).filter(|r| stale(if r.is_empty() { Some(self.plain_key) } else { self.parts.get(*r).map(|p| p.0) }, r)).collect();
+        if !keys.contains_key("") && self.plain_key != 0 {
+            self.plain_key = 0;
+            self.plain.clear();
         }
-        for t in board.texts.iter().filter(|t| keep(&t.refdes)) {
+        if dirty.is_empty() {
+            return 0;
+        }
+        let mut tracks: HashMap<&str, Vec<Track>> = dirty.iter().map(|r| (*r, vec![])).collect();
+        for l in board.silk.iter().filter(|l| dirty.contains(l.refdes.as_str())) {
+            tracks.get_mut(l.refdes.as_str()).unwrap().push(Track { side: l.side, a: l.a, b: l.b, width: l.width });
+        }
+        for t in board.texts.iter().filter(|t| dirty.contains(t.refdes.as_str())) {
             // as thick as the drawing of a text has always been
             let width = (t.height * 0.15).max(0.12);
-            let dst = if t.refdes.is_empty() { &mut plain } else { &mut of_parts };
+            let dst = tracks.get_mut(t.refdes.as_str()).unwrap();
             for [a, b] in t.strokes() {
                 dst.push(Track { side: t.side, a: Point::new(t.pos.x + a.x, t.pos.y + a.y), b: Point::new(t.pos.x + b.x, t.pos.y + b.y), width });
             }
         }
-        SilkCache { key, plain: chains(&plain), of_parts: chains(&of_parts) }
+        let n = dirty.len();
+        for r in dirty.drain() {
+            let (key, chains) = (keys[r], chains(&tracks[r]));
+            if r.is_empty() {
+                (self.plain_key, self.plain) = (key, chains);
+            } else {
+                self.parts.insert(r.to_string(), (key, chains));
+            }
+        }
+        n
     }
 }
 
-/// A hash of the silk that is drawn from the cache: with the parts in `moving` left out, it stays the same while they are dragged.
-fn silk_hash(board: &pcb_core::Board, moving: &[String]) -> u64 {
+/// A hash of the silk of each part ("" for the silk that belongs to none; never 0).
+fn silk_keys(board: &pcb_core::Board) -> HashMap<String, u64> {
     use std::hash::{Hash, Hasher};
-    let mut h = pcb_core::zonefill::FastHasher::default();
-    moving.hash(&mut h);
-    for l in board.silk.iter().filter(|l| !moving.contains(&l.refdes)) {
-        (l.a.x.to_bits(), l.a.y.to_bits(), l.b.x.to_bits(), l.b.y.to_bits(), l.width.to_bits(), l.side, l.refdes.is_empty()).hash(&mut h);
+    let mut hashers: HashMap<&str, pcb_core::zonefill::FastHasher> = HashMap::new();
+    for l in &board.silk {
+        (l.a.x.to_bits(), l.a.y.to_bits(), l.b.x.to_bits(), l.b.y.to_bits(), l.width.to_bits(), l.side).hash(hashers.entry(&l.refdes).or_default());
     }
-    for t in board.texts.iter().filter(|t| !moving.contains(&t.refdes)) {
-        (t.pos.x.to_bits(), t.pos.y.to_bits(), t.height.to_bits(), &t.text, t.rot, t.side, t.refdes.is_empty()).hash(&mut h);
+    for t in &board.texts {
+        (t.pos.x.to_bits(), t.pos.y.to_bits(), t.height.to_bits(), &t.text, t.rot, t.side).hash(hashers.entry(&t.refdes).or_default());
     }
-    h.finish()
+    hashers.into_iter().map(|(r, h)| (r.to_string(), h.finish() | 1)).collect()
 }
 
 fn tracks_hash(tracks: &[Track]) -> u64 {
@@ -293,16 +313,10 @@ impl Covers {
 
     /// The pads and the vias of the board, as far as they are shown.
     pub fn of(board: &pcb_core::Board, pads: bool, vias: bool) -> Self {
-        Self::of_except(board, pads, vias, &[])
-    }
-
-    /// [`of`](Self::of) without the pads of the parts being dragged: the key then stays the same while they move, so the copper is not
-    /// made again for every frame of the drag (the caps under the pads they left show, as the tracks stay where they were).
-    pub fn of_except(board: &pcb_core::Board, pads: bool, vias: bool, moving: &[String]) -> Self {
         use std::hash::{Hash, Hasher};
         let mut items = vec![];
         if pads {
-            for q in board.pads.iter().filter(|q| !moving.contains(&q.refdes)) {
+            for q in &board.pads {
                 let (w, h) = q.shape.size();
                 let shape = match q.shape {
                     pcb_core::PadShape::Circle { .. } => CoverShape::Circle(w / 2.0),
@@ -334,14 +348,9 @@ impl Covers {
         Covers { items, key: h.finish() | 1 }
     }
 
-    #[cfg(test)]
-    pub fn key(&self) -> u64 {
-        self.key
-    }
-
     /// Is the disc of radius `r` round `p` on `side` all under one of them?
     fn hides(&self, side: Side, p: Point, r: f64) -> bool {
-        self.items.iter().any(|c| c.side.is_none_or(|s| s == side) && c.holds_disc(p, r))
+        self.items.iter().any(|c| c.side.is_none_or(|s| s == side) && c.near(p, r) && c.holds_disc(p, r))
     }
 
     /// Is the half disc of a cap at `p`, the half towards `dir` (the way out of the end), all under one of them? (Their shapes are convex, so
@@ -350,6 +359,7 @@ impl Covers {
         let perp = (-dir.1, dir.0);
         self.items.iter().any(|c| {
             c.side.is_none_or(|s| s == side)
+                && c.near(p, r)
                 && (0..=12).all(|k| {
                     let a = std::f64::consts::PI * (k as f64 / 12.0 - 0.5);
                     let (u, v) = (a.cos() * r, a.sin() * r);
@@ -360,6 +370,16 @@ impl Covers {
 }
 
 impl Cover {
+    /// Can a disc of radius `r` round `p` be (in part) over this? Most are far off: the exact test is for the near ones only.
+    fn near(&self, p: Point, r: f64) -> bool {
+        let reach = match self.shape {
+            CoverShape::Circle(cr) => cr,
+            CoverShape::Rect(hw, hh) => hw.hypot(hh),
+            CoverShape::Capsule((ax, ay), cr) => ax.hypot(ay) + cr,
+        };
+        (p.x - self.at.x).hypot(p.y - self.at.y) <= reach + r + 1e-6
+    }
+
     fn holds_disc(&self, p: Point, r: f64) -> bool {
         const EPS: f64 = 1e-6;
         let (dx, dy) = ((p.x - self.at.x).abs(), (p.y - self.at.y).abs());
@@ -1090,16 +1110,22 @@ mod tests {
         let line = |a: (f64, f64), c: (f64, f64), refdes: &str| pcb_core::SilkLine { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.15, refdes: refdes.into() };
         // an outline of a part in three pieces, and a free line
         b.silk = vec![line((0.0, 0.0), (1.0, 0.0), "R1"), line((1.0, 0.0), (1.0, 1.0), "R1"), line((1.0, 1.0), (0.0, 1.0), "R1"), line((5.0, 5.0), (6.0, 5.0), "")];
-        let c = SilkCache::new(&b, &[]);
-        assert_eq!((c.plain.len(), c.of_parts.len()), (1, 1));
-        assert_eq!(c.of_parts[0].pts.len(), 4, "three lines are one chain of four points");
-        assert!(c.is_for(&b, &[]));
+        let mut c = SilkCache::new(&b);
+        assert_eq!((c.plain.len(), c.of_parts().count()), (1, 1));
+        assert_eq!(c.of_parts().next().unwrap().pts.len(), 4, "three lines are one chain of four points");
+        assert_eq!(c.update(&b), 0, "nothing changed");
         // a text is a few chains, not a chain for each stroke
         b.texts.push(pcb_core::SilkText { side: Side::Top, pos: Point::new(2.0, 2.0), height: 1.0, text: "R12".into(), refdes: "R12".into(), rot: 0 });
-        assert!(!c.is_for(&b, &[]), "a new text is a change");
-        let c = SilkCache::new(&b, &[]);
+        assert_eq!(c.update(&b), 1, "a new text is a change, of one part only");
         let strokes: usize = b.texts[0].strokes().len();
-        assert!(c.of_parts.len() < strokes, "{} chains for {strokes} strokes", c.of_parts.len());
+        let n = c.of_parts().count();
+        assert!(n < strokes + 1, "{n} chains for {strokes} strokes");
+        // a part that moves makes its own chains again and no other
+        b.silk[0].a.x += 0.5;
+        assert_eq!(c.update(&b), 1);
+        b.silk.clear();
+        assert_eq!(c.update(&b), 0, "what is gone is only dropped");
+        assert!(c.plain.is_empty());
     }
 
     #[test]
