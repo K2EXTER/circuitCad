@@ -190,7 +190,7 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
 }
 
 /// A toolbar button. With text: icon + label. Icon only: a square button whose tooltip starts with the label.
-/// `selected` highlights it like a selectable label; `enabled` greys it out.
+/// It is drawn with its own fill and edge; `selected` fills it with the accent colour; `enabled` greys it out.
 pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, enabled: bool, tip: &str) -> egui::Response {
     icon_button_key(ui, icon, label, "", selected, enabled, tip)
 }
@@ -211,9 +211,16 @@ pub fn icon_button_key(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, se
     let (rect, resp) = ui.allocate_exact_size(size, sense);
     if ui.is_rect_visible(rect) {
         let vis = ui.style().interact_selectable(&resp, selected);
-        if selected || resp.hovered() || resp.has_focus() {
-            ui.painter().rect(rect, vis.corner_radius, vis.weak_bg_fill, vis.bg_stroke, egui::StrokeKind::Inside);
-        }
+        // always drawn as a button (a resting fill and edge), so that it is not taken for a label; the chosen one is filled with the accent
+        let widgets = &ui.visuals().widgets;
+        let (fill, stroke) = if selected {
+            (ui.visuals().selection.bg_fill, Stroke::new(1.0, ui.visuals().selection.stroke.color))
+        } else if resp.hovered() || resp.has_focus() {
+            (vis.weak_bg_fill, vis.bg_stroke)
+        } else {
+            (widgets.inactive.weak_bg_fill, widgets.inactive.bg_stroke)
+        };
+        ui.painter().rect(rect, vis.corner_radius, fill, stroke, egui::StrokeKind::Inside);
         let col = if enabled { vis.text_color() } else { ui.visuals().widgets.noninteractive.text_color().gamma_multiply(0.5) };
         let ir = Rect::from_min_size(rect.min + vec2(if galley.is_some() { pad.x } else { 3.0 }, 3.0), vec2(side - 6.0, side - 6.0));
         paint(ui.painter(), ir, icon, col);
