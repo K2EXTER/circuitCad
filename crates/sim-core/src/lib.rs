@@ -141,3 +141,5 @@ mod tests_bench;
 mod tests_perf;
 #[cfg(test)]
 mod tests_worstcase;
+#[cfg(test)]
+mod tests_accuracy_ac;
