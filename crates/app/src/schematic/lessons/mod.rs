@@ -10,7 +10,13 @@ pub(super) struct ActiveLesson {
     pub(super) shown: Option<usize>,
     /// Steps that have been completed (once done, a step stays done).
     pub(super) done: Vec<bool>,
+    /// The step on hand and the circuit as they were when the learner last did something, and when (seconds of the UI clock):
+    /// the hint of what is missing comes after a quiet time.
+    watch: Option<(Option<usize>, String, f64)>,
 }
+
+/// Seconds the learner has to be quiet on a step before the lesson window says what its condition is missing.
+const HINT_AFTER: f64 = 25.0;
 
 struct Step {
     /// Which page of the left panel this step works on.
@@ -44,8 +50,10 @@ mod micro;
 mod models;
 mod supply;
 
+pub(super) use conditions::Unmet;
+
 #[cfg(test)]
-pub(super) use conditions::value_of;
+pub(super) use conditions::{dc_fresh_for_test, value_of};
 
 const LESSONS: &[Lesson] = &[
     basics::DIVIDER,
@@ -154,7 +162,7 @@ impl SchEditor {
         // the app starts with the resistor ready to place: in a lesson a click on the circuit would add one
         self.tool = Tool::Select;
         (lesson.setup)(self);
-        self.lesson = Some(ActiveLesson { idx, shown: None, done: vec![false; lesson.steps.len()] });
+        self.lesson = Some(ActiveLesson { idx, shown: None, done: vec![false; lesson.steps.len()], watch: None });
         self.status = format!("レッスン「{}」を始めました。右の案内に沿って操作してみましょう", lesson.title);
     }
 
@@ -192,6 +200,7 @@ impl SchEditor {
         let Some(active) = self.lesson.as_ref() else { return };
         let Some(lesson) = LESSONS.get(active.idx) else { return };
         let Some(cur) = active.done.iter().position(|d| !d) else { return };
+        self.lesson_unmet.set(None);
         if (lesson.steps[cur].done)(self)
             && let Some(a) = self.lesson.as_mut() {
                 a.done[cur] = true;
@@ -203,6 +212,29 @@ impl SchEditor {
                 active.shown = Some(next);
                 self.panel_tab = lesson.steps[next].tab;
             }
+    }
+
+    /// What the step on hand is missing, once the learner has done nothing for [`HINT_AFTER`] seconds (any change of the circuit or of the step
+    /// starts the wait again). `None` before that, or when the condition did not say.
+    pub(super) fn stuck_hint(&mut self, ctx: &egui::Context, cur: Option<usize>) -> Option<String> {
+        let now = ctx.input(|i| i.time);
+        let sig = self.signature_cached().to_string();
+        let unmet = self.lesson_unmet.get();
+        let active = self.lesson.as_mut()?;
+        let since = match &active.watch {
+            Some((step, s, t)) if *step == cur && *s == sig => *t,
+            _ => {
+                active.watch = Some((cur, sig, now));
+                now
+            }
+        };
+        let unmet = unmet.filter(|_| cur.is_some())?;
+        let quiet = now - since;
+        if quiet < HINT_AFTER {
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(HINT_AFTER - quiet + 0.05));
+            return None;
+        }
+        Some(unmet.message())
     }
 
     /// Floating guide window for the running lesson.
@@ -217,6 +249,7 @@ impl SchEditor {
         let mut restart = false;
         let mut next = None;
         let mut build = None;
+        let hint = self.stuck_hint(ctx, cur);
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
@@ -238,6 +271,13 @@ impl SchEditor {
                         ui.label(step.detail);
                     });
                 }
+            }
+            if let Some(text) = hint.as_ref() {
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(crate::theme::WARN, "ヒント");
+                    ui.label(text);
+                });
             }
             ui.separator();
             // opened by itself once the lesson is finished (the id changes, so egui opens it again)

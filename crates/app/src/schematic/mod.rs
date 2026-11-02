@@ -211,6 +211,8 @@ pub struct SchEditor {
     part_popup: Option<(usize, egui::Pos2, u32)>,
     popup_serial: u32,
     lesson_base: Schematic,
+    /// Why the lesson step on hand is not ticked (written by the step's condition each time it is checked).
+    lesson_unmet: std::cell::Cell<Option<lessons::Unmet>>,
     /// "値の決め方" window: open flag, which calculator, its input texts.
     wiz_open: bool,
     /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
@@ -545,6 +547,7 @@ impl Default for SchEditor {
             show_sim_opts: false,
             popup_serial: 0,
             lesson_base: Schematic::default(),
+            lesson_unmet: Default::default(),
             wiz_open: false,
             req_open: false,
             req_frames: true,

@@ -2,8 +2,54 @@ use super::*;
 
 // ------------------------------------------------------------------ step conditions
 
+/// Why the step on hand is not ticked, as far as a condition could tell: a condition that needs a fresh analysis
+/// result writes it here when it finds the result missing or out of date (the lesson window shows it when the learner
+/// has been stuck for a while). Conditions that stop earlier (`changed(..) && dc_fresh(..)` with nothing changed) write nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::schematic) struct Unmet {
+    /// The label of the analysis button that makes the result.
+    pub button: &'static str,
+    /// There is a result, but the circuit was changed after it.
+    pub stale: bool,
+}
+
+impl Unmet {
+    /// The sentence for the learner (the button's label is in 「」, so the button pulses as the step's own text makes it).
+    pub(in crate::schematic) fn message(&self) -> String {
+        if self.stale {
+            format!("画面の結果は、回路や値を変える前のものです。この手順は新しい結果で判定するので、もう一度「{}」を押してください", self.button)
+        } else {
+            format!("この手順は「{}」の結果で判定します。まだ押していなければ、押してみましょう", self.button)
+        }
+    }
+}
+
+/// A result is fresh when it worked and was made for the circuit as it is now; says why not otherwise.
+/// `found` is `None` when there is no result yet, else (it worked, it matches the circuit).
+fn fresh(e: &SchEditor, button: &'static str, found: Option<(bool, bool)>) -> bool {
+    match found {
+        Some((true, true)) => true,
+        // a run that failed has its own message in the panel
+        Some((false, _)) => false,
+        Some((true, false)) => {
+            e.lesson_unmet.set(Some(Unmet { button, stale: true }));
+            false
+        }
+        None => {
+            e.lesson_unmet.set(Some(Unmet { button, stale: false }));
+            false
+        }
+    }
+}
+
 pub(super) fn dc_fresh(e: &SchEditor) -> bool {
-    e.dc.as_ref().is_some_and(|d| d.outcome.is_ok() && d.signature == e.signature())
+    fresh(e, "DC動作点を解析", e.dc.as_ref().map(|d| (d.outcome.is_ok(), d.signature == e.signature())))
+}
+
+/// `dc_fresh` for the tests of the hint.
+#[cfg(test)]
+pub(in crate::schematic) fn dc_fresh_for_test(e: &SchEditor) -> bool {
+    dc_fresh(e)
 }
 
 pub(super) fn dc_ok(e: &SchEditor) -> bool {
@@ -100,7 +146,7 @@ pub(super) fn ac_done(e: &SchEditor) -> bool {
 }
 
 pub(super) fn ac_fresh(e: &SchEditor) -> bool {
-    e.ac.as_ref().is_some_and(|a| a.outcome.is_ok() && a.signature == e.signature())
+    fresh(e, "AC解析を実行", e.ac.as_ref().map(|a| (a.outcome.is_ok(), a.signature == e.signature())))
 }
 
 /// (lowest frequency, highest frequency, number of points) of the sweep the last AC run really used.
@@ -528,7 +574,7 @@ pub(super) fn usb_one_line_big_noise(e: &SchEditor) -> bool {
 }
 
 pub(super) fn tran_fresh(e: &SchEditor) -> bool {
-    e.tran.as_ref().is_some_and(|t| t.outcome.is_ok() && t.signature == e.signature())
+    fresh(e, "過渡解析を実行", e.tran.as_ref().map(|t| (t.outcome.is_ok(), t.signature == e.signature())))
 }
 
 pub(super) fn c1_changed_and_ac(e: &SchEditor) -> bool {

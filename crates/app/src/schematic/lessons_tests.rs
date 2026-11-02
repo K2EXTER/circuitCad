@@ -1437,3 +1437,65 @@ fn a_lesson_circuit_is_fitted_left_of_the_lesson_window() {
     assert!(pan_with.x > e.pan.x, "the view's centre moves right, so the circuit moves left: {} vs {}", pan_with.x, e.pan.x);
     assert!(zoom_with <= e.zoom, "and the circuit is no bigger than it would be on the whole canvas");
 }
+
+#[test]
+fn a_condition_says_when_the_result_it_needs_is_missing_or_old() {
+    use super::lessons::Unmet;
+    let mut e = SchEditor::default();
+    e.start_lesson(0);
+    // no analysis yet: the freshness check finds nothing
+    e.update_lesson();
+    assert_eq!(e.lesson_unmet.get(), None, "the first step asks for any DC result, not a fresh one");
+    assert!(!super::lessons::dc_fresh_for_test(&e));
+    assert_eq!(e.lesson_unmet.get(), Some(Unmet { button: "DC動作点を解析", stale: false }));
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    // the step asks for a changed R2 first: nothing is said about the analysis while R2 is as it was
+    assert_eq!(e.lesson_unmet.get(), None);
+    // R2 changed but the picture is the old one: the condition says so
+    set_value(&mut e, "R2", "30k");
+    e.update_lesson();
+    assert_eq!(e.lesson_unmet.get(), Some(Unmet { button: "DC動作点を解析", stale: true }));
+    assert!(e.lesson_unmet.get().unwrap().message().contains("「DC動作点を解析」"));
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert_eq!(e.lesson_unmet.get(), None, "a ticked step leaves nothing to say");
+}
+
+#[test]
+fn the_hint_comes_after_a_quiet_time_and_starts_over_with_every_change() {
+    let ctx = egui::Context::default();
+    let at = |t: f64, e: &mut SchEditor| -> Option<String> {
+        let mut out = None;
+        let input = egui::RawInput { time: Some(t), ..Default::default() };
+        let mut frame = ctx.run_ui(input, |ui| {
+            let cur = e.lesson.as_ref().and_then(|a| a.done.iter().position(|d| !d));
+            out = e.stuck_hint(ui.ctx(), cur);
+        });
+        frame.textures_delta.clear();
+        out
+    };
+    let mut e = SchEditor::default();
+    e.start_lesson(0);
+    e.run_dc();
+    e.update_lesson();
+    set_value(&mut e, "R2", "30k");
+    e.sig_cache = e.signature();
+    e.update_lesson();
+    assert!(at(100.0, &mut e).is_none(), "the wait starts when the window first looks");
+    assert!(at(110.0, &mut e).is_none(), "10 s is not long");
+    let hint = at(130.0, &mut e).expect("30 s without a change");
+    assert!(hint.contains("DC動作点を解析"), "{hint}");
+    // a change of the circuit starts the wait again
+    set_value(&mut e, "R2", "20k");
+    e.sig_cache = e.signature();
+    e.update_lesson();
+    assert!(at(131.0, &mut e).is_none());
+    assert!(at(160.0, &mut e).is_some());
+    // once the result is fresh the step is ticked and there is nothing to say
+    e.run_dc();
+    e.update_lesson();
+    assert!(at(300.0, &mut e).is_none());
+}
