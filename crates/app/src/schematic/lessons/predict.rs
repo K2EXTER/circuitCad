@@ -50,6 +50,23 @@ fn node_v(e: &SchEditor, node: &str) -> Option<f64> {
     e.dc.as_ref()?.outcome.as_ref().ok()?.voltage(node)
 }
 
+/// The frequency where `signal` of the AC result has fallen 3 dB below its first point (between the two points around it, on a log scale).
+fn cutoff_hz(e: &SchEditor, signal: &str) -> Option<f64> {
+    let r = e.ac.as_ref()?.outcome.as_ref().ok()?;
+    let db = r.signal(signal)?.db();
+    let target = db.first()? - 3.0103;
+    let i = (1..db.len()).find(|&i| db[i] <= target)?;
+    let frac = (db[i - 1] - target) / (db[i - 1] - db[i]);
+    Some((r.freq[i - 1].ln() + frac * (r.freq[i].ln() - r.freq[i - 1].ln())).exp())
+}
+
+/// How far the transient `signal` goes past its final value, in percent of the step.
+fn overshoot_pct(e: &SchEditor, signal: &str) -> Option<f64> {
+    let r = e.tran.as_ref()?.outcome.as_ref().ok()?;
+    let sg = r.signals.iter().find(|s| s.name == signal)?;
+    sim_core::step_metrics(&r.time, &sg.values).ok().map(|m| m.overshoot_pct)
+}
+
 pub(in crate::schematic) const PREDICTIONS: &[Prediction] = &[
     Prediction {
         lesson: "divider",
@@ -126,5 +143,23 @@ pub(in crate::schematic) const PREDICTIONS: &[Prediction] = &[
         measure: |e| Some(e.noise.as_ref()?.outcome.as_ref().ok()?.in_rms? * 1e6),
         unit: "µV",
         explain: "熱雑音だけなら、抵抗の 1/10 で雑音は 1/√10 (1/3.2) になります。ところが、ここでは、ベース電流のショット雑音が R1 を通って電圧になり、R1 に比例して効きます。R1 に比例する分と √R1 に比例する分が合わさって、1/5〜6 まで減ります。",
+    },
+    Prediction {
+        lesson: "rc_lowpass",
+        step: 1,
+        question: "C1 を 159n から 10 倍の 1.59u にすると、カットオフ周波数 (いま約 1kHz) はどうなると思いますか?",
+        options: &[("1kHz のまま", 1000.0), ("約 100Hz に下がる", 100.0), ("約 316Hz に下がる", 316.0), ("約 10kHz に上がる", 10000.0)],
+        measure: |e| cutoff_hz(e, "V(N$2)"),
+        unit: "Hz",
+        explain: "カットオフは 1 ÷ (2π × R × C) です。C を 10 倍にすると、ちょうど 1/10 になります (316Hz は 10 倍の平方根で、よくある思い違いです)。コンデンサが大きいほど、低い周波数から信号を逃がします。",
+    },
+    Prediction {
+        lesson: "rlc",
+        step: 1,
+        question: "R1 を 20Ω から 100Ω にすると、C1 の電圧の行き過ぎ (いま約 35%) はどうなると思いますか?",
+        options: &[("35% のまま", 35.0), ("約 15% に減る", 15.0), ("0% (行き過ぎなし)", 0.0), ("約 70% に増える", 70.0)],
+        measure: |e| overshoot_pct(e, "V(N$3)"),
+        unit: "%",
+        explain: "抵抗が大きいほど、振動のエネルギーを熱にして逃がします (ダンピング)。100Ω では抵抗が十分に大きく、振動が始まる前に落ち着いて、行き過ぎがなくなります。代わりに、立ち上がりはゆっくりになります。",
     },
 ];

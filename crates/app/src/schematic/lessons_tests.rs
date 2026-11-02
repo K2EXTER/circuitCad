@@ -1544,7 +1544,7 @@ fn value_hints_use_the_unit_of_the_part_and_say_when_a_range_is_wanted() {
 }
 
 /// What the learner does on the step a question is asked on: (lesson, step, part, new value).
-const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 8] = [
+const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 10] = [
     ("divider", 1, "R2", "30k"),
     ("led", 1, "R1", "100"),
     ("zener", 1, "R2", "100"),
@@ -1553,13 +1553,16 @@ const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 8] = [
     ("diode_curve", 2, "R1", "1.5k"),
     ("phase_margin", 1, "C1", "1p"),
     ("noise", 1, "R1", "10k"),
+    ("rc_lowpass", 1, "C1", "1.59u"),
+    ("rlc", 1, "R1", "100"),
 ];
 
 /// The analysis a question's number comes from (the DC operating point unless the lesson is about another one).
 fn run_for_prediction(e: &mut SchEditor, lesson: &str) {
     match lesson {
-        "phase_margin" => e.run_ac(),
+        "phase_margin" | "rc_lowpass" => e.run_ac(),
         "noise" => e.run_noise(),
+        "rlc" => e.run_tran(),
         _ => e.run_dc(),
     }
 }
