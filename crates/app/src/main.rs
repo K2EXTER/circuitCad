@@ -377,11 +377,6 @@ impl eframe::App for App {
                         self.sch.open_wizard(0);
                         ui.close();
                     }
-                    if ui.button("設計の要件 (表)…").on_hover_text("ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます").clicked() {
-                        self.mode = Mode::Schematic;
-                        self.sch.open_requirements();
-                        ui.close();
-                    }
                     ui.separator();
                     ui.menu_button("基板のレッスン", |ui| {
                         let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
@@ -432,6 +427,12 @@ impl eframe::App for App {
                     }
                     if ui.button("やり直し (Ctrl+Y)").on_hover_text("取り消した操作をやり直します").clicked() {
                         if sch_mode { self.sch.redo() } else { self.board_ed.redo() }
+                    }
+                    ui.separator();
+                    if ui.button("設計の要件 (表)…").on_hover_text("ネットの役割・線幅・電流、近くに置く部品の組、離しておくものを、設計全体の表で書きます。基板に取り込むと、ネットクラス・自動配置・距離のチェックに使われます。回路図・基板のどちらからでも開けます").clicked() {
+                        self.mode = Mode::Schematic;
+                        self.sch.open_requirements();
+                        ui.close();
                     }
                 });
                 ui.menu_button("ヘルプ", |ui| {
