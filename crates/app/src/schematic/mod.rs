@@ -212,7 +212,7 @@ pub struct SchEditor {
     popup_serial: u32,
     lesson_base: Schematic,
     /// Why the lesson step on hand is not ticked (written by the step's condition each time it is checked).
-    lesson_unmet: std::cell::Cell<Option<lessons::Unmet>>,
+    lesson_unmet: std::cell::RefCell<Option<lessons::Unmet>>,
     /// "値の決め方" window: open flag, which calculator, its input texts.
     wiz_open: bool,
     /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.

@@ -53,7 +53,7 @@ mod supply;
 pub(super) use conditions::Unmet;
 
 #[cfg(test)]
-pub(super) use conditions::{dc_fresh_for_test, value_of};
+pub(super) use conditions::{dc_fresh_for_test, value_at_most_for_test, value_between_for_test, value_of};
 
 const LESSONS: &[Lesson] = &[
     basics::DIVIDER,
@@ -200,7 +200,7 @@ impl SchEditor {
         let Some(active) = self.lesson.as_ref() else { return };
         let Some(lesson) = LESSONS.get(active.idx) else { return };
         let Some(cur) = active.done.iter().position(|d| !d) else { return };
-        self.lesson_unmet.set(None);
+        self.lesson_unmet.replace(None);
         if (lesson.steps[cur].done)(self)
             && let Some(a) = self.lesson.as_mut() {
                 a.done[cur] = true;
@@ -219,7 +219,7 @@ impl SchEditor {
     pub(super) fn stuck_hint(&mut self, ctx: &egui::Context, cur: Option<usize>) -> Option<String> {
         let now = ctx.input(|i| i.time);
         let sig = self.signature_cached().to_string();
-        let unmet = self.lesson_unmet.get();
+        let unmet = self.lesson_unmet.borrow().clone();
         let active = self.lesson.as_mut()?;
         let since = match &active.watch {
             Some((step, s, t)) if *step == cur && *s == sig => *t,

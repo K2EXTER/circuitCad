@@ -3,23 +3,37 @@ use super::*;
 // ------------------------------------------------------------------ step conditions
 
 /// Why the step on hand is not ticked, as far as a condition could tell: a condition that needs a fresh analysis
-/// result writes it here when it finds the result missing or out of date (the lesson window shows it when the learner
-/// has been stuck for a while). Conditions that stop earlier (`changed(..) && dc_fresh(..)` with nothing changed) write nothing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::schematic) struct Unmet {
-    /// The label of the analysis button that makes the result.
-    pub button: &'static str,
-    /// There is a result, but the circuit was changed after it.
-    pub stale: bool,
+/// result writes it here when it finds the result missing or out of date, and one that needs a part value in a range
+/// writes it when the value is outside (the lesson window shows it when the learner has been stuck for a while).
+/// Conditions that stop earlier (`changed(..) && dc_fresh(..)` with nothing changed) write nothing.
+#[derive(Clone, Debug, PartialEq)]
+pub(in crate::schematic) enum Unmet {
+    /// A fresh result of the analysis whose button has this label.
+    Analysis {
+        button: &'static str,
+        /// There is a result, but the circuit was changed after it.
+        stale: bool,
+    },
+    /// The value of a part, outside what the step asks for.
+    Value {
+        refdes: &'static str,
+        /// What it should be, with its unit ("12Ω 以下").
+        want: String,
+        /// What it is now (as written in the part), if there is such a part.
+        have: Option<String>,
+    },
 }
 
 impl Unmet {
-    /// The sentence for the learner (the button's label is in 「」, so the button pulses as the step's own text makes it).
+    /// The sentence for the learner (a button's label is in 「」, so the button pulses as the step's own text makes it).
     pub(in crate::schematic) fn message(&self) -> String {
-        if self.stale {
-            format!("画面の結果は、回路や値を変える前のものです。この手順は新しい結果で判定するので、もう一度「{}」を押してください", self.button)
-        } else {
-            format!("この手順は「{}」の結果で判定します。まだ押していなければ、押してみましょう", self.button)
+        match self {
+            Unmet::Analysis { button, stale: true } => {
+                format!("画面の結果は、回路や値を変える前のものです。この手順は新しい結果で判定するので、もう一度「{button}」を押してください")
+            }
+            Unmet::Analysis { button, stale: false } => format!("この手順は「{button}」の結果で判定します。まだ押していなければ、押してみましょう"),
+            Unmet::Value { refdes, want, have: Some(have) } => format!("{refdes} を {want}にします (いまは {have})。{refdes} を選んで、左パネルの「値」を変えます"),
+            Unmet::Value { refdes, want, have: None } => format!("{refdes} を {want}にします。{refdes} を選んで、左パネルの「値」を変えます"),
         }
     }
 }
@@ -32,14 +46,67 @@ fn fresh(e: &SchEditor, button: &'static str, found: Option<(bool, bool)>) -> bo
         // a run that failed has its own message in the panel
         Some((false, _)) => false,
         Some((true, false)) => {
-            e.lesson_unmet.set(Some(Unmet { button, stale: true }));
+            e.lesson_unmet.replace(Some(Unmet::Analysis { button, stale: true }));
             false
         }
         None => {
-            e.lesson_unmet.set(Some(Unmet { button, stale: false }));
+            e.lesson_unmet.replace(Some(Unmet::Analysis { button, stale: false }));
             false
         }
     }
+}
+
+/// The unit that goes with the value of a part (by the first letter of its name).
+fn unit_of(refdes: &str) -> &'static str {
+    match refdes.chars().next() {
+        Some('R') => "Ω",
+        Some('C') => "F",
+        Some('L') => "H",
+        Some('V') => "V",
+        _ => "",
+    }
+}
+
+/// `v` as the learner writes it, with the unit of the part (`4700.0` for "R1" → `4.7kΩ`).
+fn with_unit(refdes: &str, v: f64) -> String {
+    format!("{}{}", format_value(v), unit_of(refdes))
+}
+
+/// The value of `refdes` is a number that `ok` accepts; says what is wanted (`want`) when it is not.
+fn value_is(e: &SchEditor, refdes: &'static str, want: impl FnOnce() -> String, ok: impl Fn(f64) -> bool) -> bool {
+    let raw = value_of(&e.sch, refdes);
+    if raw.and_then(parse_value).is_some_and(ok) {
+        return true;
+    }
+    let have = raw.map(|r| format!("{}{}", r.split_whitespace().next().unwrap_or(r), unit_of(refdes)));
+    e.lesson_unmet.replace(Some(Unmet::Value { refdes, want: want(), have }));
+    false
+}
+
+/// The value of `refdes` is at most `limit` (the unit of the part: ohm, farad, henry, volt).
+pub(super) fn value_at_most(e: &SchEditor, refdes: &'static str, limit: f64) -> bool {
+    value_is(e, refdes, || format!("{} 以下", with_unit(refdes, limit)), |v| v <= limit)
+}
+
+/// `value_at_most` and `value_between` for the tests of the hints.
+#[cfg(test)]
+pub(in crate::schematic) fn value_at_most_for_test(e: &SchEditor, refdes: &'static str, limit: f64) -> bool {
+    value_at_most(e, refdes, limit)
+}
+
+#[cfg(test)]
+pub(in crate::schematic) fn value_between_for_test(e: &SchEditor, refdes: &'static str, lo: f64, hi: f64) -> bool {
+    value_between(e, refdes, lo, hi)
+}
+
+/// The value of `refdes` is at least `limit`.
+pub(super) fn value_at_least(e: &SchEditor, refdes: &'static str, limit: f64) -> bool {
+    value_is(e, refdes, || format!("{} 以上", with_unit(refdes, limit)), |v| v >= limit)
+}
+
+/// The value of `refdes` is between `lo` and `hi`.
+pub(super) fn value_between(e: &SchEditor, refdes: &'static str, lo: f64, hi: f64) -> bool {
+    value_is(e, refdes, || format!("{} から {} の間", with_unit(refdes, lo), with_unit(refdes, hi)), |v| (lo..=hi).contains(&v))
 }
 
 pub(super) fn dc_fresh(e: &SchEditor) -> bool {
@@ -74,12 +141,12 @@ pub(super) fn r3_changed_and_measured(e: &SchEditor) -> bool {
 
 /// The follower lesson's last step: the load is down to 22 ohm (or less) and the result is fresh.
 pub(super) fn follower_heavy_load(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|v| v <= 30.0)
+    value_at_most(e, "R2", 30.0) && dc_fresh(e)
 }
 
 /// The 78xx lesson's last load step: the load is down to 12 ohm (or less) and the result is fresh.
 pub(super) fn regulator_heavy_load(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|v| v <= 12.0)
+    value_at_most(e, "R1", 12.0) && dc_fresh(e)
 }
 
 /// The heat lesson: the "熱 (温度と放熱板)" calculator is open.
@@ -95,7 +162,7 @@ pub(super) fn input_lowered_under_load(e: &SchEditor) -> bool {
 
 /// The protection lesson: the supply is connected backwards (V1 negative) and the result is fresh.
 pub(super) fn supply_reversed(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "V1").and_then(parse_value).is_some_and(|v| v < 0.0)
+    value_is(e, "V1", || "-5V のようなマイナスの値".into(), |v| v < 0.0) && dc_fresh(e)
 }
 
 /// The protection lesson: the supply is right again and R2 (behind the diode) is nearly a short.
@@ -173,7 +240,7 @@ fn tran_peak(e: &SchEditor, name: &str) -> Option<f64> {
 
 /// The reset lesson: C1 is a small capacitor (500 pF or less) and the run is fresh.
 pub(super) fn c1_small_and_tran(e: &SchEditor) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| c <= 500e-12)
+    value_at_most(e, "C1", 500e-12) && tran_fresh(e)
 }
 
 /// The reset lesson: C1 is back at 100 nF or more, R1 is a weak pull-up (50k or more) and the run is fresh.
@@ -197,7 +264,7 @@ pub(super) fn zp_shown(e: &SchEditor) -> bool {
 
 /// The pull-up lesson, step 2: the button (R2) is pressed (a few ohms) and the result is fresh.
 pub(super) fn button_pressed(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|r| r <= 100.0)
+    value_at_most(e, "R2", 100.0) && dc_fresh(e)
 }
 
 /// The pull-up lesson, step 3: the button is open again, the pull-up is a normal one (100k or less), a fresh transient.
@@ -208,17 +275,17 @@ pub(super) fn pullup_with_noise(e: &SchEditor) -> bool {
 
 /// The pull-up lesson, step 4: the pull-up is taken away (10 Meg or more) and the transient is fresh.
 pub(super) fn pullup_removed(e: &SchEditor) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r >= 10e6)
+    value_at_least(e, "R1", 10e6) && tran_fresh(e)
 }
 
 /// The pin-LED lesson, step 2: the series resistor is 100 ohm or less and the result is fresh.
 pub(super) fn pin_overdriven(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r <= 100.0)
+    value_at_most(e, "R1", 100.0) && dc_fresh(e)
 }
 
 /// The pin-LED lesson, step 3: the series resistor is 800 ohm or more and the result is fresh.
 pub(super) fn pin_gentle(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| r >= 800.0)
+    value_at_least(e, "R1", 800.0) && dc_fresh(e)
 }
 
 /// The "LEDの電流制限抵抗" calculator is open.
@@ -228,7 +295,7 @@ pub(super) fn led_calc_open(e: &SchEditor) -> bool {
 
 /// The level-shift lesson, step 2: the divider's lower resistor R3 is 8k or more (a wrong ratio) and the run is fresh.
 pub(super) fn divider_ratio_wrong(e: &SchEditor) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r >= 8e3)
+    value_at_least(e, "R3", 8e3) && tran_fresh(e)
 }
 
 /// The level-shift lesson, step 3: the divider is right again (3k or less) and the 3.3 V side pull-up R5 is weak (50k or more).
@@ -256,7 +323,7 @@ pub(super) fn d1_selected_and_measured(e: &SchEditor) -> bool {
 
 /// The data sheet lesson: R1 is between `lo` and `hi` ohm and the DC result is fresh.
 fn r1_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R1").and_then(parse_value).is_some_and(|r| (lo..=hi).contains(&r))
+    value_between(e, "R1", lo, hi) && dc_fresh(e)
 }
 
 /// Step 2: about 33 ohm (125 mA: inside the absolute maximum, short of the margin of 2).
@@ -276,7 +343,7 @@ pub(super) fn diode_over_the_limit(e: &SchEditor) -> bool {
 
 /// The USB power lesson, step 2: the device draws nearly an ampere (R3 = 6 ohm or less) and the result is fresh.
 pub(super) fn vbus_heavy_load(e: &SchEditor) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r <= 6.0)
+    value_at_most(e, "R3", 6.0) && dc_fresh(e)
 }
 
 /// The USB power lesson, step 3: a thin cable (R2 = 1 ohm or more) with a half-ampere load (R3 between 8 and 12 ohm), fresh.
@@ -287,7 +354,7 @@ pub(super) fn vbus_thin_cable(e: &SchEditor) -> bool {
 
 /// The USB power lesson, step 4: a big bulk capacitor (C1 = 50 uF or more) plugged in from zero (the transient starts from zero).
 pub(super) fn vbus_big_capacitor_plugged(e: &SchEditor) -> bool {
-    tran_fresh(e) && e.tran_uic && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| c >= 50e-6)
+    tran_fresh(e) && e.tran_uic && value_at_least(e, "C1", 50e-6)
 }
 
 /// The USB speed lesson, step 2: the 1.5k pull-up is on D- (R2) and none on D+ (R1 100Meg or more), fresh.
@@ -304,7 +371,7 @@ pub(super) fn usb_nothing_plugged(e: &SchEditor) -> bool {
 
 /// The USB signal lesson: C2 (the ESD protection's capacitance) is between `lo` and `hi` and the run is fresh.
 fn c2_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "C2").and_then(parse_value).is_some_and(|c| (lo..=hi).contains(&c))
+    value_between(e, "C2", lo, hi) && tran_fresh(e)
 }
 
 /// Step 2: an ESD part of about 200 pF (the edge is out of the full-speed range).
@@ -319,7 +386,7 @@ pub(super) fn esd_far_too_big(e: &SchEditor) -> bool {
 
 /// The PWM lesson: C1 is between `lo` and `hi` farad and the run is fresh.
 fn pwm_c1_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| (lo..=hi).contains(&c))
+    value_between(e, "C1", lo, hi) && tran_fresh(e)
 }
 
 /// Step 2: a small filter capacitor (200 nF or less): the ripple stays big.
@@ -334,12 +401,12 @@ pub(super) fn pwm_big_capacitor(e: &SchEditor) -> bool {
 
 /// Step 4: the 1 uF filter again, with a load of 20k or less on the output: the level falls.
 pub(super) fn pwm_loaded(e: &SchEditor) -> bool {
-    pwm_c1_between(e, 0.5e-6, 2e-6) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|r| r <= 20e3)
+    pwm_c1_between(e, 0.5e-6, 2e-6) && value_at_most(e, "R2", 20e3)
 }
 
 /// The LDO lesson: the input V1 is between `lo` and `hi` volt and the DC result is fresh.
 fn ldo_input_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    dc_fresh(e) && value_of(&e.sch, "V1").and_then(parse_value).is_some_and(|v| (lo..=hi).contains(&v))
+    value_between(e, "V1", lo, hi) && dc_fresh(e)
 }
 
 /// Step 2: the input is about 4 V (the 1.1 V dropout part cannot hold 3.3 V any more).
@@ -380,12 +447,12 @@ pub(super) fn tl431_overloaded(e: &SchEditor) -> bool {
 
 /// The equivalent-model lesson: R1 and R2 (the relay coils) are both between `lo` and `hi` ohm.
 fn equiv_coils_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    ["R1", "R2"].iter().all(|r| value_of(&e.sch, r).and_then(parse_value).is_some_and(|v| (lo..=hi).contains(&v)))
+    value_between(e, "R1", lo, hi) && value_between(e, "R2", lo, hi)
 }
 
 /// R6 (the hand-built Darlington's emitter resistor) is between `lo` and `hi` ohm.
 fn equiv_emitter_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    value_of(&e.sch, "R6").and_then(parse_value).is_some_and(|v| (lo..=hi).contains(&v))
+    value_between(e, "R6", lo, hi)
 }
 
 /// Step 2: both coils at about 34 ohm (about 320 mA) and a fresh result.
@@ -400,7 +467,7 @@ pub(super) fn equiv_matched(e: &SchEditor) -> bool {
 
 /// Step 4: matched, and the input source V2 is a 3.3 V pin.
 pub(super) fn equiv_low_input(e: &SchEditor) -> bool {
-    equiv_matched(e) && value_of(&e.sch, "V2").and_then(parse_value).is_some_and(|v| (3.0..=3.6).contains(&v))
+    equiv_matched(e) && value_between(e, "V2", 3.0, 3.6)
 }
 
 /// The flyback lesson, step 2: a diode with its anode on DRAIN and its cathode on VCC, a fresh run whose DRAIN stays below 20 V.
@@ -413,12 +480,12 @@ pub(super) fn flyback_diode_added(e: &SchEditor) -> bool {
 
 /// Step 3: the diode is there and the coil is a big one (L1 500 mH or more); a fresh run.
 pub(super) fn flyback_big_coil(e: &SchEditor) -> bool {
-    flyback_diode_added(e) && value_of(&e.sch, "L1").and_then(parse_value).is_some_and(|l| l >= 0.5)
+    flyback_diode_added(e) && value_at_least(e, "L1", 0.5)
 }
 
 /// The debounce lesson: C1 is between `lo` and `hi` farad and the run is fresh.
 fn bounce_c1_between(e: &SchEditor, lo: f64, hi: f64) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "C1").and_then(parse_value).is_some_and(|c| (lo..=hi).contains(&c))
+    value_between(e, "C1", lo, hi) && tran_fresh(e)
 }
 
 /// Step 2: a debounce capacitor of 50 nF to 500 nF (with the 10k).
@@ -448,7 +515,7 @@ pub(super) fn temp_cold(e: &SchEditor) -> bool {
 
 /// Step 4: hot again, and the thermistor's divider resistor R3 is 2k or less.
 pub(super) fn thermistor_divider_tuned(e: &SchEditor) -> bool {
-    circuit_temp_between(e, 90.0, 150.0) && value_of(&e.sch, "R3").and_then(parse_value).is_some_and(|r| r <= 2e3)
+    circuit_temp_between(e, 90.0, 150.0) && value_at_most(e, "R3", 2e3)
 }
 
 /// The light lesson: a source value (V2 = the photocell's light, V3 = the photodiode's light) as a number.
@@ -599,7 +666,7 @@ pub(super) fn r2_changed_and_tran(e: &SchEditor) -> bool {
 
 /// The variable-supply lesson: the dial (R2) is turned to 2.8k or more and the transient is fresh.
 pub(super) fn r2_dial_too_high(e: &SchEditor) -> bool {
-    tran_fresh(e) && value_of(&e.sch, "R2").and_then(parse_value).is_some_and(|r| r >= 2800.0)
+    value_at_least(e, "R2", 2800.0) && tran_fresh(e)
 }
 
 pub(super) fn l1_changed_and_tran(e: &SchEditor) -> bool {

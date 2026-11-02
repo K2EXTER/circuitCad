@@ -1445,23 +1445,23 @@ fn a_condition_says_when_the_result_it_needs_is_missing_or_old() {
     e.start_lesson(0);
     // no analysis yet: the freshness check finds nothing
     e.update_lesson();
-    assert_eq!(e.lesson_unmet.get(), None, "the first step asks for any DC result, not a fresh one");
+    assert_eq!(e.lesson_unmet.borrow().clone(), None, "the first step asks for any DC result, not a fresh one");
     assert!(!super::lessons::dc_fresh_for_test(&e));
-    assert_eq!(e.lesson_unmet.get(), Some(Unmet { button: "DC動作点を解析", stale: false }));
+    assert_eq!(e.lesson_unmet.borrow().clone(), Some(Unmet::Analysis { button: "DC動作点を解析", stale: false }));
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 1);
     // the step asks for a changed R2 first: nothing is said about the analysis while R2 is as it was
-    assert_eq!(e.lesson_unmet.get(), None);
+    assert_eq!(e.lesson_unmet.borrow().clone(), None);
     // R2 changed but the picture is the old one: the condition says so
     set_value(&mut e, "R2", "30k");
     e.update_lesson();
-    assert_eq!(e.lesson_unmet.get(), Some(Unmet { button: "DC動作点を解析", stale: true }));
-    assert!(e.lesson_unmet.get().unwrap().message().contains("「DC動作点を解析」"));
+    assert_eq!(e.lesson_unmet.borrow().clone(), Some(Unmet::Analysis { button: "DC動作点を解析", stale: true }));
+    assert!(e.lesson_unmet.borrow().clone().unwrap().message().contains("「DC動作点を解析」"));
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 2);
-    assert_eq!(e.lesson_unmet.get(), None, "a ticked step leaves nothing to say");
+    assert_eq!(e.lesson_unmet.borrow().clone(), None, "a ticked step leaves nothing to say");
 }
 
 #[test]
@@ -1498,4 +1498,47 @@ fn the_hint_comes_after_a_quiet_time_and_starts_over_with_every_change() {
     e.run_dc();
     e.update_lesson();
     assert!(at(300.0, &mut e).is_none());
+}
+
+#[test]
+fn a_step_that_wants_a_value_says_which_value_and_what_it_is_now() {
+    use super::lessons::Unmet;
+    // the follower lesson's last step wants the load R2 at 30 ohm or less (and a fresh result)
+    let idx = lesson_ids().iter().position(|l| *l == "emitter_follower").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.run_dc();
+    e.update_lesson();
+    set_value(&mut e, "R2", "47");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    e.update_lesson();
+    let u = e.lesson_unmet.borrow().clone();
+    assert_eq!(u, Some(Unmet::Value { refdes: "R2", want: "30Ω 以下".into(), have: Some("47Ω".into()) }));
+    let text = u.unwrap().message();
+    assert!(text.contains("R2 を 30Ω 以下にします (いまは 47Ω)"), "{text}");
+    // the value is right, the result is not fresh: it is the analysis that is missing now
+    set_value(&mut e, "R2", "22");
+    e.update_lesson();
+    assert_eq!(e.lesson_unmet.borrow().clone(), Some(Unmet::Analysis { button: "DC動作点を解析", stale: true }));
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert_eq!(e.lesson_unmet.borrow().clone(), None);
+}
+
+#[test]
+fn value_hints_use_the_unit_of_the_part_and_say_when_a_range_is_wanted() {
+    use super::lessons::Unmet;
+    let mut e = SchEditor::default();
+    e.start_lesson(0); // the divider: R1 10k, R2 10k, V1 5
+    assert!(!super::lessons::value_between_for_test(&e, "R1", 1e3, 2e3));
+    let m = e.lesson_unmet.borrow().clone().unwrap();
+    assert_eq!(m, Unmet::Value { refdes: "R1", want: "1kΩ から 2kΩ の間".into(), have: Some("10kΩ".into()) });
+    // a part that is not there
+    assert!(!super::lessons::value_between_for_test(&e, "R99", 1.0, 2.0));
+    let m = e.lesson_unmet.borrow().clone().unwrap();
+    assert!(matches!(m, Unmet::Value { have: None, .. }), "{m:?}");
+    assert!(m.message().contains("R99 を 1Ω から 2Ω の間にします"), "{}", m.message());
 }
