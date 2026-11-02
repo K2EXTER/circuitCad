@@ -10,6 +10,15 @@ use pcb_core::package::{HoleSpec, PackageSpec, PadSpec};
 use pcb_core::PadShape;
 use sch_core::{LifeRating, PartRatings, PinSide, RippleRating, SimKind, SimModel, SpecRow};
 
+/// What the form asks the editor to do, because the editor owns the library: add a part from a file.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FormRequest {
+    /// Read a `.part.json` into the library.
+    ImportJson,
+    /// Open the KiCad import window.
+    ImportKicad,
+}
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum PkgKind {
     Chip2,
@@ -208,6 +217,8 @@ pub struct PartForm {
     pub pin_check: Option<pdf_check::PinCheck>,
     /// The numbers of the data sheet's drawings, for the dimension check.
     pub dim_ref: Option<pdf_check::DimRef>,
+    /// Set by the file buttons of the basic tab; the editor takes it after the frame.
+    pub request: Option<FormRequest>,
 }
 
 impl Default for PartForm {
@@ -318,6 +329,7 @@ impl Default for PartForm {
             pin_ref: None,
             pin_check: None,
             dim_ref: None,
+            request: None,
         }
     }
 }

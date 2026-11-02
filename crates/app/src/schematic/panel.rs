@@ -354,14 +354,8 @@ impl SchEditor {
         });
         // below the (closed by default) library list, outside it, so a newcomer can find them without opening anything
         ui.horizontal_wrapped(|ui| {
-            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)").clicked() {
+            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます").clicked() {
                 self.form = Some(PartForm::default());
-            }
-            if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
-                self.import_part_json();
-            }
-            if self.lit(ui.button("KiCadから取り込み…"), "KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます").clicked() {
-                self.open_kicad_import();
             }
         });
         if let Some(i) = chosen {
@@ -647,6 +641,18 @@ impl SchEditor {
             egui::Window::new("部品を作成").open(&mut open).default_size([980.0, 660.0]).resizable(true).show(ui.ctx(), |ui| {
                 saved = form.ui(ui);
             });
+            // the file buttons of the form: the library belongs to the editor
+            match form.request.take() {
+                Some(crate::part_form::FormRequest::ImportJson) => {
+                    let before = self.status.clone();
+                    self.import_part_json();
+                    if self.status != before {
+                        form.pick_msg = Some((self.status.starts_with("ライブラリに追加しました"), self.status.clone()));
+                    }
+                }
+                Some(crate::part_form::FormRequest::ImportKicad) => self.open_kicad_import(),
+                None => {}
+            }
             match saved {
                 Some(def) => match part_lib::save(&self.lib_dir, &def) {
                     Ok(p) => {
