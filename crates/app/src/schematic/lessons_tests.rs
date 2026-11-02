@@ -1694,3 +1694,32 @@ fn a_value_that_is_not_there_yet_is_named_in_the_hint_of_the_new_lessons() {
     e.update_lesson();
     assert_eq!(e.lesson_unmet.borrow().clone(), Some(Unmet::Value { refdes: "C1", want: "100pF 以下".into(), have: Some("10nF".into()) }));
 }
+
+#[test]
+fn the_noise_lesson_shows_the_main_source_changing_with_the_source_resistance() {
+    let idx = lesson_ids().iter().position(|l| *l == "noise").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_noise();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let r = e.noise.as_ref().unwrap().outcome.as_ref().unwrap();
+    assert_eq!(r.contributions[0].name, "Q1.ib");
+    let at_100k = r.in_rms.unwrap();
+    assert!((at_100k * 1e6 - 32.0).abs() < 3.0, "{at_100k}");
+    set_value(&mut e, "R1", "10k");
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "the result is old");
+    e.run_noise();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let at_10k = e.noise.as_ref().unwrap().outcome.as_ref().unwrap().in_rms.unwrap();
+    assert!(at_10k < at_100k / 4.0, "{at_10k}");
+    set_value(&mut e, "R1", "1k");
+    e.run_noise();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert_ne!(e.noise.as_ref().unwrap().outcome.as_ref().unwrap().contributions[0].name, "Q1.ib");
+}

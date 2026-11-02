@@ -117,6 +117,7 @@ const LESSONS: &[Lesson] = &[
     models::EQUIV_MODEL,
     signals::POLES,
     signals::PHASE_MARGIN,
+    signals::NOISE,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

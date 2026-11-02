@@ -347,6 +347,8 @@ struct NoiseView {
     outcome: Result<NoiseResult, Vec<String>>,
     selected: BTreeSet<String>,
     plot: PlotState,
+    /// The circuit the result is for (the lessons check that it is not old).
+    signature: String,
 }
 
 /// A kept copy of earlier waveforms, drawn dimmed behind the new ones so a change can be compared with "before".

@@ -172,6 +172,7 @@ const I_RC_LOWPASS: Item = lesson("rc_lowpass", "RC ローパスフィルタ", "
 const I_RLC: Item = lesson("rlc", "行き過ぎとリンギング (RLC 回路)", "コイルとコンデンサの回路は、ステップに対して行き過ぎて揺れる。抵抗で抑える", None);
 const I_NE555: Item = lesson("ne555", "555 で LED を点滅させる", "タイマー IC とコンデンサの充放電で、一定の間隔で点滅する。C や R を変えると、周期が変わる", None);
 const I_POLES: Item = lesson("poles", "極と零 (RLC の共振を式で見る)", "山の位置は極の周波数、鋭さは Q。抵抗を大きくすると、極が実数になって山が消える", None);
+const I_NOISE: Item = lesson("noise", "ノイズ解析 (増幅回路の雑音はどこから来る)", "抵抗の熱雑音とトランジスタのショット雑音を、部品ごとに分けて見る。信号源の抵抗を小さくすると減る", None);
 const I_PHASE_MARGIN: Item = lesson("phase_margin", "位相余裕 (容量の負荷でオペアンプが不安定になる)", "ゲインが 0dB になる周波数で、180° に対する余裕。出力の容量負荷が、余裕を食う", None);
 
 pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH, SIGNAL_PATH];
@@ -456,6 +457,7 @@ const SIGNAL_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["rc_lowpass"]), ..I_OPAMP_NONINV },
                 Item { build: true, requires: Some(&["opamp_noninv"]), ..I_OPAMP_INV },
                 Item { requires: Some(&["opamp_inv", "poles"]), ..I_PHASE_MARGIN },
+                Item { requires: Some(&["opamp_noninv"]), ..I_NOISE },
             ],
         },
         Stage {

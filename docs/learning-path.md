@@ -72,7 +72,7 @@
 - **スイッチで負荷を動かそう** (`switching`): トランジスタのスイッチ → MOSFET・PNP ハイサイド → フライバックダイオード・PWM → 降圧コンバータ → 配線の太さ(基板編2)。
 - **電池で動かそう** (`battery`): 電池の内部抵抗 → TP4056 の充電 → 保護、LDO → 熱と定格 → 降圧コンバータ。
 - **信号を扱おう: フィルタ・増幅・発振** (`signals`、7本): RC ローパス → RLC(リンギング)→ **極と零 (`poles`、新しいレッスン 48)**。オペアンプの非反転増幅 → 反転増幅 → **位相余裕 (`phase_margin`、新しいレッスン 49)**。RC のあと 555 の発振。
-- 新しいレッスン 48 `poles`(`rlc_poles.schjson`: 直列 RLC。AC 解析の山 → 「極と零を求める」で 5.03kHz・Q=3.16 の複素数の極 → R1 を 100Ω にして実数の極=山が消える)と、49 `phase_margin`(`opamp_loop_gain.schjson`: 出力に 10nF のオペアンプ。AC 解析の「安定性の余裕」で位相余裕が小さい → C1 を 1p で戻る → 100n でさらに減る)。どの孤立レッスンもパスに入った(RC・RLC・555 も)。ノイズ解析(`bjt_noise`・`noise_filter`)のレッスンは、まだない。
+- 新しいレッスン 48 `poles`(`rlc_poles.schjson`: 直列 RLC。AC 解析の山 → 「極と零を求める」で 5.03kHz・Q=3.16 の複素数の極 → R1 を 100Ω にして実数の極=山が消える)と、49 `phase_margin`(`opamp_loop_gain.schjson`: 出力に 10nF のオペアンプ。AC 解析の「安定性の余裕」で位相余裕が小さい → C1 を 1p で戻る → 100n でさらに減る)。どの孤立レッスンもパスに入った(RC・RLC・555 も)。50 `noise`(`bjt_noise.schjson`: 出力 C・入力 V2、10Hz〜100kHz。R1=100k では Q1.ib が主役で入力換算 32µV → R1=10k で 5.6µV → R1=1k で主役が抵抗の熱雑音(R3・R1)に入れ替わる)を「増幅と安定」の段に足した。`NoiseView` に回路の署名を持たせて古い結果を見分ける。`noise_filter` は過渡解析の NOISE 電源の例で、ノイズ解析ではない。
 
 ## 道筋を変えるには
 `crates/app/src/learn.rs` の `PATHS` に、段階 (`Stage`) と項目 (`Item`) を足します。レッスンの項目は、レッスンの `id` (`crates/app/src/schematic/lessons/` (型は `mod.rs`、レッスンのデータは `basics.rs` `devices.rs` `analog.rs` `supply.rs` ほか)) で指定します。準備中の項目は `planned(...)` で書きます。道筋に書いたレッスンが存在することは、テストが確認します。

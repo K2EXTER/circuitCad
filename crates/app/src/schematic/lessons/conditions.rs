@@ -722,3 +722,29 @@ pub(super) fn load_cap_small(e: &SchEditor) -> bool {
 pub(super) fn load_cap_big(e: &SchEditor) -> bool {
     value_at_least(e, "C1", 50e-9) && ac_fresh(e)
 }
+
+/// The noise result on the screen is for the circuit as it is now.
+fn noise_fresh(e: &SchEditor) -> bool {
+    fresh(e, "ノイズ解析を実行", e.noise.as_ref().map(|n| (n.outcome.is_ok(), n.signature == e.signature())))
+}
+
+/// The noise lesson, step 1: a noise result for this circuit.
+pub(super) fn noise_done(e: &SchEditor) -> bool {
+    noise_fresh(e)
+}
+
+/// The biggest source of noise in the fresh result (`None`: no result or an old one).
+fn noise_top(e: &SchEditor) -> Option<String> {
+    let n = e.noise.as_ref()?;
+    n.outcome.as_ref().ok()?.contributions.first().map(|c| c.name.clone())
+}
+
+/// The noise lesson, step 2: the source resistance R1 is 10k or less and the result is fresh.
+pub(super) fn source_r_small(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 10e3) && noise_fresh(e)
+}
+
+/// The noise lesson, step 3: R1 is 1.5k or less, the result is fresh and the base shot noise is no longer the biggest.
+pub(super) fn source_r_tiny(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 1.5e3) && noise_fresh(e) && noise_top(e).is_some_and(|n| n != "Q1.ib")
+}

@@ -137,7 +137,7 @@ impl SchEditor {
             Err(e) => format!("ノイズ解析に失敗: {}", e.first().cloned().unwrap_or_default()),
         };
         let (lo, hi) = if f1 > f0 * 1.0001 { (f0, f1) } else { (f0 / 2.0, f0 * 2.0) };
-        self.noise = Some(NoiseView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi) });
+        self.noise = Some(NoiseView { outcome, selected, plot: PlotState::log(lo.max(1e-30), hi), signature: self.signature() });
         self.wave_mode = WaveMode::Noise;
     }
 
@@ -150,7 +150,7 @@ impl SchEditor {
                 close = true;
             }
         });
-        let NoiseView { outcome, selected, plot: st } = view;
+        let NoiseView { outcome, selected, plot: st, .. } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
