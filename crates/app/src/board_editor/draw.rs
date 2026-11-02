@@ -303,7 +303,7 @@ impl BoardEditor {
             {
                 let mut cache = self.copper_cache.borrow_mut();
                 // the pads and vias are drawn over the copper: no cap is made under them (when they are hidden the caps come back)
-                let covers = ribbon::Covers::of(&self.board, self.vis.parts, self.vis.vias);
+                let covers = ribbon::Covers::of_except(&self.board, self.vis.parts, self.vis.vias, &self.dragged_parts());
                 if !cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref(), &covers)) {
                     *cache = Some(ribbon::CopperCache::new(tracks, finished.as_ref(), &covers));
                 }
@@ -413,16 +413,19 @@ impl BoardEditor {
         if self.vis.silk {
             let silk = Color32::from_rgb(235, 235, 235);
             // the lines and the strokes of the texts, followed into chains, as one mesh
+            // the silk of the parts being dragged is made apart for every frame (it is small), the rest stays in the cache
+            let moving = self.dragged_parts();
             {
                 let mut cache = self.silk_cache.borrow_mut();
-                if !cache.as_ref().is_some_and(|c| c.is_for(&self.board)) {
-                    *cache = Some(ribbon::SilkCache::new(&self.board));
+                if !cache.as_ref().is_some_and(|c| c.is_for(&self.board, &moving)) {
+                    *cache = Some(ribbon::SilkCache::new(&self.board, &moving));
                 }
             }
             let cache = self.silk_cache.borrow();
             let cache = cache.as_ref().expect("made above");
+            let dragged = (!moving.is_empty()).then(|| ribbon::SilkCache::only(&self.board, &moving));
             let mut mesh = egui::Mesh::default();
-            let shown = cache.plain.iter().chain(cache.of_parts.iter().filter(|_| self.vis.parts));
+            let shown = cache.plain.iter().chain(cache.of_parts.iter().chain(dragged.iter().flat_map(|d| d.of_parts.iter())).filter(|_| self.vis.parts));
             for ch in shown.filter(|c| self.side_visible(c.side)) {
                 let (lo, hi) = (self.to_screen(rect, ch.lo), self.to_screen(rect, ch.hi));
                 if !ribbon::on_screen(rect, lo, hi, ch.width as f32 * z / 2.0 + 4.0) {

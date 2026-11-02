@@ -189,17 +189,27 @@ pub(super) struct SilkCache {
 }
 
 impl SilkCache {
-    pub fn is_for(&self, board: &pcb_core::Board) -> bool {
-        self.key == silk_hash(board)
+    pub fn is_for(&self, board: &pcb_core::Board, moving: &[String]) -> bool {
+        self.key == silk_hash(board, moving)
     }
 
-    pub fn new(board: &pcb_core::Board) -> Self {
+    /// The silk of the board, but for that of the parts in `moving` (the parts being dragged, drawn apart by [`only`](Self::only)).
+    pub fn new(board: &pcb_core::Board, moving: &[String]) -> Self {
+        Self::build(board, silk_hash(board, moving), |refdes| !moving.contains(&refdes.to_string()))
+    }
+
+    /// Only the silk of the parts in `moving`: small, made again for every frame of a drag.
+    pub fn only(board: &pcb_core::Board, moving: &[String]) -> Self {
+        Self::build(board, 0, |refdes| !refdes.is_empty() && moving.contains(&refdes.to_string()))
+    }
+
+    fn build(board: &pcb_core::Board, key: u64, keep: impl Fn(&str) -> bool) -> Self {
         let (mut plain, mut of_parts): (Vec<Track>, Vec<Track>) = (vec![], vec![]);
-        for l in &board.silk {
+        for l in board.silk.iter().filter(|l| keep(&l.refdes)) {
             let t = Track { side: l.side, a: l.a, b: l.b, width: l.width };
             if l.refdes.is_empty() { plain.push(t) } else { of_parts.push(t) }
         }
-        for t in &board.texts {
+        for t in board.texts.iter().filter(|t| keep(&t.refdes)) {
             // as thick as the drawing of a text has always been
             let width = (t.height * 0.15).max(0.12);
             let dst = if t.refdes.is_empty() { &mut plain } else { &mut of_parts };
@@ -207,17 +217,19 @@ impl SilkCache {
                 dst.push(Track { side: t.side, a: Point::new(t.pos.x + a.x, t.pos.y + a.y), b: Point::new(t.pos.x + b.x, t.pos.y + b.y), width });
             }
         }
-        SilkCache { key: silk_hash(board), plain: chains(&plain), of_parts: chains(&of_parts) }
+        SilkCache { key, plain: chains(&plain), of_parts: chains(&of_parts) }
     }
 }
 
-fn silk_hash(board: &pcb_core::Board) -> u64 {
+/// A hash of the silk that is drawn from the cache: with the parts in `moving` left out, it stays the same while they are dragged.
+fn silk_hash(board: &pcb_core::Board, moving: &[String]) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = pcb_core::zonefill::FastHasher::default();
-    for l in &board.silk {
+    moving.hash(&mut h);
+    for l in board.silk.iter().filter(|l| !moving.contains(&l.refdes)) {
         (l.a.x.to_bits(), l.a.y.to_bits(), l.b.x.to_bits(), l.b.y.to_bits(), l.width.to_bits(), l.side, l.refdes.is_empty()).hash(&mut h);
     }
-    for t in &board.texts {
+    for t in board.texts.iter().filter(|t| !moving.contains(&t.refdes)) {
         (t.pos.x.to_bits(), t.pos.y.to_bits(), t.height.to_bits(), &t.text, t.rot, t.side, t.refdes.is_empty()).hash(&mut h);
     }
     h.finish()
@@ -281,10 +293,16 @@ impl Covers {
 
     /// The pads and the vias of the board, as far as they are shown.
     pub fn of(board: &pcb_core::Board, pads: bool, vias: bool) -> Self {
+        Self::of_except(board, pads, vias, &[])
+    }
+
+    /// [`of`](Self::of) without the pads of the parts being dragged: the key then stays the same while they move, so the copper is not
+    /// made again for every frame of the drag (the caps under the pads they left show, as the tracks stay where they were).
+    pub fn of_except(board: &pcb_core::Board, pads: bool, vias: bool, moving: &[String]) -> Self {
         use std::hash::{Hash, Hasher};
         let mut items = vec![];
         if pads {
-            for q in &board.pads {
+            for q in board.pads.iter().filter(|q| !moving.contains(&q.refdes)) {
                 let (w, h) = q.shape.size();
                 let shape = match q.shape {
                     pcb_core::PadShape::Circle { .. } => CoverShape::Circle(w / 2.0),
@@ -314,6 +332,11 @@ impl Covers {
             }
         }
         Covers { items, key: h.finish() | 1 }
+    }
+
+    #[cfg(test)]
+    pub fn key(&self) -> u64 {
+        self.key
     }
 
     /// Is the disc of radius `r` round `p` on `side` all under one of them?
@@ -1067,14 +1090,14 @@ mod tests {
         let line = |a: (f64, f64), c: (f64, f64), refdes: &str| pcb_core::SilkLine { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.15, refdes: refdes.into() };
         // an outline of a part in three pieces, and a free line
         b.silk = vec![line((0.0, 0.0), (1.0, 0.0), "R1"), line((1.0, 0.0), (1.0, 1.0), "R1"), line((1.0, 1.0), (0.0, 1.0), "R1"), line((5.0, 5.0), (6.0, 5.0), "")];
-        let c = SilkCache::new(&b);
+        let c = SilkCache::new(&b, &[]);
         assert_eq!((c.plain.len(), c.of_parts.len()), (1, 1));
         assert_eq!(c.of_parts[0].pts.len(), 4, "three lines are one chain of four points");
-        assert!(c.is_for(&b));
+        assert!(c.is_for(&b, &[]));
         // a text is a few chains, not a chain for each stroke
         b.texts.push(pcb_core::SilkText { side: Side::Top, pos: Point::new(2.0, 2.0), height: 1.0, text: "R12".into(), refdes: "R12".into(), rot: 0 });
-        assert!(!c.is_for(&b), "a new text is a change");
-        let c = SilkCache::new(&b);
+        assert!(!c.is_for(&b, &[]), "a new text is a change");
+        let c = SilkCache::new(&b, &[]);
         let strokes: usize = b.texts[0].strokes().len();
         assert!(c.of_parts.len() < strokes, "{} chains for {strokes} strokes", c.of_parts.len());
     }

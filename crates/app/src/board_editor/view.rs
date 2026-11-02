@@ -53,6 +53,19 @@ impl BoardEditor {
         self.drag_part.is_some() || self.gdrag.as_ref().is_some_and(|g| g.items.iter().all(|i| matches!(i, Item::Part(_))))
     }
 
+    /// The designators of the parts being dragged (empty when no part is, or when anything else moves with them). The cached copper and
+    /// silk are made without them, and they are drawn apart, so that a frame of the drag does not make everything again.
+    pub(super) fn dragged_parts(&self) -> Vec<String> {
+        if !self.moving_parts_only() {
+            return vec![];
+        }
+        if let Some((r, _)) = &self.drag_part {
+            return vec![r.clone()];
+        }
+        let Some(g) = &self.gdrag else { return vec![] };
+        g.items.iter().filter_map(|i| if let Item::Part(k) = i { self.board.parts.get(*k).map(|p| p.refdes.clone()) } else { None }).collect()
+    }
+
     /// Is a group being moved that is not a pour (parts, tracks, vias, silk ...)? The pours are then kept as they were until the drop,
     /// like while parts are moved (they cost 100 ms a frame on a board with guards, and a group of a hundred tracks made the drag crawl).
     /// The finished tracks are not kept: the tracks of the group would stay where they were, so the plain tracks are drawn instead.

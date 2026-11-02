@@ -1362,6 +1362,93 @@ fn board_frame_time() {
     println!("drc {} violations {:.1} ms", v.len(), t.elapsed().as_secs_f64() * 1000.0);
 }
 
+#[test]
+fn the_silk_and_copper_caches_are_kept_while_a_part_is_dragged() {
+    let mut b = pcb_core::Board::new("t", 40.0, 30.0);
+    for (r, x) in [("R1", 10.0), ("R2", 20.0)] {
+        b.set_part(pcb_core::Part { refdes: r.into(), value: "1k".into(), footprint: "R_0603".into(), pos: p(x, 15.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
+    }
+    let mut e = BoardEditor::default();
+    e.board = b;
+    let moving = vec!["R1".to_string()];
+    let silk = ribbon::SilkCache::new(&e.board, &moving);
+    let covers = ribbon::Covers::of_except(&e.board, true, true, &moving);
+    e.board.place_part("R1", p(12.0, 16.0), 0);
+    assert!(silk.is_for(&e.board, &moving), "the silk of the other parts is as it was");
+    assert_eq!(covers.key(), ribbon::Covers::of_except(&e.board, true, true, &moving).key(), "so are the pads that cover the copper");
+    // the dragged part's own silk is still made, and follows it
+    let own = ribbon::SilkCache::only(&e.board, &moving);
+    assert!(!own.of_parts.is_empty() && own.plain.is_empty());
+    e.board.place_part("R2", p(25.0, 15.0), 0);
+    assert!(!silk.is_for(&e.board, &moving), "another part that moves is a change");
+    assert!(e.dragged_parts().is_empty(), "nothing is dragged");
+    e.drag_part = Some(("R1".into(), p(0.0, 0.0)));
+    assert_eq!(e.dragged_parts(), moving);
+}
+
+/// Frame time while one part is dragged on a real board (set CCAD_BOARD, CCAD_PART for the designator): the move, then the frame.
+/// `cargo test --release -p app part_drag_frame_cost -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn part_drag_frame_cost() {
+    let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
+    let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let mut e = BoardEditor::default();
+    e.board = board;
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
+    e.fit_view(screen);
+    let ctx = egui::Context::default();
+    let refdes = std::env::var("CCAD_PART").unwrap_or_else(|_| e.board.parts[e.board.parts.len() / 2].refdes.clone());
+    let part = e.board.parts.iter().find(|q| q.refdes == refdes).unwrap().clone();
+    println!("parts {} tracks {} zones {} dragging {refdes}", e.board.parts.len(), e.board.tracks.len(), e.board.zones.len());
+    let run = |e: &mut BoardEditor| {
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
+            e.canvas(ui);
+        });
+        out.textures_delta.clear();
+        let _ = ctx.tessellate(out.shapes, out.pixels_per_point);
+    };
+    for _ in 0..3 {
+        run(&mut e);
+    }
+    let t = std::time::Instant::now();
+    for _ in 0..20 {
+        run(&mut e);
+    }
+    println!("still frame avg {:.2} ms", t.elapsed().as_secs_f64() * 1e3 / 20.0);
+    e.drag_part = Some((refdes.clone(), Point::new(0.0, 0.0)));
+    let mut drag = |e: &mut BoardEditor, label: &str| {
+        let (mut mv, mut fr, mut worst) = (0.0f64, 0.0f64, 0.0f64);
+        let n = 30;
+        for i in 0..n {
+            let t = std::time::Instant::now();
+            e.board.place_part(&refdes, Point::new(part.pos.x + i as f64 * 0.5, part.pos.y), part.rot);
+            let a = t.elapsed().as_secs_f64() * 1e3;
+            let t = std::time::Instant::now();
+            run(e);
+            let b = t.elapsed().as_secs_f64() * 1e3;
+            mv += a;
+            fr += b;
+            worst = worst.max(a + b);
+        }
+        println!("{label:24} place_part avg {:.2} ms, frame avg {:.2} ms, worst total {:.2} ms", mv / n as f64, fr / n as f64, worst);
+    };
+    drag(&mut e, "everything");
+    e.vis.silk = false;
+    drag(&mut e, "no silk");
+    e.vis.parts = false;
+    drag(&mut e, "no silk, no parts");
+    e.vis.airwires = false;
+    drag(&mut e, "+ no airwires");
+    e.vis.nets = false;
+    drag(&mut e, "+ no nets");
+    e.vis.zones = false;
+    drag(&mut e, "+ no zones");
+    e.vis.tracks = false;
+    e.vis.vias = false;
+    drag(&mut e, "+ no tracks, vias");
+}
+
 /// Frame time with the pours shown and hidden, on a real board (set CCAD_BOARD): `cargo test --release -p app zone_frame_cost -- --ignored --nocapture`
 #[test]
 #[ignore]
@@ -3105,7 +3192,7 @@ fn silk_thinning() {
     let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
     e.fit_view(view);
     set_multisampled(true);
-    let cache = ribbon::SilkCache::new(&e.board);
+    let cache = ribbon::SilkCache::new(&e.board, &[]);
     let text_h: Vec<f64> = e.board.texts.iter().map(|t| t.height).collect();
     println!("zoom {:.1} px/mm; texts {} (height {:.2} to {:.2} mm = {:.1} to {:.1} px)", e.zoom, text_h.len(), text_h.iter().cloned().fold(f64::MAX, f64::min), text_h.iter().cloned().fold(0.0, f64::max), text_h.iter().cloned().fold(f64::MAX, f64::min) * e.zoom as f64, text_h.iter().cloned().fold(0.0, f64::max) * e.zoom as f64);
     for (name, chains) in [("plain (board silk and texts)", &cache.plain), ("of parts (outlines, designators)", &cache.of_parts)] {
