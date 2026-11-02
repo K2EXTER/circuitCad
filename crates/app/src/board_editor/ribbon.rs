@@ -91,6 +91,13 @@ impl CopperCache {
         }
     }
 
+    /// Take chains made again for other pads (`covers_key`): the patches stay, the levels of detail are worked out again.
+    pub fn set_chains(&mut self, chains: Vec<Chain>, covers_key: u64) {
+        self.chains = chains;
+        self.covers_key = covers_key;
+        self.levels.borrow_mut().clear();
+    }
+
     /// The level of detail for a view of `zoom` pixels to the mm.
     pub fn lod(&self, zoom: f32) -> Rc<Lod> {
         let level = lod_level(zoom);
@@ -307,6 +314,11 @@ enum CoverShape {
 }
 
 impl Covers {
+    /// A hash of the pads and vias (the cache of chains made for them has it).
+    pub fn key(&self) -> u64 {
+        self.key
+    }
+
     pub fn none() -> Self {
         Covers { items: vec![], key: 0 }
     }

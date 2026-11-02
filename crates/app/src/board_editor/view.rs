@@ -100,7 +100,9 @@ impl BoardEditor {
         // (it fills every pour: 150 ms on a board with guards) and the answer is not kept, so the full one is made when the drag ends
         let moving = self.dragged_parts();
         if !moving.is_empty() {
-            return std::rc::Rc::new(self.drag_airwires(&moving));
+            let wires = std::rc::Rc::new(self.drag_airwires(&moving));
+            *self.drag_shown.borrow_mut() = Some(wires.clone());
+            return wires;
         }
         *self.drag_groups.borrow_mut() = None;
         if self.slow_results_kept() {
@@ -110,12 +112,53 @@ impl BoardEditor {
         if c.key != key {
             *c = CalcCache { key, conn: None, rats: None };
         }
+        if let Some(r) = &c.rats {
+            return r.clone();
+        }
+        // the part was just dropped: the full answer (with the pours that are in pieces: ~12 ms) is worked out on another thread, and the lines
+        // of the drag stay on the screen until it is in
+        let shown = self.drag_shown.borrow().clone();
+        if let Some(shown) = shown {
+            let mut job = self.airwire_job.borrow_mut();
+            if job.as_ref().is_some_and(|(k, _)| *k != key) {
+                *job = None;
+                *self.drag_shown.borrow_mut() = None;
+            } else {
+                if job.is_none() {
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let board = self.board.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(pcb_core::ratsnest::open_connections(&board));
+                    });
+                    *job = Some((key, rx));
+                }
+                match job.as_ref().expect("made above").1.try_recv() {
+                    Ok(r) => {
+                        let r = std::rc::Rc::new(r);
+                        c.rats = Some(r.clone());
+                        *job = None;
+                        *self.drag_shown.borrow_mut() = None;
+                        return r;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => return shown,
+                    Err(_) => {
+                        *job = None;
+                        *self.drag_shown.borrow_mut() = None;
+                    }
+                }
+            }
+        }
         c.rats
             .get_or_insert_with(|| {
                 // the airwires of what no copper joins, and those of a pour that is in pieces (its outline joins them, its copper does not)
                 std::rc::Rc::new(pcb_core::ratsnest::open_connections(&self.board))
             })
             .clone()
+    }
+
+    /// Is the full set of airwires being worked out after a drop? (The picture is drawn again when it is in.)
+    pub(super) fn airwires_pending(&self) -> bool {
+        self.airwire_job.borrow().is_some()
     }
 
     /// The requirements check and the measures of the table, worked out again only when the copper or the rows of the table changed

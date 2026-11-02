@@ -1386,6 +1386,43 @@ fn the_silk_and_copper_caches_are_kept_while_a_part_is_dragged() {
     assert_eq!(e.dragged_parts(), vec!["R1".to_string()]);
 }
 
+#[test]
+fn a_dragged_part_gets_airwires_to_the_copper_it_left() {
+    let mut b = pcb_core::Board::new("t", 40.0, 30.0);
+    for (r, x) in [("R1", 10.0), ("R2", 20.0)] {
+        b.set_part(pcb_core::Part { refdes: r.into(), value: "1k".into(), footprint: "R_0603".into(), pos: p(x, 15.0), rot: 0, side: pcb_core::Side::Top }).unwrap();
+    }
+    for pad in &mut b.pads {
+        if pad.pin == "1" {
+            pad.net = "N".into();
+        }
+    }
+    let (a, c) = (b.pads.iter().find(|q| q.refdes == "R1" && q.pin == "1").unwrap().pos, b.pads.iter().find(|q| q.refdes == "R2" && q.pin == "1").unwrap().pos);
+    b.tracks.push(pcb_core::model::Track { side: pcb_core::Side::Top, a, b: c, width: 0.25 });
+    let mut e = BoardEditor::default();
+    e.board = b;
+    e.drag_part = Some(("R1".into(), p(0.0, 0.0)));
+    e.board.place_part("R1", p(10.0, 25.0), 0);
+    let wires = e.cached_airwires();
+    assert_eq!(wires.len(), 1, "the part has left its copper");
+    assert_eq!(wires[0].net, "N");
+    e.drag_part = None;
+    // after the drop the lines of the drag stay until the full answer is in from its thread
+    assert_eq!(e.cached_airwires().len(), 1, "the lines of the drag stay at once");
+    let t = std::time::Instant::now();
+    while e.airwires_pending() && t.elapsed().as_secs() < 10 {
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let _ = e.cached_airwires();
+    }
+    assert!(!e.airwires_pending(), "the full answer came in");
+    assert_eq!(e.cached_airwires().len(), 1, "the full answer agrees after the drop");
+    assert!(std::rc::Rc::ptr_eq(&e.cached_airwires(), &e.cached_airwires()), "and it is kept");
+    // an edit after that is worked out at once
+    e.board.tracks.clear();
+    assert_eq!(e.cached_airwires().len(), 1);
+    assert!(!e.airwires_pending());
+}
+
 /// The first frame after a part is picked up, with one display item off at a time (set CCAD_BOARD):
 /// `cargo test --release -p app drag_start_cost -- --ignored --nocapture`
 #[test]
@@ -1394,7 +1431,8 @@ fn drag_start_cost() {
     let path = std::env::var("CCAD_BOARD").unwrap_or_else(|_| "../../microohm-meter/mmUser_sync.pcbjson".into());
     let board: pcb_core::Board = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
     let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
-    let variants: [(&str, fn(&mut BoardEditor)); 7] = [
+    let variants: [(&str, fn(&mut BoardEditor)); 8] = [
+        ("everything (warm-up)", |_| {}),
         ("everything", |_| {}),
         ("no tracks", |e| e.vis.tracks = false),
         ("no zones", |e| e.vis.zones = false),
@@ -1426,6 +1464,15 @@ fn drag_start_cost() {
         let t = std::time::Instant::now();
         run(&mut e);
         println!("{label:14} first frame of the drag {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
+        let refdes = e.board.parts[e.board.parts.len() / 2].refdes.clone();
+        for i in 1..30 {
+            e.board.place_part(&refdes, Point::new(e.board.parts.iter().find(|q| q.refdes == refdes).unwrap().pos.x + 0.5 * i as f64, 20.0), 0);
+            run(&mut e);
+        }
+        e.drag_part = None;
+        let t = std::time::Instant::now();
+        run(&mut e);
+        println!("{label:14} frame after the drop {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
     }
 }
 
@@ -1469,6 +1516,21 @@ fn cache_rebuild_cost() {
     time("CopperCache::new only", &mut || {
         let _ = ribbon::CopperCache::new(&board.tracks, None, &covers);
     });
+    if let Some(f) = pcb_core::smooth::finished(&board) {
+        let f = std::rc::Rc::new(f);
+        println!("finish on: tracks {} patches {}", f.board.tracks.len(), f.patches.len());
+        time("finished: CopperCache::new", &mut || {
+            let _ = ribbon::CopperCache::new(&board.tracks, Some(&f), &covers);
+        });
+        for zoom in [8.0f32, 20.0, 60.0] {
+            time(&format!("finished: new + lod at {zoom}"), &mut || {
+                let c = ribbon::CopperCache::new(&board.tracks, Some(&f), &covers);
+                let _ = c.lod(zoom);
+            });
+        }
+    } else {
+        println!("finish off");
+    }
     time("SilkCache::new", &mut || {
         let _ = ribbon::SilkCache::new(&board);
     });

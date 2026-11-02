@@ -287,6 +287,31 @@ impl BoardEditor {
         self.near_screen(rect, &shape.outer, 0.0)
     }
 
+    /// Make the chains of `cache` again for the pads in `covers`, on another thread (22 ms on a board of this size with the finish on).
+    fn refresh_caps(&self, ctx: &egui::Context, cache: &mut ribbon::CopperCache, tracks: &[pcb_core::Track], covers: ribbon::Covers) {
+        let key = covers.key();
+        let mut job = self.copper_job.borrow_mut();
+        if job.as_ref().is_some_and(|(k, _)| *k != key) {
+            *job = None;
+        }
+        if job.is_none() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let tracks = tracks.to_vec();
+            std::thread::spawn(move || {
+                let _ = tx.send(ribbon::chains_over(&tracks, &covers));
+            });
+            *job = Some((key, rx));
+        }
+        match job.as_ref().expect("made above").1.try_recv() {
+            Ok(chains) => {
+                cache.set_chains(chains, key);
+                *job = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => ctx.request_repaint_after(std::time::Duration::from_millis(15)),
+            Err(_) => *job = None,
+        }
+    }
+
     pub(super) fn draw_copper(&self, painter: &egui::Painter, rect: Rect) {
         let z = self.zoom;
         let o = &self.board.outline;
@@ -304,8 +329,16 @@ impl BoardEditor {
                 let mut cache = self.copper_cache.borrow_mut();
                 // the pads and vias are drawn over the copper: no cap is made under them (when they are hidden the caps come back)
                 let covers = ribbon::Covers::of(&self.board, self.vis.parts, self.vis.vias);
-                if !cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref(), &covers, self.moving_parts_only())) {
-                    *cache = Some(ribbon::CopperCache::new(tracks, finished.as_ref(), &covers));
+                let dragging = self.moving_parts_only();
+                if !cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref(), &covers, dragging)) {
+                    if cache.as_ref().is_some_and(|c| c.is_for(tracks, finished.as_ref(), &covers, true)) {
+                        // only the pads under the ends changed (a part was dropped): the caps are worked out on another thread, the old
+                        // ones are drawn until they are in
+                        self.refresh_caps(painter.ctx(), cache.as_mut().expect("checked above"), tracks, covers);
+                    } else {
+                        *cache = Some(ribbon::CopperCache::new(tracks, finished.as_ref(), &covers));
+                        *self.copper_job.borrow_mut() = None;
+                    }
                 }
             }
             let cache = self.copper_cache.borrow();
@@ -488,7 +521,11 @@ impl BoardEditor {
         self.draw_sheet_groups(painter, rect);
         self.draw_requirement_marks(painter, rect);
         if self.vis.airwires {
-            for w in self.cached_airwires().iter() {
+            let wires = self.cached_airwires();
+            if self.airwires_pending() {
+                painter.ctx().request_repaint_after(std::time::Duration::from_millis(15));
+            }
+            for w in wires.iter() {
                 painter.line_segment([self.to_screen(rect, w.a), self.to_screen(rect, w.b)], Stroke::new(1.0, Color32::from_rgb(240, 220, 90)));
             }
         }

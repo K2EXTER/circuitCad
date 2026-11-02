@@ -385,6 +385,12 @@ pub struct BoardEditor {
     /// The copper groups of the pads and vias as they were when a drag of parts began (the tracks stay where they were during it), so the
     /// airwires of every frame need no new connectivity. Cleared when no part is dragged.
     drag_groups: std::cell::RefCell<Option<(Vec<String>, Vec<usize>, Vec<usize>)>>,
+    /// The airwires of the last frame of a drag, shown until the full answer for the dropped board is in (`airwire_job`).
+    /// The chains of the copper being made again on another thread after a drop (the pads under the ends changed), with the key of the pads.
+    copper_job: std::cell::RefCell<Option<(u64, std::sync::mpsc::Receiver<Vec<ribbon::Chain>>)>>,
+    drag_shown: std::cell::RefCell<Option<std::rc::Rc<Vec<pcb_core::ratsnest::Airwire>>>>,
+    /// The full set of airwires being worked out on another thread, with the key of the board it is for.
+    airwire_job: std::cell::RefCell<Option<(u64, std::sync::mpsc::Receiver<Vec<pcb_core::ratsnest::Airwire>>)>>,
     zone_cache: std::cell::RefCell<ZoneCache>,
     zone_job: std::cell::RefCell<ZoneJob>,
     /// The pieces of the pours that are left out as islands, kept for the state of the board they were worked out for.
@@ -543,6 +549,9 @@ impl Default for BoardEditor {
             marks_cache: std::cell::RefCell::new(None),
             part_box_cache: std::cell::RefCell::new(None),
             drag_groups: Default::default(),
+            drag_shown: Default::default(),
+            copper_job: Default::default(),
+            airwire_job: Default::default(),
             zone_cache: std::cell::RefCell::new(None),
             zone_job: Default::default(),
             island_cache: std::cell::RefCell::new(None),
