@@ -96,11 +96,19 @@ fn dogleg(t: &Track, m: &Track, d: f64, need: f64, away: (f64, f64)) -> Option<V
     Some(pts.windows(2).map(|w| Track { side: t.side, a: w[0], b: w[1], width: t.width }).collect())
 }
 
+/// The wanted edge gap (mm) when the nets `a` and `b` are the two lines of one differential pair.
+fn pair_gap(pairs: &[crate::diffpair::DiffPair], a: Option<&str>, b: Option<&str>) -> Option<f64> {
+    let (a, b) = (a?, b?);
+    pairs.iter().find(|d| (d.p == a && d.n == b) || (d.p == b && d.n == a)).map(|d| d.gap)
+}
+
 /// Push the tracks that are too close to the `anchors` (indices of tracks that stay where they are) aside.
 /// Returns the shoved board, or `None` when it cannot be done within the limits.
 pub fn resolve(board: &Board, anchors: &[usize]) -> Option<Board> {
     let mut trial = board.clone();
     let mut origin: Vec<(Point, Point)> = trial.tracks.iter().map(|t| (t.a, t.b)).collect();
+    // the track of `board` each track of `trial` comes from (a piece of a bent track comes from the whole track)
+    let mut parent: Vec<usize> = (0..trial.tracks.len()).collect();
     let clearance = board.rules.min_clearance;
     let mut active: Vec<usize> = anchors.to_vec();
     for _ in 0..40 {
@@ -113,7 +121,14 @@ pub fn resolve(board: &Board, anchors: &[usize]) -> Option<Board> {
                     continue;
                 }
                 let (tm, to) = (trial.tracks[m].clone(), trial.tracks[o].clone());
-                let need = clearance + (tm.width + to.width) / 2.0 + 0.005;
+                let mut need = clearance + (tm.width + to.width) / 2.0 + 0.005;
+                // the two lines of a differential pair keep their gap (or the gap they had, when that was tighter)
+                // as the pair is pushed, so that the partner is pushed along instead of the pair closing up
+                if let Some(gap) = pair_gap(&trial.diff_pairs, conn.track_net(m), conn.track_net(o)) {
+                    let (om, oo) = (&board.tracks[parent[m]], &board.tracks[parent[o]]);
+                    let was = seg_seg(om.a, om.b, oo.a, oo.b);
+                    need = need.max(((tm.width + to.width) / 2.0 + gap).min(was) - 0.005);
+                }
                 let d = seg_seg(tm.a, tm.b, to.a, to.b);
                 if d + 1e-9 >= need {
                     continue;
@@ -129,6 +144,7 @@ pub fn resolve(board: &Board, anchors: &[usize]) -> Option<Board> {
                     trial.tracks[o] = pieces[0].clone();
                     for p in &pieces[1..] {
                         origin.push((p.a, p.b));
+                        parent.push(parent[o]);
                         trial.tracks.push(p.clone());
                         next.push(trial.tracks.len() - 1);
                     }

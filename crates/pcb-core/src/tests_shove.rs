@@ -173,7 +173,6 @@ fn a_shoved_pair_stays_connected_clean_and_within_its_skew() {
 /// Known gap: the shove only keeps the plain clearance (0.15mm), so a line pushed towards its partner closes up
 /// the pair's own gap (0.25mm here -> about 0.17-0.19mm). Candidates: push the partner along, or refuse.
 #[test]
-#[ignore = "known gap: shove ignores the differential pair's gap (docs/competitor-comparison.md)"]
 fn a_shoved_pair_keeps_its_gap() {
     for joint in [false, true] {
         let (b, _, after) = shove_pair(joint);
