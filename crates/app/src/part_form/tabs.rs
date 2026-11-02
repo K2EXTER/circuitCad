@@ -398,12 +398,12 @@ impl PartForm {
     fn body_section(&mut self, ui: &mut egui::Ui) {
         ui.group(|ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new("本体 (外形と高さ)").strong());
+            ui.label(egui::RichText::new("本体 (シルクの外形と高さ)").strong()).on_hover_text("外形は、基板のシルク (白い線) になります。高さはシルクには出ず、3D表示とケースに入るかの確認に使います");
             ui.horizontal_wrapped(|ui| {
                 ui.add(egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix("高さ ").suffix(" mm")).on_hover_text("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います");
                 ui.small("側面図の高さ (0 = 未入力)");
             });
-            ui.checkbox(&mut self.body_on, "本体の外形 (上面図の幅×長さ) を描く").on_hover_text("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります");
+            ui.checkbox(&mut self.body_on, "シルクに本体の外形 (上面図の幅×長さ) を描く").on_hover_text("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります");
             if self.body_on {
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(&mut self.body_circle, false, "四角").on_hover_text("四角い本体 (IC、チップ部品)");
