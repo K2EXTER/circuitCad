@@ -409,11 +409,16 @@ impl CopperGraph {
     pub fn path(&self, a: &PadRef, b: &PadRef) -> Option<CopperPath> {
         let (dist, prev) = self.search(a)?;
         let way = self.way(b, &dist, &prev)?;
+        // a via has a node on every layer, joined layer to layer: a way that goes through a via of a board with inner layers passes several of
+        // those joints in a row, and that is one via
         let mut vias = 0;
+        let mut in_barrel = false;
         for w in way.windows(2) {
-            if self.adj[w[0]].iter().any(|e| e.to == w[1] && e.via) {
+            let joint = self.adj[w[0]].iter().any(|e| e.to == w[1] && e.via);
+            if joint && !in_barrel {
                 vias += 1;
             }
+            in_barrel = joint;
         }
         let points: Vec<(Side, Point)> = way.iter().map(|&n| self.nodes[n]).collect();
         let mut layers: Vec<Side> = vec![];
@@ -1329,6 +1334,22 @@ mod tests {
         assert_eq!(p.vias, 1);
         assert_eq!(p.layers, vec![Side::Top, Side::Bottom]);
         assert!((p.length - 20.0).abs() < 1e-3, "{}", p.length);
+    }
+
+    #[test]
+    fn a_via_through_inner_layers_is_one_via() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        b.inner_layers = 2;
+        pad(&mut b, 5.0, 5.0, "A", "1", "N");
+        pad(&mut b, 25.0, 5.0, "B", "1", "N");
+        b.pads[1].side = Side::Bottom;
+        track(&mut b, Side::Top, (5.0, 5.0), (15.0, 5.0));
+        b.vias.push(Via { pos: Point::new(15.0, 5.0), diameter: 0.6, drill: 0.3, net: String::new() });
+        track(&mut b, Side::Bottom, (15.0, 5.0), (25.0, 5.0));
+        let g = CopperGraph::build(&b);
+        let p = g.path(&r("A.1"), &r("B.1")).expect("a path");
+        assert_eq!(p.vias, 1, "{:?}", p.layers);
+        assert!(p.layers.len() > 2, "it passes the inner layers: {:?}", p.layers);
     }
 
     #[test]
