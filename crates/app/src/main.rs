@@ -409,6 +409,11 @@ impl eframe::App for App {
                             self.start_board_lesson(4);
                             ui.close();
                         }
+                        let pairs_mark = if self.progress.is_done(board_editor::lesson::PAIRS_ID) { "✔ " } else { "　 " };
+                        if ui.button(format!("{pairs_mark}{}", board_editor::lesson::PAIRS_TITLE)).on_hover_text("2 組の差動ペアを、ペアの中・ペアどうしの順に同じ長さにして、蛇行が結合をゆるめることも確かめます").clicked() {
+                            self.start_board_lesson(6);
+                            ui.close();
+                        }
                         let mega_mark = if self.progress.is_done(board_editor::lesson::MEGA_ID) { "✔ " } else { "　 " };
                         if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます").clicked() {
                             self.start_board_lesson(5);

@@ -1,0 +1,158 @@
+{
+  "components": [
+    {
+      "refdes": "J1",
+      "kind": {
+        "Header": 6
+      },
+      "value": "Conn",
+      "pos": [
+        6,
+        8
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x6",
+      "custom": null
+    },
+    {
+      "refdes": "J2",
+      "kind": {
+        "Header": 6
+      },
+      "value": "Conn",
+      "pos": [
+        16,
+        8
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x6",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "100n",
+      "pos": [
+        30,
+        8
+      ],
+      "rot": 0,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        8,
+        18
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "LANE0_P"
+    },
+    {
+      "pos": [
+        18,
+        8
+      ],
+      "text": "LANE0_P"
+    },
+    {
+      "pos": [
+        8,
+        10
+      ],
+      "text": "LANE0_N"
+    },
+    {
+      "pos": [
+        18,
+        10
+      ],
+      "text": "LANE0_N"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "LANE1_P"
+    },
+    {
+      "pos": [
+        18,
+        12
+      ],
+      "text": "LANE1_P"
+    },
+    {
+      "pos": [
+        8,
+        14
+      ],
+      "text": "LANE1_N"
+    },
+    {
+      "pos": [
+        18,
+        14
+      ],
+      "text": "LANE1_N"
+    },
+    {
+      "pos": [
+        8,
+        16
+      ],
+      "text": "V3V3"
+    },
+    {
+      "pos": [
+        18,
+        16
+      ],
+      "text": "V3V3"
+    },
+    {
+      "pos": [
+        28,
+        8
+      ],
+      "text": "V3V3"
+    },
+    {
+      "pos": [
+        8,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        18,
+        18
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        32,
+        8
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

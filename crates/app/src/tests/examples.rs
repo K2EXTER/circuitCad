@@ -1912,3 +1912,54 @@ fn write_two_sheets_example() {
     s.switch_sheet(0);
     std::fs::write(root.join("two_sheets.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
+
+/// Generates docs/examples/work_in_progress/diff_lanes_routed.pcbjson for the board lesson on pairs of differential pairs:
+/// two headers 52 mm apart carry two lanes (LANE0, LANE1) as pairs, routed side by side on the top layer; lane 0 has a
+/// serpentine already (it had to go round something), lane 1 is straight and so shorter.
+/// `cargo test -p app write_diff_lanes_board -- --ignored --nocapture` (after `docs/examples/diff_lanes.schjson` exists)
+#[test]
+#[ignore]
+fn write_diff_lanes_board() {
+    use pcb_core::autoroute::{route_pair, RouteOptions};
+    use pcb_core::diffpair::{match_pairs, pair_report, DiffPair};
+    use pcb_core::meander::MeanderOptions;
+    use pcb_core::Zone;
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("diff_lanes.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    let b = &mut app.board_ed.board;
+    b.name = "diff_lanes".into();
+    b.set_rect_outline(0.0, 0.0, 70.0, 24.0);
+    b.place_part("J1", Point::new(8.0, 18.0), 0);
+    b.place_part("J2", Point::new(60.0, 18.0), 0);
+    b.place_part("C1", Point::new(66.0, 6.0), 0);
+    let mut pairs = vec![DiffPair::new("LANE0", "LANE0_P", "LANE0_N"), DiffPair::new("LANE1", "LANE1_P", "LANE1_N")];
+    for p in &mut pairs {
+        p.gap = 0.3;
+    }
+    b.diff_pairs = pairs.clone();
+    let opt = RouteOptions { track_width: 0.25, grid: 0.1, only_layers: Some(vec![Side::Top]), no_vias: true, ..RouteOptions::default() };
+    for p in &pairs {
+        let r = route_pair(b, p, &opt);
+        println!("{}: routed {} failed {:?}", p.name, r.routed, r.failed);
+    }
+    b.zones.push(Zone::new("GND", Side::Bottom, vec![Point::new(1.0, 1.0), Point::new(69.0, 1.0), Point::new(69.0, 23.0), Point::new(1.0, 23.0)]));
+    // the supply (3.3 V to the capacitor): the rest of the board, routed after the lanes
+    let rest = pcb_core::autoroute::autoroute(b, &RouteOptions { track_width: 0.25, grid: 0.1, ..RouteOptions::default() }, Some("V3V3"));
+    println!("V3V3: routed {} failed {:?}", rest.routed, rest.failed);
+    let gnd = pcb_core::autoroute::autoroute(b, &RouteOptions { track_width: 0.25, grid: 0.1, ..RouteOptions::default() }, Some("GND"));
+    println!("GND: routed {} failed {:?}", gnd.routed, gnd.failed);
+    let before: Vec<_> = pairs.iter().map(|p| pair_report(b, p)).collect();
+    println!("before: {before:?}");
+    let target = before[0].len_p.max(before[0].len_n) + 12.0;
+    let r = match_pairs(b, &pairs[..1], Some(target), &MeanderOptions::default());
+    println!("lane 0 lengthened: {r:?}");
+    for p in &pairs {
+        println!("{}: {:?}", p.name, pair_report(b, p));
+    }
+    println!("DRC: {:?}", pcb_core::drc::check(b));
+    println!("open: {}", pcb_core::ratsnest::ratsnest(b).len());
+    std::fs::create_dir_all(root.join("work_in_progress")).unwrap();
+    std::fs::write(root.join("work_in_progress/diff_lanes_routed.pcbjson"), serde_json::to_string_pretty(&*b).unwrap()).unwrap();
+}

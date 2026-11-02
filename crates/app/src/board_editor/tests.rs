@@ -3255,3 +3255,41 @@ fn the_part_boxes_are_kept_until_a_pad_or_an_outline_moves() {
     assert_eq!(e.part_boxes()["R1"].0, Point::new(8.0, 9.0));
     assert!(!e.part_boxes().contains_key("U9"));
 }
+
+#[test]
+fn the_pairs_lesson_goes_from_unequal_pairs_to_equal_ones_and_ends_with_the_gap_notice() {
+    use pcb_core::diffpair::{match_pairs, pair_report, tune_length};
+    let mut sch = crate::schematic::SchEditor::default();
+    assert!(sch.load_sample(BoardEditor::pairs_lesson_circuit()));
+    let mut e = BoardEditor::default();
+    e.adopt(serde_json::from_str(BoardEditor::pairs_lesson_board()).unwrap(), None);
+    e.start_pairs_lesson();
+    assert_eq!(e.lesson_progress(), 0);
+    assert_eq!(e.board.diff_pairs.len(), 2);
+    // the first DRC names both pairs' length differences
+    e.run_drc();
+    let msgs: Vec<&str> = e.violations.iter().map(|v| v.message.as_str()).collect();
+    assert!(msgs.iter().filter(|m| m.contains("長さの差")).count() == 2, "{msgs:?}");
+    assert_eq!(e.lesson_progress(), 1);
+    // each pair is tuned inside (the "長さを合わせる" button of the pair panel)
+    for d in e.board.diff_pairs.clone() {
+        e.checkpoint();
+        tune_length(&mut e.board, &d).expect("tuned");
+    }
+    assert_eq!(e.lesson_progress(), 2);
+    // the two pairs still differ by more than 10 mm
+    let means: Vec<f64> = e.board.diff_pairs.iter().map(|d| { let r = pair_report(&e.board, d); (r.len_p + r.len_n) / 2.0 }).collect();
+    assert!((means[0] - means[1]).abs() > 10.0, "{means:?}");
+    // then the pairs are brought to one length ("ペアどうしの長さを合わせる")
+    e.checkpoint();
+    let pairs = e.board.diff_pairs.clone();
+    let r = match_pairs(&mut e.board, &pairs, None, &e.meander);
+    assert!(r.pairs.iter().all(|(_, _, res)| res.is_ok()), "{r:?}");
+    assert_eq!(e.lesson_progress(), 3);
+    // the last step is a new DRC run (an edit put the old one back), and it still names the gap
+    e.run_drc();
+    assert!(e.violations.iter().any(|v| v.message.contains("間隔")), "{:?}", e.violations);
+    assert!(!e.violations.iter().any(|v| v.message.contains("長さの差")), "{:?}", e.violations);
+    assert_eq!(e.lesson_progress(), 4);
+    assert_eq!(e.finished_board_lesson(), Some("board_pairs"));
+}

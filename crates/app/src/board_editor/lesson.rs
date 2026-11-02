@@ -37,10 +37,18 @@ const MEGA_BOARD: &str = include_str!("../../../../docs/examples/work_in_progres
 /// Nets still open on the board of the sixth lesson when it starts.
 const MEGA_OPEN_AT_START: usize = 18;
 
+/// The seventh lesson: two lanes of differential pairs between two headers (`docs/examples/diff_lanes.schjson` and the routed board
+/// `work_in_progress/diff_lanes_routed.pcbjson`, made by the ignored test `write_diff_lanes_board`): even out the length inside
+/// each pair, then bring the pairs to the same length, and see what a serpentine costs.
+pub const PAIRS_TITLE: &str = "基板編7. 差動ペアどうしの長さを合わせる";
+pub const PAIRS_ID: &str = "board_pairs";
+const PAIRS_CIRCUIT: &str = include_str!("../../../../docs/examples/diff_lanes.schjson");
+const PAIRS_BOARD: &str = include_str!("../../../../docs/examples/work_in_progress/diff_lanes_routed.pcbjson");
+
 pub(super) struct BoardLesson {
     /// 0 = from a schematic to the files to order, 1 = the copper lesson, 2 = the pre-order check challenge,
     /// 3 = the placement lesson of the Arduino-compatible board, 4 = the USB differential pair lesson,
-    /// 5 = finishing the Mega board by hand.
+    /// 5 = finishing the Mega board by hand, 6 = bringing differential pairs to the same length.
     which: usize,
     done: Vec<bool>,
 }
@@ -88,6 +96,45 @@ fn mega_one_routed(e: &BoardEditor) -> bool {
 /// DRC run again after the hand work, and still clean.
 fn mega_still_clean(e: &BoardEditor) -> bool {
     mega_one_routed(e) && e.drc_ran && e.violations.is_empty()
+}
+
+/// Both lanes are routed and the two lines of each pair are as long as the pair allows.
+fn lanes_skew_ok(e: &BoardEditor) -> bool {
+    parts_on_board(e)
+        && e.board.diff_pairs.len() >= 2
+        && ratsnest(&e.board).is_empty()
+        && e.board.diff_pairs.iter().all(|d| {
+            let r = pcb_core::diffpair::pair_report(&e.board, d);
+            r.len_p > 0.0 && r.len_n > 0.0 && r.skew <= d.max_skew + 1e-9
+        })
+}
+
+/// The pairs are as long as each other (the length of a pair is the mean of its two lines), within 0.3 mm.
+fn lanes_same_length(e: &BoardEditor) -> bool {
+    if !lanes_skew_ok(e) {
+        return false;
+    }
+    let means: Vec<f64> = e
+        .board
+        .diff_pairs
+        .iter()
+        .map(|d| {
+            let r = pcb_core::diffpair::pair_report(&e.board, d);
+            (r.len_p + r.len_n) / 2.0
+        })
+        .collect();
+    let (lo, hi) = means.iter().fold((f64::MAX, 0.0_f64), |(lo, hi), m| (lo.min(*m), hi.max(*m)));
+    hi - lo <= 0.3
+}
+
+/// DRC has been run on the board as given (the two lanes are routed and the parts are on it).
+fn lanes_checked(e: &BoardEditor) -> bool {
+    parts_on_board(e) && e.board.diff_pairs.len() >= 2 && e.drc_ran
+}
+
+/// DRC has been run again after the pairs were brought to the same length (any edit puts `drc_ran` back, so this is a new run).
+fn lanes_rechecked(e: &BoardEditor) -> bool {
+    lanes_same_length(e) && e.drc_ran
 }
 
 fn order_opened(e: &BoardEditor) -> bool {
@@ -317,6 +364,29 @@ const USB_STEPS: &[Step] = &[
     },
 ];
 
+const PAIRS_STEPS: &[Step] = &[
+    Step {
+        title: "DRC で、いまの状態の指摘を読む",
+        detail: "左パネルの「DRC を実行」を押します。2 つのヘッダ (J1・J2) の間を、2 組の差動ペア LANE0・LANE1 が走っています。LANE0 は途中に蛇行 (ジグザグ) が入っていて、LANE1 はまっすぐです。指摘に「LANE0 の長さの差」「LANE1 の長さの差」(ペアの中の 2 本の長さの差) が出ます。LANE0 には「間隔のずれ」も出ます (蛇行のところで 2 本が離れているためです)。",
+        done: lanes_checked,
+    },
+    Step {
+        title: "ペアの中の長さを、それぞれ合わせる",
+        detail: "左パネルの「差動ペア」を開きます。LANE0 と LANE1 のそれぞれで「長さを合わせる」を押すと、短いほうの線に蛇行が足され、2 本の長さが揃います (長さの差が許容値 0.5mm 以内になるまで)。ペアの中の長さが揃うのは、2 本の信号が同じ時刻に届くための条件です。",
+        done: lanes_skew_ok,
+    },
+    Step {
+        title: "ペアどうしの長さを合わせる",
+        detail: "いま、LANE0 は約 67mm、LANE1 は約 54mm です。2 組が同時に届いてほしい (たとえば 2 レーンの映像信号) ときは、ペアどうしの長さも揃えます。「差動ペア」の下にある「ペアどうしの長さを合わせる」を押すと、短い LANE1 の 2 本に、同じ長さの蛇行が足されます。ペアの長さは 2 本の平均なので、2 本に同じだけ足せば、ペアの中の差は変わりません。",
+        done: lanes_same_length,
+    },
+    Step {
+        title: "もう一度 DRC を実行して、蛇行の代わりに失うものを知る",
+        detail: "「DRC を実行」を押します。長さの差の指摘は消えますが、「2 本の間隔が目標からずれています」が両方のペアに出ます。蛇行は 2 本を別々に曲げるので、そのところで 2 本が離れ、差動の結合 (ノイズを同じように拾う性質) と、差動インピーダンスが変わるためです。長さを揃えることと、2 本を寄せたままにすることは、両立しにくい、ということです。USB のフルスピード (12Mbit/s) のように遅い信号なら、数 mm の差も、少し離れることも、問題になりません。速い信号では、蛇行を 2 本いっしょに曲げる形で、手で引きます (「配線」ツール)。蛇行の山の高さは「長さ合わせ (蛇行)」の設定で変えられ、低くすると離れる量が減ります。",
+        done: lanes_rechecked,
+    },
+];
+
 const MEGA_STEPS: &[Step] = &[
     Step {
         title: "いまの基板の状態を確かめる",
@@ -442,6 +512,23 @@ impl BoardEditor {
         self.status = format!("レッスン「{MEGA_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
+    /// The sample circuit of the pairs lesson.
+    pub fn pairs_lesson_circuit() -> &'static str {
+        PAIRS_CIRCUIT
+    }
+
+    /// The routed board of the pairs lesson (JSON).
+    pub fn pairs_lesson_board() -> &'static str {
+        PAIRS_BOARD
+    }
+
+    /// Starts the pairs lesson on the board that was just adopted (the app loads the circuit and the board first).
+    pub fn start_pairs_lesson(&mut self) {
+        self.drc_ran = false;
+        self.lesson = Some(BoardLesson { which: 6, done: vec![false; PAIRS_STEPS.len()] });
+        self.status = format!("レッスン「{PAIRS_TITLE}」を始めました。右の案内に沿って操作してみましょう");
+    }
+
     fn lesson_steps(&self) -> &'static [Step] {
         match self.lesson.as_ref().map(|l| l.which) {
             Some(1) => COPPER_STEPS,
@@ -449,6 +536,7 @@ impl BoardEditor {
             Some(3) => ARDUINO_STEPS,
             Some(4) => USB_STEPS,
             Some(5) => MEGA_STEPS,
+            Some(6) => PAIRS_STEPS,
             _ => STEPS,
         }
     }
@@ -467,6 +555,7 @@ impl BoardEditor {
             3 => ARDUINO_ID,
             4 => USB_ID,
             5 => MEGA_ID,
+            6 => PAIRS_ID,
             _ => "board",
         })
     }

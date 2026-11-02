@@ -255,6 +255,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["pullup"]), ..lesson("usb_speed", "USB の速度の見分け", "D+ か D− を 1.5kΩ で引くと、ホストが機器の速度を知る。プルアップがないと認識されない", Some("機器をつなぐ前後の D+ / D− の電圧を測ります (止まった状態で)")) },
                 Item { requires: Some(&["usb_speed"]), ..lesson("usb_signal", "USB の信号線と ESD 保護の容量", "12Mbit/s の 1 ビットは約 83ns。ESD 保護部品の容量が大きいと、立ち上がりが遅れて読めなくなる", None) },
                 Item { id: "board_usb", title: "USB の配線 (差動ペア)", about: "D+ と D− を並べて、同じ長さで、短く引く。差動ペアの機能と、長さの差の確かめ方", kind: Kind::Board(4), build: false, requires: Some(&["usb_signal", "board"]), real: None },
+                Item { id: "board_pairs", title: "差動ペアどうしの長さを合わせる", about: "2 レーンの差動信号を同時に届けるため、ペアの中・ペアどうしの順に蛇行で長さを揃える。蛇行が 2 本の結合をゆるめることも確かめる", kind: Kind::Board(6), build: false, requires: Some(&["board_usb"]), real: None },
             ],
         },
         Stage {
