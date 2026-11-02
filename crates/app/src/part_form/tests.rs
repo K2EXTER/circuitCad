@@ -894,7 +894,7 @@ fn turning_the_saved_3d_shape_of_an_opened_part_keeps_it() {
 }
 
 #[test]
-fn the_pin_map_lists_every_terminal_of_the_model_and_leaves_the_sim_pins_alone_until_picked() {
+fn the_pin_table_lists_every_pin_and_leaves_the_sim_pins_alone_until_picked() {
     // a 3-terminal model on an 8-pin part
     let mut f = PartForm {
         sim: SimChoice::Subckt,
@@ -906,7 +906,7 @@ fn the_pin_map_lists_every_terminal_of_the_model_and_leaves_the_sim_pins_alone_u
     };
     let ctx = egui::Context::default();
     let input = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 700.0))), ..Default::default() };
-    let mut out = ctx.run_ui(input, |ui| f.pin_map_ui(ui));
+    let mut out = ctx.run_ui(input, |ui| f.pin_table_ui(ui));
     out.textures_delta.clear();
     assert_eq!(f.sim_pins, "3 1 2");
     let def = f.to_def().unwrap();
@@ -967,4 +967,34 @@ fn typing_in_the_form_is_noticed_before_a_kind_overwrites_it() {
     let fresh = PartForm::default().fingerprint();
     f.apply_type(PartType::Diode);
     assert_ne!(fresh, f.fingerprint(), "a kind fills in values");
+}
+
+#[test]
+fn pin_rows_read_from_the_text_and_write_back_the_same_lines() {
+    let text = "1 IN left\n2 GND\n3 OUT right";
+    let rows = pintable::rows_of(text);
+    assert_eq!(rows.len(), 3);
+    assert_eq!((rows[0].number.as_str(), rows[0].name.as_str(), rows[0].side.as_str()), ("1", "IN", "left"));
+    assert_eq!(rows[1].side, "", "no side: automatic");
+    assert_eq!(pintable::text_of(&rows), text);
+    let mut more = rows;
+    more.push(pintable::PinRow::default());
+    assert_eq!(pintable::text_of(&more), text, "an empty row is not written");
+    // a short name written with a one-letter side
+    assert_eq!(pintable::rows_of("1 A l")[0].side, "left");
+}
+
+#[test]
+fn the_pin_table_follows_a_text_changed_from_outside() {
+    let mut f = PartForm { pins_text: "1 A\n2 B".into(), ..PartForm::default() };
+    let ctx = egui::Context::default();
+    let input = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 700.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input(), |ui| f.pin_table_ui(ui));
+    out.textures_delta.clear();
+    assert_eq!(f.pin_rows.len(), 2);
+    f.pins_text = "1 A\n2 B\n3 C".into();
+    let mut out = ctx.run_ui(input(), |ui| f.pin_table_ui(ui));
+    out.textures_delta.clear();
+    assert_eq!(f.pin_rows.len(), 3, "a template or an import changed the text");
+    assert_eq!(f.pins_text, "1 A\n2 B\n3 C", "the text is not rewritten when nobody edited a row");
 }

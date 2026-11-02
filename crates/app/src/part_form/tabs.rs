@@ -248,7 +248,7 @@ impl PartForm {
                     ui.label("ノード順のピン番号");
                     ui.add(egui::TextEdit::singleline(&mut self.sim_pins).desired_width(160.0).hint_text("例: A K")).on_hover_text("モデルの端子の順番に、部品のピン番号を並べます。例: ダイオードなら A K (アノード カソード)、トランジスタなら C B E の順");
                 });
-                self.pin_map_ui(ui);
+                ui.small("モデルの端子とピンの対応は、「④ ピン」の表の「モデルの端子」の列で選びます。");
                 crate::icons::help_label(ui, "このモデルの限界", "このモデルの限界 (1行に1つ。実物との違いを書くと、部品を選んだときに表示されます)");
                 ui.add(
                     egui::TextEdit::multiline(&mut self.sim_limits)
@@ -274,8 +274,11 @@ impl PartForm {
             } else {
                 self.pick_row(ui, &[]);
             }
-            crate::icons::help_label(ui, "ピン (1行に「番号 名前 [向き]」)", "ピン (1行に「番号 名前 [left|right|top|bottom]」。向き省略で前半が左・後半が右。NC は未接続ピン扱い)");
-            ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。向きは left / right / top / bottom で、省略すると前半が左、後半が右になります。NC は未接続のピンです");
+            self.pin_table_ui(ui);
+            egui::CollapsingHeader::new("まとめて貼り付ける (文字で編集)").id_salt("pins_text").default_open(false).show(ui, |ui| {
+                ui.small("1行に「番号 名前 [向き]」。向きは left / right / top / bottom で、省略すると前半が左、後半が右です。データシートや回路図からの貼り付けに使います");
+                ui.add(egui::TextEdit::multiline(&mut self.pins_text).desired_rows(6).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace)).on_hover_text("ピンの定義を1行に1つ書きます。例: `1 IN+ left` (番号 名前 向き)。NC は未接続のピンです。上の表と同じものです");
+            });
             self.pin_check_ui(ui);
     }
 
