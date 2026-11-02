@@ -141,6 +141,16 @@ impl SchEditor {
             { let tip = "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"; if crate::icons::icon_button(ui, crate::icons::Icon::Wire, "配線", self.tool == Tool::Wire, true, tip).clicked() { self.tool = Tool::Wire; } };
             { let tip = "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"; if crate::icons::icon_button(ui, crate::icons::Icon::Label, "ラベル", self.tool == Tool::Label, true, tip).clicked() { self.tool = Tool::Label; } };
         });
+        ui.horizontal(|ui| {
+            // an edit not yet written to the history (mid-drag, just made) can be undone too
+            let can_undo = !self.undo.is_empty() || self.sch != self.committed;
+            if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, can_undo, "直前の操作を取り消します (Ctrl+Z)").clicked() {
+                self.undo();
+            }
+            if crate::icons::icon_button_key(ui, crate::icons::Icon::Redo, "やり直し", "Ctrl+Y", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)").clicked() {
+                self.redo();
+            }
+        });
         if self.lit(ui.button("クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
             self.open_quick_add();
         }
