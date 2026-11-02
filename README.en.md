@@ -45,6 +45,27 @@ circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Ge
 
 (Screenshots show the Japanese UI.)
 
+## Headless use (`ccad`)
+`ccad` runs circuitCad's calculations without opening a window. A script has **one command per line**: build a circuit by part and pin names, run ERC and analyses, make a board and export fabrication files. Every answer is one JSON object per line, so AI agents and automation can use it.
+
+```
+new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net LEDA R1.2 D1.A
+net GND V1.- D1.K
+erc
+dc
+```
+
+Save this as `led.ccad` and run `ccad led.ccad`. In the answer of `dc`, `elements.D1.current` is the current through the LED (about 11 mA). If ERC still has errors, `circuit_ok` in the answer is `false`, so you know whether to trust the numbers.
+
+- **It is also an MCP server.** Register it with, for example, `claude mcp add ccad -- ccad --strict mcp`, and an AI agent can call the same commands as tools (`--strict` refuses to analyse a circuit that has ERC errors). Board pictures are returned over MCP too.
+- **From source:** `cargo run -p cli -- led.ccad`. The release zips up to `v0.1.0-alpha.8` do not contain `ccad`.
+- The command list and the caveats are in [docs/cli.md](docs/cli.md) (Japanese).
+
 ## Try it in five minutes
 1. Download the zip from the [releases page](https://github.com/K2EXTER/circuitCad/releases), unzip it and run `circuitCad.exe`. Windows SmartScreen may warn about the unsigned executable: choose "More info" then "Run anyway".
 2. Open `docs/examples/regulator_led.schjson` from the file menu (a circuit that makes 5 V from 12 V and lights an LED).

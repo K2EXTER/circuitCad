@@ -72,6 +72,27 @@
 |---|---|
 | ![発注の準備の窓](docs/images/order.png) | ![総合デモの過渡解析。555 の出力を割ったカウンタの波形](docs/images/mixed-signal-waveform.png) |
 
+## 画面なしで使う (`ccad`)
+`ccad` は、窓を開かずに circuitCad の計算を使うコマンドです。**1行に1コマンド**のスクリプトで、回路を名前で組み立て、ERC・解析・基板・製造データまでを実行します。答えは1行に1つの JSON で返るので、AI エージェントや自動化から扱えます。
+
+```
+new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net LEDA R1.2 D1.A
+net GND V1.- D1.K
+erc
+dc
+```
+
+これを `led.ccad` として保存し、`ccad led.ccad` で実行します。`dc` の答えの `elements.D1.current` が LED に流れる電流 (約 11 mA) です。ERC にエラーが残っていると、答えの `circuit_ok` が `false` になり、数値を信用してよいかが分かります。
+
+- **MCP サーバーにもなります。** `claude mcp add ccad -- ccad --strict mcp` のように登録すると、AI エージェントが同じコマンドをツールとして呼べます (`--strict` は、ERC にエラーがあるとき解析を断ります)。基板の画像も MCP で返ります。
+- **ソースから動かす場合:** `cargo run -p cli -- led.ccad`。リリースの zip には `v0.1.0-alpha.8` までは入っていません。
+- コマンドの一覧と注意点は [docs/cli.md](docs/cli.md) にあります。
+
 ## 最初の5分
 1. 起動して、メニュー「ファイル → 開く」から `docs/examples/regulator_led.schjson` を開きます (12V から 5V を作って LED を光らせる回路)。
 2. 左パネルの「解析」タブで「DC動作点を解析」を押すと、各点の電圧が配線の色と数字で、電流が矢印で出ます。
