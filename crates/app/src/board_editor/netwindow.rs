@@ -199,17 +199,12 @@ impl BoardEditor {
                     ui.small(format!("この値は、同じクラスのネット ({}) にも効きます", others.join("・")));
                 }
             }
-            ui.separator();
-            ui.horizontal(|ui| {
-                for (k, text, hover) in [
-                    (0, "線幅", "電流と推奨の線幅、線幅のスライダー、インピーダンス、例外の区間"),
-                    (1, "クラス", "役割、間隔、ビア。このネットの配線ルール"),
-                    (2, "整え方", "角の丸み・太さの段差・分かれ目の丸み。このクラスだけ基板全体の設定と変えるとき"),
-                ] {
-                    ui.selectable_value(&mut self.net_tab, k, text).on_hover_text(hover);
-                }
-            });
-            ui.separator();
+            ui.add_space(4.0);
+            crate::widgets::tab_bar(ui, &mut self.net_tab, &[
+                (0, "線幅", "電流と推奨の線幅、線幅のスライダー、インピーダンス、例外の区間"),
+                (1, "クラス", "役割、間隔、ビア。このネットの配線ルール"),
+                (2, "整え方", "角の丸み・太さの段差・分かれ目の丸み。このクラスだけ基板全体の設定と変えるとき"),
+            ]);
             let mut set_width: Option<f64> = None;
             let mut idx: Vec<usize> = vec![];
             // the width the slider, a button or the impedance asks for this frame

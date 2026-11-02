@@ -17,3 +17,33 @@ pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
 pub fn beside_panel() -> egui::Pos2 {
     egui::pos2(crate::PANEL_WIDTH + 14.0, 56.0)
 }
+
+/// A row of tabs: each tab is a button, the chosen one is filled and underlined, and a line runs under the row, so it reads as tabs and
+/// not as a few words. `tabs` is `(value, label, hover text)`.
+pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[(T, &str, &str)]) {
+    let accent = ui.visuals().selection.stroke.color;
+    let row = ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        for &(value, label, hover) in tabs {
+            let selected = *current == value;
+            let text = egui::RichText::new(label).size(15.0);
+            let (text, fill) = if selected {
+                (text.strong().color(ui.visuals().strong_text_color()), ui.visuals().selection.bg_fill)
+            } else {
+                (text, ui.visuals().widgets.inactive.weak_bg_fill)
+            };
+            let r = ui.add(egui::Button::new(text).fill(fill).min_size(egui::vec2(72.0, 26.0)).corner_radius(egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 })).on_hover_text(hover);
+            if selected {
+                ui.painter().hline(r.rect.x_range(), r.rect.bottom(), egui::Stroke::new(3.0, accent));
+            }
+            if r.clicked() {
+                *current = value;
+            }
+        }
+    });
+    // the line under the whole row (the chosen tab's underline sits on it)
+    let y = row.response.rect.bottom() + 1.0;
+    let x = ui.max_rect().x_range();
+    ui.painter().hline(x, y, egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color));
+    ui.add_space(6.0);
+}
