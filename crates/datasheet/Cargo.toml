@@ -1,0 +1,10 @@
+[package]
+name = "datasheet"
+version = "0.1.0"
+edition = "2024"
+description = "circuitCad: データシート (PDF) を開き、ページを絵にする。GUI に依存しない"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/K2EXTER/circuitCad"
+
+[dependencies]
+hayro = "0.8.0"

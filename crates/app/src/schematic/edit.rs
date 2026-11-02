@@ -30,6 +30,20 @@ impl SchEditor {
         }
     }
 
+    /// Opens a data sheet PDF beside the open new-part form (`--form-pdf <file>`).
+    pub fn load_pdf_into_form(&mut self, path: &std::path::Path) {
+        if let Some(f) = self.form.as_mut() {
+            f.sheet.load(path);
+        }
+    }
+
+    /// Searches the data sheet window of the open new-part form (`--form-find <text>`).
+    pub fn find_in_form_pdf(&mut self, text: &str) {
+        if let Some(f) = self.form.as_mut() {
+            f.sheet.find(text);
+        }
+    }
+
     /// Opens the new-part form already set to a kind of part (`--new-part <kind>`).
     pub fn open_part_form_for(&mut self, kind: &str) {
         self.form = Some(PartForm::for_type(kind));

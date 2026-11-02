@@ -197,6 +197,8 @@ pub struct PartForm {
     pub spice_message: Option<Result<String, String>>,
     /// Result of the last trial read of the model (shown under the model box).
     pub trial_message: Option<trial::Trial>,
+    /// The data sheet (PDF) window opened beside the form.
+    pub sheet: datasheet_view::SheetView,
 }
 
 impl Default for PartForm {
@@ -301,11 +303,13 @@ impl Default for PartForm {
             tpl_message: String::new(),
             spice_message: None,
             trial_message: None,
+            sheet: datasheet_view::SheetView::default(),
         }
     }
 }
 
 mod checklist;
+mod datasheet_view;
 mod kind;
 mod parse;
 mod chip;
@@ -329,6 +333,11 @@ impl PartForm {
     /// Draws the form. Returns a finished definition when the user presses save.
     pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PartDef> {
         let built = self.to_def();
+        self.sheet.take_dropped(ui.ctx());
+        self.sheet.window(ui.ctx());
+        if let Some((datasheet_view::Target::Name, word)) = self.sheet.take_picked() {
+            self.name = word.trim_matches(|c: char| !c.is_alphanumeric()).to_string();
+        }
         self.kind_bar(ui);
         ui.separator();
         let labels: Vec<String> = FORM_TABS

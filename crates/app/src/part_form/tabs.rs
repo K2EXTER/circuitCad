@@ -14,7 +14,12 @@ impl PartForm {
         }
         egui::Grid::new("part_basic").num_columns(2).show(ui, |ui| {
             ui.label("部品名");
-            ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
+            ui.horizontal(|ui| {
+                ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
+                if self.sheet.has_doc() && ui.button("PDFから選ぶ").on_hover_text("データシートの窓で、部品名の語をクリックして入れます (ピンの上にポインタを置くと、入る語が出ます)").clicked() {
+                    self.sheet.start_pick(datasheet_view::Target::Name);
+                }
+            });
             ui.end_row();
             ui.label("カテゴリ");
             ui.text_edit_singleline(&mut self.category).on_hover_text("一覧のグループ名 (例: オペアンプ、トランジスタ)");
@@ -32,6 +37,8 @@ impl PartForm {
             ui.text_edit_singleline(&mut self.datasheet).on_hover_text("データシート (メーカーの仕様書) の URL。あとで見返すためのメモです");
             ui.end_row();
         });
+        self.sheet.open_button(ui);
+        self.sheet_candidates(ui);
         if passive || diode {
             ui.add_space(6.0);
             ui.separator();
@@ -385,5 +392,33 @@ pub(super) fn body_tip(label: &str) -> &'static str {
         "長さ" => "本体の縦の大きさ (基板の Y 方向)",
         "中心X" => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (X)。ふつうは 0",
         _ => "本体の中心の、部品の原点 (パッケージの中心) からのずれ (Y)。ふつうは 0",
+    }
+}
+
+impl PartForm {
+    /// Part numbers and a kind of part the data sheet suggests: buttons that fill the name and the category.
+    /// They are guesses from the title, so they are only offered.
+    fn sheet_candidates(&mut self, ui: &mut egui::Ui) {
+        let Some(c) = self.sheet.candidates() else { return };
+        let (names, category) = (c.names.clone(), c.category);
+        if names.is_empty() && category.is_none() {
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            if !names.is_empty() {
+                ui.small("部品名の候補");
+                for n in &names {
+                    if ui.small_button(n).on_hover_text("データシートの題名やファイル名から見つけた型番です。押すと部品名に入ります。違うときは「PDFから選ぶ」で、PDFの上でクリックして入れます").clicked() {
+                        self.name = n.clone();
+                    }
+                }
+            }
+            if let Some(cat) = category {
+                ui.small("分類の候補");
+                if ui.small_button(cat).on_hover_text("データシートの題名と本文の言葉からの推測です。押すとカテゴリに入ります").clicked() {
+                    self.category = cat.to_string();
+                }
+            }
+        });
     }
 }

@@ -12,7 +12,7 @@ cargo run -p cli -- script.ccad   # 画面なしで実行 (docs/cli.md)
 cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj を開ける: args.rs apply_args)
 ```
 
-## クレート (依存: app → pcb-core, sch-core, sim-core, part-lib)
+## クレート (依存: app → pcb-core, sch-core, sim-core, part-lib, datasheet)
 
 | クレート | 役割 |
 |---|---|
@@ -21,6 +21,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `design-spec` | 設計の要件の表の型(`DesignSpec`: ネットの役割・近くに置く組・離す組・バイパスの対応・道筋の測定 `Measure`・承知した例外 `Waiver`)。回路図 `Schematic.requirements` と基板 `Board.place_groups`/`keep_apart` が同じ型を使う |
 | `pcb-core` | 基板モデル `model.rs`、DRC、ラッツネスト、自動配線、Gerber/Excellon/BOM出力 |
 | `part-lib` | 部品JSON (`*.part.json`: 記号+パッケージ+SPICEモデル)。`examples/` が同梱部品。`kicad.rs` はKiCadの `.kicad_sym`/`.kicad_mod` を `PartDef` に変換、`passive.rs` はチップ部品のテンプレート、`vendorzip.rs` はメーカーのSPICEモデルzip(村田など。自分でダウンロードしたもの)の索引、`diode.rs` はダイオードの IS/N/RS をグラフの点から決める計算、`thru_hole.rs` はリード付き部品の穴・パッド・ピッチの目安、`passive.rs` にはコイル・抵抗のインピーダンス当てはめと温度係数の当てはめも |
+| `datasheet` | データシート(PDF)を開いてページを絵にし、語の位置と検索・見出し(日英)・型番と分類の候補を出す(純Rustの hayro。GUI非依存。`text.rs`=語・検索 / `headings.rs` / `suggest.rs`)。部品作成フォームの「データシート」窓が使う。設計と段階は `docs/datasheet-viewer-design.md` |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
 | `cli` | `ccad`: 画面なしの操作窓口。1行1コマンドのスクリプトで、名前ベースの回路作成・ERC・解析・基板・製造データを実行し、答えを1行1個のJSONで返す (AIエージェント・自動化向け。`ccad mcp` で MCP サーバーにもなる。使い方 `docs/cli.md`、詳細 `docs/code-notes/cli.md`) |
 
@@ -79,7 +80,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `args.rs` / `files.rs` / `screenshot.rs` / `startup.rs` / `tips.rs` | 起動引数 / 保存・読込・未保存の確認 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
 | `tests/` | 統合テスト `flow.rs` と、サンプル回路の生成 `examples.rs` の `write_*` (`--ignored` で実行) |
 | `plot.rs` | 波形描画 (`scale_bar`・`draw_group`・測定カーソル) |
-| `part_form/` | 部品作成フォーム (`parse` 入力→`PartDef` / `kind` 種類 / `tabs` 各タブ / `chip` チップ部品 / `template` 充電IC / `step3d` STEPの3Dの形 / `preview` / `checklist`) |
+| `part_form/` | 部品作成フォーム (`parse` 入力→`PartDef` / `kind` 種類 / `tabs` 各タブ / `chip` チップ部品 / `template` 充電IC / `step3d` STEPの3Dの形 / `preview` / `checklist` / `datasheet_view` データシート(PDF)の窓) |
 | `learn.rs` / `measure_guide.rs` / `bench_guide.rs` / `help.rs` / `project.rs` | 学習パス(直線と樹形図。ウェルカムカードも) / 学習パス最後の「組み立てて測る」の窓 / 実機の作業のチェックリスト窓(はんだ付け・ブートローダ。`Kind::Hands`) / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
 | `samples.rs` | 「ファイル → サンプル回路を開く」の一覧 (`docs/examples` を埋め込む) |
 | `source_form.rs` | 電源値フォーム |
