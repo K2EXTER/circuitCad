@@ -12,7 +12,7 @@ impl PartForm {
         };
         ui.label(egui::RichText::new("回路図の記号").strong());
         symbol_preview(ui, def);
-        ui.label(egui::RichText::new("基板の形 (実寸比)").strong());
+        ui.label(egui::RichText::new("部品の形 (実寸比)").strong());
         if let Ok(fp) = def.footprint() {
             footprint_preview(ui, &fp);
             if let Some(h) = fp.height {

@@ -354,7 +354,7 @@ impl SchEditor {
         });
         // below the (closed by default) library list, outside it, so a newcomer can find them without opening anything
         ui.horizontal_wrapped(|ui| {
-            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・基板の形・シミュレーションモデル・定格)").clicked() {
+            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)").clicked() {
                 self.form = Some(PartForm::default());
             }
             if self.lit(ui.button("JSONから追加…"), "JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します").clicked() {
