@@ -39,7 +39,7 @@ const MEGA_OPEN_AT_START: usize = 18;
 
 /// The seventh lesson: two lanes of differential pairs between two headers (`docs/examples/diff_lanes.schjson` and the routed board
 /// `work_in_progress/diff_lanes_routed.pcbjson`, made by the ignored test `write_diff_lanes_board`): even out the length inside
-/// each pair, then bring the pairs to the same length, and see what a serpentine costs.
+/// each pair, then bring the pairs to the same length with serpentines that bend both lines together.
 pub const PAIRS_TITLE: &str = "基板編7. 差動ペアどうしの長さを合わせる";
 pub const PAIRS_ID: &str = "board_pairs";
 const PAIRS_CIRCUIT: &str = include_str!("../../../../docs/examples/diff_lanes.schjson");
@@ -132,9 +132,10 @@ fn lanes_checked(e: &BoardEditor) -> bool {
     parts_on_board(e) && e.board.diff_pairs.len() >= 2 && e.drc_ran
 }
 
-/// DRC has been run again after the pairs were brought to the same length (any edit puts `drc_ran` back, so this is a new run).
+/// DRC has been run again after the pairs were brought to the same length (any edit puts `drc_ran` back, so this is a new run), and
+/// it names nothing: the pairs bent together keep their gap.
 fn lanes_rechecked(e: &BoardEditor) -> bool {
-    lanes_same_length(e) && e.drc_ran
+    lanes_same_length(e) && e.drc_ran && e.violations.is_empty()
 }
 
 fn order_opened(e: &BoardEditor) -> bool {
@@ -366,23 +367,18 @@ const USB_STEPS: &[Step] = &[
 
 const PAIRS_STEPS: &[Step] = &[
     Step {
-        title: "DRC で、いまの状態の指摘を読む",
-        detail: "左パネルの「DRC を実行」を押します。2 つのヘッダ (J1・J2) の間を、2 組の差動ペア LANE0・LANE1 が走っています。LANE0 は途中に蛇行 (ジグザグ) が入っていて、LANE1 はまっすぐです。指摘に「LANE0 の長さの差」「LANE1 の長さの差」(ペアの中の 2 本の長さの差) が出ます。LANE0 には「間隔のずれ」も出ます (蛇行のところで 2 本が離れているためです)。",
+        title: "DRC で、いまの状態を確かめる",
+        detail: "左パネルの「DRC を実行」を押します。2 つのヘッダ (J1・J2) の間を、2 組の差動ペア LANE0・LANE1 が走っていて、指摘は 0 件です。ペアの中の 2 本の長さの差 (約 1.8mm) は、ここでは遅い信号の想定で、許容 (2.0mm) の中です。左パネルの「差動ペア」を開くと、LANE0 は約 67mm、LANE1 は約 54mm と、ペアどうしの長さが違うのが分かります。ペアどうしの長さは、DRC では調べません (決まりごとではなく、設計のねらいだからです)。LANE0 には、途中に蛇行があります。拡大すると、2 本がいっしょに曲がっているのが見えます。",
         done: lanes_checked,
     },
     Step {
-        title: "ペアの中の長さを、それぞれ合わせる",
-        detail: "左パネルの「差動ペア」を開きます。LANE0 と LANE1 のそれぞれで「長さを合わせる」を押すと、短いほうの線に蛇行が足され、2 本の長さが揃います (長さの差が許容値 0.5mm 以内になるまで)。ペアの中の長さが揃うのは、2 本の信号が同じ時刻に届くための条件です。",
-        done: lanes_skew_ok,
-    },
-    Step {
         title: "ペアどうしの長さを合わせる",
-        detail: "いま、LANE0 は約 67mm、LANE1 は約 54mm です。2 組が同時に届いてほしい (たとえば 2 レーンの映像信号) ときは、ペアどうしの長さも揃えます。「差動ペア」の下にある「ペアどうしの長さを合わせる」を押すと、短い LANE1 の 2 本に、同じ長さの蛇行が足されます。ペアの長さは 2 本の平均なので、2 本に同じだけ足せば、ペアの中の差は変わりません。",
+        detail: "2 組が同時に届いてほしい (たとえば 2 レーンの映像信号) ときは、ペアどうしの長さも揃えます。「差動ペア」の下にある「ペアどうしの長さを合わせる」を押すと、短い LANE1 の 2 本に、同じ長さの蛇行が足されます。ペアの長さは 2 本の平均で、いちばん長い LANE0 に合わせます。蛇行は、2 本を入れ子の山でいっしょに曲げるので、2 本の間隔が保たれ、ペアの中の長さの差も変わりません。",
         done: lanes_same_length,
     },
     Step {
-        title: "もう一度 DRC を実行して、蛇行の代わりに失うものを知る",
-        detail: "「DRC を実行」を押します。長さの差の指摘は消えますが、「2 本の間隔が目標からずれています」が両方のペアに出ます。蛇行は 2 本を別々に曲げるので、そのところで 2 本が離れ、差動の結合 (ノイズを同じように拾う性質) と、差動インピーダンスが変わるためです。長さを揃えることと、2 本を寄せたままにすることは、両立しにくい、ということです。USB のフルスピード (12Mbit/s) のように遅い信号なら、数 mm の差も、少し離れることも、問題になりません。速い信号では、蛇行を 2 本いっしょに曲げる形で、手で引きます (「配線」ツール)。蛇行の山の高さは「長さ合わせ (蛇行)」の設定で変えられ、低くすると離れる量が減ります。",
+        title: "もう一度 DRC を実行して、間隔が保たれたことを確かめる",
+        detail: "「DRC を実行」を押します。指摘は 0 件のままです。LANE1 の蛇行を拡大すると、2 本が一定の間隔で、外側と内側を入れ替えながら曲がっているのが見えます。2 本を別々に曲げると、蛇行のところで 2 本が離れて、「2 本の間隔が目標からずれています」と出ます (差動の結合と差動インピーダンスが変わるため)。いっしょに曲げれば、それを避けられます。なお、ペアの中の長さの差は、2 本をいっしょに曲げても直りません (平行な 2 本は、山ごとに同じだけ長くなるため)。差が許容より大きいときは、差動ペアの「長さを合わせる」を使います。短いほうの 1 本だけが曲がるので、そこは間隔がずれます。",
         done: lanes_rechecked,
     },
 ];

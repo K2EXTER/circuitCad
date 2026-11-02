@@ -5,6 +5,12 @@
 //! facing edges keep the clearance; their height is worked out so that the added length is what was asked for (the
 //! corners can be square, cut at 45° or rounded, which shortens the path a little, so the height is adjusted until
 //! the length is right). Every attempt is checked with the DRC and thrown away if it makes things worse.
+//!
+//! The two lines of a differential pair are bent together ([`tune_pair`]): the lines of a coupled run are replaced by bumps
+//! that nest, one line wrapped round the other, so the gap between them stays what it was. A line that is offset from
+//! another by `d` has the same length on a bump (what one gains on the outer corners it loses on the inner ones), so
+//! the bumps add the same length to both lines and the pair keeps its skew; they alternate sides so that the line on the
+//! outside changes from bump to bump.
 
 use crate::drc::{check, connectivity};
 use crate::model::*;
@@ -50,6 +56,11 @@ fn poly_len(pts: &[Point]) -> f64 {
 /// Replace the 90° corners inside `pts` by a cut (`Chamfer`) or an arc (`Round`) of size `d` (smaller where the
 /// pieces next to it are short).
 fn treat_corners(pts: &[Point], d: f64, style: MeanderStyle) -> Vec<Point> {
+    treat_corners_sized(pts, &vec![d; pts.len()], style)
+}
+
+/// [`treat_corners`] with a size of its own for each corner (`sizes[k]` for `pts[k]`).
+fn treat_corners_sized(pts: &[Point], sizes: &[f64], style: MeanderStyle) -> Vec<Point> {
     if style == MeanderStyle::Square || pts.len() < 3 {
         return pts.to_vec();
     }
@@ -57,7 +68,7 @@ fn treat_corners(pts: &[Point], d: f64, style: MeanderStyle) -> Vec<Point> {
     for k in 1..pts.len() - 1 {
         let (p, v, q) = (pts[k - 1], pts[k], pts[k + 1]);
         let (l1, l2) = (v.dist(p), v.dist(q));
-        let d = d.min(0.45 * l1.min(l2));
+        let d = sizes[k].min(0.45 * l1.min(l2));
         if d < 1e-6 {
             out.push(v);
             continue;
@@ -207,4 +218,216 @@ pub fn match_nets(board: &mut Board, nets: &[String], target: Option<f64>, opts:
         report.nets.push((n.clone(), len, res));
     }
     report
+}
+
+// ------------------------------------------------------------------ the two lines of a pair, bent together
+
+/// Two parallel straight runs `p` and `n` (the two lines of a coupled pair) in a frame of their own: `along` is the distance
+/// along `p`, `off` the distance from `p` towards `n`, `d` the centre-to-centre distance of the lines.
+struct PairFrame {
+    origin: Point,
+    u: (f64, f64),
+    m: (f64, f64),
+    d: f64,
+    /// The stretch (along) where both runs are.
+    lo: f64,
+    hi: f64,
+    /// The ends of `n` (along), low to high.
+    n_ends: (f64, f64),
+    /// The length of `p`.
+    len_p: f64,
+}
+
+impl PairFrame {
+    fn new(p: &Track, n: &Track) -> Option<Self> {
+        if p.side != n.side {
+            return None;
+        }
+        let (lp, ln) = (seg_len(p), seg_len(n));
+        if lp < 1e-6 || ln < 1e-6 {
+            return None;
+        }
+        let u = ((p.b.x - p.a.x) / lp, (p.b.y - p.a.y) / lp);
+        let un = ((n.b.x - n.a.x) / ln, (n.b.y - n.a.y) / ln);
+        if (u.0 * un.1 - u.1 * un.0).abs() > 1e-3 {
+            return None;
+        }
+        let off_of = |q: Point| -u.1 * (q.x - p.a.x) + u.0 * (q.y - p.a.y);
+        let along_of = |q: Point| u.0 * (q.x - p.a.x) + u.1 * (q.y - p.a.y);
+        let (oa, ob) = (off_of(n.a), off_of(n.b));
+        if (oa - ob).abs() > 0.02 || oa.abs() < 1e-3 {
+            return None;
+        }
+        let (m, d) = if oa > 0.0 { ((-u.1, u.0), oa) } else { ((u.1, -u.0), -oa) };
+        let (a1, a2) = (along_of(n.a), along_of(n.b));
+        let n_ends = (a1.min(a2), a1.max(a2));
+        Some(Self { origin: p.a, u, m, d, lo: n_ends.0.max(0.0), hi: n_ends.1.min(lp), n_ends, len_p: lp })
+    }
+
+    fn at(&self, along: f64, off: f64) -> Point {
+        Point::new(self.origin.x + self.u.0 * along + self.m.0 * off, self.origin.y + self.u.1 * along + self.m.1 * off)
+    }
+}
+
+/// How the bumps of a pair are laid out: width `s` of the inner bump, distance `pitch` between the starts of two bumps, the
+/// free stretch `margin` kept at each end, and the most bumps that fit.
+struct PairLayout {
+    s: f64,
+    pitch: f64,
+    margin: f64,
+    n_max: usize,
+}
+
+fn pair_layout(f: &PairFrame, w: f64, clearance: f64, style: MeanderStyle) -> PairLayout {
+    let d = f.d;
+    let s = (3.0 * w).max(2.0 * w + clearance + 0.1).max(2.0 * d + 2.0 * w);
+    // the outer lines of two bumps on the same side face each other across 2 pitches; the baseline between a bump
+    // and the next (on the other side) must be long enough for the corners
+    let baseline = if style == MeanderStyle::Square { w + clearance } else { (w + clearance).max(s) };
+    let pitch = ((s + 2.0 * d + w + clearance) / 2.0).max(s + d + baseline);
+    let margin = 1.0_f64.max(2.0 * w);
+    let room = f.hi - f.lo - 2.0 * margin - s - 2.0 * d;
+    let n_max = if room < 0.0 { 0 } else { (room / pitch).floor() as usize + 1 };
+    PairLayout { s, pitch, margin, n_max }
+}
+
+/// The two polylines (in the order of `along`) of `n` nested bumps of depth `depth`, the first towards `n` when `sigma0` is 1.0
+/// (away from it when -1.0), the next on the other side, and so on. `None` when they do not fit.
+fn pair_bumps(f: &PairFrame, l: &PairLayout, n: usize, depth: f64, sigma0: f64, style: MeanderStyle) -> Option<(Vec<Point>, Vec<Point>)> {
+    let d = f.d;
+    let total = (n as f64 - 1.0) * l.pitch + l.s + 2.0 * d;
+    let free = (f.hi - f.lo - total) / 2.0;
+    if n == 0 || free < l.margin {
+        return None;
+    }
+    let x0 = f.lo + free + d;
+    // a corner is cut or rounded by `base` on the line inside the turn and by `base + ext` on the line outside it
+    // (concentric arcs; parallel cuts), so the lines stay `d` apart round the corner
+    let ext = match style {
+        MeanderStyle::Square => 0.0,
+        MeanderStyle::Chamfer => (2.0 - std::f64::consts::SQRT_2) * d,
+        MeanderStyle::Round => d,
+    };
+    let base = (0.45 * l.s.min(depth) - ext).max(0.0);
+    let mut p_pts = vec![f.at(0.0, 0.0)];
+    let mut n_pts = vec![f.at(f.n_ends.0, d)];
+    let (mut p_size, mut n_size) = (vec![0.0], vec![0.0]);
+    for k in 0..n {
+        let x = x0 + k as f64 * l.pitch;
+        let sigma = if k % 2 == 0 { sigma0 } else { -sigma0 };
+        // `p` is inside the turn of the legs' corners (j = 0, 3) and outside the turn of the top corners (j = 1, 2) when the
+        // bump goes towards `n` (sigma > 0); the other way round for `n`; and everything swaps when the bump goes away from `n`
+        let (p_inner, n_inner) = if sigma > 0.0 {
+            (vec![(x, 0.0), (x, depth), (x + l.s, depth), (x + l.s, 0.0)], vec![(x - d, d), (x - d, d + depth), (x + l.s + d, d + depth), (x + l.s + d, d)])
+        } else {
+            (vec![(x - d, 0.0), (x - d, -depth), (x + l.s + d, -depth), (x + l.s + d, 0.0)], vec![(x, d), (x, d - depth), (x + l.s, d - depth), (x + l.s, d)])
+        };
+        for (j, (a, o)) in p_inner.iter().enumerate() {
+            p_pts.push(f.at(*a, *o));
+            // the line on the bump's side is outside at the top corners and inside at the foot corners
+            let p_on_bump_side = sigma < 0.0;
+            let outside = if j == 1 || j == 2 { p_on_bump_side } else { !p_on_bump_side };
+            p_size.push(base + if outside { ext } else { 0.0 });
+        }
+        for (j, (a, o)) in n_inner.iter().enumerate() {
+            n_pts.push(f.at(*a, *o));
+            let n_on_bump_side = sigma > 0.0;
+            let outside = if j == 1 || j == 2 { n_on_bump_side } else { !n_on_bump_side };
+            n_size.push(base + if outside { ext } else { 0.0 });
+        }
+    }
+    p_pts.push(f.at(f.len_p, 0.0));
+    n_pts.push(f.at(f.n_ends.1, d));
+    p_size.push(0.0);
+    n_size.push(0.0);
+    Some((treat_corners_sized(&p_pts, &p_size, style), treat_corners_sized(&n_pts, &n_size, style)))
+}
+
+/// The tracks that replace the straight runs `p` and `n`, bent together so that each is `extra` mm longer; `n_bumps` bumps, the
+/// first towards `n` when `sigma0` is 1.0. `None` when it does not fit (the depth must stay between half a track width and the
+/// tallest bump) or the two lines would not get the same length.
+fn meander_pair(p: &Track, n: &Track, extra: f64, clearance: f64, opts: &MeanderOptions, n_bumps: usize, sigma0: f64) -> Option<(Vec<Track>, Vec<Track>)> {
+    let f = PairFrame::new(p, n)?;
+    let w = p.width.max(n.width);
+    let l = pair_layout(&f, w, clearance, opts.style);
+    if n_bumps == 0 || n_bumps > l.n_max || extra <= 0.0 {
+        return None;
+    }
+    let straight = (f.len_p, f.n_ends.1 - f.n_ends.0);
+    let mut depth = extra / (2.0 * n_bumps as f64);
+    for _ in 0..12 {
+        if depth <= 0.0 {
+            return None;
+        }
+        let (pp, np) = pair_bumps(&f, &l, n_bumps, depth, sigma0, opts.style)?;
+        let (got_p, got_n) = (poly_len(&pp) - straight.0, poly_len(&np) - straight.1);
+        let got = (got_p + got_n) / 2.0;
+        if (got - extra).abs() < 0.005 {
+            let fits = depth >= 0.5 * w && depth <= 1.3 * opts.height_max;
+            let alike = (got_p - got_n).abs() < 0.05;
+            let tracks = |pts: &[Point], t: &Track| -> Vec<Track> { pts.windows(2).filter(|s| s[0].dist(s[1]) > 1e-9).map(|s| Track { side: t.side, a: s[0], b: s[1], width: t.width }).collect() };
+            return (fits && alike).then(|| (tracks(&pp, p), tracks(&np, n)));
+        }
+        depth += (extra - got) / (2.0 * n_bumps as f64);
+    }
+    None
+}
+
+/// Make both lines of `pair` `extra` mm longer with bumps that nest, in the longest stretch where they run side by side
+/// (the gap between them stays; the skew of the pair does not change). Returns the length added to each line. Fails (and
+/// leaves the board as it was) when no such stretch is long enough or the bumps would break a rule.
+pub fn tune_pair(board: &mut Board, pair: &crate::diffpair::DiffPair, extra: f64, opts: &MeanderOptions) -> Result<f64, String> {
+    if extra < 0.01 {
+        return Err("長さはもう合っています".into());
+    }
+    let conn = connectivity(board);
+    let of = |net: &str| -> Vec<usize> { (0..board.tracks.len()).filter(|&i| conn.track_net(i) == Some(net)).collect() };
+    let (tp, tn) = (of(&pair.p), of(&pair.n));
+    // the runs that lie side by side, the longest stretch first
+    let mut runs: Vec<(f64, usize, usize)> = vec![];
+    for &i in &tp {
+        for &j in &tn {
+            if let Some(f) = PairFrame::new(&board.tracks[i], &board.tracks[j]) {
+                runs.push((f.hi - f.lo, i, j));
+            }
+        }
+    }
+    runs.sort_by(|a, b| b.0.total_cmp(&a.0));
+    if runs.is_empty() {
+        return Err("2本が並んで走るまっすぐな所がありません".into());
+    }
+    let before = check(board).len();
+    let (len_p0, len_n0) = (length_of(board, &pair.p), length_of(board, &pair.n));
+    let tol = 0.05_f64.max(extra * 0.02);
+    for &(_, i, j) in runs.iter().take(3) {
+        let (tp_i, tn_j) = (board.tracks[i].clone(), board.tracks[j].clone());
+        let Some(f) = PairFrame::new(&tp_i, &tn_j) else { continue };
+        let l = pair_layout(&f, tp_i.width.max(tn_j.width), board.rules.min_clearance, opts.style);
+        if l.n_max == 0 {
+            continue;
+        }
+        // first the fewest bumps that stay low enough, then fewer and taller ones
+        let n0 = ((extra / (2.0 * opts.height_max)).ceil() as usize).clamp(1, l.n_max);
+        let counts: Vec<usize> = (n0..=l.n_max).chain((1..n0).rev()).take(6).collect();
+        for n_bumps in counts {
+            for sigma0 in [1.0, -1.0] {
+                let Some((new_p, new_n)) = meander_pair(&tp_i, &tn_j, extra, board.rules.min_clearance, opts, n_bumps, sigma0) else { continue };
+                let mut trial = board.clone();
+                let (hi_i, lo_i) = (i.max(j), i.min(j));
+                trial.tracks.remove(hi_i);
+                trial.tracks.remove(lo_i);
+                trial.tracks.extend(new_p);
+                trial.tracks.extend(new_n);
+                if check(&trial).len() > before {
+                    continue;
+                }
+                let (got_p, got_n) = (length_of(&trial, &pair.p) - len_p0, length_of(&trial, &pair.n) - len_n0);
+                if (got_p - extra).abs() < tol && (got_n - extra).abs() < tol {
+                    *board = trial;
+                    return Ok((got_p + got_n) / 2.0);
+                }
+            }
+        }
+    }
+    Err("2本をいっしょに曲げる蛇行を入れられる、並んだまっすぐな配線が見つかりませんでした (近くの配線とぶつかるか、短すぎます)".into())
 }

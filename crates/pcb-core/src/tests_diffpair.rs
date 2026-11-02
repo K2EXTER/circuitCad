@@ -195,3 +195,52 @@ fn a_pair_with_one_line_unrouted_is_skipped_and_does_not_set_the_target() {
     assert!(r.pairs[0].2.is_err(), "{r:?}");
     assert!((r.target - 30.0).abs() < 1e-9, "{r:?}");
 }
+
+fn quality_of_pair(b: &Board, d: &DiffPair) -> (f64, f64, f64, f64) {
+    let r = pair_report(b, d);
+    (r.len_p, r.len_n, r.gap_min.unwrap_or(0.0), r.gap_max.unwrap_or(0.0))
+}
+
+#[test]
+fn the_two_lines_bent_together_keep_their_gap_in_every_corner_style() {
+    use crate::meander::{MeanderOptions, MeanderStyle};
+    for style in [MeanderStyle::Square, MeanderStyle::Chamfer, MeanderStyle::Round] {
+        let mut b = two_pairs(30.0);
+        let pairs = b.diff_pairs.clone();
+        let before = drc::check(&b).len();
+        let opts = MeanderOptions { style, height_max: 2.0 };
+        let r = match_pairs(&mut b, &pairs, None, &opts);
+        let added = r.pairs[1].2.as_ref().unwrap_or_else(|e| panic!("{style:?}: {e}"));
+        assert!((added - 10.0).abs() < 0.3, "{style:?}: {added}");
+        let (lp, ln, gmin, gmax) = quality_of_pair(&b, &pairs[1]);
+        assert!((lp - 40.0).abs() < 0.3 && (ln - 40.0).abs() < 0.3, "{style:?}: {lp} {ln}");
+        assert!((lp - ln).abs() < 0.06, "{style:?}: the pair keeps its skew: {lp} {ln}");
+        // the lines are 0.4 apart centre to centre (0.2 edge to edge) all along, bumps included
+        assert!((gmin - 0.2).abs() < 0.03 && (gmax - 0.2).abs() < 0.03, "{style:?}: gap {gmin}..{gmax}");
+        let msgs: Vec<String> = check_pairs(&b).into_iter().map(|v| v.message).collect();
+        assert!(msgs.is_empty(), "{style:?}: {msgs:?}");
+        assert!(drc::check(&b).len() <= before, "{style:?}: {:?}", drc::check(&b));
+        assert!(ratsnest::ratsnest(&b).is_empty(), "{style:?}");
+    }
+}
+
+#[test]
+fn lines_far_apart_get_nested_bumps_too_and_stay_connected() {
+    // the N line is 3mm away from the P line: the bumps nest at that distance
+    let mut b = two_pairs(30.0);
+    for t in b.tracks.iter_mut().skip(3).step_by(1) {
+        if (t.a.y - 25.4).abs() < 1e-9 {
+            t.a.y = 28.4;
+            t.b.y = 28.4;
+        }
+    }
+    for p in b.pads.iter_mut().filter(|p| p.net == "D2_N") {
+        p.pos.y = 28.4;
+    }
+    let pairs = b.diff_pairs.clone();
+    let r = match_pairs(&mut b, &pairs, None, &crate::meander::MeanderOptions::default());
+    assert!(r.pairs[1].2.is_ok(), "{r:?}");
+    let (lp, ln, _, _) = quality_of_pair(&b, &pairs[1]);
+    assert!((lp - 40.0).abs() < 0.3 && (ln - 40.0).abs() < 0.3, "{lp} {ln}");
+    assert!(ratsnest::ratsnest(&b).is_empty());
+}

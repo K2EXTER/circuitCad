@@ -1915,7 +1915,7 @@ fn write_two_sheets_example() {
 
 /// Generates docs/examples/work_in_progress/diff_lanes_routed.pcbjson for the board lesson on pairs of differential pairs:
 /// two headers 52 mm apart carry two lanes (LANE0, LANE1) as pairs, routed side by side on the top layer; lane 0 has a
-/// serpentine already (it had to go round something), lane 1 is straight and so shorter.
+/// serpentine already (bent together, as `match_pairs` does it: it had to go round something), lane 1 is straight and so shorter.
 /// `cargo test -p app write_diff_lanes_board -- --ignored --nocapture` (after `docs/examples/diff_lanes.schjson` exists)
 #[test]
 #[ignore]
@@ -1937,6 +1937,8 @@ fn write_diff_lanes_board() {
     let mut pairs = vec![DiffPair::new("LANE0", "LANE0_P", "LANE0_N"), DiffPair::new("LANE1", "LANE1_P", "LANE1_N")];
     for p in &mut pairs {
         p.gap = 0.3;
+        // a slow signal: the router leaves the lines of a pair about 1.8 mm apart in length, which is within what is asked here
+        p.max_skew = 2.0;
     }
     b.diff_pairs = pairs.clone();
     let opt = RouteOptions { track_width: 0.25, grid: 0.1, only_layers: Some(vec![Side::Top]), no_vias: true, ..RouteOptions::default() };

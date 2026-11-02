@@ -103,8 +103,10 @@ pub fn pair_report(board: &Board, pair: &DiffPair) -> PairReport {
     let (mut coupled, mut gmin, mut gmax): (f64, Option<f64>, Option<f64>) = (0.0, None, None);
     let reach = pair.gap * 4.0 + 1.0;
     for a in &tp {
-        // how much of this segment has a partner line next to it
-        let mut best: Option<(f64, f64)> = None; // (partner length alongside, edge gap)
+        // how much of this segment has a partner line next to it: the partner is the nearest line that runs alongside
+        // (the legs of two bumps of a serpentine, or the pieces of a rounded corner, face the same stretch; the far ones
+        // are not the partner); lines about as near as that one count together for the length alongside
+        let mut found: Vec<(f64, f64)> = vec![]; // (partner length alongside, edge gap)
         for b in tn.iter().filter(|b| b.side == a.side && parallel(a.a, a.b, b.a, b.b)) {
             let centre = seg_seg(a.a, a.b, b.a, b.b);
             let gap = centre - (a.width + b.width) / 2.0;
@@ -117,9 +119,18 @@ pub fn pair_report(board: &Board, pair: &DiffPair) -> PairReport {
             let proj = |p: Point| (p.x - a.a.x) * ux + (p.y - a.a.y) * uy;
             let (lo, hi) = (proj(b.a).min(proj(b.b)).max(0.0), proj(b.a).max(proj(b.b)).min(l));
             let overlap = (hi - lo).max(0.0);
-            if overlap > 1e-6 && best.is_none_or(|x| overlap > x.0) {
-                best = Some((overlap, gap));
+            if overlap > 1e-6 {
+                found.push((overlap, gap));
             }
+        }
+        let nearest = found.iter().map(|x| x.1).fold(f64::MAX, f64::min);
+        let near = 0.5 * pair.gap.max(0.1);
+        let mut best = found.iter().filter(|x| x.1 <= nearest + near).map(|x| x.0).reduce(f64::max).map(|o| (o, nearest));
+        // a parallel line is not the partner when another part of the other line is clearly nearer (the short piece between
+        // two bumps of a serpentine has only the top of a far bump alongside; its partner is the leg of the next bump)
+        let nearest_any = tn.iter().filter(|b| b.side == a.side).map(|b| seg_seg(a.a, a.b, b.a, b.b) - (a.width + b.width) / 2.0).fold(f64::MAX, f64::min);
+        if best.is_some_and(|(_, g)| nearest_any < g - near) {
+            best = None;
         }
         if let Some((o, g)) = best {
             coupled += o;
@@ -197,7 +208,8 @@ pub struct PairMatchReport {
 
 /// Bring pairs to the same length (pair-to-pair matching, for lanes that must arrive together): the length of a
 /// pair is the mean of its two lines, and the shorter pairs get the same serpentine on both lines, so the difference
-/// inside each pair stays what it was (even it out with [`tune_length`]). The target is the longest pair, or `target`
+/// inside each pair stays what it was (even it out with [`tune_length`]). The two lines are bent together
+/// ([`crate::meander::tune_pair`]) where they run side by side, so the gap stays. The target is the longest pair, or `target`
 /// when that is longer. A pair is done on both lines or not at all (the board keeps its tracks when one line fails).
 pub fn match_pairs(board: &mut Board, pairs: &[DiffPair], target: Option<f64>, opts: &crate::meander::MeanderOptions) -> PairMatchReport {
     let reports: Vec<PairReport> = pairs.iter().map(|d| pair_report(board, d)).collect();
@@ -214,7 +226,10 @@ pub fn match_pairs(board: &mut Board, pairs: &[DiffPair], target: Option<f64>, o
         } else {
             let extra = target - mean(r);
             let snapshot = board.clone();
-            let done = crate::meander::tune_net(board, &d.p, extra, opts).and_then(|a| crate::meander::tune_net(board, &d.n, extra, opts).map(|b| (a + b) / 2.0));
+            // both lines bent together keeps the gap; failing that, each line gets a serpentine of its own
+            let done = crate::meander::tune_pair(board, d, extra, opts).or_else(|_| {
+                crate::meander::tune_net(board, &d.p, extra, opts).and_then(|a| crate::meander::tune_net(board, &d.n, extra, opts).map(|b| (a + b) / 2.0))
+            });
             if done.is_err() {
                 *board = snapshot;
             }

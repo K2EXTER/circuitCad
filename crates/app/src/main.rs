@@ -410,7 +410,7 @@ impl eframe::App for App {
                             ui.close();
                         }
                         let pairs_mark = if self.progress.is_done(board_editor::lesson::PAIRS_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{pairs_mark}{}", board_editor::lesson::PAIRS_TITLE)).on_hover_text("2 組の差動ペアを、ペアの中・ペアどうしの順に同じ長さにして、蛇行が結合をゆるめることも確かめます").clicked() {
+                        if ui.button(format!("{pairs_mark}{}", board_editor::lesson::PAIRS_TITLE)).on_hover_text("2 組の差動ペアを同じ長さにそろえます。蛇行は 2 本をいっしょに曲げるので、間隔が保たれます").clicked() {
                             self.start_board_lesson(6);
                             ui.close();
                         }
