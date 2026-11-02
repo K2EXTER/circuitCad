@@ -314,9 +314,21 @@ pub fn load_dir(dir: &Path) -> (Vec<PartDef>, Vec<String>) {
     (parts, errors)
 }
 
+/// Write the part into the library. A part name is unique there: another file that holds a part of the same name (a bundled part's
+/// file is not named like the part: "TMUX1101_SOT-23-5.part.json") is replaced, not left beside the new one.
 pub fn save(dir: &Path, part: &PartDef) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let path = dir.join(file_name(&part.name));
+    for e in std::fs::read_dir(dir)?.filter_map(|e| e.ok()) {
+        let other = e.path();
+        if other == path || !other.to_string_lossy().ends_with(FILE_SUFFIX) {
+            continue;
+        }
+        let same = std::fs::read_to_string(&other).ok().and_then(|s| serde_json::from_str::<PartDef>(&s).ok()).is_some_and(|p| p.name == part.name);
+        if same {
+            std::fs::remove_file(&other)?;
+        }
+    }
     std::fs::write(&path, serde_json::to_string_pretty(part).map_err(std::io::Error::other)?)?;
     Ok(path)
 }

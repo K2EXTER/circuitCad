@@ -161,7 +161,8 @@ impl BoardEditor {
         let mut diff = netlist::diff(&self.board, &parts, &nets);
         // a library part edited after it was imported (a body outline, pads, a 3D shape) keeps its footprint name, so the
         // netlist alone does not see it
-        for r in library_changes(&self.board, &parts, library) {
+        let names: Vec<(String, Option<String>)> = sch.flat().components.iter().map(|c| (c.refdes.clone(), c.custom.as_ref().map(|s| s.name.clone()))).collect();
+        for r in library_changes(&self.board, &parts, &names, library) {
             if !diff.changed.contains(&r) {
                 diff.changed.push(r);
             }
@@ -193,16 +194,35 @@ impl BoardEditor {
         // checked since loses its mark)
         self.board.land_unverified.clear();
         let mut swaps: Vec<(String, pcb_core::swap::SwapSpec)> = vec![];
+        // the board keeps one footprint and one 3D shape for each footprint name: parts that share a name but differ in outline or
+        // shape cannot both be right
+        let mut by_footprint: std::collections::HashMap<String, (String, Option<serde_json::Value>, bool)> = std::collections::HashMap::new();
+        let mut clashes: Vec<String> = vec![];
         for c in sch.components.iter().filter(|c| c.custom.is_some()) {
-            let found = match sch_ed.library.iter().find(|d| d.footprint_name() == c.footprint) {
+            // the part the component stands for: many library parts share a footprint name, and each has its own outline and shape
+            let want = c.custom.as_ref().map(|s| s.name.as_str());
+            let pick = |lib: &'_ [part_lib::PartDef]| library_part(lib, want, &c.footprint).cloned();
+            let found = match pick(&sch_ed.library) {
                 Some(d) => Some(d),
-                None => on_disk.get_or_insert_with(|| part_lib::load_dir(&part_lib::default_dir()).0).iter().find(|d| d.footprint_name() == c.footprint),
+                None => pick(on_disk.get_or_insert_with(|| part_lib::load_dir(&part_lib::default_dir()).0)),
             };
+            let found = found.as_ref();
             if let Some(spec) = c.custom.as_ref().and_then(|sym| part_lib::swap_for(&sym.name, &sch_ed.library)) {
                 swaps.push((c.refdes.clone(), spec));
             }
             if let Some(def) = found
                 && let Ok(fp) = def.footprint() {
+                    let shape = (def.name.clone(), serde_json::to_value(&fp).ok(), def.model3d.is_some());
+                    match by_footprint.get(&def.footprint_name()) {
+                        Some(prev) if prev.0 != shape.0 && (prev.1 != shape.1 || prev.2 != shape.2) => {
+                            let note = format!("{} と {} は、フットプリント名「{}」が同じで、外形やパッド・3Dの形が違います (基板は名前ごとに1つの形しか持てないので、後の {} の形になります)。部品の「フットプリント名」を変えると、別々の形になります", prev.0, def.name, def.footprint_name(), def.name);
+                            if !clashes.contains(&note) {
+                                clashes.push(note);
+                            }
+                        }
+                        _ => {}
+                    }
+                    by_footprint.insert(def.footprint_name(), shape);
                     self.board.add_footprint(fp);
                     match &def.model3d {
                         Some(m) => {
@@ -236,6 +256,7 @@ impl BoardEditor {
             .map(|w| if w.contains("フットプリント") && w.contains("見つかりません") { format!("{w} (部品ライブラリにこの部品がありません。回路図の「ライブラリ」の「再読み込み」を押すか、部品を作り直してから、もう一度取り込んでください)") } else { w.clone() })
             .collect();
         self.import_notes.extend(req.warnings());
+        self.import_notes.extend(clashes);
         // new parts land beside the outline: show the whole board with them, not a corner of it under the panel on the right
         if !rep.added.is_empty() {
             self.fit_pending = true;
@@ -244,12 +265,22 @@ impl BoardEditor {
     }
 }
 
+/// The library part a component stands for: the one of that name with that footprint, else any part with the footprint (a circuit
+/// saved before the part got its name back).
+fn library_part<'a>(library: &'a [part_lib::PartDef], name: Option<&str>, footprint: &str) -> Option<&'a part_lib::PartDef> {
+    library
+        .iter()
+        .find(|d| Some(d.name.as_str()) == name && d.footprint_name() == footprint)
+        .or_else(|| library.iter().find(|d| d.footprint_name() == footprint))
+}
+
 /// The parts of the board whose library part has another footprint (pads, silkscreen, holes) or another 3D shape than the board
 /// holds. Only footprints the board stores itself count (a built-in one cannot change under it).
-pub(super) fn library_changes(board: &pcb_core::Board, parts: &[NetlistPart], library: &[part_lib::PartDef]) -> Vec<String> {
+pub(super) fn library_changes(board: &pcb_core::Board, parts: &[NetlistPart], names: &[(String, Option<String>)], library: &[part_lib::PartDef]) -> Vec<String> {
     let mut out = vec![];
     for p in parts {
-        let Some(def) = library.iter().find(|d| d.footprint_name() == p.footprint) else { continue };
+        let want = names.iter().find(|(r, _)| *r == p.refdes).and_then(|(_, n)| n.as_deref());
+        let Some(def) = library_part(library, want, &p.footprint) else { continue };
         let Some(stored) = board.footprints.iter().find(|f| f.name == p.footprint) else { continue };
         let fp_differs = def.footprint().ok().is_some_and(|fp| serde_json::to_value(&fp).ok() != serde_json::to_value(stored).ok());
         if fp_differs || def.model3d.as_ref() != board.models3d.get(&p.footprint) {
@@ -275,17 +306,23 @@ mod library_tests {
         let mut board = pcb_core::Board::new("t", 50.0, 30.0);
         board.add_footprint(def.footprint().unwrap());
         let parts = vec![NetlistPart { refdes: "U1".into(), value: "LM358".into(), footprint: def.footprint_name() }];
-        assert!(library_changes(&board, &parts, std::slice::from_ref(&def)).is_empty(), "the same part is no change");
+        let names = vec![("U1".to_string(), Some("LM358".to_string()))];
+        assert!(library_changes(&board, &parts, &names, std::slice::from_ref(&def)).is_empty(), "the same part is no change");
 
         let mut with_body = def.clone();
         with_body.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
-        assert_eq!(library_changes(&board, &parts, &[with_body]), vec!["U1".to_string()], "a new outline");
+        assert_eq!(library_changes(&board, &parts, &names, &[with_body]), vec!["U1".to_string()], "a new outline");
 
         let mut with_shape = def.clone();
         with_shape.model3d = Some(pcb_core::mesh::Mesh3d { vertices: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 1.0]], triangles: vec![[0, 1, 2]], tri_color: vec![0], palette: vec![[1, 1, 1]] });
-        assert_eq!(library_changes(&board, &parts, &[with_shape]), vec!["U1".to_string()], "a new 3D shape");
+        assert_eq!(library_changes(&board, &parts, &names, &[with_shape]), vec!["U1".to_string()], "a new 3D shape");
         // a part that is not in the library, or whose footprint is built in, is left alone
-        assert!(library_changes(&board, &parts, &[]).is_empty());
+        assert!(library_changes(&board, &parts, &names, &[]).is_empty());
+        // another part with the same footprint name, listed first, is not mistaken for the component's part
+        let mut other = def.clone();
+        other.name = "OTHER".into();
+        other.body = Some(BodySpec { shape: "rect".into(), w: 1.0, h: 1.0, x: 0.0, y: 0.0, mark: BodyMark::None, mark_pin: String::new() });
+        assert!(library_changes(&board, &parts, &names, &[other, def.clone()]).is_empty(), "the part of the component's name is compared");
     }
 
     /// Taking the part again after its library part got a body outline puts the outline on the silkscreen of the part already placed.

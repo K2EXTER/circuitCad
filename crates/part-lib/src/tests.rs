@@ -833,3 +833,19 @@ fn a_removed_part_is_gone_from_the_folder_and_stays_gone() {
     assert!(load_dir(&dir).0.iter().all(|p| p.name != "LM358"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn saving_an_edited_bundled_part_replaces_its_file_instead_of_adding_a_second_one() {
+    let dir = std::env::temp_dir().join(format!("circuitcad_lib_replace_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    install_examples(&dir).unwrap();
+    let mut p = load_dir(&dir).0.into_iter().find(|p| p.name == "LM358").unwrap();
+    p.description = "edited".into();
+    save(&dir, &p).unwrap();
+    let (parts, errors) = load_dir(&dir);
+    assert!(errors.is_empty());
+    assert_eq!(parts.len(), EXAMPLES.len(), "the count is unchanged: the bundled file was replaced");
+    let same: Vec<_> = parts.iter().filter(|p| p.name == "LM358").collect();
+    assert_eq!((same.len(), same[0].description.as_str()), (1, "edited"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
