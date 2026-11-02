@@ -14,8 +14,9 @@
 |---|---|---|---|---|---|
 | 回路図 → 基板 → 製造データ | あり | 確認 | 確認 | 確認 | 確認(回路図 Circuit Designer、基板 PCB Designer/3D) |
 | SPICE シミュレーション | あり(解析の種類が多い) | 確認(ngspice を回路図エディタに統合。モデル付きの記号で実行し波形表示) | 未確認(ngspice の記述はあるが、深さは出典で食い違う) | 確認(SPICE シミュレーションの機能ページあり) | 未確認(検索では記載なし) |
-| 自動配線 | あり | 未確認(本体の機能としては今回見つけていない) | Pro は内蔵、Standard は外部プラグイン(確認) | 未確認 | セミオートルーター(確認) |
-| 差動ペア・等長配線 | あり | 未確認 | 未確認 | 未確認 | 確認 |
+| 自動配線 | あり | 本体には無い(確認)。Freerouting をプラグインとして入れる形で、JRE が要る。KiCad 側は組み込む予定を当面持たない旨の古い書き込みあり | Pro は内蔵、Standard は外部プラグイン(確認) | 内蔵の自動配線(トポロジカルルーター)と、選んだネットを整えて引く ActiveRoute(確認) | セミオートルーター(確認) |
+| 手で引くときの配線 | あり(押しのけ、垂直な出入り、延長線トラッキング) | 押しのけ配線の内蔵ルーター(CERN 製。確認、出典は古い講演と掲示板)。差動ペアを無視して押しのけることがあるという報告あり | 未確認 | 歩み寄り(walkaround)・寄り添い(hug)・押しのけ(push)の3モード(確認) | 未確認 |
+| 差動ペア・等長配線 | あり(差動ペア、蛇行) | 差動ペアの配線・長さ調整あり(確認、出典は第三者の解説)。遅延での合わせは v10 で新規という書き込みあり。v9 の細部は公式で未確認 | 未確認 | 確認: 蛇行は Accordion / Trombone / Sawtooth の3形。ペア内とペア間を別のルールで合わせる。ActiveRoute にも長さ合わせあり | 確認 |
 | 発注前の点検(DFM) | あり(`fab.rs`) | 未確認 | 未確認 | 未確認 | DFM チェック(確認) |
 | 製造データの形式 | Gerber / Excellon / BOM / 配置CSV | Gerber・配置リストなど(確認) | 未確認 | 未確認 | ODB++ に対応(確認)。circuitCad は対象外 |
 | 部品店との連携 | 購入リスト(LCSC の型番14件) | 未確認 | LCSC の部品に直接リンク、基板製造と一体(確認。JLCPCB・LCSC・EasyEDA は同じ会社グループ) | 未確認(Octopart 系のページはある) | 未確認 |
@@ -45,8 +46,8 @@
 - 共同作業は、個人向けの方針とは別の話なので、今は候補にしない。
 
 ## 未確認として残したもの(次に調べるなら)
-- KiCad: 自動配線、差動ペア・等長配線、STEP の取り込み、DFM に近いチェック(公式のマニュアルの該当章)。
-- Altium: SPICE の解析の種類、自動配線、差動ペア・等長配線(機能ページと詳細のドキュメント)。
+- KiCad: 配線機能の公式の説明(今回は公式マニュアルの PCB エディタの章が取れず、掲示板・第三者の解説・古い講演に頼った)、STEP の取り込み、DFM に近いチェック。
+- Altium: SPICE の解析の種類、ActiveRoute の使い方の細部(ビアを置けない、電源ネットの戦略が無い、という制限は ActiveRoute の改善点の説明より)。
 - EasyEDA: シミュレーションの種類と深さ(Pro の公式ドキュメント)。
 - Quadcept: シミュレーション、STEP の入出力(公式の機能一覧)。
 
@@ -56,6 +57,13 @@
 - EasyEDA Standard と Pro の機能比較: https://prodocs.easyeda.com/en/introduction/std-vs-pro/
 - EasyEDA について: https://easyeda.com/page/about
 - LCSC のブログ(EasyEDA と KiCad の連携): https://lcsc.com/blog/smarter-pcb-design-easyeda/
+- KiCad の配線(CERN のルーターの講演、2015): https://archive.fosdem.org/2015/schedule/event/pcb_routing/
+- KiCad 9 の差動ペアの長さ調整(第三者の解説): https://techexplorations.com/guides/kicad/high-speed-pcb-design/kicad-9-differential-pair-length-tuning-guide
+- KiCad の差動ペアを無視した押しのけの報告: https://gitlab.com/kicad/code/kicad/-/issues/16146
+- Freerouting の連携(KiCad): https://www.github.com/freerouting/freerouting/blob/master/docs/integrations.md
+- KiCad の自動配線についての掲示板: https://forum.kicad.info/t/autoroute-is-it-coming-mod-edit-short-answer-is-not-in-the-foreseeable-future-so-nothing-to-see-here/30441
+- Altium ActiveRoute の改善: https://altium.com/documentation/altium-designer/nfs-18-0activeroute-improvements-ad
+- Altium の長さ調整: https://www.altium.com/documentation/altium-designer/length-tuning-ad
 - Altium Designer のマルチボード: https://www.altium.com/altium-designer/features/multi-board
 - Altium Designer の機能一覧: https://altium.com/altium-designer/de/features
 - Quadcept Community(窓の杜): https://forest.watch.impress.co.jp/library/software/quadcept/
