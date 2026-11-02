@@ -71,11 +71,16 @@ impl PartForm {
         }
     }
 
-    /// Shows one tab ("basic", "pins", "package", "sim", "ratings"), for scripts and screenshots.
+    /// Shows one tab ("basic", "ratings", "sim", "pins", "package"), for scripts and screenshots.
     pub fn show_tab(&mut self, name: &str) {
-        if let Some((t, _, _)) = FORM_TABS.iter().zip(["basic", "pins", "package", "sim", "ratings"]).find(|(_, n)| *n == name).map(|(t, _)| t) {
-            self.tab = *t;
-        }
+        self.tab = match name {
+            "basic" => FormTab::Basic,
+            "ratings" => FormTab::Ratings,
+            "sim" => FormTab::Sim,
+            "pins" => FormTab::Pins,
+            "package" => FormTab::Package,
+            _ => return,
+        };
     }
 
     /// The checklist of what to look up that the kind of part chosen at the top settles (None = still open: an IC

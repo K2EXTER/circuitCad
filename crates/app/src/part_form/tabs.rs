@@ -279,8 +279,21 @@ impl PartForm {
             self.pin_check_ui(ui);
     }
 
-    /// The tab of the board shape: package, thermal pad, body, extra pads and holes.
+    /// The tab of the board shape, in three parts: the pads (land pattern, thermal pad, extra pads and holes), the body (height and
+    /// outline) and the 3D shape.
     pub(super) fn tab_package(&mut self, ui: &mut egui::Ui) {
+        self.pads_section(ui);
+        ui.add_space(6.0);
+        self.body_section(ui);
+        ui.add_space(6.0);
+        self.step3d_ui(ui);
+    }
+
+    /// 1. パッド: the package kind, the built-in footprint or the dimensions, the thermal pad, the extra pads and holes.
+    fn pads_section(&mut self, ui: &mut egui::Ui) {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new("パッド (ランドパターン)").strong());
             if self.keep_package {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(crate::theme::WARN, "この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。");
@@ -289,8 +302,8 @@ impl PartForm {
                     }
                 });
             }
-            crate::icons::help_label(ui, "パッケージ", "パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
             ui.horizontal(|ui| {
+                crate::icons::help_label(ui, "形", "パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
                 ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
                 ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
                 ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
@@ -298,52 +311,27 @@ impl PartForm {
             });
             ui.horizontal(|ui| {
                 ui.label("標準のフットプリント");
-                let shown = if self.fp_preset.is_empty() { "(下の寸法を使う)".to_string() } else { self.fp_preset.clone() };
+                let shown = if self.fp_preset.is_empty() { "(使わない: 下の寸法)".to_string() } else { self.fp_preset.clone() };
                 egui::ComboBox::from_id_salt("fp_preset").selected_text(shown).width(200.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.fp_preset, String::new(), "(下の寸法を使う)");
+                    ui.selectable_value(&mut self.fp_preset, String::new(), "(使わない: 下の寸法)");
                     for n in pcb_core::footprints::names() {
                         ui.selectable_value(&mut self.fp_preset, n.clone(), n);
                     }
                 }).response.on_hover_text("0603 や 0805 のチップ部品、DIP・ピンヘッダなど、あらかじめ用意された形です。選ぶと、下の寸法の代わりにこの形を使います。ピン番号は、形ごとのピン名 (チップは 1 と 2、ダイオードは K と A、トランジスタは E B C など) に合わせます");
             });
-            let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64| {
-                ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(pkg_tip(label));
-            };
-            ui.horizontal_wrapped(|ui| {
-                dv(ui, "ピッチ", &mut self.pitch);
-                match self.pkg {
-                    PkgKind::Chip2 => {
-                        dv(ui, "パッド長", &mut self.len);
-                        dv(ui, "パッド幅", &mut self.width);
-                    }
-                    PkgKind::Dual => {
-                        dv(ui, "列間隔", &mut self.row);
-                        dv(ui, "パッド長", &mut self.len);
-                        dv(ui, "パッド幅", &mut self.width);
-                        ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
-                        if self.tht {
-                            dv(ui, "穴径", &mut self.drill);
-                        }
-                    }
-                    PkgKind::Quad => {
-                        dv(ui, "対向パッド間隔", &mut self.span);
-                        dv(ui, "パッド長", &mut self.len);
-                        dv(ui, "パッド幅", &mut self.width);
-                    }
-                    PkgKind::Row => {
-                        dv(ui, "パッド径", &mut self.pad_d);
-                        dv(ui, "穴径", &mut self.drill);
-                    }
-                }
-            });
-            {
+            let preset = !self.fp_preset.is_empty();
+            if preset {
+                ui.small("標準の形を使っているので、下の寸法は使われません (「使わない」に戻すと、また効きます)");
+            }
+            ui.add_enabled_ui(!preset, |ui| {
+                self.pad_dimensions(ui);
                 let targets = self.package_targets();
                 self.pick_row(ui, &targets);
                 self.dim_check_ui(ui);
-            }
-            if self.pkg == PkgKind::Row {
-                self.thru_ui(ui);
-            }
+                if self.pkg == PkgKind::Row {
+                    self.thru_ui(ui);
+                }
+            });
             if matches!(self.pkg, PkgKind::Dual | PkgKind::Quad) {
                 ui.checkbox(&mut self.thermal_on, "放熱パッド (ICの裏の大きなパッド) を付ける").on_hover_text("QFN・ESOP・SOT-223 などの、裏や中央にある大きなパッド。ここで大きさとピン番号を入れると、パッケージの中心に置きます。ピン表にもそのピンの行を足してください (例: 9 GND)。発注前チェックで、サーマルビアが足りないと注意します");
                 if self.thermal_on {
@@ -355,6 +343,62 @@ impl PartForm {
                     });
                 }
             }
+            egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
+                crate::icons::help_small(ui, "固定用の脚・穴について", "USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
+                ui.small(EXTRAS_HELP);
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("例を足す:");
+                    for (label, line, tip) in EXTRAS_EXAMPLES {
+                        if ui.small_button(*label).on_hover_text(format!("{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                            if !self.extras.is_empty() && !self.extras.ends_with('\n') {
+                                self.extras.push('\n');
+                            }
+                            self.extras.push_str(line);
+                        }
+                    }
+                });
+                ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
+                    .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
+            });
+            ui.checkbox(&mut self.land_unverified, "ランドパターンは概算 (データシートの図面と照らし合わせていない)")
+                .on_hover_text("パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください");
+        });
+    }
+
+    /// The dimensions of the chosen package kind, two to a row: a label and its box.
+    fn pad_dimensions(&mut self, ui: &mut egui::Ui) {
+        let mut rows: Vec<(&str, &mut f64)> = vec![("ピッチ", &mut self.pitch)];
+        match self.pkg {
+            PkgKind::Chip2 => rows.extend([("パッド長", &mut self.len), ("パッド幅", &mut self.width)]),
+            PkgKind::Dual => {
+                rows.extend([("列間隔", &mut self.row), ("パッド長", &mut self.len), ("パッド幅", &mut self.width)]);
+                if self.tht {
+                    rows.push(("穴径", &mut self.drill));
+                }
+            }
+            PkgKind::Quad => rows.extend([("対向パッド間隔", &mut self.span), ("パッド長", &mut self.len), ("パッド幅", &mut self.width)]),
+            PkgKind::Row => rows.extend([("パッド径", &mut self.pad_d), ("穴径", &mut self.drill)]),
+        }
+        egui::Grid::new("pad_dims").num_columns(4).spacing([8.0, 4.0]).show(ui, |ui| {
+            let n = rows.len();
+            for (i, (label, v)) in rows.into_iter().enumerate() {
+                ui.label(label);
+                ui.add(egui::DragValue::new(v).speed(0.01).range(0.0..=100.0).suffix(" mm")).on_hover_text(pkg_tip(label));
+                if i % 2 == 1 || i + 1 == n {
+                    ui.end_row();
+                }
+            }
+        });
+        if self.pkg == PkgKind::Dual {
+            ui.checkbox(&mut self.tht, "スルーホール(DIP)").on_hover_text("足を基板の穴に通す形 (DIP) にします。オフなら面実装 (表面にはんだ付け)");
+        }
+    }
+
+    /// 2. 本体: the height from the side view and the outline of the top view, with the orientation mark.
+    fn body_section(&mut self, ui: &mut egui::Ui) {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width());
+            ui.label(egui::RichText::new("本体 (外形と高さ)").strong());
             ui.horizontal_wrapped(|ui| {
                 ui.add(egui::DragValue::new(&mut self.height).speed(0.01).range(0.0..=100.0).prefix("高さ ").suffix(" mm")).on_hover_text("データシートの側面図の、基板からの本体の高さ。0 のままなら、3D表示は名前から推測します。ケースに入るかの確認と、3D表示の本体の高さに使います");
                 ui.small("側面図の高さ (0 = 未入力)");
@@ -390,27 +434,7 @@ impl PartForm {
                     }
                 });
             }
-            egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
-                crate::icons::help_small(ui, "固定用の脚・穴について", "USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
-                ui.small(EXTRAS_HELP);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("例を足す:");
-                    for (label, line, tip) in EXTRAS_EXAMPLES {
-                        if ui.small_button(*label).on_hover_text(format!("{tip}
-    数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
-                            if !self.extras.is_empty() && !self.extras.ends_with('\n') {
-                                self.extras.push('\n');
-                            }
-                            self.extras.push_str(line);
-                        }
-                    }
-                });
-                ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
-                    .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
-            });
-            ui.checkbox(&mut self.land_unverified, "ランドパターンは概算 (データシートの図面と照らし合わせていない)")
-                .on_hover_text("パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください");
-            self.step3d_ui(ui);
+        });
     }
 }
 
