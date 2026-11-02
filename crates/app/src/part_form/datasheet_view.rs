@@ -1,6 +1,6 @@
 //! The data sheet window: a PDF opened beside the part form, to read while typing the numbers in.
 
-use datasheet::{Datasheet, HEADINGS, Hit, Query, Rect, looks_like_part_number};
+use datasheet::{Datasheet, HEADINGS, Hit, Quantity, Query, Rect, looks_like_part_number};
 use eframe::egui::{self, Vec2};
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -19,14 +19,86 @@ const ZOOM_MAX: f32 = 4.0;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Target {
     Name,
+    Pitch,
+    Row,
+    PadLen,
+    PadWidth,
+    Span,
+    PadDia,
+    Drill,
+    BodyW,
+    BodyH,
+    Height,
+    MaxV,
+    MaxI,
+    MaxP,
 }
 
 impl Target {
-    fn label(self) -> &'static str {
+    pub const ALL: [Target; 14] = [
+        Target::Name,
+        Target::Pitch,
+        Target::Row,
+        Target::PadLen,
+        Target::PadWidth,
+        Target::Span,
+        Target::PadDia,
+        Target::Drill,
+        Target::BodyW,
+        Target::BodyH,
+        Target::Height,
+        Target::MaxV,
+        Target::MaxI,
+        Target::MaxP,
+    ];
+
+    pub fn from_label(label: &str) -> Option<Target> {
+        Target::ALL.into_iter().find(|t| t.label() == label)
+    }
+
+    pub fn label(self) -> &'static str {
         match self {
             Target::Name => "部品名",
+            Target::Pitch => "ピッチ",
+            Target::Row => "列間隔",
+            Target::PadLen => "パッド長",
+            Target::PadWidth => "パッド幅",
+            Target::Span => "対向パッド間隔",
+            Target::PadDia => "パッド径",
+            Target::Drill => "穴径",
+            Target::BodyW => "本体の幅",
+            Target::BodyH => "本体の長さ",
+            Target::Height => "高さ",
+            Target::MaxV => "最大電圧",
+            Target::MaxI => "最大電流",
+            Target::MaxP => "最大電力",
         }
     }
+
+    /// The kind of number the field takes (None: a name).
+    pub fn quantity(self) -> Option<Quantity> {
+        match self {
+            Target::Name => None,
+            Target::MaxV => Some(Quantity::Voltage),
+            Target::MaxI => Some(Quantity::Current),
+            Target::MaxP => Some(Quantity::Power),
+            _ => Some(Quantity::Length),
+        }
+    }
+
+    fn ask(self) -> String {
+        if self.quantity().is_some() { format!("「{}」の数字を、下のページでクリックしてください", self.label()) } else { format!("「{}」にする語を、下のページでクリックしてください", self.label()) }
+    }
+}
+
+/// A word clicked in the page, for the form to take.
+pub struct Picked {
+    pub target: Target,
+    pub text: String,
+    /// The unit written right after it on the page ("mm" after "0.65"), if any.
+    pub unit_after: Option<String>,
+    /// The page (counted from 0) it was on.
+    pub page: usize,
 }
 
 /// What the first pages suggest, for a person to pick from.
@@ -63,7 +135,7 @@ struct Opened {
     /// A field of the form waits for a word to be clicked.
     target: Option<Target>,
     /// The word that was clicked, for the form to take.
-    picked: Option<(Target, String)>,
+    picked: Option<Picked>,
 }
 
 /// A search that goes on a few pages per frame, so that a long data sheet does not freeze the window.
@@ -143,7 +215,7 @@ impl SheetView {
     }
 
     /// The word that was clicked since the last call, and what it was for.
-    pub fn take_picked(&mut self) -> Option<(Target, String)> {
+    pub fn take_picked(&mut self) -> Option<Picked> {
         self.doc.as_mut().and_then(|d| d.picked.take())
     }
 
@@ -256,7 +328,7 @@ impl Opened {
         });
         if let Some(t) = self.target {
             ui.horizontal(|ui| {
-                ui.colored_label(egui::Color32::from_rgb(70, 150, 255), format!("「{}」にする語を、下のページでクリックしてください", t.label()));
+                ui.colored_label(egui::Color32::from_rgb(70, 150, 255), t.ask());
                 if ui.button("やめる").on_hover_text("選ぶのをやめます (Esc キーでも)").clicked() {
                     self.target = None;
                 }
@@ -330,7 +402,9 @@ impl Opened {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 resp.clone().on_hover_text(format!("→ {token}"));
                 if resp.clicked() {
-                    self.picked = Some((target, token.to_string()));
+                    // a unit on the page after the number ("0.65" then "mm"), when the number ends its word
+                    let unit_after = if word.text.ends_with(token) { self.ds.unit_after(self.page, word) } else { None };
+                    self.picked = Some(Picked { target, text: token.to_string(), unit_after, page: self.page });
                     self.target = None;
                 }
             } else {

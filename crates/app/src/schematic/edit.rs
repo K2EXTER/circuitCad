@@ -44,6 +44,15 @@ impl SchEditor {
         }
     }
 
+    /// Waits for a click in the data sheet window for a field of the form (`--form-pick <field name>`).
+    pub fn pick_in_form_pdf(&mut self, label: &str) {
+        if let Some(f) = self.form.as_mut()
+            && let Some(t) = crate::part_form::PickTarget::from_label(label)
+        {
+            f.sheet.start_pick(t);
+        }
+    }
+
     /// Opens the new-part form already set to a kind of part (`--new-part <kind>`).
     pub fn open_part_form_for(&mut self, kind: &str) {
         self.form = Some(PartForm::for_type(kind));

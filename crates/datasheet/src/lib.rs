@@ -10,9 +10,11 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 mod headings;
 mod suggest;
 mod text;
+mod value;
 pub use headings::{HEADINGS, Heading};
 pub use suggest::looks_like_part_number;
 pub use text::{Hit, Query, Rect, Word, normalize};
+pub use value::{Converted, Quantity, Value, convert, is_unit_word, parse_value};
 
 /// Longest side of a drawn page in pixels. The renderer's canvas is 16 bit, and a bigger picture only costs memory.
 pub const MAX_SIDE_PX: f32 = 8192.0;
@@ -85,6 +87,11 @@ impl Datasheet {
         hits.sort_by(|a, b| a.rect.y0.total_cmp(&b.rect.y0).then(a.rect.x0.total_cmp(&b.rect.x0)));
         hits.dedup_by(|b, a| a.rect == b.rect);
         hits
+    }
+
+    /// The unit written right after a word on its line ("mm" after "0.65"), if there is one.
+    pub fn unit_after(&self, page: usize, word: &Word) -> Option<String> {
+        text::unit_after(self.words(page), word)
     }
 
     /// Part numbers the first page may be about, the likeliest first (for a person to pick from).
@@ -249,6 +256,18 @@ mod tests {
         // top to bottom: the contents row first
         assert!(h[0].in_contents && h[0].context.contains("...."));
         assert!(!h[1].in_contents);
+    }
+
+    #[test]
+    fn the_unit_after_a_number_is_found_on_its_line_only() {
+        let d = Datasheet::open(pdf_with("BT /F1 10 Tf 10 70 Td (0.65 mm 1.27 BSC) Tj 0 -20 Td (3.9) Tj 40 0 Td (mm) Tj ET", HELVETICA)).unwrap();
+        let w = d.words(0);
+        let texts: Vec<&str> = w.iter().map(|w| w.text.as_str()).collect();
+        assert_eq!(texts, ["0.65", "mm", "1.27", "BSC", "3.9", "mm"]);
+        assert_eq!(d.unit_after(0, &w[0]).as_deref(), Some("mm"));
+        // "BSC" is not a unit; a unit on the next line, or far away, does not count
+        assert_eq!(d.unit_after(0, &w[2]), None);
+        assert_eq!(d.unit_after(0, &w[4]), None);
     }
 
     #[test]

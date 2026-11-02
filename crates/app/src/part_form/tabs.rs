@@ -16,9 +16,7 @@ impl PartForm {
             ui.label("部品名");
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(&mut self.name).on_hover_text("部品の名前 (例: LM358、2N3904)。部品の一覧や回路図の値に出ます");
-                if self.sheet.has_doc() && ui.button("PDFから選ぶ").on_hover_text("データシートの窓で、部品名の語をクリックして入れます (ピンの上にポインタを置くと、入る語が出ます)").clicked() {
-                    self.sheet.start_pick(datasheet_view::Target::Name);
-                }
+                self.pick_button(ui, datasheet_view::Target::Name, "PDFから選ぶ");
             });
             ui.end_row();
             ui.label("カテゴリ");
@@ -99,15 +97,21 @@ impl PartForm {
                 }
             });
             ui.label(egui::RichText::new(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1).weak());
-            egui::Grid::new("part_ratings_grid").num_columns(2).show(ui, |ui| {
+            if !self.sheet.has_doc() {
+                self.pick_row(ui, &[]);
+            }
+            egui::Grid::new("part_ratings_grid").num_columns(3).show(ui, |ui| {
                 ui.label("最大電圧 [V]").on_hover_text("部品にかけてよい最大の電圧。ダイオードなら逆耐圧 (VRRM)、トランジスタなら Vce の最大 (VCEO)、MOSFET なら Vds の最大");
                 ui.add(egui::TextEdit::singleline(&mut self.rt_v).desired_width(80.0)).on_hover_text("例: 40 / 1000");
+                self.pick_button(ui, datasheet_view::Target::MaxV, "PDFから選ぶ");
                 ui.end_row();
                 ui.label("最大電流 [A]").on_hover_text("流してよい最大の連続電流 (ダイオードなら平均順電流 IF、トランジスタなら Ic の最大)");
                 ui.add(egui::TextEdit::singleline(&mut self.rt_i).desired_width(80.0)).on_hover_text("例: 1 / 200m");
+                self.pick_button(ui, datasheet_view::Target::MaxI, "PDFから選ぶ");
                 ui.end_row();
                 ui.label("最大電力 [W]").on_hover_text("部品が熱にしてよい最大の電力 (許容損失 Ptot)。周囲温度が高いと下がります。データシートの条件を確認します");
                 ui.add(egui::TextEdit::singleline(&mut self.rt_p).desired_width(80.0)).on_hover_text("例: 0.5 / 625m / 1");
+                self.pick_button(ui, datasheet_view::Target::MaxP, "PDFから選ぶ");
                 ui.end_row();
             });
             // only where it belongs: an electrolytic / tantalum capacitor, a part that already has such figures, or
@@ -296,6 +300,24 @@ impl PartForm {
                     }
                 }
             });
+            {
+                use datasheet_view::Target as T;
+                let mut targets = match self.pkg {
+                    PkgKind::Chip2 => vec![T::Pitch, T::PadLen, T::PadWidth],
+                    PkgKind::Dual if self.tht => vec![T::Pitch, T::Row, T::PadLen, T::PadWidth, T::Drill],
+                    PkgKind::Dual => vec![T::Pitch, T::Row, T::PadLen, T::PadWidth],
+                    PkgKind::Quad => vec![T::Pitch, T::Span, T::PadLen, T::PadWidth],
+                    PkgKind::Row => vec![T::Pitch, T::PadDia, T::Drill],
+                };
+                targets.push(T::Height);
+                if self.body_on {
+                    targets.push(T::BodyW);
+                    if !self.body_circle {
+                        targets.push(T::BodyH);
+                    }
+                }
+                self.pick_row(ui, &targets);
+            }
             if self.pkg == PkgKind::Row {
                 self.thru_ui(ui);
             }

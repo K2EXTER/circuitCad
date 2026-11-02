@@ -199,6 +199,10 @@ pub struct PartForm {
     pub trial_message: Option<trial::Trial>,
     /// The data sheet (PDF) window opened beside the form.
     pub sheet: datasheet_view::SheetView,
+    /// Where the numbers that were clicked in the PDF came from (field, page, text).
+    pub sources: Vec<pdf_input::Source>,
+    /// What the last click in the PDF did: (worked, message).
+    pub pick_msg: Option<(bool, String)>,
 }
 
 impl Default for PartForm {
@@ -304,12 +308,16 @@ impl Default for PartForm {
             spice_message: None,
             trial_message: None,
             sheet: datasheet_view::SheetView::default(),
+            sources: vec![],
+            pick_msg: None,
         }
     }
 }
 
 mod checklist;
 mod datasheet_view;
+mod pdf_input;
+pub use datasheet_view::Target as PickTarget;
 mod kind;
 mod parse;
 mod chip;
@@ -335,9 +343,7 @@ impl PartForm {
         let built = self.to_def();
         self.sheet.take_dropped(ui.ctx());
         self.sheet.window(ui.ctx());
-        if let Some((datasheet_view::Target::Name, word)) = self.sheet.take_picked() {
-            self.name = word.trim_matches(|c: char| !c.is_alphanumeric()).to_string();
-        }
+        self.take_pdf_pick();
         self.kind_bar(ui);
         ui.separator();
         let labels: Vec<String> = FORM_TABS
@@ -355,6 +361,7 @@ impl PartForm {
         let tabs: Vec<(FormTab, &str, &str)> = FORM_TABS.iter().zip(&labels).map(|((tab, _, tip), text)| (*tab, text.as_str(), *tip)).collect();
         crate::widgets::tab_bar(ui, &mut self.tab, &tabs);
         ui.separator();
+        self.pick_message(ui);
         let h = 470.0;
         let mut saved = None;
         ui.horizontal_top(|ui| {

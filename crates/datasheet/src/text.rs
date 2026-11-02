@@ -262,3 +262,14 @@ fn line_around(words: &[Word], at: &Word) -> (String, bool) {
     let cut: String = chars[from..from + SHOWN].iter().collect();
     (format!("{}{cut}{}", if from > 0 { "…" } else { "" }, if from + SHOWN < chars.len() { "…" } else { "" }), in_contents)
 }
+
+/// The unit written right after `at` on its line ("0.65" then "mm"), if there is one.
+pub(crate) fn unit_after(words: &[Word], at: &Word) -> Option<String> {
+    let em = at.em.max(1.0);
+    words
+        .iter()
+        .filter(|w| (w.baseline - at.baseline).abs() <= 0.3 * em && w.rect.x0 >= at.rect.x1 - 1.0 && w.rect.x0 - at.rect.x1 <= 2.0 * em)
+        .min_by(|a, b| a.rect.x0.total_cmp(&b.rect.x0))
+        .filter(|w| crate::value::is_unit_word(&w.text))
+        .map(|w| w.text.trim_matches(['(', ')', '[', ']']).to_string())
+}
