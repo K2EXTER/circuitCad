@@ -122,3 +122,63 @@ fn ripping_up_a_net_removes_its_tracks_and_vias_only() {
     assert_eq!(ratsnest(&b).len(), 1, "the airwire is back");
 }
 
+
+fn small_pad(b: &mut Board, x: f64, y: f64, net: &str) {
+    let mut p = Pad::new(Point::new(x, y), PadShape::Rect { w: 0.3, h: 0.3 }, None, Side::Top);
+    p.net = net.into();
+    b.pads.push(p);
+}
+
+/// A differential pair running side by side (edge gap 0.25mm, the pair's own wish), each line held by pads at both
+/// ends. With `joint` each line is two tracks meeting in a free point in the middle.
+fn pair_board(joint: bool) -> (Board, crate::diffpair::DiffPair) {
+    let mut b = Board::new("t", 40.0, 30.0);
+    for (net, y) in [("P", 12.0), ("N", 12.5)] {
+        small_pad(&mut b, 8.0, y, net);
+        small_pad(&mut b, 32.0, y, net);
+        if joint {
+            b.tracks.push(trk((8.0, y), (20.0, y), 0.25));
+            b.tracks.push(trk((20.0, y), (32.0, y), 0.25));
+        } else {
+            b.tracks.push(trk((8.0, y), (32.0, y), 0.25));
+        }
+    }
+    let mut pair = crate::diffpair::DiffPair::new("D", "P", "N");
+    pair.gap = 0.25;
+    b.diff_pairs.push(pair.clone());
+    (b, pair)
+}
+
+/// Net A is laid so close to the P line that the P line has to give way, towards the N line.
+fn shove_pair(joint: bool) -> (Board, crate::diffpair::PairReport, crate::diffpair::PairReport) {
+    let (mut b, pair) = pair_board(joint);
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    let before = crate::diffpair::pair_report(&b, &pair);
+    let n = add_tracks(&mut b, vec![trk((14.0, 11.65), (26.0, 11.65), 0.25)]);
+    assert!(n >= 1, "something was pushed");
+    let after = crate::diffpair::pair_report(&b, &pair);
+    (b, before, after)
+}
+
+#[test]
+fn a_shoved_pair_stays_connected_clean_and_within_its_skew() {
+    for joint in [false, true] {
+        let (b, _, after) = shove_pair(joint);
+        assert!(drc::check(&b).is_empty(), "joint={joint}: {:?}", drc::check(&b));
+        assert!(ratsnest(&b).is_empty(), "joint={joint}: both lines are still connected");
+        assert!(after.skew <= b.diff_pairs[0].max_skew, "joint={joint}: skew {}", after.skew);
+    }
+}
+
+/// Known gap: the shove only keeps the plain clearance (0.15mm), so a line pushed towards its partner closes up
+/// the pair's own gap (0.25mm here -> about 0.17-0.19mm). Candidates: push the partner along, or refuse.
+#[test]
+#[ignore = "known gap: shove ignores the differential pair's gap (docs/competitor-comparison.md)"]
+fn a_shoved_pair_keeps_its_gap() {
+    for joint in [false, true] {
+        let (b, _, after) = shove_pair(joint);
+        let want = b.diff_pairs[0].gap;
+        let got = after.gap_min.expect("the lines still run together");
+        assert!(got >= want - 0.02, "joint={joint}: gap {got:.3} < wanted {want}");
+    }
+}
