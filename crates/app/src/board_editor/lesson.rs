@@ -368,7 +368,7 @@ const USB_STEPS: &[Step] = &[
 const PAIRS_STEPS: &[Step] = &[
     Step {
         title: "DRC で、いまの状態を確かめる",
-        detail: "左パネルの「DRC を実行」を押します。2 つのヘッダ (J1・J2) の間を、2 組の差動ペア LANE0・LANE1 が走っていて、指摘は 0 件です。ペアの中の 2 本の長さの差 (約 1.8mm) は、ここでは遅い信号の想定で、許容 (2.0mm) の中です。左パネルの「差動ペア」を開くと、LANE0 は約 67mm、LANE1 は約 54mm と、ペアどうしの長さが違うのが分かります。ペアどうしの長さは、DRC では調べません (決まりごとではなく、設計のねらいだからです)。LANE0 には、途中に蛇行があります。拡大すると、2 本がいっしょに曲がっているのが見えます。",
+        detail: "左パネルの「DRC を実行」を押します。ヘッダ J1・J2 の間を、差動ペア LANE0・LANE1 が走っていて、指摘は 0 件です (ペアの中の長さの差は約 1.8mm で、許容 2.0mm の内)。左パネルの「差動ペア」を開くと、LANE0 は約 67mm、LANE1 は約 54mm と、ペアどうしの長さが違います。これは DRC には出ません (決まりごとではなく、設計のねらいだからです)。LANE0 の途中の蛇行は、拡大すると、2 本がいっしょに曲がっています。",
         done: lanes_checked,
     },
     Step {
@@ -590,11 +590,14 @@ impl BoardEditor {
         let arduino = l.which == 3;
         let usb = l.which == 4;
         let mega = l.which == 5;
+        let pairs = l.which == 6;
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
-            ui.label(if mega {
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else if pairs { PAIRS_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+            ui.label(if pairs {
+                "2 つのヘッダの間を、2 組の差動ペア (2 レーン) が走っています。2 組が同時に届くように、ペアどうしの長さを揃えます。蛇行は、2 本をいっしょに曲げるので、2 本の間隔が保たれます"
+            } else if mega {
                 "ATmega2560 (100 ピン、0.5mm ピッチ) の基板です。自動配線は、通せる所まで配線して、18 本のネットを残しました。残りを、手で引く・ビアで渡す・邪魔な線を引き直す・部品を動かす、で仕上げる練習です"
             } else if usb {
                 "USB の D+ と D− は、2 本で 1 つの信号を運ぶ「差動ペア」です。並べて、同じ長さで、短く引きます。差動ペアの機能で、2 本を並べて配線し、長さの差を確かめます"
@@ -628,7 +631,7 @@ impl BoardEditor {
                 }
             }
             ui.separator();
-            if !copper && !fix && !arduino && !usb && !mega {
+            if !copper && !fix && !arduino && !usb && !mega && !pairs {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
                 .default_open(cur.is_none())
@@ -650,6 +653,10 @@ impl BoardEditor {
                 ui.separator();
                 ui.colored_label(crate::theme::OK, "チャレンジ達成!");
                 ui.label("発注前チェックの ✖ と ▲ がなくなりました。このチェックは「機械的に見つかる間違い」を調べるもので、回路が正しく動くことは保証しません。発注の前に、回路図のシミュレーションと、発注先のページの最新の条件を、もう一度確かめましょう。");
+            } else if cur.is_none() && pairs {
+                ui.separator();
+                ui.colored_label(crate::theme::OK, "レッスン完了!");
+                ui.label("2 組以上の差動ペアを同時に届けたいときは、ペアの長さ (2 本の平均) を揃えます。長さ合わせの蛇行は、2 本を入れ子の山でいっしょに曲げると、間隔 (結合) が保たれます。1 本だけを曲げると、その所で 2 本が離れて、DRC に「間隔のずれ」が出ます。ペアの中の長さの差は、2 本をいっしょに曲げても直らないので、短いほうの 1 本を曲げます (そこは間隔が少しずれます)。速い信号では、拡大して、蛇行が間隔を保っているかを目で確かめましょう。");
             } else if cur.is_none() && mega {
                 ui.separator();
                 ui.colored_label(crate::theme::OK, "レッスン完了!");
