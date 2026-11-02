@@ -284,13 +284,9 @@ impl Help {
         let current = self.tab.unwrap_or(HelpTab::Schematic);
         let mut next = current;
         egui::Window::new("操作ガイド").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(640.0).default_height(560.0).vscroll(true).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                for (t, name) in TABS {
-                    ui.selectable_value(&mut next, *t, *name);
-                }
-                ui.label("(F1 でいつでも開けます)");
-            });
-            ui.separator();
+            let tabs: Vec<(HelpTab, &str, &str)> = TABS.iter().map(|(t, name)| (*t, *name, "")).collect();
+            crate::widgets::tab_bar(ui, &mut next, &tabs);
+            ui.small("(F1 でいつでも開けます)");
             for (heading, rows) in page(current) {
                 ui.add_space(8.0);
                 ui.heading(*heading);

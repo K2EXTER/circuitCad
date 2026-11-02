@@ -19,10 +19,10 @@ pub fn beside_panel() -> egui::Pos2 {
 }
 
 /// A row of tabs: each tab is a button, the chosen one is filled and underlined, and a line runs under the row, so it reads as tabs and
-/// not as a few words. `tabs` is `(value, label, hover text)`.
+/// not as a few words. `tabs` is `(value, label, hover text)`; an empty hover text shows none. The row wraps when the window is narrow.
 pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[(T, &str, &str)]) {
     let accent = ui.visuals().selection.stroke.color;
-    let row = ui.horizontal(|ui| {
+    let row = ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         for &(value, label, hover) in tabs {
             let selected = *current == value;
@@ -32,7 +32,8 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[
             } else {
                 (text, ui.visuals().widgets.inactive.weak_bg_fill)
             };
-            let r = ui.add(egui::Button::new(text).fill(fill).min_size(egui::vec2(72.0, 26.0)).corner_radius(egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 })).on_hover_text(hover);
+            let r = ui.add(egui::Button::new(text).fill(fill).min_size(egui::vec2(72.0, 26.0)).corner_radius(egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }));
+            let r = if hover.is_empty() { r } else { r.on_hover_text(hover) };
             if selected {
                 ui.painter().hline(r.rect.x_range(), r.rect.bottom(), egui::Stroke::new(3.0, accent));
             }

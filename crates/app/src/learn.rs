@@ -500,12 +500,8 @@ impl LearnWindow {
         let tree_width = (ctx.content_rect().width() * 0.85).clamp(640.0, 1200.0);
         egui::Window::new("学習パス").open(&mut open).default_width(if is_tree(path) { tree_width } else { 600.0 }).default_height((ctx.content_rect().height() * 0.92).max(480.0)).vscroll(true).show(ctx, |ui| {
             if PATHS.len() > 1 {
-                ui.horizontal_wrapped(|ui| {
-                    for (k, p) in PATHS.iter().enumerate() {
-                        ui.selectable_value(&mut chosen, k, p.title).on_hover_text("この学習パスに切り替えます (進み具合は、どのパスでも同じレッスンなら共通です)");
-                    }
-                });
-                ui.separator();
+                let tabs: Vec<(usize, &str, &str)> = PATHS.iter().enumerate().map(|(k, p)| (k, p.title, "この学習パスに切り替えます (進み具合は、どのパスでも同じレッスンなら共通です)")).collect();
+                crate::widgets::tab_bar(ui, &mut chosen, &tabs);
             }
             ui.heading(path.title);
             ui.label(spaced(path.goal));

@@ -73,13 +73,10 @@ impl SchEditor {
 
     pub(super) fn side_panel_body(&mut self, ui: &mut egui::Ui) {
         self.poll_fault_scan(ui.ctx());
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.panel_tab, PanelTab::Draw, "作図")
-                .on_hover_text("部品を置く、配線する、部品の値を変える、配線ミスを点検する (ERC)");
-            ui.selectable_value(&mut self.panel_tab, PanelTab::Analyze, "解析")
-                .on_hover_text("シミュレーションを実行して、電圧・波形・周波数特性・ノイズ・温度やばらつきの影響を見る");
-        });
-        ui.separator();
+        crate::widgets::tab_bar(ui, &mut self.panel_tab, &[
+            (PanelTab::Draw, "作図", "部品を置く、配線する、部品の値を変える、配線ミスを点検する (ERC)"),
+            (PanelTab::Analyze, "解析", "シミュレーションを実行して、電圧・波形・周波数特性・ノイズ・温度やばらつきの影響を見る"),
+        ]);
         match self.panel_tab {
             PanelTab::Draw => {
                 self.panel_parts(ui);

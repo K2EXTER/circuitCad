@@ -330,18 +330,20 @@ impl PartForm {
         let built = self.to_def();
         self.kind_bar(ui);
         ui.separator();
-        ui.horizontal_wrapped(|ui| {
-            for (tab, label, tip) in FORM_TABS {
+        let labels: Vec<String> = FORM_TABS
+            .iter()
+            .map(|(tab, label, _)| {
                 let warn = match tab {
                     FormTab::Basic => self.name.trim().is_empty(),
                     FormTab::Pins => self.parse_pins().is_err(),
                     FormTab::Package => built.is_err() || built.as_ref().is_ok_and(|d| d.footprint().is_err()),
                     _ => false,
                 };
-                let text = if warn { format!("⚠ {label}") } else { (*label).to_string() };
-                ui.selectable_value(&mut self.tab, *tab, egui::RichText::new(text).size(15.0)).on_hover_text(*tip);
-            }
-        });
+                if warn { format!("⚠ {label}") } else { (*label).to_string() }
+            })
+            .collect();
+        let tabs: Vec<(FormTab, &str, &str)> = FORM_TABS.iter().zip(&labels).map(|((tab, _, tip), text)| (*tab, text.as_str(), *tip)).collect();
+        crate::widgets::tab_bar(ui, &mut self.tab, &tabs);
         ui.separator();
         let h = 470.0;
         let mut saved = None;
