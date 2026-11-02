@@ -88,12 +88,7 @@ pub(super) fn value_at_most(e: &SchEditor, refdes: &'static str, limit: f64) -> 
     value_is(e, refdes, || format!("{} 以下", with_unit(refdes, limit)), |v| v <= limit)
 }
 
-/// `value_at_most` and `value_between` for the tests of the hints.
-#[cfg(test)]
-pub(in crate::schematic) fn value_at_most_for_test(e: &SchEditor, refdes: &'static str, limit: f64) -> bool {
-    value_at_most(e, refdes, limit)
-}
-
+/// `value_between` for the tests of the hints.
 #[cfg(test)]
 pub(in crate::schematic) fn value_between_for_test(e: &SchEditor, refdes: &'static str, lo: f64, hi: f64) -> bool {
     value_between(e, refdes, lo, hi)

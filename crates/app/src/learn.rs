@@ -143,7 +143,30 @@ const fn planned(id: &'static str, title: &'static str, about: &'static str, rea
     Item { id, title, about, kind: Kind::Planned, build: false, requires: None, real }
 }
 
-pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH];
+// ------------------------------------------------------------------ items that several paths share
+// (the record is kept by the item's id, so a lesson finished in one path is finished in the others; a path sets its own `requires`)
+
+const I_BJT_SWITCH: Item = lesson("bjt_switch", "トランジスタのスイッチ", "ベース電流でコレクタ電流を制御する。電流を増やす部品の入口", Some("トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります"));
+const I_COIN_CELL: Item = lesson("coin_cell", "電池の内部抵抗 (負荷で電圧が下がる)", "電源の電圧が、電流を流すと下がる。これを小さくするのが安定化電源の役目", Some("電池に抵抗をつないで、つなぐ前後の端子電圧を測り、内部抵抗を求めます"));
+const I_PROTECTION: Item = lesson("protection", "電源を守る (逆接続・過電流・ヒューズ)", "壊れ方を知って、守る部品を足す", Some("ヒューズや逆接続保護ダイオードの働きを、安全な条件 (低電圧・電流制限つき) で確かめます"));
+const I_LDO: Item = lesson("ldo", "LDO (低ドロップアウト) レギュレータ", "入力の余裕 (ドロップアウト電圧) が小さくても動く。USB の 5V や電池から 3.3V を作る。電圧差は熱になる", Some("入力を下げながら出力を測り、出力が落ち始める入力を、データシートと比べます"));
+const I_HEAT: Item = lesson("heat", "熱と定格を考える", "電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方", Some("負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます"));
+const I_BUCK: Item = lesson("buck","降圧コンバータ (スイッチング電源)", "発展: 熱にしない電源。リニアとの効率の違い", None);
+const I_FLYBACK: Item = lesson("flyback", "リレーやモータをつなぐ (フライバックダイオード)", "コイルの電流を急に切ると、大きな逆起電力が出てトランジスタを壊す。コイルと並列にダイオードを入れて止める", Some("リレー (または小さなモータ) をトランジスタで駆動し、ダイオードの向きを確かめます"));
+const I_PWM: Item = lesson("pwm", "PWM とフィルタ (analogWrite でアナログ電圧を作る)", "High と Low の割合 (デューティ) と RC フィルタで、途中の電圧を作る。揺れと反応の速さは引き換え。重い負荷には使えない", Some("analogWrite の値を変えて、フィルタの出力をテスタで測ります"));
+const I_BOARD: Item = Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: Some(&["draw_psu"]), build: false, real: Some("発注するなら、少量・少額で試します") };
+const I_BOARD_COPPER: Item = Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), requires: Some(&["board"]), build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") };
+const I_BOARD_FIX: Item = Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), requires: Some(&["board"]), build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") };
+const I_BOARD_ARDUINO: Item = Item { id: "board_arduino", title: "基板にする: 置き方の勘所と配線", about: "水晶はマイコンのそば・バイパスコンデンサは電源ピンのそば。通らない線は、グリッドを細かくして直す。DRC と発注の準備まで", kind: Kind::Board(3), build: false, requires: Some(&["draw_arduino", "board"]), real: Some("発注するなら、少量・少額で試します") };
+const I_BOARD_USB: Item = Item { id: "board_usb", title: "USB の配線 (差動ペア)", about: "D+ と D− を並べて、同じ長さで、短く引く。差動ペアの機能と、長さの差の確かめ方", kind: Kind::Board(4), build: false, requires: Some(&["usb_signal", "board"]), real: None };
+const I_BOARD_PAIRS: Item = Item { id: "board_pairs", title: "差動ペアどうしの長さを合わせる", about: "2 レーンの差動信号を同時に届けるため、ペアどうしの長さを蛇行で揃える。2 本をいっしょに曲げるので、間隔が保たれる", kind: Kind::Board(6), build: false, requires: Some(&["board_usb"]), real: None };
+const I_BOARD_MEGA: Item = Item { id: "board_mega", title: "基板を手で仕上げる (自動配線で通らない線)", about: "自動配置と自動配線のあと、18 本のネットが残った基板を、手で引く・ビアで渡す・邪魔な線を引き直す、で仕上げる。1 本通すごとに DRC を確かめる", kind: Kind::Board(5), build: false, requires: Some(&["board_arduino"]), real: None };
+const I_BOARD_REPAIR: Item = Item { id: "board_repair", title: "壊れた基板を直す (修理屋)", about: "ちゃんと動く基板に故障を 1 つ仕込み、症状から原因を探して直す。バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外。何度でも、別の故障で練習できる", kind: Kind::Board(7), build: false, requires: Some(&["board_fix"]), real: None };
+const I_MOSFET: Item = lesson("mosfet", "MOSFET のスイッチ (ゲート電圧とオンの深さ)", "電圧で駆動する。ゲート電圧がしきい値のあたりでオンになる。電流を流しすぎると発熱する", None);
+const I_PNP_HIGHSIDE: Item = lesson("pnp_highside", "PNP のハイサイドスイッチ (電源側で入り切り)", "NPN と逆に、入力を Low にするとオンになる。ベース抵抗の大きさが、オンの深さを決める", None);
+const I_TP4056: Item = lesson("tp4056", "リチウムイオン電池の充電 (TP4056)", "充電の 3 段階 (予備充電・定電流・定電圧)。IC の内部は見ず、外から見た動きで確かめる", None);
+
+pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH];
 
 const POWER_PATH: LearningPath = LearningPath {
     id: "power_supply",
@@ -156,7 +179,7 @@ const POWER_PATH: LearningPath = LearningPath {
             items: &[
                 Item { build: true, requires: Some(&[]), ..lesson("divider", "電圧を分ける (分圧回路)", "抵抗2本で好きな電圧を作る。出力が負荷で変わる理由の入口", Some("テスタで電圧を測る。抵抗2本をブレッドボードにつなぎ、計算値と測定値を比べます")) },
                 Item { build: true, requires: Some(&[]), ..lesson("led", "LED と電流制限抵抗", "電流を決めるのは抵抗。電流を測る方法も", Some("LED の電流をテスタの電流レンジで測り、抵抗を変えて明るさと電流を比べます")) },
-                Item { requires: Some(&["divider"]), ..lesson("coin_cell", "電池の内部抵抗 (負荷で電圧が下がる)", "電源の電圧が、電流を流すと下がる。これを小さくするのが安定化電源の役目", Some("電池に抵抗をつないで、つなぐ前後の端子電圧を測り、内部抵抗を求めます")) },
+                Item { requires: Some(&["divider"]), ..I_COIN_CELL },
             ],
         },
         Stage {
@@ -166,7 +189,7 @@ const POWER_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["led"]), ..lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")) },
                 Item { requires: Some(&["diode_curve"]), ..lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")) },
                 Item { build: true, requires: Some(&["diode_curve", "divider"]), ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },
-                Item { requires: Some(&["led"]), ..lesson("bjt_switch", "トランジスタのスイッチ", "ベース電流でコレクタ電流を制御する。電流を増やす部品の入口", Some("トランジスタで LED をオン・オフし、ベース電流とコレクタ電流を測ります")) },
+                Item { requires: Some(&["led"]), ..I_BJT_SWITCH },
                 Item { build: true, requires: Some(&["zener", "bjt_switch"]), ..lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")) },
             ],
         },
@@ -179,12 +202,12 @@ const POWER_PATH: LearningPath = LearningPath {
                 Item { build: true, requires: Some(&["opamp_inv", "emitter_follower"]), ..lesson("series_regulator", "基準電圧と帰還で安定化する (直列レギュレータ)", "オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む", Some("負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります")) },
                 Item { build: true, requires: Some(&["emitter_follower"]), ..lesson("regulator_78xx", "三端子レギュレータ (78xx / LDO) を使う", "入出力のコンデンサ、ドロップアウト電圧、使い方と選び方", Some("7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります")) },
                 Item { requires: Some(&["zener"]), ..lesson("tl431_ref", "TL431 (シャントレギュレータ): 好きな電圧の基準を作る", "REF を 2.495V に保つ部品。分圧の比で、出力を 2.5V 以上の好きな値にできる。負荷が重すぎると崩れる", Some("TL431 に 2 本の抵抗をつなぎ、出力が 2.495V × (1 + R2 ÷ R3) になるか測ります")) },
-                Item { requires: Some(&["regulator_78xx"]), ..lesson("ldo", "LDO (低ドロップアウト) レギュレータ", "入力の余裕 (ドロップアウト電圧) が小さくても動く。USB の 5V や電池から 3.3V を作る。電圧差は熱になる", Some("入力を下げながら出力を測り、出力が落ち始める入力を、データシートと比べます")) },
-                Item { requires: Some(&["regulator_78xx"]), ..lesson("heat", "熱と定格を考える", "電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方", Some("負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます")) },
-                Item { requires: Some(&["diode_curve", "regulator_78xx"]), ..lesson("protection", "電源を守る (逆接続・過電流・ヒューズ)", "壊れ方を知って、守る部品を足す", Some("ヒューズや逆接続保護ダイオードの働きを、安全な条件 (低電圧・電流制限つき) で確かめます")) },
+                Item { requires: Some(&["regulator_78xx"]), ..I_LDO },
+                Item { requires: Some(&["regulator_78xx"]), ..I_HEAT },
+                Item { requires: Some(&["diode_curve", "regulator_78xx"]), ..I_PROTECTION },
                 Item { requires: Some(&["protection"]), ..lesson("coil_layer_short", "コイルのレアショート (連鎖して壊れる)", "1つの故障が次の部品の故障を呼ぶ連鎖。ヒューズで止められる場合と、止められない場合", Some("リレーのコイル抵抗をテスタで測り、定格電流の内側か確かめます。コイルを実際にショートさせる実験はしません")) },
                 Item { requires: Some(&["rectifier", "regulator_78xx"]), ..lesson("variable_supply", "ダイヤルで電圧を変える電源 (トランス + LM317)", "100V → トランス → 整流 → 可変レギュレータ。ダイヤル(ボリューム)で出力が変わる式と、出せない電圧の理由", Some("低電圧の電源 (15〜18V の AC アダプタ) で LM317 を組み、ボリュームを回して出力を測ります。100V は実験に使いません")) },
-                Item { requires: Some(&["regulator_78xx", "heat"]), ..lesson("buck","降圧コンバータ (スイッチング電源)", "発展: 熱にしない電源。リニアとの効率の違い", None) },
+                Item { requires: Some(&["regulator_78xx", "heat"]), ..I_BUCK },
             ],
         },
         Stage {
@@ -192,10 +215,10 @@ const POWER_PATH: LearningPath = LearningPath {
             about: "設計した電源を、基板にして、組み立てて、性能を測ります",
             items: &[
                 Item { id: "draw_psu", title: "安定化電源の回路図を自分で設計する (最終課題)", about: "目標 (入力 9〜12V → 出力 5V、逆接続でも壊れない) だけ示し、自分で部品を選んで置き、配線する", kind: Kind::Build, requires: Some(&["series_regulator", "regulator_78xx", "protection"]), build: true, real: None },
-                Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: Some(&["draw_psu"]), build: false, real: Some("発注するなら、少量・少額で試します") },
-                Item { id: "board_copper", title: "配線の太さと電圧降下を確かめる", about: "細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直す", kind: Kind::Board(1), requires: Some(&["board"]), build: false, real: Some("電源の入口と負荷のピンの電圧を、テスタで測って比べます (大きな電流を流すときは、配線や部品の発熱に注意します)") },
-                Item { id: "board_fix", title: "発注前チェックをすべて通す (チャレンジ)", about: "部品が基板の外・配線が切れている・配線が細い・発注先のルール違反、という基板を、チェックの表示を頼りに自分で直す", kind: Kind::Board(2), requires: Some(&["board"]), build: false, real: Some("発注の前に、発注先のページで最新の条件を必ず確かめます") },
-                Item { id: "board_repair", title: "壊れた基板を直す (修理屋)", about: "ちゃんと動く基板に故障を 1 つ仕込み、症状から原因を探して直す。バイパスコンデンサが遠い・配線が切れている・細い・ショート・部品が基板の外。何度でも、別の故障で練習できる", kind: Kind::Board(7), build: false, requires: Some(&["board_fix"]), real: None },
+                Item { requires: Some(&["draw_psu"]), ..I_BOARD },
+                Item { requires: Some(&["board"]), ..I_BOARD_COPPER },
+                Item { requires: Some(&["board"]), ..I_BOARD_FIX },
+                Item { requires: Some(&["board_fix"]), ..I_BOARD_REPAIR },
                 Item { id: "build_psu", title: "組み立てて、性能を測る", about: "部品表・組み立て・測定。測った値をスペック表の「実測」欄に書いて、シミュレーションとの差とその理由を考える", kind: Kind::Measure, requires: Some(&["board_fix", "board_copper"]), build: false, real: Some("完成した電源の入力電圧・出力電圧を、負荷をつないだ状態とはずした状態で測り、シミュレーションと比べます") },
             ],
         },
@@ -241,9 +264,9 @@ const ARDUINO_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["temp_sensors"]), ..lesson("light_sensors", "光センサ (LDR とフォトダイオード)", "LDR は暗いと 1MΩ で、変わり方はゆるやか。フォトダイオードは光に比例するが、強いと飽和する。分圧の抵抗の選び方", Some("LDR を 10kΩ と分圧して、部屋の明かりと手で隠したときの電圧を測ります")) },
                 Item { requires: Some(&["datasheet", "divider"]), ..lesson("temp_sensors", "温度センサを読む (LM35・TMP36・NTC)", "温度に比例する電圧の IC と、抵抗が変わるサーミスタ。感度、0℃ より低い温度、分圧抵抗の選び方", Some("センサの電圧を測って式で温度にし、温度計と比べます")) },
                 Item { requires: Some(&["pullup"]), ..lesson("debounce", "ボタンのチャタリング", "接点が数 ms ばたつき、1 回押しただけなのに何回も数えられる。RC で止めると遅れる。大きすぎると押したのが分からない", Some("押した回数を数えるスケッチで、1 回押して、カウントが 2 以上になるか見ます")) },
-                Item { requires: Some(&["pin_led"]), ..lesson("flyback", "リレーやモータをつなぐ (フライバックダイオード)", "コイルの電流を急に切ると、大きな逆起電力が出てトランジスタを壊す。コイルと並列にダイオードを入れて止める", Some("リレー (または小さなモータ) をトランジスタで駆動し、ダイオードの向きを確かめます")) },
+                Item { requires: Some(&["pin_led"]), ..I_FLYBACK },
                 Item { requires: Some(&["flyback", "datasheet"]), ..lesson("equiv_model", "モデルのない IC を、等価回路で再現する (ULN2803A)", "SPICE モデルがない IC を、データシートの内部回路図から基本の部品で組み直す。データシートの代表値と比べて、ずれの理由を考えて直す", Some("ULN2803A でリレーを動かし、出力の電圧をテスタで測って、データシートの表と比べます")) },
-                Item { requires: Some(&["pin_led"]), ..lesson("pwm", "PWM とフィルタ (analogWrite でアナログ電圧を作る)", "High と Low の割合 (デューティ) と RC フィルタで、途中の電圧を作る。揺れと反応の速さは引き換え。重い負荷には使えない", Some("analogWrite の値を変えて、フィルタの出力をテスタで測ります")) },
+                Item { requires: Some(&["pin_led"]), ..I_PWM },
                 Item { requires: Some(&["pullup"]), ..lesson("levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換と、プルアップによる波形の遅れ", Some("5V のピンの出力を、分圧してから 3.3V の部品に入れる前に、テスタで測って確かめます")) },
                 Item { requires: Some(&["levels", "reset"]), ..lesson("serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレートと 1 ビットの長さ、配線の抵抗と容量でなまると文字化けする", Some("端末ソフトで 9600bps と別のボーレートを比べて、文字化けを見ます")) },
             ],
@@ -255,8 +278,8 @@ const ARDUINO_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["decoupling"]), ..lesson("usb_power", "USB の電源 (VBUS)", "ケーブルの抵抗で電圧が下がること、差し込んだ瞬間の突入電流と、VBUS の容量の目安 (10µF 程度)", Some("USB テスターなどで、機器の端の VBUS の電圧と電流を測ります")) },
                 Item { requires: Some(&["pullup"]), ..lesson("usb_speed", "USB の速度の見分け", "D+ か D− を 1.5kΩ で引くと、ホストが機器の速度を知る。プルアップがないと認識されない", Some("機器をつなぐ前後の D+ / D− の電圧を測ります (止まった状態で)")) },
                 Item { requires: Some(&["usb_speed"]), ..lesson("usb_signal", "USB の信号線と ESD 保護の容量", "12Mbit/s の 1 ビットは約 83ns。ESD 保護部品の容量が大きいと、立ち上がりが遅れて読めなくなる", None) },
-                Item { id: "board_usb", title: "USB の配線 (差動ペア)", about: "D+ と D− を並べて、同じ長さで、短く引く。差動ペアの機能と、長さの差の確かめ方", kind: Kind::Board(4), build: false, requires: Some(&["usb_signal", "board"]), real: None },
-                Item { id: "board_pairs", title: "差動ペアどうしの長さを合わせる", about: "2 レーンの差動信号を同時に届けるため、ペアどうしの長さを蛇行で揃える。2 本をいっしょに曲げるので、間隔が保たれる", kind: Kind::Board(6), build: false, requires: Some(&["board_usb"]), real: None },
+                Item { requires: Some(&["usb_signal", "board"]), ..I_BOARD_USB },
+                Item { requires: Some(&["board_usb"]), ..I_BOARD_PAIRS },
             ],
         },
         Stage {
@@ -264,7 +287,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
             about: "ここまでの部品を1枚にまとめて、基板にします",
             items: &[
                 Item { id: "draw_arduino", title: "Arduino 互換ボードの回路図を自分で描く (最終課題)", about: "ATmega328P・水晶・リセット・バイパス・LED・書き込みヘッダを、目標だけ見て自分で配線する。つなぎ方と部品の値を判定する", kind: Kind::Build, build: true, requires: Some(&["decoupling", "crystal", "reset", "pin_led", "serial"]), real: None },
-                Item { id: "board_arduino", title: "基板にする: 置き方の勘所と配線", about: "水晶はマイコンのそば・バイパスコンデンサは電源ピンのそば。通らない線は、グリッドを細かくして直す。DRC と発注の準備まで", kind: Kind::Board(3), build: false, requires: Some(&["draw_arduino", "board"]), real: Some("発注するなら、少量・少額で試します") },
+                Item { requires: Some(&["draw_arduino", "board"]), ..I_BOARD_ARDUINO },
             ],
         },
         Stage {
@@ -298,12 +321,108 @@ const MEGA_PATH: LearningPath = LearningPath {
         Stage {
             name: "2. 100 ピンの基板",
             about: "0.5mm ピッチの 100 ピンの IC は、自動配線が通せない線が残ります。残った線を、手で仕上げます",
-            items: &[Item { id: "board_mega", title: "基板を手で仕上げる (自動配線で通らない線)", about: "自動配置と自動配線のあと、18 本のネットが残った基板を、手で引く・ビアで渡す・邪魔な線を引き直す、で仕上げる。1 本通すごとに DRC を確かめる", kind: Kind::Board(5), build: false, requires: Some(&["board_arduino"]), real: None }],
+            items: &[Item { requires: Some(&["board_arduino"]), ..I_BOARD_MEGA }],
         },
         Stage {
             name: "3. 作って動かす",
             about: "100 ピンのチップを、はんだ付けします",
             items: &[Item { id: "solder_tqfp100", title: "100 ピン (0.5mm ピッチ) のはんだ付け", about: "TQFP-100 のはんだ付け。ブリッジの直し方、フラックスの使い方、電源ピンの点検と、CH340 の COM ポートが出るまで", kind: Kind::Hands, build: false, requires: Some(&["board_mega", "solder"]), real: Some("まず練習用の基板で、0.5mm ピッチのチップを試します") }],
+        },
+    ],
+};
+
+const BOARD_PATH: LearningPath = LearningPath {
+    id: "board_craft",
+    title: "基板づくりの道",
+    goal: "回路図から基板を作り、発注前チェックを通し、マイコンの基板の置き方・USB の差動ペア・100 ピンの IC のような難しい基板も扱い、壊れた基板の故障を探して直せるようになります。",
+    stages: &[
+        Stage {
+            name: "1. はじめての基板",
+            about: "取り込み・配置・配線・DRC・発注の準備の一巡と、電流に合わせた配線の太さ、発注前チェックの直し方",
+            items: &[
+                Item { requires: Some(&[]), ..I_BOARD },
+                Item { requires: Some(&["board"]), ..I_BOARD_COPPER },
+                Item { requires: Some(&["board"]), ..I_BOARD_FIX },
+            ],
+        },
+        Stage {
+            name: "2. 置き方と配線の勘所",
+            about: "マイコンの基板で水晶とバイパスコンデンサを寄せる。USB の D+ / D− を差動ペアで引く。2 組のペアの長さを揃える",
+            items: &[
+                Item { requires: Some(&["board_fix"]), ..I_BOARD_ARDUINO },
+                Item { requires: Some(&["board_fix"]), ..I_BOARD_USB },
+                Item { requires: Some(&["board_usb"]), ..I_BOARD_PAIRS },
+            ],
+        },
+        Stage {
+            name: "3. 難しい基板と、壊れた基板",
+            about: "自動配線が通せない 100 ピンの基板を手で仕上げる。故障を仕込んだ基板の原因を、症状から探して直す",
+            items: &[
+                Item { requires: Some(&["board_arduino"]), ..I_BOARD_MEGA },
+                Item { requires: Some(&["board_fix"]), ..I_BOARD_REPAIR },
+            ],
+        },
+    ],
+};
+
+const SWITCH_PATH: LearningPath = LearningPath {
+    id: "switching",
+    title: "スイッチで負荷を動かそう",
+    goal: "トランジスタや MOSFET で、LED・リレー・モーターのような負荷を入り切りし、コイルの逆起電力から守り、PWM で加減し、スイッチングで電圧を変える (降圧) ところまで、原理から理解します。",
+    stages: &[
+        Stage {
+            name: "1. 半導体のスイッチ",
+            about: "ベース電流やゲート電圧で、負荷を入り切りする。NPN・PNP・MOSFET の違いと、オンの深さ",
+            items: &[
+                Item { requires: Some(&[]), ..I_BJT_SWITCH },
+                Item { requires: Some(&["bjt_switch"]), ..I_MOSFET },
+                Item { requires: Some(&["bjt_switch"]), ..I_PNP_HIGHSIDE },
+            ],
+        },
+        Stage {
+            name: "2. 負荷を守って、加減する",
+            about: "コイル (リレー・モーター) を切ると出る逆起電力から守る。入り切りの割合で、電圧を加減する (PWM)",
+            items: &[
+                Item { requires: Some(&["bjt_switch"]), ..I_FLYBACK },
+                Item { requires: Some(&["mosfet"]), ..I_PWM },
+            ],
+        },
+        Stage {
+            name: "3. スイッチングで電圧を変える",
+            about: "スイッチを高速に入り切りして、熱にせずに電圧を下げる降圧コンバータ",
+            items: &[Item { requires: Some(&["mosfet", "flyback"]), ..I_BUCK }],
+        },
+        Stage {
+            name: "4. 基板にする",
+            about: "大きな電流が流れる基板の、配線の太さと電圧降下",
+            items: &[Item { requires: Some(&["buck"]), ..I_BOARD_COPPER }],
+        },
+    ],
+};
+
+const BATTERY_PATH: LearningPath = LearningPath {
+    id: "battery",
+    title: "電池で動かそう",
+    goal: "電池の性質 (内部抵抗・残量) から、リチウムイオン電池の充電、守り (逆接続・ヒューズ)、低い電圧の作り方 (LDO・降圧)、熱と定格まで、電池で動く機器の電源を考えられるようになります。",
+    stages: &[
+        Stage {
+            name: "1. 電池を知る",
+            about: "電池は理想の電圧源ではない。内部抵抗と残量。リチウムイオン電池の充電の 3 段階",
+            items: &[Item { requires: Some(&[]), ..I_COIN_CELL }, Item { requires: Some(&["coin_cell"]), ..I_TP4056 }],
+        },
+        Stage {
+            name: "2. 守って、電圧を整える",
+            about: "逆接続・ショートから守る。電池の電圧から、機器に必要な電圧を作る。電圧差は熱になる",
+            items: &[
+                Item { requires: Some(&["tp4056"]), ..I_PROTECTION },
+                Item { requires: Some(&["coin_cell"]), ..I_LDO },
+                Item { requires: Some(&["ldo"]), ..I_HEAT },
+            ],
+        },
+        Stage {
+            name: "3. 電池を長持ちさせる",
+            about: "電圧差を熱にしないスイッチング電源。リニアとの効率の違い",
+            items: &[Item { requires: Some(&["ldo", "heat"]), ..I_BUCK }],
         },
     ],
 };
@@ -343,7 +462,8 @@ pub fn requirements(path: &LearningPath, item: &Item) -> Vec<&'static Item> {
         Some(r) => r.to_vec(),
         None => items(path).take_while(|i| i.id != item.id).last().map(|i| vec![i.id]).unwrap_or_default(),
     };
-    ids.into_iter().filter_map(find_item).collect()
+    // an item that several paths share has the prerequisites of each path: look in this path first, then in the others
+    ids.into_iter().filter_map(|id| items(path).find(|i| i.id == id).or_else(|| find_item(id))).collect()
 }
 
 /// `requirements` without the planned items: they cannot be learned yet, so they never hold anything back.
@@ -770,12 +890,16 @@ mod tests {
     }
 
     #[test]
-    fn every_lesson_of_a_path_exists_and_ids_are_unique() {
+    fn every_lesson_of_a_path_exists_and_ids_are_unique_in_a_path() {
         let known = crate::schematic::lesson_ids();
-        let mut seen = std::collections::HashSet::new();
+        // an item that several paths share is the same item in each (the record is kept by its id)
+        let mut seen: std::collections::HashMap<&str, (&str, Kind)> = std::collections::HashMap::new();
         for path in PATHS {
+            let mut in_path = std::collections::HashSet::new();
             for item in items(path) {
-                assert!(seen.insert(item.id), "duplicate id {}", item.id);
+                assert!(in_path.insert(item.id), "duplicate id {} in {}", item.id, path.title);
+                let same = seen.entry(item.id).or_insert((item.title, item.kind));
+                assert_eq!(*same, (item.title, item.kind), "{} is not the same item in every path", item.id);
                 if let Kind::Lesson(id) = item.kind {
                     assert!(known.contains(&id), "{} refers to the missing lesson {id}", item.title);
                     assert_eq!(item.id, id);
@@ -784,6 +908,29 @@ mod tests {
                     assert!(crate::bench_guide::guide(item.id).is_some(), "{} has no hands-on guide", item.title);
                 }
             }
+        }
+    }
+
+    /// An item that two paths share has the prerequisites of the path it is shown in: the buck converter needs the 78xx and heat lessons in the
+    /// power path, but the MOSFET and the flyback diode in the switching path, and sits deeper there.
+    #[test]
+    fn a_shared_item_has_the_prerequisites_of_each_path() {
+        let power = items(&POWER_PATH).find(|i| i.id == "buck").unwrap();
+        let switching = items(&SWITCH_PATH).find(|i| i.id == "buck").unwrap();
+        let ids = |path: &LearningPath, item: &Item| requirements(path, item).iter().map(|i| i.id).collect::<Vec<_>>();
+        assert_eq!(ids(&POWER_PATH, power), ["regulator_78xx", "heat"]);
+        assert_eq!(ids(&SWITCH_PATH, switching), ["mosfet", "flyback"]);
+        // the board lesson of copper widths follows the buck converter in the switching path, so it is the deepest there
+        let copper = items(&SWITCH_PATH).find(|i| i.id == "board_copper").unwrap();
+        assert!(level(&SWITCH_PATH, copper, 0) > level(&SWITCH_PATH, switching, 0));
+        assert_eq!(level(&SWITCH_PATH, items(&SWITCH_PATH).next().unwrap(), 0), 0);
+    }
+
+    /// Lessons that were reachable only from the menu are in a path now (RC, RLC and 555 still wait for a path of their own).
+    #[test]
+    fn the_lessons_that_had_no_path_are_in_one() {
+        for id in ["mosfet", "pnp_highside", "tp4056"] {
+            assert!(find_item(id).is_some(), "the lesson {id} is in no learning path");
         }
     }
 

@@ -53,7 +53,7 @@ mod supply;
 pub(super) use conditions::Unmet;
 
 #[cfg(test)]
-pub(super) use conditions::{dc_fresh_for_test, value_at_most_for_test, value_between_for_test, value_of};
+pub(super) use conditions::{dc_fresh_for_test, value_between_for_test, value_of};
 
 const LESSONS: &[Lesson] = &[
     basics::DIVIDER,
