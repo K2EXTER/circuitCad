@@ -98,6 +98,9 @@ pub struct PartForm {
     /// The rows of the pin table and the text they were read from (see `pintable.rs`).
     pub(super) pin_rows: Vec<pintable::PinRow>,
     pub(super) pin_rows_of: Option<String>,
+    /// The rows of the extra pads table and the text they were read from (see `padtable.rs`).
+    pub(super) extra_rows: Vec<padtable::ExtraRow>,
+    pub(super) extra_rows_of: Option<String>,
     /// A kind clicked after the form was filled in, waiting for the answer to "overwrite?".
     pub(super) pending_type: Option<PartType>,
     pub name: String,
@@ -249,6 +252,8 @@ impl Default for PartForm {
             type_base: None,
             pin_rows: vec![],
             pin_rows_of: None,
+            extra_rows: vec![],
+            extra_rows_of: None,
             pending_type: None,
             pas_polar: false,
             name: String::new(),
@@ -364,6 +369,7 @@ mod vendor;
 mod diode;
 mod edit;
 mod pintable;
+mod padtable;
 mod glyph_pick;
 pub use glyph_pick::glyph_combo;
 mod zchart;

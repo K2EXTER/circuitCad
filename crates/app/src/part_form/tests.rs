@@ -998,3 +998,36 @@ fn the_pin_table_follows_a_text_changed_from_outside() {
     assert_eq!(f.pin_rows.len(), 3, "a template or an import changed the text");
     assert_eq!(f.pins_text, "1 A\n2 B\n3 C", "the text is not rewritten when nobody edited a row");
 }
+
+#[test]
+fn extra_pad_rows_write_back_the_lines_they_were_read_from() {
+    for (_, line, _) in EXTRAS_EXAMPLES {
+        let rows = padtable::rows_of(line);
+        assert_eq!(rows.len(), 1, "{line}");
+        assert_ne!(rows[0].kind, padtable::ExtraKind::Raw, "{line}");
+        assert_eq!(padtable::text_of(&rows), *line);
+    }
+    // what the table writes is what the form reads
+    let mut f = PartForm::default();
+    f.extras = EXTRAS_EXAMPLES.iter().map(|(_, l, _)| *l).collect::<Vec<_>>().join("\n");
+    let (pads, holes) = f.parse_extras().unwrap();
+    assert_eq!((pads.len(), holes.len()), (3, 2));
+    // a comment is kept as a row of its own
+    let rows = padtable::rows_of("# note\n穴 0 -3 1.0");
+    assert_eq!(rows[0].kind, padtable::ExtraKind::Raw);
+    assert_eq!(padtable::text_of(&rows), "# note\n穴 0 -3 1.0");
+}
+
+#[test]
+fn the_extra_pad_table_follows_a_text_changed_from_outside() {
+    let mut f = PartForm { extras: "穴 0 -3 1.0".into(), ..PartForm::default() };
+    let ctx = egui::Context::default();
+    let input = || egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 700.0))), ..Default::default() };
+    let mut out = ctx.run_ui(input(), |ui| f.extras_table_ui(ui));
+    out.textures_delta.clear();
+    assert_eq!(f.extra_rows.len(), 1);
+    f.extras.push_str("\nパッド SH -4 -2 1.5 2.0");
+    let mut out = ctx.run_ui(input(), |ui| f.extras_table_ui(ui));
+    out.textures_delta.clear();
+    assert_eq!(f.extra_rows.len(), 2, "an example button changed the text");
+}

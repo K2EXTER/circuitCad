@@ -306,25 +306,35 @@ impl PartForm {
                 });
             }
             ui.horizontal(|ui| {
-                crate::icons::help_label(ui, "形", "パッケージ (データシートの推奨ランドパターン寸法 mm。パッド数はピン数に合わせます。ランドパターンが無いリード付き部品は、「1列」を選ぶと、外形寸法から決める欄が出ます)");
-                ui.selectable_value(&mut self.pkg, PkgKind::Chip2, "2端子チップ").on_hover_text("抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品");
-                ui.selectable_value(&mut self.pkg, PkgKind::Dual, "デュアル(SOIC/DIP)").on_hover_text("足が左右の2列に並ぶ IC (SOIC、DIP など)");
-                ui.selectable_value(&mut self.pkg, PkgKind::Quad, "クアッド(QFP)").on_hover_text("足が四方に並ぶ IC (QFP、QFN など)");
-                ui.selectable_value(&mut self.pkg, PkgKind::Row, "1列(ヘッダ)").on_hover_text("足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)");
-            });
-            ui.horizontal(|ui| {
-                ui.label("標準のフットプリント");
-                let shown = if self.fp_preset.is_empty() { "(使わない: 下の寸法)".to_string() } else { self.fp_preset.clone() };
-                egui::ComboBox::from_id_salt("fp_preset").selected_text(shown).width(200.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.fp_preset, String::new(), "(使わない: 下の寸法)");
+                crate::icons::help_label(ui, "パッケージ", "パッドの並びの作り方です。「寸法で指定」は、データシートの推奨ランドパターンの寸法 (mm) から作ります (パッド数はピン数に合わせます)。「標準の形」は、0603 のチップや DIP・ピンヘッダなど、あらかじめ用意された形をそのまま使います (ピン番号は形ごとのピン名に合わせます)");
+                let shown = if !self.fp_preset.is_empty() {
+                    self.fp_preset.clone()
+                } else {
+                    format!("寸法で指定: {}", pkg_label(self.pkg))
+                };
+                egui::ComboBox::from_id_salt("pkg_pick").selected_text(shown).width(260.0).show_ui(ui, |ui| {
+                    ui.small("寸法で指定 (下の寸法の欄から作ります)");
+                    for (k, tip) in [
+                        (PkgKind::Chip2, "抵抗・コンデンサ・ダイオードなど、足が2つのチップ部品"),
+                        (PkgKind::Dual, "足が左右の2列に並ぶ IC (SOIC、DIP など)"),
+                        (PkgKind::Quad, "足が四方に並ぶ IC (QFP、QFN など)"),
+                        (PkgKind::Row, "足が1列に並ぶ部品 (ピンヘッダ、コネクタなど)。ランドパターンが無いリード付き部品は、外形寸法から決める欄も出ます"),
+                    ] {
+                        if ui.selectable_label(self.fp_preset.is_empty() && self.pkg == k, pkg_label(k)).on_hover_text(tip).clicked() {
+                            self.pkg = k;
+                            self.fp_preset.clear();
+                        }
+                    }
+                    ui.separator();
+                    ui.small("標準の形 (選ぶと、下の寸法の代わりにこの形を使います)");
                     for n in pcb_core::footprints::names() {
                         ui.selectable_value(&mut self.fp_preset, n.clone(), n);
                     }
-                }).response.on_hover_text("0603 や 0805 のチップ部品、DIP・ピンヘッダなど、あらかじめ用意された形です。選ぶと、下の寸法の代わりにこの形を使います。ピン番号は、形ごとのピン名 (チップは 1 と 2、ダイオードは K と A、トランジスタは E B C など) に合わせます");
+                }).response.on_hover_text("寸法から作るか、用意された標準の形を使うかを選びます");
             });
             let preset = !self.fp_preset.is_empty();
             if preset {
-                ui.small("標準の形を使っているので、下の寸法は使われません (「使わない」に戻すと、また効きます)");
+                ui.small("標準の形を使っているので、下の寸法は使われません (「寸法で指定」を選ぶと、また効きます)");
             }
             ui.add_enabled_ui(!preset, |ui| {
                 self.pad_dimensions(ui);
@@ -348,20 +358,23 @@ impl PartForm {
             }
             egui::CollapsingHeader::new("追加のパッドと穴 (USBの固定脚・位置決めの穴・長穴)").id_salt("part_extras").default_open(!self.extras.trim().is_empty()).show(ui, |ui| {
                 crate::icons::help_small(ui, "固定用の脚・穴について", "USB・DCジャック・ピンソケットなどは、信号のピンのほかに、基板に固定するための脚や穴があります。ここに足すと、部品を置いたとき一緒に付き、部品を動かしたり回したりするとついてきます。製造ファイルのドリルにも出ます");
-                ui.small(EXTRAS_HELP);
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("例を足す:");
-                    for (label, line, tip) in EXTRAS_EXAMPLES {
-                        if ui.small_button(*label).on_hover_text(format!("{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
-                            if !self.extras.is_empty() && !self.extras.ends_with('\n') {
-                                self.extras.push('\n');
+                self.extras_table_ui(ui);
+                egui::CollapsingHeader::new("文字で編集 (貼り付け・コメント)").id_salt("extras_text").default_open(false).show(ui, |ui| {
+                    ui.small(EXTRAS_HELP);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label("例を足す:");
+                        for (label, line, tip) in EXTRAS_EXAMPLES {
+                            if ui.small_button(*label).on_hover_text(format!("{tip}\n数字は例です。データシートの推奨ランドパターンの寸法に直してください")).clicked() {
+                                if !self.extras.is_empty() && !self.extras.ends_with('\n') {
+                                    self.extras.push('\n');
+                                }
+                                self.extras.push_str(line);
                             }
-                            self.extras.push_str(line);
                         }
-                    }
+                    });
+                    ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
+                        .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の表と同じものです");
                 });
-                ui.add(egui::TextEdit::multiline(&mut self.extras).desired_rows(4).desired_width(f32::INFINITY).font(egui::TextStyle::Monospace).hint_text("脚 SH -6.5 0 2.0 3.0 1.2"))
-                    .on_hover_text("追加のパッドと穴を1行に1つ書きます。# で始まる行は無視します。上の説明のとおりの形で書きます");
             });
             ui.checkbox(&mut self.land_unverified, "ランドパターンは概算 (データシートの図面と照らし合わせていない)")
                 .on_hover_text("パッドの位置と大きさを、データシートの推奨ランドパターンから読み取ったのではなく、見当で入れたときに付けます。付けた部品を置いた基板は、発注の準備のチェックで「ランドパターンが概算の部品があります」と注意されます。図面と照合したら外してください");
@@ -492,5 +505,15 @@ impl PartForm {
                 }
             }
         });
+    }
+}
+
+/// The name of a package kind in the drop-down.
+fn pkg_label(k: PkgKind) -> &'static str {
+    match k {
+        PkgKind::Chip2 => "2端子チップ",
+        PkgKind::Dual => "デュアル (SOIC/DIP)",
+        PkgKind::Quad => "クアッド (QFP)",
+        PkgKind::Row => "1列 (ヘッダ)",
     }
 }
