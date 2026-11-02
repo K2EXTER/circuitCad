@@ -1544,14 +1544,25 @@ fn value_hints_use_the_unit_of_the_part_and_say_when_a_range_is_wanted() {
 }
 
 /// What the learner does on the step a question is asked on: (lesson, step, part, new value).
-const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 6] = [
+const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 8] = [
     ("divider", 1, "R2", "30k"),
     ("led", 1, "R1", "100"),
     ("zener", 1, "R2", "100"),
     ("emitter_follower", 1, "R2", "47"),
     ("coin_cell", 1, "R1", "10"),
     ("diode_curve", 2, "R1", "1.5k"),
+    ("phase_margin", 1, "C1", "1p"),
+    ("noise", 1, "R1", "10k"),
 ];
+
+/// The analysis a question's number comes from (the DC operating point unless the lesson is about another one).
+fn run_for_prediction(e: &mut SchEditor, lesson: &str) {
+    match lesson {
+        "phase_margin" => e.run_ac(),
+        "noise" => e.run_noise(),
+        _ => e.run_dc(),
+    }
+}
 
 #[test]
 fn every_question_has_an_option_that_is_close_to_what_the_simulation_gives() {
@@ -1562,9 +1573,9 @@ fn every_question_has_an_option_that_is_close_to_what_the_simulation_gives() {
         let idx = lesson_ids().iter().position(|l| *l == lesson).unwrap();
         let mut e = SchEditor::default();
         e.start_lesson(idx);
-        e.run_dc();
+        run_for_prediction(&mut e, lesson);
         set_value(&mut e, refdes, value);
-        e.run_dc();
+        run_for_prediction(&mut e, lesson);
         let actual = (p.measure)(&e).unwrap_or_else(|| panic!("{lesson}: nothing to measure"));
         let right = p.nearest(actual);
         let (label, number) = p.options[right];
@@ -1722,4 +1733,32 @@ fn the_noise_lesson_shows_the_main_source_changing_with_the_source_resistance() 
     e.update_lesson();
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert_ne!(e.noise.as_ref().unwrap().outcome.as_ref().unwrap().contributions[0].name, "Q1.ib");
+}
+
+#[test]
+fn a_guess_about_an_ac_or_noise_number_is_judged_too() {
+    // phase margin: the margin goes to about 90 degrees (option 2)
+    let idx = lesson_ids().iter().position(|l| *l == "phase_margin").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.run_ac();
+    e.update_lesson();
+    e.lesson.as_mut().unwrap().predicted[1] = Some(2);
+    set_value(&mut e, "C1", "1p");
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(e.lesson.as_ref().unwrap().verdicts[1].as_ref().unwrap().right);
+    // noise: 1/√10 is the wrong guess (option 1)
+    let idx = lesson_ids().iter().position(|l| *l == "noise").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.run_noise();
+    e.update_lesson();
+    e.lesson.as_mut().unwrap().predicted[1] = Some(1);
+    set_value(&mut e, "R1", "10k");
+    e.run_noise();
+    e.update_lesson();
+    let v = e.lesson.as_ref().unwrap().verdicts[1].clone().expect("a verdict");
+    assert!(!v.right && v.chosen == 1 && (v.actual - 5.6).abs() < 0.5, "{v:?}");
 }
