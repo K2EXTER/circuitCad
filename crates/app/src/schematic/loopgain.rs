@@ -4,6 +4,29 @@
 use super::*;
 use sim_core::{loop_gain, AcSignal, BreakDirection};
 
+/// A note for a loop that has the bundled op-amp models in it: they are one-pole amplifiers (a gain, one pole, an output
+/// resistor), so the phase margin they give is larger than a real part's, which has a second pole. None without such a model.
+/// The models are told by the first stage, an `Eop` source inside a part (`U1.Eop`).
+pub(super) fn opamp_model_note(c: &sim_core::Circuit) -> Option<String> {
+    let mut parts: Vec<String> = c
+        .elements
+        .iter()
+        .filter_map(|e| match e {
+            sim_core::Element::Vcvs { name, .. } => name.strip_suffix(".Eop").map(str::to_string),
+            _ => None,
+        })
+        .collect();
+    parts.sort();
+    parts.dedup();
+    if parts.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "注意: このループには、オペアンプのモデル ({}) があります。同梱のモデルは「増幅 → 極が1つ → 出力抵抗」の簡単な形で、実物の部品が持つ第2の極を持ちません。位相余裕は、そのモデルでの値で、実物より大きく出ます (負荷の容量による分は表れます)。実機の余裕は、メーカーのモデルか、実機で確かめてください",
+        parts.join("、")
+    ))
+}
+
 impl SchEditor {
     pub fn set_loop_settings(&mut self, part: &str, from: &str) {
         self.loop_part = part.into();
@@ -61,6 +84,7 @@ impl SchEditor {
                             let sig = |name: &str, v: &[sim_core::C64]| AcSignal { name: name.into(), unit: "V", re: v.iter().map(|z| z.re).collect(), im: v.iter().map(|z| z.im).collect() };
                             let mut warnings = r.warnings.clone();
                             warnings.insert(0, format!("{} の所でループを切りました (信号は {} → {} の向き)", r.element, r.from_net, r.to_net));
+                            warnings.extend(opamp_model_note(&c));
                             AcResult { freq: r.freq.clone(), signals: vec![sig("T ループゲイン", &r.t), sig("Tv 電圧注入だけ", &r.tv), sig("Ti 電流注入だけ", &r.ti)], warnings }
                         })
                         .map_err(|e| vec![e.to_string()])
@@ -111,5 +135,37 @@ impl SchEditor {
                 self.run_loop();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sim_core::{Circuit, Element};
+
+    fn example(name: &str) -> Circuit {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+        let s: sch_core::Schematic = serde_json::from_str(&std::fs::read_to_string(root.join(name)).unwrap()).unwrap();
+        sim_core::from_schematic(&s).unwrap_or_else(|e| panic!("{name}: {e:?}"))
+    }
+
+    #[test]
+    fn only_a_loop_with_an_op_amp_model_gets_the_note() {
+        let mut c = Circuit::new();
+        let (a, b) = (c.node("A"), c.node("B"));
+        // a gain source that is not the first stage of a model, and one that is, in two parts
+        c.elements.push(Element::Vcvs { name: "E1".into(), p: a, n: 0, cp: b, cn: 0, gain: 2.0 });
+        assert!(opamp_model_note(&c).is_none());
+        c.elements.push(Element::Vcvs { name: "U2.Eop".into(), p: a, n: 0, cp: b, cn: 0, gain: 1e5 });
+        c.elements.push(Element::Vcvs { name: "U1.Eop".into(), p: a, n: 0, cp: b, cn: 0, gain: 1e5 });
+        let note = opamp_model_note(&c).expect("a note");
+        assert!(note.contains("U1、U2") && note.contains("第2の極") && !note.contains("E1"), "{note}");
+    }
+
+    #[test]
+    fn the_examples_with_an_op_amp_get_the_note_and_the_passive_ones_do_not() {
+        assert!(opamp_model_note(&example("opamp_loop_gain.schjson")).is_some_and(|n| n.contains("U1")));
+        assert!(opamp_model_note(&example("rc_lowpass.schjson")).is_none());
+        assert!(opamp_model_note(&example("rlc_poles.schjson")).is_none());
     }
 }
