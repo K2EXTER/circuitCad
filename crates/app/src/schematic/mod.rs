@@ -129,6 +129,8 @@ pub struct SchEditor {
     lib_prefs: library::LibPrefs,
     /// The part list takes more height.
     lib_tall: bool,
+    /// Counts the times the library was read again (the board compares its parts with the library when this changes).
+    pub lib_rev: u64,
     /// The library part the learner pressed 削除 for and has not yet confirmed.
     lib_delete: Option<String>,
     /// The quick-add box (key A), when open.
@@ -487,6 +489,7 @@ impl Default for SchEditor {
             library,
             lib_prefs,
             lib_tall: false,
+            lib_rev: 0,
             lib_delete: None,
             quick: None,
             lib_errors,

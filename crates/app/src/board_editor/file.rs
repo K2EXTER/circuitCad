@@ -125,10 +125,10 @@ impl BoardEditor {
     /// How the schematic differs from the board right now (what "回路図から取り込み" would change); worked out again
     /// only when the schematic or the board changed. Empty when the board has no parts yet (nothing imported) or the schematic is empty.
     pub fn schematic_diff(&mut self, sch_ed: &SchEditor) -> &SchDiff {
-        let key = (sch_ed.rev, self.rev);
+        let key = (sch_ed.rev, self.rev, sch_ed.lib_rev);
         if self.sync_cache.as_ref().is_none_or(|(k, _)| *k != key) {
             // nothing to compare when no part was imported yet, or when no schematic is open (a board opened on its own)
-            let diff = if self.board.parts.is_empty() || sch_ed.sch.components.is_empty() { SchDiff::default() } else { self.diff_against(&sch_ed.sch) };
+            let diff = if self.board.parts.is_empty() || sch_ed.sch.components.is_empty() { SchDiff::default() } else { self.diff_against(&sch_ed.sch, &sch_ed.library) };
             self.sync_cache = Some((key, diff));
         }
         &self.sync_cache.as_ref().unwrap().1
@@ -156,9 +156,17 @@ impl BoardEditor {
         self.req_synced = Some(spec.clone());
     }
 
-    fn diff_against(&self, sch: &sch_core::Schematic) -> SchDiff {
+    fn diff_against(&self, sch: &sch_core::Schematic, library: &[part_lib::PartDef]) -> SchDiff {
         let (parts, nets) = Self::netlist_of(sch);
-        netlist::diff(&self.board, &parts, &nets)
+        let mut diff = netlist::diff(&self.board, &parts, &nets);
+        // a library part edited after it was imported (a body outline, pads, a 3D shape) keeps its footprint name, so the
+        // netlist alone does not see it
+        for r in library_changes(&self.board, &parts, library) {
+            if !diff.changed.contains(&r) {
+                diff.changed.push(r);
+            }
+        }
+        diff
     }
 
     /// Write the names of the pins of the pin headers (set in the circuit) on the silk beside the pads.
@@ -196,8 +204,14 @@ impl BoardEditor {
             if let Some(def) = found
                 && let Ok(fp) = def.footprint() {
                     self.board.add_footprint(fp);
-                    if let Some(m) = &def.model3d {
-                        self.board.models3d.insert(def.footprint_name(), m.clone());
+                    match &def.model3d {
+                        Some(m) => {
+                            self.board.models3d.insert(def.footprint_name(), m.clone());
+                        }
+                        // the shape was taken away from the part: the board must not keep the old one
+                        None => {
+                            self.board.models3d.remove(&def.footprint_name());
+                        }
                     }
                     if def.land_unverified {
                         self.board.land_unverified.insert(def.footprint_name(), def.name.clone());
@@ -230,5 +244,65 @@ impl BoardEditor {
     }
 }
 
+/// The parts of the board whose library part has another footprint (pads, silkscreen, holes) or another 3D shape than the board
+/// holds. Only footprints the board stores itself count (a built-in one cannot change under it).
+pub(super) fn library_changes(board: &pcb_core::Board, parts: &[NetlistPart], library: &[part_lib::PartDef]) -> Vec<String> {
+    let mut out = vec![];
+    for p in parts {
+        let Some(def) = library.iter().find(|d| d.footprint_name() == p.footprint) else { continue };
+        let Some(stored) = board.footprints.iter().find(|f| f.name == p.footprint) else { continue };
+        let fp_differs = def.footprint().ok().is_some_and(|fp| serde_json::to_value(&fp).ok() != serde_json::to_value(stored).ok());
+        if fp_differs || def.model3d.as_ref() != board.models3d.get(&p.footprint) {
+            out.push(p.refdes.clone());
+        }
+    }
+    out
+}
+
 /// What differs between the schematic and the board (see `BoardEditor::schematic_diff`).
 pub type SchDiff = pcb_core::netlist::NetlistDiff;
+
+#[cfg(test)]
+mod library_tests {
+    use super::*;
+    use pcb_core::body::{BodyMark, BodySpec};
+
+    /// A library part edited after the board took it (a body outline on the silkscreen, a 3D shape) shows as a change of the part.
+    #[test]
+    fn an_edited_library_part_shows_as_a_change_on_the_board() {
+        let text = part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with("LM358")).unwrap().1;
+        let def: part_lib::PartDef = serde_json::from_str(text).unwrap();
+        let mut board = pcb_core::Board::new("t", 50.0, 30.0);
+        board.add_footprint(def.footprint().unwrap());
+        let parts = vec![NetlistPart { refdes: "U1".into(), value: "LM358".into(), footprint: def.footprint_name() }];
+        assert!(library_changes(&board, &parts, std::slice::from_ref(&def)).is_empty(), "the same part is no change");
+
+        let mut with_body = def.clone();
+        with_body.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
+        assert_eq!(library_changes(&board, &parts, &[with_body]), vec!["U1".to_string()], "a new outline");
+
+        let mut with_shape = def.clone();
+        with_shape.model3d = Some(pcb_core::mesh::Mesh3d { vertices: vec![[0.0; 3], [1.0, 0.0, 0.0], [0.0, 1.0, 1.0]], triangles: vec![[0, 1, 2]], tri_color: vec![0], palette: vec![[1, 1, 1]] });
+        assert_eq!(library_changes(&board, &parts, &[with_shape]), vec!["U1".to_string()], "a new 3D shape");
+        // a part that is not in the library, or whose footprint is built in, is left alone
+        assert!(library_changes(&board, &parts, &[]).is_empty());
+    }
+
+    /// Taking the part again after its library part got a body outline puts the outline on the silkscreen of the part already placed.
+    #[test]
+    fn taking_the_part_again_brings_the_new_silk_outline() {
+        let text = part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with("LM358")).unwrap().1;
+        let def: part_lib::PartDef = serde_json::from_str(text).unwrap();
+        let mut board = pcb_core::Board::new("t", 50.0, 30.0);
+        board.add_footprint(def.footprint().unwrap());
+        let part = pcb_core::Part { refdes: "U1".into(), value: "LM358".into(), footprint: def.footprint_name(), pos: pcb_core::Point::new(20.0, 15.0), rot: 0, side: pcb_core::Side::Top };
+        board.set_part(part.clone()).unwrap();
+        let before = board.silk.iter().filter(|s| s.refdes == "U1").count();
+        let mut edited = def.clone();
+        edited.body = Some(BodySpec { shape: "rect".into(), w: 3.9, h: 4.9, x: 0.0, y: 0.0, mark: BodyMark::Dot, mark_pin: "1".into() });
+        board.add_footprint(edited.footprint().unwrap());
+        board.set_part(part).unwrap();
+        let after = board.silk.iter().filter(|s| s.refdes == "U1").count();
+        assert!(after > before, "silk lines {before} -> {after}");
+    }
+}
