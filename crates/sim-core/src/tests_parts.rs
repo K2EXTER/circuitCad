@@ -4,7 +4,7 @@ use crate::*;
 use part_lib::{PartDef, EXAMPLES};
 use sch_core::SimKind;
 
-fn part(name: &str) -> PartDef {
+pub(crate) fn part(name: &str) -> PartDef {
     EXAMPLES
         .iter()
         .map(|(_, t)| serde_json::from_str::<PartDef>(t).unwrap())
@@ -13,7 +13,7 @@ fn part(name: &str) -> PartDef {
 }
 
 /// Instantiate a library part with its simulation pins wired to the given nets.
-fn place(c: &mut Circuit, def: &PartDef, inst: &str, nets: &[(&str, &str)]) {
+pub(crate) fn place(c: &mut Circuit, def: &PartDef, inst: &str, nets: &[(&str, &str)]) {
     let sim = def.sim.as_ref().unwrap_or_else(|| panic!("{} has no model", def.name));
     let nodes: Vec<usize> = sim
         .pins
@@ -29,12 +29,12 @@ fn place(c: &mut Circuit, def: &PartDef, inst: &str, nets: &[(&str, &str)]) {
     }
 }
 
-fn vs(c: &mut Circuit, name: &str, p: &str, n: &str, dc: f64) {
+pub(crate) fn vs(c: &mut Circuit, name: &str, p: &str, n: &str, dc: f64) {
     let (p, n) = (c.node(p), c.node(n));
     c.add(Element::vdc(name, p, n, dc));
 }
 
-fn res(c: &mut Circuit, name: &str, a: &str, b: &str, ohms: f64) {
+pub(crate) fn res(c: &mut Circuit, name: &str, a: &str, b: &str, ohms: f64) {
     let (a, b) = (c.node(a), c.node(b));
     c.add(Element::Resistor { name: name.into(), a, b, r: ohms });
 }

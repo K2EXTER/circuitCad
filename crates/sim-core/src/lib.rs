@@ -143,3 +143,5 @@ mod tests_perf;
 mod tests_worstcase;
 #[cfg(test)]
 mod tests_accuracy_ac;
+#[cfg(test)]
+mod tests_loopgain_parts;
