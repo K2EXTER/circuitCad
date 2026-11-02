@@ -13,7 +13,14 @@ pub(super) struct ActiveLesson {
     /// The step on hand and the circuit as they were when the learner last did something, and when (seconds of the UI clock):
     /// the hint of what is missing comes after a quiet time.
     watch: Option<(Option<usize>, String, f64)>,
+    /// The option the learner chose for the question of each step (if the step has one and it was answered).
+    pub(super) predicted: Vec<Option<usize>>,
+    /// How each guess turned out, written when the step was done.
+    pub(super) verdicts: Vec<Option<predict::Verdict>>,
 }
+
+/// Stands for "no guess": the learner went on without answering the question of a step.
+const NO_GUESS: usize = usize::MAX;
 
 /// Seconds the learner has to be quiet on a step before the lesson window says what its condition is missing.
 const HINT_AFTER: f64 = 25.0;
@@ -48,9 +55,13 @@ mod conditions;
 mod devices;
 mod micro;
 mod models;
+mod predict;
 mod supply;
 
 pub(super) use conditions::Unmet;
+
+#[cfg(test)]
+pub(super) use predict::{for_step as prediction_for_step, PREDICTIONS};
 
 #[cfg(test)]
 pub(super) use conditions::{dc_fresh_for_test, value_between_for_test, value_of};
@@ -162,7 +173,7 @@ impl SchEditor {
         // the app starts with the resistor ready to place: in a lesson a click on the circuit would add one
         self.tool = Tool::Select;
         (lesson.setup)(self);
-        self.lesson = Some(ActiveLesson { idx, shown: None, done: vec![false; lesson.steps.len()], watch: None });
+        self.lesson = Some(ActiveLesson { idx, shown: None, done: vec![false; lesson.steps.len()], watch: None, predicted: vec![None; lesson.steps.len()], verdicts: vec![None; lesson.steps.len()] });
         self.status = format!("レッスン「{}」を始めました。右の案内に沿って操作してみましょう", lesson.title);
     }
 
@@ -201,10 +212,15 @@ impl SchEditor {
         let Some(lesson) = LESSONS.get(active.idx) else { return };
         let Some(cur) = active.done.iter().position(|d| !d) else { return };
         self.lesson_unmet.replace(None);
-        if (lesson.steps[cur].done)(self)
-            && let Some(a) = self.lesson.as_mut() {
+        if (lesson.steps[cur].done)(self) {
+            // a guess that was made before the step is judged by the number the simulation gives now
+            let chosen = self.lesson.as_ref().and_then(|a| a.predicted[cur]).filter(|c| *c != NO_GUESS);
+            let verdict = predict::for_step(lesson.id, cur).zip(chosen).and_then(|(p, c)| (p.measure)(self).map(|v| p.verdict(c, v)));
+            if let Some(a) = self.lesson.as_mut() {
                 a.done[cur] = true;
+                a.verdicts[cur] = verdict;
             }
+        }
         // open the page of the left panel that the step on hand works on
         let Some(active) = self.lesson.as_mut() else { return };
         if let Some(next) = active.done.iter().position(|d| !d)
@@ -244,11 +260,14 @@ impl SchEditor {
         let Some(lesson) = LESSONS.get(active.idx) else { return };
         let cur = active.done.iter().position(|d| !d);
         let done = active.done.clone();
+        let predicted = active.predicted.clone();
+        let verdicts = active.verdicts.clone();
         let idx = active.idx;
         let mut close = false;
         let mut restart = false;
         let mut next = None;
         let mut build = None;
+        let mut pick: Option<(usize, usize)> = None;
         let hint = self.stuck_hint(ctx, cur);
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
@@ -266,9 +285,39 @@ impl SchEditor {
                     ui.colored_label(color, mark);
                     ui.label(egui::RichText::new(step.title).strong().color(if Some(k) == cur { color } else { ui.visuals().text_color() }));
                 });
+                let prediction = predict::for_step(lesson.id, k);
                 if Some(k) == cur {
                     ui.indent(("lesson_detail", k), |ui| {
-                        ui.label(step.detail);
+                        // the guess comes before the doing: the question first; the step's text (which tells the answer) after it
+                        if let Some(p) = prediction.filter(|_| predicted[k].is_none()) {
+                            egui::Frame::group(ui.style()).show(ui, |ui| {
+                                ui.label(egui::RichText::new("予測してみよう").strong().color(crate::theme::WARN));
+                                ui.label(p.question);
+                                for (o, (label, _)) in p.options.iter().enumerate() {
+                                    if ui.button(*label).on_hover_text("やる前に、結果を予測します。当たっても外れても、やったあとに、理由が出ます").clicked() {
+                                        pick = Some((k, o));
+                                    }
+                                }
+                                if ui.small_button("予測せずに進める").on_hover_text("予測を飛ばして、手順の説明を読みます").clicked() {
+                                    pick = Some((k, NO_GUESS));
+                                }
+                            });
+                        } else {
+                            ui.label(step.detail);
+                            if let (Some(p), Some(o)) = (prediction, predicted[k].filter(|o| *o != NO_GUESS)) {
+                                ui.small(format!("あなたの予測: 「{}」。手順のとおりにやって、確かめましょう", p.options[o].0));
+                            }
+                        }
+                    });
+                }
+                if let (Some(p), Some(v)) = (prediction, verdicts[k].as_ref()) {
+                    ui.indent(("lesson_verdict", k), |ui| {
+                        if v.right {
+                            ui.colored_label(crate::theme::OK, format!("✔ 予測が当たりました。実際は {} でした", p.show(v.actual)));
+                        } else {
+                            ui.colored_label(crate::theme::WARN, format!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", p.options[v.chosen].0, p.show(v.actual)));
+                        }
+                        ui.small(p.explain);
                     });
                 }
             }
@@ -330,6 +379,10 @@ impl SchEditor {
                 }
             });
         });
+        if let Some((k, o)) = pick
+            && let Some(a) = self.lesson.as_mut() {
+                a.predicted[k] = Some(o);
+            }
         if let Some(id) = build {
             self.start_challenge(id, 0);
             return;

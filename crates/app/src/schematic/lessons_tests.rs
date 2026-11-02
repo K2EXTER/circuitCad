@@ -1542,3 +1542,88 @@ fn value_hints_use_the_unit_of_the_part_and_say_when_a_range_is_wanted() {
     assert!(matches!(m, Unmet::Value { have: None, .. }), "{m:?}");
     assert!(m.message().contains("R99 を 1Ω から 2Ω の間にします"), "{}", m.message());
 }
+
+/// What the learner does on the step a question is asked on: (lesson, step, part, new value).
+const PREDICTION_ACTIONS: [(&str, usize, &str, &str); 6] = [
+    ("divider", 1, "R2", "30k"),
+    ("led", 1, "R1", "100"),
+    ("zener", 1, "R2", "100"),
+    ("emitter_follower", 1, "R2", "47"),
+    ("coin_cell", 1, "R1", "10"),
+    ("diode_curve", 2, "R1", "1.5k"),
+];
+
+#[test]
+fn every_question_has_an_option_that_is_close_to_what_the_simulation_gives() {
+    use super::lessons::{prediction_for_step, PREDICTIONS};
+    assert_eq!(PREDICTIONS.len(), PREDICTION_ACTIONS.len(), "every question has its action listed here");
+    for (lesson, step, refdes, value) in PREDICTION_ACTIONS {
+        let p = prediction_for_step(lesson, step).unwrap_or_else(|| panic!("{lesson} step {step} has no question"));
+        let idx = lesson_ids().iter().position(|l| *l == lesson).unwrap();
+        let mut e = SchEditor::default();
+        e.start_lesson(idx);
+        e.run_dc();
+        set_value(&mut e, refdes, value);
+        e.run_dc();
+        let actual = (p.measure)(&e).unwrap_or_else(|| panic!("{lesson}: nothing to measure"));
+        let right = p.nearest(actual);
+        let (label, number) = p.options[right];
+        // the option that is the right one says a number that the simulation really gives (within 8% or 0.03 of it)
+        assert!((number - actual).abs() <= (0.08 * actual.abs()).max(0.03), "{lesson}: the nearest option 「{label}」 says {number}, the simulation gives {actual}");
+        // and no other option is about as near (the answer is not a toss-up)
+        let others: Vec<f64> = p.options.iter().enumerate().filter(|(i, _)| *i != right).map(|(_, o)| (o.1 - actual).abs()).collect();
+        assert!(others.iter().all(|d| *d > 3.0 * (number - actual).abs().max(0.01)), "{lesson}: two options are near {actual}: {:?}", p.options);
+    }
+}
+
+#[test]
+fn a_guess_is_judged_by_the_number_when_the_step_is_done() {
+    let divider = lesson_ids().iter().position(|l| *l == "divider").unwrap();
+    // a right guess (3.75V: option 1)
+    let mut e = SchEditor::default();
+    e.start_lesson(divider);
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    e.lesson.as_mut().unwrap().predicted[1] = Some(1);
+    set_value(&mut e, "R2", "30k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let v = e.lesson.as_ref().unwrap().verdicts[1].clone().expect("a verdict");
+    assert!(v.right && (v.actual - 3.75).abs() < 0.01, "{v:?}");
+    // a wrong guess (stays 2.5V: option 0)
+    let mut e = SchEditor::default();
+    e.start_lesson(divider);
+    e.run_dc();
+    e.update_lesson();
+    e.lesson.as_mut().unwrap().predicted[1] = Some(0);
+    set_value(&mut e, "R2", "30k");
+    e.run_dc();
+    e.update_lesson();
+    let v = e.lesson.as_ref().unwrap().verdicts[1].clone().expect("a verdict");
+    assert!(!v.right && v.chosen == 0, "{v:?}");
+    // no guess, no verdict; the step is done all the same
+    let mut e = SchEditor::default();
+    e.start_lesson(divider);
+    e.run_dc();
+    e.update_lesson();
+    set_value(&mut e, "R2", "30k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(e.lesson.as_ref().unwrap().verdicts[1].is_none());
+    // "予測せずに進める" is no guess either
+    let mut e = SchEditor::default();
+    e.start_lesson(divider);
+    e.run_dc();
+    e.update_lesson();
+    e.lesson.as_mut().unwrap().predicted[1] = Some(usize::MAX);
+    set_value(&mut e, "R2", "30k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!(e.lesson.as_ref().unwrap().verdicts[1].is_none());
+    // the step of a lesson that has no question is not asked
+    assert!(super::lessons::prediction_for_step("divider", 0).is_none());
+}

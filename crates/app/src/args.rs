@@ -7,6 +7,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(id) = args.get(i + 1)
         && let Some(n) = schematic::lesson_ids().iter().position(|l| l == id) {
             app.sch.start_lesson(n);
+            // `--lesson <id> --dc`: the first analysis is done already (to see the second step of a lesson)
+            if args.iter().any(|a| a == "--dc") {
+                app.sch.analyze_dc();
+            }
         }
     if let Some(i) = args.iter().position(|a| a == "--board-lesson") {
         // --board-lesson [0|1]: 0 = schematic to order files, 1 = copper width and voltage drop
