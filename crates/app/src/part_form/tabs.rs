@@ -5,6 +5,8 @@ impl PartForm {
     /// coil can start from its data sheet numbers (below the name fields, which that fills in), an IC may start from
     /// the charger template, and the other kinds just get the fields.
     pub(super) fn tab_basic(&mut self, ui: &mut egui::Ui) {
+        self.kind_bar(ui);
+        ui.separator();
         // a part that already exists as a file needs no form at all
         ui.horizontal_wrapped(|ui| {
             ui.small("ファイルがあるとき");

@@ -393,8 +393,6 @@ impl PartForm {
         self.take_pdf_pick();
         self.take_pdf_pins();
         self.sync_pdf_checks();
-        self.kind_bar(ui);
-        ui.separator();
         let labels: Vec<String> = FORM_TABS
             .iter()
             .map(|(tab, label, _)| {

@@ -170,7 +170,6 @@ impl PartForm {
                 self.body_circle = false;
                 self.body_mark = BodyMark::Dot;
                 self.fit_body();
-                self.tab = FormTab::Pins;
             }
             PartType::Transistor => {
                 self.prefix = "Q".into();
@@ -178,7 +177,6 @@ impl PartForm {
                 (self.pitch, self.pad_d, self.drill) = (2.54, 1.5, 0.8);
                 self.body_on = false;
                 self.set_transistor("npn");
-                self.tab = FormTab::Pins;
             }
             PartType::Diode => {
                 self.prefix = "D".into();
@@ -191,15 +189,12 @@ impl PartForm {
                 (self.body_w, self.body_h, self.body_x, self.body_y) = (3.8, 1.8, 0.0, 0.0);
                 self.body_mark = BodyMark::Bar;
                 self.body_pin = "1".into();
-                self.tab = FormTab::Pins;
             }
             PartType::Capacitor => {
                 self.set_capacitor("ceramic");
-                self.tab = FormTab::Basic;
             }
             PartType::Resistor | PartType::Inductor => {
                 self.set_resistor_or_inductor(t, "chip");
-                self.tab = FormTab::Basic;
             }
             PartType::Connector => {
                 self.prefix = "J".into();
@@ -211,7 +206,6 @@ impl PartForm {
                 self.body_circle = false;
                 (self.body_w, self.body_h, self.body_x, self.body_y) = (10.16, 2.5, 0.0, 0.0);
                 self.body_mark = BodyMark::Dot;
-                self.tab = FormTab::Pins;
             }
         }
     }
