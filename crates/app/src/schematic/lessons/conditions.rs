@@ -695,3 +695,30 @@ pub(super) fn gain_restored_and_ac(e: &SchEditor) -> bool {
 pub(super) fn currents_shown(e: &SchEditor) -> bool {
     e.show_i && dc_fresh(e)
 }
+
+// ------------------------------------------------------------------ signals: poles and zeros, the phase margin
+
+/// The poles and zeros of the circuit as it is now are on the screen.
+fn pz_fresh(e: &SchEditor) -> bool {
+    fresh(e, "極と零を求める", e.pz.as_ref().map(|p| (true, p.is_fresh(&e.signature()))))
+}
+
+/// The poles lesson, step 2: a fresh result with a pair of complex poles that make a peak (Q above 1).
+pub(super) fn pz_resonant(e: &SchEditor) -> bool {
+    pz_fresh(e) && e.pz.as_ref().and_then(|p| p.max_q()).is_some_and(|q| q > 1.0)
+}
+
+/// The poles lesson, step 3: R1 is 50 ohm or more and the fresh result has only real poles (no peak, no ringing).
+pub(super) fn pz_damped(e: &SchEditor) -> bool {
+    value_at_least(e, "R1", 50.0) && pz_fresh(e) && e.pz.as_ref().is_some_and(|p| p.max_q().is_none())
+}
+
+/// The phase margin lesson, step 2: the load capacitor C1 is small (100 pF or less) and the result is fresh.
+pub(super) fn load_cap_small(e: &SchEditor) -> bool {
+    value_at_most(e, "C1", 100e-12) && ac_fresh(e)
+}
+
+/// The phase margin lesson, step 3: the load capacitor C1 is big (50 nF or more) and the result is fresh.
+pub(super) fn load_cap_big(e: &SchEditor) -> bool {
+    value_at_least(e, "C1", 50e-9) && ac_fresh(e)
+}

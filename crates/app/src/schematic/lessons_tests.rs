@@ -1627,3 +1627,70 @@ fn a_guess_is_judged_by_the_number_when_the_step_is_done() {
     // the step of a lesson that has no question is not asked
     assert!(super::lessons::prediction_for_step("divider", 0).is_none());
 }
+
+#[test]
+fn the_poles_lesson_goes_from_a_peak_to_a_peak_that_is_gone() {
+    let idx = lesson_ids().iter().position(|l| *l == "poles").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    // the poles of the series RLC: one complex pair at 5.03 kHz with Q = 3.16 (the lesson's own numbers)
+    e.run_pz();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let q = e.pz.as_ref().unwrap().max_q().unwrap();
+    assert!((q - 3.16).abs() < 0.1, "Q = {q}");
+    // 100 ohm: the poles are real, the peak is gone
+    set_value(&mut e, "R1", "100");
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "the result is old");
+    e.run_pz();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!(e.pz.as_ref().unwrap().max_q().is_none());
+}
+
+#[test]
+fn the_phase_margin_lesson_shows_the_margin_falling_with_the_load_capacitor() {
+    let idx = lesson_ids().iter().position(|l| *l == "phase_margin").unwrap();
+    let margin = |e: &SchEditor| {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        let sg = r.signal("V(OUT)").unwrap();
+        stability_margins(&r.freq, &sg.db(), &sg.phase_deg()).unwrap().phase_margin.unwrap()
+    };
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    let loaded = margin(&e);
+    assert!(loaded < 45.0, "10n: {loaded}");
+    set_value(&mut e, "C1", "1p");
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let light = margin(&e);
+    assert!(light > 70.0 && light > loaded + 30.0, "1p: {light}");
+    set_value(&mut e, "C1", "100n");
+    e.run_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!(margin(&e) < loaded, "100n: {}", margin(&e));
+}
+
+#[test]
+fn a_value_that_is_not_there_yet_is_named_in_the_hint_of_the_new_lessons() {
+    use super::lessons::Unmet;
+    let idx = lesson_ids().iter().position(|l| *l == "phase_margin").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.run_ac();
+    e.update_lesson();
+    // step 2 wants C1 at 100pF or less: the hint says so, with the unit of a capacitor
+    e.update_lesson();
+    assert_eq!(e.lesson_unmet.borrow().clone(), Some(Unmet::Value { refdes: "C1", want: "100pF 以下".into(), have: Some("10nF".into()) }));
+}

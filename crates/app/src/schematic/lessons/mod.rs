@@ -56,6 +56,7 @@ mod devices;
 mod micro;
 mod models;
 mod predict;
+mod signals;
 mod supply;
 
 pub(super) use conditions::Unmet;
@@ -114,6 +115,8 @@ const LESSONS: &[Lesson] = &[
     micro::CRYSTAL_LOAD,
     micro::CH340G,
     models::EQUIV_MODEL,
+    signals::POLES,
+    signals::PHASE_MARGIN,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

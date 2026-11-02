@@ -166,7 +166,15 @@ const I_MOSFET: Item = lesson("mosfet", "MOSFET のスイッチ (ゲート電圧
 const I_PNP_HIGHSIDE: Item = lesson("pnp_highside", "PNP のハイサイドスイッチ (電源側で入り切り)", "NPN と逆に、入力を Low にするとオンになる。ベース抵抗の大きさが、オンの深さを決める", None);
 const I_TP4056: Item = lesson("tp4056", "リチウムイオン電池の充電 (TP4056)", "充電の 3 段階 (予備充電・定電流・定電圧)。IC の内部は見ず、外から見た動きで確かめる", None);
 
-pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH];
+const I_OPAMP_NONINV: Item = lesson("opamp_noninv", "オペアンプで信号を大きくする (非反転増幅)", "帰還の考え方。抵抗の比がゲインを決める", Some("オペアンプの増幅回路を作り、入力と出力をテスタやオシロで測ります"));
+const I_OPAMP_INV: Item = lesson("opamp_inv", "オペアンプの反転増幅 (仮想接地)", "反転入力が 0V に保たれる仕組み", None);
+const I_RC_LOWPASS: Item = lesson("rc_lowpass", "RC ローパスフィルタ", "高い周波数だけを弱める。カットオフ周波数は 1 ÷ (2π R C)。抵抗とコンデンサの値で決まる", None);
+const I_RLC: Item = lesson("rlc", "行き過ぎとリンギング (RLC 回路)", "コイルとコンデンサの回路は、ステップに対して行き過ぎて揺れる。抵抗で抑える", None);
+const I_NE555: Item = lesson("ne555", "555 で LED を点滅させる", "タイマー IC とコンデンサの充放電で、一定の間隔で点滅する。C や R を変えると、周期が変わる", None);
+const I_POLES: Item = lesson("poles", "極と零 (RLC の共振を式で見る)", "山の位置は極の周波数、鋭さは Q。抵抗を大きくすると、極が実数になって山が消える", None);
+const I_PHASE_MARGIN: Item = lesson("phase_margin", "位相余裕 (容量の負荷でオペアンプが不安定になる)", "ゲインが 0dB になる周波数で、180° に対する余裕。出力の容量負荷が、余裕を食う", None);
+
+pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH, SIGNAL_PATH];
 
 const POWER_PATH: LearningPath = LearningPath {
     id: "power_supply",
@@ -197,8 +205,8 @@ const POWER_PATH: LearningPath = LearningPath {
             name: "3. 応用: 安定化のしくみ",
             about: "出力の電圧を測って、ずれたら直す (帰還)。これが安定化電源の本質です",
             items: &[
-                Item { requires: Some(&["divider"]), ..lesson("opamp_noninv", "オペアンプで信号を大きくする (非反転増幅)", "帰還の考え方。抵抗の比がゲインを決める", Some("オペアンプの増幅回路を作り、入力と出力をテスタやオシロで測ります")) },
-                Item { build: true, requires: Some(&["opamp_noninv"]), ..lesson("opamp_inv", "オペアンプの反転増幅 (仮想接地)", "反転入力が 0V に保たれる仕組み", None) },
+                Item { requires: Some(&["divider"]), ..I_OPAMP_NONINV },
+                Item { build: true, requires: Some(&["opamp_noninv"]), ..I_OPAMP_INV },
                 Item { build: true, requires: Some(&["opamp_inv", "emitter_follower"]), ..lesson("series_regulator", "基準電圧と帰還で安定化する (直列レギュレータ)", "オペアンプ + 基準電圧 + パストランジスタで、自作の安定化電源を組む", Some("負荷を変えたとき (ロードレギュレーション)、入力を変えたとき (ラインレギュレーション) の出力電圧を測ります")) },
                 Item { build: true, requires: Some(&["emitter_follower"]), ..lesson("regulator_78xx", "三端子レギュレータ (78xx / LDO) を使う", "入出力のコンデンサ、ドロップアウト電圧、使い方と選び方", Some("7805 で 5V を作り、入力と負荷を変えて出力と温度を測ります")) },
                 Item { requires: Some(&["zener"]), ..lesson("tl431_ref", "TL431 (シャントレギュレータ): 好きな電圧の基準を作る", "REF を 2.495V に保つ部品。分圧の比で、出力を 2.5V 以上の好きな値にできる。負荷が重すぎると崩れる", Some("TL431 に 2 本の抵抗をつなぎ、出力が 2.495V × (1 + R2 ÷ R3) になるか測ります")) },
@@ -423,6 +431,37 @@ const BATTERY_PATH: LearningPath = LearningPath {
             name: "3. 電池を長持ちさせる",
             about: "電圧差を熱にしないスイッチング電源。リニアとの効率の違い",
             items: &[Item { requires: Some(&["ldo", "heat"]), ..I_BUCK }],
+        },
+    ],
+};
+
+const SIGNAL_PATH: LearningPath = LearningPath {
+    id: "signals",
+    title: "信号を扱おう: フィルタ・増幅・発振",
+    goal: "周波数ごとに信号を弱める (フィルタ)、大きくする (増幅)、自分で振動させる (発振) を、AC 解析と過渡解析で見ます。山の正体 (極と Q) と、増幅が不安定になる理由 (位相余裕) まで、原理から理解します。",
+    stages: &[
+        Stage {
+            name: "1. フィルタ",
+            about: "抵抗とコンデンサで高い周波数を弱める。コイルを足すと、行き過ぎて揺れる。その山を、極と零で読む",
+            items: &[
+                Item { build: true, requires: Some(&[]), ..I_RC_LOWPASS },
+                Item { requires: Some(&["rc_lowpass"]), ..I_RLC },
+                Item { requires: Some(&["rlc"]), ..I_POLES },
+            ],
+        },
+        Stage {
+            name: "2. 増幅と安定",
+            about: "オペアンプの帰還でゲインを決める。出力に容量をつなぐと、位相余裕が減って不安定になる",
+            items: &[
+                Item { requires: Some(&["rc_lowpass"]), ..I_OPAMP_NONINV },
+                Item { build: true, requires: Some(&["opamp_noninv"]), ..I_OPAMP_INV },
+                Item { requires: Some(&["opamp_inv", "poles"]), ..I_PHASE_MARGIN },
+            ],
+        },
+        Stage {
+            name: "3. 発振",
+            about: "コンデンサの充放電で、自分で一定の間隔を作る",
+            items: &[Item { requires: Some(&["rc_lowpass"]), ..I_NE555 }],
         },
     ],
 };
@@ -926,10 +965,10 @@ mod tests {
         assert_eq!(level(&SWITCH_PATH, items(&SWITCH_PATH).next().unwrap(), 0), 0);
     }
 
-    /// Lessons that were reachable only from the menu are in a path now (RC, RLC and 555 still wait for a path of their own).
+    /// Lessons that were reachable only from the menu are in a path now.
     #[test]
     fn the_lessons_that_had_no_path_are_in_one() {
-        for id in ["mosfet", "pnp_highside", "tp4056"] {
+        for id in ["mosfet", "pnp_highside", "tp4056", "rc_lowpass", "rlc", "ne555"] {
             assert!(find_item(id).is_some(), "the lesson {id} is in no learning path");
         }
     }

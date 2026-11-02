@@ -11,6 +11,18 @@ pub(super) struct PzSummary {
     signature: String,
 }
 
+impl PzSummary {
+    /// The result is for the circuit as it is now.
+    pub(super) fn is_fresh(&self, signature: &str) -> bool {
+        self.signature == signature
+    }
+
+    /// The largest quality factor of the complex pairs of poles (`None`: all the poles are real).
+    pub(super) fn max_q(&self) -> Option<f64> {
+        self.pz.poles.iter().filter_map(|r| r.q()).reduce(f64::max)
+    }
+}
+
 fn describe(r: &Root) -> String {
     match r.q() {
         Some(q) => format!("{} (一対の複素数、Q = {:.2}{})", eng(r.freq_hz(), "Hz"), q, if q > 1.0 { "、山ができて振動する" } else { "" }),
