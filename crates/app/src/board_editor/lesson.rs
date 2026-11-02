@@ -655,7 +655,7 @@ impl BoardEditor {
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else if pairs { PAIRS_TITLE } else if repair { REPAIR_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(268.0, -56.0)).show(ctx, |ui| {
+        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else if pairs { PAIRS_TITLE } else if repair { REPAIR_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
             ui.label(if repair {
                 "ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、直します。DRC・未配線・発注前チェックなど、いままでの道具が手がかりです。何度でも、別の故障で練習できます"
             } else if pairs {
