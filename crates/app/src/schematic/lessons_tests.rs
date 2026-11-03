@@ -2511,3 +2511,32 @@ fn the_segment_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!(((5.0 - v(&e, "S1")) / 1e3 - 3.1e-3).abs() < 0.3e-3 && ((5.0 - v(&e, "S2")) / 330.0 - 9.2e-3).abs() < 0.3e-3, "only that segment dims");
 }
+
+#[test]
+fn the_analog_switch_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "analog_switch_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "OUT") - 2.9946).abs() < 0.001 && v(&e, "HOLD").abs() < 0.01, "5 mV lost in 1.8 ohm; nothing sampled yet");
+    set_value(&mut e, "R1", "100");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((v(&e, "OUT") - 2.947).abs() < 0.002, "1.8 % lost into 100 ohm");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let h = &r.signal("V(HOLD)").unwrap().values;
+        let at = |t: f64| h[r.time.iter().position(|x| *x >= t).unwrap()];
+        // tau = (1 kohm + 1.8 ohm) x 10 nF = 10 us, the sampling starts at 10 us
+        assert!(at(5e-6) < 0.01 && (at(30e-6) - 3.0 * (1.0 - (-2.0f64).exp())).abs() < 0.05 && at(110e-6) > 2.995 && at(390e-6) > 2.99, "sample and hold");
+    }
+}

@@ -1269,6 +1269,59 @@ fn write_segment_basics_example() {
     std::fs::write(root.join("segment_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/analog_switch_basics.schjson for the analog switch lesson: two TMUX1101 (VDD = 5 V). U1 passes the 3 V
+/// signal V1 to OUT, with the load R1 = 1 kohm (SEL V2 = 5 V: on). U2 is a sample-and-hold: V1 -> R2 = 1 kohm -> U2 -> HOLD with C1 = 10 nF,
+/// SEL V3 is a pulse that is high from 10 us to 110 us: `cargo test -p app write_analog_switch_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_analog_switch_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "TMUX1101").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let src = |s: &mut sch_core::Schematic, y: i32, value: &str, net: &str| {
+        let v = s.add(Kind::VSource, (0, y), 0);
+        s.components[v].value = value.into();
+        label(s, v, "+", net);
+        label(s, v, "-", "GND");
+    };
+    src(&mut s, 0, "3", "SIG");
+    src(&mut s, 24, "5", "ON");
+    src(&mut s, 48, "PULSE(0 5 10u 1n 1n 100u 400u)", "SAMPLE");
+    src(&mut s, 72, "5", "VDD");
+    // U1: the signal through the switch into a load
+    let u1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 0), 0);
+    label(&mut s, u1, "2", "SIG");
+    label(&mut s, u1, "1", "OUT");
+    label(&mut s, u1, "4", "ON");
+    label(&mut s, u1, "5", "VDD");
+    label(&mut s, u1, "3", "GND");
+    let r1 = s.add(Kind::Resistor, (50, 0), 1);
+    s.components[r1].value = "1k".into();
+    label(&mut s, r1, "1", "OUT");
+    label(&mut s, r1, "2", "GND");
+    // U2: sample and hold
+    let r2 = s.add(Kind::Resistor, (20, 40), 1);
+    s.components[r2].value = "1k".into();
+    label(&mut s, r2, "1", "SIG");
+    label(&mut s, r2, "2", "SIN");
+    let u2 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (40, 40), 0);
+    label(&mut s, u2, "2", "SIN");
+    label(&mut s, u2, "1", "HOLD");
+    label(&mut s, u2, "4", "SAMPLE");
+    label(&mut s, u2, "5", "VDD");
+    label(&mut s, u2, "3", "GND");
+    let c1 = s.add(Kind::Capacitor, (60, 40), 1);
+    s.components[c1].value = "10n".into();
+    label(&mut s, c1, "1", "HOLD");
+    label(&mut s, c1, "2", "GND");
+    // the leakage of the hold capacitor (and the way to a defined 0 V at the start)
+    let r3 = s.add(Kind::Resistor, (80, 40), 1);
+    s.components[r3].value = "100Meg".into();
+    label(&mut s, r3, "1", "HOLD");
+    label(&mut s, r3, "2", "GND");
+    std::fs::write(root.join("analog_switch_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

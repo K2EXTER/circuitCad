@@ -941,3 +941,8 @@ pub(super) fn segment_shared_resistor_fixed(e: &SchEditor) -> bool {
 pub(super) fn segment_one_dim(e: &SchEditor) -> bool {
     value_at_least(e, "R3", 800.0) && dc_fresh(e)
 }
+
+/// The analog switch lesson: the load R1 is 150 ohm or less (a load that the on resistance of 1.8 ohm shows up against) and the run is fresh.
+pub(super) fn analog_switch_low_load(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 150.0) && dc_fresh(e)
+}

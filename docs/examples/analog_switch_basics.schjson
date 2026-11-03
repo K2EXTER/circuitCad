@@ -1,0 +1,669 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "3",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "PULSE(0 5 10u 1n 1n 100u 400u)",
+      "pos": [
+        0,
+        48
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V4",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        72
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "TMUX1101",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SOT-23-5_P0.95",
+      "custom": {
+        "name": "TMUX1101",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "D",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "SEL",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "VDD",
+            "side": "top"
+          },
+          {
+            "number": "3",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TMUX1101",
+          "text": "* TMUX1101 behavioural model: one SPST switch, Ron 1.8 ohm (5 V supply, 25 C typical), Roff 1T ohm.\n* SEL above about 1.2 V over GND = on (VIH min 1.49 V, VIL max 0.87 V at 5 V).\n.subckt TMUX1101 d s sel gnd vdd\nS1 d s sel gnd SWA\n.model SWA SW(RON=1.8 ROFF=1T VT=1.2 VW=0.3)\n.ends TMUX1101",
+          "pins": [
+            "1",
+            "2",
+            "4",
+            "3",
+            "5"
+          ],
+          "params": {},
+          "limits": [
+            "オン抵抗は 5 V 単電源・25℃ の典型値 (1.8 Ω) の固定です。電圧・温度・電源電圧で変わります (最大 4 Ω、85℃ で 4.9 Ω)。",
+            "オフの漏れは 1 TΩ の固定 (0.2 V で約 0.2 pA)。実物の典型 約 5 pA と、保証の最大 ±80 pA (25℃) は入っていません。",
+            "電荷注入、容量、切り替え時間は扱いません。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        20,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "TMUX1101",
+      "pos": [
+        40,
+        40
+      ],
+      "rot": 0,
+      "footprint": "SOT-23-5_P0.95",
+      "custom": {
+        "name": "TMUX1101",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "D",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "S",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "SEL",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "VDD",
+            "side": "top"
+          },
+          {
+            "number": "3",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "TMUX1101",
+          "text": "* TMUX1101 behavioural model: one SPST switch, Ron 1.8 ohm (5 V supply, 25 C typical), Roff 1T ohm.\n* SEL above about 1.2 V over GND = on (VIH min 1.49 V, VIL max 0.87 V at 5 V).\n.subckt TMUX1101 d s sel gnd vdd\nS1 d s sel gnd SWA\n.model SWA SW(RON=1.8 ROFF=1T VT=1.2 VW=0.3)\n.ends TMUX1101",
+          "pins": [
+            "1",
+            "2",
+            "4",
+            "3",
+            "5"
+          ],
+          "params": {},
+          "limits": [
+            "オン抵抗は 5 V 単電源・25℃ の典型値 (1.8 Ω) の固定です。電圧・温度・電源電圧で変わります (最大 4 Ω、85℃ で 4.9 Ω)。",
+            "オフの漏れは 1 TΩ の固定 (0.2 V で約 0.2 pA)。実物の典型 約 5 pA と、保証の最大 ±80 pA (25℃) は入っていません。",
+            "電荷注入、容量、切り替え時間は扱いません。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "10n",
+      "pos": [
+        60,
+        40
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "100Meg",
+      "pos": [
+        80,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        0,
+        46
+      ],
+      "b": [
+        0,
+        43
+      ]
+    },
+    {
+      "a": [
+        0,
+        50
+      ],
+      "b": [
+        0,
+        53
+      ]
+    },
+    {
+      "a": [
+        0,
+        70
+      ],
+      "b": [
+        0,
+        67
+      ]
+    },
+    {
+      "a": [
+        0,
+        74
+      ],
+      "b": [
+        0,
+        77
+      ]
+    },
+    {
+      "a": [
+        26,
+        -1
+      ],
+      "b": [
+        23,
+        -1
+      ]
+    },
+    {
+      "a": [
+        34,
+        0
+      ],
+      "b": [
+        37,
+        0
+      ]
+    },
+    {
+      "a": [
+        26,
+        1
+      ],
+      "b": [
+        23,
+        1
+      ]
+    },
+    {
+      "a": [
+        30,
+        -4
+      ],
+      "b": [
+        30,
+        -7
+      ]
+    },
+    {
+      "a": [
+        30,
+        4
+      ],
+      "b": [
+        30,
+        7
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        38
+      ],
+      "b": [
+        20,
+        35
+      ]
+    },
+    {
+      "a": [
+        20,
+        42
+      ],
+      "b": [
+        20,
+        45
+      ]
+    },
+    {
+      "a": [
+        36,
+        39
+      ],
+      "b": [
+        33,
+        39
+      ]
+    },
+    {
+      "a": [
+        44,
+        40
+      ],
+      "b": [
+        47,
+        40
+      ]
+    },
+    {
+      "a": [
+        36,
+        41
+      ],
+      "b": [
+        33,
+        41
+      ]
+    },
+    {
+      "a": [
+        40,
+        36
+      ],
+      "b": [
+        40,
+        33
+      ]
+    },
+    {
+      "a": [
+        40,
+        44
+      ],
+      "b": [
+        40,
+        47
+      ]
+    },
+    {
+      "a": [
+        60,
+        38
+      ],
+      "b": [
+        60,
+        35
+      ]
+    },
+    {
+      "a": [
+        60,
+        42
+      ],
+      "b": [
+        60,
+        45
+      ]
+    },
+    {
+      "a": [
+        80,
+        38
+      ],
+      "b": [
+        80,
+        35
+      ]
+    },
+    {
+      "a": [
+        80,
+        42
+      ],
+      "b": [
+        80,
+        45
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "ON"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        43
+      ],
+      "text": "SAMPLE"
+    },
+    {
+      "pos": [
+        0,
+        53
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        67
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        0,
+        77
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        -1
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        37,
+        0
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        23,
+        1
+      ],
+      "text": "ON"
+    },
+    {
+      "pos": [
+        30,
+        -7
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        30,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        35
+      ],
+      "text": "SIG"
+    },
+    {
+      "pos": [
+        20,
+        45
+      ],
+      "text": "SIN"
+    },
+    {
+      "pos": [
+        33,
+        39
+      ],
+      "text": "SIN"
+    },
+    {
+      "pos": [
+        47,
+        40
+      ],
+      "text": "HOLD"
+    },
+    {
+      "pos": [
+        33,
+        41
+      ],
+      "text": "SAMPLE"
+    },
+    {
+      "pos": [
+        40,
+        33
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        40,
+        47
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        35
+      ],
+      "text": "HOLD"
+    },
+    {
+      "pos": [
+        60,
+        45
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        80,
+        35
+      ],
+      "text": "HOLD"
+    },
+    {
+      "pos": [
+        80,
+        45
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}
