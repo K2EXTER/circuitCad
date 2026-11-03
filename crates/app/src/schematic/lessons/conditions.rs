@@ -906,3 +906,8 @@ pub(super) fn piezo_shown(e: &SchEditor) -> bool {
 pub(super) fn varistor_over_rating(e: &SchEditor) -> bool {
     value_between(e, "V1", 17.0, 30.0) && dc_fresh(e)
 }
+
+/// The Hall sensor lesson: the supply V1 is 3.0 - 3.6 V (a 3.3 V board) and the DC run is fresh.
+pub(super) fn hall_supply_3v3(e: &SchEditor) -> bool {
+    value_between(e, "V1", 3.0, 3.6) && dc_fresh(e)
+}

@@ -476,6 +476,7 @@ const PARTS_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["temp_sensors"]), ..lesson("thermistor_basics", "サーミスタの素顔 (温度で抵抗が桁で変わる)", "R(T) = R25 × exp(B (1/T − 1/T25))、感度 −B/T² ≒ −4.4%/K、分圧の抵抗は R25 に合わせる", Some("NTC の抵抗を、氷水・室温・お湯で測り、B 定数を計算して、データシートの値と比べます")) },
                 Item { requires: Some(&["light_sensors", "transistor"]), ..lesson("phototransistor_basics", "フォトトランジスタの素顔 (光電流が hFE 倍になる)", "Ic = hFE × 光電流、感度はフォトダイオードの数百倍、強い光で飽和、応答は遅い", Some("フォトトランジスタに LED の光を当て、距離を変えて、出力の電圧が飽和する様子を測ります")) },
                 Item { requires: Some(&["led_basics", "transistor"]), ..lesson("photocoupler_basics", "フォトカプラの素顔 (光で信号を絶縁して伝える)", "Ic = CTR × If、絶縁、CTR の個体差と、負荷が重いと飽和する", Some("PC817 の LED の電流を変えて、出力のトランジスタの電流と電圧を測り、CTR を求めます")) },
+                Item { requires: Some(&["current_sensors"]), ..lesson("hall_basics", "ホールセンサの素顔 (磁界に比例して出力が振れる)", "ゼロ磁界で電源の半分、感度 mV/ガウス、極性、電源に比例 (レシオメトリック)", Some("磁石を近づけ・遠ざけながら、出力の電圧を測り、極性と、距離による変化を見ます")) },
             ],
         },
         Stage {

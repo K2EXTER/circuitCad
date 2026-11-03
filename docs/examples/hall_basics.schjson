@@ -1,0 +1,291 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "SS49E",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-92_inline",
+      "custom": {
+        "name": "SS49E",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "+VS",
+            "side": "top"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "3",
+            "name": "VOUT",
+            "side": "right"
+          },
+          {
+            "number": "B",
+            "name": "B",
+            "side": "left",
+            "sim_only": true
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "SS49E",
+          "text": ".subckt SS49E vs gnd out b\n* B pin: 1 V = 100 G. Ratiometric: Vs/2 + (Vs/5) * 1.4 mV/G * B, kept 0.2 V inside the supply\nRb b 0 100Meg\nRiq vs gnd 830\nBh h gnd V=limit(V(vs,gnd)/2+0.028*V(vs,gnd)*V(b),0.2,V(vs,gnd)-0.2)*step(V(vs,gnd)-2.5,0.2)\nRo h out 1\n.ends SS49E",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "B"
+          ],
+          "params": {},
+          "limits": [
+            "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で磁束密度 [G] (1V = 100G, 正負あり。極性で出力が上下)を与えます。つながないと 0 として扱います。",
+            "感度は電源電圧に比例(レシオメトリック)です。温度ドリフト・オフセット誤差・ノイズ・応答速度は扱いません。",
+            "実物は ±650G 付近で出力が飽和します。このモデルは電源の 0.2V 内側で飽和します。"
+          ]
+        },
+        "ratings": {
+          "v_max": 10.0,
+          "rows": [
+            {
+              "name": "感度",
+              "value": "1.4mV/G",
+              "condition": "Vs = 5V"
+            },
+            {
+              "name": "ゼロ磁界出力",
+              "value": "Vs/2 (2.5V)",
+              "condition": "Vs = 5V"
+            },
+            {
+              "name": "電源電流",
+              "value": "6mA (代表)",
+              "condition": "Vs = 5V"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        30,
+        -4
+      ],
+      "b": [
+        30,
+        -7
+      ]
+    },
+    {
+      "a": [
+        30,
+        4
+      ],
+      "b": [
+        30,
+        7
+      ]
+    },
+    {
+      "a": [
+        34,
+        0
+      ],
+      "b": [
+        37,
+        0
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        23,
+        0
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "FIELD"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        30,
+        -7
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        30,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        0
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        23,
+        0
+      ],
+      "text": "FIELD"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

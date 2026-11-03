@@ -133,6 +133,7 @@ const LESSONS: &[Lesson] = &[
     parts::THERMISTOR_BASICS,
     parts::PHOTOTRANSISTOR_BASICS,
     parts::PHOTOCOUPLER_BASICS,
+    parts::HALL_BASICS,
     parts::REGULATOR_BASICS,
     parts::TRANSFORMER_BASICS,
     parts::FUSE_BASICS,

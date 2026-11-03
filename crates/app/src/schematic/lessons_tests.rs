@@ -2409,3 +2409,31 @@ fn the_varistor_basics_lesson_ticks_and_its_numbers_hold() {
     let m = e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("M").unwrap();
     assert!(((20.0 - m) / 10.0 - 3.3e-4).abs() < 1e-4, "leakage at 20 V: {}", (20.0 - m) / 10.0);
 }
+
+#[test]
+fn the_hall_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "hall_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "OUT") - 3.2).abs() < 0.01, "2.5 V + 500 G x 1.4 mV/G");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    {
+        let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
+        let o = &r.signal("V(OUT)").unwrap().values;
+        let at = |x: f64| o[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
+        assert!((at(-10.0) - 1.1).abs() < 0.01 && (at(0.0) - 2.5).abs() < 0.01 && (at(10.0) - 3.9).abs() < 0.01, "linear around Vs/2");
+    }
+    set_value(&mut e, "V1", "3.3");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!((v(&e, "OUT") - 2.112).abs() < 0.01 && (v(&e, "OUT") / 3.3 - 0.64).abs() < 0.005, "ratiometric");
+}

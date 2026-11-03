@@ -1141,6 +1141,35 @@ fn write_varistor_basics_example() {
     std::fs::write(root.join("varistor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/hall_basics.schjson for the Hall sensor lesson: V1 (5 V) powers an SS49E linear Hall sensor (U1); V2 gives
+/// the magnetic field to its B pin (1 V = 100 G, 5 V at first = a magnet at 500 G); R1 = 100 kohm is the load (the ADC input):
+/// `cargo test -p app write_hall_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_hall_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "SS49E").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "5".into();
+    label(&mut s, v2, "+", "FIELD");
+    label(&mut s, v2, "-", "GND");
+    let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 0), 0);
+    label(&mut s, u, "1", "VCC");
+    label(&mut s, u, "2", "GND");
+    label(&mut s, u, "3", "OUT");
+    label(&mut s, u, "B", "FIELD");
+    let r = s.add(Kind::Resistor, (50, 0), 1);
+    s.components[r].value = "100k".into();
+    label(&mut s, r, "1", "OUT");
+    label(&mut s, r, "2", "GND");
+    std::fs::write(root.join("hall_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
