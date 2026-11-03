@@ -322,6 +322,8 @@ pub struct BoardEditor {
     pub currents_request: Option<CurrentSource>,
     /// "入れ替えを回路図に反映" was pressed: `main.rs` applies the pin trades to the schematic and hands the answer to `trades_applied`.
     pub to_schematic_request: bool,
+    /// A word of the lesson window that was clicked: the app opens the glossary on it.
+    pub glossary_request: Option<&'static str>,
     /// The reason typed for "承知する" (accept a finding of the requirements check).
     pub waive_reason: String,
     /// A waiver added (true) or taken back (false) in the list of the check: `main.rs` writes it into the schematic's table too.
@@ -512,6 +514,7 @@ impl Default for BoardEditor {
             post_layout_request: None,
             currents_request: None,
             to_schematic_request: false,
+            glossary_request: None,
             waive_reason: String::new(),
             waiver_request: None,
             open_sch_requirements: false,

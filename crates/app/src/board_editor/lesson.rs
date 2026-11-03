@@ -703,6 +703,7 @@ impl BoardEditor {
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
+        let mut word: Option<&'static str> = None;
         egui::Window::new(format!("レッスン: {}", title_of(which))).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
             ui.label(goal_of(which));
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
@@ -729,6 +730,21 @@ impl BoardEditor {
                 self.repair_ui(ui);
             }
             ui.separator();
+            // the words of the lesson: a click opens the glossary on that word
+            egui::CollapsingHeader::new("このレッスンの用語 (押すと用語集が開きます)").id_salt(("board_words", which)).default_open(false).show(ui, |ui| {
+                let text = lesson_texts().into_iter().find(|(w, _, _)| *w == which).map(|(_, _, t)| t).unwrap_or_default();
+                let words = crate::glossary::terms_in(&text);
+                if words.is_empty() {
+                    ui.small("このレッスンには、用語集の言葉は出てきません");
+                }
+                ui.horizontal_wrapped(|ui| {
+                    for term in words {
+                        if ui.small_button(term.name).on_hover_text(term.short).clicked() {
+                            word = Some(term.name);
+                        }
+                    }
+                });
+            });
             if !copper && !fix && !arduino && !usb && !mega && !pairs && !repair {
             egui::CollapsingHeader::new("できること・できないこと (ツールの限界)")
                 .id_salt(("board_limits", cur.is_none()))
@@ -781,6 +797,9 @@ impl BoardEditor {
                 close = true;
             }
         });
+        if word.is_some() {
+            self.glossary_request = word;
+        }
         if close {
             self.lesson = None;
         }

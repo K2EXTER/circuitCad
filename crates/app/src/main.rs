@@ -198,7 +198,7 @@ impl eframe::App for App {
             self.progress.mark(&key);
         }
         let mut action = self.learn.show(ui.ctx(), &mut self.progress);
-        if let Some(word) = self.sch.glossary_request.take() {
+        if let Some(word) = self.sch.glossary_request.take().or_else(|| self.board_ed.glossary_request.take()) {
             self.glossary.open_at(word);
         }
         match self.glossary.show(ui.ctx()) {
