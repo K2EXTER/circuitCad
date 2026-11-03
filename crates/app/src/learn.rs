@@ -697,6 +697,14 @@ pub enum Welcome {
     Close,
 }
 
+/// The path a new learner starts on: the parts path, whose first lessons explain voltage, current and how to read a drawn circuit.
+pub const FIRST_PATH_ID: &str = "parts";
+
+/// The path of `FIRST_PATH_ID` (the first of `PATHS` if it were renamed).
+pub fn first_path() -> &'static LearningPath {
+    PATHS.iter().find(|p| p.id == FIRST_PATH_ID).unwrap_or(&PATHS[0])
+}
+
 /// The card shown over an empty sheet on the very first launch: where to begin, in three buttons.
 pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome> {
     let mut choice = None;
@@ -705,13 +713,13 @@ pub fn welcome_card(ctx: &egui::Context, progress: &Progress) -> Option<Welcome>
         ui.label(spaced("回路図を描き、動かして確かめ、基板にして、発注用のデータまで作れるソフトです。電子工作が初めてでも、レッスンを順にたどれば進められます。"));
         ui.label(spaced("最初のレッスンは、描いてある回路を動かして見るところから。自分で部品を置いて描くのは、そのあとのレッスンからです。").color(NOTE));
         ui.add_space(6.0);
-        if let Some((next, action)) = next_item(&PATHS[0], progress).and_then(|i| item_action(i).map(|a| (i, a))) {
+        if let Some((next, action)) = next_item(first_path(), progress).and_then(|i| item_action(i).map(|a| (i, a))) {
             let button = egui::Button::new(egui::RichText::new(format!("▶ 最初のレッスンを始める: {}", next.title)).strong());
             if ui.add(button).on_hover_text("画面の案内にそって、描いてある回路を解析して、電圧を測ります (部品を置いて配線するのは、このあとのレッスンから)").clicked() {
                 choice = Some(Welcome::Start(action));
             }
         }
-        if ui.button("学習パス全体を見る").on_hover_text("電圧を分ける回路から、安定化電源・基板づくりまでの道すじを開きます (「学ぶ」メニューからいつでも開けます)").clicked() {
+        if ui.button("学習パス全体を見る").on_hover_text("電圧と電流の基本から、部品を 1 つずつ知る道すじを開きます。安定化電源・マイコンの基板・基板づくりの道も、上のタブから選べます (「学ぶ」メニューからいつでも開けます)").clicked() {
             choice = Some(Welcome::Path);
         }
         if ui.button("操作ガイドを開く (F1)").on_hover_text("部品の置き方・配線・シミュレーションのやり方を説明します").clicked() {
@@ -1153,6 +1161,20 @@ mod tests {
         // every item is written now (a planned one would hold nothing back and is never recommended)
         assert!(items(mega).all(|i| i.kind != Kind::Planned));
         assert!(requirements(mega, find_item("ch340g").unwrap()).iter().any(|i| i.id == "serial"));
+    }
+
+    #[test]
+    fn a_new_learner_starts_on_the_first_lesson_about_voltage_and_current() {
+        let progress = Progress::default();
+        let first = next_item(first_path(), &progress).unwrap();
+        assert_eq!(first.id, "intro_ohm");
+        assert!(item_action(first).is_some(), "the welcome card can start it");
+        // once it is done the next one is the second introduction, and only then the resistor
+        let mut progress = Progress::default();
+        progress.mark("intro_ohm");
+        assert_eq!(next_item(first_path(), &progress).unwrap().id, "intro_read");
+        progress.mark("intro_read");
+        assert!(recommended(first_path(), &progress).iter().any(|i| i.id == "resistor"));
     }
 
     #[test]

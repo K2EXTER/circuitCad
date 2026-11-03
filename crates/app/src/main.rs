@@ -202,7 +202,10 @@ impl eframe::App for App {
             self.progress.mark_welcomed();
             match choice {
                 learn::Welcome::Start(a) => action = Some(a),
-                learn::Welcome::Path => self.learn.open = true,
+                learn::Welcome::Path => {
+                    self.learn.select(learn::FIRST_PATH_ID);
+                    self.learn.open = true;
+                }
                 learn::Welcome::Guide => self.help.show(help::HelpTab::Schematic),
                 learn::Welcome::Close => {}
             }
@@ -306,7 +309,7 @@ impl eframe::App for App {
                     }
                 });
                 ui.menu_button("学ぶ", |ui| {
-                    if ui.button("学習パス (地図) を開く…").on_hover_text("学習パスの窓を開きます。3 つのパス (安定化電源・Arduino 互換ボード・Mega 互換ボード) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります").clicked() {
+                    if ui.button("学習パス (地図) を開く…").on_hover_text("学習パスの窓を開きます。パス (部品の素顔・安定化電源・Arduino 互換ボードなど) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります").clicked() {
                         self.learn.open = true;
                         ui.close();
                     }
