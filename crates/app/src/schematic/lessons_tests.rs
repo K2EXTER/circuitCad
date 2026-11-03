@@ -2540,3 +2540,35 @@ fn the_analog_switch_basics_lesson_ticks_and_its_numbers_hold() {
         assert!(at(5e-6) < 0.01 && (at(30e-6) - 3.0 * (1.0 - (-2.0f64).exp())).abs() < 0.05 && at(110e-6) > 2.995 && at(390e-6) > 2.99, "sample and hold");
     }
 }
+
+#[test]
+fn the_bridge_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "bridge_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (maximum, minimum) of a signal over the last two cycles
+    let band = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &r.signal(n).unwrap().values;
+        let t1 = *r.time.last().unwrap();
+        let w: Vec<f64> = r.time.iter().zip(v).filter(|(t, _)| **t >= t1 - 0.04).map(|(_, x)| *x).collect();
+        (w.iter().cloned().fold(f64::MIN, f64::max), w.iter().cloned().fold(f64::MAX, f64::min))
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (a, b) = (band(&e, "V(OUTA)"), band(&e, "V(OUTB)"));
+    assert!((a.0 - 15.35).abs() < 0.2 && (b.0 - 16.18).abs() < 0.2 && b.0 > a.0, "the bridge peak is lower by one diode drop: {a:?} {b:?}");
+    assert!((b.0 - b.1) / (a.0 - a.1) > 1.8 && (b.0 - b.1) / (a.0 - a.1) < 2.4, "half wave has twice the ripple: {a:?} {b:?}");
+    e.tran.as_mut().unwrap().selected.insert("I(D1)".into());
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((band(&e, "I(D1)").0 - 1.23).abs() < 0.15, "the peak current of a bridge diode");
+    set_value(&mut e, "R1", "33");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!((band(&e, "V(OUTA)").1 - 9.8).abs() < 0.4 && (band(&e, "I(D1)").0 - 2.0).abs() < 0.2, "a heavier load");
+}

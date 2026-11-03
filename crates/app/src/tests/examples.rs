@@ -1322,6 +1322,59 @@ fn write_analog_switch_basics_example() {
     std::fs::write(root.join("analog_switch_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/bridge_basics.schjson for the diode bridge lesson: a 12 V rms (17 V peak) 50 Hz source V1 feeds a bridge of four
+/// 1N4007 (D1 - D4: ACP/ACN to OUTA/GND) with R1 = 100 ohm and C1 = 470 uF; a second source V2 feeds a single 1N4007 (D5) with R2 = 100 ohm
+/// and C2 = 470 uF (OUTB) for comparison; R3 = 1 Mohm ties the floating source V1 to GND:
+/// `cargo test -p app write_bridge_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_bridge_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "1N4007").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "SIN(0 17 50)".into();
+    label(&mut s, v1, "+", "ACP");
+    label(&mut s, v1, "-", "ACN");
+    // the four diodes of the bridge: (anode, cathode)
+    for (k, (a, c)) in [("ACP", "OUTA"), ("ACN", "OUTA"), ("GND", "ACP"), ("GND", "ACN")].into_iter().enumerate() {
+        let d = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (24 + 20 * k as i32, 0), 0);
+        label(&mut s, d, "A", a);
+        label(&mut s, d, "K", c);
+    }
+    let r1 = s.add(Kind::Resistor, (110, 0), 1);
+    s.components[r1].value = "100".into();
+    s.components[r1].footprint = "R_2512".into();
+    label(&mut s, r1, "1", "OUTA");
+    label(&mut s, r1, "2", "GND");
+    let c1 = s.add(Kind::Capacitor, (126, 0), 1);
+    s.components[c1].value = "470u".into();
+    label(&mut s, c1, "1", "OUTA");
+    label(&mut s, c1, "2", "GND");
+    let r3 = s.add(Kind::Resistor, (142, 0), 1);
+    s.components[r3].value = "1Meg".into();
+    label(&mut s, r3, "1", "ACN");
+    label(&mut s, r3, "2", "GND");
+    // the half-wave rectifier
+    let v2 = s.add(Kind::VSource, (0, 40), 0);
+    s.components[v2].value = "SIN(0 17 50)".into();
+    label(&mut s, v2, "+", "HWIN");
+    label(&mut s, v2, "-", "GND");
+    let d5 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (24, 40), 0);
+    label(&mut s, d5, "A", "HWIN");
+    label(&mut s, d5, "K", "OUTB");
+    let r2 = s.add(Kind::Resistor, (110, 40), 1);
+    s.components[r2].value = "100".into();
+    s.components[r2].footprint = "R_2512".into();
+    label(&mut s, r2, "1", "OUTB");
+    label(&mut s, r2, "2", "GND");
+    let c2 = s.add(Kind::Capacitor, (126, 40), 1);
+    s.components[c2].value = "470u".into();
+    label(&mut s, c2, "1", "OUTB");
+    label(&mut s, c2, "2", "GND");
+    std::fs::write(root.join("bridge_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

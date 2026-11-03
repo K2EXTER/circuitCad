@@ -946,3 +946,13 @@ pub(super) fn segment_one_dim(e: &SchEditor) -> bool {
 pub(super) fn analog_switch_low_load(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 150.0) && dc_fresh(e)
 }
+
+/// The diode bridge lesson: the current of the bridge diode D1 is on the graph of the transient run.
+pub(super) fn bridge_diode_current_shown(e: &SchEditor) -> bool {
+    tran_fresh(e) && e.tran.as_ref().is_some_and(|t| t.selected.contains("I(D1)"))
+}
+
+/// The diode bridge lesson: the load R1 is 40 ohm or less (a heavy load) and the transient run is fresh.
+pub(super) fn bridge_heavy_load(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 40.0) && tran_fresh(e)
+}
