@@ -1,0 +1,394 @@
+//! The glossary ("用語集・索引"): what a beginner meets in the lessons, with the reading, a short explanation and the lessons in which the word comes up.
+//! The index is not written by hand: the lessons that use a term are found by looking for its name (or an alias) in the texts of the lessons.
+
+use eframe::egui;
+use std::sync::OnceLock;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kind {
+    /// A word of electronics.
+    Circuit,
+    /// A word of this program.
+    Operation,
+}
+
+pub struct Term {
+    /// The word as the lessons write it (also the heading in the list).
+    pub name: &'static str,
+    /// In hiragana: the sort order of the index and a way to search.
+    pub reading: &'static str,
+    /// Other ways to write it (symbols, English, abbreviations). One-letter ones are not looked for in the lessons.
+    pub aliases: &'static [&'static str],
+    pub kind: Kind,
+    pub short: &'static str,
+}
+
+const fn t(name: &'static str, reading: &'static str, aliases: &'static [&'static str], kind: Kind, short: &'static str) -> Term {
+    Term { name, reading, aliases, kind, short }
+}
+
+use Kind::{Circuit as C, Operation as O};
+
+pub const TERMS: &[Term] = &[
+    // ---- the basics of a circuit
+    t("電圧", "でんあつ", &["ボルト"], C, "電気を押し出す力。回路の 2 点の間の「高さの差」で、単位はボルト (V)。"),
+    t("電流", "でんりゅう", &["アンペア"], C, "流れる電気の量。単位はアンペア (A)。1A = 1000mA。"),
+    t("抵抗", "ていこう", &["オーム"], C, "電流の流れにくさ。この働きをもつ部品の名前でもあります。単位はオーム (Ω)。"),
+    t("オームの法則", "おーむのほうそく", &["V = I × R", "I = V ÷ R"], C, "電圧・電流・抵抗の関係。V = I × R (電圧 = 電流 × 抵抗)。どれか 2 つが分かれば、残りが決まります。"),
+    t("電力", "でんりょく", &["ワット"], C, "電気が 1 秒あたりにする仕事 (熱や光になる量)。P = V × I。単位はワット (W)。"),
+    t("直列", "ちょくれつ", &[], C, "部品を 1 本の道に順に並べること。同じ電流が流れ、抵抗は足し算になります。"),
+    t("並列", "へいれつ", &[], C, "部品の道を分けて並べること。同じ電圧がかかり、電流は足し算になります。"),
+    t("分圧", "ぶんあつ", &[], C, "直列の抵抗で電圧を分けること。中点の電圧 = 入力 × R2 ÷ (R1 + R2)。"),
+    t("合成の抵抗", "ごうせいのていこう", &["合成抵抗"], C, "2 本以上の抵抗を、1 本とみなしたときの抵抗値。直列は足し算、並列は (R1 × R2) ÷ (R1 + R2)。"),
+    t("GND", "ぐらうんど", &["グラウンド", "基準"], C, "電圧を測る基準の点 (0V)。回路図では、GND の記号やラベルで表します。電圧は「GND からいくつ高いか」で言います。"),
+    t("直流", "ちょくりゅう", &["DC"], C, "向きも大きさも変わらない電気。電池などです。"),
+    t("交流", "こうりゅう", &["AC"], C, "向きと大きさが、周期的に入れ替わる電気。家庭のコンセントなど。"),
+    t("周波数", "しゅうはすう", &["ヘルツ"], C, "交流が 1 秒間に繰り返す回数。単位はヘルツ (Hz)。50Hz は 1 秒に 50 回。"),
+    t("実効値", "じっこうち", &["RMS"], C, "交流の大きさを、同じ熱を出す直流の電圧で表した値。家庭の 100V は実効値で、ピークは約 141V。"),
+    t("定格", "ていかく", &[], C, "部品が安全に使える電圧・電流・電力などの上限の目安。データシートに書かれています。"),
+    t("許容差", "きょようさ", &["誤差"], C, "表示の値と、実際の値とのずれが許される範囲。±5% など。"),
+    t("Meg", "めが", &["単位の接頭語"], C, "値の大きさの印。k = 1000 倍、Meg = 100 万倍、m = 1/1000、u (µ) = 100 万分の 1、n = 10 億分の 1、p = 1 兆分の 1。シミュレーションでは M と m を区別せず、どちらも 1/1000 なので、メガは Meg と書きます。"),
+    // ---- passive parts
+    t("コンデンサ", "こんでんさ", &[], C, "電気をためる部品。直流は通さず、電圧が変わるあいだだけ電流が流れます。"),
+    t("容量", "ようりょう", &["ファラド", "静電容量"], C, "コンデンサがためられる電気の量を表す値。単位はファラド (F)。µF (マイクロ)、nF (ナノ)、pF (ピコ) がよく使われます。"),
+    t("コイル", "こいる", &["インダクタ"], C, "電流が流れると、磁界にエネルギーをためる部品。電流が急に変わるのをいやがります。"),
+    t("インダクタンス", "いんだくたんす", &["ヘンリー"], C, "コイルの、電流の変わりにくさを表す値。単位はヘンリー (H)。mH (ミリ) や µH がよく使われます。"),
+    t("時定数", "じていすう", &["τ"], C, "充電や、電流の増え方の速さを表す時間。抵抗とコンデンサで τ = R × C、抵抗とコイルで τ = L ÷ R。τ の時間で、最終値の約 63% に達します。"),
+    t("トランス", "とらんす", &["変圧器"], C, "2 つのコイルで、交流の電圧を巻数の比で変える部品。一次側と二次側は電気的につながっていません。"),
+    t("ESR", "いーえすあーる", &["等価直列抵抗"], C, "コンデンサの中にある抵抗。リップル電流が流れると、ここで熱が出ます。"),
+    t("インピーダンス", "いんぴーだんす", &[], C, "交流に対する抵抗のようなもの。周波数で変わります。単位はΩ。"),
+    // ---- diodes
+    t("ダイオード", "だいおーど", &[], C, "電流を一方向 (アノードからカソード) にだけ流す部品。"),
+    t("順方向電圧", "じゅんほうこうでんあつ", &["Vf"], C, "ダイオードや LED に、電流を流しているときの、両端の電圧。シリコンのダイオードで約 0.7V、LED で約 2V。"),
+    t("LED", "えるいーでぃー", &["発光ダイオード"], C, "電流を流すと光るダイオード。明るさは、電圧ではなく電流で決まります。"),
+    t("ツェナーダイオード", "つぇなーだいおーど", &["ツェナー"], C, "逆向きの降伏を使って、電圧を一定に保つダイオード。"),
+    t("降伏", "こうふく", &[], C, "逆向きの電圧が、ある値を超えたとき、急に逆向きに電流が流れ出す現象。"),
+    t("ショットキーダイオード", "しょっときーだいおーど", &["ショットキー"], C, "順方向電圧が低く、逆回復がほとんどないダイオード。"),
+    t("逆回復", "ぎゃくかいふく", &["trr"], C, "ダイオードに、急に逆電圧をかけたとき、蓄えられた電荷が抜けるまで、短い間、逆向きに電流が流れる現象。"),
+    // ---- transistors and amplifiers
+    t("トランジスタ", "とらんじすた", &[], C, "小さな信号で、大きな電流を制御する部品。増幅やスイッチに使います。"),
+    t("hFE", "えいちえふいー", &["電流増幅率"], C, "トランジスタの、ベースに流す電流に対する、コレクタに流れる電流の倍率。"),
+    t("飽和", "ほうわ", &[], C, "それ以上は増えなくなる状態。トランジスタが完全に ON になり、負荷が電流の上限を決める状態など。"),
+    t("MOSFET", "もすふぇっと", &[], C, "ゲートの電圧で電流を制御するトランジスタ。ゲートには、直流では電流が流れません。"),
+    t("しきい値", "しきいち", &["Vth"], C, "切り替わる境目の電圧。MOSFET では、電流が流れ始めるゲートの電圧。ロジック IC では、High と Low を分ける電圧。"),
+    t("オン抵抗", "おんていこう", &["Rds(on)"], C, "MOSFET やスイッチが ON のときの、内部の抵抗。小さいほど、損失が少なくなります。"),
+    t("オペアンプ", "おぺあんぷ", &[], C, "2 つの入力の電圧の差を、とても大きな倍率で増やす部品。"),
+    t("負帰還", "ふきかん", &["帰還"], C, "出力の一部を入力に戻すこと。倍率が、抵抗の比で決まる、安定した回路になります。"),
+    t("仮想短絡", "かそうたんらく", &[], C, "負帰還がかかったオペアンプで、+ と − の入力の電圧が、ほぼ等しくなること。"),
+    t("ゲイン", "げいん", &["倍率"], C, "出力が、入力の何倍かを表す値。"),
+    t("帯域", "たいいき", &["帯域幅"], C, "信号を正しく扱える、周波数の範囲。"),
+    t("GBW", "じーびーだぶりゅー", &["ゲイン帯域幅積"], C, "オペアンプで、倍率 × 帯域が、ほぼ一定になる値。LM358 は約 1MHz。"),
+    t("スルーレート", "するーれーと", &[], C, "出力の電圧が、変われる速さの上限 (V/µs)。大きく速い信号は、これを超えるとゆがみます。"),
+    t("ボルテージフォロワ", "ぼるてーじふぉろわ", &[], C, "出力を − 入力につないで、入力と同じ電圧を出す、倍率 1 倍の回路。"),
+    t("dB", "でしべる", &["デシベル"], C, "大きさの比を表す単位。0dB = 1 倍、6dB ≒ 2 倍、20dB = 10 倍、40dB = 100 倍、−20dB = 1/10。"),
+    t("クリップ", "くりっぷ", &[], C, "出力が、電源の電圧に届いて、波形の上や下が平らに切れること。"),
+    // ---- power
+    t("整流", "せいりゅう", &[], C, "交流を、一方向の電流 (直流) に直すこと。"),
+    t("全波整流", "ぜんぱせいりゅう", &["半波整流"], C, "交流の両方の半周期を使う整流 (ブリッジ)。ダイオード 1 本で半周期だけ使うのは、半波整流。"),
+    t("平滑コンデンサ", "へいかつこんでんさ", &["平滑"], C, "整流した電圧のゆれを、ならすコンデンサ。"),
+    t("リップル", "りっぷる", &[], C, "電源の電圧に残る、小さな周期的なゆれ。"),
+    t("ドロップアウト", "どろっぷあうと", &[], C, "レギュレータが、出力を保つのに必要な、入力と出力の最低の差。入力がそれを下回ると、出力が下がります。"),
+    t("リニアレギュレータ", "りにあれぎゅれーた", &["LDO", "三端子レギュレータ"], C, "入力と出力の差を熱にして、出力を一定に保つ電源 IC。部品が少なく、ノイズが小さい。"),
+    t("スイッチングレギュレータ", "すいっちんぐれぎゅれーた", &["降圧コンバータ"], C, "トランジスタを高速に入り切りして、熱にせずに電圧を変える電源。効率が高い。"),
+    t("PSRR", "ぴーえすあーるあーる", &["リップル除去比"], C, "入力のゆれが、出力にどれだけ伝わるかの比 (dB)。大きいほど、ゆれを消せます。"),
+    t("効率", "こうりつ", &[], C, "入力の電力のうち、出力に使えた割合。"),
+    t("ヒューズ", "ひゅーず", &[], C, "決まった電流を超えると、溶けて切れ、回路を守る部品。一度切れたら、元に戻りません。"),
+    t("突入電流", "とつにゅうでんりゅう", &[], C, "電源を入れた瞬間に、一時的に流れる大きな電流。空のコンデンサを充電するときなど。"),
+    t("サージ", "さーじ", &[], C, "雷などで、一瞬だけ加わる、とても高い電圧や大きな電流。"),
+    t("バリスタ", "ばりすた", &[], C, "電圧が高くなると、急に電流を流して、電圧の上昇を止める部品。サージから回路を守ります。"),
+    t("バイパスコンデンサ", "ばいぱすこんでんさ", &["デカップリング"], C, "ICの電源ピンのそばに置いて、電源の細かいゆれを吸収するコンデンサ。"),
+    // ---- switches, relays and logic
+    t("リレー", "りれー", &[], C, "コイルに電流を流して、接点を動かす部品。コイルと接点は、電気的に離れています。"),
+    t("接点抵抗", "せってんていこう", &[], C, "スイッチやリレーの接点が閉じているときに残る、小さな抵抗。"),
+    t("バウンス", "ばうんす", &["チャタリング"], C, "スイッチを押した瞬間に、接点が細かく入り切りを繰り返すこと。"),
+    t("アーク", "あーく", &[], C, "スイッチを切るときに、接点の間に出る火花。"),
+    t("プルアップ", "ぷるあっぷ", &[], C, "信号の線を、抵抗で電源に引き上げておくこと。何もつながっていない入力を、High に決めます。"),
+    t("オープンドレイン", "おーぷんどれいん", &["オープンコレクタ"], C, "足を GND に引き下げる働きだけを持つ出力。High は、外につけたプルアップ抵抗が作ります。"),
+    t("ロジック IC", "ろじっくあいしー", &["ロジックIC"], C, "High と Low の 2 つの値で、論理を扱う IC。"),
+    t("High", "はい", &["Low", "ハイ", "ロー"], C, "ロジックの 2 つの値。High は電源に近い電圧 (「1」)、Low は 0V に近い電圧 (「0」)。"),
+    t("ヒステリシス", "ひすてりしす", &[], C, "上がるときと、下がるときで、切り替わる境目を変えること。ノイズで出力が揺れるのを防ぎます。"),
+    t("シュミットトリガ", "しゅみっととりが", &[], C, "入力のしきい値に、ヒステリシスを持たせた回路。"),
+    // ---- resonance and sensors
+    t("共振", "きょうしん", &[], C, "特定の周波数で、よく振動したり、電気をよく通したりすること。"),
+    t("Q 値", "きゅーち", &["共振の鋭さ", "Q (共振"], C, "共振の鋭さを表す値。大きいほど、共振の山が細くなります。"),
+    t("水晶振動子", "すいしょうしんどうし", &["水晶"], C, "正確な周波数で共振する部品。マイコンのクロック (時計) の元になります。"),
+    t("等価回路", "とうかかいろ", &[], C, "同じ働きをする、部品の組み合わせで表した回路。"),
+    t("サンプルホールド", "さんぷるほーるど", &[], C, "信号の電圧を、コンデンサにためて、その値を保つ回路。"),
+    t("A/D コンバータ", "えーでぃーこんばーた", &["ADC", "A/Dコンバータ"], C, "電圧を、数字に変える回路。"),
+    t("絶縁", "ぜつえん", &[], C, "電気的に切り離すこと。つながっていないので、グラウンドも別にできます。"),
+    t("フォトカプラ", "ふぉとかぷら", &[], C, "LED と光センサを 1 つにして、光で信号を伝える部品。入力と出力が絶縁されます。"),
+    t("CTR", "しーてぃーあーる", &["電流伝達率"], C, "フォトカプラの、出力の電流 ÷ 入力の電流。"),
+    t("レシオメトリック", "れしおめとりっく", &[], C, "出力が、電源電圧に比例すること。A/D コンバータの基準が同じ電源なら、電源が変わっても読みは変わりません。"),
+    t("磁束密度", "じそくみつど", &["ガウス", "テスラ"], C, "磁界の強さ。単位はガウス (G) やテスラ (T)。1G = 0.1mT。"),
+    t("ホールセンサ", "ほーるせんさ", &[], C, "磁界の強さを、電圧で出すセンサ。"),
+    t("サーミスタ", "さーみすた", &["NTC"], C, "温度で抵抗が変わる部品。NTC は、温度が上がると抵抗が下がるタイプ。"),
+    t("B 定数", "びーていすう", &["B定数"], C, "サーミスタの、温度による抵抗の変わり方を表す定数。"),
+    t("感度", "かんど", &[], C, "入力の変化に対する、出力の変化の大きさ。"),
+    t("ミラー期間", "みらーきかん", &["プラトー"], C, "MOSFET を切り替えるとき、ゲートの電圧が一定に止まる期間。この間にドレインの電圧が下がります。"),
+    t("スイッチング損失", "すいっちんぐそんしつ", &[], C, "切り替えの最中に、電圧と電流が同時に大きいために出る熱。"),
+    // ---- this program
+    t("DC動作点", "でぃーしーどうさてん", &[], O, "回路が落ち着いた状態の、各点の電圧と各部品の電流を計算する解析。「解析」タブの「DC動作点を解析」ボタン。"),
+    t("過渡解析", "かとかいせき", &["トランジェント"], O, "時間が進むにつれて、電圧や電流がどう変わるかを計算する解析。波形がグラフに出ます。"),
+    t("AC解析", "えーしーかいせき", &["周波数特性", "ボード線図"], O, "周波数を変えながら、小さな交流が、各点にどれだけ出てくるかを調べる解析。グラフは大きさ (dB) と位相。"),
+    t("DCスイープ", "でぃーしーすいーぷ", &["DC スイープ"], O, "電源の電圧を、少しずつ変えながら、出力を調べる解析。"),
+    t("温度スイープ", "おんどすいーぷ", &[], O, "回路の温度を、少しずつ変えながら、電圧がどう変わるかを調べる解析。"),
+    t("ばらつき解析", "ばらつきかいせき", &["モンテカルロ"], O, "部品の誤差 (許容差) で、結果がどれだけ動くかを、たくさんの組み合わせで調べる解析。"),
+    t("ERC", "いーあーるしー", &["電気ルールチェック"], O, "回路図の配線ミス (つながっていない、ショートなど) を点検する機能。"),
+    t("ラベル", "らべる", &["ネットラベル"], O, "同じ名前の点を、線を引かずにつなぐ札。ラベルがついた点は、同じ名前のラベルとつながっています。"),
+    t("モデル", "もでる", &["SPICEモデル"], O, "部品の働きを、式や簡単な回路で表したもの。シミュレーションは、これで計算するので、実物と細かく違う所があります。"),
+    t("SPICE", "すぱいす", &[], O, "回路シミュレーションの、世界共通の書き方と計算の方法。値の書き方 (4.7k、100n) も、これに従います。"),
+    t("ライブラリ", "らいぶらり", &["部品ライブラリ"], O, "あらかじめ用意された、部品の一覧。左の部品の欄から、置けます。"),
+];
+
+/// Katakana to hiragana and lower case: how a word is compared in a search.
+fn norm(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            'ァ'..='ン' => char::from_u32(c as u32 - 0x60).unwrap_or(c),
+            _ => c.to_ascii_lowercase(),
+        })
+        .collect()
+}
+
+/// The row of the 五十音 table of a reading (か for が, は for ぱ ...), or "英数" when it does not start with a kana.
+pub fn row_of(reading: &str) -> &'static str {
+    const ROWS: &[(&str, &str)] = &[
+        ("あ", "ぁあぃいぅうぇえぉお"),
+        ("か", "かがきぎくぐけげこご"),
+        ("さ", "さざしじすずせぜそぞ"),
+        ("た", "ただちぢっつづてでとど"),
+        ("な", "なにぬねの"),
+        ("は", "はばぱひびぴふぶぷへべぺほぼぽ"),
+        ("ま", "まみむめも"),
+        ("や", "ゃやゅゆょよ"),
+        ("ら", "らりるれろ"),
+        ("わ", "わをん"),
+    ];
+    let first = reading.chars().next().unwrap_or(' ');
+    ROWS.iter().find(|(_, set)| set.contains(first)).map_or("英数", |(row, _)| row)
+}
+
+/// The terms that match a search text (name, reading, an alias), in the order of the table; all of them for an empty text.
+pub fn search(query: &str) -> Vec<&'static Term> {
+    let q = norm(query.trim());
+    TERMS.iter().filter(|t| q.is_empty() || norm(t.name).contains(&q) || t.reading.contains(&q) || t.aliases.iter().any(|a| norm(a).contains(&q))).collect()
+}
+
+/// The vowel of a kana, for "ー" (the long vowel mark goes with the vowel before it in the order of the index).
+fn vowel(c: char) -> char {
+    const COLUMNS: [(char, &str); 5] = [
+        ('あ', "あぁかがさざただなはばぱまやゃらわ"),
+        ('い', "いぃきぎしじちぢにひびぴみり"),
+        ('う', "うぅくぐすずつづっぬふぶぷむゆゅる"),
+        ('え', "えぇけげせぜてでねへべぺめれ"),
+        ('お', "おぉこごそぞとどのほぼぽもよょろを"),
+    ];
+    COLUMNS.iter().find(|(_, set)| set.contains(c)).map_or(c, |(v, _)| *v)
+}
+
+/// The key of the index order: the reading, with "ー" read as the vowel before it.
+fn sort_key(reading: &str) -> String {
+    let mut last = 'あ';
+    reading
+        .chars()
+        .map(|c| {
+            if c == 'ー' {
+                last
+            } else {
+                last = vowel(c);
+                c
+            }
+        })
+        .collect()
+}
+
+/// The terms in the order of the index (by reading).
+pub fn sorted(mut v: Vec<&'static Term>) -> Vec<&'static Term> {
+    v.sort_by_key(|t| sort_key(t.reading));
+    v
+}
+
+/// Whether `text` uses the term: its name or an alias of two characters or more is in it.
+pub fn occurs_in(term: &Term, text: &str) -> bool {
+    std::iter::once(term.name).chain(term.aliases.iter().copied()).any(|w| w.chars().count() >= 2 && text.contains(w))
+}
+
+/// The terms a text uses (for the lesson window).
+pub fn terms_in(text: &str) -> Vec<&'static Term> {
+    sorted(TERMS.iter().filter(|t| occurs_in(t, text)).collect())
+}
+
+/// The texts of all lessons, in the order of the lessons.
+fn lesson_texts() -> &'static Vec<String> {
+    static TEXTS: OnceLock<Vec<String>> = OnceLock::new();
+    TEXTS.get_or_init(crate::schematic::lesson_texts)
+}
+
+/// The lessons (indices, see `schematic::lesson_ids`) that use the term.
+pub fn lessons_of(term: &Term) -> Vec<usize> {
+    lesson_texts().iter().enumerate().filter(|(_, text)| occurs_in(term, text)).map(|(i, _)| i).collect()
+}
+
+#[derive(Default)]
+pub struct GlossaryWindow {
+    pub open: bool,
+    query: String,
+    selected: Option<&'static str>,
+}
+
+impl GlossaryWindow {
+    /// Open the window on a term (an empty or unknown name only opens it).
+    pub fn open_at(&mut self, name: &str) {
+        self.open = true;
+        self.query.clear();
+        self.selected = TERMS.iter().find(|t| t.name == name).map(|t| t.name);
+    }
+
+    /// Draw the window; the answer is the lesson the learner chose to start.
+    pub fn show(&mut self, ctx: &egui::Context) -> Option<usize> {
+        if !self.open {
+            return None;
+        }
+        let mut open = true;
+        let mut start = None;
+        egui::Window::new("用語集・索引").open(&mut open).default_size([760.0, 520.0]).show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("さがす:");
+                ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("名前・読み・別名 (例: ぶんあつ、dB、ADC)").desired_width(300.0))
+                    .on_hover_text("ひらがな・カタカナ・英字のどれでも探せます");
+                if ui.small_button("消す").clicked() {
+                    self.query.clear();
+                }
+            });
+            let found = sorted(search(&self.query));
+            ui.small(format!("{} 件 (全 {} 語)。語を押すと、説明と、その語が出てくるレッスンが右に出ます", found.len(), TERMS.len()));
+            ui.separator();
+            ui.columns(2, |cols| {
+                egui::ScrollArea::vertical().id_salt("glossary_list").show(&mut cols[0], |ui| {
+                    let mut row = "";
+                    for term in &found {
+                        let r = row_of(term.reading);
+                        if r != row {
+                            row = r;
+                            ui.add_space(4.0);
+                            ui.label(egui::RichText::new(format!("【{row}】")).strong().color(crate::theme::WARN));
+                        }
+                        let mark = if term.kind == Kind::Operation { "  (操作)" } else { "" };
+                        if ui.selectable_label(self.selected == Some(term.name), format!("{} ({}){mark}", term.name, term.reading)).clicked() {
+                            self.selected = Some(term.name);
+                        }
+                    }
+                    if found.is_empty() {
+                        ui.label("見つかりませんでした。別の書き方 (ひらがな・英字) でも試してください");
+                    }
+                });
+                egui::ScrollArea::vertical().id_salt("glossary_detail").show(&mut cols[1], |ui| {
+                    let Some(term) = self.selected.and_then(|n| TERMS.iter().find(|t| t.name == n)) else {
+                        ui.label("左の一覧から、語を選んでください。");
+                        return;
+                    };
+                    ui.heading(term.name);
+                    ui.small(format!("読み: {}　{}", term.reading, if term.kind == Kind::Operation { "(このソフトの言葉)" } else { "(回路の言葉)" }));
+                    if !term.aliases.is_empty() {
+                        ui.small(format!("別名: {}", term.aliases.join("、")));
+                    }
+                    ui.add_space(4.0);
+                    ui.label(term.short);
+                    ui.add_space(8.0);
+                    let titles = crate::schematic::lesson_titles();
+                    let lessons = lessons_of(term);
+                    if lessons.is_empty() {
+                        ui.small("この語が出てくるレッスンは、まだありません。");
+                    } else {
+                        ui.label(egui::RichText::new("この語が出てくるレッスン").strong());
+                        for i in lessons {
+                            if ui.button(titles[i]).on_hover_text("このレッスンを始めます").clicked() {
+                                start = Some(i);
+                            }
+                        }
+                    }
+                });
+            });
+        });
+        if !open {
+            self.open = false;
+        }
+        start
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_are_unique_and_the_readings_are_hiragana() {
+        let mut names: Vec<&str> = TERMS.iter().map(|t| t.name).collect();
+        names.sort();
+        let n = names.len();
+        names.dedup();
+        assert_eq!(names.len(), n, "a name is listed twice");
+        for t in TERMS {
+            assert!(!t.reading.is_empty() && t.reading.chars().all(|c| ('ぁ'..='ん').contains(&c) || c == 'ー'), "{}: reading {} is not hiragana", t.name, t.reading);
+            assert!(t.short.chars().count() >= 12, "{}: the explanation is too short", t.name);
+        }
+    }
+
+    #[test]
+    fn every_term_is_used_by_a_lesson() {
+        let missing: Vec<&str> = TERMS.iter().filter(|t| lessons_of(t).is_empty()).map(|t| t.name).collect();
+        assert!(missing.is_empty(), "in no lesson (the index would be empty): {missing:?}");
+    }
+
+    #[test]
+    fn a_search_finds_by_the_reading_the_name_and_the_alias() {
+        let names = |q: &str| search(q).iter().map(|t| t.name).collect::<Vec<_>>();
+        assert!(names("ぶんあつ").contains(&"分圧") && names("ブンアツ").contains(&"分圧"), "hiragana and katakana");
+        assert!(names("db").contains(&"dB") && names("デシベル").contains(&"dB"), "name and alias");
+        assert!(names("adc").contains(&"A/D コンバータ"), "an English alias");
+        assert_eq!(search("").len(), TERMS.len(), "an empty search lists all");
+        assert!(names("ぜんぜんないことば").is_empty());
+    }
+
+    #[test]
+    fn the_index_groups_by_the_row_of_the_reading() {
+        assert_eq!(row_of("ぶんあつ"), "は");
+        assert_eq!(row_of("ぐらうんど"), "か");
+        assert_eq!(row_of("ぴーえすあーるあーる"), "は");
+        assert_eq!(row_of("でしべる"), "た");
+        assert_eq!(row_of("abc"), "英数");
+        let order = ["あ", "か", "さ", "た", "な", "は", "ま", "や", "ら", "わ", "英数"];
+        let rows: Vec<usize> = sorted(search("")).iter().map(|t| order.iter().position(|r| *r == row_of(t.reading)).unwrap()).collect();
+        assert!(rows.windows(2).all(|w| w[0] <= w[1]), "the index is in the order of the rows");
+    }
+
+    #[test]
+    fn a_long_vowel_mark_sorts_with_the_vowel_before_it() {
+        assert_eq!(sort_key("いーえすあーる"), "いいえすあある");
+        let names: Vec<&str> = sorted(search("")).iter().map(|t| t.name).collect();
+        let pos = |n: &str| names.iter().position(|x| *x == n).unwrap();
+        assert!(pos("ERC") < pos("インダクタンス") || pos("インダクタンス") < pos("ERC"), "both are listed");
+        // いーあーるしー (ERC) comes before いんだくたんす: "いいあああるしし" < "いんだくたんす"
+        assert!(pos("ERC") < pos("インダクタンス"));
+    }
+
+    #[test]
+    fn the_lessons_of_a_term_are_found_in_their_texts() {
+        let term = TERMS.iter().find(|t| t.name == "分圧").unwrap();
+        let ids = crate::schematic::lesson_ids();
+        let lessons: Vec<&str> = lessons_of(term).iter().map(|&i| ids[i]).collect();
+        assert!(lessons.contains(&"intro_read"), "{lessons:?}");
+        assert!(terms_in("分圧とリップルの話").iter().any(|t| t.name == "リップル"));
+    }
+
+    #[test]
+    fn the_words_of_a_lesson_are_listed_for_its_window() {
+        let ids = crate::schematic::lesson_ids();
+        let texts = crate::schematic::lesson_texts();
+        let i = ids.iter().position(|l| *l == "intro_read").unwrap();
+        let names: Vec<&str> = terms_in(&texts[i]).iter().map(|t| t.name).collect();
+        for want in ["分圧", "ラベル", "GND", "Meg", "DC動作点"] {
+            assert!(names.contains(&want), "{want} is not among {names:?}");
+        }
+    }
+}

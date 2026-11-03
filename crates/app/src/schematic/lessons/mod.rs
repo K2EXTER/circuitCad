@@ -191,6 +191,22 @@ pub fn lesson_titles() -> Vec<&'static str> {
     LESSONS.iter().map(|l| l.title).collect()
 }
 
+/// Everything a lesson says (title, goal, summary, the steps, the notes): what the glossary looks in for the words of its index.
+fn lesson_text(l: &Lesson) -> String {
+    let mut parts: Vec<&str> = vec![l.title, l.goal, l.summary];
+    for s in l.steps {
+        parts.push(s.title);
+        parts.push(s.detail);
+    }
+    parts.extend(l.limits.iter().chain(l.real).copied());
+    parts.join("\n")
+}
+
+/// The texts of all lessons, in the order of `lesson_ids`.
+pub fn lesson_texts() -> Vec<String> {
+    LESSONS.iter().map(lesson_text).collect()
+}
+
 impl SchEditor {
     /// Replace the sheet by a sample circuit (used by the board lesson). False if it cannot be read.
     pub fn load_sample(&mut self, json: &str) -> bool {
@@ -323,6 +339,7 @@ impl SchEditor {
         let mut next = None;
         let mut build = None;
         let mut pick: Option<(usize, usize)> = None;
+        let mut word: Option<&'static str> = None;
         let hint = self.stuck_hint(ctx, cur);
         // the repair lesson says what was wrong once the learner has mended it
         let cause = self.debug_cause().filter(|_| lesson.id == "debug_circuit" && done.get(1) == Some(&true));
@@ -378,6 +395,20 @@ impl SchEditor {
                     });
                 }
             }
+            // the words of the lesson: a click opens the glossary on that word
+            egui::CollapsingHeader::new("このレッスンの用語 (押すと用語集が開きます)").id_salt(("words", idx)).default_open(false).show(ui, |ui| {
+                let words = crate::glossary::terms_in(&lesson_text(lesson));
+                if words.is_empty() {
+                    ui.small("このレッスンには、用語集の言葉は出てきません");
+                }
+                ui.horizontal_wrapped(|ui| {
+                    for term in words {
+                        if ui.small_button(term.name).on_hover_text(term.short).clicked() {
+                            word = Some(term.name);
+                        }
+                    }
+                });
+            });
             if let Some(text) = hint.as_ref() {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
@@ -447,6 +478,9 @@ impl SchEditor {
             && let Some(a) = self.lesson.as_mut() {
                 a.predicted[k] = Some(o);
             }
+        if word.is_some() {
+            self.glossary_request = word;
+        }
         if let Some(id) = build {
             self.start_challenge(id, 0);
             return;

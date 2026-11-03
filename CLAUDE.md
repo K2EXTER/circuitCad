@@ -81,6 +81,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `tests/` | 統合テスト `flow.rs` と、サンプル回路の生成 `examples.rs` の `write_*` (`--ignored` で実行) |
 | `plot.rs` | 波形描画 (`scale_bar`・`draw_group`・測定カーソル) |
 | `part_form/` | 部品作成フォーム (`parse` 入力→`PartDef` / `kind` 種類 / `tabs` 各タブ / `chip` チップ部品 / `template` 充電IC / `step3d` STEPの3Dの形 / `preview` / `checklist` / `datasheet_view` データシート(PDF)の窓) |
+| `glossary.rs` | 用語集・索引 (「学ぶ」→「用語集・索引…」、`--glossary [語]`)。`TERMS` に語(名前・読み・別名・説明。回路の言葉とソフトの言葉)を足す。どのレッスンに出るかは、レッスンの本文から自動で探す(手で対応表は書かない)。レッスンの窓の「このレッスンの用語」にも使う |
 | `learn.rs` / `measure_guide.rs` / `bench_guide.rs` / `help.rs` / `project.rs` | 学習パス(直線と樹形図。ウェルカムカードも) / 学習パス最後の「組み立てて測る」の窓 / 実機の作業のチェックリスト窓(はんだ付け・ブートローダ。`Kind::Hands`) / 操作ガイド窓 (操作の説明はここに足す) / `.ccproj` |
 | `samples.rs` | 「ファイル → サンプル回路を開く」の一覧 (`docs/examples` を埋め込む) |
 | `source_form.rs` | 電源値フォーム |

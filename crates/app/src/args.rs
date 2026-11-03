@@ -54,6 +54,10 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if args.iter().any(|a| a == "--measure-guide") {
         app.measure.open = true;
     }
+    if let Some(i) = args.iter().position(|a| a == "--glossary") {
+        // --glossary [term]: the glossary window, on a term
+        app.glossary.open_at(args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("", |s| s.as_str()));
+    }
     if args.iter().any(|a| a == "--icons-only") {
         crate::icons::set_icon_only(true);
     }

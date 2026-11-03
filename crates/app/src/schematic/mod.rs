@@ -219,6 +219,8 @@ pub struct SchEditor {
     debug_fault: Option<u64>,
     /// Why the lesson step on hand is not ticked (written by the step's condition each time it is checked).
     lesson_unmet: std::cell::RefCell<Option<lessons::Unmet>>,
+    /// A word of the lesson window that the learner clicked: the glossary opens on it (taken by the app).
+    pub glossary_request: Option<&'static str>,
     /// "値の決め方" window: open flag, which calculator, its input texts.
     wiz_open: bool,
     /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
@@ -561,6 +563,7 @@ impl Default for SchEditor {
             lesson_base: Schematic::default(),
             debug_fault: None,
             lesson_unmet: Default::default(),
+            glossary_request: None,
             wiz_open: false,
             req_open: false,
             req_frames: true,
@@ -667,7 +670,7 @@ mod quick;
 pub use challenge::challenge_exists;
 pub use spec_table::{take_specs, with_specs, SpecItem};
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
-pub use lessons::{lesson_ids, lesson_titles};
+pub use lessons::{lesson_ids, lesson_texts, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
 mod symbols;
 mod glyphs;

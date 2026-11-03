@@ -10,6 +10,7 @@ use schematic::SchEditor;
 mod args;
 mod board_editor;
 mod files;
+mod glossary;
 mod help;
 mod icons;
 mod bench_guide;
@@ -64,6 +65,7 @@ struct App {
     /// Finished lessons (saved in the app data folder) and the learning-path window.
     progress: learn::Progress,
     learn: learn::LearnWindow,
+    glossary: glossary::GlossaryWindow,
     /// The guide window of the bench step ("組み立てて、性能を測る").
     measure: measure_guide::MeasureGuide,
     bench: bench_guide::BenchGuide,
@@ -102,7 +104,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
     }
 }
 
@@ -196,6 +198,13 @@ impl eframe::App for App {
             self.progress.mark(&key);
         }
         let mut action = self.learn.show(ui.ctx(), &mut self.progress);
+        if let Some(word) = self.sch.glossary_request.take() {
+            self.glossary.open_at(word);
+        }
+        if let Some(i) = self.glossary.show(ui.ctx()) {
+            self.mode = Mode::Schematic;
+            self.sch.start_lesson(i);
+        }
         let welcome_choice = if self.welcome { learn::welcome_card(ui.ctx(), &self.progress) } else { None };
         if let Some(choice) = welcome_choice {
             self.welcome = false;
@@ -311,6 +320,10 @@ impl eframe::App for App {
                 ui.menu_button("学ぶ", |ui| {
                     if ui.button("学習パス (地図) を開く…").on_hover_text("学習パスの窓を開きます。パス (部品の素顔・安定化電源・Arduino 互換ボードなど) を切り替えて、レッスンの関係を樹形図の「学習の地図」で見られます。どこまで進んだかも残ります").clicked() {
                         self.learn.open = true;
+                        ui.close();
+                    }
+                    if ui.button("用語集・索引…").on_hover_text("電子回路の言葉と、このソフトの言葉を、読みと説明つきで引けます。語を選ぶと、その語が出てくるレッスンも分かります").clicked() {
+                        self.glossary.open = true;
                         ui.close();
                     }
                     ui.separator();
