@@ -931,3 +931,13 @@ pub(super) fn battery_coin_heavy(e: &SchEditor) -> bool {
 pub(super) fn battery_matched_load(e: &SchEditor) -> bool {
     value_between(e, "R3", 12.0, 20.0) && dc_fresh(e)
 }
+
+/// The 7-segment lesson: the shared resistor R2 of the "8" is 25 - 45 ohm (the segments get about the current of a "1") and the run is fresh.
+pub(super) fn segment_shared_resistor_fixed(e: &SchEditor) -> bool {
+    value_between(e, "R2", 25.0, 45.0) && dc_fresh(e)
+}
+
+/// The 7-segment lesson: the resistor R3 of one segment is 800 ohm or more (that segment is dim) and the run is fresh.
+pub(super) fn segment_one_dim(e: &SchEditor) -> bool {
+    value_at_least(e, "R3", 800.0) && dc_fresh(e)
+}

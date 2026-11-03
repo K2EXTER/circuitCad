@@ -2485,3 +2485,29 @@ fn the_battery_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!((v(&e, "VCOIN") - 1.5).abs() < 0.01, "half of the open voltage: the maximum power");
 }
+
+#[test]
+fn the_segment_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "segment_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // the current of one lit segment: a "1" shares 30 mA between 2, an "8" 31 mA between 7, a resistor each gives 9.2 mA
+    let (one, eight, own) = ((5.0 - v(&e, "C1")) / 100.0 / 2.0, (5.0 - v(&e, "C8")) / 100.0 / 7.0, (5.0 - v(&e, "S1")) / 330.0);
+    assert!((one - 15e-3).abs() < 0.5e-3 && (eight - 4.45e-3).abs() < 0.3e-3 && (own - 9.2e-3).abs() < 0.3e-3, "{one} {eight} {own}");
+    set_value(&mut e, "R2", "33");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!(((5.0 - v(&e, "C8")) / 33.0 / 7.0 - 13.1e-3).abs() < 0.5e-3, "the 8 gets near to the 1");
+    set_value(&mut e, "R3", "1k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!(((5.0 - v(&e, "S1")) / 1e3 - 3.1e-3).abs() < 0.3e-3 && ((5.0 - v(&e, "S2")) / 330.0 - 9.2e-3).abs() < 0.3e-3, "only that segment dims");
+}

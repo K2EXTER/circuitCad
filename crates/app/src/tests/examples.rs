@@ -1227,6 +1227,48 @@ fn write_battery_basics_example() {
     std::fs::write(root.join("battery_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/segment_basics.schjson for the 7-segment display lesson (a segment is an LED; only the lit ones are drawn):
+/// V1 (5 V) -> R1 = 100 ohm shared by the 2 lit segments of a "1" (D1, D2); -> R2 = 100 ohm shared by the 7 segments of an "8"
+/// (D3 - D9); -> a 330 ohm resistor for each of the 7 segments of an "8" (R3 - R9, D10 - D16):
+/// `cargo test -p app write_segment_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_segment_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    // a shared resistor and the LEDs of the lit segments in parallel after it
+    let shared = |s: &mut sch_core::Schematic, y: i32, node: &str, leds: usize| {
+        let r = s.add(Kind::Resistor, (20, y), 1);
+        s.components[r].value = "100".into();
+        s.components[r].footprint = "R_2512".into();
+        label(s, r, "1", "VCC");
+        label(s, r, "2", node);
+        for k in 0..leds {
+            let d = s.add(Kind::Led, (40 + 14 * k as i32, y), 0);
+            label(s, d, "A", node);
+            label(s, d, "K", "GND");
+        }
+    };
+    shared(&mut s, 0, "C1", 2);
+    shared(&mut s, 24, "C8", 7);
+    // a resistor for every segment
+    for k in 0..7 {
+        let y = 48 + 12 * k;
+        let r = s.add(Kind::Resistor, (20, y), 1);
+        s.components[r].value = "330".into();
+        label(&mut s, r, "1", "VCC");
+        label(&mut s, r, "2", &format!("S{}", k + 1));
+        let d = s.add(Kind::Led, (40, y), 0);
+        label(&mut s, d, "A", &format!("S{}", k + 1));
+        label(&mut s, d, "K", "GND");
+    }
+    std::fs::write(root.join("segment_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

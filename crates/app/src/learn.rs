@@ -457,6 +457,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["diode_curve"]), ..lesson("diode_basics", "ダイオードの素顔 (一方通行と、電流で変わる抵抗)", "I = Is (e^(V / nVt) − 1)、V は電流の対数、動的な抵抗 rd = 26mV ÷ I", Some("1N4148 の電流を変えて電圧を測り、順向きと逆向きの違いを確かめます")) },
                 Item { requires: Some(&["diode_basics", "led"]), ..lesson("led_basics", "LED の素顔 (電圧ではなく電流で光る)", "I = (電源 − Vf) ÷ R、Vf は色で違う、電流の上限、抵抗の発熱", Some("赤と青の LED を 5V と 3.3V で光らせ、電流と明るさを比べます")) },
+                Item { requires: Some(&["led_basics"]), ..lesson("segment_basics", "7 セグメント LED の素顔 (共通の抵抗は明るさをばらつかせる)", "光る線の数で変わる電流、セグメントごとの抵抗、共通ピンに流れる合計の電流", Some("7 セグメント LED の 1 つの数字を、共通の抵抗とセグメントごとの抵抗で光らせ、明るさを比べます")) },
                 Item { requires: Some(&["diode_basics", "zener"]), ..lesson("zener_basics", "ツェナーダイオードの素顔 (逆向きで電圧が止まる)", "降伏電圧 Vz、動作抵抗 rz、Iz = (Vin − Vz) ÷ R、電力 P = Vz × Iz と定格", Some("1N4733A に抵抗をつないで、電源を変えながら Z の電圧を測り、止まる様子を確かめます")) },
             ],
         },
