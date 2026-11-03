@@ -876,3 +876,13 @@ pub(super) fn coupler_weak_led(e: &SchEditor) -> bool {
 pub(super) fn coupler_saturated(e: &SchEditor) -> bool {
     value_at_least(e, "R2", 1e3) && dc_fresh(e)
 }
+
+/// The fuse lesson: R2 is between 6 and 9 ohm (about 1.5 times the rating of the fuse: it heats but may not blow) and the run is fresh.
+pub(super) fn fuse_slight_overload(e: &SchEditor) -> bool {
+    value_between(e, "R2", 6.0, 7.5) && tran_fresh(e)
+}
+
+/// The fuse lesson: R1 is 8 ohm or less (a normal load that is near the rating) and the run is fresh.
+pub(super) fn fuse_load_near_rating(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 8.0) && tran_fresh(e)
+}

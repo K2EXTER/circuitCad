@@ -997,6 +997,33 @@ fn write_photocoupler_basics_example() {
     std::fs::write(root.join("photocoupler_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/fuse_basics.schjson for the fuse lesson: a 12 V supply (it rises at 10 ms, so that the DC point has no
+/// current) feeds three FUSE_1A fuses (F1..F3) with the loads R1 = 12 ohm (1 A), R2 = 4 ohm (3 A) and R3 = 0.5 ohm (24 A):
+/// `cargo test -p app write_fuse_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_fuse_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "FUSE_1A").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "PULSE(0 12 10m 1u 1u 100 200)".into();
+    label(&mut s, v, "+", "SUP");
+    label(&mut s, v, "-", "GND");
+    for (k, ohm) in ["12", "4", "0.5"].into_iter().enumerate() {
+        let (n, y) = (k + 1, 20 * k as i32);
+        let f = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, y), 0);
+        label(&mut s, f, "1", "SUP");
+        label(&mut s, f, "2", &format!("X{n}"));
+        let r = s.add(Kind::Resistor, (50, y), 1);
+        s.components[r].value = ohm.into();
+        s.components[r].footprint = "R_2512".into();
+        label(&mut s, r, "1", &format!("X{n}"));
+        label(&mut s, r, "2", "GND");
+    }
+    std::fs::write(root.join("fuse_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

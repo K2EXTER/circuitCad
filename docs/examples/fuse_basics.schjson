@@ -1,0 +1,490 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 12 10m 1u 1u 100 200)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "F1",
+      "kind": "Custom",
+      "value": "FUSE_1A",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "Fuse_5x20_P22.5",
+      "custom": {
+        "name": "FUSE_1A",
+        "prefix": "F",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "FUSE_1A",
+          "text": ".subckt FUSE_1A a b\n* heat X (volts) is built up by I^2 and leaks away; the fuse opens when X reaches 0.95 and stays open (from X = 0.9 a latch current pushes X far above)\nVs a m DC 0\nRf m n 0.15\nBq 0 x I=I(Vs)*I(Vs)+100*limit((V(x)-0.9)*1000,0,1)\nCx x 0 0.5\nRl x 0 0.4\nBc c 0 V=1-V(x)\nRc c 0 1Meg\nS1 n b c 0 SWF\n.model SWF SW(RON=1m ROFF=1G VT=0.05 VW=0.02)\n.ends FUSE_1A",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "ヒューズを「電流の 2 乗で熱がたまり、熱は一定の割合で逃げ、たまった熱が決まった値に達したら切れる」という簡単な式で表しています。定格 1A は切れず、約 1.5A 以上で切れ、10A では約 5ms で切れます。実物の特性 (メーカーの時間-電流曲線) とは、桁は合っていても、細かくは違います。",
+            "一度切れたら元に戻りません (このモデルでは、切れたあとは電流が流れないまま、切れた状態を保ちます)。実物のヒューズは、切れるとき、アーク (火花) が出て、電圧が高いと切れ切らないことがあります。遮断容量・定格電圧は、モデルでは見ません。",
+            "冷えているときの抵抗を 0.15Ω としています。実物の 1A のヒューズは、0.1〜0.3Ω ほどで、電流が流れると少し上がります (電圧降下と発熱の原因)。"
+          ]
+        },
+        "ratings": {
+          "v_max": 250.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "定格電流",
+              "value": "1A",
+              "condition": "連続"
+            },
+            {
+              "name": "溶断特性",
+              "value": "速断形 (F)",
+              "condition": "2 倍の電流で数百 ms〜数 s"
+            },
+            {
+              "name": "遮断容量",
+              "value": "35A 以上",
+              "condition": "250V AC"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "12",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "F2",
+      "kind": "Custom",
+      "value": "FUSE_1A",
+      "pos": [
+        30,
+        20
+      ],
+      "rot": 0,
+      "footprint": "Fuse_5x20_P22.5",
+      "custom": {
+        "name": "FUSE_1A",
+        "prefix": "F",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "FUSE_1A",
+          "text": ".subckt FUSE_1A a b\n* heat X (volts) is built up by I^2 and leaks away; the fuse opens when X reaches 0.95 and stays open (from X = 0.9 a latch current pushes X far above)\nVs a m DC 0\nRf m n 0.15\nBq 0 x I=I(Vs)*I(Vs)+100*limit((V(x)-0.9)*1000,0,1)\nCx x 0 0.5\nRl x 0 0.4\nBc c 0 V=1-V(x)\nRc c 0 1Meg\nS1 n b c 0 SWF\n.model SWF SW(RON=1m ROFF=1G VT=0.05 VW=0.02)\n.ends FUSE_1A",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "ヒューズを「電流の 2 乗で熱がたまり、熱は一定の割合で逃げ、たまった熱が決まった値に達したら切れる」という簡単な式で表しています。定格 1A は切れず、約 1.5A 以上で切れ、10A では約 5ms で切れます。実物の特性 (メーカーの時間-電流曲線) とは、桁は合っていても、細かくは違います。",
+            "一度切れたら元に戻りません (このモデルでは、切れたあとは電流が流れないまま、切れた状態を保ちます)。実物のヒューズは、切れるとき、アーク (火花) が出て、電圧が高いと切れ切らないことがあります。遮断容量・定格電圧は、モデルでは見ません。",
+            "冷えているときの抵抗を 0.15Ω としています。実物の 1A のヒューズは、0.1〜0.3Ω ほどで、電流が流れると少し上がります (電圧降下と発熱の原因)。"
+          ]
+        },
+        "ratings": {
+          "v_max": 250.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "定格電流",
+              "value": "1A",
+              "condition": "連続"
+            },
+            {
+              "name": "溶断特性",
+              "value": "速断形 (F)",
+              "condition": "2 倍の電流で数百 ms〜数 s"
+            },
+            {
+              "name": "遮断容量",
+              "value": "35A 以上",
+              "condition": "250V AC"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "4",
+      "pos": [
+        50,
+        20
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "F3",
+      "kind": "Custom",
+      "value": "FUSE_1A",
+      "pos": [
+        30,
+        40
+      ],
+      "rot": 0,
+      "footprint": "Fuse_5x20_P22.5",
+      "custom": {
+        "name": "FUSE_1A",
+        "prefix": "F",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "FUSE_1A",
+          "text": ".subckt FUSE_1A a b\n* heat X (volts) is built up by I^2 and leaks away; the fuse opens when X reaches 0.95 and stays open (from X = 0.9 a latch current pushes X far above)\nVs a m DC 0\nRf m n 0.15\nBq 0 x I=I(Vs)*I(Vs)+100*limit((V(x)-0.9)*1000,0,1)\nCx x 0 0.5\nRl x 0 0.4\nBc c 0 V=1-V(x)\nRc c 0 1Meg\nS1 n b c 0 SWF\n.model SWF SW(RON=1m ROFF=1G VT=0.05 VW=0.02)\n.ends FUSE_1A",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "ヒューズを「電流の 2 乗で熱がたまり、熱は一定の割合で逃げ、たまった熱が決まった値に達したら切れる」という簡単な式で表しています。定格 1A は切れず、約 1.5A 以上で切れ、10A では約 5ms で切れます。実物の特性 (メーカーの時間-電流曲線) とは、桁は合っていても、細かくは違います。",
+            "一度切れたら元に戻りません (このモデルでは、切れたあとは電流が流れないまま、切れた状態を保ちます)。実物のヒューズは、切れるとき、アーク (火花) が出て、電圧が高いと切れ切らないことがあります。遮断容量・定格電圧は、モデルでは見ません。",
+            "冷えているときの抵抗を 0.15Ω としています。実物の 1A のヒューズは、0.1〜0.3Ω ほどで、電流が流れると少し上がります (電圧降下と発熱の原因)。"
+          ]
+        },
+        "ratings": {
+          "v_max": 250.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "定格電流",
+              "value": "1A",
+              "condition": "連続"
+            },
+            {
+              "name": "溶断特性",
+              "value": "速断形 (F)",
+              "condition": "2 倍の電流で数百 ms〜数 s"
+            },
+            {
+              "name": "遮断容量",
+              "value": "35A 以上",
+              "condition": "250V AC"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "0.5",
+      "pos": [
+        50,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        28,
+        0
+      ],
+      "b": [
+        25,
+        0
+      ]
+    },
+    {
+      "a": [
+        32,
+        0
+      ],
+      "b": [
+        35,
+        0
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    },
+    {
+      "a": [
+        28,
+        20
+      ],
+      "b": [
+        25,
+        20
+      ]
+    },
+    {
+      "a": [
+        32,
+        20
+      ],
+      "b": [
+        35,
+        20
+      ]
+    },
+    {
+      "a": [
+        50,
+        18
+      ],
+      "b": [
+        50,
+        15
+      ]
+    },
+    {
+      "a": [
+        50,
+        22
+      ],
+      "b": [
+        50,
+        25
+      ]
+    },
+    {
+      "a": [
+        28,
+        40
+      ],
+      "b": [
+        25,
+        40
+      ]
+    },
+    {
+      "a": [
+        32,
+        40
+      ],
+      "b": [
+        35,
+        40
+      ]
+    },
+    {
+      "a": [
+        50,
+        38
+      ],
+      "b": [
+        50,
+        35
+      ]
+    },
+    {
+      "a": [
+        50,
+        42
+      ],
+      "b": [
+        50,
+        45
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "SUP"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        25,
+        0
+      ],
+      "text": "SUP"
+    },
+    {
+      "pos": [
+        35,
+        0
+      ],
+      "text": "X1"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "X1"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        25,
+        20
+      ],
+      "text": "SUP"
+    },
+    {
+      "pos": [
+        35,
+        20
+      ],
+      "text": "X2"
+    },
+    {
+      "pos": [
+        50,
+        15
+      ],
+      "text": "X2"
+    },
+    {
+      "pos": [
+        50,
+        25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        25,
+        40
+      ],
+      "text": "SUP"
+    },
+    {
+      "pos": [
+        35,
+        40
+      ],
+      "text": "X3"
+    },
+    {
+      "pos": [
+        50,
+        35
+      ],
+      "text": "X3"
+    },
+    {
+      "pos": [
+        50,
+        45
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

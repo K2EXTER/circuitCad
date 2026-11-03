@@ -2280,3 +2280,42 @@ fn the_photocoupler_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3);
     assert!((v(&e, "OUT") - 0.13).abs() < 0.05, "saturated");
 }
+
+#[test]
+fn the_fuse_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "fuse_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (current at the end of the run, time of the last sample with more than 10 percent of the current of the first millisecond after the supply rises)
+    let probe = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &r.signal(n).unwrap().values;
+        let peak = v.iter().cloned().fold(0.0, f64::max);
+        let last_on = r.time.iter().zip(v).filter(|(_, i)| **i > 0.1 * peak).map(|(t, _)| *t).last().unwrap();
+        (peak, *v.last().unwrap(), last_on - 10e-3)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // 1 A holds; 3 A blows after about 60 ms; the 24 A short after about 1.4 ms; blown means blown for good
+    let (p1, end1, _) = probe(&e, "I(R1)");
+    assert!((p1 - 0.99).abs() < 0.02 && (end1 - 0.99).abs() < 0.02, "1 A holds");
+    let (p2, end2, off2) = probe(&e, "I(R2)");
+    assert!((p2 - 2.89).abs() < 0.1 && end2 < 1e-3 && (0.04..0.09).contains(&off2), "3 A: {off2}");
+    let (p3, end3, off3) = probe(&e, "I(R3)");
+    assert!(p3 > 15.0 && end3 < 1e-3 && (0.0005..0.003).contains(&off3), "short: {off3}");
+    set_value(&mut e, "R2", "7");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (_, end, off) = probe(&e, "I(R2)");
+    assert!(end < 1e-3 && (0.25..0.4).contains(&off), "1.7 A blows slowly: {off}");
+    set_value(&mut e, "R1", "6");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (_, end, off) = probe(&e, "I(R1)");
+    assert!(end < 1e-3 && (0.12..0.25).contains(&off), "2 A load blows the fuse: {off}");
+}

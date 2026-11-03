@@ -460,6 +460,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             Item { requires: Some(&["light_sensors", "transistor"]), ..lesson("phototransistor_basics", "フォトトランジスタの素顔 (光電流が hFE 倍になる)", "Ic = hFE × 光電流、感度はフォトダイオードの数百倍、強い光で飽和、応答は遅い", Some("フォトトランジスタに LED の光を当て、距離を変えて、出力の電圧が飽和する様子を測ります")) },
             Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
             Item { requires: Some(&["led_basics", "transistor"]), ..lesson("photocoupler_basics", "フォトカプラの素顔 (光で信号を絶縁して伝える)", "Ic = CTR × If、絶縁、CTR の個体差と、負荷が重いと飽和する", Some("PC817 の LED の電流を変えて、出力のトランジスタの電流と電圧を測り、CTR を求めます")) },
+            Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },
         ],
     }],
 };
