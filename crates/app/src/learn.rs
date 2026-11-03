@@ -874,6 +874,8 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
     const H: f32 = 60.0;
     const GX: f32 = 12.0;
     const GY: f32 = 26.0;
+    // room above the first row for the badge of the recommended box, which sits on the top edge of its box
+    const TOP: f32 = 22.0;
     let all: Vec<&'static Item> = items(path).collect();
     let levels: Vec<usize> = all.iter().map(|i| level(path, i, 0)).collect();
     let rows_of_level = levels.iter().max().copied().unwrap_or(0) + 1;
@@ -893,7 +895,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         (in_level[l] - r * max_cols).min(max_cols)
     };
     let widest = (0..rows).map(cols_in_row).max().unwrap_or(1);
-    let size = egui::vec2(widest as f32 * (W + GX) - GX, rows as f32 * (H + GY) - GY);
+    let size = egui::vec2(widest as f32 * (W + GX) - GX, rows as f32 * (H + GY) - GY + TOP);
     let (area, _) = ui.allocate_exact_size(size, egui::Sense::hover());
     let boxes: Vec<egui::Rect> = (0..all.len())
         .map(|k| {
@@ -901,7 +903,7 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
             let row = first_row[l] + index_in_level[k] / max_cols;
             let col = index_in_level[k] % max_cols;
             let left = (widest - cols_in_row(row)) as f32 * (W + GX) / 2.0 + col as f32 * (W + GX);
-            egui::Rect::from_min_size(area.min + egui::vec2(left, row as f32 * (H + GY)), egui::vec2(W, H))
+            egui::Rect::from_min_size(area.min + egui::vec2(left, TOP + row as f32 * (H + GY)), egui::vec2(W, H))
         })
         .collect();
     let line = ui.visuals().widgets.noninteractive.fg_stroke.color;
