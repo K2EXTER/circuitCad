@@ -891,3 +891,13 @@ pub(super) fn fuse_load_near_rating(e: &SchEditor) -> bool {
 pub(super) fn logic_output_loaded(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 150.0) && dc_fresh(e)
 }
+
+/// The speaker lesson: the mechanical capacitance C1 of the speaker is 80 uF or more (a softer suspension, lower resonance) and the run is fresh.
+pub(super) fn speaker_softer_and_ac(e: &SchEditor) -> bool {
+    value_at_least(e, "C1", 80e-6) && ac_fresh(e)
+}
+
+/// The speaker lesson: the current of the piezo buzzer, I(V2), is on the graph of the AC run.
+pub(super) fn piezo_shown(e: &SchEditor) -> bool {
+    e.ac.as_ref().is_some_and(|a| a.outcome.is_ok() && a.selected.contains("I(V2)"))
+}

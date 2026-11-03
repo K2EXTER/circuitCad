@@ -2348,3 +2348,32 @@ fn the_logic_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3);
     assert!((v(&e, "DRV") - 3.67).abs() < 0.1, "heavier load");
 }
+
+#[test]
+fn the_speaker_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "speaker_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let z = |e: &SchEditor, src: &str, f: f64| {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        let i = r.signal(src).unwrap().mag()[r.freq.iter().position(|x| *x >= f * 0.999).unwrap()];
+        1.0 / i
+    };
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // the impedance of the speaker: 8 ohm at low frequencies, about 32 ohm at the resonance, rising again with the coil
+    assert!((z(&e, "I(V1)", 20.0) - 8.0).abs() < 0.3 && (z(&e, "I(V1)", 600.0) - 32.0).abs() < 2.0, "speaker");
+    assert!((z(&e, "I(V1)", 3000.0) - 8.1).abs() < 0.5 && (z(&e, "I(V1)", 30000.0) - 20.4).abs() < 1.5, "speaker, high");
+    // the piezo buzzer: a capacitor at 100 Hz (88 kohm), about 0.9 kohm at the resonance
+    assert!((z(&e, "I(V2)", 100.0) - 88e3).abs() < 3e3 && z(&e, "I(V2)", 3900.0) < 1.1e3, "piezo");
+    e.ac.as_mut().unwrap().selected.insert("I(V2)".into());
+    e.update_lesson();
+    set_value(&mut e, "C1", "100u");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!((z(&e, "I(V1)", 350.0) - 28.6).abs() < 3.0 && z(&e, "I(V1)", 600.0) < 10.0, "the resonance moved down to 350 Hz");
+}

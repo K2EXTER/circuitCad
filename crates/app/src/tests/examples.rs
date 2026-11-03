@@ -1065,6 +1065,43 @@ fn write_logic_basics_example() {
     std::fs::write(root.join("logic_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/speaker_basics.schjson for the speaker / buzzer lesson: each is driven by its own 1 V AC source, so that
+/// I(V1) and I(V2) tell the impedance (1 V / current). V1 -> an 8 ohm speaker: voice coil R1 8 ohm + L1 0.1 mH in series with the
+/// mechanical resonance (R2 24 ohm || L2 2.12 mH || C1 33 uF, about 600 Hz). V2 -> a piezo buzzer: C2 15 nF in parallel with the series
+/// resonance R3 1 kohm + L3 0.53 H + C3 3 nF (about 4 kHz): `cargo test -p app write_speaker_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_speaker_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "0 AC 1".into();
+    label(&mut s, v1, "+", "SPIN");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 30), 0);
+    s.components[v2].value = "0 AC 1".into();
+    label(&mut s, v2, "+", "PZIN");
+    label(&mut s, v2, "-", "GND");
+    let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
+        let i = s.add(kind, (x, y), 1);
+        s.components[i].value = value.into();
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    // the speaker
+    part(&mut s, Kind::Resistor, 20, 0, "8", "SPIN", "SP1");
+    part(&mut s, Kind::Inductor, 36, 0, "0.1m", "SP1", "SPM");
+    part(&mut s, Kind::Resistor, 52, 0, "24", "SPM", "GND");
+    part(&mut s, Kind::Inductor, 68, 0, "2.12m", "SPM", "GND");
+    part(&mut s, Kind::Capacitor, 84, 0, "33u", "SPM", "GND");
+    // the piezo buzzer
+    part(&mut s, Kind::Capacitor, 20, 30, "15n", "PZIN", "GND");
+    part(&mut s, Kind::Resistor, 36, 30, "1k", "PZIN", "PZ1");
+    part(&mut s, Kind::Inductor, 52, 30, "0.53", "PZ1", "PZ2");
+    part(&mut s, Kind::Capacitor, 68, 30, "3n", "PZ2", "GND");
+    std::fs::write(root.join("speaker_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

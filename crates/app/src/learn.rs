@@ -488,11 +488,12 @@ const PARTS_PATH: LearningPath = LearningPath {
             ],
         },
         Stage {
-            name: "6. スイッチ・時計・ロジック",
-            about: "コイルで動くリレー、周波数を決める水晶、High と Low を扱うロジック IC",
+            name: "6. スイッチ・時計・音・ロジック",
+            about: "コイルで動くリレー、周波数を決める水晶、音を出すスピーカーとブザー、High と Low を扱うロジック IC",
             items: &[
                 Item { requires: Some(&["inductor", "flyback"]), ..lesson("relay_basics", "リレーの素顔 (コイルの電流で接点が動く)", "コイル = 抵抗 + インダクタンス、動作電圧 (定格の約 75%)、τ = L ÷ R、電力 V² ÷ R", Some("5V 用リレーのコイルの抵抗を測り、電圧を上げながらカチッと動作する電圧を探します")) },
                 Item { requires: Some(&["crystal", "rlc"]), ..lesson("crystal_basics", "水晶の素顔 (Q が桁違いに大きい共振)", "等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q", Some("水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます")) },
+                Item { requires: Some(&["inductor", "capacitor"]), ..lesson("speaker_basics", "スピーカーとブザーの素顔 (インピーダンスは 8Ω 一定ではない)", "共振で上がるインピーダンス、高い周波数でコイルとして上がる、圧電ブザーは容量+共振", Some("スピーカーのインピーダンスを、テスタで測る直流の抵抗 (約 8Ω ではなく 6〜7Ω) と、アンプの表示を比べます")) },
                 Item { requires: Some(&["levels"]), ..lesson("logic_basics", "ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)", "しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 80Ω の抵抗", Some("74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます")) },
             ],
         },

@@ -138,6 +138,7 @@ const LESSONS: &[Lesson] = &[
     parts::FUSE_BASICS,
     parts::RELAY_BASICS,
     parts::CRYSTAL_BASICS,
+    parts::SPEAKER_BASICS,
     parts::LOGIC_BASICS,
 ];
 
