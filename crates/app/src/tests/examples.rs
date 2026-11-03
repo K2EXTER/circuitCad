@@ -1,5 +1,16 @@
 use super::*;
 
+/// Puts a short wire on pin `pin` of component `idx`, pointing away from the part, and names its end `text` (the sample generators
+/// connect everything by net labels).
+fn label(s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str) {
+    let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+    let c = s.components[idx].pos;
+    let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+    let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+    s.wires.push(Wire { a: pt, b: end });
+    s.labels.push(sch_core::Label { pos: end, text: text.into() });
+}
+
 /// Generates docs/examples/rlc_board.pcbjson from the RLC example schematic:
 /// `cargo test -p app write_example_board -- --ignored`
 #[test]
@@ -332,14 +343,6 @@ fn write_buck_example() {
     s.components[r2].value = "10k".into();
     let rl = s.add(Kind::Resistor, (86, 4), 1);
     s.components[rl].value = "20".into();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     label(&mut s, v, "+", "VIN");
     label(&mut s, v, "-", "GND");
     label(&mut s, u, "1", "VIN");
@@ -401,14 +404,6 @@ fn write_cap_impedance_example() {
     let mut s = sch_core::Schematic::default();
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "SIN(0 1 1k) AC 1".into();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     label(&mut s, v, "+", "IN");
     label(&mut s, v, "-", "GND");
     // (node, x, parts on that node)
@@ -436,14 +431,6 @@ fn write_rail_impedance_example() {
     let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
     let (elec, cer, small) = (find("CE_100u_16V"), find("C_10u_0805"), find("C_100n_0603"));
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "5".into();
     label(&mut s, v, "+", "VIN");
@@ -502,14 +489,6 @@ fn write_loop_cap_load_example() {
 fn write_rlc_poles_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "0 AC 1".into();
     label(&mut s, v, "+", "IN");
@@ -537,14 +516,6 @@ fn write_rlc_poles_example() {
 fn write_capacitor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     // (source value, series resistor, capacitor, x, nets: input / capacitor node)
     for (src, r, c, x, input, node) in [("PULSE(0 5 0 1m 1m 0 2m)", "10", "1u", 0, "RAMP", "CA"), ("PULSE(0 5 0 1u 1u 10m 20m)", "1k", "1u", 48, "STEP", "CB")] {
         let v = s.add(Kind::VSource, (x, 0), 0);
@@ -571,14 +542,6 @@ fn write_capacitor_basics_example() {
 fn write_inductor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     for (r, x, input, node) in [("1", 0, "STEPA", "LB"), ("100", 48, "STEPB", "LA")] {
         let v = s.add(Kind::VSource, (x, 0), 0);
         s.components[v].value = "PULSE(0 5 0 1u 1u 10m 20m)".into();
@@ -604,14 +567,6 @@ fn write_inductor_basics_example() {
 fn write_resistor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let mut put = |s: &mut sch_core::Schematic, x: i32, value: &str, a: &str, b: &str| {
         let r = s.add(Kind::Resistor, (x, 0), 1);
         s.components[r].value = value.into();
@@ -644,14 +599,6 @@ fn write_resistor_basics_example() {
 fn write_transistor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VCC");
@@ -683,14 +630,6 @@ fn write_mosfet_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "2N7000").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VDD");
@@ -723,14 +662,6 @@ fn write_opamp_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LM358").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "SIN(0 0.5 1k) AC 1".into();
     label(&mut s, v1, "+", "IN");
@@ -771,14 +702,6 @@ fn write_opamp_basics_example() {
 fn write_diode_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "5 AC 1".into();
     label(&mut s, v, "+", "IN");
@@ -804,14 +727,6 @@ fn write_diode_basics_example() {
 fn write_led_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     for (k, volts) in ["5", "3.3", "2"].into_iter().enumerate() {
         let (n, y) = (k + 1, 20 * k as i32);
         let v = s.add(Kind::VSource, (0, y), 0);
@@ -837,14 +752,6 @@ fn write_zener_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "1N4733A").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "12".into();
     label(&mut s, v, "+", "IN");
@@ -870,14 +777,6 @@ fn write_zener_basics_example() {
 fn write_relay_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
         let i = s.add(kind, (x, y), 1);
         s.components[i].value = value.into();
@@ -909,14 +808,6 @@ fn write_crystal_q_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "XTAL_16MHz_3225").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
         let i = s.add(kind, (x, y), 1);
         s.components[i].value = value.into();
@@ -949,14 +840,6 @@ fn write_transformer_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "TR100_12V_5VA").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     // the load is made first so that it is R1 and the sense resistor R2
     let load = s.add(Kind::Resistor, (70, 0), 1);
     s.components[load].value = "1Meg".into();
@@ -987,14 +870,6 @@ fn write_thermistor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "NTC_10k_B3950").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "5".into();
     label(&mut s, v, "+", "VCC");
@@ -1021,14 +896,6 @@ fn write_phototransistor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "BPW34").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VCC");
@@ -1070,14 +937,6 @@ fn write_regulator_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LM7805").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "12".into();
     label(&mut s, v1, "+", "SUPPLY");
@@ -1110,14 +969,6 @@ fn write_photocoupler_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "PC817").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VIN");
@@ -1154,14 +1005,6 @@ fn write_crystal_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "XTAL_16MHz_3225").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v = s.add(Kind::VSource, (0, 0), 0);
     s.components[v].value = "SIN(0 1 16Meg) AC 1".into();
     label(&mut s, v, "+", "IN");
@@ -1186,14 +1029,6 @@ fn write_crystal_example() {
 fn write_reset_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VCC");
@@ -1221,14 +1056,6 @@ fn write_reset_example() {
 fn write_pullup_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VCC");
@@ -1263,14 +1090,6 @@ fn write_pullup_example() {
 fn write_pin_led_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "HIGH");
@@ -1299,14 +1118,6 @@ fn write_level_shift_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "BSS138").unwrap();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     // supplies and the 5 V side signal: V1 = 5 V, V2 = 3.3 V, V3 = the signal
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
@@ -1358,14 +1169,6 @@ fn write_level_shift_example() {
 fn write_uart_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     // the frame: idle high, start bit (low), 8 data bits LSB first, stop bit (high)
     let bit_us = 1e6 / 9600.0;
     let t0 = 100.0;
@@ -1411,14 +1214,6 @@ fn write_datasheet_example() {
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "1N4148").unwrap();
     let pin = |name: &str| def.pins.iter().find(|p| p.name == name).unwrap().number.clone();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VIN");
@@ -1443,14 +1238,6 @@ fn write_datasheet_example() {
 fn write_usb_vbus_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "HOST");
@@ -1489,14 +1276,6 @@ fn write_usb_vbus_example() {
 fn write_usb_speed_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "3.3".into();
     label(&mut s, v1, "+", "V33");
@@ -1529,14 +1308,6 @@ fn write_usb_speed_example() {
 fn write_usb_signal_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "PULSE(0 3.3 20n 1n 1n 82n 166n)".into();
     label(&mut s, v1, "+", "DRV");
@@ -1563,14 +1334,6 @@ fn write_usb_signal_example() {
 fn write_pwm_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "PULSE(0 5 0 20n 20n 1.02m 2.04m)".into();
     label(&mut s, v1, "+", "PWM");
@@ -1601,14 +1364,6 @@ fn write_ldo_example() {
     let (ams, mcp) = (find("AMS1117-3.3"), find("MCP1700-3302"));
     let pin = |d: &part_lib::PartDef, name: &str| d.pins.iter().find(|p| p.name == name).unwrap().number.clone();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "5".into();
     label(&mut s, v1, "+", "VIN");
@@ -1650,14 +1405,6 @@ fn write_tl431_example() {
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "TL431").unwrap();
     let pin = |name: &str| def.pins.iter().find(|p| p.name == name).unwrap().number.clone();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "12".into();
     label(&mut s, v1, "+", "VIN");
@@ -1697,14 +1444,6 @@ fn write_flyback_example() {
     let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "2N7000").unwrap();
     let pin = |name: &str| def.pins.iter().find(|p| p.name == name).unwrap().number.clone();
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "12".into();
     label(&mut s, v1, "+", "VCC");
@@ -1737,14 +1476,6 @@ fn write_flyback_example() {
 fn write_bounce_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
-        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
-        let c = s.components[idx].pos;
-        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
-        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
-        s.wires.push(Wire { a: pt, b: end });
-        s.labels.push(sch_core::Label { pos: end, text: text.into() });
-    };
     let v1 = s.add(Kind::VSource, (0, 0), 0);
     s.components[v1].value = "PWL(0 5 1m 5 1.001m 0 1.1m 0 1.101m 5 1.25m 5 1.251m 0 1.4m 0 1.401m 5 1.6m 5 1.601m 0 1.8m 0 1.801m 5 2.1m 5 2.101m 0 6m 0)".into();
     label(&mut s, v1, "+", "CONTACT");
