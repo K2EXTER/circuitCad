@@ -901,3 +901,8 @@ pub(super) fn speaker_softer_and_ac(e: &SchEditor) -> bool {
 pub(super) fn piezo_shown(e: &SchEditor) -> bool {
     e.ac.as_ref().is_some_and(|a| a.outcome.is_ok() && a.selected.contains("I(V2)"))
 }
+
+/// The varistor lesson: the rail V1 is between 17 V and 30 V (above the continuous rating of the varistor) and the DC run is fresh.
+pub(super) fn varistor_over_rating(e: &SchEditor) -> bool {
+    value_between(e, "V1", 17.0, 30.0) && dc_fresh(e)
+}

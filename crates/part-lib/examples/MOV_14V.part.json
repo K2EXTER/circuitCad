@@ -1,0 +1,87 @@
+{
+  "name": "MOV_14V",
+  "category": "保護",
+  "description": "バリスタ (サージ吸収素子) 14V 用 (ディスク径 7mm、S07K14 相当)。電圧が低いうちは電流をほとんど流さず、約 22V (1mA) を超えると電流が急に増えて、電圧の上昇を止める。極性なし。簡易モデルで、繰り返しのサージによる劣化と、容量・応答の遅さは含まない",
+  "datasheet": "",
+  "prefix": "RV",
+  "glyph": "resistor",
+  "footprint_name": "Varistor_D7_P5",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      {
+        "pin": "1",
+        "x": -2.5,
+        "y": 0,
+        "shape": "rect",
+        "w": 1.8,
+        "h": 1.8,
+        "drill": 0.9
+      },
+      {
+        "pin": "2",
+        "x": 2.5,
+        "y": 0,
+        "shape": "circle",
+        "w": 1.8,
+        "drill": 0.9
+      }
+    ]
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "MOV_14V",
+    "text": ".subckt MOV_14V a b\n* I = 1 mA * (V / 22 V)^11.7, either polarity (22 V at 1 mA, 43 V at 2.5 A); 0.3 ohm of series resistance keeps it sane at very large currents\nBm a m I=1m*pwr(V(a,m)/22,11.7)\nRm m b 0.3\n.ends MOV_14V",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "limits": [
+      "電流 I = 1mA × (V ÷ 22V)^11.7 の、1 本の式で表した簡単なモデルです。22V で 1mA、43V で 2.5A に合わせてあります。実物は、電流の範囲によって曲線の傾きが変わり (低い電流の領域と、大電流の領域)、細かい値はデータシートの曲線で確かめます。",
+      "繰り返しのサージで、バリスタは少しずつ劣化し (電圧が下がり、漏れ電流が増え)、いつかは短絡して壊れます。吸収できるエネルギー (ジュール) と電流の上限 (サージ電流) を超えると壊れます。モデルは、これらの上限を見ません。",
+      "ディスクの容量 (数百 pF) と、応答の速さ (数十 ns) は扱いません。ESD のような非常に速いパルスには、専用の部品 (TVS ダイオードなど) を使います。"
+    ]
+  },
+  "ratings": {
+    "v_max": 18,
+    "p_max": 0.25,
+    "rows": [
+      {
+        "name": "バリスタ電圧 V1mA",
+        "value": "22V ±10%",
+        "condition": "1mA"
+      },
+      {
+        "name": "連続印加電圧",
+        "value": "14V AC / 18V DC"
+      },
+      {
+        "name": "制限電圧",
+        "value": "43V (最大)",
+        "condition": "2.5A, 8/20µs"
+      },
+      {
+        "name": "サージ電流",
+        "value": "250A",
+        "condition": "8/20µs, 1 回"
+      },
+      {
+        "name": "吸収エネルギー",
+        "value": "1.2J",
+        "condition": "10/1000µs"
+      }
+    ]
+  }
+}

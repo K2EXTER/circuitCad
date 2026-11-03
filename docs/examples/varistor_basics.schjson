@@ -1,0 +1,547 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RV1",
+      "kind": "Custom",
+      "value": "MOV_14V",
+      "pos": [
+        36,
+        0
+      ],
+      "rot": 1,
+      "footprint": "Varistor_D7_P5",
+      "custom": {
+        "name": "MOV_14V",
+        "prefix": "RV",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "MOV_14V",
+          "text": ".subckt MOV_14V a b\n* I = 1 mA * (V / 22 V)^11.7, either polarity (22 V at 1 mA, 43 V at 2.5 A); 0.3 ohm of series resistance keeps it sane at very large currents\nBm a m I=1m*pwr(V(a,m)/22,11.7)\nRm m b 0.3\n.ends MOV_14V",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "電流 I = 1mA × (V ÷ 22V)^11.7 の、1 本の式で表した簡単なモデルです。22V で 1mA、43V で 2.5A に合わせてあります。実物は、電流の範囲によって曲線の傾きが変わり (低い電流の領域と、大電流の領域)、細かい値はデータシートの曲線で確かめます。",
+            "繰り返しのサージで、バリスタは少しずつ劣化し (電圧が下がり、漏れ電流が増え)、いつかは短絡して壊れます。吸収できるエネルギー (ジュール) と電流の上限 (サージ電流) を超えると壊れます。モデルは、これらの上限を見ません。",
+            "ディスクの容量 (数百 pF) と、応答の速さ (数十 ns) は扱いません。ESD のような非常に速いパルスには、専用の部品 (TVS ダイオードなど) を使います。"
+          ]
+        },
+        "ratings": {
+          "v_max": 18.0,
+          "p_max": 0.25,
+          "rows": [
+            {
+              "name": "バリスタ電圧 V1mA",
+              "value": "22V ±10%",
+              "condition": "1mA"
+            },
+            {
+              "name": "連続印加電圧",
+              "value": "14V AC / 18V DC"
+            },
+            {
+              "name": "制限電圧",
+              "value": "43V (最大)",
+              "condition": "2.5A, 8/20µs"
+            },
+            {
+              "name": "サージ電流",
+              "value": "250A",
+              "condition": "8/20µs, 1 回"
+            },
+            {
+              "name": "吸収エネルギー",
+              "value": "1.2J",
+              "condition": "10/1000µs"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 100 1m 10u 10u 100u 5m)",
+      "pos": [
+        0,
+        30
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        20,
+        30
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        36,
+        30
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        20,
+        50
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R5",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        36,
+        50
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RV2",
+      "kind": "Custom",
+      "value": "MOV_14V",
+      "pos": [
+        52,
+        50
+      ],
+      "rot": 1,
+      "footprint": "Varistor_D7_P5",
+      "custom": {
+        "name": "MOV_14V",
+        "prefix": "RV",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "MOV_14V",
+          "text": ".subckt MOV_14V a b\n* I = 1 mA * (V / 22 V)^11.7, either polarity (22 V at 1 mA, 43 V at 2.5 A); 0.3 ohm of series resistance keeps it sane at very large currents\nBm a m I=1m*pwr(V(a,m)/22,11.7)\nRm m b 0.3\n.ends MOV_14V",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "電流 I = 1mA × (V ÷ 22V)^11.7 の、1 本の式で表した簡単なモデルです。22V で 1mA、43V で 2.5A に合わせてあります。実物は、電流の範囲によって曲線の傾きが変わり (低い電流の領域と、大電流の領域)、細かい値はデータシートの曲線で確かめます。",
+            "繰り返しのサージで、バリスタは少しずつ劣化し (電圧が下がり、漏れ電流が増え)、いつかは短絡して壊れます。吸収できるエネルギー (ジュール) と電流の上限 (サージ電流) を超えると壊れます。モデルは、これらの上限を見ません。",
+            "ディスクの容量 (数百 pF) と、応答の速さ (数十 ns) は扱いません。ESD のような非常に速いパルスには、専用の部品 (TVS ダイオードなど) を使います。"
+          ]
+        },
+        "ratings": {
+          "v_max": 18.0,
+          "p_max": 0.25,
+          "rows": [
+            {
+              "name": "バリスタ電圧 V1mA",
+              "value": "22V ±10%",
+              "condition": "1mA"
+            },
+            {
+              "name": "連続印加電圧",
+              "value": "14V AC / 18V DC"
+            },
+            {
+              "name": "制限電圧",
+              "value": "43V (最大)",
+              "condition": "2.5A, 8/20µs"
+            },
+            {
+              "name": "サージ電流",
+              "value": "250A",
+              "condition": "8/20µs, 1 回"
+            },
+            {
+              "name": "吸収エネルギー",
+              "value": "1.2J",
+              "condition": "10/1000µs"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        -2
+      ],
+      "b": [
+        36,
+        -5
+      ]
+    },
+    {
+      "a": [
+        36,
+        2
+      ],
+      "b": [
+        36,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        28
+      ],
+      "b": [
+        0,
+        25
+      ]
+    },
+    {
+      "a": [
+        0,
+        32
+      ],
+      "b": [
+        0,
+        35
+      ]
+    },
+    {
+      "a": [
+        20,
+        28
+      ],
+      "b": [
+        20,
+        25
+      ]
+    },
+    {
+      "a": [
+        20,
+        32
+      ],
+      "b": [
+        20,
+        35
+      ]
+    },
+    {
+      "a": [
+        36,
+        28
+      ],
+      "b": [
+        36,
+        25
+      ]
+    },
+    {
+      "a": [
+        36,
+        32
+      ],
+      "b": [
+        36,
+        35
+      ]
+    },
+    {
+      "a": [
+        20,
+        48
+      ],
+      "b": [
+        20,
+        45
+      ]
+    },
+    {
+      "a": [
+        20,
+        52
+      ],
+      "b": [
+        20,
+        55
+      ]
+    },
+    {
+      "a": [
+        36,
+        48
+      ],
+      "b": [
+        36,
+        45
+      ]
+    },
+    {
+      "a": [
+        36,
+        52
+      ],
+      "b": [
+        36,
+        55
+      ]
+    },
+    {
+      "a": [
+        52,
+        48
+      ],
+      "b": [
+        52,
+        45
+      ]
+    },
+    {
+      "a": [
+        52,
+        52
+      ],
+      "b": [
+        52,
+        55
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "RAIL"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "M"
+    },
+    {
+      "pos": [
+        36,
+        -5
+      ],
+      "text": "M"
+    },
+    {
+      "pos": [
+        36,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        25
+      ],
+      "text": "SURGE"
+    },
+    {
+      "pos": [
+        0,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        25
+      ],
+      "text": "SURGE"
+    },
+    {
+      "pos": [
+        20,
+        35
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        36,
+        25
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        36,
+        35
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        45
+      ],
+      "text": "SURGE"
+    },
+    {
+      "pos": [
+        20,
+        55
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        36,
+        45
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        36,
+        55
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        52,
+        45
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        52,
+        55
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -2377,3 +2377,35 @@ fn the_speaker_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!((z(&e, "I(V1)", 350.0) - 28.6).abs() < 3.0 && z(&e, "I(V1)", 600.0) < 10.0, "the resonance moved down to 350 Hz");
 }
+
+#[test]
+fn the_varistor_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "varistor_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    {
+        let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
+        let m = &r.signal("V(M)").unwrap().values;
+        let at = |x: f64| m[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
+        assert!((at(12.0) - 12.0).abs() < 0.01 && (at(30.0) - 29.7).abs() < 0.3 && (at(60.0) - 42.2).abs() < 0.8, "clamps");
+    }
+    e.run_tran();
+    {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let peak = |n: &str| r.signal(n).unwrap().values.iter().cloned().fold(f64::MIN, f64::max);
+        assert!(peak("V(A)") > 98.0 && (peak("V(B)") - 47.3).abs() < 2.0, "the surge: {} {}", peak("V(A)"), peak("V(B)"));
+    }
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "V1", "20");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let m = e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("M").unwrap();
+    assert!(((20.0 - m) / 10.0 - 3.3e-4).abs() < 1e-4, "leakage at 20 V: {}", (20.0 - m) / 10.0);
+}

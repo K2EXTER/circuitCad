@@ -485,6 +485,7 @@ const PARTS_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
                 Item { requires: Some(&["rectifier", "inductor"]), ..lesson("transformer_basics", "トランスの素顔 (電圧は巻数比、電流は逆比)", "Vs ÷ Vp = Ns ÷ Np、Is ÷ Ip = Np ÷ Ns、定格 VA、無負荷と全負荷の電圧の差", Some("小さなトランスの巻線の抵抗をテスタで測り、一次と二次の比と電圧降下を計算と比べます (商用電源につなぐ実験はしません)")) },
                 Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },
+                Item { requires: Some(&["fuse_basics"]), ..lesson("varistor_basics", "バリスタの素顔 (電圧が高くなると導通して守る)", "V ∝ I^(1/α) の曲線、動作電圧の手前の漏れ、サージを吸収して制限電圧に止める、劣化", Some("バリスタの抵抗を測り、定格の連続電圧が回路の電圧より十分高いことを、データシートで確かめます (サージを実際に加える実験はしません)")) },
             ],
         },
         Stage {

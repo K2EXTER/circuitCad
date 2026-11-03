@@ -136,6 +136,7 @@ const LESSONS: &[Lesson] = &[
     parts::REGULATOR_BASICS,
     parts::TRANSFORMER_BASICS,
     parts::FUSE_BASICS,
+    parts::VARISTOR_BASICS,
     parts::RELAY_BASICS,
     parts::CRYSTAL_BASICS,
     parts::SPEAKER_BASICS,

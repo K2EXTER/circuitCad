@@ -1102,6 +1102,45 @@ fn write_speaker_basics_example() {
     std::fs::write(root.join("speaker_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/varistor_basics.schjson for the varistor lesson: V1 (12 V) -> R1 = 10 ohm -> node M with the varistor RV1
+/// (DC sweep of V1 shows the clamping); V2 (a 100 V, 100 us surge) -> 10 ohm (R2) -> load R3 = 1 kohm (node A, unprotected) and ->
+/// 10 ohm (R4) -> load R5 = 1 kohm with the varistor RV2 across it (node B): `cargo test -p app write_varistor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_varistor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "MOV_14V").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
+        let i = s.add(kind, (x, y), 1);
+        s.components[i].value = value.into();
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    let mov = |s: &mut sch_core::Schematic, x: i32, y: i32, a: &str, b: &str| {
+        let i = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (x, y), 1);
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "RAIL");
+    label(&mut s, v1, "-", "GND");
+    part(&mut s, Kind::Resistor, 20, 0, "10", "RAIL", "M");
+    mov(&mut s, 36, 0, "M", "GND");
+    let v2 = s.add(Kind::VSource, (0, 30), 0);
+    s.components[v2].value = "PULSE(0 100 1m 10u 10u 100u 5m)".into();
+    label(&mut s, v2, "+", "SURGE");
+    label(&mut s, v2, "-", "GND");
+    part(&mut s, Kind::Resistor, 20, 30, "10", "SURGE", "A");
+    part(&mut s, Kind::Resistor, 36, 30, "1k", "A", "GND");
+    part(&mut s, Kind::Resistor, 20, 50, "10", "SURGE", "B");
+    part(&mut s, Kind::Resistor, 36, 50, "1k", "B", "GND");
+    mov(&mut s, 52, 50, "B", "GND");
+    // the 12 V rail resistor and the surge source impedance do not carry power: the smallest body is enough
+    std::fs::write(root.join("varistor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
