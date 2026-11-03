@@ -201,9 +201,13 @@ impl eframe::App for App {
         if let Some(word) = self.sch.glossary_request.take() {
             self.glossary.open_at(word);
         }
-        if let Some(i) = self.glossary.show(ui.ctx()) {
-            self.mode = Mode::Schematic;
-            self.sch.start_lesson(i);
+        match self.glossary.show(ui.ctx()) {
+            Some(glossary::Target::Schematic(i)) => {
+                self.mode = Mode::Schematic;
+                self.sch.start_lesson(i);
+            }
+            Some(glossary::Target::Board(which)) => self.start_board_lesson(which),
+            None => {}
         }
         let welcome_choice = if self.welcome { learn::welcome_card(ui.ctx(), &self.progress) } else { None };
         if let Some(choice) = welcome_choice {

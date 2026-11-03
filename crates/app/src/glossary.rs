@@ -10,6 +10,8 @@ pub enum Kind {
     Circuit,
     /// A word of this program.
     Operation,
+    /// A word of the board (printed circuit board) side.
+    Board,
 }
 
 pub struct Term {
@@ -27,7 +29,7 @@ const fn t(name: &'static str, reading: &'static str, aliases: &'static [&'stati
     Term { name, reading, aliases, kind, short }
 }
 
-use Kind::{Circuit as C, Operation as O};
+use Kind::{Board as B, Circuit as C, Operation as O};
 
 pub const TERMS: &[Term] = &[
     // ---- the basics of a circuit
@@ -185,6 +187,29 @@ pub const TERMS: &[Term] = &[
     t("ハイサイド", "はいさいど", &[], C, "負荷の電源側 (+ 側) に、スイッチを入れる方式。"),
     t("TL431", "てぃーえるよんさんいち", &["シャントレギュレータ"], C, "2.495V の基準電圧を作る部品。2 本の抵抗で、好きな電圧の基準が作れます。"),
     t("LM317", "えるえむさんいちなな", &[], C, "出力電圧を、2 本の抵抗で決められる、可変の三端子レギュレータ。"),
+    // ---- the board
+    t("基板", "きばん", &["プリント基板", "PCB"], B, "部品をのせて、銅の配線でつなぐ板。回路図ができたら、これを作って、製造メーカーに発注します。"),
+    t("パターン", "ぱたーん", &["配線パターン"], B, "基板の上の、銅でできた配線や、パッドの形。「基板パターン」は、その設計。"),
+    t("配線", "はいせん", &["トラック"], B, "部品の足どうしをつなぐ、基板の上の銅の線。"),
+    t("線幅", "せんはば", &["配線幅", "推奨幅"], B, "配線の太さ。太いほど、抵抗が小さく、大きな電流を流せます。電流から、必要な太さが分かります。"),
+    t("間隔", "かんかく", &["クリアランス"], B, "配線やパッドの間の距離。近すぎると、ショートしたり、製造できなかったりします。"),
+    t("パッド", "ぱっど", &["ランド"], B, "部品の足を、はんだ付けする、基板の上の銅の部分。"),
+    t("ビア", "びあ", &["スルーホール"], B, "基板の表と裏の配線を、穴の中の銅でつなぐ所。"),
+    t("未配線", "みはいせん", &["ラッツネスト"], B, "まだ配線でつながっていない、つなぐべき接続。細い線で、表示されます。"),
+    t("自動配置", "じどうはいち", &[], B, "部品の位置を、ソフトが自動で決める機能。叩き台なので、人が手直しします。"),
+    t("自動配線", "じどうはいせん", &["オートルータ"], B, "ソフトが、配線を自動で引く機能。通せない所は、人が手で引きます。"),
+    t("DRC", "でぃーあーるしー", &["デザインルールチェック", "違反"], B, "基板の配線が、間隔・幅などの製造のルールを守っているかを調べる機能。守っていない所は、違反として、表示されます。"),
+    t("発注前チェック", "はっちゅうまえちぇっく", &["発注"], B, "基板を製造メーカーに注文する前の点検。部品が基板の外にないか、配線が細すぎないかなどを調べます。"),
+    t("ガーバー", "がーばー", &["ガーバーファイル", "Gerber"], B, "基板の製造メーカーに渡す、層ごとの図面のデータ。"),
+    t("外形", "がいけい", &[], B, "基板を切り抜く輪郭の線。部品は、外形の内側に置きます。"),
+    t("差動ペア", "さどうぺあ", &["差動"], B, "2 本の線で 1 つの信号を運ぶ組。USB の D+ と D−。並べて、同じ長さで、引きます。"),
+    t("長さ合わせ", "ながさあわせ", &["蛇行"], B, "ペアや複数の線の長さをそろえるため、線をくねらせて長くすること。"),
+    t("ヘッダ", "へっだ", &["ピンヘッダ", "コネクタ"], B, "ピンが並んだ部品。基板どうしや、ケーブルをつなぐのに使います。"),
+    t("ピッチ", "ぴっち", &[], B, "ピンや穴の、中心どうしの間隔。0.5mm ピッチ、2.54mm ピッチなど。小さいほど、配線が難しい。"),
+    t("浮遊容量", "ふゆうようりょう", &[], B, "配線やパッドの間に、意図せずできる、小さなコンデンサ。高い周波数の信号に影響します。"),
+    t("ノイズ", "のいず", &["雑音"], B, "信号に混ざる、じゃまな、不要な変動。"),
+    t("回路図", "かいろず", &[], B, "部品の記号と線で、回路のつながりを描いた図。基板を作る元になります。"),
+    t("グリッド", "ぐりっど", &["格子"], B, "画面の点や線の、位置をそろえる格子。部品や配線は、格子の点に吸い付きます。"),
     // ---- this program
     t("DC動作点", "でぃーしーどうさてん", &[], O, "回路が落ち着いた状態の、各点の電圧と各部品の電流を計算する解析。「解析」タブの「DC動作点を解析」ボタン。"),
     t("過渡解析", "かとかいせき", &["トランジェント"], O, "時間が進むにつれて、電圧や電流がどう変わるかを計算する解析。波形がグラフに出ます。"),
@@ -277,15 +302,34 @@ pub fn terms_in(text: &str) -> Vec<&'static Term> {
     sorted(TERMS.iter().filter(|t| occurs_in(t, text)).collect())
 }
 
-/// The texts of all lessons, in the order of the lessons.
-fn lesson_texts() -> &'static Vec<String> {
-    static TEXTS: OnceLock<Vec<String>> = OnceLock::new();
-    TEXTS.get_or_init(crate::schematic::lesson_texts)
+/// A lesson that the glossary can start: a lesson of the schematic editor (its index, see `schematic::lesson_ids`) or of the board editor
+/// (the number that `start_board_lesson` takes).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Target {
+    Schematic(usize),
+    Board(usize),
 }
 
-/// The lessons (indices, see `schematic::lesson_ids`) that use the term.
-pub fn lessons_of(term: &Term) -> Vec<usize> {
-    lesson_texts().iter().enumerate().filter(|(_, text)| occurs_in(term, text)).map(|(i, _)| i).collect()
+struct Entry {
+    target: Target,
+    title: &'static str,
+    text: String,
+}
+
+/// Every lesson with everything it says: the schematic lessons in their order, then the board lessons.
+fn all_lessons() -> &'static Vec<Entry> {
+    static LESSONS: OnceLock<Vec<Entry>> = OnceLock::new();
+    LESSONS.get_or_init(|| {
+        let titles = crate::schematic::lesson_titles();
+        let mut v: Vec<Entry> = crate::schematic::lesson_texts().into_iter().enumerate().map(|(i, text)| Entry { target: Target::Schematic(i), title: titles[i], text }).collect();
+        v.extend(crate::board_editor::lesson::lesson_texts().into_iter().map(|(which, title, text)| Entry { target: Target::Board(which), title, text }));
+        v
+    })
+}
+
+/// The lessons that use the term, with their titles.
+pub fn lessons_of(term: &Term) -> Vec<(Target, &'static str)> {
+    all_lessons().iter().filter(|e| occurs_in(term, &e.text)).map(|e| (e.target, e.title)).collect()
 }
 
 #[derive(Default)]
@@ -304,7 +348,7 @@ impl GlossaryWindow {
     }
 
     /// Draw the window; the answer is the lesson the learner chose to start.
-    pub fn show(&mut self, ctx: &egui::Context) -> Option<usize> {
+    pub fn show(&mut self, ctx: &egui::Context) -> Option<Target> {
         if !self.open {
             return None;
         }
@@ -332,7 +376,11 @@ impl GlossaryWindow {
                             ui.add_space(4.0);
                             ui.label(egui::RichText::new(format!("【{row}】")).strong().color(crate::theme::WARN));
                         }
-                        let mark = if term.kind == Kind::Operation { "  (操作)" } else { "" };
+                        let mark = match term.kind {
+                            Kind::Operation => "  (操作)",
+                            Kind::Board => "  (基板)",
+                            Kind::Circuit => "",
+                        };
                         if ui.selectable_label(self.selected == Some(term.name), format!("{} ({}){mark}", term.name, term.reading)).clicked() {
                             self.selected = Some(term.name);
                         }
@@ -347,22 +395,29 @@ impl GlossaryWindow {
                         return;
                     };
                     ui.heading(term.name);
-                    ui.small(format!("読み: {}　{}", term.reading, if term.kind == Kind::Operation { "(このソフトの言葉)" } else { "(回路の言葉)" }));
+                    ui.small(format!(
+                        "読み: {}　{}",
+                        term.reading,
+                        match term.kind {
+                            Kind::Operation => "(このソフトの言葉)",
+                            Kind::Board => "(基板の言葉)",
+                            Kind::Circuit => "(回路の言葉)",
+                        }
+                    ));
                     if !term.aliases.is_empty() {
                         ui.small(format!("別名: {}", term.aliases.join("、")));
                     }
                     ui.add_space(4.0);
                     ui.label(term.short);
                     ui.add_space(8.0);
-                    let titles = crate::schematic::lesson_titles();
                     let lessons = lessons_of(term);
                     if lessons.is_empty() {
                         ui.small("この語が出てくるレッスンは、まだありません。");
                     } else {
                         ui.label(egui::RichText::new("この語が出てくるレッスン").strong());
-                        for i in lessons {
-                            if ui.button(titles[i]).on_hover_text("このレッスンを始めます").clicked() {
-                                start = Some(i);
+                        for (target, title) in lessons {
+                            if ui.button(title).on_hover_text("このレッスンを始めます").clicked() {
+                                start = Some(target);
                             }
                         }
                     }
@@ -379,6 +434,12 @@ impl GlossaryWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The ids of the schematic lessons that use a term.
+    fn schematic_ids_of(term: &Term) -> Vec<&'static str> {
+        let ids = crate::schematic::lesson_ids();
+        lessons_of(term).iter().filter_map(|(t, _)| if let Target::Schematic(i) = t { Some(ids[*i]) } else { None }).collect()
+    }
 
     #[test]
     fn names_are_unique_and_the_readings_are_hiragana() {
@@ -434,8 +495,7 @@ mod tests {
     #[test]
     fn the_lessons_of_a_term_are_found_in_their_texts() {
         let term = TERMS.iter().find(|t| t.name == "分圧").unwrap();
-        let ids = crate::schematic::lesson_ids();
-        let lessons: Vec<&str> = lessons_of(term).iter().map(|&i| ids[i]).collect();
+        let lessons = schematic_ids_of(term);
         assert!(lessons.contains(&"intro_read"), "{lessons:?}");
         assert!(terms_in("分圧とリップルの話").iter().any(|t| t.name == "リップル"));
     }
@@ -453,15 +513,22 @@ mod tests {
 
     #[test]
     fn words_of_the_older_lessons_lead_to_them() {
-        let ids = crate::schematic::lesson_ids();
-        let find = |name: &str| {
-            let term = TERMS.iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{name}"));
-            lessons_of(term).iter().map(|&i| ids[i]).collect::<Vec<_>>()
-        };
+        let find = |name: &str| schematic_ids_of(TERMS.iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{name}")));
         assert!(find("データシート").contains(&"datasheet"));
         assert!(find("プルアップ").contains(&"pullup"));
         assert!(find("フライバックダイオード").contains(&"flyback"));
         assert!(find("TL431").contains(&"tl431_ref"));
         assert!(find("ESD").iter().any(|l| l.starts_with("usb")));
+    }
+
+    #[test]
+    fn words_of_the_board_lessons_lead_to_them() {
+        let boards = |name: &str| -> Vec<usize> {
+            let term = TERMS.iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{name}"));
+            lessons_of(term).iter().filter_map(|(t, _)| if let Target::Board(w) = t { Some(*w) } else { None }).collect()
+        };
+        assert!(boards("DRC").contains(&2), "the pre-order check lesson");
+        assert!(boards("差動ペア").contains(&4) && boards("差動ペア").contains(&6));
+        assert!(boards("未配線").contains(&0));
     }
 }

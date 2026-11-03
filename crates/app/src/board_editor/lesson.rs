@@ -469,6 +469,62 @@ const STEPS: &[Step] = &[
     },
 ];
 
+/// The title of board lesson `which` (0..=7).
+fn title_of(which: usize) -> &'static str {
+    match which {
+        1 => COPPER_TITLE,
+        2 => FIX_TITLE,
+        3 => ARDUINO_TITLE,
+        4 => USB_TITLE,
+        5 => MEGA_TITLE,
+        6 => PAIRS_TITLE,
+        7 => REPAIR_TITLE,
+        _ => TITLE,
+    }
+}
+
+/// The steps of board lesson `which`.
+fn steps_of(which: usize) -> &'static [Step] {
+    match which {
+        1 => COPPER_STEPS,
+        2 => FIX_STEPS,
+        3 => ARDUINO_STEPS,
+        4 => USB_STEPS,
+        5 => MEGA_STEPS,
+        6 => PAIRS_STEPS,
+        7 => REPAIR_STEPS,
+        _ => STEPS,
+    }
+}
+
+/// What board lesson `which` says in its goal (the line under the title of its window).
+fn goal_of(which: usize) -> &'static str {
+    match which {
+        1 => "電源と負荷が遠く、配線が細い基板です。配線の抵抗で電圧がどれだけ落ちるかを、シミュレーションで見て、電流から必要な太さを決めて直します",
+        2 => "発注前チェックに引っかかる基板です。部品が基板の外にある、配線が切れている、電流に対して配線が細い、発注先のルールに合っていない、という4つを、チェックの表示を頼りに自分で直します",
+        3 => "ATmega328P の Arduino 互換ボードを基板にします。自動配置は叩き台なので、水晶を、人が正しい場所へ寄せます (バイパスコンデンサは、自動配置が電源ピンのそばに置きますが、確かめます)。そのあと配線し、通らない線が残ったときの直し方も身につけます",
+        4 => "USB の D+ と D− は、2 本で 1 つの信号を運ぶ「差動ペア」です。並べて、同じ長さで、短く引きます。差動ペアの機能で、2 本を並べて配線し、長さの差を確かめます",
+        5 => "ATmega2560 (100 ピン、0.5mm ピッチ) の基板です。自動配線は、通せる所まで配線して、18 本のネットを残しました。残りを、手で引く・ビアで渡す・邪魔な線を引き直す・部品を動かす、で仕上げる練習です",
+        6 => "2 つのヘッダの間を、2 組の差動ペア (2 レーン) が走っています。2 組が同時に届くように、ペアどうしの長さを揃えます。蛇行は、2 本をいっしょに曲げるので、2 本の間隔が保たれます",
+        7 => "ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、直します。DRC・未配線・発注前チェックなど、いままでの道具が手がかりです。何度でも、別の故障で練習できます",
+        _ => "回路図で描いた回路を、基板のパターンにして、発注用のデータを作るところまでを一通り体験します",
+    }
+}
+
+/// The board lessons for the glossary: (the number `which` that starts it, its title, everything it says).
+pub fn lesson_texts() -> Vec<(usize, &'static str, String)> {
+    (0..=7)
+        .map(|which| {
+            let mut parts: Vec<&str> = vec![title_of(which), goal_of(which)];
+            for step in steps_of(which) {
+                parts.push(step.title);
+                parts.push(step.detail);
+            }
+            (which, title_of(which), parts.join("\n"))
+        })
+        .collect()
+}
+
 impl BoardEditor {
     pub fn start_lesson(&mut self) {
         self.new_file();
@@ -584,16 +640,7 @@ impl BoardEditor {
     }
 
     fn lesson_steps(&self) -> &'static [Step] {
-        match self.lesson.as_ref().map(|l| l.which) {
-            Some(1) => COPPER_STEPS,
-            Some(2) => FIX_STEPS,
-            Some(3) => ARDUINO_STEPS,
-            Some(4) => USB_STEPS,
-            Some(5) => MEGA_STEPS,
-            Some(6) => PAIRS_STEPS,
-            Some(7) => REPAIR_STEPS,
-            _ => STEPS,
-        }
+        steps_of(self.lesson.as_ref().map_or(0, |l| l.which))
     }
 
     /// The sample circuit this lesson imports.
@@ -652,27 +699,12 @@ impl BoardEditor {
         let mega = l.which == 5;
         let pairs = l.which == 6;
         let repair = l.which == 7;
+        let which = l.which;
         let steps = self.lesson_steps();
         let cur = done.iter().position(|d| !d);
         let mut close = false;
-        egui::Window::new(format!("レッスン: {}", if copper { COPPER_TITLE } else if fix { FIX_TITLE } else if arduino { ARDUINO_TITLE } else if usb { USB_TITLE } else if mega { MEGA_TITLE } else if pairs { PAIRS_TITLE } else if repair { REPAIR_TITLE } else { TITLE })).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
-            ui.label(if repair {
-                "ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、直します。DRC・未配線・発注前チェックなど、いままでの道具が手がかりです。何度でも、別の故障で練習できます"
-            } else if pairs {
-                "2 つのヘッダの間を、2 組の差動ペア (2 レーン) が走っています。2 組が同時に届くように、ペアどうしの長さを揃えます。蛇行は、2 本をいっしょに曲げるので、2 本の間隔が保たれます"
-            } else if mega {
-                "ATmega2560 (100 ピン、0.5mm ピッチ) の基板です。自動配線は、通せる所まで配線して、18 本のネットを残しました。残りを、手で引く・ビアで渡す・邪魔な線を引き直す・部品を動かす、で仕上げる練習です"
-            } else if usb {
-                "USB の D+ と D− は、2 本で 1 つの信号を運ぶ「差動ペア」です。並べて、同じ長さで、短く引きます。差動ペアの機能で、2 本を並べて配線し、長さの差を確かめます"
-            } else if arduino {
-                "ATmega328P の Arduino 互換ボードを基板にします。自動配置は叩き台なので、水晶を、人が正しい場所へ寄せます (バイパスコンデンサは、自動配置が電源ピンのそばに置きますが、確かめます)。そのあと配線し、通らない線が残ったときの直し方も身につけます"
-            } else if fix {
-                "発注前チェックに引っかかる基板です。部品が基板の外にある、配線が切れている、電流に対して配線が細い、発注先のルールに合っていない、という4つを、チェックの表示を頼りに自分で直します"
-            } else if copper {
-                "電源と負荷が遠く、配線が細い基板です。配線の抵抗で電圧がどれだけ落ちるかを、シミュレーションで見て、電流から必要な太さを決めて直します"
-            } else {
-                "回路図で描いた回路を、基板のパターンにして、発注用のデータを作るところまでを一通り体験します"
-            });
+        egui::Window::new(format!("レッスン: {}", title_of(which))).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
+            ui.label(goal_of(which));
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();
             for (k, step) in steps.iter().enumerate() {
