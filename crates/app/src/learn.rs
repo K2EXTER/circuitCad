@@ -152,6 +152,12 @@ const I_PROTECTION: Item = lesson("protection", "電源を守る (逆接続・�
 const I_LDO: Item = lesson("ldo", "LDO (低ドロップアウト) レギュレータ", "入力の余裕 (ドロップアウト電圧) が小さくても動く。USB の 5V や電池から 3.3V を作る。電圧差は熱になる", Some("入力を下げながら出力を測り、出力が落ち始める入力を、データシートと比べます"));
 const I_HEAT: Item = lesson("heat", "熱と定格を考える", "電圧差 × 電流 = 熱。放熱板が必要になる理由。定格チェックの見方", Some("負荷を増やしながらレギュレータの温度を測り (触って確かめる前に、温度計で)、計算と比べます"));
 const I_BUCK: Item = lesson("buck","降圧コンバータ (スイッチング電源)", "発展: 熱にしない電源。リニアとの効率の違い", None);
+const I_ELECTROLYTIC_LIFE: Item = lesson("electrolytic_life", "電解コンデンサの寿命 (リップル電流と温度)", "ESR の発熱で内部が温まる、寿命は 10℃ で半分、定格リップル電流を超えない", Some("電解コンデンサを触って温度を感じ、データシートの定格リップルと寿命から、使う条件の寿命を見積もります"));
+const I_DIODE_RECOVERY: Item = lesson("diode_recovery", "ダイオードの逆回復 (切り替えの瞬間に逆向きに流れる)", "順方向のとき貯めた電荷が抜けるまで逆向きに流れる、速い品とショットキー、スイッチング電源の損失とノイズ", Some("整流ダイオードの種類 (1N4007、高速、ショットキー) をデータシートの trr で見比べます"));
+const I_SWITCHING_LOSS: Item = lesson("switching_loss", "MOSFET のスイッチング損失 (ゲートの速さと熱)", "ゲート容量の充電で遅れる、ミラー期間、切り替え中の V × I が熱になる、損失 = 1 回あたりのエネルギー × 周波数", Some("ゲート抵抗を変えて、ドレインの立ち下がりの速さと、MOSFET の温度の違いを見ます"));
+const I_LDO_VS_BUCK: Item = lesson("ldo_vs_buck", "リニアとスイッチングの比較 (熱にするか、貯めて運ぶか)", "リニアの効率 = 出力 ÷ 入力の電圧、損失は (Vin − Vout) × I、スイッチングは高い効率で、リップルと部品が増える", Some("入力と出力の電圧と電流を測って、効率を計算し、リニアとスイッチングの温度を比べます"));
+const I_SLEW_RATE: Item = lesson("slew_rate", "オペアンプのスルーレート (出力が追いつけない速さ)", "出力の電圧の変化の速さには上限 (V/µs) がある、大きく速い信号は三角波にゆがむ、フルパワー帯域 = SR ÷ (2π Vp)", Some("オペアンプのボルテージフォロワに大きさと周波数を変えた正弦波を入れ、出力の形がゆがむ周波数を測ります"));
+const I_EEPROM_BASICS: Item = lesson("eeprom_basics", "EEPROM (I²C) の素顔 (オープンドレインとプルアップ)", "バスは引き下げだけ・上げるのは抵抗、立ち上がり = 0.85 RC、プルアップの上限と下限、書き込みに数 ms", Some("I²C のバス (SDA) をオシロで見て、プルアップの値を変えながら、立ち上がりの形を比べます"));
 const I_FLYBACK: Item = lesson("flyback", "リレーやモータをつなぐ (フライバックダイオード)", "コイルの電流を急に切ると、大きな逆起電力が出てトランジスタを壊す。コイルと並列にダイオードを入れて止める", Some("リレー (または小さなモータ) をトランジスタで駆動し、ダイオードの向きを確かめます"));
 const I_PWM: Item = lesson("pwm", "PWM とフィルタ (analogWrite でアナログ電圧を作る)", "High と Low の割合 (デューティ) と RC フィルタで、途中の電圧を作る。揺れと反応の速さは引き換え。重い負荷には使えない", Some("analogWrite の値を変えて、フィルタの出力をテスタで測ります"));
 const I_BOARD: Item = Item { id: "board", title: "回路図から基板をつくる", about: "取り込み・配置・配線・DRC・発注の準備", kind: Kind::Board(0), requires: Some(&["draw_psu"]), build: false, real: Some("発注するなら、少量・少額で試します") };
@@ -197,6 +203,7 @@ const POWER_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["led"]), ..lesson("diode_curve", "ダイオードの特性", "約 0.7V (ショットキーは約 0.3V) で流れ始め、そのあとは電圧がほとんど増えない", Some("ダイオードの順方向電圧を、シリコンとショットキーで測り、温めて変化を見ます")) },
                 Item { requires: Some(&["diode_curve"]), ..lesson("rectifier", "交流を直流にする (整流・平滑・リップル)", "整流・平滑コンデンサ・リップルの大きさ。シミュレーションは商用電圧 (100V) を使いますが、実機では使いません", Some("実機は低電圧の交流 (小さなトランスの出力など) だけで行い、オシロ (またはテスタの交流レンジ) でリップルを測って、容量を変えて比べます。商用電源 (100V) の配線は、危険なので行いません")) },
+                Item { requires: Some(&["rectifier"]), ..I_ELECTROLYTIC_LIFE },
                 Item { build: true, requires: Some(&["diode_curve", "divider"]), ..lesson("zener", "ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力が変わっても動きにくいが、負荷が重いと崩れる。自分で作るチャレンジつき", Some("ツェナーと抵抗で 5.1V を作り、負荷と入力を変えて電圧の変化を測ります")) },
                 Item { requires: Some(&["led"]), ..I_BJT_SWITCH },
                 Item { build: true, requires: Some(&["zener", "bjt_switch"]), ..lesson("emitter_follower", "エミッタフォロワ (電流を増やす)", "電圧はそのまま、流せる電流を増やす。直列パス型電源の中核。大電流では発熱する", Some("ツェナーの電圧を、トランジスタで大電流にし、負荷を変えて出力と温度を測ります")) },
@@ -279,6 +286,7 @@ const ARDUINO_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["pin_led"]), ..I_PWM },
                 Item { requires: Some(&["pullup"]), ..lesson("levels", "3.3V と 5V をつなぐ (レベル変換)", "電圧の違う相手を直接つなぐと壊れる・読めない。分圧と MOSFET (BSS138) での変換と、プルアップによる波形の遅れ", Some("5V のピンの出力を、分圧してから 3.3V の部品に入れる前に、テスタで測って確かめます")) },
                 Item { requires: Some(&["levels", "reset"]), ..lesson("serial", "シリアル通信と USB 変換 (発展)", "TX/RX の交差、ボーレートと 1 ビットの長さ、配線の抵抗と容量でなまると文字化けする", Some("端末ソフトで 9600bps と別のボーレートを比べて、文字化けを見ます")) },
+                Item { requires: Some(&["pullup"]), ..I_EEPROM_BASICS },
             ],
         },
         Stage {
@@ -399,8 +407,13 @@ const SWITCH_PATH: LearningPath = LearningPath {
         },
         Stage {
             name: "3. スイッチングで電圧を変える",
-            about: "スイッチを高速に入り切りして、熱にせずに電圧を下げる降圧コンバータ",
-            items: &[Item { requires: Some(&["mosfet", "flyback"]), ..I_BUCK }],
+            about: "スイッチを高速に入り切りして、熱にせずに電圧を下げる降圧コンバータ。損失はどこで出るか (MOSFET の切り替え、ダイオードの逆回復) と、リニアとの比較",
+            items: &[
+                Item { requires: Some(&["mosfet", "flyback"]), ..I_BUCK },
+                Item { requires: Some(&["buck"]), ..I_SWITCHING_LOSS },
+                Item { requires: Some(&["buck"]), ..I_DIODE_RECOVERY },
+                Item { requires: Some(&["buck"]), ..I_LDO_VS_BUCK },
+            ],
         },
         Stage {
             name: "4. 基板にする",
@@ -448,7 +461,6 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&[]), ..lesson("resistor", "抵抗の素顔 (オームの法則・直列・並列・電力)", "V = I × R、P = V × I、直列は足し算・並列は小さくなる、定格電力と許容差", Some("抵抗の値をテスタで測り、直列・並列の合成と、中点の電圧を計算と比べます")) },
                 Item { requires: Some(&["resistor"]), ..lesson("capacitor", "コンデンサの素顔 (電流は電圧の変化に比例する)", "I = C × dV/dt、充電の時定数 τ = R × C、ためるエネルギー ½CV²、並列と直列の容量", Some("大きな電解コンデンサを抵抗で充電し、63% に達する時間を測って τ = R × C と比べます")) },
-                Item { requires: Some(&["capacitor"]), ..lesson("electrolytic_life", "電解コンデンサの寿命 (リップル電流と温度)", "ESR の発熱で内部が温まる、寿命は 10℃ で半分、定格リップル電流を超えない", Some("電解コンデンサを触って温度を感じ、データシートの定格リップルと寿命から、使う条件の寿命を見積もります")) },
                 Item { requires: Some(&["capacitor"]), ..lesson("inductor", "コイルの素顔 (電流は急には変えられない)", "V = L × di/dt、時定数 τ = L ÷ R、ためるエネルギー ½LI²、飽和電流", Some("コイルの DCR を測り、抵抗といっしょにした立ち上がりの時間から L ÷ R を確かめます")) },
             ],
         },
@@ -457,7 +469,6 @@ const PARTS_PATH: LearningPath = LearningPath {
             about: "一方通行の部品。電流で変わる抵抗、光る LED、電圧を止めるツェナー",
             items: &[
                 Item { requires: Some(&["diode_curve"]), ..lesson("diode_basics", "ダイオードの素顔 (一方通行と、電流で変わる抵抗)", "I = Is (e^(V / nVt) − 1)、V は電流の対数、動的な抵抗 rd = 26mV ÷ I", Some("1N4148 の電流を変えて電圧を測り、順向きと逆向きの違いを確かめます")) },
-                Item { requires: Some(&["diode_basics"]), ..lesson("diode_recovery", "ダイオードの逆回復 (切り替えの瞬間に逆向きに流れる)", "順方向のとき貯めた電荷が抜けるまで逆向きに流れる、速い品とショットキー、スイッチング電源の損失とノイズ", Some("整流ダイオードの種類 (1N4007、高速、ショットキー) をデータシートの trr で見比べます")) },
                 Item { requires: Some(&["diode_basics", "led"]), ..lesson("led_basics", "LED の素顔 (電圧ではなく電流で光る)", "I = (電源 − Vf) ÷ R、Vf は色で違う、電流の上限、抵抗の発熱", Some("赤と青の LED を 5V と 3.3V で光らせ、電流と明るさを比べます")) },
                 Item { requires: Some(&["led_basics"]), ..lesson("segment_basics", "7 セグメント LED の素顔 (共通の抵抗は明るさをばらつかせる)", "光る線の数で変わる電流、セグメントごとの抵抗、共通ピンに流れる合計の電流", Some("7 セグメント LED の 1 つの数字を、共通の抵抗とセグメントごとの抵抗で光らせ、明るさを比べます")) },
                 Item { requires: Some(&["diode_basics", "zener"]), ..lesson("zener_basics", "ツェナーダイオードの素顔 (逆向きで電圧が止まる)", "降伏電圧 Vz、動作抵抗 rz、Iz = (Vin − Vz) ÷ R、電力 P = Vz × Iz と定格", Some("1N4733A に抵抗をつないで、電源を変えながら Z の電圧を測り、止まる様子を確かめます")) },
@@ -469,9 +480,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["resistor"]), ..lesson("transistor", "トランジスタの素顔 (電流を増やす部品)", "Ic = hFE × Ib、Vbe 約 0.65V、飽和 (Vce(sat))、損失 Vce × Ic", Some("2N3904 のベース抵抗を変えて、Ic ÷ Ib の hFE と、飽和したときのコレクタ電圧を測ります")) },
                 Item { requires: Some(&["transistor"]), ..lesson("mosfet_basics", "MOSFET の素顔 (電圧で電流を制御する)", "しきい値 Vth、オン抵抗 Rds(on)、Id ∝ (Vgs − Vth)²、中途半端な電圧は損失が大きい", Some("2N7000 のゲートの電圧を変えながらドレインの電圧を測り、しきい値とオン抵抗を確かめます")) },
-                Item { requires: Some(&["mosfet_basics", "mosfet"]), ..lesson("switching_loss", "MOSFET のスイッチング損失 (ゲートの速さと熱)", "ゲート容量の充電で遅れる、ミラー期間、切り替え中の V × I が熱になる、損失 = 1 回あたりのエネルギー × 周波数", Some("ゲート抵抗を変えて、ドレインの立ち下がりの速さと、MOSFET の温度の違いを見ます")) },
                 Item { requires: Some(&["transistor", "opamp_noninv"]), ..lesson("opamp_basics", "オペアンプの素顔 (増幅の式・帯域・振れ幅の限界)", "倍率 1 + Rf ÷ Rg、GBW = 倍率 × 帯域、出力は電源で頭打ち", Some("LM358 の非反転増幅で倍率と −3dB の周波数を測り、入力を大きくして出力が切れるのを見ます")) },
-                Item { requires: Some(&["opamp_basics"]), ..lesson("slew_rate", "オペアンプのスルーレート (出力が追いつけない速さ)", "出力の電圧の変化の速さには上限 (V/µs) がある、大きく速い信号は三角波にゆがむ、フルパワー帯域 = SR ÷ (2π Vp)", Some("オペアンプのボルテージフォロワに大きさと周波数を変えた正弦波を入れ、出力の形がゆがむ周波数を測ります")) },
             ],
         },
         Stage {
@@ -490,7 +499,6 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["coin_cell"]), ..lesson("battery_basics", "電池の素顔 (内部抵抗が電池の種類を分ける)", "端子電圧 = 開放電圧 − 電流 × 内部抵抗、種類による違い、最大電力は内部抵抗と同じ抵抗のとき", Some("単3電池とコイン電池に同じ抵抗をつなぎ、電圧の下がり方を比べます (ショートさせる実験はしません)")) },
                 Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
-                Item { requires: Some(&["regulator_basics", "buck"]), ..lesson("ldo_vs_buck", "リニアとスイッチングの比較 (熱にするか、貯めて運ぶか)", "リニアの効率 = 出力 ÷ 入力の電圧、損失は (Vin − Vout) × I、スイッチングは高い効率で、リップルと部品が増える", Some("入力と出力の電圧と電流を測って、効率を計算し、リニアとスイッチングの温度を比べます")) },
                 Item { requires: Some(&["rectifier", "inductor"]), ..lesson("transformer_basics", "トランスの素顔 (電圧は巻数比、電流は逆比)", "Vs ÷ Vp = Ns ÷ Np、Is ÷ Ip = Np ÷ Ns、定格 VA、無負荷と全負荷の電圧の差", Some("小さなトランスの巻線の抵抗をテスタで測り、一次と二次の比と電圧降下を計算と比べます (商用電源につなぐ実験はしません)")) },
                 Item { requires: Some(&["transformer_basics", "diode_basics"]), ..lesson("bridge_basics", "ダイオードブリッジの素顔 (整流の損失とピーク電流)", "全波は半波の半分のリップル、ダイオード 2 本ぶんの電圧降下、平滑コンデンサに流れる短く大きな電流", Some("低電圧の交流 (トランスの出力) を整流し、半波と全波のリップルを、オシロで比べます (商用電源の整流は行いません)")) },
                 Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },
@@ -507,7 +515,6 @@ const PARTS_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["crystal", "rlc"]), ..lesson("crystal_basics", "水晶の素顔 (Q が桁違いに大きい共振)", "等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q", Some("水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます")) },
                 Item { requires: Some(&["inductor", "capacitor"]), ..lesson("speaker_basics", "スピーカーとブザーの素顔 (インピーダンスは 8Ω 一定ではない)", "共振で上がるインピーダンス、高い周波数でコイルとして上がる、圧電ブザーは容量+共振", Some("スピーカーのインピーダンスを、テスタで測る直流の抵抗 (約 8Ω ではなく 6〜7Ω) と、アンプの表示を比べます")) },
                 Item { requires: Some(&["levels"]), ..lesson("logic_basics", "ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)", "しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 80Ω の抵抗", Some("74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます")) },
-                Item { requires: Some(&["logic_basics", "pullup"]), ..lesson("eeprom_basics", "EEPROM (I²C) の素顔 (オープンドレインとプルアップ)", "バスは引き下げだけ・上げるのは抵抗、立ち上がり = 0.85 RC、プルアップの上限と下限、書き込みに数 ms", Some("I²C のバス (SDA) をオシロで見て、プルアップの値を変えながら、立ち上がりの形を比べます")) },
             ],
         },
     ],
@@ -534,6 +541,7 @@ const SIGNAL_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["rc_lowpass"]), ..I_OPAMP_NONINV },
                 Item { build: true, requires: Some(&["opamp_noninv"]), ..I_OPAMP_INV },
                 Item { requires: Some(&["opamp_inv", "poles"]), ..I_PHASE_MARGIN },
+                Item { requires: Some(&["opamp_noninv"]), ..I_SLEW_RATE },
                 Item { requires: Some(&["opamp_noninv"]), ..I_NOISE },
             ],
         },
