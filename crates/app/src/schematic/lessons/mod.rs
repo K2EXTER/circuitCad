@@ -126,6 +126,7 @@ const LESSONS: &[Lesson] = &[
     parts::ELECTROLYTIC_LIFE,
     parts::INDUCTOR,
     parts::DIODE_BASICS,
+    parts::DIODE_RECOVERY,
     parts::LED_BASICS,
     parts::SEGMENT_BASICS,
     parts::ZENER_BASICS,

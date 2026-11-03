@@ -996,3 +996,13 @@ pub(super) fn gate_resistor_small(e: &SchEditor) -> bool {
 pub(super) fn gate_resistor_large(e: &SchEditor) -> bool {
     value_at_least(e, "R2", 400.0) && tran_fresh(e)
 }
+
+/// The diode recovery lesson: the resistor R1 of the slow diode is 80 ohm or more (a small forward current) and the run is fresh.
+pub(super) fn recovery_small_forward_current(e: &SchEditor) -> bool {
+    value_at_least(e, "R1", 80.0) && tran_fresh(e)
+}
+
+/// The diode recovery lesson: the resistor R2 of the fast diode is 3 ohm or less (a hard drive) and the run is fresh.
+pub(super) fn recovery_hard_drive(e: &SchEditor) -> bool {
+    value_at_most(e, "R2", 3.0) && tran_fresh(e)
+}

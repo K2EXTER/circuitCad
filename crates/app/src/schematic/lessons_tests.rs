@@ -2719,3 +2719,51 @@ fn the_switching_loss_lesson_ticks_and_its_numbers_hold() {
     let (e470, f470) = loss(&e);
     assert!((e470 - 3.44).abs() < 0.25 && (f470 - 359.0).abs() < 40.0 && e470 > 3.0 * e100, "a slow gate: {e470} {f470}");
 }
+
+#[test]
+fn the_diode_recovery_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "diode_recovery").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // after the switch to -5 V (at 5 us): (the largest reverse current (A), how long the current stays reversed (ns), the charge taken out (nC))
+    let rec = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let i = &r.signal(n).unwrap().values;
+        let k0 = r.time.iter().position(|t| *t >= 5.0e-6).unwrap();
+        let mut peak = 0.0f64;
+        let (mut q, mut first, mut last) = (0.0, None, 0.0);
+        for k in k0 + 1..r.time.len() {
+            if r.time[k] > 20e-6 {
+                break;
+            }
+            if i[k] < -0.01 {
+                peak = peak.max(-i[k]);
+                q += -0.5 * (i[k] + i[k - 1]) * (r.time[k] - r.time[k - 1]);
+                first.get_or_insert(r.time[k]);
+                last = r.time[k];
+            }
+        }
+        (peak, (last - first.unwrap_or(last)) * 1e9, q * 1e9)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (slow, fast, schottky) = (rec(&e, "I(R1)"), rec(&e, "I(R2)"), rec(&e, "I(R3)"));
+    assert!((slow.0 - 0.58).abs() < 0.03 && (slow.1 - 1620.0).abs() < 150.0 && (slow.2 - 936.0).abs() < 80.0, "slow {slow:?}");
+    assert!((fast.0 - 0.58).abs() < 0.03 && (fast.1 - 21.6).abs() < 6.0 && fast.2 < 15.0 && slow.2 > 50.0 * fast.2, "fast {fast:?}");
+    assert!(schottky.0 < 0.1 && schottky.2 < 1.0, "Schottky {schottky:?}");
+    set_value(&mut e, "R1", "100");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let low = rec(&e, "I(R1)");
+    assert!((low.0 - 0.0575).abs() < 0.006 && (low.2 - 95.0).abs() < 12.0 && (low.1 - 1670.0).abs() < 150.0, "a tenth of the charge, the same time: {low:?}");
+    set_value(&mut e, "R2", "2");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let hard = rec(&e, "I(R2)");
+    assert!((hard.0 - 2.64).abs() < 0.2 && hard.2 > 40.0 && hard.2 < 56.0, "a hard drive: {hard:?}");
+}

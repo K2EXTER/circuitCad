@@ -1,0 +1,469 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(5 -5 5u 10n 10n 15u 40u)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N4007",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N4007",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N4007",
+          "text": ".model 1N4007 D(IS=76.9p N=1.45 RS=0.042 BV=1000 IBV=5u CJO=15p TT=3u)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+            "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+            "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 1000.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "順方向電圧",
+              "value": "1.1V (最大)",
+              "condition": "IF = 1A"
+            },
+            {
+              "name": "非繰り返しサージ電流",
+              "value": "30A",
+              "condition": "8.3ms"
+            }
+          ]
+        },
+        "glyph": "diode"
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        20,
+        20
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Custom",
+      "value": "UF4007",
+      "pos": [
+        40,
+        20
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "UF4007",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "UF4007",
+          "text": ".model UF4007 D(IS=1n N=2.0 RS=0.3 BV=1000 IBV=5u CJO=15p TT=40n)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "逆回復時間(75ns)は扱いません。スイッチング電源のスパイクや損失は実物より小さく出ます。",
+            "接合容量は扱いません。耐圧や定格電流を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 1000.0,
+          "i_max": 1.0,
+          "p_max": 1.0,
+          "rows": [
+            {
+              "name": "順方向電圧",
+              "value": "1.7V (最大)",
+              "condition": "IF = 1A"
+            },
+            {
+              "name": "逆回復時間",
+              "value": "75ns (最大)"
+            }
+          ]
+        },
+        "glyph": "diode"
+      }
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        20,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D3",
+      "kind": "Custom",
+      "value": "1N5819",
+      "pos": [
+        40,
+        40
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N5819",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N5819",
+          "text": ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m CJO=100p)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+            "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+            "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 40.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "順方向電圧",
+              "value": "0.6V (最大)",
+              "condition": "IF = 1A"
+            }
+          ]
+        },
+        "glyph": "schottky"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        38,
+        0
+      ],
+      "b": [
+        35,
+        0
+      ]
+    },
+    {
+      "a": [
+        42,
+        0
+      ],
+      "b": [
+        45,
+        0
+      ]
+    },
+    {
+      "a": [
+        20,
+        18
+      ],
+      "b": [
+        20,
+        15
+      ]
+    },
+    {
+      "a": [
+        20,
+        22
+      ],
+      "b": [
+        20,
+        25
+      ]
+    },
+    {
+      "a": [
+        38,
+        20
+      ],
+      "b": [
+        35,
+        20
+      ]
+    },
+    {
+      "a": [
+        42,
+        20
+      ],
+      "b": [
+        45,
+        20
+      ]
+    },
+    {
+      "a": [
+        20,
+        38
+      ],
+      "b": [
+        20,
+        35
+      ]
+    },
+    {
+      "a": [
+        20,
+        42
+      ],
+      "b": [
+        20,
+        45
+      ]
+    },
+    {
+      "a": [
+        38,
+        40
+      ],
+      "b": [
+        35,
+        40
+      ]
+    },
+    {
+      "a": [
+        42,
+        40
+      ],
+      "b": [
+        45,
+        40
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "DRIVE"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "DRIVE"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        35,
+        0
+      ],
+      "text": "A1"
+    },
+    {
+      "pos": [
+        45,
+        0
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        15
+      ],
+      "text": "DRIVE"
+    },
+    {
+      "pos": [
+        20,
+        25
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        35,
+        20
+      ],
+      "text": "A2"
+    },
+    {
+      "pos": [
+        45,
+        20
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        35
+      ],
+      "text": "DRIVE"
+    },
+    {
+      "pos": [
+        20,
+        45
+      ],
+      "text": "A3"
+    },
+    {
+      "pos": [
+        35,
+        40
+      ],
+      "text": "A3"
+    },
+    {
+      "pos": [
+        45,
+        40
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

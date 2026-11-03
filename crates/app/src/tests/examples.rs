@@ -1513,6 +1513,42 @@ fn write_switching_loss_example() {
     std::fs::write(root.join("switching_loss.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/diode_recovery.schjson for the diode reverse recovery lesson: the source V1 (+5 V, then -5 V from 5 us to 20 us)
+/// drives three diodes through 10 ohm each: 1N4007 (R1, D1: its model gets a stored-charge time TT = 3 us for this sample), UF4007 (R2, D2:
+/// TT = 40 ns) and the Schottky 1N5819 (R3, D3: no stored charge, a junction capacitance of 100 pF):
+/// `cargo test -p app write_diode_recovery_example -- --ignored`
+#[test]
+#[ignore]
+fn write_diode_recovery_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str, model: &str| {
+        let mut d = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+        d.sim.as_mut().unwrap().text = model.into();
+        d
+    };
+    let diodes = [
+        find("1N4007", ".model 1N4007 D(IS=76.9p N=1.45 RS=0.042 BV=1000 IBV=5u CJO=15p TT=3u)"),
+        find("UF4007", ".model UF4007 D(IS=1n N=2.0 RS=0.3 BV=1000 IBV=5u CJO=15p TT=40n)"),
+        find("1N5819", ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m CJO=100p)"),
+    ];
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "PULSE(5 -5 5u 10n 10n 15u 40u)".into();
+    label(&mut s, v1, "+", "DRIVE");
+    label(&mut s, v1, "-", "GND");
+    for (k, def) in diodes.iter().enumerate() {
+        let y = 20 * k as i32;
+        let r = s.add(Kind::Resistor, (20, y), 1);
+        s.components[r].value = "10".into();
+        label(&mut s, r, "1", "DRIVE");
+        label(&mut s, r, "2", &format!("A{}", k + 1));
+        let d = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (40, y), 0);
+        label(&mut s, d, "A", &format!("A{}", k + 1));
+        label(&mut s, d, "K", "GND");
+    }
+    std::fs::write(root.join("diode_recovery.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
