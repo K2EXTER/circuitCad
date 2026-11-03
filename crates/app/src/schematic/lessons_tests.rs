@@ -2461,3 +2461,27 @@ fn the_switch_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!((v(&e, "SIG") - 1.1).abs() < 0.01, "a dirty contact does not give a Low");
 }
+
+#[test]
+fn the_battery_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "battery_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "VAA") - 1.526).abs() < 0.01 && (v(&e, "VLI") - 4.19).abs() < 0.02 && (v(&e, "VCOIN") - 2.96).abs() < 0.02, "light loads");
+    set_value(&mut e, "R3", "10");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((v(&e, "VCOIN") - 1.2).abs() < 0.01 && v(&e, "VAA") > 1.5, "the coin cell sags, the AA cell does not");
+    set_value(&mut e, "R3", "15");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!((v(&e, "VCOIN") - 1.5).abs() < 0.01, "half of the open voltage: the maximum power");
+}

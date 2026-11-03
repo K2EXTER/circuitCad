@@ -921,3 +921,13 @@ pub(super) fn switch_worn_power_contact(e: &SchEditor) -> bool {
 pub(super) fn switch_dirty_signal_contact(e: &SchEditor) -> bool {
     value_at_least(e, "R4", 2e3) && dc_fresh(e)
 }
+
+/// The battery lesson: the coin cell's load R3 is 12 ohm or less (a heavy load for a cell of 15 ohm) and the run is fresh.
+pub(super) fn battery_coin_heavy(e: &SchEditor) -> bool {
+    value_at_most(e, "R3", 12.0) && dc_fresh(e)
+}
+
+/// The battery lesson: the coin cell's load R3 is 12 - 20 ohm (about the internal resistance: the most power) and the run is fresh.
+pub(super) fn battery_matched_load(e: &SchEditor) -> bool {
+    value_between(e, "R3", 12.0, 20.0) && dc_fresh(e)
+}

@@ -1200,6 +1200,33 @@ fn write_switch_basics_example() {
     std::fs::write(root.join("switch_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/battery_basics.schjson for the battery lesson: a fresh AA alkaline cell (BT1) on 10 ohm (R1), a fresh 18650
+/// Li-ion cell (BT2) on 22 ohm (R2) and a fresh CR2032 coin cell (BT3) on 1 kohm (R3), side by side:
+/// `cargo test -p app write_battery_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_battery_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| {
+        let (_, t) = part_lib::EXAMPLES.iter().find(|(k, _)| k.starts_with(n)).unwrap();
+        serde_json::from_str::<part_lib::PartDef>(t).unwrap()
+    };
+    let mut s = sch_core::Schematic::default();
+    for (y, name, ohm, plus, load) in [(0, "AA_ALKALINE", "10", "VAA", 1), (24, "LIION_18650", "22", "VLI", 2), (48, "CR2032", "1k", "VCOIN", 3)] {
+        let def = find(name);
+        let b = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (0, y), 0);
+        label(&mut s, b, "1", plus);
+        label(&mut s, b, "2", "GND");
+        let r = s.add(Kind::Resistor, (24, y), 1);
+        s.components[r].value = ohm.into();
+        s.components[r].footprint = "R_2512".into();
+        label(&mut s, r, "1", plus);
+        label(&mut s, r, "2", "GND");
+        let _ = load;
+    }
+    std::fs::write(root.join("battery_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
