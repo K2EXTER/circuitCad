@@ -468,6 +468,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["resistor"]), ..lesson("transistor", "トランジスタの素顔 (電流を増やす部品)", "Ic = hFE × Ib、Vbe 約 0.65V、飽和 (Vce(sat))、損失 Vce × Ic", Some("2N3904 のベース抵抗を変えて、Ic ÷ Ib の hFE と、飽和したときのコレクタ電圧を測ります")) },
                 Item { requires: Some(&["transistor"]), ..lesson("mosfet_basics", "MOSFET の素顔 (電圧で電流を制御する)", "しきい値 Vth、オン抵抗 Rds(on)、Id ∝ (Vgs − Vth)²、中途半端な電圧は損失が大きい", Some("2N7000 のゲートの電圧を変えながらドレインの電圧を測り、しきい値とオン抵抗を確かめます")) },
+                Item { requires: Some(&["mosfet_basics", "mosfet"]), ..lesson("switching_loss", "MOSFET のスイッチング損失 (ゲートの速さと熱)", "ゲート容量の充電で遅れる、ミラー期間、切り替え中の V × I が熱になる、損失 = 1 回あたりのエネルギー × 周波数", Some("ゲート抵抗を変えて、ドレインの立ち下がりの速さと、MOSFET の温度の違いを見ます")) },
                 Item { requires: Some(&["transistor", "opamp_noninv"]), ..lesson("opamp_basics", "オペアンプの素顔 (増幅の式・帯域・振れ幅の限界)", "倍率 1 + Rf ÷ Rg、GBW = 倍率 × 帯域、出力は電源で頭打ち", Some("LM358 の非反転増幅で倍率と −3dB の周波数を測り、入力を大きくして出力が切れるのを見ます")) },
             ],
         },

@@ -986,3 +986,13 @@ pub(super) fn ldo_small_difference(e: &SchEditor) -> bool {
 pub(super) fn ldo_heavy_load(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 25.0) && dc_fresh(e)
 }
+
+/// The switching loss lesson: the gate resistor R2 is 20 ohm or less (a fast gate) and the run is fresh.
+pub(super) fn gate_resistor_small(e: &SchEditor) -> bool {
+    value_at_most(e, "R2", 20.0) && tran_fresh(e)
+}
+
+/// The switching loss lesson: the gate resistor R2 is 400 ohm or more (a slow gate) and the run is fresh.
+pub(super) fn gate_resistor_large(e: &SchEditor) -> bool {
+    value_at_least(e, "R2", 400.0) && tran_fresh(e)
+}

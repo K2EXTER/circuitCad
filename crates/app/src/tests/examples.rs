@@ -1480,6 +1480,39 @@ fn write_ldo_vs_buck_example() {
     std::fs::write(root.join("ldo_vs_buck.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/switching_loss.schjson for the MOSFET switching loss lesson: 12 V (V1) -> a 12 ohm load R1 -> the drain of the IRLZ44N
+/// (Q1); the gate is driven by V2 (a 5 V pulse, high from 0.1 us to 5.1 us, period 10 us) through Rg = R2 = 100 ohm:
+/// `cargo test -p app write_switching_loss_example -- --ignored`
+#[test]
+#[ignore]
+fn write_switching_loss_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "IRLZ44N").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "VDD");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[r1].value = "12".into();
+    s.components[r1].footprint = "R_2512".into();
+    label(&mut s, r1, "1", "VDD");
+    label(&mut s, r1, "2", "DRAIN");
+    let v2 = s.add(Kind::VSource, (0, 30), 0);
+    s.components[v2].value = "PULSE(0 5 100n 1n 1n 5u 10u)".into();
+    label(&mut s, v2, "+", "DRV");
+    label(&mut s, v2, "-", "GND");
+    let r2 = s.add(Kind::Resistor, (20, 30), 1);
+    s.components[r2].value = "100".into();
+    label(&mut s, r2, "1", "DRV");
+    label(&mut s, r2, "2", "GATE");
+    let q1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (40, 15), 0);
+    label(&mut s, q1, "1", "GATE");
+    label(&mut s, q1, "2", "DRAIN");
+    label(&mut s, q1, "3", "GND");
+    std::fs::write(root.join("switching_loss.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

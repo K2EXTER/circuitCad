@@ -2678,3 +2678,44 @@ fn the_ldo_vs_buck_lesson_ticks_and_its_numbers_hold() {
     let dc = e.dc.as_ref().unwrap().outcome.as_ref().unwrap();
     assert!(sim_core::check_ratings(&e.sch, dc).iter().any(|i| i.refdes == "U1" && i.level == sim_core::RatingLevel::Over), "the linear regulator is over its package rating");
 }
+
+#[test]
+fn the_switching_loss_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "switching_loss").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (energy lost in the MOSFET in one cycle (uJ), the 90 % - 10 % fall time of the drain (ns))
+    let loss = |e: &SchEditor| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let (v, i) = (&r.signal("V(DRAIN)").unwrap().values, &r.signal("I(R1)").unwrap().values);
+        let mut energy = 0.0;
+        for k in 1..r.time.len() {
+            energy += 0.5 * (v[k] * i[k] + v[k - 1] * i[k - 1]) * (r.time[k] - r.time[k - 1]);
+        }
+        let t_at = |lvl: f64| {
+            let k = (1..v.len()).find(|k| r.time[*k] > 0.1e-6 && v[*k] <= lvl).unwrap();
+            let (t0, t1, v0, v1) = (r.time[k - 1], r.time[k], v[k - 1], v[k]);
+            t0 + (t1 - t0) * (lvl - v0) / (v1 - v0)
+        };
+        (energy * 1e6, (t_at(1.2) - t_at(10.8)) * 1e9)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (e100, f100) = loss(&e);
+    assert!((e100 - 0.857).abs() < 0.06 && (f100 - 76.0).abs() < 8.0, "{e100} {f100}");
+    set_value(&mut e, "R2", "10");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let (e10, f10) = loss(&e);
+    assert!((e10 - 0.231).abs() < 0.03 && (f10 - 7.5).abs() < 2.0 && f10 < f100 / 5.0, "a fast gate: {e10} {f10}");
+    set_value(&mut e, "R2", "470");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let (e470, f470) = loss(&e);
+    assert!((e470 - 3.44).abs() < 0.25 && (f470 - 359.0).abs() < 40.0 && e470 > 3.0 * e100, "a slow gate: {e470} {f470}");
+}
