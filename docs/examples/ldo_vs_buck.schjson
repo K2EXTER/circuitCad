@@ -1,0 +1,716 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "AMS1117-5.0",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "SOT-223",
+      "custom": {
+        "name": "AMS1117-5.0",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "3",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "1",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "AMS1117-5.0",
+          "text": ".subckt AMS1117-5.0 in gnd out\nVdo in ind DC 1.1\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends AMS1117-5.0",
+          "pins": [
+            "3",
+            "1",
+            "2"
+          ],
+          "params": {
+            "dropout": 1.1,
+            "vout": 5.0
+          },
+          "limits": [
+            "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
+            "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
+            "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 15.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "5V ±1%"
+            },
+            {
+              "name": "ドロップアウト電圧",
+              "value": "1.1V (代表)",
+              "condition": "IO = 800mA"
+            }
+          ]
+        },
+        "glyph": "regulator",
+        "shops": {
+          "lcsc": "C6187"
+        }
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "40",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        40
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "BUCK_DEMO",
+      "pos": [
+        30,
+        40
+      ],
+      "rot": 0,
+      "footprint": "TO-220-4_inline",
+      "custom": {
+        "name": "BUCK_DEMO",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "VIN",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "3",
+            "name": "SW",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "FB",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "BUCK_DEMO",
+          "text": "* Simplified step-down (buck) regulator IC: 150 kHz PWM, internal high-side switch, soft-start, 1.23 V reference. Every voltage is taken against the gnd pin, so the output may be wired as the system ground (the IC sits on a floating negative rail).\n.subckt BUCK_DEMO vin gnd sw fb\nRq vin gnd 4k\nVclk ramp gnd PULSE(0 1 0 6.5u 0.1u 10n 6.67u)\nBgm gnd comp I=limit(0.32m*12/max(V(vin,gnd),3)*(1.23-V(fb,gnd)),-250u,250u)\nCcomp comp gnd 1u\nRcomp comp gnd 1G\nBzero comp gnd I=if(time<1u,1000*V(comp,gnd),0)\nBctl ctl gnd V=limit(V(comp,gnd),0,0.95)\nBpwm pwm gnd V=0.5*(1+tanh(30*(V(ctl,gnd)-V(ramp,gnd)-0.03)))\nS1 vin sw pwm gnd SWMAIN\n.model SWMAIN SW(RON=0.15 ROFF=1MEG VT=0.5 VW=0.15)\n.ends BUCK_DEMO",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {
+            "fsw_khz": 150.0,
+            "vref": 1.23
+          },
+          "limits": [
+            "150kHz で実際にスイッチを入り切りする動作モデルです。デューティ比、コイルのリップル電流、出力のリップル、スイッチの導通損失 (0.15Ω)、ダイオードの損失が、波形と電流に出ます。誤差アンプは積分型で、ゆっくり出力を合わせます (ソフトスタートも兼ねる)。",
+            "扱わないもの: 過電流・短絡の保護、過熱保護、スイッチの切替時間と切替損失、軽負荷での間欠動作、入力側のリップル電流、制御ループの細かい補償 (負荷が急に変わったときの応答は、実物より遅く、行き過ぎも少ない)。数値は一般的な降圧ICの概算です。",
+            "制御回路の消費電流は、VIN と GND の間の 4kΩ の抵抗で表しています (12V で約 3mA)。",
+            "時間刻みは 0.1µs (100n) 程度にしてください。粗いと、スイッチの切り替わりの位置がずれて、出力電圧の平均がずれます。計算に時間がかかるので、見る時間は 5〜10ms 程度から始めましょう。",
+            "コイルとダイオードを付け忘れると、出力が出ません。ダイオードは SW から GND へ、カソードを SW 側につけます。"
+          ]
+        }
+      }
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "100u DCR=0.05",
+      "pos": [
+        56,
+        40
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N5819",
+      "pos": [
+        72,
+        40
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N5819",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N5819",
+          "text": ".model 1N5819 D(IS=500n N=1.1 RS=0.04 BV=40 IBV=1m)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "簡易なダイオードのモデル (IS・N・RS) です。順方向電圧は電流と温度で変わります。温度の影響は、解析の温度スイープで確かめられます。",
+            "接合容量と逆回復時間は扱いません。実物は、切り替わる瞬間に短い逆向きの電流が流れるので、高い周波数の整流では損失や雑音になります。",
+            "耐圧や定格電流を超えても壊れません。データシートの定格は、自分で確かめてください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 40.0,
+          "i_max": 1.0,
+          "rows": [
+            {
+              "name": "順方向電圧",
+              "value": "0.6V (最大)",
+              "condition": "IF = 1A"
+            }
+          ]
+        },
+        "glyph": "schottky"
+      }
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "100u ESR=0.05",
+      "pos": [
+        88,
+        40
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "30k",
+      "pos": [
+        104,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        120,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R4",
+      "kind": "Resistor",
+      "value": "40",
+      "pos": [
+        136,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        23,
+        0
+      ]
+    },
+    {
+      "a": [
+        30,
+        4
+      ],
+      "b": [
+        30,
+        7
+      ]
+    },
+    {
+      "a": [
+        34,
+        0
+      ],
+      "b": [
+        37,
+        0
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        38
+      ],
+      "b": [
+        0,
+        35
+      ]
+    },
+    {
+      "a": [
+        0,
+        42
+      ],
+      "b": [
+        0,
+        45
+      ]
+    },
+    {
+      "a": [
+        26,
+        40
+      ],
+      "b": [
+        23,
+        40
+      ]
+    },
+    {
+      "a": [
+        30,
+        44
+      ],
+      "b": [
+        30,
+        47
+      ]
+    },
+    {
+      "a": [
+        34,
+        39
+      ],
+      "b": [
+        37,
+        39
+      ]
+    },
+    {
+      "a": [
+        34,
+        41
+      ],
+      "b": [
+        37,
+        41
+      ]
+    },
+    {
+      "a": [
+        56,
+        38
+      ],
+      "b": [
+        56,
+        35
+      ]
+    },
+    {
+      "a": [
+        56,
+        42
+      ],
+      "b": [
+        56,
+        45
+      ]
+    },
+    {
+      "a": [
+        70,
+        40
+      ],
+      "b": [
+        67,
+        40
+      ]
+    },
+    {
+      "a": [
+        74,
+        40
+      ],
+      "b": [
+        77,
+        40
+      ]
+    },
+    {
+      "a": [
+        88,
+        38
+      ],
+      "b": [
+        88,
+        35
+      ]
+    },
+    {
+      "a": [
+        88,
+        42
+      ],
+      "b": [
+        88,
+        45
+      ]
+    },
+    {
+      "a": [
+        104,
+        38
+      ],
+      "b": [
+        104,
+        35
+      ]
+    },
+    {
+      "a": [
+        104,
+        42
+      ],
+      "b": [
+        104,
+        45
+      ]
+    },
+    {
+      "a": [
+        120,
+        38
+      ],
+      "b": [
+        120,
+        35
+      ]
+    },
+    {
+      "a": [
+        120,
+        42
+      ],
+      "b": [
+        120,
+        45
+      ]
+    },
+    {
+      "a": [
+        136,
+        38
+      ],
+      "b": [
+        136,
+        35
+      ]
+    },
+    {
+      "a": [
+        136,
+        42
+      ],
+      "b": [
+        136,
+        45
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN1"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        0
+      ],
+      "text": "VIN1"
+    },
+    {
+      "pos": [
+        30,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        0
+      ],
+      "text": "VOUT1"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "VOUT1"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        35
+      ],
+      "text": "VIN2"
+    },
+    {
+      "pos": [
+        0,
+        45
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        23,
+        40
+      ],
+      "text": "VIN2"
+    },
+    {
+      "pos": [
+        30,
+        47
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        39
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        37,
+        41
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        56,
+        35
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        56,
+        45
+      ],
+      "text": "VOUT2"
+    },
+    {
+      "pos": [
+        67,
+        40
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        77,
+        40
+      ],
+      "text": "SW"
+    },
+    {
+      "pos": [
+        88,
+        35
+      ],
+      "text": "VOUT2"
+    },
+    {
+      "pos": [
+        88,
+        45
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        104,
+        35
+      ],
+      "text": "VOUT2"
+    },
+    {
+      "pos": [
+        104,
+        45
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        120,
+        35
+      ],
+      "text": "FB"
+    },
+    {
+      "pos": [
+        120,
+        45
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        136,
+        35
+      ],
+      "text": "VOUT2"
+    },
+    {
+      "pos": [
+        136,
+        45
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -976,3 +976,13 @@ pub(super) fn ecap_warm_and_tran(e: &SchEditor) -> bool {
 pub(super) fn ecap_more_ripple(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 1.2) && tran_fresh(e)
 }
+
+/// The LDO / switching lesson: the supply V1 of the linear regulator is 6.2 - 8 V (a small difference to 5 V) and the transient run is fresh.
+pub(super) fn ldo_small_difference(e: &SchEditor) -> bool {
+    value_between(e, "V1", 6.2, 8.0) && tran_fresh(e)
+}
+
+/// The LDO / switching lesson: the load R1 of the linear regulator is 25 ohm or less (a loss that is over the package) and the DC run is fresh.
+pub(super) fn ldo_heavy_load(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 25.0) && dc_fresh(e)
+}

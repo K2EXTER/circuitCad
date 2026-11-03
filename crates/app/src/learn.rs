@@ -487,6 +487,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&["coin_cell"]), ..lesson("battery_basics", "電池の素顔 (内部抵抗が電池の種類を分ける)", "端子電圧 = 開放電圧 − 電流 × 内部抵抗、種類による違い、最大電力は内部抵抗と同じ抵抗のとき", Some("単3電池とコイン電池に同じ抵抗をつなぎ、電圧の下がり方を比べます (ショートさせる実験はしません)")) },
                 Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
+                Item { requires: Some(&["regulator_basics", "buck"]), ..lesson("ldo_vs_buck", "リニアとスイッチングの比較 (熱にするか、貯めて運ぶか)", "リニアの効率 = 出力 ÷ 入力の電圧、損失は (Vin − Vout) × I、スイッチングは高い効率で、リップルと部品が増える", Some("入力と出力の電圧と電流を測って、効率を計算し、リニアとスイッチングの温度を比べます")) },
                 Item { requires: Some(&["rectifier", "inductor"]), ..lesson("transformer_basics", "トランスの素顔 (電圧は巻数比、電流は逆比)", "Vs ÷ Vp = Ns ÷ Np、Is ÷ Ip = Np ÷ Ns、定格 VA、無負荷と全負荷の電圧の差", Some("小さなトランスの巻線の抵抗をテスタで測り、一次と二次の比と電圧降下を計算と比べます (商用電源につなぐ実験はしません)")) },
                 Item { requires: Some(&["transformer_basics", "diode_basics"]), ..lesson("bridge_basics", "ダイオードブリッジの素顔 (整流の損失とピーク電流)", "全波は半波の半分のリップル、ダイオード 2 本ぶんの電圧降下、平滑コンデンサに流れる短く大きな電流", Some("低電圧の交流 (トランスの出力) を整流し、半波と全波のリップルを、オシロで比べます (商用電源の整流は行いません)")) },
                 Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },

@@ -1430,6 +1430,56 @@ fn write_electrolytic_life_example() {
     std::fs::write(root.join("electrolytic_life.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/ldo_vs_buck.schjson for the LDO / switching comparison lesson: two supplies of 12 V (V1, V2) and two 40 ohm
+/// loads for 5 V: an AMS1117-5.0 linear regulator (U1 -> VOUT1, load R1) and the demo buck converter (U2, L1, D1, C1, divider R2 30k / R3 10k
+/// -> VOUT2, load R4): `cargo test -p app write_ldo_vs_buck_example -- --ignored`
+#[test]
+#[ignore]
+fn write_ldo_vs_buck_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+    let (ldo, buck, diode) = (find("AMS1117-5.0"), find("BUCK_DEMO"), find("1N5819"));
+    let mut s = sch_core::Schematic::default();
+    let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
+        let i = s.add(kind, (x, y), 1);
+        s.components[i].value = value.into();
+        if kind == Kind::Resistor && value == "40" {
+            s.components[i].footprint = "R_2512".into();
+        }
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    // the linear regulator
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "VIN1");
+    label(&mut s, v1, "-", "GND");
+    let u1 = s.add_custom(ldo.symbol(), &ldo.default_value(), &ldo.footprint_name(), (30, 0), 0);
+    label(&mut s, u1, "3", "VIN1");
+    label(&mut s, u1, "1", "GND");
+    label(&mut s, u1, "2", "VOUT1");
+    part(&mut s, Kind::Resistor, 50, 0, "40", "VOUT1", "GND");
+    // the buck converter
+    let v2 = s.add(Kind::VSource, (0, 40), 0);
+    s.components[v2].value = "12".into();
+    label(&mut s, v2, "+", "VIN2");
+    label(&mut s, v2, "-", "GND");
+    let u2 = s.add_custom(buck.symbol(), &buck.default_value(), &buck.footprint_name(), (30, 40), 0);
+    label(&mut s, u2, "1", "VIN2");
+    label(&mut s, u2, "2", "GND");
+    label(&mut s, u2, "3", "SW");
+    label(&mut s, u2, "4", "FB");
+    part(&mut s, Kind::Inductor, 56, 40, "100u DCR=0.05", "SW", "VOUT2");
+    let d1 = s.add_custom(diode.symbol(), &diode.default_value(), &diode.footprint_name(), (72, 40), 0);
+    label(&mut s, d1, "A", "GND");
+    label(&mut s, d1, "K", "SW");
+    part(&mut s, Kind::Capacitor, 88, 40, "100u ESR=0.05", "VOUT2", "GND");
+    part(&mut s, Kind::Resistor, 104, 40, "30k", "VOUT2", "FB");
+    part(&mut s, Kind::Resistor, 120, 40, "10k", "FB", "GND");
+    part(&mut s, Kind::Resistor, 136, 40, "40", "VOUT2", "GND");
+    std::fs::write(root.join("ldo_vs_buck.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
