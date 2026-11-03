@@ -3,6 +3,23 @@
 use super::*;
 
 impl SchEditor {
+    /// Fits the view when a file or sheet was just opened, and keeps a running lesson's circuit fitted left of the lesson window while the
+    /// canvas changes size; a view the learner has moved is left alone.
+    pub(super) fn fit_if_needed(&mut self, rect: Rect) {
+        if self.fit_pending {
+            self.fit_pending = false;
+            self.fit_view(rect);
+            self.lesson_fit = self.lesson.is_some().then_some((rect.size(), self.zoom, self.pan));
+        } else if let Some((size, zoom, pan)) = self.lesson_fit {
+            if self.lesson.is_none() || self.zoom != zoom || self.pan != pan {
+                self.lesson_fit = None;
+            } else if (rect.size() - size).abs().max_elem() > 1.0 {
+                self.fit_view(rect);
+                self.lesson_fit = Some((rect.size(), self.zoom, self.pan));
+            }
+        }
+    }
+
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
         self.track_history(ui);
         self.live_update();
@@ -13,10 +30,7 @@ impl SchEditor {
         if self.dc.is_some() {
             self.sig_cache = self.signature();
         }
-        if self.fit_pending {
-            self.fit_pending = false;
-            self.fit_view(rect);
-        }
+        self.fit_if_needed(rect);
 
         let hover = resp.hover_pos();
         self.pan_and_zoom(ui, &resp, rect, hover);

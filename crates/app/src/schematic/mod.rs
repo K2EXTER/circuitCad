@@ -297,6 +297,8 @@ pub struct SchEditor {
     noise_marks: Vec<(Pt, bool)>,
     wave_mode: WaveMode,
     fit_pending: bool,
+    /// A running lesson keeps the circuit fitted left of its window while the canvas changes size (the left panel gets wider on the analysis page): the canvas size, zoom and pan of the last fit. Cleared when the learner moves the view.
+    lesson_fit: Option<(Vec2, f32, Vec2)>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -616,6 +618,7 @@ impl Default for SchEditor {
             noise_marks: vec![],
             wave_mode: WaveMode::Tran,
             fit_pending: false,
+            lesson_fit: None,
             sch: Schematic::default(),
             undo: vec![],
             redo: vec![],

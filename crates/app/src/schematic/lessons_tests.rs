@@ -2836,3 +2836,25 @@ fn a_part_lesson_puts_the_traces_its_text_names_on_the_graph() {
     e.analyze_ac();
     assert!(!e.ac.as_ref().unwrap().selected.is_empty());
 }
+
+/// The left panel grows when a lesson step moves to the analysis page: the circuit is fitted again, until the learner moves the view.
+#[test]
+fn a_lesson_circuit_is_fitted_again_when_the_canvas_gets_narrower() {
+    let wide = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::new(1500.0, 900.0));
+    let narrow = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::new(1360.0, 900.0));
+    let idx = lesson_ids().iter().position(|l| *l == "speaker_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.fit_pending = true;
+    e.fit_if_needed(wide);
+    let first = (e.zoom, e.pan);
+    e.fit_if_needed(narrow);
+    assert!(e.zoom < first.0 || e.pan != first.1, "fitted again for the narrower canvas");
+    assert!(e.lesson_fit.is_some());
+    // a view the learner moved is not touched any more
+    e.zoom *= 1.2;
+    let moved = (e.zoom, e.pan);
+    e.fit_if_needed(wide);
+    assert_eq!((e.zoom, e.pan), moved);
+    assert!(e.lesson_fit.is_none());
+}
