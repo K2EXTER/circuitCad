@@ -1,0 +1,492 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "0.02",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "BPW34",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "Photodiode_P5.08",
+      "custom": {
+        "name": "BPW34",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "L",
+            "name": "IRRAD",
+            "side": "bottom",
+            "sim_only": true
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "BPW34",
+          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34",
+          "pins": [
+            "A",
+            "K",
+            "L"
+          ],
+          "params": {},
+          "limits": [
+            "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で光の強さ [mW/cm²] (1V = 1mW/cm²)を与えます。つながないと 0 として扱います。",
+            "光電流は光の強さに比例します(波長による感度の違いは扱いません)。接合容量(約70pF)と応答速度は扱いません。",
+            "使い方: 逆バイアス(カソードを+側)で電流を読むか、トランスインピーダンスアンプにつなぎます。開放電圧は約0.4Vで頭打ちになります。"
+          ]
+        },
+        "ratings": {
+          "v_max": 32.0,
+          "p_max": 0.15,
+          "rows": [
+            {
+              "name": "短絡光電流",
+              "value": "75µA (代表)",
+              "condition": "1mW/cm², 950nm"
+            },
+            {
+              "name": "暗電流",
+              "value": "2nA (代表)",
+              "condition": "VR = 10V"
+            }
+          ]
+        },
+        "glyph": "photodiode"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D2",
+      "kind": "Custom",
+      "value": "BPW34",
+      "pos": [
+        30,
+        28
+      ],
+      "rot": 0,
+      "footprint": "Photodiode_P5.08",
+      "custom": {
+        "name": "BPW34",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "L",
+            "name": "IRRAD",
+            "side": "bottom",
+            "sim_only": true
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "BPW34",
+          "text": ".subckt BPW34 a k l\n* IRRAD pin: 1 V = 1 mW/cm2, photocurrent 75 uA per mW/cm2 (flows from K to A inside)\nRl l 0 100Meg\nDpd a k DPD\nBph k a I=75u*max(V(l),0)\nRsh a k 500Meg\n.model DPD D(IS=2n N=1.2 RS=10 BV=32 IBV=10u)\n.ends BPW34",
+          "pins": [
+            "A",
+            "K",
+            "L"
+          ],
+          "params": {},
+          "limits": [
+            "シミュレーション専用ピン(基板には出ません)。電圧源をつなぎ、その電圧で光の強さ [mW/cm²] (1V = 1mW/cm²)を与えます。つながないと 0 として扱います。",
+            "光電流は光の強さに比例します(波長による感度の違いは扱いません)。接合容量(約70pF)と応答速度は扱いません。",
+            "使い方: 逆バイアス(カソードを+側)で電流を読むか、トランスインピーダンスアンプにつなぎます。開放電圧は約0.4Vで頭打ちになります。"
+          ]
+        },
+        "ratings": {
+          "v_max": 32.0,
+          "p_max": 0.15,
+          "rows": [
+            {
+              "name": "短絡光電流",
+              "value": "75µA (代表)",
+              "condition": "1mW/cm², 950nm"
+            },
+            {
+              "name": "暗電流",
+              "value": "2nA (代表)",
+              "condition": "VR = 10V"
+            }
+          ]
+        },
+        "glyph": "photodiode"
+      }
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Npn",
+      "value": "2N3904",
+      "pos": [
+        60,
+        28
+      ],
+      "rot": 0,
+      "footprint": "SOT-23",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        80,
+        28
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        34,
+        0
+      ],
+      "b": [
+        37,
+        0
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        23,
+        0
+      ]
+    },
+    {
+      "a": [
+        30,
+        4
+      ],
+      "b": [
+        30,
+        7
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    },
+    {
+      "a": [
+        34,
+        28
+      ],
+      "b": [
+        37,
+        28
+      ]
+    },
+    {
+      "a": [
+        26,
+        28
+      ],
+      "b": [
+        23,
+        28
+      ]
+    },
+    {
+      "a": [
+        30,
+        32
+      ],
+      "b": [
+        30,
+        35
+      ]
+    },
+    {
+      "a": [
+        62,
+        26
+      ],
+      "b": [
+        65,
+        26
+      ]
+    },
+    {
+      "a": [
+        58,
+        28
+      ],
+      "b": [
+        55,
+        28
+      ]
+    },
+    {
+      "a": [
+        62,
+        30
+      ],
+      "b": [
+        65,
+        30
+      ]
+    },
+    {
+      "a": [
+        80,
+        26
+      ],
+      "b": [
+        80,
+        23
+      ]
+    },
+    {
+      "a": [
+        80,
+        30
+      ],
+      "b": [
+        80,
+        33
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "LIGHT"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        0
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        23,
+        0
+      ],
+      "text": "PDOUT"
+    },
+    {
+      "pos": [
+        30,
+        7
+      ],
+      "text": "LIGHT"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "PDOUT"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        28
+      ],
+      "text": "COL"
+    },
+    {
+      "pos": [
+        23,
+        28
+      ],
+      "text": "BASE"
+    },
+    {
+      "pos": [
+        30,
+        35
+      ],
+      "text": "LIGHT"
+    },
+    {
+      "pos": [
+        65,
+        26
+      ],
+      "text": "COL"
+    },
+    {
+      "pos": [
+        55,
+        28
+      ],
+      "text": "BASE"
+    },
+    {
+      "pos": [
+        65,
+        30
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        80,
+        23
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        80,
+        33
+      ],
+      "text": "COL"
+    }
+  ],
+  "layout_version": 1
+}

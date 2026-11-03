@@ -1,0 +1,331 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0.5m 1u 1u 20m 40m)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "70",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "100m",
+      "pos": [
+        36,
+        0
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0.5m 1u 1u 20m 40m)",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "47",
+      "pos": [
+        20,
+        24
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "70",
+      "pos": [
+        36,
+        24
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "L2",
+      "kind": "Inductor",
+      "value": "100m",
+      "pos": [
+        52,
+        24
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        -2
+      ],
+      "b": [
+        36,
+        -5
+      ]
+    },
+    {
+      "a": [
+        36,
+        2
+      ],
+      "b": [
+        36,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        20,
+        22
+      ],
+      "b": [
+        20,
+        19
+      ]
+    },
+    {
+      "a": [
+        20,
+        26
+      ],
+      "b": [
+        20,
+        29
+      ]
+    },
+    {
+      "a": [
+        36,
+        22
+      ],
+      "b": [
+        36,
+        19
+      ]
+    },
+    {
+      "a": [
+        36,
+        26
+      ],
+      "b": [
+        36,
+        29
+      ]
+    },
+    {
+      "a": [
+        52,
+        22
+      ],
+      "b": [
+        52,
+        19
+      ]
+    },
+    {
+      "a": [
+        52,
+        26
+      ],
+      "b": [
+        52,
+        29
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "DRV1"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "DRV1"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "C1"
+    },
+    {
+      "pos": [
+        36,
+        -5
+      ],
+      "text": "C1"
+    },
+    {
+      "pos": [
+        36,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "DRV2"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        19
+      ],
+      "text": "DRV2"
+    },
+    {
+      "pos": [
+        20,
+        29
+      ],
+      "text": "S2"
+    },
+    {
+      "pos": [
+        36,
+        19
+      ],
+      "text": "S2"
+    },
+    {
+      "pos": [
+        36,
+        29
+      ],
+      "text": "C2"
+    },
+    {
+      "pos": [
+        52,
+        19
+      ],
+      "text": "C2"
+    },
+    {
+      "pos": [
+        52,
+        29
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

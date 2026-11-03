@@ -1,0 +1,285 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1u 1u 10m 20m)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1",
+      "pos": [
+        16,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "L1",
+      "kind": "Inductor",
+      "value": "100m",
+      "pos": [
+        32,
+        0
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1u 1u 10m 20m)",
+      "pos": [
+        48,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        64,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "L2",
+      "kind": "Inductor",
+      "value": "100m",
+      "pos": [
+        80,
+        0
+      ],
+      "rot": 1,
+      "footprint": "L_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        16,
+        -2
+      ],
+      "b": [
+        16,
+        -5
+      ]
+    },
+    {
+      "a": [
+        16,
+        2
+      ],
+      "b": [
+        16,
+        5
+      ]
+    },
+    {
+      "a": [
+        32,
+        -2
+      ],
+      "b": [
+        32,
+        -5
+      ]
+    },
+    {
+      "a": [
+        32,
+        2
+      ],
+      "b": [
+        32,
+        5
+      ]
+    },
+    {
+      "a": [
+        48,
+        -2
+      ],
+      "b": [
+        48,
+        -5
+      ]
+    },
+    {
+      "a": [
+        48,
+        2
+      ],
+      "b": [
+        48,
+        5
+      ]
+    },
+    {
+      "a": [
+        64,
+        -2
+      ],
+      "b": [
+        64,
+        -5
+      ]
+    },
+    {
+      "a": [
+        64,
+        2
+      ],
+      "b": [
+        64,
+        5
+      ]
+    },
+    {
+      "a": [
+        80,
+        -2
+      ],
+      "b": [
+        80,
+        -5
+      ]
+    },
+    {
+      "a": [
+        80,
+        2
+      ],
+      "b": [
+        80,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "STEPA"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        -5
+      ],
+      "text": "STEPA"
+    },
+    {
+      "pos": [
+        16,
+        5
+      ],
+      "text": "LB"
+    },
+    {
+      "pos": [
+        32,
+        -5
+      ],
+      "text": "LB"
+    },
+    {
+      "pos": [
+        32,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        -5
+      ],
+      "text": "STEPB"
+    },
+    {
+      "pos": [
+        48,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        64,
+        -5
+      ],
+      "text": "STEPB"
+    },
+    {
+      "pos": [
+        64,
+        5
+      ],
+      "text": "LA"
+    },
+    {
+      "pos": [
+        80,
+        -5
+      ],
+      "text": "LA"
+    },
+    {
+      "pos": [
+        80,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

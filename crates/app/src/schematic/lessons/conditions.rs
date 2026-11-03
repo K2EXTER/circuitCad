@@ -751,3 +751,128 @@ pub(super) fn source_r_small(e: &SchEditor) -> bool {
 pub(super) fn source_r_tiny(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 1.5e3) && noise_fresh(e) && noise_top(e).is_some_and(|n| n != "Q1.ib")
 }
+
+/// The capacitor lesson: C1 is 4.7 uF or more (the current of the ramp grows with it) and the run is fresh.
+pub(super) fn cap_ramp_bigger(e: &SchEditor) -> bool {
+    value_at_least(e, "C1", 4.7e-6) && tran_fresh(e)
+}
+
+/// The capacitor lesson: C2 is 220 nF or less (the time constant R2 x C2 shrinks with it) and the run is fresh.
+pub(super) fn cap_step_smaller(e: &SchEditor) -> bool {
+    value_at_most(e, "C2", 220e-9) && tran_fresh(e)
+}
+
+/// The inductor lesson: L1 is 22 mH or less (the current climbs faster) and the run is fresh.
+pub(super) fn coil_ramp_faster(e: &SchEditor) -> bool {
+    value_at_most(e, "L1", 22e-3) && tran_fresh(e)
+}
+
+/// The inductor lesson: R2 is 470 ohm or more (the time constant L/R shrinks with it) and the run is fresh.
+pub(super) fn coil_resistor_bigger(e: &SchEditor) -> bool {
+    value_at_least(e, "R2", 470.0) && tran_fresh(e)
+}
+
+/// The resistor lesson: R2 is 1 kohm or more (it takes most of the voltage) and the run is fresh.
+pub(super) fn series_big_resistor(e: &SchEditor) -> bool {
+    value_at_least(e, "R2", 1e3) && dc_fresh(e)
+}
+
+/// The resistor lesson: R4 is 47 ohm or less (it takes most of the current and gets hot) and the run is fresh.
+pub(super) fn parallel_small_resistor(e: &SchEditor) -> bool {
+    value_at_most(e, "R4", 47.0) && dc_fresh(e)
+}
+
+/// The transistor lesson: R2 (the base resistor) is 20 kohm or less (the base is pushed hard) and the run is fresh.
+pub(super) fn base_pushed_hard(e: &SchEditor) -> bool {
+    value_at_most(e, "R2", 20e3) && dc_fresh(e)
+}
+
+/// The MOSFET lesson: the gate source V2 is between 2.3 V and 2.8 V (half on) and the run is fresh.
+pub(super) fn gate_half_on(e: &SchEditor) -> bool {
+    value_between(e, "V2", 2.3, 2.8) && dc_fresh(e)
+}
+
+/// The op-amp lesson: the feedback resistor R3 of the middle amplifier is 3 kohm or less (its output no longer reaches the supply) and the run is fresh.
+pub(super) fn amp_gain_lowered(e: &SchEditor) -> bool {
+    value_at_most(e, "R3", 3e3) && tran_fresh(e)
+}
+
+/// The diode lesson: R1 is 8 kohm or more (the diode current falls to a tenth) and the AC run is fresh.
+pub(super) fn diode_weak_current_and_ac(e: &SchEditor) -> bool {
+    value_at_least(e, "R1", 8e3) && ac_fresh(e)
+}
+
+/// The LED lesson: R1 is 180 ohm or less (the current of the 5 V LED rises toward its limit) and the run is fresh.
+pub(super) fn led_resistor_lowered(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 180.0) && dc_fresh(e)
+}
+
+/// The LED lesson: V3 is 2.8 V or more (above the forward voltage) and the run is fresh.
+pub(super) fn led_supply_raised(e: &SchEditor) -> bool {
+    value_at_least(e, "V3", 2.8) && dc_fresh(e)
+}
+
+/// The Zener lesson: R1 is 30 ohm or less (the Zener current and power go over its rating) and the run is fresh.
+pub(super) fn zener_overloaded(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 30.0) && dc_fresh(e)
+}
+
+/// The relay lesson: the series resistor R2 is 25 ohm or less (the coil gets 75 % of its voltage or more) and the run is fresh.
+pub(super) fn relay_series_small(e: &SchEditor) -> bool {
+    value_at_most(e, "R2", 25.0) && tran_fresh(e)
+}
+
+/// The relay lesson: the coil resistance R1 is 40 ohm or less (a low-resistance coil) and the run is fresh.
+pub(super) fn relay_coil_low_resistance(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 40.0) && tran_fresh(e)
+}
+
+/// The crystal "face" lesson: a fresh run that covers 12 MHz - 22 MHz at least (the broad hump of the LC circuit shows).
+pub(super) fn crystal_q_wide_ac(e: &SchEditor) -> bool {
+    ac_fresh(e) && ac_run_range(e).is_some_and(|(f0, f1, _)| f0 <= 12e6 && f1 >= 22e6)
+}
+
+/// The crystal "face" lesson: the loss resistor R2 of the LC circuit is 0.2 ohm or less and the run is fresh.
+pub(super) fn crystal_q_lossless_lc(e: &SchEditor) -> bool {
+    value_at_most(e, "R2", 0.2) && ac_fresh(e)
+}
+
+/// The transformer lesson: the load R1 is about the rated one (20 - 40 ohm) and the run is fresh.
+pub(super) fn transformer_rated_load(e: &SchEditor) -> bool {
+    value_between(e, "R1", 20.0, 40.0) && tran_fresh(e)
+}
+
+/// The transformer lesson: the load R1 is 8 ohm or less (more than the rating) and the run is fresh.
+pub(super) fn transformer_overloaded(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 8.0) && tran_fresh(e)
+}
+
+/// The thermistor lesson: the temperature sweep shows the three dividers A, B and C together.
+pub(super) fn thermistor_three_shown(e: &SchEditor) -> bool {
+    e.sweep.as_ref().is_some_and(|s| s.temp && s.outcome.is_ok() && ["V(A)", "V(B)", "V(C)"].iter().all(|n| s.selected.contains(*n)))
+}
+
+/// The phototransistor lesson: the light V2 is 0.2 or more (about 10 times the first value: the transistor saturates) and the run is fresh.
+pub(super) fn phototransistor_bright(e: &SchEditor) -> bool {
+    value_at_least(e, "V2", 0.2) && dc_fresh(e)
+}
+
+/// The regulator lesson: the supply V1 is 7 V or less (the 7805 is near or in dropout) and the DC run is fresh.
+pub(super) fn regulator_in_dropout(e: &SchEditor) -> bool {
+    value_at_most(e, "V1", 7.0) && dc_fresh(e)
+}
+
+/// The regulator lesson: the supply V1 is 7 V or less and the AC run is fresh.
+pub(super) fn regulator_dropout_ac(e: &SchEditor) -> bool {
+    value_at_most(e, "V1", 7.0) && ac_fresh(e)
+}
+
+/// The photocoupler lesson: the LED resistor R1 is 1 kohm or more (the LED current is small) and the run is fresh.
+pub(super) fn coupler_weak_led(e: &SchEditor) -> bool {
+    value_at_least(e, "R1", 1e3) && dc_fresh(e)
+}
+
+/// The photocoupler lesson: the load R2 is 1 kohm or more (the output transistor saturates) and the run is fresh.
+pub(super) fn coupler_saturated(e: &SchEditor) -> bool {
+    value_at_least(e, "R2", 1e3) && dc_fresh(e)
+}

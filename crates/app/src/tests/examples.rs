@@ -529,6 +529,623 @@ fn write_rlc_poles_example() {
     std::fs::write(root.join("rlc_poles.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/capacitor_basics.schjson for the capacitor lesson: a 5 V triangle wave (1 ms up, 1 ms down) through a
+/// 10 ohm sense resistor into C1 = 1 uF (the current is C*dV/dt = +-5 mA), and a 5 V step through R2 = 1 kohm into C2 = 1 uF
+/// (tau = 1 ms): `cargo test -p app write_capacitor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_capacitor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    // (source value, series resistor, capacitor, x, nets: input / capacitor node)
+    for (src, r, c, x, input, node) in [("PULSE(0 5 0 1m 1m 0 2m)", "10", "1u", 0, "RAMP", "CA"), ("PULSE(0 5 0 1u 1u 10m 20m)", "1k", "1u", 48, "STEP", "CB")] {
+        let v = s.add(Kind::VSource, (x, 0), 0);
+        s.components[v].value = src.into();
+        label(&mut s, v, "+", input);
+        label(&mut s, v, "-", "GND");
+        let ri = s.add(Kind::Resistor, (x + 16, 0), 1);
+        s.components[ri].value = r.into();
+        label(&mut s, ri, "1", input);
+        label(&mut s, ri, "2", node);
+        let ci = s.add(Kind::Capacitor, (x + 32, 0), 1);
+        s.components[ci].value = c.into();
+        label(&mut s, ci, "1", node);
+        label(&mut s, ci, "2", "GND");
+    }
+    std::fs::write(root.join("capacitor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/inductor_basics.schjson for the inductor lesson: a 5 V step through R1 = 1 ohm into L1 = 100 mH
+/// (the current climbs 50 mA per ms, V = L*di/dt) and a 5 V step through R2 = 100 ohm into L2 = 100 mH (tau = L/R = 1 ms):
+/// `cargo test -p app write_inductor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_inductor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    for (r, x, input, node) in [("1", 0, "STEPA", "LB"), ("100", 48, "STEPB", "LA")] {
+        let v = s.add(Kind::VSource, (x, 0), 0);
+        s.components[v].value = "PULSE(0 5 0 1u 1u 10m 20m)".into();
+        label(&mut s, v, "+", input);
+        label(&mut s, v, "-", "GND");
+        let ri = s.add(Kind::Resistor, (x + 16, 0), 1);
+        s.components[ri].value = r.into();
+        label(&mut s, ri, "1", input);
+        label(&mut s, ri, "2", node);
+        let li = s.add(Kind::Inductor, (x + 32, 0), 1);
+        s.components[li].value = "100m".into();
+        label(&mut s, li, "1", node);
+        label(&mut s, li, "2", "GND");
+    }
+    std::fs::write(root.join("inductor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/resistor_basics.schjson for the resistor lesson: 5 V through R1 = 100 ohm and R2 = 220 ohm in series
+/// (node A), and 5 V across R3 = 100 ohm and R4 = 220 ohm in parallel (node P):
+/// `cargo test -p app write_resistor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_resistor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let mut put = |s: &mut sch_core::Schematic, x: i32, value: &str, a: &str, b: &str| {
+        let r = s.add(Kind::Resistor, (x, 0), 1);
+        s.components[r].value = value.into();
+        label(s, r, "1", a);
+        label(s, r, "2", b);
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "5".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    put(&mut s, 16, "100", "IN", "A");
+    put(&mut s, 32, "220", "A", "GND");
+    let v = s.add(Kind::VSource, (48, 0), 0);
+    s.components[v].value = "5".into();
+    label(&mut s, v, "+", "P");
+    label(&mut s, v, "-", "GND");
+    put(&mut s, 64, "100", "P", "GND");
+    put(&mut s, 80, "220", "P", "GND");
+    // big resistor bodies, so that the defaults stay inside their power rating
+    for c in s.components.iter_mut().filter(|c| c.kind == Kind::Resistor) {
+        c.footprint = "R_2512".into();
+    }
+    std::fs::write(root.join("resistor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/transistor_basics.schjson for the transistor lesson: Q1 (NPN, hFE 200) switches a 1 kohm load R1 on
+/// VCC = 5 V, the base is fed from V2 through R2 = 100 kohm: `cargo test -p app write_transistor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_transistor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let rc = s.add(Kind::Resistor, (16, 0), 1);
+    s.components[rc].value = "1k".into();
+    label(&mut s, rc, "1", "VCC");
+    label(&mut s, rc, "2", "COL");
+    let q = s.add(Kind::Npn, (36, 0), 0);
+    label(&mut s, q, "C", "COL");
+    label(&mut s, q, "B", "BASE");
+    label(&mut s, q, "E", "GND");
+    let v2 = s.add(Kind::VSource, (52, 0), 0);
+    s.components[v2].value = "1.7".into();
+    label(&mut s, v2, "+", "VB");
+    label(&mut s, v2, "-", "GND");
+    let rb = s.add(Kind::Resistor, (68, 0), 1);
+    s.components[rb].value = "100k".into();
+    label(&mut s, rb, "1", "VB");
+    label(&mut s, rb, "2", "BASE");
+    std::fs::write(root.join("transistor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/mosfet_basics.schjson for the MOSFET lesson: Q1 (2N7000) switches a 100 ohm load R1 on VDD = 5 V,
+/// the gate is driven directly by V2 (5 V): `cargo test -p app write_mosfet_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_mosfet_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "2N7000").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VDD");
+    label(&mut s, v1, "-", "GND");
+    let rd = s.add(Kind::Resistor, (16, 0), 1);
+    s.components[rd].value = "100".into();
+    label(&mut s, rd, "1", "VDD");
+    label(&mut s, rd, "2", "DRAIN");
+    let q = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (36, 0), 0);
+    label(&mut s, q, "3", "DRAIN"); // pins are numbered: 3 = D, 2 = G, 1 = S
+    label(&mut s, q, "2", "GATE");
+    label(&mut s, q, "1", "GND");
+    let v2 = s.add(Kind::VSource, (52, 0), 0);
+    s.components[v2].value = "5".into();
+    label(&mut s, v2, "+", "GATE");
+    label(&mut s, v2, "-", "GND");
+    // big resistor bodies, so that the defaults stay inside their power rating
+    for c in s.components.iter_mut().filter(|c| c.kind == Kind::Resistor) {
+        c.footprint = "R_2512".into();
+    }
+    std::fs::write(root.join("mosfet_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/opamp_basics.schjson for the op-amp lesson: three LM358 non-inverting amplifiers on +-5 V with the
+/// gains 2, 11 and 101 (Rf = 1k / 10k / 100k, Rg = 1k) fed by one source (SIN 0.5 V, 1 kHz, AC 1):
+/// `cargo test -p app write_opamp_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_opamp_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LM358").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "SIN(0 0.5 1k) AC 1".into();
+    label(&mut s, v1, "+", "IN");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "5".into();
+    label(&mut s, v2, "+", "VCC");
+    label(&mut s, v2, "-", "GND");
+    let v3 = s.add(Kind::VSource, (0, 48), 0);
+    s.components[v3].value = "5".into();
+    label(&mut s, v3, "+", "GND");
+    label(&mut s, v3, "-", "VEE");
+    for (k, rf) in ["1k", "10k", "100k"].into_iter().enumerate() {
+        let (n, y) = (k + 1, 28 * k as i32);
+        let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, y), 0);
+        label(&mut s, u, "3", "IN");
+        label(&mut s, u, "2", &format!("FB{n}"));
+        label(&mut s, u, "1", &format!("OUT{n}"));
+        label(&mut s, u, "8", "VCC");
+        label(&mut s, u, "4", "VEE");
+        let r = s.add(Kind::Resistor, (50, y), 1);
+        s.components[r].value = rf.into();
+        label(&mut s, r, "1", &format!("OUT{n}"));
+        label(&mut s, r, "2", &format!("FB{n}"));
+        let r = s.add(Kind::Resistor, (66, y), 1);
+        s.components[r].value = "1k".into();
+        label(&mut s, r, "1", &format!("FB{n}"));
+        label(&mut s, r, "2", "GND");
+    }
+    std::fs::write(root.join("opamp_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/diode_basics.schjson for the diode lesson: V1 (5 V DC + 1 V AC) feeds a diode in the forward direction
+/// through R1 = 1 kohm (node A) and a diode in the reverse direction through R2 = 1 kohm (node B):
+/// `cargo test -p app write_diode_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_diode_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "5 AC 1".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    // forward row, then reverse row
+    for (y, node, forward) in [(0, "A", true), (20, "B", false)] {
+        let r = s.add(Kind::Resistor, (20, y), 1);
+        s.components[r].value = "1k".into();
+        label(&mut s, r, "1", "IN");
+        label(&mut s, r, "2", node);
+        let d = s.add(Kind::Diode, (40, y), 0);
+        let (a, k) = if forward { (node, "GND") } else { ("GND", node) };
+        label(&mut s, d, "A", a);
+        label(&mut s, d, "K", k);
+    }
+    std::fs::write(root.join("diode_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/led_basics.schjson for the LED lesson: three LEDs with 330 ohm resistors on 5 V, 3.3 V and 2 V:
+/// `cargo test -p app write_led_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_led_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    for (k, volts) in ["5", "3.3", "2"].into_iter().enumerate() {
+        let (n, y) = (k + 1, 20 * k as i32);
+        let v = s.add(Kind::VSource, (0, y), 0);
+        s.components[v].value = volts.into();
+        label(&mut s, v, "+", &format!("S{n}"));
+        label(&mut s, v, "-", "GND");
+        let r = s.add(Kind::Resistor, (20, y), 1);
+        s.components[r].value = "330".into();
+        label(&mut s, r, "1", &format!("S{n}"));
+        label(&mut s, r, "2", &format!("A{n}"));
+        let d = s.add(Kind::Led, (40, y), 0);
+        label(&mut s, d, "A", &format!("A{n}"));
+        label(&mut s, d, "K", "GND");
+    }
+    std::fs::write(root.join("led_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/zener_basics.schjson for the Zener lesson: V1 (12 V) -> R1 = 330 ohm -> 1N4733A (5.1 V) to GND (node Z):
+/// `cargo test -p app write_zener_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_zener_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "1N4733A").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "12".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    let r = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[r].value = "330".into();
+    label(&mut s, r, "1", "IN");
+    label(&mut s, r, "2", "Z");
+    let d = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (40, 0), 0);
+    label(&mut s, d, "K", "Z");
+    label(&mut s, d, "A", "GND");
+    // big resistor bodies, so that the defaults stay inside their power rating
+    for c in s.components.iter_mut().filter(|c| c.kind == Kind::Resistor) {
+        c.footprint = "R_2512".into();
+    }
+    std::fs::write(root.join("zener_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/relay_basics.schjson for the relay lesson: a 5 V relay coil (R 70 ohm + L 100 mH) driven by a 5 V
+/// step (R1, L1), and the same coil behind a 47 ohm series resistor R2 (R3, L2): `cargo test -p app write_relay_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_relay_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
+        let i = s.add(kind, (x, y), 1);
+        s.components[i].value = value.into();
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "PULSE(0 5 0.5m 1u 1u 20m 40m)".into();
+    label(&mut s, v, "+", "DRV1");
+    label(&mut s, v, "-", "GND");
+    part(&mut s, Kind::Resistor, 20, 0, "70", "DRV1", "C1");
+    part(&mut s, Kind::Inductor, 36, 0, "100m", "C1", "GND");
+    let v = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v].value = "PULSE(0 5 0.5m 1u 1u 20m 40m)".into();
+    label(&mut s, v, "+", "DRV2");
+    label(&mut s, v, "-", "GND");
+    part(&mut s, Kind::Resistor, 20, 24, "47", "DRV2", "S2");
+    part(&mut s, Kind::Resistor, 36, 24, "70", "S2", "C2");
+    part(&mut s, Kind::Inductor, 52, 24, "100m", "C2", "GND");
+    std::fs::write(root.join("relay_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/crystal_q.schjson for the crystal "face" lesson: the same 1 V source feeds a 16 MHz crystal (Y1) into
+/// 50 ohm (R1), and an ordinary LC series resonator (L1 1 uH, C1 98.9 pF, loss R2 1 ohm) into a 1 ohm load (R3), for comparing Q:
+/// `cargo test -p app write_crystal_q_example -- --ignored`
+#[test]
+#[ignore]
+fn write_crystal_q_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "XTAL_16MHz_3225").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let part = |s: &mut sch_core::Schematic, kind: Kind, x: i32, y: i32, value: &str, a: &str, b: &str| {
+        let i = s.add(kind, (x, y), 1);
+        s.components[i].value = value.into();
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "SIN(0 1 16Meg) AC 1".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    let y = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (20, 0), 0);
+    label(&mut s, y, "1", "IN");
+    label(&mut s, y, "3", "OUTX");
+    label(&mut s, y, "2", "GND");
+    label(&mut s, y, "4", "GND");
+    part(&mut s, Kind::Resistor, 40, 0, "50", "OUTX", "GND");
+    part(&mut s, Kind::Inductor, 20, 28, "1u", "IN", "N1");
+    part(&mut s, Kind::Capacitor, 36, 28, "98.9p", "N1", "N2");
+    part(&mut s, Kind::Resistor, 52, 28, "1", "N2", "OUTL");
+    part(&mut s, Kind::Resistor, 68, 28, "1", "OUTL", "GND");
+    std::fs::write(root.join("crystal_q.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/transformer_basics.schjson for the transformer lesson: V1 (100 V rms, 50 Hz) -> R2 = 1 ohm (primary
+/// current sense) -> the 100 V : 12 V, 5 VA transformer T1, load R1 on the secondary (1 Mohm = no load at first):
+/// `cargo test -p app write_transformer_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_transformer_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "TR100_12V_5VA").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    // the load is made first so that it is R1 and the sense resistor R2
+    let load = s.add(Kind::Resistor, (70, 0), 1);
+    s.components[load].value = "1Meg".into();
+    label(&mut s, load, "1", "OUT");
+    label(&mut s, load, "2", "GND");
+    let sense = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[sense].value = "1".into();
+    label(&mut s, sense, "1", "IN");
+    label(&mut s, sense, "2", "PRI");
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "SIN(0 141.4 50) AC 1".into();
+    label(&mut s, v, "+", "IN");
+    label(&mut s, v, "-", "GND");
+    let t = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (45, 0), 0);
+    label(&mut s, t, "1", "PRI");
+    label(&mut s, t, "2", "GND");
+    label(&mut s, t, "3", "OUT");
+    label(&mut s, t, "4", "GND");
+    std::fs::write(root.join("transformer_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/thermistor_basics.schjson for the thermistor lesson: 5 V over three dividers, each a series resistor
+/// (R1 10k -> A, R2 1k -> B, R3 100k -> C) above a 10k B3950 NTC thermistor to GND:
+/// `cargo test -p app write_thermistor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_thermistor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "NTC_10k_B3950").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v].value = "5".into();
+    label(&mut s, v, "+", "VCC");
+    label(&mut s, v, "-", "GND");
+    for (y, r, node) in [(0, "10k", "A"), (20, "1k", "B"), (40, "100k", "C")] {
+        let ri = s.add(Kind::Resistor, (20, y), 1);
+        s.components[ri].value = r.into();
+        label(&mut s, ri, "1", "VCC");
+        label(&mut s, ri, "2", node);
+        let t = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (40, y), 1);
+        label(&mut s, t, "1", node);
+        label(&mut s, t, "2", "GND");
+    }
+    std::fs::write(root.join("thermistor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/phototransistor_basics.schjson for the phototransistor lesson: V2 is the light (1 V = 1 mW/cm2, 0.02 at first)
+/// shared by two BPW34 photodiodes: D1 alone into 100 kohm (R1, node PDOUT), and D2 between the collector and the base of an NPN (Q1,
+/// hFE 200) with a 1 kohm collector load (R2, node COL) - that is a phototransistor:
+/// `cargo test -p app write_phototransistor_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_phototransistor_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "BPW34").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "0.02".into();
+    label(&mut s, v2, "+", "LIGHT");
+    label(&mut s, v2, "-", "GND");
+    // photodiode alone
+    let d1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 0), 0);
+    label(&mut s, d1, "K", "VCC");
+    label(&mut s, d1, "A", "PDOUT");
+    label(&mut s, d1, "L", "LIGHT");
+    let r1 = s.add(Kind::Resistor, (50, 0), 1);
+    s.components[r1].value = "100k".into();
+    label(&mut s, r1, "1", "PDOUT");
+    label(&mut s, r1, "2", "GND");
+    // the phototransistor: the photodiode feeds the base
+    let d2 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 28), 0);
+    label(&mut s, d2, "K", "COL");
+    label(&mut s, d2, "A", "BASE");
+    label(&mut s, d2, "L", "LIGHT");
+    let q1 = s.add(Kind::Npn, (60, 28), 0);
+    label(&mut s, q1, "C", "COL");
+    label(&mut s, q1, "B", "BASE");
+    label(&mut s, q1, "E", "GND");
+    let r2 = s.add(Kind::Resistor, (80, 28), 1);
+    s.components[r2].value = "1k".into();
+    label(&mut s, r2, "1", "VCC");
+    label(&mut s, r2, "2", "COL");
+    std::fs::write(root.join("phototransistor_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/regulator_basics.schjson for the three-terminal regulator lesson: V1 (12 V) in series with V2 (0 V, AC 1 =
+/// the ripple) feeds an LM7805 (U1) that drives a 50 ohm load R1: `cargo test -p app write_regulator_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_regulator_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "LM7805").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "12".into();
+    label(&mut s, v1, "+", "SUPPLY");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "0 AC 1".into();
+    label(&mut s, v2, "+", "VIN");
+    label(&mut s, v2, "-", "SUPPLY");
+    let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (30, 0), 0);
+    label(&mut s, u, "1", "VIN");
+    label(&mut s, u, "2", "GND");
+    label(&mut s, u, "3", "VOUT");
+    let r = s.add(Kind::Resistor, (50, 0), 1);
+    s.components[r].value = "50".into();
+    label(&mut s, r, "1", "VOUT");
+    label(&mut s, r, "2", "GND");
+    // a big resistor body, so that the default stays inside its power rating
+    for c in s.components.iter_mut().filter(|c| c.kind == Kind::Resistor) {
+        c.footprint = "R_2512".into();
+    }
+    std::fs::write(root.join("regulator_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/photocoupler_basics.schjson for the photocoupler lesson: V1 (5 V) -> R1 = 330 ohm -> the LED of a PC817 (U1)
+/// on the input side; on the isolated output side V2 (5 V, its minus is GND2) -> R2 = 220 ohm -> the collector, the emitter on GND2
+/// (R3 = 1 Mohm ties GND2 to GND only so that the simulation has a reference): `cargo test -p app write_photocoupler_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_photocoupler_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "PC817").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let label = |s: &mut sch_core::Schematic, idx: usize, pin: &str, text: &str| {
+        let (_, pt) = s.components[idx].pins().into_iter().find(|(n, _)| n == pin).unwrap_or_else(|| panic!("pin {pin}"));
+        let c = s.components[idx].pos;
+        let (dx, dy) = (pt.0 - c.0, pt.1 - c.1);
+        let end = if dx.abs() >= dy.abs() { (pt.0 + 3 * dx.signum(), pt.1) } else { (pt.0, pt.1 + 3 * dy.signum()) };
+        s.wires.push(Wire { a: pt, b: end });
+        s.labels.push(sch_core::Label { pos: end, text: text.into() });
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VIN");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[r1].value = "330".into();
+    label(&mut s, r1, "1", "VIN");
+    label(&mut s, r1, "2", "LEDA");
+    let v2 = s.add(Kind::VSource, (0, 28), 0);
+    s.components[v2].value = "5".into();
+    label(&mut s, v2, "+", "VCC2");
+    label(&mut s, v2, "-", "GND2");
+    let r2 = s.add(Kind::Resistor, (20, 28), 1);
+    s.components[r2].value = "220".into();
+    label(&mut s, r2, "1", "VCC2");
+    label(&mut s, r2, "2", "OUT");
+    let r3 = s.add(Kind::Resistor, (40, 28), 1);
+    s.components[r3].value = "1Meg".into();
+    label(&mut s, r3, "1", "GND2");
+    label(&mut s, r3, "2", "GND");
+    let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (60, 10), 0);
+    label(&mut s, u, "1", "LEDA");
+    label(&mut s, u, "2", "GND");
+    label(&mut s, u, "3", "GND2");
+    label(&mut s, u, "4", "OUT");
+    std::fs::write(root.join("photocoupler_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

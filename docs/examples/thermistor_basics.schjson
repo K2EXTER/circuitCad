@@ -1,0 +1,472 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RT1",
+      "kind": "Custom",
+      "value": "NTC_10k_B3950",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 1,
+      "footprint": "Thermistor_Disc_P5.08",
+      "custom": {
+        "name": "NTC_10k_B3950",
+        "prefix": "RT",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "NTC_10k_B3950",
+          "text": ".subckt NTC_10k_B3950 a b\n* resistance follows the circuit temperature\nBr a b I=V(a,b)/(10k*exp(3950*(1/(temp+273.15)-1/298.15)))\n.ends NTC_10k_B3950",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "抵抗値はシミュレーションの温度で決まります。温度は解析タブの温度設定・温度スイープで変えます(回路全体が同じ温度になります)。",
+            "自己発熱(流す電流で温度が上がる)・熱の応答の遅れは扱いません。電流を流しすぎると実物は測定値がずれます。",
+            "B定数(3950K)の式で近似しています。広い温度範囲では実物の値とずれます。"
+          ]
+        },
+        "ratings": {
+          "p_max": 0.25,
+          "rows": [
+            {
+              "name": "抵抗値",
+              "value": "10kΩ ±1%",
+              "condition": "25℃"
+            },
+            {
+              "name": "B定数",
+              "value": "3950K ±1%",
+              "condition": "25〜50℃"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        20,
+        20
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RT2",
+      "kind": "Custom",
+      "value": "NTC_10k_B3950",
+      "pos": [
+        40,
+        20
+      ],
+      "rot": 1,
+      "footprint": "Thermistor_Disc_P5.08",
+      "custom": {
+        "name": "NTC_10k_B3950",
+        "prefix": "RT",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "NTC_10k_B3950",
+          "text": ".subckt NTC_10k_B3950 a b\n* resistance follows the circuit temperature\nBr a b I=V(a,b)/(10k*exp(3950*(1/(temp+273.15)-1/298.15)))\n.ends NTC_10k_B3950",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "抵抗値はシミュレーションの温度で決まります。温度は解析タブの温度設定・温度スイープで変えます(回路全体が同じ温度になります)。",
+            "自己発熱(流す電流で温度が上がる)・熱の応答の遅れは扱いません。電流を流しすぎると実物は測定値がずれます。",
+            "B定数(3950K)の式で近似しています。広い温度範囲では実物の値とずれます。"
+          ]
+        },
+        "ratings": {
+          "p_max": 0.25,
+          "rows": [
+            {
+              "name": "抵抗値",
+              "value": "10kΩ ±1%",
+              "condition": "25℃"
+            },
+            {
+              "name": "B定数",
+              "value": "3950K ±1%",
+              "condition": "25〜50℃"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "100k",
+      "pos": [
+        20,
+        40
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "RT3",
+      "kind": "Custom",
+      "value": "NTC_10k_B3950",
+      "pos": [
+        40,
+        40
+      ],
+      "rot": 1,
+      "footprint": "Thermistor_Disc_P5.08",
+      "custom": {
+        "name": "NTC_10k_B3950",
+        "prefix": "RT",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "NTC_10k_B3950",
+          "text": ".subckt NTC_10k_B3950 a b\n* resistance follows the circuit temperature\nBr a b I=V(a,b)/(10k*exp(3950*(1/(temp+273.15)-1/298.15)))\n.ends NTC_10k_B3950",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "抵抗値はシミュレーションの温度で決まります。温度は解析タブの温度設定・温度スイープで変えます(回路全体が同じ温度になります)。",
+            "自己発熱(流す電流で温度が上がる)・熱の応答の遅れは扱いません。電流を流しすぎると実物は測定値がずれます。",
+            "B定数(3950K)の式で近似しています。広い温度範囲では実物の値とずれます。"
+          ]
+        },
+        "ratings": {
+          "p_max": 0.25,
+          "rows": [
+            {
+              "name": "抵抗値",
+              "value": "10kΩ ±1%",
+              "condition": "25℃"
+            },
+            {
+              "name": "B定数",
+              "value": "3950K ±1%",
+              "condition": "25〜50℃"
+            }
+          ]
+        },
+        "glyph": "resistor"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        40,
+        -2
+      ],
+      "b": [
+        40,
+        -5
+      ]
+    },
+    {
+      "a": [
+        40,
+        2
+      ],
+      "b": [
+        40,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        18
+      ],
+      "b": [
+        20,
+        15
+      ]
+    },
+    {
+      "a": [
+        20,
+        22
+      ],
+      "b": [
+        20,
+        25
+      ]
+    },
+    {
+      "a": [
+        40,
+        18
+      ],
+      "b": [
+        40,
+        15
+      ]
+    },
+    {
+      "a": [
+        40,
+        22
+      ],
+      "b": [
+        40,
+        25
+      ]
+    },
+    {
+      "a": [
+        20,
+        38
+      ],
+      "b": [
+        20,
+        35
+      ]
+    },
+    {
+      "a": [
+        20,
+        42
+      ],
+      "b": [
+        20,
+        45
+      ]
+    },
+    {
+      "a": [
+        40,
+        38
+      ],
+      "b": [
+        40,
+        35
+      ]
+    },
+    {
+      "a": [
+        40,
+        42
+      ],
+      "b": [
+        40,
+        45
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        40,
+        -5
+      ],
+      "text": "A"
+    },
+    {
+      "pos": [
+        40,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        15
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        20,
+        25
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        40,
+        15
+      ],
+      "text": "B"
+    },
+    {
+      "pos": [
+        40,
+        25
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        35
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        20,
+        45
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        40,
+        35
+      ],
+      "text": "C"
+    },
+    {
+      "pos": [
+        40,
+        45
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

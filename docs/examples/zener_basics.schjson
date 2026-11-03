@@ -1,0 +1,195 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Custom",
+      "value": "1N4733A",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 0,
+      "footprint": "D_DO-41_P10.16",
+      "custom": {
+        "name": "1N4733A",
+        "prefix": "D",
+        "pins": [
+          {
+            "number": "K",
+            "name": "K",
+            "side": "right"
+          },
+          {
+            "number": "A",
+            "name": "A",
+            "side": "left"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "D",
+          "name": "1N4733A",
+          "text": ".model 1N4733A D(IS=50f N=1 RS=6.5 BV=5.1 IBV=49m)",
+          "pins": [
+            "A",
+            "K"
+          ],
+          "params": {},
+          "limits": [
+            "降伏電圧つきのダイオードのモデルです。電流を増やしたときのツェナー電圧の変化 (ツェナーインピーダンス) は簡易な式で、実物とずれます。",
+            "ツェナー電圧は温度で変わらない値です。実物は温度で変わります。",
+            "接合容量と逆回復時間は扱いません。許容損失 (W) を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "i_max": 0.178,
+          "p_max": 1.0,
+          "rows": [
+            {
+              "name": "ツェナー電圧",
+              "value": "5.1V ±5%",
+              "condition": "IZT = 49mA"
+            },
+            {
+              "name": "ツェナーインピーダンス",
+              "value": "7Ω (最大)",
+              "condition": "IZT = 49mA"
+            }
+          ]
+        },
+        "glyph": "zener"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        42,
+        0
+      ],
+      "b": [
+        45,
+        0
+      ]
+    },
+    {
+      "a": [
+        38,
+        0
+      ],
+      "b": [
+        35,
+        0
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "Z"
+    },
+    {
+      "pos": [
+        45,
+        0
+      ],
+      "text": "Z"
+    },
+    {
+      "pos": [
+        35,
+        0
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

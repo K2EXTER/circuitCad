@@ -1,0 +1,265 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "100",
+      "pos": [
+        16,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N7000",
+      "pos": [
+        36,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-92_2N7000",
+      "custom": {
+        "name": "2N7000",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "M",
+          "name": "2N7000",
+          "text": ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ],
+          "params": {},
+          "limits": [
+            "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+            "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+            "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 60.0,
+          "i_max": 0.2,
+          "p_max": 0.4,
+          "rows": [
+            {
+              "name": "しきい値電圧",
+              "value": "0.8〜3V",
+              "condition": "ID = 1mA"
+            },
+            {
+              "name": "オン抵抗",
+              "value": "5Ω (最大)",
+              "condition": "VGS = 10V, ID = 0.5A"
+            }
+          ]
+        },
+        "glyph": "nmos"
+      }
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        52,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        16,
+        -2
+      ],
+      "b": [
+        16,
+        -5
+      ]
+    },
+    {
+      "a": [
+        16,
+        2
+      ],
+      "b": [
+        16,
+        5
+      ]
+    },
+    {
+      "a": [
+        36,
+        -2
+      ],
+      "b": [
+        36,
+        -5
+      ]
+    },
+    {
+      "a": [
+        34,
+        0
+      ],
+      "b": [
+        31,
+        0
+      ]
+    },
+    {
+      "a": [
+        36,
+        2
+      ],
+      "b": [
+        36,
+        5
+      ]
+    },
+    {
+      "a": [
+        52,
+        -2
+      ],
+      "b": [
+        52,
+        -5
+      ]
+    },
+    {
+      "a": [
+        52,
+        2
+      ],
+      "b": [
+        52,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        -5
+      ],
+      "text": "VDD"
+    },
+    {
+      "pos": [
+        16,
+        5
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        36,
+        -5
+      ],
+      "text": "DRAIN"
+    },
+    {
+      "pos": [
+        31,
+        0
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        36,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        52,
+        -5
+      ],
+      "text": "GATE"
+    },
+    {
+      "pos": [
+        52,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

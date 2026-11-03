@@ -1,0 +1,271 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "12",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "0 AC 1",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "LM7805",
+      "pos": [
+        30,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-220-3",
+      "custom": {
+        "name": "LM7805",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "OUT",
+            "side": "right"
+          },
+          {
+            "number": "2",
+            "name": "GND",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "LM7805",
+          "text": ".subckt LM7805 in gnd out\nVdo in ind DC 2\nE1 c0 gnd ind gnd 1\nVr vr gnd DC 5\nEx xh gnd c0 vr 1000\nD1 xh yh DREG\nRy yh gnd 1k\nEy y gnd yh gnd 0.001\nEc c gnd c0 y 1\nE2 o gnd c gnd 1\nRo o out 0.05\nG1 in gnd o out 20.0\n.model DREG D(IS=1e-12 N=1)\n.ends LM7805",
+          "pins": [
+            "1",
+            "2",
+            "3"
+          ],
+          "params": {
+            "dropout": 2.0,
+            "vout": 5.0
+          },
+          "limits": [
+            "出力電圧、ドロップアウト (入力が低いと出力が下がる)、出力抵抗、負荷電流が入力電流になることを再現するマクロモデルです。",
+            "扱わないもの: リップル除去、負荷や入力が急に変わったときの応答、静止電流、過電流保護、熱による制限。",
+            "モデルには内部の応答がないので、入力・出力のコンデンサを付けたときの安定性 (発振しないか) は確かめられません。データシートの推奨回路に従ってください。"
+          ]
+        },
+        "ratings": {
+          "v_max": 35.0,
+          "i_max": 1.5,
+          "rows": [
+            {
+              "name": "出力電圧",
+              "value": "5V ±4%"
+            },
+            {
+              "name": "ドロップアウト電圧",
+              "value": "2V (代表)",
+              "condition": "IO = 1A"
+            },
+            {
+              "name": "熱抵抗 (接合部-周囲)",
+              "value": "50℃/W",
+              "condition": "TO-220"
+            }
+          ]
+        },
+        "glyph": "regulator"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "50",
+      "pos": [
+        50,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_2512",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        26,
+        0
+      ],
+      "b": [
+        23,
+        0
+      ]
+    },
+    {
+      "a": [
+        30,
+        4
+      ],
+      "b": [
+        30,
+        7
+      ]
+    },
+    {
+      "a": [
+        34,
+        0
+      ],
+      "b": [
+        37,
+        0
+      ]
+    },
+    {
+      "a": [
+        50,
+        -2
+      ],
+      "b": [
+        50,
+        -5
+      ]
+    },
+    {
+      "a": [
+        50,
+        2
+      ],
+      "b": [
+        50,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "SUPPLY"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "SUPPLY"
+    },
+    {
+      "pos": [
+        23,
+        0
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        30,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        37,
+        0
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        50,
+        -5
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        50,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

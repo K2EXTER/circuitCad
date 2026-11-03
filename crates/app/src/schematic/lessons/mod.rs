@@ -56,6 +56,7 @@ mod debug;
 mod devices;
 mod micro;
 mod models;
+mod parts;
 mod predict;
 mod signals;
 mod supply;
@@ -120,6 +121,22 @@ const LESSONS: &[Lesson] = &[
     signals::PHASE_MARGIN,
     signals::NOISE,
     debug::DEBUG,
+    parts::CAPACITOR,
+    parts::INDUCTOR,
+    parts::RESISTOR,
+    parts::TRANSISTOR,
+    parts::MOSFET_BASICS,
+    parts::OPAMP_BASICS,
+    parts::DIODE_BASICS,
+    parts::LED_BASICS,
+    parts::ZENER_BASICS,
+    parts::RELAY_BASICS,
+    parts::CRYSTAL_BASICS,
+    parts::TRANSFORMER_BASICS,
+    parts::THERMISTOR_BASICS,
+    parts::PHOTOTRANSISTOR_BASICS,
+    parts::REGULATOR_BASICS,
+    parts::PHOTOCOUPLER_BASICS,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

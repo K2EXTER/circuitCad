@@ -1812,3 +1812,471 @@ fn the_repair_lesson_names_the_kind_of_place_in_its_hint() {
     let hint = e.lesson_unmet.borrow().as_ref().map(|u| u.message()).unwrap();
     assert!(hint.contains("VOUT") && hint.contains("ERC"), "{hint}");
 }
+
+#[test]
+fn the_capacitor_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "capacitor").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let sig = |e: &SchEditor, n: &str| e.tran.as_ref().unwrap().outcome.as_ref().unwrap().signal(n).unwrap().values.clone();
+    let (t, cb) = (e.tran.as_ref().unwrap().outcome.as_ref().unwrap().time.clone(), sig(&e, "V(CB)"));
+    let at = |t: &[f64], v: &[f64], x: f64| v[t.iter().position(|&s| s >= x).unwrap()];
+    // I = C dV/dt: the current of the ramp is about 5 mA in the middle of the rise, and tau = 1 ms gives 63 %
+    let i = sig(&e, "I(C1)");
+    let mid = at(&t, &i, 0.5e-3);
+    assert!((mid - 5e-3).abs() < 0.3e-3, "rising current {mid}");
+    assert!((at(&t, &cb, 1e-3) - 3.16).abs() < 0.1, "tau");
+    set_value(&mut e, "C1", "4.7u");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (t, i) = (e.tran.as_ref().unwrap().outcome.as_ref().unwrap().time.clone(), sig(&e, "I(C1)"));
+    assert!((at(&t, &i, 0.5e-3) - 23.5e-3).abs() < 2e-3, "bigger C1");
+    set_value(&mut e, "C2", "220n");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (t, cb) = (e.tran.as_ref().unwrap().outcome.as_ref().unwrap().time.clone(), sig(&e, "V(CB)"));
+    assert!((at(&t, &cb, 0.22e-3) - 3.16).abs() < 0.15, "smaller C2");
+}
+
+#[test]
+fn the_inductor_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "inductor").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let get = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        (r.time.clone(), r.signal(n).unwrap().values.clone())
+    };
+    let at = |(t, v): &(Vec<f64>, Vec<f64>), x: f64| v[t.iter().position(|&s| s >= x).unwrap()];
+    // V = L di/dt: 50 mA per ms with 1 ohm; tau = L/R = 1 ms gives 63 % of 50 mA
+    assert!((at(&get(&e, "I(L1)"), 1e-3) - 0.049).abs() < 3e-3, "ramp");
+    assert!((at(&get(&e, "I(L2)"), 1e-3) - 31.6e-3).abs() < 2e-3, "tau");
+    set_value(&mut e, "L1", "22m");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((at(&get(&e, "I(L1)"), 1e-3) - 0.22).abs() < 0.02, "faster");
+    set_value(&mut e, "R2", "1k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((at(&get(&e, "I(L2)"), 0.1e-3) - 3.16e-3).abs() < 0.3e-3, "short tau");
+}
+
+#[test]
+fn the_resistor_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "resistor").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "A") - 3.4375).abs() < 0.01 && (v(&e, "P") - 5.0).abs() < 0.01);
+    set_value(&mut e, "R2", "1k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((v(&e, "A") - 4.545).abs() < 0.01);
+    set_value(&mut e, "R4", "22");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+}
+
+#[test]
+fn the_transistor_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "transistor").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "COL") - 3.2).abs() < 0.15 && (0.7..0.85).contains(&v(&e, "BASE")), "active");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "R2", "10k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!(v(&e, "COL") < 0.2, "saturated");
+}
+
+#[test]
+fn the_mosfet_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "mosfet_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "DRAIN") - 0.14).abs() < 0.02, "on");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "V2", "2.5");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((v(&e, "DRAIN") - 4.0).abs() < 0.2, "half on");
+}
+
+#[test]
+fn the_opamp_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "opamp_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        for n in ["V(OUT1)", "V(OUT2)", "V(OUT3)"] {
+            let m = r.signal(n).unwrap().mag();
+            let f3 = r.freq[m.iter().position(|x| *x < m[0] * std::f64::consts::FRAC_1_SQRT_2).unwrap()];
+            let (gain, want) = match n { "V(OUT1)" => (2.0, 5e5), "V(OUT2)" => (11.0, 1e5), _ => (101.0, 1e4) };
+            assert!((m[0] / gain - 1.0).abs() < 0.02 && (f3 / want - 1.0).abs() < 0.15, "{n}: {} {f3}", m[0]);
+        }
+    }
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let peak = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap().signal(n).unwrap().values.clone();
+        (r.iter().cloned().fold(f64::MIN, f64::max), r.iter().cloned().fold(f64::MAX, f64::min))
+    };
+    assert!(peak(&e, "V(OUT1)").0 < 1.01 && peak(&e, "V(OUT2)").0 < 3.6 && peak(&e, "V(OUT3)").1 < -4.9, "clipping");
+    set_value(&mut e, "R3", "2k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!(peak(&e, "V(OUT2)").0 > 1.4 && peak(&e, "V(OUT2)").0 < 1.51, "clean");
+}
+
+#[test]
+fn the_diode_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "diode_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "A") - 0.693).abs() < 0.01 && v(&e, "B") > 4.99, "dc");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let mag = |e: &SchEditor, n: &str| e.ac.as_ref().unwrap().outcome.as_ref().unwrap().signal(n).unwrap().mag()[0];
+    assert!((mag(&e, "V(A)") - 0.006).abs() < 0.0005 && mag(&e, "V(B)") > 0.99, "ac1");
+    set_value(&mut e, "R1", "10k");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((mag(&e, "V(A)") - 0.0059).abs() < 0.0005, "ratio stays");
+    e.run_dc();
+    assert!((v(&e, "A") - 0.633).abs() < 0.01, "0.63 V");
+}
+
+#[test]
+fn the_led_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "led_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let amps = |e: &SchEditor, a: &str, src: f64, r: f64| (src - e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(a).unwrap()) / r;
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((amps(&e, "A1", 5.0, 330.0) - 9.2e-3).abs() < 0.5e-3 && (amps(&e, "A2", 3.3, 330.0) - 4.3e-3).abs() < 0.5e-3);
+    assert!((amps(&e, "A3", 2.0, 330.0) - 0.7e-3).abs() < 0.3e-3);
+    set_value(&mut e, "R1", "150");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((amps(&e, "A1", 5.0, 150.0) - 19.7e-3).abs() < 1e-3);
+    set_value(&mut e, "V3", "3");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((amps(&e, "A3", 3.0, 330.0) - 3.4e-3).abs() < 0.4e-3);
+}
+
+#[test]
+fn the_zener_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "zener_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
+    let z = &r.signal("V(Z)").unwrap().values;
+    let at = |x: f64| z[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
+    assert!((at(4.0) - 4.0).abs() < 0.01 && (4.9..5.1).contains(&at(5.0)) && (5.15..5.25).contains(&at(12.0)), "knee");
+    let v = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("Z").unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    assert!((v(&e) - 5.21).abs() < 0.05);
+    set_value(&mut e, "R1", "22");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((v(&e) - 6.7).abs() < 0.15);
+}
+
+#[test]
+fn the_relay_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "relay_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (final current, time from the 0.5 ms start until the pull-in current of 53.6 mA)
+    let probe = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &r.signal(n).unwrap().values;
+        (*v.last().unwrap(), r.time.iter().zip(v).find(|(_, i)| **i >= 0.0536).map(|(t, _)| t - 0.5e-3))
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (f1, t1) = probe(&e, "I(L1)");
+    assert!((f1 - 0.0714).abs() < 0.002 && (1.8e-3..2.2e-3).contains(&t1.unwrap()), "5 V coil");
+    let (f2, t2) = probe(&e, "I(L2)");
+    assert!((f2 - 0.0427).abs() < 0.002 && t2.is_none(), "3 V coil never pulls in");
+    set_value(&mut e, "R2", "15");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (f2, t2) = probe(&e, "I(L2)");
+    assert!((f2 - 0.0588).abs() < 0.002 && (2.5e-3..3.2e-3).contains(&t2.unwrap()), "82 %");
+    set_value(&mut e, "R1", "35");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (f1, t1) = probe(&e, "I(L1)");
+    assert!((f1 - 0.140).abs() < 0.004 && t1.unwrap() < 1.6e-3, "low resistance coil");
+}
+
+#[test]
+fn the_crystal_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "crystal_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // (peak value, peak frequency, width at 0.7 of the peak) of a signal
+    let probe = |e: &SchEditor, n: &str| {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        let m = r.signal(n).unwrap().mag();
+        let (k, pk) = m.iter().enumerate().fold((0, 0.0), |a, (i, v)| if *v > a.1 { (i, *v) } else { a });
+        let lo = (0..k).rev().find(|i| m[*i] < pk * std::f64::consts::FRAC_1_SQRT_2).map_or(r.freq[0], |i| r.freq[i]);
+        let hi = (k..m.len()).find(|i| m[*i] < pk * std::f64::consts::FRAC_1_SQRT_2).map_or(*r.freq.last().unwrap(), |i| r.freq[i]);
+        (pk, r.freq[k], hi - lo)
+    };
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (x, l) = (probe(&e, "V(OUTX)"), probe(&e, "V(OUTL)"));
+    assert!((x.0 - 0.53).abs() < 0.03 && x.2 < 3e3, "crystal peak {x:?}");
+    assert!((l.0 - 0.5).abs() < 0.02 && l.2 >= 190e3, "LC is flat over the window {l:?}");
+    e.set_ac_settings("10Meg", "25Meg", "2000");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let l = probe(&e, "V(OUTL)");
+    assert!((l.0 - 0.5).abs() < 0.02 && (250e3..450e3).contains(&l.2), "LC hump {l:?}");
+    set_value(&mut e, "R2", "0.1");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let l = probe(&e, "V(OUTL)");
+    assert!(l.0 > 0.85 && l.2 < 260e3, "narrower and higher {l:?}");
+}
+
+#[test]
+fn the_transformer_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "transformer_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // rms over the last two cycles (the first cycle is the start-up)
+    let rms = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &r.signal(n).unwrap().values;
+        let t1 = *r.time.last().unwrap();
+        let (mut sum, mut dur) = (0.0, 0.0);
+        for k in 1..r.time.len() {
+            if r.time[k] >= t1 - 0.04 {
+                let dt = r.time[k] - r.time[k - 1];
+                sum += v[k] * v[k] * dt;
+                dur += dt;
+            }
+        }
+        (sum / dur).sqrt()
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((rms(&e, "V(OUT)") - 14.5).abs() < 0.3 && rms(&e, "I(R2)") < 0.02, "no load");
+    set_value(&mut e, "R1", "28.8");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    let (vo, is, ip) = (rms(&e, "V(OUT)"), rms(&e, "I(R1)"), rms(&e, "I(R2)"));
+    assert!((vo - 12.0).abs() < 0.3 && (is - 0.416).abs() < 0.02 && (ip / is - 0.145).abs() < 0.01, "rated {vo} {is} {ip}");
+    set_value(&mut e, "R1", "5");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    let (vo, is) = (rms(&e, "V(OUT)"), rms(&e, "I(R1)"));
+    assert!((vo - 6.6).abs() < 0.3 && (is - 1.31).abs() < 0.06 && vo * is > 7.5, "overload {vo} {is}");
+}
+
+#[test]
+fn the_thermistor_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "thermistor_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_temp_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let at = |e: &SchEditor, n: &str, t: f64| {
+        let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
+        let k = r.x.iter().position(|x| *x >= t - 1e-9).unwrap();
+        r.signal(n).unwrap().values[k]
+    };
+    assert!((at(&e, "V(A)", -20.0) - 4.57).abs() < 0.03 && (at(&e, "V(A)", 25.0) - 2.5).abs() < 0.01 && (at(&e, "V(A)", 100.0) - 0.33).abs() < 0.03);
+    assert!((at(&e, "V(B)", 25.0) - 4.55).abs() < 0.02 && (at(&e, "V(C)", 25.0) - 0.45).abs() < 0.02);
+    // the slope at 25 C: 55 mV/K for the 10k divider, 18 mV/K for the others
+    let slope = |n: &str| (at(&e, n, 30.0) - at(&e, n, 20.0)).abs() / 10.0;
+    assert!((slope("V(A)") - 0.055).abs() < 0.004 && (slope("V(B)") - 0.018).abs() < 0.003 && (slope("V(C)") - 0.018).abs() < 0.003);
+    for n in ["V(A)", "V(B)", "V(C)"] {
+        e.sweep.as_mut().unwrap().selected.insert(n.into());
+    }
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    e.temp_c = "-20".into();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    assert!((v(&e, "A") - 4.57).abs() < 0.03, "105 kohm at -20 C");
+}
+
+#[test]
+fn the_phototransistor_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "phototransistor_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "PDOUT") - 0.15).abs() < 0.01 && (v(&e, "COL") - 4.70).abs() < 0.03, "photodiode alone vs transistor");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    {
+        let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
+        let c = &r.signal("V(COL)").unwrap().values;
+        let at = |x: f64| c[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
+        assert!((at(0.1) - 3.49).abs() < 0.05 && (at(0.3) - 0.63).abs() < 0.1 && (at(0.5) - 0.54).abs() < 0.05, "linear, then flat");
+    }
+    set_value(&mut e, "V2", "0.5");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((v(&e, "PDOUT") - 3.75).abs() < 0.05 && (v(&e, "COL") - 0.54).abs() < 0.05, "saturated");
+}
+
+#[test]
+fn the_regulator_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "regulator_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let ripple = |e: &SchEditor, f: f64| {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        r.signal("V(VOUT)").unwrap().mag()[r.freq.iter().position(|x| *x >= f * 0.999).unwrap()]
+    };
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!(ripple(&e, 100.0) < 1e-4 && ripple(&e, 1e5) < 1e-4, "rejects the ripple");
+    set_value(&mut e, "V1", "6");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((v(&e, "VOUT") - 4.0).abs() < 0.05, "input - 2 V");
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!(ripple(&e, 100.0) > 0.99 && ripple(&e, 1e4) > 0.99, "passes the ripple");
+}
+
+#[test]
+fn the_photocoupler_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "photocoupler_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    // CTR 100 %: the output current is the input current
+    let (i_in, i_out) = ((5.0 - v(&e, "LEDA")) / 330.0, (5.0 - v(&e, "OUT")) / 220.0);
+    assert!((v(&e, "LEDA") - 1.23).abs() < 0.05 && (i_out / i_in - 1.0).abs() < 0.05, "ctr {i_in} {i_out}");
+    e.run_sweep();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    {
+        let r = e.sweep.as_ref().unwrap().outcome.as_ref().unwrap();
+        let o = &r.signal("V(OUT)").unwrap().values;
+        let at = |x: f64| o[r.x.iter().position(|v| *v >= x - 1e-9).unwrap()];
+        assert!(at(0.5) > 4.99 && (at(3.0) - 3.73).abs() < 0.05 && (at(5.0) - 2.43).abs() < 0.05, "linear fall");
+    }
+    set_value(&mut e, "R2", "1k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((v(&e, "OUT") - 0.13).abs() < 0.05, "saturated");
+}

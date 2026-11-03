@@ -1,0 +1,285 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1m 1m 0 2m)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10",
+      "pos": [
+        16,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "1u",
+      "pos": [
+        32,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 1u 1u 10m 20m)",
+      "pos": [
+        48,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        64,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C2",
+      "kind": "Capacitor",
+      "value": "1u",
+      "pos": [
+        80,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        16,
+        -2
+      ],
+      "b": [
+        16,
+        -5
+      ]
+    },
+    {
+      "a": [
+        16,
+        2
+      ],
+      "b": [
+        16,
+        5
+      ]
+    },
+    {
+      "a": [
+        32,
+        -2
+      ],
+      "b": [
+        32,
+        -5
+      ]
+    },
+    {
+      "a": [
+        32,
+        2
+      ],
+      "b": [
+        32,
+        5
+      ]
+    },
+    {
+      "a": [
+        48,
+        -2
+      ],
+      "b": [
+        48,
+        -5
+      ]
+    },
+    {
+      "a": [
+        48,
+        2
+      ],
+      "b": [
+        48,
+        5
+      ]
+    },
+    {
+      "a": [
+        64,
+        -2
+      ],
+      "b": [
+        64,
+        -5
+      ]
+    },
+    {
+      "a": [
+        64,
+        2
+      ],
+      "b": [
+        64,
+        5
+      ]
+    },
+    {
+      "a": [
+        80,
+        -2
+      ],
+      "b": [
+        80,
+        -5
+      ]
+    },
+    {
+      "a": [
+        80,
+        2
+      ],
+      "b": [
+        80,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "RAMP"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        16,
+        -5
+      ],
+      "text": "RAMP"
+    },
+    {
+      "pos": [
+        16,
+        5
+      ],
+      "text": "CA"
+    },
+    {
+      "pos": [
+        32,
+        -5
+      ],
+      "text": "CA"
+    },
+    {
+      "pos": [
+        32,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        48,
+        -5
+      ],
+      "text": "STEP"
+    },
+    {
+      "pos": [
+        48,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        64,
+        -5
+      ],
+      "text": "STEP"
+    },
+    {
+      "pos": [
+        64,
+        5
+      ],
+      "text": "CB"
+    },
+    {
+      "pos": [
+        80,
+        -5
+      ],
+      "text": "CB"
+    },
+    {
+      "pos": [
+        80,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

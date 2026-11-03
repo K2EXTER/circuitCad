@@ -1,0 +1,383 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        28
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R2",
+      "kind": "Resistor",
+      "value": "220",
+      "pos": [
+        20,
+        28
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "R3",
+      "kind": "Resistor",
+      "value": "1Meg",
+      "pos": [
+        40,
+        28
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "PC817",
+      "pos": [
+        60,
+        10
+      ],
+      "rot": 0,
+      "footprint": "DIP-4_W7.62",
+      "custom": {
+        "name": "PC817",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "K",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "E",
+            "side": "right"
+          },
+          {
+            "number": "4",
+            "name": "C",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "PC817",
+          "text": ".subckt PC817 a k e c\n* input LED (Vf about 1.2 V at 20 mA); the output transistor gets a base current of CTR/BF times the LED current, CTR = 1.0 (100 %)\nVsen a an DC 0\nDled an k DLED\nBb e b I=0.005*I(Vsen)\nQo c b e QPT\n.model DLED D(IS=3e-14 N=1.7 RS=5)\n.model QPT NPN(BF=200 IS=1e-14 VAF=80)\n.ends PC817",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4"
+          ],
+          "params": {},
+          "limits": [
+            "電流伝達率 CTR (出力の電流 ÷ 入力の LED の電流) を 100% 一定とした簡易モデルです。実物の PC817 は、50〜600% (ランク別) の個体差があり、LED の電流が小さい (1mA 以下) と下がり、温度が上がっても下がり、使うほど (数年で) 下がります。",
+            "応答の遅さ (立ち上がり・立ち下がりが数 µs〜数十 µs) と、入力と出力の間の容量 (数 pF) は扱いません。数十 kHz 以上の信号には使えません。",
+            "入力と出力の絶縁は、回路図では GND を分けることで表します。絶縁耐圧 (PC817 は 5kV) と、沿面距離は、基板の設計で確保します。"
+          ]
+        },
+        "ratings": {
+          "v_max": 35.0,
+          "i_max": 0.05,
+          "p_max": 0.15,
+          "rows": [
+            {
+              "name": "電流伝達率 CTR",
+              "value": "50〜600%",
+              "condition": "IF = 5mA, VCE = 5V"
+            },
+            {
+              "name": "順方向電圧 VF",
+              "value": "1.2V (代表)",
+              "condition": "IF = 20mA"
+            },
+            {
+              "name": "コレクタ-エミッタ間電圧 VCEO",
+              "value": "80V (最大)"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        23
+      ]
+    },
+    {
+      "a": [
+        0,
+        30
+      ],
+      "b": [
+        0,
+        33
+      ]
+    },
+    {
+      "a": [
+        20,
+        26
+      ],
+      "b": [
+        20,
+        23
+      ]
+    },
+    {
+      "a": [
+        20,
+        30
+      ],
+      "b": [
+        20,
+        33
+      ]
+    },
+    {
+      "a": [
+        40,
+        26
+      ],
+      "b": [
+        40,
+        23
+      ]
+    },
+    {
+      "a": [
+        40,
+        30
+      ],
+      "b": [
+        40,
+        33
+      ]
+    },
+    {
+      "a": [
+        56,
+        9
+      ],
+      "b": [
+        53,
+        9
+      ]
+    },
+    {
+      "a": [
+        56,
+        11
+      ],
+      "b": [
+        53,
+        11
+      ]
+    },
+    {
+      "a": [
+        64,
+        9
+      ],
+      "b": [
+        67,
+        9
+      ]
+    },
+    {
+      "a": [
+        64,
+        11
+      ],
+      "b": [
+        67,
+        11
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        0,
+        23
+      ],
+      "text": "VCC2"
+    },
+    {
+      "pos": [
+        0,
+        33
+      ],
+      "text": "GND2"
+    },
+    {
+      "pos": [
+        20,
+        23
+      ],
+      "text": "VCC2"
+    },
+    {
+      "pos": [
+        20,
+        33
+      ],
+      "text": "OUT"
+    },
+    {
+      "pos": [
+        40,
+        23
+      ],
+      "text": "GND2"
+    },
+    {
+      "pos": [
+        40,
+        33
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        53,
+        9
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        53,
+        11
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        67,
+        9
+      ],
+      "text": "GND2"
+    },
+    {
+      "pos": [
+        67,
+        11
+      ],
+      "text": "OUT"
+    }
+  ],
+  "layout_version": 1
+}
