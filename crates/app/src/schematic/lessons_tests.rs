@@ -2319,3 +2319,32 @@ fn the_fuse_basics_lesson_ticks_and_its_numbers_hold() {
     let (_, end, off) = probe(&e, "I(R1)");
     assert!(end < 1e-3 && (0.12..0.25).contains(&off), "2 A load blows the fuse: {off}");
 }
+
+#[test]
+fn the_logic_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "logic_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // how many times a signal crosses the middle of the supply
+    let flips = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &r.signal(n).unwrap().values;
+        v.windows(2).filter(|w| (w[0] - 2.5) * (w[1] - 2.5) < 0.0).count()
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!(flips(&e, "V(OUT1)") > 100 && flips(&e, "V(OUT2)") == 2, "chatter {} vs clean {}", flips(&e, "V(OUT1)"), flips(&e, "V(OUT2)"));
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert!((v(&e, "DRV") - 4.4).abs() < 0.1, "drop of about 0.6 V");
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "R1", "100");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!((v(&e, "DRV") - 3.67).abs() < 0.1, "heavier load");
+}

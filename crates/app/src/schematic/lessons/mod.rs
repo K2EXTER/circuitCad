@@ -138,6 +138,7 @@ const LESSONS: &[Lesson] = &[
     parts::REGULATOR_BASICS,
     parts::PHOTOCOUPLER_BASICS,
     parts::FUSE_BASICS,
+    parts::LOGIC_BASICS,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

@@ -1,0 +1,794 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "PULSE(0 5 0 5m 5m 0 10m)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "SIN(0 0.4 50k)",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V3",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        48
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "74HC04",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC04",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1Y",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "2A",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "2Y",
+            "side": "right"
+          },
+          {
+            "number": "5",
+            "name": "3A",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "3Y",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "4Y",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "4A",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "5Y",
+            "side": "right"
+          },
+          {
+            "number": "11",
+            "name": "5A",
+            "side": "left"
+          },
+          {
+            "number": "12",
+            "name": "6Y",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "6A",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC04",
+          "text": "* 74HC04 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC04 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nRh1 vcc hv 100k\nRh2 hv gnd 100k\nS1 vcc y1 hv a1 SWPA\nS2 y1 gnd a1 hv SWNA\nS3 vcc y2 hv a2 SWPA\nS4 y2 gnd a2 hv SWNA\nS5 vcc y3 hv a3 SWPA\nS6 y3 gnd a3 hv SWNA\nS7 vcc y4 hv a4 SWPA\nS8 y4 gnd a4 hv SWNA\nS9 vcc y5 hv a5 SWPA\nS10 y5 gnd a5 hv SWNA\nS11 vcc y6 hv a6 SWPA\nS12 y6 gnd a6 hv SWNA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC04",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "スイッチで作った CMOS ゲートの動作モデルです。入力のしきい値は電源電圧の半分で、出力は High が約 80Ω、Low が約 40Ω の抵抗を通して電源・GND につながります。",
+            "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
+            "使わない入力は、GND か電源につないでください (つながないと 0V として扱います)。"
+          ]
+        },
+        "glyph": "gate_not"
+      }
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "74HC14",
+      "pos": [
+        40,
+        50
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC14",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1Y",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "2A",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "2Y",
+            "side": "right"
+          },
+          {
+            "number": "5",
+            "name": "3A",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "3Y",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "4Y",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "4A",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "5Y",
+            "side": "right"
+          },
+          {
+            "number": "11",
+            "name": "5A",
+            "side": "left"
+          },
+          {
+            "number": "12",
+            "name": "6Y",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "6A",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC14",
+          "text": "* 74HC14 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC14 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nR1 vcc r1 200k\nR2 r1 gnd 200k\nR3 r1 y1 400k\nS4 vcc y1 r1 a1 SWPA\nS5 y1 gnd a1 r1 SWNA\nR6 vcc r2 200k\nR7 r2 gnd 200k\nR8 r2 y2 400k\nS9 vcc y2 r2 a2 SWPA\nS10 y2 gnd a2 r2 SWNA\nR11 vcc r3 200k\nR12 r3 gnd 200k\nR13 r3 y3 400k\nS14 vcc y3 r3 a3 SWPA\nS15 y3 gnd a3 r3 SWNA\nR16 vcc r4 200k\nR17 r4 gnd 200k\nR18 r4 y4 400k\nS19 vcc y4 r4 a4 SWPA\nS20 y4 gnd a4 r4 SWNA\nR21 vcc r5 200k\nR22 r5 gnd 200k\nR23 r5 y5 400k\nS24 vcc y5 r5 a5 SWPA\nS25 y5 gnd a5 r5 SWNA\nR26 vcc r6 200k\nR27 r6 gnd 200k\nR28 r6 y6 400k\nS29 vcc y6 r6 a6 SWPA\nS30 y6 gnd a6 r6 SWNA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC14",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "スイッチで作った CMOS ゲートの動作モデルです。入力のしきい値は電源電圧の半分で、出力は High が約 80Ω、Low が約 40Ω の抵抗を通して電源・GND につながります。",
+            "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
+            "使わない入力は、GND か電源につないでください (つながないと 0V として扱います)。"
+          ]
+        },
+        "glyph": "gate_schmitt"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "330",
+      "pos": [
+        75,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "D1",
+      "kind": "Led",
+      "value": "LED",
+      "pos": [
+        90,
+        0
+      ],
+      "rot": 0,
+      "footprint": "LED_0805",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        0,
+        46
+      ],
+      "b": [
+        0,
+        43
+      ]
+    },
+    {
+      "a": [
+        0,
+        50
+      ],
+      "b": [
+        0,
+        53
+      ]
+    },
+    {
+      "a": [
+        36,
+        -5
+      ],
+      "b": [
+        36,
+        -8
+      ]
+    },
+    {
+      "a": [
+        44,
+        -5
+      ],
+      "b": [
+        44,
+        -8
+      ]
+    },
+    {
+      "a": [
+        36,
+        -3
+      ],
+      "b": [
+        33,
+        -3
+      ]
+    },
+    {
+      "a": [
+        44,
+        -3
+      ],
+      "b": [
+        47,
+        -3
+      ]
+    },
+    {
+      "a": [
+        36,
+        -1
+      ],
+      "b": [
+        33,
+        -1
+      ]
+    },
+    {
+      "a": [
+        40,
+        8
+      ],
+      "b": [
+        40,
+        11
+      ]
+    },
+    {
+      "a": [
+        36,
+        1
+      ],
+      "b": [
+        33,
+        1
+      ]
+    },
+    {
+      "a": [
+        36,
+        3
+      ],
+      "b": [
+        33,
+        3
+      ]
+    },
+    {
+      "a": [
+        36,
+        5
+      ],
+      "b": [
+        36,
+        8
+      ]
+    },
+    {
+      "a": [
+        40,
+        -8
+      ],
+      "b": [
+        40,
+        -11
+      ]
+    },
+    {
+      "a": [
+        36,
+        45
+      ],
+      "b": [
+        36,
+        42
+      ]
+    },
+    {
+      "a": [
+        44,
+        45
+      ],
+      "b": [
+        44,
+        42
+      ]
+    },
+    {
+      "a": [
+        36,
+        47
+      ],
+      "b": [
+        33,
+        47
+      ]
+    },
+    {
+      "a": [
+        36,
+        49
+      ],
+      "b": [
+        33,
+        49
+      ]
+    },
+    {
+      "a": [
+        40,
+        58
+      ],
+      "b": [
+        40,
+        61
+      ]
+    },
+    {
+      "a": [
+        36,
+        51
+      ],
+      "b": [
+        33,
+        51
+      ]
+    },
+    {
+      "a": [
+        36,
+        53
+      ],
+      "b": [
+        33,
+        53
+      ]
+    },
+    {
+      "a": [
+        36,
+        55
+      ],
+      "b": [
+        36,
+        58
+      ]
+    },
+    {
+      "a": [
+        40,
+        42
+      ],
+      "b": [
+        40,
+        39
+      ]
+    },
+    {
+      "a": [
+        75,
+        -2
+      ],
+      "b": [
+        75,
+        -5
+      ]
+    },
+    {
+      "a": [
+        75,
+        2
+      ],
+      "b": [
+        75,
+        5
+      ]
+    },
+    {
+      "a": [
+        88,
+        0
+      ],
+      "b": [
+        85,
+        0
+      ]
+    },
+    {
+      "a": [
+        92,
+        0
+      ],
+      "b": [
+        95,
+        0
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "RAMP"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "RAMP"
+    },
+    {
+      "pos": [
+        0,
+        43
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        53
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        36,
+        -8
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        44,
+        -8
+      ],
+      "text": "OUT1"
+    },
+    {
+      "pos": [
+        33,
+        -3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        47,
+        -3
+      ],
+      "text": "DRV"
+    },
+    {
+      "pos": [
+        33,
+        -1
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        11
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        1
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        3
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        36,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        -11
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        36,
+        42
+      ],
+      "text": "IN"
+    },
+    {
+      "pos": [
+        44,
+        42
+      ],
+      "text": "OUT2"
+    },
+    {
+      "pos": [
+        33,
+        47
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        49
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        61
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        51
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        33,
+        53
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        36,
+        58
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        40,
+        39
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        75,
+        -5
+      ],
+      "text": "DRV"
+    },
+    {
+      "pos": [
+        75,
+        5
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        85,
+        0
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        95,
+        0
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

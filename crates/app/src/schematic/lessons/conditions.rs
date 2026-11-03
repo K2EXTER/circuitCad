@@ -886,3 +886,8 @@ pub(super) fn fuse_slight_overload(e: &SchEditor) -> bool {
 pub(super) fn fuse_load_near_rating(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 8.0) && tran_fresh(e)
 }
+
+/// The logic lesson: the LED resistor R1 is 150 ohm or less (the gate output is loaded hard) and the run is fresh.
+pub(super) fn logic_output_loaded(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 150.0) && dc_fresh(e)
+}

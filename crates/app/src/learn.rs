@@ -461,6 +461,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
             Item { requires: Some(&["led_basics", "transistor"]), ..lesson("photocoupler_basics", "フォトカプラの素顔 (光で信号を絶縁して伝える)", "Ic = CTR × If、絶縁、CTR の個体差と、負荷が重いと飽和する", Some("PC817 の LED の電流を変えて、出力のトランジスタの電流と電圧を測り、CTR を求めます")) },
             Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },
+            Item { requires: Some(&["levels"]), ..lesson("logic_basics", "ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)", "しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 80Ω の抵抗", Some("74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます")) },
         ],
     }],
 };

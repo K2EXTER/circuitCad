@@ -1024,6 +1024,47 @@ fn write_fuse_basics_example() {
     std::fs::write(root.join("fuse_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/logic_basics.schjson for the logic IC lesson: a slow triangle wave (0 - 5 V in 5 ms) with 0.4 V of 50 kHz
+/// noise on top (V1 + V2) goes to a 74HC04 inverter (U1, gate 1) and a 74HC14 Schmitt inverter (U2, gate 1); gate 2 of U1 has its
+/// input on GND and drives an LED through R1 = 330 ohm: `cargo test -p app write_logic_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_logic_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let find = |n: &str| part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+    let (hc04, hc14) = (find("74HC04"), find("74HC14"));
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "PULSE(0 5 0 5m 5m 0 10m)".into();
+    label(&mut s, v1, "+", "RAMP");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "SIN(0 0.4 50k)".into();
+    label(&mut s, v2, "+", "IN");
+    label(&mut s, v2, "-", "RAMP");
+    let v3 = s.add(Kind::VSource, (0, 48), 0);
+    s.components[v3].value = "5".into();
+    label(&mut s, v3, "+", "VCC");
+    label(&mut s, v3, "-", "GND");
+    // U1: 74HC04, gate 1 = the input under test, gate 2 = the LED driver; pins 1A 1Y 2A 2Y 3A 3Y GND 4Y 4A 5Y 5A 6Y 6A VCC
+    let u1 = s.add_custom(hc04.symbol(), &hc04.default_value(), &hc04.footprint_name(), (40, 0), 0);
+    for (pin, net) in [("1", "IN"), ("2", "OUT1"), ("3", "GND"), ("4", "DRV"), ("5", "GND"), ("7", "GND"), ("9", "GND"), ("11", "GND"), ("13", "GND"), ("14", "VCC")] {
+        label(&mut s, u1, pin, net);
+    }
+    let u2 = s.add_custom(hc14.symbol(), &hc14.default_value(), &hc14.footprint_name(), (40, 50), 0);
+    for (pin, net) in [("1", "IN"), ("2", "OUT2"), ("3", "GND"), ("5", "GND"), ("7", "GND"), ("9", "GND"), ("11", "GND"), ("13", "GND"), ("14", "VCC")] {
+        label(&mut s, u2, pin, net);
+    }
+    let r1 = s.add(Kind::Resistor, (75, 0), 1);
+    s.components[r1].value = "330".into();
+    label(&mut s, r1, "1", "DRV");
+    label(&mut s, r1, "2", "LEDA");
+    let d1 = s.add(Kind::Led, (90, 0), 0);
+    label(&mut s, d1, "A", "LEDA");
+    label(&mut s, d1, "K", "GND");
+    std::fs::write(root.join("logic_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
