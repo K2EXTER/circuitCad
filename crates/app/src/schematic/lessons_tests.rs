@@ -2767,3 +2767,51 @@ fn the_diode_recovery_lesson_ticks_and_its_numbers_hold() {
     let hard = rec(&e, "I(R2)");
     assert!((hard.0 - 2.64).abs() < 0.2 && hard.2 > 40.0 && hard.2 < 56.0, "a hard drive: {hard:?}");
 }
+
+#[test]
+fn the_slew_rate_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "slew_rate").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let sig = |e: &SchEditor, n: &str| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        (r.time.clone(), r.signal(n).unwrap().values.clone())
+    };
+    // the largest slope (V/us) and the largest swing of a signal after 20 us
+    let slope = |(t, v): &(Vec<f64>, Vec<f64>)| {
+        let k0 = t.iter().position(|x| *x >= 20e-6).unwrap();
+        let mut best = 0.0f64;
+        for k in k0 + 1..t.len() {
+            let dt = t[k] - t[k - 1];
+            if dt > 0.0 {
+                best = best.max(((v[k] - v[k - 1]) / dt).abs() / 1e6);
+            }
+        }
+        (best, v[k0..].iter().cloned().fold(f64::MIN, f64::max))
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    {
+        // the pulse: a 2 V edge that a 0.3 V/us op-amp needs 6.7 us for
+        let (t, v) = sig(&e, "V(OUT1)");
+        let t_at = |lvl: f64| t[v.iter().position(|x| *x >= lvl).unwrap()];
+        let slope = 1.6 / ((t_at(1.8) - t_at(0.2)) * 1e6);
+        assert!((slope - 0.3).abs() < 0.03, "the edge runs at the slew rate: {slope} V/us");
+    }
+    let (slow, fast) = (slope(&sig(&e, "V(OUT2)")), slope(&sig(&e, "V(OUT3)")));
+    assert!((slow.0 - 0.30).abs() < 0.03 && (slow.1 - 0.8).abs() < 0.1, "the slow one is limited to 0.3 V/us: {slow:?}");
+    assert!((fast.0 - 1.26).abs() < 0.1 && fast.1 > 1.95, "the fast one follows: {fast:?}");
+    e.tran.as_mut().unwrap().selected.insert("V(OUT2)".into());
+    e.tran.as_mut().unwrap().selected.insert("V(OUT3)".into());
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "R1", "90k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let small = slope(&sig(&e, "V(OUT2)"));
+    assert!((small.0 - 0.125).abs() < 0.015 && (small.1 - 0.199).abs() < 0.01, "a small signal passes: {small:?}");
+}

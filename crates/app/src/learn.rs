@@ -471,6 +471,7 @@ const PARTS_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["transistor"]), ..lesson("mosfet_basics", "MOSFET の素顔 (電圧で電流を制御する)", "しきい値 Vth、オン抵抗 Rds(on)、Id ∝ (Vgs − Vth)²、中途半端な電圧は損失が大きい", Some("2N7000 のゲートの電圧を変えながらドレインの電圧を測り、しきい値とオン抵抗を確かめます")) },
                 Item { requires: Some(&["mosfet_basics", "mosfet"]), ..lesson("switching_loss", "MOSFET のスイッチング損失 (ゲートの速さと熱)", "ゲート容量の充電で遅れる、ミラー期間、切り替え中の V × I が熱になる、損失 = 1 回あたりのエネルギー × 周波数", Some("ゲート抵抗を変えて、ドレインの立ち下がりの速さと、MOSFET の温度の違いを見ます")) },
                 Item { requires: Some(&["transistor", "opamp_noninv"]), ..lesson("opamp_basics", "オペアンプの素顔 (増幅の式・帯域・振れ幅の限界)", "倍率 1 + Rf ÷ Rg、GBW = 倍率 × 帯域、出力は電源で頭打ち", Some("LM358 の非反転増幅で倍率と −3dB の周波数を測り、入力を大きくして出力が切れるのを見ます")) },
+                Item { requires: Some(&["opamp_basics"]), ..lesson("slew_rate", "オペアンプのスルーレート (出力が追いつけない速さ)", "出力の電圧の変化の速さには上限 (V/µs) がある、大きく速い信号は三角波にゆがむ、フルパワー帯域 = SR ÷ (2π Vp)", Some("オペアンプのボルテージフォロワに大きさと周波数を変えた正弦波を入れ、出力の形がゆがむ周波数を測ります")) },
             ],
         },
         Stage {

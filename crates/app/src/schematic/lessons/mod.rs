@@ -134,6 +134,7 @@ const LESSONS: &[Lesson] = &[
     parts::MOSFET_BASICS,
     parts::SWITCHING_LOSS,
     parts::OPAMP_BASICS,
+    parts::SLEW_RATE,
     parts::THERMISTOR_BASICS,
     parts::PHOTOTRANSISTOR_BASICS,
     parts::PHOTOCOUPLER_BASICS,

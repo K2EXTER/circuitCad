@@ -1006,3 +1006,13 @@ pub(super) fn recovery_small_forward_current(e: &SchEditor) -> bool {
 pub(super) fn recovery_hard_drive(e: &SchEditor) -> bool {
     value_at_most(e, "R2", 3.0) && tran_fresh(e)
 }
+
+/// The slew rate lesson: the traces OUT2 and OUT3 (the same 100 kHz signal through a slow and a fast op-amp) are both on the graph of a fresh run.
+pub(super) fn slew_both_outputs_shown(e: &SchEditor) -> bool {
+    tran_fresh(e) && e.tran.as_ref().is_some_and(|t| t.selected.contains("V(OUT2)") && t.selected.contains("V(OUT3)"))
+}
+
+/// The slew rate lesson: the divider R1 is 50 kohm or more (the input amplitude is a fifth of the first or less) and the run is fresh.
+pub(super) fn slew_small_signal(e: &SchEditor) -> bool {
+    value_at_least(e, "R1", 50e3) && tran_fresh(e)
+}

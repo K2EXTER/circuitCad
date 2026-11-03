@@ -1550,6 +1550,58 @@ fn write_diode_recovery_example() {
     std::fs::write(root.join("diode_recovery.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/slew_rate.schjson for the op-amp slew rate lesson: three voltage followers on +-5 V. U1 (a slow op-amp, 0.3 V/us)
+/// follows a 0 - 2 V pulse (V1); U2 (the same slow op-amp) and U3 (a fast one, 13 V/us) follow a 100 kHz sine of 2 V peak (V2 through the divider
+/// R1 = 1 ohm / R2 = 10 kohm, node IN2). The library models have no slew limit, so this sample embeds models of its own: a transconductance stage
+/// (0.1 S: the input stage is linear for ~50 mV or more) whose current is limited to SR x Cp into Cp: `cargo test -p app write_slew_rate_example -- --ignored`
+#[test]
+#[ignore]
+fn write_slew_rate_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let model = |n: &str, imax: &str, cp: &str, rp: &str| {
+        let mut d = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == n).unwrap();
+        d.sim.as_mut().unwrap().text = format!(
+            ".subckt {n} inp inn out vp vn\nRin inp inn 2Meg\nBgm 0 n0 I=limit(0.1*V(inp,inn),-{imax},{imax})\nRp n0 0 {rp}\nCp n0 0 {cp}\nBo o 0 V=limit(V(n0),V(vn)+0.05,V(vp)-1.5)\nRo o out 50\n.ends {n}"
+        );
+        d
+    };
+    // LM358: GBW 1 MHz, 0.3 V/us (Imax = SR x Cp = 4.8 mA, DC gain 100k); TL072: GBW 3 MHz, 13 V/us (Imax = 69 mA, DC gain 200k)
+    let slow = model("LM358", "4.8m", "16n", "1Meg");
+    let fast = model("TL072", "69m", "5.3n", "2Meg");
+    let mut s = sch_core::Schematic::default();
+    let src = |s: &mut sch_core::Schematic, y: i32, value: &str, plus: &str, minus: &str| {
+        let v = s.add(Kind::VSource, (0, y), 0);
+        s.components[v].value = value.into();
+        label(s, v, "+", plus);
+        label(s, v, "-", minus);
+    };
+    src(&mut s, 0, "PULSE(0 2 1u 1n 1n 20u 40u)", "IN1", "GND");
+    src(&mut s, 24, "SIN(0 2 100k)", "SINE", "GND");
+    src(&mut s, 48, "5", "VCC", "GND");
+    src(&mut s, 72, "5", "GND", "VEE");
+    let r1 = s.add(Kind::Resistor, (20, 100), 1);
+    s.components[r1].value = "1".into();
+    label(&mut s, r1, "1", "SINE");
+    label(&mut s, r1, "2", "IN2");
+    let r2 = s.add(Kind::Resistor, (36, 100), 1);
+    s.components[r2].value = "10k".into();
+    label(&mut s, r2, "1", "IN2");
+    label(&mut s, r2, "2", "GND");
+    // a voltage follower: IN+ = the input, IN- = OUT
+    let follower = |s: &mut sch_core::Schematic, def: &part_lib::PartDef, x: i32, y: i32, input: &str, out: &str| {
+        let u = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (x, y), 0);
+        label(s, u, "3", input);
+        label(s, u, "2", out);
+        label(s, u, "1", out);
+        label(s, u, "8", "VCC");
+        label(s, u, "4", "VEE");
+    };
+    follower(&mut s, &slow, 70, 0, "IN1", "OUT1");
+    follower(&mut s, &slow, 70, 30, "IN2", "OUT2");
+    follower(&mut s, &fast, 70, 60, "IN2", "OUT3");
+    std::fs::write(root.join("slew_rate.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
