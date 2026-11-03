@@ -3,7 +3,7 @@
     {
       "refdes": "V1",
       "kind": "VSource",
-      "value": "PULSE(5 -5 5u 10n 10n 15u 40u)",
+      "value": "PWL(0 0 0.5u 0 0.51u 5 15u 5 15.01u -5 30u -5 30.01u 0)",
       "pos": [
         0,
         0

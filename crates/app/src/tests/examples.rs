@@ -1513,7 +1513,7 @@ fn write_switching_loss_example() {
     std::fs::write(root.join("switching_loss.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
-/// Generates docs/examples/diode_recovery.schjson for the diode reverse recovery lesson: the source V1 (+5 V, then -5 V from 5 us to 20 us)
+/// Generates docs/examples/diode_recovery.schjson for the diode reverse recovery lesson: the source V1 (+5 V, then -5 V from 15 us to 30 us)
 /// drives three diodes through 10 ohm each: 1N4007 (R1, D1: its model gets a stored-charge time TT = 3 us for this sample), UF4007 (R2, D2:
 /// TT = 40 ns) and the Schottky 1N5819 (R3, D3: no stored charge, a junction capacitance of 100 pF):
 /// `cargo test -p app write_diode_recovery_example -- --ignored`
@@ -1533,7 +1533,8 @@ fn write_diode_recovery_example() {
     ];
     let mut s = sch_core::Schematic::default();
     let v1 = s.add(Kind::VSource, (0, 0), 0);
-    s.components[v1].value = "PULSE(5 -5 5u 10n 10n 15u 40u)".into();
+    // starts at 0 V (so that the DC point carries no current), +5 V from 0.5 us, -5 V from 15 us to 30 us
+    s.components[v1].value = "PWL(0 0 0.5u 0 0.51u 5 15u 5 15.01u -5 30u -5 30.01u 0)".into();
     label(&mut s, v1, "+", "DRIVE");
     label(&mut s, v1, "-", "GND");
     for (k, def) in diodes.iter().enumerate() {

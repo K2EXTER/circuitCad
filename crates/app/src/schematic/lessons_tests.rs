@@ -2727,15 +2727,15 @@ fn the_diode_recovery_lesson_ticks_and_its_numbers_hold() {
     e.start_lesson(idx);
     e.update_lesson();
     assert_eq!(progress(&e), 0);
-    // after the switch to -5 V (at 5 us): (the largest reverse current (A), how long the current stays reversed (ns), the charge taken out (nC))
+    // after the switch to -5 V (at 15 us): (the largest reverse current (A), how long the current stays reversed (ns), the charge taken out (nC))
     let rec = |e: &SchEditor, n: &str| {
         let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
         let i = &r.signal(n).unwrap().values;
-        let k0 = r.time.iter().position(|t| *t >= 5.0e-6).unwrap();
+        let k0 = r.time.iter().position(|t| *t >= 15.0e-6).unwrap();
         let mut peak = 0.0f64;
         let (mut q, mut first, mut last) = (0.0, None, 0.0);
         for k in k0 + 1..r.time.len() {
-            if r.time[k] > 20e-6 {
+            if r.time[k] > 30e-6 {
                 break;
             }
             if i[k] < -0.01 {
