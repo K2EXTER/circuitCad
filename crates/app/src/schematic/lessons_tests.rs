@@ -2858,3 +2858,53 @@ fn a_lesson_circuit_is_fitted_again_when_the_canvas_gets_narrower() {
     assert_eq!((e.zoom, e.pan), moved);
     assert!(e.lesson_fit.is_none());
 }
+
+#[test]
+fn the_intro_ohm_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "intro_ohm").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    set_value(&mut e, "R1", "2.2k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    set_value(&mut e, "V1", "10");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+}
+
+#[test]
+fn the_intro_read_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "intro_read").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let mid = |e: &SchEditor| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage("MID").unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((mid(&e) - 2.5).abs() < 1e-6, "a divider of two equal resistors");
+    set_value(&mut e, "R1", "3.3k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((mid(&e) - 5.0 * 1000.0 / 4300.0).abs() < 1e-6);
+    // "1M" is a thousandth of an ohm: the step stays open and says what is wanted
+    set_value(&mut e, "R2", "1M");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "1M is not one million");
+    assert!(mid(&e) < 0.01, "R2 of a milliohm pulls MID to 0 V: {}", mid(&e));
+    set_value(&mut e, "R2", "1Meg");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!((mid(&e) - 4.98).abs() < 0.01);
+}

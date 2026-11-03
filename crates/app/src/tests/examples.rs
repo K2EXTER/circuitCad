@@ -1602,6 +1602,54 @@ fn write_slew_rate_example() {
     std::fs::write(root.join("slew_rate.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/intro_ohm.schjson for the first lesson (voltage, current, resistance): a 5 V source V1 and a 1 kohm resistor R1,
+/// joined by real wires with a ground symbol (so the learner sees what a drawn circuit is): `cargo test -p app write_intro_ohm_example -- --ignored`
+#[test]
+#[ignore]
+fn write_intro_ohm_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    let r1 = s.add(Kind::Resistor, (14, 0), 1);
+    s.components[r1].value = "1k".into();
+    let pin = |s: &sch_core::Schematic, idx: usize, name: &str| s.components[idx].pins().into_iter().find(|(n, _)| n == name).unwrap().1;
+    let vplus = pin(&s, v1, "+");
+    let vminus = pin(&s, v1, "-");
+    let mut ys = [pin(&s, r1, "1"), pin(&s, r1, "2")];
+    ys.sort_by_key(|p| p.1);
+    let (rtop, rbottom) = (ys[0], ys[1]);
+    let (top, bottom) = (vplus.1.min(rtop.1) - 4, vminus.1.max(rbottom.1) + 4);
+    let gnd = s.add(Kind::Ground, (7, bottom), 0);
+    let _ = gnd;
+    for (a, b) in [(vplus, (vplus.0, top)), ((vplus.0, top), (rtop.0, top)), ((rtop.0, top), rtop), (vminus, (vminus.0, bottom)), ((vminus.0, bottom), (7, bottom)), ((7, bottom), (rbottom.0, bottom)), ((rbottom.0, bottom), rbottom)] {
+        s.wires.push(Wire { a, b });
+    }
+    std::fs::write(root.join("intro_ohm.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
+/// Generates docs/examples/intro_read.schjson for the second lesson (reading a drawn circuit): a divider drawn with net labels instead of wires:
+/// V1 5 V (IN / GND), R1 1 kohm (IN -> MID), R2 1 kohm (MID -> GND): `cargo test -p app write_intro_read_example -- --ignored`
+#[test]
+#[ignore]
+fn write_intro_read_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "IN");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[r1].value = "1k".into();
+    label(&mut s, r1, "1", "IN");
+    label(&mut s, r1, "2", "MID");
+    let r2 = s.add(Kind::Resistor, (36, 0), 1);
+    s.components[r2].value = "1k".into();
+    label(&mut s, r2, "1", "MID");
+    label(&mut s, r2, "2", "GND");
+    std::fs::write(root.join("intro_read.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

@@ -121,6 +121,8 @@ const LESSONS: &[Lesson] = &[
     signals::PHASE_MARGIN,
     signals::NOISE,
     debug::DEBUG,
+    parts::INTRO_OHM,
+    parts::INTRO_READ,
     parts::RESISTOR,
     parts::CAPACITOR,
     parts::INDUCTOR,

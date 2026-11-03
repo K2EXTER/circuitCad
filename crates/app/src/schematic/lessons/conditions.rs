@@ -1016,3 +1016,23 @@ pub(super) fn slew_both_outputs_shown(e: &SchEditor) -> bool {
 pub(super) fn slew_small_signal(e: &SchEditor) -> bool {
     value_at_least(e, "R1", 50e3) && tran_fresh(e)
 }
+
+/// The first lesson (voltage, current, resistance): R1 is 2 - 2.5 kohm and the run is fresh.
+pub(super) fn intro_resistor_changed(e: &SchEditor) -> bool {
+    value_between(e, "R1", 2e3, 2.5e3) && dc_fresh(e)
+}
+
+/// The first lesson: the source V1 is 9 - 11 V and the run is fresh.
+pub(super) fn intro_voltage_changed(e: &SchEditor) -> bool {
+    value_between(e, "V1", 9.0, 11.0) && dc_fresh(e)
+}
+
+/// The second lesson (reading a circuit): R1 is written as 3.3k (3.2 - 3.4 kohm) and the run is fresh.
+pub(super) fn intro_read_r1_3k3(e: &SchEditor) -> bool {
+    value_between(e, "R1", 3.2e3, 3.4e3) && dc_fresh(e)
+}
+
+/// The second lesson: R2 is written as 1Meg (900 kohm or more; "1M" would be a thousandth of an ohm) and the run is fresh.
+pub(super) fn intro_read_r2_1meg(e: &SchEditor) -> bool {
+    value_at_least(e, "R2", 900e3) && dc_fresh(e)
+}

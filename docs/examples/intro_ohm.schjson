@@ -1,0 +1,114 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "1k",
+      "pos": [
+        14,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        7,
+        6
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -6
+      ]
+    },
+    {
+      "a": [
+        0,
+        -6
+      ],
+      "b": [
+        14,
+        -6
+      ]
+    },
+    {
+      "a": [
+        14,
+        -6
+      ],
+      "b": [
+        14,
+        -2
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        6
+      ]
+    },
+    {
+      "a": [
+        0,
+        6
+      ],
+      "b": [
+        7,
+        6
+      ]
+    },
+    {
+      "a": [
+        7,
+        6
+      ],
+      "b": [
+        14,
+        6
+      ]
+    },
+    {
+      "a": [
+        14,
+        6
+      ],
+      "b": [
+        14,
+        2
+      ]
+    }
+  ],
+  "labels": [],
+  "layout_version": 1
+}
