@@ -966,3 +966,13 @@ pub(super) fn i2c_long_bus(e: &SchEditor) -> bool {
 pub(super) fn i2c_strong_pullup(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 1.6e3) && tran_fresh(e)
 }
+
+/// The electrolytic capacitor lesson: the circuit temperature is 80 - 100 C (a warm place) and the transient run is fresh.
+pub(super) fn ecap_warm_and_tran(e: &SchEditor) -> bool {
+    tran_fresh(e) && e.temp_c.trim().parse::<f64>().is_ok_and(|t| (80.0..=100.0).contains(&t))
+}
+
+/// The electrolytic capacitor lesson: the series resistor R1 is 1.2 ohm or less (more ripple current) and the transient run is fresh.
+pub(super) fn ecap_more_ripple(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 1.2) && tran_fresh(e)
+}

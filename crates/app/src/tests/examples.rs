@@ -1407,6 +1407,29 @@ fn write_eeprom_basics_example() {
     std::fs::write(root.join("eeprom_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/electrolytic_life.schjson for the electrolytic capacitor life lesson: a 5 V rail with a 0.5 V, 100 kHz ripple
+/// (V1 = SIN(5 0.5 100k)) through R1 = 2 ohm into the 100 uF / 16 V electrolytic capacitor C1 (ripple 0.3 A rms at 100 kHz, 6000 h at 105 C):
+/// `cargo test -p app write_electrolytic_life_example -- --ignored`
+#[test]
+#[ignore]
+fn write_electrolytic_life_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "CE_100u_16V").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "SIN(5 0.5 100k)".into();
+    label(&mut s, v1, "+", "RIPPLE");
+    label(&mut s, v1, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (20, 0), 1);
+    s.components[r1].value = "2".into();
+    label(&mut s, r1, "1", "RIPPLE");
+    label(&mut s, r1, "2", "CAP");
+    let c1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (40, 0), 1);
+    label(&mut s, c1, "1", "CAP");
+    label(&mut s, c1, "2", "GND");
+    std::fs::write(root.join("electrolytic_life.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

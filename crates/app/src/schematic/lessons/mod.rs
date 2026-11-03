@@ -123,6 +123,7 @@ const LESSONS: &[Lesson] = &[
     debug::DEBUG,
     parts::RESISTOR,
     parts::CAPACITOR,
+    parts::ELECTROLYTIC_LIFE,
     parts::INDUCTOR,
     parts::DIODE_BASICS,
     parts::LED_BASICS,

@@ -1,0 +1,207 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "SIN(5 0.5 100k)",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "2",
+      "pos": [
+        20,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Custom",
+      "value": "100u",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 1,
+      "footprint": "CP_Radial_D5_P2.0",
+      "custom": {
+        "name": "CE_100u_16V",
+        "prefix": "C",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "2",
+            "side": "right"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "CE_100u_16V",
+          "text": ".subckt CE_100u_16V 1 2\nResr 1 n_esr 300m\nLesl n_esr n_esl 15n\nC1 n_esl 2 100u\n.ends",
+          "pins": [
+            "1",
+            "2"
+          ],
+          "params": {},
+          "limits": [
+            "温度による値の変化は扱いません。",
+            "セラミックコンデンサは、直流の電圧をかけると容量が下がります。このモデルは下がりません (「DCバイアスで下がる量」に入れると反映できます)。"
+          ]
+        },
+        "ratings": {
+          "v_max": 16.0,
+          "ripple": {
+            "i_rms": 0.3,
+            "freq_hz": 100000.0,
+            "coeffs": [
+              [
+                120.0,
+                0.55
+              ],
+              [
+                1000.0,
+                0.77
+              ],
+              [
+                10000.0,
+                0.94
+              ],
+              [
+                100000.0,
+                1.0
+              ]
+            ]
+          },
+          "life": {
+            "hours": 6000.0,
+            "temp_c": 105.0
+          }
+        },
+        "glyph": "electrolytic"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        20,
+        -2
+      ],
+      "b": [
+        20,
+        -5
+      ]
+    },
+    {
+      "a": [
+        20,
+        2
+      ],
+      "b": [
+        20,
+        5
+      ]
+    },
+    {
+      "a": [
+        40,
+        -2
+      ],
+      "b": [
+        40,
+        -5
+      ]
+    },
+    {
+      "a": [
+        40,
+        2
+      ],
+      "b": [
+        40,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "RIPPLE"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        20,
+        -5
+      ],
+      "text": "RIPPLE"
+    },
+    {
+      "pos": [
+        20,
+        5
+      ],
+      "text": "CAP"
+    },
+    {
+      "pos": [
+        40,
+        -5
+      ],
+      "text": "CAP"
+    },
+    {
+      "pos": [
+        40,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

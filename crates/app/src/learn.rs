@@ -448,6 +448,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             items: &[
                 Item { requires: Some(&[]), ..lesson("resistor", "抵抗の素顔 (オームの法則・直列・並列・電力)", "V = I × R、P = V × I、直列は足し算・並列は小さくなる、定格電力と許容差", Some("抵抗の値をテスタで測り、直列・並列の合成と、中点の電圧を計算と比べます")) },
                 Item { requires: Some(&["resistor"]), ..lesson("capacitor", "コンデンサの素顔 (電流は電圧の変化に比例する)", "I = C × dV/dt、充電の時定数 τ = R × C、ためるエネルギー ½CV²、並列と直列の容量", Some("大きな電解コンデンサを抵抗で充電し、63% に達する時間を測って τ = R × C と比べます")) },
+                Item { requires: Some(&["capacitor"]), ..lesson("electrolytic_life", "電解コンデンサの寿命 (リップル電流と温度)", "ESR の発熱で内部が温まる、寿命は 10℃ で半分、定格リップル電流を超えない", Some("電解コンデンサを触って温度を感じ、データシートの定格リップルと寿命から、使う条件の寿命を見積もります")) },
                 Item { requires: Some(&["capacitor"]), ..lesson("inductor", "コイルの素顔 (電流は急には変えられない)", "V = L × di/dt、時定数 τ = L ÷ R、ためるエネルギー ½LI²、飽和電流", Some("コイルの DCR を測り、抵抗といっしょにした立ち上がりの時間から L ÷ R を確かめます")) },
             ],
         },

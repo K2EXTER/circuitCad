@@ -2610,3 +2610,34 @@ fn the_eeprom_basics_lesson_ticks_and_its_numbers_hold() {
     let (tr, low) = rise(&e);
     assert!((tr - 342.0).abs() < 25.0 && low < 0.05, "a strong pull-up: {tr}");
 }
+
+#[test]
+fn the_electrolytic_life_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "electrolytic_life").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let rep = |e: &SchEditor| {
+        let p = &e.tran.as_ref().unwrap().parts;
+        assert_eq!(p.len(), 1, "{p:?}");
+        (p[0].i_rms, p[0].allowed, p[0].core_temp_c, p[0].life_hours)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (i, allowed, core, life) = rep(&e);
+    assert!((i - 0.154).abs() < 0.01 && allowed == Some(0.3) && (core - 29.6).abs() < 0.3 && life == Some(131400.0), "15 years at 27 C: {i} {core} {life:?}");
+    e.temp_c = "85".into();
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let (_, _, core, life) = rep(&e);
+    assert!((core - 87.6).abs() < 0.3 && (life.unwrap() - 20009.0).abs() < 300.0, "20000 hours at 85 C: {core} {life:?}");
+    set_value(&mut e, "R1", "1");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let (i, _, core, life) = rep(&e);
+    assert!((i - 0.272).abs() < 0.01 && (core - 93.2).abs() < 0.3 && (life.unwrap() - 13583.0).abs() < 300.0, "more ripple: {i} {core} {life:?}");
+}
