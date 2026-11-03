@@ -911,3 +911,13 @@ pub(super) fn varistor_over_rating(e: &SchEditor) -> bool {
 pub(super) fn hall_supply_3v3(e: &SchEditor) -> bool {
     value_between(e, "V1", 3.0, 3.6) && dc_fresh(e)
 }
+
+/// The switch lesson: the contact R1 in the power path is 2 ohm or more (a worn contact) and the run is fresh.
+pub(super) fn switch_worn_power_contact(e: &SchEditor) -> bool {
+    value_at_least(e, "R1", 2.0) && dc_fresh(e)
+}
+
+/// The switch lesson: the contact R4 in the signal path is 2 kohm or more (a dirty contact) and the run is fresh.
+pub(super) fn switch_dirty_signal_contact(e: &SchEditor) -> bool {
+    value_at_least(e, "R4", 2e3) && dc_fresh(e)
+}

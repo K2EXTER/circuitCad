@@ -2437,3 +2437,27 @@ fn the_hall_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!((v(&e, "OUT") - 2.112).abs() < 0.01 && (v(&e, "OUT") / 3.3 - 0.64).abs() < 0.005, "ratiometric");
 }
+
+#[test]
+fn the_switch_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "switch_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    assert!((v(&e, "LOAD") - 4.995).abs() < 0.002 && v(&e, "SIG") < 1e-3, "a new contact drops 5 mV");
+    set_value(&mut e, "R1", "5");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((v(&e, "LOAD") - 4.52).abs() < 0.01, "a worn contact");
+    set_value(&mut e, "R4", "5k");
+    e.run_dc();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    assert!((v(&e, "SIG") - 1.1).abs() < 0.01, "a dirty contact does not give a Low");
+}

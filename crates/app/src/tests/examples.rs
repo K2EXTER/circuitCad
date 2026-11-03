@@ -1170,6 +1170,36 @@ fn write_hall_basics_example() {
     std::fs::write(root.join("hall_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/switch_basics.schjson for the switch lesson (a closed contact is a resistor): V1 (5 V) -> R1 = 0.05 ohm
+/// (the contact) -> R2 = 47 ohm (the load); V2 (3.3 V) -> R3 = 10 kohm (pull-up) -> node SIG -> R4 = 0.05 ohm (the contact) -> GND:
+/// `cargo test -p app write_switch_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_switch_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut s = sch_core::Schematic::default();
+    let part = |s: &mut sch_core::Schematic, x: i32, y: i32, value: &str, a: &str, b: &str| {
+        let i = s.add(Kind::Resistor, (x, y), 1);
+        s.components[i].value = value.into();
+        s.components[i].footprint = "R_2512".into();
+        label(s, i, "1", a);
+        label(s, i, "2", b);
+    };
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "5".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    part(&mut s, 20, 0, "0.05", "VCC", "LOAD");
+    part(&mut s, 36, 0, "47", "LOAD", "GND");
+    let v2 = s.add(Kind::VSource, (0, 28), 0);
+    s.components[v2].value = "3.3".into();
+    label(&mut s, v2, "+", "V33");
+    label(&mut s, v2, "-", "GND");
+    part(&mut s, 20, 28, "10k", "V33", "SIG");
+    part(&mut s, 36, 28, "0.05", "SIG", "GND");
+    std::fs::write(root.join("switch_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]

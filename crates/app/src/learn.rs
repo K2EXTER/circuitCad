@@ -493,6 +493,7 @@ const PARTS_PATH: LearningPath = LearningPath {
             name: "6. スイッチ・時計・音・ロジック",
             about: "コイルで動くリレー、周波数を決める水晶、音を出すスピーカーとブザー、High と Low を扱うロジック IC",
             items: &[
+                Item { requires: Some(&["pullup"]), ..lesson("switch_basics", "スイッチの素顔 (閉じた接点は小さな抵抗)", "接点抵抗と電圧降下・発熱、小さな電流の信号には金メッキ、定格と寿命", Some("スイッチを閉じた状態の抵抗を測り、押すたびに変わるか、電流を流して電圧降下を見ます")) },
                 Item { requires: Some(&["inductor", "flyback"]), ..lesson("relay_basics", "リレーの素顔 (コイルの電流で接点が動く)", "コイル = 抵抗 + インダクタンス、動作電圧 (定格の約 75%)、τ = L ÷ R、電力 V² ÷ R", Some("5V 用リレーのコイルの抵抗を測り、電圧を上げながらカチッと動作する電圧を探します")) },
                 Item { requires: Some(&["crystal", "rlc"]), ..lesson("crystal_basics", "水晶の素顔 (Q が桁違いに大きい共振)", "等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q", Some("水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます")) },
                 Item { requires: Some(&["inductor", "capacitor"]), ..lesson("speaker_basics", "スピーカーとブザーの素顔 (インピーダンスは 8Ω 一定ではない)", "共振で上がるインピーダンス、高い周波数でコイルとして上がる、圧電ブザーは容量+共振", Some("スピーカーのインピーダンスを、テスタで測る直流の抵抗 (約 8Ω ではなく 6〜7Ω) と、アンプの表示を比べます")) },
