@@ -441,29 +441,62 @@ const PARTS_PATH: LearningPath = LearningPath {
     id: "parts",
     title: "部品の素顔: 動作と特性と計算式",
     goal: "部品を 1 種類ずつ取り上げて、何をする部品か、特性を表す数字は何か、その数字を決める式は何かを、シミュレーションで確かめながら学びます。",
-    stages: &[Stage {
-        name: "1. 受動部品",
-        about: "抵抗・コンデンサ・コイル。電源や信号のどの回路にも出てくる、基本の部品です",
-        items: &[Item { requires: Some(&[]), ..lesson("capacitor", "コンデンサの素顔 (電流は電圧の変化に比例する)", "I = C × dV/dt、充電の時定数 τ = R × C、ためるエネルギー ½CV²、並列と直列の容量", Some("大きな電解コンデンサを抵抗で充電し、63% に達する時間を測って τ = R × C と比べます")) },
-            Item { requires: Some(&["capacitor"]), ..lesson("inductor", "コイルの素顔 (電流は急には変えられない)", "V = L × di/dt、時定数 τ = L ÷ R、ためるエネルギー ½LI²、飽和電流", Some("コイルの DCR を測り、抵抗といっしょにした立ち上がりの時間から L ÷ R を確かめます")) },
-            Item { requires: Some(&["capacitor"]), ..lesson("resistor", "抵抗の素顔 (オームの法則・直列・並列・電力)", "V = I × R、P = V × I、直列は足し算・並列は小さくなる、定格電力と許容差", Some("抵抗の値をテスタで測り、直列・並列の合成と、中点の電圧を計算と比べます")) },
-            Item { requires: Some(&["resistor"]), ..lesson("transistor", "トランジスタの素顔 (電流を増やす部品)", "Ic = hFE × Ib、Vbe 約 0.65V、飽和 (Vce(sat))、損失 Vce × Ic", Some("2N3904 のベース抵抗を変えて、Ic ÷ Ib の hFE と、飽和したときのコレクタ電圧を測ります")) },
-            Item { requires: Some(&["transistor"]), ..lesson("mosfet_basics", "MOSFET の素顔 (電圧で電流を制御する)", "しきい値 Vth、オン抵抗 Rds(on)、Id ∝ (Vgs − Vth)²、中途半端な電圧は損失が大きい", Some("2N7000 のゲートの電圧を変えながらドレインの電圧を測り、しきい値とオン抵抗を確かめます")) },
-            Item { requires: Some(&["transistor", "opamp_noninv"]), ..lesson("opamp_basics", "オペアンプの素顔 (増幅の式・帯域・振れ幅の限界)", "倍率 1 + Rf ÷ Rg、GBW = 倍率 × 帯域、出力は電源で頭打ち", Some("LM358 の非反転増幅で倍率と −3dB の周波数を測り、入力を大きくして出力が切れるのを見ます")) },
-            Item { requires: Some(&["diode_curve"]), ..lesson("diode_basics", "ダイオードの素顔 (一方通行と、電流で変わる抵抗)", "I = Is (e^(V / nVt) − 1)、V は電流の対数、動的な抵抗 rd = 26mV ÷ I", Some("1N4148 の電流を変えて電圧を測り、順向きと逆向きの違いを確かめます")) },
-            Item { requires: Some(&["diode_basics", "led"]), ..lesson("led_basics", "LED の素顔 (電圧ではなく電流で光る)", "I = (電源 − Vf) ÷ R、Vf は色で違う、電流の上限、抵抗の発熱", Some("赤と青の LED を 5V と 3.3V で光らせ、電流と明るさを比べます")) },
-            Item { requires: Some(&["diode_basics", "zener"]), ..lesson("zener_basics", "ツェナーダイオードの素顔 (逆向きで電圧が止まる)", "降伏電圧 Vz、動作抵抗 rz、Iz = (Vin − Vz) ÷ R、電力 P = Vz × Iz と定格", Some("1N4733A に抵抗をつないで、電源を変えながら Z の電圧を測り、止まる様子を確かめます")) },
-            Item { requires: Some(&["inductor", "flyback"]), ..lesson("relay_basics", "リレーの素顔 (コイルの電流で接点が動く)", "コイル = 抵抗 + インダクタンス、動作電圧 (定格の約 75%)、τ = L ÷ R、電力 V² ÷ R", Some("5V 用リレーのコイルの抵抗を測り、電圧を上げながらカチッと動作する電圧を探します")) },
-            Item { requires: Some(&["crystal", "rlc"]), ..lesson("crystal_basics", "水晶の素顔 (Q が桁違いに大きい共振)", "等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q", Some("水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます")) },
-            Item { requires: Some(&["rectifier", "inductor"]), ..lesson("transformer_basics", "トランスの素顔 (電圧は巻数比、電流は逆比)", "Vs ÷ Vp = Ns ÷ Np、Is ÷ Ip = Np ÷ Ns、定格 VA、無負荷と全負荷の電圧の差", Some("小さなトランスの巻線の抵抗をテスタで測り、一次と二次の比と電圧降下を計算と比べます (商用電源につなぐ実験はしません)")) },
-            Item { requires: Some(&["temp_sensors"]), ..lesson("thermistor_basics", "サーミスタの素顔 (温度で抵抗が桁で変わる)", "R(T) = R25 × exp(B (1/T − 1/T25))、感度 −B/T² ≒ −4.4%/K、分圧の抵抗は R25 に合わせる", Some("NTC の抵抗を、氷水・室温・お湯で測り、B 定数を計算して、データシートの値と比べます")) },
-            Item { requires: Some(&["light_sensors", "transistor"]), ..lesson("phototransistor_basics", "フォトトランジスタの素顔 (光電流が hFE 倍になる)", "Ic = hFE × 光電流、感度はフォトダイオードの数百倍、強い光で飽和、応答は遅い", Some("フォトトランジスタに LED の光を当て、距離を変えて、出力の電圧が飽和する様子を測ります")) },
-            Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
-            Item { requires: Some(&["led_basics", "transistor"]), ..lesson("photocoupler_basics", "フォトカプラの素顔 (光で信号を絶縁して伝える)", "Ic = CTR × If、絶縁、CTR の個体差と、負荷が重いと飽和する", Some("PC817 の LED の電流を変えて、出力のトランジスタの電流と電圧を測り、CTR を求めます")) },
-            Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },
-            Item { requires: Some(&["levels"]), ..lesson("logic_basics", "ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)", "しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 80Ω の抵抗", Some("74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます")) },
-        ],
-    }],
+    stages: &[
+        Stage {
+            name: "1. 抵抗・コンデンサ・コイル",
+            about: "電気回路の三つの基本の部品。電圧・電流・時間の関係を、式と数字で確かめます",
+            items: &[
+                Item { requires: Some(&[]), ..lesson("resistor", "抵抗の素顔 (オームの法則・直列・並列・電力)", "V = I × R、P = V × I、直列は足し算・並列は小さくなる、定格電力と許容差", Some("抵抗の値をテスタで測り、直列・並列の合成と、中点の電圧を計算と比べます")) },
+                Item { requires: Some(&["resistor"]), ..lesson("capacitor", "コンデンサの素顔 (電流は電圧の変化に比例する)", "I = C × dV/dt、充電の時定数 τ = R × C、ためるエネルギー ½CV²、並列と直列の容量", Some("大きな電解コンデンサを抵抗で充電し、63% に達する時間を測って τ = R × C と比べます")) },
+                Item { requires: Some(&["capacitor"]), ..lesson("inductor", "コイルの素顔 (電流は急には変えられない)", "V = L × di/dt、時定数 τ = L ÷ R、ためるエネルギー ½LI²、飽和電流", Some("コイルの DCR を測り、抵抗といっしょにした立ち上がりの時間から L ÷ R を確かめます")) },
+            ],
+        },
+        Stage {
+            name: "2. ダイオードの仲間",
+            about: "一方通行の部品。電流で変わる抵抗、光る LED、電圧を止めるツェナー",
+            items: &[
+                Item { requires: Some(&["diode_curve"]), ..lesson("diode_basics", "ダイオードの素顔 (一方通行と、電流で変わる抵抗)", "I = Is (e^(V / nVt) − 1)、V は電流の対数、動的な抵抗 rd = 26mV ÷ I", Some("1N4148 の電流を変えて電圧を測り、順向きと逆向きの違いを確かめます")) },
+                Item { requires: Some(&["diode_basics", "led"]), ..lesson("led_basics", "LED の素顔 (電圧ではなく電流で光る)", "I = (電源 − Vf) ÷ R、Vf は色で違う、電流の上限、抵抗の発熱", Some("赤と青の LED を 5V と 3.3V で光らせ、電流と明るさを比べます")) },
+                Item { requires: Some(&["diode_basics", "zener"]), ..lesson("zener_basics", "ツェナーダイオードの素顔 (逆向きで電圧が止まる)", "降伏電圧 Vz、動作抵抗 rz、Iz = (Vin − Vz) ÷ R、電力 P = Vz × Iz と定格", Some("1N4733A に抵抗をつないで、電源を変えながら Z の電圧を測り、止まる様子を確かめます")) },
+            ],
+        },
+        Stage {
+            name: "3. 増やす部品",
+            about: "電流を増やすトランジスタ、電圧で制御する MOSFET、信号を増やすオペアンプ",
+            items: &[
+                Item { requires: Some(&["resistor"]), ..lesson("transistor", "トランジスタの素顔 (電流を増やす部品)", "Ic = hFE × Ib、Vbe 約 0.65V、飽和 (Vce(sat))、損失 Vce × Ic", Some("2N3904 のベース抵抗を変えて、Ic ÷ Ib の hFE と、飽和したときのコレクタ電圧を測ります")) },
+                Item { requires: Some(&["transistor"]), ..lesson("mosfet_basics", "MOSFET の素顔 (電圧で電流を制御する)", "しきい値 Vth、オン抵抗 Rds(on)、Id ∝ (Vgs − Vth)²、中途半端な電圧は損失が大きい", Some("2N7000 のゲートの電圧を変えながらドレインの電圧を測り、しきい値とオン抵抗を確かめます")) },
+                Item { requires: Some(&["transistor", "opamp_noninv"]), ..lesson("opamp_basics", "オペアンプの素顔 (増幅の式・帯域・振れ幅の限界)", "倍率 1 + Rf ÷ Rg、GBW = 倍率 × 帯域、出力は電源で頭打ち", Some("LM358 の非反転増幅で倍率と −3dB の周波数を測り、入力を大きくして出力が切れるのを見ます")) },
+            ],
+        },
+        Stage {
+            name: "4. センサと光の部品",
+            about: "温度や光を電気に変える部品と、光で信号を絶縁して伝えるフォトカプラ",
+            items: &[
+                Item { requires: Some(&["temp_sensors"]), ..lesson("thermistor_basics", "サーミスタの素顔 (温度で抵抗が桁で変わる)", "R(T) = R25 × exp(B (1/T − 1/T25))、感度 −B/T² ≒ −4.4%/K、分圧の抵抗は R25 に合わせる", Some("NTC の抵抗を、氷水・室温・お湯で測り、B 定数を計算して、データシートの値と比べます")) },
+                Item { requires: Some(&["light_sensors", "transistor"]), ..lesson("phototransistor_basics", "フォトトランジスタの素顔 (光電流が hFE 倍になる)", "Ic = hFE × 光電流、感度はフォトダイオードの数百倍、強い光で飽和、応答は遅い", Some("フォトトランジスタに LED の光を当て、距離を変えて、出力の電圧が飽和する様子を測ります")) },
+                Item { requires: Some(&["led_basics", "transistor"]), ..lesson("photocoupler_basics", "フォトカプラの素顔 (光で信号を絶縁して伝える)", "Ic = CTR × If、絶縁、CTR の個体差と、負荷が重いと飽和する", Some("PC817 の LED の電流を変えて、出力のトランジスタの電流と電圧を測り、CTR を求めます")) },
+            ],
+        },
+        Stage {
+            name: "5. 電源と保護の部品",
+            about: "電圧を変えるトランス、電圧を安定にするレギュレータ、回路を守るヒューズ",
+            items: &[
+                Item { requires: Some(&["regulator_78xx"]), ..lesson("regulator_basics", "三端子レギュレータの素顔 (電源のゆれを消す力と、その限界)", "リップル除去 (PSRR)、ドロップアウト電圧、入力に余裕がないと素通りする", Some("7805 に電池や AC アダプタをつなぎ、入力を下げながら出力を測って、ドロップアウトを確かめます")) },
+                Item { requires: Some(&["rectifier", "inductor"]), ..lesson("transformer_basics", "トランスの素顔 (電圧は巻数比、電流は逆比)", "Vs ÷ Vp = Ns ÷ Np、Is ÷ Ip = Np ÷ Ns、定格 VA、無負荷と全負荷の電圧の差", Some("小さなトランスの巻線の抵抗をテスタで測り、一次と二次の比と電圧降下を計算と比べます (商用電源につなぐ実験はしません)")) },
+                Item { requires: Some(&["protection"]), ..lesson("fuse_basics", "ヒューズの素顔 (大電流ほど速く切れる)", "定格は切れない電流、時間-電流特性、負荷は定格の 7 割以下、切れたら戻らない", Some("ヒューズの抵抗を測り、定格の電流の範囲で使う負荷の選び方を、データシートの時間-電流曲線と照らします")) },
+            ],
+        },
+        Stage {
+            name: "6. スイッチ・時計・ロジック",
+            about: "コイルで動くリレー、周波数を決める水晶、High と Low を扱うロジック IC",
+            items: &[
+                Item { requires: Some(&["inductor", "flyback"]), ..lesson("relay_basics", "リレーの素顔 (コイルの電流で接点が動く)", "コイル = 抵抗 + インダクタンス、動作電圧 (定格の約 75%)、τ = L ÷ R、電力 V² ÷ R", Some("5V 用リレーのコイルの抵抗を測り、電圧を上げながらカチッと動作する電圧を探します")) },
+                Item { requires: Some(&["crystal", "rlc"]), ..lesson("crystal_basics", "水晶の素顔 (Q が桁違いに大きい共振)", "等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q", Some("水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます")) },
+                Item { requires: Some(&["levels"]), ..lesson("logic_basics", "ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)", "しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 80Ω の抵抗", Some("74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます")) },
+            ],
+        },
+    ],
 };
 
 const SIGNAL_PATH: LearningPath = LearningPath {
