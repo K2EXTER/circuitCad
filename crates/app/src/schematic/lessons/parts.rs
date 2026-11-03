@@ -798,13 +798,13 @@ pub(super) const SPEAKER_BASICS: Lesson = Lesson {
         Step {
             tab: PanelTab::Analyze,
             title: "AC解析で、スピーカーのインピーダンスが周波数で変わるのを見る",
-            detail: "「AC解析を実行」を押し、I(V1) を選びます。1V の電源なので、インピーダンス Z = 1V ÷ 電流です。低い周波数 (100Hz 以下) で電流が約 0.12A (Z ≒ 8Ω)、共振の約 600Hz で電流が最も小さくなり (Z が約 32Ω と最大)、1kHz では約 12Ω、3kHz あたりで約 8Ω に戻ります。さらに高い周波数では、コイルのインダクタンスのせいで、電流が減っていきます (10kHz で約 10Ω、30kHz で約 20Ω)。8Ω は、一部の周波数での目安にすぎません。",
+            detail: "「AC解析を実行」を押すと、I(V1) が選ばれます (グラフは dB で、1A = 0dB。0.12A は約 −18dB、0.03A は約 −30dB)。1V の電源なので、インピーダンス Z = 1V ÷ 電流です。低い周波数 (100Hz 以下) で電流が約 0.12A (Z ≒ 8Ω)、共振の約 600Hz で電流が最も小さくなり (Z が約 32Ω と最大)、1kHz では約 12Ω、3kHz あたりで約 8Ω に戻ります。さらに高い周波数では、コイルのインダクタンスのせいで、電流が減っていきます (10kHz で約 10Ω、30kHz で約 20Ω)。8Ω は、一部の周波数での目安にすぎません。",
             done: ac_fresh,
         },
         Step {
             tab: PanelTab::Analyze,
             title: "圧電ブザーの共振を見る",
-            detail: "グラフの信号に I(V2) を加えます。圧電ブザーは、低い周波数では、15nF のコンデンサとして、わずかな電流 (100Hz で約 10µA) しか流れません。約 4kHz の共振で、電流が急に増えて (約 1mA)、また下がります。この周波数の信号で駆動すると、小さな電力で大きく振動して、よく鳴ります。",
+            detail: "グラフの信号に I(V2) を加えます。圧電ブザーは、低い周波数では、15nF のコンデンサとして、わずかな電流 (100Hz で約 10µA = 約 −100dB) しか流れません。約 4kHz の共振で、電流が急に増えて (約 1mA = −60dB)、また下がります。この周波数の信号で駆動すると、小さな電力で大きく振動して、よく鳴ります。",
             done: piezo_shown,
         },
         Step {
@@ -1221,7 +1221,7 @@ pub(super) const LDO_VS_BUCK: Lesson = Lesson {
         Step {
             tab: PanelTab::Analyze,
             title: "過渡解析で、リニアとスイッチングの効率を計算する",
-            detail: "「過渡解析を実行」を押し、「電力と効率」で入力 (VIN1 と I(V1)、または VIN2 と I(V2)) と、出力 (VOUT1 と I(R1)、または VOUT2 と I(R4)) を選びます。リニアは、出力 5V で 125mA (約 0.62W) に対して、入力は 12V で 125mA (1.5W) なので、効率は 約 42%。スイッチングは、出力 約 0.59W (4.85V) に対して入力が 約 0.69W で、効率は 約 85% です。リニアの損失は 約 0.88W、スイッチングは 約 0.1W と、約 9 倍の差です。",
+            detail: "「過渡解析を実行」を押すと、VOUT1 と VOUT2 が表示されます (VOUT2 は 150kHz の細かい揺れが、拡大すると見えます)。グラフの下の「電力と効率」で、入力 (VIN1 と I(V1)、または VIN2 と I(V2)) と、出力 (VOUT1 と I(R1)、または VOUT2 と I(R4)) を選びます。V(SW) は、150kHz で 0〜12V を行き来し、グラフを塗りつぶすので、選ばないでください。リニアは、出力 5V で 125mA (約 0.62W) に対して、入力は 12V で 125mA (1.5W) なので、効率は 約 42%。スイッチングは、出力 約 0.59W (4.85V) に対して入力が 約 0.69W で、効率は 約 85% です。リニアの損失は 約 0.88W、スイッチングは 約 0.1W と、約 9 倍の差です。",
             done: tran_fresh,
         },
         Step {
@@ -1364,3 +1364,36 @@ pub(super) const SLEW_RATE: Lesson = Lesson {
         },
     ],
 };
+
+/// The traces a part lesson wants on the graph of its first run of an analysis (see `SchEditor::apply_lesson_traces`); empty = the editor's own choice.
+pub(super) fn preferred_signals(lesson: &str, analysis: &str) -> &'static [&'static str] {
+    match (lesson, analysis) {
+        ("capacitor", "tran") => &["V(CA)", "I(C1)", "V(CB)"],
+        ("inductor" | "relay_basics", "tran") => &["I(L1)", "I(L2)"],
+        ("transformer_basics", "tran") => &["V(IN)", "V(OUT)"],
+        ("bridge_basics", "tran") => &["V(OUTA)", "V(OUTB)"],
+        ("fuse_basics", "tran") => &["I(R1)", "I(R2)", "I(R3)"],
+        ("varistor_basics", "tran") => &["V(A)", "V(B)"],
+        ("logic_basics", "tran") => &["V(IN)", "V(OUT1)", "V(OUT2)"],
+        ("opamp_basics", "tran") => &["V(IN)", "V(OUT1)", "V(OUT2)", "V(OUT3)"],
+        ("diode_recovery", "tran") => &["I(R1)", "I(R2)", "I(R3)"],
+        ("switching_loss", "tran") => &["V(GATE)", "V(DRAIN)"],
+        ("ldo_vs_buck", "tran") => &["V(VOUT1)", "V(VOUT2)"],
+        ("slew_rate", "tran") => &["V(IN1)", "V(OUT1)"],
+        ("electrolytic_life", "tran") => &["V(CAP)"],
+        ("eeprom_basics", "tran") => &["V(SDA)", "V(DRV)"],
+        ("analog_switch_basics", "tran") => &["V(HOLD)"],
+        ("diode_basics", "ac") => &["V(A)", "V(B)"],
+        ("crystal_basics", "ac") => &["V(OUTX)", "V(OUTL)"],
+        ("speaker_basics", "ac") => &["I(V1)"],
+        ("regulator_basics", "ac") => &["V(VOUT)"],
+        ("opamp_basics", "ac") => &["V(OUT1)", "V(OUT2)", "V(OUT3)"],
+        ("zener_basics", "sweep") => &["V(Z)"],
+        ("transistor" | "phototransistor_basics", "sweep") => &["V(COL)"],
+        ("mosfet_basics", "sweep") => &["V(DRAIN)"],
+        ("varistor_basics", "sweep") => &["V(M)"],
+        ("hall_basics" | "photocoupler_basics", "sweep") => &["V(OUT)"],
+        ("thermistor_basics", "temp") => &["V(A)"],
+        _ => &[],
+    }
+}

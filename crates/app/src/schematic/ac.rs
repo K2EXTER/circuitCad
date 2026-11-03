@@ -28,6 +28,7 @@ impl SchEditor {
                 selected.insert(sg.name.clone());
             }
         }
+        self.apply_lesson_traces("ac", &mut selected, |n| outcome.as_ref().is_ok_and(|r| r.signal(n).is_some()));
         let skin = if !self.wiring.is_empty() && f1 > 1e6 { " / 注意: 基板の配線の抵抗は直流の値です。約 300 kHz 以上では表皮効果で増えます (10 MHz で約 1.4〜1.9 倍、100 MHz で約 3.5〜4.3 倍)" } else { "" };
         self.status = match &outcome {
             Ok(r) => format!("AC解析: 完了 ({} 点){skin}", r.freq.len()),

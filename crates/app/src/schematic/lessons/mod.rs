@@ -155,6 +155,20 @@ const LESSONS: &[Lesson] = &[
     parts::EEPROM_BASICS,
 ];
 
+impl SchEditor {
+    /// The traces the active lesson wants on the graph of a new run (`analysis` is "tran", "ac", "sweep" or "temp"): the lesson text says which
+    /// ones to look at, so they are chosen at the start instead of the first nodes. Nothing changes when the lesson has no list or the run has none of them.
+    pub(super) fn apply_lesson_traces(&self, analysis: &str, selected: &mut BTreeSet<String>, has: impl Fn(&str) -> bool) {
+        let Some(active) = self.lesson.as_ref() else { return };
+        let Some(lesson) = LESSONS.get(active.idx) else { return };
+        let wanted: Vec<&str> = parts::preferred_signals(lesson.id, analysis).iter().copied().filter(|n| has(n)).collect();
+        if !wanted.is_empty() {
+            selected.clear();
+            selected.extend(wanted.into_iter().map(String::from));
+        }
+    }
+}
+
 /// The "実機で確かめよう" notes of lesson `idx`.
 #[cfg(test)]
 pub(super) fn lesson_real(idx: usize) -> &'static [&'static str] {

@@ -34,6 +34,7 @@ impl SchEditor {
                 selected.insert(sg.name.clone());
             }
         }
+        self.apply_lesson_traces("temp", &mut selected, |n| outcome.as_ref().is_ok_and(|r| r.signal(n).is_some()));
         self.status = match &outcome {
             Ok(r) => format!("温度スイープ: 完了 ({} 点, {} 〜 {} ℃)", r.x.len(), a, b),
             Err(e) => format!("温度スイープに失敗: {}", e.first().cloned().unwrap_or_default()),

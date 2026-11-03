@@ -43,6 +43,7 @@ impl SchEditor {
                 }
             }
         }
+        self.apply_lesson_traces("sweep", &mut selected, |n| outcome.as_ref().is_ok_and(|r| r.signal(n).is_some()));
         self.status = match &outcome {
             Ok(r) => format!("DCスイープ: 完了 ({} 点, {} = {} 〜 {})", r.x.len(), src, a, b),
             Err(e) => format!("DCスイープに失敗: {}", e.first().cloned().unwrap_or_default()),

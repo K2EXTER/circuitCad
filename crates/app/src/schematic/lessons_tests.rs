@@ -2815,3 +2815,24 @@ fn the_slew_rate_lesson_ticks_and_its_numbers_hold() {
     let small = slope(&sig(&e, "V(OUT2)"));
     assert!((small.0 - 0.125).abs() < 0.015 && (small.1 - 0.199).abs() < 0.01, "a small signal passes: {small:?}");
 }
+
+#[test]
+fn a_part_lesson_puts_the_traces_its_text_names_on_the_graph() {
+    let idx = |id: &str| lesson_ids().iter().position(|l| *l == id).unwrap();
+    let names = |e: &SchEditor| e.tran.as_ref().unwrap().selected.iter().cloned().collect::<Vec<_>>();
+    // the capacitor lesson: the voltage and the current of the ramp and the voltage of the step, not the first nodes
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("capacitor"));
+    e.run_tran();
+    assert_eq!(names(&e), ["I(C1)", "V(CA)", "V(CB)"]);
+    // the speaker lesson: the current of the speaker in the AC run
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("speaker_basics"));
+    e.analyze_ac();
+    assert_eq!(e.ac.as_ref().unwrap().selected.iter().cloned().collect::<Vec<_>>(), ["I(V1)"]);
+    // a lesson without a list keeps the editor's choice
+    let mut e = SchEditor::default();
+    e.start_lesson(idx("rc_lowpass"));
+    e.analyze_ac();
+    assert!(!e.ac.as_ref().unwrap().selected.is_empty());
+}

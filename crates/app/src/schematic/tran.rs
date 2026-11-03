@@ -71,6 +71,7 @@ impl SchEditor {
                 selected.insert(sg.name.clone());
             }
         }
+        self.apply_lesson_traces("tran", &mut selected, |n| outcome.as_ref().is_ok_and(|r| r.signal(n).is_some()));
         self.status = match &outcome {
             Ok(r) => format!("過渡解析: 完了 ({} 点, 再試行 {} 回)", r.time.len(), r.retries),
             Err(e) => format!("過渡解析に失敗: {}", e.first().cloned().unwrap_or_default()),
