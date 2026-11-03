@@ -2572,3 +2572,41 @@ fn the_bridge_basics_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!((band(&e, "V(OUTA)").1 - 9.8).abs() < 0.4 && (band(&e, "I(D1)").0 - 2.0).abs() < 0.2, "a heavier load");
 }
+
+#[test]
+fn the_eeprom_basics_lesson_ticks_and_its_numbers_hold() {
+    let idx = lesson_ids().iter().position(|l| *l == "eeprom_basics").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    // the 30 % - 70 % rise time of the first rising edge of SDA after it was pulled low (ns), the low level
+    let rise = |e: &SchEditor| {
+        let r = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+        let v = &r.signal("V(SDA)").unwrap().values;
+        let start = r.time.iter().position(|t| *t >= 5.0e-6).unwrap();
+        let t_at = |lvl: f64| {
+            let k = (start..v.len()).find(|k| v[*k] >= lvl).unwrap();
+            let (t0, t1, v0, v1) = (r.time[k - 1], r.time[k], v[k - 1], v[k]);
+            t0 + (t1 - t0) * (lvl - v0) / (v1 - v0)
+        };
+        let low = v[r.time.iter().position(|t| *t >= 4.9e-6).unwrap()];
+        ((t_at(0.7 * 3.3) - t_at(0.3 * 3.3)) * 1e9, low)
+    };
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 1, "{}", e.status);
+    let (tr, low) = rise(&e);
+    assert!((tr - 414.0).abs() < 30.0 && low < 0.05 && tr > 300.0 && tr < 1000.0, "inside 100 kHz, outside 400 kHz: {tr}");
+    set_value(&mut e, "C1", "400p");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    assert!((rise(&e).0 - 1609.0).abs() < 80.0, "a long bus is too slow even for 100 kHz");
+    set_value(&mut e, "R1", "1k");
+    e.run_tran();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3, "{}", e.status);
+    let (tr, low) = rise(&e);
+    assert!((tr - 342.0).abs() < 25.0 && low < 0.05, "a strong pull-up: {tr}");
+}

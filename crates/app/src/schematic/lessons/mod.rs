@@ -147,6 +147,7 @@ const LESSONS: &[Lesson] = &[
     parts::CRYSTAL_BASICS,
     parts::SPEAKER_BASICS,
     parts::LOGIC_BASICS,
+    parts::EEPROM_BASICS,
 ];
 
 /// The "実機で確かめよう" notes of lesson `idx`.

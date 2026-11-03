@@ -502,6 +502,7 @@ const PARTS_PATH: LearningPath = LearningPath {
                 Item { requires: Some(&["crystal", "rlc"]), ..lesson("crystal_basics", "水晶の素顔 (Q が桁違いに大きい共振)", "等価回路 Rm・Lm・Cm・C0、fs = 1 ÷ (2π√(Lm Cm))、Q = ωL ÷ R、帯域幅 = fs ÷ Q", Some("水晶を LC 共振回路と並べ、ふつうの LC より山が桁違いに細いことを、発振器の周波数の安定として確かめます")) },
                 Item { requires: Some(&["inductor", "capacitor"]), ..lesson("speaker_basics", "スピーカーとブザーの素顔 (インピーダンスは 8Ω 一定ではない)", "共振で上がるインピーダンス、高い周波数でコイルとして上がる、圧電ブザーは容量+共振", Some("スピーカーのインピーダンスを、テスタで測る直流の抵抗 (約 8Ω ではなく 6〜7Ω) と、アンプの表示を比べます")) },
                 Item { requires: Some(&["levels"]), ..lesson("logic_basics", "ロジック IC の素顔 (しきい値・ヒステリシス・出力の力)", "しきい値は電源の半分、シュミットトリガは 0.6 / 0.4 Vcc、出力は電源につながる約 80Ω の抵抗", Some("74HC04 と 74HC14 にゆっくり変わる信号とノイズを入れ、出力が揺れるか確かめます")) },
+                Item { requires: Some(&["logic_basics", "pullup"]), ..lesson("eeprom_basics", "EEPROM (I²C) の素顔 (オープンドレインとプルアップ)", "バスは引き下げだけ・上げるのは抵抗、立ち上がり = 0.85 RC、プルアップの上限と下限、書き込みに数 ms", Some("I²C のバス (SDA) をオシロで見て、プルアップの値を変えながら、立ち上がりの形を比べます")) },
             ],
         },
     ],

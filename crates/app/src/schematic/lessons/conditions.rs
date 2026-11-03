@@ -956,3 +956,13 @@ pub(super) fn bridge_diode_current_shown(e: &SchEditor) -> bool {
 pub(super) fn bridge_heavy_load(e: &SchEditor) -> bool {
     value_at_most(e, "R1", 40.0) && tran_fresh(e)
 }
+
+/// The EEPROM (I2C) lesson: the bus capacitance C1 is 300 pF or more (a long bus) and the run is fresh.
+pub(super) fn i2c_long_bus(e: &SchEditor) -> bool {
+    value_at_least(e, "C1", 300e-12) && tran_fresh(e)
+}
+
+/// The EEPROM (I2C) lesson: the pull-up R1 is 1.6 kohm or less and the run is fresh.
+pub(super) fn i2c_strong_pullup(e: &SchEditor) -> bool {
+    value_at_most(e, "R1", 1.6e3) && tran_fresh(e)
+}

@@ -1,0 +1,311 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "3.3",
+      "pos": [
+        0,
+        0
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "V2",
+      "kind": "VSource",
+      "value": "PULSE(0 3.3 1u 5n 5n 4u 10u)",
+      "pos": [
+        0,
+        24
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "4.7k",
+      "pos": [
+        24,
+        0
+      ],
+      "rot": 1,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "C1",
+      "kind": "Capacitor",
+      "value": "100p",
+      "pos": [
+        40,
+        0
+      ],
+      "rot": 1,
+      "footprint": "C_0805",
+      "custom": null
+    },
+    {
+      "refdes": "Q1",
+      "kind": "Custom",
+      "value": "2N7000",
+      "pos": [
+        60,
+        0
+      ],
+      "rot": 0,
+      "footprint": "TO-92_2N7000",
+      "custom": {
+        "name": "2N7000",
+        "prefix": "Q",
+        "pins": [
+          {
+            "number": "2",
+            "name": "G",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "D",
+            "side": "top"
+          },
+          {
+            "number": "1",
+            "name": "S",
+            "side": "bottom"
+          }
+        ],
+        "sim": {
+          "kind": "model",
+          "element": "M",
+          "name": "2N7000",
+          "text": ".model 2N7000 NMOS(VTO=2.1 KP=0.12 LAMBDA=0.01 CGS=22p CGD=4p)",
+          "pins": [
+            "3",
+            "2",
+            "1"
+          ],
+          "params": {},
+          "limits": [
+            "レベル1 (Shichman-Hodges) の簡易モデルです。基板効果、容量の電圧依存、飽和速度は扱いません。大電流では、実物より電流が大きく出ます。",
+            "ゲート容量は一定の値です。スイッチングの損失やゲート駆動の見積もりには、メーカーの値を使ってください。",
+            "ボディダイオード (ソースからドレインへ流れる逆向きのダイオード) は含みません。耐圧・定格電流を超えても壊れません。"
+          ]
+        },
+        "ratings": {
+          "v_max": 60.0,
+          "i_max": 0.2,
+          "p_max": 0.4,
+          "rows": [
+            {
+              "name": "しきい値電圧",
+              "value": "0.8〜3V",
+              "condition": "ID = 1mA"
+            },
+            {
+              "name": "オン抵抗",
+              "value": "5Ω (最大)",
+              "condition": "VGS = 10V, ID = 0.5A"
+            }
+          ]
+        },
+        "glyph": "nmos"
+      }
+    }
+  ],
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        0,
+        22
+      ],
+      "b": [
+        0,
+        19
+      ]
+    },
+    {
+      "a": [
+        0,
+        26
+      ],
+      "b": [
+        0,
+        29
+      ]
+    },
+    {
+      "a": [
+        24,
+        -2
+      ],
+      "b": [
+        24,
+        -5
+      ]
+    },
+    {
+      "a": [
+        24,
+        2
+      ],
+      "b": [
+        24,
+        5
+      ]
+    },
+    {
+      "a": [
+        40,
+        -2
+      ],
+      "b": [
+        40,
+        -5
+      ]
+    },
+    {
+      "a": [
+        40,
+        2
+      ],
+      "b": [
+        40,
+        5
+      ]
+    },
+    {
+      "a": [
+        60,
+        -2
+      ],
+      "b": [
+        60,
+        -5
+      ]
+    },
+    {
+      "a": [
+        58,
+        0
+      ],
+      "b": [
+        55,
+        0
+      ]
+    },
+    {
+      "a": [
+        60,
+        2
+      ],
+      "b": [
+        60,
+        5
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        0,
+        19
+      ],
+      "text": "DRV"
+    },
+    {
+      "pos": [
+        0,
+        29
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        24,
+        -5
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        24,
+        5
+      ],
+      "text": "SDA"
+    },
+    {
+      "pos": [
+        40,
+        -5
+      ],
+      "text": "SDA"
+    },
+    {
+      "pos": [
+        40,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        -5
+      ],
+      "text": "SDA"
+    },
+    {
+      "pos": [
+        55,
+        0
+      ],
+      "text": "DRV"
+    },
+    {
+      "pos": [
+        60,
+        5
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1
+}

@@ -1375,6 +1375,38 @@ fn write_bridge_basics_example() {
     std::fs::write(root.join("bridge_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
 }
 
+/// Generates docs/examples/eeprom_basics.schjson for the EEPROM (I2C) lesson: the SDA line is pulled up by R1 = 4.7 kohm to VCC = 3.3 V (V1)
+/// and loaded by the bus capacitance C1 = 100 pF; an open-drain driver (a 2N7000, Q1) pulls it low while its gate V2 is high (a 100 kHz pulse):
+/// `cargo test -p app write_eeprom_basics_example -- --ignored`
+#[test]
+#[ignore]
+fn write_eeprom_basics_example() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let def = part_lib::EXAMPLES.iter().map(|(_, t)| serde_json::from_str::<part_lib::PartDef>(t).unwrap()).find(|d| d.name == "2N7000").unwrap();
+    let mut s = sch_core::Schematic::default();
+    let v1 = s.add(Kind::VSource, (0, 0), 0);
+    s.components[v1].value = "3.3".into();
+    label(&mut s, v1, "+", "VCC");
+    label(&mut s, v1, "-", "GND");
+    let v2 = s.add(Kind::VSource, (0, 24), 0);
+    s.components[v2].value = "PULSE(0 3.3 1u 5n 5n 4u 10u)".into();
+    label(&mut s, v2, "+", "DRV");
+    label(&mut s, v2, "-", "GND");
+    let r1 = s.add(Kind::Resistor, (24, 0), 1);
+    s.components[r1].value = "4.7k".into();
+    label(&mut s, r1, "1", "VCC");
+    label(&mut s, r1, "2", "SDA");
+    let c1 = s.add(Kind::Capacitor, (40, 0), 1);
+    s.components[c1].value = "100p".into();
+    label(&mut s, c1, "1", "SDA");
+    label(&mut s, c1, "2", "GND");
+    let q1 = s.add_custom(def.symbol(), &def.default_value(), &def.footprint_name(), (60, 0), 0);
+    label(&mut s, q1, "3", "SDA");
+    label(&mut s, q1, "2", "DRV");
+    label(&mut s, q1, "1", "GND");
+    std::fs::write(root.join("eeprom_basics.schjson"), serde_json::to_string_pretty(&s).unwrap()).unwrap();
+}
+
 /// Generates docs/examples/crystal_response.schjson: the 16 MHz crystal in a 50 ohm line (V1 -> Y1 -> R1 to GND), for the
 /// crystal lesson and its AC test: `cargo test -p app write_crystal_example -- --ignored`
 #[test]
