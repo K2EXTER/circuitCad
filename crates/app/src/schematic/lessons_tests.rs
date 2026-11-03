@@ -2908,3 +2908,12 @@ fn the_intro_read_lesson_ticks_and_its_numbers_hold() {
     assert_eq!(progress(&e), 3, "{}", e.status);
     assert!((mid(&e) - 4.98).abs() < 0.01);
 }
+
+#[test]
+fn a_long_explanation_is_cut_into_short_paragraphs_without_losing_a_word() {
+    let text = "あ".repeat(60) + "。" + &"い".repeat(60) + "。" + &"う".repeat(30) + "。" + &"え".repeat(30) + "。";
+    let p = super::lessons::paragraphs_for_test(&text);
+    assert_eq!(p.len(), 2, "{p:?}");
+    assert_eq!(p.concat(), text);
+    assert!(super::lessons::paragraphs_for_test("短い文。").len() == 1 && super::lessons::paragraphs_for_test("").is_empty());
+}

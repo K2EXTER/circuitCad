@@ -191,6 +191,22 @@ pub fn lesson_titles() -> Vec<&'static str> {
     LESSONS.iter().map(|l| l.title).collect()
 }
 
+/// A long explanation in short paragraphs: the sentences (ending in 「。」) are grouped until a paragraph is about 110 characters long.
+fn paragraphs(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = vec![];
+    let mut current = String::new();
+    for sentence in text.split_inclusive('。') {
+        current.push_str(sentence);
+        if current.chars().count() >= 110 {
+            out.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.trim().is_empty() {
+        out.push(current);
+    }
+    out
+}
+
 /// Everything a lesson says (title, goal, summary, the steps, the notes): what the glossary looks in for the words of its index.
 fn lesson_text(l: &Lesson) -> String {
     let mut parts: Vec<&str> = vec![l.title, l.goal, l.summary];
@@ -346,6 +362,18 @@ impl SchEditor {
         egui::Window::new(format!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
             ui.label(lesson.goal);
             ui.small(format!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
+            // the explanation: read before the first step, folded once the learner is working, open again when the lesson is finished
+            egui::CollapsingHeader::new("くわしい説明 (先に読むと、手順が分かりやすくなります)")
+                .id_salt(("summary", idx, cur.is_none()))
+                .default_open(cur.is_none() || done.iter().all(|d| !d))
+                .show(ui, |ui| {
+                    egui::ScrollArea::vertical().id_salt(("summary_scroll", idx)).max_height(230.0).show(ui, |ui| {
+                        for paragraph in paragraphs(lesson.summary) {
+                            ui.label(paragraph);
+                            ui.add_space(3.0);
+                        }
+                    });
+                });
             ui.separator();
             for (k, step) in lesson.steps.iter().enumerate() {
                 let (mark, color) = if done[k] {
@@ -458,8 +486,7 @@ impl SchEditor {
             }
             if cur.is_none() {
                 ui.separator();
-                ui.colored_label(crate::theme::OK, "レッスン完了!");
-                ui.label(lesson.summary);
+                ui.colored_label(crate::theme::OK, "レッスン完了! (上の「くわしい説明」を、もう一度読んでみましょう)");
                 if idx + 1 < LESSONS.len() && ui.button(format!("次のレッスンへ: {}", LESSONS[idx + 1].title)).on_hover_text("このレッスンを終えて、次のレッスンのサンプル回路を開きます").clicked() {
                     next = Some(idx + 1);
                 }
@@ -511,4 +538,9 @@ mod lit_tests {
         let detail = e.current_step_detail().unwrap();
         assert!(detail.contains("「DC動作点を解析」"), "{detail}");
     }
+}
+
+#[cfg(test)]
+pub(super) fn paragraphs_for_test(text: &str) -> Vec<String> {
+    paragraphs(text)
 }
