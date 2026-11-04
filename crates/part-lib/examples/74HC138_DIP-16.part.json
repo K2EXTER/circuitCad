@@ -1,0 +1,129 @@
+{
+  "name": "74HC138",
+  "category": "ロジックIC",
+  "description": "3 to 8 デコーダ (DIP-16)。A・B・C (C が最上位) の 2 進数で選んだ 1 本の出力 Y0〜Y7 だけが Low になります (負論理)。G1 が High で G2A・G2B が Low のときだけ動き、そうでないと全部 High。デジタルセルで作った簡易モデル (遅延 18ns)。ピン表と遅延は TI SN74HC138 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc138.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "C",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "G2A",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "G2B",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "G1",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "Y7",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "Y6",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "Y5",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "Y4",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "Y3",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "Y2",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "Y1",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "Y0",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC138",
+    "text": "* 74HC138 behavioural model: 3-to-8 decoder. The outputs are active low; G1 high and G2A, G2B low enable it. One NAND per output; delay 18 ns (the data sheet SCLS107: address or enable to Y, 18 ns typical at 4.5 V, 25 C).\n.subckt 74HC138 a b c g2a g2b g1 y7 gnd y6 y5 y4 y3 y2 y1 y0 vcc\nYna inv na 0 gnd vcc 60 0.5 0 0 0 a\nYnb inv nb 0 gnd vcc 60 0.5 0 0 0 b\nYnc inv nc 0 gnd vcc 60 0.5 0 0 0 c\nYng2a inv ng2a 0 gnd vcc 60 0.5 0 0 0 g2a\nYng2b inv ng2b 0 gnd vcc 60 0.5 0 0 0 g2b\nYen and en 0 gnd vcc 60 0.5 0 0 0 g1 ng2a ng2b\nYy0 nand y0 0 gnd vcc 60 0.5 0 0 0 td=18n en na nb nc\nYy1 nand y1 0 gnd vcc 60 0.5 0 0 0 td=18n en a nb nc\nYy2 nand y2 0 gnd vcc 60 0.5 0 0 0 td=18n en na b nc\nYy3 nand y3 0 gnd vcc 60 0.5 0 0 0 td=18n en a b nc\nYy4 nand y4 0 gnd vcc 60 0.5 0 0 0 td=18n en na nb c\nYy5 nand y5 0 gnd vcc 60 0.5 0 0 0 td=18n en a nb c\nYy6 nand y6 0 gnd vcc 60 0.5 0 0 0 td=18n en na b c\nYy7 nand y7 0 gnd vcc 60 0.5 0 0 0 td=18n en a b c\n.ends 74HC138",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、入力→出力 18ns の代表値 1 つです (4.5V・25℃ のデータシートの値。アドレスからもイネーブルからも 18ns)。出力が High になるときと Low になるときの差は表しません。",
+      "扱わないもの: 入力容量、電源電流。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

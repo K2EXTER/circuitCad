@@ -1,0 +1,129 @@
+{
+  "name": "74HC151",
+  "category": "ロジックIC",
+  "description": "8 to 1 データセレクタ (マルチプレクサ、DIP-16)。A・B・C (C が最上位) で選んだ D0〜D7 の 1 本が、Y に出ます (W は Y の反対)。G (ストローブ) が Low のときだけ動き、High だと Y は Low、W は High。デジタルセルで作った簡易モデル (選択→出力 30ns、データ→出力 23ns)。ピン表と遅延は TI SN74HC151 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc151.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "D3",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "D2",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "D1",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "D0",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "Y",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "W",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "C",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "D7",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "D6",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "D5",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "D4",
+      "side": "left"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC151",
+    "text": "* 74HC151 behavioural model: 8-to-1 data selector. A, B, C (C most significant) pick one of D0..D7; G (strobe, active low) must be low, else Y is low and W high. Delays (the data sheet SCLS110, 4.5 V, 25 C typical): A, B or C to Y 30 ns, data to Y 23 ns, strobe to Y 23 ns here (15 ns in the data sheet).\n.subckt 74HC151 d3 d2 d1 d0 y w g gnd c b a d7 d6 d5 d4 vcc\nYna inv na 0 gnd vcc 60 0.5 0 0 0 a\nYnb inv nb 0 gnd vcc 60 0.5 0 0 0 b\nYnc inv nc 0 gnd vcc 60 0.5 0 0 0 c\nYng inv ng 0 gnd vcc 60 0.5 0 0 0 g\nYm0 and m0 0 gnd vcc 60 0.5 0 0 0 td=7n na nb nc\nYm1 and m1 0 gnd vcc 60 0.5 0 0 0 td=7n a nb nc\nYm2 and m2 0 gnd vcc 60 0.5 0 0 0 td=7n na b nc\nYm3 and m3 0 gnd vcc 60 0.5 0 0 0 td=7n a b nc\nYm4 and m4 0 gnd vcc 60 0.5 0 0 0 td=7n na nb c\nYm5 and m5 0 gnd vcc 60 0.5 0 0 0 td=7n a nb c\nYm6 and m6 0 gnd vcc 60 0.5 0 0 0 td=7n na b c\nYm7 and m7 0 gnd vcc 60 0.5 0 0 0 td=7n a b c\nYt0 and t0 0 gnd vcc 60 0.5 0 0 0 td=15n m0 d0 ng\nYt1 and t1 0 gnd vcc 60 0.5 0 0 0 td=15n m1 d1 ng\nYt2 and t2 0 gnd vcc 60 0.5 0 0 0 td=15n m2 d2 ng\nYt3 and t3 0 gnd vcc 60 0.5 0 0 0 td=15n m3 d3 ng\nYt4 and t4 0 gnd vcc 60 0.5 0 0 0 td=15n m4 d4 ng\nYt5 and t5 0 gnd vcc 60 0.5 0 0 0 td=15n m5 d5 ng\nYt6 and t6 0 gnd vcc 60 0.5 0 0 0 td=15n m6 d6 ng\nYt7 and t7 0 gnd vcc 60 0.5 0 0 0 td=15n m7 d7 ng\nYy or y w gnd vcc 60 0.5 0 0 0 td=8n t0 t1 t2 t3 t4 t5 t6 t7\n.ends 74HC151",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は代表値です (4.5V・25℃ のデータシートの値: A・B・C→Y 30ns、データ→Y 23ns、G→Y 15ns)。G→Y はここでは 23ns になります (データシートより遅い)。",
+      "扱わないもの: 入力容量、電源電流。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

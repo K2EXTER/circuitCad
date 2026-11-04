@@ -118,6 +118,8 @@ mod tests_cells;
 #[cfg(test)]
 mod tests_logic;
 #[cfg(test)]
+mod tests_logic_ics;
+#[cfg(test)]
 mod tests_mos;
 #[cfg(test)]
 mod tests_parts;

@@ -1,0 +1,130 @@
+{
+  "name": "74HC161",
+  "category": "ロジックIC",
+  "description": "4 ビット 同期バイナリカウンタ (DIP-16)。CLK の立ち上がりで、ENP と ENT が両方 High のとき数え、LOAD が Low なら A〜D を取り込みます (LOAD は ENP・ENT に優先)。CLR は Low で非同期にクリア (負論理)。RCO は ENT が High で QA〜QD が全部 High のとき High (桁上げ)。デジタルセルで作った簡易モデル (クロック→Q 25ns)。ピン表と遅延は TI SN74HC161 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc161.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "glyph": "counter",
+  "pins": [
+    {
+      "number": "1",
+      "name": "CLR",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "CLK",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "C",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "D",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "ENP",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "LOAD",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "ENT",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "QD",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "QC",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "QB",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "QA",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "RCO",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC161",
+    "text": "* 74HC161 behavioural model: four D flip-flop cells (Y lines) with the count / load logic in front of them (the synchronous counter of the data sheet SCLS297); clear is asynchronous and active low, load is synchronous and active low and wins over the enables. Delays: clock to Q 25 ns, to RCO about 37 ns.\n.subckt 74HC161 clr clk a b c d enp gnd load ent qd qc qb qa rco vcc\nYnl inv nload 0 gnd vcc 60 0.5 0 0 0 load\nYen and en 0 gnd vcc 60 0.5 0 0 0 enp ent\nYt1 and t1 0 gnd vcc 60 0.5 0 0 0 en qa\nYt2 and t2 0 gnd vcc 60 0.5 0 0 0 en qa qb\nYt3 and t3 0 gnd vcc 60 0.5 0 0 0 en qa qb qc\nYxa xor xa 0 gnd vcc 60 0.5 0 0 0 qa en\nYla and la 0 gnd vcc 60 0.5 0 0 0 nload a\nYca and ca 0 gnd vcc 60 0.5 0 0 0 load xa\nYda or da 0 gnd vcc 60 0.5 0 0 0 la ca\nYFa dff qa 0 gnd vcc 60 0.5 0 0 1 td=25n da clk 0 clr\nYxb xor xb 0 gnd vcc 60 0.5 0 0 0 qb t1\nYlb and lb 0 gnd vcc 60 0.5 0 0 0 nload b\nYcb and cb 0 gnd vcc 60 0.5 0 0 0 load xb\nYdb or db 0 gnd vcc 60 0.5 0 0 0 lb cb\nYFb dff qb 0 gnd vcc 60 0.5 0 0 1 td=25n db clk 0 clr\nYxc xor xc 0 gnd vcc 60 0.5 0 0 0 qc t2\nYlc and lc 0 gnd vcc 60 0.5 0 0 0 nload c\nYcc and cc 0 gnd vcc 60 0.5 0 0 0 load xc\nYdc or dc 0 gnd vcc 60 0.5 0 0 0 lc cc\nYFc dff qc 0 gnd vcc 60 0.5 0 0 1 td=25n dc clk 0 clr\nYxd xor xd 0 gnd vcc 60 0.5 0 0 0 qd t3\nYld and ld 0 gnd vcc 60 0.5 0 0 0 nload d\nYcd and cd 0 gnd vcc 60 0.5 0 0 0 load xd\nYdd or dd 0 gnd vcc 60 0.5 0 0 0 ld cd\nYFd dff qd 0 gnd vcc 60 0.5 0 0 1 td=25n dd clk 0 clr\nYrco and rco 0 gnd vcc 60 0.5 0 0 0 td=12n ent qa qb qc qd\n.ends 74HC161",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、クロック→Q を 25ns、クロック→RCO を約 37ns (ENT→RCO は 12ns) の代表値にしてあります (4.5V・25℃ のデータシートの値: クロック→Q 25ns、クロック→RCO 24ns、ENT→RCO 17ns)。",
+      "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検 (データシートでは、データ 30ns、LOAD 27ns、ENP・ENT 34ns、CLR を戻すのが 25ns、ホールドは 0)。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱い、CLR と LOAD は働いた状態になります)。"
+    ]
+  }
+}
