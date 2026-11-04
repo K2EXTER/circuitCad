@@ -42,6 +42,7 @@ impl SchEditor {
 
         self.draw_grid(&painter, rect);
         self.draw_wires(&painter, rect);
+        self.draw_buses(&painter, rect);
         self.draw_junctions(&painter, rect);
         self.draw_components(&painter, rect);
         self.draw_requirement_frames(&painter, rect);

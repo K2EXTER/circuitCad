@@ -139,6 +139,7 @@ impl SchEditor {
         ui.horizontal(|ui| {
             { let tip = "部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます"; if crate::icons::icon_button(ui, crate::icons::Icon::Select, "選択", self.tool == Tool::Select, true, tip).clicked() { self.tool = Tool::Select; } };
             { let tip = "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"; if crate::icons::icon_button(ui, crate::icons::Icon::Wire, "配線", self.tool == Tool::Wire, true, tip).clicked() { self.tool = Tool::Wire; } };
+            { let tip = "太い青の線でバス(信号の束)を描きます。バスの線は何もつなぎません(見た目と点検のためのものです)。名前は、ラベルツールで D[0..7] と書いて、バスの線の上に置きます。つなぐ各ピンには、ラベルツールで D[0..7] と書いたまま、ピンを順にクリックすると、D0 D1 D2 … と順に付きます"; if crate::icons::icon_button(ui, crate::icons::Icon::Bus, "バス", self.tool == Tool::Bus, true, tip).clicked() { self.tool = Tool::Bus; } };
             { let tip = "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"; if crate::icons::icon_button(ui, crate::icons::Icon::Label, "ラベル", self.tool == Tool::Label, true, tip).clicked() { self.tool = Tool::Label; } };
         });
         ui.horizontal(|ui| {
@@ -155,7 +156,8 @@ impl SchEditor {
             self.open_quick_add();
         }
         if self.tool == Tool::Label {
-            ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります");
+            ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます");
+            ui.checkbox(&mut self.label_step, "番号を自動で進める").on_hover_text("オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)");
         }
         ui.separator();
         let mut chosen = None;

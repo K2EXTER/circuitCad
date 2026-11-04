@@ -712,6 +712,19 @@ fn live_recalculation_keeps_the_curve_before_the_move_and_paces_heavy_runs() {
     assert!(!e.live_waiting && e.sch == e.live_snap);
 }
 
+/// The bus sample: a bus line with its label, and no finding at all; a bus that is one number too wide is found.
+#[test]
+fn the_bus_sample_is_clean_and_a_too_wide_bus_is_found() {
+    let mut e = editor_with("bus_leds.schjson");
+    assert_eq!(e.sch.buses.len(), 1);
+    let all = |s: &Schematic| sch_core::erc(s).into_iter().map(|p| p.message).collect::<Vec<_>>();
+    assert_eq!(all(&e.sch), Vec::<String>::new());
+    e.analyze_dc();
+    assert!(e.dc.as_ref().unwrap().outcome.is_ok());
+    e.sch.labels.iter_mut().find(|l| l.text == "D[0..7]").unwrap().text = "D[0..8]".into();
+    assert!(all(&e.sch).iter().any(|m| m.contains("D8") && m.contains("どこにも")), "{:?}", all(&e.sch));
+}
+
 /// The power-supply path's three new samples: the numbers the lessons quote.
 #[test]
 fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {

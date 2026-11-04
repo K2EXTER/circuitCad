@@ -32,6 +32,17 @@ impl SchEditor {
         }
     }
 
+    /// Bus lines: thick and blue, apart from the wires (they connect nothing).
+    pub(super) fn draw_buses(&self, painter: &egui::Painter, rect: Rect) {
+        for (i, w) in self.sch.buses.iter().enumerate() {
+            let sel = self.is_sel(Sel::Bus(i));
+            painter.line_segment(
+                [self.to_screen(rect, (w.a.0 as f32, w.a.1 as f32)), self.to_screen(rect, (w.b.0 as f32, w.b.1 as f32))],
+                Stroke::new(if sel { 6.0 } else { 5.0 }, if sel { Color32::from_rgb(0, 80, 220) } else { Color32::from_rgb(40, 70, 170) }),
+            );
+        }
+    }
+
     pub(super) fn draw_junctions(&self, painter: &egui::Painter, rect: Rect) {
         // junction dots
         let pins: Vec<Pt> = self.sch.components.iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).collect();
@@ -132,7 +143,7 @@ impl SchEditor {
                 Align2::LEFT_BOTTOM,
                 &l.text,
                 FontId::proportional(13.0),
-                if sel { Color32::from_rgb(0, 80, 220) } else { Color32::from_rgb(0, 100, 100) },
+                if sel { Color32::from_rgb(0, 80, 220) } else if sch_core::is_bus_label(&l.text) { Color32::from_rgb(40, 70, 170) } else { Color32::from_rgb(0, 100, 100) },
             );
         }
     }
@@ -326,6 +337,16 @@ impl SchEditor {
                     let a_s = self.to_screen(rect, (a.0 as f32, a.1 as f32));
                     let m = self.to_screen(rect, (snapped.0 as f32, a.1 as f32));
                     let st = Stroke::new(1.5, Color32::from_rgba_unmultiplied(0, 110, 30, 150));
+                    painter.line_segment([a_s, m], st);
+                    painter.line_segment([m, sp], st);
+                }
+            }
+            Tool::Bus => {
+                painter.circle_stroke(sp, 5.0, Stroke::new(2.5, Color32::from_rgb(40, 70, 170)));
+                if let Some(a) = self.pending {
+                    let a_s = self.to_screen(rect, (a.0 as f32, a.1 as f32));
+                    let m = self.to_screen(rect, (snapped.0 as f32, a.1 as f32));
+                    let st = Stroke::new(3.0, Color32::from_rgba_unmultiplied(40, 70, 170, 130));
                     painter.line_segment([a_s, m], st);
                     painter.line_segment([m, sp], st);
                 }

@@ -259,3 +259,52 @@ fn pasting_one_thing_selects_it_as_the_single_selection() {
     assert_eq!(e.selected, Some(Sel::Comp(1)));
     assert!(e.multi.is_empty());
 }
+
+#[test]
+fn a_bus_label_numbers_the_pins_one_after_another_and_names_the_bus_on_the_line() {
+    let mut e = SchEditor::default();
+    e.add_bus((0, 0), (10, 0));
+    assert_eq!(e.sch.buses.len(), 1);
+    e.add_bus((10, 0), (14, 6));
+    assert_eq!(e.sch.buses.len(), 3, "a slanted run bends like a wire");
+    e.label_text = "D[0..2]".into();
+    // off the line: the members in turn, then nothing more
+    assert_eq!(e.next_label((20, 20)).as_deref(), Some("D0"));
+    assert_eq!(e.next_label((20, 22)).as_deref(), Some("D1"));
+    assert_eq!(e.next_label((20, 24)).as_deref(), Some("D2"));
+    assert_eq!(e.next_label((20, 26)), None);
+    assert!(e.status.contains("全部付けました"));
+    // on the line: the bus name itself
+    assert_eq!(e.next_label((4, 0)).as_deref(), Some("D[0..2]"));
+    // a new text starts again from the first member
+    e.label_text = "A[1..2]".into();
+    assert_eq!(e.next_label((20, 20)).as_deref(), Some("A1"));
+    // an ordinary name counts up only when asked to
+    e.label_text = "SIG3".into();
+    assert_eq!(e.next_label((0, 20)).as_deref(), Some("SIG3"));
+    assert_eq!(e.label_text, "SIG3");
+    e.label_step = true;
+    assert_eq!(e.next_label((0, 20)).as_deref(), Some("SIG3"));
+    assert_eq!(e.label_text, "SIG4");
+}
+
+#[test]
+fn bus_lines_can_be_picked_moved_and_deleted_with_undo() {
+    let mut e = editor();
+    e.reset_history();
+    e.add_bus((0, 8), (12, 8));
+    e.commit_history();
+    assert_eq!(e.pick((5.0, 8.1)), Some(Sel::Bus(0)));
+    e.selected = Some(Sel::Bus(0));
+    e.delete_selected();
+    assert!(e.sch.buses.is_empty());
+    e.commit_history();
+    e.undo();
+    assert_eq!(e.sch.buses.len(), 1);
+    // a box selects it, and a group drag takes it along
+    let hits = e.objects_in_box((-1.0, 7.0), (13.0, 9.0), false);
+    assert!(hits.contains(&Sel::Bus(0)));
+    e.multi = hits;
+    e.start_group_drag((0, 8));
+    assert_eq!(e.gdrag.as_ref().unwrap().buses.len(), 1);
+}

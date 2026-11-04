@@ -4,11 +4,13 @@
 mod netlist;
 mod ngspice;
 mod backannotate;
+mod bus;
 mod noconnect;
 mod requirements;
 mod sheets;
 mod spice;
 pub use backannotate::BackAnnotation;
+pub use bus::{bus_member, bus_members, is_bus_label, parse_bus};
 pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
 pub use design_spec::{matches_name, DesignSpec, KeepApart, NetRule, PlaceGroup, ROLES};
 
@@ -231,6 +233,9 @@ pub struct Schematic {
     pub components: Vec<Component>,
     pub wires: Vec<Wire>,
     pub labels: Vec<Label>,
+    /// Bus lines: drawn thick, they connect nothing by themselves (see `bus.rs`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buses: Vec<Wire>,
     pub layout_version: u32,
     /// Work-in-progress areas (min corner, max corner): ERC findings located inside are left out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -263,7 +268,7 @@ fn is_zero(n: &usize) -> bool {
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], active_sheet: 0 }
+        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], active_sheet: 0 }
     }
 }
 
@@ -272,6 +277,8 @@ struct RawSchematic {
     components: Vec<Component>,
     wires: Vec<Wire>,
     labels: Vec<Label>,
+    #[serde(default)]
+    buses: Vec<Wire>,
     #[serde(default)]
     layout_version: u32,
     #[serde(default)]
@@ -294,7 +301,7 @@ struct RawSchematic {
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, active_sheet: r.active_sheet };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, active_sheet: r.active_sheet };
         s.migrate();
         s
     }

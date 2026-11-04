@@ -36,7 +36,7 @@ pub struct Problem {
 }
 
 impl Problem {
-    fn new(severity: Severity, message: String, at: Option<Pt>, hint: &str) -> Self {
+    pub(crate) fn new(severity: Severity, message: String, at: Option<Pt>, hint: &str) -> Self {
         Self { message, sheet: 0, at, hint: hint.to_string(), severity, pin: None }
     }
 }
@@ -155,7 +155,7 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
         }
     }
     for (i, l) in s.labels.iter().enumerate() {
-        if Some(i) == skip {
+        if Some(i) == skip || crate::bus::is_bus_label(&l.text) {
             continue;
         }
         let g = cn.dsu.find(cn.ids[&l.pos]);
@@ -252,6 +252,7 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
     }
 
     let nets = extract(s);
+    out.extend(crate::bus::bus_problems(s, &nets));
     let mut connected: HashMap<(String, String), usize> = HashMap::new();
     for n in &nets {
         for p in &n.pins {

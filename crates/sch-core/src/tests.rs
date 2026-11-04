@@ -608,3 +608,83 @@ fn a_wire_joins_the_points_on_it_in_every_direction() {
     assert!(!dangling.contains(&(26, 6)), "an end on the middle of the column does not: {dangling:?}");
     assert!(dangling.contains(&(22, 6)), "the other end of the T wire dangles: {dangling:?}");
 }
+
+#[test]
+fn bus_labels_are_read_in_every_notation() {
+    assert_eq!(bus_members("D[0..3]").unwrap(), ["D0", "D1", "D2", "D3"]);
+    assert_eq!(bus_members("D[3:0]").unwrap(), ["D3", "D2", "D1", "D0"]);
+    assert_eq!(bus_members("ADDR_[1-2]").unwrap(), ["ADDR_1", "ADDR_2"]);
+    assert_eq!(bus_member("PB[0..7]", 5).as_deref(), Some("PB5"));
+    assert_eq!(bus_member("PB[0..7]", 8), None);
+    // a single bracketed number or any other text is an ordinary net name
+    for t in ["D[3]", "D", "[0..3]", "D[a..b]", "D[0..999]", "D[0..3"] {
+        assert!(!is_bus_label(t), "{t}");
+    }
+}
+
+/// Two headers joined by labels D0..D3, a bus line with the bus label on it.
+fn bus_board(range: &str, with_d3: bool) -> Schematic {
+    let mut s = Schematic::default();
+    let j1 = s.add(Kind::Header(4), (0, 0), 0);
+    let j2 = s.add(Kind::Header(4), (30, 0), 0);
+    for k in 0..4 {
+        for (j, name) in [(j1, "D"), (j2, "D")] {
+            if k == 3 && !with_d3 && j == j2 {
+                continue;
+            }
+            let at = s.components[j].pins()[k].1;
+            s.labels.push(Label { pos: at, text: format!("{name}{k}") });
+        }
+    }
+    let g = s.add(Kind::Ground, (15, 12), 0);
+    let _ = g;
+    s.buses.push(Wire { a: (10, 20), b: (20, 20) });
+    s.labels.push(Label { pos: (12, 20), text: range.into() });
+    s
+}
+
+fn bus_messages(s: &Schematic) -> Vec<String> {
+    erc(s).into_iter().map(|p| p.message).filter(|m| m.contains("バス") || m.contains("範囲")).collect()
+}
+
+#[test]
+fn a_bus_label_names_no_net_and_a_complete_bus_is_quiet() {
+    let s = bus_board("D[0..3]", true);
+    assert!(extract(&s).iter().all(|n| !n.name.contains('[')), "{:?}", extract(&s).iter().map(|n| &n.name).collect::<Vec<_>>());
+    assert!(extract(&s).iter().any(|n| n.name == "D2" && n.pins.len() == 2));
+    assert_eq!(bus_messages(&s), Vec::<String>::new());
+}
+
+#[test]
+fn the_bus_checks_find_a_missing_member_a_half_wired_one_a_stray_label_and_a_range_that_is_too_small() {
+    // the bus says D0..D4 but D4 is nowhere
+    let m = bus_messages(&bus_board("D[0..4]", true));
+    assert!(m.iter().any(|x| x.contains("D4") && x.contains("どこにも")), "{m:?}");
+    // D3 has a pin on one header only
+    let m = bus_messages(&bus_board("D[0..3]", false));
+    assert!(m.iter().any(|x| x.contains("D3") && x.contains("1つ")), "{m:?}");
+    // D3 exists but the bus stops at D2
+    let m = bus_messages(&bus_board("D[0..2]", true));
+    assert!(m.iter().any(|x| x.contains("D3") && x.contains("範囲の外")), "{m:?}");
+    // the bus label is off the line
+    let mut s = bus_board("D[0..3]", true);
+    s.labels.last_mut().unwrap().pos = (12, 30);
+    assert!(bus_messages(&s).iter().any(|x| x.contains("バスの線の上にありません")));
+    // two widths of one bus
+    let mut s = bus_board("D[0..3]", true);
+    s.labels.push(Label { pos: (14, 20), text: "D[0..1]".into() });
+    assert!(bus_messages(&s).iter().any(|x| x.contains("幅が食い違")));
+}
+
+#[test]
+fn buses_follow_their_sheet_and_survive_a_save() {
+    let mut s = bus_board("D[0..3]", true);
+    s.add_sheet();
+    assert!(s.buses.is_empty(), "the new sheet has none");
+    s.switch_sheet(0);
+    assert_eq!(s.buses.len(), 1);
+    assert_eq!(s.flat().buses.len(), 1);
+    let back: Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+    assert_eq!(back.flat().buses.len(), 1);
+    assert_eq!(back, s);
+}

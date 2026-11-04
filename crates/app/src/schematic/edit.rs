@@ -82,7 +82,10 @@ impl SchEditor {
             let t = if l2 == 0.0 { 0.0 } else { (((g.0 - a.0) * dx + (g.1 - a.1) * dy) / l2).clamp(0.0, 1.0) };
             ((g.0 - a.0 - t * dx).powi(2) + (g.1 - a.1 - t * dy).powi(2)).sqrt()
         };
-        self.sch.wires.iter().position(|w| d(w) < 0.3).map(Sel::Wire)
+        if let Some(i) = self.sch.wires.iter().position(|w| d(w) < 0.3) {
+            return Some(Sel::Wire(i));
+        }
+        self.sch.buses.iter().position(|w| d(w) < 0.4).map(Sel::Bus)
     }
 
     pub(super) fn is_sel(&self, s: Sel) -> bool {
@@ -127,6 +130,13 @@ impl SchEditor {
             let hit = if crossing { segment_hits_rect(pa, pb, lo, hi) } else { rect_contains(lo, hi, pa) && rect_contains(lo, hi, pb) };
             if hit {
                 out.push(Sel::Wire(i));
+            }
+        }
+        for (i, w) in self.sch.buses.iter().enumerate() {
+            let (pa, pb) = ((w.a.0 as f32, w.a.1 as f32), (w.b.0 as f32, w.b.1 as f32));
+            let hit = if crossing { segment_hits_rect(pa, pb, lo, hi) } else { rect_contains(lo, hi, pa) && rect_contains(lo, hi, pb) };
+            if hit {
+                out.push(Sel::Bus(i));
             }
         }
         for (i, l) in self.sch.labels.iter().enumerate() {
@@ -181,12 +191,13 @@ impl SchEditor {
     }
 
     pub(super) fn start_group_drag(&mut self, anchor: Pt) {
-        let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![] };
+        let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![], buses: vec![] };
         for s in &self.multi {
             match *s {
                 Sel::Comp(i) => g.comps.push((i, self.sch.components[i].pos)),
                 Sel::Wire(i) => g.wires.push((i, self.sch.wires[i].a, self.sch.wires[i].b)),
                 Sel::Label(i) => g.labels.push((i, self.sch.labels[i].pos)),
+                Sel::Bus(i) => g.buses.push((i, self.sch.buses[i].a, self.sch.buses[i].b)),
             }
         }
         // the labels set on the pins of the moved parts go along, unless they are selected themselves
@@ -207,21 +218,23 @@ impl SchEditor {
     pub(super) fn delete_selected(&mut self) {
         if !self.multi.is_empty() {
             let mut comps: Vec<usize> = vec![];
-            let (mut wires, mut labels) = (vec![], vec![]);
+            let (mut wires, mut labels, mut buses) = (vec![], vec![], vec![]);
             for s in self.multi.drain(..) {
                 match s {
                     Sel::Comp(i) => comps.push(i),
                     Sel::Wire(i) => wires.push(i),
                     Sel::Label(i) => labels.push(i),
+                    Sel::Bus(i) => buses.push(i),
                 }
             }
-            for (v, n) in [(&mut comps, 0), (&mut wires, 1), (&mut labels, 2)] {
+            for (v, n) in [(&mut comps, 0), (&mut wires, 1), (&mut labels, 2), (&mut buses, 3)] {
                 v.sort_unstable_by(|a, b| b.cmp(a));
                 for &i in v.iter() {
                     match n {
                         0 if i < self.sch.components.len() => drop(self.sch.components.remove(i)),
                         1 if i < self.sch.wires.len() => drop(self.sch.wires.remove(i)),
                         2 if i < self.sch.labels.len() => drop(self.sch.labels.remove(i)),
+                        3 if i < self.sch.buses.len() => drop(self.sch.buses.remove(i)),
                         _ => {}
                     }
                 }
@@ -233,6 +246,7 @@ impl SchEditor {
             Some(Sel::Comp(i)) => drop(self.sch.components.remove(i)),
             Some(Sel::Wire(i)) => drop(self.sch.wires.remove(i)),
             Some(Sel::Label(i)) => drop(self.sch.labels.remove(i)),
+            Some(Sel::Bus(i)) => drop(self.sch.buses.remove(i)),
             None => {}
         }
     }
@@ -249,4 +263,59 @@ impl SchEditor {
             self.sch.wires.push(Wire { a: m, b });
         }
     }
+
+    /// A bus line from `a` to `b` (bent like a wire when the two points are not level or plumb).
+    pub(super) fn add_bus(&mut self, a: Pt, b: Pt) {
+        if a == b {
+            return;
+        }
+        if a.0 == b.0 || a.1 == b.1 {
+            self.sch.buses.push(Wire { a, b });
+        } else {
+            let m = (b.0, a.1);
+            self.sch.buses.push(Wire { a, b: m });
+            self.sch.buses.push(Wire { a: m, b });
+        }
+    }
+
+    /// The text of the label the Label tool puts at `at` now, or `None` when there is nothing (more) to put. A bus label
+    /// (`D[0..7]`) goes onto a bus line as it is; anywhere else it gives the members one after another (D0, D1, ...). With
+    /// `label_step` the number at the end of the text is counted up after each label.
+    pub(super) fn next_label(&mut self, at: Pt) -> Option<String> {
+        let text = self.label_text.trim().to_string();
+        if text.is_empty() {
+            return None;
+        }
+        if sch_core::is_bus_label(&text) {
+            if self.sch.buses.iter().any(|w| on_seg(at, w.a, w.b)) {
+                return Some(text);
+            }
+            if self.label_k_text != text {
+                self.label_k_text = text.clone();
+                self.label_k = 0;
+            }
+            let m = sch_core::bus_member(&text, self.label_k);
+            match &m {
+                Some(_) => self.label_k += 1,
+                None => self.status = format!("{text} のメンバーは全部付けました。バスの線の上をクリックすると、バスの名前を付けられます"),
+            }
+            return m;
+        }
+        if self.label_step {
+            let digits = text.chars().rev().take_while(|c| c.is_ascii_digit()).count();
+            if digits > 0 && digits < text.len() {
+                let (base, n) = text.split_at(text.len() - digits);
+                if let Ok(n) = n.parse::<u64>() {
+                    self.label_text = format!("{base}{}", n + 1);
+                }
+            }
+        }
+        Some(text)
+    }
+}
+
+/// Whether `p` lies on the segment `a`-`b`.
+fn on_seg(p: Pt, a: Pt, b: Pt) -> bool {
+    let cross = (b.0 - a.0) as i64 * (p.1 - a.1) as i64 - (b.1 - a.1) as i64 * (p.0 - a.0) as i64;
+    cross == 0 && p.0 >= a.0.min(b.0) && p.0 <= a.0.max(b.0) && p.1 >= a.1.min(b.1) && p.1 <= a.1.max(b.1)
 }

@@ -20,6 +20,8 @@ pub struct Sheet {
     #[serde(default)]
     pub labels: Vec<Label>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buses: Vec<Wire>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub erc_skip: Vec<(Pt, Pt)>,
 }
 
@@ -44,19 +46,20 @@ impl Schematic {
         if self.sheets.is_empty() {
             return Cow::Borrowed(self);
         }
-        let mut out = Schematic { components: vec![], wires: vec![], labels: vec![], erc_skip: vec![], sheets: vec![], active_sheet: 0, ..self.clone() };
+        let mut out = Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], erc_skip: vec![], sheets: vec![], active_sheet: 0, ..self.clone() };
         for k in 0..self.sheets.len() {
             let dx = k as i32 * SHEET_STRIDE;
             let mv = |p: Pt| (p.0 + dx, p.1);
-            let (comps, wires, labels, skip) = if k == self.active_sheet {
-                (&self.components, &self.wires, &self.labels, &self.erc_skip)
+            let (comps, wires, labels, skip, buses) = if k == self.active_sheet {
+                (&self.components, &self.wires, &self.labels, &self.erc_skip, &self.buses)
             } else {
                 let s = &self.sheets[k];
-                (&s.components, &s.wires, &s.labels, &s.erc_skip)
+                (&s.components, &s.wires, &s.labels, &s.erc_skip, &s.buses)
             };
             out.components.extend(comps.iter().map(|c| Component { pos: mv(c.pos), ..c.clone() }));
             out.wires.extend(wires.iter().map(|w| Wire { a: mv(w.a), b: mv(w.b) }));
             out.labels.extend(labels.iter().map(|l| Label { pos: mv(l.pos), ..l.clone() }));
+            out.buses.extend(buses.iter().map(|w| Wire { a: mv(w.a), b: mv(w.b) }));
             out.erc_skip.extend(skip.iter().map(|&(a, b)| (mv(a), mv(b))));
         }
         Cow::Owned(out)
@@ -69,6 +72,7 @@ impl Schematic {
         s.components = std::mem::take(&mut self.components);
         s.wires = std::mem::take(&mut self.wires);
         s.labels = std::mem::take(&mut self.labels);
+        s.buses = std::mem::take(&mut self.buses);
         s.erc_skip = std::mem::take(&mut self.erc_skip);
     }
 
@@ -78,6 +82,7 @@ impl Schematic {
         self.components = std::mem::take(&mut s.components);
         self.wires = std::mem::take(&mut s.wires);
         self.labels = std::mem::take(&mut s.labels);
+        self.buses = std::mem::take(&mut s.buses);
         self.erc_skip = std::mem::take(&mut s.erc_skip);
         self.active_sheet = k;
     }
@@ -122,6 +127,7 @@ impl Schematic {
             self.components.clear();
             self.wires.clear();
             self.labels.clear();
+            self.buses.clear();
             self.erc_skip.clear();
             self.sheets.remove(k);
             self.unpark(k.min(self.sheets.len() - 1));

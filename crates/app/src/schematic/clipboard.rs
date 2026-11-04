@@ -15,6 +15,7 @@ impl SchEditor {
                 Sel::Comp(i) => comps.push(i),
                 Sel::Wire(i) => wires.push(i),
                 Sel::Label(i) => labels.push(i),
+                Sel::Bus(_) => {} // bus lines are not copied
             }
         }
         (comps, wires, labels)

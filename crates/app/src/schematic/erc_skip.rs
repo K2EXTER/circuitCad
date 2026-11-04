@@ -11,6 +11,7 @@ impl SchEditor {
                 Sel::Comp(i) => pts.extend(self.sch.components.get(i).map(|c| c.pos).into_iter().chain(self.sch.components.get(i).into_iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)))),
                 Sel::Wire(i) => pts.extend(self.sch.wires.get(i).into_iter().flat_map(|w| [w.a, w.b])),
                 Sel::Label(i) => pts.extend(self.sch.labels.get(i).map(|l| l.pos)),
+                Sel::Bus(i) => pts.extend(self.sch.buses.get(i).into_iter().flat_map(|w| [w.a, w.b])),
             }
         }
         let lo = (pts.iter().map(|p| p.0).min()? - 2, pts.iter().map(|p| p.1).min()? - 2);

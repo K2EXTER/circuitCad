@@ -29,6 +29,7 @@ impl SchEditor {
         match self.tool {
             Tool::Place if !self.has_wave() => return "クリックで部品を置きます。R キーで回転、右クリックで選択ツールに戻ります。置いた後は「選択」で値を変えられます".into(),
             Tool::Wire => return "部品のピン (赤い点) から点へクリックしてつなぎます。T字に分岐する場合は、線の途中に別の線の端を置きます".into(),
+            Tool::Bus => return "バス(信号の束)の線を引きます。クリックで折れ線、ダブルクリックで終わり。バスは何もつなぎません: 名前はラベルツールで D[0..7] と書いて、線の上に置きます".into(),
             Tool::Label => return "ラベル名を決めて回路図の点をクリック。同じ名前の場所は線なしでつながります (電源 VCC や GND に便利)".into(),
             Tool::Select | Tool::Place => {}
         }

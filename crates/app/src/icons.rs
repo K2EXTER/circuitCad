@@ -18,6 +18,7 @@ pub fn set_icon_only(on: bool) {
 pub enum Icon {
     Select,
     Wire,
+    Bus,
     Label,
     Via,
     Zone,
@@ -60,6 +61,13 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             p.line(vec![q(0.1, 0.85), q(0.1, 0.4), q(0.55, 0.4), q(0.55, 0.15), q(0.9, 0.15)], s);
             p.circle_filled(q(0.1, 0.85), u * 0.09, c);
             p.circle_filled(q(0.9, 0.15), u * 0.09, c);
+        }
+        Icon::Bus => {
+            let thick = Stroke::new(3.4, c);
+            p.line(vec![q(0.08, 0.7), q(0.5, 0.7), q(0.5, 0.3), q(0.92, 0.3)], thick);
+            for x in [0.2, 0.35] {
+                p.line_segment([q(x, 0.7), q(x + 0.1, 0.9)], Stroke::new(1.2, c));
+            }
         }
         Icon::Label => {
             let pts = vec![q(0.1, 0.25), q(0.65, 0.25), q(0.92, 0.5), q(0.65, 0.75), q(0.1, 0.75)];

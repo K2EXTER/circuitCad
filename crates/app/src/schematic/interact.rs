@@ -88,6 +88,10 @@ impl SchEditor {
                     for &(i, p) in &gd.labels {
                         self.sch.labels[i].pos = mv(p);
                     }
+                    for &(i, a, b) in &gd.buses {
+                        self.sch.buses[i].a = mv(a);
+                        self.sch.buses[i].b = mv(b);
+                    }
                     let selected_wires: Vec<usize> = gd.wires.iter().map(|w| w.0).collect();
                     self.apply_stretch(&selected_wires);
                 }
@@ -160,14 +164,21 @@ impl SchEditor {
                         self.pending = Some(snapped);
                     }
                 },
+                Tool::Bus => match self.pending.take() {
+                    None => self.pending = Some(snapped),
+                    Some(a) => {
+                        self.add_bus(a, snapped);
+                        self.pending = Some(snapped);
+                    }
+                },
                 Tool::Label => {
-                    if !self.label_text.is_empty() {
-                        self.sch.labels.push(Label { pos: snapped, text: self.label_text.clone() });
+                    if let Some(text) = self.next_label(snapped) {
+                        self.sch.labels.push(Label { pos: snapped, text });
                     }
                 }
             }
         }
-        if resp.double_clicked() && self.tool == Tool::Wire {
+        if resp.double_clicked() && matches!(self.tool, Tool::Wire | Tool::Bus) {
             self.pending = None;
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {

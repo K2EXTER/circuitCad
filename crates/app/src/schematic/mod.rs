@@ -19,6 +19,8 @@ enum Tool {
     Place,
     Wire,
     Label,
+    /// Bus lines (see `sch-core/bus.rs`).
+    Bus,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -26,6 +28,7 @@ enum Sel {
     Comp(usize),
     Wire(usize),
     Label(usize),
+    Bus(usize),
 }
 
 /// Rubber-band selection in progress (grid coordinates).
@@ -41,6 +44,7 @@ struct GroupDrag {
     comps: Vec<(usize, Pt)>,
     wires: Vec<(usize, Pt, Pt)>,
     labels: Vec<(usize, Pt)>,
+    buses: Vec<(usize, Pt, Pt)>,
 }
 
 fn rect_contains(lo: (f32, f32), hi: (f32, f32), p: (f32, f32)) -> bool {
@@ -98,6 +102,11 @@ pub struct SchEditor {
     place: Kind,
     rot: u8,
     label_text: String,
+    /// Count the number at the end of the label text up after each label placed (D0, D1, ...).
+    label_step: bool,
+    /// With a bus label as the text (D[0..7]): the member the next label stands for, and the text it was counted for.
+    label_k: usize,
+    label_k_text: String,
     pending: Option<Pt>,
     selected: Option<Sel>,
     /// Extra objects selected by a rubber band (when two or more are selected `selected` is empty).
@@ -647,6 +656,9 @@ impl Default for SchEditor {
             place: Kind::Resistor,
             rot: 0,
             label_text: "SIG".into(),
+            label_step: false,
+            label_k: 0,
+            label_k_text: String::new(),
             pending: None,
             selected: None,
             multi: vec![],
