@@ -75,8 +75,9 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             Element::Mutual { .. } => {}
             Element::Cell { name, kind, ins, out, outb, sup } => {
                 ce.push(Ce::Cell { cell: cells.len() });
-                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low, tplh: sup.tplh, tphl: sup.tphl, tsu: sup.tsu, th: sup.th });
-                n_cell_in += ins.len();
+                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low, tplh: sup.tplh, tphl: sup.tphl, tsu: sup.tsu, th: sup.th, oe: sup.oe, oe_low: sup.oe_low, od: sup.od });
+                // the output enable is one more input slot, after the others
+                n_cell_in += ins.len() + usize::from(sup.oe.is_some());
             }
             Element::Seq { name, kind, ins, q, qb, levels } => {
                 seq_names.push(name.clone());
@@ -191,24 +192,33 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         s
     };
     // digital nets: nodes only cells touch
-    let mut dnets = DigNets { digital: vec![false; total_nodes + 1], fanout: vec![vec![]; total_nodes + 1], driver: vec![None; total_nodes + 1] };
+    let mut dnets = DigNets { digital: vec![false; total_nodes + 1], fanout: vec![vec![]; total_nodes + 1], driver: vec![None; total_nodes + 1], drivers: vec![vec![]; total_nodes + 1], simple: vec![false; total_nodes + 1] };
     for cell in &cells {
-        for &n in cell.ins.iter().chain([&cell.out, &cell.outb]) {
+        for &n in cell.ins.iter().chain([&cell.out, &cell.outb]).chain(cell.oe.iter()) {
             if n != 0 && !touched[n] {
                 dnets.digital[n] = true;
             }
         }
     }
     for (ci, cell) in cells.iter().enumerate() {
-        for &n in &cell.ins {
-            if n != 0 && dnets.digital[n] {
+        for &n in cell.ins.iter().chain(cell.oe.iter()) {
+            if n != 0 && dnets.digital[n] && !dnets.fanout[n].contains(&ci) {
                 dnets.fanout[n].push(ci);
             }
         }
         for (n, inv) in [(cell.out, false), (cell.outb, true)] {
-            if n != 0 && dnets.digital[n] && dnets.driver[n].is_none() {
-                dnets.driver[n] = Some((ci, inv));
+            if n != 0 && dnets.digital[n] {
+                if dnets.driver[n].is_none() {
+                    dnets.driver[n] = Some((ci, inv));
+                }
+                dnets.drivers[n].push((ci, inv));
             }
+        }
+    }
+    // a net with one driver that is always on and never open-drain is the plain case (the value of the net is the output)
+    for n in 0..dnets.drivers.len() {
+        if let [(ci, _)] = dnets.drivers[n][..] {
+            dnets.simple[n] = cells[ci].oe.is_none() && !cells[ci].od;
         }
     }
     // the cells that share a supply, the ones that read an analog node, the outputs that sit on one
@@ -222,7 +232,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         });
         cell_group.push(g);
     }
-    let analog_cells: Vec<usize> = cells.iter().enumerate().filter(|(_, c)| c.ins.iter().any(|&n| n != 0 && !dnets.digital[n])).map(|(i, _)| i).collect();
+    let analog_cells: Vec<usize> = cells.iter().enumerate().filter(|(_, c)| c.ins.iter().chain(c.oe.iter()).any(|&n| n != 0 && !dnets.digital[n])).map(|(i, _)| i).collect();
     let analog_out: Vec<bool> = cells.iter().map(|c| (c.out != 0 && !dnets.digital[c.out]) || (c.outb != 0 && !dnets.digital[c.outb])).collect();
     let analog_out_cells: Vec<usize> = analog_out.iter().enumerate().filter(|(_, b)| **b).map(|(i, _)| i).collect();
     let dstat = DigStatic { groups, cell_group, analog_cells, analog_out, analog_out_cells };
@@ -237,6 +247,11 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         queued: vec![],
         done_first: vec![false; cells.len()],
         pend: vec![None; cells.len()],
+        en: vec![true; cells.len()],
+        pending_en: vec![],
+        bus_state: vec![0; total_nodes + 1],
+        bus: vec![],
+        epoch: 0,
         pend_due: vec![0.0; cells.len()],
         ver: vec![0; cells.len()],
         heap: Default::default(),

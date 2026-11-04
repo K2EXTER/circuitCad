@@ -34,6 +34,10 @@ pub(crate) struct DCell {
     pub tphl: f64,
     pub tsu: f64,
     pub th: f64,
+    /// The output enable node, whether it enables when low, whether the output is open-drain.
+    pub oe: Option<usize>,
+    pub oe_low: bool,
+    pub od: bool,
 }
 
 #[derive(Default)]
@@ -72,6 +76,16 @@ pub(crate) struct Dig {
     pub viol: Vec<crate::TimingViolation>,
     /// The smallest margin found at a clock edge: (cell, margin, time between this clock edge and the one before).
     pub tightest: Option<(String, f64, f64)>,
+    /// Per cell: whether its output is enabled (always, without an output enable).
+    pub en: Vec<bool>,
+    /// The cells whose output enable changed in the evaluation that is going on.
+    pub pending_en: Vec<usize>,
+    /// Per node: 0 = fine, 1 = two outputs fight, 2 = no output drives it. And the findings, grouped by node and kind:
+    /// (node, kind, count, time of the first).
+    pub bus_state: Vec<u8>,
+    pub bus: Vec<(usize, u8, usize, f64)>,
+    /// Counts the changes of which outputs sit on an analog node and push (a change makes another matrix).
+    pub epoch: u64,
 }
 
 /// What the cells need to know that does not change during a run: which cells share a supply, which read an analog node.
@@ -96,8 +110,12 @@ pub(crate) struct DigNets {
     pub digital: Vec<bool>,
     /// Per node: the cells that read it.
     pub fanout: Vec<Vec<usize>>,
-    /// Per digital node: the cell that drives it and whether through `outb`.
+    /// Per digital node: the first cell that drives it and whether through `outb` (its supply sets the level of the net).
     pub driver: Vec<Option<(usize, bool)>>,
+    /// Per digital node: every cell that drives it.
+    pub drivers: Vec<Vec<(usize, bool)>>,
+    /// Per digital node: one driver that is always on and not open-drain.
+    pub simple: Vec<bool>,
 }
 
 /// The queues of one `dig_update`.
@@ -135,6 +153,23 @@ impl Compiled {
         }
     }
 
+    /// The level of the output enable input of cell `ci` (only for a cell that has one).
+    fn oe_level(&self, d: &Dig, ci: usize) -> bool {
+        let c = &self.cells[ci];
+        match c.oe {
+            Some(n) if n != 0 && self.is_digital(n) => d.lv[n],
+            Some(n) if n != 0 => d.afrac[c.slot0 + c.ins.len()] > c.vt,
+            _ => false,
+        }
+    }
+
+    /// Whether output `inverted` of cell `ci` drives its node at all (an output that is not enabled, or an open-drain one that is
+    /// high, lets go).
+    fn drives(&self, d: &Dig, ci: usize, inverted: bool) -> bool {
+        let c = &self.cells[ci];
+        d.en[ci] && !(c.od && (d.q[ci] != inverted))
+    }
+
     /// Evaluate one cell: its next output. `before` are the levels seen at the last evaluation (for the clock edge and the
     /// data sampled by it).
     fn eval(&self, d: &mut Dig, ci: usize, te: Option<f64>) -> bool {
@@ -144,6 +179,15 @@ impl Compiled {
         let started = d.started;
         for (k, l) in now.iter().enumerate() {
             d.seen[c.slot0 + k] = *l;
+        }
+        if c.oe.is_some() {
+            let lvl = self.oe_level(d, ci);
+            d.seen[c.slot0 + c.ins.len()] = lvl;
+            let en = lvl != c.oe_low;
+            if en != d.en[ci] {
+                d.en[ci] = en;
+                d.pending_en.push(ci);
+            }
         }
         // the data inputs of an edge-triggered flip-flop (timing checks)
         let data: &[usize] = match c.kind {
@@ -245,34 +289,101 @@ impl Compiled {
     }
 
     /// Put the output of cell `ci` at `q` now: the digital nets it drives change, and the cells that read them are queued.
-    fn apply_out(&self, d: &mut Dig, w: &mut Work, ci: usize, q: bool, mem_next: &mut Vec<usize>) {
+    fn apply_out(&self, d: &mut Dig, w: &mut Work, ci: usize, q: bool, te: Option<f64>, mem_next: &mut Vec<usize>) {
         let c = &self.cells[ci];
         let force = !d.done_first[ci];
         d.done_first[ci] = true;
         let changed = d.q[ci] != q;
+        let was = [self.drives(d, ci, false), self.drives(d, ci, true)];
         d.q[ci] = q;
         if changed {
             w.any_change = true;
         }
-        for (node, val) in [(c.out, q), (c.outb, !q)] {
+        for (k, (node, inverted)) in [(c.out, false), (c.outb, true)].into_iter().enumerate() {
             if node == 0 {
                 continue;
             }
             if self.is_digital(node) {
-                let moved = d.lv[node] != val;
-                if moved || force {
-                    d.lv[node] = val;
-                    for &f in &self.dnets.fanout[node] {
-                        if is_memory(self.cells[f].kind) {
-                            mem_next.push(f);
-                        } else if !w.queued[f] {
-                            w.queued[f] = true;
-                            w.comb.push_back(f);
-                        }
-                    }
-                }
+                self.recompute_node(d, w, node, force, te, mem_next);
             } else if changed || force {
                 w.analog_changed = true;
+                // an open-drain output that lets go, or takes hold, makes another matrix
+                if was[k] != self.drives(d, ci, inverted) {
+                    d.epoch += 1;
+                }
+            }
+        }
+    }
+
+    /// The value of digital net `node` from its drivers: one driver that is always on is the net; with several, the ones that are
+    /// not off decide (two that disagree: a fight, the net goes low; none: the net keeps its value). The cells that read it are
+    /// queued when it changes.
+    fn recompute_node(&self, d: &mut Dig, w: &mut Work, node: usize, force: bool, te: Option<f64>, mem_next: &mut Vec<usize>) {
+        let drivers = &self.dnets.drivers[node];
+        let new = if self.dnets.simple[node] {
+            let (ci, inv) = drivers[0];
+            d.q[ci] != inv
+        } else {
+            let (mut lo, mut hi) = (false, false);
+            for &(ci, inv) in drivers {
+                if self.drives(d, ci, inv) {
+                    if d.q[ci] != inv {
+                        hi = true;
+                    } else {
+                        lo = true;
+                    }
+                }
+            }
+            let state = match (lo, hi) {
+                (true, true) => 1,
+                (false, false) => 2,
+                _ => 0,
+            };
+            // only a net that something reads matters when it floats
+            let state = if state == 2 && self.dnets.fanout[node].is_empty() { 0 } else { state };
+            if state != d.bus_state[node] {
+                d.bus_state[node] = state;
+                if state != 0 {
+                    match d.bus.iter_mut().find(|b| b.0 == node && b.1 == state) {
+                        Some(b) => b.2 += 1,
+                        None => d.bus.push((node, state, 1, te.unwrap_or(0.0))),
+                    }
+                }
+            }
+            match (lo, hi) {
+                (true, true) | (true, false) => false,
+                (false, true) => true,
+                (false, false) => d.lv[node],
+            }
+        };
+        if d.lv[node] != new || force {
+            d.lv[node] = new;
+            for &f in &self.dnets.fanout[node] {
+                if is_memory(self.cells[f].kind) {
+                    mem_next.push(f);
+                } else if !w.queued[f] {
+                    w.queued[f] = true;
+                    w.comb.push_back(f);
+                }
+            }
+        }
+    }
+
+    /// The cells whose output enable changed: their nets are worked out again.
+    fn flush_en(&self, d: &mut Dig, w: &mut Work, te: Option<f64>, mem_next: &mut Vec<usize>) {
+        let list = std::mem::take(&mut d.pending_en);
+        for ci in list {
+            let c = &self.cells[ci];
+            for (node, _) in [(c.out, false), (c.outb, true)] {
+                if node == 0 {
+                    continue;
+                }
+                if self.is_digital(node) {
+                    self.recompute_node(d, w, node, false, te, mem_next);
+                } else {
+                    d.epoch += 1;
+                    w.analog_changed = true;
+                }
             }
         }
     }
@@ -287,7 +398,7 @@ impl Compiled {
             if d.pend[ci].take().is_some() {
                 d.ver[ci] += 1;
             }
-            self.apply_out(d, w, ci, q, mem_next);
+            self.apply_out(d, w, ci, q, delays.then_some(te), mem_next);
         } else if q == d.q[ci] {
             if d.pend[ci].take().is_some() {
                 d.ver[ci] += 1;
@@ -323,6 +434,7 @@ impl Compiled {
                 if !d.done_first[ci] || q != heading {
                     self.emit(d, w, ci, q, te, delays, &mut mem_next);
                 }
+                self.flush_en(d, w, delays.then_some(te), &mut mem_next);
             }
             w.mem.extend(mem_next);
             w.mem.sort_unstable();
@@ -344,6 +456,7 @@ impl Compiled {
                     self.emit(d, w, ci, q, te, delays, &mut mem_next);
                 }
             }
+            self.flush_en(d, w, delays.then_some(te), &mut mem_next);
             w.mem = mem_next;
             w.mem.sort_unstable();
             w.mem.dedup();
@@ -373,6 +486,7 @@ impl Compiled {
                 self.emit(d, &mut w, ci, q, 0.0, true, &mut mem_next);
             }
         }
+        self.flush_en(d, &mut w, None, &mut mem_next);
         d.queued = w.queued;
     }
 
@@ -494,11 +608,28 @@ impl Compiled {
                     }
                 }
             }
+            if let Some(n) = c.oe
+                && n != 0
+                && !self.is_digital(n)
+            {
+                let slot = c.slot0 + c.ins.len();
+                let old_f = d.afrac[slot];
+                let new_f = if span.abs() > 1e-9 { (v(x, n) - vss) / span } else { 0.0 };
+                d.afrac[slot] = new_f;
+                if timed && (old_f > c.vt) != (new_f > c.vt) && new_f != old_f {
+                    let frac = ((c.vt - old_f) / (new_f - old_f)).clamp(0.0, 1.0);
+                    let tc = t_prev + frac * (t - t_prev);
+                    crossed = Some(crossed.map_or(tc, |e: f64| e.min(tc)));
+                }
+            }
             let mut changed = !d.done_first[ci];
             for k in 0..c.ins.len() {
                 if self.level(d, ci, k) != d.seen[c.slot0 + k] {
                     changed = true;
                 }
+            }
+            if c.oe.is_some() && self.oe_level(d, ci) != d.seen[c.slot0 + c.ins.len()] {
+                changed = true;
             }
             if changed || c.kind == CellKind::Schmitt {
                 if timed {
@@ -541,7 +672,7 @@ impl Compiled {
                     if d.ver[ci] == ver
                         && let Some(q) = d.pend[ci].take()
                     {
-                        self.apply_out(d, &mut w, ci, q, &mut mem_next);
+                        self.apply_out(d, &mut w, ci, q, Some(te), &mut mem_next);
                     }
                 }
                 for ci in read {
@@ -601,10 +732,39 @@ impl Compiled {
     }
 
     /// The level (0 or 1) an output of cell `ci` is at, for the circuit equations.
-    pub(crate) fn cell_level(&self, ci: usize, inverted: bool) -> (f64, (f64, f64)) {
+pub(crate) fn cell_drive(&self, ci: usize, inverted: bool) -> Option<(f64, (f64, f64))> {
         let d = self.dig.borrow();
+        if !self.drives(&d, ci, inverted) {
+            return None;
+        }
         let q = d.q[ci] != inverted;
-        (if q { 1.0 } else { 0.0 }, d.gsup[self.dstat.cell_group[ci]])
+        Some((if q { 1.0 } else { 0.0 }, d.gsup[self.dstat.cell_group[ci]]))
+    }
+
+    /// The findings about the digital nets that several outputs share: a fight, or no output at all. In Japanese, for the warnings
+    /// of a run.
+    pub(crate) fn bus_warnings(&self) -> Vec<String> {
+        let d = self.dig.borrow();
+        d.bus
+            .iter()
+            .map(|&(node, kind, count, t)| {
+                let name = &self.node_names[node];
+                let drivers: Vec<&str> = self.dnets.drivers[node].iter().map(|(ci, _)| self.cells[*ci].name.as_str()).collect();
+                if kind == 1 {
+                    format!(
+                        "ネット {name}: 2 つ以上の出力が違う値を同時に出しています ({count} 回。最初は {}。つながっている出力: {})。ここでは Low にして続けます。実物では出力どうしで大きな電流が流れて、壊れることがあります。出力許可 (OE) を切り替える時間をずらして、同時に出ないようにしてください",
+                        crate::format_time(t),
+                        drivers.join("、")
+                    )
+                } else {
+                    format!(
+                        "ネット {name}: どの出力も出ていません ({count} 回。最初は {}。つながっている出力: {})。浮いたネットです。ここでは前の値のままにしていますが、実物では不定です。プルアップ (またはプルダウン) 抵抗を付けるか、どれかの出力を出してください",
+                        crate::format_time(t),
+                        drivers.join("、")
+                    )
+                }
+            })
+            .collect()
     }
 
     /// The names and stored states of the cells with a memory.

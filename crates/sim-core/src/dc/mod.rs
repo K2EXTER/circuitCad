@@ -93,7 +93,7 @@ pub(crate) enum Ce {
 }
 
 /// (gmin, (step, trapezoidal) when dynamic)
-type FactorKey = (u64, Option<(u64, bool)>, u64);
+type FactorKey = (u64, Option<(u64, bool)>, u64, u64);
 
 pub(crate) struct Compiled {
     pub(crate) node_names: Vec<String>, // circuit nodes only
@@ -496,6 +496,7 @@ fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, mut warnings: Ve
     let voltages = cm.node_names.iter().enumerate().map(|(i, n)| (n.clone(), v(x, i))).collect();
     let mut seq_states: Vec<(String, bool)> = cm.seq_names.iter().cloned().zip(cm.seq_state.borrow().iter().map(|s| *s > 0.5)).collect();
     seq_states.extend(cm.cell_states());
+    warnings.extend(cm.bus_warnings());
     if !seq_states.is_empty() {
         let ones = seq_states.iter().filter(|(_, s)| *s).count();
         warnings.push(format!(

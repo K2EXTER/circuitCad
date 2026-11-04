@@ -567,24 +567,28 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 };
                 let (out, outb, vss, vcc) = (local(c, t[2]), local(c, t[3]), local(c, t[4]), local(c, t[5]));
                 // after reset_low: td=<s> tplh=<s> tphl=<s> (delays), tsu=<s> th=<s> (setup and hold of a flip-flop), any order, then the inputs
+                // oe=<node> (output enable; oel=1: enables when low) and od=1 (open drain) as well
                 let (mut tplh, mut tphl, mut tsu, mut th) = (0.0, 0.0, 0.0, 0.0);
+                let (mut oe, mut oe_low, mut od) = (None, false, false);
                 let mut ins: Vec<usize> = vec![];
                 for w in &t[11..] {
                     if let Some((key, value)) = w.split_once('=') {
-                        let secs = val(value)?;
                         match key.to_ascii_lowercase().as_str() {
-                            "td" => (tplh, tphl) = (secs, secs),
-                            "tplh" => tplh = secs,
-                            "tphl" => tphl = secs,
-                            "tsu" => tsu = secs,
-                            "th" => th = secs,
-                            other => return Err(format!("{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl・tsu・th)")),
+                            "oe" => oe = Some(local(c, value)),
+                            "oel" => oe_low = value == "1",
+                            "od" => od = value == "1",
+                            "td" => (tplh, tphl) = (val(value)?, val(value)?),
+                            "tplh" => tplh = val(value)?,
+                            "tphl" => tphl = val(value)?,
+                            "tsu" => tsu = val(value)?,
+                            "th" => th = val(value)?,
+                            other => return Err(format!("{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl・tsu・th・oe・oel・od)")),
                         }
                     } else {
                         ins.push(local(c, w));
                     }
                 }
-                let sup = crate::CellSupply { vss, vcc, rout: val(t[6])?, vt: val(t[7])?, vh: val(t[8])?, set_low: t[9] == "1", reset_low: t[10] == "1", tplh, tphl, tsu, th };
+                let sup = crate::CellSupply { vss, vcc, rout: val(t[6])?, vt: val(t[7])?, vh: val(t[8])?, set_low: t[9] == "1", reset_low: t[10] == "1", tplh, tphl, tsu, th, oe, oe_low, od };
                 c.add(Element::Cell { name, kind, ins, out, outb, sup });
             }
             'K' => {

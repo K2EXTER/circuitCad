@@ -265,3 +265,96 @@ fn the_hold_time_is_checked_after_the_clock_edge() {
     assert_eq!(bad.timing.violations[0].kind, crate::TimingKind::Hold);
     assert!(bad.warnings.iter().any(|w| w.contains("ホールド時間が足りません")), "{:?}", bad.warnings);
 }
+
+fn pwl_source(c: &mut Circuit, name: &str, node: usize, text: &str) {
+    let s = parse_source_full(text).unwrap();
+    c.add(Element::VSource { name: name.into(), p: node, n: 0, wave: s.wave, ac: s.ac });
+}
+
+/// Two 3-state buffers on one digital net: the one that is enabled drives it; both enabled with different values is a fight (the
+/// net goes low, a warning says so); none enabled floats (the net keeps its value, a warning says so).
+#[test]
+fn a_tri_state_bus_takes_the_enabled_driver_and_warns_of_a_fight_and_of_a_float() {
+    let mut c = Circuit::new();
+    let n = place(
+        &mut c,
+        "vcc vss d1 e1 d2 e2 out",
+        "Y1 buf bus 0 vss vcc 60 0.5 0 0 0 oe=e1 d1\nY2 buf bus 0 vss vcc 60 0.5 0 0 0 oe=e2 d2\nY3 buf out 0 vss vcc 60 0.5 0 0 0 bus",
+    );
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    // 0..1 us: driver 1 enabled, sends 1 (d2 = 0, e2 = 0). 1..2 us: driver 2 enabled, sends 0. 2..3 us: both enabled (1 and 0).
+    // 3..4 us: none enabled. 4..5 us: driver 1 again.
+    pwl_source(&mut c, "Vd1", n[2], "PWL(0 5 5u 5)");
+    pwl_source(&mut c, "Ve1", n[3], "PWL(0 5 1u 5 1.01u 0 2u 0 2.01u 5 3u 5 3.01u 0 4u 0 4.01u 5 5u 5)");
+    pwl_source(&mut c, "Vd2", n[4], "PWL(0 0 5u 0)");
+    pwl_source(&mut c, "Ve2", n[5], "PWL(0 0 1u 0 1.01u 5 3u 5 3.01u 0 5u 0)");
+    c.add(Element::Resistor { name: "Rl".into(), a: n[6], b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 5e-6, tstep: 20e-9, uic: false }).unwrap();
+    let out = |t: f64| at(&r, "V(out)", t);
+    assert!(out(0.8e-6) > 4.5, "driver 1 sends 1: {}", out(0.8e-6));
+    assert!(out(1.8e-6) < 0.5, "driver 2 sends 0: {}", out(1.8e-6));
+    assert!(out(2.8e-6) < 0.5, "a fight goes low: {}", out(2.8e-6));
+    assert!(out(3.8e-6) < 0.5, "a floating net keeps its value: {}", out(3.8e-6));
+    assert!(out(4.8e-6) > 4.5, "driver 1 again: {}", out(4.8e-6));
+    assert!(r.warnings.iter().any(|w| w.contains("ネット U1.bus") && w.contains("違う値を同時に")), "{:?}", r.warnings);
+    assert!(r.warnings.iter().any(|w| w.contains("ネット U1.bus") && w.contains("どの出力も出ていません")), "{:?}", r.warnings);
+}
+
+/// An output enable that is active low (`oel=1`).
+#[test]
+fn an_output_enable_can_be_active_low() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss d oe y", "Y1 buf y 0 vss vcc 60 0.5 0 0 0 oe=oe oel=1 d");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    c.add(Element::vdc("Vd", n[2], 0, 5.0));
+    pwl_source(&mut c, "Voe", n[3], "PWL(0 0 1u 0 1.01u 5 3u 5)");
+    // the load pulls the node to 2.5 V when the output lets go
+    let top = c.node("top");
+    c.add(Element::vdc("Vtop", top, 0, 5.0));
+    c.add(Element::Resistor { name: "Rup".into(), a: n[4], b: top, r: 10e3 });
+    c.add(Element::Resistor { name: "Rdn".into(), a: n[4], b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 3e-6, tstep: 20e-9, uic: false }).unwrap();
+    let y = |t: f64| at(&r, "V(y)", t);
+    assert!(y(0.8e-6) > 4.5 * 10.0 / 10.06 && y(0.8e-6) > 4.0, "enabled (oe low): the buffer drives 5 V: {}", y(0.8e-6));
+    assert!((y(2.0e-6) - 2.5).abs() < 0.1, "disabled (oe high): the output lets go and the divider decides: {}", y(2.0e-6));
+}
+
+/// Two open-drain outputs and a pull-up: the node is high only when both let go (a wired AND), low when either pulls. The matrix
+/// changes with who is pulling, and the solution follows it.
+#[test]
+fn open_drain_outputs_with_a_pull_up_make_a_wired_and() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss a b bus", "Y1 buf bus 0 vss vcc 60 0.5 0 0 0 od=1 a\nY2 buf bus 0 vss vcc 60 0.5 0 0 0 od=1 b");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    // a: 1 until 2 us, then 0 until 3 us, then 1. b: 1 until 4 us, 0 until 5 us, then 1.
+    pwl_source(&mut c, "Va", n[2], "PWL(0 5 2u 5 2.01u 0 3u 0 3.01u 5 7u 5)");
+    pwl_source(&mut c, "Vb", n[3], "PWL(0 5 4u 5 4.01u 0 5u 0 5.01u 5 7u 5)");
+    c.add(Element::Resistor { name: "Rp".into(), a: n[4], b: n[0], r: 4.7e3 });
+    let r = transient(&c, &TranSettings { tstop: 7e-6, tstep: 20e-9, uic: false }).unwrap();
+    let bus = |t: f64| at(&r, "V(bus)", t);
+    let low = 5.0 * 60.0 / (60.0 + 4700.0);
+    assert!((bus(1.0e-6) - 5.0).abs() < 0.05, "both let go: {}", bus(1.0e-6));
+    assert!((bus(2.5e-6) - low).abs() < 0.05, "a pulls: {}", bus(2.5e-6));
+    assert!((bus(3.5e-6) - 5.0).abs() < 0.05, "both let go again: {}", bus(3.5e-6));
+    assert!((bus(4.5e-6) - low).abs() < 0.05, "b pulls: {}", bus(4.5e-6));
+    assert!((bus(6.0e-6) - 5.0).abs() < 0.05, "both let go: {}", bus(6.0e-6));
+}
+
+/// Open-drain outputs on a digital net with no pull-up cannot make a high level: the net floats when they let go (it keeps its
+/// value, a warning asks for a pull-up).
+#[test]
+fn open_drain_outputs_without_a_pull_up_float_and_warn() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss a y", "Y1 buf bus 0 vss vcc 60 0.5 0 0 0 od=1 a\nY2 buf y 0 vss vcc 60 0.5 0 0 0 bus");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    pwl_source(&mut c, "Va", n[2], "PWL(0 0 1u 0 1.01u 5 3u 5)");
+    c.add(Element::Resistor { name: "Rl".into(), a: n[3], b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 3e-6, tstep: 20e-9, uic: false }).unwrap();
+    assert!(at(&r, "V(y)", 0.5e-6) < 0.5);
+    assert!(at(&r, "V(y)", 2.5e-6) < 0.5, "it cannot go high without a pull-up: {}", at(&r, "V(y)", 2.5e-6));
+    assert!(r.warnings.iter().any(|w| w.contains("どの出力も出ていません") && w.contains("プルアップ")), "{:?}", r.warnings);
+}

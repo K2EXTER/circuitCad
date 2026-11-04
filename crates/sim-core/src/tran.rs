@@ -577,6 +577,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
     }
 
     if cm.has_cells() {
+        warnings.extend(cm.bus_warnings());
         result.timing = cm.timing_report();
         for v in &result.timing.violations {
             let what = match v.kind {

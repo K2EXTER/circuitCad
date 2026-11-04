@@ -255,6 +255,11 @@ pub struct CellSupply {
     /// Setup and hold time (seconds) of the data inputs of an edge-triggered flip-flop (0 = not checked).
     pub tsu: f64,
     pub th: f64,
+    /// Output enable: the node that lets the output out (`None` = always), whether it enables when it is low, and whether the
+    /// output is open-drain (a high output is off).
+    pub oe: Option<usize>,
+    pub oe_low: bool,
+    pub od: bool,
 }
 
 /// What a `Element::Seq` is, with the order of its inputs in `ins` (node 0 = tied low):
@@ -314,7 +319,7 @@ impl Element {
             Element::Vccs { p, n, cp, cn, .. } => vec![*p, *n, *cp, *cn],
             Element::Mutual { .. } => vec![],
             Element::Seq { ins, q, qb, .. } => ins.iter().copied().chain([*q, *qb]).collect(),
-            Element::Cell { ins, out, outb, sup, .. } => ins.iter().copied().chain([*out, *outb, sup.vss, sup.vcc]).collect(),
+            Element::Cell { ins, out, outb, sup, .. } => ins.iter().copied().chain([*out, *outb, sup.vss, sup.vcc]).chain(sup.oe).collect(),
         }
     }
 

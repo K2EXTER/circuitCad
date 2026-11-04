@@ -195,8 +195,10 @@ impl Compiled {
                     let c = &self.cells[*cell];
                     let g = 1.0 / c.rout.max(1e-3);
                     for (node, inverted) in [(c.out, false), (c.outb, true)].into_iter().filter(|_| self.dstat.analog_out[*cell]) {
-                        if node != 0 && !self.is_digital(node) {
-                            let (lvl, (vss, vcc)) = self.cell_level(*cell, inverted);
+                        if node != 0
+                            && !self.is_digital(node)
+                            && let Some((lvl, (vss, vcc))) = self.cell_drive(*cell, inverted)
+                        {
                             m.at(node - 1, node - 1, g);
                             m.b[node - 1] += g * (vss + lvl * (vcc - vss));
                         }
