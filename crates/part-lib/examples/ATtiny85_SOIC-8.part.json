@@ -53,5 +53,6 @@
     "row_spacing": 7.2,
     "pad_len": 1.85,
     "pad_width": 0.6
-  }
+  },
+  "programming": [{"name": "ISP (SPI)", "pins": ["PB5/RESET", "PB0", "PB1", "PB2", "VCC", "GND"]}]
 }

@@ -77,6 +77,10 @@ pub struct PartDef {
     /// Gates and inputs that are alike, so their nets may trade places on the board (`ccad board swap`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub swap: Option<pcb_core::swap::SwapSpec>,
+    /// How the chip is programmed (ISP, UART bootloader ...) and the pins each way needs: the schematic ERC checks that one way
+    /// has all its pins on a connector.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub programming: Vec<sch_core::ProgInterface>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -131,6 +135,7 @@ impl PartDef {
             ratings: self.ratings.clone().filter(|r| !r.is_empty()),
             glyph: self.glyph.clone(),
             shops: self.shops.clone(),
+            programming: self.programming.clone(),
         }
     }
 

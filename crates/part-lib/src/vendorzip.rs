@@ -453,6 +453,7 @@ impl VendorIndex {
             body: None,
             model3d: None,
             swap: None,
+            programming: vec![],
             shops: Default::default(),
             land_unverified: false,
         };

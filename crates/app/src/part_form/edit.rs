@@ -121,6 +121,7 @@ impl PartForm {
         let Some(o) = &self.orig else { return };
         def.shops = o.shops.clone();
         def.swap = o.swap.clone();
+        def.programming = o.programming.clone();
         if def.footprint_name.is_none() {
             def.footprint_name = o.footprint_name.clone();
         }

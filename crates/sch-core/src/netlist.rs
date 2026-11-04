@@ -253,6 +253,7 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
 
     let nets = extract(s);
     out.extend(crate::bus::bus_problems(s, &nets));
+    out.extend(crate::programming::programming_problems(s, &nets));
     let mut connected: HashMap<(String, String), usize> = HashMap::new();
     for n in &nets {
         for p in &n.pins {

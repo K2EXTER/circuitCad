@@ -167,6 +167,7 @@ mod tests {
             ratings: Some(PartRatings { ripple, life, ..Default::default() }),
             glyph: "electrolytic".into(),
             shops: Default::default(),
+            programming: vec![],
         };
         s.add_custom(sym, "100u", "", (10, 10), 0);
         s

@@ -526,5 +526,6 @@
     "y": 0.0,
     "mark": "dot",
     "mark_pin": "1"
-  }
+  },
+  "programming": [{"name": "ISP (SPI)", "pins": ["RESET", "PB2", "PB3", "PB1", "VCC", "GND"]}, {"name": "UART0 ブートローダ", "pins": ["PE0", "PE1", "VCC", "GND"]}]
 }

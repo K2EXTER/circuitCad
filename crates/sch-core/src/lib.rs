@@ -6,6 +6,7 @@ mod ngspice;
 mod backannotate;
 mod bus;
 mod noconnect;
+mod programming;
 mod requirements;
 mod sheets;
 mod spice;
@@ -697,6 +698,18 @@ pub struct CustomSymbol {
     /// Where to buy it: shop id ("akizuki", "digikey", "lcsc") -> the shop's own part number.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub shops: std::collections::BTreeMap<String, String>,
+    /// How the part is programmed (ISP, UART bootloader, SWD ...): the pins each way needs. The ERC warns when no way has all
+    /// its pins on a connector. Empty = not a programmable part (or not known).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub programming: Vec<ProgInterface>,
+}
+
+/// One way to write the program into a chip: a name for people ("ISP (SPI)") and the pin names it needs.
+/// A name that several pins share (GND, VCC) is satisfied by any one of them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ProgInterface {
+    pub name: String,
+    pub pins: Vec<String>,
 }
 
 pub struct PinGeom {

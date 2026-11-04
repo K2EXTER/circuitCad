@@ -176,5 +176,6 @@
   },
   "shops": {
     "lcsc": "C14877"
-  }
+  },
+  "programming": [{"name": "ISP (SPI)", "pins": ["PC6/RESET", "PB3", "PB4", "PB5", "VCC", "GND"]}, {"name": "UART ブートローダ", "pins": ["PD0", "PD1", "VCC", "GND"]}]
 }

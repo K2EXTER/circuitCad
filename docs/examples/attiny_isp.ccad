@@ -1,0 +1,23 @@
+# ATtiny85 with a 6-pin ISP header (the standard AVR ISP order): the ERC checks that the programming pins reach the header.
+# Build: cargo run -p cli -- docs/examples/attiny_isp.ccad
+new
+add ATtiny85 as=U1
+add HEADER6 as=J1
+add C 100n as=C1
+add R 10k as=R1
+add R 330 as=R2
+add LED as=D1
+add V 5 as=V1
+
+net VCC V1.+ U1.VCC J1.2 C1.1 R1.1
+net GND V1.- U1.GND J1.6 C1.2 D1.K
+net RESET U1.PB5/RESET J1.5 R1.2
+net MISO U1.PB1 J1.1
+net SCK U1.PB2 J1.3
+net MOSI U1.PB0 J1.4
+net LEDA U1.PB3 R2.1
+net LEDB R2.2 D1.A
+nc U1.PB4
+pinnames J1 MISO,VCC,SCK,MOSI,RESET,GND
+erc
+save docs/examples/attiny_isp.schjson

@@ -68,7 +68,7 @@ mod tests {
 
     fn part(name: &str, sim: Option<SimModel>) -> CustomSymbol {
         let pin = |n: &str, side| SymPin { number: n.into(), name: n.into(), side, sim_only: false };
-        CustomSymbol { name: name.into(), prefix: "U".into(), pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)], sim, ratings: None, glyph: String::new(), shops: Default::default() }
+        CustomSymbol { name: name.into(), prefix: "U".into(), pins: vec![pin("1", PinSide::Left), pin("2", PinSide::Right)], sim, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![] }
     }
 
     fn model(limits: &[&str]) -> SimModel {

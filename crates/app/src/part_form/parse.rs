@@ -373,6 +373,7 @@ impl PartForm {
             land_unverified: self.land_unverified,
             model3d: self.model3d.clone(),
             swap: None,
+            programming: vec![],
         };
         self.keep_hidden(&mut def);
         Ok(def)

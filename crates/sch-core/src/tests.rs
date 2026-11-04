@@ -156,6 +156,7 @@ fn opamp() -> CustomSymbol {
     CustomSymbol {
         ratings: None,
         shops: Default::default(),
+        programming: vec![],
         glyph: String::new(),
         name: "LM358".into(),
         prefix: "U".into(),
@@ -428,6 +429,7 @@ fn ic_power_pin_behind_a_series_mosfet_counts_as_supplied() {
     let fet = CustomSymbol {
         ratings: None,
         shops: Default::default(),
+        programming: vec![],
         glyph: "pmos".into(),
         name: "AO3401A".into(),
         prefix: "Q".into(),
@@ -490,6 +492,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         sim: None,
         ratings: None,
         shops: Default::default(),
+        programming: vec![],
         glyph: "electrolytic".into(),
     };
     let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0 };

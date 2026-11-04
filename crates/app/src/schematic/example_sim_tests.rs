@@ -725,6 +725,32 @@ fn the_bus_sample_is_clean_and_a_too_wide_bus_is_found() {
     assert!(all(&e.sch).iter().any(|m| m.contains("D8") && m.contains("どこにも")), "{:?}", all(&e.sch));
 }
 
+/// The programming-header check: the ISP sample is quiet; a programming pin cut off the header is found; the Arduino-style board
+/// (ISP header, FTDI header with the reset through a capacitor) is quiet once the chip carries its programming pins.
+#[test]
+fn the_programming_check_finds_a_pin_that_does_not_reach_the_header() {
+    let msgs = |s: &Schematic| sch_core::erc(s).into_iter().map(|p| p.message).collect::<Vec<_>>();
+    let mut e = editor_with("attiny_isp.schjson");
+    assert!(e.sch.components.iter().any(|c| c.custom.as_ref().is_some_and(|y| !y.programming.is_empty())));
+    assert_eq!(msgs(&e.sch), Vec::<String>::new());
+    e.sch.labels.iter_mut().find(|l| l.text == "SCK").unwrap().text = "SCK2".into();
+    let m = msgs(&e.sch);
+    assert!(m.iter().any(|t| t.contains("U1") && t.contains("書き込む") && t.contains("PB2")), "{m:?}");
+    // the Arduino-style board: give the chip the programming ways of the library part
+    let mut a = editor_with("arduino_minimal.schjson");
+    let part: part_lib::PartDef = serde_json::from_str(part_lib::EXAMPLES.iter().find(|(n, _)| n.starts_with("ATmega328P")).unwrap().1).unwrap();
+    let u1 = a.sch.components.iter_mut().find(|c| c.refdes == "U1").unwrap();
+    u1.custom.as_mut().unwrap().programming = part.programming.clone();
+    let before = msgs(&a.sch);
+    assert!(!before.iter().any(|t| t.contains("書き込む")), "{before:?}");
+    // cut the ISP clock and the serial lines: no way is left
+    for name in ["D13", "RXD", "TXD"] {
+        // one label of the pair: the two ends no longer share a name
+        a.sch.labels.iter_mut().find(|l| l.text == name).unwrap().text = format!("{name}_X");
+    }
+    assert!(msgs(&a.sch).iter().any(|t| t.contains("U1") && t.contains("書き込む")), "{:?}", msgs(&a.sch));
+}
+
 /// The power-supply path's three new samples: the numbers the lessons quote.
 #[test]
 fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {
