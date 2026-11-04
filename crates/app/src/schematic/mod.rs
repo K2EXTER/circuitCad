@@ -87,6 +87,12 @@ pub struct SchEditor {
     /// Re-run the open analysis whenever the circuit changes.
     live: bool,
     live_snap: Schematic,
+    /// Keep the curves a re-run replaces as the faint "before" curves.
+    live_ghost: bool,
+    /// How long the last automatic re-run took (s), when it ended, and whether a change is waiting for the next one.
+    live_cost: f64,
+    live_last: Option<std::time::Instant>,
+    live_waiting: bool,
     pub path: Option<PathBuf>,
     tool: Tool,
     place: Kind,
@@ -632,6 +638,10 @@ impl Default for SchEditor {
             slider_span: 1.0,
             live: false,
             live_snap: Schematic::default(),
+            live_ghost: true,
+            live_cost: 0.0,
+            live_last: None,
+            live_waiting: false,
             path: None,
             tool: Tool::Place,
             place: Kind::Resistor,

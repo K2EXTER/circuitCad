@@ -23,6 +23,9 @@ impl SchEditor {
     pub fn canvas(&mut self, ui: &mut egui::Ui) {
         self.track_history(ui);
         self.live_update();
+        if self.live_waiting {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(30));
+        }
         self.sheet_tabs(ui);
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let rect = resp.rect;

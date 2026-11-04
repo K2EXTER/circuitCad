@@ -671,6 +671,47 @@ fn live_recalculation_keeps_the_last_good_result_when_a_value_fails() {
     assert!(e.tran.as_ref().unwrap().outcome.is_ok());
 }
 
+/// "自動で再計算": the first change after a pause keeps the old curve as the faint "before"; later changes of the same
+/// move keep that one; with the option off nothing is kept. A heavy run is paced.
+#[test]
+fn live_recalculation_keeps_the_curve_before_the_move_and_paces_heavy_runs() {
+    let mut e = editor_with("rc_lowpass.schjson");
+    // a pulse, so that the waveform depends on R1
+    e.sch.components.iter_mut().find(|c| c.refdes == "V1").unwrap().value = "PULSE(0 1 0 1u 1u 1m 2m)".into();
+    e.set_tran_settings("2m", "10u");
+    e.analyze_tran();
+    e.live = true;
+    e.live_update();
+    assert!(e.tran.as_ref().unwrap().ghost.is_none());
+    let r1 = e.sch.components.iter().position(|c| c.refdes == "R1").unwrap();
+    e.live_last = Some(std::time::Instant::now() - std::time::Duration::from_secs(5)); // a pause
+    e.sch.components[r1].value = "3k".into();
+    e.live_update();
+    let g = e.tran.as_ref().unwrap().ghost.clone().expect("the curve before the move is kept");
+    let now = e.tran.as_ref().unwrap().outcome.as_ref().unwrap();
+    assert!(g.sigs.iter().any(|s| now.signal(&s.base).is_some_and(|n| n.values != s.v)), "the ghost is the curve before the move, not the new one");
+    // a second change right after keeps the same ghost
+    e.sch.components[r1].value = "4k".into();
+    e.live_update();
+    let g2 = e.tran.as_ref().unwrap().ghost.clone().unwrap();
+    assert_eq!(g.sigs[0].v, g2.sigs[0].v);
+    // with the option off a later burst does not replace it
+    e.live_ghost = false;
+    e.live_last = None;
+    e.sch.components[r1].value = "5k".into();
+    e.live_update();
+    assert_eq!(e.tran.as_ref().unwrap().ghost.clone().unwrap().sigs[0].v, g.sigs[0].v);
+    // a heavy run waits (the change stays pending), then goes through
+    e.live_cost = 10.0;
+    e.live_last = Some(std::time::Instant::now());
+    e.sch.components[r1].value = "6k".into();
+    e.live_update();
+    assert!(e.live_waiting && e.sch != e.live_snap);
+    e.live_last = Some(std::time::Instant::now() - std::time::Duration::from_secs(20));
+    e.live_update();
+    assert!(!e.live_waiting && e.sch == e.live_snap);
+}
+
 /// The power-supply path's three new samples: the numbers the lessons quote.
 #[test]
 fn diode_zener_and_follower_samples_give_the_numbers_of_their_lessons() {

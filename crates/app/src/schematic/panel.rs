@@ -498,6 +498,9 @@ impl SchEditor {
                             self.slider = Some((i, base, c.value.clone()));
                         }
                         ui.checkbox(&mut self.live, "自動で再計算").on_hover_text("オンにすると、値を動かすたびに、開いている解析 (DC / 過渡 / AC) をやり直します。重い回路ではオフにしてください");
+                        if self.live {
+                            ui.checkbox(&mut self.live_ghost, "変える前の線を残す").on_hover_text("オンにすると、値を動かし始める前の波形・特性を、うすい線で残します。動かした後のこい線と重ねて、どう変わったかを比べられます。波形の「いまの波形を残す」で残した線は、これで置き換わります");
+                        }
                     }
                 }
                 if c.kind == Kind::VSource {
