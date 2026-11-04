@@ -207,6 +207,13 @@ fn step_error_ratio(hist: &[Sample], t_new: f64, cv: &[f64], abs_v: &[f64], il: 
 }
 
 pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimError> {
+    transient_with(circuit, s, None)
+}
+
+/// `transient`, recording only the signals `keep` accepts (by name, `V(node)` / `I(element)`). A circuit with thousands of
+/// nodes stores a value of every node and element at every step otherwise, which is more work (and memory) than the
+/// simulation itself. `None` records everything.
+pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(&str) -> bool>) -> Result<TranResult, SimError> {
     if !(s.tstop.is_finite() && s.tstop > 0.0) {
         return Err(SimError::Invalid("終了時間は正の値にしてください".into()));
     }
@@ -297,25 +304,42 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
     let mut bp_idx = 0;
 
     let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0, rejected: 0 };
-    let node_ids: Vec<usize> = (1..cm.node_names.len()).collect();
-    for &i in &node_ids {
-        result.signals.push(Signal { name: format!("V({})", cm.node_names[i]), unit: "V", values: vec![] });
+    let wanted = |name: &str| keep.is_none_or(|f| f(name));
+    // (node, index in `result.signals`) of the node voltages kept, and the index of every element's current (None = not kept)
+    let mut node_slots: Vec<(usize, usize)> = vec![];
+    for i in 1..cm.node_names.len() {
+        let name = format!("V({})", cm.node_names[i]);
+        if wanted(&name) {
+            node_slots.push((i, result.signals.len()));
+            result.signals.push(Signal { name, unit: "V", values: vec![] });
+        }
     }
     let first = cm.element_results(&x, Some(0.0), &cap_i);
+    let mut element_slots: Vec<Option<usize>> = vec![];
     for e in &first {
-        result.signals.push(Signal { name: format!("I({})", e.name), unit: "A", values: vec![] });
+        let name = format!("I({})", e.name);
+        if wanted(&name) {
+            element_slots.push(Some(result.signals.len()));
+            result.signals.push(Signal { name, unit: "A", values: vec![] });
+        } else {
+            element_slots.push(None);
+        }
     }
+    let any_element = element_slots.iter().any(|s| s.is_some());
     let record = |res: &mut TranResult, t: f64, x: &[f64], cap_i: &[f64], cm: &crate::dc::Compiled| {
         res.time.push(t);
-        for (k, &i) in node_ids.iter().enumerate() {
-            res.signals[k].values.push(v(x, i));
+        for &(i, si) in &node_slots {
+            res.signals[si].values.push(v(x, i));
         }
-        let base = node_ids.len();
-        let mut k = 0;
-        cm.visit_elements(x, Some(t), cap_i, |_, current, _, _, _| {
-            res.signals[base + k].values.push(current);
-            k += 1;
-        });
+        if any_element {
+            let mut k = 0;
+            cm.visit_elements(x, Some(t), cap_i, |_, current, _, _, _| {
+                if let Some(Some(si)) = element_slots.get(k) {
+                    res.signals[*si].values.push(current);
+                }
+                k += 1;
+            });
+        }
     };
     record(&mut result, 0.0, &x, &cap_i, &cm);
 

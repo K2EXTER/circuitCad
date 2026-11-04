@@ -73,7 +73,7 @@ pub use spice_in::{add_model_instance, add_subckt_instance, decode_spice_text, i
 pub use heat_tran::{heat_tran, thermal_nodes_from_schematic, HeatTran, HeatTranPart, ThermalLink, ThermalNode};
 pub use selfheat::{default_theta, heaters_from_schematic, self_heat, HeatedPart, Heater, SelfHeat};
 pub use temperature::{temp_sweep, T_NOM_C};
-pub use tran::{auto_tstep, transient, Signal, TranResult, TranSettings};
+pub use tran::{auto_tstep, transient, transient_with, Signal, TranResult, TranSettings};
 pub use stepmetrics::{settling_times, step_metrics, Settling, StepMetrics};
 pub use power::{efficiency, mean_power};
 pub use spec::{compare_measured, evaluate as evaluate_spec, evaluate_worst as evaluate_worst_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};

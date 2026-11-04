@@ -47,9 +47,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         ic=NAME=1,NAME=0 sets their starting states. A latch built from gates has more than one answer:
                                         guess=NET=V,NET=V picks the one near those voltages (like .nodeset); 'dc states' also solves
                                         from other starting points and lists the nets that settle elsewhere ('other_states')
-  tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic]
+  tran TSTOP [TSTEP] [probe=V(out),I(R1)] [samples=6] [uic] [record=all|probes]
                                         starts from the DC operating point (a capacitor starts charged);
                                         add 'uic' to start from zero instead (step responses, oscillators)
+                                        record=probes keeps only the probed signals (saves time and memory in a circuit with thousands of
+                                        nodes; chosen by itself when the record would pass ten million values, record=all keeps everything)
                                         'ratings' / 'warnings' (second half of the run): resistor rms power, LED peak current,
                                         electrolytic ripple current, op-amp inputs that stay apart (saturation)
                                         settle=V(out) [from=20u] [tol=1e-2,1e-3,1e-4]: from the instant `from`, the time until the signal

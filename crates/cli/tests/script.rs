@@ -1766,3 +1766,28 @@ fn break_health_and_reveal_work_as_a_repair_practice() {
     // the good board again: mended
     assert!(a.iter().any(|v| v["repaired"] == Value::Bool(true)), "{a:?}");
 }
+
+#[test]
+fn record_probes_keeps_only_the_probed_signals_and_record_all_keeps_everything() {
+    let rc = "new\nadd V 5 as=V1\nadd R 1k as=R1\nadd C 1u as=C1\nnet VCC V1.+ R1.1\nnet OUT R1.2 C1.1\nnet GND V1.- C1.2\n";
+    // all signals, the probed ones shown
+    let (a, ok) = run(&format!("{rc}tran 5m 50u probe=V(out) record=all\n"));
+    assert!(ok, "{a:?}");
+    let all = last(&a, "tran")["points"].as_u64().unwrap();
+    // only the probed ones are kept: the same points and the same numbers, and a note says so
+    let (b, ok) = run(&format!("{rc}tran 5m 50u probe=V(out) record=probes\nspec tran_pp V(VCC) 0 1\n"));
+    assert!(ok, "{b:?}");
+    let sp = last(&b, "spec");
+    assert!(sp["pass"].is_null() && sp["note"].as_str().unwrap().contains("結果にありません"), "a spec on a signal that was not kept says so: {sp:?}");
+    let t = last(&b, "tran");
+    assert_eq!(t["points"].as_u64().unwrap(), all);
+    assert_eq!(t["signals"].as_object().unwrap().len(), 1, "{t:?}");
+    assert!(t["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("記録は probe= の信号だけ")), "{t:?}");
+    let (c, _) = run(&format!("{rc}tran 5m 50u probe=V(out) record=all\n"));
+    assert_eq!(last(&c, "tran")["signals"]["V(OUT)"]["final"], t["signals"]["V(OUT)"]["final"]);
+    // errors
+    let (d, ok) = run(&format!("{rc}tran 5m 50u record=probes\n"));
+    assert!(!ok && d.iter().any(|v| v["error"].as_str().is_some_and(|e| e.contains("record=probes needs probe="))), "{d:?}");
+    let (e, ok) = run(&format!("{rc}tran 5m 50u probe=V(out) record=some\n"));
+    assert!(!ok && e.iter().any(|v| v["error"].as_str().is_some_and(|e| e.contains("not 'all' or 'probes'"))), "{e:?}");
+}

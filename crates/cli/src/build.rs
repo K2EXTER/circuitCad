@@ -810,7 +810,28 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
         if let Some(spec) = opt(&kv, "guess") {
             apply_guess(&mut c, spec)?;
         }
-        let r = sim_core::transient(&c, &sim_core::TranSettings { tstop, tstep, uic }).map_err(|e| cli_sim_error(e.to_string()))?;
+        // `record=probes` keeps only the probed signals (a large circuit would store a value of every node and element at every step);
+        // `record=all` keeps everything; without it a circuit big enough that the record would pass ten million values is cut to the probes
+        let est_values = (c.names.len() + c.elements.len()) as f64 * (tstop / tstep).max(1.0);
+        let (restrict, auto) = match (opt(&kv, "record").map(lower).as_deref(), probes.is_empty()) {
+            (Some("probes"), true) => return Err("record=probes needs probe=V(net),I(part) to say what to keep".to_string()),
+            (Some("probes"), false) => (true, false),
+            (Some("all"), _) => (false, false),
+            (None, probes_empty) => (!probes_empty && est_values > 1.0e7, true),
+            (Some(other), _) => return Err(format!("record: '{other}' is not 'all' or 'probes'")),
+        };
+        let keep = |name: &str| {
+            let n = lower(name);
+            probes.iter().any(|p| n == *p || n.contains(p.as_str()))
+        };
+        let r = sim_core::transient_with(&c, &sim_core::TranSettings { tstop, tstep, uic }, if restrict { Some(&keep) } else { None }).map_err(|e| cli_sim_error(e.to_string()))?;
+        let restricted_note: Option<String> = restrict.then(|| {
+            if auto {
+                "記録は probe= の信号だけです (回路が大きいので、自動で絞りました。全部を記録するには record=all を付けてください)。probe にない信号を使う spec・settle・定格の注意は出ません".to_string()
+            } else {
+                "記録は probe= の信号だけです (record=probes)。probe にない信号を使う spec・settle・定格の注意は出ません".to_string()
+            }
+        });
         self.last_tran = Some(r.clone());
         let n = r.time.len();
         let pick = |v: &[f64]| -> Vec<Value> {
@@ -836,7 +857,7 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
             })
             .collect();
         let (ratings, notes) = self.tran_notes(&r);
-        let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "models": self.model_gaps(), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).collect::<Vec<_>>()});
+        let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "models": self.model_gaps(), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).chain(restricted_note).collect::<Vec<_>>()});
         if let Some(list) = opt(&kv, "settle") {
             let from = match opt(&kv, "from") {
                 Some(s) => sim_core::parse_value(s).filter(|v| *v >= 0.0).ok_or_else(|| format!("from: '{s}' is not a time (write 20u, 1m ...)"))?,

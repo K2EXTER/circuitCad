@@ -60,3 +60,25 @@ fn two_toggle_flip_flops_on_a_digital_net_divide_by_four() {
     }
 }
 
+
+/// A run that keeps only some signals has the same time points and the same numbers for them.
+#[test]
+fn a_filtered_run_keeps_only_the_wanted_signals_with_the_same_values() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss clk q1 q2 qb1 qb2", "Y1 dff q1 qb1 vss vcc 60 0.5 0 0 0 qb1 clk 0 0\nY2 dff q2 qb2 vss vcc 60 0.5 0 0 0 qb2 q1 0 0");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    let s = parse_source_full("PULSE(0 5 1u 1n 1n 4u 10u)").unwrap();
+    c.add(Element::VSource { name: "Vclk".into(), p: n[2], n: 0, wave: s.wave, ac: s.ac });
+    c.add(Element::Resistor { name: "Rl".into(), a: n[4], b: 0, r: 10e3 });
+    let set = TranSettings { tstop: 45e-6, tstep: 0.1e-6, uic: false };
+    let full = transient(&c, &set).unwrap();
+    let keep = |name: &str| name == "V(q2)" || name == "I(Rl)";
+    let part = transient_with(&c, &set, Some(&keep)).unwrap();
+    assert_eq!(full.time, part.time);
+    let names: Vec<&str> = part.signals.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["V(q2)", "I(Rl)"]);
+    for s in &part.signals {
+        assert_eq!(s.values, full.signal(&s.name).unwrap().values, "{}", s.name);
+    }
+}
