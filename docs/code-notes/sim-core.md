@@ -365,4 +365,6 @@ MOSFET ドライバ `TC4421-JT`/`TC4422-JT`(Microchip)は、`tanh` で飽和す�
 `part-lib/examples/74HC74_DIP-14.part.json` のモデルを、スイッチで作った NAND ラッチ(S1〜S44)から、`U1 dff(1) $G_DPWR $G_DGND pre clr clk d q qb D_DFF IO_STD` の2行(`Element::Seq`)に替えた。理由: ゼロ遅延のマスタースレーブをゲートで組むと、クロックの立ち下がりでマスターが開くのとスレーブが閉じるのが同時になり、16bit(約390ゲート)のアキュムレータで過渡解析が収束しなかった。Seq の FF なら競合がなく、2561 ゲート + FF 512 個でも 1 ms(100 クロック)が 72 秒で通る(ゲートの FF は 388 ゲートで 33 秒、RC で許可信号を重ならなくして初めて通った)。
 - 違い: 出力は 0 V / 5 V 固定、入力のしきい値は 2.5 V(電源が 5 V でないと合わない)。VCC ピンは見ない。状態の変化は最大で 1 刻み遅れる。PRE・CLR は負論理のまま。
 - `74HC4017` のモデルは、この部品を元にした生成物(`S1`〜`S22`)なので、そのまま(スイッチ版)。
+- 出力は 60Ω の抵抗を通す(`R1 q1i q1 60` など)。理想の電圧源のままだと、サンプルの LED の電流が 9.25 mA になり、`logic_blinker` のテスト(2〜8 mA)が落ちた。
+- ngspice は `U dff(1)` を読めない。`app/src/xcheck.rs` の `our_side` は、`dff(` などを含む部品があれば「対象外」にし、`docs/xcheck/ngspice_dc.json` から `logic_blinker` を外した(`mixed_signal` は元から保存の対象外)。
 - サンプル(`logic_blinker` `mixed_signal.schjson` `mixed_signal.ccproj`)は回路図の中に部品の定義(`custom`)を持っているので、74HC74 の `sim` を新しいものに置き換えた(波形の周波数・デューティは前と同じ。`logic_blinker` の内部ノード `U2.m1` などは無くなった)。

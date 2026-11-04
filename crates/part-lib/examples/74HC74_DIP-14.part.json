@@ -1,7 +1,7 @@
 {
   "name": "74HC74",
   "category": "ロジックIC",
-  "description": "デュアル D フリップフロップ (DIP-14)。クロックの立上りで D を取り込みます。PRE・CLR は負論理の非同期セット/リセット。状態を内部に持つモデル (遅延なし。出力は 0 V / 5 V)",
+  "description": "デュアル D フリップフロップ (DIP-14)。クロックの立上りで D を取り込みます。PRE・CLR は負論理の非同期セット/リセット。状態を内部に持つモデル (遅延なし。出力は 0 V / 5 V で約 60Ω)",
   "datasheet": "",
   "prefix": "U",
   "footprint_name": "DIP-14_W7.62",
@@ -89,7 +89,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC74",
-    "text": "* 74HC74 behavioural model: two D flip-flops that keep their state inside (Element::Seq). No propagation delay; the outputs swing 0..5 V.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nU1 dff(1) $G_DPWR $G_DGND pre1 clr1 clk1 d1 q1 qb1 D_DFF IO_STD\nU2 dff(1) $G_DPWR $G_DGND pre2 clr2 clk2 d2 q2 qb2 D_DFF IO_STD\n.ends 74HC74",
+    "text": "* 74HC74 behavioural model: two D flip-flops that keep their state inside (Element::Seq). No propagation delay; the outputs swing 0..5 V through 60 ohm.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nU1 dff(1) $G_DPWR $G_DGND pre1 clr1 clk1 d1 q1i qb1i D_DFF IO_STD\nR1 q1i q1 60\nR2 qb1i qb1 60\nU2 dff(1) $G_DPWR $G_DGND pre2 clr2 clk2 d2 q2i qb2i D_DFF IO_STD\nR3 q2i q2 60\nR4 qb2i qb2 60\n.ends 74HC74",
     "pins": [
       "1",
       "2",
@@ -108,7 +108,7 @@
     ],
     "params": {},
     "limits": [
-      "状態を内部に持つ D フリップフロップのモデルです。出力は 0 V / 5 V で、入力のしきい値は 2.5 V です (電源が 5 V でないときは合いません)。電源ピン (VCC) はつないでも、モデルは見ません。",
+      "状態を内部に持つ D フリップフロップのモデルです。出力は 0 V / 5 V で約 60Ω の抵抗を通してつながり、入力のしきい値は 2.5 V です (電源が 5 V でないときは合いません)。電源ピン (VCC) はつないでも、モデルは見ません。",
       "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。状態の変化は、次の計算の刻みから出力に出ます (最大で 1 刻み遅れます)。",
       "使わない入力は、GND か電源につないでください (つながないと 0 V として扱い、PRE・CLR は働いた状態になります)。",
       "D フリップフロップは、クロックの立ち上がりで入力を取り込みます。PRE・CLR は負論理 (Low で働く) の非同期入力です。"
