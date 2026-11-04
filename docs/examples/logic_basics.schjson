@@ -238,9 +238,8 @@
         ],
         "sim": {
           "kind": "subckt",
-          "element": "",
           "name": "74HC14",
-          "text": "* 74HC14 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC14 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nR1 vcc r1 200k\nR2 r1 gnd 200k\nR3 r1 y1 400k\nS4 vcc y1 r1 a1 SWPA\nS5 y1 gnd a1 r1 SWNA\nR6 vcc r2 200k\nR7 r2 gnd 200k\nR8 r2 y2 400k\nS9 vcc y2 r2 a2 SWPA\nS10 y2 gnd a2 r2 SWNA\nR11 vcc r3 200k\nR12 r3 gnd 200k\nR13 r3 y3 400k\nS14 vcc y3 r3 a3 SWPA\nS15 y3 gnd a3 r3 SWNA\nR16 vcc r4 200k\nR17 r4 gnd 200k\nR18 r4 y4 400k\nS19 vcc y4 r4 a4 SWPA\nS20 y4 gnd a4 r4 SWNA\nR21 vcc r5 200k\nR22 r5 gnd 200k\nR23 r5 y5 400k\nS24 vcc y5 r5 a5 SWPA\nS25 y5 gnd a5 r5 SWNA\nR26 vcc r6 200k\nR27 r6 gnd 200k\nR28 r6 y6 400k\nS29 vcc y6 r6 a6 SWPA\nS30 y6 gnd a6 r6 SWNA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC14",
+          "text": "* 74HC14 behavioural model: a Schmitt-trigger inverter as one expression per gate. The switching level depends on the gate's own output (positive feedback): 0.6 Vcc rising, 0.4 Vcc falling. The output follows Vcc through 60 ohm. No propagation delay.\n.subckt 74HC14 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nB1 o1 gnd V=V(vcc,gnd)*(1-(0.5+0.5*tanh((V(a1,gnd)-0.3568*V(vcc,gnd)-0.2864*V(o1,gnd))/(0.02*V(vcc,gnd)+0.001))))\nR1 o1 y1 60\nRin_a1 a1 gnd 1G\nB2 o2 gnd V=V(vcc,gnd)*(1-(0.5+0.5*tanh((V(a2,gnd)-0.3568*V(vcc,gnd)-0.2864*V(o2,gnd))/(0.02*V(vcc,gnd)+0.001))))\nR2 o2 y2 60\nRin_a2 a2 gnd 1G\nB3 o3 gnd V=V(vcc,gnd)*(1-(0.5+0.5*tanh((V(a3,gnd)-0.3568*V(vcc,gnd)-0.2864*V(o3,gnd))/(0.02*V(vcc,gnd)+0.001))))\nR3 o3 y3 60\nRin_a3 a3 gnd 1G\nB4 o4 gnd V=V(vcc,gnd)*(1-(0.5+0.5*tanh((V(a4,gnd)-0.3568*V(vcc,gnd)-0.2864*V(o4,gnd))/(0.02*V(vcc,gnd)+0.001))))\nR4 o4 y4 60\nRin_a4 a4 gnd 1G\nB5 o5 gnd V=V(vcc,gnd)*(1-(0.5+0.5*tanh((V(a5,gnd)-0.3568*V(vcc,gnd)-0.2864*V(o5,gnd))/(0.02*V(vcc,gnd)+0.001))))\nR5 o5 y5 60\nRin_a5 a5 gnd 1G\nB6 o6 gnd V=V(vcc,gnd)*(1-(0.5+0.5*tanh((V(a6,gnd)-0.3568*V(vcc,gnd)-0.2864*V(o6,gnd))/(0.02*V(vcc,gnd)+0.001))))\nR6 o6 y6 60\nRin_a6 a6 gnd 1G\n.ends 74HC14",
           "pins": [
             "1",
             "2",
@@ -259,9 +258,9 @@
           ],
           "params": {},
           "limits": [
-            "スイッチで作った CMOS ゲートの動作モデルです。入力のしきい値は電源電圧の半分で、出力は High が約 80Ω、Low が約 40Ω の抵抗を通して電源・GND につながります。",
-            "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
-            "使わない入力は、GND か電源につないでください (つながないと 0V として扱います)。"
+            "ゲートを 1 つのなめらかな式で表した動作モデルです。切り替わる電圧は、そのゲートの出力に応じて変わります (ヒステリシス): 上がるとき 0.6Vcc、下がるとき 0.4Vcc。出力は電源電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+            "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。ヒステリシスの幅は電源電圧に比例する代表的な値で、実物の個体差は含みません。",
+            "使わない入力は、GND か電源につないでください (つながないと、1GΩ で GND につながっているので 0V として扱います)。"
           ]
         },
         "glyph": "gate_schmitt"
