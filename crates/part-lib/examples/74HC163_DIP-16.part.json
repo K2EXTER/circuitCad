@@ -1,0 +1,130 @@
+{
+  "name": "74HC163",
+  "category": "ロジックIC",
+  "description": "4 ビット 同期バイナリカウンタ (DIP-16)。74HC161 と同じですが、CLR は同期クリアです (CLK の立ち上がりで、CLR が Low なら 0 に戻ります。LOAD に優先)。CLK の立ち上がりで、ENP と ENT が両方 High のとき数え、LOAD が Low なら A〜D を取り込みます。RCO は ENT が High で QA〜QD が全部 High のとき High。デジタルセルで作った簡易モデル (クロック→Q 25ns)。ピン表と遅延は TI SN74HC163 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc163.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "glyph": "counter",
+  "pins": [
+    {
+      "number": "1",
+      "name": "CLR",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "CLK",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "C",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "D",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "ENP",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "LOAD",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "ENT",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "QD",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "QC",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "QB",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "QA",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "RCO",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC163",
+    "text": "* 74HC163 behavioural model: the 74HC161 with a synchronous clear (CLR low clears at the clock edge, before the load). Delays: clock to Q 25 ns, to RCO about 37 ns (the data sheet SCLS298, 4.5 V, 25 C typical: 25 and 24 ns).\n.subckt 74HC163 clr clk a b c d enp gnd load ent qd qc qb qa rco vcc\nYnl inv nload 0 gnd vcc 60 0.5 0 0 0 load\nYen and en 0 gnd vcc 60 0.5 0 0 0 enp ent\nYt1 and t1 0 gnd vcc 60 0.5 0 0 0 en qa\nYt2 and t2 0 gnd vcc 60 0.5 0 0 0 en qa qb\nYt3 and t3 0 gnd vcc 60 0.5 0 0 0 en qa qb qc\nYxa xor xa 0 gnd vcc 60 0.5 0 0 0 qa en\nYla and la 0 gnd vcc 60 0.5 0 0 0 nload a\nYca and ca 0 gnd vcc 60 0.5 0 0 0 load xa\nYra or ra 0 gnd vcc 60 0.5 0 0 0 la ca\nYda and da 0 gnd vcc 60 0.5 0 0 0 clr ra\nYFa dff qa 0 gnd vcc 60 0.5 0 0 0 td=25n da clk 0 0\nYxb xor xb 0 gnd vcc 60 0.5 0 0 0 qb t1\nYlb and lb 0 gnd vcc 60 0.5 0 0 0 nload b\nYcb and cb 0 gnd vcc 60 0.5 0 0 0 load xb\nYrb or rb 0 gnd vcc 60 0.5 0 0 0 lb cb\nYdb and db 0 gnd vcc 60 0.5 0 0 0 clr rb\nYFb dff qb 0 gnd vcc 60 0.5 0 0 0 td=25n db clk 0 0\nYxc xor xc 0 gnd vcc 60 0.5 0 0 0 qc t2\nYlc and lc 0 gnd vcc 60 0.5 0 0 0 nload c\nYcc and cc 0 gnd vcc 60 0.5 0 0 0 load xc\nYrc or rc 0 gnd vcc 60 0.5 0 0 0 lc cc\nYdc and dc 0 gnd vcc 60 0.5 0 0 0 clr rc\nYFc dff qc 0 gnd vcc 60 0.5 0 0 0 td=25n dc clk 0 0\nYxd xor xd 0 gnd vcc 60 0.5 0 0 0 qd t3\nYld and ld 0 gnd vcc 60 0.5 0 0 0 nload d\nYcd and cd 0 gnd vcc 60 0.5 0 0 0 load xd\nYrd or rd 0 gnd vcc 60 0.5 0 0 0 ld cd\nYdd and dd 0 gnd vcc 60 0.5 0 0 0 clr rd\nYFd dff qd 0 gnd vcc 60 0.5 0 0 0 td=25n dd clk 0 0\nYrco and rco 0 gnd vcc 60 0.5 0 0 0 td=12n ent qa qb qc qd\n.ends 74HC163",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、クロック→Q 25ns、クロック→RCO 約 37ns (ENT→RCO は 12ns) の代表値です (データシートの 4.5V・25℃ の値は、25ns、24ns、17ns)。",
+      "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

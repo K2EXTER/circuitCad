@@ -367,3 +367,394 @@ fn the_74hc574_reports_a_data_change_just_before_the_clock() {
     assert!(r.timing.violations.iter().any(|v| v.kind == crate::TimingKind::Setup), "{:?}", r.timing);
     assert!(r.warnings.iter().any(|w| w.contains("セットアップ時間が足りません")), "{:?}", r.warnings);
 }
+
+// ---------------------------------------------------------------------------------------------- the rest of the first list (H2)
+
+/// The clock rises at 0.9 us, 1.9 us, ... (high 0.4 us): the count after the j-th edge is read 0.6 us after it.
+fn after_edge(j: usize) -> f64 {
+    0.9e-6 + (j as f64 - 1.0) * 1e-6 + 0.6e-6
+}
+
+fn count_of(r: &TranResult, pins: &[&str], vcc: f64, t: f64) -> usize {
+    pins.iter().enumerate().map(|(i, p)| ((at(r, p, t) > vcc / 2.0) as usize) << i).sum()
+}
+
+/// The 74HC163 clears at the clock edge (not at once), and counts.
+#[test]
+fn the_74hc163_clears_at_the_clock_edge() {
+    let mut c = Circuit::new();
+    place(&mut c, "74HC163");
+    supply(&mut c, 5.0);
+    source(&mut c, "Vclk", "CLK", "PULSE(0 5 0.9u 1n 1n 0.4u 1u)");
+    // CLR low from 5.2 to 5.6 us (between two edges: nothing happens), and from 7.2 to 8.0 us (the 8th edge, at 7.9 us, clears)
+    source(&mut c, "Vclr", "CLR", "PWL(0 5 5.2u 5 5.21u 0 5.6u 0 5.61u 5 7.2u 5 7.21u 0 8.0u 0 8.01u 5 40u 5)");
+    source(&mut c, "Venp", "ENP", "5");
+    source(&mut c, "Vent", "ENT", "5");
+    source(&mut c, "Vload", "LOAD", "5");
+    for p in ["A", "B", "C", "D"] {
+        source(&mut c, &format!("V{p}"), p, "0");
+    }
+    for p in ["QA", "QB", "QC", "QD", "RCO"] {
+        load(&mut c, p);
+    }
+    let r = transient(&c, &TranSettings { tstop: 12e-6, tstep: 20e-9, uic: false }).unwrap();
+    let q = ["QA", "QB", "QC", "QD"];
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(1)), 1);
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(4)), 4);
+    assert_eq!(count_of(&r, &q, 5.0, 5.5e-6), 5, "a CLR pulse between two edges changes nothing");
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(7)), 7);
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(8)), 0, "the edge with CLR low clears");
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(10)), 2, "and the count goes on from 0");
+}
+
+/// One 74HC393 counter counts the falling edges of CLK in binary, and CLR (high) clears it at once.
+#[test]
+fn the_74hc393_counts_falling_edges_and_clears() {
+    let mut c = Circuit::new();
+    place(&mut c, "74HC393");
+    supply(&mut c, 5.0);
+    // falling edges at 1.3 us, 2.3 us, ... (the clock is high 0.9..1.3 us): the count after the j-th falling edge is j
+    source(&mut c, "Vclk", "1CLK", "PULSE(0 5 0.9u 1n 1n 0.4u 1u)");
+    source(&mut c, "Vclr", "1CLR", "PWL(0 0 6.5u 0 6.51u 5 6.9u 5 6.91u 0 20u 0)");
+    source(&mut c, "Vclk2", "2CLK", "0");
+    source(&mut c, "Vclr2", "2CLR", "0");
+    for p in ["1QA", "1QB", "1QC", "1QD", "2QA"] {
+        load(&mut c, p);
+    }
+    let r = transient(&c, &TranSettings { tstop: 14e-6, tstep: 20e-9, uic: false }).unwrap();
+    let q = ["1QA", "1QB", "1QC", "1QD"];
+    for j in 1..=5usize {
+        let t = 1.3e-6 + (j as f64 - 1.0) * 1e-6 + 0.6e-6;
+        assert_eq!(count_of(&r, &q, 5.0, t), j, "after {j} falling edges");
+    }
+    assert_eq!(count_of(&r, &q, 5.0, 6.7e-6), 0, "CLR high clears between edges");
+    assert_eq!(count_of(&r, &q, 5.0, 8.0e-6), 1, "the count goes on: the first falling edge after CLR is at 7.3 us");
+    assert_eq!(count_of(&r, &q, 5.0, 9.0e-6), 2, "and the next one at 8.3 us");
+}
+
+/// The 74HC139: one output of a decoder goes low; G high turns the decoder off; the two decoders are independent.
+#[test]
+fn the_74hc139_decodes_two_bits() {
+    for vcc in [5.0, 3.3] {
+        for n in 0..4usize {
+            for (g, enabled) in [(0, true), (1, false)] {
+                let mut c = Circuit::new();
+                place(&mut c, "74HC139");
+                supply(&mut c, vcc);
+                // decoder 1 gets the test code; decoder 2 gets the opposite code and is always enabled
+                for (pin, bit) in [("1A", n & 1), ("1B", n >> 1), ("1G", g), ("2A", (3 - n) & 1), ("2B", (3 - n) >> 1), ("2G", 0)] {
+                    source(&mut c, &format!("V{pin}"), pin, &format!("{}", bit as f64 * vcc));
+                }
+                for k in 0..4 {
+                    load(&mut c, &format!("1Y{k}"));
+                    load(&mut c, &format!("2Y{k}"));
+                }
+                let r = dc_op(&c).unwrap();
+                for k in 0..4usize {
+                    let y1 = r.voltage(&format!("p_1Y{k}")).unwrap() < vcc / 2.0;
+                    assert_eq!(y1, enabled && k == n, "74HC139 on {vcc} V, 1Y{k}, code {n}, G {g}");
+                    let y2 = r.voltage(&format!("p_2Y{k}")).unwrap() < vcc / 2.0;
+                    assert_eq!(y2, k == 3 - n, "2Y{k} follows its own code");
+                }
+            }
+        }
+    }
+}
+
+/// The 74HC153 passes C0..C3 of each half by the shared select (A, B); G high forces Y low.
+#[test]
+fn the_74hc153_selects_one_of_four_per_half() {
+    for vcc in [5.0, 3.3] {
+        for sel in 0..4usize {
+            for (g, data_bit) in [(0, 0usize), (0, 1), (1, 1)] {
+                let mut c = Circuit::new();
+                place(&mut c, "74HC153");
+                supply(&mut c, vcc);
+                for (pin, bit) in [("A", sel & 1), ("B", sel >> 1), ("1G", g), ("2G", 0)] {
+                    source(&mut c, &format!("V{pin}"), pin, &format!("{}", bit as f64 * vcc));
+                }
+                for k in 0..4usize {
+                    // the selected input carries the test value in half 1 and its inverse in half 2; the others carry the opposite
+                    let b1 = if k == sel { data_bit } else { 1 - data_bit };
+                    let b2 = if k == sel { 1 - data_bit } else { data_bit };
+                    source(&mut c, &format!("V1C{k}"), &format!("1C{k}"), &format!("{}", b1 as f64 * vcc));
+                    source(&mut c, &format!("V2C{k}"), &format!("2C{k}"), &format!("{}", b2 as f64 * vcc));
+                }
+                load(&mut c, "1Y");
+                load(&mut c, "2Y");
+                let r = dc_op(&c).unwrap();
+                let (y1, y2) = (r.voltage("p_1Y").unwrap() > vcc / 2.0, r.voltage("p_2Y").unwrap() > vcc / 2.0);
+                assert_eq!(y1, g == 0 && data_bit == 1, "74HC153 on {vcc} V, half 1, select {sel}, data {data_bit}, G {g}");
+                assert_eq!(y2, g == 0 && data_bit == 0, "half 2 (G low), select {sel}, data {data_bit}");
+            }
+        }
+    }
+}
+
+/// The 74HC157: A/B picks the A or the B inputs; G high forces every Y low.
+#[test]
+fn the_74hc157_selects_a_or_b_for_four_channels() {
+    for vcc in [5.0, 3.3] {
+        for sel in [0, 1] {
+            for g in [0, 1] {
+                let mut c = Circuit::new();
+                place(&mut c, "74HC157");
+                supply(&mut c, vcc);
+                for (pin, bit) in [("A/B", sel), ("G", g)] {
+                    source(&mut c, &format!("V{}", pin.replace('/', "_")), pin, &format!("{}", bit as f64 * vcc));
+                }
+                // channel k: A = bit k of 0b0101, B = its inverse
+                for k in 1..=4usize {
+                    let a = (k + 1) % 2; // 0,1,0,1 for k = 1..4... a(1)=0 a(2)=1 a(3)=0 a(4)=1
+                    source(&mut c, &format!("V{k}A"), &format!("{k}A"), &format!("{}", a as f64 * vcc));
+                    source(&mut c, &format!("V{k}B"), &format!("{k}B"), &format!("{}", (1 - a) as f64 * vcc));
+                    load(&mut c, &format!("{k}Y"));
+                }
+                let r = dc_op(&c).unwrap();
+                for k in 1..=4usize {
+                    let a = (k + 1) % 2;
+                    let want = g == 0 && (if sel == 0 { a } else { 1 - a }) == 1;
+                    assert_eq!(r.voltage(&format!("p_{k}Y")).unwrap() > vcc / 2.0, want, "74HC157 on {vcc} V, channel {k}, A/B {sel}, G {g}");
+                }
+            }
+        }
+    }
+}
+
+/// The 74HC164 shifts A AND B in at each rising clock edge; CLR clears at once.
+#[test]
+fn the_74hc164_shifts_the_and_of_its_two_inputs() {
+    let mut c = Circuit::new();
+    place(&mut c, "74HC164");
+    supply(&mut c, 5.0);
+    source(&mut c, "Vclk", "CLK", "PULSE(0 5 0.9u 1n 1n 0.4u 1u)");
+    // A is 1 throughout; B is 1 for the first three edges (until 3.5 us), then 0
+    source(&mut c, "Va", "A", "5");
+    source(&mut c, "Vb", "B", "PWL(0 5 3.5u 5 3.51u 0 20u 0)");
+    source(&mut c, "Vclr", "CLR", "PWL(0 0 0.3u 0 0.31u 5 9.5u 5 9.51u 0 10.4u 0 10.41u 5 20u 5)");
+    for p in ["QA", "QB", "QC", "QD", "QE", "QF", "QG", "QH"] {
+        load(&mut c, p);
+    }
+    let r = transient(&c, &TranSettings { tstop: 12e-6, tstep: 20e-9, uic: false }).unwrap();
+    let q = ["QA", "QB", "QC", "QD", "QE", "QF", "QG", "QH"];
+    // three 1s go in, then 0s: after j edges the lowest min(j,3) outputs are shifted up: j = 1: QA; 2: QA QB; 3: QA QB QC; 4: QB QC QD; ...
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(1)), 0b0000_0001);
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(3)), 0b0000_0111);
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(4)), 0b0000_1110);
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(6)), 0b0011_1000);
+    assert_eq!(count_of(&r, &q, 5.0, 9.4e-6), 0b1100_0000, "after nine edges the first 1 has gone out through QH; the other two are at QG and QH");
+    assert_eq!(count_of(&r, &q, 5.0, 9.7e-6), 0, "CLR low clears at once, between edges");
+    assert_eq!(count_of(&r, &q, 5.0, after_edge(10)), 0, "the edge at 9.9 us finds CLR low: nothing is shifted in");
+}
+
+/// The 74HC165 loads A..H at once with SH/LD low (asynchronously) and shifts them out through QH.
+#[test]
+fn the_74hc165_loads_in_parallel_and_shifts_out_serially() {
+    let bits = [1, 0, 1, 1, 0, 0, 1, 0usize]; // A..H
+    let mut c = Circuit::new();
+    place(&mut c, "74HC165");
+    supply(&mut c, 5.0);
+    // SH/LD low from 0.3 to 1.2 us (loads between the clock edges: asynchronous), then high; the clock rises at 1.9, 2.9, ... us
+    source(&mut c, "Vshld", "SH/LD", "PWL(0 5 0.3u 5 0.31u 0 1.2u 0 1.21u 5 20u 5)");
+    source(&mut c, "Vclk", "CLK", "PULSE(0 5 1.9u 1n 1n 0.4u 1u)");
+    source(&mut c, "Vinh", "CLK_INH", "0");
+    source(&mut c, "Vser", "SER", "0");
+    for (i, p) in ["A", "B", "C", "D", "E", "F", "G", "H"].iter().enumerate() {
+        source(&mut c, &format!("V{p}"), p, &format!("{}", bits[i] as f64 * 5.0));
+    }
+    load(&mut c, "QH");
+    load(&mut c, "QH_N");
+    let r = transient(&c, &TranSettings { tstop: 12e-6, tstep: 20e-9, uic: false }).unwrap();
+    let qh = |t: f64| at(&r, "QH", t) > 2.5;
+    // after the load (1.0 us) QH is H (the last bit); each rising edge then brings the next bit towards QH: after edge 1 it is G...
+    assert_eq!(qh(1.0e-6), bits[7] == 1, "QH shows H right after the load");
+    for j in 1..=7usize {
+        let t = 1.9e-6 + (j as f64 - 1.0) * 1e-6 + 0.6e-6;
+        assert_eq!(qh(t), bits[7 - j] == 1, "QH after {j} clock edges");
+    }
+    assert_eq!(at(&r, "QH_N", 1.0e-6) > 2.5, bits[7] != 1, "QH_N is the inverse");
+}
+
+/// The 74HC283 adds two 4-bit numbers and a carry in.
+#[test]
+fn the_74hc283_adds() {
+    for vcc in [5.0, 3.3] {
+        for (a, b, cin) in [(0usize, 0usize, 0usize), (5, 3, 0), (9, 6, 1), (15, 15, 1), (7, 8, 0), (12, 4, 0), (1, 14, 1)] {
+            let mut c = Circuit::new();
+            place(&mut c, "74HC283");
+            supply(&mut c, vcc);
+            for i in 0..4 {
+                source(&mut c, &format!("VA{i}"), &format!("A{i}"), &format!("{}", ((a >> i) & 1) as f64 * vcc));
+                source(&mut c, &format!("VB{i}"), &format!("B{i}"), &format!("{}", ((b >> i) & 1) as f64 * vcc));
+                load(&mut c, &format!("S{i}"));
+            }
+            source(&mut c, "VCIN", "CIN", &format!("{}", cin as f64 * vcc));
+            load(&mut c, "COUT");
+            let r = dc_op(&c).unwrap();
+            let mut sum = 0usize;
+            for i in 0..4 {
+                sum |= ((r.voltage(&format!("p_S{i}")).unwrap() > vcc / 2.0) as usize) << i;
+            }
+            sum |= ((r.voltage("p_COUT").unwrap() > vcc / 2.0) as usize) << 4;
+            assert_eq!(sum, a + b + cin, "74HC283 on {vcc} V: {a} + {b} + {cin}");
+        }
+    }
+}
+
+/// The 74HC4040 divides by two at each stage and counts the falling edges of CP in binary up to 4095; MR clears.
+#[test]
+fn the_74hc4040_is_a_twelve_stage_ripple_counter() {
+    let mut c = Circuit::new();
+    place(&mut c, "74HC4040");
+    supply(&mut c, 5.0);
+    source(&mut c, "Vcp", "CP", "PULSE(0 5 0.9u 1n 1n 0.4u 1u)");
+    source(&mut c, "Vmr", "MR", "PWL(0 0 9.5u 0 9.51u 5 9.9u 5 9.91u 0 40u 0)");
+    let q: Vec<String> = (1..=12).map(|k| format!("Q{k}")).collect();
+    for p in &q {
+        load(&mut c, p);
+    }
+    let r = transient(&c, &TranSettings { tstop: 14e-6, tstep: 20e-9, uic: false }).unwrap();
+    let pins: Vec<&str> = q.iter().map(|s| s.as_str()).collect();
+    for j in 1..=8usize {
+        // the falling edge of CP number j is at 1.3 + (j - 1) us; the count settles within about 50 ns of it
+        let t = 1.3e-6 + (j as f64 - 1.0) * 1e-6 + 0.6e-6;
+        assert_eq!(count_of(&r, &pins, 5.0, t), j, "after {j} falling edges");
+    }
+    assert_eq!(count_of(&r, &pins, 5.0, 9.7e-6), 0, "MR high clears at once");
+    assert_eq!(count_of(&r, &pins, 5.0, 11.6e-6), 2, "and the count goes on (the falling edges at 10.3 us and 11.3 us)");
+}
+
+/// The CD4511B: the codes 0..9 light the segments of the data sheet, LT lights all, BL blanks, LE holds the code, codes above 9 are blank.
+#[test]
+fn the_cd4511b_decodes_bcd_to_seven_segments() {
+    // a b c d e f g for each digit (the data sheet truth table)
+    let table = ["abcdef", "bc", "abdeg", "abcdg", "bcfg", "acdfg", "cdefg", "abc", "abcdefg", "abcfg"];
+    for vdd in [5.0, 10.0] {
+        let run = |code: usize, lt: f64, bl: f64, le: f64| {
+            let mut c = Circuit::new();
+            place(&mut c, "CD4511B");
+            let (v, g) = (node(&mut c, "VDD"), node(&mut c, "VSS"));
+            c.add(Element::vdc("Vdd", v, 0, vdd));
+            c.add(Element::Resistor { name: "Rg".into(), a: g, b: 0, r: 1e-3 });
+            for (pin, bit) in [("A", code & 1), ("B", (code >> 1) & 1), ("C", (code >> 2) & 1), ("D", (code >> 3) & 1)] {
+                source(&mut c, &format!("V{pin}"), pin, &format!("{}", bit as f64 * vdd));
+            }
+            source(&mut c, "Vlt", "LT", &format!("{}", lt * vdd));
+            source(&mut c, "Vbl", "BL", &format!("{}", bl * vdd));
+            source(&mut c, "Vle", "LE", &format!("{}", le * vdd));
+            for s in "ABCDEFG".chars() {
+                load(&mut c, &format!("SEG_{s}"));
+            }
+            let r = dc_op(&c).unwrap();
+            "ABCDEFG".chars().map(|s| r.voltage(&format!("p_SEG_{s}")).unwrap() > vdd / 2.0).collect::<Vec<bool>>()
+        };
+        for (digit, segs) in table.iter().enumerate() {
+            let want: Vec<bool> = "abcdefg".chars().map(|s| segs.contains(s)).collect();
+            assert_eq!(run(digit, 1.0, 1.0, 0.0), want, "digit {digit} on {vdd} V");
+        }
+        for code in 10..16 {
+            assert_eq!(run(code, 1.0, 1.0, 0.0), vec![false; 7], "code {code} is blank");
+        }
+        assert_eq!(run(3, 0.0, 1.0, 0.0), vec![true; 7], "lamp test lights everything");
+        assert_eq!(run(3, 0.0, 0.0, 0.0), vec![true; 7], "lamp test wins over blanking");
+        assert_eq!(run(3, 1.0, 0.0, 0.0), vec![false; 7], "BL low blanks");
+    }
+}
+
+/// With LE high the CD4511B keeps the code it had when LE rose.
+#[test]
+fn the_cd4511b_latches_the_code_with_le() {
+    let mut c = Circuit::new();
+    place(&mut c, "CD4511B");
+    let (v, g) = (node(&mut c, "VDD"), node(&mut c, "VSS"));
+    c.add(Element::vdc("Vdd", v, 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: g, b: 0, r: 1e-3 });
+    // the code is 1 (A) until 5 us, then 2 (B); LE rises at 3 us: it holds 1; LE falls at 8 us: it follows 2
+    source(&mut c, "VA", "A", "PWL(0 5 5u 5 5.01u 0 20u 0)");
+    source(&mut c, "VB", "B", "PWL(0 0 5u 0 5.01u 5 20u 5)");
+    source(&mut c, "VC", "C", "0");
+    source(&mut c, "VD", "D", "0");
+    source(&mut c, "Vlt", "LT", "5");
+    source(&mut c, "Vbl", "BL", "5");
+    source(&mut c, "Vle", "LE", "PWL(0 0 3u 0 3.01u 5 8u 5 8.01u 0 20u 0)");
+    for s in "ABCDEFG".chars() {
+        load(&mut c, &format!("SEG_{s}"));
+    }
+    let r = transient(&c, &TranSettings { tstop: 12e-6, tstep: 50e-9, uic: false }).unwrap();
+    let seg = |t: f64| -> String { "ABCDEFG".chars().filter(|s| at(&r, &format!("SEG_{s}"), t) > 2.5).collect() };
+    assert_eq!(seg(2.5e-6), "BC", "code 1 shows b and c (the delay is 0.7 us at 5 V)");
+    assert_eq!(seg(7.0e-6), "BC", "LE high holds the 1 after the code changed to 2");
+    assert_eq!(seg(11.0e-6), "ABDEG", "LE low: it follows the code 2");
+}
+
+/// The ROM32x8 holds one sine period; an R-2R ladder on D0..D7 turns each word into a voltage of word / 256 of the supply.
+#[test]
+fn the_rom32x8_through_an_r_2r_ladder_gives_a_sine() {
+    for addr in 0..32usize {
+        let mut c = Circuit::new();
+        place(&mut c, "ROM32x8");
+        supply(&mut c, 5.0);
+        source(&mut c, "Voe", "OE", "0");
+        for k in 0..5 {
+            source(&mut c, &format!("Va{k}"), &format!("A{k}"), if addr >> k & 1 == 1 { "5" } else { "0" });
+        }
+        let nodes: Vec<usize> = (0..8).map(|k| c.node(&format!("ladder{k}"))).collect();
+        for k in 0..8 {
+            let d = node(&mut c, &format!("D{k}"));
+            c.add(Element::Resistor { name: format!("R2_{k}"), a: d, b: nodes[k], r: 20e3 });
+            if k + 1 < 8 {
+                c.add(Element::Resistor { name: format!("R1_{k}"), a: nodes[k], b: nodes[k + 1], r: 10e3 });
+            }
+        }
+        c.add(Element::Resistor { name: "Rterm".into(), a: nodes[0], b: 0, r: 20e3 });
+        let r = dc_op(&c).unwrap();
+        let want = (127.5 + 127.5 * (2.0 * std::f64::consts::PI * addr as f64 / 32.0).sin()).round() / 256.0 * 5.0;
+        let v = r.voltage("ladder7").unwrap();
+        assert!((v - want).abs() < 0.03, "address {addr}: {v} V instead of {want} V");
+    }
+}
+
+/// A high OE lets go of the data outputs.
+#[test]
+fn the_rom32x8_outputs_are_off_when_oe_is_high() {
+    let mut c = Circuit::new();
+    place(&mut c, "ROM32x8");
+    supply(&mut c, 5.0);
+    source(&mut c, "Voe", "OE", "5");
+    for k in 0..5 {
+        source(&mut c, &format!("Va{k}"), &format!("A{k}"), "5");
+    }
+    // address 31 holds 103 (0b01100111): D0 would be high; pulled down it stays low when the ROM is off
+    let d0 = node(&mut c, "D0");
+    c.add(Element::Resistor { name: "Rpd".into(), a: d0, b: 0, r: 10e3 });
+    let r = dc_op(&c).unwrap();
+    assert!(r.voltage("p_D0").unwrap() < 0.5, "{}", r.voltage("p_D0").unwrap());
+}
+
+/// The 4-bit flash converter reads floor(16 * VIN / supply) at each rising clock edge, on 5 V and on 3.3 V.
+#[test]
+fn the_adc4_flash_reads_floor_of_sixteen_times_the_input_over_the_supply() {
+    for vcc in [5.0, 3.3] {
+        let mut c = Circuit::new();
+        place(&mut c, "ADC4_FLASH");
+        supply(&mut c, vcc);
+        // a staircase through the middle of every code, 16 steps of 2 us; the clock rises 1.5 us into each step
+        let mut pwl = String::from("PWL(0 0");
+        for j in 0..16 {
+            let (t0, v) = (j as f64 * 2e-6, (j as f64 + 0.5) / 16.0 * vcc);
+            pwl += &format!(" {} {} {} {}", t0 + 0.1e-6, v, t0 + 2e-6, v);
+        }
+        pwl.push(')');
+        source(&mut c, "Vin", "AIN", &pwl);
+        source(&mut c, "Vclk", "CLK", &format!("PULSE(0 {vcc} 1.5u 1n 1n 0.3u 2u)"));
+        for p in ["D0", "D1", "D2", "D3"] {
+            load(&mut c, p);
+        }
+        let r = transient(&c, &TranSettings { tstop: 33e-6, tstep: 20e-9, uic: false }).unwrap();
+        for j in 0..16usize {
+            let t = j as f64 * 2e-6 + 1.9e-6;
+            let code: usize = (0..4).map(|k| usize::from(at(&r, &format!("D{k}"), t) > vcc / 2.0) << k).sum();
+            assert_eq!(code, j, "step {j} on {vcc} V");
+        }
+    }
+}

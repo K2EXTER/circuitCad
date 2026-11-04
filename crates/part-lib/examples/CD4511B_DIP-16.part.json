@@ -1,0 +1,130 @@
+{
+  "name": "CD4511B",
+  "category": "ロジックIC",
+  "description": "BCD → 7 セグメントのデコーダ・ドライバ (ラッチつき、DIP-16、4000 シリーズ)。D C B A の 2 進数 (0〜9) を、7 セグメント LED の SEG_A〜SEG_G (データシートの a〜g) に出します (High で点灯、共通カソード用)。LE が High のあいだは、その直前の値を保ちます。LT を Low にすると全部点灯 (ランプテスト)。BL を Low にすると全部消灯。10 以上の入力は全部消灯。電源は 3〜18V で、出力は電源電圧まで振れます。デジタルセルで作った簡易モデル (5V で、入力→出力 520〜660ns)。ピン表・真理値表・遅延は TI CD4511B のデータシートで確かめました。出力の抵抗 120Ω は 5V での見積もりです",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/cd4511b.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "C",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "LT",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "BL",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "LE",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "D",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "VSS",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "SEG_E",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "SEG_D",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "SEG_C",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "SEG_B",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "SEG_A",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "SEG_G",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "SEG_F",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VDD",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "CD4511B",
+    "text": "* CD4511B behavioural model: a BCD to 7-segment latch / decoder / driver. LE high holds the code; LT low lights every segment (lamp test, before anything else); BL low blanks (when LT is high); codes above 9 are blank. The levels follow the supply pins (3 to 18 V). The outputs source current: 120 ohm is an estimate at 5 V. Delays at 5 V (the data sheet SCHS072): data to output 520 ns falling, 660 ns rising; the speed grows with the supply.\n.subckt CD4511B b c lt bl le d a gnd seg_e seg_d seg_c seg_b seg_a seg_g seg_f vcc\nYnle inv nle 0 gnd vcc 60 0.5 0 0 0 le\nYnlt inv nlt 0 gnd vcc 60 0.5 0 0 0 lt\nYLa dlatch la nla gnd vcc 60 0.5 0 0 0 a nle 0 0\nYLb dlatch lb nlb gnd vcc 60 0.5 0 0 0 b nle 0 0\nYLc dlatch lc nlc gnd vcc 60 0.5 0 0 0 c nle 0 0\nYLd dlatch ld nld gnd vcc 60 0.5 0 0 0 d nle 0 0\nYm0 and m0 0 gnd vcc 60 0.5 0 0 0 nld nlc nlb nla\nYm1 and m1 0 gnd vcc 60 0.5 0 0 0 nld nlc nlb la\nYm2 and m2 0 gnd vcc 60 0.5 0 0 0 nld nlc lb nla\nYm3 and m3 0 gnd vcc 60 0.5 0 0 0 nld nlc lb la\nYm4 and m4 0 gnd vcc 60 0.5 0 0 0 nld lc nlb nla\nYm5 and m5 0 gnd vcc 60 0.5 0 0 0 nld lc nlb la\nYm6 and m6 0 gnd vcc 60 0.5 0 0 0 nld lc lb nla\nYm7 and m7 0 gnd vcc 60 0.5 0 0 0 nld lc lb la\nYm8 and m8 0 gnd vcc 60 0.5 0 0 0 ld nlc nlb nla\nYm9 and m9 0 gnd vcc 60 0.5 0 0 0 ld nlc nlb la\nYga or ga 0 gnd vcc 60 0.5 0 0 0 m0 m2 m3 m5 m7 m8 m9\nYba and ka 0 gnd vcc 60 0.5 0 0 0 bl ga\nYoa or seg_a 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt ka\nYgb or gb 0 gnd vcc 60 0.5 0 0 0 m0 m1 m2 m3 m4 m7 m8 m9\nYbb and kb 0 gnd vcc 60 0.5 0 0 0 bl gb\nYob or seg_b 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kb\nYgc or gc 0 gnd vcc 60 0.5 0 0 0 m0 m1 m3 m4 m5 m6 m7 m8 m9\nYbc and kc 0 gnd vcc 60 0.5 0 0 0 bl gc\nYoc or seg_c 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kc\nYgd or gd 0 gnd vcc 60 0.5 0 0 0 m0 m2 m3 m5 m6 m8\nYbd and kd 0 gnd vcc 60 0.5 0 0 0 bl gd\nYod or seg_d 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kd\nYge or ge 0 gnd vcc 60 0.5 0 0 0 m0 m2 m6 m8\nYbe and ke 0 gnd vcc 60 0.5 0 0 0 bl ge\nYoe or seg_e 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt ke\nYgf or gf 0 gnd vcc 60 0.5 0 0 0 m0 m4 m5 m6 m8 m9\nYbf and kf 0 gnd vcc 60 0.5 0 0 0 bl gf\nYof or seg_f 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kf\nYgg or gg 0 gnd vcc 60 0.5 0 0 0 m2 m3 m4 m5 m6 m8 m9\nYbg and kg 0 gnd vcc 60 0.5 0 0 0 bl gg\nYog or seg_g 0 gnd vcc 120 0.5 0 0 0 tplh=660n tphl=520n nlt kg\n.ends CD4511B",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピン (VDD と VSS) の間の電圧まで振れます。",
+      "出力は約 120Ω の抵抗を通してつながります (5V での見積もり。データシートの出力電圧の表からの概算)。電源が高いほど小さくなりますが、ここでは一定です。",
+      "遅延は、5V の代表値 (入力→出力 立ち上がり 660ns、立ち下がり 520ns) 1 組です。電源が 10V なら約 1/2.5 (260/210ns) と速くなりますが、ここでは電源によらず一定です。LT・BL からの経路 (250〜400ns) も同じ値で近似しています。",
+      "扱わないもの: 入力容量、電源電流、セットアップ時間 (5V で 150ns)・ホールド時間・ストローブのパルス幅の点検。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

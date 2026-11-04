@@ -563,6 +563,7 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     "dlatch" => K::Dlatch,
                     "srlatch" => K::Srlatch,
                     "schmitt" => K::Schmitt,
+                    "lut" | "rom" => K::Lut,
                     other => return Err(format!("{name}: デジタルセルの種類 {other} が分かりません")),
                 };
                 let (out, outb, vss, vcc) = (local(c, t[2]), local(c, t[3]), local(c, t[4]), local(c, t[5]));
@@ -571,9 +572,19 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 let (mut tplh, mut tphl, mut tsu, mut th) = (0.0, 0.0, 0.0, 0.0);
                 let (mut oe, mut oe_low, mut od) = (None, false, false);
                 let mut ins: Vec<usize> = vec![];
+                // lut / rom: outs=<node>,<node>,... (bit 0 first) and table=<hex>,<hex>,... (one word per address, bit k to output k)
+                let (mut outs, mut words): (Vec<usize>, Option<Vec<u64>>) = (vec![], None);
                 for w in &t[11..] {
                     if let Some((key, value)) = w.split_once('=') {
                         match key.to_ascii_lowercase().as_str() {
+                            "outs" => outs = value.split(',').map(|n| local(c, n)).collect(),
+                            "table" => {
+                                let mut v = vec![];
+                                for h in value.split(',') {
+                                    v.push(u64::from_str_radix(h.trim_start_matches("0x"), 16).map_err(|_| format!("{name}: table= の {h} が 16 進数ではありません (例: table=0,1,1,0)"))?);
+                                }
+                                words = Some(v);
+                            }
                             "oe" => oe = Some(local(c, value)),
                             "oel" => oe_low = value == "1",
                             "od" => od = value == "1",
@@ -582,14 +593,40 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                             "tphl" => tphl = val(value)?,
                             "tsu" => tsu = val(value)?,
                             "th" => th = val(value)?,
-                            other => return Err(format!("{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl・tsu・th・oe・oel・od)")),
+                            other => return Err(format!("{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl・tsu・th・oe・oel・od・outs・table)")),
                         }
                     } else {
                         ins.push(local(c, w));
                     }
                 }
                 let sup = crate::CellSupply { vss, vcc, rout: val(t[6])?, vt: val(t[7])?, vh: val(t[8])?, set_low: t[9] == "1", reset_low: t[10] == "1", tplh, tphl, tsu, th, oe, oe_low, od };
-                c.add(Element::Cell { name, kind, ins, out, outb, sup });
+                if kind != K::Lut {
+                    if !outs.is_empty() || words.is_some() {
+                        return Err(format!("{name}: outs= と table= が使えるのは lut / rom だけです"));
+                    }
+                    c.add(Element::Cell { name, kind, ins, out, outb, sup, table: None });
+                } else {
+                    // one cell per output bit, all reading the same address inputs
+                    let words = words.ok_or_else(|| format!("{name}: lut / rom には table=<16 進数>,<16 進数>,... (アドレス順) が要ります"))?;
+                    if ins.is_empty() || ins.len() > 16 {
+                        return Err(format!("{name}: lut / rom のアドレス入力は 1〜16 本にしてください ({} 本)", ins.len()));
+                    }
+                    if words.len() > 1 << ins.len() {
+                        return Err(format!("{name}: table= が {} 個ありますが、アドレス入力 {} 本では {} 個までです", words.len(), ins.len(), 1usize << ins.len()));
+                    }
+                    if outs.is_empty() {
+                        outs.push(out);
+                    }
+                    if outs.len() > 64 {
+                        return Err(format!("{name}: lut / rom の出力は 64 本までです"));
+                    }
+                    let many = outs.len() > 1;
+                    for (k, o) in outs.iter().enumerate() {
+                        let table: Vec<bool> = (0..1usize << ins.len()).map(|a| words.get(a).is_some_and(|w| w >> k & 1 == 1)).collect();
+                        let nm = if many { format!("{name}.{k}") } else { name.clone() };
+                        c.add(Element::Cell { name: nm, kind, ins: ins.clone(), out: *o, outb: 0, sup, table: Some(std::sync::Arc::new(table)) });
+                    }
+                }
             }
             'K' => {
                 // K name L1 L2 k  (two coupled inductors; the names are those of this subcircuit)

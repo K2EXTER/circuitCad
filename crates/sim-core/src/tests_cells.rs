@@ -358,3 +358,68 @@ fn open_drain_outputs_without_a_pull_up_float_and_warn() {
     assert!(at(&r, "V(y)", 2.5e-6) < 0.5, "it cannot go high without a pull-up: {}", at(&r, "V(y)", 2.5e-6));
     assert!(r.warnings.iter().any(|w| w.contains("どの出力も出ていません") && w.contains("プルアップ")), "{:?}", r.warnings);
 }
+
+/// A look-up table with several outputs (`outs=`, `table=`): a 4-bit address decoded to the 7 segments of a digit.
+#[test]
+fn a_rom_cell_gives_one_output_word_per_address() {
+    // a b c d e f g of 0..9 (bit 0 = a)
+    let words = [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F];
+    let table = words.iter().map(|w| format!("{w:X}")).collect::<Vec<_>>().join(",");
+    for addr in 0..16usize {
+        let mut c = Circuit::new();
+        let body = format!("Y1 rom 0 0 vss vcc 60 0.5 0 0 0 outs=sa,sb,sc,sd,se,sf,sg table={table} a0 a1 a2 a3");
+        let n = place(&mut c, "vcc vss a0 a1 a2 a3 sa sb sc sd se sf sg", &body);
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        for k in 0..4 {
+            c.add(Element::vdc(&format!("Va{k}"), n[2 + k], 0, if addr >> k & 1 == 1 { 5.0 } else { 0.0 }));
+        }
+        for k in 0..7 {
+            c.add(Element::Resistor { name: format!("Rl{k}"), a: n[6 + k], b: n[1], r: 100e3 });
+        }
+        let r = dc_op(&c).unwrap();
+        let want = words.get(addr).copied().unwrap_or(0);
+        for (k, s) in ["sa", "sb", "sc", "sd", "se", "sf", "sg"].iter().enumerate() {
+            let v = r.voltage(s).unwrap();
+            assert_eq!(v > 2.5, want >> k & 1 == 1, "address {addr}, output {s}: {v} V");
+        }
+    }
+}
+
+/// A single-output `lut` is any truth table: this one is the 3-input majority function.
+#[test]
+fn a_lut_cell_is_a_truth_table_and_has_a_delay() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss a b c y", "Y1 lut y 0 vss vcc 60 0.5 0 0 0 tplh=20n tphl=30n table=0,0,0,1,0,1,1,1 a b c");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    c.add(Element::Resistor { name: "Rl".into(), a: n[5], b: n[1], r: 100e3 });
+    // a is high all the time, b rises at 1 us, c pulses from 3 us to 5 us: the majority is 1 from 1 us on (a and b)
+    for (name, node, spec) in [("Va", n[2], "DC 5"), ("Vb", n[3], "PULSE(0 5 1u 1n 1n 100u 200u)"), ("Vc", n[4], "PULSE(0 5 3u 1n 1n 2u 200u)")] {
+        let s = parse_source_full(spec).unwrap();
+        c.add(Element::VSource { name: name.into(), p: node, n: 0, wave: s.wave, ac: s.ac });
+    }
+    let r = transient(&c, &TranSettings { tstop: 10e-6, tstep: 10e-9, uic: false }).unwrap();
+    let y = |t: f64| at(&r, "V(y)", t);
+    assert!(y(0.9e-6) < 1.0, "a alone: {}", y(0.9e-6));
+    assert!(y(1.01e-6) < 1.0, "the output waits for its delay: {}", y(1.01e-6));
+    assert!(y(1.2e-6) > 4.0, "a and b: {}", y(1.2e-6));
+    assert!(y(6e-6) > 4.0, "a and b stay high: {}", y(6e-6));
+}
+
+#[test]
+fn a_lut_cell_with_a_bad_table_is_refused() {
+    let mut c = Circuit::new();
+    let text = ".subckt CELLS vcc vss a y\nY1 lut y 0 vss vcc 60 0.5 0 0 0 table=0,1,1 a\n.ends CELLS";
+    let nodes: Vec<usize> = ["vcc", "vss", "a", "y"].iter().map(|n| c.node(n)).collect();
+    let e = add_subckt_instance(&mut c, "U1", "CELLS", text, &nodes).unwrap_err();
+    assert!(e.contains("table="), "{e}");
+    let mut c = Circuit::new();
+    let text = ".subckt CELLS vcc vss a y\nY1 lut y 0 vss vcc 60 0.5 0 0 0 a\n.ends CELLS";
+    let nodes: Vec<usize> = ["vcc", "vss", "a", "y"].iter().map(|n| c.node(n)).collect();
+    assert!(add_subckt_instance(&mut c, "U1", "CELLS", text, &nodes).is_err());
+    let mut c = Circuit::new();
+    let text = ".subckt CELLS vcc vss a y\nY1 and y 0 vss vcc 60 0.5 0 0 0 table=1 a\n.ends CELLS";
+    let nodes: Vec<usize> = ["vcc", "vss", "a", "y"].iter().map(|n| c.node(n)).collect();
+    assert!(add_subckt_instance(&mut c, "U1", "CELLS", text, &nodes).is_err());
+}

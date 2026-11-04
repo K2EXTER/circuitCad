@@ -1,0 +1,128 @@
+{
+  "name": "74HC283D",
+  "category": "ロジックIC",
+  "description": "4 ビット 全加算器 (DIP-16)。A3〜A0 と B3〜B0 と、下からの桁上げ CIN を足して、和 S3〜S0 と、上への桁上げ COUT を出します。デジタルセルで作った簡易モデル (和 15ns、桁上げ 16ns)。ピン表は TI CD74HC283 のデータシートで確かめました。遅延は、データシートに 4.5V の代表値が無く、5V・15pF の代表値で近似しています。2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/cd74hc283.pdf",
+  "prefix": "U",
+  "footprint_name": "SOIC-16_P1.27",
+  "pins": [
+    {
+      "number": "1",
+      "name": "S1",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "B1",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "A1",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "S0",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "A0",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "B0",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "CIN",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "COUT",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "S3",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "B3",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "A3",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "S2",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "A2",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "B2",
+      "side": "left"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC283",
+    "text": "* 74HC283 behavioural model: a 4-bit full adder with fast carry. S = A + B + CIN, COUT the carry out. Delays: sums 15 ns, carry out 16 ns (the CD74HC283 data sheet SCHS176 gives only maxima at 4.5 V; these are its 5 V, 15 pF typical values: CIN to S0 13, S1 15, S2 and COUT 16, S3 19 ns, A or B to S 18 ns).\n.subckt 74HC283 s1 b1 a1 s0 a0 b0 cin gnd cout s3 b3 a3 s2 a2 b2 vcc\nYx0 xor x0 0 gnd vcc 60 0.5 0 0 0 a0 b0\nYs0 xor s0 0 gnd vcc 60 0.5 0 0 0 td=15n x0 cin\nYg0 and g0 0 gnd vcc 60 0.5 0 0 0 a0 b0\nYp0 and p0 0 gnd vcc 60 0.5 0 0 0 x0 cin\nYc0 or c1 0 gnd vcc 60 0.5 0 0 0 g0 p0\nYx1 xor x1 0 gnd vcc 60 0.5 0 0 0 a1 b1\nYs1 xor s1 0 gnd vcc 60 0.5 0 0 0 td=15n x1 c1\nYg1 and g1 0 gnd vcc 60 0.5 0 0 0 a1 b1\nYp1 and p1 0 gnd vcc 60 0.5 0 0 0 x1 c1\nYc1 or c2 0 gnd vcc 60 0.5 0 0 0 g1 p1\nYx2 xor x2 0 gnd vcc 60 0.5 0 0 0 a2 b2\nYs2 xor s2 0 gnd vcc 60 0.5 0 0 0 td=15n x2 c2\nYg2 and g2 0 gnd vcc 60 0.5 0 0 0 a2 b2\nYp2 and p2 0 gnd vcc 60 0.5 0 0 0 x2 c2\nYc2 or c3 0 gnd vcc 60 0.5 0 0 0 g2 p2\nYx3 xor x3 0 gnd vcc 60 0.5 0 0 0 a3 b3\nYs3 xor s3 0 gnd vcc 60 0.5 0 0 0 td=15n x3 c3\nYg3 and g3 0 gnd vcc 60 0.5 0 0 0 a3 b3\nYp3 and p3 0 gnd vcc 60 0.5 0 0 0 x3 c3\nYc3 or cout 0 gnd vcc 60 0.5 0 0 0 td=16n g3 p3\n.ends 74HC283",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、和を 15ns、COUT を 16ns の代表値にしてあります。CD74HC283 のデータシートは、4.5V では最大値だけを載せていて (CIN→S0 32ns など)、5V・負荷 15pF の代表値 (CIN→S0 13ns、S3 19ns、A・B→S 18ns、COUT 16ns) をもとにしました。桁が上がるほど遅くなる (桁上げの先読み回路の差) は表しません。",
+      "扱わないもの: 入力容量、電源電流。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

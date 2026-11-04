@@ -1,0 +1,130 @@
+{
+  "name": "74HC4040",
+  "category": "ロジックIC",
+  "description": "12 段 非同期 (リップル) カウンタ (DIP-16)。CP の立ち下がりごとに、Q1 が反転し、Q1 の立ち下がりで Q2 が反転し、…と順に繰り上がります (0〜4095 を数える)。Q1 は 2 分周、Q12 は 4096 分周。MR を High にすると、すぐ 0 に戻ります。デジタルセルで作った簡易モデル (CP→Q1 17ns、1 段ごとに 4ns)。ピン表は TI CD74HC4040 のデータシートで確かめました。遅延は 5V・15pF の代表値です。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/cd74hc4040.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "glyph": "counter",
+  "pins": [
+    {
+      "number": "1",
+      "name": "Q12",
+      "side": "right"
+    },
+    {
+      "number": "2",
+      "name": "Q6",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "Q5",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "Q7",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "Q4",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "Q3",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "Q2",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "Q1",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "CP",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "MR",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "Q9",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "Q8",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "Q10",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "Q11",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC4040",
+    "text": "* 74HC4040 behavioural model: a 12-stage ripple counter. It counts on the falling edge of CP; MR high clears at once. Delays (the CD74HC4040 data sheet SCHS203, 5 V, 15 pF typical): CP to Q1 17 ns, one stage to the next 4 ns, MR to Q 17 ns.\n.subckt 74HC4040 q12 q6 q5 q7 q4 q3 q2 gnd q1 cp mr q9 q8 q10 q11 vcc\nYnp inv ncp 0 gnd vcc 60 0.5 0 0 0 cp\nYT1 tff q1 nq1 gnd vcc 60 0.5 0 0 0 td=17n vcc ncp 0 mr\nYT2 tff q2 nq2 gnd vcc 60 0.5 0 0 0 td=4n vcc nq1 0 mr\nYT3 tff q3 nq3 gnd vcc 60 0.5 0 0 0 td=4n vcc nq2 0 mr\nYT4 tff q4 nq4 gnd vcc 60 0.5 0 0 0 td=4n vcc nq3 0 mr\nYT5 tff q5 nq5 gnd vcc 60 0.5 0 0 0 td=4n vcc nq4 0 mr\nYT6 tff q6 nq6 gnd vcc 60 0.5 0 0 0 td=4n vcc nq5 0 mr\nYT7 tff q7 nq7 gnd vcc 60 0.5 0 0 0 td=4n vcc nq6 0 mr\nYT8 tff q8 nq8 gnd vcc 60 0.5 0 0 0 td=4n vcc nq7 0 mr\nYT9 tff q9 nq9 gnd vcc 60 0.5 0 0 0 td=4n vcc nq8 0 mr\nYT10 tff q10 nq10 gnd vcc 60 0.5 0 0 0 td=4n vcc nq9 0 mr\nYT11 tff q11 nq11 gnd vcc 60 0.5 0 0 0 td=4n vcc nq10 0 mr\nYT12 tff q12 nq12 gnd vcc 60 0.5 0 0 0 td=4n vcc nq11 0 mr\n.ends 74HC4040",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、CP→Q1 17ns と、1 段ごとの 4ns です (CD74HC4040 のデータシートの 5V・負荷 15pF の代表値。4.5V・50pF では最大値だけで、CP→Q1 40ns、段→段 15ns)。",
+      "扱わないもの: 入力容量、電源電流、パルス幅の点検。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "name": "74HC139",
+  "category": "ロジックIC",
+  "description": "2 to 4 デコーダ ×2 (DIP-16)。A・B (B が上の桁) の 2 進数で選んだ 1 本の出力 Y0〜Y3 だけが Low になります (負論理)。G (ストローブ) が Low のときだけ動き、High だと全部 High。デジタルセルで作った簡易モデル (遅延 14ns)。ピン表と遅延は TI SN74HC139 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc139.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1G",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "1A",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "1B",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "1Y0",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "1Y1",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "1Y2",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "1Y3",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "2Y3",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "2Y2",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "2Y1",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "2Y0",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "2B",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "2A",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "2G",
+      "side": "left"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC139",
+    "text": "* 74HC139 behavioural model: two 2-to-4 decoders with active-low outputs and an active-low strobe G. Delay 14 ns (the data sheet SCLS108, 4.5 V, 25 C typical: A or B to Y 14 ns, G to Y 11 ns).\n.subckt 74HC139 1g 1a 1b 1y0 1y1 1y2 1y3 gnd 2y3 2y2 2y1 2y0 2b 2a 2g vcc\nYna1 inv na1 0 gnd vcc 60 0.5 0 0 0 1a\nYnb1 inv nb1 0 gnd vcc 60 0.5 0 0 0 1b\nYen1 inv en1 0 gnd vcc 60 0.5 0 0 0 1g\nYy10 nand 1y0 0 gnd vcc 60 0.5 0 0 0 td=14n en1 na1 nb1\nYy11 nand 1y1 0 gnd vcc 60 0.5 0 0 0 td=14n en1 1a nb1\nYy12 nand 1y2 0 gnd vcc 60 0.5 0 0 0 td=14n en1 na1 1b\nYy13 nand 1y3 0 gnd vcc 60 0.5 0 0 0 td=14n en1 1a 1b\nYna2 inv na2 0 gnd vcc 60 0.5 0 0 0 2a\nYnb2 inv nb2 0 gnd vcc 60 0.5 0 0 0 2b\nYen2 inv en2 0 gnd vcc 60 0.5 0 0 0 2g\nYy20 nand 2y0 0 gnd vcc 60 0.5 0 0 0 td=14n en2 na2 nb2\nYy21 nand 2y1 0 gnd vcc 60 0.5 0 0 0 td=14n en2 2a nb2\nYy22 nand 2y2 0 gnd vcc 60 0.5 0 0 0 td=14n en2 na2 2b\nYy23 nand 2y3 0 gnd vcc 60 0.5 0 0 0 td=14n en2 2a 2b\n.ends 74HC139",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、入力→出力 14ns の代表値 1 つです (4.5V・25℃ のデータシートの値は、A・B→Y が 14ns、G→Y が 11ns)。",
+      "扱わないもの: 入力容量、電源電流。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

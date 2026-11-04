@@ -38,6 +38,8 @@ pub(crate) struct DCell {
     pub oe: Option<usize>,
     pub oe_low: bool,
     pub od: bool,
+    /// The look-up table of a `Lut` cell.
+    pub table: Option<std::sync::Arc<Vec<bool>>>,
 }
 
 #[derive(Default)]
@@ -128,7 +130,7 @@ struct Work {
 }
 
 fn is_memory(k: CellKind) -> bool {
-    !matches!(k, CellKind::And | CellKind::Nand | CellKind::Or | CellKind::Nor | CellKind::Xor | CellKind::Xnor | CellKind::Buf | CellKind::Inv)
+    !matches!(k, CellKind::And | CellKind::Nand | CellKind::Or | CellKind::Nor | CellKind::Xor | CellKind::Xnor | CellKind::Buf | CellKind::Inv | CellKind::Lut)
 }
 
 impl Compiled {
@@ -220,6 +222,10 @@ impl Compiled {
             Xnor => count % 2 == 0,
             Buf => at(&now, 0),
             Inv => !at(&now, 0),
+            Lut => {
+                let addr = now.iter().enumerate().fold(0usize, |a, (k, b)| a | (usize::from(*b) << k));
+                c.table.as_ref().and_then(|t| t.get(addr)).copied().unwrap_or(false)
+            }
             _ => {
                 let old = d.st[ci];
                 let mut new = old;

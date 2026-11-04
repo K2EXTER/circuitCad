@@ -1,0 +1,131 @@
+{
+  "name": "74HC165",
+  "category": "ロジックIC",
+  "description": "8 ビット パラレルイン・シリアルアウト シフトレジスタ (DIP-16)。SH/LD が Low のあいだ、A〜H の値がすぐに取り込まれます (非同期)。SH/LD が High で CLK が立ち上がるたびに、SER から入って、A→B→…→H と進み、QH に出ます (QH_N は QH の反対)。CLK_INH が High だとクロックが止まります。デジタルセルで作った簡易モデル (クロック→QH 15ns)。ピン表と遅延は TI SN74HC165 のデータシートで確かめました (QH の反対のピンは、名前を QH_N にしました)。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc165.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-16_W7.62",
+  "glyph": "shift_reg",
+  "pins": [
+    {
+      "number": "1",
+      "name": "SH/LD",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "CLK",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "E",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "F",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "G",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "H",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "QH_N",
+      "side": "right"
+    },
+    {
+      "number": "8",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "9",
+      "name": "QH",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "SER",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "A",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "B",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "C",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "D",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "CLK_INH",
+      "side": "left"
+    },
+    {
+      "number": "16",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 16,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC165",
+    "text": "* 74HC165 behavioural model: an 8-bit parallel-in serial-out shift register. SH/LD low loads A..H at once (asynchronous); with SH/LD high each rising CLK edge shifts towards QH (SER enters at A); CLK INH high stops the clock. Delays (the data sheet SCLS030, 4.5 V, 25 C typical): clock to QH 15 ns, SH/LD to QH 20 ns, H to QH 15 ns.\n.subckt 74HC165 shld clk e f g h qhn gnd qh ser a b c d inh vcc\nYld inv ld 0 gnd vcc 60 0.5 0 0 0 shld\nYgc or gclk 0 gnd vcc 60 0.5 0 0 0 clk inh\nYn0 inv na 0 gnd vcc 60 0.5 0 0 0 a\nYs0 and set0 0 gnd vcc 60 0.5 0 0 0 ld a\nYr0 and rst0 0 gnd vcc 60 0.5 0 0 0 ld na\nYF0 dff s0 0 gnd vcc 60 0.5 0 0 0 td=15n ser gclk set0 rst0\nYn1 inv nb 0 gnd vcc 60 0.5 0 0 0 b\nYs1 and set1 0 gnd vcc 60 0.5 0 0 0 ld b\nYr1 and rst1 0 gnd vcc 60 0.5 0 0 0 ld nb\nYF1 dff s1 0 gnd vcc 60 0.5 0 0 0 td=15n s0 gclk set1 rst1\nYn2 inv nc 0 gnd vcc 60 0.5 0 0 0 c\nYs2 and set2 0 gnd vcc 60 0.5 0 0 0 ld c\nYr2 and rst2 0 gnd vcc 60 0.5 0 0 0 ld nc\nYF2 dff s2 0 gnd vcc 60 0.5 0 0 0 td=15n s1 gclk set2 rst2\nYn3 inv nd 0 gnd vcc 60 0.5 0 0 0 d\nYs3 and set3 0 gnd vcc 60 0.5 0 0 0 ld d\nYr3 and rst3 0 gnd vcc 60 0.5 0 0 0 ld nd\nYF3 dff s3 0 gnd vcc 60 0.5 0 0 0 td=15n s2 gclk set3 rst3\nYn4 inv ne 0 gnd vcc 60 0.5 0 0 0 e\nYs4 and set4 0 gnd vcc 60 0.5 0 0 0 ld e\nYr4 and rst4 0 gnd vcc 60 0.5 0 0 0 ld ne\nYF4 dff s4 0 gnd vcc 60 0.5 0 0 0 td=15n s3 gclk set4 rst4\nYn5 inv nf 0 gnd vcc 60 0.5 0 0 0 f\nYs5 and set5 0 gnd vcc 60 0.5 0 0 0 ld f\nYr5 and rst5 0 gnd vcc 60 0.5 0 0 0 ld nf\nYF5 dff s5 0 gnd vcc 60 0.5 0 0 0 td=15n s4 gclk set5 rst5\nYn6 inv ng 0 gnd vcc 60 0.5 0 0 0 g\nYs6 and set6 0 gnd vcc 60 0.5 0 0 0 ld g\nYr6 and rst6 0 gnd vcc 60 0.5 0 0 0 ld ng\nYF6 dff s6 0 gnd vcc 60 0.5 0 0 0 td=15n s5 gclk set6 rst6\nYn7 inv nh 0 gnd vcc 60 0.5 0 0 0 h\nYs7 and set7 0 gnd vcc 60 0.5 0 0 0 ld h\nYr7 and rst7 0 gnd vcc 60 0.5 0 0 0 ld nh\nYF7 dff qh qhn gnd vcc 60 0.5 0 0 0 td=15n s6 gclk set7 rst7\n.ends 74HC165",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、クロック→QH 15ns の代表値 1 つです (4.5V・25℃ のデータシートの値。SH/LD→QH は 20ns、H→QH は 15ns)。",
+      "CLK_INH を Low にするのが、CLK が High の間だと、実物と同じように、クロックの立ち上がりと見なされて 1 つずれます。",
+      "扱わないもの: 入力容量、電源電流、セットアップ/ホールド時間の点検。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}

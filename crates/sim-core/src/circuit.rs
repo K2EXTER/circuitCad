@@ -215,7 +215,7 @@ pub enum Element {
     /// relative to its supply pins (`sup`). A node that only cells touch is a purely digital net: it is a 0 / 1 in a table, not an
     /// unknown of the circuit. See `dc/digital.rs`. Inputs are listed like those of a `Seq` for the memory kinds; the gates
     /// take any number of inputs.
-    Cell { name: String, kind: CellKind, ins: Vec<usize>, out: usize, outb: usize, sup: CellSupply },
+    Cell { name: String, kind: CellKind, ins: Vec<usize>, out: usize, outb: usize, sup: CellSupply, table: Option<std::sync::Arc<Vec<bool>>> },
 }
 
 /// What a `Element::Cell` computes. The memory kinds read their inputs like `SeqKind` (Dff: d clk set reset ...).
@@ -235,6 +235,8 @@ pub enum CellKind {
     Srff,
     Dlatch,
     Srlatch,
+    /// One output bit of a look-up table: the inputs are the address (the first is the lowest bit), `table[address]` is the output.
+    Lut,
     Schmitt,
 }
 

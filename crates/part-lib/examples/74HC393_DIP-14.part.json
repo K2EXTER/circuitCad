@@ -1,0 +1,118 @@
+{
+  "name": "74HC393",
+  "category": "ロジックIC",
+  "description": "4 ビット 非同期 (リップル) カウンタ ×2 (DIP-14)。CLK の立ち下がりで、QA が反転し、QA の立ち下がりで QB が反転し、…と順に繰り上がります (0〜15 を数える)。CLR を High にすると、すぐ 0 に戻ります。デジタルセルで作った簡易モデル (CLK→QA 15ns、QB 22ns、QC 28ns、QD 32ns)。ピン表と遅延は TI SN74HC393 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc393.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-14_W7.62",
+  "glyph": "counter",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1CLK",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "1CLR",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "1QA",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "1QB",
+      "side": "right"
+    },
+    {
+      "number": "5",
+      "name": "1QC",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "1QD",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "8",
+      "name": "2QD",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "2QC",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "2QB",
+      "side": "right"
+    },
+    {
+      "number": "11",
+      "name": "2QA",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "2CLR",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "2CLK",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 14,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC393",
+    "text": "* 74HC393 behavioural model: two 4-bit ripple counters. Each counts on the falling edge of CLK; CLR high clears at once. Delays from the clock (the data sheet SCLS143, 4.5 V, 25 C typical): QA 15 ns, QB 22 ns, QC 28 ns, QD 32 ns.\n.subckt 74HC393 1clk 1clr 1qa 1qb 1qc 1qd gnd 2qd 2qc 2qb 2qa 2clr 2clk vcc\nYn1 inv n1clk 0 gnd vcc 60 0.5 0 0 0 1clk\nYT1a tff 1qa nq1a gnd vcc 60 0.5 0 0 0 td=15n vcc n1clk 0 1clr\nYT1b tff 1qb nq1b gnd vcc 60 0.5 0 0 0 td=7n vcc nq1a 0 1clr\nYT1c tff 1qc nq1c gnd vcc 60 0.5 0 0 0 td=6n vcc nq1b 0 1clr\nYT1d tff 1qd nq1d gnd vcc 60 0.5 0 0 0 td=4n vcc nq1c 0 1clr\nYn2 inv n2clk 0 gnd vcc 60 0.5 0 0 0 2clk\nYT2a tff 2qa nq2a gnd vcc 60 0.5 0 0 0 td=15n vcc n2clk 0 2clr\nYT2b tff 2qb nq2b gnd vcc 60 0.5 0 0 0 td=7n vcc nq2a 0 2clr\nYT2c tff 2qc nq2c gnd vcc 60 0.5 0 0 0 td=6n vcc nq2b 0 2clr\nYT2d tff 2qd nq2d gnd vcc 60 0.5 0 0 0 td=4n vcc nq2c 0 2clr\n.ends 74HC393",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、CLK→QA 15ns、QB 22ns、QC 28ns、QD 32ns の代表値です (4.5V・25℃ のデータシートの値)。1 段ごとの遅れが足されて、リップル (繰り上がりが順に伝わる) 特有のずれが出ます。CLR→Q は各段の遅れで近似しています (データシートは 17ns)。",
+      "扱わないもの: 入力容量、電源電流、パルス幅の点検。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います)。"
+    ]
+  }
+}
