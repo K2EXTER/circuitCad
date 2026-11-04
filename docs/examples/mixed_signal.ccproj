@@ -545,7 +545,7 @@
           "sim": {
             "kind": "subckt",
             "name": "74HC04",
-            "text": "* 74HC04 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. No propagation delay.\n.subckt 74HC04 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nY1 inv y1 0 gnd vcc 60 0.5 0 0 0 a1\nY2 inv y2 0 gnd vcc 60 0.5 0 0 0 a2\nY3 inv y3 0 gnd vcc 60 0.5 0 0 0 a3\nY4 inv y4 0 gnd vcc 60 0.5 0 0 0 a4\nY5 inv y5 0 gnd vcc 60 0.5 0 0 0 a5\nY6 inv y6 0 gnd vcc 60 0.5 0 0 0 a6\n.ends 74HC04",
+            "text": "* 74HC04 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 7 ns.\n.subckt 74HC04 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nY1 inv y1 0 gnd vcc 60 0.5 0 0 0 td=7n a1\nY2 inv y2 0 gnd vcc 60 0.5 0 0 0 td=7n a2\nY3 inv y3 0 gnd vcc 60 0.5 0 0 0 td=7n a3\nY4 inv y4 0 gnd vcc 60 0.5 0 0 0 td=7n a4\nY5 inv y5 0 gnd vcc 60 0.5 0 0 0 td=7n a5\nY6 inv y6 0 gnd vcc 60 0.5 0 0 0 td=7n a6\n.ends 74HC04",
             "pins": [
               "1",
               "2",
@@ -565,7 +565,7 @@
             "params": {},
             "limits": [
               "ゲートを「デジタルセル」(行列の外で評価する素子) で表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。ゲートどうしだけをつなぐ配線は、回路の方程式に入りません (波形には電圧が出ます)。",
-              "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
+              "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。伝搬遅延は、5V・25℃ での代表値を 1 つ決めたもの (立ち上がりと立ち下がりの差、電源電圧や温度による変化は含みません)。数値は必ずデータシートで確かめてください。",
               "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
             ]
           }
@@ -659,7 +659,7 @@
           "sim": {
             "kind": "subckt",
             "name": "74HC74",
-            "text": "* 74HC74 behavioural model: two D flip-flop cells (Y lines) that keep their state inside. The levels follow the supply pins, the outputs have 60 ohm. No propagation delay.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nY1 dff q1 qb1 gnd vcc 60 0.5 0 1 1 d1 clk1 pre1 clr1\nY2 dff q2 qb2 gnd vcc 60 0.5 0 1 1 d2 clk2 pre2 clr2\n.ends 74HC74",
+            "text": "* 74HC74 behavioural model: two D flip-flop cells (Y lines) that keep their state inside. The levels follow the supply pins, the outputs have 60 ohm. Propagation delay 14 ns.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nY1 dff q1 qb1 gnd vcc 60 0.5 0 1 1 td=14n d1 clk1 pre1 clr1\nY2 dff q2 qb2 gnd vcc 60 0.5 0 1 1 td=14n d2 clk2 pre2 clr2\n.ends 74HC74",
             "pins": [
               "1",
               "2",
@@ -679,7 +679,7 @@
             "params": {},
             "limits": [
               "状態を内部に持つ D フリップフロップのセルで表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-              "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。状態の変化は、クロックの立ち上がりと同じ時刻に出力に出ます (遅延なし)。",
+              "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。クロックの立ち上がりから出力が変わるまでの遅れ (クロック→Q) は、代表値を 1 つ決めたものです (数値は必ずデータシートで確かめてください)。",
               "使わない入力は、GND か電源につないでください (つながないと、Low として扱い、PRE・CLR は働いた状態になります)。",
               "D フリップフロップは、クロックの立ち上がりで入力を取り込みます。PRE・CLR は負論理 (Low で働く) の非同期入力です。"
             ]

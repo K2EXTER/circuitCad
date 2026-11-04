@@ -265,7 +265,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
 
     // digital cells start from the levels of the initial point
     if cm.has_cells() {
-        cm.dig_update(&x);
+        cm.dig_begin_run(&x);
         cm.fix_nodes(&mut x);
     }
 
@@ -363,6 +363,14 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
         if bp_idx < bps.len() && t + h >= bps[bp_idx] - eps {
             h = bps[bp_idx] - t;
             lands_on_bp = true;
+        }
+        // the next change of an output that sits on an analog node (a delayed output of a digital cell): land a step on it
+        if cm.has_cells()
+            && let Some(te) = cm.dig_next_event()
+            && te > t + eps
+            && te < t + h - eps
+        {
+            h = te - t;
         }
         if t + h >= s.tstop - eps {
             h = s.tstop - t;
@@ -492,7 +500,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
         // a flip-flop or latch that changed: its outputs jump at the next step, so restart like at a source corner
         let seq_changed = cm.has_seq() && cm.seq_update(Some(&x), &att.x);
         // digital cells: an output on an analog node that changed jumps at the next step, like a flip-flop's
-        let seq_changed = seq_changed | (cm.has_cells() && cm.dig_update(&att.x).0);
+        let seq_changed = seq_changed | (cm.has_cells() && cm.dig_update(&att.x, Some(t)).0);
         x = att.x;
         // (the voltages of the digital nets are read from the cells when recorded, `Compiled::node_voltage`)
         vj = att.vj;

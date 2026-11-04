@@ -75,7 +75,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             Element::Mutual { .. } => {}
             Element::Cell { name, kind, ins, out, outb, sup } => {
                 ce.push(Ce::Cell { cell: cells.len() });
-                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low });
+                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low, tplh: sup.tplh, tphl: sup.tphl });
                 n_cell_in += ins.len();
             }
             Element::Seq { name, kind, ins, q, qb, levels } => {
@@ -224,7 +224,8 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     }
     let analog_cells: Vec<usize> = cells.iter().enumerate().filter(|(_, c)| c.ins.iter().any(|&n| n != 0 && !dnets.digital[n])).map(|(i, _)| i).collect();
     let analog_out: Vec<bool> = cells.iter().map(|c| (c.out != 0 && !dnets.digital[c.out]) || (c.outb != 0 && !dnets.digital[c.outb])).collect();
-    let dstat = DigStatic { groups, cell_group, analog_cells, analog_out };
+    let analog_out_cells: Vec<usize> = analog_out.iter().enumerate().filter(|(_, b)| **b).map(|(i, _)| i).collect();
+    let dstat = DigStatic { groups, cell_group, analog_cells, analog_out, analog_out_cells };
     let dig = std::cell::RefCell::new(Dig {
         lv: vec![false; total_nodes + 1],
         seen: vec![false; n_cell_in],
@@ -235,6 +236,12 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         started: false,
         queued: vec![],
         done_first: vec![false; cells.len()],
+        pend: vec![None; cells.len()],
+        pend_due: vec![0.0; cells.len()],
+        ver: vec![0; cells.len()],
+        heap: Default::default(),
+        seq: 0,
+        t_prev: 0.0,
     });
     // the guesses of the user for digital nets: where their latches start
     let dig_seeds: Vec<(usize, f64)> = c.nodesets.iter().filter_map(|(name, volts)| c.names.iter().position(|n| n.eq_ignore_ascii_case(name)).filter(|i| *i > 0 && dnets.digital[*i]).map(|i| (i, *volts))).collect();

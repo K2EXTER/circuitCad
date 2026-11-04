@@ -418,7 +418,7 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
                 // digital cells: settle them on the solution, and solve again while their outputs or supplies move the answer
                 if cm.has_cells() {
                     for _ in 0..16 {
-                        let (resolve, _) = cm.dig_update(&att.x);
+                        let (resolve, _) = cm.dig_update(&att.x, None);
                         if !resolve {
                             break;
                         }

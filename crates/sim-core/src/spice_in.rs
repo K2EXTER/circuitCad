@@ -566,8 +566,23 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                     other => return Err(format!("{name}: デジタルセルの種類 {other} が分かりません")),
                 };
                 let (out, outb, vss, vcc) = (local(c, t[2]), local(c, t[3]), local(c, t[4]), local(c, t[5]));
-                let sup = crate::CellSupply { vss, vcc, rout: val(t[6])?, vt: val(t[7])?, vh: val(t[8])?, set_low: t[9] == "1", reset_low: t[10] == "1" };
-                let ins: Vec<usize> = t[11..].iter().map(|n| local(c, n)).collect();
+                // after reset_low: td=<s> tplh=<s> tphl=<s> (delays, any order), then the inputs
+                let (mut tplh, mut tphl) = (0.0, 0.0);
+                let mut ins: Vec<usize> = vec![];
+                for w in &t[11..] {
+                    if let Some((key, value)) = w.split_once('=') {
+                        let secs = val(value)?;
+                        match key.to_ascii_lowercase().as_str() {
+                            "td" => (tplh, tphl) = (secs, secs),
+                            "tplh" => tplh = secs,
+                            "tphl" => tphl = secs,
+                            other => return Err(format!("{name}: デジタルセルのパラメータ {other} が分かりません (td・tplh・tphl)")),
+                        }
+                    } else {
+                        ins.push(local(c, w));
+                    }
+                }
+                let sup = crate::CellSupply { vss, vcc, rout: val(t[6])?, vt: val(t[7])?, vh: val(t[8])?, set_low: t[9] == "1", reset_low: t[10] == "1", tplh, tphl };
                 c.add(Element::Cell { name, kind, ins, out, outb, sup });
             }
             'K' => {

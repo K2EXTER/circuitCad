@@ -30,6 +30,8 @@ pub(crate) struct DCell {
     pub vh: f64,
     pub set_low: bool,
     pub reset_low: bool,
+    pub tplh: f64,
+    pub tphl: f64,
 }
 
 #[derive(Default)]
@@ -51,6 +53,16 @@ pub(crate) struct Dig {
     pub queued: Vec<bool>,
     /// Per cell: whether it has been evaluated (and its outputs applied) at least once.
     pub done_first: Vec<bool>,
+    /// Per cell: the output it is heading for after its propagation delay, when it is not there yet, and when it gets there.
+    pub pend: Vec<Option<bool>>,
+    pub pend_due: Vec<f64>,
+    /// Per cell: the number of the latest schedule (an event with another number is out of date: the output changed its mind).
+    pub ver: Vec<u64>,
+    /// The events to come: (time bits, order, kind 0 = an output arrives / 1 = a cell reads its inputs, cell, schedule number).
+    pub heap: std::collections::BinaryHeap<std::cmp::Reverse<(u64, u64, u8, usize, u64)>>,
+    pub seq: u64,
+    /// The time of the last `dig_update`.
+    pub t_prev: f64,
 }
 
 /// What the cells need to know that does not change during a run: which cells share a supply, which read an analog node.
@@ -64,6 +76,8 @@ pub(crate) struct DigStatic {
     pub analog_cells: Vec<usize>,
     /// Per cell: whether an output sits on an analog node (a source behind `rout` in the circuit equations).
     pub analog_out: Vec<bool>,
+    /// The cells with such an output.
+    pub analog_out_cells: Vec<usize>,
 }
 
 /// What the cells need to know about the nodes, fixed when the circuit is compiled.
@@ -75,6 +89,15 @@ pub(crate) struct DigNets {
     pub fanout: Vec<Vec<usize>>,
     /// Per digital node: the cell that drives it and whether through `outb`.
     pub driver: Vec<Option<(usize, bool)>>,
+}
+
+/// The queues of one `dig_update`.
+struct Work {
+    comb: std::collections::VecDeque<usize>,
+    queued: Vec<bool>,
+    mem: Vec<usize>,
+    any_change: bool,
+    analog_changed: bool,
 }
 
 fn is_memory(k: CellKind) -> bool {
@@ -189,15 +212,158 @@ impl Compiled {
         }
     }
 
-    /// Take the accepted solution `x` in: refresh the supplies and the analog inputs, then settle the cells. Returns whether the
-    /// circuit equations have to be solved again (an output on an analog node changed, or a supply moved enough to matter) and
-    /// whether any cell output changed at all.
+    /// Put the output of cell `ci` at `q` now: the digital nets it drives change, and the cells that read them are queued.
+    fn apply_out(&self, d: &mut Dig, w: &mut Work, ci: usize, q: bool, mem_next: &mut Vec<usize>) {
+        let c = &self.cells[ci];
+        let force = !d.done_first[ci];
+        d.done_first[ci] = true;
+        let changed = d.q[ci] != q;
+        d.q[ci] = q;
+        if changed {
+            w.any_change = true;
+        }
+        for (node, val) in [(c.out, q), (c.outb, !q)] {
+            if node == 0 {
+                continue;
+            }
+            if self.is_digital(node) {
+                let moved = d.lv[node] != val;
+                if moved || force {
+                    d.lv[node] = val;
+                    for &f in &self.dnets.fanout[node] {
+                        if is_memory(self.cells[f].kind) {
+                            mem_next.push(f);
+                        } else if !w.queued[f] {
+                            w.queued[f] = true;
+                            w.comb.push_back(f);
+                        }
+                    }
+                }
+            } else if changed || force {
+                w.analog_changed = true;
+            }
+        }
+    }
+
+    /// Let cell `ci` head for `q`: at once when it has no delay (or this is the first evaluation, or the run is static), otherwise
+    /// as an event after its propagation delay. A change that is taken back before the delay is over never happens (inertial).
+    fn emit(&self, d: &mut Dig, w: &mut Work, ci: usize, q: bool, te: f64, delays: bool, mem_next: &mut Vec<usize>) {
+        let c = &self.cells[ci];
+        let first = !d.done_first[ci];
+        let td = if !delays || first { 0.0 } else if q { c.tplh } else { c.tphl };
+        if td <= 0.0 {
+            if d.pend[ci].take().is_some() {
+                d.ver[ci] += 1;
+            }
+            self.apply_out(d, w, ci, q, mem_next);
+        } else if q == d.q[ci] {
+            if d.pend[ci].take().is_some() {
+                d.ver[ci] += 1;
+            }
+        } else if d.pend[ci] != Some(q) {
+            d.pend[ci] = Some(q);
+            d.ver[ci] += 1;
+            d.pend_due[ci] = te + td;
+            d.seq += 1;
+            let item = std::cmp::Reverse(((te + td).to_bits(), d.seq, 0u8, ci, d.ver[ci]));
+            d.heap.push(item);
+        }
+    }
+
+    /// Settle the cells queued in `w` at time `te`: the gates one after the other, then the flip-flops and latches together,
+    /// until nothing changes.
+    fn settle(&self, d: &mut Dig, w: &mut Work, te: f64, delays: bool) {
+        let mut budget = 200 * self.cells.len() + 10_000;
+        loop {
+            // phase 1: the gates, one after the other
+            let mut mem_next: Vec<usize> = vec![];
+            while let Some(ci) = w.comb.pop_front() {
+                w.queued[ci] = false;
+                if budget == 0 {
+                    for ci in w.comb.drain(..) {
+                        w.queued[ci] = false;
+                    }
+                    return;
+                }
+                budget -= 1;
+                let q = self.eval(d, ci);
+                let heading = d.pend[ci].unwrap_or(d.q[ci]);
+                if !d.done_first[ci] || q != heading {
+                    self.emit(d, w, ci, q, te, delays, &mut mem_next);
+                }
+            }
+            w.mem.extend(mem_next);
+            w.mem.sort_unstable();
+            w.mem.dedup();
+            if w.mem.is_empty() {
+                return;
+            }
+            // phase 2: the flip-flops and latches whose inputs changed, together
+            let batch = std::mem::take(&mut w.mem);
+            if budget < batch.len() {
+                return;
+            }
+            budget -= batch.len();
+            let results: Vec<(usize, bool)> = batch.iter().map(|&ci| (ci, self.eval(d, ci))).collect();
+            let mut mem_next: Vec<usize> = vec![];
+            for (ci, q) in results {
+                let heading = d.pend[ci].unwrap_or(d.q[ci]);
+                if !d.done_first[ci] || q != heading {
+                    self.emit(d, w, ci, q, te, delays, &mut mem_next);
+                }
+            }
+            w.mem = mem_next;
+            w.mem.sort_unstable();
+            w.mem.dedup();
+        }
+    }
+
+    /// The start of a transient run: settle the cells on the initial solution `x` without delays (as the operating point), then
+    /// let the gates that are not at what their inputs say (a ring of an odd number of inverters has no such state) head for it
+    /// with their delays, so that the run starts them going.
+    pub(crate) fn dig_begin_run(&self, x: &[f64]) {
+        if self.cells.is_empty() {
+            return;
+        }
+        self.dig_update(x, None);
+        let mut guard = self.dig.borrow_mut();
+        let d = &mut *guard;
+        let mut w = Work { comb: Default::default(), queued: std::mem::take(&mut d.queued), mem: vec![], any_change: false, analog_changed: false };
+        w.queued.resize(self.cells.len(), false);
+        let mut mem_next: Vec<usize> = vec![];
+        for ci in 0..self.cells.len() {
+            if is_memory(self.cells[ci].kind) {
+                continue;
+            }
+            let q = self.eval(d, ci);
+            let heading = d.pend[ci].unwrap_or(d.q[ci]);
+            if q != heading {
+                self.emit(d, &mut w, ci, q, 0.0, true, &mut mem_next);
+            }
+        }
+        d.queued = w.queued;
+    }
+
+    /// The time of the next change of an output that sits on an analog node: the transient run lands a step on it.
+    pub(crate) fn dig_next_event(&self) -> Option<f64> {
+        let d = self.dig.borrow();
+        self.dstat.analog_out_cells.iter().filter(|&&ci| d.pend[ci].is_some()).map(|&ci| d.pend_due[ci]).min_by(|a, b| a.total_cmp(b))
+    }
+
+    /// Take the accepted solution `x` (at time `time`; `None` = a static solution: the delays are left out) in: refresh the
+    /// supplies and the analog inputs, then settle the cells. Returns whether the circuit equations have to be solved again (an
+    /// output on an analog node changed, or a supply moved enough to matter) and whether any cell output changed at all.
     ///
     /// The cells settle in two phases, repeated until nothing changes: the gates (no memory) one after the other, each output
     /// applied at once, so a latch built from gates falls into one of its states instead of ringing; then every flip-flop and
     /// latch whose inputs changed, together, on the levels the gates left (a flip-flop samples what its data input was before the
     /// clock edge, so a shift register shifts by one).
-    pub(crate) fn dig_update(&self, x: &[f64]) -> (bool, bool) {
+    ///
+    /// With a time, the cells that read an analog node are looked at at the moment their input crossed the threshold (found by
+    /// linear interpolation between this and the last call), an output with a delay arrives as an event, and the events up to
+    /// `time` are processed in order. Between two calls the digital part keeps its own time exactly; only what crosses to or from
+    /// an analog node is quantised to the steps (an output on an analog node that has a delay is a corner the step lands on).
+    pub(crate) fn dig_update(&self, x: &[f64], time: Option<f64>) -> (bool, bool) {
         if self.cells.is_empty() {
             return (false, false);
         }
@@ -214,11 +380,12 @@ impl Compiled {
                 }
             }
         }
+        let timed = time.is_some() && !first;
+        let t = time.unwrap_or(0.0);
+        let t_prev = d.t_prev;
         let n_cells = self.cells.len();
-        let mut comb: std::collections::VecDeque<usize> = Default::default();
-        let mut queued = std::mem::take(&mut d.queued);
-        queued.resize(n_cells, false);
-        let mut mem: Vec<usize> = vec![];
+        let mut w = Work { comb: Default::default(), queued: std::mem::take(&mut d.queued), mem: vec![], any_change: false, analog_changed: false };
+        w.queued.resize(n_cells, false);
         let mut sup_moved = false;
         for (g, &(a, b)) in self.dstat.groups.iter().enumerate() {
             let (vss, vcc) = (v(x, a), v(x, b));
@@ -241,9 +408,18 @@ impl Compiled {
             let c = &self.cells[ci];
             let (vss, vcc) = d.gsup[self.dstat.cell_group[ci]];
             let span = vcc - vss;
+            // when an analog input crossed the threshold since the last call (the earliest of them)
+            let mut crossed: Option<f64> = None;
             for (k, &n) in c.ins.iter().enumerate() {
                 if n != 0 && !self.is_digital(n) {
-                    d.afrac[c.slot0 + k] = if span.abs() > 1e-9 { (v(x, n) - vss) / span } else { 0.0 };
+                    let old_f = d.afrac[c.slot0 + k];
+                    let new_f = if span.abs() > 1e-9 { (v(x, n) - vss) / span } else { 0.0 };
+                    d.afrac[c.slot0 + k] = new_f;
+                    if timed && (old_f > c.vt) != (new_f > c.vt) && new_f != old_f {
+                        let frac = ((c.vt - old_f) / (new_f - old_f)).clamp(0.0, 1.0);
+                        let tc = t_prev + frac * (t - t_prev);
+                        crossed = Some(crossed.map_or(tc, |e: f64| e.min(tc)));
+                    }
                 }
             }
             let mut changed = !d.done_first[ci];
@@ -253,93 +429,67 @@ impl Compiled {
                 }
             }
             if changed || c.kind == CellKind::Schmitt {
-                if is_memory(c.kind) {
-                    mem.push(ci);
+                if timed {
+                    d.seq += 1;
+                    let te = crossed.unwrap_or(t);
+                    d.heap.push(std::cmp::Reverse((te.to_bits(), d.seq, 1u8, ci, 0)));
+                } else if is_memory(c.kind) {
+                    w.mem.push(ci);
                 } else {
-                    comb.push_back(ci);
-                    queued[ci] = true;
+                    w.comb.push_back(ci);
+                    w.queued[ci] = true;
                 }
             }
         }
-        let mut any_change = false;
-        let mut analog_changed = false;
-        let mut budget = 200 * n_cells + 10_000;
-        // apply the output of one cell; the cells that read a digital net that changed are queued
-        let mut apply = |d: &mut Dig, ci: usize, q: bool, comb: &mut std::collections::VecDeque<usize>, queued: &mut Vec<bool>, mem_next: &mut Vec<usize>| {
-            let c = &self.cells[ci];
-            let force = !d.done_first[ci];
-            d.done_first[ci] = true;
-            let changed = d.q[ci] != q;
-            d.q[ci] = q;
-            if changed {
-                any_change = true;
-            }
-            for (node, val) in [(c.out, q), (c.outb, !q)] {
-                if node == 0 {
-                    continue;
+        if !timed {
+            self.settle(d, &mut w, t, false);
+        } else {
+            let limit = t + 1e-12 * t.abs() + 1e-18;
+            while let Some(&std::cmp::Reverse(top)) = d.heap.peek() {
+                let te = f64::from_bits(top.0);
+                if te > limit {
+                    break;
                 }
-                if self.is_digital(node) {
-                    let moved = d.lv[node] != val;
-                    if moved || force {
-                        d.lv[node] = val;
-                        for &f in &self.dnets.fanout[node] {
-                            if is_memory(self.cells[f].kind) {
-                                mem_next.push(f);
-                            } else if !queued[f] {
-                                queued[f] = true;
-                                comb.push_back(f);
-                            }
-                        }
+                // everything due at this moment: the outputs that arrive, then the cells that read their inputs
+                let mut arrive: Vec<(usize, u64)> = vec![];
+                let mut read: Vec<usize> = vec![];
+                while let Some(&std::cmp::Reverse(item)) = d.heap.peek() {
+                    if item.0 != top.0 {
+                        break;
                     }
-                } else if changed || force {
-                    analog_changed = true;
+                    d.heap.pop();
+                    if item.2 == 0 {
+                        arrive.push((item.3, item.4));
+                    } else {
+                        read.push(item.3);
+                    }
                 }
-            }
-        };
-        'settle: loop {
-            // phase 1: the gates, one after the other
-            let mut mem_next: Vec<usize> = vec![];
-            while let Some(ci) = comb.pop_front() {
-                queued[ci] = false;
-                if budget == 0 {
-                    break 'settle;
+                let mut mem_next: Vec<usize> = vec![];
+                for (ci, ver) in arrive {
+                    if d.ver[ci] == ver
+                        && let Some(q) = d.pend[ci].take()
+                    {
+                        self.apply_out(d, &mut w, ci, q, &mut mem_next);
+                    }
                 }
-                budget -= 1;
-                let q = self.eval(d, ci);
-                if !d.done_first[ci] || q != d.q[ci] {
-                    apply(d, ci, q, &mut comb, &mut queued, &mut mem_next);
+                for ci in read {
+                    if is_memory(self.cells[ci].kind) {
+                        w.mem.push(ci);
+                    } else if !w.queued[ci] {
+                        w.queued[ci] = true;
+                        w.comb.push_back(ci);
+                    }
                 }
+                w.mem.extend(mem_next);
+                w.mem.sort_unstable();
+                w.mem.dedup();
+                self.settle(d, &mut w, te, true);
             }
-            mem.extend(mem_next);
-            mem.sort_unstable();
-            mem.dedup();
-            if mem.is_empty() {
-                break;
-            }
-            // phase 2: the flip-flops and latches whose inputs changed, together
-            let batch = std::mem::take(&mut mem);
-            if budget < batch.len() {
-                break;
-            }
-            budget -= batch.len();
-            let results: Vec<(usize, bool)> = batch.iter().map(|&ci| (ci, self.eval(d, ci))).collect();
-            let mut mem_next: Vec<usize> = vec![];
-            for (ci, q) in results {
-                if !d.done_first[ci] || q != d.q[ci] {
-                    apply(d, ci, q, &mut comb, &mut queued, &mut mem_next);
-                }
-            }
-            mem = mem_next;
-            mem.sort_unstable();
-            mem.dedup();
         }
-        // a loop that did not settle leaves gates in the queue: clear their marks for the next call
-        for ci in comb {
-            queued[ci] = false;
-        }
-        d.queued = queued;
+        d.queued = w.queued;
         d.started = true;
-        (analog_changed || (sup_moved && self.dstat.analog_out.iter().any(|b| *b)), any_change)
+        d.t_prev = t;
+        (w.analog_changed || (sup_moved && self.dstat.analog_out.iter().any(|b| *b)), w.any_change)
     }
 
     /// Write the voltage of every digital net into the solution (the circuit equations leave those nodes at 0).

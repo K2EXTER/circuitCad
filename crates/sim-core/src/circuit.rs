@@ -249,6 +249,9 @@ pub struct CellSupply {
     pub vh: f64,
     pub set_low: bool,
     pub reset_low: bool,
+    /// Propagation delay (seconds) of an output going high / low (0 = none).
+    pub tplh: f64,
+    pub tphl: f64,
 }
 
 /// What a `Element::Seq` is, with the order of its inputs in `ins` (node 0 = tied low):

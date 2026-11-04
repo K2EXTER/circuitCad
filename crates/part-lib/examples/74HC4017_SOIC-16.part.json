@@ -1,7 +1,7 @@
 {
   "name": "74HC4017D",
   "category": "ロジックIC",
-  "description": "十進カウンタ (ジョンソンカウンタ、DIP-16)。CP の立ち上がりごとに、出力 Q0〜Q9 のうち 1 つだけが High になり、順に進みます (Q9 の次は Q0)。MR を High にすると Q0 に戻ります。CO は Q0〜Q4 の間 High (10 進カウンタの桁上げ)。デジタルセルで作った簡易モデル (遅延なし)。ピン番号は一般的な 4017 の並び (必ずデータシートで確かめてください)。2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
+  "description": "十進カウンタ (ジョンソンカウンタ、DIP-16)。CP の立ち上がりごとに、出力 Q0〜Q9 のうち 1 つだけが High になり、順に進みます (Q9 の次は Q0)。MR を High にすると Q0 に戻ります。CO は Q0〜Q4 の間 High (10 進カウンタの桁上げ)。デジタルセルで作った簡易モデル (遅延 20ns)。ピン番号は一般的な 4017 の並び (必ずデータシートで確かめてください)。2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
   "datasheet": "",
   "prefix": "U",
   "footprint_name": "SOIC-16_P1.27",
@@ -98,7 +98,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC4017",
-    "text": "* 74HC4017 behavioural model: five D flip-flop cells in a Johnson counter and ten decoding gate cells (Y lines). The levels follow the supply pins; the outputs have 60 ohm. No propagation delay.\n.subckt 74HC4017 q5 q1 q0 q2 q6 q7 q3 gnd q8 q4 q9 co ce cp mr vcc\nYF1 dff j1 jb1 gnd vcc 60 0.5 0 0 0 jb5 cp 0 mr\nYF2 dff j2 jb2 gnd vcc 60 0.5 0 0 0 j1 cp 0 mr\nYF3 dff j3 jb3 gnd vcc 60 0.5 0 0 0 j2 cp 0 mr\nYF4 dff j4 jb4 gnd vcc 60 0.5 0 0 0 j3 cp 0 mr\nYF5 dff j5 jb5 gnd vcc 60 0.5 0 0 0 j4 cp 0 mr\nYQ0 nor q0 0 gnd vcc 60 0.5 0 0 0 j1 j5\nYQ1 and q1 0 gnd vcc 60 0.5 0 0 0 j1 jb2\nYQ2 and q2 0 gnd vcc 60 0.5 0 0 0 j2 jb3\nYQ3 and q3 0 gnd vcc 60 0.5 0 0 0 j3 jb4\nYQ4 and q4 0 gnd vcc 60 0.5 0 0 0 j4 jb5\nYQ5 and q5 0 gnd vcc 60 0.5 0 0 0 j5 j1\nYQ6 and q6 0 gnd vcc 60 0.5 0 0 0 jb1 j2\nYQ7 and q7 0 gnd vcc 60 0.5 0 0 0 jb2 j3\nYQ8 and q8 0 gnd vcc 60 0.5 0 0 0 jb3 j4\nYQ9 and q9 0 gnd vcc 60 0.5 0 0 0 jb4 j5\nYCO buf co 0 gnd vcc 60 0.5 0 0 0 jb5\n.ends 74HC4017",
+    "text": "* 74HC4017 behavioural model: five D flip-flop cells in a Johnson counter and ten decoding gate cells (Y lines). The levels follow the supply pins; the outputs have 60 ohm. Propagation delay: clock to Q 12 ns plus the decoding 8 ns.\n.subckt 74HC4017 q5 q1 q0 q2 q6 q7 q3 gnd q8 q4 q9 co ce cp mr vcc\nYF1 dff j1 jb1 gnd vcc 60 0.5 0 0 0 td=12n jb5 cp 0 mr\nYF2 dff j2 jb2 gnd vcc 60 0.5 0 0 0 td=12n j1 cp 0 mr\nYF3 dff j3 jb3 gnd vcc 60 0.5 0 0 0 td=12n j2 cp 0 mr\nYF4 dff j4 jb4 gnd vcc 60 0.5 0 0 0 td=12n j3 cp 0 mr\nYF5 dff j5 jb5 gnd vcc 60 0.5 0 0 0 td=12n j4 cp 0 mr\nYQ0 nor q0 0 gnd vcc 60 0.5 0 0 0 td=8n j1 j5\nYQ1 and q1 0 gnd vcc 60 0.5 0 0 0 td=8n j1 jb2\nYQ2 and q2 0 gnd vcc 60 0.5 0 0 0 td=8n j2 jb3\nYQ3 and q3 0 gnd vcc 60 0.5 0 0 0 td=8n j3 jb4\nYQ4 and q4 0 gnd vcc 60 0.5 0 0 0 td=8n j4 jb5\nYQ5 and q5 0 gnd vcc 60 0.5 0 0 0 td=8n j5 j1\nYQ6 and q6 0 gnd vcc 60 0.5 0 0 0 td=8n jb1 j2\nYQ7 and q7 0 gnd vcc 60 0.5 0 0 0 td=8n jb2 j3\nYQ8 and q8 0 gnd vcc 60 0.5 0 0 0 td=8n jb3 j4\nYQ9 and q9 0 gnd vcc 60 0.5 0 0 0 td=8n jb4 j5\nYCO buf co 0 gnd vcc 60 0.5 0 0 0 td=8n jb5\n.ends 74HC4017",
     "pins": [
       "1",
       "2",
@@ -119,7 +119,7 @@
     ],
     "limits": [
       "状態を内部に持つ D フリップフロップのセル 5 個のジョンソンカウンタと、10 個の復号のセルでできたモデルです。電源の GND と VCC を基準に動き、入力のしきい値は電源電圧の半分、出力は電源電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-      "扱わないもの: 伝搬遅延、クロック禁止 (CE。GND につないで使ってください)、電源電流、ホールド/セットアップ時間、電源投入時に起こりうる不正な状態からの自己復帰 (実物は数クロックで正しい状態に戻る)。",
+      "扱わないもの: クロック禁止 (CE。GND につないで使ってください)、電源電流、ホールド/セットアップ時間、電源投入時に起こりうる不正な状態からの自己復帰 (実物は数クロックで正しい状態に戻る)。",
       "電源を入れたら、MR を一度 High にして、Q0 から数え始めるようにしてください (電源に 0.1µF、GND に 100kΩ をつなぐと、電源投入時に MR が一瞬 High になります)。",
       "CP は立ち上がりで数えます。スイッチをつなぐときは、チャタリングをとるフィルタとシュミットトリガ (74HC14 など) を前に入れてください。"
     ]

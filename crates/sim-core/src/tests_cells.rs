@@ -82,3 +82,124 @@ fn a_filtered_run_keeps_only_the_wanted_signals_with_the_same_values() {
         assert_eq!(s.values, full.signal(&s.name).unwrap().values, "{}", s.name);
     }
 }
+
+fn edge_time(r: &TranResult, name: &str, level: f64, rising: bool, after: f64) -> Option<f64> {
+    let s = r.signal(name)?;
+    for k in 1..r.time.len() {
+        if r.time[k - 1] < after {
+            continue;
+        }
+        let (a, b) = (s.values[k - 1], s.values[k]);
+        if rising && a < level && b >= level || !rising && a > level && b <= level {
+            // linear interpolation between the two points
+            return Some(r.time[k - 1] + (level - a) / (b - a) * (r.time[k] - r.time[k - 1]));
+        }
+    }
+    None
+}
+
+/// An inverter with a delay: the output follows the input by td (rising and falling alike), seen through a resistive load.
+#[test]
+fn a_delayed_inverter_follows_its_input_after_the_delay() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss a y", "Y1 inv y 0 vss vcc 60 0.5 0 0 0 td=20n a");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    let s = parse_source_full("PULSE(0 5 1u 1n 1n 2u 4u)").unwrap();
+    c.add(Element::VSource { name: "Va".into(), p: n[2], n: 0, wave: s.wave, ac: s.ac });
+    c.add(Element::Resistor { name: "Rl".into(), a: n[3], b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 9e-6, tstep: 20e-9, uic: false }).unwrap();
+    // the input crosses 2.5 V at about 1.0005 us (rising) and 3.0005 us (falling), and 5.0005 us again
+    let a_rise = edge_time(&r, "V(a)", 2.5, true, 0.0).unwrap();
+    let y_fall = edge_time(&r, "V(y)", 2.5, false, 0.0).unwrap();
+    assert!((y_fall - a_rise - 20e-9).abs() < 8e-9, "falling output {:.1} ns after the input rose", (y_fall - a_rise) * 1e9);
+    let a_fall = edge_time(&r, "V(a)", 2.5, false, 2e-6).unwrap();
+    let y_rise = edge_time(&r, "V(y)", 2.5, true, 2e-6).unwrap();
+    assert!((y_rise - a_fall - 20e-9).abs() < 8e-9, "rising output {:.1} ns after the input fell", (y_rise - a_fall) * 1e9);
+}
+
+/// A pulse shorter than the delay does not get through (inertial delay), a longer one does.
+#[test]
+fn a_pulse_shorter_than_the_delay_is_swallowed() {
+    for (width, passes) in [(10e-9, false), (60e-9, true)] {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss a y", "Y1 buf y 0 vss vcc 60 0.5 0 0 0 td=30n a");
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        let s = parse_source_full(&format!("PULSE(0 5 1u 1n 1n {width:e} 5u)")).unwrap();
+        c.add(Element::VSource { name: "Va".into(), p: n[2], n: 0, wave: s.wave, ac: s.ac });
+        c.add(Element::Resistor { name: "Rl".into(), a: n[3], b: 0, r: 10e3 });
+        let r = transient(&c, &TranSettings { tstop: 3e-6, tstep: 5e-9, uic: false }).unwrap();
+        let top = r.signal("V(y)").unwrap().values.iter().cloned().fold(0.0f64, f64::max);
+        assert_eq!(top > 2.5, passes, "a {width:e} s pulse through a 30 ns delay: the output reached {top}");
+    }
+}
+
+/// Gates with delays make a ring oscillator that oscillates (no delay: it cannot): three inverters of 10 ns each, a half
+/// period of 30 ns, and a buffer to an analog load to see it. The delay inside the ring is exact whatever the step is.
+#[test]
+fn a_ring_of_three_delayed_inverters_oscillates_with_the_period_of_six_delays() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss y", "Y1 inv n2 0 vss vcc 60 0.5 0 0 0 td=10n n1\nY2 inv n3 0 vss vcc 60 0.5 0 0 0 td=10n n2\nY3 inv n1 0 vss vcc 60 0.5 0 0 0 td=10n n3\nY4 buf y 0 vss vcc 60 0.5 0 0 0 n1");
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    c.add(Element::Resistor { name: "Rl".into(), a: n[2], b: 0, r: 10e3 });
+    // an odd ring has no state to rest in: the run starts it going
+    let r = transient(&c, &TranSettings { tstop: 2e-6, tstep: 5e-9, uic: false }).unwrap();
+    let mut rises: Vec<f64> = vec![];
+    let mut after = 0.0;
+    while let Some(t) = edge_time(&r, "V(y)", 2.5, true, after) {
+        rises.push(t);
+        after = t + 1e-12;
+    }
+    assert!(rises.len() > 10, "the ring oscillates: {} rising edges", rises.len());
+    // 2 us / 60 ns = 33 periods; the output is seen at the steps of the run (5 ns), 12 to a period
+    assert!((30..=36).contains(&rises.len()), "{} rising edges in 2 us for a 60 ns period", rises.len());
+}
+
+/// The time inside the digital part does not depend on the step: a chain of 100 buffers of 10 ns each delays an edge by 1 us even
+/// when the steps are 500 ns, and an output on an analog node that has a delay is a corner the run lands a step on.
+#[test]
+fn a_long_chain_of_delays_is_exact_whatever_the_step() {
+    let mut body = String::new();
+    for k in 0..100 {
+        let (a, y) = (if k == 0 { "a".to_string() } else { format!("c{k}") }, format!("c{}", k + 1));
+        body += &format!("Y{k} buf {y} 0 vss vcc 60 0.5 0 0 0 td=10n {a}\n");
+    }
+    body += "YO buf y 0 vss vcc 60 0.5 0 0 0 td=1n c100";
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss a y", &body);
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    let s = parse_source_full("PULSE(0 5 2u 1n 1n 5u 20u)").unwrap();
+    c.add(Element::VSource { name: "Va".into(), p: n[2], n: 0, wave: s.wave, ac: s.ac });
+    c.add(Element::Resistor { name: "Rl".into(), a: n[3], b: 0, r: 10e3 });
+    let r = transient(&c, &TranSettings { tstop: 8e-6, tstep: 500e-9, uic: false }).unwrap();
+    let a_rise = edge_time(&r, "V(a)", 2.5, true, 0.0).unwrap();
+    let y_rise = edge_time(&r, "V(y)", 2.5, true, 0.0).unwrap();
+    // 100 x 10 ns + 1 ns; the output is seen at the steps (the run lands one on the arrival), so it rises a step's worth later at most
+    let d = y_rise - a_rise;
+    assert!((1.0e-6..1.0e-6 + 520e-9).contains(&d), "the chain took {:.1} ns", d * 1e9);
+}
+
+/// The ring oscillator count does not depend on the step either when its output has a delay of its own (the run lands on it).
+#[test]
+fn a_ring_seen_through_a_delayed_buffer_has_the_same_edges_whatever_the_step() {
+    let ring = |tstep: f64| {
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss y", "Y1 inv n2 0 vss vcc 60 0.5 0 0 0 td=10n n1\nY2 inv n3 0 vss vcc 60 0.5 0 0 0 td=10n n2\nY3 inv n1 0 vss vcc 60 0.5 0 0 0 td=10n n3\nY4 buf y 0 vss vcc 60 0.5 0 0 0 td=1n n1");
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        c.add(Element::Resistor { name: "Rl".into(), a: n[2], b: 0, r: 10e3 });
+        let r = transient(&c, &TranSettings { tstop: 2e-6, tstep, uic: false }).unwrap();
+        let (mut count, mut after) = (0, 0.0);
+        while let Some(t) = edge_time(&r, "V(y)", 2.5, true, after) {
+            count += 1;
+            after = t + 1e-12;
+        }
+        count
+    };
+    let (fine, coarse) = (ring(5e-9), ring(200e-9));
+    assert!((30..=36).contains(&fine), "{fine} rising edges at 5 ns");
+    assert!((30..=36).contains(&coarse), "{coarse} rising edges at 200 ns steps");
+}

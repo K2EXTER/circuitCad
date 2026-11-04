@@ -116,7 +116,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC14",
-    "text": "* 74HC14 behavioural model: Schmitt-trigger cells (Y lines): 0.6 / 0.4 of the supply, the output follows the supply through 60 ohm. No propagation delay.\n.subckt 74HC14 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nY1 schmitt 0 y1 gnd vcc 60 0.5 0.1 0 0 a1\nY2 schmitt 0 y2 gnd vcc 60 0.5 0.1 0 0 a2\nY3 schmitt 0 y3 gnd vcc 60 0.5 0.1 0 0 a3\nY4 schmitt 0 y4 gnd vcc 60 0.5 0.1 0 0 a4\nY5 schmitt 0 y5 gnd vcc 60 0.5 0.1 0 0 a5\nY6 schmitt 0 y6 gnd vcc 60 0.5 0.1 0 0 a6\n.ends 74HC14",
+    "text": "* 74HC14 behavioural model: Schmitt-trigger cells (Y lines): 0.6 / 0.4 of the supply, the output follows the supply through 60 ohm. Propagation delay 11 ns.\n.subckt 74HC14 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nY1 schmitt 0 y1 gnd vcc 60 0.5 0.1 0 0 td=11n a1\nY2 schmitt 0 y2 gnd vcc 60 0.5 0.1 0 0 td=11n a2\nY3 schmitt 0 y3 gnd vcc 60 0.5 0.1 0 0 td=11n a3\nY4 schmitt 0 y4 gnd vcc 60 0.5 0.1 0 0 td=11n a4\nY5 schmitt 0 y5 gnd vcc 60 0.5 0.1 0 0 td=11n a5\nY6 schmitt 0 y6 gnd vcc 60 0.5 0.1 0 0 td=11n a6\n.ends 74HC14",
     "pins": [
       "1",
       "2",
@@ -136,7 +136,7 @@
     "params": {},
     "limits": [
       "シュミットトリガのセルで表したモデルです。切り替わる電圧は、上がるとき電源の 0.6、下がるとき 0.4 (電源の2つのピンの間の電圧に対する割合)。出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-      "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。ヒステリシスの幅は代表的な値で、実物の個体差は含みません。",
+      "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。ヒステリシスの幅は代表的な値で、実物の個体差は含みません。伝搬遅延は、5V・25℃ での代表値を 1 つ決めたもの (立ち上がりと立ち下がりの差、電源電圧や温度による変化は含みません)。数値は必ずデータシートで確かめてください。",
       "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
     ]
   }
