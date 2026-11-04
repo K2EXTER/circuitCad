@@ -126,9 +126,23 @@ fn other_states(c: &sim_core::Circuit, first: &sim_core::DcResult) -> Value {
     let base = named(first);
     let (lo, hi) = base.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), (_, v)| (a.min(*v), b.max(*v)));
     let mut out = vec![];
-    for (label, level) in [("all nets high", hi), ("all nets low", lo)] {
+    // nets that sit between the rails in the first answer (a latch resting at its unstable middle point): another start splits them,
+    // every other one high and the rest low, because a start that treats them alike keeps a symmetric latch in the middle
+    let span = hi - lo;
+    let mid: Vec<usize> = (0..base.len()).filter(|&i| span > 1.0 && base[i].1 > lo + 0.2 * span && base[i].1 < hi - 0.2 * span).collect();
+    let mut starts: Vec<(&str, Vec<f64>)> = vec![("all nets high", vec![hi; base.len()]), ("all nets low", vec![lo; base.len()])];
+    if mid.len() >= 2 {
+        for (label, first_high) in [("middle nets split (first high)", true), ("middle nets split (first low)", false)] {
+            let mut levels: Vec<f64> = base.iter().map(|(_, v)| *v).collect();
+            for (k, &i) in mid.iter().enumerate() {
+                levels[i] = if (k % 2 == 0) == first_high { hi } else { lo };
+            }
+            starts.push((label, levels));
+        }
+    }
+    for (label, levels) in starts {
         let mut cc = c.clone();
-        cc.nodesets = base.iter().map(|(n, _)| (n.clone(), level)).collect();
+        cc.nodesets = base.iter().zip(&levels).map(|((n, _), l)| (n.clone(), *l)).collect();
         match sim_core::dc_op(&cc) {
             Ok(r) => {
                 let diff: Vec<(String, f64, f64)> = named(&r).into_iter().zip(&base).filter(|((_, v), (_, w))| (v - w).abs() > 0.2).map(|((n, v), (_, w))| (n, *w, v)).collect();

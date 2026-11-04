@@ -355,6 +355,7 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
                     t: t + h,
                     dynamic: Some(Dyn { h, trap, cap_v: &cap_v, cap_i: &cap_i, ind_i: &ind_i, ind_v: &ind_v, capped: tries < CAPPED_TRIES }),
                     sw_widen: 1.0,
+                    seed_g: None,
                 };
                 match cm.newton(x.clone(), vj.clone(), &ctx) {
                     Ok(a) => break a,

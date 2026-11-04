@@ -106,6 +106,8 @@ pub(crate) struct Ctx<'a> {
     pub dynamic: Option<Dyn<'a>>,
     /// Factor by which switch transitions are widened (1 = as modelled).
     pub sw_widen: f64,
+    /// Conductance with which a `nodeset` pulls its node to the seed voltage (`None` = `gmin`, as the other nodes are pulled to ground).
+    pub seed_g: Option<f64>,
 }
 
 impl Ctx<'_> {
@@ -114,7 +116,7 @@ impl Ctx<'_> {
     }
 
     pub fn dc(gmin: f64, scale: f64) -> Ctx<'static> {
-        Ctx { gmin, scale, t: 0.0, dynamic: None, sw_widen: 1.0 }
+        Ctx { gmin, scale, t: 0.0, dynamic: None, sw_widen: 1.0, seed_g: None }
     }
 }
 
@@ -134,7 +136,9 @@ impl Compiled {
         }
         // `nodeset`: the large gmin of the first stages pulls a node to its seed voltage instead of to ground
         for (i, s) in self.seed.iter().enumerate() {
-            m.b[i] += gmin * s;
+            let g = ctx.seed_g.unwrap_or(gmin) - gmin;
+            m.at(i, i, g);
+            m.b[i] += ctx.seed_g.unwrap_or(gmin) * s;
         }
         for e in &self.ce {
             match e {

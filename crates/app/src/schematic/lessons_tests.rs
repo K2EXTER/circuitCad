@@ -2340,13 +2340,13 @@ fn the_logic_basics_lesson_ticks_and_its_numbers_hold() {
     let v = |e: &SchEditor, n: &str| e.dc.as_ref().unwrap().outcome.as_ref().unwrap().voltage(n).unwrap();
     e.run_dc();
     e.update_lesson();
-    assert!((v(&e, "DRV") - 4.4).abs() < 0.1, "drop of about 0.6 V");
+    assert!((v(&e, "DRV") - 4.53).abs() < 0.1, "drop of about 0.5 V");
     assert_eq!(progress(&e), 2, "{}", e.status);
     set_value(&mut e, "R1", "100");
     e.run_dc();
     e.update_lesson();
     assert_eq!(progress(&e), 3);
-    assert!((v(&e, "DRV") - 3.67).abs() < 0.1, "heavier load");
+    assert!((v(&e, "DRV") - 3.89).abs() < 0.1, "heavier load");
 }
 
 #[test]

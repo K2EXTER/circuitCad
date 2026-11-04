@@ -106,8 +106,8 @@ fn output_drive_is_a_few_tens_of_ohms() {
     c.add(Element::Resistor { name: "Rl".into(), a: n[1], b: 0, r: 1e3 });
     let r = dc_op(&c).unwrap();
     let v = r.voltage("p2").unwrap();
-    // 80 ohm high-side switch against a 1k load
-    assert!((v - 5.0 * 1e3 / 1080.0).abs() < 0.03, "{v}");
+    // 60 ohm output resistance against a 1k load
+    assert!((v - 5.0 * 1e3 / 1060.0).abs() < 0.03, "{v}");
     // and sinking: input high, load to the supply
     let mut c = Circuit::new();
     let n = place(&mut c, "74HC04");
@@ -115,7 +115,7 @@ fn output_drive_is_a_few_tens_of_ohms() {
     drive(&mut c, "A", n[0], 5.0);
     c.add(Element::Resistor { name: "Rl".into(), a: n[1], b: n[13], r: 1e3 });
     let v = dc_op(&c).unwrap().voltage("p2").unwrap();
-    assert!((v - 5.0 * 40.0 / 1040.0).abs() < 0.03, "{v}");
+    assert!((v - 5.0 * 60.0 / 1060.0).abs() < 0.03, "{v}");
 }
 
 #[test]
@@ -208,8 +208,8 @@ fn all_logic_parts_load() {
     for ic in ["74HC00", "74HC02", "74HC04", "74HC08", "74HC14", "74HC32", "74HC74", "74HC86"] {
         let mut c = Circuit::new();
         place(&mut c, ic);
-        // the 74HC74 keeps its state inside (Element::Seq); the others are made of switches
-        assert!(c.elements.iter().any(|e| matches!(e, Element::Switch { .. } | Element::Seq { .. })), "{ic}");
+        // the 74HC14 is made of switches, the 74HC74 keeps its state inside (Element::Seq), the other gates are B sources
+        assert!(c.elements.iter().any(|e| matches!(e, Element::Switch { .. } | Element::Seq { .. } | Element::BSource { .. })), "{ic}");
     }
 }
 

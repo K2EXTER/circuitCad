@@ -227,12 +227,21 @@ impl Compiled {
                 // gmin from 1e-2 down to 1e-12 (a decade at a time), each step starting from the previous solution. A step
                 // that does not converge is split into smaller ones: a latch or a current-limited output stage can need
                 // hundreds of iterations for a decade, but only a few for a third of it.
-                let first = self.newton_damped(zero_x, zero_vj, &Ctx::dc(1e-2, 1.0))?;
+                // with `nodeset`s the pull to the seeds stays at the strength of the first stage while gmin falls (like SPICE: the seeds
+                // decide which state a latch is in), and is released at the end
+                let hold = |gmin: f64| {
+                    let mut c = Ctx::dc(gmin, 1.0);
+                    if !self.seed.is_empty() {
+                        c.seed_g = Some(1e-2);
+                    }
+                    c
+                };
+                let first = self.newton_damped(zero_x, zero_vj, &hold(1e-2))?;
                 let (mut x, mut vj, mut iters) = (first.x, first.vj, first.iterations);
                 let (mut e, mut de) = (2.0f64, 1.0f64);
                 while e < 12.0 - 1e-9 {
                     let target = (e + de).min(12.0);
-                    let ctx = Ctx::dc(10f64.powf(-target), 1.0);
+                    let ctx = hold(10f64.powf(-target));
                     match self.newton_damped(x.clone(), vj.clone(), &ctx) {
                         Ok(a) => {
                             iters += a.iterations;
@@ -257,6 +266,13 @@ impl Compiled {
                             e = target;
                         }
                     }
+                }
+                if !self.seed.is_empty() {
+                    let ctx = Ctx::dc(1e-12, 1.0);
+                    let a = self.newton_damped(x.clone(), vj.clone(), &ctx).or_else(|f| self.newton_long(x, vj, &ctx).map_err(|_| f))?;
+                    iters += a.iterations;
+                    x = a.x;
+                    vj = a.vj;
                 }
                 Ok(Attempt { x, vj, iterations: iters })
             }

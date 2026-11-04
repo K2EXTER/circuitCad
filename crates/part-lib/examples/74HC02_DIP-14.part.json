@@ -1,11 +1,38 @@
 {
   "name": "74HC02",
   "category": "ロジックIC",
-  "description": "クワッド 2入力 NOR (DIP-14)。スイッチで作った簡易モデル (遅延なし)。入力のしきい値は電源の半分、2〜6V で動作",
+  "description": "クワッド 2入力 NOR (DIP-14)。式で作った簡易モデル (遅延なし)。入力のしきい値は電源の半分、2〜6V で動作",
   "datasheet": "",
   "prefix": "U",
   "footprint_name": "DIP-14_W7.62",
-  "swap": {"gates": [["2", "3", "1"], ["5", "6", "4"], ["8", "9", "10"], ["11", "12", "13"]], "inputs": [0, 1]},
+  "swap": {
+    "gates": [
+      [
+        "2",
+        "3",
+        "1"
+      ],
+      [
+        "5",
+        "6",
+        "4"
+      ],
+      [
+        "8",
+        "9",
+        "10"
+      ],
+      [
+        "11",
+        "12",
+        "13"
+      ]
+    ],
+    "inputs": [
+      0,
+      1
+    ]
+  },
   "pins": [
     {
       "number": "1",
@@ -90,7 +117,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC02",
-    "text": "* 74HC02 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC02 y1 a1 b1 y2 a2 b2 gnd a3 b3 y3 a4 b4 y4 vcc\nRh1 vcc hv 100k\nRh2 hv gnd 100k\nS1 vcc p1 hv a1 SWPS\nS2 p1 y1 hv b1 SWPS\nS3 y1 gnd a1 hv SWNA\nS4 y1 gnd b1 hv SWNA\nS5 vcc p2 hv a2 SWPS\nS6 p2 y2 hv b2 SWPS\nS7 y2 gnd a2 hv SWNA\nS8 y2 gnd b2 hv SWNA\nS9 vcc p3 hv a3 SWPS\nS10 p3 y3 hv b3 SWPS\nS11 y3 gnd a3 hv SWNA\nS12 y3 gnd b3 hv SWNA\nS13 vcc p4 hv a4 SWPS\nS14 p4 y4 hv b4 SWPS\nS15 y4 gnd a4 hv SWNA\nS16 y4 gnd b4 hv SWNA\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC02",
+    "text": "* 74HC02 behavioural model: each gate is one smooth expression (a tanh of the input around Vcc/2); the output follows Vcc through 60 ohm. No propagation delay.\n.subckt 74HC02 y1 a1 b1 y2 a2 b2 gnd a3 b3 y3 a4 b4 y4 vcc\nB1 o1 gnd V=V(vcc,gnd)*((1-(0.5+0.5*tanh((V(a1,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b1,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR1 o1 y1 60\nB2 o2 gnd V=V(vcc,gnd)*((1-(0.5+0.5*tanh((V(a2,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b2,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR2 o2 y2 60\nB3 o3 gnd V=V(vcc,gnd)*((1-(0.5+0.5*tanh((V(a3,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b3,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR3 o3 y3 60\nB4 o4 gnd V=V(vcc,gnd)*((1-(0.5+0.5*tanh((V(a4,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b4,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR4 o4 y4 60\nRin_a1 a1 gnd 1G\nRin_b1 b1 gnd 1G\nRin_a2 a2 gnd 1G\nRin_b2 b2 gnd 1G\nRin_a3 a3 gnd 1G\nRin_b3 b3 gnd 1G\nRin_a4 a4 gnd 1G\nRin_b4 b4 gnd 1G\n.ends 74HC02",
     "pins": [
       "1",
       "2",
@@ -109,9 +136,9 @@
     ],
     "params": {},
     "limits": [
-      "スイッチで作った CMOS ゲートの動作モデルです。入力のしきい値は電源電圧の半分で、出力は High が約 80Ω、Low が約 40Ω の抵抗を通して電源・GND につながります。",
+      "ゲートを 1 つのなめらかな式で表した動作モデルです。入力のしきい値は電源電圧の半分で、出力は電源電圧まで振れ、約 60Ω の抵抗を通してつながります。",
       "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
-      "使わない入力は、GND か電源につないでください (つながないと 0V として扱います)。"
+      "使わない入力は、GND か電源につないでください (つながないと、1GΩ で GND につながっているので 0V として扱います)。"
     ]
   }
 }
