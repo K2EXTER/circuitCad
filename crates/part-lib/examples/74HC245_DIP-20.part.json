@@ -1,0 +1,153 @@
+{
+  "name": "74HC245",
+  "category": "ロジックIC",
+  "description": "8 ビット 双方向バストランシーバ (3 ステート、DIP-20)。DIR が High のとき A から B へ、Low のとき B から A へ、値を渡します。OE が High だと両側とも何も出しません (Hi-Z)。バスのつなぎ口に使います。デジタルセルで作った簡易モデル (遅延 15ns)。ピン表と遅延は TI SN74HC245 のデータシートで確かめました。2〜6V で動作",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc245.pdf",
+  "prefix": "U",
+  "footprint_name": "DIP-20_W7.62",
+  "pins": [
+    {
+      "number": "1",
+      "name": "DIR",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "A1",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "A2",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "A3",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "A4",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "A5",
+      "side": "left"
+    },
+    {
+      "number": "7",
+      "name": "A6",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "A7",
+      "side": "left"
+    },
+    {
+      "number": "9",
+      "name": "A8",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "11",
+      "name": "B8",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "B7",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "B6",
+      "side": "right"
+    },
+    {
+      "number": "14",
+      "name": "B5",
+      "side": "right"
+    },
+    {
+      "number": "15",
+      "name": "B4",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "B3",
+      "side": "right"
+    },
+    {
+      "number": "17",
+      "name": "B2",
+      "side": "right"
+    },
+    {
+      "number": "18",
+      "name": "B1",
+      "side": "right"
+    },
+    {
+      "number": "19",
+      "name": "OE",
+      "side": "left"
+    },
+    {
+      "number": "20",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 20,
+    "pitch": 2.54,
+    "row_spacing": 7.62,
+    "pad_len": 1.6,
+    "pad_width": 1.6,
+    "drill": 0.8
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC245",
+    "text": "* 74HC245 behavioural model: an octal bus transceiver. DIR high: A to B; DIR low: B to A; OE high: both sides off. Delay 15 ns (the data sheet SCLS131, 4.5 V, 25 C typical); the enable and disable times are not modelled.\n.subckt 74HC245 dir a1 a2 a3 a4 a5 a6 a7 a8 gnd b8 b7 b6 b5 b4 b3 b2 b1 oe vcc\nYndir inv ndir 0 gnd vcc 60 0.5 0 0 0 dir\nYenab nor enab 0 gnd vcc 60 0.5 0 0 0 oe ndir\nYenba nor enba 0 gnd vcc 60 0.5 0 0 0 oe dir\nYab1 buf b1 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a1\nYba1 buf a1 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b1\nYab2 buf b2 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a2\nYba2 buf a2 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b2\nYab3 buf b3 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a3\nYba3 buf a3 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b3\nYab4 buf b4 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a4\nYba4 buf a4 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b4\nYab5 buf b5 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a5\nYba5 buf a5 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b5\nYab6 buf b6 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a6\nYba6 buf a6 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b6\nYab7 buf b7 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a7\nYba7 buf a7 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b7\nYab8 buf b8 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enab a8\nYba8 buf a8 0 gnd vcc 60 0.5 0 0 0 td=15n oe=enba b8\n.ends 74HC245",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、A↔B 15ns の代表値 1 つです (4.5V・25℃ のデータシートの値)。出力許可 (OE) と DIR の切り替えの遅れ (ten 23ns、tdis 25ns) は表しません。",
+      "DIR を切り替えるとき、実物は先に切ってから入れる (切り替えの間に両方が出ない) ので、バスがぶつかりません。ここでは遅れを表さないので、切り替えの一瞬に、両側の出力が同時に出ることがありますが、同じ値なので衝突の警告にはなりません。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱い、OE は働いた状態になります)。"
+    ]
+  }
+}

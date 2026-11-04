@@ -1,0 +1,117 @@
+{
+  "name": "74HC125D",
+  "category": "ロジックIC",
+  "description": "バス バッファ (3 ステート出力、4 個、DIP-14)。OE が Low の組だけ、入力 A の値を出力 Y に出します。High のときは何も出しません (Hi-Z)。バスにつなぐ部品です。デジタルセルで作った簡易モデル (遅延 14ns)。ピン表と遅延は TI SN74HC125 のデータシートで確かめました。2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc125.pdf",
+  "prefix": "U",
+  "footprint_name": "SOIC-14_P1.27",
+  "glyph": "gate_buffer",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1OE",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "1A",
+      "side": "left"
+    },
+    {
+      "number": "3",
+      "name": "1Y",
+      "side": "right"
+    },
+    {
+      "number": "4",
+      "name": "2OE",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "2A",
+      "side": "left"
+    },
+    {
+      "number": "6",
+      "name": "2Y",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "8",
+      "name": "3Y",
+      "side": "right"
+    },
+    {
+      "number": "9",
+      "name": "3A",
+      "side": "left"
+    },
+    {
+      "number": "10",
+      "name": "3OE",
+      "side": "left"
+    },
+    {
+      "number": "11",
+      "name": "4Y",
+      "side": "right"
+    },
+    {
+      "number": "12",
+      "name": "4A",
+      "side": "left"
+    },
+    {
+      "number": "13",
+      "name": "4OE",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 14,
+    "pitch": 1.27,
+    "row_spacing": 5.4,
+    "pad_len": 1.55,
+    "pad_width": 0.6
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC125",
+    "text": "* 74HC125 behavioural model: four non-inverting 3-state buffers, each with its own output enable (active low). Delay 14 ns (the data sheet, 4.5 V, 25 C typical); the enable and disable times are not modelled.\n.subckt 74HC125 1oe 1a 1y 2oe 2a 2y gnd 3y 3a 3oe 4y 4a 4oe vcc\nYb1 buf 1y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=1oe oel=1 1a\nYb2 buf 2y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=2oe oel=1 2a\nYb3 buf 3y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=3oe oel=1 3a\nYb4 buf 4y 0 gnd vcc 60 0.5 0 0 0 td=14n oe=4oe oel=1 4a\n.ends 74HC125",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は、A→Y 14ns の代表値 1 つです (4.5V・25℃ のデータシートの値)。出力許可 (OE) の切り替えの遅れ (ten 16ns、tdis 17ns) は表しません。",
+      "扱わないもの: 入力容量、電源電流。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱います。OE は働いた状態になります)。"
+    ]
+  }
+}

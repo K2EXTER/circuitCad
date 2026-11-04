@@ -1,0 +1,153 @@
+{
+  "name": "74HC373D",
+  "category": "ロジックIC",
+  "description": "8 ビット ラッチ (3 ステート出力、DIP-20)。LE が High の間、出力 Q は入力 D に追従し (透明)、LE が Low になると、そのときの値を保ちます。OE が High だと出力は何も出しません (Hi-Z)。デジタルセルで作った簡易モデル (遅延 16ns)。ピン表と遅延は TI SN74HC373 のデータシートで確かめました。2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
+  "datasheet": "https://www.ti.com/lit/ds/symlink/sn74hc373.pdf",
+  "prefix": "U",
+  "footprint_name": "SOIC-20W_P1.27",
+  "land_unverified": true,
+  "pins": [
+    {
+      "number": "1",
+      "name": "OE",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "1Q",
+      "side": "right"
+    },
+    {
+      "number": "3",
+      "name": "1D",
+      "side": "left"
+    },
+    {
+      "number": "4",
+      "name": "2D",
+      "side": "left"
+    },
+    {
+      "number": "5",
+      "name": "2Q",
+      "side": "right"
+    },
+    {
+      "number": "6",
+      "name": "3Q",
+      "side": "right"
+    },
+    {
+      "number": "7",
+      "name": "3D",
+      "side": "left"
+    },
+    {
+      "number": "8",
+      "name": "4D",
+      "side": "left"
+    },
+    {
+      "number": "9",
+      "name": "4Q",
+      "side": "right"
+    },
+    {
+      "number": "10",
+      "name": "GND",
+      "side": "bottom"
+    },
+    {
+      "number": "11",
+      "name": "LE",
+      "side": "left"
+    },
+    {
+      "number": "12",
+      "name": "5Q",
+      "side": "right"
+    },
+    {
+      "number": "13",
+      "name": "5D",
+      "side": "left"
+    },
+    {
+      "number": "14",
+      "name": "6D",
+      "side": "left"
+    },
+    {
+      "number": "15",
+      "name": "6Q",
+      "side": "right"
+    },
+    {
+      "number": "16",
+      "name": "7Q",
+      "side": "right"
+    },
+    {
+      "number": "17",
+      "name": "7D",
+      "side": "left"
+    },
+    {
+      "number": "18",
+      "name": "8D",
+      "side": "left"
+    },
+    {
+      "number": "19",
+      "name": "8Q",
+      "side": "right"
+    },
+    {
+      "number": "20",
+      "name": "VCC",
+      "side": "top"
+    }
+  ],
+  "package": {
+    "type": "dual",
+    "pins": 20,
+    "pitch": 1.27,
+    "row_spacing": 9.4,
+    "pad_len": 1.9,
+    "pad_width": 0.6
+  },
+  "sim": {
+    "kind": "subckt",
+    "name": "74HC373",
+    "text": "* 74HC373 behavioural model: eight transparent D latches (LE high: the latch follows D, LE low: it holds) with 3-state outputs (OE active low). Delay about 16 ns (the data sheet SCLS140, 4.5 V, 25 C typical: D to Q 15 ns, LE to Q 18 ns); the enable and disable times are not modelled.\n.subckt 74HC373 oe 1q 1d 2d 2q 3q 3d 4d 4q gnd le 5q 5d 6d 6q 7q 7d 8d 8q vcc\nYL1 dlatch 1q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 1d le 0 0\nYL2 dlatch 2q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 2d le 0 0\nYL3 dlatch 3q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 3d le 0 0\nYL4 dlatch 4q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 4d le 0 0\nYL5 dlatch 5q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 5d le 0 0\nYL6 dlatch 6q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 6d le 0 0\nYL7 dlatch 7q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 7d le 0 0\nYL8 dlatch 8q 0 gnd vcc 60 0.5 0 0 0 td=16n oe=oe oel=1 8d le 0 0\n.ends 74HC373",
+    "pins": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20"
+    ],
+    "params": {},
+    "limits": [
+      "デジタルセル (行列の外で計算する素子) で作った動作モデルです。入力のしきい値は電源の半分、出力は電源の 2 つのピンの間の電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "遅延は 16ns の代表値 1 つです (4.5V・25℃ のデータシートの値は、D→Q 15ns、LE→Q 18ns)。出力許可 (OE) の切り替えの遅れは表しません。",
+      "扱わないもの: 入力容量、電源電流、LE に対するデータのセットアップ時間 (10ns)・ホールド時間 (10ns) の点検。",
+      "使わない入力は、GND か電源につないでください (つながないと Low として扱い、OE は働いた状態になります)。"
+    ]
+  }
+}
