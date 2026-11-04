@@ -1,5 +1,5 @@
 use crate::{on_segment, sheet_of, Kind, Label, Pt, Schematic, SHEET_STRIDE};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PinRef {
@@ -89,14 +89,33 @@ fn connectivity(s: &Schematic) -> Conn {
         add(l.pos);
     }
     let mut dsu = Dsu((0..ids.len()).collect());
+    // the known points by column and by row, sorted: a wire along a column or a row finds the points on it by a range search
+    let mut by_x: HashMap<i32, Vec<(i32, usize)>> = HashMap::new();
+    let mut by_y: HashMap<i32, Vec<(i32, usize)>> = HashMap::new();
+    for (&p, &id) in &ids {
+        by_x.entry(p.0).or_default().push((p.1, id));
+        by_y.entry(p.1).or_default().push((p.0, id));
+    }
+    by_x.values_mut().for_each(|v| v.sort_unstable());
+    by_y.values_mut().for_each(|v| v.sort_unstable());
+    let range = |v: &Vec<(i32, usize)>, lo: i32, hi: i32| -> Vec<usize> {
+        let start = v.partition_point(|e| e.0 < lo);
+        v[start..].iter().take_while(|e| e.0 <= hi).map(|e| e.1).collect()
+    };
     for w in &s.wires {
         let (a, b) = (ids[&w.a], ids[&w.b]);
         dsu.union(a, b);
         // any known point lying on the wire (pin, endpoint of another wire, label) joins it
-        for (&p, &id) in &ids {
-            if on_segment(p, w.a, w.b) {
-                dsu.union(id, a);
-            }
+        let found: Vec<usize> = if w.a.0 == w.b.0 {
+            by_x.get(&w.a.0).map(|v| range(v, w.a.1.min(w.b.1), w.a.1.max(w.b.1))).unwrap_or_default()
+        } else if w.a.1 == w.b.1 {
+            by_y.get(&w.a.1).map(|v| range(v, w.a.0.min(w.b.0), w.a.0.max(w.b.0))).unwrap_or_default()
+        } else {
+            // a slanted wire: look at every point
+            ids.iter().filter(|(p, _)| on_segment(**p, w.a, w.b)).map(|(_, id)| *id).collect()
+        };
+        for id in found {
+            dsu.union(id, a);
         }
     }
     Conn { ids, dsu }
@@ -239,6 +258,26 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
             connected.insert((p.refdes.clone(), p.pin.clone()), n.pins.len());
         }
     }
+    // lookups used by the checks below (a scan of every net or part for every pin makes the check grow with the square of the size)
+    let mut comp_index: HashMap<&str, usize> = HashMap::new();
+    for (i, c) in s.components.iter().enumerate() {
+        comp_index.entry(c.refdes.as_str()).or_insert(i);
+    }
+    let comp = |r: &str| comp_index.get(r).map(|&i| &s.components[i]);
+    let mut net_of: HashMap<(&str, &str), usize> = HashMap::new();
+    let mut named_pins: HashSet<(&str, &str)> = HashSet::new();
+    let mut net_by_name: HashMap<&str, usize> = HashMap::new();
+    for (ni, n) in nets.iter().enumerate() {
+        net_by_name.entry(n.name.as_str()).or_insert(ni);
+        for p in &n.pins {
+            net_of.entry((p.refdes.as_str(), p.pin.as_str())).or_insert(ni);
+            if !n.name.starts_with("N$") {
+                named_pins.insert((p.refdes.as_str(), p.pin.as_str()));
+            }
+        }
+    }
+    let no_connect: HashSet<(&str, &str)> = s.no_connects.iter().map(|(r, p)| (r.as_str(), p.as_str())).collect();
+    let net_index = |r: &str, pin: &str| net_of.get(&(r, pin)).copied();
     let dangling = dangling_wire_ends(s);
     for c in &s.components {
         if c.kind.is_power_symbol() {
@@ -255,8 +294,8 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
             }
             let alone = connected.get(&(c.refdes.clone(), pin.clone())).is_none_or(|&n| n < 2);
             // a pin marked as left open on purpose: nothing to say while it is alone; a warning when it has been wired after all
-            if s.no_connects.iter().any(|(r, p)| *r == c.refdes && *p == pin) {
-                let named = nets.iter().any(|n| !n.name.starts_with("N$") && n.pins.iter().any(|p| p.refdes == c.refdes && p.pin == pin));
+            if no_connect.contains(&(c.refdes.as_str(), pin.as_str())) {
+                let named = named_pins.contains(&(c.refdes.as_str(), pin.as_str()));
                 if !alone || named {
                     out.push(Problem::new(
                         Warning,
@@ -269,9 +308,7 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
             }
             if alone {
                 // a pin alone on a net is only fine when it is explicitly named (e.g. a header pin on a labelled net)
-                let named = nets.iter().any(|n| {
-                    !n.name.starts_with("N$") && n.pins.iter().any(|p| p.refdes == c.refdes && p.pin == pin)
-                });
+                let named = named_pins.contains(&(c.refdes.as_str(), pin.as_str()));
                 if !named {
                     let near = dangling
                         .iter()
@@ -305,7 +342,7 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
     for c in s.components.iter().filter(|c| c.kind == Kind::VSource) {
         let pins = c.pins();
         if pins.len() == 2 {
-            let net = |pin: &str| nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == c.refdes && p.pin == pin));
+            let net = |pin: &str| net_index(&c.refdes, pin).map(|i| &nets[i]);
             if let (Some(a), Some(b)) = (net(&pins[0].0), net(&pins[1].0))
                 && a.name == b.name {
                     out.push(Problem::new(
@@ -344,10 +381,9 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
 
     // a power symbol only names a net; something must actually drive it
     for c in s.components.iter().filter(|c| c.kind == Kind::Power) {
-        let Some(net) = nets.iter().find(|n| n.name == c.value) else { continue };
-        let driven = net.pins.iter().any(|p| {
-            s.components.iter().find(|x| x.refdes == p.refdes).is_some_and(|x| matches!(x.kind, Kind::VSource | Kind::Header(_) | Kind::Custom))
-        });
+        let Some(&ni) = net_by_name.get(c.value.as_str()) else { continue };
+        let net = &nets[ni];
+        let driven = net.pins.iter().any(|p| comp(&p.refdes).is_some_and(|x| matches!(x.kind, Kind::VSource | Kind::Header(_) | Kind::Custom)));
         if !driven {
             out.push(Problem::new(
                 Error,
@@ -359,8 +395,6 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
     }
 
     // ---- checks that need the whole netlist
-    let comp = |r: &str| s.components.iter().find(|c| c.refdes == r);
-    let net_index = |r: &str, pin: &str| nets.iter().position(|n| n.pins.iter().any(|p| p.refdes == r && p.pin == pin));
     let driven_by_source = |ni: usize| nets[ni].pins.iter().any(|p| comp(&p.refdes).is_some_and(|c| matches!(c.kind, Kind::VSource | Kind::Header(_))));
     // a supply net may also be fed by the output pin of another library part (a regulator)
     let fed_by_output = |ni: usize, me: &str| {
@@ -458,12 +492,11 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
     }
     if let Some(gnd) = nets.iter().position(|n| n.name == "GND") {
         let gnd_root = find(&mut parent, gnd);
-        let mut reported: Vec<usize> = vec![];
+        let mut reported: HashSet<usize> = HashSet::new();
         for c in s.components.iter().filter(|c| !c.kind.is_power_symbol()) {
             let Some(ni) = c.pins().iter().find_map(|(pin, _)| net_index(&c.refdes, pin)) else { continue };
             let root = find(&mut parent, ni);
-            if root != gnd_root && !reported.contains(&root) {
-                reported.push(root);
+            if root != gnd_root && reported.insert(root) {
                 out.push(Problem::new(
                     Warning,
                     format!("{} を含む部分が GND とつながっていません", c.refdes),
@@ -511,17 +544,35 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
 
 /// Wire ends that touch nothing: no pin, no other wire (end or middle), no label.
 fn dangling_wire_ends(s: &Schematic) -> Vec<Pt> {
-    let pins: Vec<Pt> = s.components.iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).collect();
+    let pins: HashSet<Pt> = s.components.iter().flat_map(|c| c.pins().into_iter().map(|p| p.1)).collect();
+    let labels: HashSet<Pt> = s.labels.iter().map(|l| l.pos).collect();
+    // the wires by row (along x) and by column (along y), and the slanted ones apart
+    let mut rows: HashMap<i32, Vec<usize>> = HashMap::new();
+    let mut cols: HashMap<i32, Vec<usize>> = HashMap::new();
+    let mut slanted: Vec<usize> = vec![];
+    for (j, o) in s.wires.iter().enumerate() {
+        if o.a.0 == o.b.0 {
+            cols.entry(o.a.0).or_default().push(j);
+        } else if o.a.1 == o.b.1 {
+            rows.entry(o.a.1).or_default().push(j);
+        } else {
+            slanted.push(j);
+        }
+    }
+    let on_other_wire = |i: usize, p: Pt| -> bool {
+        let near = cols.get(&p.0).into_iter().flatten().chain(rows.get(&p.1).into_iter().flatten()).chain(slanted.iter());
+        near.into_iter().any(|&j| j != i && on_segment(p, s.wires[j].a, s.wires[j].b))
+    };
     let mut out: Vec<Pt> = vec![];
+    let mut seen: HashSet<Pt> = HashSet::new();
     for (i, w) in s.wires.iter().enumerate() {
         for p in [w.a, w.b] {
-            if w.a == w.b || out.contains(&p) {
+            if w.a == w.b || seen.contains(&p) {
                 continue;
             }
-            let touches = pins.contains(&p)
-                || s.labels.iter().any(|l| l.pos == p)
-                || s.wires.iter().enumerate().any(|(j, o)| j != i && on_segment(p, o.a, o.b));
+            let touches = pins.contains(&p) || labels.contains(&p) || on_other_wire(i, p);
             if !touches {
+                seen.insert(p);
                 out.push(p);
             }
         }

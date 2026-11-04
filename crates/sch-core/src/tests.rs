@@ -578,3 +578,33 @@ fn thermal_links_are_kept_in_the_file_and_replaced_in_either_order() {
     s.set_thermal_link("Q1", "RS1", 0.0);
     assert!(s.thermal_links.is_empty());
 }
+
+/// A wire joins every point that lies on it, along a row, along a column and slanted; an end that rests on the middle of
+/// another wire is not dangling.
+#[test]
+fn a_wire_joins_the_points_on_it_in_every_direction() {
+    let mut s = Schematic::default();
+    s.add(Kind::Resistor, (0, 0), 0); // R1: pins (-2,0) and (2,0)
+    s.add(Kind::Resistor, (-4, 4), 1); // R2: vertical, pins (-4,2) and (-4,6)
+    s.add(Kind::Resistor, (20, 0), 0); // R3: pins (18,0) and (22,0)
+    s.add(Kind::Resistor, (30, 10), 1); // R4: pins (30,8) and (30,12)
+    s.add(Kind::Resistor, (40, 10), 0); // R5: pins (38,10) and (42,10)
+    // slanted from (-4,2) to (0,-2): passes through R1's pin (-2,0)
+    wire(&mut s, (-4, 2), (0, -2));
+    // along a row from R3's pin (18,0) to (26,0), then along a column down to (26,10)
+    wire(&mut s, (18, 0), (26, 0));
+    wire(&mut s, (26, 0), (26, 10));
+    // a wire from (22,6) to (26,6): one end rests on the middle of the column, the other touches nothing
+    wire(&mut s, (22, 6), (26, 6));
+    let net = |s: &Schematic, p: Pt| net_at(s, p).expect("a net");
+    assert_eq!(net(&s, (-2, 0)), net(&s, (-4, 2)), "the slanted wire joins R1's pin and R2's pin");
+    assert_ne!(net(&s, (-2, 0)), net(&s, (2, 0)));
+    // the row and the column are one net; the point (26,10) at the end of the column is on it
+    assert_eq!(net(&s, (18, 0)), net(&s, (26, 10)));
+    let problems = erc(&s);
+    let dangling: Vec<Pt> = problems.iter().filter(|p| p.message.contains("線の端")).filter_map(|p| p.at).collect();
+    assert!(dangling.contains(&(0, -2)), "the far end of the slanted wire dangles: {dangling:?}");
+    assert!(!dangling.contains(&(-4, 2)), "an end on R2's pin does not: {dangling:?}");
+    assert!(!dangling.contains(&(26, 6)), "an end on the middle of the column does not: {dangling:?}");
+    assert!(dangling.contains(&(22, 6)), "the other end of the T wire dangles: {dangling:?}");
+}
