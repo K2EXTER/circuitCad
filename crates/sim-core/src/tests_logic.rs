@@ -208,8 +208,8 @@ fn all_logic_parts_load() {
     for ic in ["74HC00", "74HC02", "74HC04", "74HC08", "74HC14", "74HC32", "74HC74", "74HC86"] {
         let mut c = Circuit::new();
         place(&mut c, ic);
-        // the 74HC14 is made of switches, the 74HC74 keeps its state inside (Element::Seq), the other gates are B sources
-        assert!(c.elements.iter().any(|e| matches!(e, Element::Switch { .. } | Element::Seq { .. } | Element::BSource { .. })), "{ic}");
+        // the gates, the Schmitt trigger and the flip-flop are digital cells
+        assert!(c.elements.iter().any(|e| matches!(e, Element::Cell { .. })), "{ic}");
     }
 }
 

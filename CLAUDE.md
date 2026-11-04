@@ -26,7 +26,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `cli` | `ccad`: 画面なしの操作窓口。1行1コマンドのスクリプトで、名前ベースの回路作成・ERC・解析・基板・製造データを実行し、答えを1行1個のJSONで返す (AIエージェント・自動化向け。`ccad mcp` で MCP サーバーにもなる。使い方 `docs/cli.md`、詳細 `docs/code-notes/cli.md`) |
 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`
-- `dc/` 動作点 (`build.rs` 回路→コンパイル済み形 / `devices.rs` 素子の式 / `mna.rs` 行列 / `newton.rs` ニュートン反復 / `linalg.rs` 疎LU)
+- `dc/` 動作点 (`build.rs` 回路→コンパイル済み形 / `devices.rs` 素子の式 / `mna.rs` 行列 / `newton.rs` ニュートン反復 / `linalg.rs` 疎LU / `digital.rs` デジタルセル(ゲート・FF を方程式の外で評価。部品の `Y` 行。設計 `docs/digital-engine-design.md`))
 - `tran.rs` 過渡(刻みは自動調整) / `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs` FFT・統計 / `paramsweep.rs` パラメータスイープ / `montecarlo.rs` ばらつき解析 / `temperature.rs` 温度
 - `from_schematic.rs` 部品→素子の変換 (新しい部品種別はここ) / `waveform.rs` 電源波形 / `value.rs` SPICE数値 / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `options.rs` 計算精度 `SimOptions` / `par.rs` 独立な計算を全コアで並列(`par_map`。ばらつき解析・パラメータスイープ・故障・CLI の `sens`) / `diagnose.rs` 失敗時の原因と直し方

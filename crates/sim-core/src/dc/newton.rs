@@ -154,7 +154,9 @@ impl Compiled {
     /// One solve is exact for a linear circuit. The matrix depends only on gmin and the
     /// integration step, so its factorisation is reused while those stay the same.
     pub(super) fn solve_linear(&self, x0: Vec<f64>, mut vj: Vec<f64>, ctx: &Ctx) -> Result<Attempt, Fail> {
-        let key = (ctx.gmin.to_bits(), ctx.dynamic.as_ref().map(|d| (d.h.to_bits(), d.trap)));
+        // a circuit without capacitors and inductors has the same matrix at every step size
+        let dynamic_key = if self.n_caps == 0 && self.n_inds == 0 { None } else { ctx.dynamic.as_ref().map(|d| (d.h.to_bits(), d.trap)) };
+        let key = (ctx.gmin.to_bits(), dynamic_key, ctx.seed_g.map_or(0, f64::to_bits));
         let hit = self.cache.borrow().iter().find(|e| e.0 == key).map(|e| e.1.clone());
         let (mut xn, fac) = match hit {
             Some(f) => (self.assemble_with(&mut vj, &x0, ctx, true).0.b, f),

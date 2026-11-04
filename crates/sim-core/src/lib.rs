@@ -52,7 +52,7 @@ pub use loopgain::{loop_gain, BreakDirection, LoopGain};
 pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};
 pub use impedance::{character as z_character, impedance_analysis, z_extrema, ImpedanceResult, ZExtremum};
 pub use polezero::{pole_zero, transfer_function, PoleZero, Root, TransferFunction};
-pub use circuit::{BjtModel, Circuit, DiodeModel, Element, MosModel, SeqKind, SeqLevels, SwitchModel};
+pub use circuit::{BjtModel, CellKind, CellSupply, Circuit, DiodeModel, Element, MosModel, SeqKind, SeqLevels, SwitchModel};
 pub use dcsweep::{dc_sweep, inverter_metrics, DcSweepResult, DcSweepSettings, DcSweepSignal, InverterMetrics};
 pub use options::{options, set_options, SimOptions};
 pub use paramsweep::{param_sweep, sweep_values, with_number, ParamAnalysis, ParamCurve, ParamResult, ParamSettings, MAX_RUNS};
@@ -113,6 +113,8 @@ mod tests_diode_cap;
 mod tests_params;
 #[cfg(test)]
 mod tests_dcsweep;
+#[cfg(test)]
+mod tests_cells;
 #[cfg(test)]
 mod tests_logic;
 #[cfg(test)]

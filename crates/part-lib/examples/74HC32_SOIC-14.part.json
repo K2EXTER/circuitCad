@@ -1,7 +1,7 @@
 {
   "name": "74HC32D",
   "category": "ロジックIC",
-  "description": "クワッド 2入力 OR (DIP-14)。式で作った簡易モデル (遅延なし)。入力のしきい値は電源の半分、2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
+  "description": "クワッド 2入力 OR (DIP-14)。デジタルセルで作った簡易モデル (遅延なし)。入力のしきい値は電源の半分、2〜6V で動作 表面実装 (SOIC) 版。ピン番号は DIP と同じ。",
   "datasheet": "",
   "prefix": "U",
   "footprint_name": "SOIC-14_P1.27",
@@ -116,7 +116,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC32",
-    "text": "* 74HC32 behavioural model: each gate is one smooth expression (a tanh of the input around Vcc/2); the output follows Vcc through 60 ohm. No propagation delay.\n.subckt 74HC32 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nB1 o1 gnd V=V(vcc,gnd)*(1-(1-(0.5+0.5*tanh((V(a1,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b1,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR1 o1 y1 60\nB2 o2 gnd V=V(vcc,gnd)*(1-(1-(0.5+0.5*tanh((V(a2,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b2,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR2 o2 y2 60\nB3 o3 gnd V=V(vcc,gnd)*(1-(1-(0.5+0.5*tanh((V(a3,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b3,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR3 o3 y3 60\nB4 o4 gnd V=V(vcc,gnd)*(1-(1-(0.5+0.5*tanh((V(a4,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001))))*(1-(0.5+0.5*tanh((V(b4,gnd)-0.5*V(vcc,gnd))/(0.05*V(vcc,gnd)+0.001)))))\nR4 o4 y4 60\nRin_a1 a1 gnd 1G\nRin_b1 b1 gnd 1G\nRin_a2 a2 gnd 1G\nRin_b2 b2 gnd 1G\nRin_a3 a3 gnd 1G\nRin_b3 b3 gnd 1G\nRin_a4 a4 gnd 1G\nRin_b4 b4 gnd 1G\n.ends 74HC32",
+    "text": "* 74HC32 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. No propagation delay.\n.subckt 74HC32 a1 b1 y1 a2 b2 y2 gnd y3 a3 b3 y4 a4 b4 vcc\nY1 or y1 0 gnd vcc 60 0.5 0 0 0 a1 b1\nY2 or y2 0 gnd vcc 60 0.5 0 0 0 a2 b2\nY3 or y3 0 gnd vcc 60 0.5 0 0 0 a3 b3\nY4 or y4 0 gnd vcc 60 0.5 0 0 0 a4 b4\n.ends 74HC32",
     "pins": [
       "1",
       "2",
@@ -135,9 +135,9 @@
     ],
     "params": {},
     "limits": [
-      "ゲートを 1 つのなめらかな式で表した動作モデルです。入力のしきい値は電源電圧の半分で、出力は電源電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+      "ゲートを「デジタルセル」(行列の外で評価する素子) で表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。ゲートどうしだけをつなぐ配線は、回路の方程式に入りません (波形には電圧が出ます)。",
       "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
-      "使わない入力は、GND か電源につないでください (つながないと、1GΩ で GND につながっているので 0V として扱います)。"
+      "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
     ]
   }
 }

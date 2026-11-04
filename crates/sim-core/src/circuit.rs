@@ -211,6 +211,44 @@ pub enum Element {
     /// A digital element with a memory (flip-flop, latch, Schmitt trigger). Its outputs are voltage sources whose level
     /// follows a stored state that changes only between time steps, never inside a Newton iteration. See `SeqKind`.
     Seq { name: String, kind: SeqKind, ins: Vec<usize>, q: usize, qb: usize, levels: SeqLevels },
+    /// A digital cell (gate, flip-flop, latch, Schmitt trigger) that is evaluated outside the circuit equations, with levels
+    /// relative to its supply pins (`sup`). A node that only cells touch is a purely digital net: it is a 0 / 1 in a table, not an
+    /// unknown of the circuit. See `dc/digital.rs`. Inputs are listed like those of a `Seq` for the memory kinds; the gates
+    /// take any number of inputs.
+    Cell { name: String, kind: CellKind, ins: Vec<usize>, out: usize, outb: usize, sup: CellSupply },
+}
+
+/// What a `Element::Cell` computes. The memory kinds read their inputs like `SeqKind` (Dff: d clk set reset ...).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CellKind {
+    And,
+    Nand,
+    Or,
+    Nor,
+    Xor,
+    Xnor,
+    Buf,
+    Inv,
+    Dff,
+    Tff,
+    Jkff,
+    Srff,
+    Dlatch,
+    Srlatch,
+    Schmitt,
+}
+
+/// The supply of a `Cell`: the logic levels are fractions of `v(vcc) - v(vss)`; an output is a source of that level behind
+/// `rout`. `vt` is the input threshold (a fraction), `vh` the half-width of the hysteresis (Schmitt).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CellSupply {
+    pub vss: usize,
+    pub vcc: usize,
+    pub rout: f64,
+    pub vt: f64,
+    pub vh: f64,
+    pub set_low: bool,
+    pub reset_low: bool,
 }
 
 /// What a `Element::Seq` is, with the order of its inputs in `ins` (node 0 = tied low):
@@ -240,6 +278,40 @@ pub struct SeqLevels {
 }
 
 impl Element {
+    /// Every node the element is connected to (ground included, an inductor pair named in `Mutual` has none).
+    pub fn nodes(&self) -> Vec<usize> {
+        match self {
+            Element::Resistor { a, b, .. } | Element::Capacitor { a, b, .. } | Element::Inductor { a, b, .. } | Element::ChargeCap { a, b, .. } | Element::Switch { a, b, .. } => {
+                let mut v = vec![*a, *b];
+                if let Element::Switch { cp, cn, .. } = self {
+                    v.extend([*cp, *cn]);
+                }
+                if let Element::ChargeCap { q, .. } = self {
+                    q.read_nodes(&mut v);
+                }
+                v
+            }
+            Element::VSource { p, n, .. } | Element::Vcvs { p, n, .. } | Element::BSource { p, n, .. } => {
+                let mut v = vec![*p, *n];
+                if let Element::Vcvs { cp, cn, .. } = self {
+                    v.extend([*cp, *cn]);
+                }
+                if let Element::BSource { expr, .. } = self {
+                    expr.read_nodes(&mut v);
+                }
+                v
+            }
+            Element::ISource { from, to, .. } => vec![*from, *to],
+            Element::Diode { a, k, .. } => vec![*a, *k],
+            Element::Bjt { c, b, e, .. } => vec![*c, *b, *e],
+            Element::Mosfet { d, g, s, .. } => vec![*d, *g, *s],
+            Element::Vccs { p, n, cp, cn, .. } => vec![*p, *n, *cp, *cn],
+            Element::Mutual { .. } => vec![],
+            Element::Seq { ins, q, qb, .. } => ins.iter().copied().chain([*q, *qb]).collect(),
+            Element::Cell { ins, out, outb, sup, .. } => ins.iter().copied().chain([*out, *outb, sup.vss, sup.vcc]).collect(),
+        }
+    }
+
     pub fn vdc(name: &str, p: usize, n: usize, v: f64) -> Element {
         Element::VSource { name: name.into(), p, n, wave: Waveform::Dc(v), ac: None }
     }
@@ -260,7 +332,8 @@ impl Element {
             | Element::BSource { name, .. }
             | Element::ChargeCap { name, .. }
             | Element::Mutual { name, .. }
-            | Element::Seq { name, .. } => name,
+            | Element::Seq { name, .. }
+            | Element::Cell { name, .. } => name,
         }
     }
 }

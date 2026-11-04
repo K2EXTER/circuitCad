@@ -135,9 +135,11 @@ fn our_side(s: &Schematic) -> Result<(Schematic, Result<Vec<(String, f64)>, Stri
         return Err(Outcome::Skipped("シミュレーションモデルのない部品があります".into()));
     }
     // a flip-flop written as a PSpice `U dff(n)` (a stored state inside the element) is something ngspice cannot read
-    let seq = |c: &&sch_core::Component| c.custom.as_ref().and_then(|x| x.sim.as_ref()).is_some_and(|m| ["dff(", "jkff(", "dltch(", "srff("].iter().any(|k| m.text.contains(k)));
+    let seq = |c: &&sch_core::Component| {
+        c.custom.as_ref().and_then(|x| x.sim.as_ref()).is_some_and(|m| ["dff(", "jkff(", "dltch(", "srff("].iter().any(|k| m.text.contains(k)) || m.text.lines().any(|l| l.trim_start().starts_with('Y')))
+    };
     if flat.components.iter().filter(seq).next().is_some() {
-        return Err(Outcome::Skipped("ngspice が読めない記憶つきの部品 (U dff など) があります".into()));
+        return Err(Outcome::Skipped("ngspice が読めない部品 (デジタルセルの Y 行、U dff など) があります".into()));
     }
     let circuit = match from_schematic(&flat) {
         Ok(c) => c,

@@ -101,6 +101,22 @@ pub enum Expr {
     Call(Func, Vec<Expr>),
 }
 
+impl Expr {
+    /// The nodes the expression reads with `V(..)`.
+    pub fn read_nodes(&self, out: &mut Vec<usize>) {
+        match self {
+            Expr::Node(n) => out.push(*n),
+            Expr::Neg(e) => e.read_nodes(out),
+            Expr::Bin(_, a, b) => {
+                a.read_nodes(out);
+                b.read_nodes(out);
+            }
+            Expr::Call(_, args) => args.iter().for_each(|e| e.read_nodes(out)),
+            Expr::Num(_) | Expr::Time | Expr::Temp | Expr::Branch(_) => {}
+        }
+    }
+}
+
 // ------------------------------------------------------------------ parsing
 
 struct Parser<'a, 'b> {

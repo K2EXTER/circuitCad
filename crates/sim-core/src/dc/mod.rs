@@ -84,6 +84,8 @@ pub(crate) enum Ce {
     S { name: String, a: usize, b: usize, cp: usize, cn: usize, m: SwitchModel },
     /// A flip-flop / latch / Schmitt trigger: two voltage-source outputs (`br_q`, `br_qb`; node 0 = unused) at the level of state `idx`.
     Seq { kind: crate::SeqKind, ins: Vec<usize>, q: usize, qb: usize, br_q: usize, br_qb: usize, idx: usize, lv: crate::SeqLevels },
+    /// A digital cell (index into `Compiled::cells`): its outputs on analog nodes are sources behind `rout`.
+    Cell { cell: usize },
     /// `br` is only meaningful for a voltage-type source.
     B { name: String, p: usize, n: usize, voltage: bool, br: usize, c: crate::expr::CExpr },
     /// Charge-type capacitor: `c` is Q(x); slots `idx` (voltage) and `idx + 1` (charge) of the capacitor state.
@@ -91,7 +93,7 @@ pub(crate) enum Ce {
 }
 
 /// (gmin, (step, trapezoidal) when dynamic)
-type FactorKey = (u64, Option<(u64, bool)>);
+type FactorKey = (u64, Option<(u64, bool)>, u64);
 
 pub(crate) struct Compiled {
     pub(crate) node_names: Vec<String>, // circuit nodes only
@@ -117,11 +119,20 @@ pub(crate) struct Compiled {
     pub(crate) seq_names: Vec<String>,
     /// The voltage every node (index `node - 1`) is pulled towards while gmin is large, and starts from: empty if the circuit has no `nodesets`.
     pub(crate) seed: Vec<f64>,
+    /// Which entries of `seed` are guesses of the user (the others are 0 and must not be pulled).
+    pub(crate) seeded: Vec<bool>,
+    /// The digital cells and the state they keep outside the circuit equations (`digital.rs`).
+    pub(crate) cells: Vec<DCell>,
+    pub(crate) dnets: DigNets,
+    pub(crate) dig: std::cell::RefCell<Dig>,
+    /// The `nodesets` that name a digital net: (node, volts).
+    pub(crate) dig_seeds: Vec<(usize, f64)>,
 }
 
 
 mod build;
 mod devices;
+mod digital;
 mod linalg;
 mod mna;
 mod newton;
@@ -130,6 +141,7 @@ mod seq;
 // the pieces see each other through the parent; the rest of the crate gets what it needs from here
 use build::*;
 use devices::*;
+use digital::*;
 use linalg::*;
 
 pub(crate) use build::{compile, v};
@@ -177,6 +189,10 @@ fn floating_nodes(c: &Circuit) -> Vec<usize> {
             Element::Seq { q, qb, .. } => {
                 union(*q, 0);
                 union(*qb, 0);
+            }
+            // outputs are sources against ground; an input left to the cells reads as low, so it is not a floating node
+            Element::Cell { ins, out, outb, .. } => {
+                ins.iter().chain([out, outb]).for_each(|n| union(*n, 0));
             }
             Element::Bjt { c, b, e, .. } => {
                 union(*c, *e);
@@ -318,7 +334,7 @@ pub(crate) fn has_ground(circuit: &Circuit) -> bool {
         Element::Mosfet { d, g, s, .. } => *d == 0 || *g == 0 || *s == 0,
         Element::Switch { a, b, cp, cn, .. } => *a == 0 || *b == 0 || *cp == 0 || *cn == 0,
         Element::Mutual { .. } => false,
-        Element::Seq { .. } => true,
+        Element::Seq { .. } | Element::Cell { .. } => true,
         Element::Bjt { c, b, e, .. } => *c == 0 || *b == 0 || *e == 0,
         Element::Vcvs { p, n, .. } | Element::Vccs { p, n, .. } | Element::BSource { p, n, .. } => *p == 0 || *n == 0,
     })
@@ -398,6 +414,20 @@ pub(crate) fn solve_op(cm: &Compiled, order: &[Strategy]) -> Result<(Attempt, &'
                         }
                     }
                 }
+                // digital cells: settle them on the solution, and solve again while their outputs or supplies move the answer
+                if cm.has_cells() {
+                    for _ in 0..16 {
+                        let (resolve, _) = cm.dig_update(&att.x);
+                        if !resolve {
+                            break;
+                        }
+                        match cm.run(which) {
+                            Ok(a) => att = a,
+                            Err(_) => break,
+                        }
+                    }
+                    cm.fix_nodes(&mut att.x);
+                }
                 let name = match which {
                     Strategy::Direct => "direct",
                     Strategy::Gmin | Strategy::GminLong => "gmin stepping",
@@ -463,7 +493,8 @@ fn report(cm: &Compiled, att: &Attempt, strategy: &'static str, mut warnings: Ve
     let x = &att.x;
     let els = cm.element_results(x, None, &vec![0.0; cm.n_caps]);
     let voltages = cm.node_names.iter().enumerate().map(|(i, n)| (n.clone(), v(x, i))).collect();
-    let seq_states: Vec<(String, bool)> = cm.seq_names.iter().cloned().zip(cm.seq_state.borrow().iter().map(|s| *s > 0.5)).collect();
+    let mut seq_states: Vec<(String, bool)> = cm.seq_names.iter().cloned().zip(cm.seq_state.borrow().iter().map(|s| *s > 0.5)).collect();
+    seq_states.extend(cm.cell_states());
     if !seq_states.is_empty() {
         let ones = seq_states.iter().filter(|(_, s)| *s).count();
         warnings.push(format!(
@@ -510,7 +541,7 @@ impl Compiled {
                     let (i, vv) = (x[*br], v(x, *p) - v(x, *n));
                     push(name, i, vv, vec![], vv * i);
                 }
-                Ce::K { .. } | Ce::Seq { .. } => {}
+                Ce::K { .. } | Ce::Seq { .. } | Ce::Cell { .. } => {}
                 Ce::I { name, from, to, wave, .. } => {
                     let (i, vv) = (src(wave), v(x, *from) - v(x, *to));
                     push(name, i, vv, vec![], vv * i);

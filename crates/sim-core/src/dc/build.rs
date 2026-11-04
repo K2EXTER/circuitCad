@@ -26,6 +26,23 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     }
     let total_nodes = n_nodes + internal;
     let br_base = total_nodes - 1;
+    // the nodes something other than a digital cell touches (and the supplies of the cells): those stay analog
+    let mut touched = vec![false; total_nodes + 1];
+    touched[0] = true;
+    for e in &c.elements {
+        if let Element::Cell { sup, .. } = e {
+            touched[sup.vss] = true;
+            touched[sup.vcc] = true;
+            continue;
+        }
+        for n in e.nodes() {
+            if n < touched.len() {
+                touched[n] = true;
+            }
+        }
+    }
+    let mut cells: Vec<DCell> = vec![];
+    let mut n_cell_in = 0;
     for e in &c.elements {
         match e {
             Element::Resistor { name, a, b, r } => ce.push(Ce::R { name: name.clone(), a: *a, b: *b, g: 1.0 / r }),
@@ -56,6 +73,11 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
             // coupled inductors are compiled after all the inductors are known (below)
             Element::Mutual { .. } => {}
+            Element::Cell { name, kind, ins, out, outb, sup } => {
+                ce.push(Ce::Cell { cell: cells.len() });
+                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low });
+                n_cell_in += ins.len();
+            }
             Element::Seq { name, kind, ins, q, qb, levels } => {
                 seq_names.push(name.clone());
                 // one branch per used output; `usize::MAX` marks an output left unconnected
@@ -154,18 +176,54 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
     let has_b = ce.iter().any(|e| matches!(e, Ce::B { .. }));
     // the stored states start at 0, unless the circuit says otherwise (`Circuit::initial` holds 1 / 0 under the element's name)
     let seq_state = std::cell::RefCell::new(seq_names.iter().map(|n| c.initial.iter().find(|(m, _)| m == n).map_or(0.0, |(_, v)| if *v > 0.5 { 1.0 } else { 0.0 })).collect::<Vec<f64>>());
+    let mut seeded = vec![];
     let seed = if c.nodesets.is_empty() {
         vec![]
     } else {
         let mut s = vec![0.0; n_nodes.saturating_sub(1)];
+        seeded = vec![false; s.len()];
         for (name, volts) in &c.nodesets {
             if let Some(i) = c.names.iter().position(|n| n.eq_ignore_ascii_case(name)).filter(|i| *i > 0) {
                 s[i - 1] = *volts;
+                seeded[i - 1] = true;
             }
         }
         s
     };
-    Compiled { seed, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
+    // digital nets: nodes only cells touch
+    let mut dnets = DigNets { digital: vec![false; total_nodes + 1], fanout: vec![vec![]; total_nodes + 1], driver: vec![None; total_nodes + 1] };
+    for cell in &cells {
+        for &n in cell.ins.iter().chain([&cell.out, &cell.outb]) {
+            if n != 0 && !touched[n] {
+                dnets.digital[n] = true;
+            }
+        }
+    }
+    for (ci, cell) in cells.iter().enumerate() {
+        for &n in &cell.ins {
+            if n != 0 && dnets.digital[n] {
+                dnets.fanout[n].push(ci);
+            }
+        }
+        for (n, inv) in [(cell.out, false), (cell.outb, true)] {
+            if n != 0 && dnets.digital[n] && dnets.driver[n].is_none() {
+                dnets.driver[n] = Some((ci, inv));
+            }
+        }
+    }
+    let dig = std::cell::RefCell::new(Dig {
+        lv: vec![false; total_nodes + 1],
+        seen: vec![false; n_cell_in],
+        afrac: vec![0.0; n_cell_in],
+        st: cells.iter().map(|k| c.initial.iter().find(|(m, _)| *m == k.name).is_some_and(|(_, v)| *v > 0.5)).collect(),
+        q: vec![false; cells.len()],
+        sup: vec![(0.0, 0.0); cells.len()],
+        started: false,
+        done_first: vec![false; cells.len()],
+    });
+    // the guesses of the user for digital nets: where their latches start
+    let dig_seeds: Vec<(usize, f64)> = c.nodesets.iter().filter_map(|(name, volts)| c.names.iter().position(|n| n.eq_ignore_ascii_case(name)).filter(|i| *i > 0 && dnets.digital[*i]).map(|i| (i, *volts))).collect();
+    Compiled { cells, dnets, dig, dig_seeds, seed, seeded, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

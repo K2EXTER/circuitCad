@@ -44,7 +44,7 @@ fn terminals(e: &Element, main: f64, ib: Option<f64>, ie: Option<f64>, mut add: 
             add(*d, -main);
             add(*s, main);
         }
-        Element::Mutual { .. } | Element::Seq { .. } => {}
+        Element::Mutual { .. } | Element::Seq { .. } | Element::Cell { .. } => {}
     }
 }
 

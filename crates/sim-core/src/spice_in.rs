@@ -541,6 +541,35 @@ fn add_flat_subckt(c: &mut Circuit, inst: &str, sub_name: &str, text: &str, node
                 let ins: Vec<usize> = t[10..].iter().map(|n| local(c, n)).collect();
                 c.add(Element::Seq { name, kind, ins, q, qb, levels });
             }
+            'Y' => {
+                // a digital cell: Y<name> kind out outb vss vcc rout vt vh set_low reset_low in...
+                // The levels are fractions of v(vcc) - v(vss); vt is the input threshold, vh the half-width of the hysteresis,
+                // set_low / reset_low (0 or 1) make the set / reset inputs active low; out / outb are 0 when unused.
+                need(11)?;
+                use crate::CellKind as K;
+                let kind = match t[1] {
+                    "and" => K::And,
+                    "nand" => K::Nand,
+                    "or" => K::Or,
+                    "nor" => K::Nor,
+                    "xor" => K::Xor,
+                    "xnor" => K::Xnor,
+                    "buf" => K::Buf,
+                    "inv" => K::Inv,
+                    "dff" => K::Dff,
+                    "tff" => K::Tff,
+                    "jkff" => K::Jkff,
+                    "srff" => K::Srff,
+                    "dlatch" => K::Dlatch,
+                    "srlatch" => K::Srlatch,
+                    "schmitt" => K::Schmitt,
+                    other => return Err(format!("{name}: デジタルセルの種類 {other} が分かりません")),
+                };
+                let (out, outb, vss, vcc) = (local(c, t[2]), local(c, t[3]), local(c, t[4]), local(c, t[5]));
+                let sup = crate::CellSupply { vss, vcc, rout: val(t[6])?, vt: val(t[7])?, vh: val(t[8])?, set_low: t[9] == "1", reset_low: t[10] == "1" };
+                let ins: Vec<usize> = t[11..].iter().map(|n| local(c, n)).collect();
+                c.add(Element::Cell { name, kind, ins, out, outb, sup });
+            }
             'K' => {
                 // K name L1 L2 k  (two coupled inductors; the names are those of this subcircuit)
                 need(4)?;

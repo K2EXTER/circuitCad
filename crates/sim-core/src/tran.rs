@@ -256,6 +256,12 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         }
     }
 
+    // digital cells start from the levels of the initial point
+    if cm.has_cells() {
+        cm.dig_update(&x);
+        cm.fix_nodes(&mut x);
+    }
+
     let mut cap_v = vec![0.0; cm.n_caps];
     let mut cap_i = vec![0.0; cm.n_caps];
     let mut ind_i = vec![0.0; cm.n_inds];
@@ -461,7 +467,10 @@ pub fn transient(circuit: &Circuit, s: &TranSettings) -> Result<TranResult, SimE
         t = if lands_on_bp { bps[bp_idx] } else { t + h };
         // a flip-flop or latch that changed: its outputs jump at the next step, so restart like at a source corner
         let seq_changed = cm.has_seq() && cm.seq_update(Some(&x), &att.x);
+        // digital cells: an output on an analog node that changed jumps at the next step, like a flip-flop's
+        let seq_changed = seq_changed | (cm.has_cells() && cm.dig_update(&att.x).0);
         x = att.x;
+        cm.fix_nodes(&mut x);
         vj = att.vj;
         // the step after a retry has no reliable current history either
         force_be = lands_on_bp || retried || seq_changed;

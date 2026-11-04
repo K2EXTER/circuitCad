@@ -136,9 +136,11 @@ impl Compiled {
         }
         // `nodeset`: the large gmin of the first stages pulls a node to its seed voltage instead of to ground
         for (i, s) in self.seed.iter().enumerate() {
-            let g = ctx.seed_g.unwrap_or(gmin) - gmin;
-            m.at(i, i, g);
-            m.b[i] += ctx.seed_g.unwrap_or(gmin) * s;
+            if self.seeded[i] {
+                let g = ctx.seed_g.unwrap_or(gmin) - gmin;
+                m.at(i, i, g);
+                m.b[i] += ctx.seed_g.unwrap_or(gmin) * s;
+            }
         }
         for e in &self.ce {
             match e {
@@ -185,6 +187,19 @@ impl Compiled {
                     if *br_qb != usize::MAX {
                         m.branch(*qb, 0, *br_qb);
                         m.b[*br_qb] = lv.vlow + (lv.vhigh - lv.vlow) * (1.0 - s);
+                    }
+                }
+                Ce::Cell { cell } => {
+                    // an output on an analog node: a source at the level of the cell behind rout, in Norton form so the matrix stays
+                    // the same when the level changes (the supply is the one of the last accepted point)
+                    let c = &self.cells[*cell];
+                    let g = 1.0 / c.rout.max(1e-3);
+                    for (node, inverted) in [(c.out, false), (c.outb, true)] {
+                        if node != 0 && !self.is_digital(node) {
+                            let (lvl, (vss, vcc)) = self.cell_level(*cell, inverted);
+                            m.at(node - 1, node - 1, g);
+                            m.b[node - 1] += g * (vss + lvl * (vcc - vss));
+                        }
                     }
                 }
                 Ce::K { br1, br2, idx1, idx2, m: mutual, .. } => {
