@@ -252,6 +252,9 @@ pub struct CellSupply {
     /// Propagation delay (seconds) of an output going high / low (0 = none).
     pub tplh: f64,
     pub tphl: f64,
+    /// Setup and hold time (seconds) of the data inputs of an edge-triggered flip-flop (0 = not checked).
+    pub tsu: f64,
+    pub th: f64,
 }
 
 /// What a `Element::Seq` is, with the order of its inputs in `ins` (node 0 = tied low):

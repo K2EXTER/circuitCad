@@ -858,6 +858,24 @@ thermal link=Q1:RS1:150[,A:B:K/W...]   (a heat resistance between two parts thro
             .collect();
         let (ratings, notes) = self.tran_notes(&r);
         let mut answer = json!({"circuit_ok": circuit_ok, "points": n, "tstop": tstop, "signals": sigs, "signals_not_shown": chosen.len().saturating_sub(cap), "models": self.model_gaps(), "ratings": ratings, "post_layout": self.post_layout && self.board.is_some(), "warnings": r.warnings.iter().cloned().chain(gate).chain(notes).chain(restricted_note).collect::<Vec<_>>()});
+        if !r.timing.violations.is_empty() || r.timing.tightest.is_some() {
+            let kind = |k: sim_core::TimingKind| if k == sim_core::TimingKind::Setup { "setup" } else { "hold" };
+            let violations: Vec<Value> = r
+                .timing
+                .violations
+                .iter()
+                .map(|v| json!({"flip_flop": v.cell, "kind": kind(v.kind), "count": v.count, "first_at_s": v.first_time, "worst_margin_s": v.worst_margin, "required_s": v.required}))
+                .collect();
+            let mut timing = json!({"violations": violations});
+            if let Some((cell, margin, interval)) = &r.timing.tightest {
+                // how fast the clock could be if only this flip-flop's data path limited it (an estimate: the data path is taken as it was)
+                let max_hz = (interval.is_finite() && *interval > *margin).then(|| 1.0 / (interval - margin));
+                timing["tightest"] = json!({"flip_flop": cell, "margin_to_setup_s": margin, "clock_interval_s": if interval.is_finite() { json!(interval) } else { Value::Null }, "max_clock_hz_estimate": max_hz});
+            }
+            if let Some(o) = answer.as_object_mut() {
+                o.insert("timing".into(), timing);
+            }
+        }
         if let Some(list) = opt(&kv, "settle") {
             let from = match opt(&kv, "from") {
                 Some(s) => sim_core::parse_value(s).filter(|v| *v >= 0.0).ok_or_else(|| format!("from: '{s}' is not a time (write 20u, 1m ...)"))?,

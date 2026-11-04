@@ -44,6 +44,51 @@ pub struct TranResult {
     pub retries: usize,
     /// Steps thrown away because the error estimate was too large, and redone smaller.
     pub rejected: usize,
+    /// The setup and hold checks of the flip-flops that have a `tsu` / `th`.
+    pub timing: TimingReport,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimingKind {
+    Setup,
+    Hold,
+}
+
+/// A flip-flop whose data input changed too close to the clock edge, all the times together.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TimingViolation {
+    pub cell: String,
+    pub kind: TimingKind,
+    pub count: usize,
+    /// When it first happened (seconds), the smallest time found between the data change and the clock edge, and the time the data sheet asks for.
+    pub first_time: f64,
+    pub worst_margin: f64,
+    pub required: f64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TimingReport {
+    pub violations: Vec<TimingViolation>,
+    /// The smallest margin to the setup time found at a clock edge: (flip-flop, margin in seconds, time since the clock edge before; NaN for the first).
+    pub tightest: Option<(String, f64, f64)>,
+}
+
+/// A time with its unit, for the messages (`12.3 ns`).
+pub fn format_time(t: f64) -> String {
+    let a = t.abs();
+    if a == 0.0 {
+        "0 s".into()
+    } else if a < 1e-9 {
+        format!("{:.0} ps", t * 1e12)
+    } else if a < 1e-6 {
+        format!("{:.1} ns", t * 1e9)
+    } else if a < 1e-3 {
+        format!("{:.2} µs", t * 1e6)
+    } else if a < 1.0 {
+        format!("{:.2} ms", t * 1e3)
+    } else {
+        format!("{t:.2} s")
+    }
 }
 
 impl TranResult {
@@ -303,7 +348,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
     bps.dedup_by(|a, b| (*a - *b).abs() <= 1e-15 * s.tstop.max(1e-12));
     let mut bp_idx = 0;
 
-    let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0, rejected: 0 };
+    let mut result = TranResult { time: vec![], signals: vec![], warnings: vec![], retries: 0, rejected: 0, timing: TimingReport::default() };
     let wanted = |name: &str| keep.is_none_or(|f| f(name));
     // (node, index in `result.signals`) of the node voltages kept, and the index of every element's current (None = not kept)
     let mut node_slots: Vec<(usize, usize)> = vec![];
@@ -531,6 +576,20 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
         }
     }
 
+    if cm.has_cells() {
+        result.timing = cm.timing_report();
+        for v in &result.timing.violations {
+            let what = match v.kind {
+                TimingKind::Setup => format!("データがクロックの {} 前に変わっています (必要なのは {} 以上)。クロックを遅くするか、データまでの遅れ (ゲートの段数) を短くしてください", format_time(v.worst_margin), format_time(v.required)),
+                TimingKind::Hold => format!("データがクロックの {} 後に変わっています (クロックのあと {} は変わってはいけません)。データの経路に遅れを足すか、クロックのずれを減らしてください", format_time(v.worst_margin), format_time(v.required)),
+            };
+            let name = match v.kind {
+                TimingKind::Setup => "セットアップ時間",
+                TimingKind::Hold => "ホールド時間",
+            };
+            warnings.push(format!("{}: {name}が足りません ({} 回。最初は {})。{what}。この回の出力は実物では不定で、ここでは古いデータを取り込んだ値です", v.cell, v.count, format_time(v.first_time)));
+        }
+    }
     warnings.dedup();
     result.warnings = warnings;
     Ok(result)

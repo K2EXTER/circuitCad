@@ -75,7 +75,7 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             Element::Mutual { .. } => {}
             Element::Cell { name, kind, ins, out, outb, sup } => {
                 ce.push(Ce::Cell { cell: cells.len() });
-                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low, tplh: sup.tplh, tphl: sup.tphl });
+                cells.push(DCell { name: name.clone(), kind: *kind, ins: ins.clone(), slot0: n_cell_in, out: *out, outb: *outb, vss: sup.vss, vcc: sup.vcc, rout: sup.rout, vt: sup.vt, vh: sup.vh, set_low: sup.set_low, reset_low: sup.reset_low, tplh: sup.tplh, tphl: sup.tphl, tsu: sup.tsu, th: sup.th });
                 n_cell_in += ins.len();
             }
             Element::Seq { name, kind, ins, q, qb, levels } => {
@@ -240,6 +240,10 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
         pend_due: vec![0.0; cells.len()],
         ver: vec![0; cells.len()],
         heap: Default::default(),
+        last_change: vec![-1e30; n_cell_in],
+        last_edge: vec![-1e30; cells.len()],
+        viol: vec![],
+        tightest: None,
         seq: 0,
         t_prev: 0.0,
     });

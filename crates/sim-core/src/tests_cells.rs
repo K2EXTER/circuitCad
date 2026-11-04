@@ -203,3 +203,65 @@ fn a_ring_seen_through_a_delayed_buffer_has_the_same_edges_whatever_the_step() {
     assert!((30..=36).contains(&fine), "{fine} rising edges at 5 ns");
     assert!((30..=36).contains(&coarse), "{coarse} rising edges at 200 ns steps");
 }
+
+fn dff_with_data(td_data: &str, tsu: &str, th: &str) -> TranResult {
+    // a flip-flop sampling a data signal: the data goes through a chain of buffers (td_data each, 3 of them), the clock is direct
+    let body = format!(
+        "Y1 buf d1 0 vss vcc 60 0.5 0 0 0 td={td_data} din\nY2 buf d2 0 vss vcc 60 0.5 0 0 0 td={td_data} d1\nY3 buf d 0 vss vcc 60 0.5 0 0 0 td={td_data} d2\nYF dff q 0 vss vcc 60 0.5 0 0 0 tsu={tsu} th={th} d clk 0 0"
+    );
+    let mut c = Circuit::new();
+    let n = place(&mut c, "vcc vss din clk q", &body);
+    c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+    c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+    // data rises at 1.0 us, the clock rises at 1.0 us + 150 ns and 2 us: with 3 x 40 ns the data is at the flip-flop at 1.12 us
+    let dpulse = parse_source_full("PULSE(0 5 1u 1n 1n 0.6u 4u)").unwrap();
+    c.add(Element::VSource { name: "Vd".into(), p: n[2], n: 0, wave: dpulse.wave, ac: dpulse.ac });
+    let ck = parse_source_full("PULSE(0 5 1.15u 1n 1n 0.4u 1u)").unwrap();
+    c.add(Element::VSource { name: "Vck".into(), p: n[3], n: 0, wave: ck.wave, ac: ck.ac });
+    c.add(Element::Resistor { name: "Rl".into(), a: n[4], b: 0, r: 10e3 });
+    transient(&c, &TranSettings { tstop: 3e-6, tstep: 20e-9, uic: false }).unwrap()
+}
+
+/// The data reaches the flip-flop 30 ns before the clock edge: a setup time of 20 ns is met, of 50 ns is not, and the report says so.
+#[test]
+fn the_setup_time_is_checked_at_the_clock_edge() {
+    let ok = dff_with_data("40n", "20n", "0");
+    assert!(ok.timing.violations.is_empty(), "{:?}", ok.timing);
+    assert!(!ok.warnings.iter().any(|w| w.contains("セットアップ")), "{:?}", ok.warnings);
+    let (cell, margin, _interval) = ok.timing.tightest.clone().expect("a margin is found");
+    assert!(cell.ends_with("YF"), "{cell}");
+    // 30 ns between the data and the edge, minus 20 ns of setup: about 10 ns of room
+    assert!((margin - 10e-9).abs() < 6e-9, "the margin {margin:e}");
+    let bad = dff_with_data("40n", "50n", "0");
+    assert_eq!(bad.timing.violations.len(), 1, "{:?}", bad.timing);
+    let v = &bad.timing.violations[0];
+    assert_eq!(v.kind, crate::TimingKind::Setup);
+    assert!((v.worst_margin - 30e-9).abs() < 6e-9 && (v.required - 50e-9).abs() < 1e-12, "{v:?}");
+    assert!(bad.warnings.iter().any(|w| w.contains("セットアップ時間が足りません")), "{:?}", bad.warnings);
+}
+
+/// The data changes 30 ns after the clock edge: a hold time of 10 ns is met, of 60 ns is not.
+#[test]
+fn the_hold_time_is_checked_after_the_clock_edge() {
+    // data falls at 1.0 + 0.6 us = 1.6 us, + 120 ns of chain = 1.72 us; the clock edge at 1.15 us is far: use the second edge of the clock (2.15 us)
+    // instead: put the fall of the data 30 ns after an edge by a data pulse that is 0.6 us long and a chain of 3 x 40 ns
+    let run = |th: &str| {
+        let body = format!("Y1 buf d1 0 vss vcc 60 0.5 0 0 0 td=40n din\nY2 buf d2 0 vss vcc 60 0.5 0 0 0 td=40n d1\nY3 buf d 0 vss vcc 60 0.5 0 0 0 td=40n d2\nYF dff q 0 vss vcc 60 0.5 0 0 0 tsu=5n th={th} d clk 0 0");
+        let mut c = Circuit::new();
+        let n = place(&mut c, "vcc vss din clk q", &body);
+        c.add(Element::vdc("Vcc", n[0], 0, 5.0));
+        c.add(Element::Resistor { name: "Rg".into(), a: n[1], b: 0, r: 1e-3 });
+        // data: high from 0.5 us to 1.5 us (at the flip-flop: 0.62 us to 1.62 us); the clock edge at 1.59 us: the data falls 30 ns after it
+        let dpulse = parse_source_full("PULSE(0 5 0.5u 1n 1n 1u 4u)").unwrap();
+        c.add(Element::VSource { name: "Vd".into(), p: n[2], n: 0, wave: dpulse.wave, ac: dpulse.ac });
+        let ck = parse_source_full("PULSE(0 5 1.59u 1n 1n 0.3u 4u)").unwrap();
+        c.add(Element::VSource { name: "Vck".into(), p: n[3], n: 0, wave: ck.wave, ac: ck.ac });
+        c.add(Element::Resistor { name: "Rl".into(), a: n[4], b: 0, r: 10e3 });
+        transient(&c, &TranSettings { tstop: 3e-6, tstep: 20e-9, uic: false }).unwrap()
+    };
+    assert!(run("10n").timing.violations.is_empty());
+    let bad = run("60n");
+    assert_eq!(bad.timing.violations.len(), 1, "{:?}", bad.timing);
+    assert_eq!(bad.timing.violations[0].kind, crate::TimingKind::Hold);
+    assert!(bad.warnings.iter().any(|w| w.contains("ホールド時間が足りません")), "{:?}", bad.warnings);
+}

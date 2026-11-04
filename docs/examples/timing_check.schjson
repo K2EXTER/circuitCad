@@ -1,0 +1,546 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "5",
+      "pos": [
+        8,
+        10
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "VD",
+      "kind": "VSource",
+      "value": "PULSE(0 5 100n 1n 1n 200n 400n)",
+      "pos": [
+        18,
+        10
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "VCK",
+      "kind": "VSource",
+      "value": "PULSE(0 5 150n 1n 1n 100n 200n)",
+      "pos": [
+        28,
+        10
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "U1",
+      "kind": "Custom",
+      "value": "74HC04",
+      "pos": [
+        42,
+        16
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC04",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1A",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1Y",
+            "side": "right"
+          },
+          {
+            "number": "3",
+            "name": "2A",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "2Y",
+            "side": "right"
+          },
+          {
+            "number": "5",
+            "name": "3A",
+            "side": "left"
+          },
+          {
+            "number": "6",
+            "name": "3Y",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "4Y",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "4A",
+            "side": "left"
+          },
+          {
+            "number": "10",
+            "name": "5Y",
+            "side": "right"
+          },
+          {
+            "number": "11",
+            "name": "5A",
+            "side": "left"
+          },
+          {
+            "number": "12",
+            "name": "6Y",
+            "side": "right"
+          },
+          {
+            "number": "13",
+            "name": "6A",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC04",
+          "text": "* 74HC04 behavioural model: digital cells (Y lines), evaluated outside the circuit equations; the levels follow the supply pins, the outputs have 60 ohm. Propagation delay 7 ns.\n.subckt 74HC04 a1 y1 a2 y2 a3 y3 gnd y4 a4 y5 a5 y6 a6 vcc\nY1 inv y1 0 gnd vcc 60 0.5 0 0 0 td=7n a1\nY2 inv y2 0 gnd vcc 60 0.5 0 0 0 td=7n a2\nY3 inv y3 0 gnd vcc 60 0.5 0 0 0 td=7n a3\nY4 inv y4 0 gnd vcc 60 0.5 0 0 0 td=7n a4\nY5 inv y5 0 gnd vcc 60 0.5 0 0 0 td=7n a5\nY6 inv y6 0 gnd vcc 60 0.5 0 0 0 td=7n a6\n.ends 74HC04",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "ゲートを「デジタルセル」(行列の外で評価する素子) で表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。ゲートどうしだけをつなぐ配線は、回路の方程式に入りません (波形には電圧が出ます)。",
+            "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。伝搬遅延は、5V・25℃ での代表値を 1 つ決めたもの (立ち上がりと立ち下がりの差、電源電圧や温度による変化は含みません)。数値は必ずデータシートで確かめてください。",
+            "使わない入力は、GND か電源につないでください (つながないと、Low として扱います)。"
+          ]
+        },
+        "glyph": "gate_not"
+      }
+    },
+    {
+      "refdes": "U2",
+      "kind": "Custom",
+      "value": "74HC74",
+      "pos": [
+        60,
+        18
+      ],
+      "rot": 0,
+      "footprint": "DIP-14_W7.62",
+      "custom": {
+        "name": "74HC74",
+        "prefix": "U",
+        "pins": [
+          {
+            "number": "1",
+            "name": "1CLR",
+            "side": "left"
+          },
+          {
+            "number": "2",
+            "name": "1D",
+            "side": "left"
+          },
+          {
+            "number": "3",
+            "name": "1CLK",
+            "side": "left"
+          },
+          {
+            "number": "4",
+            "name": "1PRE",
+            "side": "left"
+          },
+          {
+            "number": "5",
+            "name": "1Q",
+            "side": "right"
+          },
+          {
+            "number": "6",
+            "name": "1QB",
+            "side": "right"
+          },
+          {
+            "number": "7",
+            "name": "GND",
+            "side": "bottom"
+          },
+          {
+            "number": "8",
+            "name": "2QB",
+            "side": "right"
+          },
+          {
+            "number": "9",
+            "name": "2Q",
+            "side": "right"
+          },
+          {
+            "number": "10",
+            "name": "2PRE",
+            "side": "left"
+          },
+          {
+            "number": "11",
+            "name": "2CLK",
+            "side": "left"
+          },
+          {
+            "number": "12",
+            "name": "2D",
+            "side": "left"
+          },
+          {
+            "number": "13",
+            "name": "2CLR",
+            "side": "left"
+          },
+          {
+            "number": "14",
+            "name": "VCC",
+            "side": "top"
+          }
+        ],
+        "sim": {
+          "kind": "subckt",
+          "element": "",
+          "name": "74HC74",
+          "text": "* 74HC74 behavioural model: two D flip-flop cells (Y lines) that keep their state inside. The levels follow the supply pins, the outputs have 60 ohm. Propagation delay 14 ns.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nY1 dff q1 qb1 gnd vcc 60 0.5 0 1 1 td=14n tsu=20n d1 clk1 pre1 clr1\nY2 dff q2 qb2 gnd vcc 60 0.5 0 1 1 td=14n tsu=20n d2 clk2 pre2 clr2\n.ends 74HC74",
+          "pins": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14"
+          ],
+          "params": {},
+          "limits": [
+            "状態を内部に持つ D フリップフロップのセルで表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。",
+            "扱わないもの: 入力容量、電源電流。クロックの立ち上がりから出力が変わるまでの遅れ (クロック→Q 14ns) と、セットアップ時間 (20ns。足りないと過渡解析が警告を出します。出力の不定は表さず、古い値を取り込みます) は、代表値を 1 つ決めたものです (数値は必ずデータシートで確かめてください)。ホールド時間は 0 とみなします。",
+            "使わない入力は、GND か電源につないでください (つながないと、Low として扱い、PRE・CLR は働いた状態になります)。",
+            "D フリップフロップは、クロックの立ち上がりで入力を取り込みます。PRE・CLR は負論理 (Low で働く) の非同期入力です。"
+          ]
+        },
+        "glyph": "ff_d"
+      }
+    },
+    {
+      "refdes": "R1",
+      "kind": "Resistor",
+      "value": "10k",
+      "pos": [
+        76,
+        8
+      ],
+      "rot": 0,
+      "footprint": "R_0805",
+      "custom": null
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        8,
+        12
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        42,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        60,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        56,
+        17
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        56,
+        11
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        56,
+        19
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        56,
+        25
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        18,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        28,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        42,
+        24
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        60,
+        28
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        78,
+        8
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        56,
+        23
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        56,
+        21
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        18,
+        8
+      ],
+      "text": "DIN"
+    },
+    {
+      "pos": [
+        38,
+        11
+      ],
+      "text": "DIN"
+    },
+    {
+      "pos": [
+        46,
+        11
+      ],
+      "text": "N1"
+    },
+    {
+      "pos": [
+        38,
+        13
+      ],
+      "text": "N1"
+    },
+    {
+      "pos": [
+        46,
+        13
+      ],
+      "text": "N2"
+    },
+    {
+      "pos": [
+        38,
+        15
+      ],
+      "text": "N2"
+    },
+    {
+      "pos": [
+        46,
+        15
+      ],
+      "text": "N3"
+    },
+    {
+      "pos": [
+        38,
+        17
+      ],
+      "text": "N3"
+    },
+    {
+      "pos": [
+        46,
+        17
+      ],
+      "text": "N4"
+    },
+    {
+      "pos": [
+        38,
+        19
+      ],
+      "text": "N4"
+    },
+    {
+      "pos": [
+        46,
+        19
+      ],
+      "text": "N5"
+    },
+    {
+      "pos": [
+        38,
+        21
+      ],
+      "text": "N5"
+    },
+    {
+      "pos": [
+        46,
+        21
+      ],
+      "text": "D"
+    },
+    {
+      "pos": [
+        56,
+        13
+      ],
+      "text": "D"
+    },
+    {
+      "pos": [
+        28,
+        8
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        56,
+        15
+      ],
+      "text": "CLK"
+    },
+    {
+      "pos": [
+        64,
+        15
+      ],
+      "text": "Q"
+    },
+    {
+      "pos": [
+        74,
+        8
+      ],
+      "text": "Q"
+    }
+  ],
+  "layout_version": 1,
+  "no_connects": [
+    [
+      "U2",
+      "6"
+    ],
+    [
+      "U2",
+      "8"
+    ],
+    [
+      "U2",
+      "9"
+    ]
+  ]
+}

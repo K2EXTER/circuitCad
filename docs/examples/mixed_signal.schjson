@@ -657,7 +657,7 @@
         "sim": {
           "kind": "subckt",
           "name": "74HC74",
-          "text": "* 74HC74 behavioural model: two D flip-flop cells (Y lines) that keep their state inside. The levels follow the supply pins, the outputs have 60 ohm. Propagation delay 14 ns.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nY1 dff q1 qb1 gnd vcc 60 0.5 0 1 1 td=14n d1 clk1 pre1 clr1\nY2 dff q2 qb2 gnd vcc 60 0.5 0 1 1 td=14n d2 clk2 pre2 clr2\n.ends 74HC74",
+          "text": "* 74HC74 behavioural model: two D flip-flop cells (Y lines) that keep their state inside. The levels follow the supply pins, the outputs have 60 ohm. Propagation delay 14 ns.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nY1 dff q1 qb1 gnd vcc 60 0.5 0 1 1 td=14n tsu=20n d1 clk1 pre1 clr1\nY2 dff q2 qb2 gnd vcc 60 0.5 0 1 1 td=14n tsu=20n d2 clk2 pre2 clr2\n.ends 74HC74",
           "pins": [
             "1",
             "2",
@@ -677,7 +677,7 @@
           "params": {},
           "limits": [
             "状態を内部に持つ D フリップフロップのセルで表したモデルです。入力のしきい値は電源電圧の半分、出力は電源の2つのピンの電圧まで振れ、約 60Ω の抵抗を通してつながります。",
-            "扱わないもの: 入力容量、電源電流、ホールド/セットアップ時間。クロックの立ち上がりから出力が変わるまでの遅れ (クロック→Q) は、代表値を 1 つ決めたものです (数値は必ずデータシートで確かめてください)。",
+            "扱わないもの: 入力容量、電源電流。クロックの立ち上がりから出力が変わるまでの遅れ (クロック→Q 14ns) と、セットアップ時間 (20ns。足りないと過渡解析が警告を出します。出力の不定は表さず、古い値を取り込みます) は、代表値を 1 つ決めたものです (数値は必ずデータシートで確かめてください)。ホールド時間は 0 とみなします。",
             "使わない入力は、GND か電源につないでください (つながないと、Low として扱い、PRE・CLR は働いた状態になります)。",
             "D フリップフロップは、クロックの立ち上がりで入力を取り込みます。PRE・CLR は負論理 (Low で働く) の非同期入力です。"
           ]

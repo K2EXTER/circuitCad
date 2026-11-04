@@ -32,6 +32,8 @@ pub(crate) struct DCell {
     pub reset_low: bool,
     pub tplh: f64,
     pub tphl: f64,
+    pub tsu: f64,
+    pub th: f64,
 }
 
 #[derive(Default)]
@@ -63,6 +65,13 @@ pub(crate) struct Dig {
     pub seq: u64,
     /// The time of the last `dig_update`.
     pub t_prev: f64,
+    /// Per input: when its level last changed (for the setup check); per cell: when its clock last rose (for the hold check).
+    pub last_change: Vec<f64>,
+    pub last_edge: Vec<f64>,
+    /// The setup / hold violations found, one entry per cell and kind.
+    pub viol: Vec<crate::TimingViolation>,
+    /// The smallest margin found at a clock edge: (cell, margin, time between this clock edge and the one before).
+    pub tightest: Option<(String, f64, f64)>,
 }
 
 /// What the cells need to know that does not change during a run: which cells share a supply, which read an analog node.
@@ -128,13 +137,33 @@ impl Compiled {
 
     /// Evaluate one cell: its next output. `before` are the levels seen at the last evaluation (for the clock edge and the
     /// data sampled by it).
-    fn eval(&self, d: &mut Dig, ci: usize) -> bool {
+    fn eval(&self, d: &mut Dig, ci: usize, te: Option<f64>) -> bool {
         let c = &self.cells[ci];
         let now: Vec<bool> = (0..c.ins.len()).map(|k| self.level(d, ci, k)).collect();
         let before: Vec<bool> = (0..c.ins.len()).map(|k| d.seen[c.slot0 + k]).collect();
         let started = d.started;
         for (k, l) in now.iter().enumerate() {
             d.seen[c.slot0 + k] = *l;
+        }
+        // the data inputs of an edge-triggered flip-flop (timing checks)
+        let data: &[usize] = match c.kind {
+            Dff | Tff => &[0],
+            Jkff | Srff => &[0, 1],
+            _ => &[],
+        };
+        if let Some(te) = te {
+            for k in 0..c.ins.len() {
+                if now[k] != before[k] {
+                    // a data input that changes soon after the clock edge breaks the hold time
+                    if c.th > 0.0 && data.contains(&k) {
+                        let le = d.last_edge[ci];
+                        if te > le && te - le < c.th - 1e-15 {
+                            self.note_violation(d, ci, crate::TimingKind::Hold, te, te - le, c.th);
+                        }
+                    }
+                    d.last_change[c.slot0 + k] = te;
+                }
+            }
         }
         let at = |v: &Vec<bool>, k: usize| v.get(k).copied().unwrap_or(false);
         let count = now.iter().filter(|b| **b).count();
@@ -162,6 +191,9 @@ impl Compiled {
                     new = set && !reset || (set && reset && old);
                 } else {
                     let edge = clk_at.is_some_and(|k| started && !at(&before, k) && at(&now, k));
+                    if edge && let Some(te) = te {
+                        self.timing_edge(d, ci, te, data);
+                    }
                     match c.kind {
                         Dff if edge => new = at(&before, 0),
                         Tff if edge && at(&before, 0) => new = !old,
@@ -286,7 +318,7 @@ impl Compiled {
                     return;
                 }
                 budget -= 1;
-                let q = self.eval(d, ci);
+                let q = self.eval(d, ci, delays.then_some(te));
                 let heading = d.pend[ci].unwrap_or(d.q[ci]);
                 if !d.done_first[ci] || q != heading {
                     self.emit(d, w, ci, q, te, delays, &mut mem_next);
@@ -304,7 +336,7 @@ impl Compiled {
                 return;
             }
             budget -= batch.len();
-            let results: Vec<(usize, bool)> = batch.iter().map(|&ci| (ci, self.eval(d, ci))).collect();
+            let results: Vec<(usize, bool)> = batch.iter().map(|&ci| (ci, self.eval(d, ci, delays.then_some(te)))).collect();
             let mut mem_next: Vec<usize> = vec![];
             for (ci, q) in results {
                 let heading = d.pend[ci].unwrap_or(d.q[ci]);
@@ -335,13 +367,53 @@ impl Compiled {
             if is_memory(self.cells[ci].kind) {
                 continue;
             }
-            let q = self.eval(d, ci);
+            let q = self.eval(d, ci, None);
             let heading = d.pend[ci].unwrap_or(d.q[ci]);
             if q != heading {
                 self.emit(d, &mut w, ci, q, 0.0, true, &mut mem_next);
             }
         }
         d.queued = w.queued;
+    }
+
+    /// A clock edge of flip-flop `ci` at `te`: the setup time of its data inputs, and the margin that is left.
+    fn timing_edge(&self, d: &mut Dig, ci: usize, te: f64, data: &[usize]) {
+        let c = &self.cells[ci];
+        let interval = te - d.last_edge[ci];
+        d.last_edge[ci] = te;
+        if c.tsu <= 0.0 {
+            return;
+        }
+        for &k in data {
+            let dt = te - d.last_change[c.slot0 + k];
+            if dt < c.tsu - 1e-15 {
+                self.note_violation(d, ci, crate::TimingKind::Setup, te, dt, c.tsu);
+            }
+            // the margin to the setup time (how much later the data could arrive); the time since the clock edge before is NaN
+            // for the first edge
+            let margin = dt - c.tsu;
+            if d.tightest.as_ref().is_none_or(|t| margin < t.1) {
+                d.tightest = Some((c.name.clone(), margin, if interval < 1e29 { interval } else { f64::NAN }));
+            }
+        }
+    }
+
+    fn note_violation(&self, d: &mut Dig, ci: usize, kind: crate::TimingKind, time: f64, margin: f64, required: f64) {
+        let name = &self.cells[ci].name;
+        if let Some(v) = d.viol.iter_mut().find(|v| v.cell == *name && v.kind == kind) {
+            v.count += 1;
+            if margin < v.worst_margin {
+                v.worst_margin = margin;
+            }
+        } else {
+            d.viol.push(crate::TimingViolation { cell: name.clone(), kind, count: 1, first_time: time, worst_margin: margin, required });
+        }
+    }
+
+    /// What the timing checks found in this run.
+    pub(crate) fn timing_report(&self) -> crate::TimingReport {
+        let d = self.dig.borrow();
+        crate::TimingReport { violations: d.viol.clone(), tightest: d.tightest.clone() }
     }
 
     /// The time of the next change of an output that sits on an analog node: the transient run lands a step on it.

@@ -183,7 +183,7 @@ mod tests {
             t += if k % 3 == 0 { 0.6 * base } else { base };
             k += 1;
         }
-        TranResult { time, signals: vec![Signal { name: "I(C1.C1)".into(), unit: "A", values: i }], warnings: vec![], retries: 0, rejected: 0 }
+        TranResult { time, signals: vec![Signal { name: "I(C1.C1)".into(), unit: "A", values: i }], warnings: vec![], retries: 0, rejected: 0, timing: Default::default() }
     }
 
     #[test]
