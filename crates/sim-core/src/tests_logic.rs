@@ -208,7 +208,8 @@ fn all_logic_parts_load() {
     for ic in ["74HC00", "74HC02", "74HC04", "74HC08", "74HC14", "74HC32", "74HC74", "74HC86"] {
         let mut c = Circuit::new();
         place(&mut c, ic);
-        assert!(c.elements.iter().any(|e| matches!(e, Element::Switch { .. })), "{ic}");
+        // the 74HC74 keeps its state inside (Element::Seq); the others are made of switches
+        assert!(c.elements.iter().any(|e| matches!(e, Element::Switch { .. } | Element::Seq { .. })), "{ic}");
     }
 }
 

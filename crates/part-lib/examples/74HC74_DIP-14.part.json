@@ -1,7 +1,7 @@
 {
   "name": "74HC74",
   "category": "ロジックIC",
-  "description": "デュアル D フリップフロップ (DIP-14)。クロックの立上りで D を取り込みます。PRE・CLR は負論理の非同期セット/リセット。スイッチで作った簡易モデル (遅延なし)",
+  "description": "デュアル D フリップフロップ (DIP-14)。クロックの立上りで D を取り込みます。PRE・CLR は負論理の非同期セット/リセット。状態を内部に持つモデル (遅延なし。出力は 0 V / 5 V)",
   "datasheet": "",
   "prefix": "U",
   "footprint_name": "DIP-14_W7.62",
@@ -89,7 +89,7 @@
   "sim": {
     "kind": "subckt",
     "name": "74HC74",
-    "text": "* 74HC74 behavioural model: CMOS gates made of voltage-controlled switches (no propagation delay).\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nRh1 vcc hi 90k\nRh2 hi hv 10k\nRh3 hv lo 10k\nRh4 lo gnd 90k\nS1 d1 m1 lo clk1 SWT\nS2 vcc m2 hv m1 SWPA\nS3 m2 gnd m1 hv SWNA\nS4 vcc m3 hv m2 SWPA\nS5 m3 gnd m2 hv SWNA\nS6 m3 m1 clk1 lo SWT\nS7 m2 s4 clk1 hi SWT\nS8 vcc s5 hv s4 SWPA\nS9 s5 gnd s4 hv SWNA\nS10 vcc s6 hv s5 SWPA\nS11 s6 gnd s5 hv SWNA\nS12 s6 s4 hi clk1 SWT\nS13 vcc g7 hv s5 SWPA\nS14 g7 gnd s5 hv SWNA\nS15 vcc q1 hv g7 SWPA\nS16 q1 gnd g7 hv SWNA\nS17 vcc qb1 hv s5 SWPA\nS18 qb1 gnd s5 hv SWNA\nS19 vcc m1 hv pre1 SWF\nS20 s4 gnd hv pre1 SWF\nS21 m1 gnd hv clr1 SWF\nS22 vcc s4 hv clr1 SWF\nS23 d2 m8 lo clk2 SWT\nS24 vcc m9 hv m8 SWPA\nS25 m9 gnd m8 hv SWNA\nS26 vcc m10 hv m9 SWPA\nS27 m10 gnd m9 hv SWNA\nS28 m10 m8 clk2 lo SWT\nS29 m9 s11 clk2 hi SWT\nS30 vcc s12 hv s11 SWPA\nS31 s12 gnd s11 hv SWNA\nS32 vcc s13 hv s12 SWPA\nS33 s13 gnd s12 hv SWNA\nS34 s13 s11 hi clk2 SWT\nS35 vcc g14 hv s12 SWPA\nS36 g14 gnd s12 hv SWNA\nS37 vcc q2 hv g14 SWPA\nS38 q2 gnd g14 hv SWNA\nS39 vcc qb2 hv s12 SWPA\nS40 qb2 gnd s12 hv SWNA\nS41 vcc m8 hv pre2 SWF\nS42 s11 gnd hv pre2 SWF\nS43 m8 gnd hv clr2 SWF\nS44 vcc s11 hv clr2 SWF\n.model SWPA SW(RON=80 ROFF=1G VT=0 VW=0.1)\n.model SWPS SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNA SW(RON=40 ROFF=1G VT=0 VW=0.1)\n.model SWNS SW(RON=20 ROFF=1G VT=0 VW=0.1)\n.model SWT SW(RON=100 ROFF=1G VT=0 VW=0.05)\n.model SWF SW(RON=1 ROFF=1G VT=0 VW=0.1)\n.ends 74HC74",
+    "text": "* 74HC74 behavioural model: two D flip-flops that keep their state inside (Element::Seq). No propagation delay; the outputs swing 0..5 V.\n.subckt 74HC74 clr1 d1 clk1 pre1 q1 qb1 gnd qb2 q2 pre2 clk2 d2 clr2 vcc\nU1 dff(1) $G_DPWR $G_DGND pre1 clr1 clk1 d1 q1 qb1 D_DFF IO_STD\nU2 dff(1) $G_DPWR $G_DGND pre2 clr2 clk2 d2 q2 qb2 D_DFF IO_STD\n.ends 74HC74",
     "pins": [
       "1",
       "2",
@@ -108,9 +108,9 @@
     ],
     "params": {},
     "limits": [
-      "スイッチで作った CMOS ゲートの動作モデルです。入力のしきい値は電源電圧の半分で、出力は High が約 80Ω、Low が約 40Ω の抵抗を通して電源・GND につながります。",
-      "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。そのため、インバータをリング状につないだ発振器は動きません。",
-      "使わない入力は、GND か電源につないでください (つながないと 0V として扱います)。",
+      "状態を内部に持つ D フリップフロップのモデルです。出力は 0 V / 5 V で、入力のしきい値は 2.5 V です (電源が 5 V でないときは合いません)。電源ピン (VCC) はつないでも、モデルは見ません。",
+      "扱わないもの: 伝搬遅延、入力容量、電源電流、ホールド/セットアップ時間。状態の変化は、次の計算の刻みから出力に出ます (最大で 1 刻み遅れます)。",
+      "使わない入力は、GND か電源につないでください (つながないと 0 V として扱い、PRE・CLR は働いた状態になります)。",
       "D フリップフロップは、クロックの立ち上がりで入力を取り込みます。PRE・CLR は負論理 (Low で働く) の非同期入力です。"
     ]
   }
