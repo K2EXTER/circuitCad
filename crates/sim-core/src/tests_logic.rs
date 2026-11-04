@@ -255,3 +255,25 @@ fn a_flip_flop_circuit_says_its_dc_answer_is_one_state_and_the_start_state_picks
     assert_eq!(r1.seq_states, vec![("FF1".to_string(), true)], "the circuit's initial state is the stored state");
     assert!((r1.voltage("q").unwrap() - 5.0).abs() < 0.1);
 }
+
+/// The 74HC74 on a 3.3 V supply: Q follows D at the rising clock edge and swings to the supply, not to 5 V.
+#[test]
+fn the_74hc74_works_on_3v3() {
+    let mut c = Circuit::new();
+    let n = place(&mut c, "74HC74");
+    supply(&mut c, &n, 3.3);
+    let mut pwl = |name: &str, node: usize, text: &str| {
+        let s = parse_source_full(text).unwrap();
+        c.add(Element::VSource { name: name.into(), p: node, n: 0, wave: s.wave, ac: s.ac });
+    };
+    // clock edges at 1 us and 3 us; D is high at the first, low at the second; PRE and CLR are inactive (high)
+    pwl("Vclk", n[2], "PWL(0 0 1u 0 1.01u 3.3 2u 3.3 2.01u 0 3u 0 3.01u 3.3 4u 3.3 4.01u 0 5u 0)");
+    pwl("Vd", n[1], "PWL(0 3.3 2.5u 3.3 2.51u 0 5u 0)");
+    pwl("Vclr", n[0], "PWL(0 3.3 5u 3.3)");
+    pwl("Vpre", n[3], "PWL(0 3.3 5u 3.3)");
+    let r = transient(&c, &TranSettings { tstop: 5e-6, tstep: 20e-9, uic: false }).unwrap();
+    let q = |t: f64| at(&r, "V(p5)", t);
+    assert!((q(2.5e-6) - 3.3).abs() < 0.15, "Q high after the first edge: {}", q(2.5e-6));
+    assert!(q(4.5e-6) < 0.15, "Q low after the second edge: {}", q(4.5e-6));
+    assert!((at(&r, "V(p6)", 4.5e-6) - 3.3).abs() < 0.15, "QB is high then: {}", at(&r, "V(p6)", 4.5e-6));
+}

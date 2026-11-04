@@ -398,3 +398,42 @@ fn the_74hc4017_counts_one_output_at_a_time_and_wraps_after_ten() {
     // carry out: high while the count is 0..4
     assert!(at("co", 100e-6 * 2.0 + 90e-6) > 2.5 && at("co", 100e-6 * 7.0 + 90e-6) < 2.5);
 }
+
+/// The 74HC4017 counts on a 3.3 V supply and on a floating one (GND pin at -1.8 V, VCC pin at +3.0 V): the levels follow the supply pins.
+#[test]
+fn the_74hc4017_counts_on_3v3_and_on_a_floating_supply() {
+    for (vss, vcc) in [(0.0, 3.3), (-1.8, 3.0)] {
+        let def = part("74HC4017");
+        let pin = |n: &str| def.pins.iter().find(|p| p.name == n).unwrap().number.clone();
+        let mut c = Circuit::new();
+        vs(&mut c, "Vss", "vss", "0", vss);
+        vs(&mut c, "Vcc", "vcc", "0", vcc);
+        let span = vcc - vss;
+        let a = c.node("cp");
+        let s = parse_source_full(&format!("PULSE({vss} {} 100u 1u 1u 50u 100u)", vss + span)).unwrap();
+        c.add(Element::VSource { name: "Vcp".into(), p: a, n: 0, wave: s.wave, ac: s.ac });
+        let m = c.node("mr");
+        let s = parse_source_full(&format!("PULSE({} {vss} 40u 1u 1u 1 2)", vss + span)).unwrap();
+        c.add(Element::VSource { name: "Vmr".into(), p: m, n: 0, wave: s.wave, ac: s.ac });
+        let names: Vec<String> = (0..10).map(|k| format!("q{k}")).collect();
+        let mut nets: Vec<(String, String)> = vec![(pin("VCC"), "vcc".into()), (pin("GND"), "vss".into()), (pin("CE"), "vss".into()), (pin("CP"), "cp".into()), (pin("MR"), "mr".into()), (pin("CO"), "co".into())];
+        for (k, n) in names.iter().enumerate() {
+            nets.push((pin(&format!("Q{k}")), n.clone()));
+        }
+        let wiring: Vec<(&str, &str)> = nets.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
+        place(&mut c, &def, "U1", &wiring);
+        let r = transient(&c, &TranSettings { tstop: 1.45e-3, tstep: 1e-6, uic: false }).unwrap();
+        let at = |net: &str, t: f64| {
+            let i = r.time.iter().position(|x| *x >= t).unwrap();
+            r.signal(&format!("V({net})")).unwrap().values[i]
+        };
+        for edges in 1..=12usize {
+            let t = 100e-6 * edges as f64 + 90e-6;
+            let want = edges % 10;
+            let high: Vec<usize> = (0..10).filter(|k| at(&names[*k], t) > vss + 0.5 * span).collect();
+            assert_eq!(high, vec![want], "after {edges} clock edges on {vss}..{vcc}");
+            // and the high level is the supply, not 5 V
+            assert!((at(&names[want], t) - vcc).abs() < 0.15, "high output {} on {vss}..{vcc}", at(&names[want], t));
+        }
+    }
+}
