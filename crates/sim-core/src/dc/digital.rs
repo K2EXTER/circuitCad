@@ -44,11 +44,26 @@ pub(crate) struct Dig {
     pub st: Vec<bool>,
     /// Per cell: the output q (qb is its inverse).
     pub q: Vec<bool>,
-    /// Per cell: (vss, vcc) from the last accepted solution.
-    pub sup: Vec<(f64, f64)>,
+    /// Per supply group (cells that share the same vss and vcc pins): (vss, vcc) from the last accepted solution.
+    pub gsup: Vec<(f64, f64)>,
     pub started: bool,
+    /// Scratch for `dig_update`: which gates are in the queue (all false between two calls).
+    pub queued: Vec<bool>,
     /// Per cell: whether it has been evaluated (and its outputs applied) at least once.
     pub done_first: Vec<bool>,
+}
+
+/// What the cells need to know that does not change during a run: which cells share a supply, which read an analog node.
+#[derive(Default)]
+pub(crate) struct DigStatic {
+    /// The distinct (vss, vcc) pairs of the cells.
+    pub groups: Vec<(usize, usize)>,
+    /// Per cell: its index in `groups`.
+    pub cell_group: Vec<usize>,
+    /// The cells with an input on an analog node: the only ones whose inputs can change by themselves between two solutions.
+    pub analog_cells: Vec<usize>,
+    /// Per cell: whether an output sits on an analog node (a source behind `rout` in the circuit equations).
+    pub analog_out: Vec<bool>,
 }
 
 /// What the cells need to know about the nodes, fixed when the circuit is compiled.
@@ -201,16 +216,30 @@ impl Compiled {
         }
         let n_cells = self.cells.len();
         let mut comb: std::collections::VecDeque<usize> = Default::default();
-        let mut queued = vec![false; n_cells];
+        let mut queued = std::mem::take(&mut d.queued);
+        queued.resize(n_cells, false);
         let mut mem: Vec<usize> = vec![];
         let mut sup_moved = false;
-        for (ci, c) in self.cells.iter().enumerate() {
-            let (vss, vcc) = (v(x, c.vss), v(x, c.vcc));
-            let old = d.sup[ci];
+        for (g, &(a, b)) in self.dstat.groups.iter().enumerate() {
+            let (vss, vcc) = (v(x, a), v(x, b));
+            let old = d.gsup[g];
             if (vss - old.0).abs() > 1e-6 + 1e-6 * old.0.abs() || (vcc - old.1).abs() > 1e-6 + 1e-6 * old.1.abs() {
                 sup_moved = true;
             }
-            d.sup[ci] = (vss, vcc);
+            d.gsup[g] = (vss, vcc);
+        }
+        // the first time every cell is looked at; afterwards only those that read an analog node (the others are reached through
+        // the cells that drive them)
+        let all: Vec<usize>;
+        let candidates: &[usize] = if first {
+            all = (0..n_cells).collect();
+            &all
+        } else {
+            &self.dstat.analog_cells
+        };
+        for &ci in candidates {
+            let c = &self.cells[ci];
+            let (vss, vcc) = d.gsup[self.dstat.cell_group[ci]];
             let span = vcc - vss;
             for (k, &n) in c.ins.iter().enumerate() {
                 if n != 0 && !self.is_digital(n) {
@@ -304,9 +333,13 @@ impl Compiled {
             mem.sort_unstable();
             mem.dedup();
         }
+        // a loop that did not settle leaves gates in the queue: clear their marks for the next call
+        for ci in comb {
+            queued[ci] = false;
+        }
+        d.queued = queued;
         d.started = true;
-        let analog_out = self.cells.iter().any(|c| (c.out != 0 && !self.is_digital(c.out)) || (c.outb != 0 && !self.is_digital(c.outb)));
-        (analog_changed || (sup_moved && analog_out), any_change)
+        (analog_changed || (sup_moved && self.dstat.analog_out.iter().any(|b| *b)), any_change)
     }
 
     /// Write the voltage of every digital net into the solution (the circuit equations leave those nodes at 0).
@@ -321,7 +354,7 @@ impl Compiled {
             }
             x[n - 1] = match drv {
                 Some((ci, _)) => {
-                    let (vss, vcc) = d.sup[*ci];
+                    let (vss, vcc) = d.gsup[self.dstat.cell_group[*ci]];
                     if d.lv[n] { vcc } else { vss }
                 }
                 None => 0.0,
@@ -329,11 +362,27 @@ impl Compiled {
         }
     }
 
+    /// The voltage of node `n` in the solution `x`: a digital net is not in the circuit equations, its voltage is the supply level
+    /// of the cell that drives it.
+    pub(crate) fn node_voltage(&self, x: &[f64], n: usize) -> f64 {
+        if !self.is_digital(n) {
+            return v(x, n);
+        }
+        let d = self.dig.borrow();
+        match self.dnets.driver[n] {
+            Some((ci, _)) => {
+                let (vss, vcc) = d.gsup[self.dstat.cell_group[ci]];
+                if d.lv[n] { vcc } else { vss }
+            }
+            None => 0.0,
+        }
+    }
+
     /// The level (0 or 1) an output of cell `ci` is at, for the circuit equations.
     pub(crate) fn cell_level(&self, ci: usize, inverted: bool) -> (f64, (f64, f64)) {
         let d = self.dig.borrow();
         let q = d.q[ci] != inverted;
-        (if q { 1.0 } else { 0.0 }, d.sup[ci])
+        (if q { 1.0 } else { 0.0 }, d.gsup[self.dstat.cell_group[ci]])
     }
 
     /// The names and stored states of the cells with a memory.

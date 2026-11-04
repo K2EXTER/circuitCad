@@ -194,7 +194,7 @@ impl Compiled {
                     // the same when the level changes (the supply is the one of the last accepted point)
                     let c = &self.cells[*cell];
                     let g = 1.0 / c.rout.max(1e-3);
-                    for (node, inverted) in [(c.out, false), (c.outb, true)] {
+                    for (node, inverted) in [(c.out, false), (c.outb, true)].into_iter().filter(|_| self.dstat.analog_out[*cell]) {
                         if node != 0 && !self.is_digital(node) {
                             let (lvl, (vss, vcc)) = self.cell_level(*cell, inverted);
                             m.at(node - 1, node - 1, g);

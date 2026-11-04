@@ -124,6 +124,7 @@ pub(crate) struct Compiled {
     /// The digital cells and the state they keep outside the circuit equations (`digital.rs`).
     pub(crate) cells: Vec<DCell>,
     pub(crate) dnets: DigNets,
+    pub(crate) dstat: DigStatic,
     pub(crate) dig: std::cell::RefCell<Dig>,
     /// The `nodesets` that name a digital net: (node, volts).
     pub(crate) dig_seeds: Vec<(usize, f64)>,

@@ -211,19 +211,34 @@ pub(crate) fn compile(c: &Circuit) -> Compiled {
             }
         }
     }
+    // the cells that share a supply, the ones that read an analog node, the outputs that sit on one
+    let mut groups: Vec<(usize, usize)> = vec![];
+    let mut cell_group = vec![];
+    for cell in &cells {
+        let key = (cell.vss, cell.vcc);
+        let g = groups.iter().position(|k| *k == key).unwrap_or_else(|| {
+            groups.push(key);
+            groups.len() - 1
+        });
+        cell_group.push(g);
+    }
+    let analog_cells: Vec<usize> = cells.iter().enumerate().filter(|(_, c)| c.ins.iter().any(|&n| n != 0 && !dnets.digital[n])).map(|(i, _)| i).collect();
+    let analog_out: Vec<bool> = cells.iter().map(|c| (c.out != 0 && !dnets.digital[c.out]) || (c.outb != 0 && !dnets.digital[c.outb])).collect();
+    let dstat = DigStatic { groups, cell_group, analog_cells, analog_out };
     let dig = std::cell::RefCell::new(Dig {
         lv: vec![false; total_nodes + 1],
         seen: vec![false; n_cell_in],
         afrac: vec![0.0; n_cell_in],
         st: cells.iter().map(|k| c.initial.iter().find(|(m, _)| *m == k.name).is_some_and(|(_, v)| *v > 0.5)).collect(),
         q: vec![false; cells.len()],
-        sup: vec![(0.0, 0.0); cells.len()],
+        gsup: vec![(0.0, 0.0); dstat.groups.len()],
         started: false,
+        queued: vec![],
         done_first: vec![false; cells.len()],
     });
     // the guesses of the user for digital nets: where their latches start
     let dig_seeds: Vec<(usize, f64)> = c.nodesets.iter().filter_map(|(name, volts)| c.names.iter().position(|n| n.eq_ignore_ascii_case(name)).filter(|i| *i > 0 && dnets.digital[*i]).map(|i| (i, *volts))).collect();
-    Compiled { cells, dnets, dig, dig_seeds, seed, seeded, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
+    Compiled { cells, dnets, dstat, dig, dig_seeds, seed, seeded, seq_state, seq_names, node_names: c.names.clone(), n_caps, n_inds, n_nodes, n_unknowns: br_base + n_br, n_slots, linear, has_b, cache: Default::default(), plan: Default::default(), ce }
 }
 
 pub(crate) fn v(x: &[f64], node: usize) -> f64 {

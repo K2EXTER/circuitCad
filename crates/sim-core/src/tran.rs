@@ -329,7 +329,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
     let record = |res: &mut TranResult, t: f64, x: &[f64], cap_i: &[f64], cm: &crate::dc::Compiled| {
         res.time.push(t);
         for &(i, si) in &node_slots {
-            res.signals[si].values.push(v(x, i));
+            res.signals[si].values.push(cm.node_voltage(x, i));
         }
         if any_element {
             let mut k = 0;
@@ -494,7 +494,7 @@ pub fn transient_with(circuit: &Circuit, s: &TranSettings, keep: Option<&dyn Fn(
         // digital cells: an output on an analog node that changed jumps at the next step, like a flip-flop's
         let seq_changed = seq_changed | (cm.has_cells() && cm.dig_update(&att.x).0);
         x = att.x;
-        cm.fix_nodes(&mut x);
+        // (the voltages of the digital nets are read from the cells when recorded, `Compiled::node_voltage`)
         vj = att.vj;
         // the step after a retry has no reliable current history either
         force_be = lands_on_bp || retried || seq_changed;
