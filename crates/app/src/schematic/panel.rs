@@ -138,23 +138,40 @@ impl SchEditor {
     pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
         // the tools, undo and quick add are one group: close together
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
+        // the four tools are one segmented bar: joined, equal width, one chosen (the buttons below it act; these switch the mode)
         ui.horizontal(|ui| {
-            { let tip = "部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます"; if crate::icons::icon_button(ui, crate::icons::Icon::Select, "選択", self.tool == Tool::Select, true, tip).clicked() { self.tool = Tool::Select; } };
-            { let tip = "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"; if crate::icons::icon_button(ui, crate::icons::Icon::Wire, "配線", self.tool == Tool::Wire, true, tip).clicked() { self.tool = Tool::Wire; } };
-            { let tip = "太い青の線でバス(信号の束)を描きます。バスの線は何もつなぎません(見た目と点検のためのものです)。名前は、ラベルツールで D[0..7] と書いて、バスの線の上に置きます。つなぐ各ピンには、ラベルツールで D[0..7] と書いたまま、ピンを順にクリックすると、D0 D1 D2 … と順に付きます"; if crate::icons::icon_button(ui, crate::icons::Icon::Bus, "バス", self.tool == Tool::Bus, true, tip).clicked() { self.tool = Tool::Bus; } };
-            { let tip = "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"; if crate::icons::icon_button(ui, crate::icons::Icon::Label, "ラベル", self.tool == Tool::Label, true, tip).clicked() { self.tool = Tool::Label; } };
+            ui.spacing_mut().item_spacing.x = 0.0;
+            let tools: [(crate::icons::Icon, &str, Tool, &str); 4] = [
+                (crate::icons::Icon::Select, "選択", Tool::Select, "部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます"),
+                (crate::icons::Icon::Wire, "配線", Tool::Wire, "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"),
+                (crate::icons::Icon::Bus, "バス", Tool::Bus, "太い青の線でバス(信号の束)を描きます。バスの線は何もつなぎません(見た目と点検のためのものです)。名前は、ラベルツールで D[0..7] と書いて、バスの線の上に置きます。つなぐ各ピンには、ラベルツールで D[0..7] と書いたまま、ピンを順にクリックすると、D0 D1 D2 … と順に付きます"),
+                (crate::icons::Icon::Label, "ラベル", Tool::Label, "同じ名前のラベルを付けた場所は、線でつながなくても同じ配線 (ネット) になります。図がすっきりします"),
+            ];
+            let width = ui.available_width() / tools.len() as f32;
+            for (n, (icon, label, tool, tip)) in tools.into_iter().enumerate() {
+                let r = if n == 0 { 4 } else { 0 };
+                let e = if n == 3 { 4 } else { 0 };
+                let corners = egui::CornerRadius { nw: r, sw: r, ne: e, se: e };
+                if crate::icons::segment_button(ui, icon, label, "", self.tool == tool, true, tip, width, corners).clicked() {
+                    self.tool = tool;
+                }
+            }
         });
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
             // an edit not yet written to the history (mid-drag, just made) can be undone too
             let can_undo = !self.undo.is_empty() || self.sch != self.committed;
-            if crate::icons::icon_button_key(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, can_undo, "直前の操作を取り消します (Ctrl+Z)").clicked() {
+            let half = egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 };
+            let other = egui::CornerRadius { nw: 0, sw: 0, ne: 4, se: 4 };
+            let width = ui.available_width() / 2.0;
+            if crate::icons::segment_button(ui, crate::icons::Icon::Undo, "元に戻す", "Ctrl+Z", false, can_undo, "直前の操作を取り消します (Ctrl+Z)", width, half).clicked() {
                 self.undo();
             }
-            if crate::icons::icon_button_key(ui, crate::icons::Icon::Redo, "やり直し", "Ctrl+Y", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)").clicked() {
+            if crate::icons::segment_button(ui, crate::icons::Icon::Redo, "やり直し", "Ctrl+Y", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)", width, other).clicked() {
                 self.redo();
             }
         });
-        if self.lit(crate::widgets::primary_button(ui, true, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
             self.open_quick_add();
         }
         if self.tool == Tool::Label {
@@ -184,7 +201,8 @@ impl SchEditor {
             .filter(|(_, g)| !g.is_empty())
             .collect();
         let basic_title = if self.basic_open { egui::RichText::new("基本の部品").strong() } else { egui::RichText::new("基本の部品") };
-        let basic = crate::widgets::band_header(ui, basic_title, self.basic_open, false, |ui| {
+        let (_, basic_clicked) = crate::widgets::band_header(ui, "basic", basic_title, self.basic_open, true, |ui| {
+            crate::widgets::well(ui, |ui| {
             ui.small("クリックして配置 / Rキーで回転");
             for k in Kind::PALETTE {
                 let selected = self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k;
@@ -234,16 +252,17 @@ impl SchEditor {
                     self.pending = None;
                 }
             }
+            });
         });
         // the two lists take turns: opening one closes the other, so the open list has the height of the panel
-        if basic.header_response.clicked() {
+        if basic_clicked {
             self.basic_open = !self.basic_open;
             if self.basic_open {
                 self.lib_open = false;
             }
         }
         let library_title = crate::widgets::count_title(ui, "ライブラリ部品", self.library.len());
-        let library = crate::widgets::band_header(ui, library_title, self.lib_open, true, |ui| {
+        let (_, library_clicked) = crate::widgets::band_header(ui, "library", library_title, self.lib_open, true, |ui| {
             // everything inside the library group sits in one sunken well joined to the band; the indent line is not needed there
             crate::widgets::well(ui, |ui| {
             ui.visuals_mut().indent_has_left_vline = false;
@@ -414,7 +433,7 @@ impl SchEditor {
             }
             });
         });
-        if library.header_response.clicked() {
+        if library_clicked {
             self.lib_open = !self.lib_open;
             if self.lib_open {
                 self.basic_open = false;

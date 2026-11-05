@@ -18,6 +18,12 @@ pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Re
     ui.add_enabled(enabled, egui::Button::new(label))
 }
 
+/// `primary_button` as wide as the space left in its row (the main action of a side panel, under bars of the same width).
+pub fn primary_button_wide(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
+    let size = egui::vec2(ui.available_width(), ui.spacing().interact_size.y);
+    ui.add_enabled_ui(enabled, |ui| ui.add_sized(size, egui::Button::new(label))).inner
+}
+
 /// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
 pub fn section_heading(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     ui.add_space(crate::theme::SPACE_S);
@@ -49,13 +55,17 @@ pub fn count_title(ui: &egui::Ui, name: &str, count: usize) -> egui::text::Layou
 /// A top-level folded group of a side panel: its title row sits on a band one step lighter than the panel (lighter again while open), so
 /// the groups read as sections and the lists and rows inside them, on the plain panel, as a level below. With `flush` the contents touch
 /// the band (no gap), so a box drawn inside (see `well`) joins the band as one piece; the contents restore the row gap themselves.
+///
+/// Returns the group's response and whether the band was clicked anywhere (the whole band is the target, not just the arrow and the
+/// title; `id` tells two bands apart); the caller flips `open` itself.
 pub fn band_header<R>(
     ui: &mut egui::Ui,
+    id: &str,
     title: impl Into<egui::WidgetText>,
     open: bool,
     flush: bool,
     body: impl FnOnce(&mut egui::Ui) -> R,
-) -> egui::CollapsingResponse<R> {
+) -> (egui::CollapsingResponse<R>, bool) {
     let slot = ui.painter().add(egui::Shape::Noop);
     // no guide line under the arrow: the band and the indent already show what belongs to the group
     let r = ui
@@ -71,11 +81,18 @@ pub fn band_header<R>(
     let joined = open && flush;
     let band = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), rows).expand2(egui::vec2(0.0, 1.0));
     let band = if joined { egui::Rect::from_min_max(band.min, egui::pos2(band.max.x, rows.max)) } else { band };
-    let fill = egui::Color32::from_gray(if open { 48 } else { 38 });
+    let hit = ui.interact(egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), rows), ui.id().with(("band_header", id)), egui::Sense::click());
+    let fill = egui::Color32::from_gray(match (open, hit.hovered()) {
+        (true, false) => 48,
+        (true, true) => 54,
+        (false, false) => 38,
+        (false, true) => 46,
+    });
+    let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand);
     let low = if joined { 0 } else { 4 };
     let corners = egui::CornerRadius { nw: 4, ne: 4, sw: low, se: low };
     ui.painter().set(slot, egui::epaint::RectShape::filled(band, corners, fill));
-    r
+    (r, hit.clicked())
 }
 
 /// The sunken box under an open `band_header(.., flush: true, ..)`: the ground of text fields and plots ("look inside"), square at the

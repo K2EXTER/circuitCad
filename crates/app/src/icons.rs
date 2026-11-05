@@ -197,15 +197,21 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
     }
 }
 
-/// A toolbar button. With text: icon + label. Icon only: a square button whose tooltip starts with the label.
-/// It is drawn with its own fill and edge; `selected` fills it with the accent colour; `enabled` greys it out.
-pub fn icon_button(ui: &mut egui::Ui, icon: Icon, label: &str, selected: bool, enabled: bool, tip: &str) -> egui::Response {
-    icon_button_key(ui, icon, label, "", selected, enabled, tip)
-}
-
-/// `icon_button` that also shows its keyboard shortcut (`key`, e.g. "Ctrl+Z"; empty for none): dim text after the
+/// A toolbar button. With text: icon + label. Icon only: a square button whose tooltip starts with the label. It is drawn with its own
+/// fill and edge; `selected` fills it with the accent colour; `enabled` greys it out. It also shows its keyboard shortcut (`key`, e.g. "Ctrl+Z"; empty for none): dim text after the
 /// label, and a line in the tooltip (also when only the icon is shown).
 pub fn icon_button_key(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, selected: bool, enabled: bool, tip: &str) -> egui::Response {
+    icon_button_shaped(ui, icon, label, key, selected, enabled, tip, None)
+}
+
+/// A button in a joined row (one tool of a segmented bar): `shape` is the fixed width and the corner radii (square where it touches
+/// its neighbour); the icon and label are centred in it.
+pub fn segment_button(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, selected: bool, enabled: bool, tip: &str, width: f32, corners: egui::CornerRadius) -> egui::Response {
+    icon_button_shaped(ui, icon, label, key, selected, enabled, tip, Some((width, corners)))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn icon_button_shaped(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, selected: bool, enabled: bool, tip: &str, shape: Option<(f32, egui::CornerRadius)>) -> egui::Response {
     let side = ui.spacing().interact_size.y.max(22.0);
     let pad = ui.spacing().button_padding;
     let (size, galley) = if icon_only() {
@@ -215,6 +221,16 @@ pub fn icon_button_key(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, se
         let kw = if key.is_empty() { 0.0 } else { ui.painter().layout_no_wrap(key.to_owned(), egui::TextStyle::Button.resolve(ui.style()), Color32::PLACEHOLDER).size().x + 10.0 };
         (vec2(side + 2.0 * pad.x + g.size().x + kw, side), Some(g))
     };
+    let size = match shape {
+        Some((w, _)) => vec2(w, size.y),
+        None => size,
+    };
+    // content is centred when the width is fixed
+    let dx = shape.map_or(0.0, |_| {
+        let kw = if key.is_empty() { 0.0 } else { ui.painter().layout_no_wrap(key.to_owned(), egui::TextStyle::Button.resolve(ui.style()), Color32::PLACEHOLDER).size().x + 10.0 };
+        let natural = if galley.is_some() { size.x.min(side + 2.0 * pad.x + galley.as_ref().map_or(0.0, |g| g.size().x) + kw) } else { side };
+        ((size.x - natural) / 2.0).max(0.0)
+    });
     let sense = if enabled { egui::Sense::click() } else { egui::Sense::hover() };
     let (rect, resp) = ui.allocate_exact_size(size, sense);
     if ui.is_rect_visible(rect) {
@@ -228,18 +244,25 @@ pub fn icon_button_key(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, se
         } else {
             (widgets.inactive.weak_bg_fill, widgets.inactive.bg_stroke)
         };
-        ui.painter().rect(rect, vis.corner_radius, fill, stroke, egui::StrokeKind::Inside);
+        ui.painter().rect(rect, shape.map_or(vis.corner_radius, |(_, c)| c), fill, stroke, egui::StrokeKind::Inside);
+        // a faint line between two joined buttons (the left one of a pair carries it on its right edge)
+        if shape.is_some_and(|(_, c)| c.ne == 0) && !selected {
+            ui.painter().vline(rect.max.x - 0.5, rect.y_range().shrink(4.0), Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color));
+        }
         let col = if enabled { vis.text_color() } else { ui.visuals().widgets.noninteractive.text_color().gamma_multiply(0.5) };
-        let ir = Rect::from_min_size(rect.min + vec2(if galley.is_some() { pad.x } else { 3.0 }, 3.0), vec2(side - 6.0, side - 6.0));
+        let ir = Rect::from_min_size(rect.min + vec2(dx + if galley.is_some() { pad.x } else { 3.0 }, 3.0), vec2(side - 6.0, side - 6.0));
         paint(ui.painter(), ir, icon, col);
         if let Some(g) = galley {
-            let pos = pos2(rect.min.x + pad.x + side - 2.0, rect.center().y - g.size().y / 2.0);
+            let pos = pos2(rect.min.x + dx + pad.x + side - 2.0, rect.center().y - g.size().y / 2.0);
+            let label_end = pos.x + g.size().x;
             ui.painter().galley(pos, g, col);
             if !key.is_empty() {
                 // the shortcut sits at the right end, dimmer than the label
                 let dim = col.gamma_multiply(0.55);
                 let kg = ui.painter().layout_no_wrap(key.to_owned(), egui::TextStyle::Button.resolve(ui.style()), dim);
-                ui.painter().galley(pos2(rect.max.x - pad.x - kg.size().x, rect.center().y - kg.size().y / 2.0), kg, dim);
+                // in a fixed-width (centred) button the shortcut follows the label; otherwise it sits at the right end
+                let x = if shape.is_some() { label_end + 10.0 } else { rect.max.x - pad.x - kg.size().x };
+                ui.painter().galley(pos2(x, rect.center().y - kg.size().y / 2.0), kg, dim);
             }
         }
     }
