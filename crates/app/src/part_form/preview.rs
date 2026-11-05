@@ -43,7 +43,7 @@ impl PartForm {
         if let Some(n) = self.editing().filter(|_| !replaces) {
             ui.small(format!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
         }
-        if crate::widgets::primary_button(ui, ok, label).on_hover_text(tip.replace("{}", &def.name)).clicked() {
+        if crate::widgets::primary_button_wide(ui, ok, label).on_hover_text(tip.replace("{}", &def.name)).clicked() {
             return Some(def.clone());
         }
         None

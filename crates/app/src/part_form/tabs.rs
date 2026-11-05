@@ -8,15 +8,16 @@ impl PartForm {
         self.kind_bar(ui);
         ui.separator();
         // a part that already exists as a file needs no form at all
-        ui.horizontal_wrapped(|ui| {
-            ui.small("ファイルがあるとき");
-            if ui.button("JSONから追加…").on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません").clicked() {
-                self.request = Some(FormRequest::ImportJson);
-            }
-            if ui.button("KiCadから取り込み…").on_hover_text("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます").clicked() {
-                self.request = Some(FormRequest::ImportKicad);
-            }
-        });
+        ui.small("ファイルがあるとき");
+        let bar = crate::widgets::segment_row(ui, &[("JSONから追加…", true), ("KiCadから取り込み…", true)]);
+        bar[0].clone().on_hover_text("部品の定義ファイル (.part.json) を読み込んで、ライブラリに追加します。このフォームに入れたものは使いません");
+        bar[1].clone().on_hover_text("KiCad のシンボル (.kicad_sym、旧形式の .lib) と、あればフットプリント (.kicad_mod) を読み込んで、ライブラリに追加します。Ultra Librarian・SnapEDA でダウンロードした zip (形式は KiCad) は、そのまま選べます (3D モデルが入っていれば、それも付けます)。KiCad の公式ライブラリの部品も使えます");
+        if bar[0].clicked() {
+            self.request = Some(FormRequest::ImportJson);
+        }
+        if bar[1].clicked() {
+            self.request = Some(FormRequest::ImportKicad);
+        }
         ui.separator();
         let passive = matches!(self.ptype, Some(PartType::Capacitor | PartType::Resistor | PartType::Inductor));
         let diode = self.ptype == Some(PartType::Diode) && self.glyph != "zener";

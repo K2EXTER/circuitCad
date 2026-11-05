@@ -188,6 +188,12 @@ pub fn plain_card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -
 /// A row of text buttons joined into one bar (equal widths, square where they meet, a faint line between): the buttons of one purpose
 /// ("make or reuse a part"). `items` is `(label, enabled)`; the responses come back in the same order, for the caller's hover text and clicks.
 pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Response> {
+    segment_bar(ui, items, None)
+}
+
+/// The same bar for choosing one of several: `selected` is the one in effect (filled with the selection colour, bold). The responses come
+/// back in order; a click on one is the choice.
+pub fn segment_bar(ui: &mut egui::Ui, items: &[(&str, bool)], selected: Option<usize>) -> Vec<egui::Response> {
     let mut out = Vec::new();
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
@@ -196,7 +202,10 @@ pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Respo
         for (n, (label, enabled)) in items.iter().enumerate() {
             let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), if *enabled { egui::Sense::click() } else { egui::Sense::hover() });
             let widgets = &ui.visuals().widgets;
-            let (fill, stroke) = if *enabled && (resp.hovered() || resp.has_focus()) {
+            let chosen = selected == Some(n);
+            let (fill, stroke) = if chosen {
+                (ui.visuals().selection.bg_fill, widgets.inactive.bg_stroke)
+            } else if *enabled && (resp.hovered() || resp.has_focus()) {
                 (widgets.hovered.weak_bg_fill, widgets.hovered.bg_stroke)
             } else {
                 (widgets.inactive.weak_bg_fill, widgets.inactive.bg_stroke)
@@ -208,7 +217,7 @@ pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Respo
             if last == 0 {
                 ui.painter().vline(rect.max.x - 0.5, rect.y_range().shrink(4.0), egui::Stroke::new(1.0, widgets.noninteractive.bg_stroke.color));
             }
-            let colour = if *enabled { ui.style().interact(&resp).text_color() } else { widgets.noninteractive.text_color().gamma_multiply(0.5) };
+            let colour = if chosen { ui.visuals().strong_text_color() } else if *enabled { ui.style().interact(&resp).text_color() } else { widgets.noninteractive.text_color().gamma_multiply(0.5) };
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, *label, egui::TextStyle::Button.resolve(ui.style()), colour);
             out.push(resp);
         }

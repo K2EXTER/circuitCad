@@ -10,19 +10,21 @@ impl PartForm {
         if self.type_base.is_none() {
             self.type_base = Some(if self.ptype.is_some() { self.fingerprint() } else { PartForm::default().fingerprint() });
         }
-        ui.horizontal_wrapped(|ui| {
-            crate::widgets::section_heading(ui, "部品の種類");
-            for (t, label, tip) in PART_TYPES {
-                if ui.selectable_label(self.ptype == Some(*t), egui::RichText::new(*label).size(15.0)).on_hover_text(*tip).clicked() {
-                    if self.type_base.as_deref() == Some(self.fingerprint().as_str()) {
-                        self.apply_type(*t);
-                        self.type_base = Some(self.fingerprint());
-                    } else {
-                        self.pending_type = Some(*t);
-                    }
+        crate::widgets::section_heading(ui, "部品の種類");
+        let items: Vec<(&str, bool)> = PART_TYPES.iter().map(|(_, label, _)| (*label, true)).collect();
+        let bar = crate::widgets::segment_bar(ui, &items, PART_TYPES.iter().position(|(t, _, _)| self.ptype == Some(*t)));
+        for (n, r) in bar.iter().enumerate() {
+            r.clone().on_hover_text(PART_TYPES[n].2);
+            if r.clicked() {
+                let t = PART_TYPES[n].0;
+                if self.type_base.as_deref() == Some(self.fingerprint().as_str()) {
+                    self.apply_type(t);
+                    self.type_base = Some(self.fingerprint());
+                } else {
+                    self.pending_type = Some(t);
                 }
             }
-        });
+        }
         if let Some(t) = self.pending_type {
             let name = PART_TYPES.iter().find(|(k, _, _)| *k == t).map_or("", |(_, l, _)| *l);
             ui.horizontal_wrapped(|ui| {
@@ -39,59 +41,71 @@ impl PartForm {
         }
         match self.ptype {
             Some(PartType::Transistor) => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("どの種類?");
-                    for (k, label, tip) in [
+                ui.label("どの種類?");
+                let options = [
                         ("npn", "NPN", "ベース電流でコレクタ→エミッタの電流を制御する。負荷を GND 側で切り替える"),
                         ("pnp", "PNP", "NPN と電流の向きが逆。電源側で切り替える"),
                         ("nmos", "Nch MOSFET", "ゲート電圧で制御。大電流のスイッチに向く"),
                         ("pmos", "Pch MOSFET", "N チャネルと極性が逆。電源側で切り替える"),
-                    ] {
-                        if ui.selectable_label(self.glyph == k, label).on_hover_text(tip).clicked() {
-                            self.set_transistor(k);
-                        }
+                    ];
+                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.glyph == *k));
+                for (n, r) in bar.iter().enumerate() {
+                    r.clone().on_hover_text(options[n].2);
+                    if r.clicked() {
+                        let k = options[n].0;
+                        self.set_transistor(k);
                     }
-                });
+                }
             }
             Some(PartType::Diode) => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("どの種類?");
-                    for (k, label, tip) in [
+                ui.label("どの種類?");
+                let options = [
                         ("diode", "整流・スイッチング", "電流を一方向に流す。記号は三角と線"),
                         ("schottky", "ショットキー", "順方向の電圧降下が小さい。棒の両端が S 形の記号"),
                         ("zener", "ツェナー", "逆向きで電圧を一定に保つ。棒の両端が Z 形の記号"),
-                    ] {
-                        if ui.selectable_label(self.glyph == k, label).on_hover_text(tip).clicked() {
-                            self.glyph = k.into();
-                        }
+                    ];
+                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.glyph == *k));
+                for (n, r) in bar.iter().enumerate() {
+                    r.clone().on_hover_text(options[n].2);
+                    if r.clicked() {
+                        let k = options[n].0;
+                        self.glyph = k.into();
                     }
-                });
+                }
             }
             Some(PartType::Capacitor) => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("どの種類?");
-                    for (k, label, tip) in [
+                ui.label("どの種類?");
+                let options = [
                         ("ceramic", "積層セラミック", "チップ部品。小さくて高い周波数に強い。極性なし。電圧がかかると容量が減ります"),
                         ("electrolytic", "電解", "リード付きの円筒形。容量が大きく、電源の平滑に使う。極性があり、ESR は大きめ"),
                         ("tantalum", "タンタル", "小さくて容量が大きい。極性があり、耐圧に余裕を見ないと壊れます"),
                         ("film", "フィルム", "リード付きの箱形。極性なし。ESR・ESL が小さく、容量が安定します"),
-                    ] {
-                        if ui.selectable_label(self.ptype_sub == k, label).on_hover_text(tip).clicked() {
-                            self.set_capacitor(k);
-                        }
+                    ];
+                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));
+                for (n, r) in bar.iter().enumerate() {
+                    r.clone().on_hover_text(options[n].2);
+                    if r.clicked() {
+                        let k = options[n].0;
+                        self.set_capacitor(k);
                     }
-                });
+                }
                 crate::icons::help_small(ui, "名前の付け方", "名前は、種類の頭文字から始めると、部品一覧の「コンデンサ」の木で種類ごとに分かれます (電解 CE_ / タンタル CT_ / フィルム CF_)。値は「① 基本」のかんたん作成で入れます");
             }
             Some(t @ (PartType::Resistor | PartType::Inductor)) => {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("どの形?");
-                    for (k, label, tip) in [("chip", "チップ", "面実装の小さい部品 (0603・0805 など)"), ("leaded", "リード付き", "足を基板の穴に通す部品")] {
-                        if ui.selectable_label(self.ptype_sub == k, label).on_hover_text(tip).clicked() {
-                            self.set_resistor_or_inductor(t, k);
-                        }
+                ui.label("どの形?");
+                let options = [("chip", "チップ", "面実装の小さい部品 (0603・0805 など)"), ("leaded", "リード付き", "足を基板の穴に通す部品")];
+                let items: Vec<(&str, bool)> = options.iter().map(|(_, label, _)| (*label, true)).collect();
+                let bar = crate::widgets::segment_bar(ui, &items, options.iter().position(|(k, _, _)| self.ptype_sub == *k));
+                for (n, r) in bar.iter().enumerate() {
+                    r.clone().on_hover_text(options[n].2);
+                    if r.clicked() {
+                        let k = options[n].0;
+                        self.set_resistor_or_inductor(t, k);
                     }
-                });
+                }
             }
             _ => {}
         }
