@@ -414,7 +414,7 @@ impl GlossaryWindow {
                     if lessons.is_empty() {
                         ui.small("この語が出てくるレッスンは、まだありません。");
                     } else {
-                        ui.label(egui::RichText::new("この語が出てくるレッスン").strong());
+                        crate::widgets::section_heading(ui, "この語が出てくるレッスン");
                         for (target, title) in lessons {
                             if ui.button(title).on_hover_text("このレッスンを始めます").clicked() {
                                 start = Some(target);

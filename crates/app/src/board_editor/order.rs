@@ -179,7 +179,7 @@ impl BoardEditor {
         egui::Window::new("発注の準備").open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
             ui.label("基板を発注する前の確認です。上から順に見ていきましょう。");
             ui.separator();
-            ui.strong("1. 発注先を選ぶ");
+            crate::widgets::section_heading(ui, "1. 発注先を選ぶ");
             egui::ComboBox::from_id_salt("fab_pick")
                 .selected_text(self.selected_fab().map_or("選んでください", |f| f.name))
                 .width(300.0)
@@ -208,7 +208,7 @@ impl BoardEditor {
 
             ui.separator();
             ui.horizontal(|ui| {
-                ui.strong("2. 発注前のチェック");
+                crate::widgets::section_heading(ui, "2. 発注前のチェック");
                 if ui.button("もう一度チェック").on_hover_text("いまの基板でチェックをやり直します。直したあとに押します").clicked() {
                     run = true;
                 }
@@ -254,7 +254,7 @@ impl BoardEditor {
             }
 
             ui.separator();
-            ui.strong("3. 出来上がりを見る");
+            crate::widgets::section_heading(ui, "3. 出来上がりを見る");
             ui.small("書き出すファイルを読み戻して、基板の絵にします。発注先に届くのはこの形です。配線や穴が想定どおりか確認しましょう");
             if ui.button(if self.order.preview.is_some() { "プレビューを更新" } else { "プレビューを作る" }).on_hover_text("書き出すファイルを読み戻して、出来上がりの絵を作り直します").clicked() {
                 make_preview = true;
@@ -291,7 +291,7 @@ impl BoardEditor {
             }
 
             ui.separator();
-            ui.strong("4. 製造ファイルを書き出す");
+            crate::widgets::section_heading(ui, "4. 製造ファイルを書き出す");
             ui.small("ガーバーは、基板の工場に渡す設計図のデータです (銅の層・シルク・外形・穴が、層ごとのファイルになります)。まとめて zip にします");
             ui.add_enabled_ui(ready, |ui| {
                 if ui.button("書き出し先のフォルダを選んで書き出す").on_hover_text("ガーバー・ドリル・部品表・部品位置・zip をまとめて作ります").clicked() {
@@ -310,7 +310,7 @@ impl BoardEditor {
                     }
                 });
                 if let Some(f) = self.selected_fab() {
-                    ui.strong(format!("5. {} で注文する", f.name));
+                    crate::widgets::section_heading(ui, format!("5. {} で注文する", f.name));
                     for (k, step) in f.steps.iter().enumerate() {
                         ui.small(format!("{}. {}", k + 1, step.replace("基板名", &self.board.name)));
                     }

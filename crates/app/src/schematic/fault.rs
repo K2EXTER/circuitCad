@@ -297,7 +297,7 @@ impl SchEditor {
         let mut close = false;
         let FaultWaveView { report, plot: st } = view;
         ui.horizontal(|ui| {
-            ui.strong(match report {
+            crate::widgets::heading_inline(ui, match report {
                 Ok(FaultWave::Ac(_)) => "故障シミュレーション (AC): 周波数特性の比較",
                 _ => "故障シミュレーション (過渡): 正常と故障の比較",
             });

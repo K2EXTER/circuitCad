@@ -21,8 +21,13 @@ pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Re
 }
 
 /// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
-pub fn section_heading(ui: &mut egui::Ui, text: &str) -> egui::Response {
+pub fn section_heading(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     ui.add_space(crate::theme::SPACE_S);
+    heading_inline(ui, text)
+}
+
+/// The same title without the air above, for a title that shares a row with a button (the top row of a result window).
+pub fn heading_inline(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Response {
     ui.label(egui::RichText::new(text).strong().color(crate::theme::INFO))
 }
 

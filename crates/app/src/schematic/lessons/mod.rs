@@ -467,7 +467,7 @@ impl SchEditor {
                 });
             if let Some(cid) = challenge_of_lesson(lesson.id) {
                 ui.separator();
-                ui.label(egui::RichText::new("自分で作ってみよう").strong());
+                crate::widgets::section_heading(ui, "自分で作ってみよう");
                 ui.label("見るだけでなく、目標だけを示して、自分で部品を置き、配線し、値を決める練習です。作ったあとは、判定ボタンで、動きを調べます");
                 if ui.button("チャレンジを始める").on_hover_text("いまの回路を空にして、目標から自分で作ります。あとで、このレッスンに戻れます").clicked() {
                     build = Some(cid);

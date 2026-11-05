@@ -114,7 +114,7 @@ impl BoardEditor {
     fn ir_drop_ui(&mut self, ui: &mut egui::Ui) {
         ui.separator();
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("配線の電圧降下").strong());
+            crate::widgets::section_heading(ui, "配線の電圧降下");
             if ui.button("計算する").on_hover_text("上で入れた電流が流れたとき、電源の入口から各ピンまでの配線 (銅箔・ビア) で何 V 下がるかを求めます。配線を変えたら、もう一度押してください").clicked() {
                 let fp = copper_fingerprint(&self.board);
                 self.ir_drop = Some((fp, pcb_core::irdrop::net_drops(&self.board, &pcb_core::irdrop::IrSpec::default())));

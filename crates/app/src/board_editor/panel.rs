@@ -175,7 +175,7 @@ impl BoardEditor {
                 let only_tip = if sel_net.is_some() { "" } else { "
 
 (いまは使えません: 先に基板の上のパッドを1つクリックして選んでください)" };
-                ui.label(egui::RichText::new("自動で引く").strong());
+                crate::widgets::section_heading(ui, "自動で引く");
                 ui.label(egui::RichText::new("上から順に押します").weak());
                 ui.horizontal_wrapped(|ui| {
                     if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
@@ -195,7 +195,7 @@ impl BoardEditor {
                 });
                 ui.checkbox(&mut self.pour_top, "表面も GND のベタで埋める").on_hover_text("「GND ベタ」を押したとき、裏面に加えて、表面の空いた所も GND の銅で埋めます (自動配線は、その上を通る形で配線します。配線のあとに表面のベタを足すこともできます)。配線から隙間をあけて塗るので、配線は変わりません。表面の GND パッドは直接つながり、ノイズに強く、銅の量が表裏でそろって基板が反りにくくなります。ルール違反が増えるときは置きません");
                 ui.separator();
-                ui.label(egui::RichText::new("引いた配線の手直し").strong());
+                crate::widgets::section_heading(ui, "引いた配線の手直し");
                 ui.horizontal_wrapped(|ui| {
                     if ui.button("配線を短くする").on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます").clicked() {
                         self.shorten_routes(None);

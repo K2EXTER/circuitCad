@@ -57,7 +57,7 @@ impl SchEditor {
         let Some(view) = self.sweep.as_mut() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
-            ui.strong(if view.temp { "温度スイープ (温度を変えたときの動作点)" } else { "DCスイープ (入力を変えたときの出力)" });
+            crate::widgets::heading_inline(ui, if view.temp { "温度スイープ (温度を変えたときの動作点)" } else { "DCスイープ (入力を変えたときの出力)" });
             if crate::widgets::close_button(ui, "スイープの表示") {
                 close = true;
             }

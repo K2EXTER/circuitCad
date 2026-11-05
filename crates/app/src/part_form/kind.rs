@@ -11,7 +11,7 @@ impl PartForm {
             self.type_base = Some(if self.ptype.is_some() { self.fingerprint() } else { PartForm::default().fingerprint() });
         }
         ui.horizontal_wrapped(|ui| {
-            ui.label(egui::RichText::new("部品の種類").strong());
+            crate::widgets::section_heading(ui, "部品の種類");
             for (t, label, tip) in PART_TYPES {
                 if ui.selectable_label(self.ptype == Some(*t), egui::RichText::new(*label).size(15.0)).on_hover_text(*tip).clicked() {
                     if self.type_base.as_deref() == Some(self.fingerprint().as_str()) {

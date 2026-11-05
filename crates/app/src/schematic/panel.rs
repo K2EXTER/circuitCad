@@ -810,7 +810,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
     }
     egui::CollapsingHeader::new("部品選びのヒント (この回路で必要な定格)").id_salt(("advice", &c.refdes)).default_open(false).show(ui, |ui| {
         if let Some(r) = ratings.filter(|r| !r.is_empty()) {
-            ui.label(egui::RichText::new("データシートの情報").strong());
+            crate::widgets::section_heading(ui, "データシートの情報");
             for l in r.summary().lines() {
                 ui.label(format!("・{l}"));
             }
@@ -834,14 +834,14 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
             return;
         };
         ui.separator();
-        ui.label(egui::RichText::new("この回路でかかる値").strong());
+        crate::widgets::section_heading(ui, "この回路でかかる値");
         ui.label(format!("・電流 {}  電力 {}", eng(i, "A"), eng(p, "W")));
         if matches!(c.custom.as_ref().and_then(|s| s.sim.as_ref()).map(|m| m.element.to_ascii_uppercase()).as_deref(), Some("Q" | "M" | "J")) {
             ui.label(format!("・部品の両端の電圧 (Vce / Vds) {}", eng(st.v.unwrap_or(0.0), "V")));
         }
         ui.label(format!("・回路の最大電圧 {}", eng(st.v_circuit, "V")));
         let req = sim_core::requirement(&st, 2.0);
-        ui.label(egui::RichText::new("余裕を 2 倍とるなら").strong()).on_hover_text("部品は、定格ぎりぎりで使うと、熱や劣化で壊れやすくなります。電圧・電流・電力は、最低でも 2 倍の余裕を見るのが、初学者の目安です");
+        crate::widgets::section_heading(ui, "余裕を 2 倍とるなら").on_hover_text("部品は、定格ぎりぎりで使うと、熱や劣化で壊れやすくなります。電圧・電流・電力は、最低でも 2 倍の余裕を見るのが、初学者の目安です");
         if c.kind == Kind::Resistor {
             let need = req.p_min;
             let pick = RESISTOR_WATTS.iter().copied().find(|w| *w >= need);
@@ -865,7 +865,7 @@ fn advice_ui(ui: &mut egui::Ui, c: &Component, dc: Option<&DcView>, fresh: bool,
             let mut ok: Vec<&PartDef> = library.iter().filter(|d| d.name != def.name && cat.is_some_and(|c| d.category == c) && d.ratings.as_ref().is_some_and(|r| sim_core::meets(&req, r, true))).collect();
             ok.sort_by(|a, b| a.name.cmp(&b.name));
             if !ok.is_empty() {
-                ui.label(egui::RichText::new("同じ種類で、条件を満たすライブラリ部品").strong());
+                crate::widgets::section_heading(ui, "同じ種類で、条件を満たすライブラリ部品");
                 ui.horizontal_wrapped(|ui| {
                     for d in ok.iter().take(8) {
                         ui.label(&d.name).on_hover_text(d.ratings.as_ref().map(|r| r.summary()).unwrap_or_default());

@@ -167,7 +167,7 @@ impl SchEditor {
         let mut close = false;
         let ParamView { outcome, ac, part, node, plot: st } = view;
         ui.horizontal(|ui| {
-            ui.strong(format!("パラメータスイープ: {part} を変えたときの V({node})"));
+            crate::widgets::heading_inline(ui, format!("パラメータスイープ: {part} を変えたときの V({node})"));
             if crate::widgets::close_button(ui, "パラメータスイープの表示") {
                 close = true;
             }

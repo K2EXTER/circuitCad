@@ -145,7 +145,7 @@ impl SchEditor {
         let Some(view) = self.noise.as_mut() else { return };
         let mut close = false;
         ui.horizontal(|ui| {
-            ui.strong("ノイズ解析 (熱雑音・ショット雑音)");
+            crate::widgets::heading_inline(ui, "ノイズ解析 (熱雑音・ショット雑音)");
             if crate::widgets::close_button(ui, "ノイズ解析の表示") {
                 close = true;
             }

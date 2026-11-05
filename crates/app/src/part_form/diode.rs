@@ -94,7 +94,7 @@ impl PartForm {
     }
 
     pub(super) fn diode_ui(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("かんたん作成: ダイオードをデータシートの数値からつくる").strong());
+        crate::widgets::section_heading(ui, "かんたん作成: ダイオードをデータシートの数値からつくる");
         crate::icons::help_small(ui, "グラフの数字からモデルを作ります", "メーカーのデータシートには SPICE モデルが載っていないことが多いので、グラフの数字から IS・N・RS を決めて、モデルを作ります");
         egui::CollapsingHeader::new("考え方: IS・N・RS とは? (はじめての人はここから)").id_salt("dio_howto").show(ui, |ui| {
             for t in [

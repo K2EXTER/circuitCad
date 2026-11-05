@@ -121,7 +121,7 @@ impl SchEditor {
         let worst = view.worst.clone();
         let mut close = false;
         ui.horizontal(|ui| {
-            ui.strong(match view.outcome.as_ref().map(|r| r.unit) {
+            crate::widgets::heading_inline(ui, match view.outcome.as_ref().map(|r| r.unit) {
                 Ok("Hz") => "ばらつき解析 (部品の誤差でカットオフ周波数がどれだけずれるか)",
                 Ok("s") | Ok("%") => "ばらつき解析 (部品の誤差でステップ応答がどれだけずれるか)",
                 _ => "ばらつき解析 (部品の誤差で出力がどれだけずれるか)",

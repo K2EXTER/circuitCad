@@ -104,7 +104,7 @@ impl BoardEditor {
             ui.colored_label(crate::theme::OK, "直りました! 点検の結果は、故障の前と同じです");
         }
         if revealed || fixed {
-            ui.label(egui::RichText::new("原因と直し方").strong());
+            crate::widgets::section_heading(ui, "原因と直し方");
             ui.label(cause);
         }
         ui.horizontal_wrapped(|ui| {
