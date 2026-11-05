@@ -108,7 +108,7 @@ impl SchEditor {
                 let (open_all, close_all) = (self.sec_mode == 1 || lesson, self.sec_mode == 2 && !lesson);
                 for (key, title, basic, hint) in ANALYSIS_SECTIONS {
                     let id = egui::Id::new(("analysis_section", *key, self.sec_gen, lesson));
-                    egui::CollapsingHeader::new(egui::RichText::new(*title).strong()).id_salt(id).default_open(open_all || (*basic && !close_all)).show(ui, |ui| {
+                    crate::widgets::section_header(ui, id, open_all || (*basic && !close_all), title, hint, |ui| {
                         match *key {
                             "dc" => self.panel_dc(ui),
                             "tran" => self.panel_tran(ui),
@@ -128,7 +128,7 @@ impl SchEditor {
                             }
                             _ => self.panel_fault(ui),
                         }
-                    }).header_response.on_hover_text(*hint);
+                    });
                 }
                 self.panel_results(ui);
             }
@@ -440,15 +440,22 @@ impl SchEditor {
             }
         }
         // below the (closed by default) library list, outside it, so a newcomer can find them without opening anything
-        ui.horizontal_wrapped(|ui| {
-            if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます").clicked() {
-                self.form = Some(PartForm::default());
-            }
-        });
+        // make or reuse a part: one bar (the parts library's own buttons, then the snippet pair that works on the selection)
+        let has = self.has_selection();
+        let bar = crate::widgets::segment_row(ui, &[("部品を作る…", true), ("選択を保存…", has), ("スニペット…", true)]);
+        let make = self.lit(bar[0].clone(), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます");
+        if make.clicked() {
+            self.form = Some(PartForm::default());
+        }
+        if bar[1].clone().on_hover_text("選んだ部品・線・ラベルをファイル (スニペット) に保存します。電源回路やLED点灯回路など、よく使う部分を別の回路でも使えます").clicked() {
+            self.save_snippet_dialog();
+        }
+        if bar[2].clone().on_hover_text("保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます").clicked() {
+            self.load_snippet_dialog();
+        }
         if let Some(i) = chosen {
             self.choose_library_part(i);
         }
-        ui.separator();
     }
 
     pub(super) fn panel_properties(&mut self, ui: &mut egui::Ui) {
@@ -630,7 +637,6 @@ impl SchEditor {
                 }
             });
         }
-        self.snippet_ui(ui);
         if self.has_selection() && self.lit(ui.button("削除 (Delete)"), "削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
             self.delete_selected();
         }
@@ -663,22 +669,22 @@ impl SchEditor {
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
         crate::widgets::group_gap(ui);
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
-        ui.horizontal(|ui| {
-            if !self.sch.requirements.is_empty() {
-                crate::icons::icon_switch(ui, crate::icons::Icon::Eye, crate::icons::Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。明るい四角が「出している」です。表を開かなくても、回路図を見た人に設計の意図が伝わります");
-                ui.label("設計の要件の枠");
-            }
-            if ui.button("設計の要件の表…").on_hover_text("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)").clicked() {
-                self.open_requirements();
-            }
-        });
-        if self.lit(ui.button("ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "ERC (電気ルールチェック)"), "ERC (電気ルールチェック)").on_hover_text("配線ミスの点検。ピンや線の端がつながっていない、電源が短絡している、部品番号がダブっている、などを探して丸で示します (赤紫 = エラー、橙 = 注意)。結果の行をクリックすると、その場所へ移動して直し方を表示します。シミュレーションや基板に進む前にやっておくと安心です").clicked() {
             self.problems = erc(&self.sch);
             self.problems.extend(self.conversion_problems());
             self.erc_focus = None;
             self.erc_ran = true;
             let errors = self.problems.iter().filter(|p| p.severity == Severity::Error).count();
             self.status = format!("ERC: エラー {} 件、注意 {} 件", errors, self.problems.len() - errors);
+        }
+        // the other two checks of the design: its requirements table, and areas left out of the ERC while drawing
+        let skip_enabled = self.selection_box_exists();
+        let bar = crate::widgets::segment_row(ui, &[("設計の要件の表…", true), ("選択を描きかけにする", skip_enabled)]);
+        if bar[0].clone().on_hover_text("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)").clicked() {
+            self.open_requirements();
+        }
+        if bar[1].clone().on_hover_text("選んだ部品・配線を囲む範囲を「描きかけ」にして、その中のERCの指摘を出さなくします。作りながら出るエラーの山を減らすための機能です。範囲は灰色の枠で表示され、完成したら下の×で外します。保存もされます").clicked() {
+            self.skip_selection();
         }
         self.erc_skip_ui(ui);
         if self.erc_ran && self.problems.is_empty() {

@@ -60,6 +60,34 @@ impl SchEditor {
         Some(Rect::from_two_pos(self.to_screen(rect, (x0 - m, y0 - m)), self.to_screen(rect, (x1 + m, y1 + m))))
     }
 
+    /// The "show" strip over the sheet (top right), made like the board's "物の表示とロック": a whitish glass box that folds down to its
+    /// title, one row per kind of thing with an eye. Only while the design has a requirements table.
+    pub(super) fn view_overlay(&mut self, ui: &egui::Ui, rect: Rect) {
+        use crate::icons::{fold_header, icon_label, icon_switch, Icon};
+        if self.sch.requirements.is_empty() {
+            return;
+        }
+        let pos = rect.right_top() + Vec2::new(-14.0, 14.0);
+        egui::Area::new(egui::Id::new("sch_view_overlay")).order(egui::Order::Foreground).pivot(egui::Align2::RIGHT_TOP).fixed_pos(pos).show(ui.ctx(), |ui| {
+            egui::Frame::NONE
+                .fill(Color32::from_rgba_unmultiplied(238, 242, 246, 150))
+                .stroke(Stroke::new(1.0, Color32::from_white_alpha(70)))
+                .corner_radius(6.0)
+                .inner_margin(egui::Margin::same(6))
+                .show(ui, |ui| {
+                    ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
+                    if fold_header(ui, egui::Id::new("sch_view_overlay_fold"), "表示", true, "クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」です。明るい四角が「出している」です") {
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 2.0;
+                            icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。表を開かなくても、回路図を見た人に設計の意図が伝わります");
+                            icon_label(ui, Icon::Frame, "要件の枠");
+                            ui.label("要件の枠");
+                        });
+                    }
+                });
+        });
+    }
+
     /// The groups of the requirements table as coloured frames with their names, and the parts to keep apart as two frames of one colour
     /// ("A" and "B") with the distance: the intent of the design, readable on the sheet without opening the table. Only the parts on the
     /// sheet that is shown (a net named in a distance is not framed).

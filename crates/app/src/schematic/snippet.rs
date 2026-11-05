@@ -26,30 +26,23 @@ impl SchEditor {
         Ok(())
     }
 
-    pub(super) fn snippet_ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            let has = self.has_selection();
-            if ui
-                .add_enabled(has, egui::Button::new("選択を保存…"))
-                .on_hover_text("選んだ部品・線・ラベルをファイル (スニペット) に保存します。電源回路やLED点灯回路など、よく使う部分を別の回路でも使えます")
-                .clicked()
-                && let Some(p) = rfd::FileDialog::new().add_filter("スニペット", &[EXT]).set_file_name(format!("snippet.{EXT}")).save_file()
-            {
-                self.status = match self.save_snippet_to(&p) {
-                    Ok(()) => format!("スニペットを保存しました: {}", p.display()),
-                    Err(e) => format!("保存失敗: {e}"),
-                };
-            }
-            if ui
-                .button("スニペットを置く…")
-                .on_hover_text("保存したスニペットを選んで、いまの回路の空いた所に置きます。部品番号は新しくなります。置いたあと、ドラッグで動かせます")
-                .clicked()
-                && let Some(p) = rfd::FileDialog::new().add_filter("スニペット", &[EXT]).pick_file()
-                && let Err(e) = self.load_snippet_from(&p)
-            {
-                self.status = format!("読み込み失敗: {e}");
-            }
-        });
+    /// "選択を保存…": asks where, then writes the selection as a snippet file.
+    pub(super) fn save_snippet_dialog(&mut self) {
+        if let Some(p) = rfd::FileDialog::new().add_filter("スニペット", &[EXT]).set_file_name(format!("snippet.{EXT}")).save_file() {
+            self.status = match self.save_snippet_to(&p) {
+                Ok(()) => format!("スニペットを保存しました: {}", p.display()),
+                Err(e) => format!("保存失敗: {e}"),
+            };
+        }
+    }
+
+    /// "スニペットを置く…": asks which file, then puts it on free ground of this sheet.
+    pub(super) fn load_snippet_dialog(&mut self) {
+        if let Some(p) = rfd::FileDialog::new().add_filter("スニペット", &[EXT]).pick_file()
+            && let Err(e) = self.load_snippet_from(&p)
+        {
+            self.status = format!("読み込み失敗: {e}");
+        }
     }
 }
 

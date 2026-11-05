@@ -19,21 +19,23 @@ impl SchEditor {
         Some((lo, hi))
     }
 
+    /// Whether something is selected that a work-in-progress box can be drawn around.
+    pub(super) fn selection_box_exists(&self) -> bool {
+        self.selection_box().is_some()
+    }
+
+    /// "選択を描きかけにする": the selection's box stops reporting ERC findings.
+    pub(super) fn skip_selection(&mut self) {
+        if let Some(b) = self.selection_box() {
+            self.sch.erc_skip.push(b);
+            self.problems = erc(&self.sch);
+            self.erc_focus = None;
+            self.status = "選んだ範囲をERCの対象から外しました".into();
+        }
+    }
+
+    /// The list of areas already marked as work in progress, each with a button to bring it back.
     pub(super) fn erc_skip_ui(&mut self, ui: &mut egui::Ui) {
-        let b = self.selection_box();
-        ui.horizontal(|ui| {
-            let add = ui
-                .add_enabled(b.is_some(), egui::Button::new("選択を描きかけにする"))
-                .on_hover_text("選んだ部品・配線を囲む範囲を「描きかけ」にして、その中のERCの指摘を出さなくします。作りながら出るエラーの山を減らすための機能です。範囲は灰色の枠で表示され、完成したら下の×で外します。保存もされます");
-            if add.clicked()
-                && let Some(b) = b
-            {
-                self.sch.erc_skip.push(b);
-                self.problems = erc(&self.sch);
-                self.erc_focus = None;
-                self.status = "選んだ範囲をERCの対象から外しました".into();
-            }
-        });
         let mut remove = None;
         for (k, (lo, hi)) in self.sch.erc_skip.iter().enumerate() {
             ui.horizontal(|ui| {
@@ -51,7 +53,6 @@ impl SchEditor {
         }
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -95,6 +95,76 @@ pub fn band_header<R>(
     (r, hit.clicked())
 }
 
+/// One of a long list of folded sections in a side panel (the analyses): a closed row is plain text, and only the open one sits on a
+/// band (with bold text), so a list of a dozen rows stays quiet and the open ones stand out. The whole row is the click target and
+/// shows `hint` on hover. The open state is kept by `id`. Returns what `body` returns while the section is open.
+pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, default_open);
+    let open = state.is_open();
+    let (row, hit) = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.spacing().interact_size.y), egui::Sense::click());
+    if open || hit.hovered() {
+        let gray = match (open, hit.hovered()) {
+            (true, false) => 48,
+            (true, true) => 54,
+            _ => 38,
+        };
+        ui.painter().rect_filled(row.expand2(egui::vec2(0.0, 1.0)), 4, egui::Color32::from_gray(gray));
+    }
+    // the fold arrow turns from pointing right to pointing down as the section opens
+    let colour = if open { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
+    let spin = egui::emath::Rot2::from_angle(state.openness(ui.ctx()) * std::f32::consts::FRAC_PI_2);
+    let centre = egui::pos2(row.min.x + 4.0 + ui.spacing().icon_width / 2.0, row.center().y);
+    let r = 4.5;
+    let points = [egui::vec2(-r * 0.5, -r), egui::vec2(r, 0.0), egui::vec2(-r * 0.5, r)].map(|p| centre + spin * p).to_vec();
+    ui.painter().add(egui::Shape::convex_polygon(points, colour, egui::Stroke::NONE));
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let galley = ui.painter().layout_no_wrap(title.to_owned(), font, colour);
+    let pos = egui::pos2(row.min.x + 4.0 + ui.spacing().icon_width + 6.0, row.center().y - galley.size().y / 2.0);
+    // bold while open: draw twice, a pixel apart (the font has no bold face)
+    if open {
+        ui.painter().galley(pos + egui::vec2(0.6, 0.0), galley.clone(), colour);
+    }
+    ui.painter().galley(pos, galley, colour);
+    let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(hint);
+    let out = state.show_body_indented(&hit, ui, body).map(|r| r.inner);
+    if hit.clicked() {
+        state.toggle(ui);
+    }
+    state.store(ui.ctx());
+    out
+}
+
+/// A row of text buttons joined into one bar (equal widths, square where they meet, a faint line between): the buttons of one purpose
+/// ("make or reuse a part"). `items` is `(label, enabled)`; the responses come back in the same order, for the caller's hover text and clicks.
+pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Response> {
+    let mut out = Vec::new();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        let width = ui.available_width() / items.len() as f32;
+        let height = ui.spacing().interact_size.y;
+        for (n, (label, enabled)) in items.iter().enumerate() {
+            let (rect, resp) = ui.allocate_exact_size(egui::vec2(width, height), if *enabled { egui::Sense::click() } else { egui::Sense::hover() });
+            let widgets = &ui.visuals().widgets;
+            let (fill, stroke) = if *enabled && (resp.hovered() || resp.has_focus()) {
+                (widgets.hovered.weak_bg_fill, widgets.hovered.bg_stroke)
+            } else {
+                (widgets.inactive.weak_bg_fill, widgets.inactive.bg_stroke)
+            };
+            let first = if n == 0 { 4 } else { 0 };
+            let last = if n + 1 == items.len() { 4 } else { 0 };
+            let corners = egui::CornerRadius { nw: first, sw: first, ne: last, se: last };
+            ui.painter().rect(rect, corners, fill, stroke, egui::StrokeKind::Inside);
+            if last == 0 {
+                ui.painter().vline(rect.max.x - 0.5, rect.y_range().shrink(4.0), egui::Stroke::new(1.0, widgets.noninteractive.bg_stroke.color));
+            }
+            let colour = if *enabled { ui.style().interact(&resp).text_color() } else { widgets.noninteractive.text_color().gamma_multiply(0.5) };
+            ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, *label, egui::TextStyle::Button.resolve(ui.style()), colour);
+            out.push(resp);
+        }
+    });
+    out
+}
+
 /// The sunken box under an open `band_header(.., flush: true, ..)`: the ground of text fields and plots ("look inside"), square at the
 /// top where it meets the band, rounded at the bottom, and as wide as the band (it steps back out over the indent). Inputs inside are
 /// a step lighter than the box.

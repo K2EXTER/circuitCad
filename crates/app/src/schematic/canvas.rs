@@ -46,6 +46,7 @@ impl SchEditor {
         self.draw_junctions(&painter, rect);
         self.draw_components(&painter, rect);
         self.draw_requirement_frames(&painter, rect);
+        self.view_overlay(ui, rect);
         self.draw_labels(&painter, rect);
         self.draw_voltages(&painter, rect);
         self.draw_currents(&painter, rect);
