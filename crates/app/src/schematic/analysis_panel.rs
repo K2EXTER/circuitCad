@@ -5,9 +5,6 @@ use super::*;
 impl SchEditor {
     pub(super) fn panel_dc(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if self.lit(ui.button("DC動作点を解析"), "DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
-                self.run_dc();
-            }
             ui.checkbox(&mut self.show_v, "電圧表示").on_hover_text("DC解析の結果を回路図に重ねて表示します。配線は電圧が低いほど青、高いほど赤に色分けされます");
             ui.checkbox(&mut self.show_i, "電流表示").on_hover_text("各部品を流れる電流を数値と矢印 (電流の向き) で表示します。「どこに電流が流れているか」の理解に役立ちます。数値の符号は向きの約束です: 素子の第1端子→第2端子の向きに流れるとプラス、逆向きならマイナス (例: -9.2 mA は、9.2 mA が逆向きに流れている)。電源は、電力を供給しているとマイナスになります");
         });
@@ -24,6 +21,9 @@ impl SchEditor {
 抵抗・コンデンサ・コイルは、ライブラリ部品の温度係数 (TC1・TC2) を入れたものだけ、温度で値が変わります (基本部品は変わりません)");
             ui.label("℃");
         });
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "DC動作点を解析"), "DC動作点を解析").on_hover_text("時間が経って落ち着いたときの各点の電圧と電流を求めます。回路図の各ピンの横に電圧が出るので、「思った電圧になっているか」の確認に一番よく使います").clicked() {
+            self.run_dc();
+        }
         if !self.wiring.is_empty() {
             ui.horizontal(|ui| {
                 ui.colored_label(egui::Color32::from_rgb(90, 190, 110), format!("基板の配線抵抗を反映中 ({} ピン、結合 {} 組)", self.wiring.len(), self.couplings.len()))
@@ -44,11 +44,12 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.tran_tstep).hint_text("自動").desired_width(56.0)).on_hover_text("計算の最大の時間刻み。空欄なら自動で、終了時間の 1/1000 になります (波形の変化が速い所では、自動でもっと細かくします)。波形が角ばって見えるときは、小さい値を入れます");
         });
         ui.horizontal(|ui| {
-            if self.lit(ui.button("過渡解析を実行"), "過渡解析を実行").on_hover_text("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います").clicked() {
-                self.run_tran();
-            }
             ui.checkbox(&mut self.tran_uic, "ゼロ状態から").on_hover_text("コンデンサの電圧などを 0 の状態から始めます。電源を入れた直後の立ち上がりを見たいときに使います");
         });
+
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "過渡解析を実行"), "過渡解析を実行").on_hover_text("時間とともに電圧・電流がどう変わるかを計算し、オシロスコープのように波形を表示します。充放電や発振、パルスの応答を見るのに使います").clicked() {
+            self.run_tran();
+        }
     }
 
     pub(super) fn panel_ac(&mut self, ui: &mut egui::Ui) {
@@ -60,7 +61,7 @@ impl SchEditor {
             ui.label("点/dec");
             ui.add(egui::TextEdit::singleline(&mut self.ac_ppd).desired_width(30.0)).on_hover_text("周波数が10倍になる間に何点測るか。多いほど滑らかですが、20 もあれば十分です");
         });
-        if self.lit(ui.button("AC解析を実行"), "AC解析を実行").on_hover_text("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "AC解析を実行"), "AC解析を実行").on_hover_text("入力の周波数を変えたとき、出力の大きさと位相がどう変わるか (周波数特性) を求めます。フィルタやアンプの帯域を調べるボード線図が出ます").clicked() {
             self.run_ac();
         }
     }
@@ -77,7 +78,7 @@ impl SchEditor {
             ui.label("刻み");
             ui.add(egui::TextEdit::singleline(&mut self.sweep_step).desired_width(40.0)).on_hover_text("電圧を変える間隔 (V)。切り替わりをなめらかに見るには、電源電圧の 1/100 くらい");
         });
-        if self.lit(ui.button("DCスイープを実行"), "DCスイープを実行").on_hover_text("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "DCスイープを実行"), "DCスイープを実行").on_hover_text("入力電圧を変えながら出力を測り、伝達特性のグラフを描きます。インバーターなら VOH / VOL / 切替電圧 / ノイズマージンも自動で計算します").clicked() {
             self.run_sweep();
         }
     }
@@ -118,7 +119,7 @@ impl SchEditor {
             ui.label("刻み");
             ui.add(egui::TextEdit::singleline(&mut self.temp_step).desired_width(30.0)).on_hover_text("温度の間隔 (℃)");
         });
-        if self.lit(ui.button("温度スイープを実行"), "温度スイープを実行").on_hover_text("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "温度スイープを実行"), "温度スイープを実行").on_hover_text("温度を変えながら動作点を求め、各点の電圧がどう動くかをグラフにします。
 LED の電流や、トランジスタ回路のバイアスが温度でずれる様子が分かります").clicked() {
             self.run_temp_sweep();
         }
@@ -169,7 +170,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
             ui.label("電源");
             ui.add(egui::TextEdit::singleline(&mut self.mc_tol_v).desired_width(26.0)).on_hover_text("直流電源の電圧の誤差。最悪ケースだけに使います (ランダムのばらつきは電源をそのままにします)。0 なら電源は変えません。例: 5V 電源が ±5% なら 5");
         });
-        if self.lit(ui.button("ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "ばらつき解析を実行"), "ばらつき解析を実行").on_hover_text("すべての部品の値を許容差の範囲でランダムに変えて何度も動作点を計算し、選んだ点の電圧がどれだけばらつくかを見ます。
 「同じ回路を作っても、実物ごとに電圧が違う」理由と、どの部品を高精度にすべきかが分かります").clicked() {
             self.run_mc();
         }

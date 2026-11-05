@@ -30,7 +30,7 @@ impl SchEditor {
             ui.add(egui::TextEdit::singleline(&mut self.heat_ambient).desired_width(40.0)).on_hover_text("部品のまわりの空気の温度 (℃)。部品の温度は、これに「電力 × 熱抵抗」を足したものになります");
             ui.label("℃");
         });
-        if self.lit(ui.button("自己発熱を計算"), "自己発熱を計算").on_hover_text("電流が流れる抵抗は、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)").clicked() {
+        if self.lit(crate::widgets::primary_button_wide(ui, true, "自己発熱を計算"), "自己発熱を計算").on_hover_text("電流が流れる抵抗は、自分の電力で温まります。温まると値が変わる抵抗 (温度係数のある部品) は、電流も変わるので、落ち着くまでくり返し計算します。直流の定常状態です (短いパルスでは、これより低くなります)").clicked() {
             self.heat_view = Some(self.run_self_heat());
             if let Some(Err(e)) = &self.heat_view {
                 self.status = format!("自己発熱の計算に失敗: {e}");

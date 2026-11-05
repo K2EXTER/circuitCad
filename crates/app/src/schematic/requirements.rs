@@ -76,13 +76,19 @@ impl SchEditor {
                 .inner_margin(egui::Margin::same(6))
                 .show(ui, |ui| {
                     ui.visuals_mut().override_text_color = Some(Color32::from_rgb(25, 35, 45));
-                    if fold_header(ui, egui::Id::new("sch_view_overlay_fold"), "表示", true, "クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」です。明るい四角が「出している」です") {
-                        ui.horizontal(|ui| {
+                    let fold = egui::Id::new("sch_view_overlay_fold");
+                    if fold_header(ui, fold, "表示", true, "クリックでたたみます / ひらきます。種類ごとに、目は「画面に出すか」です。明るい四角が「出している」です") {
+                        // the header spans the width of the rows (remembered for the next frame), so its empty part clicks too
+                        let width = ui.scope(|ui| ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 2.0;
                             icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。表を開かなくても、回路図を見た人に設計の意図が伝わります");
                             icon_label(ui, Icon::Frame, "要件の枠");
                             ui.label("要件の枠");
-                        });
+                        }))
+                        .response
+                        .rect
+                        .width();
+                        crate::icons::fold_remember_width(ui, fold, width);
                     }
                 });
         });
