@@ -91,7 +91,7 @@ impl SchEditor {
                     let (label, tip) = if all_open { ("すべて閉じる", "すべての解析の設定を閉じて、見出しだけにします") } else { ("すべて開く", "すべての解析の設定を開きます。もう一度押すと、すべて閉じます") };
                     // during a lesson every section is open, so the lesson's steps can be found
                     let in_lesson = self.lesson.is_some();
-                    let b = ui.add_enabled(!in_lesson, egui::Button::new(label).small());
+                    let b = crate::widgets::primary_button_wide(ui, !in_lesson, label);
                     if b.on_hover_text(if in_lesson { "レッスン中は、手順に出てくる欄を探せるように、すべて開いています" } else { tip }).clicked() {
                         self.sec_gen += 1;
                         self.sec_mode = if all_open { 2 } else { 1 };

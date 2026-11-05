@@ -6,7 +6,7 @@ use pcb_core::NetClass;
 impl BoardEditor {
     /// The layer stack the impedance is worked out from (`Board.stackup`).
     pub(super) fn panel_stackup(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("層構成 (層数・材料)").default_open(false).show(ui, |ui| {
+        crate::widgets::section_header(ui, egui::Id::new("board_sec_層構"), false, "層構成 (層数・材料)", "基板の層の数と、材料・層の間隔 (誘電率・層の間隔・銅箔)。インピーダンスの目安に使います", |ui| {
             self.layer_count_ui(ui);
             ui.separator();
             ui.small("基板の材料と、層の間隔です。配線の太さから特性インピーダンスの目安を出すのに使います。初期値は、ふつうの厚さ 1.6 mm の2層基板の値です。発注先の公式ページにある積層構成 (層の間隔・誘電率・銅箔の厚さ) に直すと、近づきます");
@@ -33,7 +33,7 @@ impl BoardEditor {
                 self.checkpoint_once();
                 self.board.stackup = s;
             }
-        }).header_response.on_hover_text("基板の層の数と、材料・層の間隔 (誘電率・層の間隔・銅箔)。インピーダンスの目安に使います");
+        });
     }
 
     pub(super) fn panel_net_classes(&mut self, ui: &mut egui::Ui) {

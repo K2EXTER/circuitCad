@@ -92,24 +92,31 @@ pub fn band_header<R>(
     let low = if joined { 0 } else { 4 };
     let corners = egui::CornerRadius { nw: 4, ne: 4, sw: low, se: low };
     ui.painter().set(slot, egui::epaint::RectShape::filled(band, corners, fill));
+    // a border round the band and the contents under it (they read as one card)
+    if let (true, Some(body)) = (joined, &r.body_response) {
+        let card = egui::Rect::from_min_max(band.min, egui::pos2(band.max.x, body.rect.bottom()));
+        ui.painter().rect_stroke(card, 4, egui::Stroke::new(1.0, egui::Color32::from_gray(75)), egui::StrokeKind::Inside);
+    }
     (r, hit.clicked())
 }
 
-/// One of a long list of folded sections in a side panel (the analyses): a closed row is plain text, and only the open one sits on a
-/// band (with bold text), so a list of a dozen rows stays quiet and the open ones stand out. The whole row is the click target and
+/// One of a long list of folded sections in a side panel (the analyses): every row sits on a band, the open one lighter, bold, and boxed
+/// with its contents, so the open ones stand out. The whole row is the click target and
 /// shows `hint` on hover. The open state is kept by `id`. Returns what `body` returns while the section is open.
 pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, title: &str, hint: &str, body: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
     let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, default_open);
     let open = state.is_open();
     let (row, hit) = ui.allocate_exact_size(egui::vec2(ui.available_width(), ui.spacing().interact_size.y), egui::Sense::click());
-    if open || hit.hovered() {
-        let gray = match (open, hit.hovered()) {
-            (true, false) => 48,
-            (true, true) => 54,
-            _ => 38,
-        };
-        ui.painter().rect_filled(row.expand2(egui::vec2(0.0, 1.0)), 4, egui::Color32::from_gray(gray));
-    }
+    let gray = match (open, hit.hovered()) {
+        (true, false) => 48,
+        (true, true) => 54,
+        (false, false) => 38,
+        (false, true) => 46,
+    };
+    // an open section's band joins the box under it: square at the bottom, no air below
+    let low = if open { 0 } else { 4 };
+    let band = if open { row.expand2(egui::vec2(0.0, 0.0)) } else { row.expand2(egui::vec2(0.0, 1.0)) };
+    ui.painter().rect_filled(band, egui::CornerRadius { nw: 4, ne: 4, sw: low, se: low }, egui::Color32::from_gray(gray));
     // the fold arrow turns from pointing right to pointing down as the section opens
     let colour = if open { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
     let spin = egui::emath::Rot2::from_angle(state.openness(ui.ctx()) * std::f32::consts::FRAC_PI_2);
@@ -126,7 +133,36 @@ pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, ti
     }
     ui.painter().galley(pos, galley, colour);
     let hit = hit.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(hint);
-    let out = state.show_body_indented(&hit, ui, body).map(|r| r.inner);
+    // the band already shows what belongs to the section: no guide line, and a narrow indent (the panel is only so wide)
+    let mut bottom = row.bottom();
+    let out = ui
+        .scope(|ui| {
+            ui.visuals_mut().indent_has_left_vline = false;
+            let indent = ui.spacing().indent;
+            ui.spacing_mut().indent = 8.0;
+            ui.spacing_mut().item_spacing.y = 0.0;
+            state
+                .show_body_indented(&hit, ui, |ui| {
+                    // the contents stand on the panel's own ground, as wide as the band, inside a border drawn round band and contents
+                    let framed = egui::Frame::new()
+                        .outer_margin(egui::Margin { left: -(ui.spacing().indent as i8), right: 0, top: 0, bottom: 0 })
+                        .inner_margin(egui::Margin::symmetric(6, 6))
+                        .show(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.spacing_mut().item_spacing.y = crate::theme::ROW_GAP;
+                            ui.spacing_mut().indent = indent;
+                            body(ui)
+                        });
+                    bottom = framed.response.rect.bottom();
+                    framed.inner
+                })
+                .map(|r| r.inner)
+        })
+        .inner;
+    if out.is_some() {
+        let frame = egui::Rect::from_min_max(row.min, egui::pos2(row.max.x, bottom));
+        ui.painter().rect_stroke(frame, 4, egui::Stroke::new(1.0, egui::Color32::from_gray(75)), egui::StrokeKind::Inside);
+    }
     if hit.clicked() {
         state.toggle(ui);
     }
@@ -165,19 +201,15 @@ pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Respo
     out
 }
 
-/// The sunken box under an open `band_header(.., flush: true, ..)`: the ground of text fields and plots ("look inside"), square at the
-/// top where it meets the band, rounded at the bottom, and as wide as the band (it steps back out over the indent). Inputs inside are
-/// a step lighter than the box.
+/// The contents of an open `band_header(.., flush: true, ..)`: on the panel's own ground, as wide as the band (it steps back out over the
+/// indent), with a little air inside; `band_header` draws the border round band and contents.
 pub fn well<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::new()
-        .fill(ui.visuals().extreme_bg_color)
-        .corner_radius(egui::CornerRadius { nw: 0, ne: 0, sw: 4, se: 4 })
-        .outer_margin(egui::Margin { left: -(crate::theme::INDENT as i8), right: 0, top: 0, bottom: 0 })
-        .inner_margin(egui::Margin::symmetric(4, 4))
+        .outer_margin(egui::Margin { left: -(ui.spacing().indent as i8), right: 0, top: 0, bottom: 0 })
+        .inner_margin(egui::Margin::symmetric(6, 6))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = crate::theme::ROW_GAP;
-            ui.visuals_mut().extreme_bg_color = egui::Color32::from_gray(34);
             body(ui)
         })
         .inner

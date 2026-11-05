@@ -509,7 +509,7 @@ impl SchEditor {
     pub(super) fn panel_fault(&mut self, ui: &mut egui::Ui) {
         let circuit = self.sim_circuit().ok();
         let parts: Vec<String> = self.sch.flat().components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.clone()).collect();
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("部品");
             let shown = if self.fault_part.is_empty() { "選ぶ".to_string() } else { self.fault_part.clone() };
             let before = self.fault_part.clone();
@@ -540,7 +540,7 @@ impl SchEditor {
             .and_then(|c| c.elements.iter().find(|e| e.name() == self.fault_part))
             .map(fault_applicable)
             .unwrap_or_default();
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("壊し方");
             if ui.selectable_label(self.fault_pin.is_empty(), "部品全体").on_hover_text("部品そのものが壊れた/付け間違えた状態にします").clicked() {
                 self.fault_pin.clear();
@@ -574,7 +574,7 @@ impl SchEditor {
             });
         } else {
             let pins = self.pin_choices(&self.fault_part);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label("ピン");
                 let shown = pins.iter().find(|(n, _)| *n == self.fault_pin).map_or(self.fault_pin.clone(), |(_, d)| d.clone());
                 let shown = match self.pin_net(&self.fault_part, &self.fault_pin) {
@@ -594,7 +594,7 @@ impl SchEditor {
                 ui.selectable_value(&mut self.fault_pin_how, 2, "別のネットにブリッジ").on_hover_text("隣のピンやパターンとはんだでつながってしまった状態。つなぐ相手のネットを選びます");
             });
             if self.fault_pin_how == 2 {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label("相手のネット");
                     let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
                     egui::ComboBox::from_id_salt("fault_bridge").width(100.0).selected_text(if self.fault_bridge.is_empty() { "選ぶ".to_string() } else { self.fault_bridge.clone() }).show_ui(ui, |ui| {
@@ -605,14 +605,14 @@ impl SchEditor {
                 });
             }
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.label("比べる");
             ui.selectable_value(&mut self.fault_domain, FaultDomain::Dc, "DC (電圧)").on_hover_text("落ち着いたあとの電圧と電流を比べます。素早く、どこが危ないか分かります");
             ui.selectable_value(&mut self.fault_domain, FaultDomain::Tran, "過渡 (波形)").on_hover_text("時間を追った波形を、正常な回路と重ねて比べます。リップルや発振、点滅の変化など、DCでは見えない故障が分かります。過渡解析の終了時間・刻みの設定を使います");
             ui.selectable_value(&mut self.fault_domain, FaultDomain::Ac, "AC (周波数特性)").on_hover_text("周波数ごとのゲインを、正常な回路と重ねて比べます。フィルタのカットオフが動く、増幅度が変わる、共振が現れるなどが分かります。AC解析の周波数の設定を使います。入力の電源は「AC 1」にしておきます");
         });
         if self.fault_domain != FaultDomain::Dc {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.label("見る点");
                 let nets: Vec<String> = extract(&self.sch).into_iter().map(|n| n.name).filter(|n| !n.contains('.')).collect();
                 let shown = self.fault_watch_node().unwrap_or_else(|| "選ぶ".to_string());
@@ -628,7 +628,7 @@ impl SchEditor {
                     .on_hover_text("波形を比べるノード (ネット) の名前。出力にあたる点を選びます。選ばないときは OUT などを自動で探します");
             });
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.button("故障を試す").on_hover_text("選んだ部品やピンを壊して解析し、変わった電圧と電流を日本語で説明します。回路そのものは変わりません").clicked() {
                 self.run_fault();
             }
@@ -642,7 +642,7 @@ impl SchEditor {
         });
         if let Some(run) = &self.scan_run {
             let done = run.done.load(Ordering::Relaxed);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 let text = if done == 0 { "正常な回路を計算しています…".to_string() } else { format!("故障を試しています: {done} / {}", run.total) };
                 ui.add(egui::ProgressBar::new(done as f32 / run.total.max(1) as f32).text(text).desired_width(220.0));
                 if ui.button("中止").on_hover_text("まだ始めていない故障は試さずにやめます。すでに解いている途中のものは、終わるまで待ちます").clicked() {
