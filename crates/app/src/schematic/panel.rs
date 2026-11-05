@@ -618,7 +618,7 @@ impl SchEditor {
                 crate::icons::icon_switch(ui, crate::icons::Icon::Eye, crate::icons::Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。明るい四角が「出している」です。表を開かなくても、回路図を見た人に設計の意図が伝わります");
                 ui.label("設計の要件の枠");
             }
-            if ui.small_button("設計の要件の表…").on_hover_text("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)").clicked() {
+            if ui.button("設計の要件の表…").on_hover_text("「設計の要件」の表を開きます。ネットの役割・近くに置く部品の組・離しておくものを書く所です (「編集」メニューの「設計の要件 (表)」と同じ)").clicked() {
                 self.open_requirements();
             }
         });
@@ -710,7 +710,7 @@ impl SchEditor {
             }
         }
         self.kicad_window(ui.ctx());
-        if ui.small_button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
+        if ui.button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
             self.help_request = Some(crate::help::HelpTab::Schematic);
         }
     }
