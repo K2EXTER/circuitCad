@@ -73,7 +73,7 @@ impl Session {
     fn req_list(&self) -> Res {
         let r = &self.sch.requirements;
         Ok(obj(json!({
-            "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "order": n.order, "vias": n.vias, "layers": n.layers, "max_length": n.max_length, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
+            "net_rules": r.net_rules.iter().map(|n| json!({"name": n.name, "nets": n.nets, "role": n.role, "width": n.width, "clearance": n.clearance, "current": n.current, "order": n.order, "vias": n.vias, "layers": n.layers, "max_length": n.max_length, "max_vias": n.max_vias, "max_neck": n.max_neck, "links": n.links.iter().map(|l| json!({"a": l.a, "b": l.b, "width": l.width})).collect::<Vec<Value>>(), "note": n.note})).collect::<Vec<Value>>(),
             "groups": r.groups.iter().map(|g| json!({"name": g.name, "parts": g.parts, "max_dist": g.max_dist, "note": g.note})).collect::<Vec<Value>>(),
             "apart": r.apart.iter().map(|a| json!({"name": a.name, "a": a.a, "b": a.b, "min_dist": a.min_dist, "note": a.note})).collect::<Vec<Value>>(),
             "bypass": r.bypass.iter().map(|b| json!({"ic": b.ic, "caps": b.caps, "note": b.note})).collect::<Vec<Value>>(),
@@ -127,6 +127,11 @@ impl Session {
                     }
                 };
                 let max_length = number(&kv, "max_length")?;
+                let max_vias = match opt(&kv, "max_vias") {
+                    None => None,
+                    Some(v) => Some(v.parse::<u32>().map_err(|_| format!("max_vias={v}: a whole number of 0 or more (0 = no limit)"))?),
+                };
+                let max_neck = number(&kv, "max_neck")?;
                 let vias = match opt(&kv, "vias") {
                     None => None,
                     Some("role") => Some(String::new()),
@@ -165,6 +170,12 @@ impl Session {
                 }
                 if let Some(v) = max_length {
                     r.max_length = v;
+                }
+                if let Some(v) = max_vias {
+                    r.max_vias = v;
+                }
+                if let Some(v) = max_neck {
+                    r.max_neck = v;
                 }
                 (r.width, r.clearance, r.current) = (width.unwrap_or(r.width), clearance.unwrap_or(r.clearance), current.unwrap_or(r.current));
                 if let Some(t) = text {

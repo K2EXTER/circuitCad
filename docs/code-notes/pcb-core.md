@@ -271,3 +271,9 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
   - 測定 `ring`(`drc/path.rs` の `ring_cover`): パッドの中心から 72 方向に、パッドの縁から `reach`(既定 1 mm)の範囲を 0.1 mm ごとにたどり、ガードのネットの銅(貫通のパッドは両面)に当たる向きの割合(%)。パッド 1 個とガードのネットを `pads` に書く。
 
 - 取り込みで基板に届かなかった行(`RequirementsImport.unmatched` = ネットのパッドが基板にない役割の行 / `dropped_layers` = 基板にない層)は `warnings()` で文にして、取り込み後の注意(`import_notes`)と CLI `board import` の `warnings` に出す(`netlist::import_hints_report`)。表を直したあとは、`BoardEditor::sync_requirements`(`board_editor/file.rs`)が、表を直したとき・回路図を開いたときに立つ旗(`SchEditor.req_dirty`)を見て、回路図の表と最後に取り込んだ表(`req_synced`)を比べ、違えば `import_requirements` だけを(Undo つきで)やり直す。開いたばかりで最後が分からない基板は、基板が持つ組・距離・バイパス・例外・測定と比べる。
+
+## ネットクラスの数の上限: ビア数と細い配線(2026-11-05)
+- `NetClass.max_vias`(ネット1本のビアの数。0 は上限なし)と `NetClass.max_neck`(線幅が `track_width` より細いトラックの合計 mm。0 は上限なし。`width_exceptions` で細いままの区間も数える)。回路図の表 `design_spec::NetRule.max_vias`・`max_neck` から `import_requirements` が写す。`NetClass::limits_copper()` は、長さ・ビア数・細い配線のどれかの上限があるか(あれば要件の点検が銅を見る)。
+- 点検は `requirements.rs` の `net_findings`(長さの上限と同じ所。1本ごとに `FindingKind::Net` の指摘、`item` がネット名、`actual`/`limit`)。ビアは `CopperIndex::net_of` で数え、細い配線はトラックの幅が `track_width − 1e-6` 未満のものの長さの合計。
+- 画面は回路図の「設計の要件」の「詳細: 配線の性質」の表(「ビアの上限」「細い配線の上限」)。CLI は `req net … max_vias= max_neck=` と `board class … max_vias= max_neck=`(答えにも出る)。
+- 他のソフトとの対応: Altium の Maximum Via Count と Routing Neck-Down(細い区間の合計の長さの上限)、KiCad の `via_count`。

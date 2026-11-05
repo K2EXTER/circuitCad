@@ -48,6 +48,13 @@ pub struct NetRule {
     /// The most track (mm) a net of the row may have in all; 0 = no limit.
     #[serde(skip_serializing_if = "is_zero")]
     pub max_length: f64,
+    /// The most vias a net of the row may have; 0 = no limit.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub max_vias: u32,
+    /// The most track (mm) a net of the row may have that is thinner than the row's width (the necked-down stretches: escapes from fine-pitch
+    /// parts); 0 = no limit.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub max_neck: f64,
     /// Wires between two parts that have a width of their own (the router makes these connections first, with that width).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<LinkWidth>,
@@ -147,6 +154,10 @@ pub struct Waiver {
     pub item: String,
     /// Why it is accepted (what the person who reads the table later needs to know).
     pub note: String,
+}
+
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
 }
 
 fn is_zero(v: &f64) -> bool {

@@ -440,6 +440,13 @@ pub struct NetClass {
     /// The most track (mm) a net of the class may have in all (0: no limit); the check finds a net with more.
     #[serde(skip_serializing_if = "is_zero")]
     pub max_length: f64,
+    /// The most vias a net of the class may have (0: no limit); the check finds a net with more.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub max_vias: u32,
+    /// The most track (mm) of a net that is thinner than the class's width (necked-down stretches, say the escape from a fine-pitch part)
+    /// (0: no limit); the check finds a net with more. Stretches kept thin by `width_exceptions` count too.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub max_neck: f64,
     /// Stretches of track that keep their own width, though the class asks for another (a thin stretch into the pins of a fine-pitch part, say).
     /// The slider of the net's width, "recommended width", the current check and the impedance check leave them alone.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -466,6 +473,10 @@ impl WidthException {
         };
         near(t.a) && near(t.b)
     }
+}
+
+fn is_zero_u32(v: &u32) -> bool {
+    *v == 0
 }
 
 fn is_zero(v: &f64) -> bool {
@@ -564,9 +575,16 @@ impl Role {
     }
 }
 
+impl NetClass {
+    /// Does the class limit the copper of its nets (the length, the vias, the necked-down track)? The requirements check then looks at the copper.
+    pub fn limits_copper(&self) -> bool {
+        self.max_length > 0.0 || self.max_vias > 0 || self.max_neck > 0.0
+    }
+}
+
 impl Default for NetClass {
     fn default() -> Self {
-        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0, width_exceptions: vec![] }
+        Self { name: String::new(), nets: vec![], track_width: 0.25, clearance: 0.15, via_diameter: 0.6, via_drill: 0.3, impedance: None, finish: Default::default(), role: Role::None, order: None, no_vias: None, layers: vec![], max_length: 0.0, max_vias: 0, max_neck: 0.0, width_exceptions: vec![] }
     }
 }
 

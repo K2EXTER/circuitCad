@@ -78,6 +78,8 @@ pub fn import_requirements(board: &mut Board, spec: &DesignSpec) -> Requirements
         c.order = rule.order.map(|o| o.min(9));
         c.layers = rule.layers.iter().filter_map(|k| Side::from_key(k)).filter(|s| copper.contains(s)).collect();
         c.max_length = rule.max_length.max(0.0);
+        c.max_vias = rule.max_vias;
+        c.max_neck = rule.max_neck.max(0.0);
         c.no_vias = match rule.vias.as_str() {
             "none" => Some(true),
             "allow" => Some(false),
@@ -406,14 +408,14 @@ pub fn any(board: &Board) -> bool {
         || !board.keep_apart.is_empty()
         || !board.bypass.is_empty()
         || !board.measures.is_empty()
-        || board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0)
+        || board.net_classes.iter().any(|c| !c.layers.is_empty() || c.limits_copper())
 }
 
 /// The properties of the net classes that the copper can break: tracks of a net on a layer its class does not allow (one finding for the
 /// class, with the length), and a net with more track than its class lets it have (one for each such net).
 fn net_findings(board: &Board, model: Option<&crate::drc::CopperModel>) -> (Vec<Finding>, usize) {
     let (mut out, mut checked) = (vec![], 0);
-    if !board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0) {
+    if !board.net_classes.iter().any(|c| !c.layers.is_empty() || c.limits_copper()) {
         return (out, 0);
     }
     let built;
@@ -424,11 +426,22 @@ fn net_findings(board: &Board, model: Option<&crate::drc::CopperModel>) -> (Vec<
             &built
         }
     };
-    // per net: the length on each layer
+    // per net: the length on each layer, the vias, and the track thinner than the class's width
     let mut by_net: std::collections::BTreeMap<String, Vec<(Side, f64)>> = Default::default();
+    let mut thin: std::collections::BTreeMap<String, f64> = Default::default();
+    let want_neck = board.net_classes.iter().any(|c| c.max_neck > 0.0);
     for (i, t) in board.tracks.iter().enumerate() {
         if let Some(n) = index.track_net(i) {
             by_net.entry(n.to_string()).or_default().push((t.side, t.a.dist(t.b)));
+            if want_neck && board.class_of(n).is_some_and(|c| c.max_neck > 0.0 && t.width < c.track_width - 1e-6) {
+                *thin.entry(n.to_string()).or_default() += t.a.dist(t.b);
+            }
+        }
+    }
+    let mut vias: std::collections::BTreeMap<String, usize> = Default::default();
+    for k in 0..board.vias.len() {
+        if let Some(n) = index.net_of(board.tracks.len() + board.pads.len() + k) {
+            *vias.entry(n.to_string()).or_default() += 1;
         }
     }
     for c in &board.net_classes {
@@ -473,6 +486,38 @@ fn net_findings(board: &Board, model: Option<&crate::drc::CopperModel>) -> (Vec<
                 }
             }
         }
+        if c.max_vias > 0 {
+            for n in &c.nets {
+                checked += 1;
+                let count = vias.get(n).copied().unwrap_or(0);
+                if count > c.max_vias as usize {
+                    out.push(Finding {
+                        kind: FindingKind::Net,
+                        name: c.name.clone(),
+                        item: n.clone(),
+                        message: format!("ネット {n} (「{}」): ビアが {count} 個あります (上限 {} 個)", c.name, c.max_vias),
+                        actual: count as f64,
+                        limit: c.max_vias as f64,
+                    });
+                }
+            }
+        }
+        if c.max_neck > 0.0 {
+            for n in &c.nets {
+                checked += 1;
+                let len = thin.get(n).copied().unwrap_or(0.0);
+                if len > c.max_neck + 1e-9 {
+                    out.push(Finding {
+                        kind: FindingKind::Net,
+                        name: c.name.clone(),
+                        item: n.clone(),
+                        message: format!("ネット {n} (「{}」): 線幅 {} mm より細い配線が {len:.1} mm あります (上限 {} mm)", c.name, c.track_width, c.max_neck),
+                        actual: len,
+                        limit: c.max_neck,
+                    });
+                }
+            }
+        }
     }
     (out, checked)
 }
@@ -483,7 +528,7 @@ pub fn check(board: &Board) -> RequirementsReport {
 
 /// Does the check need the copper model (measures, or a net class with layers or a length limit)?
 fn needs_model(board: &Board) -> bool {
-    !board.measures.is_empty() || board.net_classes.iter().any(|c| !c.layers.is_empty() || c.max_length > 0.0)
+    !board.measures.is_empty() || board.net_classes.iter().any(|c| !c.layers.is_empty() || c.limits_copper())
 }
 
 /// [`check`], with the copper model when the caller has built it (a few ms on a big board; it is shared by all the rows).
@@ -1272,6 +1317,39 @@ mod tests {
         b.net_classes[0].max_length = 40.0;
         b.waivers.clear();
         assert!(check(&b).findings.is_empty());
+    }
+
+    /// The vias and the thin track of a net are counted against the class: a net with a via too many, or more necked-down track than allowed.
+    #[test]
+    fn the_vias_and_the_necked_down_track_of_a_net_class_are_limited() {
+        let mut b = Board::new("t", 50.0, 50.0);
+        pad_at(&mut b, 5.0, 5.0, "R", "1");
+        pad_at(&mut b, 25.0, 5.0, "F", "1");
+        b.pads[0].net = "SA".into();
+        b.pads[1].net = "SA".into();
+        // 20 mm of 0.25 mm track, then two vias and 6 mm of 0.15 mm track on the bottom
+        wire(&mut b, (5.0, 5.0), (25.0, 5.0));
+        for x in [25.0, 31.0] {
+            b.vias.push(Via { pos: Point::new(x, 5.0), diameter: 0.6, drill: 0.3, net: "SA".into() });
+        }
+        b.tracks.push(Track { side: Side::Bottom, a: Point::new(25.0, 5.0), b: Point::new(31.0, 5.0), width: 0.15 });
+        let spec = DesignSpec {
+            net_rules: vec![design_spec::NetRule { name: "検出".into(), nets: vec!["SA".into()], width: 0.25, max_vias: 1, max_neck: 4.0, ..Default::default() }],
+            ..Default::default()
+        };
+        import_requirements(&mut b, &spec);
+        assert!(any(&b));
+        let rep = check(&b);
+        assert_eq!(rep.findings.len(), 2, "{:?}", rep.findings);
+        assert!(rep.findings.iter().any(|f| f.item == "SA" && f.message.contains("ビアが 2 個") && f.limit == 1.0), "{:?}", rep.findings);
+        assert!(rep.findings.iter().any(|f| f.item == "SA" && f.message.contains("細い配線が 6.0 mm") && f.limit == 4.0), "{:?}", rep.findings);
+        // roomy enough limits: nothing; 0 = no limit
+        b.net_classes[0].max_vias = 2;
+        b.net_classes[0].max_neck = 6.0;
+        assert!(check(&b).findings.is_empty());
+        b.net_classes[0].max_vias = 0;
+        b.net_classes[0].max_neck = 0.0;
+        assert!(!b.net_classes[0].limits_copper() && check(&b).findings.is_empty());
     }
 
     /// A waiver of the table moves a finding from "wrong" to "accepted, and why": it is not counted, the mark says so, and the pre-order

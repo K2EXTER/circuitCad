@@ -1618,6 +1618,31 @@ req net 線 layers=nope
     assert!(!rep["findings"].as_array().unwrap().iter().any(|f| f["message"].as_str().is_some_and(|m| m.contains("許している層"))), "{rep}");
 }
 
+/// The number of vias and the necked-down track of a net: set by the table (`max_vias`, `max_neck`), carried into the class, and refused when
+/// they are not numbers.
+#[test]
+fn the_via_count_and_the_neck_limit_are_set_by_the_table_and_carried_into_the_class() {
+    let script = "new
+add V 5 as=V1
+add R 270 as=R1
+add LED as=D1
+net VCC V1.+ R1.1
+net A R1.2 D1.A
+net GND V1.- D1.K
+req net 線 nets=A max_vias=2 max_neck=3.5
+req
+board import
+board class
+req net 線 max_vias=x
+";
+    let (a, ok) = run(script);
+    assert!(!ok, "a via count that is not a number is refused");
+    let table = a.iter().find(|v| v.get("net_rules").is_some()).expect("the table");
+    assert_eq!((table["net_rules"][0]["max_vias"].as_u64(), table["net_rules"][0]["max_neck"].as_f64()), (Some(2), Some(3.5)), "{table}");
+    let class = a.iter().filter_map(|v| v["classes"].as_array()).next().unwrap();
+    assert_eq!((class[0]["max_vias"].as_u64(), class[0]["max_neck"].as_f64()), (Some(2), Some(3.5)), "{class:?}");
+}
+
 /// A guard asked for in the table (`what=guard`): the share of the sensitive track that has the guard net on both sides. Before the guard
 /// tracks are drawn the sensitive track is bare (0 %); `board guard` draws them and the share rises.
 #[test]

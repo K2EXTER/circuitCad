@@ -793,6 +793,12 @@ impl Session {
                 if let Some(v) = opt(&kv, "max_length") {
                     board.net_classes[k].max_length = v.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("max_length={v}: a number of 0 or more (mm)"))?;
                 }
+                if let Some(v) = opt(&kv, "max_vias") {
+                    board.net_classes[k].max_vias = v.parse::<u32>().map_err(|_| format!("max_vias={v}: a whole number of 0 or more (0 = no limit)"))?;
+                }
+                if let Some(v) = opt(&kv, "max_neck") {
+                    board.net_classes[k].max_neck = v.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("max_neck={v}: a number of 0 or more (mm)"))?;
+                }
                 if let Some(v) = opt(&kv, "vias") {
                     board.net_classes[k].no_vias = match v {
                         "none" => Some(true),
@@ -1276,7 +1282,7 @@ fn quality_json(q: &pcb_core::quality::Quality) -> Value {
 /// A net class as the commands answer it.
 fn class_json(c: &pcb_core::NetClass) -> Value {
     let exceptions: Vec<Value> = c.width_exceptions.iter().map(|e| json!({"net": e.net, "from": [e.a.x, e.a.y], "to": [e.b.x, e.b.y], "width": e.width})).collect();
-    json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length, "width_exceptions": exceptions})
+    json!({"name": c.name, "nets": c.nets, "width": c.track_width, "clearance": c.clearance, "via": [c.via_diameter, c.via_drill], "role": c.role.name(), "order": c.route_order(), "no_vias": c.forbids_vias(), "layers": c.layers.iter().map(|s| s.key()).collect::<Vec<_>>(), "max_length": c.max_length, "max_vias": c.max_vias, "max_neck": c.max_neck, "width_exceptions": exceptions})
 }
 
 /// What the checks find, as the answers of `board break` and `board health` show it.

@@ -205,12 +205,14 @@ impl SchEditor {
                     buf.clear();
                     changed = true;
                 }
-                egui::CollapsingHeader::new("詳細: 配線の性質 (順番・ビア・層・長さ) (?)").id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty() || !r.layers.is_empty() || r.max_length > 0.0)).show(ui, |ui| {
+                egui::CollapsingHeader::new("詳細: 配線の性質 (順番・ビア・層・長さ・ビア数・細い配線) (?)").id_salt("req_props").default_open(spec.net_rules.iter().any(|r| r.order.is_some() || !r.vias.is_empty() || !r.layers.is_empty() || r.max_length > 0.0 || r.max_vias > 0 || r.max_neck > 0.0)).show(ui, |ui| {
                     ui.label("役割がきめている「配線の順番」と「ビアを使うか」と、使う層・長さの上限を、行ごとに決めます。").on_hover_text("役割は、性質のひな形です。電源 0・スイッチング 1・検出 2・アナログ 3・ロジック 4・役割なし 5 の順に、自動配線が引きます (役割なしで太いネットは電源と同じ 0)。検出はビアを使いません。ここで直すと、役割は変えずに、この行だけ別の順番にしたり、検出でもビアを許したり、役割なしでもビアを禁じたりできます。「役割のとおり」にすると、また役割が決めます。
 ・使う層: 自動配線がこの層だけにトラックを引きます (表面なら top、裏面なら bottom、内層は inner1 ... を , で区切る。空ならどの層でも)。ほかの層に配線があると、基板の点検が指摘します
-・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし");
-                    egui::Grid::new("req_props_grid").num_columns(5).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
-                        for h in ["行", "配線の順番 (小さいほど先)", "ビア", "使う層 (, 区切り)", "長さの上限"] {
+・長さの上限: 1つのネットのトラックの合計 (mm)。0 なら上限なし
+・ビアの上限: 1つのネットのビアの数。0 なら上限なし (ビアは、戻り電流の道が切れ、インダクタンスも増える)
+・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし");
+                    egui::Grid::new("req_props_grid").num_columns(7).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
+                        for h in ["行", "配線の順番 (小さいほど先)", "ビア", "使う層 (, 区切り)", "長さの上限", "ビアの上限", "細い配線の上限"] {
                             ui.strong(h);
                         }
                         ui.end_row();
@@ -254,6 +256,12 @@ impl SchEditor {
                             let before = r.max_length;
                             number_cell(ui, &mut r.max_length, " mm", 1.0, "1つのネットのトラックの長さの合計の上限。0 なら上限なし");
                             changed |= r.max_length != before;
+                            let before = r.max_vias;
+                            ui.add(egui::DragValue::new(&mut r.max_vias).speed(0.1).range(0..=1000).suffix(" 個")).on_hover_text("1つのネットのビアの数の上限。0 なら上限なし");
+                            changed |= r.max_vias != before;
+                            let before = r.max_neck;
+                            number_cell(ui, &mut r.max_neck, " mm", 0.5, "線幅が行の線幅より細いトラックの合計の上限 (細い引き出しなど)。0 なら上限なし");
+                            changed |= r.max_neck != before;
                             ui.end_row();
                         }
                     });
