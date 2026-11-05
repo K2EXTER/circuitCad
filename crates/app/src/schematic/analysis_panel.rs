@@ -209,43 +209,26 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                         };
                         ui.colored_label(col, format!("{mark}: {}", r.message)).on_hover_text(&r.hint);
                     }
-                    egui::CollapsingHeader::new("解析結果").default_open(true).show(ui, |ui| {
-                        egui::Grid::new("dc_nodes").striped(true).show(ui, |ui| {
-                            for (n, v) in res.voltages.iter().filter(|(n, _)| !n.contains('.')) {
-                                ui.label(n);
-                                ui.label(eng(*v, "V"));
-                                ui.end_row();
-                            }
-                        });
-                        ui.separator();
-                        egui::Grid::new("dc_elems").striped(true).show(ui, |ui| {
-                            ui.strong("素子");
-                            ui.strong("電流");
-                            ui.strong("電圧");
-                            ui.strong("電力");
-                            ui.end_row();
-                            for e in res.elements.iter().filter(|e| !e.name.contains('.')) {
-                                ui.label(&e.name);
-                                ui.label(eng(e.current, "A"));
-                                ui.label(eng(e.voltage, "V"));
-                                ui.label(eng(e.power, "W"));
-                                ui.end_row();
-                            }
-                        });
-                        ui.small("電流は素子の第1端子→第2端子の向き。電源は電力を供給すると負");
-                    });
+                    // the long lists are in a window (search, sort, click to jump): the panel only says how much there is
+                    let nodes = res.voltages.iter().filter(|(n, _)| !n.contains('.')).count();
+                    let elems = res.elements.iter().filter(|e| !e.name.contains('.')).count();
+                    ui.label(format!("ノード {nodes} 個・素子 {elems} 個"));
+                    if let Some(hot) = res.elements.iter().filter(|e| !e.name.contains('.')).max_by(|a, b| a.power.abs().total_cmp(&b.power.abs())) {
+                        ui.small(format!("電力が最大: {} ({})", hot.name, eng(hot.power.abs(), "W")))
+                            .on_hover_text("いちばん熱くなる素子です。表を「電力が大きい順」に並べると、続きが分かります");
+                    }
+                    if ui.button("結果を表で見る…").on_hover_text("ノードの電圧と、素子ごとの電流・電圧・電力を、検索と並べ替えのできる窓で開きます。行を押すと、回路図でその部品を選びます").clicked() {
+                        self.tables.results = true;
+                    }
                 }
             }
         }
         if go_tran {
             self.run_tran();
         }
-        ui.collapsing("ネットリスト", |ui| {
-            for n in extract(&self.sch) {
-                let pins: Vec<String> = n.pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
-                ui.label(format!("{}: {}", n.name, pins.join(", ")));
-            }
-        });
+        if ui.button("ネットリストを開く…").on_hover_text("どのピンとどのピンがつながっているか (ネット) の一覧を、検索のできる窓で開きます。回路図の配線ミスや、基板に渡るつながりの確認に使います").clicked() {
+            self.tables.netlist = true;
+        }
         if self.lit(ui.button("SPICEネットリストを書き出し…"), "SPICEネットリストを書き出し…").on_hover_text("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います").clicked()
             && let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
                 self.status = match std::fs::write(&p, to_spice(&self.sch, "circuitCad")) {

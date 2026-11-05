@@ -271,6 +271,8 @@ pub struct SchEditor {
     htran_links_seen: Vec<(String, String, f64)>,
     coverage_cache: Option<(u64, std::rc::Rc<sim_core::ModelCoverage>)>,
     sec_mode: u8,
+    /// Windows with the long result lists (results table, net list)
+    tables: result_tables::State,
     fault_part: String,
     /// Pin to break ("" = break the whole part), how (0 open, 1 to ground, 2 bridge to `fault_bridge`).
     fault_pin: String,
@@ -604,6 +606,7 @@ impl Default for SchEditor {
             htran_links: String::new(),
             coverage_cache: None,
             sec_mode: 0,
+            tables: Default::default(),
             fault_part: String::new(),
             fault_pin: String::new(),
             fault_pin_how: 0,
@@ -702,6 +705,7 @@ pub(crate) use glyphs::{glyph_fits, symbol_lines, symbol_pin_labels};
 mod wave;
 mod ac;
 mod analysis_panel;
+mod result_tables;
 mod sweep;
 mod challenge;
 mod lessons;

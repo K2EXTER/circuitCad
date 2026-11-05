@@ -133,6 +133,7 @@ impl SchEditor {
                 self.panel_results(ui);
             }
         }
+        self.result_windows(ui.ctx());
     }
 
     pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
