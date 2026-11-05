@@ -133,14 +133,8 @@ impl SchEditor {
                 }
             }
             Ok(res) => {
-                for w in &res.warnings {
-                    // "starting from all zero" is the normal way into an oscillator: a calm note, not a warning
-                    if w.contains("普通のことです") {
-                        ui.colored_label(Color32::from_rgb(130, 170, 210), format!("ⓘ {w}"));
-                    } else {
-                        ui.colored_label(crate::theme::WARN, w);
-                    }
-                }
+                // "starting from all zero" is the normal way into an oscillator: a calm note, not a warning
+                crate::widgets::warning_lines(ui, "tran_warn", &res.warnings, |w| w.contains("普通のことです"));
                 // a picture that does not move in its second half: the end time may be too short for what the circuit does (a blinker
                 // with a period of a second, seen for 20 ms, is a flat line)
                 let half = res.time.last().copied().unwrap_or(0.0) * 0.5;

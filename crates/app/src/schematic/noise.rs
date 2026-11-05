@@ -158,9 +158,7 @@ impl SchEditor {
                 }
             }
             Ok(res) => {
-                for w in &res.warnings {
-                    ui.colored_label(crate::theme::WARN, w);
-                }
+                crate::widgets::warning_lines(ui, "noise_warn", &res.warnings, |_| false);
                 let to_db = |psd: &[f64]| -> Vec<f64> { psd.iter().map(|p| 10.0 * (p.max(1e-60) / 1e-18).log10()).collect() };
                 let mut order: Vec<(String, f64)> = vec![("合計".to_string(), res.out_rms)];
                 if let Some(r) = res.in_rms {

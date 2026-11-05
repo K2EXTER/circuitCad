@@ -124,9 +124,7 @@ impl SchEditor {
                 }
             }
             Ok(res) => {
-                for w in &res.warnings {
-                    ui.colored_label(crate::theme::WARN, w);
-                }
+                crate::widgets::warning_lines(ui, "z_warn", &res.warnings, |_| false);
                 let (mag, db, ph) = (res.mag(), res.db(), res.phase_deg());
                 ui.horizontal_top(|ui| {
                     ui.vertical(|ui| {

@@ -198,9 +198,7 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                     }
                 }
                 Ok(res) => {
-                    for w in &res.warnings {
-                        ui.colored_label(crate::theme::WARN, w);
-                    }
+                    crate::widgets::warning_lines(ui, "dc_warn", &res.warnings, |_| false);
                     for r in &dc.ratings {
                         let (mark, col) = if r.level == sim_core::RatingLevel::Over {
                             ("⚠ 定格超え", crate::theme::ERROR)
@@ -217,19 +215,25 @@ LED の電流や、トランジスタ回路のバイアスが温度でずれる�
                         ui.small(format!("電力が最大: {} ({})", hot.name, eng(hot.power.abs(), "W")))
                             .on_hover_text("いちばん熱くなる素子です。表を「電力が大きい順」に並べると、続きが分かります");
                     }
-                    if ui.button("結果を表で見る…").on_hover_text("ノードの電圧と、素子ごとの電流・電圧・電力を、検索と並べ替えのできる窓で開きます。行を押すと、回路図でその部品を選びます").clicked() {
-                        self.tables.results = true;
-                    }
                 }
             }
         }
         if go_tran {
             self.run_tran();
         }
-        if ui.button("ネットリストを開く…").on_hover_text("どのピンとどのピンがつながっているか (ネット) の一覧を、検索のできる窓で開きます。回路図の配線ミスや、基板に渡るつながりの確認に使います").clicked() {
+        // the lists and the export are one bar: two windows (search, sort, click to jump) and the file for other simulators
+        let has_result = self.dc.as_ref().is_some_and(|d| d.outcome.is_ok());
+        let bar = crate::widgets::segment_row(ui, &[("結果の表…", has_result), ("ネットリスト…", true), ("SPICE書き出し…", true)]);
+        bar[0].clone().on_hover_text(if has_result { "ノードの電圧と、素子ごとの電流・電圧・電力を、検索と並べ替えのできる窓で開きます。行を押すと、回路図でその部品を選びます" } else { "先に「DC動作点を解析」を押すと、結果の表が開けます" });
+        bar[1].clone().on_hover_text("どのピンとどのピンがつながっているか (ネット) の一覧を、検索のできる窓で開きます。回路図の配線ミスや、基板に渡るつながりの確認に使います");
+        self.lit(bar[2].clone(), "SPICEネットリストを書き出し…").on_hover_text("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います");
+        if bar[0].clicked() {
+            self.tables.results = true;
+        }
+        if bar[1].clicked() {
             self.tables.netlist = true;
         }
-        if self.lit(ui.button("SPICEネットリストを書き出し…"), "SPICEネットリストを書き出し…").on_hover_text("回路を SPICE のネットリスト (.cir) として書き出します。LTspice や ngspice など、ほかのシミュレータで同じ回路を動かしたいときに使います").clicked()
+        if bar[2].clicked()
             && let Some(p) = rfd::FileDialog::new().add_filter("SPICE", &["cir"]).set_file_name("circuit.cir").save_file() {
                 self.status = match std::fs::write(&p, to_spice(&self.sch, "circuitCad")) {
                     Ok(()) => format!("書き出しました: {}", p.display()),

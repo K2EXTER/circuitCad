@@ -251,3 +251,31 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[
     ui.painter().hline(x, y, egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color));
     ui.add_space(6.0);
 }
+
+/// The warning lines of an analysis: one line is shown as it is; several are folded under "⚠ 警告 N 件" (closed), so a long list
+/// does not push the result down. A line that `calm` accepts is a note, not a warning (blue, not counted).
+pub fn warning_lines(ui: &mut egui::Ui, id: &str, lines: &[String], calm: impl Fn(&str) -> bool) {
+    let (notes, warns): (Vec<&String>, Vec<&String>) = lines.iter().partition(|w| calm(w));
+    for w in notes {
+        ui.colored_label(egui::Color32::from_rgb(130, 170, 210), format!("ⓘ {w}"));
+    }
+    match warns.len() {
+        0 => {}
+        1 => {
+            ui.colored_label(crate::theme::WARN, warns[0]);
+        }
+        n => {
+            egui::CollapsingHeader::new(egui::RichText::new(format!("⚠ 警告 {n} 件")).color(crate::theme::WARN))
+                .id_salt(id)
+                .default_open(false)
+                .show(ui, |ui| {
+                    for w in warns {
+                        ui.colored_label(crate::theme::WARN, w);
+                    }
+                })
+                .header_response
+                .on_hover_text("解析で見つかった注意です。押すと全部を出します");
+        }
+    }
+}
+

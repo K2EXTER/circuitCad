@@ -103,7 +103,7 @@ impl SchEditor {
                 }
                 egui::Grid::new("res_nodes").striped(true).num_columns(2).show(ui, |ui| {
                     for (n, v) in rows {
-                        if ui.add(egui::Label::new(n).sense(egui::Sense::click())).on_hover_text("クリックで、このネットにつながる部品を回路図で選びます").clicked() {
+                        if ui.link(n.as_str()).on_hover_text("クリックで、このネットにつながる部品を回路図で選びます").clicked() {
                             *goto_net = Some(n.clone());
                         }
                         ui.label(eng(*v, "V"));
@@ -125,7 +125,7 @@ impl SchEditor {
                     ui.strong("電力");
                     ui.end_row();
                     for e in rows {
-                        if ui.add(egui::Label::new(&e.name).sense(egui::Sense::click())).on_hover_text("クリックで、この部品を回路図で選びます").clicked() {
+                        if ui.link(e.name.as_str()).on_hover_text("クリックで、この部品を回路図で選びます").clicked() {
                             *goto = Some(e.name.clone());
                         }
                         ui.label(eng(e.current, "A"));
@@ -151,7 +151,7 @@ impl SchEditor {
                     continue;
                 }
                 ui.horizontal_wrapped(|ui| {
-                    if ui.add(egui::Label::new(egui::RichText::new(&n.name).strong()).sense(egui::Sense::click())).on_hover_text("クリックで、このネットにつながる部品を回路図で選びます").clicked() {
+                    if ui.link(egui::RichText::new(&n.name).strong()).on_hover_text("クリックで、このネットにつながる部品を回路図で選びます").clicked() {
                         *goto_net = Some(n.name.clone());
                     }
                     ui.label(format!("({} ピン)", pins.len()));
@@ -161,12 +161,21 @@ impl SchEditor {
         });
     }
 
-    /// Selects the part with this part number and brings it to the middle of the sheet.
+    /// Selects the part with this part number and brings it to the middle of the sheet (opening the sheet it is on when that is another one).
     pub(super) fn goto_part(&mut self, refdes: &str) {
-        let Some(i) = self.sch.components.iter().position(|c| c.refdes == refdes) else {
-            self.status = format!("{refdes} は、いま開いているシートにありません。ほかのシートを探してください");
+        let mut sheet = (self.sch.components.iter().any(|c| c.refdes == refdes)).then_some(self.sch.active_sheet);
+        if sheet.is_none() {
+            sheet = (0..self.sch.sheets.len()).find(|&k| k != self.sch.active_sheet && self.sch.sheets[k].components.iter().any(|c| c.refdes == refdes));
+        }
+        let Some(k) = sheet else {
+            self.status = format!("{refdes} が回路図に見つかりません");
             return;
         };
+        if k != self.sch.active_sheet {
+            self.show_sheet(k);
+            self.fit_pending = false; // the view is set below, not fitted to the whole sheet
+        }
+        let Some(i) = self.sch.components.iter().position(|c| c.refdes == refdes) else { return };
         self.selected = Some(Sel::Comp(i));
         self.multi.clear();
         let at = self.sch.components[i].pos;

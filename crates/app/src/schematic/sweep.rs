@@ -72,9 +72,7 @@ impl SchEditor {
                 }
             }
             Ok(res) => {
-                for w in &res.warnings {
-                    ui.colored_label(crate::theme::WARN, w);
-                }
+                crate::widgets::warning_lines(ui, "sweep_warn", &res.warnings, |_| false);
                 let names: Vec<&DcSweepSignal> = res.signals.iter().filter(|s| !s.name.contains('.')).collect();
                 // key numbers of the first selected voltage that is an inverting curve
                 let metrics = names.iter().filter(|s| s.unit == "V" && selected.contains(&s.name)).find_map(|s| inverter_metrics(&res.x, &s.values).map(|m| (s.name.clone(), m)));

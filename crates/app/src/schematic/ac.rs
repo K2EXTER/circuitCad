@@ -62,9 +62,7 @@ impl SchEditor {
                 }
             }
             Ok(res) => {
-                for w in &res.warnings {
-                    ui.colored_label(crate::theme::WARN, w);
-                }
+                crate::widgets::warning_lines(ui, "ac_warn", &res.warnings, |_| false);
                 plot::scale_bar(ui, st, "Hz", &[(0, "dB"), (1, "°")]);
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
