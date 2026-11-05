@@ -12,12 +12,10 @@ pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
     ui.button("閉じる").on_hover_text(format!("{what}を閉じます")).clicked()
 }
 
-/// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"). Buttons are grey until pressed, so it keeps the grey
-/// and is told apart by its bold text and a little more height; the hover edge and the press colour are the shared accent. Use at most
-/// one per panel.
+/// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"). Buttons are grey until pressed and the same size, so
+/// this looks like any other button; it exists so the main actions stay easy to find in the code (and to restyle in one place).
 pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
-    let button = egui::Button::new(egui::RichText::new(label).strong()).min_size(egui::vec2(0.0, 26.0));
-    ui.add_enabled(enabled, button)
+    ui.add_enabled(enabled, egui::Button::new(label))
 }
 
 /// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
