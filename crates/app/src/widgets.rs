@@ -170,6 +170,21 @@ pub fn section_header<R>(ui: &mut egui::Ui, id: egui::Id, default_open: bool, ti
     out
 }
 
+/// A bordered box without a heading, square on top, for what hangs from the bar just above it (the settings of the picked tool) and goes
+/// away with it: the same border and inner margin as the cards of the folds, no band and no arrow.
+pub fn plain_card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let framed = egui::Frame::new()
+        .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(75)))
+        .corner_radius(egui::CornerRadius { nw: 0, ne: 0, sw: 4, se: 4 })
+        .inner_margin(egui::Margin::symmetric(6, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = crate::theme::ROW_GAP;
+            body(ui)
+        });
+    framed.inner
+}
+
 /// A row of text buttons joined into one bar (equal widths, square where they meet, a faint line between): the buttons of one purpose
 /// ("make or reuse a part"). `items` is `(label, enabled)`; the responses come back in the same order, for the caller's hover text and clicks.
 pub fn segment_row(ui: &mut egui::Ui, items: &[(&str, bool)]) -> Vec<egui::Response> {

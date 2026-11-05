@@ -59,6 +59,13 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::Silk, "シルク線", Icon::Silk),
 ];
 
+/// The tools as the panel shows them: groups of joined bars, each tool with a short label (the full name is in `TOOLS`).
+const TOOL_GROUPS: &[(&str, &[(Tool, &str)])] = &[
+    ("基本", &[(Tool::Select, "選択"), (Tool::Track, "配線"), (Tool::Via, "ビア")]),
+    ("銅・穴", &[(Tool::Zone, "ゾーン"), (Tool::PadTh, "穴付き"), (Tool::PadSmd, "SMD"), (Tool::Hole, "取付穴")]),
+    ("外形・文字", &[(Tool::OutlineRect, "矩形"), (Tool::OutlinePoly, "多角形"), (Tool::Silk, "シルク")]),
+];
+
 /// What a click adds while a polygon is drawn (the board outline, a pour, a hole of a pour): like a drafting program, lines and arcs
 /// close a shape, or a circle or a rectangle is drawn at once.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]

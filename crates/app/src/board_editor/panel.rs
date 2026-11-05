@@ -56,30 +56,38 @@ impl BoardEditor {
             }
             group_heading(ui, "手で描く (ツール)", "ここで選んだツールで、基板の上に自分で描き込みます (数字キー 1〜0 でも選べます)");
             ui.scope(|ui| {
-                ui.spacing_mut().item_spacing.y = if wrap { 4.0 } else { ui.spacing().item_spacing.y };
-                // the picked tool's settings open right under its button; the rest of the tools follow below
-                // (icon-only: the icons are one wrapped block, so the settings go under the whole block, not into the middle of it)
-                let at = TOOLS.iter().position(|(t, _, _)| *t == self.tool).filter(|_| !wrap && matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone));
-                let (head, tail) = TOOLS.split_at(at.map_or(TOOLS.len(), |i| i + 1));
-                for part in [head, tail] {
-                    if wrap {
-                        ui.horizontal_wrapped(|ui| self.tool_buttons(ui, part));
-                    } else {
-                        self.tool_buttons(ui, part);
-                    }
-                    if std::ptr::eq(part, head) && !wrap {
-                        self.tool_options(ui);
-                    }
-                }
                 if wrap {
+                    // icon-only: the icons are one wrapped block, and the picked tool's settings go under the whole block
+                    ui.spacing_mut().item_spacing.y = 4.0;
+                    ui.horizontal_wrapped(|ui| self.tool_buttons(ui, TOOLS));
                     self.tool_options(ui);
+                } else {
+                    // three groups of joined bars; the picked tool's settings open right under its own group
+                    for (name, tools) in TOOL_GROUPS {
+                        ui.label(egui::RichText::new(*name).weak().small());
+                        // a picked tool with settings: the bar and the box under it are one piece (square where they meet, no gap)
+                        let joined = tools.iter().any(|(t, _)| *t == self.tool) && self.has_tool_options();
+                        let gap = ui.spacing().item_spacing.y;
+                        if joined {
+                            ui.spacing_mut().item_spacing.y = 0.0;
+                        }
+                        self.tool_bar(ui, tools, joined);
+                        if joined {
+                            self.tool_options(ui);
+                            ui.spacing_mut().item_spacing.y = gap;
+                        }
+                    }
                 }
             });
             ui.horizontal(|ui| {
-                if crate::icons::icon_button_key(ui, Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.undo.is_empty(), "直前の操作を取り消します (Ctrl+Z)").clicked() {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let half = egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 };
+                let other = egui::CornerRadius { nw: 0, sw: 0, ne: 4, se: 4 };
+                let width = ui.available_width() / 2.0;
+                if crate::icons::segment_button(ui, Icon::Undo, "元に戻す", "Ctrl+Z", false, !self.undo.is_empty(), "直前の操作を取り消します (Ctrl+Z)", width, half).clicked() {
                     self.undo();
                 }
-                if crate::icons::icon_button_key(ui, Icon::Redo, "やり直し", "Ctrl+Y", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)").clicked() {
+                if crate::icons::segment_button(ui, Icon::Redo, "やり直し", "Ctrl+Y", false, !self.redo.is_empty(), "取り消した操作をやり直します (Ctrl+Y)", width, other).clicked() {
                     self.redo();
                 }
             });
@@ -103,10 +111,13 @@ impl BoardEditor {
             // open while the board is still being set up (no parts or no outline yet), then folded away
             let setup_open = self.board.parts.is_empty() || self.board.outline.len() < 3;
             crate::widgets::section_header(ui, egui::Id::new("board_sec_① "), setup_open, "① 部品を並べる", "回路図から部品を取り込み、基板の上に並べて、基板の外形 (大きさ・形) を決めます。ここまでが「何をどこに置くか」です", |ui| {
-                if ui.button("回路図から取り込み").on_hover_text("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します").clicked() {
+                let bar = crate::widgets::segment_row(ui, &[("回路図から取り込み", true), ("ピン名をシルクへ", true)]);
+                bar[0].clone().on_hover_text("回路図の部品とつながり (ネット) を基板に読み込みます。部品が並び、つなぐべき所に黄色の線 (未配線) が出ます。回路図を直したらもう一度押します");
+                bar[1].clone().on_hover_text("回路図でヘッダ(コネクタ)に付けた「ピンの名前」(F+、SA、GND など)を、基板のシルク(白い文字)として、パッドのそばに書きます。もう一度押すと書き直します。位置は、あとで「文字」ツールで動かせます");
+                if bar[0].clicked() {
                     self.import_from_schematic(sch);
                 }
-                if ui.button("ヘッダのピン名をシルクに書く").on_hover_text("回路図でヘッダ(コネクタ)に付けた「ピンの名前」(F+、SA、GND など)を、基板のシルク(白い文字)として、パッドのそばに書きます。もう一度押すと書き直します。位置は、あとで「文字」ツールで動かせます").clicked() {
+                if bar[1].clicked() {
                     self.write_pin_names(sch);
                 }
                 let diff = self.schematic_diff(sch).clone();
@@ -119,23 +130,41 @@ impl BoardEditor {
                 }
                 self.sheet_legend(ui);
                 ui.label(format!("未配線: {} 本 (黄色の線)", self.cached_airwires().len())).on_hover_text("まだ銅の線でつながっていない部分です。黄色の線 (ラッツネスト) が、つなぐべき相手を結んで示します。配線すると減って、0 になれば全部つながっています");
-                if ui.button("部品を並べて外形を決める").on_hover_text("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。「GND ベタ」を置いたあとでも使えます (そのビアと短い線は、並べたあとに置き直します)。ほかの配線がある基板では使えません (部品を動かすと配線が合わなくなるため)").clicked() {
+                if crate::widgets::primary_button_wide(ui, true, "部品を並べて外形を決める").on_hover_text("すべての部品を、つながりの強いものが近くなるように並べ、基板の外形をそれに合わせます。最初の叩き台を作る機能なので、並べたあとに手で動かして整えてください。先に「銅箔ゾーン」で GND のベタを塗っておくと、ベタでつながる GND は配線が要らないので、それを除いて部品を近づけ、小さくまとまります (ベタも新しい外形に合わせます)。「GND ベタ」を置いたあとでも使えます (そのビアと短い線は、並べたあとに置き直します)。ほかの配線がある基板では使えません (部品を動かすと配線が合わなくなるため)").clicked() {
                     self.autoplace();
                 }
                 if self.sheet_colors().len() >= 2 {
                     ui.checkbox(&mut self.place_by_sheet, "シートごとに塊にして並べる").on_hover_text("回路図が複数のシートのとき、シートごとの部品を1つの塊(長方形)にして並べ、塊どうしをつながりの強い順に並べます。塊の中は、足の多い部品から、つながりの強い順です。どの部品がどのシートのものか分かりやすく、手で直しやすくなります。そのぶん、基板が大きくなり、配線が長くなります (マイクロオームメーターの回路 (6 シート・191 部品) で、面積 +37%、自動配線の長さ +13%、コンデンサが電源ピンから遠くなります)。そのため、初めはオフです。オフだと、シートに関係なく並べます");
                 }
-                if ui.button("部品の向きを最適化").on_hover_text("配線がまだ付いていない部品を、0°・90°・180°・270° のうち、未配線の線が短く、交差が少なくなる向きに回します。回してもピンのつなぎは変わりません (回路は同じ)。ほかの部品や配線、基板の外にぶつかる向きは選びません。ロックした部品は回しません。配線を引く前の仕上げに使います。元に戻すで取り消せます").clicked() {
+                let (has_swap, has_map) = (!self.board.swap_specs.is_empty(), !self.board.pin_map.is_empty());
+                let mut items = vec![("向きを最適化", true)];
+                if has_swap {
+                    items.push(("ゲートを入れ替え", true));
+                }
+                if has_map {
+                    items.push(("回路図に反映", true));
+                }
+                let bar = crate::widgets::segment_row(ui, &items);
+                bar[0].clone().on_hover_text("配線がまだ付いていない部品を、0°・90°・180°・270° のうち、未配線の線が短く、交差が少なくなる向きに回します。回してもピンのつなぎは変わりません (回路は同じ)。ほかの部品や配線、基板の外にぶつかる向きは選びません。ロックした部品は回しません。配線を引く前の仕上げに使います。元に戻すで取り消せます");
+                let mut at = 1;
+                let mut swap = false;
+                let mut reflect = false;
+                if has_swap {
+                    bar[at].clone().on_hover_text("74HC32 や 74HC14 のように、同じゲートが何個も入った IC では、どのゲートをどの信号に使っても回路は同じです (OR ゲートの 2 つの入力も同じ)。部品を置いたあとに押すと、未配線の線が短く、交差が少なくなる割り当てを探して入れ替えます。配線がまだ付いていないゲートだけ動かします。入れ替えは基板に覚えられ、「回路図から取り込み」をしても元に戻りません。回路は変わらないので、シミュレーションはそのままです。元に戻すで取り消せます");
+                    swap = bar[at].clicked();
+                    at += 1;
+                }
+                if has_map {
+                    bar[at].clone().on_hover_text("「ゲートを入れ替えて交差を減らす」で入れ替えたピンを、回路図の側にも反映します。回路図の配線の端とネットラベルが、入れ替えたピンへ移ります (部品は描き直さないので、ピンの間で配線が交差して見えることがあります。つながりは基板と同じです)。反映すると、基板が覚えていた入れ替えは要らなくなります。ほかの配線とまざってつながりが変わるときは、何も変えずに理由を出します。回路図の側の「元に戻す」で取り消せます");
+                    reflect = bar[at].clicked();
+                }
+                if bar[0].clicked() {
                     self.orient_parts();
                 }
-                if !self.board.swap_specs.is_empty()
-                    && ui.button("ゲートを入れ替えて交差を減らす").on_hover_text("74HC32 や 74HC14 のように、同じゲートが何個も入った IC では、どのゲートをどの信号に使っても回路は同じです (OR ゲートの 2 つの入力も同じ)。部品を置いたあとに押すと、未配線の線が短く、交差が少なくなる割り当てを探して入れ替えます。配線がまだ付いていないゲートだけ動かします。入れ替えは基板に覚えられ、「回路図から取り込み」をしても元に戻りません。回路は変わらないので、シミュレーションはそのままです。元に戻すで取り消せます").clicked()
-                {
+                if swap {
                     self.swap_gates();
                 }
-                if !self.board.pin_map.is_empty()
-                    && ui.button("入れ替えを回路図に反映").on_hover_text("「ゲートを入れ替えて交差を減らす」で入れ替えたピンを、回路図の側にも反映します。回路図の配線の端とネットラベルが、入れ替えたピンへ移ります (部品は描き直さないので、ピンの間で配線が交差して見えることがあります。つながりは基板と同じです)。反映すると、基板が覚えていた入れ替えは要らなくなります。ほかの配線とまざってつながりが変わるときは、何も変えずに理由を出します。回路図の側の「元に戻す」で取り消せます").clicked()
-                {
+                if reflect {
                     self.to_schematic_request = true;
                 }
                 ui.separator();
@@ -171,50 +200,54 @@ impl BoardEditor {
                     Some(Item::Pad(i)) => self.board.pads.get(i).map(|p| p.net.clone()).filter(|n| !n.is_empty()),
                     _ => None,
                 };
-                let only_label = sel_net.as_ref().map_or("選んだネットだけ".to_string(), |n| format!("{n} だけ"));
                 let only_tip = if sel_net.is_some() { "" } else { "
 
 (いまは使えません: 先に基板の上のパッドを1つクリックして選んでください)" };
                 crate::widgets::section_heading(ui, "自動で引く");
                 ui.label(egui::RichText::new("上から順に押します").weak());
-                ui.horizontal_wrapped(|ui| {
-                    if ui.button("GND ベタ").on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
-    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます").clicked() {
-                        self.ground_pour();
-                    }
-                    if ui.button("未配線を全部つなぐ").on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
+                let short_only = sel_net.as_ref().map_or("選んだネットだけ".to_string(), |n| format!("{n} だけ"));
+                let bar = crate::widgets::segment_row(ui, &[("GND ベタ", true), ("全部つなぐ", true), (short_only.as_str(), sel_net.is_some())]);
+                bar[0].clone().on_hover_text("基板の裏面ぜんぶを GND の銅箔 (ベタ) にして、表面の GND パッドを、短い線とビアで裏のベタにつなぎます。GND の長い配線が要らなくなり、配線も楽になります。
+    部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます");
+                bar[1].clone().on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
     線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
     電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「配線の太さ (電流から)」で見直せます)。
-    2層・45°配線で、ルール違反になる配線は自動的にやめます").clicked() {
-                        self.autoroute(None);
+    2層・45°配線で、ルール違反になる配線は自動的にやめます");
+                bar[2].clone().on_hover_text(format!("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}"));
+                if bar[0].clicked() {
+                    self.ground_pour();
+                }
+                if bar[1].clicked() {
+                    self.autoroute(None);
+                }
+                if bar[2].clicked()
+                    && let Some(n) = &sel_net {
+                        self.autoroute(Some(n));
                     }
-                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(&only_label)).on_hover_text(format!("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}")).clicked()
-                        && let Some(n) = &sel_net {
-                            self.autoroute(Some(n));
-                        }
-                });
                 ui.checkbox(&mut self.pour_top, "表面も GND のベタで埋める").on_hover_text("「GND ベタ」を押したとき、裏面に加えて、表面の空いた所も GND の銅で埋めます (自動配線は、その上を通る形で配線します。配線のあとに表面のベタを足すこともできます)。配線から隙間をあけて塗るので、配線は変わりません。表面の GND パッドは直接つながり、ノイズに強く、銅の量が表裏でそろって基板が反りにくくなります。ルール違反が増えるときは置きません");
                 ui.separator();
                 crate::widgets::section_heading(ui, "引いた配線の手直し");
-                ui.horizontal_wrapped(|ui| {
-                    if ui.button("配線を短くする").on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます").clicked() {
-                        self.shorten_routes(None);
+                let bar = crate::widgets::segment_row(ui, &[("配線を短くする", true), ("通らない接続", true), (short_only.as_str(), sel_net.is_some())]);
+                bar[0].clone().on_hover_text("遠回りしている配線や、なくてもつながるビアのある配線を、引き直してみます。短く・ビアが少なくなり、ルール違反が増えないものだけを採用します (手で引いた配線にも使えます)。時間がかかることがあります。気に入らなければ「元に戻す」で取り消せます");
+                bar[1].clone().on_hover_text("自動配線で通らなかった(黄色の線が残った)接続のそばの小さい部品 (3 ピンまで) を 1〜4 mm 動かして、配線を引き直してみます。通らない接続が減り、ルール違反が増えないものだけを採用します。最長 40 秒かかります。気に入らなければ「元に戻す」で取り消せます");
+                bar[2].clone().on_hover_text(format!("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります){only_tip}"));
+                if bar[0].clicked() {
+                    self.shorten_routes(None);
+                }
+                if bar[1].clicked() {
+                    self.nudge_parts();
+                }
+                if bar[2].clicked()
+                    && let Some(n) = &sel_net {
+                        self.shorten_routes(Some(n));
                     }
-                    if ui.button("通らない接続を通す").on_hover_text("自動配線で通らなかった(黄色の線が残った)接続のそばの小さい部品 (3 ピンまで) を 1〜4 mm 動かして、配線を引き直してみます。通らない接続が減り、ルール違反が増えないものだけを採用します。最長 40 秒かかります。気に入らなければ「元に戻す」で取り消せます").clicked() {
-                        self.nudge_parts();
-                    }
-                    if ui.add_enabled(sel_net.is_some(), egui::Button::new(&only_label)).on_hover_text(format!("パッドを選ぶと、そのパッドのネットの配線だけを短くしてみます (まわりの配線を動かすことはあります){only_tip}")).clicked()
-                        && let Some(n) = &sel_net {
-                            self.shorten_routes(Some(n));
-                        }
-                });
             });
             crate::widgets::section_header(ui, egui::Id::new("board_sec_仕上"), false, "仕上げ (任意)", "パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです", |ui| {
                 self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
             });
             crate::widgets::section_header(ui, egui::Id::new("board_sec_③ "), true, "③ 確認して発注", "「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。問題がなければ、「発注の準備」で、工場に渡すデータ (ガーバー) を作ります", |ui| {
-                if ui.button("DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
+                if crate::widgets::primary_button_wide(ui, true, "DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                     self.run_drc();
                 }
                 self.requirements_check(ui);
@@ -240,10 +273,13 @@ impl BoardEditor {
                     let n = pcb_core::drc::add_thermal_vias(&mut self.board);
                     self.status = if n > 0 { format!("サーマルビアを {n} 個置きました。裏面に同じネットのゾーンを作ってください") } else { "サーマルビアを置けませんでした (パッドが小さい、または他の穴に近すぎます)".into() };
                 }
-                if ui.button("3Dで見る…").on_hover_text("基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます").clicked() {
+                let bar = crate::widgets::segment_row(ui, &[("3Dで見る…", true), ("発注の準備…", true)]);
+                bar[0].clone().on_hover_text("基板を立体で見ます。出来上がりの色 (緑のレジスト・金色のパッド・白いシルク) と、部品の高さの目安が分かります。ドラッグで回せます");
+                bar[1].clone().on_hover_text("発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します");
+                if bar[0].clicked() {
                     self.open_view3d();
                 }
-                if ui.button("発注の準備…").on_hover_text("発注先を選び、チェックと出来上がりの確認をして、製造ファイルを書き出します。発注までの手順も表示します").clicked() {
+                if bar[1].clicked() {
                     self.open_order();
                 }
                 ui.label("基板名 (出力ファイル名)").on_hover_text("書き出すファイルの名前のもとになります (例: board_gerber.zip)");
@@ -252,6 +288,27 @@ impl BoardEditor {
             ui.separator();
             if ui.button("操作ガイド (F1)").on_hover_text("マウスとキーの操作の一覧を開きます").clicked() {
                 self.help_request = Some(crate::help::HelpTab::Board);
+            }
+        });
+    }
+
+    /// One group of tools as a joined bar (equal widths, one chosen). The short labels are for the narrow bar; the hover text has the
+    /// full name, what the tool does and its number key.
+    fn tool_bar(&mut self, ui: &mut egui::Ui, tools: &[(Tool, &str)], joined: bool) {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            let width = ui.available_width() / tools.len() as f32;
+            for (n, (t, label)) in tools.iter().enumerate() {
+                let (_, full, icon) = TOOLS.iter().find(|(x, _, _)| x == t).copied().expect("every tool is in TOOLS");
+                let first = if n == 0 { 4 } else { 0 };
+                let last = if n + 1 == tools.len() { 4 } else { 0 };
+                let (low_l, low_r) = if joined { (0, 0) } else { (first, last) };
+                let corners = egui::CornerRadius { nw: first, sw: low_l, ne: last, se: low_r };
+                let key = tool_key(*t).map(|k| format!(" (キー {k})")).unwrap_or_default();
+                let tip = format!("{full}: {}{key}", tool_tip(*t));
+                if crate::icons::segment_button(ui, icon, label, "", self.tool == *t, true, &tip, width, corners).clicked() {
+                    self.set_tool(*t);
+                }
             }
         });
     }
@@ -282,30 +339,17 @@ impl BoardEditor {
 
     /// Settings of the tool that is picked, shown right under the toolbar: how a wire is laid for the wire tool,
     /// the size of a via for the via tool (autoroute uses both).
+    /// Whether the picked tool has settings to show under the bar.
+    fn has_tool_options(&self) -> bool {
+        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::OutlinePoly)
+    }
+
     fn tool_options(&mut self, ui: &mut egui::Ui) {
-        let title = match self.tool {
-            Tool::Track => "配線ツールの設定",
-            Tool::Via => "ビアツールの設定",
-            Tool::PadTh => "パッド(スルーホール)の設定",
-            Tool::PadSmd => "パッド(SMD)の設定",
-            Tool::Hole => "取付穴の設定",
-            Tool::Zone => "銅箔ゾーンの設定",
-            Tool::OutlinePoly => "基板外形 (多角形) の設定",
-            _ => return,
-        };
-        // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
-        let accent = crate::theme::INFO;
-        let inner = egui::Frame::NONE
-            .fill(Color32::from_rgba_unmultiplied(90, 160, 230, 28))
-            .corner_radius(4.0)
-            .inner_margin(egui::Margin { left: 10, right: 6, top: 4, bottom: 6 })
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(egui::RichText::new(title).strong().color(accent));
-                self.tool_options_body(ui);
-            });
-        let r = inner.response.rect;
-        ui.painter().rect_filled(Rect::from_min_max(r.min, egui::pos2(r.min.x + 3.0, r.max.y)), 2.0, accent);
+        if !self.has_tool_options() {
+            return;
+        }
+        // a bordered box right under the tool bar: it belongs to the picked tool and goes when the tool changes (no heading: the picked button says which)
+        crate::widgets::plain_card(ui, |ui| self.tool_options_body(ui));
         ui.add_space(4.0);
     }
 
