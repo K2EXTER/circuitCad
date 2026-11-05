@@ -23,16 +23,19 @@ pub const HIGHLIGHT: Color32 = Color32::from_rgb(211, 182, 59);
 pub const SPACE_S: f32 = 4.0;
 pub const SPACE_M: f32 = 8.0;
 pub const SPACE_L: f32 = 12.0;
+/// Indent of a folded group's contents and the gap between rows (the values `apply` sets; a flush group restores them inside).
+pub const INDENT: f32 = 20.0;
+pub const ROW_GAP: f32 = 5.0;
 
 /// Spacing, corners and widget colours for every window (called once from `startup.rs`, dark panels).
 pub fn apply(style: &mut egui::Style) {
     let sp = &mut style.spacing;
-    sp.item_spacing = egui::vec2(8.0, 5.0);
+    sp.item_spacing = egui::vec2(8.0, ROW_GAP);
     sp.button_padding = egui::vec2(8.0, 3.0);
     sp.interact_size.y = 24.0;
     // the fold arrow of a list is as wide as this: a larger target, and the guide line of a folded group is drawn at its centre
     sp.icon_width = 18.0;
-    sp.indent = 20.0;
+    sp.indent = INDENT;
     sp.menu_margin = egui::Margin::same(6);
     sp.window_margin = egui::Margin::same(10);
     let v = &mut style.visuals;

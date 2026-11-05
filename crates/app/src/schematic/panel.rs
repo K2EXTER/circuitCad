@@ -183,7 +183,8 @@ impl SchEditor {
             })
             .filter(|(_, g)| !g.is_empty())
             .collect();
-        let basic = egui::CollapsingHeader::new("基本の部品").open(Some(self.basic_open)).show(ui, |ui| {
+        let basic_title = if self.basic_open { egui::RichText::new("基本の部品").strong() } else { egui::RichText::new("基本の部品") };
+        let basic = crate::widgets::band_header(ui, basic_title, self.basic_open, false, |ui| {
             ui.small("クリックして配置 / Rキーで回転");
             for k in Kind::PALETTE {
                 let selected = self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k;
@@ -241,15 +242,23 @@ impl SchEditor {
                 self.lib_open = false;
             }
         }
-        let library = egui::CollapsingHeader::new(crate::widgets::count_title(ui, "ライブラリ部品", self.library.len())).open(Some(self.lib_open)).show(ui, |ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
+        let library_title = crate::widgets::count_title(ui, "ライブラリ部品", self.library.len());
+        let library = crate::widgets::band_header(ui, library_title, self.lib_open, true, |ui| {
+            // everything inside the library group sits in one sunken well joined to the band; the indent line is not needed there
+            crate::widgets::well(ui, |ui| {
+            ui.visuals_mut().indent_has_left_vline = false;
+            ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)").desired_width(f32::INFINITY).margin(egui::Margin::symmetric(6, 7)))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
             let cat_of = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
             let mut cats: Vec<String> = self.library.iter().map(cat_of).collect();
             cats.sort();
             cats.dedup();
             ui.horizontal(|ui| {
+                // the same width and height as the search field above: it takes what the "◎のみ" box leaves
+                ui.spacing_mut().button_padding.y = 5.0;
+                let combo_width = ui.available_width() - 76.0;
                 egui::ComboBox::from_id_salt("lib_cat")
+                    .width(combo_width)
                     .selected_text(if self.lib_cat.is_empty() { "すべてのカテゴリ".to_string() } else { self.lib_cat.clone() })
                     .show_ui(ui, |ui| {
                         ui.selectable_value(&mut self.lib_cat, String::new(), "すべてのカテゴリ");
@@ -276,7 +285,7 @@ impl SchEditor {
                 })
                 .collect();
             // the list fills what is left of the window (the part card and "部品を作る" stay below it)
-            let list_height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 190.0).clamp(160.0, 900.0);
+            let list_height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 215.0).clamp(160.0, 900.0);
             let by_name = |n: &String| self.library.iter().position(|d| &d.name == n);
             let favs: Vec<usize> = self.lib_prefs.fav.iter().filter_map(by_name).collect();
             let recents: Vec<usize> = self.lib_prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
@@ -342,6 +351,9 @@ impl SchEditor {
                     });
                 }
             });
+            // a line under the scrolling part: a row cut by the edge reads as scrolled, not as overlapping the notes below
+            ui.add_space(2.0);
+            ui.separator();
             if let Some(n) = toggle_fav {
                 self.lib_prefs.toggle_fav(&n);
                 self.lib_prefs.save(&self.lib_dir);
@@ -400,6 +412,7 @@ impl SchEditor {
             for e in &self.lib_errors {
                 ui.colored_label(crate::theme::ERROR, e);
             }
+            });
         });
         if library.header_response.clicked() {
             self.lib_open = !self.lib_open;

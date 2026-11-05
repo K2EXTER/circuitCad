@@ -46,6 +46,56 @@ pub fn count_title(ui: &egui::Ui, name: &str, count: usize) -> egui::text::Layou
     job
 }
 
+/// A top-level folded group of a side panel: its title row sits on a band one step lighter than the panel (lighter again while open), so
+/// the groups read as sections and the lists and rows inside them, on the plain panel, as a level below. With `flush` the contents touch
+/// the band (no gap), so a box drawn inside (see `well`) joins the band as one piece; the contents restore the row gap themselves.
+pub fn band_header<R>(
+    ui: &mut egui::Ui,
+    title: impl Into<egui::WidgetText>,
+    open: bool,
+    flush: bool,
+    body: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::CollapsingResponse<R> {
+    let slot = ui.painter().add(egui::Shape::Noop);
+    // no guide line under the arrow: the band and the indent already show what belongs to the group
+    let r = ui
+        .scope(|ui| {
+            ui.visuals_mut().indent_has_left_vline = false;
+            if flush {
+                ui.spacing_mut().item_spacing.y = 0.0;
+            }
+            egui::CollapsingHeader::new(title).open(Some(open)).show(ui, body)
+        })
+        .inner;
+    let rows = r.header_response.rect.y_range();
+    let joined = open && flush;
+    let band = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), rows).expand2(egui::vec2(0.0, 1.0));
+    let band = if joined { egui::Rect::from_min_max(band.min, egui::pos2(band.max.x, rows.max)) } else { band };
+    let fill = egui::Color32::from_gray(if open { 48 } else { 38 });
+    let low = if joined { 0 } else { 4 };
+    let corners = egui::CornerRadius { nw: 4, ne: 4, sw: low, se: low };
+    ui.painter().set(slot, egui::epaint::RectShape::filled(band, corners, fill));
+    r
+}
+
+/// The sunken box under an open `band_header(.., flush: true, ..)`: the ground of text fields and plots ("look inside"), square at the
+/// top where it meets the band, rounded at the bottom, and as wide as the band (it steps back out over the indent). Inputs inside are
+/// a step lighter than the box.
+pub fn well<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    egui::Frame::new()
+        .fill(ui.visuals().extreme_bg_color)
+        .corner_radius(egui::CornerRadius { nw: 0, ne: 0, sw: 4, se: 4 })
+        .outer_margin(egui::Margin { left: -(crate::theme::INDENT as i8), right: 0, top: 0, bottom: 0 })
+        .inner_margin(egui::Margin::symmetric(4, 4))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = crate::theme::ROW_GAP;
+            ui.visuals_mut().extreme_bg_color = egui::Color32::from_gray(34);
+            body(ui)
+        })
+        .inner
+}
+
 /// Where a guide or table window first opens: just right of the left panel, so the panel it talks about ("左の…") stays in view
 /// and the buttons in it can still be pressed (egui would open it in the top-left corner, on top of the panel).
 pub fn beside_panel() -> egui::Pos2 {
