@@ -29,6 +29,23 @@ pub fn heading_inline(ui: &mut egui::Ui, text: impl Into<String>) -> egui::Respo
     ui.label(egui::RichText::new(text).strong().color(crate::theme::INFO))
 }
 
+/// The gap between two groups of controls in a side panel: close controls sit 4 px apart, groups 12 px, with a faint line between.
+pub fn group_gap(ui: &mut egui::Ui) {
+    ui.add_space(crate::theme::SPACE_S);
+    ui.separator();
+    ui.add_space(crate::theme::SPACE_S);
+}
+
+/// The title of a folded group with the number of items it holds, as a quiet badge after the name ("ADC  1"), so the count does not
+/// read as part of the name.
+pub fn count_title(ui: &egui::Ui, name: &str, count: usize) -> egui::text::LayoutJob {
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let mut job = egui::text::LayoutJob::default();
+    job.append(name, 0.0, egui::TextFormat::simple(font.clone(), ui.visuals().text_color()));
+    job.append(&count.to_string(), 8.0, egui::TextFormat::simple(font, ui.visuals().weak_text_color()));
+    job
+}
+
 /// Where a guide or table window first opens: just right of the left panel, so the panel it talks about ("左の…") stays in view
 /// and the buttons in it can still be pressed (egui would open it in the top-left corner, on top of the panel).
 pub fn beside_panel() -> egui::Pos2 {

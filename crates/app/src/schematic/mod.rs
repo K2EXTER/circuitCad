@@ -142,8 +142,9 @@ pub struct SchEditor {
     lib_sim_only: bool,
     /// Favorite and recently placed library parts (saved next to the library).
     lib_prefs: library::LibPrefs,
-    /// The part list takes more height.
-    lib_tall: bool,
+    /// Which of the two part lists in the panel is open: only one at a time, so the open one gets the height.
+    basic_open: bool,
+    lib_open: bool,
     /// Counts the times the library was read again (the board compares its parts with the library when this changes).
     pub lib_rev: u64,
     /// The library part the learner pressed 削除 for and has not yet confirmed.
@@ -507,7 +508,8 @@ impl Default for SchEditor {
         Self {
             library,
             lib_prefs,
-            lib_tall: false,
+            basic_open: true,
+            lib_open: false,
             lib_rev: 0,
             lib_delete: None,
             quick: None,

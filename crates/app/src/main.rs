@@ -538,7 +538,7 @@ impl eframe::App for App {
             }
         });
         if self.mode == Mode::Schematic {
-            egui::Panel::left("sch_tools").default_size(PANEL_WIDTH).min_size(220.0).show(ui, |ui| self.sch.side_panel(ui));
+            egui::Panel::left("sch_tools").default_size(PANEL_WIDTH).min_size(220.0).frame(egui::Frame::side_top_panel(ui.style()).inner_margin(egui::Margin::symmetric(12, 8))).show(ui, |ui| self.sch.side_panel(ui));
             if self.sch.has_wave() {
                 egui::Panel::bottom("wave").resizable(true).default_size(320.0).show(ui, |ui| self.sch.wave_panel(ui));
             }

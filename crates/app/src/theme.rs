@@ -29,7 +29,10 @@ pub fn apply(style: &mut egui::Style) {
     let sp = &mut style.spacing;
     sp.item_spacing = egui::vec2(8.0, 5.0);
     sp.button_padding = egui::vec2(8.0, 3.0);
-    sp.interact_size.y = 22.0;
+    sp.interact_size.y = 24.0;
+    // the fold arrow of a list is as wide as this: a larger target, and the guide line of a folded group is drawn at its centre
+    sp.icon_width = 18.0;
+    sp.indent = 20.0;
     sp.menu_margin = egui::Margin::same(6);
     sp.window_margin = egui::Margin::same(10);
     let v = &mut style.visuals;
@@ -37,6 +40,8 @@ pub fn apply(style: &mut egui::Style) {
     for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
         w.corner_radius = r;
     }
+    v.indent_has_left_vline = true;
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, Color32::from_gray(58));
     v.widgets.inactive.weak_bg_fill = Color32::from_gray(48);
     v.widgets.inactive.bg_fill = Color32::from_gray(48);
     v.widgets.hovered.weak_bg_fill = Color32::from_gray(62);

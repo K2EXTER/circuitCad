@@ -136,6 +136,8 @@ impl SchEditor {
     }
 
     pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
+        // the tools, undo and quick add are one group: close together
+        ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
         ui.horizontal(|ui| {
             { let tip = "部品や配線をクリックで選択、部品はドラッグで移動できます。選ぶと値(抵抗値など)を変えられます"; if crate::icons::icon_button(ui, crate::icons::Icon::Select, "選択", self.tool == Tool::Select, true, tip).clicked() { self.tool = Tool::Select; } };
             { let tip = "端点をクリックして線を引きます。クリックするたびに折れ線が続き、ダブルクリックで終わります。右クリックで配線を確定し、配線していないときの右クリックで選択ツールに戻ります"; if crate::icons::icon_button(ui, crate::icons::Icon::Wire, "配線", self.tool == Tool::Wire, true, tip).clicked() { self.tool = Tool::Wire; } };
@@ -159,7 +161,8 @@ impl SchEditor {
             ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます");
             ui.checkbox(&mut self.label_step, "番号を自動で進める").on_hover_text("オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)");
         }
-        ui.separator();
+        crate::widgets::group_gap(ui);
+        ui.spacing_mut().item_spacing.y = 5.0;
         let mut chosen = None;
         // library parts hang under the basic part of their kind (capacitor, diode, transistor), grouped by family
         type Family<'a> = (Kind, Vec<(&'a str, Vec<usize>)>);
@@ -180,7 +183,7 @@ impl SchEditor {
             })
             .filter(|(_, g)| !g.is_empty())
             .collect();
-        egui::CollapsingHeader::new("基本の部品").default_open(true).show(ui, |ui| {
+        let basic = egui::CollapsingHeader::new("基本の部品").open(Some(self.basic_open)).show(ui, |ui| {
             ui.small("クリックして配置 / Rキーで回転");
             for k in Kind::PALETTE {
                 let selected = self.tool == Tool::Place && self.place_lib.is_none() && self.place == *k;
@@ -231,7 +234,14 @@ impl SchEditor {
                 }
             }
         });
-        egui::CollapsingHeader::new(format!("ライブラリ部品 ({})", self.library.len())).default_open(false).show(ui, |ui| {
+        // the two lists take turns: opening one closes the other, so the open list has the height of the panel
+        if basic.header_response.clicked() {
+            self.basic_open = !self.basic_open;
+            if self.basic_open {
+                self.lib_open = false;
+            }
+        }
+        let library = egui::CollapsingHeader::new(crate::widgets::count_title(ui, "ライブラリ部品", self.library.len())).open(Some(self.lib_open)).show(ui, |ui| {
             ui.add(egui::TextEdit::singleline(&mut self.lib_filter).hint_text("検索 (名前・説明・ピン名・パッケージ)"))
                 .on_hover_text("部品名のほか、説明、ピンの名前、パッケージ名 (例: SOT-23、TO-92) でも探せます");
             let cat_of = |d: &PartDef| if d.category.is_empty() { "その他".to_string() } else { d.category.clone() };
@@ -249,7 +259,6 @@ impl SchEditor {
                     }).response.on_hover_text("ライブラリ部品の分類。選んだ分類だけを一覧に出します");
                 ui.checkbox(&mut self.lib_sim_only, "◎のみ").on_hover_text("シミュレーションモデルのある部品だけを表示します");
             });
-            ui.checkbox(&mut self.lib_tall, "一覧を広く").on_hover_text("部品の一覧の高さを広げます。部品が多いときに、スクロールしなくても探しやすくなります");
             let f = self.lib_filter.to_lowercase();
             let filtering = !f.is_empty() || !self.lib_cat.is_empty() || self.lib_sim_only;
             // which parts pass the search / category / simulation filters
@@ -266,6 +275,8 @@ impl SchEditor {
                     [d.name.as_str(), d.description.as_str(), cat_of(d).as_str(), pins.as_str(), d.footprint_name().as_str()].iter().any(|t| t.to_lowercase().contains(&f))
                 })
                 .collect();
+            // the list fills what is left of the window (the part card and "部品を作る" stay below it)
+            let list_height = (ui.ctx().content_rect().bottom() - ui.cursor().top() - 190.0).clamp(160.0, 900.0);
             let by_name = |n: &String| self.library.iter().position(|d| &d.name == n);
             let favs: Vec<usize> = self.lib_prefs.fav.iter().filter_map(by_name).collect();
             let recents: Vec<usize> = self.lib_prefs.recent.iter().filter_map(by_name).filter(|i| !favs.contains(i)).collect();
@@ -291,7 +302,7 @@ impl SchEditor {
                     }
                 });
             };
-            egui::ScrollArea::vertical().max_height(if self.lib_tall { 640.0 } else { 280.0 }).auto_shrink([false, true]).show(ui, |ui| {
+            egui::ScrollArea::vertical().max_height(list_height).auto_shrink([false, true]).show(ui, |ui| {
                 let sel = |i: usize| self.tool == Tool::Place && self.place_lib == Some(i);
                 if !filtering {
                     for (title, ids, tip) in [("★ お気に入り", &favs, "☆ を押した部品"), ("最近使った部品", &recents, "最近置いた部品 (新しい順)")] {
@@ -320,7 +331,7 @@ impl SchEditor {
                 }
                 for (c, ids) in groups {
                     let holds_selected = ids.iter().any(|&i| sel(i));
-                    let mut h = egui::CollapsingHeader::new(format!("{c} ({})", ids.len())).id_salt(("libcat", &c));
+                    let mut h = egui::CollapsingHeader::new(crate::widgets::count_title(ui, &c, ids.len())).id_salt(("libcat", &c));
                     if filtering || holds_selected {
                         h = h.open(Some(true));
                     }
@@ -390,6 +401,12 @@ impl SchEditor {
                 ui.colored_label(crate::theme::ERROR, e);
             }
         });
+        if library.header_response.clicked() {
+            self.lib_open = !self.lib_open;
+            if self.lib_open {
+                self.basic_open = false;
+            }
+        }
         // below the (closed by default) library list, outside it, so a newcomer can find them without opening anything
         ui.horizontal_wrapped(|ui| {
             if self.lit(ui.button("＋ 部品を作る…"), "＋ 部品を作る…").on_hover_text("ライブラリにない部品を、データシートを見ながら自分で作って追加します (記号・部品の形・シミュレーションモデル・定格)。JSON や KiCad のファイルからの追加も、開いた窓の「① 基本」からできます").clicked() {
@@ -612,7 +629,8 @@ impl SchEditor {
     }
 
     pub(super) fn panel_erc(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
+        crate::widgets::group_gap(ui);
+        ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
         ui.horizontal(|ui| {
             if !self.sch.requirements.is_empty() {
                 crate::icons::icon_switch(ui, crate::icons::Icon::Eye, crate::icons::Icon::EyeOff, &mut self.req_frames, "「設計の要件」の表を、回路図の上に枠で出します (近くに置く組は色つきの枠、離す組は A・B の二重の枠)。明るい四角が「出している」です。表を開かなくても、回路図を見た人に設計の意図が伝わります");
@@ -675,7 +693,7 @@ impl SchEditor {
     }
 
     pub(super) fn panel_forms(&mut self, ui: &mut egui::Ui) {
-        ui.separator();
+        crate::widgets::group_gap(ui);
         if let Some(mut form) = self.form.take() {
             let mut open = true;
             let mut saved = None;
