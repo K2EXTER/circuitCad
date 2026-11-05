@@ -53,7 +53,7 @@ impl BoardEditor {
                 pair_failed.extend(r.failed);
             }
         }
-        // nets with a declared current ("配線の太さ (電流から)") are routed with the width that current needs
+        // nets with a declared current ("電流と電圧降下") are routed with the width that current needs
         let mut report = autoroute::autoroute_sized(&mut self.board, &opt, net);
         report.routed += pair_routed;
         // a pair connection that failed is tried again by the plain router above; count only what is still open

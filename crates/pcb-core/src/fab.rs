@@ -205,7 +205,7 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     // outline
     let area = if board.outline.len() >= 3 { signed_area(&board.outline).abs() } else { 0.0 };
     if area < 1.0 {
-        out.push(check(Level::Error, "基板の外形がありません", "基板の形 (外形) が決まっていません。左の「矩形に設定」か、ツール「基板外形」で決めましょう。発注には外形が必要です", None));
+        out.push(check(Level::Error, "基板の外形がありません", "基板の形 (外形) が決まっていません。左の「矩形にする」か、ツール「基板外形」で決めましょう。発注には外形が必要です", None));
         return out;
     }
     let (mut lo, mut hi) = (Point::new(f64::MAX, f64::MAX), Point::new(f64::MIN, f64::MIN));

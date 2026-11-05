@@ -34,7 +34,7 @@ impl BoardEditor {
             return "部品が基板の外にあります。左の「部品を並べて外形を決める」で自動的に並べるか、部品をドラッグして基板の中に置きましょう".into();
         }
         if self.board.bounds().is_none() || self.board.outline.is_empty() {
-            return "基板の外形を決めましょう。左の「矩形に設定」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です".into();
+            return "基板の外形を決めましょう。左の「矩形にする」か、ツールの「基板外形」で描きます。発注にはこの外形が必要です".into();
         }
         let unrouted = self.cached_airwires().len();
         if unrouted > 0 {
@@ -51,8 +51,12 @@ impl BoardEditor {
             // icon-only buttons are packed side by side; with labels they stay one per line
             let wrap = crate::icons::icon_only();
             // the width panel lives under the wire tool's settings: show it when something asks for it (simulated currents, --ir)
-            if self.widths_open.is_some() && self.tool != Tool::Track {
-                self.set_tool(Tool::Track);
+            // a simulated current or an IR-drop result opens step ③, where the currents and the drop are shown
+            if self.widths_open.take().is_some() {
+                let id = egui::Id::new("board_sec_③ ");
+                let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true);
+                state.set_open(true);
+                state.store(ui.ctx());
             }
             group_heading(ui, "手で描く (ツール)", "ここで選んだツールで、基板の上に自分で描き込みます (数字キー 1〜0 でも選べます)");
             ui.scope(|ui| {
@@ -169,26 +173,29 @@ impl BoardEditor {
                 }
                 ui.separator();
                 ui.label("基板の外形").on_hover_text("基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります。矩形・円・多角形が選べます");
-                ui.horizontal(|ui| {
-                    ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 ")).on_hover_text("基板の幅 (mm)。「矩形に設定」を押すと外形に反映されます");
-                    ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ ")).on_hover_text("基板の高さ (mm)。「矩形に設定」を押すと外形に反映されます");
-                    if ui.button("矩形に設定").on_hover_text("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります").clicked() {
-                        self.checkpoint();
-                        let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
-                        self.set_outline_box(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
-                    }
-                });
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.add(egui::DragValue::new(&mut self.size_w).speed(0.5).range(5.0..=500.0).prefix("幅 ")).on_hover_text("基板の幅 (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます");
+                    ui.add(egui::DragValue::new(&mut self.size_h).speed(0.5).range(5.0..=500.0).prefix("高さ ")).on_hover_text("基板の高さ (mm)。「矩形にする」か「円・長円にする」を押すと外形に反映されます");
                     ui.add(egui::DragValue::new(&mut self.size_r).speed(0.1).range(0.0..=100.0).prefix("角R ").suffix(" mm"))
                         .on_hover_text("角の丸み (半径)。0 なら角ばった形です。ケースに入れる基板や、手で持つ基板は、角を丸めると角が欠けにくく、安全です。大きすぎる値は、入る大きさまで自動で小さくなります");
-                    if ui.button("円・長円に設定").on_hover_text("上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に").clicked() {
-                        self.checkpoint();
-                        let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
-                        self.board.outline = pcb_core::outline::ellipse(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
-                        self.status = "基板の外形を円・長円にしました".into();
-                    }
                 });
-                if ui.button("いまの外形の角を丸める").on_hover_text("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)").clicked() {
+                // the three ways to turn the numbers above into an outline: one bar
+                let bar = crate::widgets::segment_row(ui, &[("矩形にする", true), ("円・長円にする", true), ("角を丸める", true)]);
+                bar[0].clone().on_hover_text("上の幅と高さで基板の外形を作ります。発注するときの基板サイズになります。右の「角R」が 0 より大きいと、角が丸くなります");
+                bar[1].clone().on_hover_text("上の幅と高さに収まる円 (幅=高さ) や長円の外形にします。丸い基板やボタン電池サイズの基板に");
+                bar[2].clone().on_hover_text("いまの基板の外形 (矩形でも、多角形でも) のすべての角を、上の「角R」の半径で丸めます。辺が短くて入らない角は、入る大きさまで小さくなります (元に戻すで取り消せます)");
+                if bar[0].clicked() {
+                    self.checkpoint();
+                    let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
+                    self.set_outline_box(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
+                }
+                if bar[1].clicked() {
+                    self.checkpoint();
+                    let (lo, _) = self.board.bounds().unwrap_or((Point::default(), Point::default()));
+                    self.board.outline = pcb_core::outline::ellipse(lo.x, lo.y, lo.x + self.size_w, lo.y + self.size_h);
+                    self.status = "基板の外形を円・長円にしました".into();
+                }
+                if bar[2].clicked() {
                     self.round_outline(self.size_r);
                 }
                 if let Some((lo, hi)) = self.board.bounds() {
@@ -211,7 +218,7 @@ impl BoardEditor {
     部品を並べる前に押しても、並べたあとに押しても使えます。先に押すと、GND を除いて部品が近づきます (「部品を並べて外形を決める」の説明を参照)。どちらも「全部」の自動配線の前に押します (四角い外形の基板で使えます)。気に入らなければ「元に戻す」で取り消せます");
                 bar[1].clone().on_hover_text("未配線 (黄色の線) をすべて自動で配線します。先に部品を基板の上に並べておいてください。
     線幅・ビア径は、配線・ビアツールを選ぶと出る設定が使われ、通せなかった接続は黄色の線のまま残ります。気に入らなければ「元に戻す」で取り消せます。
-    電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「配線の太さ (電流から)」で見直せます)。
+    電流がまだ決まっていないときは、回路図の動作点 (DC) の電流を先に取り、電流の大きいネットは必要な太さで引きます (「③ 確認して発注」の「電流と電圧降下」で見直せます)。
     2層・45°配線で、ルール違反になる配線は自動的にやめます");
                 bar[2].clone().on_hover_text(format!("パッドを選ぶと、そのパッドのネットだけを自動配線します。重要な線は手で引き、残りを任せる使い方ができます{only_tip}"));
                 if bar[0].clicked() {
@@ -262,6 +269,9 @@ impl BoardEditor {
                     self.pan = Vec2::new(at.x as f32, at.y as f32);
                     self.zoom = self.zoom.max(25.0);
                 }
+                ui.separator();
+                self.panel_widths(ui);
+                ui.separator();
                 let lacking = self.thermal_lacking();
                 if lacking > 0
                     && ui
@@ -384,12 +394,11 @@ impl BoardEditor {
         });
         ui.add(egui::DragValue::new(&mut self.track_width).speed(0.01).range(0.05..=5.0).prefix("線幅 ").suffix(" mm"))
             .on_hover_text("配線の太さ。大きい電流を流す線は太く。発注先の最小線幅 (多くは 0.15〜0.2 mm) を下回らないように");
-        egui::CollapsingHeader::new("高度な配線 (中級者向け)").default_open(false).open(self.widths_open.map(|_| true)).show(ui, |ui| {
-                self.panel_widths(ui);
+        egui::CollapsingHeader::new("高度な配線 (中級者向け)").default_open(false).show(ui, |ui| {
                 self.panel_net_classes(ui);
                 self.panel_pairs(ui);
                 self.panel_lengths(ui);
-        }).header_response.on_hover_text("中級者向け: 配線の太さ (電流から)・差動ペア・長さ合わせ");
+        }).header_response.on_hover_text("中級者向け: ネットクラス・差動ペア・長さ合わせ");
             }
             Tool::Via => {
                 let nets = self.board_nets();

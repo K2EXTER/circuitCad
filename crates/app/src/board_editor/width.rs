@@ -58,25 +58,24 @@ impl BoardEditor {
     }
 
     pub(super) fn panel_widths(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new("配線の太さ (電流から)").default_open(false).open(self.widths_open.take()).show(ui, |ui| {
-            let nets = self.board_nets();
-            if nets.is_empty() {
-                ui.small("回路図から部品を取り込むと、ネットの一覧が出ます");
-                return;
+        crate::widgets::section_heading(ui, "電流と電圧降下");
+        let nets = self.board_nets();
+        if nets.is_empty() {
+            ui.small("回路図から部品を取り込むと、ネットの一覧が出ます");
+            return;
+        }
+        let conn = drc::connectivity(&self.board);
+        let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
+        ui.small("流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます");
+        ui.horizontal(|ui| {
+            if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます").clicked() {
+                self.current_win_open = true;
             }
-            let conn = drc::connectivity(&self.board);
-            let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
-            ui.small("流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます");
-            ui.horizontal(|ui| {
-                if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます").clicked() {
-                    self.current_win_open = true;
-                }
-                if thin > 0 {
-                    ui.colored_label(crate::theme::ERROR, format!("電流に対して細いネット {thin} 本"));
-                }
-            });
-            self.ir_drop_ui(ui);
-        }).header_response.on_hover_text("ネットごとに流す電流を入れると、必要な線幅を計算し、足りない配線を教えます (銅箔 35µm・温度上昇 10℃ の外層)。電源やモーターの線は、信号線より太くします");
+            if thin > 0 {
+                ui.colored_label(crate::theme::ERROR, format!("電流に対して細いネット {thin} 本"));
+            }
+        });
+        self.ir_drop_ui(ui);
     }
 }
 
