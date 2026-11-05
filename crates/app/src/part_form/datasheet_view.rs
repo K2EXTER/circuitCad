@@ -318,7 +318,7 @@ impl SheetView {
             }
         });
         if !self.msg.is_empty() {
-            ui.colored_label(egui::Color32::from_rgb(230, 80, 70), &self.msg);
+            ui.colored_label(crate::theme::ERROR, &self.msg);
         }
     }
 
@@ -424,7 +424,7 @@ impl Opened {
         });
         if let Some(t) = self.target {
             ui.horizontal(|ui| {
-                ui.colored_label(egui::Color32::from_rgb(70, 150, 255), t.ask());
+                ui.colored_label(crate::theme::INFO, t.ask());
                 if ui.button("やめる").on_hover_text("選ぶのをやめます (Esc キーでも)").clicked() {
                     self.target = None;
                 }
@@ -432,7 +432,7 @@ impl Opened {
         }
         if self.selecting {
             ui.horizontal(|ui| {
-                ui.colored_label(egui::Color32::from_rgb(70, 150, 255), "ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)");
+                ui.colored_label(crate::theme::INFO, "ピン表を、下のページでドラッグして囲んでください (番号と名前の列が入るように)");
                 if ui.button("やめる").on_hover_text("囲むのをやめます (Esc キーでも)").clicked() {
                     self.selecting = false;
                 }
@@ -472,7 +472,7 @@ impl Opened {
                 }
                 Err(e) => {
                     self.texture = None;
-                    ui.colored_label(egui::Color32::from_rgb(230, 80, 70), e);
+                    ui.colored_label(crate::theme::ERROR, e);
                     return;
                 }
             }
@@ -504,7 +504,7 @@ impl Opened {
             if let (Some(from), Some(to)) = (self.drag_from, resp.interact_pointer_pos()) {
                 let r = egui::Rect::from_two_pos(from, to);
                 ui.painter().rect_filled(r, 0.0, egui::Color32::from_rgba_unmultiplied(70, 150, 255, 50));
-                ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(70, 150, 255)), egui::StrokeKind::Inside);
+                ui.painter().rect_stroke(r, 0.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Inside);
                 if resp.drag_stopped() {
                     let (a, b) = ((r.min - origin) / zoom, (r.max - origin) / zoom);
                     // a click or a speck is not a table
@@ -529,7 +529,7 @@ impl Opened {
             if let Some(word) = under
                 && let Some(token) = word.token_at(p.x)
             {
-                ui.painter().rect_stroke(on_screen(&word.rect).expand(1.0), 2.0, egui::Stroke::new(1.5, egui::Color32::from_rgb(70, 150, 255)), egui::StrokeKind::Outside);
+                ui.painter().rect_stroke(on_screen(&word.rect).expand(1.0), 2.0, egui::Stroke::new(1.5, crate::theme::INFO), egui::StrokeKind::Outside);
                 ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
                 resp.clone().on_hover_text(format!("→ {token}"));
                 if resp.clicked() {

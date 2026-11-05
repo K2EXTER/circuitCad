@@ -108,7 +108,7 @@ impl SchEditor {
         let mut longer = false;
         let TranView { outcome, selected, plot: st, spectrum, spec_t0, spec_t1, spec_plot, spec_cache, thd_f0, ghost, power, parts, .. } = view;
         ui.horizontal(|ui| {
-            ui.strong("過渡解析の波形");
+            ui.label(egui::RichText::new("過渡解析の波形").strong().color(ui.visuals().selection.stroke.color));
             if crate::widgets::close_button(ui, "波形") {
                 close = true;
             }

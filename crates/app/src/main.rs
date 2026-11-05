@@ -506,6 +506,7 @@ impl eframe::App for App {
         self.sch.requirements_window(ui.ctx());
         egui::Panel::bottom("status").show(ui, |ui| {
             // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
+            ui.spacing_mut().item_spacing.y = 4.0;
             ui.horizontal(|ui| {
                 let status = if self.mode == Mode::Schematic { &self.sch.status } else { &self.board_ed.status };
                 if self.show_hints {
@@ -529,7 +530,11 @@ impl eframe::App for App {
             });
             if self.show_hints {
                 let hint = if self.mode == Mode::Schematic { self.sch.hint() } else { self.board_ed.hint() };
-                ui.colored_label(egui::Color32::from_rgb(90, 170, 110), format!("ヒント: {hint}"));
+                // the word "ヒント" carries the colour; the sentence is plain text so a long hint stays easy to read
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("ヒント").strong().color(crate::theme::OK));
+                    ui.add(egui::Label::new(hint.as_str()).truncate()).on_hover_text(hint.as_str());
+                });
             }
         });
         if self.mode == Mode::Schematic {

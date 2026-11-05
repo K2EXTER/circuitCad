@@ -5,7 +5,7 @@ use super::*;
 /// A heading that splits the left panel into its two halves: the tools drawn by hand and the steps to follow.
 fn group_heading(ui: &mut egui::Ui, text: &str, tip: &str) {
     ui.add_space(2.0);
-    ui.label(egui::RichText::new(text).strong().color(Color32::from_rgb(120, 180, 240))).on_hover_text(tip);
+    ui.label(egui::RichText::new(text).strong().color(crate::theme::INFO)).on_hover_text(tip);
     ui.separator();
 }
 
@@ -111,11 +111,11 @@ impl BoardEditor {
                 }
                 let diff = self.schematic_diff(sch).clone();
                 if !diff.is_empty() {
-                    ui.colored_label(Color32::from_rgb(255, 180, 60), format!("回路図と違います: {}", diff.summary()))
+                    ui.colored_label(crate::theme::WARN, format!("回路図と違います: {}", diff.summary()))
                         .on_hover_text("取り込んだあとに、回路図が変わったか、基板が変わりました。「回路図から取り込み」を押すと、基板の部品の位置と配線は残したまま、値・形・つながりが回路図に合わせて更新されます");
                 }
                 for n in &self.import_notes {
-                    ui.colored_label(Color32::from_rgb(255, 180, 60), n);
+                    ui.colored_label(crate::theme::WARN, n);
                 }
                 self.sheet_legend(ui);
                 ui.label(format!("未配線: {} 本 (黄色の線)", self.cached_airwires().len())).on_hover_text("まだ銅の線でつながっていない部分です。黄色の線 (ラッツネスト) が、つなぐべき相手を結んで示します。配線すると減って、0 になれば全部つながっています");
@@ -294,7 +294,7 @@ impl BoardEditor {
             _ => return,
         };
         // a tinted box with a heading and a left bar, so it reads as belonging to the tool above, not to the list below
-        let accent = Color32::from_rgb(90, 160, 230);
+        let accent = crate::theme::INFO;
         let inner = egui::Frame::NONE
             .fill(Color32::from_rgba_unmultiplied(90, 160, 230, 28))
             .corner_radius(4.0)

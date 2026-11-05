@@ -805,7 +805,7 @@ impl LearnWindow {
                 egui::CollapsingHeader::new("学習の地図 (上から下へ進みます。線は「先に済ませると分かりやすい」の関係です)").default_open(true).show(ui, |ui| {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing.x = 18.0;
-                        ui.colored_label(Color32::from_rgb(255, 205, 70), "★ 次はこれ");
+                        ui.colored_label(crate::theme::HIGHLIGHT, "★ 次はこれ");
                         ui.colored_label(crate::theme::WARN, "橙の枠 = いま学べる");
                         ui.colored_label(crate::theme::OK, "緑 = 完了");
                         ui.colored_label(Color32::from_gray(190), "灰色の枠 = 先に済ませるレッスンがある");
@@ -853,7 +853,7 @@ impl LearnWindow {
                             }
                         }
                         if item.real.is_some() {
-                            ui.colored_label(Color32::from_rgb(90, 170, 220), "[実験あり]").on_hover_text(item.real.unwrap_or_default());
+                            ui.colored_label(crate::theme::INFO, "[実験あり]").on_hover_text(item.real.unwrap_or_default());
                         }
                     });
                     ui.indent(("path_item", path.id, item.id), |ui| {
@@ -948,13 +948,13 @@ fn tree_map(ui: &mut egui::Ui, path: &LearningPath, progress: &Progress, next_id
         let painter = ui.painter().with_clip_rect(boxes[k]);
         painter.rect_filled(boxes[k], 4.0, fill);
         let width = if is_recommended { 3.5 } else if next_ids.contains(&item.id) { 2.0 } else { 1.0 };
-        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { Color32::from_rgb(255, 205, 70) } else { stroke }), egui::StrokeKind::Inside);
+        painter.rect_stroke(boxes[k], 4.0, egui::Stroke::new(width, if is_recommended { crate::theme::HIGHLIGHT } else { stroke }), egui::StrokeKind::Inside);
         let galley = painter.layout(item.title.to_string(), egui::FontId::proportional(14.0), text, W - 10.0);
         painter.galley(boxes[k].min + egui::vec2(5.0, 4.0), galley, text);
         if is_recommended {
             // a badge on the top edge: this is the one to take next
             let badge = egui::Rect::from_min_size(boxes[k].right_top() + egui::vec2(-80.0, -19.0), egui::vec2(78.0, 18.0));
-            ui.painter().rect_filled(badge, 9.0, Color32::from_rgb(255, 205, 70));
+            ui.painter().rect_filled(badge, 9.0, crate::theme::HIGHLIGHT);
             ui.painter().text(badge.center(), egui::Align2::CENTER_CENTER, "★ 次はこれ", egui::FontId::proportional(12.0), Color32::BLACK);
         }
         let response = response.on_hover_text(if item.kind == Kind::Planned { format!("{}

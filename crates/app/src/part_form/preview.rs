@@ -10,9 +10,9 @@ impl PartForm {
                 return None;
             }
         };
-        ui.label(egui::RichText::new("回路図の記号").strong());
+        crate::widgets::section_heading(ui, "回路図の記号");
         symbol_preview(ui, def);
-        ui.label(egui::RichText::new("部品の形 (実寸比)").strong());
+        crate::widgets::section_heading(ui, "部品の形 (実寸比)");
         if let Ok(fp) = def.footprint() {
             footprint_preview(ui, &fp);
             if let Some(h) = fp.height {
@@ -29,7 +29,7 @@ impl PartForm {
             }
             for i in &issues {
                 // an "error" here only means "cannot be saved yet": a blank form starts with some, so it is worded as a to-do
-                let (c, mark) = if i.error { (Color32::from_rgb(215, 90, 70), "保存前に直す") } else { (crate::theme::WARN, "注意") };
+                let (c, mark) = if i.error { (crate::theme::ERROR, "保存前に直す") } else { (crate::theme::WARN, "注意") };
                 ui.colored_label(c, format!("{mark}: {}", i.message));
             }
         });
@@ -43,7 +43,7 @@ impl PartForm {
         if let Some(n) = self.editing().filter(|_| !replaces) {
             ui.small(format!("「{n}」から名前を変えたので、別の部品として追加します (元の部品は残ります)"));
         }
-        if ui.add_enabled(ok, egui::Button::new(egui::RichText::new(label).size(15.0))).on_hover_text(tip.replace("{}", &def.name)).clicked() {
+        if crate::widgets::primary_button(ui, ok, label).on_hover_text(tip.replace("{}", &def.name)).clicked() {
             return Some(def.clone());
         }
         None

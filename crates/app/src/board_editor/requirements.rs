@@ -31,7 +31,7 @@ impl BoardEditor {
         let boxes = self.part_boxes();
         let (good, bad) = (crate::theme::OK, Color32::from_rgb(255, 60, 200));
         // not kept, but the table accepts it (a waiver with its reason)
-        let accepted = Color32::from_rgb(210, 190, 90);
+        let accepted = crate::theme::WARN;
         // the frames and lines go into one mesh and are handed over before each tag, so that the tags lie over them
         let mut mesh = egui::Mesh::default();
         // a dark halo under every line and frame: the top copper is red and the inner layers green, so the colour alone is not enough
@@ -197,7 +197,7 @@ impl BoardEditor {
         }
         let answer = self.cached_requirements();
         let rep = &answer.0;
-        let orange = Color32::from_rgb(255, 180, 60);
+        let orange = crate::theme::WARN;
         if rep.findings.is_empty() {
             ui.label(format!("✔ 設計の要件を満たしています ({} 件を確認)", rep.checked)).on_hover_text("回路図の「設計の要件」の表にある、近くに置く組と、離す組を調べました。上限や下限の0のものは調べません");
         } else {
@@ -232,7 +232,7 @@ impl BoardEditor {
             egui::CollapsingHeader::new(format!("承知した例外 ({})", rep.waived.len())).id_salt("req_waived").default_open(false).show(ui, |ui| {
                 for (f, why) in &rep.waived {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(&f.message).color(Color32::from_rgb(210, 190, 90)));
+                        ui.label(egui::RichText::new(&f.message).color(crate::theme::WARN));
                         ui.label(egui::RichText::new(format!("理由: {}", if why.trim().is_empty() { "(書かれていません)" } else { why })).small());
                         if ui.small_button("承知をやめる").on_hover_text("この例外を取り消して、また指摘に戻します。回路図の表からも消えます").clicked() {
                             let w = design_spec::Waiver { kind: f.kind.key().into(), name: f.name.clone(), item: f.item.clone(), note: String::new() };

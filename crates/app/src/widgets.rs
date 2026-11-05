@@ -12,6 +12,20 @@ pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
     ui.button("閉じる").on_hover_text(format!("{what}を閉じます")).clicked()
 }
 
+/// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"): filled with the accent so it stands out from the grey
+/// buttons. Use at most one per panel. Disabled (`enabled == false`) it looks like any greyed button.
+pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
+    let text = egui::RichText::new(label).color(egui::Color32::WHITE).strong();
+    let button = egui::Button::new(text).fill(crate::theme::ACCENT).min_size(egui::vec2(0.0, 26.0));
+    ui.add_enabled(enabled, button)
+}
+
+/// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
+pub fn section_heading(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    ui.add_space(crate::theme::SPACE_S);
+    ui.label(egui::RichText::new(text).strong().color(ui.visuals().selection.stroke.color))
+}
+
 /// Where a guide or table window first opens: just right of the left panel, so the panel it talks about ("左の…") stays in view
 /// and the buttons in it can still be pressed (egui would open it in the top-left corner, on top of the panel).
 pub fn beside_panel() -> egui::Pos2 {
@@ -26,7 +40,7 @@ pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[
         ui.spacing_mut().item_spacing.x = 3.0;
         for &(value, label, hover) in tabs {
             let selected = *current == value;
-            let text = egui::RichText::new(label).size(15.0);
+            let text = egui::RichText::new(label).size(14.0);
             let (text, fill) = if selected {
                 (text.strong().color(ui.visuals().strong_text_color()), ui.visuals().selection.bg_fill)
             } else {

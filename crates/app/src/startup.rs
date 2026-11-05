@@ -47,6 +47,7 @@ pub(super) fn install_japanese_font(ctx: &egui::Context) {
     // the default body / button size (12.5 px) is not a whole pixel count (13 px fails the same way), and with this font the
     // thin hyphen / minus stroke then vanishes ("1e-6" reads "1e 6", "-3dB" reads "3dB")
     ctx.all_styles_mut(|style| {
+        crate::theme::apply(style);
         for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
             style.text_styles.insert(ts, egui::FontId::proportional(14.0));
         }

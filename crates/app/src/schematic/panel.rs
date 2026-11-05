@@ -152,7 +152,7 @@ impl SchEditor {
                 self.redo();
             }
         });
-        if self.lit(ui.button("クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
+        if self.lit(crate::widgets::primary_button(ui, true, "クイック追加 (A)"), "クイック追加 (A)").on_hover_text("部品の名前を打って探し、↑↓と Enter で置く部品にします。回路図の上で A キーを押しても開きます。お気に入りと最近使った部品が先頭に出ます").clicked() {
             self.open_quick_add();
         }
         if self.tool == Tool::Label {
