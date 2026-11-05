@@ -109,13 +109,14 @@ pub struct Style<'a> {
 }
 
 pub const PALETTE: [Color32; 8] = [
-    Color32::from_rgb(240, 200, 60),
-    Color32::from_rgb(70, 200, 230),
-    Color32::from_rgb(230, 90, 200),
-    Color32::from_rgb(110, 220, 110),
-    Color32::from_rgb(250, 140, 60),
-    Color32::from_rgb(140, 160, 255),
-    Color32::from_rgb(255, 130, 140),
+    // one lightness and chroma (OKLCH L 0.78, C 0.14), only the hue changes; the last is a neutral grey
+    Color32::from_rgb(211, 182, 59),
+    Color32::from_rgb(70, 205, 235),
+    Color32::from_rgb(238, 148, 219),
+    Color32::from_rgb(122, 207, 126),
+    Color32::from_rgb(251, 157, 89),
+    Color32::from_rgb(175, 169, 255),
+    Color32::from_rgb(255, 144, 146),
     Color32::from_rgb(225, 225, 225),
 ];
 

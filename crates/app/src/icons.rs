@@ -222,7 +222,7 @@ pub fn icon_button_key(ui: &mut egui::Ui, icon: Icon, label: &str, key: &str, se
         // always drawn as a button (a resting fill and edge), so that it is not taken for a label; the chosen one is filled with the accent
         let widgets = &ui.visuals().widgets;
         let (fill, stroke) = if selected {
-            (ui.visuals().selection.bg_fill, Stroke::new(1.0, ui.visuals().selection.stroke.color))
+            (ui.visuals().selection.bg_fill, Stroke::new(1.0, crate::theme::INFO))
         } else if resp.hovered() || resp.has_focus() {
             (vis.weak_bg_fill, vis.bg_stroke)
         } else {

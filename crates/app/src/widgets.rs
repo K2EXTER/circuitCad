@@ -23,7 +23,7 @@ pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Re
 /// The title of a block inside a panel or window ("回路図の記号"): a step stronger than the body, in the light accent, with a little air above.
 pub fn section_heading(ui: &mut egui::Ui, text: &str) -> egui::Response {
     ui.add_space(crate::theme::SPACE_S);
-    ui.label(egui::RichText::new(text).strong().color(ui.visuals().selection.stroke.color))
+    ui.label(egui::RichText::new(text).strong().color(crate::theme::INFO))
 }
 
 /// Where a guide or table window first opens: just right of the left panel, so the panel it talks about ("左の…") stays in view
@@ -35,7 +35,7 @@ pub fn beside_panel() -> egui::Pos2 {
 /// A row of tabs: each tab is a button, the chosen one is filled and underlined, and a line runs under the row, so it reads as tabs and
 /// not as a few words. `tabs` is `(value, label, hover text)`; an empty hover text shows none. The row wraps when the window is narrow.
 pub fn tab_bar<T: PartialEq + Copy>(ui: &mut egui::Ui, current: &mut T, tabs: &[(T, &str, &str)]) {
-    let accent = ui.visuals().selection.stroke.color;
+    let accent = crate::theme::INFO;
     let row = ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 3.0;
         for &(value, label, hover) in tabs {
