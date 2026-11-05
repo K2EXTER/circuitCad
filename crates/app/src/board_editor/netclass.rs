@@ -22,10 +22,10 @@ impl BoardEditor {
                 ui.small(format!("この構成で、外層の 50 Ω は、線幅 約 {w:.2} mm です"));
             }
             ui.horizontal(|ui| {
-                if ui.small_button("この層数の目安を入れる").on_hover_text("2層なら、1.6 mm の基板の裏の銅までの距離 (1.53 mm)。4層以上なら、外層と隣のベタの間が薄い (0.2 mm) 例を入れます。層の間隔は発注先ごとに違うので、あくまで例です。公式ページの値に直してください").clicked() {
+                if ui.button("この層数の目安を入れる").on_hover_text("2層なら、1.6 mm の基板の裏の銅までの距離 (1.53 mm)。4層以上なら、外層と隣のベタの間が薄い (0.2 mm) 例を入れます。層の間隔は発注先ごとに違うので、あくまで例です。公式ページの値に直してください").clicked() {
                     s.height = if total > 2 { 0.2 } else { pcb_core::impedance::Stackup::default().height };
                 }
-                if ui.small_button("初期値に戻す").on_hover_text("ふつうの 1.6 mm・2層基板の値に戻します").clicked() {
+                if ui.button("初期値に戻す").on_hover_text("ふつうの 1.6 mm・2層基板の値に戻します").clicked() {
                     s = pcb_core::impedance::Stackup::default();
                 }
             });

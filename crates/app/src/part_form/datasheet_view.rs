@@ -564,7 +564,7 @@ impl Opened {
             self.search = Search::new(Query::new(&self.query).into_iter().collect(), None);
         }
         ui.horizontal_wrapped(|ui| {
-            if ui.small_button("ピン表を囲む").on_hover_text("ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます").clicked() {
+            if ui.button("ピン表を囲む").on_hover_text("ページの上でピン表をドラッグで囲むと、番号と名前を読み取ります。読み取った内容は確認して、ピン表に入れます").clicked() {
                 self.selecting = true;
                 self.target = None;
             }

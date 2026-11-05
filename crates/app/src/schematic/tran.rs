@@ -156,7 +156,7 @@ impl SchEditor {
                 if flat {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(egui::RichText::new("波形が後半ほとんど動いていません。回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。").size(12.0));
-                        if ui.small_button("終了時間を10倍にして計算し直す").on_hover_text("終了時間の欄を10倍にして、もう一度過渡解析を実行します").clicked() {
+                        if ui.button("終了時間を10倍にして計算し直す").on_hover_text("終了時間の欄を10倍にして、もう一度過渡解析を実行します").clicked() {
                             longer = true;
                         }
                     });

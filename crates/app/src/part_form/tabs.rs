@@ -308,7 +308,7 @@ impl PartForm {
             if self.keep_package {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(crate::theme::WARN, "この部品のパッドは、1つずつ指定されています (下の寸法は使われていません)。");
-                    if ui.small_button("寸法で作り直す").on_hover_text("いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます").clicked() {
+                    if ui.button("寸法で作り直す").on_hover_text("いまのパッドを捨てて、下の寸法 (ピッチ・列間隔など) からパッドを作り直します。ピンの数と並びが合うか、右の絵で確かめてください。標準のフットプリントを選んでも置き換えられます").clicked() {
                         self.keep_package = false;
                     }
                 });

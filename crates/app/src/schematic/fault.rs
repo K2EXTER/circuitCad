@@ -665,7 +665,7 @@ impl SchEditor {
                         ui.label(l);
                     }
                 }
-                if ui.small_button("閉じる").on_hover_text("連鎖故障の説明を消します").clicked() {
+                if ui.button("閉じる").on_hover_text("連鎖故障の説明を消します").clicked() {
                     self.fault_chain = None;
                 }
             }

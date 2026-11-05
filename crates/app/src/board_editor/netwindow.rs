@@ -49,7 +49,7 @@ fn finish_override_ui(ui: &mut egui::Ui, o: &mut pcb_core::smooth::FinishOverrid
                     ui.add(egui::DragValue::new(r).speed(0.05).range(0.1..=5.0).suffix(" mm")).on_hover_text("角の丸みの半径。配線が短いと、入る大きさまで自動で小さくなります");
                 }
             });
-            if !o.is_default() && ui.small_button("基板全体の設定に戻す").on_hover_text("このクラスの整え方の変更をすべてやめます").clicked() {
+            if !o.is_default() && ui.button("基板全体の設定に戻す").on_hover_text("このクラスの整え方の変更をすべてやめます").clicked() {
                 *o = Default::default();
             }
         });

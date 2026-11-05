@@ -178,7 +178,7 @@ impl BoardEditor {
                     ui.label(egui::RichText::new(what).small().color(Color32::GRAY));
                 });
             }
-            if ui.small_button("回路図で表を開く").on_hover_text("表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます").clicked() {
+            if ui.button("回路図で表を開く").on_hover_text("表は回路図の側で直します (基板と回路図で食い違わないように、ここは見るだけです)。直すと基板に自動で取り込まれます").clicked() {
                 open_sch = true;
             }
         });
