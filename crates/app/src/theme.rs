@@ -40,6 +40,8 @@ pub fn apply(style: &mut egui::Style) {
     v.widgets.inactive.weak_bg_fill = Color32::from_gray(48);
     v.widgets.inactive.bg_fill = Color32::from_gray(48);
     v.widgets.hovered.weak_bg_fill = Color32::from_gray(62);
+    v.widgets.active.weak_bg_fill = ACCENT;
+    v.widgets.active.bg_fill = ACCENT;
     v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, ACCENT_HOVER);
     // the chosen tab, tool or list row: one fill, white text (egui draws selected text in `selection.stroke`), a light edge
     v.selection.bg_fill = SELECTED_BG;

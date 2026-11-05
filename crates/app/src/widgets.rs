@@ -12,11 +12,11 @@ pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
     ui.button("閉じる").on_hover_text(format!("{what}を閉じます")).clicked()
 }
 
-/// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"): filled with the accent so it stands out from the grey
-/// buttons. Use at most one per panel. Disabled (`enabled == false`) it looks like any greyed button.
+/// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"). Buttons are grey until pressed, so it keeps the grey
+/// and is told apart by its bold text and a little more height; the hover edge and the press colour are the shared accent. Use at most
+/// one per panel.
 pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
-    let text = egui::RichText::new(label).color(egui::Color32::WHITE).strong();
-    let button = egui::Button::new(text).fill(crate::theme::ACCENT).min_size(egui::vec2(0.0, 26.0));
+    let button = egui::Button::new(egui::RichText::new(label).strong()).min_size(egui::vec2(0.0, 26.0));
     ui.add_enabled(enabled, button)
 }
 
