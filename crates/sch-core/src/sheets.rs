@@ -23,6 +23,8 @@ pub struct Sheet {
     pub buses: Vec<Wire>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub erc_skip: Vec<(Pt, Pt)>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ports: Vec<SheetPort>,
 }
 
 /// The sheet number and the place on that sheet of a point of the flat sheet.
@@ -37,32 +39,23 @@ impl Schematic {
         self.sheets.len().max(1)
     }
 
+    /// The name of sheet `k`; a place (slot) of the flat sheet beyond the sheets is a copy of a child sheet: "child (instance)".
     pub fn sheet_name(&self, k: usize) -> String {
+        if k >= self.sheets.len().max(1) {
+            if let Some(i) = self.instances().into_iter().find(|i| i.slot == k) {
+                return format!("{} ({})", self.sheet_name(i.sheet), i.path.join("."));
+            }
+        }
         self.sheets.get(k).map(|s| s.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| format!("シート{}", k + 1))
     }
 
-    /// All sheets as one: sheet `k` is moved `k * SHEET_STRIDE` to the right. A single sheet is returned as it is.
+    /// All sheets as one, every sheet symbol replaced by a copy of its child sheet (see `hierarchy.rs`): the sheet `k` that no
+    /// symbol refers to is moved `k * SHEET_STRIDE` to the right. A single sheet is returned as it is.
     pub fn flat(&self) -> Cow<'_, Schematic> {
         if self.sheets.is_empty() {
             return Cow::Borrowed(self);
         }
-        let mut out = Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], erc_skip: vec![], sheets: vec![], active_sheet: 0, ..self.clone() };
-        for k in 0..self.sheets.len() {
-            let dx = k as i32 * SHEET_STRIDE;
-            let mv = |p: Pt| (p.0 + dx, p.1);
-            let (comps, wires, labels, skip, buses) = if k == self.active_sheet {
-                (&self.components, &self.wires, &self.labels, &self.erc_skip, &self.buses)
-            } else {
-                let s = &self.sheets[k];
-                (&s.components, &s.wires, &s.labels, &s.erc_skip, &s.buses)
-            };
-            out.components.extend(comps.iter().map(|c| Component { pos: mv(c.pos), ..c.clone() }));
-            out.wires.extend(wires.iter().map(|w| Wire { a: mv(w.a), b: mv(w.b) }));
-            out.labels.extend(labels.iter().map(|l| Label { pos: mv(l.pos), ..l.clone() }));
-            out.buses.extend(buses.iter().map(|w| Wire { a: mv(w.a), b: mv(w.b) }));
-            out.erc_skip.extend(skip.iter().map(|&(a, b)| (mv(a), mv(b))));
-        }
-        Cow::Owned(out)
+        Cow::Owned(self.expand())
     }
 
     /// Puts the editing fields away into the active sheet's place.
@@ -74,6 +67,7 @@ impl Schematic {
         s.labels = std::mem::take(&mut self.labels);
         s.buses = std::mem::take(&mut self.buses);
         s.erc_skip = std::mem::take(&mut self.erc_skip);
+        s.ports = std::mem::take(&mut self.ports);
     }
 
     /// Takes sheet `k` into the editing fields (they must be empty).
@@ -84,6 +78,7 @@ impl Schematic {
         self.labels = std::mem::take(&mut s.labels);
         self.buses = std::mem::take(&mut s.buses);
         self.erc_skip = std::mem::take(&mut s.erc_skip);
+        self.ports = std::mem::take(&mut s.ports);
         self.active_sheet = k;
     }
 
@@ -123,12 +118,14 @@ impl Schematic {
         if self.sheets.len() < 2 || k >= self.sheets.len() {
             return false;
         }
+        self.forget_sheet_refs(k);
         if k == self.active_sheet {
             self.components.clear();
             self.wires.clear();
             self.labels.clear();
             self.buses.clear();
             self.erc_skip.clear();
+            self.ports.clear();
             self.sheets.remove(k);
             self.unpark(k.min(self.sheets.len() - 1));
         } else {

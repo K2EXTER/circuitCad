@@ -170,7 +170,40 @@ impl Session {
                 self.cursor = self.cursor_below();
                 Ok(obj(json!({"tidied": sizes, "hint": "the parts are in rows about 1.7 times as wide as tall; nets and labels are unchanged"})))
             }
-            _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all]]".into()),
+            "port" => {
+                // a port of this sheet: a pin of the symbol that stands for the sheet where it is used as a child sheet
+                let usage = "sheet port NAME REF.PIN [dir=in|out|io]   (a port at that pin of a part on the active sheet)";
+                let name = pos.get(1).ok_or(usage)?;
+                let at = pos.get(2).ok_or(usage)?;
+                let (rf, pin) = at.split_once('.').ok_or(usage)?;
+                let comp = self.sch.components.iter().find(|c| c.refdes.eq_ignore_ascii_case(rf)).ok_or_else(|| format!("no part {rf} on the active sheet"))?;
+                let place = comp.pins().into_iter().find(|(n, _)| n.eq_ignore_ascii_case(pin)).ok_or_else(|| format!("{} has no pin {pin}", comp.refdes))?.1;
+                let dir = match opt(&kv, "dir").map(|d| d.to_ascii_lowercase()).as_deref() {
+                    None | Some("io") => sch_core::PortDir::Io,
+                    Some("in") => sch_core::PortDir::In,
+                    Some("out") => sch_core::PortDir::Out,
+                    Some(other) => return Err(format!("dir={other}: use in, out or io")),
+                };
+                if self.sch.ports.iter().any(|p| p.name == *name) {
+                    return Err(format!("the sheet has a port {name} already"));
+                }
+                self.sch.ports.push(sch_core::SheetPort { pos: place, name: name.clone(), dir });
+                self.sch.refresh_sheet_symbols();
+                Ok(obj(json!({"port": name, "at": at, "ports": self.sch.ports.len(), "hint": "'sheet place' puts a symbol of this sheet on another sheet; its pins are the ports"})))
+            }
+            "place" => {
+                // a symbol of another sheet on the active sheet: one copy of that sheet per symbol
+                let child = self.sheet_index(pos.get(1).ok_or("sheet place N|NAME   (a symbol of that sheet on the active sheet)")?)?;
+                if self.sch.sheets.is_empty() {
+                    return Err("the circuit has one sheet: 'sheet add' makes the other".into());
+                }
+                let (x, y, _) = self.cursor;
+                let i = self.sch.add_sheet_symbol(child, (x, y)).ok_or("a sheet cannot hold a symbol of itself")?;
+                self.cursor.1 += 14;
+                let c = &self.sch.components[i];
+                Ok(obj(json!({"placed": c.refdes, "sheet": self.sch.sheet_name(child), "pins": c.pins().into_iter().map(|(n, _)| n).collect::<Vec<_>>(), "hint": "wire or label the pins like any part; each symbol is one copy of the sheet, its parts are called R1_CH1 and its labels CH1.NAME"})))
+            }
+            _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all] | port NAME REF.PIN [dir=] | place N|NAME]".into()),
         }
     }
 }

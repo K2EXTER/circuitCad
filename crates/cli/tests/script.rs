@@ -1012,6 +1012,25 @@ fn sheets_split_a_label_circuit_without_changing_its_answer() {
 }
 
 #[test]
+fn a_sheet_used_twice_is_two_copies_with_their_own_parts_and_nets() {
+    // a divider on its own sheet, used by two symbols on the first sheet
+    let script = "new\nsheet add Divider\nadd R 10k as=R1\nadd R 10k as=R2\nnet MID R1.2 R2.1\nnet GND R2.2\nsheet port IN R1.1 dir=in\nsheet port OUT R1.2 dir=out\n\
+                  sheet use 1\nadd V 10 as=V1\nsheet place Divider\nsheet place Divider\nnet VIN V1.+ CH1.IN CH2.IN\nnet GND V1.-\n\
+                  erc\ndc probe=V(CH1.MID),V(CH2.MID)\n";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let placed: Vec<_> = a.iter().filter(|v| v.get("placed").is_some()).map(|v| v["placed"].as_str().unwrap().to_string()).collect();
+    assert_eq!(placed, ["CH1", "CH2"]);
+    assert_eq!(last(&a, "erc")["errors"], 0, "{a:?}");
+    let dc = last(&a, "dc");
+    for p in ["V(CH1.MID)", "V(CH2.MID)"] {
+        assert!((dc["probes"][p].as_f64().unwrap() - 5.0).abs() < 1e-6, "{p}: {dc}");
+    }
+    let (a, ok) = run("new\nsheet add Other\nsheet place Other\n");
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("itself"), "{a:?}");
+}
+
+#[test]
 fn tidy_packs_a_sprawling_sheet_into_a_compact_one_and_keeps_the_circuit() {
     let mut s = String::from("new
 add V 12 as=V1

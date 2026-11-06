@@ -1,3 +1,4 @@
+use crate::hierarchy::GENERATED;
 use crate::{on_segment, sheet_of, Kind, Label, Pt, Schematic, SHEET_STRIDE};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -130,7 +131,8 @@ pub fn extract(s: &Schematic) -> Vec<Net> {
 /// Name of the net that passes through grid point `p` (a pin, a wire, a label), as `extract`
 /// would call it. `None` when nothing is connected there or the net has no component pin.
 pub fn net_at(s: &Schematic, p: Pt) -> Option<String> {
-    let p = (p.0 + s.active_sheet as i32 * SHEET_STRIDE, p.1);
+    // a child sheet is drawn in the place of its first copy
+    let p = (p.0 + s.first_slot_of(s.active_sheet) as i32 * SHEET_STRIDE, p.1);
     let mut probe = s.flat().into_owned();
     probe.labels.push(Label { pos: p, text: String::new() });
     let skip = probe.labels.len() - 1;
@@ -190,8 +192,9 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
     for (n, g) in &by_name {
         let root = cn.dsu.find(*g);
         let e = name_of.entry(root).or_insert_with(|| n.clone());
-        // deterministic and tidy: prefer GND, otherwise the alphabetically first
-        if n == "GND" || (e != "GND" && n < e) {
+        // deterministic and tidy: prefer GND, then a name somebody wrote over one the sheet expansion made, then the alphabetically first
+        let rank = |s: &str| if s == "GND" { 0 } else if s.starts_with(GENERATED) { 2 } else { 1 };
+        if (rank(n), n.as_str()) < (rank(e), e.as_str()) {
             *e = n.clone();
         }
     }
@@ -210,21 +213,24 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
                 }
             }
         });
+        // a name the sheet expansion made (a net inside a copy of a child sheet) is shown without its mark
+        let name = name.trim_start_matches(GENERATED).to_string();
         nets.push((g, Net { name, pins }));
     }
     (cn, nets)
 }
 
 /// Electrical rule check. Findings located inside a work-in-progress area (`Schematic::erc_skip`) are left out.
-pub fn erc(s: &Schematic) -> Vec<Problem> {
-    let s = &*s.flat();
+pub fn erc(whole: &Schematic) -> Vec<Problem> {
+    let s = &*whole.flat();
     let mut out = erc_all(s);
     out.retain(|p| p.at.is_none_or(|a| !s.erc_skip.iter().any(|(lo, hi)| a.0 >= lo.0 && a.0 <= hi.0 && a.1 >= lo.1 && a.1 <= hi.1)));
-    // findings are placed on their own sheet
+    // findings are placed on their own sheet (a finding in a copy of a child sheet is shown on the child sheet)
+    let copies = whole.instances();
     for p in &mut out {
         if let Some(a) = p.at {
             let (k, local) = sheet_of(a);
-            (p.sheet, p.at) = (k, Some(local));
+            (p.sheet, p.at) = (copies.iter().find(|i| i.slot == k).map_or(k, |i| i.sheet), Some(local));
         }
     }
     out

@@ -8,10 +8,12 @@ mod bus;
 mod noconnect;
 mod programming;
 mod requirements;
+mod hierarchy;
 mod sheets;
 mod spice;
 pub use backannotate::BackAnnotation;
 pub use bus::{bus_member, bus_members, is_bus_label, parse_bus};
+pub use hierarchy::{Instance, PortDir, SheetPort, SubRef};
 pub use sheets::{sheet_of, Sheet, SHEET_STRIDE};
 pub use design_spec::{matches_name, DesignSpec, KeepApart, NetRule, PlaceGroup, ROLES};
 
@@ -170,6 +172,9 @@ pub struct Component {
     /// Heat capacity (J/K) of the part and the copper it warms, for the temperature-over-time run; 0 = none given.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub cth: f64,
+    /// A sheet symbol: this part stands for another sheet (see `hierarchy.rs`); its reference designator is the instance name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub: Option<SubRef>,
 }
 
 fn is_zero_f64(x: &f64) -> bool {
@@ -237,6 +242,9 @@ pub struct Schematic {
     /// Bus lines: drawn thick, they connect nothing by themselves (see `bus.rs`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub buses: Vec<Wire>,
+    /// Ports of this sheet, used when it is a child sheet of a sheet symbol (see `hierarchy.rs`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ports: Vec<SheetPort>,
     pub layout_version: u32,
     /// Work-in-progress areas (min corner, max corner): ERC findings located inside are left out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -269,7 +277,7 @@ fn is_zero(n: &usize) -> bool {
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], active_sheet: 0 }
+        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], ports: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], active_sheet: 0 }
     }
 }
 
@@ -280,6 +288,8 @@ struct RawSchematic {
     labels: Vec<Label>,
     #[serde(default)]
     buses: Vec<Wire>,
+    #[serde(default)]
+    ports: Vec<SheetPort>,
     #[serde(default)]
     layout_version: u32,
     #[serde(default)]
@@ -302,7 +312,7 @@ struct RawSchematic {
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, active_sheet: r.active_sheet };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, ports: r.ports, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, active_sheet: r.active_sheet };
         s.migrate();
         s
     }
@@ -466,6 +476,7 @@ impl Schematic {
             theta: 0.0,
             tc_ppm: 0.0,
             cth: 0.0,
+            sub: None,
         });
         self.components.len() - 1
     }
@@ -486,6 +497,7 @@ impl Schematic {
             theta: 0.0,
             tc_ppm: 0.0,
             cth: 0.0,
+            sub: None,
         });
         self.components.len() - 1
     }

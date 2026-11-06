@@ -1,0 +1,417 @@
+//! Sheet hierarchy: a sheet symbol (a part with `sub`) stands for another sheet, which can be used many times
+//! (the same channel repeated). Design: `docs/hierarchy-design.md`.
+//!
+//! Everything downstream (netlist, ERC, simulation, board import) works on `flat()`, so the expansion is done there:
+//! a sheet symbol is replaced by a copy of its child sheet, one copy per symbol.
+//! - Reference designators of the copy: `R1_CH1` (the first letter stays, SPICE decides the kind of the element by it).
+//! - Net labels of the copy: `CH1.NAME`, a net of its own per copy. Power symbols (VCC, GND) stay global.
+//! - Ports of the child sheet join the pins of the symbol, by a pair of labels with the same made-up name.
+//! - A sheet that no symbol refers to stays an ordinary sheet, as before.
+
+use crate::*;
+
+/// How many symbols deep a child sheet may be used (a sheet using itself is cut earlier).
+pub const MAX_DEPTH: usize = 8;
+
+/// The first character of a net name made by the expansion. Such a name never wins over a name the user wrote when a net
+/// has both (the net of a port is called by the name of the parent's wire); `extract` takes the character off again.
+pub const GENERATED: char = '\u{1}';
+
+/// Which way a port passes a signal. It only decides the side of the sheet symbol the pin is drawn on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PortDir {
+    In,
+    Out,
+    Io,
+}
+
+/// A port of a child sheet: a name at a place on the sheet. It is the pin of the same name on the sheet symbols that use the sheet.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SheetPort {
+    pub pos: Pt,
+    pub name: String,
+    pub dir: PortDir,
+}
+
+/// What a sheet symbol stands for: the number of the child sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubRef {
+    pub sheet: usize,
+}
+
+/// One copy of a sheet in the flat sheet: its place (slot, `slot * SHEET_STRIDE` to the right), the sheet it is a copy of, and
+/// the instance names from the top (empty for an ordinary sheet).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Instance {
+    pub slot: usize,
+    pub sheet: usize,
+    pub path: Vec<String>,
+}
+
+struct Parts<'a> {
+    comps: &'a [Component],
+    wires: &'a [Wire],
+    labels: &'a [Label],
+    buses: &'a [Wire],
+    skip: &'a [(Pt, Pt)],
+    ports: &'a [SheetPort],
+}
+
+/// The name a net of the copy at `path` gets: the same text on both sides of a port makes them one net.
+fn generated(path: &[String], name: &str) -> String {
+    format!("{GENERATED}{}.{name}", path.join("."))
+}
+
+impl Schematic {
+    fn parts(&self, k: usize) -> Parts<'_> {
+        if k == self.active_sheet || self.sheets.is_empty() {
+            Parts { comps: &self.components, wires: &self.wires, labels: &self.labels, buses: &self.buses, skip: &self.erc_skip, ports: &self.ports }
+        } else {
+            let s = &self.sheets[k];
+            Parts { comps: &s.components, wires: &s.wires, labels: &s.labels, buses: &s.buses, skip: &s.erc_skip, ports: &s.ports }
+        }
+    }
+
+    /// The sheets some other sheet's symbol refers to (the child sheets).
+    pub fn child_sheets(&self) -> Vec<usize> {
+        let n = self.sheet_count();
+        let mut out: Vec<usize> = vec![];
+        for k in 0..n {
+            for c in self.parts(k).comps {
+                if let Some(sub) = c.sub
+                    && sub.sheet < n
+                    && sub.sheet != k
+                    && !out.contains(&sub.sheet)
+                {
+                    out.push(sub.sheet);
+                }
+            }
+        }
+        out.sort_unstable();
+        out
+    }
+
+    /// Every copy of a sheet in the flat sheet, in the order they are laid out. The sheets nothing refers to come first
+    /// in their own places (as before); the copies made for the symbols follow, from slot `sheet_count()` on.
+    pub fn instances(&self) -> Vec<Instance> {
+        let n = self.sheet_count();
+        let children = self.child_sheets();
+        let mut tops: Vec<usize> = (0..n).filter(|k| !children.contains(k)).collect();
+        if tops.is_empty() {
+            // sheets that use each other in a ring: the first one stands for the whole
+            tops.push(0);
+        }
+        let mut out = vec![];
+        let mut next = n;
+        for k in tops {
+            out.push(Instance { slot: k, sheet: k, path: vec![] });
+            self.collect_copies(k, &[], &[k], &mut next, &mut out);
+        }
+        out
+    }
+
+    fn collect_copies(&self, k: usize, path: &[String], chain: &[usize], next: &mut usize, out: &mut Vec<Instance>) {
+        if path.len() >= MAX_DEPTH {
+            return;
+        }
+        for c in self.parts(k).comps {
+            let Some(sub) = c.sub else { continue };
+            // a sheet inside itself (directly or through others) cannot be expanded
+            if sub.sheet >= self.sheet_count() || chain.contains(&sub.sheet) {
+                continue;
+            }
+            let mut p = path.to_vec();
+            p.push(c.refdes.clone());
+            out.push(Instance { slot: *next, sheet: sub.sheet, path: p.clone() });
+            *next += 1;
+            let mut ch = chain.to_vec();
+            ch.push(sub.sheet);
+            self.collect_copies(sub.sheet, &p, &ch, next, out);
+        }
+    }
+
+    /// The sheet (number) of a place in the flat sheet: for a copy of a child sheet, the child sheet itself.
+    pub fn slot_sheet(&self, slot: usize) -> usize {
+        self.instances().iter().find(|i| i.slot == slot).map_or(slot, |i| i.sheet)
+    }
+
+    /// The place in the flat sheet where sheet `k` is drawn (its first copy, for a child sheet; nothing is drawn for a child
+    /// sheet that no symbol uses yet, then its own number).
+    pub fn first_slot_of(&self, k: usize) -> usize {
+        self.instances().iter().find(|i| i.sheet == k).map_or(k, |i| i.slot)
+    }
+
+    /// The flat sheet: the sheets and the copies of the child sheets side by side. Only called when there are several sheets.
+    pub(crate) fn expand(&self) -> Schematic {
+        let mut out = Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], ports: vec![], erc_skip: vec![], sheets: vec![], active_sheet: 0, ..self.clone() };
+        let insts = self.instances();
+        for inst in &insts {
+            let dx = inst.slot as i32 * SHEET_STRIDE;
+            let mv = |p: Pt| (p.0 + dx, p.1);
+            let p = self.parts(inst.sheet);
+            let suffix = inst.path.join("_");
+            for c in p.comps {
+                if let Some(sub) = c.sub {
+                    // a symbol: its copy is laid out elsewhere; the pins are tied to the ports of the child by name
+                    let mut child_path = inst.path.clone();
+                    child_path.push(c.refdes.clone());
+                    if insts.iter().any(|i| i.path == child_path && i.sheet == sub.sheet) {
+                        let pins = c.pins();
+                        for port in self.parts(sub.sheet).ports {
+                            if let Some((_, at)) = pins.iter().find(|(n, _)| *n == port.name) {
+                                out.labels.push(Label { pos: mv(*at), text: generated(&child_path, &port.name) });
+                            }
+                        }
+                    }
+                    continue;
+                }
+                let mut c2 = Component { pos: mv(c.pos), ..c.clone() };
+                if !inst.path.is_empty() && !c.kind.is_power_symbol() {
+                    c2.refdes = format!("{}_{suffix}", c.refdes);
+                }
+                out.components.push(c2);
+            }
+            out.wires.extend(p.wires.iter().map(|w| Wire { a: mv(w.a), b: mv(w.b) }));
+            out.buses.extend(p.buses.iter().map(|w| Wire { a: mv(w.a), b: mv(w.b) }));
+            out.erc_skip.extend(p.skip.iter().map(|&(a, b)| (mv(a), mv(b))));
+            for l in p.labels {
+                // a copy's labels are its own nets (a bus label keeps its text: the bus check reads it)
+                let text = if inst.path.is_empty() || crate::bus::is_bus_label(&l.text) { l.text.clone() } else { generated(&inst.path, &l.text) };
+                out.labels.push(Label { pos: mv(l.pos), text });
+            }
+            if !inst.path.is_empty() {
+                for port in p.ports {
+                    out.labels.push(Label { pos: mv(port.pos), text: generated(&inst.path, &port.name) });
+                }
+            }
+        }
+        out
+    }
+
+    /// The symbol that stands for sheet `k`: a box with one pin per port, the inputs on the left and the rest on the right.
+    pub fn sheet_symbol(&self, k: usize) -> CustomSymbol {
+        let mut ports: Vec<&SheetPort> = self.parts(k).ports.iter().collect();
+        ports.sort_by(|a, b| (a.pos.1, &a.name).cmp(&(b.pos.1, &b.name)));
+        let mut pins: Vec<SymPin> = vec![];
+        for p in ports {
+            if p.name.is_empty() || pins.iter().any(|q| q.number == p.name) {
+                continue;
+            }
+            let side = if p.dir == PortDir::Out { PinSide::Right } else { PinSide::Left };
+            pins.push(SymPin { number: p.name.clone(), name: p.name.clone(), side, sim_only: false });
+        }
+        CustomSymbol { name: self.sheet_name(k), prefix: "CH".into(), pins, sim: None, ratings: None, glyph: String::new(), shops: Default::default(), programming: vec![] }
+    }
+
+    /// Puts a sheet symbol for sheet `child` on the sheet being edited. `None` when there is no such sheet, or it is the sheet
+    /// being edited (a sheet cannot hold itself). The symbol is called CH1, CH2, ... (the instance name; rename it in the part's number).
+    pub fn add_sheet_symbol(&mut self, child: usize, pos: Pt) -> Option<usize> {
+        if child >= self.sheet_count() || child == self.active_sheet || self.sheets.is_empty() {
+            return None;
+        }
+        let sym = self.sheet_symbol(child);
+        let i = self.add_custom(sym, &self.sheet_name(child), "", pos, 0);
+        self.components[i].sub = Some(SubRef { sheet: child });
+        self.components[i].sim_only = true;
+        Some(i)
+    }
+
+    /// Makes the pins of every sheet symbol follow the ports of its child sheet (after a port was added, renamed or removed).
+    pub fn refresh_sheet_symbols(&mut self) {
+        let syms: Vec<CustomSymbol> = (0..self.sheet_count()).map(|k| self.sheet_symbol(k)).collect();
+        let fix = |comps: &mut Vec<Component>| {
+            for c in comps.iter_mut() {
+                if let Some(sub) = c.sub
+                    && let Some(sym) = syms.get(sub.sheet)
+                {
+                    c.custom = Some(sym.clone());
+                }
+            }
+        };
+        fix(&mut self.components);
+        for s in &mut self.sheets {
+            fix(&mut s.components);
+        }
+    }
+
+    /// A sheet is about to be deleted: its symbols go too, and the numbers of the later sheets move up by one.
+    pub(crate) fn forget_sheet_refs(&mut self, gone: usize) {
+        let fix = |comps: &mut Vec<Component>| {
+            comps.retain(|c| c.sub.is_none_or(|s| s.sheet != gone));
+            for c in comps.iter_mut() {
+                if let Some(s) = &mut c.sub
+                    && s.sheet > gone
+                {
+                    s.sheet -= 1;
+                }
+            }
+        };
+        fix(&mut self.components);
+        for s in &mut self.sheets {
+            fix(&mut s.components);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Sheet 0 is the top; sheet 1 is a child: R1 and C1 in series, ports IN and OUT, a label MID between them.
+    fn channel() -> Schematic {
+        let mut s = Schematic::default();
+        s.add_sheet(); // sheet 1 is being edited
+        let r = s.add(Kind::Resistor, (10, 10), 0);
+        let c = s.add(Kind::Capacitor, (30, 10), 0);
+        let rp = s.components[r].pins();
+        let cp = s.components[c].pins();
+        s.wires.push(Wire { a: rp[1].1, b: cp[0].1 });
+        s.labels.push(Label { pos: rp[1].1, text: "MID".into() });
+        s.ports.push(SheetPort { pos: rp[0].1, name: "IN".into(), dir: PortDir::In });
+        s.ports.push(SheetPort { pos: cp[1].1, name: "OUT".into(), dir: PortDir::Out });
+        s.switch_sheet(0);
+        s
+    }
+
+    fn pin_of(s: &Schematic, i: usize, name: &str) -> Pt {
+        s.components[i].pins().into_iter().find(|(n, _)| n == name).unwrap().1
+    }
+
+    /// The top sheet uses the channel twice: CH1 gets SIG on its input, CH2 gets the output of CH1.
+    fn two_channels() -> Schematic {
+        let mut s = channel();
+        let a = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let b = s.add_sheet_symbol(1, (40, 10)).unwrap();
+        assert_eq!((s.components[a].refdes.as_str(), s.components[b].refdes.as_str()), ("CH1", "CH2"));
+        let (a_in, a_out, b_in) = (pin_of(&s, a, "IN"), pin_of(&s, a, "OUT"), pin_of(&s, b, "IN"));
+        s.labels.push(Label { pos: a_in, text: "SIG".into() });
+        s.wires.push(Wire { a: a_out, b: b_in });
+        s.labels.push(Label { pos: a_out, text: "BETWEEN".into() });
+        s
+    }
+
+    #[test]
+    fn a_child_sheet_is_expanded_once_per_symbol() {
+        let s = two_channels();
+        let flat = s.flat();
+        let mut refs: Vec<&str> = flat.components.iter().map(|c| c.refdes.as_str()).collect();
+        refs.sort();
+        assert_eq!(refs, ["C1_CH1", "C1_CH2", "R1_CH1", "R1_CH2"], "the symbols themselves are gone, the child's parts are copied");
+        assert_eq!(s.instances().len(), 3, "the top sheet and two copies");
+    }
+
+    #[test]
+    fn ports_join_the_symbol_pins_and_nets_keep_the_name_the_user_gave() {
+        let s = two_channels();
+        let nets = extract(&s);
+        let has = |name: &str, pin: (&str, &str)| nets.iter().any(|n| n.name == name && n.pins.iter().any(|p| p.refdes == pin.0 && p.pin == pin.1));
+        assert!(has("SIG", ("R1_CH1", "1")), "the parent's label names the net: {nets:?}");
+        assert!(has("BETWEEN", ("C1_CH1", "2")) && has("BETWEEN", ("R1_CH2", "1")), "the output of CH1 is the input of CH2: {nets:?}");
+        assert!(nets.iter().all(|n| !n.name.contains(GENERATED)), "the mark is taken off: {nets:?}");
+    }
+
+    #[test]
+    fn labels_of_a_copy_are_nets_of_its_own() {
+        let s = two_channels();
+        let nets = extract(&s);
+        let mid1 = nets.iter().find(|n| n.name == "CH1.MID").expect("CH1.MID");
+        let mid2 = nets.iter().find(|n| n.name == "CH2.MID").expect("CH2.MID");
+        assert!(mid1.pins.iter().all(|p| p.refdes.ends_with("_CH1")) && mid1.pins.len() == 2);
+        assert!(mid2.pins.iter().all(|p| p.refdes.ends_with("_CH2")) && mid2.pins.len() == 2);
+    }
+
+    #[test]
+    fn power_symbols_stay_global_in_a_copy() {
+        let mut s = channel();
+        s.switch_sheet(1);
+        let g = s.add(Kind::Ground, (50, 30), 0);
+        let c = s.components.iter().position(|c| c.refdes == "C1").unwrap();
+        let (cp, gp) = (s.components[c].pins()[1].1, s.components[g].pins()[0].1);
+        s.wires.push(Wire { a: cp, b: gp });
+        s.switch_sheet(0);
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let g0 = s.add(Kind::Ground, (60, 60), 0);
+        let top_gnd = s.components[g0].pins()[0].1;
+        s.wires.push(Wire { a: top_gnd, b: (top_gnd.0, top_gnd.1 + 2) });
+        let nets = extract(&s);
+        let gnd = nets.iter().find(|n| n.name == "GND").expect("GND");
+        assert!(gnd.pins.iter().any(|p| p.refdes == "C1_CH1" && p.pin == "2"), "{nets:?}");
+    }
+
+    #[test]
+    fn a_problem_in_a_copy_is_shown_on_the_child_sheet() {
+        let mut s = channel();
+        // a resistor left alone in the child sheet
+        s.switch_sheet(1);
+        s.add(Kind::Resistor, (60, 30), 0);
+        s.switch_sheet(0);
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let ps = erc(&s);
+        let p = ps.iter().find(|p| p.message.contains("R2_CH1")).expect("R2_CH1 is not connected");
+        assert_eq!(p.sheet, 1, "the child sheet, where the part is drawn");
+        assert_eq!(s.sheet_name(2), "シート2 (CH1)");
+    }
+
+    #[test]
+    fn a_sheet_inside_itself_is_not_expanded_forever() {
+        let mut s = channel();
+        // sheet 1 gets a symbol of sheet 0, and sheet 0 a symbol of sheet 1: a ring
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        s.switch_sheet(1);
+        s.add_sheet_symbol(0, (10, 40)).unwrap();
+        let flat = s.flat();
+        assert!(flat.components.len() < 20, "cut at the ring, not {}", flat.components.len());
+        assert!(s.add_sheet_symbol(1, (0, 0)).is_none(), "a sheet cannot hold itself");
+    }
+
+    #[test]
+    fn a_child_inside_a_child_gets_both_names() {
+        let mut s = Schematic::default();
+        s.add_sheet();
+        s.add_sheet(); // 0 = top, 1 = middle, 2 = leaf being edited
+        let r = s.add(Kind::Resistor, (10, 10), 0);
+        let rp = s.components[r].pins();
+        s.ports.push(SheetPort { pos: rp[0].1, name: "A".into(), dir: PortDir::Io });
+        s.switch_sheet(1);
+        let leaf = s.add_sheet_symbol(2, (10, 10)).unwrap();
+        s.components[leaf].refdes = "L".into();
+        s.switch_sheet(0);
+        let mid = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        s.components[mid].refdes = "M".into();
+        let flat = s.flat();
+        assert!(flat.components.iter().any(|c| c.refdes == "R1_M_L"), "{:?}", flat.components.iter().map(|c| &c.refdes).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn deleting_a_child_sheet_takes_its_symbols_and_renumbers() {
+        let mut s = two_channels();
+        s.add_sheet(); // a third sheet, sheet 2, being edited
+        s.switch_sheet(0);
+        assert!(s.remove_sheet(1));
+        assert!(s.components.iter().all(|c| c.sub.is_none()), "the symbols of the deleted sheet are gone");
+        assert_eq!(s.sheet_count(), 2);
+    }
+
+    #[test]
+    fn symbols_follow_the_ports_of_their_sheet() {
+        let mut s = two_channels();
+        s.switch_sheet(1);
+        s.ports.push(SheetPort { pos: (0, 0), name: "EN".into(), dir: PortDir::In });
+        s.switch_sheet(0);
+        s.refresh_sheet_symbols();
+        let ch = s.components.iter().find(|c| c.sub.is_some()).unwrap();
+        let pins: Vec<String> = ch.custom.as_ref().unwrap().pins.iter().map(|p| p.name.clone()).collect();
+        assert_eq!(pins.len(), 3);
+        assert!(pins.contains(&"EN".to_string()));
+    }
+
+    #[test]
+    fn a_hierarchy_round_trips_through_json_and_plain_files_stay_plain() {
+        let s = two_channels();
+        let back: Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back, s);
+        let plain = serde_json::to_string(&Schematic::default()).unwrap();
+        assert!(!plain.contains("ports") && !plain.contains("sub"), "{plain}");
+    }
+}
