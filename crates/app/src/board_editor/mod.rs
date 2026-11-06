@@ -233,10 +233,19 @@ type ZoneCache = Option<(u64, Vec<PourCache>)>;
 /// The pours and islands being worked out on another thread, for the geometry key given.
 type ZoneJob = Option<(u64, std::sync::mpsc::Receiver<(Vec<PourCache>, Vec<(Side, String, Vec<pcb_core::zonefill::FillShape>)>)>)>;
 
+/// The two pages of the left panel: the steps from import to order, and the hand-drawing tools.
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum PanelTab {
+    #[default]
+    Steps,
+    Draw,
+}
+
 pub struct BoardEditor {
     pub board: Board,
     pub path: Option<PathBuf>,
     tool: Tool,
+    panel_tab: PanelTab,
     side: Side,
     grid: f64,
     track_width: f64,
@@ -464,6 +473,7 @@ impl Default for BoardEditor {
             board: Board::new("board", 50.0, 40.0),
             path: None,
             tool: Tool::Select,
+            panel_tab: PanelTab::Steps,
             side: Side::Top,
             grid: 0.5,
             track_width: 0.25,

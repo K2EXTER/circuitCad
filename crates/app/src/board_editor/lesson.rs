@@ -484,6 +484,15 @@ fn title_of(which: usize) -> &'static str {
 }
 
 /// The steps of board lesson `which`.
+/// The panel tab a step is done on: the steps tab, except where the step names a hand-drawing tool or a work setting
+/// (the grid of the Arduino board lesson, drawing a line by hand in the Mega lesson).
+fn step_tab(which: usize, step: usize) -> PanelTab {
+    match (which, step) {
+        (3, 4) | (5, 1) => PanelTab::Draw,
+        _ => PanelTab::Steps,
+    }
+}
+
 fn steps_of(which: usize) -> &'static [Step] {
     match which {
         1 => COPPER_STEPS,
@@ -530,6 +539,7 @@ impl BoardEditor {
         self.new_file();
         self.drc_ran = false;
         self.lesson = Some(BoardLesson { which: 0, done: vec![false; STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -538,6 +548,7 @@ impl BoardEditor {
         self.new_file();
         self.drc_ran = false;
         self.lesson = Some(BoardLesson { which: 3, done: vec![false; ARDUINO_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{ARDUINO_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -546,6 +557,7 @@ impl BoardEditor {
         self.new_file();
         self.drc_ran = false;
         self.lesson = Some(BoardLesson { which: 4, done: vec![false; USB_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{USB_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -570,6 +582,7 @@ impl BoardEditor {
         self.post_layout_fresh = false;
         self.drc_ran = false;
         self.lesson = Some(BoardLesson { which: 1, done: vec![false; COPPER_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{COPPER_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -584,6 +597,7 @@ impl BoardEditor {
         self.drc_ran = false;
         self.order = order::OrderState::default();
         self.lesson = Some(BoardLesson { which: 2, done: vec![false; FIX_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("チャレンジ「{FIX_TITLE}」を始めました。右の案内に沿って、発注前チェックの赤と黄色をなくしましょう");
     }
 
@@ -601,6 +615,7 @@ impl BoardEditor {
     pub fn start_mega_lesson(&mut self) {
         self.drc_ran = false;
         self.lesson = Some(BoardLesson { which: 5, done: vec![false; MEGA_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{MEGA_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -618,6 +633,7 @@ impl BoardEditor {
     pub fn start_pairs_lesson(&mut self) {
         self.drc_ran = false;
         self.lesson = Some(BoardLesson { which: 6, done: vec![false; PAIRS_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{PAIRS_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -636,6 +652,7 @@ impl BoardEditor {
         self.drc_ran = false;
         self.repair = None;
         self.lesson = Some(BoardLesson { which: 7, done: vec![false; REPAIR_STEPS.len()] });
+        self.panel_tab = PanelTab::Steps; // every lesson starts with the steps
         self.status = format!("レッスン「{REPAIR_TITLE}」を始めました。右の案内に沿って操作してみましょう");
     }
 
@@ -685,6 +702,11 @@ impl BoardEditor {
         if (self.lesson_steps()[cur].done)(self)
             && let Some(l) = self.lesson.as_mut() {
                 l.done[cur] = true;
+                // the next step may be done with the hand-drawing tools: show the tab that has what it names
+                let which = l.which;
+                if cur + 1 < l.done.len() {
+                    self.panel_tab = step_tab(which, cur + 1);
+                }
             }
     }
 
