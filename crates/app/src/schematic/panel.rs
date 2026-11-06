@@ -657,7 +657,7 @@ impl SchEditor {
                     if !sub_rows.is_empty() {
                         let title = format!("このコピーだけの値 ({})", sub.values.len());
                         egui::CollapsingHeader::new(title).id_salt(("sub_values", i)).default_open(!sub.values.is_empty()).show(ui, |ui| {
-                            ui.small("書いた部品だけ、この記号のコピーで別の値になります。空欄は、シートの値のままです").on_hover_text("同じシートを何回も使うとき、チャンネルごとに抵抗値などを変えたい部品だけ、ここに書きます。シートの中の部品は、そのままです。コピーの部品は R1_CH1 のように別の番号になり、シミュレーションにも基板にも、ここの値が使われます");
+                            ui.small("書いた部品だけ別の値 (空欄=シートのまま)").on_hover_text("同じシートを何回も使うとき、チャンネルごとに抵抗値などを変えたい部品だけ、ここに書きます。シートの中の部品は、そのままです。コピーの部品は R1_CH1 のように別の番号になり、シミュレーションにも基板にも、ここの値が使われます");
                             egui::Grid::new(("sub_values_grid", i)).num_columns(3).spacing([8.0, 4.0]).show(ui, |ui| {
                                 for (refdes, base) in &sub_rows {
                                     let mut text = sub.values.get(refdes).cloned().unwrap_or_default();
