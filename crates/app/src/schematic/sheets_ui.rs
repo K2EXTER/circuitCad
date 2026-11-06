@@ -38,7 +38,7 @@ impl SchEditor {
         ui.horizontal_wrapped(|ui| {
             if let Some(&parent) = self.sheet_trail.last() {
                 let tip = "この階層の記号をダブルクリックして開いたシートから、もとのシートへ戻ります";
-                if ui.button(format!("↰ 親へ戻る ({})", self.sch.sheet_name(parent))).on_hover_text(tip).clicked() {
+                if ui.button(format!("← 親へ戻る ({})", self.sch.sheet_name(parent))).on_hover_text(tip).clicked() {
                     back = true;
                 }
             }

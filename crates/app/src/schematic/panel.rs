@@ -491,6 +491,7 @@ impl SchEditor {
     fn properties_inner(&mut self, ui: &mut egui::Ui, heading: bool) {
         self.label_net_ui(ui);
         self.port_editor_ui(ui);
+        let mut open_sheet: Option<usize> = None;
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());
@@ -535,7 +536,7 @@ impl SchEditor {
                     });
                 }
                 // the pins this part does not use: marked, ERC stops asking about them
-                if !c.kind.is_power_symbol() && (c.custom.is_some() || c.kind.pins().len() >= 3) {
+                if !c.kind.is_power_symbol() && c.sub.is_none() && (c.custom.is_some() || c.kind.pins().len() >= 3) {
                     let pins: Vec<(String, String)> = match &c.custom {
                         Some(s) => s.pins.iter().map(|p| (p.number.clone(), p.name.clone())).collect(),
                         None => c.kind.pins().into_iter().map(|(n, _)| (n.clone(), n)).collect(),
@@ -620,7 +621,7 @@ impl SchEditor {
                     }
                 }
                 // the board and model side of the part: rarely changed, so folded
-                if !c.kind.is_power_symbol() {
+                if !c.kind.is_power_symbol() && c.sub.is_none() {
                     egui::CollapsingHeader::new("基板とモデル").id_salt(("part_board", i)).default_open(false).show(ui, |ui| {
                         if let Some(sym) = &c.custom {
                             ui.label(format!("フットプリント: {}", c.footprint));
@@ -648,8 +649,17 @@ impl SchEditor {
                             .on_hover_text("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)");
                     });
                 }
-                advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
+                if let Some(sub) = c.sub {
+                    if ui.button("シートの中を開く").on_hover_text("この記号が表すシートを開きます (記号のダブルクリックでも開きます)。直すと、同じシートを使う全部の記号に効きます").clicked() {
+                        open_sheet = Some(sub.sheet);
+                    }
+                } else {
+                    advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
+                }
             }
+        if let Some(k) = open_sheet {
+            self.enter_sheet(k);
+        }
         // one row of actions on the selection: rotate, the clipboard, delete
         if self.has_selection() || !self.clipboard.is_empty() {
             let has = self.has_selection();

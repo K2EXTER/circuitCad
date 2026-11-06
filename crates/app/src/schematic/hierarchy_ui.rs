@@ -55,6 +55,7 @@ impl SchEditor {
             Some(i) => {
                 self.selected = Some(Sel::Comp(i));
                 self.multi.clear();
+                self.fit_pending = true;
                 let c = &self.sch.components[i];
                 self.status = format!("{} を置きました。ピンに線かラベルをつなぎます。ダブルクリックで、そのシートの中を開けます", c.refdes);
             }
