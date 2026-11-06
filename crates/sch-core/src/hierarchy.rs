@@ -533,6 +533,18 @@ impl Schematic {
                     "シートの記号のピンに、線もラベルもついていません。入力のピンが浮いていると電圧が決まらず、動作が不安定になります。線かラベルでつなぎましょう。使わないポートなら、そのままで構いません",
                 ));
             }
+            // two outputs tied together: each tries to hold the net at its own level
+            if t.dir == PortDir::Out
+                && let Some(net) = crate::netlist::net_at(flat, t.parent_pt)
+                && let Some(other) = ties.iter().take_while(|o| !std::ptr::eq(*o, t)).find(|o| o.dir == PortDir::Out && crate::netlist::net_at(flat, o.parent_pt).as_deref() == Some(net.as_str()))
+            {
+                out.push(Problem::new(
+                    Error,
+                    format!("出力のポート {} {} と {} {} が、同じネットにつながっています", t.symbol, t.port, other.symbol, other.port),
+                    Some(t.parent_pt),
+                    "出力どうしをつなぐと、2つが別々の電圧を出そうとして、ぶつかります (実際の回路なら壊れることもあります)。どちらかを入力のポートにするか、つなぎ方を見直しましょう。スイッチで切り替えたいときは、間にスイッチやゲートを入れます",
+                ));
+            }
             if t.first && lonely.contains(&t.child_pt) {
                 out.push(Problem::new(
                     Warning,
@@ -602,6 +614,22 @@ mod problem_tests {
         s.switch_sheet(0);
         s.add_sheet_symbol(2, (30, 10)).unwrap();
         assert!(messages(&s).iter().any(|m| m.contains("に、ポートがありません")));
+    }
+
+    #[test]
+    fn two_outputs_on_one_net_are_an_error_but_an_output_into_an_input_is_not() {
+        let mut s = child();
+        let a = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let b = s.add_sheet_symbol(1, (10, 40)).unwrap();
+        let pin = |s: &Schematic, i: usize, n: &str| s.components[i].pins().into_iter().find(|(p, _)| p == n).unwrap().1;
+        // CH1.OUT feeds CH2.IN: fine
+        s.labels.push(Label { pos: pin(&s, a, "OUT"), text: "MID".into() });
+        s.labels.push(Label { pos: pin(&s, b, "IN"), text: "MID".into() });
+        assert!(!messages(&s).iter().any(|m| m.contains("出力のポート")), "{:?}", messages(&s));
+        // CH2.OUT onto the same net as CH1.OUT: two outputs
+        s.labels.push(Label { pos: pin(&s, b, "OUT"), text: "MID".into() });
+        let p = erc(&s).into_iter().find(|p| p.message.contains("出力のポート")).expect("two outputs");
+        assert_eq!(p.severity, crate::netlist::Severity::Error);
     }
 
     #[test]
