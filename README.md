@@ -8,6 +8,8 @@
 
 [**⬇ Windows 版をダウンロード**](https://github.com/K2EXTER/circuitCad/releases) (アルファ版・インストール不要・zip を展開して `circuitCad.exe` を起動)
 
+紹介ページ: <https://k2exter.github.io/circuitCad/>
+
 開発の経緯 (AI を使って、1週間で作った記録) は、Zenn の記事にまとめています: [Claude Codeで1週間・約5万行: 初学者向けの回路CAD「circuitCad」をRustで作った記録](https://zenn.dev/k2exter/articles/d54c59e62156c3)
 
 > **状態: 初期バージョン (アルファ)。** 動作確認は Windows だけで、基板の発注の実績もまだありません。使う前に、下の「[現在の状態と既知の制限](#現在の状態と既知の制限)」を読んでください。

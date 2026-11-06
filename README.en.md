@@ -10,6 +10,8 @@ circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Ge
 
 [**Download for Windows**](https://github.com/K2EXTER/circuitCad/releases) (alpha, no installer: unzip and run `circuitCad.exe`)
 
+Project page (in Japanese, with screenshots and a demo video): <https://k2exter.github.io/circuitCad/>
+
 > **Status: early alpha.** Only tested on Windows. No board made with this software has been manufactured yet. See [Limitations](#limitations) before relying on it.
 
 ![A screen recording (about 75 s): drawing a schematic, simulating it, importing it into a PCB, auto-routing, DRC and the 3D view. The UI is in Japanese.](docs/images/demo-live.gif)
