@@ -2917,3 +2917,39 @@ fn a_long_explanation_is_cut_into_short_paragraphs_without_losing_a_word() {
     assert_eq!(p.concat(), text);
     assert!(super::lessons::paragraphs_for_test("短い文。").len() == 1 && super::lessons::paragraphs_for_test("").is_empty());
 }
+
+/// The hierarchy lesson: open the stage sheet, run the AC analysis, change the one C1 (all three copies follow), add a fourth symbol.
+#[test]
+fn the_hierarchy_lesson_ticks_its_steps_and_one_c1_moves_all_three_stages() {
+    let idx = lesson_ids().iter().position(|l| *l == "hierarchy").unwrap();
+    let mut e = SchEditor::default();
+    e.start_lesson(idx);
+    e.update_lesson();
+    assert_eq!(progress(&e), 0);
+    e.show_sheet(1);
+    e.update_lesson();
+    assert_eq!(progress(&e), 1);
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 2, "{}", e.status);
+    let cutoff = |e: &SchEditor| {
+        let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
+        let (f, m) = (&r.freq, r.signal("V(VOUT)").unwrap().mag());
+        f.iter().zip(m.iter()).find(|(_, m)| **m < 0.7071).map(|(f, _)| *f).unwrap()
+    };
+    let before = cutoff(&e);
+    assert!((150.0..250.0).contains(&before), "three stages cut off near 190 Hz, not {before}");
+    // changing C1 without running again does not count
+    set_value(&mut e, "C1", "1.59u");
+    e.update_lesson();
+    assert_eq!(progress(&e), 2);
+    e.analyze_ac();
+    e.update_lesson();
+    assert_eq!(progress(&e), 3);
+    assert!(cutoff(&e) < before / 5.0, "all three copies of C1 changed: {} -> {}", before, cutoff(&e));
+    // the fourth symbol
+    e.show_sheet(0);
+    e.place_sheet_symbol(1);
+    e.update_lesson();
+    assert_eq!(progress(&e), 4);
+}

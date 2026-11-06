@@ -176,6 +176,7 @@ const I_OPAMP_NONINV: Item = lesson("opamp_noninv", "オペアンプで信号を
 const I_OPAMP_INV: Item = lesson("opamp_inv", "オペアンプの反転増幅 (仮想接地)", "反転入力が 0V に保たれる仕組み", None);
 const I_RC_LOWPASS: Item = lesson("rc_lowpass", "RC ローパスフィルタ", "高い周波数だけを弱める。カットオフ周波数は 1 ÷ (2π R C)。抵抗とコンデンサの値で決まる", None);
 const I_RLC: Item = lesson("rlc", "行き過ぎとリンギング (RLC 回路)", "コイルとコンデンサの回路は、ステップに対して行き過ぎて揺れる。抵抗で抑える", None);
+const I_HIERARCHY: Item = lesson("hierarchy", "同じ回路を何回も使う (階層)", "使い回したい回路を別のシートに1つ描き、記号 (箱) にして何回も置く。中を直すと全部に効く。コピーごとに部品とネットの名前が別になる", None);
 const I_NE555: Item = lesson("ne555", "555 で LED を点滅させる", "タイマー IC とコンデンサの充放電で、一定の間隔で点滅する。C や R を変えると、周期が変わる", None);
 const I_POLES: Item = lesson("poles", "極と零 (RLC の共振を式で見る)", "山の位置は極の周波数、鋭さは Q。抵抗を大きくすると、極が実数になって山が消える", None);
 const I_NOISE: Item = lesson("noise", "ノイズ解析 (増幅回路の雑音はどこから来る)", "抵抗の熱雑音とトランジスタのショット雑音を、部品ごとに分けて見る。信号源の抵抗を小さくすると減る", None);
@@ -539,6 +540,7 @@ const SIGNAL_PATH: LearningPath = LearningPath {
             items: &[
                 Item { build: true, requires: Some(&[]), ..I_RC_LOWPASS },
                 Item { requires: Some(&["rc_lowpass"]), ..I_RLC },
+                Item { requires: Some(&["rc_lowpass"]), ..I_HIERARCHY },
                 Item { requires: Some(&["rlc"]), ..I_POLES },
             ],
         },

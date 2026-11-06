@@ -54,6 +54,7 @@ mod basics;
 mod conditions;
 mod debug;
 mod devices;
+mod hierarchy;
 mod micro;
 mod models;
 mod parts;
@@ -155,6 +156,7 @@ const LESSONS: &[Lesson] = &[
     parts::LDO_VS_BUCK,
     parts::SLEW_RATE,
     parts::EEPROM_BASICS,
+    hierarchy::HIERARCHY,
 ];
 
 impl SchEditor {
