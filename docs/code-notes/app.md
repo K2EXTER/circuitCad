@@ -167,6 +167,7 @@ IC の電源ピン (VCC/VDD/V+/VIN) のネットは、電圧源・ヘッダ、�
 - **名前の規則**: コピーの部品番号は `R1_CH1`(元の番号 + `_` + 記号の番号。入れ子は `R1_M_L`。先頭の文字を変えない=SPICE が素子の種類を先頭の文字で決めるため)。コピーのネットラベルは `CH1.NAME`(コピーごとに別のネット)。電源記号(VCC・GND)とバスのラベルはそのまま。
 - **ポート**は `Schematic.ports` / `Sheet.ports`(`SheetPort{pos,name,dir}`)。展開で、親の記号のピンと子のポートの位置に、同じ作り名のラベルを置いてつなぐ。作り名は先頭に `GENERATED`(`\u{1}`)を付け、`extract` の名前決めで、人が書いた名前より後にして、最後に外す(親の線の名前 `SIG` が、`CH1.IN` に負けない)。
 - **置き場所(slot)**: 独立したシートは今までどおり `k * SHEET_STRIDE`、コピーは `sheet_count()` 番目から1つずつ。`instances()` が一覧、`slot_sheet` / `first_slot_of` / `sheet_name(slot)`(「子 (CH1)」)で引く。ERC の指摘はコピーの中でも子シートの座標で返す。`net_at` は子シートの最初のコピーで探す。
+- 記号のピンは、ポートを置いた順(`sheet_symbol`)。ポートを足す・消すと、ピンは箱の中央にそろえ直されて動くので、`refresh_sheet_symbols`(`follow_pins`)が、動いたピンにつながっていた線(元の端に短い線を足す)とラベル(ピンへ動かす)を追いかける。
 - 輪(自分自身を含む参照)は展開しない(`collect_copies` の経路の検査、深さ `MAX_DEPTH`=8)。シートを消すと、そのシートの記号も消え、後ろの番号が詰まる(`forget_sheet_refs`)。ポートを足したら `refresh_sheet_symbols` で記号のピンを直す。
 - CLI: `sheet port NAME REF.PIN [dir=in|out|io]`、`sheet place N|NAME`(記号を置く。`sheet use` は編集中のシートの切り替えで、前から別の意味)。
 - 画面(段階2、`app/schematic/hierarchy_ui.rs`): シートのタブを右クリック →「いまのシートに、記号として置く」(`place_sheet_symbol`)、記号をダブルクリックで中を開く(`enter_sheet`。`sheet_trail` に戻り先を積み、タブの横の「親へ戻る」で `leave_sheet`)、ラベルツールの「ポートにする」(`label_port`。`place_port`)と向き、ポートは旗の形で描く(`draw_ports`)。ポートは `Sel::Port` で選べて(名前と向きは `port_editor_ui`)、消すと記号のピンも消える。ポートは動かせない・コピーされない(消して置き直す)。

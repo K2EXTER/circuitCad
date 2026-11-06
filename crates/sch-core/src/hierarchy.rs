@@ -191,8 +191,8 @@ impl Schematic {
 
     /// The symbol that stands for sheet `k`: a box with one pin per port, the inputs on the left and the rest on the right.
     pub fn sheet_symbol(&self, k: usize) -> CustomSymbol {
-        let mut ports: Vec<&SheetPort> = self.parts(k).ports.iter().collect();
-        ports.sort_by(|a, b| (a.pos.1, &a.name).cmp(&(b.pos.1, &b.name)));
+        // in the order the ports were put: a port added later is a pin added at the end, the pins that are wired stay in their order
+        let ports: Vec<&SheetPort> = self.parts(k).ports.iter().collect();
         let mut pins: Vec<SymPin> = vec![];
         for p in ports {
             if p.name.is_empty() || pins.iter().any(|q| q.number == p.name) {
@@ -218,20 +218,13 @@ impl Schematic {
     }
 
     /// Makes the pins of every sheet symbol follow the ports of its child sheet (after a port was added, renamed or removed).
+    /// The pins are centred on the box, so a port added or removed moves the others: what is wired to a moved pin stays joined to it
+    /// (a short wire from the new place of the pin to the old end of the wire; a net label on the pin moves with it).
     pub fn refresh_sheet_symbols(&mut self) {
         let syms: Vec<CustomSymbol> = (0..self.sheet_count()).map(|k| self.sheet_symbol(k)).collect();
-        let fix = |comps: &mut Vec<Component>| {
-            for c in comps.iter_mut() {
-                if let Some(sub) = c.sub
-                    && let Some(sym) = syms.get(sub.sheet)
-                {
-                    c.custom = Some(sym.clone());
-                }
-            }
-        };
-        fix(&mut self.components);
+        follow_pins(&mut self.components, &mut self.wires, &mut self.labels, &syms);
         for s in &mut self.sheets {
-            fix(&mut s.components);
+            follow_pins(&mut s.components, &mut s.wires, &mut s.labels, &syms);
         }
     }
 
@@ -630,5 +623,82 @@ mod backannotate_tests {
         assert!(rep.parts.is_empty());
         assert_eq!(rep.copies, ["R1_CH1"]);
         assert_eq!(s, before, "nothing in the drawing changed");
+    }
+}
+
+/// Gives the sheet symbols among `comps` the symbols `syms` (by their sheet), and keeps what is joined to a pin that moved joined.
+fn follow_pins(comps: &mut [Component], wires: &mut Vec<Wire>, labels: &mut [Label], syms: &[CustomSymbol]) {
+    // what to do, found before anything moves (a pin may move to the place another pin leaves)
+    let mut stubs: Vec<Wire> = vec![];
+    let mut label_moves: Vec<(usize, Pt)> = vec![];
+    for c in comps.iter_mut() {
+        let Some(sub) = c.sub else { continue };
+        let Some(sym) = syms.get(sub.sheet) else { continue };
+        let old = c.pins();
+        c.custom = Some(sym.clone());
+        for (number, from) in old {
+            let Some((_, to)) = c.pins().into_iter().find(|(n, _)| *n == number) else { continue };
+            if to == from {
+                continue;
+            }
+            if wires.iter().any(|w| w.a == from || w.b == from) {
+                // keep the wire where it is; a short wire (or two, with a corner) joins it to the pin
+                if to.0 == from.0 || to.1 == from.1 {
+                    stubs.push(Wire { a: to, b: from });
+                } else {
+                    let corner = (to.0, from.1);
+                    stubs.push(Wire { a: to, b: corner });
+                    stubs.push(Wire { a: corner, b: from });
+                }
+            } else {
+                for (i, l) in labels.iter().enumerate() {
+                    if l.pos == from {
+                        label_moves.push((i, to));
+                    }
+                }
+            }
+        }
+    }
+    for (i, to) in label_moves {
+        labels[i].pos = to;
+    }
+    wires.extend(stubs);
+}
+
+#[cfg(test)]
+mod pin_order_tests {
+    use super::*;
+
+    #[test]
+    fn a_port_added_later_keeps_the_wired_pins_joined_and_in_order() {
+        let mut s = Schematic::default();
+        s.add_sheet();
+        let r = s.add(Kind::Resistor, (10, 10), 0);
+        let p = s.components[r].pins();
+        s.ports.push(SheetPort { pos: p[0].1, name: "IN".into(), dir: PortDir::In });
+        s.ports.push(SheetPort { pos: p[1].1, name: "OUT".into(), dir: PortDir::Out });
+        s.switch_sheet(0);
+        let ch = s.add_sheet_symbol(1, (20, 20)).unwrap();
+        let pin = |s: &Schematic, n: &str| s.components[ch].pins().into_iter().find(|(x, _)| x == n).unwrap().1;
+        // IN is wired to a far point and OUT is named by a label
+        let far = (pin(&s, "IN").0 - 10, pin(&s, "IN").1);
+        s.wires.push(Wire { a: far, b: pin(&s, "IN") });
+        s.labels.push(Label { pos: far, text: "SIG".into() });
+        s.labels.push(Label { pos: pin(&s, "OUT"), text: "RES".into() });
+        let nets_before = extract(&s);
+        let (in_before, out_before) = (pin(&s, "IN"), pin(&s, "OUT"));
+        // a third port (output): the pins on the right are centred again
+        s.switch_sheet(1);
+        s.ports.push(SheetPort { pos: (60, 60), name: "EN".into(), dir: PortDir::Out });
+        s.switch_sheet(0);
+        s.refresh_sheet_symbols();
+        assert!(pin(&s, "OUT") != out_before || pin(&s, "IN") != in_before, "the test needs a pin that moves");
+        let pins: Vec<String> = s.components[ch].pins().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(pins, ["IN", "OUT", "EN"], "in the order the ports were put");
+        let nets = extract(&s);
+        let on = |nets: &[Net], name: &str, refdes: &str| nets.iter().any(|n| n.name == name && n.pins.iter().any(|p| p.refdes.starts_with(refdes)));
+        for (name, refdes) in [("SIG", "R1_CH1"), ("RES", "R1_CH1")] {
+            assert!(on(&nets_before, name, refdes) && on(&nets, name, refdes), "{name} still reaches {refdes}: {nets:?}");
+        }
     }
 }
