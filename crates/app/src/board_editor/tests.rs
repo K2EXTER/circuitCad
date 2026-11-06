@@ -2153,7 +2153,8 @@ fn the_mega_board_lesson_starts_half_routed_and_ticks_when_a_net_is_routed_and_d
     open.dedup();
     assert_eq!(open.len(), 18);
     e.run_drc();
-    assert!(e.violations.is_empty());
+    assert!(e.violations.iter().all(|v| v.message.starts_with("未配線")), "only the open lines are listed: {:?}", e.violations);
+    assert!(!e.violations.is_empty(), "the DRC lists the open connections");
     assert_eq!(e.lesson_progress(), 1);
     // the hand work cannot be scripted here (a straight line over the board shorts other nets): stand in for "one net is routed" by taking
     // one open net out of the board, which is what the lesson counts
@@ -2165,7 +2166,7 @@ fn the_mega_board_lesson_starts_half_routed_and_ticks_when_a_net_is_routed_and_d
     }
     assert_eq!(e.lesson_progress(), 2, "one net less is open");
     e.run_drc();
-    let clean = e.violations.is_empty();
+    let clean = e.violations.iter().all(|v| v.message.starts_with("未配線"));
     assert_eq!(e.lesson_progress(), if clean { 3 } else { 2 }, "the last step needs a clean DRC after the work ({} violations)", e.violations.len());
     assert_eq!(e.finished_board_lesson().is_some(), clean);
 }

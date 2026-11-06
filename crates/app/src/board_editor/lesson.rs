@@ -90,9 +90,15 @@ fn open_nets(e: &BoardEditor) -> usize {
     nets.len()
 }
 
-/// The Mega board as it was given: DRC has been run, it is clean, and nets are still open (the DRC does not look for those).
+/// The rule findings of the last DRC run: the unrouted lines it also lists ("未配線: …") are left out, so a board that is
+/// still being routed can be clean of broken rules.
+fn rule_findings(e: &BoardEditor) -> usize {
+    e.violations.iter().filter(|v| !v.message.starts_with("未配線")).count()
+}
+
+/// The Mega board as it was given: DRC has been run, no rule is broken, and nets are still open (the DRC lists those lines apart).
 fn mega_checked_as_given(e: &BoardEditor) -> bool {
-    parts_on_board(e) && e.drc_ran && e.violations.is_empty() && open_nets(e) >= MEGA_OPEN_AT_START
+    parts_on_board(e) && e.drc_ran && rule_findings(e) == 0 && open_nets(e) >= MEGA_OPEN_AT_START
 }
 
 /// At least one of the open nets has been routed by hand.
@@ -102,7 +108,7 @@ fn mega_one_routed(e: &BoardEditor) -> bool {
 
 /// DRC run again after the hand work, and still clean.
 fn mega_still_clean(e: &BoardEditor) -> bool {
-    mega_one_routed(e) && e.drc_ran && e.violations.is_empty()
+    mega_one_routed(e) && e.drc_ran && rule_findings(e) == 0
 }
 
 /// Both lanes are routed and the two lines of each pair are as long as the pair allows.
@@ -426,7 +432,7 @@ const REPAIR_STEPS: &[Step] = &[
 const MEGA_STEPS: &[Step] = &[
     Step {
         title: "いまの基板の状態を確かめる",
-        detail: "この基板は、自動配置と自動配線で、通るところまで配線したものです。左パネルの「DRC を実行」を押すと、違反は 0 件です。でも、基板の上には黄色の線 (未配線) が残っています。左パネルの「未配線」で数えると、18 本のネットが残っています。DRC は「引いた配線がルールを守っているか」を調べるもので、「引き忘れ」は調べません。引き忘れは、未配線の表示と、発注前チェックで見つけます。",
+        detail: "この基板は、自動配置と自動配線で、通るところまで配線したものです。左パネルの「DRC を実行」を押すと、ルール違反は 0 件で、「未配線: …」の指摘だけが並びます。基板の上の黄色の線 (未配線) と同じものです。左パネルの「未配線」で数えると、18 本のネットが残っています。「未配線」以外の指摘が 0 件なら、引いた配線はルールを守っています。引き忘れは、この「未配線」の指摘と黄色の線、発注前チェックで見つけます。",
         done: mega_checked_as_given,
     },
     Step {
@@ -436,7 +442,7 @@ const MEGA_STEPS: &[Step] = &[
     },
     Step {
         title: "DRC を、もう一度実行して、0 件のままか確かめる",
-        detail: "手で配線を引いたり、部品を動かしたりすると、思わぬ所で線どうしが近づきすぎることがあります。「DRC を実行」を押して、違反が 0 件のままか確かめます。違反が出たら、一覧をクリックしてその場所を直します。そのあとも、残りの未配線を少しずつ通していけます (すべて通すのは、時間のかかる作業です。1 本通すごとに DRC を確かめる習慣をつけましょう)。",
+        detail: "手で配線を引いたり、部品を動かしたりすると、思わぬ所で線どうしが近づきすぎることがあります。「DRC を実行」を押して、「未配線」以外の違反が 0 件のままか確かめます。違反が出たら、一覧をクリックしてその場所を直します。そのあとも、残りの未配線を少しずつ通していけます (すべて通すのは、時間のかかる作業です。1 本通すごとに DRC を確かめる習慣をつけましょう)。",
         done: mega_still_clean,
     },
 ];

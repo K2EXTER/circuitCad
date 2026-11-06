@@ -125,3 +125,22 @@ fn open_connections_count_the_pads_a_cut_pour_leaves_out() {
     let miss = list.iter().find(|c| c.title.contains("未配線")).expect("the pre-order check lists the open connections");
     assert!(miss.title.contains(&seen.len().to_string()), "{}", miss.title);
 }
+
+/// A ground via inside the outline of the pour but cut off from it by a ring of another net is not joined: it is an open connection
+/// (the DRC button reports it), as a pad would be.
+#[test]
+fn a_ground_via_cut_off_from_the_pour_is_open() {
+    let mut b = Board::new("t", 40.0, 30.0);
+    pad(&mut b, 30.0, 20.0, "GND");
+    b.zones.push(Zone::new("GND", Side::Top, rect(2.0, 2.0, 38.0, 28.0)));
+    b.vias.push(via(5.0, 5.0, "GND"));
+    assert!(drc::split_pour_checks(&b).is_empty(), "the via sits in the pour");
+    assert!(crate::ratsnest::open_violations(&b).is_empty());
+    ring(&mut b, Point::new(5.0, 5.0), 2.5);
+    let found = drc::split_pour_checks(&b);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].message.contains("ビア"), "{}", found[0].message);
+    let open = crate::ratsnest::open_violations(&b);
+    assert_eq!(open.len(), 1, "{open:?}");
+    assert!(open[0].message.contains("未配線") && open[0].message.contains("GND"));
+}

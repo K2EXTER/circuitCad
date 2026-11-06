@@ -58,21 +58,29 @@ pub fn split_pour_checks(board: &Board) -> Vec<Violation> {
     pour_splits(board)
         .into_iter()
         .map(|s| {
-            let names: Vec<String> = s.left.iter().take(4).map(|&j| format!("{}-{}", board.pads[j].refdes, board.pads[j].pin)).collect();
+            let names: Vec<String> = s.left.iter().take(4).map(|x| x.name.clone()).collect();
             v(
                 format!("ネット {} のベタが、他のネットの配線やパッドで分断されていて、{} が、残りの {} とつながっていません。配線かビアで、つなぎましょう (ベタの見た目は広がっていても、銅はつながっていません)", s.net, names.join("・"), s.net),
-                board.pads[s.left[0]].pos,
+                s.left[0].pos,
             )
         })
         .collect()
 }
 
-/// A net whose pads are not all joined by its copper: the pads (numbers in `board.pads`) of the pieces that are left out, and the pads
-/// of the piece that is kept (the one with the most pads).
+/// A pad or a via that a net's copper has to join.
+#[derive(Clone, Debug)]
+pub struct Spot {
+    pub pos: Point,
+    /// "U1-3" for a pad, "ビア" for a via.
+    pub name: String,
+}
+
+/// A net whose pads and vias are not all joined by its copper: the ones in the pieces that are left out, and the ones
+/// of the piece that is kept (the one with the most).
 pub struct PourSplit {
     pub net: String,
-    pub left: Vec<usize>,
-    pub main: Vec<usize>,
+    pub left: Vec<Spot>,
+    pub main: Vec<Spot>,
 }
 
 /// An airwire for each net split like that: from the nearest left-out pad to a pad of the kept piece (the yellow line to draw).
@@ -80,8 +88,8 @@ pub fn pour_split_airwires(board: &Board) -> Vec<crate::ratsnest::Airwire> {
     pour_splits(board)
         .into_iter()
         .filter_map(|s| {
-            let a = &board.pads[s.left[0]];
-            let b = s.main.iter().map(|&j| &board.pads[j]).min_by(|x, y| x.pos.dist(a.pos).total_cmp(&y.pos.dist(a.pos)))?;
+            let a = &s.left[0];
+            let b = s.main.iter().min_by(|x, y| x.pos.dist(a.pos).total_cmp(&y.pos.dist(a.pos)))?;
             Some(crate::ratsnest::Airwire { net: s.net.clone(), a: a.pos, b: b.pos })
         })
         .collect()
@@ -113,13 +121,20 @@ fn pour_splits(board: &Board) -> Vec<PourSplit> {
     for net in nets {
         // the copper groups of the net that hold a pad (a group of tracks alone is nothing to connect)
         let group_of = |i: usize| base.items[i];
-        let mut pad_groups: Vec<(usize, usize)> = vec![]; // (group, pad number)
+        let mut pad_groups: Vec<(usize, Spot)> = vec![]; // (group, first pad or via of it)
         for (j, p) in board.pads.iter().enumerate() {
             if p.net == net {
                 let g = group_of(base.n_tracks + j);
                 if !pad_groups.iter().any(|(x, _)| *x == g) {
-                    pad_groups.push((g, j));
+                    pad_groups.push((g, Spot { pos: p.pos, name: format!("{}-{}", p.refdes, p.pin) }));
                 }
+            }
+        }
+        // a via of the net counts like a pad: a ground via that sits in a piece the pour does not join to the rest is as open as a pad
+        for (k, via) in board.vias.iter().enumerate() {
+            let g = group_of(base.n_tracks + board.pads.len() + k);
+            if base.group_net(g) == Some(net) && !pad_groups.iter().any(|(x, _)| *x == g) {
+                pad_groups.push((g, Spot { pos: via.pos, name: "ビア".into() }));
             }
         }
         if pad_groups.len() < 2 {
@@ -136,7 +151,9 @@ fn pour_splits(board: &Board) -> Vec<PourSplit> {
                 let inside = |p: Point| inside_polygon(&shape.outer, p) && !shape.holes.iter().any(|h| inside_polygon(h, p));
                 let mut first: Option<usize> = None;
                 for (i, it) in items.iter().enumerate() {
-                    if !it.on(*side) || base.group_net(group_of(i)) != Some(net) || !anchors_inside(&it.geo, &shape.outer) || !inside(center(&it.geo)) && !matches!(it.geo, Geo::Cap { .. }) {
+                    // a via (a round dot) must really sit in the copper; a track only has to touch the piece
+                    let dot = matches!(it.geo, Geo::Cap { a, b, .. } if a == b);
+                    if !it.on(*side) || base.group_net(group_of(i)) != Some(net) || !anchors_inside(&it.geo, &shape.outer) || !inside(center(&it.geo)) && (dot || !matches!(it.geo, Geo::Cap { .. })) {
                         continue;
                     }
                     let g = group_of(i);
@@ -155,18 +172,18 @@ fn pour_splits(board: &Board) -> Vec<PourSplit> {
                 }
             }
         }
-        let mut comps: Vec<(usize, Vec<usize>)> = vec![];
-        for (g, j) in &pad_groups {
+        let mut comps: Vec<(usize, Vec<Spot>)> = vec![];
+        for (g, spot) in &pad_groups {
             let r = root(&mut parent, *g);
             match comps.iter_mut().find(|(x, _)| *x == r) {
-                Some((_, pads)) => pads.push(*j),
-                None => comps.push((r, vec![*j])),
+                Some((_, pads)) => pads.push(spot.clone()),
+                None => comps.push((r, vec![spot.clone()])),
             }
         }
         if comps.len() > 1 {
             // the pieces that are left out: all but the one with the most pads
             comps.sort_by_key(|(_, pads)| std::cmp::Reverse(pads.len()));
-            let left: Vec<usize> = comps[1..].iter().flat_map(|(_, p)| p.iter().copied()).collect();
+            let left: Vec<Spot> = comps[1..].iter().flat_map(|(_, p)| p.iter().cloned()).collect();
             out.push(PourSplit { net: net.to_string(), left, main: comps[0].1.clone() });
         }
     }

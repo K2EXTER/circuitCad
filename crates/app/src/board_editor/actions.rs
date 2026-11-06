@@ -256,6 +256,8 @@ impl BoardEditor {
         self.violations = drc::check_final(&self.board);
         self.violations.extend(pcb_core::diffpair::check_pairs(&self.board));
         self.violations.extend(drc::slit_checks(&self.board));
+        // the yellow lines count as findings too (a ground pad or via a cut pour leaves out is on them)
+        self.violations.extend(pcb_core::ratsnest::open_violations(&self.board));
         self.drc_ran = true;
         self.status = format!("DRC: 違反 {} 件", self.violations.len());
     }

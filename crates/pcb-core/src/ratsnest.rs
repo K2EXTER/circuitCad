@@ -48,6 +48,20 @@ pub fn open_connections(board: &Board) -> Vec<Airwire> {
     w
 }
 
+/// [`open_connections`] as DRC findings (one per unrouted line), so the DRC button reports what the yellow lines show.
+pub fn open_violations(board: &Board) -> Vec<crate::drc::Violation> {
+    open_connections(board)
+        .into_iter()
+        .map(|w| crate::drc::Violation {
+            message: format!(
+                "未配線: ネット {} が、(x {:.1}, y {:.1}) と (x {:.1}, y {:.1}) の間でつながっていません。配線かビアでつなぎましょう (ベタの輪郭の中でも、他のネットの配線やパッドで銅が分かれていると、つながっていません)",
+                w.net, w.a.x, w.a.y, w.b.x, w.b.y
+            ),
+            at: w.a,
+        })
+        .collect()
+}
+
 /// [`ratsnest`] with the copper groups of the pads (`grp[i]` for `board.pads[i]`) already known.
 pub fn ratsnest_in(board: &Board, grp: &[usize]) -> Vec<Airwire> {
     ratsnest_with_vias(board, grp, &[])
