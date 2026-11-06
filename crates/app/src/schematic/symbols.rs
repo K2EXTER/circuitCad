@@ -255,7 +255,22 @@ impl SchEditor {
 
     pub(super) fn draw_component(&self, painter: &egui::Painter, rect: Rect, c: &Component, color: Color32) {
         match &c.custom {
-            Some(sym) => self.draw_custom(painter, rect, sym, c.pos, c.rot, color),
+            Some(sym) => {
+                // a sheet symbol (a child sheet used as a part) gets a tinted body so it is not mistaken for an ordinary part
+                if c.sub.is_some() {
+                    let l = sym.layout();
+                    let (hw, hh) = (l.hw as f32, l.hh as f32);
+                    let pts: Vec<egui::Pos2> = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+                        .iter()
+                        .map(|&p| {
+                            let r = rot_f(p, c.rot);
+                            self.to_screen(rect, (c.pos.0 as f32 + r.0, c.pos.1 as f32 + r.1))
+                        })
+                        .collect();
+                    painter.add(egui::Shape::convex_polygon(pts, Color32::from_rgb(214, 230, 250), Stroke::NONE));
+                }
+                self.draw_custom(painter, rect, sym, c.pos, c.rot, color)
+            }
             None if c.kind == Kind::VSource => self.draw_shapes(painter, rect, source_symbol(&c.value), c.pos, c.rot, color),
             None => {
                 self.draw_symbol(painter, rect, c.kind, c.pos, c.rot, color);
