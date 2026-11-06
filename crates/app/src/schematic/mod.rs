@@ -29,6 +29,8 @@ enum Sel {
     Wire(usize),
     Label(usize),
     Bus(usize),
+    /// A port of the sheet (the entry of a child sheet).
+    Port(usize),
 }
 
 /// Rubber-band selection in progress (grid coordinates).
@@ -100,6 +102,10 @@ pub struct SchEditor {
     place: Kind,
     rot: u8,
     label_text: String,
+    /// The label tool puts a port of the sheet (a pin of the sheet symbol) of this direction, not a net label.
+    label_port: Option<sch_core::PortDir>,
+    /// The sheets entered through a sheet symbol, outermost first: "back to the parent" goes up one.
+    sheet_trail: Vec<usize>,
     /// Count the number at the end of the label text up after each label placed (D0, D1, ...).
     label_step: bool,
     /// With a bus label as the text (D[0..7]): the member the next label stands for, and the text it was counted for.
@@ -661,6 +667,8 @@ impl Default for SchEditor {
             place: Kind::Resistor,
             rot: 0,
             label_text: "SIG".into(),
+            label_port: None,
+            sheet_trail: vec![],
             label_step: false,
             label_k: 0,
             label_k_text: String::new(),
@@ -692,6 +700,7 @@ const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
+mod hierarchy_ui;
 mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;

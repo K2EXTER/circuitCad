@@ -33,7 +33,15 @@ impl SchEditor {
         let mut go = None;
         let mut delete = None;
         let mut add = false;
+        let mut back = false;
+        let mut place_symbol = None;
         ui.horizontal_wrapped(|ui| {
+            if let Some(&parent) = self.sheet_trail.last() {
+                let tip = "この階層の記号をダブルクリックして開いたシートから、もとのシートへ戻ります";
+                if ui.button(format!("↰ 親へ戻る ({})", self.sch.sheet_name(parent))).on_hover_text(tip).clicked() {
+                    back = true;
+                }
+            }
             if count > 1 {
                 for k in 0..count {
                     let name = self.sch.sheet_name(k);
@@ -41,10 +49,15 @@ impl SchEditor {
                     if tab.clicked() {
                         go = Some(k);
                     }
+                    let can_place = k != self.sch.active_sheet && count > 1;
                     tab.context_menu(|ui| {
                         let mut n = name.clone();
                         if ui.text_edit_singleline(&mut n).on_hover_text("シートの名前").changed() {
                             self.sch.rename_sheet(k, &n);
+                        }
+                        if can_place && ui.button("いまのシートに、記号として置く").on_hover_text("このシートを、1つの部品 (記号) として、いまのシートに置きます。シートの中のポートが、記号のピンになります。同じシートを何回も置けて、中を直すと全部に効きます。部品番号は R1_CH1 のようになります").clicked() {
+                            place_symbol = Some(k);
+                            ui.close();
                         }
                         if ui.button("このシートを削除").on_hover_text("このシートの部品・線・ラベルをすべて消します (Ctrl+Z で戻せます)").clicked() {
                             delete = Some(k);
@@ -73,8 +86,16 @@ impl SchEditor {
             self.fit_pending = true;
             self.refresh_erc();
         }
+        if back {
+            self.leave_sheet();
+            self.refresh_erc();
+        }
+        if let Some(k) = place_symbol {
+            self.place_sheet_symbol(k);
+        }
         if let Some(k) = go {
             self.show_sheet(k);
+            self.sheet_trail.clear();
             self.refresh_erc();
         }
     }

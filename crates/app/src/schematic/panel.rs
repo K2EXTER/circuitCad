@@ -197,6 +197,7 @@ impl SchEditor {
         if self.tool == Tool::Label {
             ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます");
             ui.checkbox(&mut self.label_step, "番号を自動で進める").on_hover_text("オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)");
+            self.port_tool_ui(ui);
         }
     }
 
@@ -489,6 +490,7 @@ impl SchEditor {
     /// The settings of the selected part; `heading` adds the "選択中の部品" line (the panel band has its own title).
     fn properties_inner(&mut self, ui: &mut egui::Ui, heading: bool) {
         self.label_net_ui(ui);
+        self.port_editor_ui(ui);
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());

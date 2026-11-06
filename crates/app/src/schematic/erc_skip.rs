@@ -12,6 +12,7 @@ impl SchEditor {
                 Sel::Wire(i) => pts.extend(self.sch.wires.get(i).into_iter().flat_map(|w| [w.a, w.b])),
                 Sel::Label(i) => pts.extend(self.sch.labels.get(i).map(|l| l.pos)),
                 Sel::Bus(i) => pts.extend(self.sch.buses.get(i).into_iter().flat_map(|w| [w.a, w.b])),
+                Sel::Port(i) => pts.extend(self.sch.ports.get(i).map(|p| p.pos)),
             }
         }
         let lo = (pts.iter().map(|p| p.0).min()? - 2, pts.iter().map(|p| p.1).min()? - 2);

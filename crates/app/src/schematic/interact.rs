@@ -172,7 +172,9 @@ impl SchEditor {
                     }
                 },
                 Tool::Label => {
-                    if let Some(text) = self.next_label(snapped) {
+                    if let (Some(dir), true) = (self.label_port, self.sch.sheet_count() > 1) {
+                        self.place_port(snapped, dir);
+                    } else if let Some(text) = self.next_label(snapped) {
                         self.sch.labels.push(Label { pos: snapped, text });
                     }
                 }
@@ -180,6 +182,12 @@ impl SchEditor {
         }
         if resp.double_clicked() && matches!(self.tool, Tool::Wire | Tool::Bus) {
             self.pending = None;
+        }
+        // a double click on a sheet symbol opens the sheet it stands for
+        if resp.double_clicked() && self.tool == Tool::Select {
+            if let Some(sub) = self.comp_at(g).and_then(|i| self.sch.components[i].sub) {
+                self.enter_sheet(sub.sheet);
+            }
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
             if self.noise_pick {

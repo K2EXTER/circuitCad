@@ -75,6 +75,9 @@ impl SchEditor {
         if let Some(i) = self.sch.labels.iter().position(|l| (l.pos.0 as f32 - g.0).abs() < 0.8 && (l.pos.1 as f32 - g.1).abs() < 0.6) {
             return Some(Sel::Label(i));
         }
+        if let Some(i) = self.sch.ports.iter().position(|p| (p.pos.0 as f32 - g.0).abs() < 0.8 && (p.pos.1 as f32 - g.1).abs() < 0.6) {
+            return Some(Sel::Port(i));
+        }
         let d = |w: &Wire| {
             let (a, b) = ((w.a.0 as f32, w.a.1 as f32), (w.b.0 as f32, w.b.1 as f32));
             let (dx, dy) = (b.0 - a.0, b.1 - a.1);
@@ -144,6 +147,11 @@ impl SchEditor {
                 out.push(Sel::Label(i));
             }
         }
+        for (i, p) in self.sch.ports.iter().enumerate() {
+            if rect_contains(lo, hi, (p.pos.0 as f32, p.pos.1 as f32)) {
+                out.push(Sel::Port(i));
+            }
+        }
         out
     }
 
@@ -198,6 +206,7 @@ impl SchEditor {
                 Sel::Wire(i) => g.wires.push((i, self.sch.wires[i].a, self.sch.wires[i].b)),
                 Sel::Label(i) => g.labels.push((i, self.sch.labels[i].pos)),
                 Sel::Bus(i) => g.buses.push((i, self.sch.buses[i].a, self.sch.buses[i].b)),
+                Sel::Port(_) => {} // a port stays where it is (delete it and put it again)
             }
         }
         // the labels set on the pins of the moved parts go along, unless they are selected themselves
@@ -218,6 +227,7 @@ impl SchEditor {
     pub(super) fn delete_selected(&mut self) {
         if !self.multi.is_empty() {
             let mut comps: Vec<usize> = vec![];
+            let mut ports: Vec<usize> = vec![];
             let (mut wires, mut labels, mut buses) = (vec![], vec![], vec![]);
             for s in self.multi.drain(..) {
                 match s {
@@ -225,6 +235,7 @@ impl SchEditor {
                     Sel::Wire(i) => wires.push(i),
                     Sel::Label(i) => labels.push(i),
                     Sel::Bus(i) => buses.push(i),
+                    Sel::Port(i) => ports.push(i),
                 }
             }
             for (v, n) in [(&mut comps, 0), (&mut wires, 1), (&mut labels, 2), (&mut buses, 3)] {
@@ -239,6 +250,15 @@ impl SchEditor {
                     }
                 }
             }
+            ports.sort_unstable_by(|a, b| b.cmp(a));
+            for i in ports.iter().copied() {
+                if i < self.sch.ports.len() {
+                    self.sch.ports.remove(i);
+                }
+            }
+            if !ports.is_empty() {
+                self.sch.refresh_sheet_symbols();
+            }
             self.selected = None;
             return;
         }
@@ -247,6 +267,10 @@ impl SchEditor {
             Some(Sel::Wire(i)) => drop(self.sch.wires.remove(i)),
             Some(Sel::Label(i)) => drop(self.sch.labels.remove(i)),
             Some(Sel::Bus(i)) => drop(self.sch.buses.remove(i)),
+            Some(Sel::Port(i)) => {
+                self.sch.ports.remove(i);
+                self.sch.refresh_sheet_symbols();
+            }
             None => {}
         }
     }
