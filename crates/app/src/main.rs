@@ -573,7 +573,13 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "circuitCad",
         eframe::NativeOptions {
-            viewport: egui::ViewportBuilder::default().with_maximized(true).with_title("circuitCad"),
+            viewport: {
+                let mut vp = egui::ViewportBuilder::default().with_maximized(true).with_title("circuitCad");
+                if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")) {
+                    vp = vp.with_icon(icon);
+                }
+                vp
+            },
             multisampling: if smooth_edges { 4 } else { 0 },
             ..Default::default()
         },

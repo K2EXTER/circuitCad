@@ -22,5 +22,8 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 serde_json = "1.0.151"
 sim-core = { version = "0.1.0", path = "../sim-core" }
 
+[build-dependencies]
+embed-resource = "3"
+
 [dev-dependencies]
 zip = "8.6.0"
