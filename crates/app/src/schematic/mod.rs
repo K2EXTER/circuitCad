@@ -144,6 +144,8 @@ pub struct SchEditor {
     lib_prefs: library::LibPrefs,
     /// Which of the two part lists in the panel is open: only one at a time, so the open one gets the height.
     basic_open: bool,
+    /// Whether the selected part's settings band in the panel is open.
+    props_open: bool,
     lib_open: bool,
     /// Counts the times the library was read again (the board compares its parts with the library when this changes).
     pub lib_rev: u64,
@@ -511,6 +513,7 @@ impl Default for SchEditor {
             library,
             lib_prefs,
             basic_open: true,
+            props_open: true,
             lib_open: false,
             lib_rev: 0,
             lib_delete: None,

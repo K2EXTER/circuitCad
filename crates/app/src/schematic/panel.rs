@@ -79,8 +79,26 @@ impl SchEditor {
         ]);
         match self.panel_tab {
             PanelTab::Draw => {
+                self.panel_tools(ui);
+                // the selected part's settings sit right under quick add, above the long part lists
+                ui.spacing_mut().item_spacing.y = 5.0;
+                if let Some(Sel::Comp(i)) = self.selected
+                    && let Some(c) = self.sch.components.get(i)
+                {
+                    // the settings of the selected part: a band like the part lists below, folded by a click
+                    crate::widgets::group_gap(ui);
+                    let name = if c.kind.is_power_symbol() { String::new() } else { format!(" {}", c.refdes) };
+                    let title = egui::RichText::new(format!("選択中の部品{name}")).strong();
+                    let (_, clicked) = crate::widgets::band_header(ui, "props", title, self.props_open, true, |ui| {
+                        crate::widgets::well(ui, |ui| self.properties_inner(ui, false));
+                    });
+                    if clicked {
+                        self.props_open = !self.props_open;
+                    }
+                } else {
+                    self.panel_properties(ui);
+                }
                 self.panel_parts(ui);
-                self.panel_properties(ui);
                 self.panel_erc(ui);
                 self.panel_forms(ui);
             }
@@ -136,7 +154,8 @@ impl SchEditor {
         self.result_windows(ui.ctx());
     }
 
-    pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
+    /// Tools, undo/redo and quick add: the top of the draw tab.
+    pub(super) fn panel_tools(&mut self, ui: &mut egui::Ui) {
         // the tools, undo and quick add are one group: close together
         ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
         // the four tools are one segmented bar: joined, equal width, one chosen (the buttons below it act; these switch the mode)
@@ -179,6 +198,10 @@ impl SchEditor {
             ui.text_edit_singleline(&mut self.label_text).on_hover_text("ネットの名前 (例: VCC、OUT)。同じ名前のラベルを付けた所は、線でつながなくても同じ配線になります。D[0..7] のように書くと、バスの名前です: バスの線の上をクリックするとバスの名前が付き、ほかの所をクリックすると D0 D1 D2 … と順に付きます");
             ui.checkbox(&mut self.label_step, "番号を自動で進める").on_hover_text("オンにすると、名前の終わりの数字を、ラベルを付けるたびに 1 つ進めます (D0 → D1 → D2 …)");
         }
+    }
+
+    /// The part lists and the part-making buttons (below the tools and the selected part's settings).
+    pub(super) fn panel_parts(&mut self, ui: &mut egui::Ui) {
         crate::widgets::group_gap(ui);
         ui.spacing_mut().item_spacing.y = 5.0;
         let mut chosen = None;
@@ -460,12 +483,19 @@ impl SchEditor {
     }
 
     pub(super) fn panel_properties(&mut self, ui: &mut egui::Ui) {
+        self.properties_inner(ui, true);
+    }
+
+    /// The settings of the selected part; `heading` adds the "選択中の部品" line (the panel band has its own title).
+    fn properties_inner(&mut self, ui: &mut egui::Ui, heading: bool) {
         self.label_net_ui(ui);
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());
                 let c = &mut self.sch.components[i];
-                ui.label("選択中の部品");
+                if heading {
+                    ui.label(egui::RichText::new("選択中の部品").strong());
+                }
                 if !c.kind.is_power_symbol() {
                     ui.horizontal(|ui| {
                         ui.label("番号");
