@@ -612,3 +612,23 @@ mod problem_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod backannotate_tests {
+    use super::*;
+
+    #[test]
+    fn a_trade_on_a_copy_of_a_child_sheet_is_not_put_into_the_drawing() {
+        let mut s = Schematic::default();
+        s.add_sheet();
+        s.add(Kind::Resistor, (10, 10), 0);
+        s.switch_sheet(0);
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let trades = std::collections::BTreeMap::from([("R1_CH1".to_string(), std::collections::BTreeMap::from([("1".to_string(), "2".to_string()), ("2".to_string(), "1".to_string())]))]);
+        let before = s.clone();
+        let rep = s.apply_pin_trades(&trades).unwrap();
+        assert!(rep.parts.is_empty());
+        assert_eq!(rep.copies, ["R1_CH1"]);
+        assert_eq!(s, before, "nothing in the drawing changed");
+    }
+}

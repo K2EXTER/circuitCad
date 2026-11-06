@@ -167,6 +167,9 @@ impl BoardEditor {
     /// The answer of the schematic to "入れ替えを回路図に反映": the traded parts are in the drawing now, so the board has nothing left to remember.
     pub fn trades_applied(&mut self, answer: Result<sch_core::BackAnnotation, String>) {
         match answer {
+            Ok(rep) if rep.parts.is_empty() && !rep.copies.is_empty() => {
+                self.status = format!("{} は、階層のコピー (同じ子シートから作った部品) なので、回路図には反映しません。1つ直すと全部のコピーに効いてしまうためです。入れ替えは基板だけに残ります", rep.copies.join("・"));
+            }
             Ok(rep) if rep.parts.is_empty() => self.status = "回路図に反映する入れ替えが見つかりませんでした (回路図にその部品がありません)".into(),
             Ok(rep) => {
                 self.checkpoint();

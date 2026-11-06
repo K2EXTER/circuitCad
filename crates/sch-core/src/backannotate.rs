@@ -16,6 +16,8 @@ pub struct BackAnnotation {
     pub parts: Vec<String>,
     /// How many wire ends and net labels were moved.
     pub moved: usize,
+    /// Traded parts that are copies of a child sheet (`R1_CH1`): one sheet draws all the copies, so the trade stays on the board only.
+    pub copies: Vec<String>,
 }
 
 impl Schematic {
@@ -34,7 +36,12 @@ impl Schematic {
             if keys != values {
                 return Err(format!("{refdes}: ピンの入れ替えが輪になっていません (入れ替えた先のピンが、別のピンへ移っていません)。基板の「回路図から取り込み」をやり直してから、入れ替えをもう一度してください"));
             }
-            let Some(k) = work.sheet_of_part(refdes) else { continue };
+            let Some(k) = work.sheet_of_part(refdes) else {
+                if self.flat().components.iter().any(|c| c.refdes == *refdes) {
+                    rep.copies.push(refdes.clone());
+                }
+                continue;
+            };
             let n = work.trade_on_sheet(k, refdes, &map)?;
             rep.parts.push(refdes.clone());
             rep.moved += n;

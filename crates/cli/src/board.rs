@@ -113,7 +113,7 @@ impl Session {
                 for r in &rep.parts {
                     board.pin_map.remove(r);
                 }
-                Ok(obj(json!({"parts": rep.parts, "moved": rep.moved, "left": board.pin_map.keys().collect::<Vec<_>>()})))
+                Ok(obj(json!({"parts": rep.parts, "moved": rep.moved, "copies": rep.copies, "left": board.pin_map.keys().collect::<Vec<_>>()})))
             }
             "breakout" => {
                 // board breakout [width=0.2]: before routing, a short wire out of every pin of a fine-pitch IC that needs one: the pins in the middle of a

@@ -1031,6 +1031,25 @@ fn a_sheet_used_twice_is_two_copies_with_their_own_parts_and_nets() {
 }
 
 #[test]
+fn the_copies_of_a_child_sheet_go_onto_a_board_and_are_routed() {
+    let sample = format!("{}/../../docs/examples/hierarchy_rc_stages.schjson", env!("CARGO_MANIFEST_DIR"));
+    let (a, ok) = run(&format!("open {sample}
+board new 60 40
+board import
+board autoplace
+board route
+board status
+board backannotate
+"));
+    assert!(!ok, "backannotate has nothing to trade here: {a:?}");
+    let imp = a.iter().find(|v| v.get("added").is_some()).unwrap();
+    let added: Vec<&str> = imp["added"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(added, ["V1", "R1_CH1", "C1_CH1", "R1_CH2", "C1_CH2", "R1_CH3", "C1_CH3"]);
+    let st = a.iter().find(|v| v.get("drc_violations").is_some()).unwrap();
+    assert_eq!((st["drc_violations"].as_i64(), st["unrouted"].as_i64()), (Some(0), Some(0)), "{st}");
+}
+
+#[test]
 fn tidy_packs_a_sprawling_sheet_into_a_compact_one_and_keeps_the_circuit() {
     let mut s = String::from("new
 add V 12 as=V1

@@ -2627,7 +2627,7 @@ fn applied_pin_trades_leave_the_board_and_come_back_with_undo() {
     e.trades_applied(Err("つながりが変わります".into()));
     assert_eq!(e.board.pin_map.len(), 2);
     assert!(e.status.contains("つながりが変わります"));
-    e.trades_applied(Ok(sch_core::BackAnnotation { parts: vec!["U1".into()], moved: 4 }));
+    e.trades_applied(Ok(sch_core::BackAnnotation { parts: vec!["U1".into()], moved: 4, ..Default::default() }));
     assert!(!e.board.pin_map.contains_key("U1") && e.board.pin_map.contains_key("U2"));
     assert!(e.status.contains("U1") && e.status.contains('4'), "{}", e.status);
     e.undo();
