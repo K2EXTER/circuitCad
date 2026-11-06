@@ -2935,7 +2935,7 @@ fn the_hierarchy_lesson_ticks_its_steps_and_one_c1_moves_all_three_stages() {
     let cutoff = |e: &SchEditor| {
         let r = e.ac.as_ref().unwrap().outcome.as_ref().unwrap();
         let (f, m) = (&r.freq, r.signal("V(VOUT)").unwrap().mag());
-        f.iter().zip(m.iter()).find(|(_, m)| **m < 0.7071).map(|(f, _)| *f).unwrap()
+        f.iter().zip(m.iter()).find(|(_, m)| **m < std::f64::consts::FRAC_1_SQRT_2).map(|(f, _)| *f).unwrap()
     };
     let before = cutoff(&e);
     assert!((150.0..250.0).contains(&before), "three stages cut off near 190 Hz, not {before}");
