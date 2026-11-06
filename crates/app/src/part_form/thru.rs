@@ -38,9 +38,16 @@ impl PartForm {
         let open = self.ptype == Some(PartType::Diode) || self.ptype == Some(PartType::Resistor);
         egui::CollapsingHeader::new("リード付き部品: 外形寸法から穴とピッチを決める (推奨ランドパターンが無いとき)").id_salt("thru_help").default_open(open).show(ui, |ui| {
             crate::icons::help_small(ui, "外形寸法から穴とパッドを決めます", "ダイオードや抵抗のデータシートには、推奨ランドパターンが無く、外形寸法 (本体の大きさとリードの太さ) だけが載っていることがよくあります。その数字から、穴径・パッド径・穴の間隔を決めます");
+            let bar = crate::widgets::segment_bar(ui, &[("軸方向 (ダイオード・抵抗)", true), ("ラジアル (LED・電解)", true)], Some(usize::from(self.thru_radial)));
+            bar[0].clone().on_hover_text("本体の両端からリードが出ている形。基板に寝かせて、リードを折り曲げて挿します");
+            bar[1].clone().on_hover_text("リードが本体の同じ側から出ている形 (LED・電解コンデンサ)。リードの間隔は、データシートにあります");
+            if bar[0].clicked() {
+                self.thru_radial = false;
+            }
+            if bar[1].clicked() {
+                self.thru_radial = true;
+            }
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.thru_radial, false, "軸方向 (ダイオード・抵抗)").on_hover_text("本体の両端からリードが出ている形。基板に寝かせて、リードを折り曲げて挿します");
-                ui.selectable_value(&mut self.thru_radial, true, "ラジアル (LED・電解コンデンサ)").on_hover_text("リードが本体の同じ側から出ている形。リードの間隔は、データシートにあります");
                 if ui.small_button("DO-41 の例 (1N4007)").on_hover_text("1N4007 のデータシート (Diodes Inc.) の外形寸法の最大値を入れます。リード径 0.864、本体 5.21 × 2.72").clicked() {
                     (self.thru_radial, self.thru_lead, self.thru_len, self.thru_dia) = (false, "0.864".into(), "5.21".into(), "2.72".into());
                 }

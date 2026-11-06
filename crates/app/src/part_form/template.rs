@@ -51,13 +51,16 @@ impl PartForm {
                 }
             });
             let t = &mut self.tpl;
-            ui.horizontal(|ui| {
-                ui.label("方式");
-                ui.selectable_value(&mut t.topology, Topology::Linear, "リニア")
-                    .on_hover_text("入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)");
-                ui.selectable_value(&mut t.topology, Topology::Buck, "降圧スイッチング")
-                    .on_hover_text("コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)");
-            });
+            ui.label("方式");
+            let bar = crate::widgets::segment_bar(ui, &[("リニア", true), ("降圧スイッチング", true)], Some(usize::from(t.topology == Topology::Buck)));
+            bar[0].clone().on_hover_text("入力から電池へ、電流をそのまま通します。回路は簡単ですが、入力と電池の電圧差が熱になります (TP4056 など)");
+            bar[1].clone().on_hover_text("コイルを使って電圧を下げながら充電します。効率が良く、大きな電流向き。LX 端子に外付けのコイルをつなぎます (TP5100・IP2332 など)");
+            if bar[0].clicked() {
+                t.topology = Topology::Linear;
+            }
+            if bar[1].clicked() {
+                t.topology = Topology::Buck;
+            }
             ui.horizontal_wrapped(|ui| {
                 ui.label("セル数");
                 ui.add(egui::DragValue::new(&mut t.cells).range(1..=8)).on_hover_text("電池を直列につなぐ数。満充電電圧 = セル数 × 1セルの電圧");
@@ -71,12 +74,16 @@ impl PartForm {
                     t.cell_voltage = 3.6;
                 }
             });
-            ui.horizontal(|ui| {
-                ui.label("充電電流の決め方");
-                ui.selectable_value(&mut t.setting, CurrentSetting::Fixed, "決まった値").on_hover_text("データシートに電流が1つだけ書かれている場合");
-                ui.selectable_value(&mut t.setting, CurrentSetting::Resistor, "抵抗で設定 (PROG 端子)")
-                    .on_hover_text("端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます");
-            });
+            ui.label("充電電流の決め方");
+            let bar = crate::widgets::segment_bar(ui, &[("決まった値", true), ("抵抗で設定 (PROG 端子)", true)], Some(usize::from(t.setting == CurrentSetting::Resistor)));
+            bar[0].clone().on_hover_text("データシートに電流が1つだけ書かれている場合");
+            bar[1].clone().on_hover_text("端子につなぐ抵抗で電流を決める場合。データシートの式 I = 定数 + k ÷ R に合わせます");
+            if bar[0].clicked() {
+                t.setting = CurrentSetting::Fixed;
+            }
+            if bar[1].clicked() {
+                t.setting = CurrentSetting::Resistor;
+            }
             match t.setting {
                 CurrentSetting::Fixed => {
                     ui.horizontal(|ui| {

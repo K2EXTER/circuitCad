@@ -116,10 +116,10 @@ impl PartForm {
                         }
                     }).response.on_hover_text("選ぶと、その種類で調べるとよい項目が出ます");
                 }
-                if ui.button("調べる項目のチェックリストを入れる").on_hover_text("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)").clicked() {
-                    self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
-                }
             });
+            if crate::widgets::primary_button_wide(ui, true, "調べる項目のチェックリストを入れる").on_hover_text("下の「そのほかの情報」に、調べる項目を並べます。データシートを見て、値を書き込んでください (すでに書いた行は、そのまま残ります)").clicked() {
+                self.rt_rows = merge_checklist(&self.rt_rows, self.rt_kind);
+            }
             ui.label(egui::RichText::new(CHECKLISTS[self.rt_kind.min(CHECKLISTS.len() - 1)].1).weak());
             if !self.sheet.has_doc() {
                 self.pick_row(ui, &[]);
@@ -185,11 +185,18 @@ impl PartForm {
     pub(super) fn tab_sim(&mut self, ui: &mut egui::Ui) {
             ui.label("シミュレーションモデル (部品の特性)");
             crate::icons::help_small(ui, "SPICE モデルを貼ると自動入力", "メーカーのサイトなどで見つけた SPICE モデル (`.model` / `.subckt`) をそのまま貼ると、種類・名前・ピンを自動で入力します");
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.sim, SimChoice::None, "なし").on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
-                ui.selectable_value(&mut self.sim, SimChoice::Model, ".model (ダイオード/トランジスタ等)").on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
-                ui.selectable_value(&mut self.sim, SimChoice::Subckt, ".subckt (IC マクロモデル)").on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
-            });
+            {
+                let choices = [SimChoice::None, SimChoice::Model, SimChoice::Subckt];
+                let bar = crate::widgets::segment_bar(ui, &[("なし", true), (".model (素子1つ)", true), (".subckt (ICマクロ)", true)], choices.iter().position(|c| *c == self.sim));
+                bar[0].clone().on_hover_text("シミュレーションしない部品にします (基板づくりだけに使う部品)");
+                bar[1].clone().on_hover_text("ダイオードやトランジスタなどの 1 素子を `.model` 文で書いたモデル");
+                bar[2].clone().on_hover_text("IC の中身を、複数の素子の組み合わせ (`.subckt`) で書いたモデル");
+                for (n, c) in choices.iter().enumerate() {
+                    if bar[n].clicked() {
+                        self.sim = *c;
+                    }
+                }
+            }
             let mut autofill = false;
             let pasted = ui.add(
                 egui::TextEdit::multiline(&mut self.sim_text)
@@ -202,25 +209,27 @@ impl PartForm {
             if pasted.changed() && self.sim == SimChoice::None && !self.sim_text.trim().is_empty() {
                 autofill = true;
             }
-            ui.horizontal(|ui| {
-                if ui.button("貼ったモデルから自動入力").on_hover_text("上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です").clicked() {
-                    autofill = true;
-                }
-                if ui.button("試し読み").on_hover_text("このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します").clicked() {
-                    self.trial_message = Some(self.trial_read());
-                }
-                if ui.button("SPICEファイルを読む…").on_hover_text("メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します").clicked()
-                    && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
-                {
-                    match std::fs::read(&p).map(|b| sim_core::decode_spice_text(&b)) {
-                        Ok(t) => {
-                            self.sim_text = t;
-                            autofill = true;
-                        }
-                        Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。読めないときは、テキストエディタで開いて貼り付けてください"))),
+            let bar = crate::widgets::segment_row(ui, &[("自動入力", true), ("試し読み", true), ("ファイルを読む…", true)]);
+            bar[0].clone().on_hover_text("貼ったモデルから自動入力: 上の SPICE 文を読んで、種類・モデル名・素子記号・ピン表・ノード順を入力します。何度押しても大丈夫です");
+            bar[1].clone().on_hover_text("このモデルをシミュレータに読ませて、動くかを保存の前に確かめます。読めない書き方があれば、直し方を出します");
+            bar[2].clone().on_hover_text("SPICEファイルを読む: メーカーからダウンロードした .lib / .mod / .sub / .cir / .txt のファイルを読み込み、上の欄に入れて自動入力します");
+            if bar[0].clicked() {
+                autofill = true;
+            }
+            if bar[1].clicked() {
+                self.trial_message = Some(self.trial_read());
+            }
+            if bar[2].clicked()
+                && let Some(p) = rfd::FileDialog::new().add_filter("SPICE モデル", &["lib", "mod", "sub", "cir", "spice", "txt", "inc"]).pick_file()
+            {
+                match std::fs::read(&p).map(|b| sim_core::decode_spice_text(&b)) {
+                    Ok(t) => {
+                        self.sim_text = t;
+                        autofill = true;
                     }
+                    Err(e) => self.spice_message = Some(Err(format!("ファイルを読めませんでした: {e}。読めないときは、テキストエディタで開いて貼り付けてください"))),
                 }
-            });
+            }
             if autofill {
                 self.spice_message = Some(self.autofill_from_spice());
                 self.trial_message = None;
@@ -273,13 +282,11 @@ impl PartForm {
     /// The tab of the pins.
     pub(super) fn tab_pins(&mut self, ui: &mut egui::Ui) {
             if self.sheet.has_doc() {
-                ui.horizontal(|ui| {
-                    if ui.button("PDFのピン表を囲んで取り込む・比べる").on_hover_text("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します").clicked() {
-                        self.pick_msg = None;
-                        self.sheet.start_pin_select();
-                    }
-                    ui.small("データシートの「ピン配置」の表");
-                });
+                if crate::widgets::primary_button_wide(ui, true, "PDFのピン表を囲んで取り込む・比べる").on_hover_text("データシートの窓で、ピン表をドラッグで囲みます。番号と名前を読み取り、確認してからこのピン表に入れます (置き換え・あとに足す)。「比べるだけ」を選ぶと、ピン表は変えずに、食い違いを探します").clicked() {
+                    self.pick_msg = None;
+                    self.sheet.start_pin_select();
+                }
+                ui.small("データシートの「ピン配置」の表を囲みます");
             } else {
                 self.pick_row(ui, &[]);
             }
@@ -430,9 +437,16 @@ impl PartForm {
             });
             ui.checkbox(&mut self.body_on, "シルクに本体の外形 (上面図の幅×長さ) を描く").on_hover_text("データシートの外形寸法 (3面図の上面図) の、部品の本体の大きさを入れます。基板のシルク (白い線) に本体の輪郭が出て、向きの印 (1番ピンの点・カソードの棒・＋) も付きます。パッドに重なる所は自動で避けます。3D表示でも、この幅×長さ×上の高さの本体になります");
             if self.body_on {
+                let bar = crate::widgets::segment_bar(ui, &[("四角", true), ("円", true)], Some(usize::from(self.body_circle)));
+                bar[0].clone().on_hover_text("四角い本体 (IC、チップ部品)");
+                bar[1].clone().on_hover_text("丸い本体 (ラジアルの電解コンデンサ、LED)");
+                if bar[0].clicked() {
+                    self.body_circle = false;
+                }
+                if bar[1].clicked() {
+                    self.body_circle = true;
+                }
                 ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.body_circle, false, "四角").on_hover_text("四角い本体 (IC、チップ部品)");
-                    ui.selectable_value(&mut self.body_circle, true, "円").on_hover_text("丸い本体 (ラジアルの電解コンデンサ、LED)");
                     let dv = |ui: &mut egui::Ui, label: &str, v: &mut f64, lo: f64| {
                         ui.add(egui::DragValue::new(v).speed(0.01).range(lo..=100.0).prefix(format!("{label} ")).suffix(" mm")).on_hover_text(body_tip(label));
                     };
@@ -443,16 +457,22 @@ impl PartForm {
                     dv(ui, "中心X", &mut self.body_x, -100.0);
                     dv(ui, "中心Y", &mut self.body_y, -100.0);
                 });
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("向きの印");
-                    for (m, label, tip) in [
-                        (BodyMark::None, "なし", "印を付けません"),
-                        (BodyMark::Dot, "点", "本体の角の内側に点を打ちます。ICの1番ピンの印です"),
-                        (BodyMark::Bar, "棒", "本体の端の近くに線を引きます。ダイオードのカソードや、LEDの平らな側の印です"),
-                        (BodyMark::Plus, "＋", "極性のあるコンデンサの ＋ 側の印です"),
-                    ] {
-                        ui.selectable_value(&mut self.body_mark, m, label).on_hover_text(tip);
+                ui.label("向きの印");
+                let marks = [
+                    (BodyMark::None, "なし", "印を付けません"),
+                    (BodyMark::Dot, "点", "本体の角の内側に点を打ちます。ICの1番ピンの印です"),
+                    (BodyMark::Bar, "棒", "本体の端の近くに線を引きます。ダイオードのカソードや、LEDの平らな側の印です"),
+                    (BodyMark::Plus, "＋", "極性のあるコンデンサの ＋ 側の印です"),
+                ];
+                let items: Vec<(&str, bool)> = marks.iter().map(|m| (m.1, true)).collect();
+                let bar = crate::widgets::segment_bar(ui, &items, marks.iter().position(|m| m.0 == self.body_mark));
+                for (n, (m, _, tip)) in marks.iter().enumerate() {
+                    bar[n].clone().on_hover_text(*tip);
+                    if bar[n].clicked() {
+                        self.body_mark = *m;
                     }
+                }
+                ui.horizontal_wrapped(|ui| {
                     if self.body_mark != BodyMark::None {
                         ui.label("のピン");
                         ui.add(egui::TextEdit::singleline(&mut self.body_pin).desired_width(40.0).hint_text("1")).on_hover_text("印を付けるピンの番号。空なら最初のパッド (1番ピン)。ダイオードのカソードなら K、電解コンデンサの＋なら＋側のピン番号");
