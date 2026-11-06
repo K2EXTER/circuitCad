@@ -231,6 +231,9 @@ pub(crate) const DC_ORDER: [Strategy; 4] = [Strategy::Direct, Strategy::Gmin, St
 /// allowed to report "no operating point" there.
 pub(crate) const DC_ORDER_WIDEN: [Strategy; 5] = [Strategy::Direct, Strategy::Widen, Strategy::Gmin, Strategy::Source, Strategy::GminLong];
 
+/// A circuit with more unknowns than this gives up switch widening as soon as the plain Newton steps fail at its first stage.
+const WIDEN_QUICK_GIVE_UP: usize = 300;
+
 impl Compiled {
     fn run(&self, which: Strategy) -> Result<Attempt, Fail> {
         let mut zero_x = vec![0.0; self.n_unknowns];
@@ -306,9 +309,12 @@ impl Compiled {
             }
             Strategy::Widen => {
                 let (mut x, mut vj, mut iters) = (zero_x, zero_vj, 0);
-                for widen in [1000.0, 300.0, 100.0, 30.0, 10.0, 5.0, 3.0, 2.0, 1.5, 1.0] {
+                for (k, widen) in [1000.0, 300.0, 100.0, 30.0, 10.0, 5.0, 3.0, 2.0, 1.5, 1.0].into_iter().enumerate() {
                     let ctx = Ctx { sw_widen: widen, ..Ctx::dc(crate::options::options().gmin, 1.0) };
-                    let a = self.newton_damped(x, vj, &ctx)?;
+                    // the first stage is the easy one (the switches are at their softest): on a big circuit, when even the plain Newton
+                    // steps do not land there, the damped variants (a dozen more tries, seconds for hundreds of unknowns) rarely do, so
+                    // the next strategy gets its turn. Small circuits keep them (two bundled chargers need them, and they cost nothing).
+                    let a = if k == 0 && self.n_unknowns > WIDEN_QUICK_GIVE_UP { self.newton(x, vj, &ctx)? } else { self.newton_damped(x, vj, &ctx)? };
                     iters += a.iterations;
                     x = a.x;
                     vj = a.vj;
