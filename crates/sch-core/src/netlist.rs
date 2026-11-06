@@ -224,6 +224,7 @@ fn extract_groups(s: &Schematic, skip: Option<usize>) -> (Conn, Vec<(usize, Net)
 pub fn erc(whole: &Schematic) -> Vec<Problem> {
     let s = &*whole.flat();
     let mut out = erc_all(s);
+    out.extend(whole.hierarchy_problems(s));
     out.retain(|p| p.at.is_none_or(|a| !s.erc_skip.iter().any(|(lo, hi)| a.0 >= lo.0 && a.0 <= hi.0 && a.1 >= lo.1 && a.1 <= hi.1)));
     // findings are placed on their own sheet (a finding in a copy of a child sheet is shown on the child sheet)
     let copies = whole.instances();
@@ -586,4 +587,25 @@ fn dangling_wire_ends(s: &Schematic) -> Vec<Pt> {
         }
     }
     out
+}
+
+/// The points among `pts` that nothing is attached to: no pin, wire end or other label shares their wiring (before names are
+/// joined). Used for the ports of a sheet symbol, which are tied by a label each.
+pub(crate) fn lonely_points(s: &Schematic, pts: &[Pt]) -> Vec<Pt> {
+    let mut cn = connectivity(s);
+    let mut size: HashMap<usize, usize> = HashMap::new();
+    let ids: Vec<usize> = cn.ids.values().copied().collect();
+    for id in ids {
+        *size.entry(cn.dsu.find(id)).or_default() += 1;
+    }
+    pts.iter()
+        .filter(|p| {
+            let Some(&id) = cn.ids.get(*p) else { return true };
+            // the points are places: a pin or a second label on the same place counts as something attached
+            let pins = s.components.iter().filter(|c| c.pins().iter().any(|q| q.1 == **p)).count();
+            let labels = s.labels.iter().filter(|l| l.pos == **p).count();
+            size.get(&cn.dsu.find(id)).copied().unwrap_or(1) <= 1 && pins == 0 && labels <= 1
+        })
+        .copied()
+        .collect()
 }

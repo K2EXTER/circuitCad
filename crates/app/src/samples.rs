@@ -19,6 +19,7 @@ pub const SAMPLES: &[Sample] = &[
     sample!("LED と電流制限抵抗", "電池・抵抗・LED の一番かんたんな回路。「解析」タブの「DC動作点を解析」で、電流が出ます", "led"),
     sample!("12V から 5V を作って LED を光らせる", "三端子レギュレータ (LM7805) の回路。「DC動作点を解析」で、各点の電圧と電流が回路図に重なります", "regulator_led"),
     sample!("電源と負荷を2枚のシートに分ける", "上の「12V から 5V」と同じ回路を、電源のシートと負荷のシートに分けたもの。シートが違っても、同じ名前のネットラベル (5V) は同じ配線です。上のタブで切り替え、「DC動作点を解析」で1枚のときと同じ答えを確かめます", "two_sheets"),
+    sample!("同じ回路を3回使う (階層: RC を3段重ねる)", "RC ローパスの「ステージ」を別のシートに1つだけ描き、3つの記号 (CH1〜CH3) で使い回します。「RCステージ」のタブを開くと中身 (R と C、入口と出口のポート) が見えます。「解析」タブの「AC解析を実行」で、3段重ねた特性が出ます (1段より急に落ちます)。シートの中を直すと、3つ全部に効きます", "hierarchy_rc_stages"),
     sample!("RC ローパスフィルタ", "抵抗とコンデンサで高い周波数を通しにくくする回路。「AC解析を実行」で、ボード線図が出ます", "rc_lowpass"),
     sample!("RLC のパルス応答", "パルスを入れると波形が振動して落ち着く回路。「過渡解析を実行」で、波形が出ます", "rlc_pulse"),
     sample!("ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力を変えても出力があまり動きません", "zener_regulator"),
@@ -70,5 +71,22 @@ mod tests {
         assert!(!ed.sch.components.is_empty());
         assert!(ed.status.contains(SAMPLES[1].title), "{}", ed.status);
         assert!(!ed.open_sample("broken", "{ not json"));
+    }
+}
+
+#[cfg(test)]
+mod hierarchy_sample_tests {
+    use super::*;
+
+    #[test]
+    fn the_three_stage_sample_expands_to_three_copies_and_has_no_error() {
+        let s = SAMPLES.iter().find(|s| s.json.contains("\"sub\"")).expect("a sample that uses a sheet symbol");
+        let sch: sch_core::Schematic = serde_json::from_str(s.json).unwrap();
+        let flat = sch.flat();
+        let mut refs: Vec<&str> = flat.components.iter().filter(|c| !c.kind.is_power_symbol()).map(|c| c.refdes.as_str()).collect();
+        refs.sort();
+        assert_eq!(refs, ["C1_CH1", "C1_CH2", "C1_CH3", "R1_CH1", "R1_CH2", "R1_CH3", "V1"]);
+        assert!(sch_core::erc(&sch).iter().all(|p| p.severity != sch_core::Severity::Error), "{:?}", sch_core::erc(&sch));
+        assert!(sim_core::from_schematic(&sch).is_ok(), "the expanded circuit simulates");
     }
 }

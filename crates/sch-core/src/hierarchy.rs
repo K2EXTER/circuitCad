@@ -415,3 +415,200 @@ mod tests {
         assert!(!plain.contains("ports") && !plain.contains("sub"), "{plain}");
     }
 }
+
+/// A port seen from both ends, in the flat sheet: the pin of a sheet symbol, and the port of the child sheet it is tied to.
+struct Tie {
+    symbol: String,
+    port: String,
+    dir: PortDir,
+    parent_pt: Pt,
+    child_pt: Pt,
+    /// The first copy of this port of this child sheet (the others are the same by construction, they are checked once).
+    first: bool,
+}
+
+impl Schematic {
+    fn port_ties(&self) -> Vec<Tie> {
+        let insts = self.instances();
+        let mut out: Vec<Tie> = vec![];
+        let mut seen: Vec<(usize, String)> = vec![];
+        for inst in &insts {
+            let dx = inst.slot as i32 * SHEET_STRIDE;
+            for c in self.parts(inst.sheet).comps {
+                let Some(sub) = c.sub else { continue };
+                let mut child_path = inst.path.clone();
+                child_path.push(c.refdes.clone());
+                let Some(child) = insts.iter().find(|i| i.path == child_path && i.sheet == sub.sheet) else { continue };
+                let cdx = child.slot as i32 * SHEET_STRIDE;
+                let pins = c.pins();
+                for port in self.parts(sub.sheet).ports {
+                    let Some((_, at)) = pins.iter().find(|(n, _)| *n == port.name) else { continue };
+                    let key = (sub.sheet, port.name.clone());
+                    let first = !seen.contains(&key);
+                    seen.push(key);
+                    out.push(Tie { symbol: format!("{}{}", c.refdes, if inst.path.is_empty() { String::new() } else { format!(" ({})", inst.path.join(".")) }), port: port.name.clone(), dir: port.dir, parent_pt: (at.0 + dx, at.1), child_pt: (port.pos.0 + cdx, port.pos.1), first });
+                }
+            }
+        }
+        out
+    }
+
+    /// Whether sheet `from` can reach sheet `to` through sheet symbols (a ring when a symbol of `to` sits on `from` and `from` can reach `to`).
+    fn reaches(&self, from: usize, to: usize, seen: &mut Vec<usize>) -> bool {
+        if from == to {
+            return true;
+        }
+        if seen.contains(&from) || from >= self.sheet_count() {
+            return false;
+        }
+        seen.push(from);
+        self.parts(from).comps.iter().filter_map(|c| c.sub).any(|s| self.reaches(s.sheet, to, seen))
+    }
+
+    /// The findings about the hierarchy, in the places of the flat sheet `flat` (`erc` puts them back on their sheets).
+    pub(crate) fn hierarchy_problems(&self, flat: &Schematic) -> Vec<Problem> {
+        use crate::netlist::Severity::{Error, Warning};
+        let mut out = vec![];
+        let n = self.sheet_count();
+        let place = |k: usize, p: Pt| (p.0 + self.first_slot_of(k) as i32 * SHEET_STRIDE, p.1);
+        for k in 0..n {
+            let parts = self.parts(k);
+            // a symbol that cannot be expanded: the sheet inside itself, or a ring
+            for c in parts.comps {
+                let Some(sub) = c.sub else { continue };
+                if sub.sheet >= n || self.reaches(sub.sheet, k, &mut vec![]) {
+                    out.push(Problem::new(
+                        Error,
+                        format!("シートの記号 {} が、自分自身を含むシートを指しています", c.refdes),
+                        Some(place(k, c.pos)),
+                        "シートの記号は、そのシートの中 (孫のシートも含めて) にある自分を指せません。記号が堂々巡りになるので、このシートは展開されず、回路に入りません。この記号を消すか、別のシートを指す記号に置き換えましょう",
+                    ));
+                } else if self.parts(sub.sheet).ports.is_empty() {
+                    out.push(Problem::new(
+                        Warning,
+                        format!("シートの記号 {} が指すシート「{}」に、ポートがありません", c.refdes, self.sheet_name(sub.sheet)),
+                        Some(place(k, c.pos)),
+                        &format!("ポートは、シートの出入口です。ポートがないと、記号にピンがなく、親のシートとつなげません。「{}」を開き、ラベルツールの「ポートにする」で、信号の出入りする所にポートを置きましょう", self.sheet_name(sub.sheet)),
+                    ));
+                }
+            }
+            // two ports of one name on a sheet are one pin of the symbol
+            let ports = parts.ports;
+            for (i, p) in ports.iter().enumerate() {
+                if ports[..i].iter().any(|q| q.name == p.name) {
+                    out.push(Problem::new(
+                        Error,
+                        format!("シート「{}」に、ポート {} が2つあります", self.sheet_name(k), p.name),
+                        Some(place(k, p.pos)),
+                        "同じ名前のポートは、記号の1つのピンにまとまってしまいます。片方を選んで、名前を変えるか消しましょう",
+                    ));
+                }
+            }
+        }
+        // a port nothing is wired to, on the parent side (the pin of the symbol) or inside the child sheet
+        let ties = self.port_ties();
+        let points: Vec<Pt> = ties.iter().flat_map(|t| [t.parent_pt, t.child_pt]).collect();
+        let lonely = crate::netlist::lonely_points(flat, &points);
+        for t in &ties {
+            // an output left alone is harmless; an input or a two-way port left alone is a floating pin
+            if t.dir != PortDir::Out && lonely.contains(&t.parent_pt) {
+                out.push(Problem::new(
+                    Warning,
+                    format!("{} のポート {} が、つながっていません", t.symbol, t.port),
+                    Some(t.parent_pt),
+                    "シートの記号のピンに、線もラベルもついていません。入力のピンが浮いていると電圧が決まらず、動作が不安定になります。線かラベルでつなぎましょう。使わないポートなら、そのままで構いません",
+                ));
+            }
+            if t.first && lonely.contains(&t.child_pt) {
+                out.push(Problem::new(
+                    Warning,
+                    format!("ポート {} が、シートの中でどこにもつながっていません", t.port),
+                    Some(t.child_pt),
+                    "ポートの場所に、部品のピンも線もラベルもありません。ポートは、シートの中の線や部品のピンの上に置きます。ずれていたら、消して置き直しましょう",
+                ));
+            }
+        }
+        out
+    }
+}
+
+#[cfg(test)]
+mod problem_tests {
+    use super::*;
+
+    /// Child sheet 1: R1 with ports IN (input, on pin 1) and OUT (output, on pin 2). Sheet 0 is the top.
+    fn child() -> Schematic {
+        let mut s = Schematic::default();
+        s.add_sheet();
+        let r = s.add(Kind::Resistor, (10, 10), 0);
+        let p = s.components[r].pins();
+        s.ports.push(SheetPort { pos: p[0].1, name: "IN".into(), dir: PortDir::In });
+        s.ports.push(SheetPort { pos: p[1].1, name: "OUT".into(), dir: PortDir::Out });
+        s.switch_sheet(0);
+        s
+    }
+
+    fn messages(s: &Schematic) -> Vec<String> {
+        erc(s).into_iter().map(|p| p.message).collect()
+    }
+
+    #[test]
+    fn an_input_port_left_alone_on_the_parent_is_a_warning_and_an_output_is_not() {
+        let mut s = child();
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let m = messages(&s);
+        assert!(m.iter().any(|m| m.contains("CH1 のポート IN")), "{m:?}");
+        assert!(!m.iter().any(|m| m.contains("ポート OUT")), "an output left open is fine: {m:?}");
+        // wire the input: the warning goes
+        let pin = s.components[0].pins().into_iter().find(|(n, _)| n == "IN").unwrap().1;
+        s.labels.push(Label { pos: pin, text: "SIG".into() });
+        assert!(!messages(&s).iter().any(|m| m.contains("CH1 のポート IN")));
+    }
+
+    #[test]
+    fn a_port_with_nothing_under_it_is_reported_on_the_child_sheet() {
+        let mut s = child();
+        s.switch_sheet(1);
+        s.ports.push(SheetPort { pos: (90, 90), name: "LOST".into(), dir: PortDir::Io });
+        s.switch_sheet(0);
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let p = erc(&s).into_iter().find(|p| p.message.contains("ポート LOST が、シートの中")).expect("LOST");
+        assert_eq!((p.sheet, p.at), (1, Some((90, 90))));
+    }
+
+    #[test]
+    fn two_ports_of_one_name_and_a_sheet_without_ports_are_reported() {
+        let mut s = child();
+        s.switch_sheet(1);
+        s.ports.push(SheetPort { pos: (12, 12), name: "IN".into(), dir: PortDir::In });
+        s.switch_sheet(0);
+        assert!(messages(&s).iter().any(|m| m.contains("ポート IN が2つ")));
+        // a third sheet without ports, used by a symbol
+        s.add_sheet();
+        s.switch_sheet(0);
+        s.add_sheet_symbol(2, (30, 10)).unwrap();
+        assert!(messages(&s).iter().any(|m| m.contains("に、ポートがありません")));
+    }
+
+    #[test]
+    fn a_ring_of_symbols_is_an_error() {
+        let mut s = child();
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        s.switch_sheet(1);
+        s.add_sheet_symbol(0, (40, 40)).unwrap();
+        s.switch_sheet(0);
+        assert!(erc(&s).iter().any(|p| p.message.contains("自分自身を含む") && p.severity == crate::netlist::Severity::Error));
+    }
+
+    #[test]
+    fn every_hierarchy_finding_explains_itself() {
+        let mut s = child();
+        s.add_sheet_symbol(1, (10, 10)).unwrap();
+        s.switch_sheet(1);
+        s.ports.push(SheetPort { pos: (90, 90), name: "IN".into(), dir: PortDir::In });
+        s.switch_sheet(0);
+        for p in erc(&s) {
+            assert!(p.hint.len() > 20 && !p.hint.contains("{}"), "{}: {}", p.message, p.hint);
+        }
+    }
+}

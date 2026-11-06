@@ -1,0 +1,275 @@
+{
+  "components": [
+    {
+      "refdes": "V1",
+      "kind": "VSource",
+      "value": "0 AC 1",
+      "pos": [
+        8,
+        16
+      ],
+      "rot": 0,
+      "footprint": "PinHeader_1x2_PM",
+      "custom": null
+    },
+    {
+      "refdes": "CH1",
+      "kind": "Custom",
+      "value": "RCステージ",
+      "pos": [
+        18,
+        14
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": {
+        "name": "RCステージ",
+        "prefix": "CH",
+        "pins": [
+          {
+            "number": "IN",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "OUT",
+            "name": "OUT",
+            "side": "right"
+          }
+        ],
+        "sim": null
+      },
+      "sim_only": true,
+      "sub": {
+        "sheet": 1
+      }
+    },
+    {
+      "refdes": "CH2",
+      "kind": "Custom",
+      "value": "RCステージ",
+      "pos": [
+        18,
+        28
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": {
+        "name": "RCステージ",
+        "prefix": "CH",
+        "pins": [
+          {
+            "number": "IN",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "OUT",
+            "name": "OUT",
+            "side": "right"
+          }
+        ],
+        "sim": null
+      },
+      "sim_only": true,
+      "sub": {
+        "sheet": 1
+      }
+    },
+    {
+      "refdes": "CH3",
+      "kind": "Custom",
+      "value": "RCステージ",
+      "pos": [
+        18,
+        42
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": {
+        "name": "RCステージ",
+        "prefix": "CH",
+        "pins": [
+          {
+            "number": "IN",
+            "name": "IN",
+            "side": "left"
+          },
+          {
+            "number": "OUT",
+            "name": "OUT",
+            "side": "right"
+          }
+        ],
+        "sim": null
+      },
+      "sim_only": true,
+      "sub": {
+        "sheet": 1
+      }
+    },
+    {
+      "refdes": "#PWR01",
+      "kind": "Ground",
+      "value": "GND",
+      "pos": [
+        8,
+        18
+      ],
+      "rot": 0,
+      "footprint": "",
+      "custom": null
+    }
+  ],
+  "wires": [],
+  "labels": [
+    {
+      "pos": [
+        8,
+        14
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        14,
+        14
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        22,
+        14
+      ],
+      "text": "S1"
+    },
+    {
+      "pos": [
+        14,
+        28
+      ],
+      "text": "S1"
+    },
+    {
+      "pos": [
+        22,
+        28
+      ],
+      "text": "S2"
+    },
+    {
+      "pos": [
+        14,
+        42
+      ],
+      "text": "S2"
+    },
+    {
+      "pos": [
+        22,
+        42
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        8,
+        18
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "sheets": [
+    {
+      "name": "シート1",
+      "components": [],
+      "wires": [],
+      "labels": []
+    },
+    {
+      "name": "RCステージ",
+      "components": [
+        {
+          "refdes": "R1",
+          "kind": "Resistor",
+          "value": "1k",
+          "pos": [
+            10,
+            14
+          ],
+          "rot": 0,
+          "footprint": "R_0805",
+          "custom": null
+        },
+        {
+          "refdes": "C1",
+          "kind": "Capacitor",
+          "value": "159n",
+          "pos": [
+            24,
+            14
+          ],
+          "rot": 0,
+          "footprint": "C_0805",
+          "custom": null
+        },
+        {
+          "refdes": "#PWR01",
+          "kind": "Ground",
+          "value": "GND",
+          "pos": [
+            26,
+            14
+          ],
+          "rot": 0,
+          "footprint": "",
+          "custom": null
+        }
+      ],
+      "wires": [],
+      "labels": [
+        {
+          "pos": [
+            12,
+            14
+          ],
+          "text": "MID"
+        },
+        {
+          "pos": [
+            22,
+            14
+          ],
+          "text": "MID"
+        },
+        {
+          "pos": [
+            26,
+            14
+          ],
+          "text": "GND"
+        }
+      ],
+      "ports": [
+        {
+          "pos": [
+            8,
+            14
+          ],
+          "name": "IN",
+          "dir": "in"
+        },
+        {
+          "pos": [
+            12,
+            14
+          ],
+          "name": "OUT",
+          "dir": "out"
+        }
+      ]
+    }
+  ]
+}
