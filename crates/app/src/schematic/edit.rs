@@ -178,11 +178,21 @@ impl SchEditor {
                 .into_iter()
                 .filter_map(|l| before.iter().find(|p| p.1 == self.sch.labels[l].pos).map(|p| (l, p.0.clone())))
                 .collect();
+            let carried_ports: Vec<(usize, String)> = self
+                .attached_ports(i)
+                .into_iter()
+                .filter_map(|l| before.iter().find(|p| p.1 == self.sch.ports[l].pos).map(|p| (l, p.0.clone())))
+                .collect();
             self.sch.components[i].rot = next;
             let after = self.sch.components[i].pins();
             for (l, pin) in carried {
                 if let Some(p) = after.iter().find(|p| p.0 == pin) {
                     self.sch.labels[l].pos = p.1;
+                }
+            }
+            for (l, pin) in carried_ports {
+                if let Some(p) = after.iter().find(|p| p.0 == pin) {
+                    self.sch.ports[l].pos = p.1;
                 }
             }
             // wires ending on the pins follow them
@@ -198,15 +208,22 @@ impl SchEditor {
         self.sch.labels.iter().enumerate().filter(|(_, l)| pins.contains(&l.pos) && !on_wire(l.pos)).map(|(k, _)| k).collect()
     }
 
+    /// Sheet ports that sit on a pin of part `i` and on no wire end: like net labels, they move with the part.
+    pub(super) fn attached_ports(&self, i: usize) -> Vec<usize> {
+        let pins: Vec<Pt> = self.sch.components[i].pins().into_iter().map(|p| p.1).collect();
+        let on_wire = |p: Pt| self.sch.wires.iter().any(|w| w.a == p || w.b == p);
+        self.sch.ports.iter().enumerate().filter(|(_, l)| pins.contains(&l.pos) && !on_wire(l.pos)).map(|(k, _)| k).collect()
+    }
+
     pub(super) fn start_group_drag(&mut self, anchor: Pt) {
-        let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![], buses: vec![] };
+        let mut g = GroupDrag { anchor, comps: vec![], wires: vec![], labels: vec![], ports: vec![], buses: vec![] };
         for s in &self.multi {
             match *s {
                 Sel::Comp(i) => g.comps.push((i, self.sch.components[i].pos)),
                 Sel::Wire(i) => g.wires.push((i, self.sch.wires[i].a, self.sch.wires[i].b)),
                 Sel::Label(i) => g.labels.push((i, self.sch.labels[i].pos)),
                 Sel::Bus(i) => g.buses.push((i, self.sch.buses[i].a, self.sch.buses[i].b)),
-                Sel::Port(_) => {} // a port stays where it is (delete it and put it again)
+                Sel::Port(i) => g.ports.push((i, self.sch.ports[i].pos)),
             }
         }
         // the labels set on the pins of the moved parts go along, unless they are selected themselves
@@ -215,6 +232,11 @@ impl SchEditor {
                 for l in self.attached_labels(i) {
                     if !g.labels.iter().any(|(k, _)| *k == l) {
                         g.labels.push((l, self.sch.labels[l].pos));
+                    }
+                }
+                for p in self.attached_ports(i) {
+                    if !g.ports.iter().any(|(k, _)| *k == p) {
+                        g.ports.push((p, self.sch.ports[p].pos));
                     }
                 }
             }

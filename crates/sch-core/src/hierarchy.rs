@@ -97,6 +97,19 @@ impl Schematic {
         out
     }
 
+    /// The sheets that hold a symbol of another sheet (the parent sheets), with how many symbols each holds.
+    pub fn parent_sheets(&self) -> Vec<(usize, usize)> {
+        let n = self.sheet_count();
+        let mut out = vec![];
+        for k in 0..n {
+            let c = self.parts(k).comps.iter().filter(|c| c.sub.as_ref().is_some_and(|s| s.sheet < n && s.sheet != k)).count();
+            if c > 0 {
+                out.push((k, c));
+            }
+        }
+        out
+    }
+
     /// Every copy of a sheet in the flat sheet, in the order they are laid out. The sheets nothing refers to come first
     /// in their own places (as before); the copies made for the symbols follow, from slot `sheet_count()` on.
     pub fn instances(&self) -> Vec<Instance> {

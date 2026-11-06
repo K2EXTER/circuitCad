@@ -88,6 +88,9 @@ impl SchEditor {
                     for &(i, p) in &gd.labels {
                         self.sch.labels[i].pos = mv(p);
                     }
+                    for &(i, p) in &gd.ports {
+                        self.sch.ports[i].pos = mv(p);
+                    }
                     for &(i, a, b) in &gd.buses {
                         self.sch.buses[i].a = mv(a);
                         self.sch.buses[i].b = mv(b);
@@ -109,9 +112,14 @@ impl SchEditor {
                     let (dx, dy) = (np.0 - c.pos.0, np.1 - c.pos.1);
                     // net labels set on the pins go along with the part
                     let carried = self.attached_labels(i);
+                    let carried_ports = self.attached_ports(i);
                     self.sch.components[i].pos = np;
                     for l in carried {
                         let p = &mut self.sch.labels[l].pos;
+                        *p = (p.0 + dx, p.1 + dy);
+                    }
+                    for k in carried_ports {
+                        let p = &mut self.sch.ports[k].pos;
                         *p = (p.0 + dx, p.1 + dy);
                     }
                     self.apply_stretch(&[]);

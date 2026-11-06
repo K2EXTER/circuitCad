@@ -43,9 +43,32 @@ impl SchEditor {
                 }
             }
             if count > 1 {
+                let children = self.sch.child_sheets();
+                let parents = self.sch.parent_sheets();
+                let instances = self.sch.instances();
                 for k in 0..count {
                     let name = self.sch.sheet_name(k);
-                    let tab = ui.selectable_label(k == self.sch.active_sheet, &name).on_hover_text("このシートを開きます。右クリックで名前の変更と削除ができます。同じ名前のネットラベルと電源記号は、シートが違っても同じ配線になります");
+                    let is_child = children.contains(&k);
+                    let symbols = parents.iter().find(|p| p.0 == k).map_or(0, |p| p.1);
+                    let mut tip = String::new();
+                    if is_child {
+                        let copies = instances.iter().filter(|i| i.sheet == k && !i.path.is_empty()).count();
+                        tip += &format!("階層の子シートです。どこかのシートの記号として {copies} 個置かれていて、中を直すと全部に効きます。外とのつながりは、シートのポートが記号のピンになって行います。");
+                    }
+                    if symbols > 0 {
+                        tip += &format!("階層の親シートです。ほかのシートの記号を {symbols} 個置いています (記号をダブルクリックで中のシートへ)。");
+                    }
+                    if tip.is_empty() {
+                        tip = "ふつうのシートです (階層の親でも子でもありません)。同じ名前のネットラベルと電源記号は、シートが違っても同じ配線になります。".to_string();
+                    }
+                    tip += "右クリックで名前の変更と削除ができます";
+                    let label = match (is_child, symbols > 0) {
+                        (true, true) => egui::RichText::new(format!("{name} (親・子)")).color(egui::Color32::from_rgb(150, 130, 220)),
+                        (true, false) => egui::RichText::new(format!("{name} (子)")).color(egui::Color32::from_rgb(90, 150, 220)),
+                        (false, true) => egui::RichText::new(format!("{name} (親)")).color(egui::Color32::from_rgb(220, 150, 70)),
+                        _ => egui::RichText::new(name.clone()),
+                    };
+                    let tab = ui.selectable_label(k == self.sch.active_sheet, label).on_hover_text(tip);
                     if tab.clicked() {
                         go = Some(k);
                     }

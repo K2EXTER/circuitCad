@@ -100,6 +100,24 @@ mod tests {
     }
 
     #[test]
+    fn a_port_on_a_pin_turns_and_moves_with_the_part() {
+        let mut e = SchEditor::default();
+        e.sch = Schematic::default();
+        e.sch.add(Kind::Resistor, (20, 20), 0);
+        let p = pin(&e, 0, 1);
+        e.sch.ports.push(sch_core::SheetPort { pos: p, name: "IN".into(), dir: sch_core::PortDir::In });
+        e.rotate_comp(0);
+        assert_eq!(e.sch.ports[0].pos, pin(&e, 0, 1), "the port stays on its pin when the part turns");
+        e.multi = vec![Sel::Comp(0)];
+        e.start_group_drag((20, 20));
+        assert_eq!(e.gdrag.as_ref().unwrap().ports.len(), 1, "a group drag carries the port on the pin");
+        // a port with a wire on it stays where it is (the wire is what follows the part)
+        let q = pin(&e, 0, 1);
+        e.sch.wires.push(Wire { a: q, b: (q.0 + 6, q.1) });
+        assert!(e.attached_ports(0).is_empty());
+    }
+
+    #[test]
     fn dragging_a_part_there_and_back_restores_the_wires() {
         let mut e = SchEditor::default();
         e.sch = Schematic::default();

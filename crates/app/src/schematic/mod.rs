@@ -46,6 +46,7 @@ struct GroupDrag {
     comps: Vec<(usize, Pt)>,
     wires: Vec<(usize, Pt, Pt)>,
     labels: Vec<(usize, Pt)>,
+    ports: Vec<(usize, Pt)>,
     buses: Vec<(usize, Pt, Pt)>,
 }
 
