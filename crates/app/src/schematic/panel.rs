@@ -495,6 +495,7 @@ impl SchEditor {
         if let Some(Sel::Comp(i)) = self.selected
             && i < self.sch.components.len() {
                 let fresh = self.dc.as_ref().is_some_and(|d| d.signature == self.signature());
+                let sub_rows: Vec<(String, String)> = self.sch.components[i].sub.as_ref().map(|s| self.sch.value_rows(s.sheet)).unwrap_or_default();
                 let c = &mut self.sch.components[i];
                 if heading {
                     ui.label(egui::RichText::new("選択中の部品").strong());
@@ -649,9 +650,30 @@ impl SchEditor {
                             .on_hover_text("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)");
                     });
                 }
-                if let Some(sub) = c.sub {
+                if let Some(sub) = c.sub.as_mut() {
                     if ui.button("シートの中を開く").on_hover_text("この記号が表すシートを開きます (記号のダブルクリックでも開きます)。直すと、同じシートを使う全部の記号に効きます").clicked() {
                         open_sheet = Some(sub.sheet);
+                    }
+                    if !sub_rows.is_empty() {
+                        let title = format!("このコピーだけの値 ({})", sub.values.len());
+                        egui::CollapsingHeader::new(title).id_salt(("sub_values", i)).default_open(!sub.values.is_empty()).show(ui, |ui| {
+                            ui.small("書いた部品だけ、この記号のコピーで別の値になります。空欄は、シートの値のままです").on_hover_text("同じシートを何回も使うとき、チャンネルごとに抵抗値などを変えたい部品だけ、ここに書きます。シートの中の部品は、そのままです。コピーの部品は R1_CH1 のように別の番号になり、シミュレーションにも基板にも、ここの値が使われます");
+                            egui::Grid::new(("sub_values_grid", i)).num_columns(3).spacing([8.0, 4.0]).show(ui, |ui| {
+                                for (refdes, base) in &sub_rows {
+                                    let mut text = sub.values.get(refdes).cloned().unwrap_or_default();
+                                    ui.label(refdes);
+                                    ui.small(base).on_hover_text("シートの値");
+                                    if ui.add(egui::TextEdit::singleline(&mut text).hint_text(base.as_str()).desired_width(f32::INFINITY)).on_hover_text("このコピーでの値。空欄にすると、シートの値に戻ります").changed() {
+                                        if text.trim().is_empty() {
+                                            sub.values.remove(refdes);
+                                        } else {
+                                            sub.values.insert(refdes.clone(), text);
+                                        }
+                                    }
+                                    ui.end_row();
+                                }
+                            });
+                        });
                     }
                 } else {
                     advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);

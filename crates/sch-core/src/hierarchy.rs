@@ -34,10 +34,13 @@ pub struct SheetPort {
     pub dir: PortDir,
 }
 
-/// What a sheet symbol stands for: the number of the child sheet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// What a sheet symbol stands for: the number of the child sheet, and the values this copy gives to some of its parts.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SubRef {
     pub sheet: usize,
+    /// Part of the child sheet (its reference designator there) -> the value this copy uses instead of the sheet's own.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub values: std::collections::BTreeMap<String, String>,
 }
 
 /// One copy of a sheet in the flat sheet: its place (slot, `slot * SHEET_STRIDE` to the right), the sheet it is a copy of, and
@@ -47,6 +50,8 @@ pub struct Instance {
     pub slot: usize,
     pub sheet: usize,
     pub path: Vec<String>,
+    /// The values this copy gives to parts of the sheet (from its symbol).
+    pub values: std::collections::BTreeMap<String, String>,
 }
 
 struct Parts<'a> {
@@ -79,7 +84,7 @@ impl Schematic {
         let mut out: Vec<usize> = vec![];
         for k in 0..n {
             for c in self.parts(k).comps {
-                if let Some(sub) = c.sub
+                if let Some(sub) = &c.sub
                     && sub.sheet < n
                     && sub.sheet != k
                     && !out.contains(&sub.sheet)
@@ -105,7 +110,7 @@ impl Schematic {
         let mut out = vec![];
         let mut next = n;
         for k in tops {
-            out.push(Instance { slot: k, sheet: k, path: vec![] });
+            out.push(Instance { slot: k, sheet: k, path: vec![], values: Default::default() });
             self.collect_copies(k, &[], &[k], &mut next, &mut out);
         }
         out
@@ -116,14 +121,14 @@ impl Schematic {
             return;
         }
         for c in self.parts(k).comps {
-            let Some(sub) = c.sub else { continue };
+            let Some(sub) = &c.sub else { continue };
             // a sheet inside itself (directly or through others) cannot be expanded
             if sub.sheet >= self.sheet_count() || chain.contains(&sub.sheet) {
                 continue;
             }
             let mut p = path.to_vec();
             p.push(c.refdes.clone());
-            out.push(Instance { slot: *next, sheet: sub.sheet, path: p.clone() });
+            out.push(Instance { slot: *next, sheet: sub.sheet, path: p.clone(), values: sub.values.clone() });
             *next += 1;
             let mut ch = chain.to_vec();
             ch.push(sub.sheet);
@@ -152,7 +157,7 @@ impl Schematic {
             let p = self.parts(inst.sheet);
             let suffix = inst.path.join("_");
             for c in p.comps {
-                if let Some(sub) = c.sub {
+                if let Some(sub) = &c.sub {
                     // a symbol: its copy is laid out elsewhere; the pins are tied to the ports of the child by name
                     let mut child_path = inst.path.clone();
                     child_path.push(c.refdes.clone());
@@ -167,6 +172,9 @@ impl Schematic {
                     continue;
                 }
                 let mut c2 = Component { pos: mv(c.pos), ..c.clone() };
+                if let Some(v) = inst.values.get(&c.refdes) {
+                    c2.value = v.clone();
+                }
                 if !inst.path.is_empty() && !c.kind.is_power_symbol() {
                     c2.refdes = format!("{}_{suffix}", c.refdes);
                 }
@@ -212,7 +220,7 @@ impl Schematic {
         }
         let sym = self.sheet_symbol(child);
         let i = self.add_custom(sym, &self.sheet_name(child), "", pos, 0);
-        self.components[i].sub = Some(SubRef { sheet: child });
+        self.components[i].sub = Some(SubRef { sheet: child, ..Default::default() });
         self.components[i].sim_only = true;
         Some(i)
     }
@@ -231,7 +239,7 @@ impl Schematic {
     /// A sheet is about to be deleted: its symbols go too, and the numbers of the later sheets move up by one.
     pub(crate) fn forget_sheet_refs(&mut self, gone: usize) {
         let fix = |comps: &mut Vec<Component>| {
-            comps.retain(|c| c.sub.is_none_or(|s| s.sheet != gone));
+            comps.retain(|c| c.sub.as_ref().is_none_or(|s| s.sheet != gone));
             for c in comps.iter_mut() {
                 if let Some(s) = &mut c.sub
                     && s.sheet > gone
@@ -428,7 +436,7 @@ impl Schematic {
         for inst in &insts {
             let dx = inst.slot as i32 * SHEET_STRIDE;
             for c in self.parts(inst.sheet).comps {
-                let Some(sub) = c.sub else { continue };
+                let Some(sub) = &c.sub else { continue };
                 let mut child_path = inst.path.clone();
                 child_path.push(c.refdes.clone());
                 let Some(child) = insts.iter().find(|i| i.path == child_path && i.sheet == sub.sheet) else { continue };
@@ -455,7 +463,7 @@ impl Schematic {
             return false;
         }
         seen.push(from);
-        self.parts(from).comps.iter().filter_map(|c| c.sub).any(|s| self.reaches(s.sheet, to, seen))
+        self.parts(from).comps.iter().filter_map(|c| c.sub.as_ref()).any(|s| self.reaches(s.sheet, to, seen))
     }
 
     /// The findings about the hierarchy, in the places of the flat sheet `flat` (`erc` puts them back on their sheets).
@@ -468,7 +476,7 @@ impl Schematic {
             let parts = self.parts(k);
             // a symbol that cannot be expanded: the sheet inside itself, or a ring
             for c in parts.comps {
-                let Some(sub) = c.sub else { continue };
+                let Some(sub) = &c.sub else { continue };
                 if sub.sheet >= n || self.reaches(sub.sheet, k, &mut vec![]) {
                     out.push(Problem::new(
                         Error,
@@ -632,8 +640,8 @@ fn follow_pins(comps: &mut [Component], wires: &mut Vec<Wire>, labels: &mut [Lab
     let mut stubs: Vec<Wire> = vec![];
     let mut label_moves: Vec<(usize, Pt)> = vec![];
     for c in comps.iter_mut() {
-        let Some(sub) = c.sub else { continue };
-        let Some(sym) = syms.get(sub.sheet) else { continue };
+        let Some(sheet) = c.sub.as_ref().map(|s| s.sheet) else { continue };
+        let Some(sym) = syms.get(sheet) else { continue };
         let old = c.pins();
         c.custom = Some(sym.clone());
         for (number, from) in old {
@@ -700,5 +708,55 @@ mod pin_order_tests {
         for (name, refdes) in [("SIG", "R1_CH1"), ("RES", "R1_CH1")] {
             assert!(on(&nets_before, name, refdes) && on(&nets, name, refdes), "{name} still reaches {refdes}: {nets:?}");
         }
+    }
+}
+
+impl Schematic {
+    /// The parts of sheet `k` that a symbol can give another value in its copy: (reference designator, the value the sheet has).
+    pub fn value_rows(&self, k: usize) -> Vec<(String, String)> {
+        if k >= self.sheet_count() {
+            return vec![];
+        }
+        self.parts(k).comps.iter().filter(|c| c.sub.is_none() && !c.kind.is_power_symbol() && c.kind != Kind::Ground).map(|c| (c.refdes.clone(), c.value.clone())).collect()
+    }
+}
+
+#[cfg(test)]
+mod value_tests {
+    use super::*;
+
+    #[test]
+    fn a_copy_can_give_a_part_its_own_value_and_the_others_keep_the_sheets() {
+        let mut s = Schematic::default();
+        s.add_sheet();
+        let r = s.add(Kind::Resistor, (10, 10), 0);
+        s.components[r].value = "10k".into();
+        s.switch_sheet(0);
+        let a = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let b = s.add_sheet_symbol(1, (40, 10)).unwrap();
+        s.components[b].sub.as_mut().unwrap().values.insert("R1".into(), "4.7k".into());
+        let value_of = |s: &Schematic, r: &str| s.flat().components.iter().find(|c| c.refdes == r).map(|c| c.value.clone());
+        assert_eq!(value_of(&s, "R1_CH1").as_deref(), Some("10k"));
+        assert_eq!(value_of(&s, "R1_CH2").as_deref(), Some("4.7k"));
+        assert!(s.components[a].sub.as_ref().unwrap().values.is_empty());
+        assert_eq!(s.value_rows(1), [("R1".to_string(), "10k".to_string())]);
+        // the sheet itself did not change, and the override is saved
+        s.switch_sheet(1);
+        assert_eq!(s.components[0].value, "10k");
+        s.switch_sheet(0);
+        let back: Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(value_of(&back, "R1_CH2").as_deref(), Some("4.7k"));
+    }
+
+    #[test]
+    fn a_value_for_a_part_the_sheet_does_not_have_does_nothing() {
+        let mut s = Schematic::default();
+        s.add_sheet();
+        s.add(Kind::Resistor, (10, 10), 0);
+        s.switch_sheet(0);
+        let a = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        s.components[a].sub.as_mut().unwrap().values.insert("R9".into(), "1".into());
+        let own = s.value_rows(1)[0].1.clone();
+        assert_eq!(s.flat().components.iter().map(|c| c.value.clone()).collect::<Vec<_>>(), [own]);
     }
 }

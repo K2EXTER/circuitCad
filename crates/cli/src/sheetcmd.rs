@@ -203,7 +203,25 @@ impl Session {
                 let c = &self.sch.components[i];
                 Ok(obj(json!({"placed": c.refdes, "sheet": self.sch.sheet_name(child), "pins": c.pins().into_iter().map(|(n, _)| n).collect::<Vec<_>>(), "hint": "wire or label the pins like any part; each symbol is one copy of the sheet, its parts are called R1_CH1 and its labels CH1.NAME"})))
             }
-            _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all] | port NAME REF.PIN [dir=] | place N|NAME]".into()),
+            "value" => {
+                // a copy of the sheet with its own value for one part: `sheet value CH2 R1 4.7k`; `reset` (or `-`) takes the value back to the sheet's own
+                let usage = "sheet value SYMBOL REF VALUE   (the copy SYMBOL, e.g. CH2, uses VALUE for its part REF; `reset` for the sheet's own)";
+                let (symbol, rf, value) = (pos.get(1).ok_or(usage)?, pos.get(2).ok_or(usage)?, pos.get(3).ok_or(usage)?);
+                let c = self.sch.components.iter_mut().find(|c| c.sub.is_some() && c.refdes.eq_ignore_ascii_case(symbol)).ok_or_else(|| format!("no sheet symbol {symbol} on the active sheet ('sheet place' puts one)"))?;
+                let sub = c.sub.as_mut().ok_or(usage)?;
+                let child = sub.sheet;
+                let base = self.sch.value_rows(child);
+                let key = base.iter().find(|(r, _)| r.eq_ignore_ascii_case(rf)).map(|(r, _)| r.clone()).ok_or_else(|| format!("the sheet {} has no part {rf}", self.sch.sheet_name(child)))?;
+                let c = self.sch.components.iter_mut().find(|c| c.sub.is_some() && c.refdes.eq_ignore_ascii_case(symbol)).ok_or(usage)?;
+                let sub = c.sub.as_mut().ok_or(usage)?;
+                if value == "reset" || value == "-" {
+                    sub.values.remove(&key);
+                } else {
+                    sub.values.insert(key.clone(), value.clone());
+                }
+                Ok(obj(json!({"symbol": symbol, "part": key, "value": if value == "reset" || value == "-" { serde_json::Value::Null } else { json!(value) }, "overrides": sub.values.len(), "hint": "the copy's part is called REF_SYMBOL (R1_CH2); the sheet itself and the other copies keep their values"})))
+            }
+            _ => Err("sheet [add [NAME] | use N|NAME | name NAME | move REF.. to=N|NAME | tidy [all] | port NAME REF.PIN [dir=] | place N|NAME | value SYMBOL REF VALUE]".into()),
         }
     }
 }

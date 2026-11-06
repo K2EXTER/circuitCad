@@ -1031,6 +1031,35 @@ fn a_sheet_used_twice_is_two_copies_with_their_own_parts_and_nets() {
 }
 
 #[test]
+fn one_copy_of_a_sheet_can_have_its_own_value() {
+    let script = "new
+sheet add Divider
+add R 10k as=R1
+add R 10k as=R2
+net MID R1.2 R2.1
+net GND R2.2
+sheet port IN R1.1 dir=in
+sheet port OUT R1.2 dir=out
+\n                  sheet use 1
+add V 10 as=V1
+sheet place Divider
+sheet place Divider
+net VIN V1.+ CH1.IN CH2.IN
+net GND V1.-
+sheet value CH2 R2 30k
+dc probe=V(CH1.MID),V(CH2.MID)
+";
+    let (a, ok) = run(script);
+    assert!(ok, "{a:?}");
+    let dc = last(&a, "dc");
+    assert!((dc["probes"]["V(CH1.MID)"].as_f64().unwrap() - 5.0).abs() < 1e-6, "{dc}");
+    assert!((dc["probes"]["V(CH2.MID)"].as_f64().unwrap() - 7.5).abs() < 1e-6, "30k under 10k: {dc}");
+    let (a, ok) = run(&format!("{script}sheet value CH2 R7 1k
+"));
+    assert!(!ok && a.last().unwrap()["error"].as_str().unwrap().contains("no part R7"), "{a:?}");
+}
+
+#[test]
 fn the_copies_of_a_child_sheet_go_onto_a_board_and_are_routed() {
     let sample = format!("{}/../../docs/examples/hierarchy_rc_stages.schjson", env!("CARGO_MANIFEST_DIR"));
     let (a, ok) = run(&format!("open {sample}
