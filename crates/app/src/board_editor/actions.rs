@@ -153,14 +153,14 @@ impl BoardEditor {
         if r.plans.is_empty() {
             self.undo.pop();
             self.status = if r.locked.is_empty() {
-                "ゲートの入れ替え: これ以上、短く・交差が減る割り当ては見つかりませんでした".into()
+                "ゲートの入れ替え: これ以上、未配線が短くなる割り当ては見つかりませんでした".into()
             } else {
                 format!("ゲートの入れ替え: {} は、どのゲートにも配線が付いているので動かせません。入れ替えたいゲートの配線を消してから、もう一度押してください", r.locked.join("・"))
             };
             return;
         }
         self.violations.clear();
-        let parts: Vec<String> = r.plans.iter().map(|p| format!("{} (未配線 {:.0} → {:.0} mm、交差 {} → {})", p.refdes, p.length.0, p.length.1, p.crossings.0, p.crossings.1)).collect();
+        let parts: Vec<String> = r.plans.iter().map(|p| format!("{} (未配線 {:.0} → {:.0} mm、交差 {} → {}。長さを優先して選びます)", p.refdes, p.length.0, p.length.1, p.crossings.0, p.crossings.1)).collect();
         self.status = format!("ゲートの入れ替え: {}。回路は同じです。配線はこれからです", parts.join(" / "));
     }
 
