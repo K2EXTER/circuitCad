@@ -86,8 +86,6 @@ pub struct SchEditor {
     saved_rev: u64,
     /// Value slider: (component, the value the slider is centred on, the text it last wrote).
     slider: Option<(usize, f64, String)>,
-    /// How far the value slider reaches from the centre, in decades (0.3 = 1/2..2x, 1 = 1/10..10x, 2 = 1/100..100x).
-    slider_span: f64,
     /// Re-run the open analysis whenever the circuit changes.
     live: bool,
     live_snap: Schematic,
@@ -652,7 +650,6 @@ impl Default for SchEditor {
             rev: 0,
             saved_rev: 0,
             slider: None,
-            slider_span: 1.0,
             live: false,
             live_snap: Schematic::default(),
             live_ghost: true,
