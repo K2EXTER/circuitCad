@@ -496,11 +496,26 @@ impl SchEditor {
                 if heading {
                     ui.label(egui::RichText::new("選択中の部品").strong());
                 }
-                if !c.kind.is_power_symbol() {
-                    ui.horizontal(|ui| {
-                        ui.label("番号");
-                        ui.text_edit_singleline(&mut c.refdes).on_hover_text("部品番号 (R1、C2、U1 など)。同じ番号が2つあると、どちらかが解析やネットで区別できません");
+                // the two things everyone edits first, aligned in one table
+                let (has_refdes, has_value) = (!c.kind.is_power_symbol(), c.kind != Kind::Ground);
+                if has_refdes || has_value {
+                    egui::Grid::new(("part_main", i)).num_columns(2).spacing([8.0, 5.0]).show(ui, |ui| {
+                        if has_refdes {
+                            ui.label("番号");
+                            ui.add(egui::TextEdit::singleline(&mut c.refdes).desired_width(f32::INFINITY)).on_hover_text("部品番号 (R1、C2、U1 など)。同じ番号が2つあると、どちらかが解析やネットで区別できません");
+                            ui.end_row();
+                        }
+                        if has_value {
+                            ui.label("値");
+                            ui.add(egui::TextEdit::singleline(&mut c.value).desired_width(f32::INFINITY)).on_hover_text(value_hint(c.kind));
+                            ui.end_row();
+                        }
                     });
+                }
+                if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
+                    && ui.small_button("値の決め方…").on_hover_text("この部品の値を計算で決める窓を開きます (LEDの抵抗・分圧・フィルタなど)").clicked()
+                {
+                    self.wiz_open = true;
                 }
                 if let Kind::Header(n) = c.kind {
                     egui::CollapsingHeader::new("ピンの名前 (信号名)").id_salt(("pin_names", i)).default_open(true).show(ui, |ui| {
@@ -537,12 +552,6 @@ impl SchEditor {
                                 }
                             }
                         }
-                    });
-                }
-                if c.kind != Kind::Ground {
-                    ui.horizontal(|ui| {
-                        ui.label("値");
-                        ui.text_edit_singleline(&mut c.value).on_hover_text(value_hint(c.kind));
                     });
                 }
                 if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) {
@@ -615,61 +624,67 @@ impl SchEditor {
                         }
                     }
                 }
-                if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
-                    && ui.small_button("値の決め方…").on_hover_text("この部品の値を計算で決める窓を開きます (LEDの抵抗・分圧・フィルタなど)").clicked()
-                {
-                    self.wiz_open = true;
-                }
-                if let Some(sym) = &c.custom {
-                    ui.label(format!("フットプリント: {}", c.footprint));
-                    match &sym.sim {
-                        Some(m) => {
-                            ui.label(format!("モデル: {}", m.name));
-                            // a circuit saved before the notes existed carries the model without them:
-                            // take the notes of the same library model (same name, same text)
-                            let from_library = self.library.iter().find(|d| d.name == sym.name && d.sim.as_ref().is_some_and(|x| x.text == m.text)).and_then(|d| d.sim.as_ref()).map(|x| &x.limits);
-                            limits_ui(ui, if m.limits.is_empty() { from_library.map_or(&[][..], |l| l.as_slice()) } else { &m.limits }, "placed_limits");
-                        }
-                        None => {
-                            ui.colored_label(crate::theme::WARN, "シミュレーションモデルなし");
-                        }
-                    }
-                } else if !c.kind.is_power_symbol() {
-                    let current = c.footprint_name();
-                    egui::ComboBox::from_label("フットプリント").selected_text(current).show_ui(ui, |ui| {
-                        for n in pcb_core::footprints::names() {
-                            ui.selectable_value(&mut c.footprint, n.clone(), n);
-                        }
-                    }).response.on_hover_text("基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます");
-                }
+                // the board and model side of the part: rarely changed, so folded
                 if !c.kind.is_power_symbol() {
-                    ui.checkbox(&mut c.sim_only, "シミュレーション専用 (基板に載せない)")
-                        .on_hover_text("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)");
+                    egui::CollapsingHeader::new("基板とモデル").id_salt(("part_board", i)).default_open(false).show(ui, |ui| {
+                        if let Some(sym) = &c.custom {
+                            ui.label(format!("フットプリント: {}", c.footprint));
+                            match &sym.sim {
+                                Some(m) => {
+                                    ui.label(format!("モデル: {}", m.name));
+                                    // a circuit saved before the notes existed carries the model without them:
+                                    // take the notes of the same library model (same name, same text)
+                                    let from_library = self.library.iter().find(|d| d.name == sym.name && d.sim.as_ref().is_some_and(|x| x.text == m.text)).and_then(|d| d.sim.as_ref()).map(|x| &x.limits);
+                                    limits_ui(ui, if m.limits.is_empty() { from_library.map_or(&[][..], |l| l.as_slice()) } else { &m.limits }, "placed_limits");
+                                }
+                                None => {
+                                    ui.colored_label(crate::theme::WARN, "シミュレーションモデルなし");
+                                }
+                            }
+                        } else {
+                            let current = c.footprint_name();
+                            egui::ComboBox::from_label("フットプリント").selected_text(current).show_ui(ui, |ui| {
+                                for n in pcb_core::footprints::names() {
+                                    ui.selectable_value(&mut c.footprint, n.clone(), n);
+                                }
+                            }).response.on_hover_text("基板に載せる部品の形 (パッドの並び)。実物の部品の寸法に合わせて選びます");
+                        }
+                        ui.checkbox(&mut c.sim_only, "シミュレーション専用 (基板に載せない)")
+                            .on_hover_text("試験用の電源や、測る相手の代わりに置いた抵抗など、実物の基板には要らない部品に付けます。付けると、基板の取り込み・部品表・購入リストに出ません (シミュレーションには使われます)");
+                    });
                 }
                 advice_ui(ui, &*c, self.dc.as_ref(), fresh, &self.library);
-                if self.lit(ui.button("回転 (R)"), "回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked() {
-                    self.rotate_req = Some(i);
-                }
             }
+        // one row of actions on the selection: rotate, the clipboard, delete
         if self.has_selection() || !self.clipboard.is_empty() {
             let has = self.has_selection();
-            ui.horizontal_wrapped(|ui| {
-                if ui.add_enabled(has, egui::Button::new("コピー")).on_hover_text("選んだ部品・線・ラベルをコピーします (Ctrl+C)。部品のピンについているネットラベルも一緒にコピーされます").clicked() {
-                    self.copy_selection();
-                }
-                if ui.add_enabled(has, egui::Button::new("切り取り")).on_hover_text("コピーして、元のものを消します (Ctrl+X)").clicked() {
-                    self.cut_selection();
-                }
-                if ui.add_enabled(!self.clipboard.is_empty(), egui::Button::new("貼り付け")).on_hover_text("コピーしたものを、近くの空いた所に置きます (Ctrl+V)。部品番号は新しくなります。貼ったあと、ドラッグで動かせます").clicked() {
-                    self.paste_clipboard();
-                }
-                if ui.add_enabled(has, egui::Button::new("複製")).on_hover_text("コピーしてすぐ貼り付けます (Ctrl+D)").clicked() {
-                    self.duplicate_selection();
-                }
-            });
-        }
-        if self.has_selection() && self.lit(ui.button("削除 (Delete)"), "削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
-            self.delete_selected();
+            ui.add_space(crate::theme::SPACE_S);
+            ui.spacing_mut().item_spacing.y = crate::theme::SPACE_S;
+            // two joined bars, like the buttons under the part lists: change the part, then the clipboard
+            let rotatable = matches!(self.selected, Some(Sel::Comp(_)));
+            let edit = crate::widgets::segment_row(ui, &[("回転 (R)", rotatable), ("複製", has), ("削除", has)]);
+            if let Some(Sel::Comp(i)) = self.selected
+                && self.lit(edit[0].clone(), "回転 (R)").on_hover_text("部品を 90° 回します (R キーでも同じです)").clicked()
+            {
+                self.rotate_req = Some(i);
+            }
+            if edit[1].clone().on_hover_text("コピーしてすぐ貼り付けます (Ctrl+D)").clicked() {
+                self.duplicate_selection();
+            }
+            if self.lit(edit[2].clone(), "削除 (Delete)").on_hover_text("選んだものを消します (Delete キーでも同じです)").clicked() {
+                self.delete_selected();
+            }
+            let has_clip = !self.clipboard.is_empty();
+            let clip = crate::widgets::segment_row(ui, &[("コピー", has), ("切り取り", has), ("貼り付け", has_clip)]);
+            if clip[0].clone().on_hover_text("選んだ部品・線・ラベルをコピーします (Ctrl+C)。部品のピンについているネットラベルも一緒にコピーされます").clicked() {
+                self.copy_selection();
+            }
+            if clip[1].clone().on_hover_text("コピーして、元のものを消します (Ctrl+X)").clicked() {
+                self.cut_selection();
+            }
+            if clip[2].clone().on_hover_text("コピーしたものを、近くの空いた所に置きます (Ctrl+V)。部品番号は新しくなります。貼ったあと、ドラッグで動かせます").clicked() {
+                self.paste_clipboard();
+            }
         }
     }
 
