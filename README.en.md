@@ -12,7 +12,7 @@ circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Ge
 
 Project page (in Japanese, with screenshots and a demo video): <https://k2exter.github.io/circuitCad/>
 
-> **Status: early alpha.** Only tested on Windows. No board made with this software has been manufactured yet. See [Limitations](#limitations) before relying on it.
+> **Status: early alpha.** Mainly tested on Windows (Linux: lightly checked on WSL2 only). No board made with this software has been manufactured yet. See [Limitations](#limitations) before relying on it.
 
 ![A screen recording (about 75 s): drawing a schematic, simulating it, importing it into a PCB, auto-routing, DRC and the 3D view. The UI is in Japanese.](docs/images/demo-live.gif)
 
@@ -94,7 +94,7 @@ On Linux you also need GTK and related development packages (`libgtk-3-dev`, `li
 A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in [docs/code-notes/](docs/code-notes/). These are written in Japanese (code and comments are in English).
 
 ## Limitations
-- **Tested on Windows 10 / 11 only.** macOS and Linux build and pass the tests in CI, but nobody has launched the app there yet.
+- **Tested mainly on Windows 10 / 11.** On Linux, the author built it, launched it and tried basic operation on WSL2 (Ubuntu 26.04, no GPU) only; other distributions and real hardware are untested, and you may need GTK and related runtime libraries. macOS builds and passes the tests in CI, but nobody has launched the app there yet.
 - **No board has been manufactured from this software yet.** Gerber and drill export and the pre-order checks exist, but they are unproven in practice. For a first order, use a small quantity and check the result in the fabricator's Gerber viewer.
 - **The simulator uses simplified models** and can differ noticeably from real hardware. Each lesson explains the differences.
 - **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page. A part whose land pattern has not been checked against the datasheet is flagged `land_unverified`, and the pre-order check warns about it.

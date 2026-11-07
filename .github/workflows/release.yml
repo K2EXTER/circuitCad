@@ -13,14 +13,14 @@ jobs:
             name: windows-x64
             bin: circuitCad.exe
             cli: ccad.exe
-          # macOS and Linux have never been built or run by the author: add them back (and drop
-          # `prerelease` below when ready) once someone has checked them.
+          # Linux: built, started and checked by the author on WSL2 (Ubuntu 26.04) only (see README).
+          - os: ubuntu-latest
+            name: linux-x64
+            bin: circuitCad
+            cli: ccad
+          # macOS has never been built or run by the author: add it back once someone has checked it.
           # - os: macos-latest
           #   name: macos-arm64
-          #   bin: circuitCad
-          #   cli: ccad
-          # - os: ubuntu-latest
-          #   name: linux-x64
           #   bin: circuitCad
           #   cli: ccad
     runs-on: ${{ matrix.os }}
