@@ -62,15 +62,30 @@ fn basic_kind(p: &SchPart) -> Option<Kind> {
         "L" | "L_Small" | "L_US" if two => Some(Kind::Inductor),
         "D" | "D_Small" | "D_Schottky" | "D_Zener" if two => Some(Kind::Diode),
         "LED" | "LED_Small" if two => Some(Kind::Led),
-        "VDC" if two && p.fields.get("Sim.Params").is_some_and(|s| dc_of(s).is_some()) => Some(Kind::VSource),
+        "VDC" | "VSIN" | "VPULSE" if two && source_value(p).is_some() => Some(Kind::VSource),
         n if n.starts_with("Q_NPN") && p.pins.len() == 3 => Some(Kind::Npn),
         _ => None,
     }
 }
 
-/// `dc=5` from KiCad 7's `Sim.Params` (`dc=5 ac=1`).
-fn dc_of(params: &str) -> Option<String> {
-    params.split_whitespace().find_map(|w| w.strip_prefix("dc=")).map(str::to_string)
+/// The value of a KiCad 7 source (`Sim.Type` and `Sim.Params`: `dc=5`, `dc=0 ampl=1 f=1k`, `y1=0 y2=5 tw=1m per=2m`) as circuitCad
+/// writes it: `5`, `SIN(0 1 1k 0 0 0)`, `PULSE(0 5 0 0 0 1m 2m)`. None when it is not one of these three.
+fn source_value(p: &SchPart) -> Option<String> {
+    let name = p.lib_id.rsplit(':').next().unwrap_or(&p.lib_id);
+    let ty = p.fields.get("Sim.Type").map(|t| t.to_ascii_uppercase()).unwrap_or_else(|| match name {
+        "VSIN" => "SIN".into(),
+        "VPULSE" => "PULSE".into(),
+        _ => "DC".into(),
+    });
+    let params = p.fields.get("Sim.Params")?;
+    let get = |k: &str| params.split_whitespace().find_map(|w| w.strip_prefix(&format!("{k}=")).map(str::to_string));
+    let or0 = |k: &str| get(k).unwrap_or_else(|| "0".into());
+    match ty.as_str() {
+        "DC" => get("dc"),
+        "SIN" => Some(format!("SIN({} {} {} {} {} {})", or0("dc"), get("ampl")?, get("f")?, or0("td"), or0("theta"), or0("phase"))),
+        "PULSE" => Some(format!("PULSE({} {} {} {} {} {} {})", get("y1")?, get("y2")?, or0("td"), or0("tr"), or0("tf"), get("tw")?, get("per")?)),
+        _ => None,
+    }
 }
 
 /// The name of our pin for a KiCad pin.
@@ -160,7 +175,7 @@ pub fn import(k: &KicadSch) -> Imported {
         if !p.value.is_empty() {
             c.value = match kind {
                 Some(Kind::Resistor | Kind::Capacitor | Kind::Inductor) => normalise_value(&p.value),
-                Some(Kind::VSource) => p.fields.get("Sim.Params").and_then(|s| dc_of(s)).unwrap_or_else(|| p.value.clone()),
+                Some(Kind::VSource) => source_value(p).unwrap_or_else(|| p.value.clone()),
                 _ => p.value.clone(),
             };
         }
@@ -293,6 +308,24 @@ mod tests {
         assert!(imp.sch.components.iter().any(|c| c.kind == Kind::Ground), "one ground symbol is placed");
         let first_net: Vec<String> = nets.iter().find(|n| n.pins.iter().any(|p| p.refdes == "V1" && p.pin == "+")).unwrap().pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
         assert!(first_net.contains(&"R1.1".to_string()), "{first_net:?}");
+    }
+
+    #[test]
+    fn kicad_sources_become_circuitcad_source_values() {
+        let part = |lib: &str, fields: &[(&str, &str)]| SchPart {
+            reference: "V1".into(),
+            value: "x".into(),
+            lib_id: lib.into(),
+            symbol: lib.into(),
+            footprint: String::new(),
+            dnp: false,
+            fields: fields.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect(),
+            pins: vec![],
+        };
+        assert_eq!(source_value(&part("Simulation_SPICE:VDC", &[("Sim.Params", "dc=9")])).as_deref(), Some("9"));
+        assert_eq!(source_value(&part("Simulation_SPICE:VSIN", &[("Sim.Params", "dc=1 ampl=2 f=1k")])).as_deref(), Some("SIN(1 2 1k 0 0 0)"));
+        assert_eq!(source_value(&part("Simulation_SPICE:VPULSE", &[("Sim.Params", "y1=0 y2=5 tr=1u tf=1u tw=1m per=2m")])).as_deref(), Some("PULSE(0 5 0 1u 1u 1m 2m)"));
+        assert_eq!(source_value(&part("Simulation_SPICE:VPULSE", &[("Sim.Params", "y1=0")])), None, "missing parameters: not guessed");
     }
 
     #[test]

@@ -16,9 +16,9 @@ gspice` にあるときだけ実行され、無ければ何もせず通る)。�
 ## kicad_import.rs — `KicadSch` から `Schematic` を組み立てる(I1 第2段階)
 - 入口は `import(&KicadSch) -> Imported{sch, notes, basic, custom}`。画面(ファイル → KiCad の回路図を開く… / 起動引数 `*.kicad_sch`)は `app/schematic/file.rs` の `load_kicad_sch`、CLI は `import_kicad FILE`。
 - 絵は引き継がない。部品を CLI の `add` と同じ行詰めで並べ直し、つながりはピンの先端のネットラベルで表す(`net` コマンドと同じ)。ネット名 `GND`・`0` は `GND` にして接地記号を1つ置く。
-- 基本の部品に変えるもの(`basic_kind`): `R`/`R_Small`/`R_US`、`C`/`C_Small`、`L`/`L_Small`、`D`/`D_Small`/`D_Schottky`/`D_Zener`、`LED`、`Q_NPN*`(ピン名 B/C/E)、`VDC`(`Sim.Params` の `dc=` がある時だけ)。ダイオードの KiCad のピン1=K・2=A。値の `4k7`→`4.7k`、`2R2`→`2.2`。
+- 基本の部品に変えるもの(`basic_kind`): `R`/`R_Small`/`R_US`、`C`/`C_Small`、`L`/`L_Small`、`D`/`D_Small`/`D_Schottky`/`D_Zener`、`LED`、`Q_NPN*`(ピン名 B/C/E)、`VDC`/`VSIN`/`VPULSE`(`Sim.Type`・`Sim.Params` から `5`・`SIN(...)`・`PULSE(...)` の値にする。パラメータが足りないものは推測せず、記号から作った部品にする)。ダイオードの KiCad のピン1=K・2=A。値の `4k7`→`4.7k`、`2R2`→`2.2`。
 - それ以外は `kicad::to_part(sym, None)` の記号(ピン番号はそのまま)。モデルは付かないので `coverage` に「モデルなし」と出る。取り込みの案内にも参照名を並べる。
 - フットプリントは、同じ名前か `_NNNNMetric` を外した名前(`R_0805_2012Metric`→`R_0805`)がこのソフトにあれば付ける。なければ案内に出す。DNP は `sim_only` にする。
 - 参照名が `?` や重複のものは新しい名前にして案内に出す。
 - 検証: 自作の分圧回路 `docs/examples/kicad-divider.kicad_sch`(9 V→4.5 V。`ccad` でも通る)と、実物 `ECL-OR.kicad_sch`(ネットごとの部品が KiCad と一致)。
-- 未対応: KiCad 7 以降の電源の波形(`Sim.Device`/`Sim.Params` の SIN・PULSE など。`VDC` 以外)、極性つきコンデンサ(記号から作った部品になる)、`Spice_Model` 欄、子シート(第1段階の案内)。
+- 未対応: 上の3つ以外の電源(EXP・PWL・電流源など)、極性つきコンデンサ(記号から作った部品になる)、`Spice_Model` 欄、子シート(第1段階の案内)。
