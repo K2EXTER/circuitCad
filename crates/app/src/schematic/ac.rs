@@ -24,7 +24,13 @@ impl SchEditor {
         };
         let mut selected = BTreeSet::new();
         if let Ok(r) = &outcome {
-            for sg in r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).take(3) {
+            // the first three voltages that answer to the AC source: a node nothing AC reaches (the supply, a node behind a DC-only
+            // source) is a flat line at -infinity dB that stretches the graph, so it is left unselected (all silent: the first three)
+            let volts: Vec<_> = r.signals.iter().filter(|s| s.unit == "V" && !s.name.contains('.')).collect();
+            let responds = |s: &&sim_core::AcSignal| s.mag().iter().any(|m| *m > 1e-9);
+            let live: Vec<_> = volts.iter().filter(|s| responds(s)).collect();
+            let pick: Vec<_> = if live.is_empty() { volts.iter().take(3).collect() } else { live.into_iter().take(3).collect() };
+            for sg in pick {
                 selected.insert(sg.name.clone());
             }
         }

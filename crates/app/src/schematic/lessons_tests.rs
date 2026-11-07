@@ -2953,3 +2953,41 @@ fn the_hierarchy_lesson_ticks_its_steps_and_one_c1_moves_all_three_stages() {
     e.update_lesson();
     assert_eq!(progress(&e), 4);
 }
+
+/// The AC run selects the first voltages that answer to the AC source, not the first ones in the list: the supply of a circuit
+/// (a DC-only node) is a flat line at -infinity dB that used to be selected and stretch the graph.
+#[test]
+fn the_ac_run_selects_signals_that_respond_and_not_the_dc_supply() {
+    use sch_core::{Kind, Wire};
+    let mut e = SchEditor::default();
+    let s = &mut e.sch;
+    // a DC supply with a load, only DC: nets that no AC reaches (put first so they come first in the list)
+    s.add(Kind::VSource, (30, 0), 0);
+    s.components[0].value = "5".into();
+    s.add(Kind::Resistor, (36, -6), 0);
+    s.components[1].value = "1k".into();
+    s.add(Kind::Ground, (30, 6), 0);
+    for (a, b) in [((30, -2), (30, -6)), ((30, -6), (34, -6)), ((38, -6), (42, -6)), ((42, -6), (42, 6)), ((42, 6), (30, 6)), ((30, 2), (30, 6))] {
+        s.wires.push(Wire { a, b });
+    }
+    // the AC part: V1 -- R1 -- out -- C1 -- GND
+    s.add(Kind::VSource, (0, 0), 0);
+    s.components[3].value = "AC 1".into();
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.components[4].value = "1k".into();
+    s.add(Kind::Capacitor, (12, 0), 1);
+    s.components[5].value = "100n".into();
+    s.add(Kind::Ground, (0, 6), 0);
+    for (a, b) in [((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), (12, -6)), ((12, -6), (12, -2)), ((12, 2), (12, 6)), ((12, 6), (0, 6)), ((0, 2), (0, 6))] {
+        s.wires.push(Wire { a, b });
+    }
+    e.analyze_ac();
+    let view = e.ac.as_ref().unwrap();
+    let res = view.outcome.as_ref().unwrap_or_else(|m| panic!("{m:?} / {}", e.status));
+    assert!(!view.selected.is_empty());
+    for n in &view.selected {
+        assert!(res.signal(n).unwrap().mag().iter().any(|m| *m > 1e-9), "{n} is selected but flat: {:?}", view.selected);
+    }
+    // the node that answers (the capacitor's) is among them
+    assert!(view.selected.len() >= 2, "{:?}", view.selected);
+}
