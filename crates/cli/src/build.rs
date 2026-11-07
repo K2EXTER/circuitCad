@@ -362,6 +362,30 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "sim_only": on})))
     }
 
+    /// `shop REF [akizuki=I-00941] [digikey=RC0805FR-071KL] [lcsc=C123] | shop REF -`: the shop part numbers of one part (for a plain
+    /// resistor or capacitor, which has no library part to carry them). They reach the board's shopping list and the BOM.
+    pub fn shop(&mut self, args: &[String]) -> Res {
+        let usage = "shop REF [akizuki=NUMBER] [digikey=NUMBER] [lcsc=NUMBER]   (`shop REF -` clears them; `shop REF` shows them). Write only numbers you read on the shop's page.";
+        let (r, rest) = args.split_first().ok_or(usage)?;
+        let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        if rest.first().is_some_and(|w| w == "-") {
+            c.shops.clear();
+        }
+        for a in rest.iter().filter(|a| *a != "-") {
+            let (shop, number) = a.split_once('=').ok_or_else(|| format!("'{a}': write shop=NUMBER (shops: akizuki, digikey, lcsc)"))?;
+            let shop = shop.trim().to_ascii_lowercase();
+            if pcb_core::shops::shop(&shop).is_none() {
+                return Err(format!("unknown shop '{shop}' (shops: akizuki, digikey, lcsc)"));
+            }
+            if number.trim().is_empty() {
+                c.shops.remove(&shop);
+            } else {
+                c.shops.insert(shop, number.trim().to_string());
+            }
+        }
+        Ok(obj(json!({"ref": c.refdes, "shops": c.shop_numbers()})))
+    }
+
     /// `pinnames REF NAME1,NAME2,...`: what each pin of a pin header is for (`-` clears them).
     pub fn pin_names(&mut self, args: &[String]) -> Res {
         let usage = "pinnames REF NAME1,NAME2,...   (the names of the pins of a pin header, pin 1 first; `-` clears them)";

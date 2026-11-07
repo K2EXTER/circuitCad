@@ -78,5 +78,8 @@
         "condition": "VR = 0V"
       }
     ]
+  },
+  "shops": {
+    "digikey": "1N4148TR"
   }
 }

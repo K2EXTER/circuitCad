@@ -175,6 +175,25 @@ pub struct Component {
     /// A sheet symbol: this part stands for another sheet (see `hierarchy.rs`); its reference designator is the instance name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sub: Option<SubRef>,
+    /// Where to buy this very part: shop id ("akizuki", "digikey", "lcsc") -> the shop's own part number. For a plain resistor or
+    /// capacitor (which has no library part to carry one); it wins over the numbers of the library part. See `shop_numbers`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub shops: std::collections::BTreeMap<String, String>,
+}
+
+impl Component {
+    /// The shop part numbers of this part: those of its library part, overridden by the ones set on the part itself.
+    pub fn shop_numbers(&self) -> std::collections::BTreeMap<String, String> {
+        let mut m = self.custom.as_ref().map(|s| s.shops.clone()).unwrap_or_default();
+        for (k, v) in &self.shops {
+            if v.trim().is_empty() {
+                m.remove(k);
+            } else {
+                m.insert(k.clone(), v.trim().to_string());
+            }
+        }
+        m
+    }
 }
 
 fn is_zero_f64(x: &f64) -> bool {
@@ -477,6 +496,7 @@ impl Schematic {
             tc_ppm: 0.0,
             cth: 0.0,
             sub: None,
+            shops: Default::default(),
         });
         self.components.len() - 1
     }
@@ -498,6 +518,7 @@ impl Schematic {
             tc_ppm: 0.0,
             cth: 0.0,
             sub: None,
+            shops: Default::default(),
         });
         self.components.len() - 1
     }

@@ -1239,7 +1239,7 @@ fn num(s: &str) -> Result<f64, String> {
 
 /// The shop part numbers of the schematic's library parts, by reference designator.
 fn shops_of(sch: &sch_core::Schematic) -> Vec<(String, std::collections::BTreeMap<String, String>)> {
-    sch.flat().components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect()
+    sch.flat().components.iter().map(|c| (c.refdes.clone(), c.shop_numbers())).collect()
 }
 
 /// "top", "bottom", "inner1" ... as a copper layer.

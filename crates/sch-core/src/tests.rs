@@ -24,7 +24,7 @@ fn refdes_are_numbered_per_prefix() {
 
 #[test]
 fn rotation_moves_pins() {
-    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, sub: None };
+    let c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 1, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, sub: None, shops: Default::default() };
     let pins = c.pins();
     assert_eq!(pins[0].1, (10, 8));
     assert_eq!(pins[1].1, (10, 12));
@@ -495,7 +495,7 @@ fn old_two_lead_glyph_sheet_gets_short_leads() {
         programming: vec![],
         glyph: "electrolytic".into(),
     };
-    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, sub: None };
+    let c = Component { refdes: "C1".into(), kind: Kind::Custom, value: "100u".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: Some(sym), sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, sub: None, shops: Default::default() };
     let mut s = Schematic::default();
     s.components.push(c);
     assert_eq!(s.components[0].pins()[0].1, (8, 10)); // new leads are 2 long
@@ -690,4 +690,27 @@ fn buses_follow_their_sheet_and_survive_a_save() {
     let back: Schematic = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
     assert_eq!(back.flat().buses.len(), 1);
     assert_eq!(back, s);
+}
+
+#[test]
+fn a_part_numbers_of_its_own_win_over_those_of_its_library_part_and_are_not_written_when_empty() {
+    let mut c = Component { refdes: "R1".into(), kind: Kind::Resistor, value: "1k".into(), pos: (10, 10), rot: 0, footprint: String::new(), custom: None, sim_only: false, pin_names: vec![], theta: 0.0, tc_ppm: 0.0, cth: 0.0, sub: None, shops: Default::default() };
+    assert!(c.shop_numbers().is_empty());
+    assert!(!serde_json::to_string(&c).unwrap().contains("shops"), "an empty map must not be written");
+    c.shops.insert("digikey".into(), " RC0805FR-071KL ".into());
+    assert_eq!(c.shop_numbers()["digikey"], "RC0805FR-071KL");
+    let back: Component = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+    assert_eq!(back.shops, c.shops);
+    // an old file without the field still reads
+    let old = serde_json::to_string(&Component { shops: Default::default(), ..c.clone() }).unwrap();
+    assert!(serde_json::from_str::<Component>(&old).is_ok());
+    // a blank number takes the library part's number away
+    let mut sym = CustomSymbol { name: "X".into(), prefix: "R".into(), pins: vec![], sim: None, ratings: None, shops: Default::default(), programming: vec![], glyph: String::new() };
+    sym.shops.insert("lcsc".into(), "C1".into());
+    sym.shops.insert("digikey".into(), "X".into());
+    c.custom = Some(sym);
+    c.shops.insert("lcsc".into(), "  ".into());
+    let m = c.shop_numbers();
+    assert_eq!(m.get("lcsc"), None);
+    assert_eq!(m["digikey"], "RC0805FR-071KL");
 }

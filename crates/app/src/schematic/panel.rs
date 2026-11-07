@@ -536,6 +536,24 @@ impl SchEditor {
                         }
                     });
                 }
+                // where to buy this very part: reaches the shopping list and the BOM of the board
+                if !c.kind.is_power_symbol() && c.sub.is_none() && !c.sim_only && c.kind != Kind::Ground {
+                    egui::CollapsingHeader::new("買える店の型番").id_salt(("shops", i)).default_open(!c.shops.is_empty()).show(ui, |ui| {
+                        ui.small("店のページで確かめた型番だけ入れます。購入リストと部品表に出ます (空欄なら、検索リンクになります)").on_hover_text("抵抗やコンデンサのように、ライブラリ部品ではない部品に、買う型番を付けられます。ライブラリ部品が型番を持っているときは、ここに書いた型番が優先されます。間違った型番より、空欄のほうがよいです");
+                        for (id, label, hint) in [("akizuki", "秋月", "秋月電子通商の商品コード (例: 100941)"), ("digikey", "DigiKey", "DigiKey で検索できる型番 (例: RC0805FR-071KL)"), ("lcsc", "LCSC", "LCSC の部品番号 (C + 数字。例: C25804)")] {
+                            let mut v = c.shops.get(id).cloned().unwrap_or_default();
+                            ui.horizontal(|ui| {
+                                ui.label(label);
+                                ui.add(egui::TextEdit::singleline(&mut v).desired_width(f32::INFINITY)).on_hover_text(hint);
+                            });
+                            if v.is_empty() {
+                                c.shops.remove(id);
+                            } else {
+                                c.shops.insert(id.to_string(), v);
+                            }
+                        }
+                    });
+                }
                 // the pins this part does not use: marked, ERC stops asking about them
                 if !c.kind.is_power_symbol() && c.sub.is_none() && (c.custom.is_some() || c.kind.pins().len() >= 3) {
                     let pins: Vec<(String, String)> = match &c.custom {

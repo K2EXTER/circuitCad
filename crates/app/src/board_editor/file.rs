@@ -239,7 +239,7 @@ impl BoardEditor {
                 }
         }
         let rep = netlist::import(&mut self.board, &parts, &nets);
-        let shops: Vec<_> = sch.components.iter().filter_map(|c| c.custom.as_ref().map(|s| (c.refdes.clone(), s.shops.clone()))).collect();
+        let shops: Vec<_> = sch.components.iter().map(|c| (c.refdes.clone(), c.shop_numbers())).collect();
         netlist::import_shops(&mut self.board, &shops);
         netlist::import_swaps(&mut self.board, &swaps);
         let sheets: Vec<(String, String)> = sch.components.iter().filter(|c| !c.kind.is_power_symbol() && !c.sim_only).map(|c| (c.refdes.clone(), sch_ed.sch.sheet_name(sch_core::sheet_of(c.pos).0))).collect();

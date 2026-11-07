@@ -1249,6 +1249,39 @@ fn a_simulation_only_part_simulates_but_is_left_off_the_board() {
 }
 
 #[test]
+fn a_plain_resistor_carries_its_own_shop_number_to_the_shopping_list() {
+    // a plain R has no library part to carry a number: `shop` puts it on the part itself (and keeps the tolerance analyses working)
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 1k as=R1
+add R 1k as=R2
+net A V1.+ R1.1
+net B R1.2 R2.1
+net GND V1.- R2.2
+simonly V1
+shop R1 digikey=RC0805FR-071KL
+board import
+board shopping
+");
+    assert!(ok, "{a:?}");
+    let lines = last(&a, "board")["lines"].as_array().unwrap().clone();
+    let with: Vec<_> = lines.iter().filter(|l| l["shops"]["digikey"]["number"] == "RC0805FR-071KL").collect();
+    assert_eq!(with.len(), 1, "{lines:?}");
+    assert_eq!(with[0]["refdes"], serde_json::json!(["R1"]), "{with:?}");
+    // the other resistor has only the search link, and an unknown shop or a clear are handled
+    let (b, ok) = run("new
+add R 1k as=R1
+shop R1 digikey=X1 lcsc=C1
+shop R1 digikey=
+shop R1 nowhere=1
+");
+    assert!(!ok, "{b:?}");
+    assert!(b.last().unwrap()["error"].as_str().unwrap().contains("unknown shop"), "{b:?}");
+    let shown = b.iter().rev().find(|v| v["cmd"] == "shop" && v.get("shops").is_some()).unwrap();
+    assert_eq!(shown["shops"], serde_json::json!({"lcsc": "C1"}), "{shown:?}");
+}
+
+#[test]
 fn tracks_and_vias_can_be_laid_looked_up_and_taken_away() {
     let script = "new
 add V 5 as=V1
