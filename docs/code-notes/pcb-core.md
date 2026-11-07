@@ -280,3 +280,10 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - 点検は `requirements.rs` の `net_findings`(長さの上限と同じ所。1本ごとに `FindingKind::Net` の指摘、`item` がネット名、`actual`/`limit`)。ビアは `CopperIndex::net_of` で数え、細い配線はトラックの幅が `track_width − 1e-6` 未満のものの長さの合計。
 - 画面は回路図の「設計の要件」の「詳細: 配線の性質」の表(「ビアの上限」「細い配線の上限」)。CLI は `req net … max_vias= max_neck=` と `board class … max_vias= max_neck=`(答えにも出る)。
 - 他のソフトとの対応: Altium の Maximum Via Count と Routing Neck-Down(細い区間の合計の長さの上限)、KiCad の `via_count`。
+
+## dxf.rs — ケース設計用の DXF(2026-11-08)
+- `dxf::mechanical(&Board) -> String`: ASCII の DXF R12(AC1009。LINE・CIRCLE・ARC・TEXT だけ)。単位は mm。基板の y は下向きなので、書くときに符号を反転する(上から見た形になる)。
+- 層: `BOARD_OUTLINE`(外形の線)、`HOLES`(取り付け穴。長穴は2本の線+2つの円弧)、`PAD_DRILLS`(パッドのドリル)、`PARTS`(部品のパッド全体を囲む箱。部品の本体の大きさではない)、`PART_NAMES`(部品番号)。
+- 入口: 画面の「ファイル → 基板の外形・穴・部品の位置をDXFで保存…」(`board_editor/file.rs` の `export_dxf`)、CLI の `board dxf FILE`。
+- 確認: 単体テスト(線・円・円弧の数、y の反転)だけ。ケースの CAD で開いての確認は、まだしていない。
+- 読み込み(ケースの図面から外形・穴を取る)は未実装(候補 C5)。

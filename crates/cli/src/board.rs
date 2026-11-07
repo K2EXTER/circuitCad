@@ -1178,6 +1178,12 @@ impl Session {
                 }
                 Ok(obj(answer))
             }
+            "dxf" => {
+                let f = rest.first().ok_or("board dxf FILE.dxf   (the outline, holes, pad drills and part boxes in mm, y up, for the case's CAD)")?;
+                let board = self.board_mut()?;
+                std::fs::write(f, pcb_core::dxf::mechanical(board)).map_err(|e| format!("{f}: {e}"))?;
+                Ok(obj(json!({"file": f, "outline_points": board.outline.len(), "holes": board.holes.len(), "parts": board.parts.len()})))
+            }
             "fab" => {
                 let dir = std::path::Path::new(rest.first().ok_or("board fab DIR")?);
                 let board = self.board_mut()?;

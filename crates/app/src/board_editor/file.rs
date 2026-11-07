@@ -26,6 +26,17 @@ impl BoardEditor {
         }
     }
 
+    /// Write the board's outline, holes and part boxes as a DXF, for the case's CAD.
+    pub fn export_dxf(&mut self) {
+        let name = format!("{}.dxf", if self.board.name.is_empty() { "board" } else { &self.board.name });
+        if let Some(p) = rfd::FileDialog::new().add_filter("DXF (ケース設計用)", &["dxf"]).set_file_name(name).save_file() {
+            self.status = match std::fs::write(&p, pcb_core::dxf::mechanical(&self.board)) {
+                Ok(()) => format!("DXF を保存しました: {}", p.display()),
+                Err(e) => format!("DXF の保存に失敗: {e}"),
+            };
+        }
+    }
+
     pub fn open(&mut self) {
         if let Some(p) = rfd::FileDialog::new().add_filter("circuitCad 基板", &["pcbjson"]).pick_file() {
             self.load_path(p);

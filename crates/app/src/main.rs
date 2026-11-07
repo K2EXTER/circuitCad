@@ -322,6 +322,10 @@ impl eframe::App for App {
                         self.sch.export_svg();
                         ui.close();
                     }
+                    if !sch_mode && ui.button("基板の外形・穴・部品の位置をDXFで保存…").on_hover_text("基板の外形、取り付け穴、部品を囲む箱と部品番号を、DXF (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に渡して、基板が収まるか、穴の位置が合うかを確かめるのに使います。画面と同じ向き (上から見た形) で書き出します").clicked() {
+                        self.board_ed.export_dxf();
+                        ui.close();
+                    }
                     if !sch_mode {
                         ui.separator();
                         if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").on_hover_text("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます").clicked() {
