@@ -236,6 +236,7 @@ impl Session {
             "value" => self.set_value(args),
             "simonly" => self.sim_only(args),
             "shop" => self.shop(args),
+            "footprint" => self.footprint(args),
             "pinnames" => self.pin_names(args),
             "net" => self.net(args),
             "nc" => self.nc(args),

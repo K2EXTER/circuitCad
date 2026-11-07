@@ -1312,6 +1312,42 @@ value R1 \"lots\"
 }
 
 #[test]
+fn a_plain_part_can_take_another_footprint() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 1k as=R1
+net A V1.+ R1.1
+net GND V1.- R1.2
+simonly V1
+footprint R1 R_0805_Reflow
+board import
+board status
+");
+    assert!(ok, "{a:?}");
+    let imp = a.iter().find(|v| v["cmd"] == "footprint").unwrap();
+    assert_eq!(imp["footprint"], "R_0805_Reflow", "{imp:?}");
+    // it reaches the board's footprint (pad 0.9 mm long) and `-` goes back to the default
+    let (b, ok) = run("new
+add R 1k as=R1
+footprint R1 R_0805_Reflow
+footprint R1 -
+");
+    assert!(ok, "{b:?}");
+    assert_eq!(b.last().unwrap()["footprint"], "R_0805", "{b:?}");
+    // an unknown name and a library part are refused with the reason
+    let (c, ok) = run("new
+add R 1k as=R1
+footprint R1 R_9999
+");
+    assert!(!ok && c.last().unwrap()["error"].as_str().unwrap().contains("unknown footprint"), "{c:?}");
+    let (d, ok) = run("new
+add AMS1117-3.3 as=U1
+footprint U1 R_0805
+");
+    assert!(!ok && d.last().unwrap()["error"].as_str().unwrap().contains("library part"), "{d:?}");
+}
+
+#[test]
 fn tracks_and_vias_can_be_laid_looked_up_and_taken_away() {
     let script = "new
 add V 5 as=V1

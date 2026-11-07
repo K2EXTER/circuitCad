@@ -362,6 +362,26 @@ impl Session {
         Ok(obj(json!({"ref": c.refdes, "sim_only": on})))
     }
 
+    /// `footprint REF NAME` / `footprint REF -`: the PCB footprint of a plain part (a resistor, capacitor, diode ...), for example
+    /// `R_0805_Reflow`. `-` goes back to the kind's default. A library part brings its own footprint, so it is refused.
+    pub fn footprint(&mut self, args: &[String]) -> Res {
+        let usage = "footprint REF NAME   (`footprint REF -` goes back to the default; names: see `parts`, e.g. R_0805, R_0805_Reflow)";
+        let [r, name] = args else { return Err(usage.into()) };
+        let c = self.sch.components.iter_mut().find(|c| !c.kind.is_power_symbol() && c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
+        if c.custom.is_some() {
+            return Err(format!("{} is a library part: its footprint ({}) comes with the part", c.refdes, c.footprint_name()));
+        }
+        if name == "-" {
+            c.footprint = c.kind.default_footprint();
+        } else {
+            if pcb_core::footprints::get(name).is_none() {
+                return Err(format!("unknown footprint '{name}' (some of them: {})", pcb_core::footprints::names().into_iter().take(14).collect::<Vec<_>>().join(", ")));
+            }
+            c.footprint = name.clone();
+        }
+        Ok(obj(json!({"ref": c.refdes, "footprint": c.footprint_name()})))
+    }
+
     /// `shop REF [akizuki=I-00941] [digikey=RC0805FR-071KL] [lcsc=C123] | shop REF -`: the shop part numbers of one part (for a plain
     /// resistor or capacitor, which has no library part to carry them). They reach the board's shopping list and the BOM.
     pub fn shop(&mut self, args: &[String]) -> Res {

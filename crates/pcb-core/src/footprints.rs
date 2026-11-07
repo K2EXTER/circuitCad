@@ -123,7 +123,7 @@ fn wire_pads_sized(name: &str, pins: &[String], pad_d: f64, drill: f64) -> Footp
 
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
-        "R_0603", "R_0805", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
+        "R_0603", "R_0805", "R_0805_Reflow", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_0805_Reflow", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
         "D_DO-35_7.62", "LED_5mm", "TO-92", "SOT-23", "PinHeader_1x2_PM",
     ]
     .iter()
@@ -145,6 +145,10 @@ pub fn get(name: &str) -> Option<Footprint> {
         "C_1210" => smd2(name, 1.5, 1.2, 2.9, ["1", "2"]),
         "R_0603" | "C_0603" => smd2(name, 0.825, 0.8, 0.95, ["1", "2"]),
         "R_0805" | "C_0805" | "L_0805" => smd2(name, 0.9125, 1.025, 1.4, ["1", "2"]),
+        // the reflow land YAGEO recommends for its RC chip resistors (Chip Resistor Surface Mount, Fig. 4 / Table 1: overall 3.0, gap 1.2,
+        // pad length 0.9, pad width 1.2). The normal 0805 above has a 0.8 gap and 1.4-wide pads, which is easier to hand-solder. Samsung
+        // gives no land for its CL21 capacitors, so the capacitor takes the same numbers.
+        "R_0805_Reflow" | "C_0805_Reflow" => smd2(name, 1.05, 0.9, 1.2, ["1", "2"]),
         // IPC-7351 nominal land patterns for the larger chips (1/4 W and 1 W resistors)
         "R_1206" | "C_1206" => smd2(name, 1.5, 1.2, 1.8, ["1", "2"]),
         "R_2512" => smd2(name, 2.95, 1.4, 3.4, ["1", "2"]),
@@ -278,5 +282,22 @@ mod wire_pad_tests {
         assert_eq!((thin.pads[0].drill, thin.pads[0].shape.size()), (Some(0.7), (1.6, 1.6)));
         assert!(get("WirePad_D1.0_P1.2").is_none(), "a ring of less than 0.2 mm each side is refused");
         assert!(get("WirePad_1x41").is_none() && names().contains(&"WirePad_1x3".to_string()));
+    }
+
+    #[test]
+    fn the_reflow_0805_follows_the_yageo_numbers() {
+        // Table 1: overall 3.0, gap 1.2, pad length 0.9, pad width 1.2 (overall = gap + 2 x pad length)
+        for n in ["R_0805_Reflow", "C_0805_Reflow"] {
+            let fp = get(n).unwrap();
+            assert!(names().contains(&n.to_string()), "{n} is offered in the picker");
+            let (w, h) = fp.pads[0].shape.size();
+            assert!((w - 0.9).abs() < 1e-9 && (h - 1.2).abs() < 1e-9, "{n}: {w} x {h}");
+            let gap = fp.pads[1].pos.x - fp.pads[0].pos.x - w;
+            let overall = fp.pads[1].pos.x - fp.pads[0].pos.x + w;
+            assert!((gap - 1.2).abs() < 1e-9 && (overall - 3.0).abs() < 1e-9, "{n}: gap {gap}, overall {overall}");
+        }
+        // the normal 0805 is not changed
+        let n = get("R_0805").unwrap();
+        assert!((n.pads[1].pos.x - n.pads[0].pos.x - 1.825).abs() < 1e-9);
     }
 }
