@@ -219,6 +219,16 @@ impl Session {
                 self.cursor = self.cursor_below();
                 Ok(obj(json!({"parts": self.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count()})))
             }
+            "import_kicad" => {
+                let f = args.first().ok_or("import_kicad FILE.kicad_sch   (a KiCad 6+ schematic; the parts are laid out again, the nets kept as net names)")?;
+                let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+                let k = part_lib::kicad_sch::parse_schematic(&text)?;
+                let imp = part_lib::kicad_import::import(&k);
+                self.sch = imp.sch;
+                self.cursor = self.cursor_below();
+                (self.last_dc, self.last_tran, self.last_ac) = (None, None, None);
+                Ok(obj(json!({"parts": imp.basic + imp.custom, "plain_parts": imp.basic, "parts_from_kicad_symbols": imp.custom, "nets": k.nets.len(), "notes": imp.notes})))
+            }
             "save" => {
                 let f = args.first().ok_or("save FILE.schjson")?;
                 let text = serde_json::to_string_pretty(&self.sch).map_err(|e| e.to_string())?;

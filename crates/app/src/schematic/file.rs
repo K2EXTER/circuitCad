@@ -44,6 +44,33 @@ impl SchEditor {
         }
     }
 
+    /// Read a KiCad schematic (`.kicad_sch`): the parts are laid out again and joined by net names. What could not be carried over is
+    /// told in a dialog (`with_dialog`) or in the status line only.
+    pub fn open_kicad_sch(&mut self) {
+        if let Some(p) = rfd::FileDialog::new().add_filter("KiCad の回路図 (.kicad_sch)", &["kicad_sch"]).pick_file() {
+            self.load_kicad_sch(p, true);
+        }
+    }
+
+    pub fn load_kicad_sch(&mut self, p: PathBuf, with_dialog: bool) {
+        let read = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display())).and_then(|t| part_lib::kicad_sch::parse_schematic(&t));
+        match read {
+            Ok(k) => {
+                let imp = part_lib::kicad_import::import(&k);
+                self.adopt(imp.sch, None);
+                self.status = format!("KiCad の回路図を取り込みました: 部品 {} 個 (基本の部品 {}・記号から作った部品 {})。保存するときは名前を付けます", imp.basic + imp.custom, imp.basic, imp.custom);
+                if with_dialog {
+                    rfd::MessageDialog::new()
+                        .set_title("KiCad の回路図を取り込みました")
+                        .set_description(imp.notes.iter().map(|n| format!("・{n}")).collect::<Vec<_>>().join("
+"))
+                        .show();
+                }
+            }
+            Err(e) => self.status = format!("取り込めませんでした: {e}"),
+        }
+    }
+
     pub fn load_path(&mut self, p: PathBuf) {
         let read = |p: &PathBuf| -> Result<(Schematic, Vec<SpecItem>), String> {
             let text = std::fs::read_to_string(p).map_err(|e| e.to_string())?;
@@ -76,5 +103,23 @@ impl SchEditor {
         self.saved_specs.clear();
         self.dc = None;
         self.fit_pending = true;
+    }
+}
+
+#[cfg(test)]
+mod kicad_tests {
+    use super::*;
+
+    #[test]
+    fn a_kicad_sheet_opens_as_a_sheet_that_has_no_file_yet() {
+        let mut e = SchEditor::default();
+        e.path = Some(PathBuf::from("old.schjson"));
+        let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples/kicad-divider.kicad_sch");
+        e.load_kicad_sch(p, false);
+        assert_eq!(e.sch.components.iter().filter(|c| !c.kind.is_power_symbol()).count(), 3, "{}", e.status);
+        assert!(e.path.is_none(), "saving must ask for a name, not overwrite the old file");
+        assert!(e.status.contains("取り込みました"), "{}", e.status);
+        e.load_kicad_sch(PathBuf::from("no-such.kicad_sch"), false);
+        assert!(e.status.contains("取り込めませんでした"), "{}", e.status);
     }
 }

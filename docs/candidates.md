@@ -86,7 +86,7 @@ Altium の調べでの注意: 基板の接続は、コネクタに「システ�
 
 | # | 内容 | 規模 | 理由 |
 |---|---|---|---|
-| I1 | KiCad の回路図 `.kicad_sch` の読み込み | 中〜大 | 他のソフトの回路を試せる入り口。**第1段階(部品とネットの読み取り、`part-lib/kicad_sch.rs`)は済み**。残りは、`Schematic` への組み立て・画面・CLI(`docs/code-notes/part-lib.md`) |
+| I1 | KiCad の回路図 `.kicad_sch` の読み込み | 中〜大 | 他のソフトの回路を試せる入り口。**済み**(`part-lib/kicad_sch.rs` で読み取り、`kicad_import.rs` で組み立て。画面・CLI あり)。残りは、電源の波形(SIN・PULSE)・極性つきコンデンサの対応、回転 90〜270° の実物での確認(`docs/code-notes/part-lib.md`) |
 | I2 | 回路図の PDF の書き出し | 小〜中 | 今は SVG まで(ブラウザの印刷で PDF にできる)。日本語を埋め込む PDF は、フォントの埋め込みが要る |
 | I3 | 基板の SVG・DXF の書き出し | 小〜中 | C5 と一緒に。ケース設計・記事の図に使える |
 | I4 | KiCad の基板 `.kicad_pcb` の読み込み・書き出し | 大 | 効果は限られる。後回し |

@@ -104,6 +104,9 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             apply_board_args(app, args);
         }
     }
+    if let Some(p) = args.iter().find(|a| a.ends_with(".kicad_sch")) {
+        app.sch.load_kicad_sch(p.into(), false);
+    }
     if let Some(p) = args.iter().find(|a| a.ends_with(".schjson")) {
         app.sch.load_path(p.into());
         // `--sheet N`: the Nth sheet (from 1) is the one shown

@@ -288,6 +288,11 @@ impl eframe::App for App {
                         if sch_mode { self.sch.open() } else { self.board_ed.open() }
                         ui.close();
                     }
+                    if ui.button("KiCad の回路図を開く…").on_hover_text("KiCad 6 以降の回路図 (.kicad_sch) を取り込みます。部品はこのソフトの記号で並べ直し、つながりはネットの名前で表します (KiCad の図の形・位置は引き継ぎません)。子シート・バスなど読めないものは、取り込んだあとの案内に出ます").clicked() && self.confirm_unsaved_one(true, "開くと、いまの回路図は置き換わります。") {
+                        self.sch.open_kicad_sch();
+                        self.mode = Mode::Schematic;
+                        ui.close();
+                    }
                     ui.menu_button("サンプル回路を開く", |ui| {
                         for s in samples::SAMPLES {
                             if ui.button(s.title).on_hover_text(s.about).clicked() {

@@ -764,6 +764,7 @@ pub fn install_examples(dir: &Path) -> std::io::Result<()> {
 
 pub mod diode;
 pub mod kicad;
+pub mod kicad_import;
 pub mod kicad_sch;
 pub mod vendorzip;
 pub mod passive;
