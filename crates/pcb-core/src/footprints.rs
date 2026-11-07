@@ -123,7 +123,7 @@ fn wire_pads_sized(name: &str, pins: &[String], pad_d: f64, drill: f64) -> Footp
 
 pub fn names() -> Vec<String> {
     let mut v: Vec<String> = [
-        "R_0603", "R_0805", "R_0805_Reflow", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_0805_Reflow", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
+        "R_0603", "R_0805", "R_0805_Reflow", "R_1206", "R_2512", "C_0402", "C_0603", "C_0805", "C_0805_Reflow", "C_1206", "C_1210", "L_0805", "LED_0805", "D_SOD-123", "CT_3528-21", "R_Axial_10.16", "C_Disc_5.08", "CP_Radial_D5_P2.0",
         "D_DO-35_7.62", "LED_5mm", "TO-92", "SOT-23", "PinHeader_1x2_PM",
     ]
     .iter()
@@ -154,6 +154,9 @@ pub fn get(name: &str) -> Option<Footprint> {
         "R_2512" => smd2(name, 2.95, 1.4, 3.4, ["1", "2"]),
         "LED_0805" => smd2(name, 0.9125, 1.025, 1.4, ["K", "A"]),
         "D_SOD-123" => smd2(name, 1.65, 0.91, 1.22, ["K", "A"]),
+        // molded tantalum chip, case B (EIA 3528-21): KEMET's land for density level B ("median", Table 2 of the T491 data sheet):
+        // pad 1.80 long x 2.23 wide, gap 1.12. Pin 1 is the + end (the stripe on the body).
+        "CT_3528-21" => smd2(name, 1.46, 1.8, 2.23, ["1", "2"]),
         "R_Axial_10.16" => tht2(name, 10.16, 1.8, 0.9, ["1", "2"]),
         "C_Disc_5.08" => tht2(name, 5.08, 1.6, 0.8, ["1", "2"]),
         // radial electrolytic: pin 1 (square pad) is the + lead
@@ -256,6 +259,14 @@ fn outline(name: &str) -> Vec<FpLine> {
             v.push(line((-1.2, -0.9), (-1.2, 0.9)));
             v
         }
+        // molded tantalum 3528-21: the long edges of the body outside the pads, a bar across the + end (pin 1, left) and a +
+        "CT_3528-21" => vec![
+            line((-2.36, 1.55), (2.36, 1.55)),
+            line((-2.36, -1.55), (2.36, -1.55)),
+            line((-2.75, 1.55), (-2.75, -1.55)),
+            line((-3.5, 0.0), (-3.0, 0.0)),
+            line((-3.25, 0.25), (-3.25, -0.25)),
+        ],
         // 5 mm LED: the flat side is the cathode (K, left)
         "LED_5mm" => {
             let mut v = circle_lines(2.9);
@@ -299,5 +310,29 @@ mod wire_pad_tests {
         // the normal 0805 is not changed
         let n = get("R_0805").unwrap();
         assert!((n.pads[1].pos.x - n.pads[0].pos.x - 1.825).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_tantalum_case_b_follows_the_kemet_land_and_marks_the_plus_end() {
+        let fp = get("CT_3528-21").unwrap();
+        assert!(names().contains(&"CT_3528-21".to_string()));
+        let (w, h) = fp.pads[0].shape.size();
+        assert!((w - 1.8).abs() < 1e-9 && (h - 2.23).abs() < 1e-9, "{w} x {h}");
+        // gap 1.12 between the pads
+        let gap = fp.pads[1].pos.x - fp.pads[0].pos.x - w;
+        assert!((gap - 1.12).abs() < 1e-9, "{gap}");
+        // pin 1 (+) is on the left, and the polarity marks are on that side only, clear of the copper
+        assert!(fp.pads[0].pos.x < 0.0 && fp.pads[0].pin == "1");
+        let left_only = fp.silk.iter().filter(|l| l.a.x < -2.4 && l.b.x < -2.4).count();
+        assert_eq!(left_only, 3, "a bar and a +: {:?}", fp.silk);
+        for l in &fp.silk {
+            for p in &fp.pads {
+                let (hw, hh) = (p.shape.size().0 / 2.0, p.shape.size().1 / 2.0);
+                for q in [l.a, l.b] {
+                    let inside = (q.x - p.pos.x).abs() < hw + 0.2 && (q.y - p.pos.y).abs() < hh + 0.2;
+                    assert!(!inside, "silk point {q:?} is on a pad at {:?}", p.pos);
+                }
+            }
+        }
     }
 }

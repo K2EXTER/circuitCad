@@ -1,0 +1,51 @@
+{
+  "name": "T491B226K016AT",
+  "category": "コンデンサ",
+  "description": "KEMET T491 モールドタンタルコンデンサ 22µF ±10% 16V(ケース B、EIA 3528-21)。ESR 最大 2.2Ω(100kHz・25℃)。DigiKey のページとデータシート(KEM_T2005_T491)で確認(2026-11-07)。ランドは KEMET の表 2 の Level B(標準)。AMS1117 などの LDO の出力コンデンサ(ESR が低すぎると不安定になる型)向け。極性があります: 1 番ピン(左)が +(本体の帯の側)で、逆につなぐと壊れます",
+  "datasheet": "https://yageogroup.com/content/datasheet/asset/file/KEM_T2005_T491",
+  "prefix": "C",
+  "value": "22u",
+  "pins": [
+    {
+      "number": "1",
+      "name": "1",
+      "side": "left"
+    },
+    {
+      "number": "2",
+      "name": "2",
+      "side": "right"
+    }
+  ],
+  "package": {
+    "type": "chip2",
+    "pitch": 2.92,
+    "pad_len": 1.8,
+    "pad_width": 2.23
+  },
+  "footprint_name": "CT_3528-21",
+  "height": 2.1,
+  "sim": {
+    "kind": "subckt",
+    "element": "",
+    "name": "T491B226K016AT",
+    "text": ".subckt T491B226K016AT 1 2\nResr 1 n_esr 2.2\nC1 n_esr 2 22u\n.ends",
+    "pins": [
+      "1",
+      "2"
+    ],
+    "params": {},
+    "limits": [
+      "ESR はデータシートの最大値 2.2Ω(100kHz・25℃)です。実物の標準値はこれより低いことがあり、周波数や温度でも変わります。ESL(自己インダクタンス)はデータシートに無いので入れていません。",
+      "温度による値の変化は扱いません。タンタルは、セラミックのような直流電圧による容量の低下は小さいので、ここでは考えません。",
+      "極性(+ が 1 番ピン)は、シミュレーションでは見ません。逆向きにつなぐと、実物は壊れます(逆電圧は定格の 15% まで、短い時間だけ。25℃)。"
+    ]
+  },
+  "ratings": {
+    "v_max": 16.0
+  },
+  "glyph": "electrolytic",
+  "shops": {
+    "digikey": "T491B226K016AT"
+  }
+}
