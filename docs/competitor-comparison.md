@@ -94,6 +94,28 @@ Altium の分類ごとに、circuitCad で近いものを挙げる。「なし�
 - EasyEDA Pro と Quadcept は、画面の表を中心に、領域・クラス間・製造先ごとのプリセットで調整する。**製造先のプリセットに切り替える**(EasyEDA の JLCPCB など)のは、発注まで通す目的に合う(circuitCad は `fab.rs` の発注先と発注前チェックで近い)。
 - circuitCad は、点検の message に原因と直し方を日本語で付けている。他のソフトの点検の説明の書き方は未確認。
 
+## ファイル互換性(2026-11-08、コードと `docs/library.md` による。他のソフトで実際に開いて確かめたものではない)
+
+circuitCad の列だけを書く。他のソフトが何を読み書きできるかは、今回は調べていない。
+
+| 形式 | 取り込み | 書き出し |
+|---|---|---|
+| KiCad のシンボル(`.kicad_sym`、旧形式 `.lib`) | あり(部品作成フォーム。ピンだけ取り、記号は四角い形) | なし |
+| KiCad のフットプリント(`.kicad_mod`) | あり(パッド・穴・長穴) | なし |
+| Ultra Librarian・SnapEDA の zip(KiCad 形式) | あり(シンボル・フットプリント・STEP を自動で拾う) | - |
+| メーカーの SPICE モデル(村田など) | 一部(読める素子と書き方に制限。`.include`・XSPICE の多くは不可) | - |
+| SPICE ネットリスト(`.cir`) | なし | あり(ngspice の方言) |
+| STEP(3D) | 部品1個ずつ(曲面は粗い) | なし(E3) |
+| Gerber・Excellon ドリル・BOM・部品配置(CSV) | - | あり |
+| 回路図の SVG | - | あり(2026-11-08) |
+| KiCad の回路図・基板(`.kicad_sch` / `.kicad_pcb`)、EAGLE、Altium、EasyEDA、LTspice(`.asc`) | なし | なし |
+| DXF | なし(C5) | なし(C5) |
+| ODB++・Specctra(Freerouting 用) | なし | なし |
+
+- 部品(ライブラリ)の互換性は、KiCad と SnapEDA・Ultra Librarian の資産を使える範囲にある。ただし記号の絵は取り込めない。
+- 設計データ(回路図・基板)は、自前の形式(`.schjson` / `.pcbjson` / `.ccproj`)に閉じている。外へ出るのは製造データと SPICE ネットリストだけ。
+- 候補は `docs/candidates.md` の「ファイル互換性」。
+
 ## 未確認として残したもの(次に調べるなら)
 - 配線ルール: KiCad の Board Setup の Constraints の各項目の細部、KiCad のカスタムルールの条件に使える性質の一覧、EasyEDA の差動ペアのルールの細部と優先順位、EasyEDA Standard 版のルール、Quadcept のクラス間クリアランスや配線長の設定の細部。
 - KiCad: 配線機能の公式の説明(今回は公式マニュアルの PCB エディタの章が取れず、掲示板・第三者の解説・古い講演に頼った)、STEP の取り込み、DFM に近いチェック。

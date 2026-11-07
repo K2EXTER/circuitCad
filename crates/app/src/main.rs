@@ -313,6 +313,10 @@ impl eframe::App for App {
                         }
                         ui.close();
                     }
+                    if sch_mode && ui.button("回路図をSVGで保存…").on_hover_text("いま見えているシートを、拡大しても粗くならない図 (SVG) にします。ブラウザや Inkscape で開けて、ブラウザの印刷から PDF にもできます。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります").clicked() {
+                        self.sch.export_svg();
+                        ui.close();
+                    }
                     if !sch_mode {
                         ui.separator();
                         if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").on_hover_text("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます").clicked() {

@@ -739,6 +739,7 @@ mod history;
 mod hint;
 mod canvas;
 mod draw;
+mod svg;
 mod interact;
 mod panel;
 mod coverage;
