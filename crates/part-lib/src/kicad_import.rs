@@ -58,7 +58,7 @@ fn basic_kind(p: &SchPart) -> Option<Kind> {
     let two = p.pins.len() == 2;
     match name {
         "R" | "R_Small" | "R_US" | "R_Small_US" if two => Some(Kind::Resistor),
-        "C" | "C_Small" if two => Some(Kind::Capacitor),
+        "C" | "C_Small" | "C_Polarized" | "C_Polarized_Small" | "CP" | "CP_Small" if two => Some(Kind::Capacitor),
         "L" | "L_Small" | "L_US" if two => Some(Kind::Inductor),
         "D" | "D_Small" | "D_Schottky" | "D_Zener" if two => Some(Kind::Diode),
         "LED" | "LED_Small" if two => Some(Kind::Led),
@@ -206,6 +206,9 @@ pub fn import(k: &KicadSch) -> Imported {
                 _ => notes.push(format!("{refdes}: ピン {} ({}) は対応する場所がなく、つなぎませんでした。", pin.number, pin.name)),
             }
         }
+        if p.lib_id.rsplit(':').next().is_some_and(|n| n.starts_with("CP") || n.starts_with("C_Polarized")) && kind.is_some() {
+            notes.push(format!("{refdes} は極性のあるコンデンサです。このソフトのコンデンサは極性を記号に出さないので、ピン1が + 側 (KiCad と同じ) であることを覚えておいてください。ESR などは値の欄に書けます。"));
+        }
         if kind.is_some() { basic += 1 } else { custom += 1 }
     }
 
@@ -326,6 +329,15 @@ mod tests {
         assert_eq!(source_value(&part("Simulation_SPICE:VSIN", &[("Sim.Params", "dc=1 ampl=2 f=1k")])).as_deref(), Some("SIN(1 2 1k 0 0 0)"));
         assert_eq!(source_value(&part("Simulation_SPICE:VPULSE", &[("Sim.Params", "y1=0 y2=5 tr=1u tf=1u tw=1m per=2m")])).as_deref(), Some("PULSE(0 5 0 1u 1u 1m 2m)"));
         assert_eq!(source_value(&part("Simulation_SPICE:VPULSE", &[("Sim.Params", "y1=0")])), None, "missing parameters: not guessed");
+    }
+
+    #[test]
+    fn a_polarized_capacitor_is_a_capacitor_with_a_note() {
+        let t = DIVIDER.replace("Device:R\") (at 100 120", "Device:C_Polarized\") (at 100 120").replace("(symbol \"Device:R\" (in_bom", "(symbol \"Device:C_Polarized\" (in_bom yes) (on_board yes) (property \"Reference\" \"C\" (at 0 0 0)) (property \"Value\" \"C\" (at 0 0 0)) (symbol \"C_Polarized_1_1\" (pin passive line (at 0 3.81 270) (length 1.27) (name \"+\" (effects (font (size 1.27 1.27)))) (number \"1\" (effects (font (size 1.27 1.27))))) (pin passive line (at 0 -3.81 90) (length 1.27) (name \"-\" (effects (font (size 1.27 1.27)))) (number \"2\" (effects (font (size 1.27 1.27)))))))
+    (symbol \"Device:R\" (in_bom");
+        let imp = import(&parse_schematic(&t).unwrap());
+        assert_eq!((imp.basic, imp.custom), (3, 0), "{:?}", imp.notes);
+        assert!(imp.notes.iter().any(|n| n.contains("極性")), "{:?}", imp.notes);
     }
 
     #[test]
