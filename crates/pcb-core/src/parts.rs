@@ -124,6 +124,32 @@ impl Board {
             }
         }
 
+        // a diode / LED with a box and no polarity mark of its own: a bar across the box on the cathode side, as on the body of the
+        // real part (the square pad alone does not tell a person with a soldering iron which end is which)
+        if outline.is_empty() {
+            let two: Vec<&Pad> = self.pads.iter().filter(|p| p.refdes == part.refdes).collect();
+            if let (2, Some(k), Some(a)) = (two.len(), two.iter().find(|p| p.pin == "K"), two.iter().find(|p| p.pin == "A")) {
+                let (dx, dy) = (a.pos.x - k.pos.x, a.pos.y - k.pos.y);
+                // along the axis of the two pads only (parts are turned by quarter turns); the bar must have room between them
+                let horizontal = dx.abs() > dy.abs();
+                let (ext_k, ext_a) = if horizontal { (k.shape.size().0, a.shape.size().0) } else { (k.shape.size().1, a.shape.size().1) };
+                let dist = if horizontal { dx.abs() } else { dy.abs() };
+                let gap = dist - ext_k / 2.0 - ext_a / 2.0;
+                if gap >= 2.0 && (horizontal && dy.abs() < 1e-6 || !horizontal && dx.abs() < 1e-6) {
+                    let sign = if horizontal { dx.signum() } else { dy.signum() };
+                    let off = ext_k / 2.0 + 0.5;
+                    let (pa, pb) = if horizontal {
+                        let bx = k.pos.x + sign * off;
+                        (Point::new(bx, y0 - m), Point::new(bx, y1 + m))
+                    } else {
+                        let by = k.pos.y + sign * off;
+                        (Point::new(x0 - m, by), Point::new(x1 + m, by))
+                    };
+                    self.silk.push(SilkLine { side: part.side, a: pa, b: pb, width: 0.3, refdes: part.refdes.clone() });
+                }
+            }
+        }
+
         // designator above the part, centred (plus the offset the user gave it)
         let off = self.label_offsets.get(&part.refdes).copied().unwrap_or_default();
         let mut label = SilkText { side: part.side, pos: Point::default(), height: 1.0, text: part.refdes.clone(), refdes: part.refdes.clone(), rot: label_rot };
@@ -248,5 +274,51 @@ mod tests {
         // the same footprint again changes nothing
         b.set_part(part("C_0402")).unwrap();
         assert_eq!(b.tracks[0].b, n1);
+    }
+
+    #[test]
+    fn a_diode_with_room_between_its_pads_gets_a_cathode_bar_on_the_cathode_side() {
+        let part = |fp: &str, rot: u8| Part { refdes: "D1".into(), value: "1N4148".into(), footprint: fp.into(), pos: Point::new(20.0, 15.0), rot, side: Side::Top };
+        let bar = |b: &Board| b.silk.iter().filter(|l| l.refdes == "D1" && l.width > 0.2).cloned().collect::<Vec<_>>();
+        // a library diode (a footprint with pads only, as from a part file): pads 7.62 apart, K on the left; the bar is just inside
+        // the K pad, across the box. (The built-in D_DO-35_7.62 has its own outline with a bar and is not touched.)
+        let lib = || {
+            let mut fp = crate::footprints::get("D_DO-35_7.62").unwrap();
+            fp.name = "D_DO-35_P7.62".into();
+            fp.silk.clear();
+            fp
+        };
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.add_footprint(lib());
+        b.set_part(part("D_DO-35_P7.62", 0)).unwrap();
+        let (k, a) = (b.pads.iter().find(|p| p.pin == "K").unwrap().pos, b.pads.iter().find(|p| p.pin == "A").unwrap().pos);
+        let lines = bar(&b);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!((lines[0].a.x - lines[0].b.x).abs() < 1e-9 && lines[0].a.y != lines[0].b.y, "a bar across the part");
+        let side = |x: f64| (x - k.x).abs() < (x - a.x).abs();
+        assert!(side(lines[0].a.x), "nearer the cathode than the anode: bar {} K {} A {}", lines[0].a.x, k.x, a.x);
+        // turned by 180 degrees the bar goes with the cathode to the other end
+        b.set_part(part("D_DO-35_P7.62", 2)).unwrap();
+        let (k2, a2) = (b.pads.iter().find(|p| p.pin == "K").unwrap().pos, b.pads.iter().find(|p| p.pin == "A").unwrap().pos);
+        assert!(k2.x > a2.x);
+        let l2 = bar(&b);
+        assert_eq!(l2.len(), 1);
+        assert!((l2[0].a.x - k2.x).abs() < (l2[0].a.x - a2.x).abs());
+        // a quarter turn: the bar lies across the other way
+        b.set_part(part("D_DO-35_P7.62", 1)).unwrap();
+        let l3 = bar(&b);
+        assert!(l3.len() == 1 && (l3[0].a.y - l3[0].b.y).abs() < 1e-9 && l3[0].a.x != l3[0].b.x, "{l3:?}");
+        // a small LED (0.8 mm between the pads) has no room: nothing is added
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.set_part(part("LED_0805", 0)).unwrap();
+        assert!(bar(&b).is_empty());
+        // the built-in DO-35 keeps its own outline (one bar of its own, not two)
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.set_part(part("D_DO-35_7.62", 0)).unwrap();
+        assert!(bar(&b).is_empty(), "no second bar: {:?}", bar(&b));
+        // and a part without K and A pads is left alone
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.set_part(Part { refdes: "D1".into(), value: "x".into(), footprint: "R_Axial_10.16".into(), pos: Point::new(20.0, 15.0), rot: 0, side: Side::Top }).unwrap();
+        assert!(bar(&b).is_empty());
     }
 }
