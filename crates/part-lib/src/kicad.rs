@@ -14,14 +14,14 @@ pub enum Node {
 }
 
 impl Node {
-    fn text(&self) -> Option<&str> {
+    pub(crate) fn text(&self) -> Option<&str> {
         match self {
             Node::Atom(s) => Some(s),
             Node::List(_) => None,
         }
     }
 
-    fn items(&self) -> &[Node] {
+    pub(crate) fn items(&self) -> &[Node] {
         match self {
             Node::List(v) => v,
             Node::Atom(_) => &[],
@@ -29,24 +29,24 @@ impl Node {
     }
 
     /// The first element when it is an atom: `(pad ...)` -> "pad".
-    fn head(&self) -> Option<&str> {
+    pub(crate) fn head(&self) -> Option<&str> {
         self.items().first().and_then(|n| n.text())
     }
 
-    fn find(&self, name: &str) -> Option<&Node> {
+    pub(crate) fn find(&self, name: &str) -> Option<&Node> {
         self.items().iter().skip(1).find(|n| n.head() == Some(name))
     }
 
-    fn find_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> {
+    pub(crate) fn find_all<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> {
         self.items().iter().skip(1).filter(move |n| n.head() == Some(name))
     }
 
     /// The `i`-th element after the head, as text.
-    fn arg(&self, i: usize) -> Option<&str> {
+    pub(crate) fn arg(&self, i: usize) -> Option<&str> {
         self.items().get(i + 1).and_then(|n| n.text())
     }
 
-    fn num(&self, i: usize) -> Option<f64> {
+    pub(crate) fn num(&self, i: usize) -> Option<f64> {
         self.arg(i).and_then(|s| s.parse().ok())
     }
 }
@@ -180,7 +180,7 @@ fn prop<'a>(sym: &'a Node, key: &str) -> &'a str {
     sym.find_all("property").find(|p| p.arg(0) == Some(key)).and_then(|p| p.arg(1)).unwrap_or("")
 }
 
-fn symbol_of(all: &[&Node], sym: &Node, depth: usize) -> Option<KicadSymbol> {
+pub(crate) fn symbol_of(all: &[&Node], sym: &Node, depth: usize) -> Option<KicadSymbol> {
     let name = sym.arg(0)?.to_string();
     // `(extends "Parent")`: the pins live in the parent, the properties here.
     let parent = sym.find("extends").and_then(|e| e.arg(0)).filter(|_| depth < 8);
