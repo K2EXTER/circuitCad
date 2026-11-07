@@ -274,6 +274,18 @@ fn spice_expands_capacitor_and_inductor_parasitics() {
 }
 
 #[test]
+fn spice_writes_the_capacitance_left_after_the_dc_bias() {
+    let mut s = Schematic::default();
+    s.add(Kind::Capacitor, (0, 0), 0);
+    s.components[0].value = "22u BIAS=61".into();
+    let d = to_spice(&s, "t");
+    let line = d.lines().find(|l| l.starts_with("C1 ")).unwrap_or_else(|| panic!("{d}"));
+    let v: f64 = line.split_whitespace().last().unwrap().parse().unwrap();
+    assert!((v - 22e-6 * 0.39).abs() < 1e-12, "{line}");
+    assert!(d.contains("61% lost to the DC bias"), "{d}");
+}
+
+#[test]
 fn net_at_finds_the_net_under_a_point() {
     let mut s = divider();
     let r2 = s.components[2].pins();

@@ -52,7 +52,15 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
                 let get = |key: &str| c.value.split_whitespace().find_map(|t| t.to_ascii_uppercase().strip_prefix(&format!("{key}=")).map(|v| v.to_string()));
                 let (n1, n2) = (nd(r, "1"), nd(r, "2"));
                 match c.kind {
-                    Kind::Capacitor if get("ESR").is_some() || get("ESL").is_some() => {
+                    Kind::Capacitor if get("ESR").is_some() || get("ESL").is_some() || get("BIAS").is_some() => {
+                        // BIAS=61: the capacitance left at the working DC voltage (the simulator does the same)
+                        let main = match (get("BIAS").and_then(|b| b.parse::<f64>().ok()), crate::ngspice::spice_number(main)) {
+                            (Some(b), Some(v)) if b > 0.0 => {
+                                let _ = writeln!(out, "* {r}: {main} with {b}% lost to the DC bias");
+                                format!("{:e}", v * (1.0 - b / 100.0))
+                            }
+                            _ => main.to_string(),
+                        };
                         let mut from = n1;
                         if let Some(esr) = get("ESR") {
                             let _ = writeln!(out, "R{r}_ESR {from} {r}_esr {esr}");

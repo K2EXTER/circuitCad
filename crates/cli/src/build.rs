@@ -275,7 +275,7 @@ impl Session {
         let value = pos.get(1).cloned();
         if let (Some(k), Some(v)) = (kind, &value)
             && matches!(k, Kind::Resistor | Kind::Capacitor | Kind::Inductor)
-            && sim_core::parse_value(v).is_none()
+            && sim_core::parse_part_value(v).is_err()
         {
             return Err(bad_number(v));
         }
@@ -339,7 +339,7 @@ impl Session {
         // a source with spaces in it (PULSE(0 5 1m ...), "0 AC 1") is one value whether or not it was written in quotes
         let v = &rest.join(" ");
         let c = self.sch.components.iter_mut().find(|c| c.refdes.eq_ignore_ascii_case(r)).ok_or_else(|| format!("no part {r}"))?;
-        if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) && sim_core::parse_value(v).is_none() {
+        if matches!(c.kind, Kind::Resistor | Kind::Capacitor | Kind::Inductor) && sim_core::parse_part_value(v).is_err() {
             return Err(bad_number(v));
         }
         c.value = v.clone();

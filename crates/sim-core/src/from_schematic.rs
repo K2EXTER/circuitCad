@@ -206,12 +206,18 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
                 }
                 let get = |k: &str| extra.iter().find(|(n, _)| n == k).map(|(_, v)| *v).filter(|v| *v > 0.0);
                 let allowed: &[&str] = match comp.kind {
-                    Kind::Capacitor => &["ESR", "ESL", "IC"],
+                    Kind::Capacitor => &["ESR", "ESL", "IC", "BIAS"],
                     Kind::Inductor => &["DCR"],
                     _ => &[],
                 };
                 if let Some((k, _)) = extra.iter().find(|(k, _)| !allowed.contains(&k.as_str())) {
                     errors.push(err(r, format!("{k} はこの部品では使えません (使えるもの: {})", if allowed.is_empty() { "なし".to_string() } else { allowed.join(", ") })));
+                    continue;
+                }
+                // BIAS=61: a ceramic capacitor that loses 61 % of its capacitance at its working DC voltage (a constant, as in the library
+                // parts' "DCバイアスで下がる量")
+                if get("BIAS").is_some_and(|b| b > 95.0) {
+                    errors.push(err(r, "BIAS (DCバイアスで下がる容量) は 0〜95 (%) で入れてください (例: BIAS=60)"));
                     continue;
                 }
                 match comp.kind {
@@ -229,7 +235,7 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
                             c.add(Element::Inductor { name: format!("{r}.ESL"), a: from, b: m, l: esl });
                             from = m;
                         }
-                        c.add(Element::Capacitor { name: r.into(), a: from, b, c: x });
+                        c.add(Element::Capacitor { name: r.into(), a: from, b, c: x * (1.0 - get("BIAS").unwrap_or(0.0) / 100.0) });
                         if let Some((_, ic)) = extra.iter().find(|(k, _)| k == "IC") {
                             c.set_initial_voltage(r, *ic);
                         }

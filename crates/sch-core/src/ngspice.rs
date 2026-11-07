@@ -20,7 +20,7 @@ struct Sw {
 }
 
 /// SPICE number with an engineering suffix ("1G", "4.7k", "100meg", "5m").
-fn spice_number(t: &str) -> Option<f64> {
+pub(crate) fn spice_number(t: &str) -> Option<f64> {
     let t = t.trim().to_ascii_lowercase();
     let end = t.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == '+' || c == '-' || c == 'e')).unwrap_or(t.len());
     // an 'e' just before the suffix ("1e" + "meg") is not an exponent

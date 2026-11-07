@@ -146,6 +146,25 @@ fn rc_with_cap(value: &str, source: &str) -> Schematic {
 }
 
 #[test]
+fn bias_takes_a_share_of_the_capacitance_away() {
+    let cap_of = |v: &str| {
+        let c = from_schematic(&rc_with_cap(v, "AC 1")).unwrap();
+        c.elements.iter().find_map(|e| if let Element::Capacitor { name, c, .. } = e { (name == "C1").then_some(*c) } else { None }).unwrap()
+    };
+    assert!((cap_of("100n") - 100e-9).abs() < 1e-18);
+    assert!((cap_of("100n BIAS=60") - 40e-9).abs() < 1e-15, "{}", cap_of("100n BIAS=60"));
+    // it keeps the ESR / ESL and the other options working next to it
+    assert!((cap_of("22u ESR=5m BIAS=61") - 22e-6 * 0.39).abs() < 1e-12);
+    // BIAS=0 changes nothing; more than 95 % is refused with the reason; a resistor has no BIAS
+    assert!((cap_of("100n BIAS=0") - 100e-9).abs() < 1e-18);
+    let e = from_schematic(&rc_with_cap("100n BIAS=99", "AC 1")).unwrap_err();
+    assert!(e.iter().any(|m| m.to_string().contains("BIAS")), "{e:?}");
+    let mut s = rc_with_cap("100n", "AC 1");
+    s.components[1].value = "10 BIAS=50".into();
+    assert!(from_schematic(&s).is_err());
+}
+
+#[test]
 fn real_capacitor_has_a_self_resonance() {
     let (cc, esr, esl) = (100e-9, 0.05, 10e-9);
     let s = rc_with_cap("100n ESR=0.05 ESL=10n", "AC 1");

@@ -1282,6 +1282,36 @@ shop R1 nowhere=1
 }
 
 #[test]
+fn a_capacitor_value_can_carry_esr_and_the_dc_bias() {
+    // BIAS=50 halves the capacitance: the RC corner of 1k and 100n (1.59 kHz) moves to 3.18 kHz
+    let (a, ok) = run("new
+add V \"0 AC 1\" as=V1
+add R 1k as=R1
+add C 100n as=C1
+net IN V1.+ R1.1
+net OUT R1.2 C1.1
+net GND V1.- C1.2
+value C1 \"100n BIAS=50\"
+erc
+ac 100 100k ppd=40 probe=V(OUT)
+");
+    assert!(ok, "{a:?}");
+    let fc = last(&a, "ac")["signals"]["V(OUT)"]["minus_3db_hz"].as_f64().unwrap();
+    assert!((fc - 3183.0).abs() < 40.0, "{fc}");
+    // a wrong option is refused with the reason, and a value that is not a number still is
+    let (b, ok) = run("new
+add C 100n as=C1
+value C1 \"100n ESR=oops\"
+");
+    assert!(!ok, "{b:?}");
+    let (c, ok) = run("new
+add R 1k as=R1
+value R1 \"lots\"
+");
+    assert!(!ok, "{c:?}");
+}
+
+#[test]
 fn tracks_and_vias_can_be_laid_looked_up_and_taken_away() {
     let script = "new
 add V 5 as=V1
