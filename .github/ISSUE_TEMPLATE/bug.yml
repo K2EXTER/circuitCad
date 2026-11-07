@@ -1,0 +1,31 @@
+name: 不具合の報告
+description: 動かない、おかしな結果が出る、落ちる
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        見つけてくれてありがとうございます。分かる範囲で構いません。
+        シミュレーションの数値がおかしいときは、`docs/accuracy.md` に既知の差があります。
+  - type: textarea
+    id: what
+    attributes:
+      label: 何が起きましたか
+      description: 期待した動きと、実際の動きを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現の手順
+      description: 開いたファイル (サンプル名など) と、押したボタンの順番。回路ファイル (.schjson / .pcbjson) を貼れると助かります。
+  - type: input
+    id: version
+    attributes:
+      label: バージョン
+      description: 例 v0.1.0-alpha.9 (ダウンロードしたリリース名)
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      description: 例 Windows 11

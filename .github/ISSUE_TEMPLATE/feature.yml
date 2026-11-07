@@ -1,0 +1,16 @@
+name: 要望・感想
+description: こんな機能がほしい、ここが分かりにくかった
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: どんなことをしたいですか
+      description: 機能の案より、やりたいこと (困っていること) を書いてもらえると助かります。
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: 補足
+      description: いま使っている他のソフトとの比較や、初学者として引っかかった点など。
