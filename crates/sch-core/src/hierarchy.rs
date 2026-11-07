@@ -439,6 +439,45 @@ struct Tie {
     child_pt: Pt,
     /// The first copy of this port of this child sheet (the others are the same by construction, they are checked once).
     first: bool,
+    /// The parts of this copy of the child sheet (and of the copies inside it), by their names in the flat sheet.
+    inside: Vec<String>,
+}
+
+/// Whether something can drive the wiring of input tie `i`: an output (or two-way) port tied to it, or a source, a supply or
+/// ground symbol or a library part outside the child copy itself; the search goes through resistors and coils.
+fn net_is_fed(flat: &Schematic, ties: &[Tie], group: &[Option<usize>], nets: &[(usize, crate::netlist::Net)], i: usize) -> bool {
+    let Some(start) = group[i] else { return true };
+    let me = &ties[i];
+    let kind_of = |refdes: &str| flat.components.iter().find(|c| c.refdes == refdes).map(|c| c.kind);
+    // the group of every pin that has a net
+    let group_of_pin = |refdes: &str, pin: &str| nets.iter().find(|(_, n)| n.pins.iter().any(|p| p.refdes == refdes && p.pin == pin)).map(|(g, _)| *g);
+    let mut seen = vec![start];
+    let mut todo = vec![start];
+    while let Some(g) = todo.pop() {
+        if ties.iter().enumerate().any(|(k, t)| k != i && t.dir != PortDir::In && group[k] == Some(g)) {
+            return true;
+        }
+        let Some((_, net)) = nets.iter().find(|(r, _)| *r == g) else { continue };
+        for p in &net.pins {
+            if me.inside.contains(&p.refdes) {
+                continue;
+            }
+            match kind_of(&p.refdes) {
+                Some(Kind::VSource | Kind::Header(_) | Kind::Power | Kind::Ground | Kind::Custom) => return true,
+                Some(Kind::Resistor | Kind::Inductor) => {
+                    let other = if p.pin == "1" { "2" } else { "1" };
+                    if let Some(h) = group_of_pin(&p.refdes, other)
+                        && !seen.contains(&h)
+                    {
+                        seen.push(h);
+                        todo.push(h);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    false
 }
 
 impl Schematic {
@@ -460,9 +499,19 @@ impl Schematic {
                     let key = (sub.sheet, port.name.clone());
                     let first = !seen.contains(&key);
                     seen.push(key);
-                    out.push(Tie { symbol: format!("{}{}", c.refdes, if inst.path.is_empty() { String::new() } else { format!(" ({})", inst.path.join(".")) }), port: port.name.clone(), dir: port.dir, parent_pt: (at.0 + dx, at.1), child_pt: (port.pos.0 + cdx, port.pos.1), first });
+                    out.push(Tie { symbol: format!("{}{}", c.refdes, if inst.path.is_empty() { String::new() } else { format!(" ({})", inst.path.join(".")) }), port: port.name.clone(), dir: port.dir, parent_pt: (at.0 + dx, at.1), child_pt: (port.pos.0 + cdx, port.pos.1), first, inside: self.copy_parts(&insts, &child_path) });
                 }
             }
+        }
+        out
+    }
+
+    /// The names, in the flat sheet, of the parts of the copy at `path` and of the copies inside it.
+    fn copy_parts(&self, insts: &[Instance], path: &[String]) -> Vec<String> {
+        let mut out = vec![];
+        for i in insts.iter().filter(|i| i.path.starts_with(path)) {
+            let suffix = i.path.join("_");
+            out.extend(self.parts(i.sheet).comps.iter().filter(|c| c.sub.is_none() && !c.kind.is_power_symbol()).map(|c| format!("{}_{suffix}", c.refdes)));
         }
         out
     }
@@ -523,7 +572,31 @@ impl Schematic {
         let ties = self.port_ties();
         let points: Vec<Pt> = ties.iter().flat_map(|t| [t.parent_pt, t.child_pt]).collect();
         let lonely = crate::netlist::lonely_points(flat, &points);
-        for t in &ties {
+        let parent_pts: Vec<Pt> = ties.iter().map(|t| t.parent_pt).collect();
+        let (group, nets) = crate::netlist::groups_at(flat, &parent_pts);
+        for (i, t) in ties.iter().enumerate() {
+            // two outputs tied together: each tries to hold the net at its own level
+            if t.dir == PortDir::Out
+                && let Some(g) = group[i]
+                && let Some(j) = (0..i).find(|&j| ties[j].dir == PortDir::Out && group[j] == Some(g))
+            {
+                let other = &ties[j];
+                out.push(Problem::new(
+                    Error,
+                    format!("出力のポート {} {} と {} {} が、同じネットにつながっています", t.symbol, t.port, other.symbol, other.port),
+                    Some(t.parent_pt),
+                    "出力どうしをつなぐと、2つが別々の電圧を出そうとして、ぶつかります (実際の回路なら壊れることもあります)。どちらかを入力のポートにするか、つなぎ方を見直しましょう。スイッチで切り替えたいときは、間にスイッチやゲートを入れます",
+                ));
+            }
+            // an input nothing feeds: the wire leads to no source, no output and no part that could drive it
+            if t.dir == PortDir::In && !lonely.contains(&t.parent_pt) && !net_is_fed(flat, &ties, &group, &nets, i) {
+                out.push(Problem::new(
+                    Warning,
+                    format!("{} の入力のポート {} に、信号を出すものがつながっていません", t.symbol, t.port),
+                    Some(t.parent_pt),
+                    "入力のポートは、外から信号や電圧をもらう口です。このピンにつながる線の先に、電源・信号源・ICの出力・別の記号の出力のポートが見つかりません (抵抗やコイルを通った先も調べました)。入力が決まらないと、子シートの中が動きません。信号を出す所までつなぎましょう。意図して浮かせるなら、このままで構いません",
+                ));
+            }
             // an output left alone is harmless; an input or a two-way port left alone is a floating pin
             if t.dir != PortDir::Out && lonely.contains(&t.parent_pt) {
                 out.push(Problem::new(
@@ -531,18 +604,6 @@ impl Schematic {
                     format!("{} のポート {} が、つながっていません", t.symbol, t.port),
                     Some(t.parent_pt),
                     "シートの記号のピンに、線もラベルもついていません。入力のピンが浮いていると電圧が決まらず、動作が不安定になります。線かラベルでつなぎましょう。使わないポートなら、そのままで構いません",
-                ));
-            }
-            // two outputs tied together: each tries to hold the net at its own level
-            if t.dir == PortDir::Out
-                && let Some(net) = crate::netlist::net_at(flat, t.parent_pt)
-                && let Some(other) = ties.iter().take_while(|o| !std::ptr::eq(*o, t)).find(|o| o.dir == PortDir::Out && crate::netlist::net_at(flat, o.parent_pt).as_deref() == Some(net.as_str()))
-            {
-                out.push(Problem::new(
-                    Error,
-                    format!("出力のポート {} {} と {} {} が、同じネットにつながっています", t.symbol, t.port, other.symbol, other.port),
-                    Some(t.parent_pt),
-                    "出力どうしをつなぐと、2つが別々の電圧を出そうとして、ぶつかります (実際の回路なら壊れることもあります)。どちらかを入力のポートにするか、つなぎ方を見直しましょう。スイッチで切り替えたいときは、間にスイッチやゲートを入れます",
                 ));
             }
             if t.first && lonely.contains(&t.child_pt) {
@@ -630,6 +691,44 @@ mod problem_tests {
         s.labels.push(Label { pos: pin(&s, b, "OUT"), text: "MID".into() });
         let p = erc(&s).into_iter().find(|p| p.message.contains("出力のポート")).expect("two outputs");
         assert_eq!(p.severity, crate::netlist::Severity::Error);
+    }
+
+    #[test]
+    fn an_input_nothing_feeds_is_a_warning_until_a_source_or_an_output_is_wired() {
+        let mut s = child();
+        let a = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let pin = |s: &Schematic, i: usize, n: &str| s.components[i].pins().into_iter().find(|(p, _)| p == n).unwrap().1;
+        let fed = |s: &Schematic| !messages(s).iter().any(|m| m.contains("入力のポート IN に"));
+        // a name that nothing else uses: the pin is wired but leads nowhere
+        s.labels.push(Label { pos: pin(&s, a, "IN"), text: "SIG".into() });
+        assert!(!fed(&s), "{:?}", messages(&s));
+        // a voltage source on that name feeds it
+        let v = s.add(Kind::VSource, (60, 60), 0);
+        let vp = s.components[v].pins()[0].1;
+        s.labels.push(Label { pos: vp, text: "SIG".into() });
+        assert!(fed(&s), "{:?}", messages(&s));
+        // through a resistor from a source also counts
+        s.labels.retain(|l| l.text != "SIG" || l.pos != vp);
+        assert!(!fed(&s));
+        let r = s.add(Kind::Resistor, (60, 90), 0);
+        let rp = s.components[r].pins();
+        s.labels.push(Label { pos: rp[0].1, text: "SIG".into() });
+        s.labels.push(Label { pos: rp[1].1, text: "SRC".into() });
+        s.labels.push(Label { pos: vp, text: "SRC".into() });
+        assert!(fed(&s), "{:?}", messages(&s));
+    }
+
+    #[test]
+    fn an_output_of_another_symbol_feeds_an_input() {
+        let mut s = child();
+        let a = s.add_sheet_symbol(1, (10, 10)).unwrap();
+        let b = s.add_sheet_symbol(1, (10, 40)).unwrap();
+        let pin = |s: &Schematic, i: usize, n: &str| s.components[i].pins().into_iter().find(|(p, _)| p == n).unwrap().1;
+        s.labels.push(Label { pos: pin(&s, a, "OUT"), text: "MID".into() });
+        s.labels.push(Label { pos: pin(&s, b, "IN"), text: "MID".into() });
+        let m = messages(&s);
+        assert!(!m.iter().any(|m| m.contains("CH2 の入力のポート IN に")), "{m:?}");
+        assert!(m.iter().any(|m| m.contains("CH1 の入力のポート IN")) || m.iter().any(|m| m.contains("CH1 のポート IN")), "CH1 IN is left alone: {m:?}");
     }
 
     #[test]

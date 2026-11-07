@@ -589,6 +589,14 @@ fn dangling_wire_ends(s: &Schematic) -> Vec<Pt> {
     out
 }
 
+/// For each of `pts`, the group it belongs to once names are joined (as `extract` does it), and every net with its group.
+/// A point that is not in the wiring at all has no group; a group with no component pin has no net.
+pub(crate) fn groups_at(s: &Schematic, pts: &[Pt]) -> (Vec<Option<usize>>, Vec<(usize, Net)>) {
+    let (mut cn, groups) = extract_groups(s, None);
+    let at = pts.iter().map(|p| cn.ids.get(p).copied().map(|id| cn.dsu.find(id))).collect();
+    (at, groups)
+}
+
 /// The points among `pts` that nothing is attached to: no pin, wire end or other label shares their wiring (before names are
 /// joined). Used for the ports of a sheet symbol, which are tied by a label each.
 pub(crate) fn lonely_points(s: &Schematic, pts: &[Pt]) -> Vec<Pt> {
