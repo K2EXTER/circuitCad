@@ -36,7 +36,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## pcb-core (`crates/pcb-core/src`) — 詳細: `docs/code-notes/pcb-core.md`(目次。ファイル一覧は `pcb-core/output.md` の末尾)
 - モデル `model.rs`(層は `Side`、`NetClass`、`Rules`)/ フットプリント `footprints.rs` `package.rs` `parts.rs` / 回路図取込 `netlist.rs`
 - `drc/`(clearance・connectivity・path・pour・decoupling・thermal・silk・acute・area・slit・patch・geo …)/ `current.rs` `irdrop.rs` `impedance.rs` `diffpair.rs` `requirements.rs`
-- 配置: `autoplace.rs` `align.rs` `connectors.rs` `orient.rs` `swap.rs` `nudge.rs`(配線後に近くの部品を動かして引き直す)`renumber.rs`(部品番号を位置順に振り直す)`replicas.rs`(繰り返し構造の検出)
+- 配置: `autoplace.rs` `align.rs` `connectors.rs` `orient.rs` `swap.rs` `nudge.rs`(配線後に近くの部品を動かして引き直す)`renumber.rs`(部品番号を位置順に振り直す)`snippet.rs`(配置・配線のスニペット)`replicas.rs`(繰り返し構造の検出)
 - 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
 - 配線: `autoroute.rs` `shove.rs` `ratsnest.rs` `reroute.rs` `merge.rs` `breakout.rs` `bridge.rs` `trunk.rs` `slot.rs` `padentry.rs` `meander.rs` `smooth.rs` `quality.rs`
 - 3D・ケース: `body.rs` `model3d.rs` `step.rs` `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` / 絵と図: `svg.rs` `picture.rs`
@@ -58,7 +58,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 エディタは1つの型を複数ファイルの `impl` に分割している(子モジュールから親の非公開フィールドが見える)。
 
 - `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel` `analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`requirements`(設計の要件の窓)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
-- `board_editor/`(`BoardEditor`): `mod.rs` 型 / `canvas` `interact` `draw` `panel` / `select` `route` `tools` `ribbon` `padlead` `livepath` `tracking` `shoving` / `align` `lengths` `pairs` `layers` `netclass` `netwindow` `currentwindow` `zoneedit` `repair` `ruler` `measure`(距離を測るツール)`smoothing` `linked` `netglow` `width` `order` / `file` `actions` `history` `view` / `view3d/`(camera・scene・glow)と `raster3d.rs`(3D)/ `requirements.rs`
+- `board_editor/`(`BoardEditor`): `mod.rs` 型 / `canvas` `interact` `draw` `panel` / `select` `route` `tools` `ribbon` `padlead` `livepath` `tracking` `shoving` / `align` `lengths` `pairs` `layers` `netclass` `netwindow` `currentwindow` `zoneedit` `repair` `ruler` `measure`(距離を測るツール)`snippet``smoothing` `linked` `netglow` `width` `order` / `file` `actions` `history` `view` / `view3d/`(camera・scene・glow)と `raster3d.rs`(3D)/ `requirements.rs`
 
 ## 「〜を変えたい」早見表
 - 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel.rs` にボタン + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル

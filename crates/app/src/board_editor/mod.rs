@@ -683,6 +683,7 @@ pub(crate) use draw::capsule;
 mod order;
 mod measure;
 mod ruler;
+mod snippet;
 pub mod lesson;
 mod panel;
 #[cfg(test)]

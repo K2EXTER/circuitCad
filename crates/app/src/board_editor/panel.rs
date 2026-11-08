@@ -129,6 +129,17 @@ impl BoardEditor {
                 if reflect {
                     self.to_schematic_request = true;
                 }
+                {
+                    let bar = crate::widgets::segment_row(ui, &[("選択を保存…", true), ("スニペットを置く…", true)]);
+                    bar[0].clone().on_hover_text("選んだ部品と、その間の配線・ビアを、ファイル (.ccbsnip) に保存します。よく使う電源まわりの配置と配線などを、別の基板で使えます。部品の位置と向きは、選んだ範囲の真ん中からの相対で残ります");
+                    bar[1].clone().on_hover_text("保存したスニペットを、いま見えている画面の真ん中に置きます。同じ部品番号・同じフットプリントの部品を、保存した並べ方に動かし、保存した配線とビアを足します。動かした部品につながっていた古い配線は消えます。この基板にない部品や、固定した部品は動かさず、結果の文に出します。「元に戻す」で戻せます");
+                    if bar[0].clicked() {
+                        self.save_snippet_dialog();
+                    }
+                    if bar[1].clicked() {
+                        self.load_snippet_dialog();
+                    }
+                }
                 if !self.board.parts.is_empty() {
                     let bar = crate::widgets::segment_row(ui, &[("部品番号を位置順に", true)]);
                     bar[0].clone().on_hover_text("部品番号 (R1・C2 など) を、基板の上の位置の順に振り直します。上の段から下の段へ、各段は左から右です。回路図の部品番号、要件の表、「接続しない」の印も同じに変わります。固定した部品の番号は変えません。「元に戻す」で戻せます (回路図の側も、回路図で元に戻してください)");
