@@ -41,6 +41,8 @@ pub enum Kind {
     Led,
     /// A pin header: plastic body and long pins.
     Header,
+    /// A TO-92 (the small black transistor with a flat face): the body across the row of its three legs.
+    To92,
     /// A TO-220 standing on the board: plastic body with a metal tab above it.
     To220,
     /// A surface-mount IC or transistor with legs.
@@ -70,6 +72,9 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     if fp.contains("to-220") {
         return Kind::To220;
     }
+    if fp.contains("to-92") {
+        return Kind::To92;
+    }
     match prefix(refdes) {
         'R' | 'L' | 'C' | 'D' if fp.contains("5mm") => Kind::Led,
         'R' if fp.contains("axial") => Kind::Axial,
@@ -85,7 +90,8 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
 
 /// Footprints (a part of the name, in lower case) of parts that stand tall, with the typical height of the body in mm and its colour.
 /// Estimates from the usual packages: the real part may be a few mm different, so give the footprint a `height` when it matters.
-const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 5] = [
+const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 6] = [
+    ("xtal_3225", 0.9, [190, 190, 200]),
     ("terminalblock", 10.0, [30, 110, 60]),
     ("transformer", 25.0, [60, 60, 70]),
     ("batteryholder_aa", 16.0, [40, 40, 44]),
@@ -374,6 +380,16 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             let mut v = vec![solid([lo.x - 0.5, lo.y - 0.5, 0.0], [hi.x + 0.5, hi.y + 0.5, h], color, b)];
             for p in &pads {
                 v.push(solid([p.pos.x - 0.32, p.pos.y - 0.32, 0.0], [p.pos.x + 0.32, p.pos.y + 0.32, h + 6.0], GOLD, b));
+            }
+            v
+        }
+        Kind::To92 => {
+            // 4.8 mm across the legs, 3.8 mm deep, the legs a little way up into the body
+            let (len, thick) = (4.8, 3.8);
+            let (a, p) = if along_x { ([cx - len / 2.0, cy - thick / 2.0], [cx + len / 2.0, cy + thick / 2.0]) } else { ([cx - thick / 2.0, cy - len / 2.0], [cx + thick / 2.0, cy + len / 2.0]) };
+            let mut v = vec![solid([a[0], a[1], 0.8], [p[0], p[1], h], color, b)];
+            for q in &pads {
+                v.push(solid([q.pos.x - 0.25, q.pos.y - 0.25, 0.0], [q.pos.x + 0.25, q.pos.y + 0.25, 0.9], SILVER, b));
             }
             v
         }
@@ -766,5 +782,23 @@ mod tests {
         assert_eq!(r.too_tall.len(), 1);
         // a terminal block is 10 mm tall, a footprint's own height still wins
         assert_eq!(part_style("J1", "TerminalBlock_4P_5.08").0, 10.0);
+    }
+
+    #[test]
+    fn a_to_92_is_a_body_on_three_legs_and_a_smd_crystal_is_low() {
+        let mut b = Board::new("x", 30.0, 20.0);
+        for (i, x) in [10.0, 12.54, 15.08].iter().enumerate() {
+            let mut p = Pad::new(Point::new(*x, 10.0), PadShape::Oval { w: 1.4, h: 1.4 }, Some(0.8), Side::Top);
+            p.refdes = "Q1".into();
+            p.pin = format!("{}", i + 1);
+            b.pads.push(p);
+        }
+        b.parts.push(Part { refdes: "Q1".into(), value: String::new(), footprint: "TO-92_inline".into(), pos: Point::new(12.54, 10.0), rot: 0, side: Side::Top });
+        assert_eq!(part_kind("Q1", "TO-92_inline"), Kind::To92);
+        let boxes = part_boxes(&b);
+        assert_eq!(boxes.len(), 1 + 3, "the body and three legs");
+        let body = boxes.iter().max_by(|a, c| (a.hi[0] - a.lo[0]).total_cmp(&(c.hi[0] - c.lo[0]))).unwrap();
+        assert!(((body.hi[0] - body.lo[0]) - 4.8).abs() < 1e-9 && ((body.hi[1] - body.lo[1]) - 3.8).abs() < 1e-9, "the package's size, not the pads'");
+        assert_eq!(part_style("Y1", "XTAL_3225").0, 0.9);
     }
 }
