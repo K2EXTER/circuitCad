@@ -217,6 +217,12 @@ struct Visible {
     ruler: bool,
     tracks: bool,
     vias: bool,
+    /// The hatched keep-out areas (they still hold while hidden).
+    keepouts: bool,
+    /// The dimension lines kept on the board.
+    dimensions: bool,
+    /// The marks of the rule check while one works (the check itself goes on).
+    drc_marks: bool,
 }
 
 /// Where the declared net currents come from.
@@ -575,7 +581,7 @@ impl Default for BoardEditor {
             redo: vec![],
             pick: Pickable::ALL,
             check_focus: None,
-            vis: Visible { top: true, bottom: true, silk: true, parts: true, airwires: true, nets: true, zones: true, ruler: true, tracks: true, vias: true, inner_hidden: 0 },
+            vis: Visible { top: true, bottom: true, silk: true, parts: true, airwires: true, nets: true, zones: true, ruler: true, tracks: true, vias: true, keepouts: true, dimensions: true, drc_marks: true, inner_hidden: 0 },
             zone_net: "GND".into(),
             zone_clearance: 0.3,
             zone_thermal: true,

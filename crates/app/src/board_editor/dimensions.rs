@@ -45,7 +45,7 @@ impl BoardEditor {
     }
 
     pub(super) fn draw_dimensions(&self, painter: &egui::Painter, rect: Rect) {
-        if self.board.dimensions.is_empty() {
+        if self.board.dimensions.is_empty() || !self.vis.dimensions {
             return;
         }
         let col = Color32::from_rgb(120, 175, 235);

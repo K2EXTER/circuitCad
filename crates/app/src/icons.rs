@@ -41,6 +41,10 @@ pub enum Icon {
     Gap,
     /// Two sheets of paper, one over the other (the schematic sheets).
     Sheet,
+    /// A dimension line: two extension lines and the measured line with arrows between them.
+    Dimension,
+    /// A finding of the rule check: a ring with a cross.
+    DrcMark,
     Layers,
     Eye,
     EyeOff,
@@ -168,6 +172,22 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             p.line_segment([q(0.15, 0.5), q(0.28, 0.6)], Stroke::new(1.0, c));
             p.line_segment([q(0.85, 0.5), q(0.72, 0.4)], Stroke::new(1.0, c));
             p.line_segment([q(0.85, 0.5), q(0.72, 0.6)], Stroke::new(1.0, c));
+        }
+        Icon::Dimension => {
+            for x in [0.15, 0.85] {
+                p.line_segment([q(x, 0.2), q(x, 0.85)], Stroke::new(1.0, c));
+            }
+            p.line_segment([q(0.15, 0.35), q(0.85, 0.35)], s);
+            for (x, d) in [(0.15, 0.13), (0.85, -0.13)] {
+                p.line_segment([q(x, 0.35), q(x + d, 0.25)], Stroke::new(1.0, c));
+                p.line_segment([q(x, 0.35), q(x + d, 0.45)], Stroke::new(1.0, c));
+            }
+            p.line_segment([q(0.3, 0.7), q(0.7, 0.7)], Stroke::new(1.0, c));
+        }
+        Icon::DrcMark => {
+            p.circle_stroke(q(0.5, 0.5), r.width() * 0.36, s);
+            p.line_segment([q(0.33, 0.33), q(0.67, 0.67)], s);
+            p.line_segment([q(0.33, 0.67), q(0.67, 0.33)], s);
         }
         Icon::Ruler => {
             p.rect_stroke(Rect::from_min_max(q(0.08, 0.35), q(0.92, 0.65)), 1.0, s, egui::StrokeKind::Inside);

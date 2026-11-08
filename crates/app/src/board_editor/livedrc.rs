@@ -115,7 +115,7 @@ impl BoardEditor {
         }
         let red = Color32::from_rgb(255, 70, 70);
         let mut tip: Option<(Pos2, &str)> = None;
-        for v in found.iter() {
+        for v in found.iter().filter(|_| self.vis.drc_marks) {
             let c = self.to_screen(rect, v.at);
             if !rect.expand(20.0).contains(c) {
                 continue;
@@ -138,7 +138,11 @@ impl BoardEditor {
         }
         // the count in the corner, so a finding off the screen is not missed
         let n = found.len();
-        let text = format!("ルール違反 {n} 件 (赤い × の所。ポインタを合わせると内容)");
+        let text = if self.vis.drc_marks {
+            format!("ルール違反 {n} 件 (赤い × の所。ポインタを合わせると内容)")
+        } else {
+            format!("ルール違反 {n} 件 (印は隠しています。右上の「物の表示とロック」の「点検の印」で出せます)")
+        };
         let galley = painter.layout_no_wrap(text, egui::FontId::proportional(14.0), Color32::WHITE);
         let at = Pos2::new(rect.left() + 44.0, rect.bottom() - 30.0 - galley.size().y);
         painter.rect_filled(Rect::from_min_size(at, galley.size()).expand(4.0), 4.0, red.gamma_multiply(0.8));

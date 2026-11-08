@@ -56,12 +56,17 @@ impl BoardEditor {
                         let before = self.pick;
                         // (icon, name, tip, eye, lock): None where a kind has no such switch
                         egui::Grid::new("view_lock_grid").spacing(Vec2::new(4.0, 2.0)).show(ui, |ui| {
+                            let req = pcb_core::requirements::any(&self.board);
+                            let sheets = !self.board.part_sheets.is_empty();
                             let v = self.vis;
-                            let mut all_shown = v.parts && v.tracks && v.vias && v.zones && v.silk && v.airwires && v.nets && v.ruler;
+                            let mut all_shown = v.parts && v.tracks && v.vias && v.zones && v.silk && v.airwires && v.nets && v.ruler && v.keepouts && v.dimensions && v.drc_marks
+                                && (!sheets || self.show_sheets) && (!req || (self.show_req_marks && self.show_req_lines));
                             if icon_switch(ui, Icon::Eye, Icon::EyeOff, &mut all_shown, "すべての表示を、まとめて出す / 隠す (下の目の一括操作)。いまは全部が出ているときだけ明るくなります").changed() {
-                                (self.vis.tracks, self.vis.vias, self.vis.zones, self.vis.silk) = (all_shown, all_shown, all_shown, all_shown);
-                                (self.vis.airwires, self.vis.nets, self.vis.ruler) = (all_shown, all_shown, all_shown);
-                                self.vis.parts = all_shown;
+                                let a = all_shown;
+                                (self.vis.tracks, self.vis.vias, self.vis.zones, self.vis.silk, self.vis.parts) = (a, a, a, a, a);
+                                (self.vis.airwires, self.vis.nets, self.vis.ruler) = (a, a, a);
+                                (self.vis.keepouts, self.vis.dimensions, self.vis.drc_marks) = (a, a, a);
+                                (self.show_sheets, self.show_req_marks, self.show_req_lines) = (a, a, a);
                             }
                             ui.label("すべて");
                             let p = self.pick;
@@ -90,6 +95,13 @@ impl BoardEditor {
                                     ui.label(name);
                                 });
                             };
+                            // a small grey heading over a group of rows (in the name column)
+                            let head = |ui: &mut egui::Ui, text: &str| {
+                                ui.label("");
+                                ui.label(egui::RichText::new(text).small().color(Color32::from_rgb(85, 100, 115)));
+                                ui.end_row();
+                            };
+                            head(ui, "基板の物");
                             eye(ui, &mut self.vis.parts, "部品 (部品のパッド、外形、部品番号) を表示します。隠すと、部品の下の配線やベタが見やすくなります。隠している間も、配線やビアは、そのまま選べます");
                             kind(ui, Icon::Part, "部品");
                             lock(ui, &mut self.pick.parts, "部品をロックします。選べず、ドラッグでも動きません (範囲選択になります)");
@@ -114,28 +126,47 @@ impl BoardEditor {
                             kind(ui, Icon::Silk, "シルク");
                             lock(ui, &mut self.pick.silk, "部品に属さないシルク線をロックします");
                             ui.end_row();
+                            head(ui, "作業の補助");
                             eye(ui, &mut self.vis.airwires, "未配線 (まだつながっていない接続を示す黄色の線) を表示します");
                             kind(ui, Icon::Airwire, "未配線");
-                            none(ui);
-                            ui.end_row();
-                            if !self.board.part_sheets.is_empty() {
-                                eye(ui, &mut self.show_sheets, "回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります");
-                                kind(ui, Icon::Sheet, "シートの色");
-                                none(ui);
-                                ui.end_row();
-                            }
-                            eye(ui, &mut self.show_req_marks, "回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎならピンク)。表がないときは何も出ません");
-                            kind(ui, Icon::Frame, "要件の組 (枠)");
-                            none(ui);
-                            ui.end_row();
-                            eye(ui, &mut self.show_req_lines, "回路図の「設計の要件」の、離す組を、いちばん近い2つのパッドを結ぶ線と距離で表示します (足りなければピンク)。表がないときは何も出ません");
-                            kind(ui, Icon::Gap, "要件の距離 (線)");
                             none(ui);
                             ui.end_row();
                             eye(ui, &mut self.vis.nets, "パッドのそばに、回路図でのつながりの名前 (ネット名) を表示します");
                             kind(ui, Icon::Label, "ネット名");
                             none(ui);
                             ui.end_row();
+                            eye(ui, &mut self.vis.keepouts, "禁止領域 (斜線の範囲) を表示します。隠しても領域は効いたままで、DRC は中の配線・ビア・部品を指摘し、自動配線とベタは領域をよけます");
+                            kind(ui, Icon::Keepout, "禁止領域");
+                            none(ui);
+                            ui.end_row();
+                            eye(ui, &mut self.vis.dimensions, "基板に残した寸法線を表示します。隠しても、DXF と SVG の図には出ます");
+                            kind(ui, Icon::Dimension, "寸法線");
+                            none(ui);
+                            ui.end_row();
+                            eye(ui, &mut self.vis.drc_marks, "作業中の点検で見つかったルール違反の印 (赤い ×) を表示します。隠しても点検は続き、左下に件数が出ます。点検そのものを止めるのは「③ 確認して発注」の「作業中も点検する」です");
+                            kind(ui, Icon::DrcMark, "点検の印");
+                            none(ui);
+                            ui.end_row();
+                            if sheets || req {
+                                head(ui, "回路図から");
+                            }
+                            if sheets {
+                                eye(ui, &mut self.show_sheets, "回路図のシート(タブ)ごとに、部品のまわりを色で囲み、グループの角にシート名を出します。どの部品がどのシートのものか、基板の上で見分けられます。シートの一覧は、左のパネルにあります");
+                                kind(ui, Icon::Sheet, "シートの色");
+                                none(ui);
+                                ui.end_row();
+                            }
+                            if req {
+                                eye(ui, &mut self.show_req_marks, "回路図の「設計の要件」の、近くに置く組を、枠で囲んで表示します (守れていれば緑、広がりすぎならピンク)");
+                                kind(ui, Icon::Frame, "要件の組 (枠)");
+                                none(ui);
+                                ui.end_row();
+                                eye(ui, &mut self.show_req_lines, "回路図の「設計の要件」の、離す組を、いちばん近い2つのパッドを結ぶ線と距離で表示します (足りなければピンク)");
+                                kind(ui, Icon::Gap, "要件の距離 (線)");
+                                none(ui);
+                                ui.end_row();
+                            }
+                            head(ui, "画面");
                             eye(ui, &mut self.vis.ruler, "画面の上と左に、実際の寸法 (mm) の目盛りを出します。オレンジの印がカーソルの位置です");
                             kind(ui, Icon::Ruler, "定規 (mm)");
                             none(ui);
@@ -233,5 +264,54 @@ impl BoardEditor {
                 ui.ctx().request_repaint(); // the padding follows the new widths
             }
         }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// How many shapes the keep-outs, the dimensions and the marks of the live check draw.
+    fn drawn(e: &BoardEditor) -> usize {
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0));
+        let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(rect), ..Default::default() }, |ui| {
+            let painter = ui.painter().clone();
+            e.draw_keepouts(&painter, rect);
+            e.draw_dimensions(&painter, rect);
+            e.draw_live_drc(&painter, rect, None);
+        });
+        out.textures_delta.clear();
+        out.shapes.len()
+    }
+
+    #[test]
+    fn the_new_eyes_hide_keepouts_dimensions_and_the_marks_but_the_count_stays() {
+        let mut e = BoardEditor::default();
+        e.board = pcb_core::Board::new("t", 40.0, 30.0);
+        e.fit_view(Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0)));
+        e.board.keepouts.push(pcb_core::keepout::Keepout::new(vec![Point::new(10.0, 10.0), Point::new(20.0, 10.0), Point::new(20.0, 20.0), Point::new(10.0, 20.0)]));
+        e.board.tracks.push(pcb_core::Track { side: Side::Top, a: Point::new(2.0, 15.0), b: Point::new(38.0, 15.0), width: 0.25 });
+        pcb_core::dimension::add_outline_dimensions(&mut e.board).unwrap();
+        e.settle_live_drc();
+        assert!(!e.live_findings().is_empty());
+        let all = drawn(&e);
+        for (name, f) in [
+            ("keepouts", (|e: &mut BoardEditor| e.vis.keepouts = false) as fn(&mut BoardEditor)),
+            ("dimensions", |e| e.vis.dimensions = false),
+            ("marks", |e| e.vis.drc_marks = false),
+        ] {
+            let mut e2 = BoardEditor { board: e.board.clone(), ..Default::default() };
+            (e2.zoom, e2.pan) = (e.zoom, e.pan);
+            e2.settle_live_drc();
+            f(&mut e2);
+            assert!(drawn(&e2) < all, "{name}");
+        }
+        // with the marks hidden the check still runs, and the badge says where to show them again
+        e.vis.drc_marks = false;
+        assert!(!e.live_findings().is_empty());
+        // the keep-out still holds for the DRC while hidden
+        e.vis.keepouts = false;
+        assert!(drc::check(&e.board).iter().any(|v| v.message.contains("禁止領域")));
     }
 }

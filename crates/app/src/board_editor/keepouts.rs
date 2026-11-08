@@ -15,6 +15,9 @@ impl BoardEditor {
     }
 
     pub(super) fn draw_keepouts(&self, painter: &egui::Painter, rect: Rect) {
+        if !self.vis.keepouts {
+            return;
+        }
         let col = Color32::from_rgb(235, 90, 90);
         for k in self.board.keepouts.iter().filter(|k| k.polygon.len() >= 3) {
             let pts: Vec<Pos2> = k.polygon.iter().map(|p| self.to_screen(rect, *p)).collect();

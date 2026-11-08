@@ -2800,7 +2800,7 @@ fn triangle_breakdown() {
         let n = count(&mut e);
         println!("{name:40} off: {n:7}  ->  {:7} ({:.1}%)", all as i64 - n as i64, (all as f64 - n as f64) * 100.0 / all as f64);
     }
-    e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, inner_hidden: u32::MAX };
+    e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, keepouts: false, dimensions: false, drc_marks: false, inner_hidden: u32::MAX };
     println!("everything off (frame, grid, outline, panels): {}", count(&mut e));
     let grid = e.grid;
     e.grid = 0.0;
@@ -3420,7 +3420,7 @@ fn fixed_part_split() {
     set_multisampled(true);
     let view = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0));
     e.fit_view(view);
-    e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, inner_hidden: u32::MAX };
+    e.vis = Visible { top: false, bottom: false, silk: false, parts: false, airwires: false, nets: false, zones: false, ruler: false, tracks: false, vias: false, keepouts: false, dimensions: false, drc_marks: false, inner_hidden: u32::MAX };
     let ctx = egui::Context::default();
     let mut shapes = vec![];
     for _ in 0..3 {
