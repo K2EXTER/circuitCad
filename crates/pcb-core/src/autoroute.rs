@@ -577,6 +577,30 @@ fn build_grid(board: &Board, opt: &RouteOptions, nets: &mut Vec<String>) -> Opti
             }
         }
     }
+    // keep-out areas: no track (its edge and clearance included) and no via (its ring) inside
+    for k in board.keepouts.iter().filter(|k| k.polygon.len() >= 3 && (k.tracks || k.vias)) {
+        let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for p in &k.polygon {
+            (x0, y0, x1, y1) = (x0.min(p.x), y0.min(p.y), x1.max(p.x), y1.max(p.y));
+        }
+        let half_trk = opt.track_width / 2.0;
+        let half_via = opt.via_diameter / 2.0;
+        let (i0, j0, i1, j1) = grid.cells_near((x0, y0, x1, y1), half_trk.max(half_via) + g);
+        for j in j0..=j1 {
+            for i in i0..=i1 {
+                let d = k.distance(grid.pos(i, j));
+                let idx = j * nx + i;
+                for l in 0..nl {
+                    if k.tracks && k.on(grid.layers[l]) && d < half_trk + 1e-9 {
+                        grid.trk[l][idx] = -1;
+                    }
+                }
+                if k.vias && d < half_via + 1e-9 {
+                    grid.no_via[idx] = true;
+                }
+            }
+        }
+    }
     if opt.no_vias {
         grid.no_via.iter_mut().for_each(|c| *c = true);
     }

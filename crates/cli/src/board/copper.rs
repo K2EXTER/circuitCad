@@ -127,6 +127,62 @@ impl Session {
         Ok(obj(json!({"dimensions": list})))
     }
 
+    pub(super) fn board_forbid(&mut self, rest: &[String]) -> Res {
+        // board forbid | forbid rect=x0,y0,x1,y1 | poly=x,y;x,y;x,y [layers=top,bottom] [tracks=0] [vias=0] [pours=0] [parts=0] [name=]
+        // | forbid remove N | forbid clear: keep-out areas (the DRC reports what is inside, the router goes round, pours leave them)
+        let (pos, kv) = options(rest);
+        let board = self.board_mut()?;
+        match pos.first().map(String::as_str) {
+            Some("remove") => {
+                let i: usize = pos.get(1).and_then(|v| v.parse().ok()).ok_or("board forbid remove N (the index in the list)")?;
+                if i >= board.keepouts.len() {
+                    return Err(format!("there is no area {i} (there are {})", board.keepouts.len()));
+                }
+                board.keepouts.remove(i);
+            }
+            Some("clear") => board.keepouts.clear(),
+            Some(o) => return Err(format!("board forbid {o}: use rect= / poly= to add, remove N, clear (or nothing for the list)")),
+            None => {
+                let nums = |v: &str| -> Result<Vec<f64>, String> { v.split([',', ';']).map(|x| x.trim().parse::<f64>().map_err(|_| format!("{x} is not a number"))).collect() };
+                let polygon = if let Some(v) = opt(&kv, "rect") {
+                    let r = nums(v)?;
+                    let [x0, y0, x1, y1] = r.as_slice() else { return Err("rect=x0,y0,x1,y1 (four numbers, mm)".into()) };
+                    let (x0, x1, y0, y1) = (x0.min(*x1), x0.max(*x1), y0.min(*y1), y0.max(*y1));
+                    vec![pcb_core::model::Point::new(x0, y0), pcb_core::model::Point::new(x1, y0), pcb_core::model::Point::new(x1, y1), pcb_core::model::Point::new(x0, y1)]
+                } else if let Some(v) = opt(&kv, "poly") {
+                    let r = nums(v)?;
+                    if r.len() < 6 || r.len() % 2 != 0 {
+                        return Err("poly=x,y;x,y;x,y (three points or more, mm)".into());
+                    }
+                    r.chunks(2).map(|c| pcb_core::model::Point::new(c[0], c[1])).collect()
+                } else {
+                    vec![]
+                };
+                if !polygon.is_empty() {
+                    let mut k = pcb_core::keepout::Keepout::new(polygon);
+                    k.name = opt(&kv, "name").unwrap_or("").to_string();
+                    if let Some(l) = opt(&kv, "layers") {
+                        k.layers = l.split(',').map(parse_layer).collect::<Result<_, _>>()?;
+                    }
+                    let off = |n: &str| opt(&kv, n) == Some("0");
+                    (k.tracks, k.vias, k.pours, k.parts) = (!off("tracks"), !off("vias"), !off("pours"), !off("parts"));
+                    if !(k.tracks || k.vias || k.pours || k.parts) {
+                        return Err("an area that forbids nothing: leave at least one of tracks, vias, pours, parts on".into());
+                    }
+                    board.keepouts.push(k);
+                }
+            }
+        }
+        let inside = pcb_core::keepout::keepout_checks(board);
+        let list: Vec<Value> = board
+            .keepouts
+            .iter()
+            .enumerate()
+            .map(|(i, k)| json!({"index": i, "name": k.name, "points": k.polygon.iter().map(|p| [p.x, p.y]).collect::<Vec<_>>(), "layers": if k.layers.is_empty() { vec!["all".to_string()] } else { k.layers.iter().map(|s| layer_name(*s)).collect() }, "forbids": k.what()}))
+            .collect();
+        Ok(obj(json!({"areas": list, "inside": inside.iter().map(|v| json!({"at": [v.at.x, v.at.y], "message": v.message})).collect::<Vec<_>>()})))
+    }
+
     pub(super) fn board_pinlabels(&mut self, rest: &[String]) -> Res {
         // board pinlabels [height=1.0]: the names of the pins of the pin headers (`pinnames` in the circuit) on the silk beside the pads
         let (_, kv) = options(rest);

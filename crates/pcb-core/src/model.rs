@@ -713,6 +713,9 @@ pub struct Board {
     /// Dimensions kept on the board (a drawing layer: the editor, the DXF and the SVG show them; the Gerber files do not).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dimensions: Vec<crate::dimension::Dimension>,
+    /// Keep-out areas: no tracks / vias / pours / parts inside (`keepout.rs`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keepouts: Vec<crate::keepout::Keepout>,
     pub rules: Rules,
 }
 
@@ -804,6 +807,7 @@ impl Board {
             pin_map: Default::default(),
             label_offsets: Default::default(),
             dimensions: vec![],
+            keepouts: vec![],
             rules: Rules::default(),
         }
     }

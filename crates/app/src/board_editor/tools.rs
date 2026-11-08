@@ -85,6 +85,7 @@ impl BoardEditor {
                     self.status = format!("図形を足しましたが、銅が増えません。このネット ({}) のパッド・ビア・配線のどれにも触れていないので、孤立した銅として消えています (うすい灰色の破線で見えます)。パッドやビア・配線にかかるように描いてください", self.zone_net);
                 }
             }
+            Tool::Keepout => self.add_keepout(shape.flatten()),
             _ => {}
         }
     }
@@ -246,7 +247,7 @@ impl BoardEditor {
     }
 
     /// A click while a polygon is drawn: it adds a corner, an arc, or finishes a circle or a rectangle. A click on the first point closes it.
-    fn polygon_click(&mut self, p: Point) {
+    pub(super) fn polygon_click(&mut self, p: Point) {
         let near_first = self.poly.len() >= 3 && self.poly[0].dist(p) < 6.0 / self.zoom as f64;
         match self.poly_mode {
             PolyMode::Lines => {
@@ -364,7 +365,7 @@ impl BoardEditor {
                     }
                 }
             },
-            Tool::OutlinePoly | Tool::Zone => self.polygon_click(p),
+            Tool::OutlinePoly | Tool::Zone | Tool::Keepout => self.polygon_click(p),
             Tool::PadTh => {
                 self.checkpoint();
                 self.board.pads.push(Pad::new(p, PadShape::Circle { d: self.pad_size }, Some(self.pad_drill), self.side.outer()));

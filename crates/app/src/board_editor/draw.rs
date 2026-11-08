@@ -670,7 +670,7 @@ impl BoardEditor {
                     }
                 }
             }
-            Tool::OutlinePoly | Tool::Zone => {
+            Tool::OutlinePoly | Tool::Zone | Tool::Keepout => {
                 let col = match (self.tool, self.zone_op) {
                     (Tool::Zone, pcb_core::model::ShapeOp::Sub) => Color32::LIGHT_RED,
                     (Tool::Zone, _) => self.side_color(self.side),

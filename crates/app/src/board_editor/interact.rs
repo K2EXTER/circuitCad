@@ -159,7 +159,7 @@ impl BoardEditor {
             if resp.clicked_by(egui::PointerButton::Primary) {
                 self.click(p);
             }
-            if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+            if resp.double_clicked() && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::Keepout) {
                 self.finish_polygon();
             }
             // a double click on an edge of a shape of the selected pour puts a corner there
@@ -179,7 +179,7 @@ impl BoardEditor {
             self.gdrag = None;
         }
         // while a shape is drawn, the right click opens a menu (line / arc / ..., the last corner back, close, cancel), like a drafting program
-        let drawing = matches!(self.tool, Tool::OutlinePoly | Tool::Zone) && (!self.poly.is_empty() || self.pending.is_some() || self.arc_mid.is_some());
+        let drawing = matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::Keepout) && (!self.poly.is_empty() || self.pending.is_some() || self.arc_mid.is_some());
         if drawing {
             resp.context_menu(|ui| self.polygon_menu(ui));
         } else {
@@ -210,7 +210,7 @@ impl BoardEditor {
             self.status = "幹の選びを取り消しました (もう一度右クリックで選択ツールに戻ります)".into();
             return true;
         }
-        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone) && (self.arc_mid.take().is_some() || self.pending.take().is_some()) {
+        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::Keepout) && (self.arc_mid.take().is_some() || self.pending.take().is_some()) {
             self.status = "円弧・円・長方形の途中の点を取り消しました (もう一度右クリックで、描きかけの多角形を確定します)".into();
             return true;
         }
@@ -219,7 +219,7 @@ impl BoardEditor {
             return true;
         }
         if !self.poly.is_empty() {
-            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+            if self.poly.len() >= 3 && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::Keepout) {
                 self.finish_polygon();
             } else {
                 self.poly.clear();

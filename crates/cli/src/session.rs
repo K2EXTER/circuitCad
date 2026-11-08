@@ -92,6 +92,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board fiducials [d=1.0] [open=3.0] [remove=1]   three pick-and-place marks near the corners (only for machine assembly)
   board nets [sort=length|detour|vias|width|open|pads|class] [csv=file]   one row per net: class, length (per layer), detour, vias, widths, pours, open
   board dim [outline | add X1,Y1 X2,Y2 [dir=aligned|h|v] [offset=2] | remove N | clear]   dimensions kept on the board (DXF and SVG only)
+  board forbid [rect=x0,y0,x1,y1 | poly=x,y;x,y;x,y] [layers=top] [tracks=0] [vias=0] [pours=0] [parts=0] | remove N | clear   keep-out areas
   board autoplace
   board move REF X Y [rot=0..3]        put one part at X Y mm (its origin; wiring is not moved)
   board route [net=NAME] [lead=MM] [bridge=0]   (neighbouring pads of one part and net, e.g. two LX pins, are strapped into one piece first; bridge=0 leaves that out)

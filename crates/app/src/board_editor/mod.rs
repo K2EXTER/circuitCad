@@ -22,6 +22,8 @@ pub enum Tool {
     OutlineRect,
     OutlinePoly,
     Zone,
+    /// Draw a keep-out area (no tracks / vias / pours / parts inside).
+    Keepout,
     /// Measure the distance between two points (nothing is changed on the board).
     Measure,
 }
@@ -34,6 +36,7 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::Track => "銅の配線 (トラック) を引きます。クリックで始点、クリックで曲がり、ダブルクリックで終了。V でビアを打って裏面に移れます",
         Tool::Via => "表面と裏面をつなぐ穴 (ビア) を置きます",
         Tool::Zone => "広い面を銅で埋めます (ベタ)。GND に使うと配線が楽になり、ノイズにも強くなります",
+        Tool::Keepout => "配線・ビア・ベタ・部品を置けない領域 (禁止領域) を、多角形で描きます。クリックで頂点、ダブルクリックか Enter で確定 (ベタと同じく、円や長方形も描けます)。アンテナの下・ねじの頭・ケースの壁が当たる所などに使います。何を禁止するかと層は、描いたあと左の一覧で変えられます",
         Tool::OutlineRect => "基板の外形を矩形でドラッグして決めます",
         Tool::OutlinePoly => "基板の外形を多角形で決めます。クリックで頂点、ダブルクリックで確定",
         Tool::PadTh => "穴付き (スルーホール) の単独パッドを置きます",
@@ -61,12 +64,14 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::Hole, "取付穴", Icon::Hole),
     (Tool::Silk, "シルク線", Icon::Silk),
     (Tool::Measure, "距離を測る", Icon::Ruler),
+    // (last: the number keys of the tools before it stay as they were)
+    (Tool::Keepout, "禁止領域", Icon::Keepout),
 ];
 
 /// The tools as the panel shows them: groups of joined bars, each tool with a short label (the full name is in `TOOLS`).
 const TOOL_GROUPS: &[(&str, &[(Tool, &str)])] = &[
     ("基本", &[(Tool::Select, "選択"), (Tool::Track, "配線"), (Tool::Via, "ビア"), (Tool::Measure, "測る")]),
-    ("銅・穴", &[(Tool::Zone, "ゾーン"), (Tool::PadTh, "穴付き"), (Tool::PadSmd, "SMD"), (Tool::Hole, "取付穴")]),
+    ("銅・穴", &[(Tool::Zone, "ゾーン"), (Tool::Keepout, "禁止"), (Tool::PadTh, "穴付き"), (Tool::PadSmd, "SMD"), (Tool::Hole, "取付穴")]),
     ("外形・文字", &[(Tool::OutlineRect, "矩形"), (Tool::OutlinePoly, "多角形"), (Tool::Silk, "シルク")]),
 ];
 
@@ -693,6 +698,7 @@ pub(crate) use draw::capsule;
 mod order;
 mod measure;
 mod livedrc;
+mod keepouts;
 mod dimensions;
 mod ruler;
 mod snippet;

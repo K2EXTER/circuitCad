@@ -384,7 +384,7 @@ impl BoardEditor {
     /// the size of a via for the via tool (autoroute uses both).
     /// Whether the picked tool has settings to show under the bar.
     fn has_tool_options(&self) -> bool {
-        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::OutlinePoly)
+        matches!(self.tool, Tool::Track | Tool::Via | Tool::PadTh | Tool::PadSmd | Tool::Hole | Tool::Zone | Tool::Keepout | Tool::OutlinePoly)
     }
 
     fn tool_options(&mut self, ui: &mut egui::Ui) {
@@ -458,6 +458,7 @@ impl BoardEditor {
                 ui.add(egui::DragValue::new(&mut self.pad_drill).speed(0.05).range(0.2..=6.0).prefix("パッド穴 ").suffix(" mm")).on_hover_text("パッドの穴径 (スルーホール)。部品の足の太さ + 0.2〜0.3mm が目安です");
             }
             Tool::OutlinePoly => self.poly_mode_ui(ui),
+            Tool::Keepout => self.panel_keepouts(ui),
             Tool::Hole => {
                 ui.add(egui::DragValue::new(&mut self.hole_drill).speed(0.1).range(0.5..=10.0).prefix("取付穴 ").suffix(" mm")).on_hover_text("ネジ止め用の取付穴の穴径。M3 のネジなら 3.2mm 前後です");
             }
@@ -516,7 +517,7 @@ impl BoardEditor {
     }
 
     /// What a click draws: lines, arcs, a circle or a rectangle (for the board outline, a pour and the hole of a pour).
-    fn poly_mode_ui(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn poly_mode_ui(&mut self, ui: &mut egui::Ui) {
         let before = self.poly_mode;
         ui.horizontal_wrapped(|ui| {
             ui.selectable_value(&mut self.poly_mode, PolyMode::Lines, "直線").on_hover_text("クリックした点を直線でつなぎます。最初の点をクリックするか、右クリック・ダブルクリック・Enter で、囲んで確定します");

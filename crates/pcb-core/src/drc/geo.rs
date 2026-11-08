@@ -19,7 +19,7 @@ pub(crate) fn point_seg(p: Point, a: Point, b: Point) -> f64 {
     p.dist(Point::new(a.x + t * dx, a.y + t * dy))
 }
 
-pub(super) fn segs_intersect(a: Point, b: Point, c: Point, d: Point) -> bool {
+pub(crate) fn segs_intersect(a: Point, b: Point, c: Point, d: Point) -> bool {
     let (d1, d2) = (cross(a, b, c), cross(a, b, d));
     let (d3, d4) = (cross(c, d, a), cross(c, d, b));
     if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0)) && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0)) {

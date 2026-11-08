@@ -205,6 +205,10 @@ fn pour_wiring(board: &Board) -> Option<Vec<(String, groundpour::PourOptions)>> 
 }
 
 fn place(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) -> Result<PlaceReport, String> {
+    // the placement draws a new outline round the parts: areas drawn on the old board would stand somewhere else
+    if !board.keepouts.is_empty() {
+        return Err(format!("禁止領域が {} 個ある基板は、自動で並べられません (自動配置は外形を作り直すので、領域の場所がずれます)。先に部品を並べてから禁止領域を描くか、禁止領域を消してから並べてください", board.keepouts.len()));
+    }
     // a refusal must leave the board as it was (the pour wiring is taken out on the way)
     let backup = (!board.tracks.is_empty() || !board.vias.is_empty()).then(|| board.clone());
     let r = place_inner(board, turn, improve, tuning);

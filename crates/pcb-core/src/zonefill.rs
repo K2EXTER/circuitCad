@@ -625,6 +625,9 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
             }
         }
     }
+    for k in board.keepouts.iter().filter(|k| k.pours && k.on(side) && k.polygon.len() >= 3) {
+        cuts.push(k.polygon.iter().map(|p| [p.x, p.y]).collect());
+    }
     for (k, v) in board.vias.iter().enumerate() {
         if !same(conn.via_net(k)) {
             cuts.push(circle(v.pos, v.diameter / 2.0 + c));
@@ -788,6 +791,14 @@ pub fn geometry_key(board: &Board) -> u64 {
         pt(&mut h, t.a);
         pt(&mut h, t.b);
         f(&mut h, t.width);
+    }
+    // keep-out areas cut the pours and are part of what the DRC sees
+    for k in &board.keepouts {
+        (k.tracks, k.vias, k.pours, k.parts).hash(&mut h);
+        k.layers.hash(&mut h);
+        for p in &k.polygon {
+            pt(&mut h, *p);
+        }
     }
     for p in &board.pads {
         pt(&mut h, p.pos);

@@ -27,6 +27,7 @@ pub mod fiducial;
 pub mod footprints;
 pub mod geom;
 pub mod impedance;
+pub mod keepout;
 pub mod irdrop;
 pub mod labels;
 pub mod meander;

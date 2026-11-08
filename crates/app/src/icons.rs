@@ -22,6 +22,8 @@ pub enum Icon {
     Label,
     Via,
     Zone,
+    /// A keep-out area: a dashed box with a "no" sign.
+    Keepout,
     OutlineRect,
     OutlinePoly,
     PadTh,
@@ -86,6 +88,20 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
                 p.line_segment([q(0.12, 0.12 + t * 0.76 + 0.0), q(0.12 + t * 0.76, 0.12)], Stroke::new(1.0, c));
                 p.line_segment([q(0.88, 0.12 + t * 0.76), q(0.12 + t * 0.76, 0.88)], Stroke::new(1.0, c));
             }
+        }
+        Icon::Keepout => {
+            // dashed box
+            let (x0, y0, x1, y1) = (0.12, 0.12, 0.88, 0.88);
+            for k in 0..4 {
+                let (a, b) = (x0 + k as f32 * 0.19, x0 + k as f32 * 0.19 + 0.11);
+                for (pa, pb) in [(q(a, y0), q(b, y0)), (q(a, y1), q(b, y1)), (q(x0, a), q(x0, b)), (q(x1, a), q(x1, b))] {
+                    p.line_segment([pa, pb], Stroke::new(1.2, c));
+                }
+            }
+            let _ = y1;
+            // the sign
+            p.circle_stroke(q(0.5, 0.5), u * 0.22, Stroke::new(1.4, c));
+            p.line_segment([q(0.35, 0.35), q(0.65, 0.65)], Stroke::new(1.4, c));
         }
         Icon::OutlineRect => {
             let b = Rect::from_min_max(q(0.1, 0.2), q(0.9, 0.8));

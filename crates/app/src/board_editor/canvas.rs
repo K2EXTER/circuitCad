@@ -24,6 +24,7 @@ impl BoardEditor {
         self.draw_zones(&painter, rect, conn.as_deref());
         self.draw_islands(&painter, rect, conn.as_deref());
         self.draw_zone_shapes(&painter, rect);
+        self.draw_keepouts(&painter, rect);
         self.update_net_focus(&resp, rect);
         self.draw_copper(&painter, rect);
         self.draw_net_focus(&painter, rect);
@@ -131,11 +132,11 @@ impl BoardEditor {
                 }
             }
         }
-        if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+        if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::Keepout) {
             self.finish_polygon();
         }
         // while a shape is drawn: S line, A arc through a point, T arc that leaves the last line smoothly, Backspace takes the last corner back
-        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
+        if matches!(self.tool, Tool::OutlinePoly | Tool::Zone | Tool::Keepout) {
             if pressed(Key::S) {
                 self.set_poly_mode(PolyMode::Lines);
             }
