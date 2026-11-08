@@ -314,3 +314,37 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - `TALL_FOOTPRINTS`(フットプリント名の一部 → 本体の高さ・色)に、端子台 10・トランス(EI30)25・電池ホルダ(単3)16・(CR2032)5・ヒューズホルダ(5×20)9 mm。**一般的な形の目安で、メーカーの図面ではない**。フットプリントの `height` があればそちらが優先。
 - `Kind::To92`(`to-92`): 脚の並びにそって 4.8 × 3.8 mm の本体(パッドの大きさではなく、パッケージの大きさ)+ 細い脚。以前はパッドを囲んだ薄い板だった。表面実装の水晶 `xtal_3225` は 0.9 mm。
 - 確認: 単体テスト(TO-220 の合計の高さ・部品の箱の数・ケースの確認が拾うこと)と、`mixed_signal` の 3D で背の高い部品が出ること。形の細かい見た目(タブの向き・USB やジャックなどのコネクタ)は未対応。
+
+## ファイル一覧(pcb-core)
+
+(CLAUDE.md の地図から移した、ファイルごとの詳しい一覧。CLAUDE.md には1行ずつの要約だけ残してある)
+- `model.rs` 全データ型 (層は `Side`、内層は `Board.inner_layers`) / `footprints.rs`・`package.rs` フットプリント / `parts.rs` `place_part` / `netlist.rs` 回路図→基板の取込
+- `drc/` DRC (`mod.rs`=`check`・`clearance`・`shorts` / `connectivity.rs` 銅の接続グループ / `path.rs` 2つのパッドの間の銅の道筋(トラックとビアをたどる。長さ・ビア数・層・分かれ目)・ネット間の間隔・ガードの被覆 / `geo.rs` 距離計算 / `silk.rs` シルクとマスク帯 / `thermal.rs` サーマルビア / `pour.rs` ベタ(細いかけら・島・分断・上書き) / `decoupling.rs` バイパスコンデンサ / `acute.rs` 鋭角 / `tests.rs`) / `current.rs` 配線の太さと電流 / `irdrop.rs` 電圧降下 + レイアウト後シミュレーション用の配線抵抗 (`wiring_resistances` → `sim-core::from_schematic_with_wiring`) / `diffpair.rs` 差動ペア
+- `align.rs` 選んだ部品の整列(左右上下・中心・等間隔)。`autoplace.rs` の配置のあとの整列とベタ先の配置も
+- `connectors.rs` 自動配置の最後に、ピンヘッダの向きと位置を決めて未配線の交差を減らす
+- `breakage.rs` 基板に故障を1つ仕込む(修理の練習。バイパスが遠い・配線が切れる・細い・ショート・部品が基板の外。`health`=点検の数、`repaired`。基板レッスン8、`ccad board break`/`health`/`reveal`)
+- `reroute.rs` 遠回りした配線・余分なビアの引き直し(手で引いた配線向け。「配線を短くする」ボタンと `ccad board improve`)
+- `merge.rs` 一直線の配線を1本にまとめる(自動配線の後。銅の形は変えない)
+- `breakout.rs` 細かいピッチの IC の足から出口の短い線を先に引く(辺の真ん中はまっすぐ、両端は外向きに曲げる。全体の配線で通らない接続が残ったときだけ使う。`ccad board breakout`)
+- `requirements.rs` 回路図の「設計の要件」の表を基板に取り込み(ネットクラス・電流・組・距離)、組の広がりと離す距離を点検する。自動配置は組を1つの塊にする(`ccad board req`)
+- `padentry.rs` パッドの根元をそろえる(垂直な出入り・2本は両端寄せ。自動配線の直後と全部の配線に)
+- `step.rs`・`mesh.rs` メーカーの STEP を三角形のメッシュ(`Mesh3d`)にして、部品の3Dの形にする(`PartDef.model3d` → `Board.models3d` → `model3d.rs` の `part_meshes`)
+- `quality.rs` 配線の見た目の数字(折れ・ビア・並走・層ごとの長さ。`ccad board status`/`board quality`。手動と自動の比較に使う)
+- `orient.rs` 部品の向き(0/90/180/270°)を、未配線の長さと交差が最小になるように決める(配線の付いていない部品だけ。`ccad board orient`、パネルのボタン)
+- `swap.rs` 同じゲート・同じ入力のネットの入れ替え(配置のあと、未配線の長さと交差を減らす。`ccad board swap`、パネルのボタン)
+- `meander.rs` 長さ合わせ(蛇行配線。ネットを目標の長さに)
+- ネットクラス(ネットごとの線幅・間隔・ビア・配線の順番 `order`・ビアの可否 `no_vias`・使う層 `layers`・長さの上限 `max_length`。役割 `Role` はこの性質のひな形)は `model.rs` の `NetClass`(DRC は `clearance_between`、`autoroute.rs` の `autoroute_sized` が使う。画面は `board_editor/netclass.rs`、CLI は `board class`)
+- `impedance.rs` 配線の太さ⇄インピーダンスの目安と層構成 `Stackup`(ネットクラスの `impedance` 目標を発注前チェックで調べる。`ccad board impedance`)
+- `labels.rs` 部品番号のシルク文字を、配線やパッドから離れた所へ動かす(「文字を配線からよける」ボタンと `ccad board labels`)
+- `smooth.rs` 配線の仕上げ(角丸め・涙型・分かれ目の凹み。`Board.finish` の設定で表示・出力・DRCのときに毎回計算)
+- `ratsnest.rs` 未配線 / `autoroute.rs` 自動配線 / `shove.rs` 押しのけ配線
+- `body.rs` 部品の本体外形 / `outline.rs` 曲線の外形 / `zonefill.rs` ベタの銅 / `model3d.rs` 3D用の立体
+- `bridge.rs` 隣り合う同じネットのパッドを先に銅でつなぐ(自動配線の前) / `trunk.rs` その手で引く版(2パッドから首2本+太い幹) / `slot.rs` 仕上げで並走する同ネット配線のすき間を埋める
+- `svg.rs` 基板の1つの面の SVG(Gerber を読み戻して描く。画面のファイルメニューと `ccad board svg`)
+- `link.rs`(app)回路図・基板・3D で選んだ部品とネットの連動(`App::sync_focus`。設定でオフにできる。詳細 `docs/code-notes/app.md`)
+- `case.rs` 箱のケースの内寸に、基板が入るか・背の高い部品がないか(3D 表示の「内寸」と `ccad board case`)
+- `dxf_in.rs` ケースの図面(DXF)から外形と穴を取る(画面のファイルメニューと `ccad board dxf_import`)
+- `dxf.rs` ケース設計用の DXF(外形・穴・パッドのドリル・部品の箱。画面のファイルメニューと `ccad board dxf`)
+- `picture.rs` 基板の絵(RGBA。1 つの銅箔の層・ベタ・配線・パッド・穴・シルク・mm の格子と数字、ネットの色分け、DRC 違反の番号と未配線の線。AI が絵で確かめる `ccad board picture`)
+- `shops.rs` 購入リスト(店の型番・検索リンク。`ccad board shopping`、`*-shopping.csv`)
+- `fab.rs` 発注先と発注前チェック / `export.rs` 製造一式 / `gerber.rs` / `excellon.rs` / `assembly.rs` BOM・配置CSV / `gerber_view.rs` 書き出しの読み戻し / `strokefont.rs` シルク文字
