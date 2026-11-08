@@ -468,6 +468,8 @@ pub struct BoardEditor {
     net_win_note: Option<(String, String)>,
     /// The window that lists the currents of all nets.
     pub current_win_open: bool,
+    /// The rule check while one works (`livedrc.rs`).
+    pub live_drc: livedrc::LiveDrc,
     /// The "ネットの一覧" window.
     pub net_table: nettable::NetTableState,
     /// The impedance (Ω) last asked for in a net window.
@@ -615,6 +617,7 @@ impl Default for BoardEditor {
             net_win_asked: None,
             net_win_note: None,
             current_win_open: false,
+            live_drc: Default::default(),
             net_table: Default::default(),
             z_target: 50.0,
             via_net: None,
@@ -689,6 +692,7 @@ pub fn set_multisampled(on: bool) {
 pub(crate) use draw::capsule;
 mod order;
 mod measure;
+mod livedrc;
 mod dimensions;
 mod ruler;
 mod snippet;

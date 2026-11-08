@@ -235,6 +235,7 @@ impl BoardEditor {
                 if crate::widgets::primary_button_wide(ui, true, "DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {
                     self.run_drc();
                 }
+                self.live_drc_toggle(ui);
                 self.requirements_check(ui);
                 self.requirements_table(ui, &sch.sch.requirements);
                 let mut jump = None;

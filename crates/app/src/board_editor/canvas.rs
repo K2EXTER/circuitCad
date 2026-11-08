@@ -18,6 +18,7 @@ impl BoardEditor {
 
         self.pan_and_zoom(ui, &resp, rect);
 
+        self.update_live_drc(ui.ctx());
         self.draw_grid(&painter, rect);
         let conn = (!self.board.zones.is_empty() || self.selected.is_some()).then(|| self.cached_connectivity());
         self.draw_zones(&painter, rect, conn.as_deref());
@@ -30,6 +31,7 @@ impl BoardEditor {
         self.draw_overlays(&painter, rect);
         self.draw_layer_badge(&painter, rect);
         self.draw_dimensions(&painter, rect);
+        self.draw_live_drc(&painter, rect, ui.input(|i| i.pointer.hover_pos()));
         self.draw_measure(&painter, rect);
         self.layer_overlay(ui, rect);
 

@@ -78,7 +78,6 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 
 | # | 内容 | 規模 | 今の circuitCad / 他のソフト |
 |---|---|---|---|
-| J4 | 配線中の違反のその場の表示(オンライン DRC) | 中 | 押しのけ配線はクラスの間隔を守るが、違反の表示は「DRC を実行」のときだけ / Altium・Quadcept(確認) |
 | J5 | 部品店の在庫・値段(部品表に出す) | 中 | 店の検索リンクを作るだけ(`pcb-core/shops.rs`) / EasyEDA の LCSC・Altium・Quadcept(確認)。API の規約と鍵の扱いを先に調べる |
 
 **J-2. 中級者になると欲しくなる**
