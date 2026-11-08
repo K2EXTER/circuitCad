@@ -31,6 +31,26 @@ impl SchEditor {
         }
     }
 
+    /// The sheet as the text of the autosave, when it has changes that are not saved.
+    pub fn autosave_json(&self) -> Option<String> {
+        if !self.dirty() {
+            return None;
+        }
+        let mut value = serde_json::to_value(&self.sch).ok()?;
+        with_specs(&mut value, &self.spec_items());
+        serde_json::to_string(&value).ok()
+    }
+
+    /// Take the sheet back from an autosave. It counts as changed (it was never saved), and keeps the name of the file it came from.
+    pub fn restore(&mut self, autosave: &std::path::Path, original: Option<PathBuf>) {
+        self.load_path(autosave.to_path_buf());
+        self.path = original;
+        self.rev += 1;
+        if self.status.starts_with("開きました") {
+            self.status = "保存前の回路図を復元しました。保存してください".into();
+        }
+    }
+
     /// The sheet and its spec table as the text of a `.schjson` file.
     fn sheet_json(&self) -> Result<String, serde_json::Error> {
         let mut value = serde_json::to_value(&self.sch)?;

@@ -26,6 +26,24 @@ impl BoardEditor {
         }
     }
 
+    /// The board as the text of the autosave, when it has changes that are not saved.
+    pub fn autosave_json(&self) -> Option<String> {
+        if !self.dirty() {
+            return None;
+        }
+        serde_json::to_string(&self.board).ok()
+    }
+
+    /// Take the board back from an autosave. It counts as changed (it was never saved), and keeps the name of the file it came from.
+    pub fn restore(&mut self, autosave: &std::path::Path, original: Option<PathBuf>) {
+        self.load_path(autosave.to_path_buf());
+        self.path = original;
+        self.rev += 1;
+        if self.status.starts_with("開きました") {
+            self.status = "保存前の基板を復元しました。保存してください".into();
+        }
+    }
+
     /// Write the board's outline, holes and part boxes as a DXF, for the case's CAD.
     pub fn export_dxf(&mut self) {
         let name = format!("{}.dxf", if self.board.name.is_empty() { "board" } else { &self.board.name });

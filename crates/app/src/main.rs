@@ -8,6 +8,7 @@ use eframe::egui;
 use schematic::SchEditor;
 
 mod args;
+mod autosave;
 mod board_editor;
 mod files;
 mod glossary;
@@ -81,6 +82,9 @@ struct App {
     closing_ok: bool,
     /// The first-launch welcome card is up (only when started with no arguments and no lesson finished yet).
     welcome: bool,
+    /// A copy of unsaved work left by an earlier run (asked about at start-up), and when the copy was last written.
+    recovery: Option<autosave::Found>,
+    last_autosave: std::time::Instant,
 }
 
 impl App {
@@ -131,7 +135,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false, recovery: None, last_autosave: std::time::Instant::now() }
     }
 }
 
@@ -145,6 +149,12 @@ impl eframe::App for App {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
             }
         }
+        // the copy of unsaved work goes away once the window really closes with nothing to lose
+        if ui.ctx().input(|i| i.viewport().close_requested()) && (self.closing_ok || !self.dirty()) {
+            autosave::clear(&autosave::default_dir());
+        }
+        self.tick_autosave(ui.ctx());
+        self.recovery_window(ui.ctx());
         // the switches of the requirements' frames and of the sheet colours survive a restart
         let now = (self.sch.req_frames, self.board_ed.show_req_marks, self.board_ed.show_req_lines, self.board_ed.show_sheets);
         if now != self.req_view {
@@ -652,7 +662,10 @@ fn main() -> eframe::Result {
             apply_args(&mut app, &args);
             // `--screenshot <file>` alone still counts as a plain launch (so the card can be checked on a screenshot)
             let opens_something = args.iter().enumerate().any(|(i, a)| a != "--screenshot" && !(i > 0 && args[i - 1] == "--screenshot"));
-            app.welcome = !opens_something && app.progress.needs_welcome();
+            if !opens_something {
+                app.look_for_recovery();
+            }
+            app.welcome = !opens_something && app.recovery.is_none() && app.progress.needs_welcome();
             Ok(Box::new(app))
         }),
     )
