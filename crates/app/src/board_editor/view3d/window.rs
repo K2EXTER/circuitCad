@@ -27,7 +27,8 @@ impl BoardEditor {
                 Some(Item::Track(i)) if i < b.tracks.len() => self.cached_connectivity().track_net(i).map(str::to_string),
                 Some(Item::Pad(i)) if i < b.pads.len() => self.cached_connectivity().pad_net(i).map(str::to_string),
                 Some(Item::Via(i)) if i < b.vias.len() => self.cached_connectivity().via_net(i).map(str::to_string),
-                _ => None,
+                // nothing picked here: what was picked in the schematic
+                _ => self.linked.net.clone(),
             }
         };
         let mut new_net: Option<Option<String>> = None;
@@ -52,7 +53,12 @@ impl BoardEditor {
         let mut save_png = false;
         let mut note: Option<String> = None;
         let mut pick: Option<usize> = None;
-        let selected = if let Some(Item::Part(i)) = self.selected { Some(i) } else { None };
+        let selected = if let Some(Item::Part(i)) = self.selected {
+            Some(i)
+        } else {
+            // the part picked in the schematic is shown as the selected one
+            self.linked.part.as_deref().and_then(|r| self.board.parts.iter().position(|p| p.refdes == r))
+        };
         let v = &mut self.view3d;
         egui::Window::new("3Dで見る").open(&mut open).default_size([900.0, 680.0]).show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {

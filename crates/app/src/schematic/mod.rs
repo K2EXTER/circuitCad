@@ -114,6 +114,9 @@ pub struct SchEditor {
     label_k_text: String,
     pending: Option<Pt>,
     selected: Option<Sel>,
+    /// What was picked in the board or the 3D view (`crate::link`), shown on the sheet; and the wires of its net, with the key they were found for.
+    pub linked: crate::link::Focus,
+    linked_cache: std::cell::RefCell<((String, u64, usize), Vec<usize>)>,
     /// Extra objects selected by a rubber band (when two or more are selected `selected` is empty).
     multi: Vec<Sel>,
     boxsel: Option<BoxSel>,
@@ -675,6 +678,8 @@ impl Default for SchEditor {
             label_k_text: String::new(),
             pending: None,
             selected: None,
+            linked: Default::default(),
+            linked_cache: Default::default(),
             multi: vec![],
             boxsel: None,
             gdrag: None,
@@ -702,6 +707,7 @@ const WIRE: Color32 = Color32::from_rgb(0, 110, 30);
 // The editor is one type spread over several files; the child modules see its private fields.
 use lessons::ActiveLesson;
 mod hierarchy_ui;
+mod linked;
 mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;

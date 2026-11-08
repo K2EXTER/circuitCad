@@ -86,6 +86,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         }
     if let Some(p) = args.iter().find(|a| a.ends_with(".ccproj")) {
         app.load_project(p.into());
+        // `--select R1` also picks the part of a project's schematic (the board and the 3D view show it: the linked pick)
+        if let Some(i) = args.iter().position(|a| a == "--select")
+            && let Some(r) = args.get(i + 1) {
+                app.sch.select_part(r);
+            }
         // a project has both halves: the board's copper can go into the schematic's transient run (`--post-layout --tran stop step`)
         if args.iter().any(|a| a == "--post-layout") {
             app.apply_post_layout(true);

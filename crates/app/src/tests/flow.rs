@@ -576,3 +576,40 @@ fn a_net_window_fetches_the_dc_current_of_its_net_and_the_list_window_draws() {
     frame(&mut app);
     assert!(app.board_ed.current_win_open);
 }
+
+/// What is picked in the schematic is shown on the board (and in the 3D view), and what is picked on the board, on the sheet.
+#[test]
+fn a_pick_in_one_editor_is_linked_to_the_others() {
+    let mut app = App::default();
+    let s = &mut app.sch.sch;
+    s.add(Kind::VSource, (0, 0), 0);
+    s.add(Kind::Resistor, (6, -6), 0);
+    s.add(Kind::Resistor, (8, 0), 1);
+    s.add(Kind::Ground, (0, 6), 0);
+    let r2 = s.components[2].pins();
+    for (a, b) in [((0, -2), (0, -6)), ((0, -6), (4, -6)), ((8, -6), r2[0].1), (r2[1].1, (8, 4)), ((8, 4), (0, 4)), ((0, 2), (0, 6))] {
+        s.wires.push(Wire { a, b });
+    }
+    app.board_ed.import_from_schematic(&app.sch);
+
+    // a part picked on the sheet: the board is told which
+    assert!(app.sch.select_part("R2"));
+    app.sync_focus();
+    assert_eq!(app.board_ed.linked.part.as_deref(), Some("R2"));
+    assert!(app.sch.linked.is_empty(), "the editor that was picked in shows its own pick, not a link");
+
+    // a track picked on the board: the sheet is told its net, and the board's own link is put away
+    let a = app.board_ed.board.pads.iter().find(|p| p.refdes == "R1" && p.pin == "2").unwrap().pos;
+    let b = app.board_ed.board.pads.iter().find(|p| p.refdes == "R2" && p.pin == "1").unwrap().pos;
+    app.board_ed.board.tracks.push(Track { side: Side::Top, a, b, width: 0.25 });
+    app.board_ed.select_track(0);
+    app.sync_focus();
+    let net = app.board_ed.board.pads.iter().find(|p| p.refdes == "R1" && p.pin == "2").unwrap().net.clone();
+    assert_eq!(app.sch.linked.net.as_deref(), Some(net.as_str()));
+    assert!(app.board_ed.linked.is_empty());
+
+    // with the link off nothing is shown in the other
+    app.link_selection = false;
+    app.sync_focus();
+    assert!(app.sch.linked.is_empty() && app.board_ed.linked.is_empty());
+}

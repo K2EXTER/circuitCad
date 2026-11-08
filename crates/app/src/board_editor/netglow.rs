@@ -67,9 +67,22 @@ impl BoardEditor {
         self.hover_net = net.map(|n| (n, pos));
     }
 
-    /// The glow of the net under the pointer, over the copper.
+    /// The glow of the net under the pointer, over the copper; else the glow of the net picked in the schematic or the 3D view.
     pub(super) fn draw_net_focus(&self, painter: &egui::Painter, rect: Rect) {
-        let Some((net, pos)) = self.hover_net.as_ref().map(|(n, p)| (n.as_str(), *p)) else { return };
+        if let Some((net, pos)) = self.hover_net.as_ref().map(|(n, p)| (n.as_str(), *p)) {
+            self.paint_net_glow(painter, rect, net);
+            let galley = painter.layout_no_wrap(self.net_caption(net), egui::FontId::proportional(14.0), Color32::BLACK);
+            let at = pos + Vec2::new(14.0, -26.0);
+            painter.rect_filled(Rect::from_min_size(at, galley.size() + Vec2::new(10.0, 4.0)), 3.0, HOVER);
+            painter.galley(at + Vec2::new(5.0, 2.0), galley, Color32::BLACK);
+        } else if let Some(net) = self.linked.net.as_deref() {
+            self.paint_net_glow(painter, rect, net);
+        }
+        self.draw_linked_part(painter, rect);
+    }
+
+    /// The copper of `net` (tracks, pads, vias, pours) in the glow colour.
+    fn paint_net_glow(&self, painter: &egui::Painter, rect: Rect, net: &str) {
         let conn = self.cached_connectivity();
         let z = self.zoom;
         let col = HOVER;
@@ -120,12 +133,23 @@ impl BoardEditor {
                 }
             }
         }
-        {
-            let galley = painter.layout_no_wrap(self.net_caption(net), egui::FontId::proportional(14.0), Color32::BLACK);
-            let at = pos + Vec2::new(14.0, -26.0);
-            painter.rect_filled(Rect::from_min_size(at, galley.size() + Vec2::new(10.0, 4.0)), 3.0, HOVER);
-            painter.galley(at + Vec2::new(5.0, 2.0), galley, Color32::BLACK);
+    }
+
+    /// A ring round the part picked in the schematic or the 3D view (the box round its pads).
+    fn draw_linked_part(&self, painter: &egui::Painter, rect: Rect) {
+        let Some(r) = self.linked.part.as_deref() else { return };
+        let mut bb: Option<(Point, Point)> = None;
+        for p in self.board.pads.iter().filter(|p| p.refdes == r) {
+            let (w, h) = p.shape.size();
+            let (lo, hi) = (Point::new(p.pos.x - w / 2.0, p.pos.y - h / 2.0), Point::new(p.pos.x + w / 2.0, p.pos.y + h / 2.0));
+            bb = Some(match bb {
+                None => (lo, hi),
+                Some((a, b)) => (Point::new(a.x.min(lo.x), a.y.min(lo.y)), Point::new(b.x.max(hi.x), b.y.max(hi.y))),
+            });
         }
+        let Some((lo, hi)) = bb else { return };
+        let (a, b) = (self.to_screen(rect, lo), self.to_screen(rect, hi));
+        painter.rect_stroke(Rect::from_two_pos(a, b).expand(6.0), 4.0, Stroke::new(2.5, HOVER), egui::StrokeKind::Outside);
     }
 
     /// The name shown by the pointer: a net the schematic never named (the program called it N$1) says which pins it joins, so

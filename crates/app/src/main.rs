@@ -13,6 +13,7 @@ mod files;
 mod glossary;
 mod help;
 mod icons;
+mod link;
 mod bench_guide;
 mod measure_guide;
 mod samples;
@@ -56,6 +57,9 @@ struct App {
     board_ed: BoardEditor,
     /// The three switches of the requirements' frames and lines as last written to the settings (the file is written when one changes).
     req_view: (bool, bool, bool, bool),
+    /// Show what is picked in one of the schematic, the board and the 3D view in the others, and what each had picked last frame.
+    link_selection: bool,
+    last_focus: (link::Focus, link::Focus),
     /// Multisampling the window was made with, and the setting for the next start (the menu changes only the second).
     smooth_edges_running: bool,
     smooth_edges: bool,
@@ -80,6 +84,29 @@ struct App {
 }
 
 impl App {
+    /// The part or net picked in the schematic or on the board (the one that changed) goes to the other as `linked`; the 3D view reads
+    /// the board's. With the link off, nothing is shown in the other.
+    fn sync_focus(&mut self) {
+        if !self.link_selection {
+            if !self.sch.linked.is_empty() || !self.board_ed.linked.is_empty() {
+                self.sch.linked = Default::default();
+                self.board_ed.linked = Default::default();
+            }
+            return;
+        }
+        let (s, b) = (self.sch.focus(), self.board_ed.focus());
+        if s != self.last_focus.0 {
+            // a pick on the sheet; putting it away puts away what the board shows of it
+            self.board_ed.linked = s.clone();
+            self.sch.linked = Default::default();
+            self.last_focus.0 = s;
+        } else if b != self.last_focus.1 {
+            self.sch.linked = b.clone();
+            self.board_ed.linked = Default::default();
+            self.last_focus.1 = b;
+        }
+    }
+
     /// Carry the board's copper resistance to the schematic's simulations, or take it away.
     fn apply_post_layout(&mut self, on: bool) {
         if !on {
@@ -104,7 +131,7 @@ impl App {
 
 impl Default for App {
     fn default() -> Self {
-        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
+        Self { welcome: false, show_hints: true, mode: Mode::Schematic, sch: SchEditor::default(), board_ed: BoardEditor::default(), req_view: (true, true, true, true), link_selection: true, last_focus: Default::default(), smooth_edges_running: true, smooth_edges: true, shot_path: None, help: help::Help::default(), progress: learn::Progress::default(), learn: learn::LearnWindow::default(), glossary: glossary::GlossaryWindow::default(), measure: measure_guide::MeasureGuide::default(), bench: bench_guide::BenchGuide::default(), auto_shot: None, project: None, closing_ok: false }
     }
 }
 
@@ -127,6 +154,7 @@ impl eframe::App for App {
                 self.sch.status = e;
             }
         }
+        self.sync_focus();
         self.finish_screenshot(ui);
         self.tick_auto_screenshot(ui);
         // F1, and the small "操作" buttons of the panels, open the guide
@@ -505,6 +533,9 @@ impl eframe::App for App {
                         icons::set_icon_only(only);
                         changed = true;
                     }
+                    if ui.checkbox(&mut self.link_selection, "選んだ部品・ネットを回路図・基板・3Dで連動").on_hover_text("回路図で選んだ部品やネット (配線・ネットラベル) が、基板と3D表示でも光り、基板や3Dで選んだものが、回路図でも光ります (水色の枠と線)。画面を切り替えたときに、同じものをすぐ探せます。オフにすると、それぞれ別々に選びます").changed() {
+                        changed = true;
+                    }
                     let note = if self.smooth_edges != self.smooth_edges_running { " (次の起動から)" } else { "" };
                     if ui
                         .checkbox(&mut self.smooth_edges, format!("線の縁をなめらかにする{note}"))
@@ -516,7 +547,7 @@ impl eframe::App for App {
                     // these survive a restart
                     if changed {
                         let file = prefs::Prefs::default_file();
-                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints, smooth_edges: self.smooth_edges, ..prefs::Prefs::load(&file) }.save(&file);
+                        let saved = prefs::Prefs { icon_only: only, show_hints: self.show_hints, smooth_edges: self.smooth_edges, link_selection: self.link_selection, ..prefs::Prefs::load(&file) }.save(&file);
                         if let Err(e) = saved {
                             self.sch.status = e;
                         }
@@ -615,6 +646,7 @@ fn main() -> eframe::Result {
             (app.smooth_edges_running, app.smooth_edges) = (smooth_edges, prefs.smooth_edges);
             icons::set_icon_only(prefs.icon_only);
             (app.sch.req_frames, app.board_ed.show_req_marks, app.board_ed.show_req_lines, app.board_ed.show_sheets) = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
+            app.link_selection = prefs.link_selection;
             app.req_view = (prefs.req_frames, prefs.req_groups, prefs.req_lines, prefs.sheet_colors);
             let args: Vec<String> = std::env::args().skip(1).collect();
             apply_args(&mut app, &args);

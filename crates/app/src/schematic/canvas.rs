@@ -45,6 +45,7 @@ impl SchEditor {
         self.draw_buses(&painter, rect);
         self.draw_junctions(&painter, rect);
         self.draw_components(&painter, rect);
+        self.draw_linked(&painter, rect);
         self.draw_requirement_frames(&painter, rect);
         self.view_overlay(ui, rect);
         self.draw_labels(&painter, rect);

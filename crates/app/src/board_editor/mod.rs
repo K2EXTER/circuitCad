@@ -420,6 +420,8 @@ pub struct BoardEditor {
     thermal_cache: std::cell::Cell<Option<(u64, usize)>>,
     /// The net under the pointer with the pointer's place; it glows (`netglow.rs`).
     hover_net: Option<(String, Pos2)>,
+    /// What was picked in the schematic (`crate::link`): its net glows and its part is ringed, here and in the 3D view.
+    pub linked: crate::link::Focus,
     /// A value of a net class is being dragged: the undo step was taken at its start.
     drag_edit: bool,
     /// The net whose window is open (from the right-click menu of its copper with the Select tool).
@@ -578,6 +580,7 @@ impl Default for BoardEditor {
             zone_outline_lod: Default::default(),
             thermal_cache: std::cell::Cell::new(None),
             hover_net: None,
+            linked: Default::default(),
             drag_edit: false,
             net_win: None,
             net_tab: 0,
@@ -645,6 +648,7 @@ mod zoneedit;
 use zoneedit::{EditTarget, VertexRef};
 mod trunk;
 mod netglow;
+mod linked;
 mod tracking;
 mod netclass;
 mod netwindow;
