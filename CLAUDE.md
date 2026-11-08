@@ -37,7 +37,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - モデル `model.rs`(層は `Side`、`NetClass`、`Rules`)/ フットプリント `footprints.rs` `package.rs` `parts.rs` / 回路図取込 `netlist.rs`
 - `drc/`(clearance・connectivity・path・pour・decoupling・thermal・silk・acute・area・slit・patch・geo …)/ `current.rs` `irdrop.rs` `impedance.rs` `diffpair.rs` `requirements.rs`
 - 配置: `autoplace/`(order・blocks・ics・finish) `align.rs` `connectors.rs` `orient.rs` `swap.rs` `nudge.rs`(配線後に近くの部品を動かして引き直す)`renumber.rs`(部品番号を位置順に振り直す)`snippet.rs`(配置・配線のスニペット)`replicas.rs`(繰り返し構造の検出)
-- 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`stitch.rs`(ビアの縫い付け)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
+- 銅・形: `zonefill.rs`(ベタの銅)`copper.rs`(配線後に足す銅)`groundpour.rs`(GNDベタ)`stitch.rs`(ビアの縫い付け)`fiducial.rs`(フィデューシャル)`outline.rs` `shape.rs` `geom.rs` `pinlabels.rs`
 - 配線: `autoroute.rs` `shove.rs` `ratsnest.rs` `reroute.rs` `merge.rs` `breakout.rs` `bridge.rs` `trunk.rs` `slot.rs` `padentry.rs` `meander.rs` `smooth.rs` `quality.rs`
 - 3D・ケース: `body.rs` `model3d.rs` `step.rs` `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` / 絵と図: `svg.rs` `picture.rs`
 - 出力: `fab.rs`(発注前チェック)`export.rs` `gerber.rs` `excellon.rs` `assembly.rs` `shops.rs` `gerber_view.rs`

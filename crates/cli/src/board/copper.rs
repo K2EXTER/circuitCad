@@ -46,6 +46,29 @@ impl Session {
         Ok(obj(json!({"added": r.added, "dropped": r.dropped, "layers": layers})))
     }
 
+    pub(super) fn board_fiducials(&mut self, rest: &[String]) -> Res {
+        // board fiducials [d=1.0] [open=3.0] [layer=top|bottom] [remove=1]: three marks for the pick-and-place camera near three
+        // corners (bare copper dot, a ring with no mask round it), or take them off
+        let (_, kv) = options(rest);
+        let mut o = pcb_core::fiducial::FiducialOptions::default();
+        if let Some(l) = opt(&kv, "layer") {
+            o.side = parse_layer(l)?;
+        }
+        if let Some(v) = opt(&kv, "d") {
+            o.diameter = num(v)?;
+        }
+        if let Some(v) = opt(&kv, "open") {
+            o.opening = num(v)?;
+        }
+        let board = self.board_mut()?;
+        if opt(&kv, "remove") == Some("1") {
+            return Ok(obj(json!({"removed": pcb_core::fiducial::remove_fiducials(board, o.side)})));
+        }
+        let r = pcb_core::fiducial::place_fiducials(board, &o)?;
+        let at: Vec<Value> = board.pads.iter().filter(|p| pcb_core::fiducial::is_fiducial(p) && p.side == o.side).map(|p| json!([(p.pos.x * 100.0).round() / 100.0, (p.pos.y * 100.0).round() / 100.0])).collect();
+        Ok(obj(json!({"placed": r.put, "missed_corners": r.missed, "at": at})))
+    }
+
     pub(super) fn board_pinlabels(&mut self, rest: &[String]) -> Res {
         // board pinlabels [height=1.0]: the names of the pins of the pin headers (`pinnames` in the circuit) on the silk beside the pads
         let (_, kv) = options(rest);

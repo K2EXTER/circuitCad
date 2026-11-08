@@ -494,7 +494,7 @@ pub fn part_boxes(board: &Board) -> Vec<PartBox> {
     let mut out = vec![];
     for (i, part) in board.parts.iter().enumerate() {
         // a part with a mesh of its own (a maker's STEP) is drawn from `part_meshes`
-        if board.models3d.contains_key(&part.footprint) {
+        if board.models3d.contains_key(&part.footprint) || crate::assembly::is_bare_copper(&part.footprint) {
             continue;
         }
         let bottom = part.side == Side::Bottom;

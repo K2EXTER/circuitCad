@@ -118,11 +118,21 @@ pub struct Pad {
     /// Net name from the schematic (empty = unassigned).
     #[serde(default)]
     pub net: String,
+    /// Diameter of a round solder-mask opening of its own (a fiducial: bare copper with a clear ring round it, which pours keep
+    /// out of too). 0: the pad's shape grown by the board's mask expansion.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub mask_open: f64,
 }
 
 impl Pad {
     pub fn new(pos: Point, shape: PadShape, drill: Option<f64>, side: Side) -> Self {
-        Self { pos, shape, drill, slot: 0.0, slot_v: false, side, refdes: String::new(), pin: String::new(), net: String::new() }
+        Self { pos, shape, drill, slot: 0.0, slot_v: false, side, refdes: String::new(), pin: String::new(), net: String::new(), mask_open: 0.0 }
+    }
+
+    /// The radius the copper keeps clear round the pad's centre, beyond the usual clearance: half the mask opening of a fiducial
+    /// (with 0.1 mm to spare for the mask's registration), or 0.
+    pub fn keep_clear(&self) -> f64 {
+        if self.mask_open > 0.0 { self.mask_open / 2.0 + 0.1 } else { 0.0 }
     }
 }
 

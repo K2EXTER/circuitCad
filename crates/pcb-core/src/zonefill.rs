@@ -620,6 +620,9 @@ fn raw_fill_uncached(board: &Board, zone: &Zone, conn: &Connectivity) -> Vec<Fil
     for (j, p) in board.pads.iter().enumerate().filter(|(_, p)| p.drill.is_some() || p.side == side) {
         if !same(conn.pad_net(j)) {
             cuts.push(pad_path(p.pos, p.shape, c));
+            if p.mask_open > 0.0 {
+                cuts.push(circle(p.pos, p.keep_clear()));
+            }
         }
     }
     for (k, v) in board.vias.iter().enumerate() {

@@ -90,7 +90,6 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 | J7 | 配線・ビア・部品を置けない領域、領域ごとのルール | 中 | ベタの穴あけ(`board keepout`、CLI のみ)だけ / KiCad・EasyEDA(確認)、Quadcept のデザインルール領域 |
 | J9 | 製造用の図面(ドリル表・寸法・組立図の PDF) | 中 | なし(Gerber・SVG・DXF まで) / Altium の Draftsman(確認) |
 | J10 | シルクの画像・ロゴ、銅箔の文字 | 小〜中 | シルクの文字だけ / EasyEDA の画像(確認)、KiCad の画像変換(知識) |
-| J11 | フィデューシャル・テストポイントの部品 | 小 | 取付穴とバラのパッドはある / EasyEDA のテストポイント(確認) |
 | J12 | 部品の型番(MPN)・メーカー欄、実装しない(DNP)、自由な欄 | 小〜中 | 店の型番と `simonly` だけ。バリアント(1つの回路から部品表を作り分ける)は対象外のまま / KiCad 10・Fusion にバリアント(確認) |
 | J13 | ネットの一覧表(長さ・ビア数・層・ネットクラス) | 小〜中 | 長さ合わせの窓の長さと CLI の `board status` だけ / KiCad の Net Inspector(確認) |
 | J14 | 2つの版の回路図・基板の違いを見比べる | 中 | 回路図と基板の食い違いだけ / Quadcept の Gerber の重ね比べ(確認) |

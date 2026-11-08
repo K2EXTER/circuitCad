@@ -1,0 +1,17 @@
+{
+  "name": "TESTPOINT_THT_1.0",
+  "category": "テストポイント",
+  "description": "テストポイント(穴あきのパッド、外径 2.0 mm・穴 1.0 mm)。穴にすずめっき線を輪にしてはんだ付けすると、クリップのプローブをつかませられます(ピンヘッダの 1 本を立ててもよい)。測りたいネットにつなぎます。基板の銅だけなので、部品表・実装リスト・購入リストには出ません(線やピンは手持ちのものを使います)。シミュレーションモデルなし(回路では何もしません)",
+  "prefix": "TP",
+  "value": "TP",
+  "footprint_name": "TestPoint_THT_D2.0mm_Drill1.0mm",
+  "pins": [
+    { "number": "1", "name": "TP", "side": "left" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "1", "x": 0, "y": 0, "shape": "circle", "w": 2.0, "drill": 1.0 }
+    ]
+  }
+}

@@ -112,7 +112,7 @@ impl Line {
 pub fn lines(board: &Board) -> Vec<Line> {
     type Key = (String, String, BTreeMap<String, String>);
     let mut groups: BTreeMap<Key, Vec<String>> = BTreeMap::new();
-    for p in &board.parts {
+    for p in board.parts.iter().filter(|p| !crate::assembly::is_bare_copper(&p.footprint)) {
         let codes = board.part_shops.get(&p.refdes).cloned().unwrap_or_default();
         groups.entry((crate::assembly::bom_value(&p.value), p.footprint.clone(), codes)).or_default().push(p.refdes.clone());
     }

@@ -216,7 +216,11 @@ pub fn mask(board: &Board, side: Side) -> String {
     let mut g = GerberLayer::new(func);
     let e = board.rules.mask_expansion;
     for p in board.pads.iter().filter(|p| pad_on_copper(p, side)) {
-        g.flash(p.pos, p.shape, e);
+        if p.mask_open > 0.0 {
+            g.flash(p.pos, PadShape::Circle { d: p.mask_open }, 0.0);
+        } else {
+            g.flash(p.pos, p.shape, e);
+        }
     }
     g.finish("pcb-core")
 }

@@ -1,0 +1,17 @@
+{
+  "name": "TESTPOINT_PAD_1.5",
+  "category": "テストポイント",
+  "description": "テストポイント(表面の丸い銅のパッド、直径 1.5 mm)。テスターやオシロスコープのプローブを当てて、電圧や波形を測る場所です。測りたいネットにつなぎます。銅だけで部品は付かないので、部品表・実装リスト・購入リストには出ません。プローブを当てやすいよう、まわりを空けて置きます。シミュレーションモデルなし(回路では何もしません)",
+  "prefix": "TP",
+  "value": "TP",
+  "footprint_name": "TestPoint_Pad_D1.5mm",
+  "pins": [
+    { "number": "1", "name": "TP", "side": "left" }
+  ],
+  "package": {
+    "type": "explicit",
+    "pads": [
+      { "pin": "1", "x": 0, "y": 0, "shape": "circle", "w": 1.5 }
+    ]
+  }
+}

@@ -229,6 +229,7 @@ impl BoardEditor {
             crate::widgets::section_header(ui, egui::Id::new("board_sec_仕上"), false, "仕上げ (任意)", "パッドの根元をそろえる、配線の角を丸める、涙型など、見た目と製造のための仕上げです", |ui| {
                 self.panel_pad_entries(ui);
                 self.panel_smooth(ui);
+                self.panel_fiducials(ui);
             });
             crate::widgets::section_header(ui, egui::Id::new("board_sec_③ "), true, "③ 確認して発注", "「DRC」は、線が近すぎないか・基板の端にはみ出していないかなど、工場で作れるかの規則 (設計ルール) を調べる機能です。問題がなければ、「発注の準備」で、工場に渡すデータ (ガーバー) を作ります", |ui| {
                 if crate::widgets::primary_button_wide(ui, true, "DRC を実行").on_hover_text("設計ルールチェック。線同士が近すぎる、銅が基板の端にはみ出している、などを調べます。発注前に必ず実行しましょう").clicked() {

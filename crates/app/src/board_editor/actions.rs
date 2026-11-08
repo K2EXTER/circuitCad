@@ -291,6 +291,41 @@ impl BoardEditor {
         });
     }
 
+    /// The fiducial row of the finishing section: put three marks near the corners, or take them off.
+    pub(super) fn panel_fiducials(&mut self, ui: &mut egui::Ui) {
+        ui.separator();
+        let has = self.board.pads.iter().any(|p| pcb_core::fiducial::is_fiducial(p) && p.side == Side::Top);
+        ui.horizontal(|ui| {
+            if !has {
+                if ui.button("フィデューシャルを置く").on_hover_text("基板の3つの角の近くに、実装機のカメラが基板の位置を合わせるための丸い印 (直径 1 mm の銅、まわり直径 3 mm はレジストなし) を置きます。
+部品の実装を工場に頼むときに使います (手はんだなら要りません)。必要かどうか・大きさは、頼む工場の説明で確かめてください。
+角に部品や配線があるときは、少し内側の空いた所に置きます。印の円の中には、ベタも入りません").clicked() {
+                    self.place_fiducials();
+                }
+            } else if ui.button("フィデューシャルを取り除く").on_hover_text("表面のフィデューシャル (位置合わせの印) を全部取り除きます").clicked() {
+                self.checkpoint();
+                let n = pcb_core::fiducial::remove_fiducials(&mut self.board, Side::Top);
+                self.status = format!("フィデューシャルを {n} 個取り除きました");
+            }
+        });
+    }
+
+    /// Put three fiducials on the top (see `pcb_core::fiducial`). One undo step.
+    pub fn place_fiducials(&mut self) {
+        self.checkpoint();
+        match pcb_core::fiducial::place_fiducials(&mut self.board, &Default::default()) {
+            Ok(r) => {
+                self.violations.clear();
+                let missed = if r.missed.is_empty() { String::new() } else { format!("{}の角の近くには空きがありませんでした (3 個が勧められます。角を空けてから置き直してください)。", r.missed.join("・")) };
+                self.status = format!("フィデューシャルを {} 個置きました。{missed}印のまわりの円の中には、配線やビアを通さないでください", r.put);
+            }
+            Err(e) => {
+                self.undo.pop();
+                self.status = e;
+            }
+        }
+    }
+
     /// Put stitching vias of GND (see `pcb_core::stitch`). One undo step.
     pub fn stitch_vias(&mut self, mode: pcb_core::stitch::StitchMode) {
         self.checkpoint();

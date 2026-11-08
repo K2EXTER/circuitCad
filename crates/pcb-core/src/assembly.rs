@@ -24,11 +24,17 @@ pub(crate) fn bom_value(value: &str) -> String {
     }
 }
 
+/// A footprint that is only copper on the board (a test point pad): nothing is bought or mounted for it, so it stays out of the
+/// bill of materials, the placement list, the purchase list and the 3D view.
+pub fn is_bare_copper(footprint: &str) -> bool {
+    footprint.starts_with("TestPoint_")
+}
+
 /// One row per distinct (value, footprint), designators listed together.
 pub fn bom_csv(board: &Board) -> String {
     // parts with another LCSC number stay on their own row
     let mut groups: BTreeMap<(String, String, String), Vec<String>> = BTreeMap::new();
-    for p in &board.parts {
+    for p in board.parts.iter().filter(|p| !is_bare_copper(&p.footprint)) {
         let lcsc = board.part_shops.get(&p.refdes).and_then(|s| s.get("lcsc")).map(|c| c.trim().to_string()).unwrap_or_default();
         groups.entry((bom_value(&p.value), p.footprint.clone(), lcsc)).or_default().push(p.refdes.clone());
     }
@@ -50,6 +56,7 @@ pub fn cpl_csv(board: &Board) -> String {
     let mut parts: Vec<&Part> = board
         .parts
         .iter()
+        .filter(|p| !is_bare_copper(&p.footprint))
         .filter(|p| board.pads.iter().filter(|pad| pad.refdes == p.refdes).all(|pad| pad.drill.is_none()))
         .collect();
     parts.sort_by_key(|p| natural_key(&p.refdes));
@@ -101,6 +108,15 @@ mod tests {
         assert_eq!(bom_value("100u DCR=0.05 ESL=2n"), "100u");
         assert_eq!(bom_value("10k"), "10k");
         assert_eq!(bom_value("Conn 2 pin"), "Conn 2 pin");
+    }
+
+    #[test]
+    fn a_test_point_pad_is_neither_bought_nor_placed() {
+        let mut b = board();
+        b.set_part(Part { refdes: "TP1".into(), value: "TP".into(), footprint: "TestPoint_Pad_D1.5mm".into(), pos: Point::new(30.0, 20.0), rot: 0, side: Side::Top }).ok();
+        assert!(!bom_csv(&b).contains("TP1"));
+        assert!(!cpl_csv(&b).contains("TP1"));
+        assert!(!crate::shops::purchase_csv(&b, 1, false).contains("TP1"));
     }
 
     #[test]

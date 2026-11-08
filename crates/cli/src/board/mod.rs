@@ -34,6 +34,7 @@ impl Session {
             "autoplace" => self.board_autoplace(rest),
             "pour" => self.board_pour(rest),
             "stitch" => self.board_stitch(rest),
+            "fiducials" => self.board_fiducials(rest),
             "pinlabels" => self.board_pinlabels(rest),
             "guard" => self.board_guard(rest),
             "picture" => self.board_picture(rest),

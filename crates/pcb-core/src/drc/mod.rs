@@ -122,6 +122,7 @@ pub fn check(board: &Board) -> Vec<Violation> {
 
     out.extend(clearance(board));
     out.extend(shorts(board));
+    out.extend(crate::fiducial::fiducial_checks(board));
     out
 }
 

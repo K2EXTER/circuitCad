@@ -534,6 +534,28 @@ fn stitching_vias_join_the_two_ground_pours_of_the_tp5100_sample() {
     assert_eq!(app.board_ed.board.vias.len(), vias);
 }
 
+/// Fiducials on the TP5100 sample after the pour and the routing: three marks, the board stays clean, the BOM is unchanged,
+/// and the button takes them off again.
+#[test]
+fn fiducials_go_on_the_routed_tp5100_board() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("tp5100_charger.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    app.board_ed.autoplace();
+    app.board_ed.ground_pour();
+    app.board_ed.autoroute_now(None);
+    let bom = pcb_core::assembly::bom_csv(&app.board_ed.board);
+    app.board_ed.place_fiducials();
+    assert!(app.board_ed.status.starts_with("フィデューシャルを 3 個"), "{}", app.board_ed.status);
+    let b = app.board_ed.board.clone();
+    assert_eq!(b.pads.iter().filter(|p| pcb_core::fiducial::is_fiducial(p)).count(), 3);
+    assert!(pcb_core::drc::check_final(&b).is_empty(), "{:?}", pcb_core::drc::check_final(&b));
+    assert_eq!(pcb_core::assembly::bom_csv(&b), bom);
+    app.board_ed.undo();
+    assert!(!app.board_ed.board.pads.iter().any(pcb_core::fiducial::is_fiducial));
+}
+
 /// The thin-power-line sample (docs/examples/thin_power_line.ccproj): the copper eats about 0.4 V of the 5 V,
 /// the simulated current says the tracks are too thin, and widening them brings the load back near 5 V.
 #[test]

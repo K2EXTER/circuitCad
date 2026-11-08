@@ -22,6 +22,7 @@ pub mod dxf_in;
 pub mod excellon;
 pub mod export;
 pub mod fab;
+pub mod fiducial;
 pub mod footprints;
 pub mod geom;
 pub mod impedance;

@@ -409,6 +409,11 @@ impl BoardEditor {
                     painter.rect_filled(Rect::from_center_size(c, sz), sz.min_elem() / 2.0, col);
                 }
             }
+            if p.mask_open > 0.0 {
+                // a fiducial: the ring with no solder mask round the dot
+                ribbon::flush(painter, &mut shapes);
+                painter.circle_stroke(c, p.mask_open as f32 * z / 2.0, egui::Stroke::new(1.0, col.gamma_multiply(0.7)));
+            }
             if let Some(d) = p.drill {
                 if p.slot > d + 1e-9 {
                     ribbon::flush(painter, &mut shapes);
