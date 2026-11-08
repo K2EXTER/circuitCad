@@ -17,6 +17,7 @@ pub mod current;
 pub mod diffpair;
 pub mod drc;
 pub mod dxf;
+pub mod dxf_in;
 pub mod excellon;
 pub mod export;
 pub mod fab;

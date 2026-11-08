@@ -294,3 +294,11 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - 色は表面=金、裏面=青、内層=紫、基板=緑、シルク=白。入口は画面の「ファイル → 基板の表面/裏面をSVGで保存…」(`board_editor/file.rs` の `export_svg`)と CLI の `board svg FILE [side=] [silk=0]`。
 - 確認: `board picture` と同じ向きになることと、ベタの切り抜きが出ることを、同梱の `rlc_board` で目で見た。単体テストは、要素・ミラー・マスクの順序。
 - 読み込み(ケースの図面から外形・穴を取る)は未実装(候補 C5)。
+
+## dxf_in.rs — ケースの図面から外形と穴を取る(2026-11-08)
+- `dxf_in::read(text, layer) -> Result<DxfShape{outline, holes, notes}>`、`apply(&mut Board, &shape, to_origin)`。ASCII の DXF の LINE・ARC・CIRCLE・LWPOLYLINE・POLYLINE(VERTEX のふくらみ `42` も)だけを読む。それ以外(TEXT・SPLINE・INSERT など)は読まずに、種類と数を案内に出す。
+- 端が 0.01 mm 以内で合う線・円弧・ポリラインをつないで輪にする(向きが逆でもよい)。閉じた輪のうち面積がいちばん大きいものが外形。ほかの輪(切り欠き・長穴)は案内に数だけ出す。外形の中にある円が穴(外にある円は穴にしない)。閉じた輪がなければ、層の名前を挙げて断る。
+- 単位は `$INSUNITS`(1=インチ、2=フィート、5=cm、6=m、なし・4=mm)。円弧の曲がりは `outline.rs` の許容(`ARC_TOLERANCE`)で折れ線にする。
+- `apply` は外形を置き換え、部品に属さない穴を図面の円に置き換える(部品の穴は残す)。`to_origin` で外形の左下を (0,0) に。部品の位置は動かさない。
+- 入口: 画面「ファイル → ケースの図面 (DXF) から外形と穴を取り込む…」(`board_editor/file.rs` の `import_dxf`。元に戻せる)、CLI `board dxf_import FILE [layer=] [origin=0]`。
+- 確認: 自分で書いた DXF の読み戻し(外形の面積・穴の位置)、線3本+円弧1つ(順不同)、インチと LWPOLYLINE、ふくらみ(半円)、開いた形と DXF でないファイルの断り。実際のケースの CAD が書いた DXF では、まだ確かめていない(バイナリ DXF・SPLINE・楕円は未対応)。

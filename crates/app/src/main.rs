@@ -322,6 +322,10 @@ impl eframe::App for App {
                         self.sch.export_svg();
                         ui.close();
                     }
+                    if !sch_mode && ui.button("ケースの図面 (DXF) から外形と穴を取り込む…").on_hover_text("ケースの CAD で描いた DXF (ASCII 形式) から、基板の外形 (線・円弧・ポリラインがつながって閉じた、いちばん大きい輪) と、その中の円 (取り付け穴) を取り込みます。外形の左下が (0, 0) になります。単位は図面の設定 (INSUNITS) から mm にします。「元に戻す」で戻せます").clicked() {
+                        self.board_ed.import_dxf();
+                        ui.close();
+                    }
                     if !sch_mode && ui.button("基板の外形・穴・部品の位置をDXFで保存…").on_hover_text("基板の外形、取り付け穴、部品を囲む箱と部品番号を、DXF (mm) にします。ケースを設計する CAD (Fusion・FreeCAD・SolidWorks など) に渡して、基板が収まるか、穴の位置が合うかを確かめるのに使います。画面と同じ向き (上から見た形) で書き出します").clicked() {
                         self.board_ed.export_dxf();
                         ui.close();

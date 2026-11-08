@@ -68,6 +68,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `body.rs` 部品の本体外形 / `outline.rs` 曲線の外形 / `zonefill.rs` ベタの銅 / `model3d.rs` 3D用の立体
 - `bridge.rs` 隣り合う同じネットのパッドを先に銅でつなぐ(自動配線の前) / `trunk.rs` その手で引く版(2パッドから首2本+太い幹) / `slot.rs` 仕上げで並走する同ネット配線のすき間を埋める
 - `svg.rs` 基板の1つの面の SVG(Gerber を読み戻して描く。画面のファイルメニューと `ccad board svg`)
+- `dxf_in.rs` ケースの図面(DXF)から外形と穴を取る(画面のファイルメニューと `ccad board dxf_import`)
 - `dxf.rs` ケース設計用の DXF(外形・穴・パッドのドリル・部品の箱。画面のファイルメニューと `ccad board dxf`)
 - `picture.rs` 基板の絵(RGBA。1 つの銅箔の層・ベタ・配線・パッド・穴・シルク・mm の格子と数字、ネットの色分け、DRC 違反の番号と未配線の線。AI が絵で確かめる `ccad board picture`)
 - `shops.rs` 購入リスト(店の型番・検索リンク。`ccad board shopping`、`*-shopping.csv`)

@@ -1195,6 +1195,16 @@ impl Session {
                 std::fs::write(f, &svg).map_err(|e| format!("{f}: {e}"))?;
                 Ok(obj(json!({"file": f, "side": format!("{side:?}"), "bytes": svg.len()})))
             }
+            "dxf_import" => {
+                let (pos, kv) = options(rest);
+                let f = pos.first().ok_or("board dxf_import FILE.dxf [layer=NAME] [origin=0]   (the outline = the biggest closed loop of lines, arcs and polylines; circles inside it become holes; origin=0 keeps the drawing's coordinates instead of moving the lower left corner to 0,0)")?;
+                let text = std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?;
+                let shape = pcb_core::dxf_in::read(&text, opt(&kv, "layer"))?;
+                let board = self.board_mut()?;
+                pcb_core::dxf_in::apply(board, &shape, opt(&kv, "origin") != Some("0"));
+                let (lo, hi) = board.bounds().unwrap_or_default();
+                Ok(obj(json!({"outline_points": board.outline.len(), "holes": shape.holes.len(), "width_mm": hi.x - lo.x, "height_mm": hi.y - lo.y, "notes": shape.notes})))
+            }
             "dxf" => {
                 let f = rest.first().ok_or("board dxf FILE.dxf   (the outline, holes, pad drills and part boxes in mm, seen from the top, for the case's CAD)")?;
                 let board = self.board_mut()?;

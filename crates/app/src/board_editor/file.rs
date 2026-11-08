@@ -37,6 +37,24 @@ impl BoardEditor {
         }
     }
 
+    /// Take the outline and the holes from a DXF drawing of the case (the loose holes of before are replaced; the parts stay where they are).
+    pub fn import_dxf(&mut self) {
+        let Some(p) = rfd::FileDialog::new().add_filter("DXF (ケースの図面)", &["dxf"]).pick_file() else { return };
+        match std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display())).and_then(|t| pcb_core::dxf_in::read(&t, None)) {
+            Ok(shape) => {
+                self.checkpoint();
+                pcb_core::dxf_in::apply(&mut self.board, &shape, true);
+                self.fit_pending = true;
+                self.status = format!("DXF から外形と穴 {} 個を取り込みました (元に戻せます)", shape.holes.len());
+                let mut notes = shape.notes.clone();
+                notes.push("外形の左下を (0, 0) に合わせました。すでに部品を置いていた場合は、外形に収まっているか確かめてください。".into());
+                rfd::MessageDialog::new().set_title("DXF を取り込みました").set_description(notes.iter().map(|n| format!("・{n}")).collect::<Vec<_>>().join("
+")).show();
+            }
+            Err(e) => self.status = format!("DXF を取り込めませんでした: {e}"),
+        }
+    }
+
     /// Write one side of the board as an SVG (vector; the bottom is drawn as seen from below).
     pub fn export_svg(&mut self, side: pcb_core::Side) {
         let name = format!("{}-{}.svg", if self.board.name.is_empty() { "board" } else { &self.board.name }, if side == pcb_core::Side::Bottom { "bottom" } else { "top" });

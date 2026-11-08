@@ -155,6 +155,7 @@ board fab out/
 | `board route` の `bridge=0` | 自動配線の前に、同じ部品・同じネットで隣り合う表面実装パッド(レギュレータの2つのLXピンなど)を短い銅でつなぐ処理を止める。答えの `pads_bridged` がつないだ数。 |
 | `board check [fab=jlcpcb\|pcbway\|oshpark\|standard]` | アプリの「発注の準備」と同じ発注前チェック。`ready`(エラーが無ければ true)、`errors`/`warnings`/`info`/`ok` の数、`list`(ok 以外の項目の `level`・`title`・理由 `detail`・場所 `at`)を返す。未配線・DRC違反・基板の外の部品・配線の太さと電圧降下・シルク・鋭角・サーマルビア・バイパスコンデンサ・料金の枠(`fab=` を付けたとき)・**回路図と基板の食い違い**(取り込み後に回路図を直したとき)を調べる。`board fab` の前に実行し、`ready:false` なら直してから書き出す。 |
 | `board svg F [side=top|bottom|inner1…] [silk=0]` | 基板の1つの面を SVG(ベクタの絵)にする。銅・シルク・穴を、発注用の Gerber と同じデータから描く(できあがりの姿)。裏面は下から見た向き。記事・レポート・印刷用。 |
+| `board dxf_import F [layer=名前] [origin=0]` | ケースの図面(ASCII の DXF)から外形と穴を取り込む。線・円弧・ポリライン(ふくらみつき)がつながって閉じた輪のうち、いちばん大きいものが外形。その中の円は穴。`origin=0` で図面の座標のまま(既定は外形の左下を 0,0 に)。単位は INSUNITS から mm に。答えの `notes` に、読まなかったものが出る。 |
 | `board dxf F` | 基板の外形・穴・パッドのドリル・部品を囲む箱と部品番号を DXF(mm、上から見た形)に書く。ケースを設計する CAD に渡す。 |
 | `board save F` / `open F` / `fab DIR` | `.pcbjson` の保存・読込、ガーバー・ドリル・BOM・部品位置・zip の書き出し。 |
 
