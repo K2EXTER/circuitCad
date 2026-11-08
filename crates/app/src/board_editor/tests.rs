@@ -2030,17 +2030,16 @@ fn the_arduino_board_lesson_walks_from_import_to_the_order_window() {
     e.import_from_schematic(&sch);
     assert_eq!(e.lesson_progress(), 1);
     e.autoplace();
-    assert_eq!(e.lesson_progress(), 2);
-    // the auto placement is only a first draft: the crystal and the bypass capacitors are not near their pins yet
+    // the auto placement puts the crystal (with its load capacitors) in front of XTAL1 / XTAL2 itself: the step is to check it
     let far = |e: &BoardEditor, a: (&str, &str), b: (&str, &str)| {
         let at = |r: &str, p: &str| e.board.pads.iter().find(|x| x.refdes == r && x.pin == p).map(|x| x.pos).unwrap();
         let (p, q) = (at(a.0, a.1), at(b.0, b.1));
         ((p.x - q.x).powi(2) + (p.y - q.y).powi(2)).sqrt()
     };
-    assert!(far(&e, ("Y1", "1"), ("U1", "7")) > 9.0, "the crystal starts {} mm from XTAL1", far(&e, ("Y1", "1"), ("U1", "7")));
-    drag_next_to(&mut e, "Y1", &[("1", ("U1", "7")), ("3", ("U1", "8"))], 8.0);
-    assert!(far(&e, ("Y1", "3"), ("U1", "8")) <= 9.0, "the other end follows: {}", far(&e, ("Y1", "3"), ("U1", "8")));
-    assert_eq!(e.lesson_progress(), 3, "the crystal is near");
+    assert!(far(&e, ("Y1", "1"), ("U1", "7")) <= 5.0, "the crystal stands {} mm from XTAL1", far(&e, ("Y1", "1"), ("U1", "7")));
+    assert!(far(&e, ("Y1", "3"), ("U1", "8")) <= 9.0, "and {} mm from XTAL2", far(&e, ("Y1", "3"), ("U1", "8")));
+    assert_eq!(e.lesson_progress(), 2);
+    assert_eq!(e.lesson_progress(), 3, "the crystal is near (one step a frame, as in the app)");
     // the auto placement puts the bypass capacitors by their pins itself (the lesson is to look, and to move one that is still far): the
     // step is done as soon as both are near, however many the learner had to move
     drag_next_to(&mut e, "C3", &[("1", ("U1", "4"))], 5.0);

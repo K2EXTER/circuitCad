@@ -82,6 +82,10 @@ pub(super) fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>
     let rail = |n: &str| is_ground_net(n) || is_supply_net(n) || is_negative_supply_net(n);
     let supply = |n: &str| is_supply_net(n) || is_negative_supply_net(n);
     let count = |r: &str| board.pads.iter().filter(|p| p.refdes == r).count();
+    // a crystal or resonator: its pads that are not on a ground count (its two ends; the ground pads of the case go to the pour). A
+    // connector with a few signals and many ground pads (USB) is not a satellite: it belongs at the edge
+    let crystal = |r: &str| r.starts_with('Y') || r.starts_with('X');
+    let signal_pads = |r: &str| board.pads.iter().filter(|p| p.refdes == r && !is_ground_net(&p.net)).count();
     let ics: Vec<&Part> = board.parts.iter().filter(|p| p.refdes.starts_with('U') && count(&p.refdes) >= 8 && !skip.contains(&p.refdes)).collect();
     let mut assigned: std::collections::BTreeMap<String, Vec<String>> = Default::default();
     for cap in board.parts.iter().filter(|p| p.refdes.starts_with('C') && !skip.contains(&p.refdes)) {
@@ -107,10 +111,14 @@ pub(super) fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>
     // share with it, which are not hubs, they meet that one IC and no other IC or header
     let mut sat_net: std::collections::BTreeMap<String, String> = Default::default();
     let taken: std::collections::BTreeSet<String> = assigned.values().flatten().cloned().collect();
-    for part in board.parts.iter().filter(|p| !skip.contains(&p.refdes) && !p.refdes.starts_with('U') && count(&p.refdes) <= SATELLITE_PADS && !taken.contains(&p.refdes)) {
+    // the bigger ones first (a crystal before its load capacitors, which then sit by the crystal)
+    let mut candidates: Vec<&Part> = board.parts.iter().filter(|p| !skip.contains(&p.refdes) && !p.refdes.starts_with('U') && (if crystal(&p.refdes) { signal_pads(&p.refdes) } else { count(&p.refdes) }) <= SATELLITE_PADS && !taken.contains(&p.refdes)).collect();
+    candidates.sort_by_key(|p| std::cmp::Reverse(signal_pads(&p.refdes)));
+    for part in candidates {
         let mut touched: std::collections::BTreeMap<&str, &str> = Default::default();
         let mut other_anchor = false;
-        for pad in board.pads.iter().filter(|p| p.refdes == part.refdes && !p.net.is_empty()) {
+        // (a ground joins everything and is poured: it does not tie a part to an IC or a header)
+        for pad in board.pads.iter().filter(|p| p.refdes == part.refdes && !p.net.is_empty() && !is_ground_net(&p.net)) {
             let on: std::collections::BTreeSet<&str> = board.pads.iter().filter(|q| q.net == pad.net).map(|q| q.refdes.as_str()).collect();
             if on.len() > 6 {
                 continue;
@@ -163,12 +171,28 @@ pub(super) fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>
             };
             let Some(sp) = sp else { continue };
             let other_net = if sat_net.contains_key(c) { None } else { cap_pads.iter().find(|q| q.net != sp.net && rail(&q.net)).map(|q| q.net.clone()) };
-            let pins: Vec<Pad> = scratch.pads.iter().filter(|p| p.refdes == ic_name && p.net == sp.net).cloned().collect();
+            let satellite = sat_net.contains_key(c);
+            let own: std::collections::BTreeSet<String> = cap_pads.iter().filter(|p| !p.net.is_empty() && !rail(&p.net)).map(|p| p.net.clone()).collect();
+            // where to look: round the IC's pins on the net; for a satellite, round every pad in the block that it joins (a load capacitor
+            // finds room by the crystal when the pins are crowded)
+            let pins: Vec<Pad> = scratch
+                .pads
+                .iter()
+                .filter(|p| if satellite { own.contains(&p.net) && (p.refdes == ic_name || block.caps.iter().any(|(r, ..)| r == &p.refdes)) } else { p.refdes == ic_name && p.net == sp.net })
+                .cloned()
+                .collect();
             let other_pins: Vec<Pad> = other_net.map_or(vec![], |n| scratch.pads.iter().filter(|p| p.refdes == ic_name && p.net == n).cloned().collect());
             // the boxes in the way: the IC and the capacitors already put
             let mut boxes: Vec<(Point, Point)> = extent(&scratch, &ic_name).into_iter().collect();
             boxes.extend(block.caps.iter().filter_map(|(r, ..)| extent(&scratch, r)));
+            // a satellite: each of its pads to the nearest pad of the same net already in the block (the IC's pin, or the crystal that a
+            // load capacitor goes with)
+            let block_pads: Vec<Pad> = scratch.pads.iter().filter(|p| !p.net.is_empty() && !rail(&p.net) && (p.refdes == ic_name || block.caps.iter().any(|(r, ..)| r == &p.refdes))).cloned().collect();
+            let sat_cost = |pads: &[Pad]| -> f64 { pads.iter().filter_map(|q| block_pads.iter().filter(|b| b.net == q.net).map(|b| b.pos.dist(q.pos)).reduce(f64::min)).sum() };
             let cost_of = |pads: &[Pad]| -> f64 {
+                if satellite {
+                    return sat_cost(pads);
+                }
                 let Some(s) = pads.iter().find(|q| q.pin == sp.pin) else { return f64::MAX };
                 let o = pads.iter().find(|q| q.pin != sp.pin && q.net != sp.net);
                 pins.iter()
@@ -179,7 +203,8 @@ pub(super) fn ic_blocks(board: &Board, skip: &std::collections::BTreeSet<String>
                     .fold(f64::MAX, f64::min)
             };
             let mut best: Option<(f64, Point, u8)> = None;
-            let zones = escape_zones(&scratch, &ic_name, &rail);
+            // (a satellite may stand in front of the pins it is joined to: those wires are its own)
+            let zones = escape_zones(&scratch, &ic_name, &|n: &str| rail(n) || (satellite && own.contains(n)));
             // the first pass keeps the way out of the signal pins free; when there is no such place, the second does not
             for strict in [true, false] {
             if best.is_some() {

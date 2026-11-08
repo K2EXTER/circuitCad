@@ -546,3 +546,46 @@ fn bypass_capacitors_sit_by_their_ic_supply_pin() {
     assert!(d(&with) < d(&without) / 2.0, "much closer than without the pull: {} {}", d(&with), d(&without));
     assert!(drc::decoupling_checks(&with).is_empty(), "{:?}", drc::decoupling_checks(&with));
 }
+
+/// A microcontroller with a crystal (two ends, two ground pads of the case) and its two load capacitors, and a header on many of its pins.
+fn mcu_with_crystal() -> Board {
+    let part = |r: &str, f: &str| NetlistPart { refdes: r.into(), value: "1".into(), footprint: f.into() };
+    let net = |n: &str, pins: &[(&str, &str)]| NetlistNet { name: n.into(), pins: pins.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect() };
+    let mut b = Board::new("t", 10.0, 10.0);
+    b.add_footprint(package::PackageSpec::Quad { pins: 32, pitch: 0.8, span: 8.4, pad_len: 1.6, pad_width: 0.5 }.build("TQFP-32").unwrap());
+    b.add_footprint(package::PackageSpec::Dual { pins: 4, pitch: 1.1, row_spacing: 2.2, pad_len: 1.0, pad_width: 0.9, drill: None }.build("XTAL4").unwrap());
+    let mut parts = vec![part("U1", "TQFP-32"), part("Y1", "XTAL4"), part("C1", "C_0805"), part("C2", "C_0805"), part("J1", "PinHeader_1x10")];
+    let mut nets = vec![
+        net("XTAL1", &[("U1", "7"), ("Y1", "1"), ("C1", "1")]),
+        net("XTAL2", &[("U1", "8"), ("Y1", "3"), ("C2", "1")]),
+        net("GND", &[("U1", "5"), ("Y1", "2"), ("Y1", "4"), ("C1", "2"), ("C2", "2"), ("J1", "10")]),
+    ];
+    for k in 0..9 {
+        nets.push(net(&format!("D{k}"), &[("U1", &(20 + k).to_string()), ("J1", &(k + 1).to_string())]));
+    }
+    parts.push(part("R1", "R_0805"));
+    nets.push(net("RST", &[("U1", "29"), ("R1", "1")]));
+    nets.push(net("VCC", &[("U1", "4"), ("R1", "2"), ("J1", "9")]));
+    import(&mut b, &parts, &nets);
+    b
+}
+
+/// The least distance between a pad of `a` and a pad of `b` on `net`.
+fn pads_apart(b: &Board, a: &str, c: &str, net: &str) -> f64 {
+    gap_to_pin(b, a, c, net)
+}
+
+#[test]
+fn a_crystal_and_its_load_capacitors_sit_by_the_clock_pins() {
+    let mut b = mcu_with_crystal();
+    with_pour(&mut b, 0.5);
+    autoplace(&mut b).unwrap();
+    // the crystal's ends by XTAL1 / XTAL2 (its ground pads do not keep it out of the IC's block), the load capacitors by the crystal
+    assert!(pads_apart(&b, "Y1", "U1", "XTAL1") <= 4.0, "{}", pads_apart(&b, "Y1", "U1", "XTAL1"));
+    assert!(pads_apart(&b, "Y1", "U1", "XTAL2") <= 4.0, "{}", pads_apart(&b, "Y1", "U1", "XTAL2"));
+    for (cap, n) in [("C1", "XTAL1"), ("C2", "XTAL2")] {
+        let d = pads_apart(&b, cap, "Y1", n).min(pads_apart(&b, cap, "U1", n));
+        assert!(d <= 3.0, "{cap}: {d}");
+    }
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+}

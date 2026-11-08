@@ -103,7 +103,7 @@ pub(super) fn turn_copies_toward_ports(board: &mut Board, groups: &[Vec<Vec<Stri
 
 /// A bypass capacitor farther than this (mm) from the pin it serves is moved to the pin.
 pub(super) const BYPASS_NEAR: f64 = 2.5;
-/// A part with this many pads or fewer can be a satellite of an IC (see `ic_blocks`).
+/// A part with this many pads or fewer can be a satellite of an IC (see `ic_blocks`; a crystal counts only the pads not on a ground).
 pub(super) const SATELLITE_PADS: usize = 3;
 /// How far (mm) from the pin a place is looked for, and the distance between the places tried.
 pub(super) const BYPASS_REACH: f64 = 6.0;
