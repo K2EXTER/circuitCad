@@ -342,6 +342,7 @@ impl BoardEditor {
                     self.pending = Some(p); // continue the route
                 }
             },
+            Tool::Measure => self.measure_click(p),
             Tool::Silk => match self.pending.take() {
                 None => self.pending = Some(p),
                 Some(a) => {

@@ -22,6 +22,8 @@ pub enum Tool {
     OutlineRect,
     OutlinePoly,
     Zone,
+    /// Measure the distance between two points (nothing is changed on the board).
+    Measure,
 }
 
 use crate::icons::Icon;
@@ -38,6 +40,7 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::PadSmd => "表面実装の単独パッドを置きます",
         Tool::Hole => "ネジ止め用の取付穴を置きます",
         Tool::Silk => "部品名や目印などの白い印刷 (シルク) の線を引きます",
+        Tool::Measure => "2点の間の距離を測ります。1回目のクリックで始点、2回目で終点。パッド・ビアの中心や配線の端に吸い付きます。基板は変わりません (Esc で消します)",
     }
 }
 
@@ -57,11 +60,12 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::PadSmd, "パッド(SMD)", Icon::PadSmd),
     (Tool::Hole, "取付穴", Icon::Hole),
     (Tool::Silk, "シルク線", Icon::Silk),
+    (Tool::Measure, "距離を測る", Icon::Ruler),
 ];
 
 /// The tools as the panel shows them: groups of joined bars, each tool with a short label (the full name is in `TOOLS`).
 const TOOL_GROUPS: &[(&str, &[(Tool, &str)])] = &[
-    ("基本", &[(Tool::Select, "選択"), (Tool::Track, "配線"), (Tool::Via, "ビア")]),
+    ("基本", &[(Tool::Select, "選択"), (Tool::Track, "配線"), (Tool::Via, "ビア"), (Tool::Measure, "測る")]),
     ("銅・穴", &[(Tool::Zone, "ゾーン"), (Tool::PadTh, "穴付き"), (Tool::PadSmd, "SMD"), (Tool::Hole, "取付穴")]),
     ("外形・文字", &[(Tool::OutlineRect, "矩形"), (Tool::OutlinePoly, "多角形"), (Tool::Silk, "シルク")]),
 ];
@@ -282,6 +286,9 @@ pub struct BoardEditor {
     zoom: f32, // pixels per mm
     pan: Vec2, // world mm at the screen centre
     pending: Option<Point>,
+    /// The measuring tool: the start point, and the end point once it is clicked; and where the snapped pointer is.
+    measure: Option<(Point, Option<Point>)>,
+    measure_hover: Option<Point>,
     /// Polygon being drawn (board outline or zone).
     poly: Vec<Point>,
     /// The corners of the shape being drawn (a corner and the point an arc from it passes through); `poly` is the same shape as short
@@ -502,6 +509,8 @@ impl Default for BoardEditor {
             zoom: 12.0,
             pan: Vec2::new(25.0, 20.0),
             pending: None,
+            measure: None,
+            measure_hover: None,
             poly: vec![],
             poly_verts: vec![],
             vdrag: None,
@@ -669,6 +678,7 @@ pub fn set_multisampled(on: bool) {
 
 pub(crate) use draw::capsule;
 mod order;
+mod measure;
 mod ruler;
 pub mod lesson;
 mod panel;

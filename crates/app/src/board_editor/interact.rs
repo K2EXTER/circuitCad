@@ -86,7 +86,7 @@ impl BoardEditor {
             self.ctrl_down = ctrl;
             let near = self.snap_object(w);
             let mut on_object = false;
-            if matches!(self.tool, Tool::Track | Tool::Via)
+            if matches!(self.tool, Tool::Track | Tool::Via | Tool::Measure)
                 && let Some(c) = near {
                     // snapped onto something that is already there: a green ring says so
                     p = c;
@@ -95,6 +95,7 @@ impl BoardEditor {
                 }
             p = self.track_guides(&resp.ctx, painter, rect, w, p, near, on_object);
             sp = Some(p);
+            self.measure_hover = Some(p);
             self.draw_cursor(painter, rect, p);
 
             if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.vdrag.is_none()
@@ -225,6 +226,10 @@ impl BoardEditor {
                 self.poly_verts.clear();
                 self.status = "多角形の入力を取り消しました".into();
             }
+            return true;
+        }
+        if self.tool == Tool::Measure && self.measure.take().is_some() {
+            self.status = "測った距離を消しました".into();
             return true;
         }
         if self.tool == Tool::Select {
