@@ -82,17 +82,61 @@ Altium の調べでの注意: 基板の接続は、コネクタに「システ�
 | I3 | ~~基板の SVG・DXF の書き出し~~ → **済み**(`pcb-core/svg.rs`・`dxf.rs`。DXF をケースの CAD で開く確認はまだ) | 小〜中 | |
 | I4 | KiCad の基板 `.kicad_pcb` の読み込み・書き出し | 大 | 効果は限られる。後回し |
 
+## J. 他のソフトとの比較で足りないもの(2026-11-08)
+
+KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の公式ページを調べ、circuitCad のコードと突き合わせた。他のソフトの欄の「(知識)」は、公式ページで確かめていないもの。すでに上の表にあるもの(C3 部品番号の振り直し、I2 PDF、A2 型番、E3 STEP の書き出し、G のデジタル波形の表示)は、ここに重ねて書かない。
+
+**J-1. 初学者が困る・多くのソフトにある**
+
+| # | 内容 | 規模 | 今の circuitCad / 他のソフト |
+|---|---|---|---|
+| J1 | 自動保存とクラッシュからの復旧 | 小〜中 | クラッシュログ(`startup.rs`)と未保存の確認(`files.rs`)だけ。作品が消えるのは初学者にいちばん痛い |
+| J2 | 図枠(用紙の大きさ・タイトル・版・日付) | 小 | なし(KiCad の読み込みでタイトルを読むだけ)。印刷・PDF(I2)と一緒に作る / KiCad・Altium・Quadcept(知識) |
+| J3 | 2点間の距離を測る道具と、寸法線 | 小〜中 | 画面の端の mm の目盛(`board_editor/ruler.rs`)だけ / KiCad・EasyEDA(確認) |
+| J4 | 配線中の違反のその場の表示(オンライン DRC) | 中 | 押しのけ配線はクラスの間隔を守るが、違反の表示は「DRC を実行」のときだけ / Altium・Quadcept(確認) |
+| J5 | 部品店の在庫・値段(部品表に出す) | 中 | 店の検索リンクを作るだけ(`pcb-core/shops.rs`) / EasyEDA の LCSC・Altium・Quadcept(確認)。API の規約と鍵の扱いを先に調べる |
+
+**J-2. 中級者になると欲しくなる**
+
+| # | 内容 | 規模 | 今の circuitCad / 他のソフト |
+|---|---|---|---|
+| J6 | ピンの電気的な種類(入力・出力・電源・オープンコレクタ)と ERC の照合表 | 中 | 種類を持つのは階層のポートだけ(`hierarchy.rs`)。IC の電源ピンは名前で見分ける / KiCad(確認)ほか |
+| J7 | 配線・ビア・部品を置けない領域、領域ごとのルール | 中 | ベタの穴あけ(`board keepout`、CLI のみ)だけ / KiCad・EasyEDA(確認)、Quadcept のデザインルール領域 |
+| J8 | ビアの縫い付け(GND のビアの格子・ビアの柵) | 小〜中 | SMD の GND パッドに 1 本ずつ(`groundpour.rs`)だけ / EasyEDA(確認)、KiCad・Altium(知識) |
+| J9 | 製造用の図面(ドリル表・寸法・組立図の PDF) | 中 | なし(Gerber・SVG・DXF まで) / Altium の Draftsman(確認) |
+| J10 | シルクの画像・ロゴ、銅箔の文字 | 小〜中 | シルクの文字だけ / EasyEDA の画像(確認)、KiCad の画像変換(知識) |
+| J11 | フィデューシャル・テストポイントの部品 | 小 | 取付穴とバラのパッドはある / EasyEDA のテストポイント(確認) |
+| J12 | 部品の型番(MPN)・メーカー欄、実装しない(DNP)、自由な欄 | 小〜中 | 店の型番と `simonly` だけ。バリアント(1つの回路から部品表を作り分ける)は対象外のまま / KiCad 10・Fusion にバリアント(確認) |
+| J13 | ネットの一覧表(長さ・ビア数・層・ネットクラス) | 小〜中 | 長さ合わせの窓の長さと CLI の `board status` だけ / KiCad の Net Inspector(確認) |
+| J14 | 2つの版の回路図・基板の違いを見比べる | 中 | 回路図と基板の食い違いだけ / Quadcept の Gerber の重ね比べ(確認) |
+| J15 | 面付け(V カット・ミシン目・捨て基板) | 中 | なし。今は発注先に頼めば足りる / EasyEDA(確認) |
+
+**J-3. 専門的・後回しでよい**
+
+| # | 内容 | メモ |
+|---|---|---|
+| J16 | 記号とフットプリントを絵で描く編集画面 | 今はフォームと KiCad の取り込み。記号の絵は四角い箱 |
+| J17 | LTspice の `.asc`・EAGLE の読み込み | LTspice は初学者の利用者が多く、効果は大きめ |
+| J18 | IPC-D-356(電気テスト用のネットリスト)、Gerber X2 の部品ごとの情報(`%TO`) | 今の X2 はファイルの情報(`%TF`)だけ。ODB++・IPC-2581 は対象外のまま |
+| J19 | 沿面距離(高電圧の点検)、ネットタイ、キャスタレーション | Altium に沿面距離のルール(確認) |
+| J20 | ショートカットの変更、明るい画面への切り替え、英語の画面 | 今は暗い画面だけ(`theme.rs`)、日本語だけ |
+| J21 | プラグインの仕組み | 今は CLI と MCP で足りている |
+| J22 | シミュレーションの残り: S パラメータ・IBIS、銅の面積から熱抵抗、平均化したスイッチング電源のモデル、モーター | 熱抵抗は「温度の時間変化の画面の続き」の案と同じ。伝送線路は無損失の LC のはしごだけ |
+
+出典は `docs/competitor-comparison.md` の出典の節と、次のページ: KiCad 9.0 のリリース https://www.kicad.org/blog/2025/02/Version-9.0.0-Released/ ・KiCad 10.0 のリリース https://www.kicad.org/blog/2026/03/Version-10.0.0-Released/ ・EasyEDA の Standard と Pro の比較 https://prodocs.easyeda.com/en/introduction/std-vs-pro/ ・EasyEDA の面付け https://prodocs.easyeda.com/en/pcb/tools-panelize-advanced/ ・EasyEDA の部品表(価格と在庫) https://prodocs.easyeda.com/en/pcb/export-bill-of-materials-bom/ ・Altium の Draftsman https://www.altium.com/documentation/altium-designer/streamlining-board-design-documentation-with-draftsman?version=21 ・Fusion Electronics https://www.autodesk.com/products/fusion-360/blog/18-things-need-to-know-fusion-360-electronics/ ・Quadcept の製品 https://www.quadcept.com/ja/product/cad/ ・Quadcept の Gerber の重ね比べ https://www.quadcept.com/ja/manual/pcb/post-752
+
 ## 優先して進める順
 
 2026-11-08 に見直した。
 
 1. 評価基板の仕上げ(サーマルビアとルールの警告、スペック表の「実測」欄、組み立てと測定の手順書)。シミュレーションが実物と合うことを示す
-2. I2(回路図の PDF の書き出し)
-3. E1 の残り(USB・ジャック・ブザーなどの形)→ E2 の残り(ねじ柱・コネクタの穴あけ位置)
+2. J1(自動保存と復旧)
+3. I2 + J2(回路図の PDF の書き出しと図枠)、J3(距離を測る道具)
 4. C3(部品番号の振り直し)→ B4(基板のスニペット)
-5. 確認だけの作業: DXF をケースの CAD で開く(C5・I3)、KiCad の回路図の回転 90〜270° を実物で確かめる(I1)
-6. A2(秋月・DigiKey の型番。店のページで確かめながら少しずつ)
-7. E3 → E4 → E5(STEP の書き出し → マルチボード。長期)、G・H の残り(デジタル波形の表示など)
+5. E1 の残り(USB・ジャック・ブザーなどの形)→ E2 の残り(ねじ柱・コネクタの穴あけ位置)
+6. 確認だけの作業: DXF をケースの CAD で開く(C5・I3)、KiCad の回路図の回転 90〜270° を実物で確かめる(I1)
+7. A2(秋月・DigiKey の型番。店のページで確かめながら少しずつ)、J の残り(J4〜J15 から、使って困った順に)
+8. E3 → E4 → E5(STEP の書き出し → マルチボード。長期)、G・H の残り(デジタル波形の表示など)
 
 通しの点検(`docs/beginner-walkthrough.md`)は、新しい機能を足すたびに行う。
 

@@ -108,12 +108,14 @@ circuitCad の列だけを書く。他のソフトが何を読み書きできる
 | STEP(3D) | 部品1個ずつ(曲面は粗い) | なし(E3) |
 | Gerber・Excellon ドリル・BOM・部品配置(CSV) | - | あり |
 | 回路図の SVG | - | あり(2026-11-08) |
-| KiCad の回路図・基板(`.kicad_sch` / `.kicad_pcb`)、EAGLE、Altium、EasyEDA、LTspice(`.asc`) | なし | なし |
-| DXF | なし(C5) | なし(C5) |
+| KiCad の回路図(`.kicad_sch`) | あり(部品とネットを取り出して組み立てる。`part-lib/kicad_sch.rs`・`kicad_import.rs`) | なし |
+| KiCad の基板(`.kicad_pcb`)、EAGLE、Altium、EasyEDA、LTspice(`.asc`) | なし | なし |
+| DXF | あり(基板の外形と穴をケースの図面から取る。`pcb-core/dxf_in.rs`) | あり(外形・穴・パッドのドリル・部品の箱。`pcb-core/dxf.rs`)。どちらもケースの CAD で実際に開く確認はまだ |
+| 基板の SVG | - | あり(1つの面を Gerber から描く。`pcb-core/svg.rs`) |
 | ODB++・Specctra(Freerouting 用) | なし | なし |
 
 - 部品(ライブラリ)の互換性は、KiCad と SnapEDA・Ultra Librarian の資産を使える範囲にある。ただし記号の絵は取り込めない。
-- 設計データ(回路図・基板)は、自前の形式(`.schjson` / `.pcbjson` / `.ccproj`)に閉じている。外へ出るのは製造データと SPICE ネットリストだけ。
+- 設計データ(回路図・基板)は、自前の形式(`.schjson` / `.pcbjson` / `.ccproj`)に閉じている。外へ出るのは製造データ・SPICE ネットリスト・SVG・DXF だけ。入ってくるのは KiCad の回路図とケースの DXF。
 - 候補は `docs/candidates.md` の「ファイル互換性」。
 
 ## 未確認として残したもの(次に調べるなら)
