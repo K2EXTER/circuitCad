@@ -867,11 +867,6 @@ pub(super) fn regulator_dropout_ac(e: &SchEditor) -> bool {
     value_at_most(e, "V1", 7.0) && ac_fresh(e)
 }
 
-/// The photocoupler lesson: the LED resistor R1 is 1 kohm or more (the LED current is small) and the run is fresh.
-pub(super) fn coupler_weak_led(e: &SchEditor) -> bool {
-    value_at_least(e, "R1", 1e3) && dc_fresh(e)
-}
-
 /// The photocoupler lesson: the load R2 is 1 kohm or more (the output transistor saturates) and the run is fresh.
 pub(super) fn coupler_saturated(e: &SchEditor) -> bool {
     value_at_least(e, "R2", 1e3) && dc_fresh(e)

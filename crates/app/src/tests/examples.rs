@@ -567,7 +567,7 @@ fn write_inductor_basics_example() {
 fn write_resistor_basics_example() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
     let mut s = sch_core::Schematic::default();
-    let mut put = |s: &mut sch_core::Schematic, x: i32, value: &str, a: &str, b: &str| {
+    let put = |s: &mut sch_core::Schematic, x: i32, value: &str, a: &str, b: &str| {
         let r = s.add(Kind::Resistor, (x, 0), 1);
         s.components[r].value = value.into();
         label(s, r, "1", a);

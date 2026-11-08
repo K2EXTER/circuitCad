@@ -21,7 +21,9 @@ pub const HIGHLIGHT: Color32 = Color32::from_rgb(211, 182, 59);
 
 /// Spacing scale: use these instead of a new number in `add_space`.
 pub const SPACE_S: f32 = 4.0;
+#[allow(dead_code)] // part of the scale (docs/code-notes/app/ui-rules.md), kept for new panels
 pub const SPACE_M: f32 = 8.0;
+#[allow(dead_code)]
 pub const SPACE_L: f32 = 12.0;
 /// Indent of a folded group's contents and the gap between rows (the values `apply` sets; a flush group restores them inside).
 pub const INDENT: f32 = 20.0;

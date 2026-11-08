@@ -11,6 +11,7 @@ fn the_next_steps_are_filled_in_and_not_repeated() {
 }
 
 use super::*;
+use super::paths::*;
 
 fn temp_file(name: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("circuitcad-test-{name}-{}", std::process::id()));

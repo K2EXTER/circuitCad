@@ -11,7 +11,6 @@ mod window;
 #[cfg(test)]
 mod tests;
 
-use paths::*;
 pub use paths::PATHS;
 pub use window::{welcome_card, LearnWindow};
 

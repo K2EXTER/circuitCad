@@ -1446,7 +1446,7 @@ fn drag_start_cost() {
         e.board = board.clone();
         e.fit_view(screen);
         let ctx = egui::Context::default();
-        let mut run = |e: &mut BoardEditor| {
+        let run = |e: &mut BoardEditor| {
             let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(screen), ..Default::default() }, |ui| {
                 e.canvas(ui);
             });
@@ -1578,7 +1578,7 @@ fn part_drag_frame_cost() {
     e.board.place_part(&refdes, Point::new(part.pos.x + 1.0, part.pos.y), part.rot);
     run(&mut e);
     println!("second move: {:.1} ms", t.elapsed().as_secs_f64() * 1e3);
-    let mut drag = |e: &mut BoardEditor, label: &str| {
+    let drag = |e: &mut BoardEditor, label: &str| {
         let (mut mv, mut fr, mut worst) = (0.0f64, 0.0f64, 0.0f64);
         let n = 30;
         for i in 0..n {
@@ -2836,7 +2836,7 @@ fn part_triangle_breakdown() {
         n
     };
     let base_vis = e.vis;
-    let mut with = |e: &mut BoardEditor, b: &pcb_core::Board, parts: bool, silk: bool| {
+    let with = |e: &mut BoardEditor, b: &pcb_core::Board, parts: bool, silk: bool| {
         e.board = b.clone();
         e.vis = base_vis;
         e.vis.parts = parts;
@@ -2939,7 +2939,7 @@ fn triangle_settling() {
     }
     e.fit_view(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0)));
     let ctx = egui::Context::default();
-    let mut frame = |e: &mut BoardEditor| -> usize {
+    let frame = |e: &mut BoardEditor| -> usize {
         let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
             e.canvas(ui);
         });
@@ -3221,7 +3221,7 @@ fn plain_strips_frame_cost() {
     for plain in [false, true, false, true] {
         set_multisampled(plain);
         // the first frames make the caches and the threads' answers
-        let mut run = |e: &mut BoardEditor| {
+        let run = |e: &mut BoardEditor| {
             let t = std::time::Instant::now();
             let mut out = ctx.run_ui(egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400.0, 900.0))), ..Default::default() }, |ui| {
                 e.canvas(ui);

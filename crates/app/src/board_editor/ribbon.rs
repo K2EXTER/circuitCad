@@ -200,6 +200,7 @@ pub(super) struct SilkCache {
 }
 
 impl SilkCache {
+    #[cfg(test)]
     pub fn new(board: &pcb_core::Board) -> Self {
         let mut c = SilkCache::default();
         c.update(board);

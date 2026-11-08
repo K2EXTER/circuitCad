@@ -13,14 +13,4 @@ impl Focus {
     pub fn is_empty(&self) -> bool {
         self.part.is_none() && self.net.is_none()
     }
-
-    /// The text for the status line: what is shown in the other windows.
-    pub fn describe(&self) -> String {
-        match (&self.part, &self.net) {
-            (Some(p), Some(n)) => format!("部品 {p}・ネット {n}"),
-            (Some(p), None) => format!("部品 {p}"),
-            (None, Some(n)) => format!("ネット {n}"),
-            (None, None) => String::new(),
-        }
-    }
 }

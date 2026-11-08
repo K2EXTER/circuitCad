@@ -916,7 +916,7 @@ fn the_pin_table_lists_every_pin_and_leaves_the_sim_pins_alone_until_picked() {
 /// A SOIC-like shape: a body, a densely tessellated bump on it (a logo, a rounded edge) and thin leads at both sides.
 fn soic_like(dense: usize) -> pcb_core::mesh::Mesh3d {
     let mut m = pcb_core::mesh::Mesh3d { palette: vec![[40, 40, 40], [200, 200, 200]], ..Default::default() };
-    let mut quad = |m: &mut pcb_core::mesh::Mesh3d, a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3], col: u8| {
+    let quad = |m: &mut pcb_core::mesh::Mesh3d, a: [f32; 3], b: [f32; 3], c: [f32; 3], d: [f32; 3], col: u8| {
         let n = m.vertices.len() as u32;
         m.vertices.extend([a, b, c, d]);
         m.triangles.extend([[n, n + 1, n + 2], [n, n + 2, n + 3]]);

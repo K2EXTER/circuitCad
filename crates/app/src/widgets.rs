@@ -14,6 +14,7 @@ pub fn close_button(ui: &mut egui::Ui, what: &str) -> bool {
 
 /// The one main action of a panel or form ("保存してライブラリに追加", "クイック追加"). Buttons are grey until pressed and the same size, so
 /// this looks like any other button; it exists so the main actions stay easy to find in the code (and to restyle in one place).
+#[allow(dead_code)] // the documented main-action button (ui-rules.md); the panels use `primary_button_wide` right now
 pub fn primary_button(ui: &mut egui::Ui, enabled: bool, label: &str) -> egui::Response {
     ui.add_enabled(enabled, egui::Button::new(label))
 }
