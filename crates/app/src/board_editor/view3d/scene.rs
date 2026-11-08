@@ -27,6 +27,9 @@ pub(super) struct Scene {
     pub(super) over: Vec<f64>,
     pub(super) rings: [Option<f64>; 2],
     pub(super) applied: Option<(bool, u64, u64)>,
+    /// The case box drawn as a wire frame (inside size, centred on the board; turned a quarter when the board only fits that way), and the settings it was made for.
+    pub(super) case: Option<CaseWire>,
+    pub(super) case_key: Option<[u64; 5]>,
     /// Copper of the highlighted net as triangles (`true` = bottom face), drawn just above the board picture.
     pub(super) glow: Vec<(bool, [Point; 3])>,
 }
@@ -35,6 +38,15 @@ pub(super) struct Scene {
 pub(super) fn light(n: [f32; 3]) -> f32 {
     let l = [-0.35f32, 0.45, 0.82];
     0.45 + 0.6 * (n[0] * l[0] + n[1] * l[1] + n[2] * l[2]).max(0.0)
+}
+
+/// The wire frame of the case's inside: x and y of two corners, z of the floor and the lid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct CaseWire {
+    pub lo: Point,
+    pub hi: Point,
+    pub z0: f64,
+    pub z1: f64,
 }
 
 pub(super) type Face3 = (Vec<[f64; 3]>, [f32; 3]);
@@ -144,7 +156,7 @@ impl Scene {
         let mut nets: Vec<String> = board.pads.iter().filter(|p| !p.net.is_empty()).map(|p| p.net.clone()).collect();
         nets.sort();
         nets.dedup();
-        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, nets, glow: vec![] })
+        Ok(Scene { pv, img, outline, tris, lo, hi, boxes, meshes, parts, tallest, heights, bottoms, over, rings: [None; 2], applied: None, case: None, case_key: None, nets, glow: vec![] })
     }
 
     /// Marks the parts that stand higher than the case allows (`top` / `bottom` mm above each face; 0 = that face
@@ -158,6 +170,22 @@ impl Scene {
         let lim = |side_bottom: bool| if !on { 0.0 } else if side_bottom { bottom } else { top };
         self.over = (0..self.parts.len()).map(|i| if lim(self.bottoms[i]) > 0.0 { (self.heights[i] - lim(self.bottoms[i])).max(0.0) } else { 0.0 }).collect();
         self.rings = [Some(lim(false)).filter(|l| *l > 0.0), Some(lim(true)).filter(|l| *l > 0.0)];
+        true
+    }
+
+    /// Shows the inside of the case as a wire box (`None`: no box). Returns whether anything changed.
+    pub(super) fn set_case(&mut self, spec: Option<pcb_core::case::CaseSpec>) -> bool {
+        let key = spec.map(|s| [s.inner_w.to_bits(), s.inner_d.to_bits(), s.top.to_bits(), s.bottom.to_bits(), s.clearance.to_bits()]);
+        if self.case_key == key {
+            return false;
+        }
+        self.case_key = key;
+        self.case = spec.filter(|s| s.inner_w > 0.0 && s.inner_d > 0.0).map(|s| {
+            let r = pcb_core::case::check(&pcb_core::model::Board { outline: self.outline.clone(), ..pcb_core::model::Board::new("", 0.0, 0.0) }, &s);
+            let (w, d) = if r.turned { (s.inner_d, s.inner_w) } else { (s.inner_w, s.inner_d) };
+            let c = Point::new((self.lo.x + self.hi.x) / 2.0, (self.lo.y + self.hi.y) / 2.0);
+            CaseWire { lo: Point::new(c.x - w / 2.0, c.y - d / 2.0), hi: Point::new(c.x + w / 2.0, c.y + d / 2.0), z0: -if s.bottom > 0.0 { s.bottom } else { 0.0 }, z1: BOARD_THICKNESS + if s.top > 0.0 { s.top } else { 10.0 } }
+        });
         true
     }
 
@@ -236,6 +264,17 @@ impl Scene {
                     let (a, b) = (self.outline[i], self.outline[(i + 1) % n]);
                     buf.line(vert([a.x, a.y, z], [0.0, 0.0]), vert([b.x, b.y, z], [0.0, 0.0]), [255, 170, 40]);
                 }
+            }
+        }
+        if let Some(w) = &self.case {
+            let col = [90, 170, 255];
+            let corners = [(w.lo.x, w.lo.y), (w.hi.x, w.lo.y), (w.hi.x, w.hi.y), (w.lo.x, w.hi.y)];
+            for i in 0..4 {
+                let (a, b) = (corners[i], corners[(i + 1) % 4]);
+                for z in [w.z0, w.z1] {
+                    buf.line(vert([a.0, a.1, z], [0.0, 0.0]), vert([b.0, b.1, z], [0.0, 0.0]), col);
+                }
+                buf.line(vert([a.0, a.1, w.z0], [0.0, 0.0]), vert([a.0, a.1, w.z1], [0.0, 0.0]), col);
             }
         }
         if !show_parts {

@@ -40,6 +40,10 @@ impl BoardEditor {
             if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_limits(on, top, bottom)) {
                 self.view3d.generation += 1;
             }
+            let spec = on.then(|| pcb_core::case::CaseSpec { inner_w: self.view3d.case_w, inner_d: self.view3d.case_d, top, bottom, clearance: 0.5 });
+            if self.view3d.scene.as_mut().is_some_and(|sc| sc.set_case(spec)) {
+                self.view3d.generation += 1;
+            }
         }
         let mut open = true;
         let mut retex = false;
@@ -77,6 +81,8 @@ impl BoardEditor {
                 if v.check_height {
                     ui.add(egui::DragValue::new(&mut v.limit_top).range(0.0..=200.0).speed(0.1).prefix("表 ").suffix(" mm")).on_hover_text("表側の、基板の面からケースまでの高さ (部品に使える高さ)");
                     ui.add(egui::DragValue::new(&mut v.limit_bottom).range(0.0..=200.0).speed(0.1).prefix("裏 ").suffix(" mm")).on_hover_text("裏側の、基板の面からケースまでの高さ");
+                    ui.add(egui::DragValue::new(&mut v.case_w).range(0.0..=500.0).speed(0.5).prefix("内寸 幅 ").suffix(" mm")).on_hover_text("ケースの内側の幅。基板が入るかを調べます (縁との隙間は 0.5 mm を見込みます)。0 にすると調べません。青い枠がケースの内側です");
+                    ui.add(egui::DragValue::new(&mut v.case_d).range(0.0..=500.0).speed(0.5).prefix("奥行 ").suffix(" mm")).on_hover_text("ケースの内側の奥行 (幅と合わせて、基板の底面が入るかを調べます)");
                 }
                 ui.checkbox(&mut v.spin, "自動回転").on_hover_text("ゆっくり回して、いろいろな向きから見せます");
                 if ui.button("更新").on_hover_text("基板エディタで変更した内容を反映します").clicked() {
@@ -120,6 +126,15 @@ impl BoardEditor {
                 info += &format!(" / 裏側 {r} ({t:.1} mm)");
             }
             ui.small(info);
+            if v.check_height && v.case_w > 0.0 && v.case_d > 0.0 {
+                let r = pcb_core::case::check(&self.board, &pcb_core::case::CaseSpec { inner_w: v.case_w, inner_d: v.case_d, clearance: 0.5, ..Default::default() });
+                if r.fits {
+                    let how = if r.turned { " (基板を 90° 回すと)" } else { "" };
+                    ui.colored_label(crate::theme::OK, format!("✔ 基板 {:.1} × {:.1} mm はケースの底に入ります{how}。余り: {:.1} × {:.1} mm", r.board_w, r.board_d, r.spare_w, r.spare_d));
+                } else {
+                    ui.colored_label(crate::theme::ERROR, format!("⚠ 基板 {:.1} × {:.1} mm はケースの底 ({:.1} × {:.1} mm、縁の隙間込み) に入りません (足りない分: 幅 {:.1} / 奥行 {:.1} mm)", r.board_w, r.board_d, v.case_w - 1.0, v.case_d - 1.0, (-r.spare_w).max(0.0), (-r.spare_d).max(0.0)));
+                }
+            }
             if v.check_height {
                 let over = scene.over_list();
                 if over.is_empty() {

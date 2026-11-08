@@ -1195,6 +1195,19 @@ impl Session {
                 std::fs::write(f, &svg).map_err(|e| format!("{f}: {e}"))?;
                 Ok(obj(json!({"file": f, "side": format!("{side:?}"), "bytes": svg.len()})))
             }
+            "case" => {
+                let (_, kv) = options(rest);
+                let num = |k: &str| opt(&kv, k).map(|s| sim_core::parse_value(s).filter(|x| x.is_finite() && *x >= 0.0).ok_or_else(|| format!("{k}={s} is not a size in mm (zero or more)"))).transpose();
+                let spec = pcb_core::case::CaseSpec { inner_w: num("w")?.unwrap_or(0.0), inner_d: num("d")?.unwrap_or(0.0), top: num("top")?.unwrap_or(0.0), bottom: num("bottom")?.unwrap_or(0.0), clearance: num("clear")?.unwrap_or(0.5) };
+                if spec.inner_w == 0.0 && spec.inner_d == 0.0 && spec.top == 0.0 && spec.bottom == 0.0 {
+                    return Err("board case [w=MM d=MM] [top=MM] [bottom=MM] [clear=0.5]   (the inside of the case: width and depth for the floor, the room above and below the board for the parts' heights)".into());
+                }
+                let board = self.board_mut()?;
+                let r = pcb_core::case::check(board, &spec);
+                let tall: Vec<Value> = r.too_tall.iter().map(|(p, s, h, o)| json!({"part": p, "side": format!("{s:?}"), "height_mm": h, "over_mm": o})).collect();
+                Ok(obj(json!({"ok": r.ok(), "board_mm": [r.board_w, r.board_d], "floor_checked": r.floor_checked, "fits": r.fits, "turned_a_quarter": r.turned, "spare_mm": [r.spare_w, r.spare_d], "too_tall": tall,
+                    "note": "the heights of the parts are the 3D view's (a footprint's own height, else a guess by kind); the board's size is the box round its outline and parts"})))
+            }
             "dxf_import" => {
                 let (pos, kv) = options(rest);
                 let f = pos.first().ok_or("board dxf_import FILE.dxf [layer=NAME] [origin=0]   (the outline = the biggest closed loop of lines, arcs and polylines; circles inside it become holes; origin=0 keeps the drawing's coordinates instead of moving the lower left corner to 0,0)")?;

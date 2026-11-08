@@ -254,6 +254,26 @@ mod view3d_tests {
     }
 
     #[test]
+    fn the_case_box_is_a_wire_frame_round_the_board_and_turns_when_the_board_only_fits_turned() {
+        let b = tall_and_short();
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        let (bw, bd) = (s.hi.x - s.lo.x, s.hi.y - s.lo.y);
+        let spec = |w, d| pcb_core::case::CaseSpec { inner_w: w, inner_d: d, top: 10.0, bottom: 2.0, clearance: 0.5 };
+        assert!(s.set_case(Some(spec(bw + 10.0, bd + 10.0))));
+        let w = s.case.unwrap();
+        assert!(((w.hi.x - w.lo.x) - (bw + 10.0)).abs() < 1e-9, "the box has the inside size given");
+        assert_eq!((w.z0, w.z1), (-2.0, BOARD_THICKNESS + 10.0));
+        assert!(!s.set_case(Some(spec(bw + 10.0, bd + 10.0))), "same settings: nothing to redraw");
+        // given the other way round and only big enough that way: the box is drawn turned, the board stays
+        if (bw - bd).abs() > 3.0 {
+            assert!(s.set_case(Some(spec(bd + 2.0, bw + 2.0))));
+            let w = s.case.unwrap();
+            assert!(((w.hi.x - w.lo.x) - (bw + 2.0)).abs() < 1e-9, "turned: the box is wide enough for the board as it lies");
+        }
+        assert!(s.set_case(None) && s.case.is_none());
+    }
+
+    #[test]
     fn a_draft_is_half_size_and_hover_still_finds_the_part() {
         let b = tall_and_short();
         let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();

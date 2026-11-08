@@ -302,3 +302,8 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - `apply` は外形を置き換え、部品に属さない穴を図面の円に置き換える(部品の穴は残す)。`to_origin` で外形の左下を (0,0) に。部品の位置は動かさない。
 - 入口: 画面「ファイル → ケースの図面 (DXF) から外形と穴を取り込む…」(`board_editor/file.rs` の `import_dxf`。元に戻せる)、CLI `board dxf_import FILE [layer=] [origin=0]`。
 - 確認: 自分で書いた DXF の読み戻し(外形の面積・穴の位置)、線3本+円弧1つ(順不同)、インチと LWPOLYLINE、ふくらみ(半円)、開いた形と DXF でないファイルの断り。実際のケースの CAD が書いた DXF では、まだ確かめていない(バイナリ DXF・SPLINE・楕円は未対応)。
+
+## case.rs — 箱のケースに入るか(E2。2026-11-08)
+- `case::check(&Board, &CaseSpec{inner_w, inner_d, top, bottom, clearance}) -> CaseReport`。底に入るか(縁の隙間 `clearance` を両側に見込む。90° 回せば入るときは `turned`)、部品の高さ(`model3d::part_height_on`。表の部品は `top`、裏の部品は `bottom` の高さと比べる。0 は調べない)。基板の大きさは外形と部品を囲む箱。
+- 入口: 3D 表示の「ケース高さ」を入れたときの「内寸 幅・奥行」(`view3d/window.rs`。青い枠が内側。入るかの一行を出す。枠は `scene.rs` の `set_case`)、CLI の `board case`。
+- 未対応: ねじ柱・コネクタの穴あけ・ケースの STEP との干渉(E4)。基板の固定穴とケースの位置合わせもしていない。

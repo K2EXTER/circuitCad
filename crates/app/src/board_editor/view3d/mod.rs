@@ -60,6 +60,9 @@ pub(super) struct View3d {
     check_height: bool,
     limit_top: f64,
     limit_bottom: f64,
+    /// The inside size of the case (width, depth in mm; 0 = not given).
+    case_w: f64,
+    case_d: f64,
 }
 
 /// A finished picture of the scene: what it was drawn for, the image, and the part at each pixel.
@@ -84,7 +87,7 @@ struct PictureKey {
 
 impl Default for View3d {
     fn default() -> Self {
-        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0 }
+        Self { open: false, yaw: 0.0, pitch: 0.9, zoom: 1.0, pan: Vec2::ZERO, spin: false, touched: false, show_parts: true, show_names: false, mask: true, silk: true, scene: None, error: None, stale: true, hover: None, generation: 0, cache: None, net: None, followed: None, focus: None, check_height: false, limit_top: 15.0, limit_bottom: 5.0, case_w: 0.0, case_d: 0.0 }
     }
 }
 
