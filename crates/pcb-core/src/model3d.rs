@@ -41,6 +41,8 @@ pub enum Kind {
     Led,
     /// A pin header: plastic body and long pins.
     Header,
+    /// A TO-220 standing on the board: plastic body with a metal tab above it.
+    To220,
     /// A surface-mount IC or transistor with legs.
     SmdIc,
     /// A through-hole IC (DIP).
@@ -65,6 +67,9 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     if fp.contains("pinheader") {
         return Kind::Header;
     }
+    if fp.contains("to-220") {
+        return Kind::To220;
+    }
     match prefix(refdes) {
         'R' | 'L' | 'C' | 'D' if fp.contains("5mm") => Kind::Led,
         'R' if fp.contains("axial") => Kind::Axial,
@@ -78,12 +83,30 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     }
 }
 
+/// Footprints (a part of the name, in lower case) of parts that stand tall, with the typical height of the body in mm and its colour.
+/// Estimates from the usual packages: the real part may be a few mm different, so give the footprint a `height` when it matters.
+const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 5] = [
+    ("terminalblock", 10.0, [30, 110, 60]),
+    ("transformer", 25.0, [60, 60, 70]),
+    ("batteryholder_aa", 16.0, [40, 40, 44]),
+    ("batteryholder_cr2032", 5.0, [150, 150, 158]),
+    ("fuse_5x20", 9.0, [200, 190, 150]),
+];
+
+/// How far a TO-220's metal tab stands above its plastic body (mm).
+const TO220_TAB: f64 = 6.5;
+
 /// Body height (mm above the board) and colour guessed from the reference designator and footprint.
 pub fn part_style(refdes: &str, footprint: &str) -> (f64, [u8; 3]) {
     let fp = footprint.to_ascii_lowercase();
     let th = is_through_hole(&fp);
     if fp.contains("pinheader") {
         return (2.5, [24, 24, 26]);
+    }
+    // parts that stand tall by their footprint, whatever they are called: typical heights, for the case check (a footprint's
+    // own `height` wins over these; they are estimates, not a maker's drawing)
+    if let Some(r) = TALL_FOOTPRINTS.iter().find(|(key, _, _)| fp.contains(key)) {
+        return (r.1, r.2);
     }
     match prefix(refdes) {
         'R' if th => (2.4, [196, 160, 110]),
@@ -94,7 +117,7 @@ pub fn part_style(refdes: &str, footprint: &str) -> (f64, [u8; 3]) {
         'D' if fp.contains("5mm") || fp.contains("led") => (if fp.contains("5mm") { 8.5 } else { 0.8 }, [220, 60, 50]),
         'D' if th => (2.7, [30, 30, 32]),
         'D' => (1.0, [36, 36, 40]),
-        'Q' | 'U' if fp.contains("to-220") => (4.5, [40, 40, 44]),
+        'Q' | 'U' if fp.contains("to-220") => (9.3, [40, 40, 44]),
         'Q' if fp.contains("to-92") => (4.5, [32, 32, 36]),
         'Q' => (1.1, [36, 36, 40]),
         'U' if fp.contains("dip") => (3.3, [28, 28, 32]),
@@ -114,6 +137,7 @@ pub fn part_total_height(refdes: &str, footprint: &str) -> f64 {
     let (h, _) = part_style(refdes, footprint);
     match part_kind(refdes, footprint) {
         Kind::Header => h + 6.0,
+        Kind::To220 => h + TO220_TAB,
         _ => h,
     }
 }
@@ -132,6 +156,7 @@ pub fn part_height_on(board: &Board, part: &Part) -> f64 {
     let (h, _) = style_in(board, part);
     match part_kind(&part.refdes, &part.footprint) {
         Kind::Header => h + 6.0,
+        Kind::To220 if board.footprint(&part.footprint).and_then(|f| f.height).is_none() => h + TO220_TAB,
         _ => h,
     }
 }
@@ -349,6 +374,19 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             let mut v = vec![solid([lo.x - 0.5, lo.y - 0.5, 0.0], [hi.x + 0.5, hi.y + 0.5, h], color, b)];
             for p in &pads {
                 v.push(solid([p.pos.x - 0.32, p.pos.y - 0.32, 0.0], [p.pos.x + 0.32, p.pos.y + 0.32, h + 6.0], GOLD, b));
+            }
+            v
+        }
+        Kind::To220 => {
+            // the plastic body across the row of the legs, the metal tab on top of it (which side the tab faces is a guess)
+            let (len, thick) = (10.0, 4.5);
+            let mk = |a0: f64, a1: f64, p0: f64, p1: f64, z0: f64, z1: f64, c: [u8; 3]| {
+                if along_x { solid([cx + a0, cy + p0, z0], [cx + a1, cy + p1, z1], c, b) } else { solid([cx + p0, cy + a0, z0], [cx + p1, cy + a1, z1], c, b) }
+            };
+            let mut v = vec![mk(-len / 2.0, len / 2.0, -thick / 2.0, thick / 2.0, 0.5, h, color)];
+            v.push(mk(-len / 2.0, len / 2.0, -thick / 2.0, -thick / 2.0 + 1.3, h, h + TO220_TAB, SILVER));
+            for p in &pads {
+                v.push(solid([p.pos.x - 0.35, p.pos.y - 0.35, 0.0], [p.pos.x + 0.35, p.pos.y + 0.35, 0.5], SILVER, b));
             }
             v
         }
@@ -704,5 +742,29 @@ mod tests {
         assert_eq!(of(1).len(), 9, "8 legs + body");
         assert!(of(1).iter().any(|x| x.color != SILVER && x.lo[2] > BOARD_THICKNESS), "the body sits on its legs");
         assert!(of(2).iter().any(|x| matches!(x.shape, BodyShape::Cylinder(0))), "a resistor lying along x");
+    }
+
+    #[test]
+    fn a_to_220_stands_with_its_tab_and_a_terminal_block_is_tall() {
+        let mut b = Board::new("x", 30.0, 20.0);
+        for (i, x) in [10.0, 12.54, 15.08].iter().enumerate() {
+            let mut p = Pad::new(Point::new(*x, 10.0), PadShape::Oval { w: 1.8, h: 1.8 }, Some(1.0), Side::Top);
+            p.refdes = "Q1".into();
+            p.pin = format!("{}", i + 1);
+            b.pads.push(p);
+        }
+        b.parts.push(Part { refdes: "Q1".into(), value: String::new(), footprint: "TO-220-3".into(), pos: Point::new(12.54, 10.0), rot: 0, side: Side::Top });
+        assert_eq!(part_kind("Q1", "TO-220-3"), Kind::To220);
+        let total = part_height_on(&b, &b.parts[0]);
+        assert!((total - 15.8).abs() < 1e-9, "body 9.3 + tab 6.5: {total}");
+        let boxes = part_boxes(&b);
+        let top = boxes.iter().filter(|x| x.refdes == "Q1").map(|x| x.hi[2]).fold(0.0, f64::max);
+        assert!((top - (BOARD_THICKNESS + total)).abs() < 1e-9, "the tab reaches the total height");
+        assert_eq!(boxes.len(), 2 + 3, "body, tab and three legs");
+        // the case check sees it: 12 mm of room is not enough
+        let r = crate::case::check(&b, &crate::case::CaseSpec { top: 12.0, ..Default::default() });
+        assert_eq!(r.too_tall.len(), 1);
+        // a terminal block is 10 mm tall, a footprint's own height still wins
+        assert_eq!(part_style("J1", "TerminalBlock_4P_5.08").0, 10.0);
     }
 }
