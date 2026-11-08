@@ -147,6 +147,25 @@ mod view3d_tests {
     }
 
     #[test]
+    fn a_picked_net_lights_its_vias_on_both_faces() {
+        let mut b = two_resistors();
+        b.vias.push(pcb_core::Via { pos: Point::new(20.0, 20.0), diameter: 1.2, drill: 0.6, net: "B".into() });
+        b.vias.push(pcb_core::Via { pos: Point::new(25.0, 20.0), diameter: 1.2, drill: 0.6, net: "A".into() });
+        let glow = net_glow(&b, &pcb_core::drc::connectivity(&b), "B", &[]);
+        let near = |bottom: bool, x: f64| glow.iter().any(|(f, t)| *f == bottom && t.iter().all(|p| (p.x - x).abs() < 0.7 && (p.y - 20.0).abs() < 0.7));
+        assert!(near(false, 20.0) && near(true, 20.0), "the via of net B shows on the top and the bottom");
+        assert!(!near(false, 25.0) && !near(true, 25.0), "the via of net A does not");
+        // and it is drawn: lit at the via when seen from above
+        let mut s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();
+        s.glow = glow;
+        let (rect, cam) = top_view(&s);
+        let (img, ..) = snapshot(&s, rect, &cam, false, Quality::Fine(1), None, None);
+        let (p, _) = cam.project([20.0, 20.0, BOARD_THICKNESS]);
+        let c = img[p.y.round() as usize * 800 + p.x.round() as usize];
+        assert!(c[0] > 200 && c[1] < 100 && c[2] > 120, "{c:?}");
+    }
+
+    #[test]
     fn focusing_a_part_centres_it_and_fills_more_of_the_view() {
         let b = two_resistors();
         let s = Scene::build(&b, &egui::Context::default(), false, false).unwrap();

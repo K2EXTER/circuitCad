@@ -331,6 +331,11 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     }
     if args.iter().any(|a| a == "--3d") {
         app.board_ed.open_view3d();
+        // --3d-net <net>: light that net's copper in the 3D view (for screenshots)
+        if let Some(i) = args.iter().position(|a| a == "--3d-net")
+            && let Some(n) = args.get(i + 1) {
+                app.board_ed.set_view3d_net(n);
+            }
     }
     if args.iter().any(|a| a == "--order") {
         app.board_ed.open_order();

@@ -98,6 +98,11 @@ impl BoardEditor {
         self.view3d.stale = true;
     }
 
+    /// Picks the net to light in the 3D view (`--3d-net`, for screenshots).
+    pub fn set_view3d_net(&mut self, net: &str) {
+        self.view3d.net = Some(net.to_string());
+    }
+
     /// Recomputes the copper of the highlighted net (after the scene was rebuilt or another net was picked).
     fn apply_net_glow(&mut self) {
         // with the finish on, the highlighted copper is the finished one
