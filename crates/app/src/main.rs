@@ -197,6 +197,11 @@ impl eframe::App for App {
         if let Some(net) = self.board_ed.route_after_currents.take() {
             self.board_ed.autoroute_now(net.as_deref());
         }
+        if std::mem::take(&mut self.board_ed.renumber_request) {
+            let plan = self.board_ed.renumber_plan();
+            let answer = self.sch.sch.rename_parts(&plan);
+            self.board_ed.renumber_applied(&plan, answer);
+        }
         if std::mem::take(&mut self.board_ed.to_schematic_request) {
             let trades = self.board_ed.board.pin_map.clone();
             let answer = self.sch.sch.apply_pin_trades(&trades);

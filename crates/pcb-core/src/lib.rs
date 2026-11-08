@@ -39,6 +39,7 @@ pub mod nudge;
 pub mod breakout;
 pub mod breakage;
 pub mod orient;
+pub mod renumber;
 pub mod netlist;
 pub mod outline;
 pub mod padentry;

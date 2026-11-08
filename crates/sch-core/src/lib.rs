@@ -4,6 +4,7 @@
 mod netlist;
 mod ngspice;
 mod backannotate;
+mod renumber;
 mod bus;
 mod noconnect;
 mod programming;

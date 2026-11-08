@@ -115,6 +115,17 @@ impl Session {
                 }
                 Ok(obj(json!({"parts": rep.parts, "moved": rep.moved, "copies": rep.copies, "left": board.pin_map.keys().collect::<Vec<_>>()})))
             }
+            "renumber" => {
+                // board renumber [dry=1]: number the parts again by where they sit (the top row first, each row from the left; locked parts keep
+                // theirs). The schematic, its table of requirements and the board change together. `dry=1` only answers what would change.
+                let (_, kv) = options(rest);
+                let plan = pcb_core::renumber::renumber_plan(self.board_mut()?);
+                if opt(&kv, "dry") != Some("1") && !plan.is_empty() {
+                    self.sch.rename_parts(&plan)?;
+                    self.board_mut()?.rename_parts(&plan);
+                }
+                Ok(obj(json!({"renamed": plan.len(), "plan": plan, "dry": opt(&kv, "dry") == Some("1")})))
+            }
             "breakout" => {
                 // board breakout [width=0.2]: before routing, a short wire out of every pin of a fine-pitch IC that needs one: the pins in the middle of a
                 // side go straight out, the ones at the two ends turn outward (the nearer the end, the sooner), so they do not cross the way out of the

@@ -129,6 +129,13 @@ impl BoardEditor {
                 if reflect {
                     self.to_schematic_request = true;
                 }
+                if !self.board.parts.is_empty() {
+                    let bar = crate::widgets::segment_row(ui, &[("部品番号を位置順に", true)]);
+                    bar[0].clone().on_hover_text("部品番号 (R1・C2 など) を、基板の上の位置の順に振り直します。上の段から下の段へ、各段は左から右です。回路図の部品番号、要件の表、「接続しない」の印も同じに変わります。固定した部品の番号は変えません。「元に戻す」で戻せます (回路図の側も、回路図で元に戻してください)");
+                    if bar[0].clicked() {
+                        self.renumber_request = true;
+                    }
+                }
                 ui.separator();
                 ui.label("基板の外形").on_hover_text("基板の大きさと形 (黄色の枠) です。発注するときの基板サイズになります。矩形・円・多角形が選べます");
                 ui.horizontal_wrapped(|ui| {

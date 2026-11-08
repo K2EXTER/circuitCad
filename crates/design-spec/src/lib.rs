@@ -4,6 +4,8 @@
 //! say them, so the same sentences can be read back from the file.
 
 pub mod netnames;
+mod rename;
+pub use rename::rename_words;
 
 use serde::{Deserialize, Serialize};
 

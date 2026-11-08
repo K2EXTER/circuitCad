@@ -165,6 +165,24 @@ impl BoardEditor {
     }
 
     /// The answer of the schematic to "入れ替えを回路図に反映": the traded parts are in the drawing now, so the board has nothing left to remember.
+    /// The new part numbers by position (`pcb_core::renumber`), for the schematic to take first.
+    pub fn renumber_plan(&self) -> std::collections::BTreeMap<String, String> {
+        pcb_core::renumber::renumber_plan(&self.board)
+    }
+
+    /// The schematic answered the renumbering (`answer`: how many parts it renamed, or why not): on success the board takes the numbers too.
+    pub fn renumber_applied(&mut self, plan: &std::collections::BTreeMap<String, String>, answer: Result<usize, String>) {
+        match answer {
+            Err(e) => self.status = format!("部品番号の振り直しを取りやめました: {e}"),
+            Ok(_) if plan.is_empty() => self.status = "部品番号は、すでに位置の順に並んでいます".into(),
+            Ok(in_schematic) => {
+                self.checkpoint();
+                let n = self.board.rename_parts(plan);
+                self.status = format!("部品番号を位置の順に振り直しました: 基板 {n} 個、回路図 {in_schematic} 個。回路図の側を元に戻すときは、回路図で「元に戻す」を押してください");
+            }
+        }
+    }
+
     pub fn trades_applied(&mut self, answer: Result<sch_core::BackAnnotation, String>) {
         match answer {
             Ok(rep) if rep.parts.is_empty() && !rep.copies.is_empty() => {
@@ -263,5 +281,50 @@ impl BoardEditor {
         self.violations.extend(pcb_core::ratsnest::open_violations(&self.board));
         self.drc_ran = true;
         self.status = format!("DRC: 違反 {} 件", self.violations.len());
+    }
+}
+
+#[cfg(test)]
+mod renumber_tests {
+    use super::*;
+
+    fn editors() -> (crate::schematic::SchEditor, BoardEditor) {
+        let mut sch = crate::schematic::SchEditor::default();
+        sch.sch.add(sch_core::Kind::Resistor, (0, 0), 0);
+        sch.sch.add(sch_core::Kind::Resistor, (10, 0), 0);
+        let mut b = BoardEditor::default();
+        // R1 sits to the right of R2 on the same row
+        for (r, x) in [("R1", 30.0), ("R2", 10.0)] {
+            b.board.parts.push(pcb_core::model::Part { refdes: r.into(), value: "1k".into(), footprint: "R_0603".into(), pos: pcb_core::model::Point { x, y: 5.0 }, rot: 0, side: pcb_core::model::Side::Top });
+        }
+        (sch, b)
+    }
+
+    #[test]
+    fn the_schematic_and_the_board_take_the_same_numbers_and_the_board_can_be_undone() {
+        let (mut sch, mut b) = editors();
+        let plan = b.renumber_plan();
+        let answer = sch.sch.rename_parts(&plan);
+        b.renumber_applied(&plan, answer);
+        let names = |v: Vec<&str>| v.into_iter().map(String::from).collect::<Vec<_>>();
+        assert_eq!(b.board.parts.iter().map(|p| p.refdes.as_str()).collect::<Vec<_>>(), vec!["R2", "R1"]);
+        assert_eq!(sch.sch.components.iter().map(|c| c.refdes.clone()).collect::<Vec<_>>(), names(vec!["R2", "R1"]));
+        assert!(b.status.contains("振り直しました"), "{}", b.status);
+        b.undo();
+        assert_eq!(b.board.parts[0].refdes, "R1");
+    }
+
+    #[test]
+    fn a_refusal_from_the_schematic_leaves_the_board_alone() {
+        let (mut sch, mut b) = editors();
+        // a second R2 in the schematic: after the swap of R1 and R2 two parts would be called R1, so the schematic refuses
+        sch.sch.add(sch_core::Kind::Resistor, (20, 0), 0);
+        sch.sch.components[2].refdes = "R2".into();
+        let plan = b.renumber_plan();
+        let answer = sch.sch.rename_parts(&plan);
+        assert!(answer.is_err());
+        b.renumber_applied(&plan, answer);
+        assert_eq!(b.board.parts[0].refdes, "R1");
+        assert!(b.status.contains("取りやめました"), "{}", b.status);
     }
 }
