@@ -49,6 +49,14 @@ pub enum Kind {
     SmdIc,
     /// A through-hole IC (DIP).
     Dip,
+    /// A connector in a metal shell (USB, DC jack, RJ45): a plastic base with the shell over it.
+    Shell,
+    /// A screw terminal block: a green block with a screw on top of each terminal.
+    Terminal,
+    /// A mains / EI transformer: the iron core with the coil showing at the ends.
+    Transformer,
+    /// A round buzzer: a black can with the sound hole in the top.
+    Buzzer,
     /// Anything else: one box.
     Other,
 }
@@ -75,6 +83,19 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
     if fp.contains("to-92") {
         return Kind::To92;
     }
+    if fp.contains("terminalblock") {
+        return Kind::Terminal;
+    }
+    if fp.contains("transformer") {
+        return Kind::Transformer;
+    }
+    if fp.contains("buzzer") {
+        return Kind::Buzzer;
+    }
+    // a connector is told by its footprint (and not by a letter alone: a USB protection IC is not a connector)
+    if matches!(prefix(refdes), 'J' | 'P' | 'X') && ["usb", "jack", "barrel", "rj45"].iter().any(|k| fp.contains(k)) {
+        return Kind::Shell;
+    }
     match prefix(refdes) {
         'R' | 'L' | 'C' | 'D' if fp.contains("5mm") => Kind::Led,
         'R' if fp.contains("axial") => Kind::Axial,
@@ -90,7 +111,15 @@ pub fn part_kind(refdes: &str, footprint: &str) -> Kind {
 
 /// Footprints (a part of the name, in lower case) of parts that stand tall, with the typical height of the body in mm and its colour.
 /// Estimates from the usual packages: the real part may be a few mm different, so give the footprint a `height` when it matters.
-const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 6] = [
+const TALL_FOOTPRINTS: [(&str, f64, [u8; 3]); 13] = [
+    // connectors with a metal shell; the sizes are the usual ones of each family (the maker's drawing may differ by a few mm)
+    ("usb_micro", 2.8, [190, 190, 200]),
+    ("usb_c", 3.3, [190, 190, 200]),
+    ("usb_b", 11.0, [190, 190, 200]),
+    ("usb", 7.0, [190, 190, 200]),
+    ("barrel", 11.0, [40, 40, 44]),
+    ("jack", 10.0, [40, 40, 44]),
+    ("buzzer", 9.0, [30, 30, 34]),
     ("xtal_3225", 0.9, [190, 190, 200]),
     ("terminalblock", 10.0, [30, 110, 60]),
     ("transformer", 25.0, [60, 60, 70]),
@@ -431,6 +460,31 @@ fn solids(board: &Board, part: &Part) -> Vec<Solid> {
             v.extend(pin1_dot(&pads, blo, bhi, h));
             v
         }
+        Kind::Shell => {
+            // a low plastic base the size of the footprint, the metal shell over it (a little inside, so the base shows round the foot)
+            let base = (h * 0.12).clamp(0.8, 1.6);
+            let s = 0.3_f64.min(sx.min(sy) * 0.1);
+            vec![solid([lo.x, lo.y, 0.0], [hi.x, hi.y, base], [30, 30, 34], b), solid([lo.x + s, lo.y + s, base], [hi.x - s, hi.y - s, h], color, b)]
+        }
+        Kind::Terminal => {
+            // the block with a screw (and its slot) on top of each terminal
+            let mut v = vec![solid([lo.x - 0.5, lo.y - 0.5, 0.0], [hi.x + 0.5, hi.y + 0.5, h], color, b)];
+            for p in &pads {
+                let r = (sx.min(sy).max(3.5) * 0.4).min(2.2);
+                v.push(solid([p.pos.x - r, p.pos.y - r, h], [p.pos.x + r, p.pos.y + r, h + 0.5], [150, 150, 158], BodyShape::Cylinder(2)));
+                v.push(solid([p.pos.x - r * 0.8, p.pos.y - 0.2, h + 0.5], [p.pos.x + r * 0.8, p.pos.y + 0.2, h + 0.55], [40, 40, 44], b));
+            }
+            v
+        }
+        Kind::Transformer => {
+            // the iron core (a little narrower along the pads' long side) with the coil standing out at its two ends
+            let (core_lo, core_hi) = if along_x { ([lo.x + sx * 0.12, lo.y], [hi.x - sx * 0.12, hi.y]) } else { ([lo.x, lo.y + sy * 0.12], [hi.x, hi.y - sy * 0.12]) };
+            vec![solid([lo.x, lo.y, 0.0], [hi.x, hi.y, h * 0.7], [150, 92, 50], b), solid([core_lo[0], core_lo[1], 0.0], [core_hi[0], core_hi[1], h], color, b)]
+        }
+        Kind::Buzzer => {
+            let dia = (sx.max(sy) * 1.6).max(9.0);
+            vec![solid([cx - dia / 2.0, cy - dia / 2.0, 0.0], [cx + dia / 2.0, cy + dia / 2.0, h], color, BodyShape::Cylinder(2)), solid([cx - 1.2, cy - 1.2, h], [cx + 1.2, cy + 1.2, h + 0.05], [8, 8, 10], BodyShape::Cylinder(2))]
+        }
         Kind::Other => vec![solid([lo.x - 0.1, lo.y - 0.1, 0.0], [hi.x + 0.1, hi.y + 0.1, h], color, b)],
     }
 }
@@ -699,7 +753,7 @@ mod tests {
         assert_eq!(part_style("V1", "PinHeader_1x2_PM").0, 2.5);
         assert_eq!(part_kind("U1", "SOIC-8_P1.27"), Kind::SmdIc);
         assert_eq!(part_kind("U2", "DIP-14_W7.62"), Kind::Dip);
-        assert_eq!(part_kind("T1", "Transformer_EI30"), Kind::Other);
+        assert_eq!(part_kind("T1", "Transformer_EI30"), Kind::Transformer);
     }
 
     #[test]
@@ -800,5 +854,60 @@ mod tests {
         let body = boxes.iter().max_by(|a, c| (a.hi[0] - a.lo[0]).total_cmp(&(c.hi[0] - c.lo[0]))).unwrap();
         assert!(((body.hi[0] - body.lo[0]) - 4.8).abs() < 1e-9 && ((body.hi[1] - body.lo[1]) - 3.8).abs() < 1e-9, "the package's size, not the pads'");
         assert_eq!(part_style("Y1", "XTAL_3225").0, 0.9);
+    }
+
+    fn board_with(refdes: &str, fp: &str, pads: &[(f64, f64)]) -> Board {
+        let mut b = Board::new("x", 60.0, 40.0);
+        for (i, (x, y)) in pads.iter().enumerate() {
+            let mut p = Pad::new(Point::new(*x, *y), PadShape::Circle { d: 1.7 }, Some(1.0), Side::Top);
+            p.refdes = refdes.into();
+            p.pin = format!("{}", i + 1);
+            b.pads.push(p);
+        }
+        b.parts.push(Part { refdes: refdes.into(), value: String::new(), footprint: fp.into(), pos: Point::new(20.0, 20.0), rot: 0, side: Side::Top });
+        b
+    }
+
+    #[test]
+    fn a_usb_connector_is_a_metal_shell_on_a_base_a_terminal_block_has_screws() {
+        // the shapes of the shipped sample: the signal pins in a row, the shell legs to one side
+        assert_eq!(part_kind("J1", "USB_DEMO_TH"), Kind::Shell);
+        assert_eq!(part_kind("J1", "PinHeader_1x4"), Kind::Header, "a header is still a header");
+        assert_eq!(part_kind("U1", "USBLC6-2SC6"), Kind::SmdIc, "a USB protection chip is not a connector");
+        let b = board_with("J1", "USB_DEMO_TH", &[(16.5, 20.0), (19.0, 20.0), (21.0, 20.0), (23.5, 20.0), (13.5, 16.0), (26.5, 16.0)]);
+        let boxes = part_boxes(&b);
+        assert_eq!(boxes.len(), 2, "the plastic base and the shell (the pins show as pads)");
+        let shell = boxes.iter().find(|x| x.color == [190, 190, 200]).expect("a silver shell");
+        assert!((shell.hi[2] - (BOARD_THICKNESS + 7.0)).abs() < 1e-9, "a USB-A is about 7 mm tall");
+        assert_eq!(part_style("J1", "USB_C_Receptacle").0, 3.3);
+        assert_eq!(part_style("J1", "USB_Micro-B").0, 2.8);
+
+        // four terminals, one screw (a cylinder and its slot) on each
+        let t = board_with("V1", "TerminalBlock_4P_5.08", &[(10.0, 20.0), (15.08, 20.0), (20.16, 20.0), (25.24, 20.0)]);
+        assert_eq!(part_kind("V1", "TerminalBlock_4P_5.08"), Kind::Terminal);
+        let boxes = part_boxes(&t);
+        assert_eq!(boxes.iter().filter(|x| x.shape == BodyShape::Cylinder(2)).count(), 4, "a screw head per terminal");
+        assert_eq!(boxes.len(), 1 + 4 * 2, "the block, and a screw with its slot on each terminal");
+    }
+
+    #[test]
+    fn a_transformer_shows_core_and_coil_and_a_buzzer_is_a_can_with_a_hole() {
+        let t = board_with("T1", "Transformer_EI30", &[(10.0, 10.0), (10.0, 30.0), (30.0, 10.0), (30.0, 30.0)]);
+        assert_eq!(part_kind("T1", "Transformer_EI30"), Kind::Transformer);
+        let boxes = part_boxes(&t);
+        let body: Vec<&PartBox> = boxes.iter().filter(|x| x.hi[2] - BOARD_THICKNESS > 5.0).collect();
+        assert_eq!(body.len(), 2, "core and coil");
+        let heights: Vec<f64> = body.iter().map(|x| x.hi[2] - BOARD_THICKNESS).collect();
+        assert!(heights.iter().any(|h| (h - 25.0).abs() < 1e-9) && heights.iter().any(|h| (h - 17.5).abs() < 1e-9), "{heights:?}");
+
+        let z = board_with("BZ1", "Buzzer_D12_P7.6", &[(16.2, 20.0), (23.8, 20.0)]);
+        assert_eq!(part_kind("BZ1", "Buzzer_D12_P7.6"), Kind::Buzzer);
+        let boxes = part_boxes(&z);
+        let can = boxes.iter().find(|x| x.hi[2] - BOARD_THICKNESS > 8.0).expect("the can");
+        assert_eq!(can.shape, BodyShape::Cylinder(2));
+        assert!(can.hi[0] - can.lo[0] >= 12.0 - 1e-9, "wide enough for a 12 mm buzzer");
+        assert_eq!(boxes.iter().filter(|x| x.color == [8, 8, 10]).count(), 1, "the sound hole");
+        // the height counts in the case check (9 mm)
+        assert_eq!(part_total_height("BZ1", "Buzzer_D12_P7.6"), 9.0);
     }
 }
