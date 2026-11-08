@@ -19,6 +19,16 @@ const FONT_FAMILY: &str = "'BIZ UDGothic','BIZ UDPGothic','Yu Gothic UI','Meiryo
 impl SchEditor {
     /// The shown sheet as an SVG document, or `None` when it has nothing on it.
     pub fn sheet_svg(&mut self) -> Option<String> {
+        self.sheet_shapes().map(|shapes| shapes_to_svg(&shapes, SCH_BG))
+    }
+
+    /// The shown sheet as a PDF file's bytes, or `None` when it has nothing on it.
+    pub fn sheet_pdf(&mut self) -> Option<Vec<u8>> {
+        self.sheet_shapes().map(|shapes| super::pdf::shapes_to_pdf(&shapes, SCH_BG))
+    }
+
+    /// What egui draws for the shown sheet (at the export zoom, without the selection), for the pictures made from it.
+    fn sheet_shapes(&mut self) -> Option<Vec<ClippedShape>> {
         let mut pts: Vec<(f32, f32)> = vec![];
         for c in &self.sch.components {
             let (x0, x1, y0, y1) = comp_extents(c);
@@ -73,7 +83,7 @@ impl SchEditor {
         self.pan = saved.1;
         self.selected = saved.2;
         self.multi = saved.3;
-        Some(shapes_to_svg(&out.shapes, SCH_BG))
+        Some(out.shapes)
     }
 
     /// File → 回路図をSVGで保存: asks for the place and writes the file.
@@ -86,6 +96,21 @@ impl SchEditor {
         self.status = match std::fs::write(&path, svg) {
             Ok(()) => format!("SVG を保存しました: {}", path.display()),
             Err(e) => format!("SVG を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
+        };
+    }
+}
+
+impl SchEditor {
+    /// File → 回路図をPDFで保存: asks for the place and writes the file.
+    pub fn export_pdf(&mut self) {
+        let Some(pdf) = self.sheet_pdf() else {
+            self.status = "回路図が空なので、PDF に書き出せません。部品を置いてからもう一度お試しください".into();
+            return;
+        };
+        let Some(path) = rfd::FileDialog::new().add_filter("PDF", &["pdf"]).set_file_name("schematic.pdf").save_file() else { return };
+        self.status = match std::fs::write(&path, pdf) {
+            Ok(()) => format!("PDF を保存しました: {}", path.display()),
+            Err(e) => format!("PDF を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください"),
         };
     }
 }

@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -269,6 +269,24 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
             }
         }
     }
+    // `--pdf file.pdf`: the same sheet as a one-page PDF, then quit
+    if let Some(i) = args.iter().position(|a| a == "--pdf")
+        && let Some(p) = args.get(i + 1) {
+            match app.sch.sheet_pdf() {
+                Some(pdf) => match std::fs::write(p, pdf) {
+                    Ok(()) => println!("PDF を保存しました: {p}"),
+                    Err(e) => {
+                        eprintln!("PDF を保存できませんでした: {e}。保存先のフォルダに書き込めるか確認してください");
+                        std::process::exit(1);
+                    }
+                },
+                None => {
+                    eprintln!("回路図が空なので、PDF に書き出せません");
+                    std::process::exit(1);
+                }
+            }
+            std::process::exit(0);
+        }
     // `--svg file.svg`: the shown sheet as an SVG picture (after the other options, so `--dc` figures are in it), then quit
     if let Some(i) = args.iter().position(|a| a == "--svg")
         && let Some(p) = args.get(i + 1) {

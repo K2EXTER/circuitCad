@@ -231,6 +231,7 @@ dependencies = [
  "sch-core",
  "serde_json",
  "sim-core",
+ "ttf-parser",
  "zip",
 ]
 

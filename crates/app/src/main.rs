@@ -365,6 +365,10 @@ impl eframe::App for App {
                         self.sch.export_svg();
                         ui.close();
                     }
+                    if sch_mode && ui.button("回路図をPDFで保存…").on_hover_text("いま見えているシートを、1ページの PDF にします。印刷や提出、メールで送るのに使えます。文字は形(アウトライン)で入るので、どの環境でも同じ見た目ですが、PDF の中で文字の検索やコピーはできません。図枠は右下に入ります。選択やグリッドは入らず、電圧・電流の表示は、出ていればそのまま入ります").clicked() {
+                        self.sch.export_pdf();
+                        ui.close();
+                    }
                     if sch_mode && ui.button("図枠 (タイトル・版・日付)…").on_hover_text("回路の名前・版・日付・作者を書いておきます。SVG に書き出すと、図の右下に枠で入ります").clicked() {
                         self.sch.open_title_block();
                         ui.close();

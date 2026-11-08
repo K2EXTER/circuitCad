@@ -748,6 +748,7 @@ mod history;
 mod hint;
 mod canvas;
 mod draw;
+mod pdf;
 mod svg;
 mod title_block;
 mod interact;
