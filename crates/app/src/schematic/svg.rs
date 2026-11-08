@@ -65,6 +65,7 @@ impl SchEditor {
             self.draw_ports(&painter, rect);
             self.draw_voltages(&painter, rect);
             self.draw_currents(&painter, rect);
+            self.draw_title_block(&painter, rect);
         });
 
         out.textures_delta.clear();

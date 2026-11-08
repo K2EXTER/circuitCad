@@ -251,6 +251,8 @@ pub struct SchEditor {
     wiz_open: bool,
     /// The window of the design's requirements (`requirements.rs`), the text boxes of its table, and the sentences about names the circuit lacks.
     req_open: bool,
+    /// The window of the title block (`title_block.rs`).
+    title_open: bool,
     /// Frames on the sheet round the parts of the groups and of the distances to keep in the requirements table.
     pub req_frames: bool,
     /// The suggestions for the bypass section of the requirements table (each with its tick), and the sentence about them.
@@ -596,6 +598,7 @@ impl Default for SchEditor {
             glossary_request: None,
             wiz_open: false,
             req_open: false,
+            title_open: false,
             req_frames: true,
             req_bp_suggest: vec![],
             req_bp_msg: String::new(),
@@ -746,6 +749,7 @@ mod hint;
 mod canvas;
 mod draw;
 mod svg;
+mod title_block;
 mod interact;
 mod panel;
 mod coverage;

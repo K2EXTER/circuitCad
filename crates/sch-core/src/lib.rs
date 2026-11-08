@@ -252,6 +252,22 @@ pub struct Label {
 /// got short leads; they are fixed up when read (see `RawSchematic`).
 pub const LAYOUT_VERSION: u32 = 1;
 
+/// The title block of a printed sheet: what the circuit is, which version, when, by whom.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct TitleBlock {
+    pub title: String,
+    pub revision: String,
+    pub date: String,
+    pub author: String,
+    pub note: String,
+}
+
+impl TitleBlock {
+    pub fn is_empty(&self) -> bool {
+        *self == TitleBlock::default()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(from = "RawSchematic")]
 pub struct Schematic {
@@ -286,6 +302,9 @@ pub struct Schematic {
     /// Several sheets: every sheet, the one being edited (`active_sheet`) as an empty place (it is in the fields above). Empty = one sheet.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sheets: Vec<Sheet>,
+    /// Title, revision, date and author, drawn at the corner of the exported sheet.
+    #[serde(default, skip_serializing_if = "TitleBlock::is_empty")]
+    pub title_block: TitleBlock,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub active_sheet: usize,
 }
@@ -296,7 +315,7 @@ fn is_zero(n: &usize) -> bool {
 
 impl Default for Schematic {
     fn default() -> Self {
-        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], ports: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], active_sheet: 0 }
+        Schematic { components: vec![], wires: vec![], labels: vec![], buses: vec![], ports: vec![], layout_version: LAYOUT_VERSION, erc_skip: vec![], net_currents: BTreeMap::new(), diff_pairs: vec![], requirements: DesignSpec::default(), no_connects: vec![], thermal_links: vec![], sheets: vec![], title_block: TitleBlock::default(), active_sheet: 0 }
     }
 }
 
@@ -326,12 +345,14 @@ struct RawSchematic {
     #[serde(default)]
     sheets: Vec<Sheet>,
     #[serde(default)]
+    title_block: TitleBlock,
+    #[serde(default)]
     active_sheet: usize,
 }
 
 impl From<RawSchematic> for Schematic {
     fn from(r: RawSchematic) -> Self {
-        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, ports: r.ports, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, active_sheet: r.active_sheet };
+        let mut s = Schematic { components: r.components, wires: r.wires, labels: r.labels, buses: r.buses, ports: r.ports, layout_version: r.layout_version, erc_skip: r.erc_skip, net_currents: r.net_currents, diff_pairs: r.diff_pairs, requirements: r.requirements, no_connects: r.no_connects, thermal_links: r.thermal_links, sheets: r.sheets, title_block: r.title_block, active_sheet: r.active_sheet };
         s.migrate();
         s
     }

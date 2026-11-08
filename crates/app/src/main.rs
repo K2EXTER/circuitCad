@@ -360,6 +360,10 @@ impl eframe::App for App {
                         self.sch.export_svg();
                         ui.close();
                     }
+                    if sch_mode && ui.button("図枠 (タイトル・版・日付)…").on_hover_text("回路の名前・版・日付・作者を書いておきます。SVG に書き出すと、図の右下に枠で入ります").clicked() {
+                        self.sch.open_title_block();
+                        ui.close();
+                    }
                     if !sch_mode && ui.button("ケースの図面 (DXF) から外形と穴を取り込む…").on_hover_text("ケースの CAD で描いた DXF (ASCII 形式) から、基板の外形 (線・円弧・ポリラインがつながって閉じた、いちばん大きい輪) と、その中の円 (取り付け穴) を取り込みます。外形の左下が (0, 0) になります。単位は図面の設定 (INSUNITS) から mm にします。「元に戻す」で戻せます").clicked() {
                         self.board_ed.import_dxf();
                         ui.close();
@@ -568,6 +572,7 @@ impl eframe::App for App {
         self.sch.settings_window(ui.ctx());
         self.sch.wizard_window(ui.ctx());
         self.sch.requirements_window(ui.ctx());
+        self.sch.title_block_window(ui.ctx());
         egui::Panel::bottom("status").show(ui, |ui| {
             // line 1: what just happened (left) and a rotating general tip (right); line 2: what to do next
             ui.spacing_mut().item_spacing.y = 4.0;
