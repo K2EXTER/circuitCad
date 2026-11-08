@@ -69,6 +69,64 @@ impl Session {
         Ok(obj(json!({"placed": r.put, "missed_corners": r.missed, "at": at})))
     }
 
+    pub(super) fn board_dim(&mut self, rest: &[String]) -> Res {
+        // board dim | dim outline | dim add X1,Y1 X2,Y2 [dir=aligned|h|v] [offset=2] [height=1.2] | dim remove N | dim clear:
+        // dimensions kept on the board (a drawing layer: DXF and SVG, never Gerber)
+        use pcb_core::dimension::{DimDir, Dimension};
+        let (pos, kv) = options(rest);
+        let point = |s: &str| -> Result<pcb_core::model::Point, String> {
+            let v: Vec<f64> = s.split(',').map(|x| x.trim().parse::<f64>().map_err(|_| format!("{s}: write a point as X,Y (mm)"))).collect::<Result<_, _>>()?;
+            match v.as_slice() {
+                [x, y] => Ok(pcb_core::model::Point::new(*x, *y)),
+                _ => Err(format!("{s}: write a point as X,Y (mm)")),
+            }
+        };
+        let board = self.board_mut()?;
+        match pos.first().map(String::as_str) {
+            None | Some("list") => {}
+            Some("outline") => {
+                pcb_core::dimension::add_outline_dimensions(board)?;
+            }
+            Some("add") => {
+                let (Some(a), Some(b)) = (pos.get(1), pos.get(2)) else { return Err("board dim add X1,Y1 X2,Y2 [dir=aligned|h|v] [offset=2]".into()) };
+                let dir = match opt(&kv, "dir") {
+                    None | Some("aligned") => DimDir::Aligned,
+                    Some("h") | Some("horizontal") => DimDir::Horizontal,
+                    Some("v") | Some("vertical") => DimDir::Vertical,
+                    Some(d) => return Err(format!("dir={d}: use aligned, h or v")),
+                };
+                let offset = match opt(&kv, "offset") {
+                    Some(v) => v.parse::<f64>().ok().filter(|o| o.is_finite()).ok_or_else(|| format!("offset={v}: a number of mm (negative puts the line on the right)"))?,
+                    None => 2.0,
+                };
+                let mut d = Dimension::new(point(a)?, point(b)?, offset, dir);
+                if let Some(h) = opt(&kv, "height") {
+                    d.text_height = num(h)?;
+                }
+                if d.length() < 0.01 {
+                    return Err("the two points are the same along that direction: nothing to measure".into());
+                }
+                board.dimensions.push(d);
+            }
+            Some("remove") => {
+                let i: usize = pos.get(1).and_then(|v| v.parse().ok()).ok_or("board dim remove N (the index in the list)")?;
+                if i >= board.dimensions.len() {
+                    return Err(format!("there is no dimension {i} (there are {})", board.dimensions.len()));
+                }
+                board.dimensions.remove(i);
+            }
+            Some("clear") => board.dimensions.clear(),
+            Some(o) => return Err(format!("board dim {o}: use outline, add, remove, clear (or nothing for the list)")),
+        }
+        let list: Vec<Value> = board
+            .dimensions
+            .iter()
+            .enumerate()
+            .map(|(i, d)| json!({"index": i, "a": [d.a.x, d.a.y], "b": [d.b.x, d.b.y], "dir": format!("{:?}", d.dir).to_lowercase(), "length_mm": (d.length() * 100.0).round() / 100.0, "offset": d.offset}))
+            .collect();
+        Ok(obj(json!({"dimensions": list})))
+    }
+
     pub(super) fn board_pinlabels(&mut self, rest: &[String]) -> Res {
         // board pinlabels [height=1.0]: the names of the pins of the pin headers (`pinnames` in the circuit) on the silk beside the pads
         let (_, kv) = options(rest);

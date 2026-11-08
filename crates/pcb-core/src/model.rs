@@ -710,6 +710,9 @@ pub struct Board {
     /// The text follows its part and keeps the offset; an entry is removed when the text is put back.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub label_offsets: std::collections::BTreeMap<String, Point>,
+    /// Dimensions kept on the board (a drawing layer: the editor, the DXF and the SVG show them; the Gerber files do not).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub dimensions: Vec<crate::dimension::Dimension>,
     pub rules: Rules,
 }
 
@@ -800,6 +803,7 @@ impl Board {
             part_sheets: Default::default(),
             pin_map: Default::default(),
             label_offsets: Default::default(),
+            dimensions: vec![],
             rules: Rules::default(),
         }
     }

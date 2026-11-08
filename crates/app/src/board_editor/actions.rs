@@ -293,6 +293,7 @@ impl BoardEditor {
 
     /// The fiducial row of the finishing section: put three marks near the corners, or take them off.
     pub(super) fn panel_fiducials(&mut self, ui: &mut egui::Ui) {
+        self.panel_dimensions(ui);
         ui.separator();
         let has = self.board.pads.iter().any(|p| pcb_core::fiducial::is_fiducial(p) && p.side == Side::Top);
         ui.horizontal(|ui| {

@@ -35,6 +35,7 @@ impl Session {
             "pour" => self.board_pour(rest),
             "stitch" => self.board_stitch(rest),
             "fiducials" => self.board_fiducials(rest),
+            "dim" => self.board_dim(rest),
             "pinlabels" => self.board_pinlabels(rest),
             "guard" => self.board_guard(rest),
             "picture" => self.board_picture(rest),

@@ -3,7 +3,8 @@
 //!
 //! The board's y axis points up, as the DXF's does, so the coordinates are written as they are and the drawing looks as the board
 //! does from the top. Layers: `BOARD_OUTLINE`, `HOLES` (mounting holes and slots), `PAD_DRILLS` (the drills of the pads),
-//! `PARTS` (the box round each part's pads) and `PART_NAMES` (the references).
+//! `PARTS` (the box round each part's pads), `PART_NAMES` (the references) and `DIMENSIONS` (the dimensions kept on the board:
+//! lines, and the length as a text along the dimension line).
 
 use crate::model::*;
 use std::fmt::Write;
@@ -68,6 +69,18 @@ impl Dxf {
         }
     }
 
+    /// A text centred on `at` and turned `angle` degrees counter-clockwise.
+    fn text_centred(&mut self, layer: &str, at: Point, height: f64, angle: f64, s: &str) {
+        self.start("TEXT", layer);
+        self.pt(0, at.x, at.y);
+        self.pair(40, format!("{height:.3}"));
+        self.pair(1, s);
+        self.pair(50, format!("{angle:.3}"));
+        self.pair(72, 1);
+        self.pt(1, at.x, at.y);
+        self.pair(73, 2);
+    }
+
     fn text(&mut self, layer: &str, at: Point, height: f64, s: &str) {
         self.start("TEXT", layer);
         self.pt(0, at.x, at.y);
@@ -77,7 +90,7 @@ impl Dxf {
 }
 
 /// (layer, AutoCAD colour number)
-const LAYERS: [(&str, i32); 5] = [("BOARD_OUTLINE", 7), ("HOLES", 1), ("PAD_DRILLS", 3), ("PARTS", 5), ("PART_NAMES", 2)];
+const LAYERS: [(&str, i32); 6] = [("BOARD_OUTLINE", 7), ("HOLES", 1), ("PAD_DRILLS", 3), ("PARTS", 5), ("PART_NAMES", 2), ("DIMENSIONS", 4)];
 
 /// The DXF text of the board.
 pub fn mechanical(board: &Board) -> String {
@@ -117,6 +130,13 @@ pub fn mechanical(board: &Board) -> String {
             d.line("PARTS", corners[i], corners[(i + 1) % 4]);
         }
         d.text("PART_NAMES", Point::new(lo.x, hi.y + 0.3), 0.8, &part.refdes);
+    }
+    for dim in &board.dimensions {
+        let g = dim.drawing();
+        for [a, b] in &g.lines {
+            d.line("DIMENSIONS", *a, *b);
+        }
+        d.text_centred("DIMENSIONS", g.text_at, dim.text_height, g.angle, &g.text);
     }
 
     let mut out = String::new();

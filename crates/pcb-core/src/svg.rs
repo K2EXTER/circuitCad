@@ -17,6 +17,8 @@ pub struct SvgOpts {
 const BOARD: &str = "#1f5c3a";
 const SILK: &str = "#f4f4f0";
 const HOLE: &str = "#101418";
+/// The dimensions (a drawing layer, not made on the board).
+const DIM: &str = "#3a6fb0";
 
 fn colour(side: Side) -> &'static str {
     match side {
@@ -88,7 +90,13 @@ fn layer(prims: &[Prim], c: &str, id: &str, bounds: (Point, Point), defs: &mut S
 
 /// The SVG text of one side of the board.
 pub fn board_svg(board: &Board, opts: &SvgOpts) -> Result<String, String> {
-    let (lo, hi) = board.bounds().ok_or("基板に外形も部品もないので、図にできません。先に外形を描いてください")?;
+    let (mut lo, mut hi) = board.bounds().ok_or("基板に外形も部品もないので、図にできません。先に外形を描いてください")?;
+    // the dimensions are drawn on the top view (read from below they would be mirrored), so the picture takes them in
+    let dims = opts.side != Side::Bottom;
+    for (a, b) in board.dimensions.iter().filter(|_| dims).map(|d| d.bounds()) {
+        lo = Point::new(lo.x.min(a.x), lo.y.min(a.y));
+        hi = Point::new(hi.x.max(b.x), hi.y.max(b.y));
+    }
     let margin = 1.0;
     let (lo, hi) = (Point::new(lo.x - margin, lo.y - margin), Point::new(hi.x + margin, hi.y + margin));
     let (w, h) = (hi.x - lo.x, hi.y - lo.y);
@@ -114,6 +122,13 @@ pub fn board_svg(board: &Board, opts: &SvgOpts) -> Result<String, String> {
             match b {
                 None => inner.push_str(&element(&Prim::Flash { ap: Aperture::Circle(d), at: a, clear: false }, HOLE)),
                 Some(b) => inner.push_str(&element(&Prim::Line { a, b, width: d, clear: false }, HOLE)),
+            }
+        }
+    }
+    if dims {
+        for d in &board.dimensions {
+            for [a, b] in d.strokes() {
+                let _ = write!(inner, "<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{DIM}\" stroke-width=\"0.12\" stroke-linecap=\"round\"/>", n(a.x), n(a.y), n(b.x), n(b.y));
             }
         }
     }
@@ -165,6 +180,22 @@ mod tests {
         assert_eq!(defs.matches("<mask").count(), 1);
         assert!(g.starts_with("<g mask=\"url(#t1)\"><polygon"), "{g}");
         assert!(g.ends_with("<circle cx=\"5\" cy=\"5\" r=\"1\" fill=\"#abc\"/>"), "what is drawn after the cut is not cut: {g}");
+    }
+
+    #[test]
+    fn the_dimensions_are_drawn_and_widen_the_picture() {
+        let mut b = sample();
+        let plain = board_svg(&b, &SvgOpts { side: Side::Top, silk: true }).unwrap();
+        crate::dimension::add_outline_dimensions(&mut b).unwrap();
+        let s = board_svg(&b, &SvgOpts { side: Side::Top, silk: true }).unwrap();
+        assert!(s.contains(DIM) && !plain.contains(DIM));
+        let width = |s: &str| s.split("width=\"").nth(1).and_then(|w| w.split("mm").next()).and_then(|w| w.parse::<f64>().ok()).unwrap();
+        assert!(width(&s) > width(&plain) + 4.0, "{} {}", width(&s), width(&plain));
+        // not on the mirrored bottom
+        assert!(!board_svg(&b, &SvgOpts { side: Side::Bottom, silk: false }).unwrap().contains(DIM));
+        // the DXF has them on a layer of their own, with the length as a text
+        let dxf = crate::dxf::mechanical(&b);
+        assert!(dxf.contains("DIMENSIONS") && dxf.contains("30.00") && dxf.contains("20.00"), "{dxf}");
     }
 
     #[test]

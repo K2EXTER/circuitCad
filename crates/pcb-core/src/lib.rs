@@ -16,6 +16,7 @@ pub mod trunk;
 pub mod copper;
 pub mod current;
 pub mod diffpair;
+pub mod dimension;
 pub mod drc;
 pub mod dxf;
 pub mod dxf_in;

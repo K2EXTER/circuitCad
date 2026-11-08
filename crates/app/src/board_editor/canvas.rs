@@ -29,6 +29,7 @@ impl BoardEditor {
         self.draw_highlight(&painter, rect, conn.as_deref());
         self.draw_overlays(&painter, rect);
         self.draw_layer_badge(&painter, rect);
+        self.draw_dimensions(&painter, rect);
         self.draw_measure(&painter, rect);
         self.layer_overlay(ui, rect);
 
@@ -118,6 +119,15 @@ impl BoardEditor {
             self.poly_verts.clear();
             self.multi.clear();
             self.boxsel = None;
+        }
+        // a finished measurement is kept as a dimension: Enter as it is, H only its width, V only its height
+        if self.tool == Tool::Measure && !cmd && matches!(self.measure, Some((_, Some(_)))) {
+            for (k, dir) in [(Key::Enter, pcb_core::dimension::DimDir::Aligned), (Key::H, pcb_core::dimension::DimDir::Horizontal), (Key::V, pcb_core::dimension::DimDir::Vertical)] {
+                if pressed(k) {
+                    self.keep_measure(dir);
+                    return;
+                }
+            }
         }
         if pressed(Key::Enter) && matches!(self.tool, Tool::OutlinePoly | Tool::Zone) {
             self.finish_polygon();

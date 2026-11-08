@@ -24,7 +24,11 @@ impl BoardEditor {
     }
 
     pub(super) fn fit_view(&mut self, rect: Rect) {
-        let Some((lo, hi)) = self.board.bounds() else { return };
+        let Some((mut lo, mut hi)) = self.board.bounds() else { return };
+        // the dimensions stand outside the board: they are taken in too
+        for (a, b) in self.board.dimensions.iter().map(|d| d.bounds()) {
+            (lo, hi) = (Point::new(lo.x.min(a.x), lo.y.min(a.y)), Point::new(hi.x.max(b.x), hi.y.max(b.y)));
+        }
         let (w, h) = ((hi.x - lo.x).max(5.0) + 10.0, (hi.y - lo.y).max(5.0) + 10.0);
         // the "物の表示とロック" panel floats over the right edge of the canvas: fit into the part of the canvas left of it
         let free = (rect.width() - OVERLAY_PANEL_PX).max(rect.width() * 0.5);

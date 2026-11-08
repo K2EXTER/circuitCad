@@ -40,7 +40,7 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::PadSmd => "表面実装の単独パッドを置きます",
         Tool::Hole => "ネジ止め用の取付穴を置きます",
         Tool::Silk => "部品名や目印などの白い印刷 (シルク) の線を引きます",
-        Tool::Measure => "2点の間の距離を測ります。1回目のクリックで始点、2回目で終点。パッド・ビアの中心や配線の端に吸い付きます。基板は変わりません (Esc で消します)",
+        Tool::Measure => "2点の間の距離を測ります。1回目のクリックで始点、2回目で終点。パッド・ビアの中心や配線の端に吸い付きます。測ったあと Enter で寸法線として基板に残せます (H は横の長さだけ・V は縦だけ。DXF と SVG の図に出ます)。残さなければ基板は変わりません (Esc で消します)",
     }
 }
 
@@ -689,6 +689,7 @@ pub fn set_multisampled(on: bool) {
 pub(crate) use draw::capsule;
 mod order;
 mod measure;
+mod dimensions;
 mod ruler;
 mod snippet;
 pub mod lesson;

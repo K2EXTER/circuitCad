@@ -36,6 +36,12 @@
 
 - 取り込みで基板に届かなかった行(`RequirementsImport.unmatched` = ネットのパッドが基板にない役割の行 / `dropped_layers` = 基板にない層)は `warnings()` で文にして、取り込み後の注意(`import_notes`)と CLI `board import` の `warnings` に出す(`netlist::import_hints_report`)。表を直したあとは、`BoardEditor::sync_requirements`(`board_editor/file.rs`)が、表を直したとき・回路図を開いたときに立つ旗(`SchEditor.req_dirty`)を見て、回路図の表と最後に取り込んだ表(`req_synced`)を比べ、違えば `import_requirements` だけを(Undo つきで)やり直す。開いたばかりで最後が分からない基板は、基板が持つ組・距離・バイパス・例外・測定と比べる。
 
+## dimension.rs — 基板に残す寸法線(J3、2026-11-08)
+- `Board.dimensions: Vec<Dimension>`(`a`・`b`・`offset`・`dir`(`Aligned` 斜め / `Horizontal` / `Vertical`)・`text_height`・`outline`)。`offset` は a→b の向きの左側へ何 mm(負は右)。`drawing()` が線(寸法線・補助線(点から 0.5 mm あけ、寸法線の 1 mm 先まで)・矢印 4 本。長さ 2.5 mm 未満は矢印を内向き)と文字(「12.70」、寸法線の外側、角度は -90〜90° に直して読める向き)を返す。`strokes()` は文字も線のフォント(`strokefont`)で線にしたもの(SVG 用)。
+- `add_outline_dimensions`: 外形の外接矩形の幅(下に 4 mm)と高さ(左に 4 mm)。`outline: true` の印で、もう一度押すと置き直す。
+- 出力: DXF の層 `DIMENSIONS`(線と、回転・中央そろえの TEXT)。SVG は表面の図だけ(裏面は鏡に映すので文字が逆になる)で、図の範囲を寸法線まで広げる。ガーバーには出さない。DXF を読み直しても外形は変わらない(`dxf_in.rs` のテスト)。
+- CLI `board dim`、アプリは距離を測るツールの Enter・H・V と「外形の寸法線」。
+
 ## dxf.rs — ケース設計用の DXF(2026-11-08)
 - `dxf::mechanical(&Board) -> String`: ASCII の DXF R12(AC1009。LINE・CIRCLE・ARC・TEXT だけ)。単位は mm。基板の y も DXF の y も上向きなので、そのまま書く(上から見た形になる)。
 - 層: `BOARD_OUTLINE`(外形の線)、`HOLES`(取り付け穴。長穴は2本の線+2つの円弧)、`PAD_DRILLS`(パッドのドリル)、`PARTS`(部品のパッド全体を囲む箱。部品の本体の大きさではない)、`PART_NAMES`(部品番号)。

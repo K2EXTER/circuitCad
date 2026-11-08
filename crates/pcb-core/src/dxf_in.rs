@@ -329,6 +329,15 @@ mod tests {
     }
 
     #[test]
+    fn the_dimensions_in_a_dxf_we_wrote_do_not_change_the_outline() {
+        let mut b = Board::new("demo", 30.0, 20.0);
+        crate::dimension::add_outline_dimensions(&mut b).unwrap();
+        b.dimensions.push(crate::dimension::Dimension::new(Point::new(5.0, 5.0), Point::new(9.0, 8.0), 2.0, crate::dimension::DimDir::Aligned));
+        let all = read(&mechanical(&b), None).unwrap();
+        assert!((area(&all.outline) - 600.0).abs() < 1e-6, "{:?}", all.outline);
+    }
+
+    #[test]
     fn lines_and_an_arc_that_meet_make_a_rounded_outline() {
         // a 20 x 10 box whose right side is a half circle: three lines and one arc, given in no particular order
         let dxf = "0\nSECTION\n2\nENTITIES\n\

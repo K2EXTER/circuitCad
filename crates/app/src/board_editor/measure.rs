@@ -16,7 +16,7 @@ impl BoardEditor {
     pub(super) fn measure_click(&mut self, p: Point) {
         self.measure = match self.measure {
             Some((a, None)) => {
-                self.status = format!("距離: {} — 次のクリックで測り直し、Esc で消します", measure_text(a, p));
+                self.status = format!("距離: {} — Enter で寸法線として残す (H は横だけ・V は縦だけ)。次のクリックで測り直し、Esc で消します", measure_text(a, p));
                 Some((a, Some(p)))
             }
             _ => {
