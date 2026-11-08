@@ -1,0 +1,80 @@
+# pcb-core: モデル・DRC・電流と線幅・IR ドロップとインダクタンス・インピーダンス・ネットクラス
+
+(`docs/code-notes/pcb-core.md` の目次から分けた。内容は元のまま)
+
+- `model.rs` `Board`/`Track`/`Pad`/`Via`/`Zone`/`Rules` ほか全データ型。部品番号のシルク文字(`SilkText` の `refdes` つき)は `set_part` が部品の上に自動で置く。ユーザーが動かした分は `Board.label_offsets`(部品番号 → 自動の位置からのずれ mm。無いファイルは空として読む)に持ち、`set_part` が毎回足すので、部品を動かしても文字は同じ間隔で付いてくる。`move_label`(文字を動かして、ずれを足す)・`reset_label`(自動の位置に戻す)・`remove_part` でずれも消える。`SilkText.rot`(4分の1回転。既定0)で文字を回せる(`turn_label`)。テスト `tests_label.rs`
+  - 銅箔は `Side` (Top/Bottom/`Inner(n)`)で表し、`Board.inner_layers`(内層の数、0=2層)と `copper_layers()` が層の一覧(上から下)。
+  - トラックとゾーンだけが内層に置け、部品・パッド・シルクは `Side::outer()` で表裏のみ。
+  - スルーホールとビアは全層につながる(ブラインド/ベリードビアは未対応)。
+  - DRC・ラッツネスト・自動配線(`autoroute.rs` は N 層格子)・IR ドロップ・ガーバー(`Copper,L2,Inr`、`export.rs` が内層を `.G1`… で出す)・発注前チェックが対応。
+  - GUIは `board_editor/layers.rs`(層数 2/4/6/8、減らすと内層の銅があれば断る。`layer_overlay` は画面右上の折りたたみ式の層パネル=作業層の選択と層ごとの表示/非表示、Lキーで順送り)。
+  - `Hole`=めっきなしの穴(長穴 `slot`/`slot_v`、部品付きは `refdes`。部品の穴は `parts.rs` の `set_part` が出し入れして部品に追従)、フットプリントを替えた部品は、古いパッドの上で終わっていた配線の端が同じピンの新しいパッドの中心へ動く(`set_part` の `follow_pads`)、`Pad.slot`=めっき長穴。
+  - `footprints.rs` の `Footprint.holes`(`FpHole`)と `package.rs` の `Explicit{pads,holes}`(`PadSpec.slot`/`HoleSpec`)が元。
+  - 長穴は `excellon.rs` が `G85` で出し、`gerber_view.rs` の `parse_excellon_slots` が読み戻す。
+  - 部品作成フォームの「追加のパッドと穴」(`part_form/` の `parse_extras`、脚/穴/パッド)が入力口、見本は `USB_DEMO_TH`
+- `drc/` (`mod.rs`・`connectivity.rs`・`geo.rs`・`silk.rs`・`thermal.rs`・`pour.rs`・`decoupling.rs`・`acute.rs` に分割。公開関数は `drc::` から使える) `check`(全体)・`clearance`・`shorts`・`connectivity`(銅の接続グループ、ネット判定) — 自動配線もこれを使う
+- `current.rs` 配線の太さと電流(IPC-2221: `width_for_current`/`current_for_width`、`Board.net_currents` との照合 `net_widths`、`widen_net`) / `drc/silk.rs` の `silk_checks` はシルク注意、`decoupling_checks` はICの電源ピンのバイパスコンデンサ(無い/8mm超で警告、`MAX_DECOUPLING_DISTANCE`)、`acute_angle_checks` は90°未満の鋭角(酸のたまり。パッドやビアの上にある角は、銅で埋まるので除く)、`thermal_via_checks` は放熱パッド(`heat_pads`: 表面実装で 4mm² 以上、他のパッドの 2 倍超)の中のサーマルビアの数(2.5mm² に 1 個、最低 2 個)。
+  - 同じネットのベタ(実際の銅の形で100mm²以上=`POUR_SPREAD_AREA`)が接していれば半分(`thermal_via_need`)、小さい/切れ切れなら半分にしない。
+  - `add_thermal_vias` が足りない分を格子状に置く(DRCが悪化するなら置かない、GUIは基板エディタの「サーマルビアを置く」)、`zone_checks` はベタの細いかけら(スリバー)と、どこにもつながらない銅の島(`zonefill` の実際の形で調べる)、`mask_dam_checks` は異なるネットのパッドの間のソルダーマスクの帯(0.1mm 未満で警告、`MIN_MASK_DAM`)、`missing_ground_fill` はGNDベタが無いときのヒント。
+  - どちらも発注前チェックで警告 / DRCの指摘は日本語で原因と直し方を書く
+- `irdrop.rs` `wiring_resistances`(全ネットの入口パッド→各パッドの抵抗とインダクタンスの一覧 `PadSeries{ohm,henry}`。
+  - インダクタンスは抵抗が最小の経路(ダイクストラ)の線を1本の配線とみなして Terman の式 `track_inductance`(0.2 nH/mm×長さ×(ln(2長さ/(幅+厚さ))+0.5+…))、ビア `via_inductance`(0.2 nH/mm×h×(ln(2h/r)−0.75)、0.3 mm の穴で約0.74 nH)・ベタ(0.3 nH)を足す。
+  - `wiring_couplings`(別ネットのパッド対ごとに、2本の経路を短い片に刻んで相互インダクタンスを足す。
+    - 平行な片どうしは2本の線(距離は断面の幾何平均距離 0.2235(w+t) でならす=発散防止)の厳密式(Grover、`parallel_mutual`)、角度のある片どうしは中点間の 1e-10×dl1·dl2/r。
+    - 検証: FastHenry2 3.6(Windows版)と57ケース(`tools/inductance_cases.json`: 平行な2本=長さ 10〜100 mm・幅 0.25〜3 mm・間隔 0.5〜10 mm、折れ曲がる1本=45°・90°・135°・ドッグレッグ・階段、角度のある2本、逆向きの2本、L字を回る2本、ビア(穴径 0.3・0.6・1.0 mm、上層→ビア→下層の直線・U字・横向き)、上下層に重ねた2本(重なる・横にずれる・逆向き・直角に交差)、1 kHz、断面 12×4 本)を比べ、自己は 1.0% 以内(ビア単体の短い経路は絶対差 0.1 nH 以内、5.8%)、相互は 0.9% 以内。
+    - 入力は `tools/fasthenry_cases.py`、結果は `tools/fasthenry_results.csv`、突き合わせは `tools/compare_fasthenry.py`。
+    - FastHenry2 は画面付きで引数起動できず、COM(`FastHenry2.Document` の `Run`/`IsRunning`)で動かし、`Zc.mat` の Im(Z)/ω を読む。
+    - テスト `inductance_agrees_with_fasthenry`(自己1.5%・相互1%)、表は `inductance_cases_table`(`--ignored --nocapture`)。
+    - 経路の自己インダクタンスは、同じ向きに続く区間(`straight_runs`)ごとの Terman の式の和+区間どうしの相互の2倍(折れ曲がりで、直角は0、鋭角ほど効く)。
+    - 最初は全長を1本とみなしていて、135°の折れ曲がりで +29%、階段で +20% ずれた。
+    - ビア(3次元): 経路の線分に、ビアの1段(隣の層どうしの間)を高さが変わる線分(`PathSeg.z`→`z2`、`a==b`、`width`=穴径)として入れ、同じ向きに続く段は1本の穴(`straight_runs` は3次元の向きで判定)。
+    - 穴の自己インダクタンスは `via_inductance(穴径, 高さ)`(丸い線の部分インダクタンス)、結合 `mutual` は3次元の片で、平行な片(配線どうし・穴どうし)は Grover の厳密式、穴と配線は直角なので0。
+    - 穴の幾何平均距離は 0.389×穴径。
+    - FastHenry2 との比較(1 kHz)に、隣り合う穴の2本(間隔 1.27・2.54・5・10 mm、同じ向き・逆向き、穴径 0.6)、1本の経路の2つの穴(1.27・2.54・5 mm)、4層基板で全層を貫く穴・一部の層だけの穴・その2本、を足した(合計70ケース、ベタなし)。
+    - 隣り合う穴の相互は 0.4% 以内(1.27 mm で 0.42 nH、2.54 mm で 0.24 nH)、1本の経路の2つの穴は 1.9% 以内(絶対差 0.06 nH)、4層の穴は 2.2% 以内。
+    - 以前の版は、穴どうしの結合が無く(穴の2本の相互が FastHenry の 0.56 倍、10 mm 離れると 0)、4層基板では隣の層の段ごとに基板の全厚の穴として数えていたため、全層を貫く穴が +77%、一部だけの穴が +43〜66%、抵抗は3倍だった(`via_resistance(穴径, 段の高さ)` に直した)。
+    - テスト `holes_side_by_side_couple`、`a_hole_through_four_layers_counts_the_barrel_once`。
+    - ビアは FastHenry では中空の筒ではなく、同じ幾何平均距離の中実の四角棒で表した(実物の筒は約20%低い)。
+    - 最初のビアの式 5.08h(ln(4h/d)+1)(約1.3 nH)は戻り電流を含む値で、経路の一部としては FastHenry の約1.7倍だったため、丸い線の部分インダクタンスの式に直した。
+    - ベタ: 別のネットのベタが別の層で配線の下(上)にあると(`PathSeg.plane`、配線の中点がベタの多角形の中)、戻り電流はベタを流れるので、鏡像法で `L − M(配線, 鏡像)`(`image_of`: ベタの面で鏡に映した配線。
+    - 完全導体の平面なら磁気的に厳密)。
+    - 2本が同じベタの上にあるときの結合は `M(a,b) − M(a, bの鏡像)`。
+    - 最初はベタの影響を 0.3 nH 足すだけで、2層基板の 50 mm・幅 0.25 mm の配線(ベタまで 1.6 mm)が 64 nH と、教科書の微細配線の式(Hammerstad の空気中の Z0 → L'=Z0/c、`tools/ref_microstrip.py`、`tools/plane_reference.csv`)の 39 nH より 63% 大きかった。
+    - 鏡像法のあとは 5 ケース(2層ベタ・内層ベタ 0.53/1.07 mm・幅 1 mm・L字)で式との差 -3.1〜+0.4%(無限長の式なので端の効果ぶん)。
+    - FastHenry2 3.6 は、ベタ(`G` 要素)を含む入力を COM 経由では計算せず(マニュアルの例題でも `Zc.mat` が出ない)、ベタは FastHenry とは比べていない(入力の生成だけ `fasthenry_cases.py` に残してある)。
+    - ベタの網目状の抜け・分割・薄い内層との間のずれ、同じネットのベタの上の配線(鏡像を使わない)、ビアどうしの結合は後述のとおり比べ済み。
+    - 周波数依存(表皮効果・近接効果、`tools/fasthenry_freq.py` が入力、結果は `tools/fasthenry_freq_results.csv`、断面は表面ほど細かい 7×11 本、1 kHz〜100 MHz): 配線 50 mm・35 µm の銅で、抵抗は直流に対し 1 MHz で 1.01〜1.30 倍(幅 0.25〜3 mm)、10 MHz で 1.36〜1.88 倍、100 MHz で 3.5〜4.3 倍(表皮の深さは 66 / 21 / 6.6 µm)。
+    - インダクタンスは単独の配線で 100 MHz に -2.4%、行きと帰りが 0.5 mm の近い対で 10 MHz に -5.9%、100 MHz に -10.4%(電流が向かい合う縁に寄る)。
+    - 近い対の抵抗は同じ幅の単独より少し大きい(100 MHz で 3.9 倍、単独 3.5 倍)。
+    - 私たちのモデルは直流の抵抗と低周波のインダクタンスなので、抵抗は約 300 kHz まで、インダクタンスは約 10 MHz までが有効の目安。
+    - 1 MHz を超える AC 解析で配線の反映が入っているときは、`ccad` の `ac` の `warnings`(`skin_warning`)とアプリのステータス行で知らせる(周波数に依存する抵抗そのものは入れていない: 回路シミュレータの抵抗素子は周波数に依存しないため)。
+    - ベタの種類は問わず「別ネット=交流的な基準面」とみなす(電源ベタでもGNDベタでも)。
+    - 2つの経路はどちらも入口パッドから外向きに読むので、行きと帰りが並んで走ると k>0 でループが L1+L2−2M に小さくなる。
+    - k=M/√(L1L2)、|k|<0.03 は捨て、強い順に200組まで、パッドが200を超えると計算しない)。
+  - 同じネットのパッド同士は結合させない(共有部分は各パッドで二重に数えているため)。
+  - レイアウト後シミュレーションの入力。
+  - 配線されていないネットは入れない)。
+  - 配線の電圧降下(トラック・ビア・パッドを抵抗の網にして、入口のパッド(コネクタ・電圧源 `V1` 優先)から各パッドまでの抵抗を解く。
+    - `net_drop`/`net_drops`、`Board.net_currents` の電流で mV を出す。
+    - ベタは正方形セルの網目(セル数は面積から 0.3〜1.5 mm の間隔、約 4000 セル以下。パッド・ビア・配線の端は、接点の大きさの円盤と同じ広がり方になる数の近いセルにつなぐ。1つ・数個のセルの等価半径は格子の数値解の表 `cell_blob_radius`)、各パッドが電流の全部を引く最悪見積り。
+    - 解は共役勾配法(`cg_resistance`、ターゲットごとに1回)。
+    - 節点が 9000 を超えると計算しない。
+    - 以前はベタを「ハブ」1点に抵抗でつなぐ近似で、`tools/ref_pour.py`(0.125 mm 格子の有限差分の独立な解、`tools/pour_reference.csv`、17ケース)に対し、コンパクトなベタで -17〜-51%、細長いベタで -54〜-76%、角のパッドで +53% ずれた。
+    - 網目にして最大 3.8%(参照自体が約3%)、テスト `pour_resistance_agrees_with_a_finite_difference_solution`(6%以内)。
+    - 配線の抵抗は FastHenry2 と 0.24% 差(銅の抵抗率の丸め、`tools/fasthenry_resistance.csv`、テスト `trace_resistance_agrees_with_fasthenry`)。
+    - ベタの銅は `zonefill::zone_fill`(外形で切り、他ネットの配線・パッド・ビア・穴・外形の端のクリアランスを抜いたもの)。
+    - セルは 3×3 の点のうち2点以上が銅のとき存在し、セル間の抵抗はシート抵抗÷(2つのセルの銅の割合の平均、0.2〜1)(0.34 mm の細い橋でもつながる)。
+    - スルーホールパッドでサーマルリリーフ(`Zone.thermal`)のときは4本のスポーク分 `RS × gap / (4 × spoke_width)`(既定 0.3/0.3 で 0.12 mΩ)を足す。
+    - 逃げ穴つきの参照ケース(2.54 mm ピッチの壁・隙間つきの壁・3×3の島・横から切り込んだ細い帯)で差は 1.1% 以内、テスト `thermal_relief_adds_the_resistance_of_its_spokes`。
+    - 逃げ穴を無視していた版は、壁で -7%、切り込みのある細い帯で約 -16%)。
+  - GUIは `board_editor/width.rs` の「配線の電圧降下」(`--ir <net> <A>`)
+  - 寄生容量: `PadSeries.farad` = 経路の各区間(下か上にベタがある区間 `PathSeg.plane`)の `track_capacitance`(Sakurai-Tamaru: `C = ε0 εr 長さ (1.15 w/h + 2.80 (t/h)^0.222)`、εr 4.5、FR-4。w/h 0.3〜30 で数%、外は目安)の和。ビアとベタのない区間は0。隣り合う配線どうしの容量は数えない(簡易版)。ベタは回路のグランドとして扱う(電源ベタでも交流では近い)。検算は式の手計算(100 mm・0.25 mm・1.6 mm で 5.49 pF、テスト `a_trace_over_a_pour_has_capacitance_to_it`)。共有区間はピンごとに数える(R・Lと同じ)。
+- ビアのネット(`model.rs` の `Via.net`。空なら保存しない。空 = 触れたもののネットを使う、従来どおり): `connectivity` の `pad_nets` が、ビアのネットもグループのネットに入れる(パッドのネットが先。パッドと違えば、`shorts` が「ネット短絡」にする)。同じネットのベタの中にあるビアは、ベタとつながる(ベタはそのビアの周りを抜かない)。ネットを持つビアは、何にも触れていなくても `ratsnest` の端になる(同じネットのパッドとの未配線の線)。基板エディタのビアツールが置くビアのネットは、設定で選んだネット、「自動」なら置いた場所のパッド・ビア・配線・ベタのネット、何もなければなし。配線しながら置いたビアは、その配線のネット。テスト `tests_via.rs`
+- `impedance.rs` 配線の太さ⇄特性インピーダンスの目安(誤差 ±10% ほどの教科書の式): 外層 `Kind::Microstrip` は Hammerstad-Jensen(銅箔の厚さによる幅の補正つき)、内層 `Kind::Stripline` は IPC-2141 の式、差動 `differential` は IPC-2141 の近似(外層 `2·Z0·(1−0.48·e^(−0.96 s/h))`、内層 `2·Z0·(1−0.347·e^(−2.9 s/b))`)。逆向き `width_for`・`width_for_differential`・`space_for_differential` は二分法(範囲 0.03〜20mm。届かない値は `None`)。層構成 `Stackup`(誘電率 4.5・外層から基準面まで 1.53mm・内層の上下のベタの間 0.36mm・銅箔 35µm。2層 1.6mm 基板の標準的な値。`Board.stackup`、初期値なら保存しない)。発注先ごとの積層構成の数値は、公式ページで確かめるまで入れない(記憶で書かない)ので、画面でその値に直してもらう。`NetClass.impedance`(目標の Ω)がある組のネットを `check_targets` が調べ、10% 以上外れた配線を `fab::preflight` が「目標のインピーダンスから外れた配線があります」(警告)にする。テスト `impedance.rs`
+- 線幅の例外(`model.rs` の `NetClass.width_exceptions`=`WidthException{net,a,b,width}`、`current.rs` の `is_excepted`): クラスの線幅とは別の太さにしたい区間。配線の両端が区間の線分から 0.05mm 以内なら、その配線が例外(位置で決まる。配線を動かすと外れる)。首(`is_neck`)と同じく、`net_widths`(電流チェック)・`widen_net`・インピーダンスのチェック(`check_targets`)・ネットの窓のスライダーの対象から外す。ファイルには、あるときだけ書く。画面は `netwindow.rs` の `width_exceptions_ui`。テスト `a_width_exception_is_left_out_of_the_current_check`
+- ネットクラス(`model.rs` の `NetClass`、`Board.net_classes`。名前・ネットの並び・線幅・間隔・ビア径・ビア穴。空なら保存しない): `class_of(net)` は、そのネットを並べた最初のクラス。`clearance_between(a, b)` は、基板の最小間隔と、2つのネットのクラスの間隔の大きいほう。`max_clearance()` は基板のどのクラスよりも大きい間隔(近い組を探す幅と、涙型などの仕上げの銅の確認に使う)。DRC の `clearance` と、変更後の違反数を数える関数は、組ごとに `clearance_between` を使い、クラスのせいで狭いときは文に「(ネットクラスで、広い間隔を決めたネットです)」を足す。自動配線 `autoroute_sized` は、クラスのあるネット(と電流のあるネット)を、それぞれ自分の `RouteOptions`(線幅=クラスと電流から必要な幅の大きいほう、ビア、`clearance`)で先に引く。探索の格子(`build_grid`)は、障害物ごとに「基板の最小間隔・その障害物のネットのクラスの間隔・いま引くネットのクラスの間隔」の最大をあけて印を付ける。基板の最小線幅・最小間隔より小さい値は、画面とCLIが受け付けない(`Rules` が床)。テスト `tests_netclass.rs`
+- `drc/decoupling.rs` は負電源(`is_negative_supply_net`: VNEG・VEE・V-・-5V)のピンも、近くにバイパスコンデンサがあるか調べる
+
+- `NetClass.max_vias`(ネット1本のビアの数。0 は上限なし)と `NetClass.max_neck`(線幅が `track_width` より細いトラックの合計 mm。0 は上限なし。`width_exceptions` で細いままの区間も数える)。回路図の表 `design_spec::NetRule.max_vias`・`max_neck` から `import_requirements` が写す。`NetClass::limits_copper()` は、長さ・ビア数・細い配線のどれかの上限があるか(あれば要件の点検が銅を見る)。
+- ネットクラス(ネットごとの線幅・間隔・ビア・配線の順番 `order`・ビアの可否 `no_vias`・使う層 `layers`・長さの上限 `max_length`。役割 `Role` はこの性質のひな形)は `model.rs` の `NetClass`(DRC は `clearance_between`、`autoroute.rs` の `autoroute_sized` が使う。画面は `board_editor/netclass.rs`、CLI は `board class`)
+- `impedance.rs` 配線の太さ⇄インピーダンスの目安と層構成 `Stackup`(ネットクラスの `impedance` 目標を発注前チェックで調べる。`ccad board impedance`)

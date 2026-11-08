@@ -43,7 +43,7 @@
 
 ## D. デジタル回路のシミュレーションの残り
 
-エンジンとロジック IC は実装済み(`docs/digital-engine-design.md`、`docs/digital-parts-design.md`、`docs/code-notes/sim-core.md`)。残りだけ書く。
+エンジンとロジック IC は実装済み(`docs/digital-engine-design.md`、`docs/digital-parts-design.md`、`docs/code-notes/sim-core/digital.md`)。残りだけ書く。
 
 | 内容 | 規模 | メモ |
 |---|---|---|

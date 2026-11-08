@@ -81,4 +81,4 @@ cargo test -p app transient_runs_still_match_the_stored_ngspice_statistics
 cargo test -p app ac_sweeps_still_match_the_stored_ngspice_answers
 ```
 
-公開モデルとの比較の手順 (環境変数など) は [docs/code-notes/sim-core.md](code-notes/sim-core.md) の「公開モデル集での ngspice との検算」にあります。比較の仕組みは [docs/code-notes/app.md](code-notes/app.md) の「開発用の検算 (xcheck)」にあります。
+公開モデルとの比較の手順 (環境変数など) は [docs/code-notes/sim-core/models.md](code-notes/sim-core/models.md) の「公開モデル集での ngspice との検算」にあります。比較の仕組みは [docs/code-notes/app.md](code-notes/app.md) の「開発用の検算 (xcheck)」にあります。
