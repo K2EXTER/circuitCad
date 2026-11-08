@@ -104,7 +104,7 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                         app.sch.set_tran_signals(n);
                     }
             }
-        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window"].iter().any(|f| args.iter().any(|a| a == f)) {
+        if ["--drc", "--finish", "--3d", "--order", "--export", "--ir", "--select-track", "--net-window", "--nets"].iter().any(|f| args.iter().any(|a| a == f)) {
             app.mode = Mode::Board;
             apply_board_args(app, args);
         }
@@ -357,6 +357,10 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     }
     if args.iter().any(|a| a == "--order") {
         app.board_ed.open_order();
+    }
+    // --nets: the window with the table of the nets
+    if args.iter().any(|a| a == "--nets") {
+        app.board_ed.net_table.open = true;
     }
     if let Some(i) = args.iter().position(|a| a == "--export")
         && let Some(dir) = args.get(i + 1) {

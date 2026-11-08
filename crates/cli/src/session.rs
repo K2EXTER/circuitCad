@@ -90,6 +90,7 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   board pour [net=GND]                  the GND pour of the editor (bottom copper + a via per surface pad); do it BEFORE autoplace: the poured net then drops out of the placement and the parts sit closer
   board stitch [net=GND] [pitch=5] [mode=grid|fence]   stitching vias where the net is poured on two layers (grid over the overlap, or a fence along the edge); do it AFTER route
   board fiducials [d=1.0] [open=3.0] [remove=1]   three pick-and-place marks near the corners (only for machine assembly)
+  board nets [sort=length|detour|vias|width|open|pads|class] [csv=file]   one row per net: class, length (per layer), detour, vias, widths, pours, open
   board autoplace
   board move REF X Y [rot=0..3]        put one part at X Y mm (its origin; wiring is not moved)
   board route [net=NAME] [lead=MM] [bridge=0]   (neighbouring pads of one part and net, e.g. two LX pins, are strapped into one piece first; bridge=0 leaves that out)

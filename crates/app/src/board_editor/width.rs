@@ -68,6 +68,9 @@ impl BoardEditor {
         let thin = net_widths(&self.board, &conn, &CopperSpec::default()).iter().filter(|w| w.too_thin()).count();
         ui.small("流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、下の一覧の窓で入れます");
         ui.horizontal(|ui| {
+            if ui.button("ネットの一覧").on_hover_text("全部のネットの、配線の長さ (層ごとも)・遠回りの度合い・ビアの数・線幅・ベタ・未配線の数・ネットクラスを、1つの表で見ます。見出しのクリックで並べ替え、CSV でコピーもできます").clicked() {
+                self.net_table.open = true;
+            }
             if ui.button("電流の一覧を別窓で開く").on_hover_text("全部のネットの電流・推奨の線幅・今の配線の太さ (過渡解析をしていれば、実効・10 ms の最大・ピークも) を、1つの表で見ます。回路図のDC解析・過渡解析から電流を入れることも、足りない配線を推奨幅にすることもできます").clicked() {
                 self.current_win_open = true;
             }

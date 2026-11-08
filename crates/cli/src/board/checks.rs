@@ -3,6 +3,34 @@
 use super::*;
 
 impl Session {
+    pub(super) fn board_nets(&mut self, rest: &[String]) -> Res {
+        // board nets [sort=name|class|pads|length|detour|vias|width|open] [asc=1|desc=1] [csv=file]: one row per net (the editor's
+        // "ネットの一覧"): class, pads, track length in all and per layer, detour, vias, thinnest / widest track, pours, open connections
+        let (_, kv) = options(rest);
+        let board = self.board_mut()?;
+        let mut rows = pcb_core::nettable::net_table(board, None);
+        let by = match opt(&kv, "sort") {
+            None => pcb_core::nettable::SortBy::Name,
+            Some(s) => pcb_core::nettable::SortBy::parse(s).ok_or_else(|| format!("sort={s}: use name, class, pads, length, detour, vias, width or open"))?,
+        };
+        let numeric = !matches!(by, pcb_core::nettable::SortBy::Name | pcb_core::nettable::SortBy::Class);
+        let desc = if numeric { opt(&kv, "asc") != Some("1") } else { opt(&kv, "desc") == Some("1") };
+        pcb_core::nettable::sort_rows(&mut rows, by, desc);
+        if let Some(file) = opt(&kv, "csv") {
+            std::fs::write(file, pcb_core::nettable::table_csv(&rows)).map_err(|e| format!("{file}: {e}"))?;
+        }
+        let r2 = |v: f64| (v * 100.0).round() / 100.0;
+        let list: Vec<Value> = rows
+            .iter()
+            .map(|r| {
+                json!({"net": r.net, "class": r.class, "pads": r.pads, "length_mm": r2(r.length),
+                    "by_layer_mm": r.by_layer.iter().map(|(k, v)| (k.clone(), json!(r2(*v)))).collect::<serde_json::Map<String, Value>>(),
+                    "detour": r.detour().map(r2), "vias": r.vias, "thinnest_mm": r2(r.thinnest), "widest_mm": r2(r.widest), "pours": r.pours, "open": r.open})
+            })
+            .collect();
+        Ok(obj(json!({"nets": list, "count": rows.len(), "open": rows.iter().map(|r| r.open).sum::<usize>()})))
+    }
+
     pub(super) fn board_impedance(&mut self, rest: &[String]) -> Res {
         // the impedance of a track and the width for a wanted one (a rule of thumb, +-10 %):
         //   board impedance [er=4.5] [height=1.53] [gap=0.36] [copper=35] [layer=outer|inner]

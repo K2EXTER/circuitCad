@@ -41,6 +41,7 @@ impl Session {
             "track" => self.board_track(rest),
             "via" => self.board_via(rest),
             "net" => self.board_net(rest),
+            "nets" => self.board_nets(rest),
             "zones" => self.board_zones(rest),
             "keepout" => self.board_keepout(rest),
             "copper" => self.board_copper(rest),

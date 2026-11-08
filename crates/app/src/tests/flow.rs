@@ -556,6 +556,34 @@ fn fiducials_go_on_the_routed_tp5100_board() {
     assert!(!app.board_ed.board.pads.iter().any(pcb_core::fiducial::is_fiducial));
 }
 
+/// The net table window on the routed TP5100 board: every net has a row, nothing is open, GND shows its pours, and the window
+/// draws without trouble.
+#[test]
+fn the_net_table_lists_every_net_of_the_routed_tp5100_board() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("tp5100_charger.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    app.board_ed.autoplace();
+    app.board_ed.ground_pour();
+    app.board_ed.autoroute_now(None);
+    let rows = pcb_core::nettable::net_table(&app.board_ed.board, None);
+    let nets: std::collections::HashSet<&str> = app.board_ed.board.pads.iter().map(|p| p.net.as_str()).filter(|n| !n.is_empty()).collect();
+    assert_eq!(rows.len(), nets.len());
+    assert!(rows.iter().all(|r| r.open == 0));
+    let gnd = rows.iter().find(|r| r.net == "GND").unwrap();
+    assert!(gnd.pours.contains(&"裏面".to_string()), "{gnd:?}");
+    app.board_ed.net_table.open = true;
+    let ctx = egui::Context::default();
+    for _ in 0..2 {
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            app.board_ed.net_table_window(ui.ctx());
+        });
+        out.textures_delta.clear();
+    }
+    assert!(app.board_ed.net_table.open);
+}
+
 /// The thin-power-line sample (docs/examples/thin_power_line.ccproj): the copper eats about 0.4 V of the 5 V,
 /// the simulated current says the tracks are too thin, and widening them brings the load back near 5 V.
 #[test]

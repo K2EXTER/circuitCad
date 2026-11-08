@@ -468,6 +468,8 @@ pub struct BoardEditor {
     net_win_note: Option<(String, String)>,
     /// The window that lists the currents of all nets.
     pub current_win_open: bool,
+    /// The "ネットの一覧" window.
+    pub net_table: nettable::NetTableState,
     /// The impedance (Ω) last asked for in a net window.
     z_target: f64,
     /// The net a via is placed for with the Via tool: `None` = the net of what is under the pointer (a pad, a track, a pour).
@@ -613,6 +615,7 @@ impl Default for BoardEditor {
             net_win_asked: None,
             net_win_note: None,
             current_win_open: false,
+            net_table: Default::default(),
             z_target: 50.0,
             via_net: None,
             last_export_dir: None,
@@ -670,6 +673,7 @@ mod netwindow;
 mod requirements;
 mod sheets;
 mod currentwindow;
+mod nettable;
 mod file;
 mod actions;
 mod canvas;

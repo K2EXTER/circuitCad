@@ -43,6 +43,7 @@ pub mod orient;
 pub mod renumber;
 pub mod snippet;
 pub mod netlist;
+pub mod nettable;
 pub mod outline;
 pub mod padentry;
 pub mod par;
