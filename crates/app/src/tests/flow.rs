@@ -508,6 +508,32 @@ fn the_ground_pour_takes_the_ground_wires_off_the_tp5100_sample() {
     assert!(app.board_ed.board.zones.is_empty() && app.board_ed.board.vias.is_empty());
 }
 
+/// Stitching vias on the TP5100 sample after the pour on both sides and the routing: GND vias over the overlap, the board
+/// stays clean, and one undo takes them away.
+#[test]
+fn stitching_vias_join_the_two_ground_pours_of_the_tp5100_sample() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/examples");
+    let mut app = App::default();
+    app.sch.load_path(root.join("tp5100_charger.schjson"));
+    app.board_ed.import_from_schematic(&app.sch);
+    app.board_ed.autoplace();
+    app.board_ed.ground_pour();
+    app.board_ed.autoroute_now(None);
+    let vias = app.board_ed.board.vias.len();
+    app.board_ed.stitch_vias(pcb_core::stitch::StitchMode::Grid);
+    assert!(app.board_ed.status.starts_with("ビアの縫い付け"), "{}", app.board_ed.status);
+    let b = app.board_ed.board.clone();
+    assert!(b.vias.len() > vias, "{}", app.board_ed.status);
+    assert!(b.vias[vias..].iter().all(|v| v.net == "GND"));
+    assert!(pcb_core::drc::check_final(&b).is_empty(), "{:?}", pcb_core::drc::check_final(&b));
+    assert!(pcb_core::ratsnest::ratsnest(&b).is_empty());
+    app.board_ed.stitch_vias(pcb_core::stitch::StitchMode::Fence);
+    assert!(pcb_core::drc::check_final(&app.board_ed.board).is_empty());
+    app.board_ed.undo();
+    app.board_ed.undo();
+    assert_eq!(app.board_ed.board.vias.len(), vias);
+}
+
 /// The thin-power-line sample (docs/examples/thin_power_line.ccproj): the copper eats about 0.4 V of the 5 V,
 /// the simulated current says the tracks are too thin, and widening them brings the load back near 5 V.
 #[test]

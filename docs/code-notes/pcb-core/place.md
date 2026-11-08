@@ -37,6 +37,7 @@
   - エディタの自動配線は、裏面にGNDベタがあれば、チェック「表面も GND のベタで埋める」(既定オン)のとき、配線のあとに呼ぶ。
   - CLIは `route` が同じことをし(`top_pour`、`top=0` で切る)。
   - GUIは `board_editor/actions.rs` の `ground_pour` と「② 配線」の「GND ベタ」。
+- `stitch.rs` ビアの縫い付け(J8、2026-11-08)。`stitch_vias(board, opt)`: ネット(既定 GND)のベタが2つ以上の層にあるとき、その層の実際の銅(`merged_fills` と、島 `dropped_islands` も。ビアで島がつながるため)の重なり(`overlap_shapes`)の中に、そのネットのビアを置く。`StitchMode::Grid` は基板の角から半ピッチずらした正方格子、`Fence` は外形に沿って `pitch` ごと、内側へ 0.25 mm ずつずらして入る所。置ける条件 `fits`: ビアの中心が銅の中、輪が銅の縁から `margin`(0.25 mm)離れる、パッド・ビア・穴から間隔+0.2 mm 離れる。全部置いたあと `drc::check` が増えたら、新しい指摘の近く(ビアの径+間隔+0.3 mm)のビアを外して最大6回やり直し、それでも増えるなら何も変えない(`dropped` は外した数)。ベタが1層だけなら断る(縫う相手がない)。もう一度押すと、空いた所だけに足す(どこも埋まっていればエラー)。TP5100 のサンプルで格子 20 個・柵(3 mm)35 個、DRC 0。GUI は「② 自動で配線」の「ビアを縫う」「ふちに柵」と間隔(`BoardEditor.stitch_pitch`、`actions.rs` の `panel_stitch`)、CLI は `board stitch`。テスト `stitch.rs`・`flow.rs` の `stitching_vias_join_the_two_ground_pours_of_the_tp5100_sample`
   - 同梱サンプル40個で、自動配置→ベタ→自動配線すると、未配線0・DRC違反0(仕上げ後も)、GNDの配線は合計1145→91mm、ビアは57→119個。
   - ゾーンはパッドをつなぐ判定だけで、ベタが配線で分かれた島の連続性までは見ない(`connectivity` の仕様)。
 - `footprints.rs` の `CT_3528-21`: モールドタンタル B ケースの形(KEMET T491 のデータシート 表 2 の Level B: パッド 1.80×2.23 mm・すき間 1.12 mm)。1 番ピンが +(左)で、シルクに + 側の縦線と「+」を描く(外形 `outline`)。ライブラリ部品 `T491B226K016AT`(KEMET、22µF・16V・ESR 最大 2.2Ω。LDO の出力コンデンサ向き)が使う。

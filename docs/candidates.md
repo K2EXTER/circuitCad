@@ -88,7 +88,6 @@ KiCad 9/10・EasyEDA Pro・Altium・Fusion(旧 EAGLE)・LTspice・Quadcept の�
 |---|---|---|---|
 | J6 | ピンの電気的な種類(入力・出力・電源・オープンコレクタ)と ERC の照合表 | 中 | 種類を持つのは階層のポートだけ(`hierarchy.rs`)。IC の電源ピンは名前で見分ける / KiCad(確認)ほか |
 | J7 | 配線・ビア・部品を置けない領域、領域ごとのルール | 中 | ベタの穴あけ(`board keepout`、CLI のみ)だけ / KiCad・EasyEDA(確認)、Quadcept のデザインルール領域 |
-| J8 | ビアの縫い付け(GND のビアの格子・ビアの柵) | 小〜中 | SMD の GND パッドに 1 本ずつ(`groundpour.rs`)だけ / EasyEDA(確認)、KiCad・Altium(知識) |
 | J9 | 製造用の図面(ドリル表・寸法・組立図の PDF) | 中 | なし(Gerber・SVG・DXF まで) / Altium の Draftsman(確認) |
 | J10 | シルクの画像・ロゴ、銅箔の文字 | 小〜中 | シルクの文字だけ / EasyEDA の画像(確認)、KiCad の画像変換(知識) |
 | J11 | フィデューシャル・テストポイントの部品 | 小 | 取付穴とバラのパッドはある / EasyEDA のテストポイント(確認) |

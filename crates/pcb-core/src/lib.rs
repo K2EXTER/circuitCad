@@ -60,6 +60,7 @@ pub mod shove;
 pub mod slot;
 pub mod smooth;
 pub mod step;
+pub mod stitch;
 pub mod swap;
 pub mod strokefont;
 pub mod svg;

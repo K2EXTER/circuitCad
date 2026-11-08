@@ -21,6 +21,31 @@ impl Session {
         Ok(obj(json!({"zone_added": r.zone_added, "top_added": r.top_added, "vias": r.vias, "already": r.already, "left": r.left})))
     }
 
+    pub(super) fn board_stitch(&mut self, rest: &[String]) -> Res {
+        // board stitch [net=GND] [pitch=5] [mode=grid|fence] [via=0.6] [drill=0.3]: vias of the net where it is poured on two or
+        // more layers (a grid over the overlap, or a fence along the board edge)
+        let (_, kv) = options(rest);
+        let mut o = pcb_core::stitch::StitchOptions { net: opt(&kv, "net").map(str::to_string), ..Default::default() };
+        o.mode = match opt(&kv, "mode") {
+            None | Some("grid") => pcb_core::stitch::StitchMode::Grid,
+            Some("fence") => pcb_core::stitch::StitchMode::Fence,
+            Some(m) => return Err(format!("mode={m}: use grid or fence")),
+        };
+        if let Some(v) = opt(&kv, "pitch") {
+            o.pitch = num(v)?;
+        }
+        if let Some(v) = opt(&kv, "via") {
+            o.via_diameter = num(v)?;
+        }
+        if let Some(v) = opt(&kv, "drill") {
+            o.via_drill = num(v)?;
+        }
+        let board = self.board_mut()?;
+        let r = pcb_core::stitch::stitch_vias(board, &o)?;
+        let layers: Vec<String> = r.layers.iter().map(|s| layer_name(*s)).collect();
+        Ok(obj(json!({"added": r.added, "dropped": r.dropped, "layers": layers})))
+    }
+
     pub(super) fn board_pinlabels(&mut self, rest: &[String]) -> Res {
         // board pinlabels [height=1.0]: the names of the pins of the pin headers (`pinnames` in the circuit) on the silk beside the pads
         let (_, kv) = options(rest);

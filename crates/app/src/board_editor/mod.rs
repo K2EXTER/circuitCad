@@ -258,6 +258,8 @@ pub struct BoardEditor {
     widths_open: Option<bool>,
     /// After the auto-router, fill the top with GND too (only when the bottom has the GND pour).
     pour_top: bool,
+    /// Distance between the stitching vias (mm), for the "ビアを縫う" buttons.
+    stitch_pitch: f64,
     /// The two nets picked in the diff-pair panel for a new pair.
     pair_new: (String, String),
     ir_drop: Option<(f64, Vec<pcb_core::irdrop::NetDrop>)>,
@@ -491,6 +493,7 @@ impl Default for BoardEditor {
             ir_drop: None,
             widths_open: None,
             pour_top: true,
+            stitch_pitch: 5.0,
             pair_new: Default::default(),
             pad_size: 1.6,
             pad_drill: 0.8,

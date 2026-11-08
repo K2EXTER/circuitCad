@@ -273,6 +273,43 @@ impl BoardEditor {
         }
     }
 
+    /// The "ビアを縫う" row: stitching vias of GND over the overlap of its pours, or a fence along the edge.
+    pub(super) fn panel_stitch(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let grid = ui.button("ビアを縫う").on_hover_text("表と裏の両方に GND のベタがある所に、GND のビアを格子に並べて、表と裏のベタを何か所もつなぎます (ビアの縫い付け)。
+信号の帰りの電流が近くで反対の面へ移れ、ベタの中の孤立した銅もつながります。配線と表面のベタのあとに押します。
+ビアがベタの中に収まり、ルール違反が増えない所だけに置きます。気に入らなければ「元に戻す」で取り消せます");
+            let fence = ui.button("ふちに柵").on_hover_text("基板の外形に沿って、GND のビアを1列に並べます (ビアの柵)。表と裏のベタのふちが同じ電位になり、基板のふちから出る雑音が減ります。高い周波数を使う基板や、ふちに沿って信号が走る基板で使います");
+            ui.add(egui::DragValue::new(&mut self.stitch_pitch).speed(0.1).range(1.0..=20.0).prefix("間隔 ").suffix(" mm"))
+                .on_hover_text("となりのビアとの間隔。狭いほどよくつながりますが、穴の数が増えます。目安は 3〜10 mm (速い信号ほど狭く)。柵は 2〜3 mm がよく使われます");
+            if grid.clicked() {
+                self.stitch_vias(pcb_core::stitch::StitchMode::Grid);
+            }
+            if fence.clicked() {
+                self.stitch_vias(pcb_core::stitch::StitchMode::Fence);
+            }
+        });
+    }
+
+    /// Put stitching vias of GND (see `pcb_core::stitch`). One undo step.
+    pub fn stitch_vias(&mut self, mode: pcb_core::stitch::StitchMode) {
+        self.checkpoint();
+        let opt = pcb_core::stitch::StitchOptions { net: None, pitch: self.stitch_pitch, via_diameter: self.via_dia, via_drill: self.via_drill, mode, ..Default::default() };
+        match pcb_core::stitch::stitch_vias(&mut self.board, &opt) {
+            Ok(r) => {
+                self.violations.clear();
+                let what = if mode == pcb_core::stitch::StitchMode::Grid { "格子に" } else { "外形に沿って" };
+                let dropped = if r.dropped > 0 { format!(" (ルール違反になる {} か所は外しました)", r.dropped) } else { String::new() };
+                let layers: Vec<String> = r.layers.iter().map(|s| s.label()).collect();
+                self.status = format!("ビアの縫い付け: GND のビアを{what} {} 個置き、{} のベタをつなぎました{dropped}", r.added, layers.join("・"));
+            }
+            Err(e) => {
+                self.undo.pop();
+                self.status = e;
+            }
+        }
+    }
+
     pub fn run_drc(&mut self) {
         self.violations = drc::check_final(&self.board);
         self.violations.extend(pcb_core::diffpair::check_pairs(&self.board));

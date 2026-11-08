@@ -33,6 +33,7 @@ impl Session {
             "matchpairs" => self.board_matchpairs(rest),
             "autoplace" => self.board_autoplace(rest),
             "pour" => self.board_pour(rest),
+            "stitch" => self.board_stitch(rest),
             "pinlabels" => self.board_pinlabels(rest),
             "guard" => self.board_guard(rest),
             "picture" => self.board_picture(rest),
