@@ -154,7 +154,8 @@ board fab out/
 | `board shopping [boards=N] [spare=0] [file=PATH]` | 買うものの一覧。値とフットプリントごとに `qty`(`boards` 枚分)・`spare`(予備。チップの抵抗・コンデンサ・コイル・LED だけ、2個か全体の1割の多いほう。`spare=0` で切る)・`buy`(合計)と、店(`akizuki`・`digikey`・`lcsc`)ごとの `number`(部品JSONに型番があるとき)か `search`(店の検索ページへのリンク)を返す。`file=` を付けるとCSVも書く。`board fab` の出力にも `*-shopping.csv` として入る(列は `Value,Footprint,Designator,Qty,Spare,Buy` のあとに店ごとの型番とリンク)。 |
 | `board route` の `bridge=0` | 自動配線の前に、同じ部品・同じネットで隣り合う表面実装パッド(レギュレータの2つのLXピンなど)を短い銅でつなぐ処理を止める。答えの `pads_bridged` がつないだ数。 |
 | `board check [fab=jlcpcb\|pcbway\|oshpark\|standard]` | アプリの「発注の準備」と同じ発注前チェック。`ready`(エラーが無ければ true)、`errors`/`warnings`/`info`/`ok` の数、`list`(ok 以外の項目の `level`・`title`・理由 `detail`・場所 `at`)を返す。未配線・DRC違反・基板の外の部品・配線の太さと電圧降下・シルク・鋭角・サーマルビア・バイパスコンデンサ・料金の枠(`fab=` を付けたとき)・**回路図と基板の食い違い**(取り込み後に回路図を直したとき)を調べる。`board fab` の前に実行し、`ready:false` なら直してから書き出す。 |
-| `board dxf F` | 基板の外形・穴・パッドのドリル・部品を囲む箱と部品番号を DXF(mm、y が上向き、上から見た形)に書く。ケースを設計する CAD に渡す。 |
+| `board svg F [side=top|bottom|inner1…] [silk=0]` | 基板の1つの面を SVG(ベクタの絵)にする。銅・シルク・穴を、発注用の Gerber と同じデータから描く(できあがりの姿)。裏面は下から見た向き。記事・レポート・印刷用。 |
+| `board dxf F` | 基板の外形・穴・パッドのドリル・部品を囲む箱と部品番号を DXF(mm、上から見た形)に書く。ケースを設計する CAD に渡す。 |
 | `board save F` / `open F` / `fab DIR` | `.pcbjson` の保存・読込、ガーバー・ドリル・BOM・部品位置・zip の書き出し。 |
 
 ## MCPサーバーとして使う (Claude Code などから)

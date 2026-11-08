@@ -58,6 +58,7 @@ pub mod smooth;
 pub mod step;
 pub mod swap;
 pub mod strokefont;
+pub mod svg;
 pub mod zonefill;
 
 #[cfg(test)]

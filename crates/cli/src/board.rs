@@ -1178,8 +1178,25 @@ impl Session {
                 }
                 Ok(obj(answer))
             }
+            "svg" => {
+                let (pos, kv) = options(rest);
+                let f = pos.first().ok_or("board svg FILE.svg [side=top|bottom|inner1...] [silk=0]   (a vector picture of one side, from the Gerber data; the bottom is seen from below)")?;
+                let side = match opt(&kv, "side").unwrap_or("top").to_ascii_lowercase().as_str() {
+                    "top" => pcb_core::Side::Top,
+                    "bottom" => pcb_core::Side::Bottom,
+                    s => match s.strip_prefix("inner").and_then(|k| k.parse::<u8>().ok()) {
+                        Some(k) => pcb_core::Side::Inner(k),
+                        None => return Err(format!("side={s}: write top, bottom or inner1, inner2 ...")),
+                    },
+                };
+                let silk = opt(&kv, "silk") != Some("0");
+                let board = self.board_mut()?;
+                let svg = pcb_core::svg::board_svg(board, &pcb_core::svg::SvgOpts { side, silk })?;
+                std::fs::write(f, &svg).map_err(|e| format!("{f}: {e}"))?;
+                Ok(obj(json!({"file": f, "side": format!("{side:?}"), "bytes": svg.len()})))
+            }
             "dxf" => {
-                let f = rest.first().ok_or("board dxf FILE.dxf   (the outline, holes, pad drills and part boxes in mm, y up, for the case's CAD)")?;
+                let f = rest.first().ok_or("board dxf FILE.dxf   (the outline, holes, pad drills and part boxes in mm, seen from the top, for the case's CAD)")?;
                 let board = self.board_mut()?;
                 std::fs::write(f, pcb_core::dxf::mechanical(board)).map_err(|e| format!("{f}: {e}"))?;
                 Ok(obj(json!({"file": f, "outline_points": board.outline.len(), "holes": board.holes.len(), "parts": board.parts.len()})))

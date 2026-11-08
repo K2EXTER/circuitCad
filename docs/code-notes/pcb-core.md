@@ -282,8 +282,15 @@ CLAUDE.md の地図から参照される、各ファイルの詳しい説明。
 - 他のソフトとの対応: Altium の Maximum Via Count と Routing Neck-Down(細い区間の合計の長さの上限)、KiCad の `via_count`。
 
 ## dxf.rs — ケース設計用の DXF(2026-11-08)
-- `dxf::mechanical(&Board) -> String`: ASCII の DXF R12(AC1009。LINE・CIRCLE・ARC・TEXT だけ)。単位は mm。基板の y は下向きなので、書くときに符号を反転する(上から見た形になる)。
+- `dxf::mechanical(&Board) -> String`: ASCII の DXF R12(AC1009。LINE・CIRCLE・ARC・TEXT だけ)。単位は mm。基板の y も DXF の y も上向きなので、そのまま書く(上から見た形になる)。
 - 層: `BOARD_OUTLINE`(外形の線)、`HOLES`(取り付け穴。長穴は2本の線+2つの円弧)、`PAD_DRILLS`(パッドのドリル)、`PARTS`(部品のパッド全体を囲む箱。部品の本体の大きさではない)、`PART_NAMES`(部品番号)。
 - 入口: 画面の「ファイル → 基板の外形・穴・部品の位置をDXFで保存…」(`board_editor/file.rs` の `export_dxf`)、CLI の `board dxf FILE`。
 - 確認: 単体テスト(線・円・円弧の数、y の反転)だけ。ケースの CAD で開いての確認は、まだしていない。
+
+## svg.rs — 基板の1つの面を SVG に(2026-11-08)
+- `svg::board_svg(&Board, &SvgOpts{side, silk}) -> Result<String,String>`。銅・シルク・穴は、発注用の Gerber・ドリルの文字(`gerber::copper`・`silk`、`excellon`)を `gerber_view::parse_gerber` で読み戻して描く。だから、ベタ・仕上げ・ベタの抜きも含めた「できあがりの姿」になる(画面の描画とは別の経路)。
+- Gerber の「消す」(clear)は、そこまでの絵を `<mask>` で包んで抜く(消したあとに描いたものは抜かれない)。
+- 基板の y は上向き、SVG は下向きなので、全体を `scale(1,-1)` の組で包む。裏面は `scale(-1,-1)` で、下から見た向き(左右反転)。大きさは mm(`width`/`height` が mm)。
+- 色は表面=金、裏面=青、内層=紫、基板=緑、シルク=白。入口は画面の「ファイル → 基板の表面/裏面をSVGで保存…」(`board_editor/file.rs` の `export_svg`)と CLI の `board svg FILE [side=] [silk=0]`。
+- 確認: `board picture` と同じ向きになることと、ベタの切り抜きが出ることを、同梱の `rlc_board` で目で見た。単体テストは、要素・ミラー・マスクの順序。
 - 読み込み(ケースの図面から外形・穴を取る)は未実装(候補 C5)。

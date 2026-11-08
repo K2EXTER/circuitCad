@@ -1,7 +1,7 @@
 //! A DXF (ASCII, the R12 flavour every CAD reads) of the board's mechanical side, for the person who designs the case: the outline,
 //! the holes, the drills of the pads, and the place and size of every part. Units are millimetres.
 //!
-//! The board's y axis points down (as on the screen); the DXF's points up, so y is negated and the drawing looks as the board
+//! The board's y axis points up, as the DXF's does, so the coordinates are written as they are and the drawing looks as the board
 //! does from the top. Layers: `BOARD_OUTLINE`, `HOLES` (mounting holes and slots), `PAD_DRILLS` (the drills of the pads),
 //! `PARTS` (the box round each part's pads) and `PART_NAMES` (the references).
 
@@ -24,7 +24,7 @@ impl Dxf {
 
     fn pt(&mut self, i: i32, x: f64, y: f64) {
         self.pair(10 + i, format!("{x:.4}"));
-        self.pair(20 + i, format!("{:.4}", -y));
+        self.pair(20 + i, format!("{y:.4}"));
         self.pair(30 + i, "0.0");
     }
 
@@ -54,8 +54,7 @@ impl Dxf {
         let r = width / 2.0;
         let half = ((len - width) / 2.0).max(0.0);
         if vertical {
-            // board y grows downwards: the cap at the smaller board y is the upper one in the DXF
-            let (up, down) = (Point::new(c.x, c.y - half), Point::new(c.x, c.y + half));
+            let (up, down) = (Point::new(c.x, c.y + half), Point::new(c.x, c.y - half));
             self.line(layer, Point::new(c.x - r, up.y), Point::new(c.x - r, down.y));
             self.line(layer, Point::new(c.x + r, up.y), Point::new(c.x + r, down.y));
             self.arc(layer, up, r, 0.0, 180.0);
@@ -117,7 +116,7 @@ pub fn mechanical(board: &Board) -> String {
         for i in 0..4 {
             d.line("PARTS", corners[i], corners[(i + 1) % 4]);
         }
-        d.text("PART_NAMES", Point::new(lo.x, lo.y - 0.3), 0.8, &part.refdes);
+        d.text("PART_NAMES", Point::new(lo.x, hi.y + 0.3), 0.8, &part.refdes);
     }
 
     let mut out = String::new();
@@ -166,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn outline_holes_and_parts_are_written_with_y_up() {
+    fn outline_holes_and_parts_are_written_as_they_are() {
         let mut b = Board::new("demo", 30.0, 20.0);
         b.holes.push(Hole::new(Point::new(2.0, 2.0), 3.2));
         let mut pad = Pad::new(Point::new(10.0, 5.0), PadShape::Circle { d: 1.6 }, Some(0.8), Side::Top);
@@ -180,7 +179,7 @@ mod tests {
         assert_eq!(count(&s, "CIRCLE"), 2, "the mounting hole and the pad's drill");
         assert_eq!(count(&s, "TEXT"), 1);
         assert!(s.contains("\n40\n1.6000\n"), "the 3.2 mm hole has radius 1.6");
-        assert!(s.contains("\n20\n-2.0000\n"), "y is negated");
+        assert!(s.contains("\n20\n2.0000\n"), "y is kept: both the board and the DXF point up");
     }
 
     #[test]

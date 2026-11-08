@@ -327,6 +327,12 @@ impl eframe::App for App {
                         ui.close();
                     }
                     if !sch_mode {
+                        for (label, side) in [("基板の表面をSVGで保存…", pcb_core::Side::Top), ("基板の裏面をSVGで保存…", pcb_core::Side::Bottom)] {
+                            if ui.button(label).on_hover_text("基板の絵を、拡大しても粗くならない図 (SVG) にします。銅・シルク・穴は、発注用の Gerber と同じデータから描くので、できあがりの姿です。記事・レポート・印刷に使えます。裏面は、基板を裏返して下から見た向きです").clicked() {
+                                self.board_ed.export_svg(side);
+                                ui.close();
+                            }
+                        }
                         ui.separator();
                         if ui.button("発注の準備・製造ファイルの書き出し (Gerber / ドリル / BOM / 部品配置)…").on_hover_text("発注先を選んで、発注前のチェック・出来上がりの確認・Gerber などの書き出しを順に行う窓を開きます").clicked() {
                             self.board_ed.open_order();
