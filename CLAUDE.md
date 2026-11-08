@@ -23,7 +23,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `part-lib` | 部品JSON(`*.part.json`)、`examples/` が同梱部品。KiCad の記号・フットプリント・回路図の取り込み(`kicad*.rs`)、チップ部品・ダイオード・リード付き部品の計算、メーカーのSPICEモデルzipの索引 |
 | `datasheet` | データシート(PDF)の表示・検索・見出し・型番の候補・表からのピン突き合わせ(`docs/datasheet-viewer-design.md`) |
 | `app` | egui のGUI。回路図エディタ・基板エディタ・波形表示 |
-| `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`docs/cli.md`、`docs/code-notes/cli.md`) |
+| `cli` | `ccad`: 画面なしの操作窓口(1行1コマンドのスクリプト。`ccad mcp` で MCP サーバー。`board/` は基板の命令を話題ごとのファイルに分けてある。`docs/cli.md`、`docs/code-notes/cli.md`) |
 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`(目次。ファイル一覧は `sim-core/files.md`)
 - 動作点 `dc/`(build・devices・mna・newton・linalg・digital)/ 過渡 `tran.rs` / `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs`(FFT・THD)/ `temperature.rs`
@@ -50,18 +50,18 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 | `args.rs` `files.rs` `autosave.rs` `screenshot.rs` `startup.rs` `tips.rs` | 起動引数 / 保存・未保存の確認 / 自動保存と復旧 / 画面保存 / クラッシュログ・フォント / 豆知識 `TIPS` |
 | `plot.rs` / `part_form/` | 波形描画 / 部品作成フォーム(`parse` 入力→部品 / `tabs` `kind` `chip` `template` `thru` `diode` 種類ごとの入力 / `pintable` `padtable` `pin_import` ピンとパッド / `step3d` / `datasheet_view` `pdf_*` データシートの窓 / `checklist` `trial` `vendor` `zchart` `preview`) |
 | `glossary.rs` | 用語集(`TERMS` に語を足す) |
-| `learn.rs` `measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
+| `learn/`(`paths` パスの中身 / `window` 窓とウェルカムカード)`measure_guide.rs` `bench_guide.rs` `help.rs` `project.rs` | 学習パス / 組み立てて測る窓 / 実機作業の窓 / 操作ガイド(操作の説明はここ) / `.ccproj` |
 | `theme.rs` `widgets.rs` | 色・余白・ボタン・窓の位置の決まり(`docs/code-notes/app/ui-rules.md`) |
 | `samples.rs` `source_form.rs` `link.rs` `xcheck*.rs` | サンプル一覧(`docs/examples`)/ 電源値フォーム / 回路図・基板・3D の連動 / ngspice との検算 |
 | `tests/` | 統合テスト `flow.rs` と、サンプル生成 `examples.rs` の `write_*`(`--ignored`) |
 
 エディタは1つの型を複数ファイルの `impl` に分割している(子モジュールから親の非公開フィールドが見える)。
 
-- `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel` `analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`svg`・`pdf`(回路図の書き出し)`requirements`(設計の要件の窓)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
+- `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel/`(`mod` ツール・ERC・フォーム / `parts` 部品一覧 / `properties` 選択部品の設定)`analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`svg`・`pdf`(回路図の書き出し)`requirements`(設計の要件の窓)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
 - `board_editor/`(`BoardEditor`): `mod.rs` 型 / `canvas` `interact` `draw` `panel` / `select` `route` `tools` `ribbon` `padlead` `livepath` `tracking` `shoving` / `align` `lengths` `pairs` `layers` `netclass` `netwindow` `currentwindow` `zoneedit` `repair` `ruler` `measure`(距離を測るツール)`snippet``smoothing` `linked` `netglow` `width` `order` / `file` `actions` `history` `view` / `view3d/`(camera・scene・glow)と `raster3d.rs`(3D)/ `requirements.rs`
 
 ## 「〜を変えたい」早見表
-- 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel.rs` にボタン + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル
+- 新しい解析を足す → `sim-core/<名前>.rs` + `schematic/<名前>.rs` (実行+パネル) + `schematic/panel/mod.rs` の `ANALYSIS_SECTIONS` にボタン + `mod.rs` の `WaveMode` と `wave.rs` + `docs/examples/` にサンプル
 - 新しい部品種別(基本素子) → `sch-core/lib.rs` の `Kind`、`symbols.rs`、`sim-core/from_schematic.rs`
 - ライブラリ部品を足す → `part-lib/examples/*.part.json` (形式は `docs/part-format.md`)
 - レッスン → `schematic/lessons/` に1件の `const` を足して `mod.rs` の `LESSONS` に並べる / チャレンジ → `schematic/challenge/` に1件の `const` を足して `mod.rs` の `CHALLENGES` に並べる (答えが通るテストも) / 学習パス → `learn.rs` の `PATHS`
