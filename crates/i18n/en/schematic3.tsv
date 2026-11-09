@@ -495,3 +495,6 @@ DC動作点が解けていないので、必要な定格を出せません	The D
 負荷の急変 (落ち込みと戻り): 負荷を急に変えたときの電圧の落ち込みと、戻るまでの時間	Load step (dip and recovery): how far the voltage dips when the load changes suddenly, and how long it takes to come back
 選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます	Keeps a copy of the selected waveform in a faint color. Change a part value and recalculate to compare before (faint line) and after (bold line). Press again to clear it
 電力と効率: 入力と出力の平均電力と効率、損失	Power and efficiency: average input and output power, efficiency and loss
+前の特性を消す	Clear kept response
+計算した範囲の中で、最大値から 3dB 下がる所がありません (入力そのものや、平らなままの信号)	Nowhere in the computed range does it fall 3 dB below its maximum (the input itself, or a signal that stays flat)
+選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます	Keeps a copy of the selected response in a faint color. Change a part value and recalculate to compare before (faint line) and after (bold line). Press again to clear it

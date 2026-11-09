@@ -61,7 +61,7 @@ impl SchEditor {
                 open_help = true;
             }
         });
-        let AcView { outcome, selected, plot: st, ghost, psrr_run, notes, .. } = view;
+        let AcView { outcome, selected, plot: st, ghost, psrr_run, pz_run, notes, .. } = view;
         match outcome {
             Err(msgs) => {
                 for m in msgs {
@@ -77,17 +77,23 @@ impl SchEditor {
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| !s.name.contains('.')).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
-                        ui.set_width(170.0);
-                        ui.horizontal(|ui| {
-                            if ui.button(i18n::tr("選択をクリア")).clicked() {
-                                selected.clear();
-                            }
-                            if ui.button(i18n::tr("回路図で選ぶ")).on_hover_text(i18n::tr("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)")).clicked() {
-                                start_probe = true;
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            if ui.button(i18n::tr("いまの特性を残す")).on_hover_text(i18n::tr("選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます")).clicked() {
+                        // same layout as the transient viewer: one bar of buttons, the signals side by side under it, then the
+                        // tables; the column scrolls as one so nothing is cut off at the panel's bottom
+                        ui.set_width(360.0);
+                        egui::ScrollArea::vertical().id_salt("ac_left").auto_shrink([false, false]).show(ui, |ui| {
+                        let bar = crate::widgets::segment_row(ui, &[("回路図で選ぶ", true), ("選択をクリア", !selected.is_empty()), (if ghost.is_some() { "前の特性を消す" } else { "いまの特性を残す" }, true)]);
+                        if bar[0].clicked() {
+                            start_probe = true;
+                        }
+                        bar[0].clone().on_hover_text(i18n::tr("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の周波数特性が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)"));
+                        if bar[1].clicked() {
+                            selected.clear();
+                        }
+                        bar[1].clone().on_hover_text(i18n::tr("選んだ信号を、すべて外します"));
+                        if bar[2].clicked() {
+                            if ghost.is_some() {
+                                *ghost = None;
+                            } else {
                                 let mut sigs = vec![];
                                 for sg in order.iter().filter(|n| selected.contains(**n)).filter_map(|n| res.signal(n)) {
                                     let name = format!("{} (前)", sg.name);
@@ -96,13 +102,26 @@ impl SchEditor {
                                 }
                                 *ghost = Some(Ghost { x: res.freq.clone(), sigs });
                             }
-                            if ghost.is_some() && ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("残してある「前」の特性を消します")).clicked() {
-                                *ghost = None;
+                        }
+                        bar[2].clone().on_hover_text(i18n::tr("選んでいる特性のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます"));
+                        ui.horizontal_wrapped(|ui| {
+                            for name in &order {
+                                let mut on = selected.contains(*name);
+                                let color = order.iter().filter(|n| selected.contains(**n)).position(|n| n == name).map(|i| PALETTE[i % PALETTE.len()]);
+                                let text = match color {
+                                    Some(c) if on => egui::RichText::new(*name).color(c),
+                                    _ => egui::RichText::new(*name),
+                                };
+                                if ui.checkbox(&mut on, text).changed() {
+                                    if on {
+                                        selected.insert(name.to_string());
+                                    } else {
+                                        selected.remove(*name);
+                                    }
+                                }
                             }
                         });
-                        let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
-                        let sim = |name: &str| res.signal(name).map(|sg| (res.freq.clone(), sg.db()));
-                        bench_data::bench_controls(ui, bench, bench_ui, true, &order, &shown, &sim);
+                        ui.add_space(crate::theme::SPACE_S);
                         // -3dB point: one column per signal
                         let corner: Vec<(String, String)> = order
                             .iter()
@@ -110,7 +129,7 @@ impl SchEditor {
                             .take(4)
                             .filter_map(|name| {
                                 let sg = res.signal(name).filter(|s| s.unit == "V")?;
-                                let txt = minus_3db(&res.freq, &sg.mag()).map_or_else(|| "範囲内にありません".to_string(), |f| eng(f, "Hz"));
+                                let txt = minus_3db(&res.freq, &sg.mag()).map_or_else(|| "—".to_string(), |f| eng(f, "Hz"));
                                 Some((name.to_string(), txt))
                             })
                             .collect();
@@ -124,11 +143,18 @@ impl SchEditor {
                                 ui.end_row();
                                 ui.label(i18n::tr("-3dB点")).on_hover_text(i18n::tr("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります"));
                                 for (_, txt) in &corner {
-                                    ui.label(i18n::tr_dyn(txt));
+                                    if txt == "—" {
+                                        // the input itself, or a curve that never falls 3 dB inside the range
+                                        ui.label(txt).on_hover_text(i18n::tr("計算した範囲の中で、最大値から 3dB 下がる所がありません (入力そのものや、平らなままの信号)"));
+                                    } else {
+                                        ui.label(txt);
+                                    }
                                 }
                                 ui.end_row();
                             });
                         }
+                        // a ripple share or a fitted transfer function has no loop to be stable or not
+                        if !*psrr_run && !*pz_run {
                         egui::CollapsingHeader::new(i18n::tr("安定性の余裕 (位相余裕・ゲイン余裕)")).show(ui, |ui| {
                             let margins: Vec<(String, sim_core::Margins)> = order
                                 .iter()
@@ -201,22 +227,10 @@ impl SchEditor {
                                 }
                             }
                         });
-                        egui::ScrollArea::vertical().show(ui, |ui| {
-                            for name in &order {
-                                let mut on = selected.contains(*name);
-                                let color = order.iter().filter(|n| selected.contains(**n)).position(|n| n == name).map(|i| PALETTE[i % PALETTE.len()]);
-                                let text = match color {
-                                    Some(c) if on => egui::RichText::new(*name).color(c),
-                                    _ => egui::RichText::new(*name),
-                                };
-                                if ui.checkbox(&mut on, text).changed() {
-                                    if on {
-                                        selected.insert(name.to_string());
-                                    } else {
-                                        selected.remove(*name);
-                                    }
-                                }
-                            }
+                        }
+                        let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
+                        let sim = |name: &str| res.signal(name).map(|sg| (res.freq.clone(), sg.db()));
+                        bench_data::bench_controls(ui, bench, bench_ui, true, &order, &shown, &sim);
                         });
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());
