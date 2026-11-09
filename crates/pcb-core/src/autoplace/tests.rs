@@ -589,3 +589,25 @@ fn a_crystal_and_its_load_capacitors_sit_by_the_clock_pins() {
     }
     assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
 }
+
+#[test]
+fn a_locked_header_stays_and_the_rest_is_placed_round_it() {
+    let mut b = mcu_with_crystal();
+    with_pour(&mut b, 0.5);
+    // the header put where the case wants it, turned, far from where a placement would put it, and locked
+    b.place_part("J1", Point::new(60.0, 40.0), 1);
+    b.locked_parts.push("J1".into());
+    let r = autoplace(&mut b).unwrap();
+    let j1 = b.parts.iter().find(|p| p.refdes == "J1").unwrap();
+    assert_eq!((j1.pos, j1.rot), (Point::new(60.0, 40.0), 1), "the locked header did not move or turn");
+    assert_eq!((r.locked, r.placed), (1, 5));
+    // the others gather by it (the chip that its nine signals go to is near), nothing overlaps, and the outline holds it all
+    let centre = |r: &str| extent(&b, r).map(|(lo, hi)| Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0)).unwrap();
+    assert!(centre("U1").dist(centre("J1")) < 20.0, "{:?} {:?}", centre("U1"), centre("J1"));
+    assert!(drc::check(&b).is_empty(), "{:?}", drc::check(&b));
+    let (lo, hi) = b.bounds().unwrap();
+    for p in &b.parts {
+        let (a, z) = extent(&b, &p.refdes).unwrap();
+        assert!(a.x >= lo.x && a.y >= lo.y && z.x <= hi.x && z.y <= hi.y, "{} is outside the outline", p.refdes);
+    }
+}

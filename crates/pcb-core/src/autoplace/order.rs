@@ -124,7 +124,9 @@ pub(super) fn net_hpwl(pins: &NetPins, at: impl Fn(usize) -> Option<(f64, f64)>)
 /// already placed): each part goes as near as it can to where its pins would sit on the pads they connect to, on the
 /// nearest free spot of a 0.5 mm grid, picking from the first few free spots the one with the shortest nets. Parts
 /// gather round the parts they belong to instead of lining up in rows. Returns the cell corners, moved to the origin.
-pub(super) fn attach_layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], apart: &[Apart], order: &[usize]) -> Vec<(usize, f64, f64)> {
+/// `fixed` (empty, or one entry per item): the items that stand already (the parts a person locked), at these cell corners; then the others
+/// are placed round them, and nothing is moved to the origin.
+pub(super) fn attach_layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], apart: &[Apart], order: &[usize], fixed: &[Option<(f64, f64)>]) -> Vec<(usize, f64, f64)> {
     const STEP: f64 = 0.5;
     const WANT: usize = 12;
     // how much a part's net length may grow to stay closer to the middle of what is placed (mm per mm); measured on a
@@ -139,13 +141,20 @@ pub(super) fn attach_layout(items: &[(String, Point, f64, f64)], nets: &[NetPins
     }
     let mut at: Vec<Option<(f64, f64)>> = vec![None; n];
     let mut placed: Vec<usize> = vec![];
+    for (i, f) in fixed.iter().enumerate() {
+        if let Some(p) = f {
+            at[i] = Some(*p);
+            placed.push(i);
+        }
+    }
     let free = |at: &[Option<(f64, f64)>], placed: &[usize], i: usize, x: f64, y: f64| {
         placed.iter().all(|&j| {
             let (px, py) = at[j].unwrap();
             !(x < px + items[j].2 - 1e-9 && px < x + items[i].2 - 1e-9 && y < py + items[j].3 - 1e-9 && py < y + items[i].3 - 1e-9)
         })
     };
-    for &i in order {
+    let todo: Vec<usize> = order.iter().copied().filter(|&i| fixed.get(i).is_none_or(|f| f.is_none())).collect();
+    for &i in &todo {
         // where the part would like to be: its pads on the pads of its nets
         let (mut sx, mut sy, mut sw) = (0.0, 0.0, 0.0);
         for &(k, ox, oy) in &mine[i] {
@@ -222,12 +231,61 @@ pub(super) fn attach_layout(items: &[(String, Point, f64, f64)], nets: &[NetPins
                 y += 1.0;
             }
         }
+        // round parts a person locked, the room left between them may be too small for a big block where it would like to be (the nearest
+        // free spots are then all on one side): the whole board and a cell's size round it are searched on the coarser grid as well
+        if fixed.iter().any(|f| f.is_some()) && !placed.is_empty() {
+            let reach = items[i].2.max(items[i].3);
+            let mut y = by0 - reach;
+            while y <= by1 + reach {
+                let mut x = bx0 - reach;
+                while x <= bx1 + reach {
+                    let p = ((x / STEP).round() * STEP, (y / STEP).round() * STEP);
+                    if free(&at, &placed, i, p.0, p.1) {
+                        found.push(p);
+                    }
+                    x += 1.0;
+                }
+                y += 1.0;
+            }
+        }
         let best = found.into_iter().min_by(|a, b| cost(*a).total_cmp(&cost(*b))).unwrap();
         at[i] = Some(best);
         placed.push(i);
     }
+    if fixed.iter().any(|f| f.is_some()) {
+        return placed.iter().map(|&i| (i, at[i].unwrap().0, at[i].unwrap().1)).collect();
+    }
     let (x0, y0) = placed.iter().fold((f64::MAX, f64::MAX), |b, &j| (b.0.min(at[j].unwrap().0), b.1.min(at[j].unwrap().1)));
     order.iter().map(|&i| (i, at[i].unwrap().0 - x0, at[i].unwrap().1 - y0)).collect()
+}
+
+/// The order in which to place the items round the `fixed` ones: always the one most tied to those placed (the fixed first), the one with
+/// the most nets when none is tied.
+pub(super) fn fixed_order(items: &[(String, Point, f64, f64)], tie: &[Vec<f64>], degree: &[usize], fixed: &[Option<(f64, f64)>]) -> Vec<usize> {
+    let n = items.len();
+    let mut score = vec![0.0f64; n];
+    let mut left: Vec<usize> = (0..n).filter(|&i| fixed[i].is_none()).collect();
+    left.sort_by(|&a, &b| degree[b].cmp(&degree[a]).then(items[a].0.cmp(&items[b].0)));
+    for f in (0..n).filter(|&i| fixed[i].is_some()) {
+        for &m in &left {
+            score[m] += tie[m][f];
+        }
+    }
+    let mut order = vec![];
+    while !left.is_empty() {
+        let mut best = 0;
+        for k in 1..left.len() {
+            if score[left[k]] > score[left[best]] + 1e-9 {
+                best = k;
+            }
+        }
+        let i = left.remove(best);
+        order.push(i);
+        for &m in &left {
+            score[m] += tie[m][i];
+        }
+    }
+    order
 }
 
 /// Improve the order by swapping and moving parts, keeping what shortens the nets (and, early on, some of what does
@@ -363,7 +421,7 @@ pub(super) fn layout(items: &[(String, Point, f64, f64)], nets: &[NetPins], apar
     let (mut spots, mut used_w, mut used_h) = pack(items, &order, row_w);
     // the other way to lay the parts out: free placement round the most connected ones; the one with the shorter nets wins
     if improve && !compact && items.len() >= 4 {
-        let cand = attach_layout(items, nets, apart, &greedy);
+        let cand = attach_layout(items, nets, apart, &greedy, &[]);
         if spots_cost(items, nets, apart, &cand) < spots_cost(items, nets, apart, &spots) {
             (used_w, used_h) = cand.iter().fold((0.0f64, 0.0f64), |b, &(i, x, y)| (b.0.max(x + items[i].2), b.1.max(y + items[i].3)));
             spots = cand;

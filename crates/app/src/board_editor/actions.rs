@@ -122,7 +122,8 @@ impl BoardEditor {
                 if r.repoured > 0 {
                     poured += &format!("ベタへのビア {} 個は置き直しました。", r.repoured);
                 }
-                self.status = format!("自動配置: {} 個を並べ、外形を {} × {} mm にしました。{poured}位置は手で動かして調整できます", r.placed, r.width, r.height);
+                let locked = if r.locked > 0 { format!("固定した {} 個はそのままにして、そのまわりに並べました。", r.locked) } else { String::new() };
+                self.status = format!("自動配置: {} 個を並べ、外形を {} × {} mm にしました。{locked}{poured}位置は手で動かして調整できます", r.placed, r.width, r.height);
             }
             Err(e) => {
                 self.undo.pop();

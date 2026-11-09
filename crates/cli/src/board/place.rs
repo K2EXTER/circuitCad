@@ -79,7 +79,30 @@ impl Session {
         };
         let tuning = pcb_core::autoplace::Tuning { sheets: flag("sheets", base.sheets), arrays: flag("arrays", base.arrays), channels: flag("channels", base.channels), groups: flag("groups", base.groups), apart: flag("apart", base.apart), ..base };
         let r = pcb_core::autoplace::autoplace_with(board, &tuning)?;
-        Ok(obj(json!({"placed": r.placed, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings, "group_notes": r.group_notes})))
+        Ok(obj(json!({"placed": r.placed, "locked": r.locked, "width": r.width, "height": r.height, "poured_nets_ignored": r.poured, "repoured_vias": r.repoured, "airwire_crossings": r.crossings, "group_notes": r.group_notes})))
+    }
+
+    pub(super) fn board_lock(&mut self, rest: &[String], lock: bool) -> Res {
+        // board lock R1,J2 | headers | all  /  board unlock R1 | all: lock parts where they stand (autoplace, align and the editor leave them),
+        // or unlock them. `headers` are the pin headers (a row of three or more pads). The answer is the parts locked now
+        let (words, _) = options(rest);
+        let which = words.first().ok_or(if lock { "board lock R1,J2 | headers | all" } else { "board unlock R1,J2 | all" })?.to_string();
+        let board = self.board_mut()?;
+        let names: Vec<String> = match which.as_str() {
+            "all" => board.parts.iter().map(|p| p.refdes.clone()).collect(),
+            "headers" => board.parts.iter().map(|p| p.refdes.clone()).filter(|r| pcb_core::autoplace::is_pin_header(board, r)).collect(),
+            list => list.split(',').map(|r| r.trim().to_string()).filter(|r| !r.is_empty()).collect(),
+        };
+        if let Some(r) = names.iter().find(|r| !board.parts.iter().any(|p| &p.refdes == *r)) {
+            return Err(format!("部品 {r} は基板にありません"));
+        }
+        for r in names {
+            board.locked_parts.retain(|x| x != &r);
+            if lock {
+                board.locked_parts.push(r);
+            }
+        }
+        Ok(obj(json!({"locked": board.locked_parts})))
     }
 
     pub(super) fn board_nudge(&mut self, rest: &[String]) -> Res {

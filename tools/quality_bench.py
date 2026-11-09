@@ -16,6 +16,8 @@ Options:
     --ccad PATH       the ccad binary (default: target/release/ccad, else target/debug/ccad)
     --no-pour         skip `board pour` (every net is wired, the old flow)
     --route-args S    extra words for `board route`, e.g. "improve=1" or "currents=0"
+    --lock-headers    place, lock the pin headers where they stand, and place the rest again round them (the flow where a person puts
+                      the connectors first)
     --only NAME ...   only these samples (file names without the extension)
     --save FILE       write the per-sample numbers as JSON
     --compare FILE    print the totals of FILE next to this run's, and the samples that changed most
@@ -63,12 +65,16 @@ def run_script(ccad, text):
     return answers
 
 
-def measure(ccad, sample, pour, route_args):
+def measure(ccad, sample, pour, route_args, lock_headers=False):
     pcb = tempfile.NamedTemporaryFile(suffix=".pcbjson", delete=False).name
     steps = ["open " + sample.replace("\\", "/"), "board import"]
     if pour:
         steps.append("board pour")
-    steps += ["board autoplace", ("board route " + route_args).strip(), "board drc", "board status", "board check", "board save " + pcb.replace("\\", "/")]
+    steps.append("board autoplace")
+    if lock_headers:
+        # the pin headers stay where the first placement put them (as a person would put them first), the rest is placed again round them
+        steps += ["board lock headers", "board autoplace"]
+    steps += [("board route " + route_args).strip(), "board drc", "board status", "board check", "board save " + pcb.replace("\\", "/")]
     t = time.time()
     answers = run_script(ccad, "\n".join(steps) + "\n")
     seconds = time.time() - t
@@ -112,6 +118,7 @@ def main():
     ap.add_argument("--no-pour", action="store_true")
     ap.add_argument("--route-args", default="")
     ap.add_argument("--only", nargs="*")
+    ap.add_argument("--lock-headers", action="store_true", help="place, lock the pin headers where they are, and place the rest again round them")
     ap.add_argument("--save")
     ap.add_argument("--compare")
     a = ap.parse_args()
@@ -122,7 +129,7 @@ def main():
     rows, skipped = {}, []
     for s in samples:
         name = os.path.basename(s).split(".")[0]
-        r = measure(ccad, s, not a.no_pour, a.route_args)
+        r = measure(ccad, s, not a.no_pour, a.route_args, a.lock_headers)
         if r is None:
             skipped.append(name)
             continue
@@ -134,7 +141,7 @@ def main():
     print(f"{len(rows)} samples" + (f" (skipped: {', '.join(skipped)})" if skipped else ""))
     print("total  " + "  ".join(f"{k} {t[k]:g}" for k in TOTALS))
     if a.save:
-        json.dump({"pour": not a.no_pour, "route_args": a.route_args, "rows": rows}, open(a.save, "w"), indent=1)
+        json.dump({"pour": not a.no_pour, "route_args": a.route_args, "lock_headers": a.lock_headers, "rows": rows}, open(a.save, "w"), indent=1)
         print("saved", a.save)
     if a.compare:
         old = json.load(open(a.compare))

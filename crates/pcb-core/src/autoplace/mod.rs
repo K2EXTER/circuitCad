@@ -48,6 +48,8 @@ pub struct PlaceReport {
     pub crossings: usize,
     /// What the groups of the requirements could not get: parts that are not in the block of their group (they are in a copy or an IC's block).
     pub group_notes: Vec<String>,
+    /// Parts a person locked (`Board.locked_parts`): they kept their places, and the others were placed round them.
+    pub locked: usize,
 }
 
 pub(crate) fn extent(board: &Board, refdes: &str) -> Option<(Point, Point)> {
@@ -234,6 +236,17 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     if board.parts.is_empty() {
         return Err("部品がありません。先に「回路図から取り込み」をしてください".into());
     }
+    // the parts a person locked keep their places and turns (a connector put where the case wants it); the others are placed round them.
+    // A locked part is in no copy, no IC's block and no group
+    let locked: std::collections::BTreeMap<String, (Point, u8, Point)> = board
+        .parts
+        .iter()
+        .filter(|p| board.is_locked(&p.refdes))
+        .filter_map(|p| extent(board, &p.refdes).map(|(lo, _)| (p.refdes.clone(), (p.pos, p.rot, lo))))
+        .collect();
+    let free_copies = |groups: Vec<Vec<Vec<usize>>>, name: &dyn Fn(usize) -> String| -> Vec<Vec<Vec<usize>>> {
+        groups.into_iter().filter(|g| !g.iter().flatten().any(|&i| locked.contains_key(&name(i)))).collect()
+    };
     // the copies of a small structure are turned the way that wires best, the first one tried by routing it alone (a person tries the small
     // circuit first, and copies what works)
     let mut in_copies: std::collections::BTreeSet<String> = Default::default();
@@ -244,11 +257,13 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
         let sheet_by_name = |i: usize| board.part_sheets.get(&names[i]).cloned().unwrap_or_default();
         let groups = replicas::find(board, &dummy, &skip, &sheet_by_name);
         let groups = if tuning.channels { replicas::merge_channels(board, &dummy, groups, &skip) } else { groups };
+        let groups = free_copies(groups, &|i| names[i].clone());
         turn_copies(board, &groups, &names, gap, label);
         in_copies = groups.iter().flat_map(|g| g.iter().flat_map(|c| c.iter().map(|&i| names[i].clone()))).collect();
     }
     // an IC and its bypass capacitors are settled once and move as one piece (the capacitors are turned now, before the parts are measured)
-    let blocks: Vec<IcBlock> = if improve && tuning.bypass && tuning.arrays { ic_blocks(board, &in_copies) } else { vec![] };
+    let not_in_blocks: std::collections::BTreeSet<String> = in_copies.iter().cloned().chain(locked.keys().cloned()).collect();
+    let blocks: Vec<IcBlock> = if improve && tuning.bypass && tuning.arrays { ic_blocks(board, &not_in_blocks) } else { vec![] };
     for b in &blocks {
         for (cap, rot, _) in &b.caps {
             if let Some(part) = board.parts.iter().find(|p| &p.refdes == cap).cloned() {
@@ -293,6 +308,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     let sheet_name = |i: usize| board.part_sheets.get(&items[i].0).cloned().unwrap_or_default();
     let copies = if tuning.arrays { replicas::find(board, &items, &poured, &sheet_name) } else { vec![] };
     let copies = if tuning.arrays && tuning.channels { replicas::merge_channels(board, &items, copies, &poured) } else { copies };
+    let copies = free_copies(copies, &|i| items[i].0.clone());
     let mut arrays = build_arrays(&items, &nets, &degree, &copies, improve);
     // an IC with its capacitors is one item as well: the corners of the cells of its parts, from where the capacitors stand from the IC
     for b in &blocks {
@@ -317,6 +333,7 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     let mut group_notes: Vec<String> = vec![];
     if improve && tuning.groups {
         let mut taken: std::collections::BTreeSet<usize> = arrays.iter().flat_map(|a| a.members.iter().map(|m| m.0)).collect();
+        taken.extend((0..items.len()).filter(|&i| locked.contains_key(&items[i].0)));
         for (g, names) in crate::requirements::groups_on_board(board) {
             let members: Vec<usize> = names.iter().filter_map(|r| items.iter().position(|it| &it.0 == r)).filter(|i| !taken.contains(i)).collect();
             let left_out: Vec<&str> = names.iter().filter(|r| items.iter().position(|it| &it.0 == *r).is_some_and(|i| !members.contains(&i))).map(|r| r.as_str()).collect();
@@ -373,7 +390,8 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
             }
         }
     }
-    let by_sheet = if tuning.sheets { sheet_groups(&csheet) } else { None };
+    // (round locked parts the sheets are not laid out as blocks: the blocks would not know where the locked parts stand)
+    let by_sheet = if tuning.sheets && locked.is_empty() { sheet_groups(&csheet) } else { None };
     let (cspots, used_w, used_h) = match by_sheet {
         Some(groups) => sheet_blocks(&citems, &cnets, &cdegree, &groups, improve),
         None => {
@@ -381,9 +399,34 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
                 return Err("パッドを持つ部品がありません".into());
             }
             let tie = ties(&cnets, citems.len());
-            layout(&citems, &cnets, &apart_items, &cdegree, &tie, improve, false, false)
+            // a locked part's cell, where the part stands (the layout's 0 is the board's MARGIN)
+            let fixed: Vec<Option<(f64, f64)>> = origin
+                .iter()
+                .map(|o| match o {
+                    Origin::Single(i) => locked.get(&items[*i].0).map(|&(.., lo)| (lo.x - gap / 2.0 - MARGIN, lo.y - gap / 2.0 - label - MARGIN)),
+                    Origin::Array(_) => None,
+                })
+                .collect();
+            let any_fixed = fixed.iter().any(|f| f.is_some());
+            if any_fixed {
+                let order = fixed_order(&citems, &tie, &cdegree, &fixed);
+                (attach_layout(&citems, &cnets, &apart_items, &order, &fixed), 0.0, 0.0)
+            } else {
+                layout(&citems, &cnets, &apart_items, &cdegree, &tie, improve, false, false)
+            }
         }
     };
+    // round locked parts the layout is where the board is (it may start anywhere): it is moved to 0, and the board by as much the other way
+    let (mut cspots, mut used_w, mut used_h) = (cspots, used_w, used_h);
+    let mut shift = (0.0, 0.0);
+    if !locked.is_empty() {
+        let (x0, y0, x1, y1) = cspots.iter().fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |b, &(i, x, y)| (b.0.min(x), b.1.min(y), b.2.max(x + citems[i].2), b.3.max(y + citems[i].3)));
+        shift = ((x0 / SNAP).floor() * SNAP, (y0 / SNAP).floor() * SNAP);
+        for s in cspots.iter_mut() {
+            (s.1, s.2) = (s.1 - shift.0, s.2 - shift.1);
+        }
+        (used_w, used_h) = (x1 - shift.0, y1 - shift.1);
+    }
     // back to the parts: the members of an array stand where the array's cell puts them
     let mut spots: Vec<(usize, f64, f64)> = vec![];
     for (ci, x, y) in cspots {
@@ -392,30 +435,38 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
             Origin::Array(k) => spots.extend(arrays[k].members.iter().map(|&(i, ax, ay)| (i, x + ax, y + ay))),
         }
     }
-    let in_array: std::collections::BTreeSet<String> = arrays.iter().flat_map(|a| a.members.iter().map(|m| items[m.0].0.clone())).collect();
+    // (the parts that the finishing steps leave where they are: those in an array, and the locked ones)
+    let mut in_array: std::collections::BTreeSet<String> = arrays.iter().flat_map(|a| a.members.iter().map(|m| items[m.0].0.clone())).collect();
+    in_array.extend(locked.keys().cloned());
+    let (bx, by) = (MARGIN + shift.0, MARGIN + shift.1);
     for (i, sx, sy) in &spots {
         let (refdes, lo, ..) = &items[*i];
+        if let Some(&(pos, rot, _)) = locked.get(refdes) {
+            board.place_part(refdes, pos, rot);
+            continue;
+        }
         let rot = board.parts.iter().find(|p| &p.refdes == refdes).map_or(0, |p| p.rot);
         // the pad box starts gap/2 inside its cell
-        board.place_part(refdes, Point::new(snap(MARGIN + gap / 2.0 + sx - lo.x), snap(MARGIN + gap / 2.0 + label + sy - lo.y)), rot);
+        board.place_part(refdes, Point::new(snap(bx + gap / 2.0 + sx - lo.x), snap(by + gap / 2.0 + label + sy - lo.y)), rot);
     }
+    let inside = (Point::new(bx, by), Point::new(bx + used_w, by + used_h));
     if turn {
         turn_to_shorten(board, &in_array);
         if improve && tuning.arrays {
             let groups: Vec<Vec<Vec<String>>> = copies.iter().map(|g| g.iter().map(|c| c.iter().map(|&i| items[i].0.clone()).collect()).collect()).collect();
             turn_copies_toward_ports(board, &groups);
         }
-        crate::connectors::orient_connectors(board, (Point::new(MARGIN, MARGIN), Point::new(MARGIN + used_w, MARGIN + used_h)));
+        crate::connectors::orient_connectors(board, inside);
     }
     if tuning.align {
         align_parts(board, &in_array);
     }
     if tuning.bypass && improve {
-        attach_bypass_caps(board, (Point::new(MARGIN, MARGIN), Point::new(MARGIN + used_w, MARGIN + used_h)), &in_array);
+        attach_bypass_caps(board, inside, &in_array);
     }
     let (w, h) = (used_w + 2.0 * MARGIN, used_h + 2.0 * MARGIN);
     let old = board.bounds().filter(|_| board.outline.len() >= 3);
-    board.set_rect_outline(0.0, 0.0, w.ceil(), h.ceil());
+    board.set_rect_outline(shift.0, shift.1, shift.0 + w.ceil(), shift.1 + h.ceil());
     if let Some((lo, hi)) = old {
         refit_pours(board, lo, hi);
     }
@@ -424,7 +475,12 @@ fn place_inner(board: &mut Board, turn: bool, improve: bool, tuning: &Tuning) ->
     poured.dedup();
     let repoured = repour.iter().map(|(_, o)| groundpour::ground_pour(board, o).map_or(0, |r| r.vias)).sum();
     let crossings = crate::ratsnest::crossings(board);
-    Ok(PlaceReport { placed: spots.len(), width: w.ceil(), height: h.ceil(), poured, repoured, crossings, group_notes })
+    Ok(PlaceReport { placed: spots.len() - locked.len(), width: w.ceil(), height: h.ceil(), poured, repoured, crossings, group_notes, locked: locked.len() })
+}
+
+/// A pin header (a row of three or more pads on one line): the part a person most often puts in place first and locks (see `PlaceReport::locked`).
+pub fn is_pin_header(board: &Board, refdes: &str) -> bool {
+    crate::connectors::is_pad_row(board, refdes)
 }
 
 pub(crate) fn airwire_length(board: &Board) -> f64 {

@@ -16,6 +16,7 @@ python tools/quality_bench.py --compare before.json
 - `--no-pour`: ベタを使わない(昔の流れ。GND も配線する)
 - `--route-args "improve=1"`: `board route` に足す語
 - `--only led_blinker mixed_signal`: 一部のサンプルだけ
+- `--lock-headers`: 1 回並べたあと、ピンヘッダをその場で固定し(`board lock headers`)、残りをもう一度並べる。人がコネクタを先に置いて残りを自動で並べる流れの質を測る
 - `--compare` は両方にあるサンプルだけを比べ、配線長がいちばん変わったサンプルも出す
 
 **`problems`(DRC違反+未配線)は 0 でなければなりません。** 0 でないサンプルがあれば、その変更は配線を壊しています(例: 電流から太さを決めたとき、太い配線が場所を取って1本通らなくなった → 通る本数が多いほうを採用する処理を足した)。

@@ -32,6 +32,8 @@ impl Session {
             "orient" => self.board_orient(rest),
             "matchpairs" => self.board_matchpairs(rest),
             "autoplace" => self.board_autoplace(rest),
+            "lock" => self.board_lock(rest, true),
+            "unlock" => self.board_lock(rest, false),
             "pour" => self.board_pour(rest),
             "stitch" => self.board_stitch(rest),
             "fiducials" => self.board_fiducials(rest),
