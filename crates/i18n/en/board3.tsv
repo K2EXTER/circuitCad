@@ -195,3 +195,5 @@ PNG保存	Save PNG
 高さの目安: {hh:.1} mm	Estimated height: {hh:.1} mm
 ケースの高さを {o:.1} mm 超えています	{o:.1} mm over the case height
 3D表示から {} を選びました (基板エディタで選択中)	Selected {} from the 3D view (selected in the board editor)
+流れる電流から、必要な線幅を決めます。電流は、基板でネットの配線やパッドをクリックして出る窓か、「電流の一覧を別窓で開く」の窓で入れます	Find the trace width a current needs. Enter the current in the window that opens when you click a net's trace or pad on the board, or in the "Open current list in a window" window
+色の目安 (緑・橙・赤)	What the colors mean (green, orange, red)
