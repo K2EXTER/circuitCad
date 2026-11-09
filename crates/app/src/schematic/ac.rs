@@ -116,7 +116,7 @@ impl SchEditor {
                                 ui.end_row();
                                 ui.label(i18n::tr("-3dB点")).on_hover_text(i18n::tr("ゲインの最大値から 3dB (約 0.7倍) 下がる周波数です。フィルタの「カットオフ周波数」にあたります"));
                                 for (_, txt) in &corner {
-                                    ui.label(txt);
+                                    ui.label(i18n::tr_dyn(txt));
                                 }
                                 ui.end_row();
                             });

@@ -1,11 +1,13 @@
 ﻿# Regenerates the pictures used by README.md (docs/images/*.png) with the app's own --screenshot option:
 #   powershell -File tools/gen_screenshots.ps1               # all of them
 #   powershell -File tools/gen_screenshots.ps1 -Only waveform  # one (name without .png)
+#   powershell -File tools/gen_screenshots.ps1 -Lang en        # the English screen, into docs/images/en (README.en.md)
 # Needs a built app: cargo build -p app   (or -Exe path\to\circuitCad.exe, e.g. a release build).
 # Add a picture by adding a line to $shots: name, then the app's arguments (see crates/app/src/args.rs).
 param(
     [string]$Exe = "",
-    [string]$Only = ""
+    [string]$Only = "",
+    [string]$Lang = ""
 )
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -18,6 +20,10 @@ if (-not (Test-Path $Exe)) { throw "circuitCad.exe not found: $Exe (build it fir
 
 $ex = Join-Path $root "docs\examples"
 $out = Join-Path $root "docs\images"
+if ($Lang -ne "") {
+    $out = Join-Path $out $Lang
+    New-Item -ItemType Directory -Force $out | Out-Null
+}
 
 # name -> arguments (the file to open comes first)
 $shots = [ordered]@{
@@ -28,6 +34,7 @@ $shots = [ordered]@{
     "view3d"                 = @("$ex\mixed_signal.ccproj", "--3d")
     "order"                  = @("$ex\mixed_signal.ccproj", "--order")
     "guide"                  = @("--guide")
+    "lesson"                 = @("--lesson", "divider", "--dc")
     "mixed-signal-schematic" = @("$ex\mixed_signal.schjson")
     "mixed-signal-waveform"  = @("$ex\mixed_signal.schjson", "--tran", "8m", "10u", "--signals", "CLK,Q1,Q2,FILT")
 }
@@ -37,6 +44,7 @@ foreach ($name in $shots.Keys) {
     if ($Only -ne "" -and $name -ne $Only) { continue }
     $png = Join-Path $out "$name.png"
     $argv = @($shots[$name]) + @("--screenshot", $png)
+    if ($Lang -ne "") { $argv += @("--lang", $Lang) }
     $p = Start-Process -FilePath $Exe -ArgumentList $argv -PassThru
     if (-not $p.WaitForExit(120000)) {
         $p.Kill()

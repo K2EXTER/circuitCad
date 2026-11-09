@@ -79,7 +79,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - `docs/examples/*.schjson` サンプル回路 (説明と生成テストは `docs/code-notes/samples.md`)
 
 ## 配布 — 詳細: `docs/release-process.md`
-依存クレートを変えたら `python tools/gen_third_party_licenses.py` で `THIRD_PARTY_LICENSES.txt` を作り直す(CIが検査)。リリースはタグ `v*` で Windows 用の zip を作る。**タグを打つ前に `docs/release-notes/<タグ>.md` を置くこと**。READMEの画像は `tools/gen_screenshots.ps1`、操作録画は `tools/gen_demo_live.ps1` で作り直す。
+依存クレートを変えたら `python tools/gen_third_party_licenses.py` で `THIRD_PARTY_LICENSES.txt` を作り直す(CIが検査)。リリースはタグ `v*` で Windows 用の zip を作る。**タグを打つ前に `docs/release-notes/<タグ>.md` を置くこと**。READMEの画像は `tools/gen_screenshots.ps1`(英語の画面は `-Lang en` で `docs/images/en/` へ。README.en.md が使う)、操作録画は `tools/gen_demo_live.ps1` で作り直す。
 
 ## 規約
 - ボタン・入力欄には `on_hover_text` で説明を付ける。エラーメッセージは原因と対処が分かる日本語で。

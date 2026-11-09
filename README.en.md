@@ -6,17 +6,25 @@
 
 circuitCad combines schematic capture, SPICE-style simulation, PCB layout and Gerber export in a single desktop application. It is aimed at beginners who want to go from "learning a circuit" to "experimenting with it" to "ordering a real board" without switching tools.
 
-> **The user interface is in Japanese only.** Buttons, hints, lessons and error messages are all in Japanese, and there is no translation yet. This page is a summary for people who found the project from outside Japan. If you would like to see an English UI, please open an issue and tell us what you would use it for.
+> **English UI.** The whole interface (menus, hover help, error messages, the operation guide, the glossary, the learning paths and all lessons) can be shown in English: **Settings → Language / 言語 → English**, or start it with `--lang en`. The English text was translated with AI help from the Japanese original; if a sentence reads oddly, please open an issue (or fix the line in [`crates/i18n/en/`](crates/i18n/en/)).
+>
+> **The released zips up to `v0.1.0-alpha.9` are Japanese only.** The English mode is in `main` and will be in the next release; until then, [build from source](#build-from-source).
 
 [**Download for Windows**](https://github.com/K2EXTER/circuitCad/releases) (alpha, no installer: unzip and run `circuitCad.exe`)
 
-Project page (in Japanese, with screenshots and a demo video): <https://k2exter.github.io/circuitCad/>
+Project page (in Japanese, with a demo video): <https://k2exter.github.io/circuitCad/>
 
 > **Status: early alpha.** Mainly tested on Windows (Linux: lightly checked on WSL2 only). No board made with this software has been manufactured yet. See [Limitations](#limitations) before relying on it.
 
-![A screen recording (about 75 s): drawing a schematic, simulating it, importing it into a PCB, auto-routing, DRC and the 3D view. The UI is in Japanese.](docs/images/demo-live.gif)
+![A series regulator schematic with node voltages and branch currents overlaid on the wires (English UI)](docs/images/en/schematic-dc.png)
 
-![A series regulator schematic with node voltages and branch currents overlaid on the wires](docs/images/schematic-dc.png)
+| A lesson: predict first, then simulate | The operation guide (F1) |
+|---|---|
+| ![Lesson 1, "Dividing voltage": the lesson window asks for a prediction before the step is shown](docs/images/en/lesson.png) | ![The operation guide window with mouse and key operations](docs/images/en/guide.png) |
+
+A screen recording (about 75 s, Japanese UI): drawing a schematic, simulating it, importing it into a PCB, auto-routing, DRC and the 3D view.
+
+![A screen recording (about 75 s): drawing a schematic, simulating it, importing it into a PCB, auto-routing, DRC and the 3D view. The UI is in Japanese.](docs/images/demo-live.gif)
 
 ## Who it is for
 - People who are new to electronics and find tools like KiCad or LTspice intimidating.
@@ -39,19 +47,21 @@ Project page (in Japanese, with screenshots and a demo video): <https://k2exter.
 
 | Transient waveform | Bode plot (AC analysis) |
 |---|---|
-| ![Transient waveform of a 555 oscillator](docs/images/waveform.png) | ![AC analysis Bode plot](docs/images/bode.png) |
+| ![Transient waveform of a 555 oscillator](docs/images/en/waveform.png) | ![AC analysis Bode plot](docs/images/en/bode.png) |
 
 | Hand-routed board (41 parts, 249 tracks) | 3D view |
 |---|---|
-| ![PCB editor showing the mixed-signal demo board](docs/images/board.png) | ![3D view of the same board](docs/images/view3d.png) |
+| ![PCB editor showing the mixed-signal demo board](docs/images/en/board.png) | ![3D view of the same board](docs/images/en/view3d.png) |
 
-(Screenshots show the Japanese UI.)
+| Pre-order check |
+|---|
+| ![The "Prepare order" window: fab rules, pre-order checks and their explanations](docs/images/en/order.png) |
 
 | A board with the design requirements imported | The design-requirements table |
 |---|---|
 | ![PCB editor with frames for parts that go together, lines for distances, and a list of requirements not yet met](docs/images/requirements-board.png) | ![The design-requirements table: net roles, widths and currents, with the reason for each](docs/images/requirements-table.png) |
 
-These two show the author's work-in-progress milliohm meter (3 mΩ to 3 MΩ, 10 ranges, several sheets). Write what you want of the circuit in the table, and on the board it becomes checks for parts that go together, distances and track widths (some tracks are still unrouted and some requirements are not met yet). The design is not verified on hardware and uses makers' models, so its files are not included.
+These two (Japanese UI) show the author's work-in-progress milliohm meter (3 mΩ to 3 MΩ, 10 ranges, several sheets). Write what you want of the circuit in the table, and on the board it becomes checks for parts that go together, distances and track widths (some tracks are still unrouted and some requirements are not met yet). The design is not verified on hardware and uses makers' models, so its files are not included.
 
 ## Headless use (`ccad`)
 `ccad` runs circuitCad's calculations without opening a window. A script has **one command per line**: build a circuit by part and pin names, run ERC and analyses, make a board and export fabrication files. Every answer is one JSON object per line, so AI agents and automation can use it.
@@ -75,11 +85,12 @@ Save this as `led.ccad` and run `ccad led.ccad`. In the answer of `dc`, `element
 - The command list and the caveats are in [docs/cli.md](docs/cli.md) (Japanese).
 
 ## Try it in five minutes
-1. Download the zip from the [releases page](https://github.com/K2EXTER/circuitCad/releases), unzip it and run `circuitCad.exe`. Windows SmartScreen may warn about the unsigned executable: choose "More info" then "Run anyway".
-2. Open `docs/examples/regulator_led.schjson` from the file menu (a circuit that makes 5 V from 12 V and lights an LED).
-3. In the left panel, open the analysis tab and run the DC operating point. Voltages appear as wire colours and numbers, currents as arrows.
-4. Select a resistor and drag its value slider with auto-recalculation on; the result updates live.
-5. Open the lesson menu and try the first lesson.
+1. Download the zip from the [releases page](https://github.com/K2EXTER/circuitCad/releases), unzip it and run `circuitCad.exe`. Windows SmartScreen may warn about the unsigned executable: choose "More info" then "Run anyway". (For the English UI, build from source until the next release: see the note at the top.)
+2. Choose **Settings → Language / 言語 → English**. The setting is kept for the next start.
+3. **File → Open sample circuit → "Make 5V from 12V to light an LED"** (a three-terminal regulator circuit).
+4. In the left panel, open the **Analysis** tab and press **Run DC operating point**. Voltages appear as wire colours and numbers, currents as arrows.
+5. Select a resistor, turn on **Auto recalculate** and drag its value slider; the result updates live.
+6. Open **Learn → Learning path** and start with the first lesson.
 
 ## Build from source
 You need [Rust](https://www.rust-lang.org/).
@@ -89,9 +100,11 @@ cargo run -p app --release
 cargo test --workspace
 ```
 
-On Linux you also need GTK and related development packages (`libgtk-3-dev`, `libxkbcommon-dev`, `libwayland-dev`, ...). A Japanese font is loaded from the system at runtime, and a bundled one (BIZ UDGothic, SIL OFL 1.1) is used if none is found.
+Start it in English with `cargo run -p app --release -- --lang en` (or choose the language in the Settings menu once).
 
-A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in [docs/code-notes/](docs/code-notes/). These are written in Japanese (code and comments are in English).
+On Linux you also need GTK and related development packages (`libgtk-3-dev`, `libxkbcommon-dev`, `libwayland-dev`, ...). A Japanese font is loaded from the system at runtime, and a bundled one (BIZ UDGothic, SIL OFL 1.1) is used if none is found; in English mode Latin text uses Segoe UI on Windows (DejaVu Sans on Linux) when it is there.
+
+A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in [docs/code-notes/](docs/code-notes/). These are written in Japanese (code and comments are in English). How the English UI works, and how to add or fix a translation, is in [docs/code-notes/i18n.md](docs/code-notes/i18n.md) (Japanese): the Japanese text stays in the code as the key of the tables in `crates/i18n/en/*.tsv` (one `Japanese<TAB>English` per line).
 
 ## Limitations
 - **Tested mainly on Windows 10 / 11.** On Linux, the author built it, launched it and tried basic operation on WSL2 (Ubuntu 26.04, no GPU) only; other distributions and real hardware are untested, and you may need GTK and related runtime libraries. macOS builds and passes the tests in CI, but nobody has launched the app there yet.
@@ -99,12 +112,13 @@ A code map for contributors is in [CLAUDE.md](CLAUDE.md), with per-file notes in
 - **The simulator uses simplified models** and can differ noticeably from real hardware. Each lesson explains the differences.
 - **Part data and fabricator rules are approximate.** Always check the datasheet and the fabricator's current page. A part whose land pattern has not been checked against the datasheet is flagged `land_unverified`, and the pre-order check warns about it.
 - **Do not use it as the basis for safety-critical designs** (medical, automotive, high voltage, lithium-cell chargers, and so on).
+- **The English text is new** and was translated with AI help; some wording may be awkward, and a few messages built at run time may still appear in Japanese. Reports are welcome.
 - It is developed by a small team (mostly one person plus an AI assistant), so replies and fixes can be slow.
 
 Use at your own risk. No guarantee is made that a board designed with this software will work or can be manufactured.
 
 ## About how it was built
-Almost all of the code was written by Claude (via Claude Code); the maintainer operates the app, runs the tests and decides what to build. The write-up (in Japanese) is on [Zenn](https://zenn.dev/k2exter/articles/d54c59e62156c3).
+Almost all of the code was written by Claude (via Claude Code); the maintainer operates the app, runs the tests and decides what to build. The English UI text was also translated by Claude, from the Japanese original. The write-up (in Japanese) is on [Zenn](https://zenn.dev/k2exter/articles/d54c59e62156c3).
 
 ## Contributing
 Bug reports, suggestions and part additions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md). Issues in English are fine.

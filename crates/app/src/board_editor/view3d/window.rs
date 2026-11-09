@@ -124,12 +124,12 @@ impl BoardEditor {
             }
             let Some(scene) = &v.scene else { return };
             let (w, h) = (scene.hi.x - scene.lo.x, scene.hi.y - scene.lo.y);
-            let mut info = format!("基板 {w:.1} × {h:.1} × {BOARD_THICKNESS} mm");
+            let mut info = i18n::trf!("基板 {w:.1} × {h:.1} × {BOARD_THICKNESS} mm");
             if let Some((r, t)) = &scene.tallest[0] {
-                info += &format!(" / 表側の最も高い部品 {r} (基板の面から {t:.1} mm)");
+                info += &i18n::trf!(" / 表側の最も高い部品 {r} (基板の面から {t:.1} mm)");
             }
             if let Some((r, t)) = &scene.tallest[1] {
-                info += &format!(" / 裏側 {r} ({t:.1} mm)");
+                info += &i18n::trf!(" / 裏側 {r} ({t:.1} mm)");
             }
             ui.small(info);
             if v.check_height && v.case_w > 0.0 && v.case_d > 0.0 {
@@ -240,7 +240,7 @@ impl BoardEditor {
                 let font = egui::FontId::proportional(13.0);
                 let mut y = resp.rect.bottom() - 10.0;
                 for line in lines.iter().rev() {
-                    let g = painter.layout_no_wrap((*line).to_string(), font.clone(), Color32::WHITE);
+                    let g = painter.layout_no_wrap(i18n::tr(line).to_string(), font.clone(), Color32::WHITE);
                     let at = Pos2::new(resp.rect.left() + 12.0, y - g.size().y);
                     painter.rect_filled(Rect::from_min_size(at - Vec2::new(6.0, 3.0), g.size() + Vec2::new(12.0, 6.0)), 4.0, Color32::from_black_alpha(150));
                     y = at.y - 8.0;
