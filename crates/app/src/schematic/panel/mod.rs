@@ -18,6 +18,7 @@ const ANALYSIS_SECTIONS: &[(&str, &str, bool, &str)] = &[
     ("spec", "スペック (合否の表)", false, "作りたい回路の目標値 (出力電圧は 4.75〜5.25V、カットオフは 1kHz 前後など) を書いておくと、解析の結果が合格かどうかを ✓/× で表示します。値を変えるたびに判定がやり直されます"),
     ("selfheat", "自己発熱 (部品の温度上昇)", false, "電流が流れる抵抗は、自分の電力で温まります。温度がどれだけ上がるか、温度係数のある抵抗は値がどれだけ動くかを、熱抵抗 (K/W) から計算します。シャント抵抗や、精度が要る分圧の抵抗の確認に"),
     ("coverage", "モデルの前提 (何がわからないか)", false, "シミュレーションが計算に入れていない部品 (モデルがない)、汎用の標準値で計算している部品、モデルの注意書きをまとめて見ます。結果を信じてよい範囲が分かります"),
+    ("diagnose", "症状から原因を探す (故障診断)", false, "動かない回路で測った電圧から、どの部品がどう壊れているかを探します。起こりうる故障を全部計算して、測った値に合う順に並べ、次にどこを測ればよいかも教えます。実物の修理に使えます"),
     ("fault", "故障シミュレーション", false, "部品を壊した状態 (断線・ショート・逆向き・値の間違い・ピンの断線やブリッジ・電源の低下) で解析し、元の回路と比べます。「どこが壊れると危ないか」を、実物を壊さずに学べます"),
 ];
 
@@ -77,6 +78,7 @@ impl SchEditor {
                     if b.on_hover_text(if in_lesson { i18n::tr("レッスン中は、手順に出てくる欄を探せるように、すべて開いています") } else { tip }).clicked() {
                         self.sec_gen += 1;
                         self.sec_mode = if all_open { 2 } else { 1 };
+                        self.focus_section = None;
                     }
                 });
                 // what the results rest on: a part without a model is not in the calculation at all
@@ -90,7 +92,12 @@ impl SchEditor {
                 let (open_all, close_all) = (self.sec_mode == 1 || lesson, self.sec_mode == 2 && !lesson);
                 for (key, title, basic, hint) in ANALYSIS_SECTIONS {
                     let id = egui::Id::new(("analysis_section", *key, self.sec_gen, lesson));
-                    crate::widgets::section_header(ui, id, open_all || (*basic && !close_all), title, hint, |ui| {
+                    // a section asked for by name (command line) is the one open
+                    let open = match self.focus_section {
+                        Some(f) => *key == f,
+                        None => open_all || (*basic && !close_all),
+                    };
+                    crate::widgets::section_header(ui, id, open, title, hint, |ui| {
                         match *key {
                             "dc" => self.panel_dc(ui),
                             "tran" => self.panel_tran(ui),
@@ -99,6 +106,7 @@ impl SchEditor {
                             "param" => self.panel_param(ui),
                             "noise" => self.panel_noise(ui),
                             "psrr" => self.panel_psrr(ui),
+                            "diagnose" => self.panel_troubleshoot(ui),
                             "loopgain" => self.panel_loop(ui),
                             "impedance" => self.panel_z(ui),
                             "polezero" => self.panel_pz(ui),

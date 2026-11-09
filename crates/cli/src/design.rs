@@ -396,6 +396,51 @@ impl Session {
         Ok(obj(json!({"circuit_ok": gate.is_none(), "net": pos[0], "points": r.freq.len(), "per_decade": decades, "min_ohm": lo, "max_ohm": hi, "peaks_and_dips": extrema, "warnings": r.warnings.iter().cloned().chain(gate).collect::<Vec<_>>()})))
     }
 
+    /// `diagnose NET=V [NET=V ...] [rare] [top=8]`: which single fault explains voltages measured on a circuit that does not work,
+    /// and where to measure next.
+    pub fn diagnose(&mut self, args: &[String]) -> Res {
+        let usage = "diagnose NET=V [NET=V ...] [rare] [top=8]   (voltages measured against GND; every single fault is solved and matched; rare = also the faults that hardly ever happen)";
+        let mut readings = vec![];
+        let mut rare = false;
+        let mut top = 8usize;
+        for a in args {
+            if a.eq_ignore_ascii_case("rare") {
+                rare = true;
+                continue;
+            }
+            let Some((k, v)) = a.split_once('=') else { return Err(usage.into()) };
+            if k.eq_ignore_ascii_case("top") {
+                top = v.parse().map_err(|_| "top= takes a number".to_string())?;
+                continue;
+            }
+            let volts = sim_core::parse_value(v).ok_or_else(|| format!("'{v}' is not a voltage (write 4.93, 50m ...)"))?;
+            readings.push(sim_core::Reading { node: k.trim().trim_start_matches("V(").trim_end_matches(')').to_string(), volts });
+        }
+        if readings.is_empty() {
+            return Err(usage.into());
+        }
+        let gate = self.erc_gate()?;
+        let hyps = sim_core::fault_hypotheses(&self.sch, 27.0, rare).map_err(|e| e.to_string())?;
+        let d = sim_core::troubleshoot(&hyps, &readings);
+        let name = |i: usize| if hyps[i].element.is_empty() { hyps[i].label.clone() } else { format!("{} {}", hyps[i].element, hyps[i].label) };
+        let suspects: Vec<Value> = d
+            .suspects
+            .iter()
+            .take(top)
+            .map(|s| json!({"fault": name(s.index), "part": hyps[s.index].element, "probability": (s.probability * 1000.0).round() / 1000.0, "fits": s.worst_miss <= 3.0,
+                "predicted": s.fit.iter().map(|(n, p, _)| (n.clone(), json!(p))).collect::<serde_json::Map<String, Value>>()}))
+            .collect();
+        let next: Vec<Value> = d
+            .next
+            .iter()
+            .map(|n| json!({"net": n.node, "candidates_left": (n.left_after * 100.0).round() / 100.0, "predictions": n.predictions.iter().map(|(i, v)| json!({"fault": name(*i), "volts": v})).collect::<Vec<_>>()}))
+            .collect();
+        Ok(obj(json!({"circuit_ok": gate.is_none(), "faults_tried": hyps.len() - 1, "suspects": suspects, "candidates_left": (d.left * 100.0).round() / 100.0, "measure_next": next,
+            "unexplained": d.unexplained, "unknown_nets": d.unknown_nodes,
+            "note": "one fault at a time, DC only; probability = fit to the readings (spread 20 mV + 2 %) weighted by how often the fault happens",
+            "warnings": gate.into_iter().collect::<Vec<_>>()})))
+    }
+
     /// `psrr NET F0 F1 [supply=V1] [ppd=10]`: how much of a ripple on one supply reaches NET (every other AC source is silenced).
     pub fn psrr(&mut self, args: &[String]) -> Res {
         let (pos, kv) = options(args);

@@ -42,6 +42,7 @@ pub(crate) mod tran;
 mod worstcase;
 mod sensitivity;
 mod psrr;
+mod troubleshoot;
 #[cfg(not(test))]
 mod tran;
 mod value;
@@ -51,6 +52,7 @@ pub use coverage::{model_coverage, ModelCoverage, PartNote};
 pub use ac::{ac_analysis, AcResult, AcSettings, AcSignal, AcSweep, C64};
 pub use expr::Expr;
 pub use loopgain::{loop_gain, BreakDirection, LoopGain};
+pub use troubleshoot::{diagnose as troubleshoot, hypotheses as fault_hypotheses, spread as reading_spread, Diagnosis, Hypothesis, NextPoint, Reading, Suspect};
 pub use psrr::{psrr_summary, supply_sources, with_supply_ripple, PsrrSummary};
 pub use sensitivity::{sensitivity, SensPart, SensSettings, Sensitivity};
 pub use worstcase::{worst_case, WcPart, WcSettings, WorstCase};

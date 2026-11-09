@@ -2075,3 +2075,28 @@ save {}
     assert!(w.get("specs").is_none() && w.get("tolerances").is_none());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn diagnose_names_the_open_resistor_and_the_point_that_tells_it_apart() {
+    // 10 V, R1 10k to MID, R2 10k to GND, R3 1k MID→OUT, R4 10k OUT→GND; OUT measured dead
+    let (a, ok) = run("new
+add V 10 as=V1
+add R 10k as=R1
+add R 10k as=R2
+add R 1k as=R3
+add R 10k as=R4
+net VIN V1.+ R1.1
+net MID R1.2 R2.1 R3.1
+net OUT R3.2 R4.1
+net GND V1.- R2.2 R4.2
+diagnose OUT=0
+diagnose OUT=0 MID=5
+");
+    assert!(ok, "{a:?}");
+    let first = &a[a.len() - 2];
+    let faults: Vec<&str> = first["suspects"].as_array().unwrap().iter().take(3).map(|s| s["fault"].as_str().unwrap()).collect();
+    assert!(faults.iter().any(|f| f.starts_with("R1")) && faults.iter().any(|f| f.starts_with("R3")), "{faults:?}");
+    assert!(first["measure_next"].as_array().unwrap().iter().take(2).any(|n| n["net"] == "MID"), "{first}");
+    let second = a.last().unwrap();
+    assert!(second["suspects"][0]["fault"].as_str().unwrap().starts_with("R3"), "{second}");
+}

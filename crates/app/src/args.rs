@@ -248,6 +248,13 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
                 app.sch.set_psrr_settings(if src == "-" { "" } else { src }, out);
                 app.sch.analyze_psrr();
             }
+        if let Some(i) = args.iter().position(|a| a == "--diagnose")
+            && let Some(r) = args.get(i + 1) {
+                // --diagnose NODE=V,NODE=V  (the readings; the faults are solved here, then matched)
+                app.sch.set_diag_readings(r);
+                app.sch.analyze_diagnosis();
+                app.sch.show_analysis_section("diagnose");
+            }
         if let Some(i) = args.iter().position(|a| a == "--sens")
             && let Some(node) = args.get(i + 1) {
                 // --sens <node> [ac]  (sensitivity: every part moved by 1 %; AC measures the -3 dB frequency with the --ac range)

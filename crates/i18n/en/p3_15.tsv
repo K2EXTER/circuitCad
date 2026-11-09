@@ -68,3 +68,40 @@ LTspice の回路図 (.asc) を取り込みます。並べ直しとネットの�
 ツェナーで 5.1V を作る回路に、電流源 I1 (負荷) とコンデンサ C1 を足したもの。I1 は 1ms で 0 → 10mA に増え、2ms 後に戻ります。「過渡解析を実行」して、波形の左の「負荷の急変 (落ち込みと戻り)」を開くと、電圧がどれだけ下がるか (約 77mV、ツェナーの内部抵抗の分) と、戻るまでの時間が出ます。C1 を 100u にすると、ゆっくり下がるようになりますが、落ち着く先は同じです	A zener making 5.1V, with a current source I1 (the load) and a capacitor C1 added. I1 rises from 0 to 10mA at 1ms and drops back 2ms later. "Run transient analysis" and open "Load step (dip and recovery)" left of the waveform: it shows how far the voltage drops (about 77mV, from the zener's internal resistance) and how long it takes to settle. With C1 at 100u it drops more slowly, but settles at the same voltage
 負荷が急に変わったときの電圧	The voltage when the load changes at once
 電流源 (部品の一覧の「電流源」) の値を PULSE にして出力につなぎ、過渡解析します。波形の左の「負荷の急変 (落ち込みと戻り)」に、落ち込み・落ち着いた先・戻るまでの時間が出ます	Connect a current source ("Current source" in the parts list) set to PULSE to the output and run the transient analysis. "Load step (dip and recovery)" left of the waveform shows the dip, where it settles and how long it takes
+# troubleshooting (app/schematic/troubleshoot.rs, sim-core/troubleshoot.rs)
+回路を計算できないため、故障を試せません: {e}	The circuit cannot be computed, so faults cannot be tried: {e}
+{node} の電圧「{v}」を数値にできません (4.93 や 50m のように書きます)	The voltage "{v}" of {node} is not a number (write it like 4.93 or 50m)
+測った点と電圧を 1 つ以上入れてください	Enter at least one measured point and its voltage
+故障診断: いちばん疑わしいのは {} ({:.0}%)	Troubleshooting: the likeliest is {} ({:.0}%)
+故障診断: 1 つの故障ではうまく説明できません	Troubleshooting: no single fault explains it well
+故障診断: 起こりうる故障を全部計算しています…	Troubleshooting: computing every possible fault…
+動かない回路で、テスターで測った電圧 (GND から) を入れます。起こりうる故障を 1 つずつ全部計算して、測った値をいちばんよく説明する故障を探し、次に測るとよい点を教えます	Enter the voltages measured (from GND) with a meter on a circuit that does not work. Every possible fault is computed one by one; the faults that explain the readings best are listed, with the point worth measuring next
+点を選ぶ	Pick a point
+その点の電圧 (V)。4.93 や 50m のように書きます	The voltage at that point (V), written like 4.93 or 50m
++ 測った点	+ Measured point
+測った点を 1 行足します	Adds a row for a measured point
+スペック表の実測から	From the spec table
+スペック表の DC電圧の行に入れた実測を、測った点として取り込みます (何枚か入れてあるときは 1 枚目)	Takes the readings typed into the DC voltage rows of the spec table as measured points (the first board when there are several)
+値が 10 倍になる・逆向きにつないだ、など、めったに起きない故障も候補に入れます (小さな重みで)	Also considers faults that hardly ever happen, such as a value ten times off or a part put in backwards (with a small weight)
+計算中…	Computing…
+原因の候補を探す	Find the likely causes
+はじめは、起こりうる故障を全部計算します (大きな回路では時間がかかります)。2 回目からは、測った値を変えてもすぐ答えが出ます	The first time, every possible fault is computed (this takes a while on a large circuit). After that, changed readings are answered at once
+ (ほか {} 通り)	 (and {} more ways)
+{n} という点は回路にありません	The circuit has no point called {n}
+どの故障 1 つでも、測った値をうまく説明できません。故障が 2 つ以上ある・測り間違い (テスターの GND の当て先)・モデルが実物と違う、を疑います	No single fault explains the readings well. Suspect two or more faults, a measuring mistake (where the meter's ground lead is), or a model that differs from the real part
+疑わしい順	Likeliest first
+測った値に合う度合いと、その故障の起こりやすさ (よくある・ときどき・まれ) から出した割合です。クリックすると、回路図でその部品を選びます	A share worked out from how well the fault fits the readings and how often it happens (common, occasional, rare). Click to select the part on the schematic
+{n}: この故障なら {} / 測った値 {}	{n}: {} with this fault / {} measured
+次に測るとよい点: {} (候補が約 {:.1} 個に絞れます)	Measure next: {} (narrows it to about {:.1} candidates)
+いまの候補が、この点ではそれぞれ違う電圧になるので、測ると見分けられます	The present candidates give different voltages here, so measuring it tells them apart
+  {} なら {}	  {}: {}
+ほかの候補: {}	Other points: {}
+これ以上は DC の電圧では見分けられません。部品を外して測る・抵抗値を測る・波形を見る、などで確かめます	DC voltages cannot tell them apart any further. Check by taking a part out and measuring it, measuring a resistance, or looking at the waveforms
+候補はほぼ 1 つに絞れました。その部品を外して確かめるか、交換してみましょう	It is narrowed down to about one candidate. Take that part out and check it, or replace it
+症状から原因を探す (故障診断)	Find the cause from the symptoms (troubleshooting)
+動かない回路で測った電圧から、どの部品がどう壊れているかを探します。起こりうる故障を全部計算して、測った値に合う順に並べ、次にどこを測ればよいかも教えます。実物の修理に使えます	From voltages measured on a circuit that does not work, finds which part is broken and how. Every possible fault is computed and ranked by how well it fits, and it says where to measure next. Useful for repairing real circuits
+動かない回路の原因	Why a circuit does not work
+症状から原因を探す (故障診断)。テスターで測った電圧を入れると、起こりうる故障を全部計算して、合う順に並べ、次に測るとよい点を教えます	Find the cause from the symptoms (troubleshooting). Enter voltages measured with a meter: every possible fault is computed and ranked by fit, with the point worth measuring next
+故障なし	No fault
+ピン {pin} ({n}) を断線	Pin {pin} ({n}) open
+ピン {pin} を断線	Pin {pin} open

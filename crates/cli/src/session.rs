@@ -82,6 +82,9 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]
                                         Monte Carlo: parts drawn at random inside their tolerance; mean, std, the 95 % range a few built
                                         boards should land in, a histogram, the parts that matter; lo=/hi= give the share inside the limits
+  diagnose NET=V [NET=V ...] [rare] [top=8]
+                                        troubleshooting: which single fault explains voltages measured on a circuit that does
+                                        not work (every fault solved, ranked by fit and how often it happens), and where to measure next
   psrr NET FSTART FSTOP [supply=V1] [ppd=10]
                                         supply rejection: a 1 V ripple on one DC supply alone (the first one if not named), the share
                                         that reaches NET per decade (dB) and the rejection at 100 Hz, 1 kHz ...; the worst frequency
@@ -304,6 +307,7 @@ impl Session {
             "noise" => self.noise(args),
             "zout" => self.zout(args),
             "psrr" => self.psrr(args),
+            "diagnose" => self.diagnose(args),
             "loopgain" => self.loopgain(args),
             "pz" => self.pz(args),
             "worst" => self.worst(args),

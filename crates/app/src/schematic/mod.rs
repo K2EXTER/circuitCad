@@ -273,6 +273,8 @@ pub struct SchEditor {
     wiz_in: Vec<String>,
     /// Analysis sections of the "解析" tab: a generation counter (bumped by the buttons to reset them) and how they start: 0 = the basics open, 1 = all open, 2 = all closed.
     sec_gen: u32,
+    /// The one analysis section opened by name (command line); None = the usual open / closed.
+    focus_section: Option<&'static str>,
     /// What the simulation leaves out (`sim_core::model_coverage`), kept for the schematic revision it was made for.
     /// The last self-heating run (the section "自己発熱") and the surrounding temperature typed for it.
     heat_view: Option<Result<selfheat::HeatView, String>>,
@@ -315,6 +317,8 @@ pub struct SchEditor {
     fault_scan: Vec<fault::ScanRow>,
     /// The scan of every part also tries the faults that hardly ever happen.
     scan_rare: bool,
+    /// "症状から原因を探す": the readings and the solved faults.
+    diag: troubleshoot::DiagState,
     /// The "break every part" scan while it runs on its own thread.
     scan_run: Option<fault::ScanRun>,
     fault_chain: Option<Result<sim_core::ChainReport, Vec<String>>>,
@@ -630,6 +634,7 @@ impl Default for SchEditor {
             wiz_kind: 0,
             wiz_in: vec![],
             sec_gen: 0,
+            focus_section: None,
             heat_view: None,
             heat_ambient: "27".into(),
             htran: None,
@@ -658,6 +663,7 @@ impl Default for SchEditor {
             fault_view: None,
             fault_scan: vec![],
             scan_rare: false,
+            diag: Default::default(),
             scan_run: None,
             fault_chain: None,
             sweep_src: String::new(),
@@ -761,6 +767,7 @@ mod variation;
 mod sensitivity;
 mod tolerance;
 mod psrr;
+mod troubleshoot;
 mod tran;
 mod dc;
 mod library;

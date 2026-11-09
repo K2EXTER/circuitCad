@@ -29,7 +29,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 ## sim-core (`crates/sim-core/src`) — 詳細: `docs/code-notes/sim-core.md`(目次。ファイル一覧は `sim-core/files.md`)
 - 動作点 `dc/`(build・devices・mna・newton・linalg・digital)/ 過渡 `tran.rs` / `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs`(FFT・THD)/ `temperature.rs`
 - 回路図→素子 `from_schematic.rs`(新しい部品種別はここ)/ `spice_in.rs` ライブラリ読込 / `spice_flat.rs` ベンダー形式のSPICE文の展開 / `expr.rs` 式の評価 / `netcurrent.rs` ネットごとの電流 / `dc/seq.rs` 記憶つき素子 / `waveform.rs` / `value.rs` / `options.rs` / `par.rs` 並列 / `diagnose.rs` 失敗時の原因
-- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `loopgain` `polezero` `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage`
+- 解析: `paramsweep` `montecarlo` `worstcase` `sensitivity` `psrr` `troubleshoot` `loopgain` `polezero` `impedance` `measure` `stepmetrics` `power` `spec` `ratings` `ripple` `fault` `chain` `coverage`
 - 熱: `selfheat.rs` 自己発熱 / `heat_tran.rs` 温度の時間変化
 - `designcalc.rs` 値の計算(足すときは `schematic/wizard.rs` の `CALCS` と `cli/src/design.rs` の `CALCS` にも)
 - `tests_*.rs` は機能別
@@ -58,7 +58,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 
 エディタは1つの型を複数ファイルの `impl` に分割している(子モジュールから親の非公開フィールドが見える)。
 
-- `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel/`(`mod` ツール・ERC・フォーム / `parts` 部品一覧 / `properties` 選択部品の設定)`analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`svg`・`pdf`(回路図の書き出し)`requirements`(設計の要件の窓)`bench_data`(実測を波形に重ねる)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `sensitivity` `psrr` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
+- `schematic/`(`SchEditor`): `mod.rs` 型 / `canvas` `draw` `interact` `symbols` 描画と操作 / `panel/`(`mod` ツール・ERC・フォーム / `parts` 部品一覧 / `properties` 選択部品の設定)`analysis_panel` `hint` 左パネル / `edit` `stretch` `history` `file` `clipboard` `snippet` `sheets_ui` `hierarchy_ui` `title_block`(図枠)`svg`・`pdf`(回路図の書き出し)`requirements`(設計の要件の窓)`bench_data`(実測を波形に重ねる)`quick` `library` `settings` `glyphs` `erc_skip` `net_hints` `kicad_import` `result_tables` `linked`/ 各解析 `dc` `tran` `ac` `sweep` `noise` `wave` `fault` `param` `variation` `sensitivity` `psrr` `troubleshoot` `spec_table` `power_ui` `selfheat*` / 学習 `lessons/` `challenge/` `wizard.rs`
 - `board_editor/`(`BoardEditor`): `mod.rs` 型 / `canvas` `interact` `draw` `panel` / `select` `route` `tools` `ribbon` `padlead` `livepath` `tracking` `shoving` / `align` `lengths` `pairs` `layers` `netclass` `netwindow` `currentwindow` `nettable`(ネットの一覧の窓) `zoneedit` `repair` `ruler` `measure`(距離を測るツール)`dimensions`(寸法線)`livedrc`(作業中の点検)`keepouts`(禁止領域のツール)`snippet``smoothing` `linked` `netglow` `width` `order` / `file` `actions` `history` `view` / `view3d/`(camera・scene・glow)と `raster3d.rs`(3D)/ `requirements.rs`
 
 ## 「〜を変えたい」早見表
