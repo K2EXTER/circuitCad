@@ -77,6 +77,11 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
                                         sensitivity: moves each part's value by step % and says how far the probe moves (per_percent,
                                         elasticity), the biggest first; names the parts that decide an accuracy
                                         the DC point for a range of values of one part (a V source, R, C, L): one row per value; the part keeps its value
+  worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]
+                                        worst case: the smallest and largest value of one result with every part at an end of its tolerance (%)
+  mc NET [measure=dc|cutoff|rise|...] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=]
+                                        Monte Carlo: parts drawn at random inside their tolerance; mean, std, the 95 % range a few built
+                                        boards should land in, a histogram, the parts that matter; lo=/hi= give the share inside the limits
   noise OUT[,REF] FSTART FSTOP [ppd=10] [input=V1] [temp=27] [top=8]
                                         thermal / shot noise at net OUT (or the difference OUT,REF): rms over the band,
                                         density per decade, the biggest contributors; input=V1 also refers it to that source
@@ -271,6 +276,7 @@ impl Session {
             "loopgain" => self.loopgain(args),
             "pz" => self.pz(args),
             "worst" => self.worst(args),
+            "mc" => self.mc(args),
             "thd" => self.thd(args),
             "models" | "murata" => self.models(args),
             "calc" => self.calc(args),

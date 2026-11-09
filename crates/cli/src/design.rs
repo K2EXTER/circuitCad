@@ -46,6 +46,47 @@ const CALCS: &[(&str, &str, &[&str], Run)] = &[
     ("zener", "series resistor of a zener regulator", &["vin_V", "vz_V", "load_mA", "iz_min_mA"], |v| sim_core::zener_regulator(v[0], v[1], v[2], v[3])),
 ];
 
+/// The options `worst` and `mc` share: `tol_r= tol_c= tol_l= tol_v=` (percent) and `measure=` with its `f=` / `tran=` range.
+/// Tolerances come back as fractions.
+fn tolerances_and_measure(kv: &[(String, String)], ppd: usize) -> Result<(f64, f64, f64, f64, sim_core::McMeasure), String> {
+    use sim_core::{McMeasure, TranMetric};
+    let tol = |key: &str, default: f64| -> Result<f64, String> {
+        match opt(kv, key) {
+            Some(s) => s.parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0).ok_or_else(|| format!("{key}={s}: a percentage from 0 to 100 (5 = ±5 %)")),
+            None => Ok(default / 100.0),
+        }
+    };
+    let pair = |key: &str, default: (f64, f64)| -> Result<(f64, f64), String> {
+        match opt(kv, key) {
+            Some(s) => {
+                let (a, b) = s.split_once(':').ok_or_else(|| format!("{key}={s}: write two values with a colon (like 10:1Meg)"))?;
+                Ok((sim_core::parse_value(a).ok_or_else(|| format!("{key}: '{a}' is not a number"))?, sim_core::parse_value(b).ok_or_else(|| format!("{key}: '{b}' is not a number"))?))
+            }
+            None => Ok(default),
+        }
+    };
+    let how = opt(kv, "measure").unwrap_or("dc").to_ascii_lowercase();
+    let measure = match how.as_str() {
+        "dc" => McMeasure::DcVoltage,
+        "cutoff" => {
+            let (f0, f1) = pair("f", (10.0, 1e6))?;
+            McMeasure::Cutoff { fstart: f0, fstop: f1, points_per_decade: ppd }
+        }
+        "rise" | "overshoot" | "settle" | "final" => {
+            let (tstop, tstep) = pair("tran", (10e-3, 10e-6))?;
+            let metric = match how.as_str() {
+                "rise" => TranMetric::RiseTime,
+                "overshoot" => TranMetric::Overshoot,
+                "settle" => TranMetric::SettlingTime,
+                _ => TranMetric::FinalValue,
+            };
+            McMeasure::Tran { tstop, tstep, uic: false, metric }
+        }
+        other => return Err(format!("measure={other}: use dc, cutoff, rise, overshoot, settle or final")),
+    };
+    Ok((tol("tol_r", 1.0)?, tol("tol_c", 10.0)?, tol("tol_l", 10.0)?, tol("tol_v", 0.0)?, measure))
+}
+
 fn round6(x: f64) -> f64 {
     format!("{x:.6e}").parse().unwrap_or(x)
 }
@@ -151,45 +192,10 @@ impl Session {
     /// `worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]`:
     /// the smallest and the largest value one result can take when every part sits at an end of its tolerance.
     pub fn worst(&mut self, args: &[String]) -> Res {
-        use sim_core::{McMeasure, TranMetric};
         let (pos, kv) = options(args);
         let usage = "worst NET [measure=dc|cutoff|rise|overshoot|settle|final] [tol_r=1] [tol_c=10] [tol_l=10] [tol_v=0] [f=10:1Meg] [tran=10m:10u] [top=8]   (tolerances in percent; NET is the net measured)";
         let net = pos.first().ok_or_else(|| usage.to_string())?.trim().to_string();
-        let tol = |key: &str, default: f64| -> Result<f64, String> {
-            match opt(&kv, key) {
-                Some(s) => s.parse::<f64>().ok().filter(|v| (0.0..100.0).contains(v)).map(|v| v / 100.0).ok_or_else(|| format!("{key}={s}: a percentage from 0 to 100 (5 = ±5 %)")),
-                None => Ok(default / 100.0),
-            }
-        };
-        let (tol_r, tol_c, tol_l, tol_v) = (tol("tol_r", 1.0)?, tol("tol_c", 10.0)?, tol("tol_l", 10.0)?, tol("tol_v", 0.0)?);
-        let pair = |key: &str, default: (f64, f64)| -> Result<(f64, f64), String> {
-            match opt(&kv, key) {
-                Some(s) => {
-                    let (a, b) = s.split_once(':').ok_or_else(|| format!("{key}={s}: write two values with a colon (like 10:1Meg)"))?;
-                    Ok((sim_core::parse_value(a).ok_or_else(|| format!("{key}: '{a}' is not a number"))?, sim_core::parse_value(b).ok_or_else(|| format!("{key}: '{b}' is not a number"))?))
-                }
-                None => Ok(default),
-            }
-        };
-        let how = opt(&kv, "measure").unwrap_or("dc").to_ascii_lowercase();
-        let measure = match how.as_str() {
-            "dc" => McMeasure::DcVoltage,
-            "cutoff" => {
-                let (f0, f1) = pair("f", (10.0, 1e6))?;
-                McMeasure::Cutoff { fstart: f0, fstop: f1, points_per_decade: 50 }
-            }
-            "rise" | "overshoot" | "settle" | "final" => {
-                let (tstop, tstep) = pair("tran", (10e-3, 10e-6))?;
-                let metric = match how.as_str() {
-                    "rise" => TranMetric::RiseTime,
-                    "overshoot" => TranMetric::Overshoot,
-                    "settle" => TranMetric::SettlingTime,
-                    _ => TranMetric::FinalValue,
-                };
-                McMeasure::Tran { tstop, tstep, uic: false, metric }
-            }
-            other => return Err(format!("measure={other}: use dc, cutoff, rise, overshoot, settle or final")),
-        };
+        let (tol_r, tol_c, tol_l, tol_v, measure) = tolerances_and_measure(&kv, 50)?;
         let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
         let gate = self.erc_gate()?;
         let c = self.circuit()?;
@@ -205,6 +211,70 @@ impl Session {
             "parts": parts, "unsolved_parts": w.unsolved,
             "meaning": "min/max are solved circuits with every part at one end of its tolerance (+ = high end, - = low end); likely_at_worst treats the parts as independent",
             "warnings": gate.into_iter().collect::<Vec<_>>()
+        })))
+    }
+
+    /// `mc NET [measure=dc|cutoff|rise|overshoot|settle|final] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50]
+    /// [tran=10m:10u] [lo=] [hi=] [bins=10] [top=8]`: Monte Carlo. Every resistor, capacitor and coil is drawn at random inside its
+    /// tolerance (uniformly), the circuit solved each time, and the spread of one result reported, with the 95 % range a few built
+    /// boards should fall in.
+    pub fn mc(&mut self, args: &[String]) -> Res {
+        let (pos, kv) = options(args);
+        let usage = "mc NET [measure=dc|cutoff|rise|overshoot|settle|final] [runs=1000] [seed=1] [tol_r=1] [tol_c=10] [tol_l=10] [f=10:1Meg] [ppd=50] [tran=10m:10u] [lo=] [hi=] [bins=10] [top=8]   (tolerances in percent; NET is the net measured)";
+        let net = pos.first().ok_or_else(|| usage.to_string())?.trim().to_string();
+        if opt(&kv, "tol_v").is_some() {
+            return Err("tol_v= is not used by mc (only resistors, capacitors and coils are drawn at random); use 'worst ... tol_v=' for the supply".into());
+        }
+        let ppd: usize = match opt(&kv, "ppd") {
+            Some(s) => s.parse().ok().filter(|v| (1..=1000).contains(v)).ok_or_else(|| format!("ppd={s}: points per decade, 1 to 1000"))?,
+            None => 50,
+        };
+        let (tol_r, tol_c, tol_l, _, measure) = tolerances_and_measure(&kv, ppd)?;
+        let runs: usize = match opt(&kv, "runs") {
+            Some(s) => s.parse().ok().filter(|v| (1..=20_000).contains(v)).ok_or_else(|| format!("runs={s}: 1 to 20000"))?,
+            None => 1000,
+        };
+        let seed: u64 = match opt(&kv, "seed") {
+            Some(s) => s.parse().map_err(|_| format!("seed={s}: a whole number (the same seed gives the same draws)"))?,
+            None => 1,
+        };
+        let limit = |key: &str| -> Result<Option<f64>, String> {
+            opt(&kv, key).map(|s| sim_core::parse_value(s).ok_or_else(|| format!("{key}={s} is not a number (write 3.2, 650, 1k ...)"))).transpose()
+        };
+        let (lo, hi) = (limit("lo")?, limit("hi")?);
+        let bins: usize = opt(&kv, "bins").and_then(|s| s.parse().ok()).unwrap_or(10).clamp(1, 100);
+        let top: usize = opt(&kv, "top").and_then(|s| s.parse().ok()).unwrap_or(8).clamp(1, 100);
+        let gate = self.erc_gate()?;
+        let c = self.circuit()?;
+        let r = sim_core::monte_carlo(&c, &sim_core::McSettings { runs, seed, tol_r, tol_c, tol_l, output: net, measure }).map_err(|e| e.to_string())?;
+        let st = r.stats().ok_or("no run gave an answer (every random circuit failed to solve); try fewer runs or smaller tolerances")?;
+        let mut v = r.values.clone();
+        v.sort_by(f64::total_cmp);
+        let q = |p: f64| v[((v.len() - 1) as f64 * p).round() as usize];
+        let (h_lo, h_hi, counts) = r.histogram(bins);
+        let inside = (lo.is_some() || hi.is_some()).then(|| {
+            let n = v.iter().filter(|x| lo.is_none_or(|l| **x >= l) && hi.is_none_or(|h| **x <= h)).count();
+            round6(n as f64 / v.len() as f64 * 100.0)
+        });
+        let pct = |x: f64| if r.nominal.abs() > 1e-30 { Some(round6((x - r.nominal) / r.nominal.abs() * 100.0)) } else { None };
+        let sens: Vec<Value> = r.sensitivity.iter().filter(|(_, d)| *d != 0.0).take(top).map(|(n, d)| json!({"part": n, "change_at_high_end": d})).collect();
+        let mut warnings: Vec<String> = gate.into_iter().collect();
+        if r.failed > 0 {
+            warnings.push(format!("{} of {runs} random circuits did not solve and are left out", r.failed));
+        }
+        if c.elements.iter().any(|e| !matches!(e, sim_core::Element::Resistor { .. } | sim_core::Element::Capacitor { .. } | sim_core::Element::Inductor { .. } | sim_core::Element::VSource { .. } | sim_core::Element::ISource { .. })) {
+            warnings.push("only resistors, capacitors and coils are drawn at random: the spread of diodes, transistors and ICs (a regulator's output voltage, a diode's forward voltage) and of the supplies is not in this range".into());
+        }
+        Ok(obj(json!({
+            "net": r.output, "unit": r.unit, "runs": runs, "solved": r.values.len(), "seed": seed,
+            "tolerance_percent": {"r": round6(tol_r * 100.0), "c": round6(tol_c * 100.0), "l": round6(tol_l * 100.0)},
+            "nominal": r.nominal, "mean": st.mean, "std": st.std, "min": st.min, "max": st.max,
+            "range_95": [q(0.025), q(0.975)], "range_95_percent_from_nominal": [pct(q(0.025)), pct(q(0.975))],
+            "within_limits_percent": inside,
+            "histogram": {"from": h_lo, "to": h_hi, "counts": counts},
+            "parts": sens,
+            "meaning": "each part is drawn uniformly inside its tolerance; range_95 holds the middle 95 % of the runs (a few built boards should land there); parts = how far the result moves when only that part is at the high end of its tolerance, the biggest first; within_limits_percent = share of runs inside lo..hi",
+            "warnings": warnings
         })))
     }
 

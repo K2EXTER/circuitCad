@@ -771,6 +771,39 @@ worst mid measure=nope
 }
 
 #[test]
+fn mc_spreads_a_divider_inside_its_worst_case_and_repeats_with_the_same_seed() {
+    let (a, ok) = run("new
+add V 5 as=V1
+add R 10k as=R1
+add R 10k as=R2
+net VIN V1.+ R1.1
+net MID R1.2 R2.1
+net GND V1.- R2.2
+erc
+mc mid tol_r=1 runs=500 lo=2.49 hi=2.51
+mc mid tol_r=1 runs=500 lo=2.49 hi=2.51
+mc mid tol_v=5
+");
+    assert!(!ok);
+    let rows: Vec<&Value> = a.iter().filter(|v| v.get("range_95").is_some()).collect();
+    assert_eq!(rows.len(), 2, "{a:?}");
+    let m = rows[0];
+    assert_eq!(m["solved"], 500, "{m}");
+    // every draw stays inside the worst case of 1 % resistors (2.475 ... 2.525 V) and is not all at the nominal
+    let (min, max) = (m["min"].as_f64().unwrap(), m["max"].as_f64().unwrap());
+    assert!(min >= 2.475 - 1e-9 && max <= 2.525 + 1e-9 && max - min > 0.02, "{m}");
+    let r95 = m["range_95"].as_array().unwrap();
+    assert!(r95[0].as_f64().unwrap() < 2.5 && r95[1].as_f64().unwrap() > 2.5, "{m}");
+    let inside = m["within_limits_percent"].as_f64().unwrap();
+    assert!(inside > 50.0 && inside < 100.0, "{m}");
+    assert_eq!(m["histogram"]["counts"].as_array().unwrap().iter().map(|c| c.as_u64().unwrap()).sum::<u64>(), 500);
+    assert_eq!(m["parts"].as_array().unwrap().len(), 2, "{m}");
+    // the same seed gives the same draws
+    assert_eq!(rows[0]["mean"], rows[1]["mean"]);
+    assert!(a.last().unwrap()["error"].as_str().unwrap().contains("tol_v"));
+}
+
+#[test]
 fn thd_reads_a_clipped_sine_and_asks_for_tran_first() {
     let head = "new
 add V 0 as=V1
