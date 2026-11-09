@@ -45,6 +45,10 @@ pub enum Kind {
     Ground,
     /// Power symbol; the value is the net name (VCC, +5V, ...).
     Power,
+    /// Current source, for the simulation only (a test load, a bias current, a light-driven current): a positive value pushes
+    /// current out of pin + into the circuit, and it comes back in at pin -, the way a battery's current flows. It is placed as
+    /// simulation-only (no part on the board).
+    ISource,
 }
 
 impl Kind {
@@ -55,6 +59,7 @@ impl Kind {
         Kind::Diode,
         Kind::Led,
         Kind::VSource,
+        Kind::ISource,
         Kind::Npn,
         Kind::Header(2),
         Kind::Header(4),
@@ -70,6 +75,7 @@ impl Kind {
             Kind::Diode => "ダイオード".into(),
             Kind::Led => "LED".into(),
             Kind::VSource => "電源".into(),
+            Kind::ISource => "電流源".into(),
             Kind::Npn => "NPNトランジスタ".into(),
             Kind::Header(n) => format!("ヘッダ {n}P"),
             Kind::Custom => "ライブラリ部品".into(),
@@ -85,6 +91,7 @@ impl Kind {
             Kind::Inductor => "L",
             Kind::Diode | Kind::Led => "D",
             Kind::VSource => "V",
+            Kind::ISource => "I",
             Kind::Npn => "Q",
             Kind::Header(_) => "J",
             Kind::Custom => "U",
@@ -100,6 +107,7 @@ impl Kind {
             Kind::Diode => "1N4148",
             Kind::Led => "LED",
             Kind::VSource => "5",
+            Kind::ISource => "1m",
             Kind::Npn => "2N3904",
             Kind::Header(_) => "Conn",
             Kind::Custom => "",
@@ -119,7 +127,7 @@ impl Kind {
             Kind::VSource => "PinHeader_1x2_PM".into(),
             Kind::Npn => "SOT-23".into(),
             Kind::Header(n) => format!("PinHeader_1x{n}"),
-            Kind::Custom | Kind::Ground | Kind::Power => String::new(),
+            Kind::Custom | Kind::Ground | Kind::Power | Kind::ISource => String::new(),
         }
     }
 
@@ -133,7 +141,7 @@ impl Kind {
         match self {
             Kind::Resistor | Kind::Capacitor | Kind::Inductor => vec![p("1", -2, 0), p("2", 2, 0)],
             Kind::Diode | Kind::Led => vec![p("A", -2, 0), p("K", 2, 0)],
-            Kind::VSource => vec![p("+", 0, -2), p("-", 0, 2)],
+            Kind::VSource | Kind::ISource => vec![p("+", 0, -2), p("-", 0, 2)],
             Kind::Npn => vec![p("C", 2, -2), p("B", -2, 0), p("E", 2, 2)],
             Kind::Header(n) => (0..n as i32).map(|i| (format!("{}", i + 1), (2, 2 * i))).collect(),
             Kind::Custom => vec![],
@@ -512,7 +520,8 @@ impl Schematic {
             rot: rot % 4,
             footprint: kind.default_footprint(),
             custom: None,
-            sim_only: false,
+            // a current source is a test source: there is no such part to put on the board
+            sim_only: kind == Kind::ISource,
             pin_names: vec![],
             theta: 0.0,
             tc_ppm: 0.0,

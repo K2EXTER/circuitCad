@@ -65,6 +65,7 @@ fn basic_kind(p: &SchPart) -> Option<Kind> {
         "D" | "D_Small" | "D_Schottky" | "D_Zener" if two => Some(Kind::Diode),
         "LED" | "LED_Small" if two => Some(Kind::Led),
         "VDC" | "VSIN" | "VPULSE" if two && source_value(p).is_some() => Some(Kind::VSource),
+        "IDC" | "ISIN" | "IPULSE" if two && source_value(p).is_some() => Some(Kind::ISource),
         n if n.starts_with("Q_NPN") && p.pins.len() == 3 => Some(Kind::Npn),
         _ => None,
     }
@@ -75,8 +76,8 @@ fn basic_kind(p: &SchPart) -> Option<Kind> {
 fn source_value(p: &SchPart) -> Option<String> {
     let name = p.lib_id.rsplit(':').next().unwrap_or(&p.lib_id);
     let ty = p.fields.get("Sim.Type").map(|t| t.to_ascii_uppercase()).unwrap_or_else(|| match name {
-        "VSIN" => "SIN".into(),
-        "VPULSE" => "PULSE".into(),
+        "VSIN" | "ISIN" => "SIN".into(),
+        "VPULSE" | "IPULSE" => "PULSE".into(),
         _ => "DC".into(),
     });
     let params = p.fields.get("Sim.Params")?;
@@ -104,6 +105,12 @@ fn our_pin(kind: Kind, pin: &SchPin) -> Option<String> {
         Kind::VSource => by_name(&[("+", "+"), ("-", "-")]).or(match pin.number.as_str() {
             "1" => Some("+".into()),
             "2" => Some("-".into()),
+            _ => None,
+        }),
+        // SPICE's current runs into pin 1 (+) and out of pin 2; ours flows out of +
+        Kind::ISource => by_name(&[("+", "-"), ("-", "+")]).or(match pin.number.as_str() {
+            "1" => Some("-".into()),
+            "2" => Some("+".into()),
             _ => None,
         }),
         Kind::Npn => by_name(&[("C", "C"), ("B", "B"), ("E", "E")]),
@@ -204,7 +211,7 @@ pub fn import(k: &KicadSch) -> Imported {
         if !p.value.is_empty() {
             c.value = match kind {
                 Some(Kind::Resistor | Kind::Capacitor | Kind::Inductor) => normalise_value(&p.value),
-                Some(Kind::VSource) => source_value(p).unwrap_or_else(|| p.value.clone()),
+                Some(Kind::VSource | Kind::ISource) => source_value(p).unwrap_or_else(|| p.value.clone()),
                 _ => p.value.clone(),
             };
         }

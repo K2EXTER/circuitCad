@@ -35,6 +35,7 @@ fn aliases(k: Kind) -> &'static str {
         Kind::Diode => "diode d ダイオード",
         Kind::Led => "led light 発光 ダイオード",
         Kind::VSource => "source supply battery power v 電源 電池 信号",
+        Kind::ISource => "current source i load 電流源 定電流 負荷 電子負荷",
         Kind::Npn => "npn transistor bjt q トランジスタ",
         Kind::Header(_) => "header connector pin コネクタ ヘッダ ピン",
         Kind::Ground => "ground gnd 0v アース グランド",

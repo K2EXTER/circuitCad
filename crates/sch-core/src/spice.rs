@@ -97,6 +97,15 @@ pub fn to_spice_for(s: &Schematic, title: &str, dialect: Dialect) -> String {
                     let _ = writeln!(out, "{r} {} {} DC {v}", nd(r, "+"), nd(r, "-"));
                 }
             }
+            Kind::ISource => {
+                // ours pushes current out of +; SPICE's `I n1 n2` pushes it out of n2: the nodes go the other way round
+                let v = c.value.trim();
+                let word = v.split(|ch: char| !ch.is_ascii_alphabetic()).next().unwrap_or("").to_ascii_uppercase();
+                let spec = matches!(word.as_str(), "SIN" | "PULSE" | "PWL" | "EXP" | "SFFM" | "DC" | "AC");
+                let v = if spec { v.to_string() } else { format!("DC {v}") };
+                let name = if r.to_ascii_uppercase().starts_with('I') { r.clone() } else { format!("I{r}") };
+                let _ = writeln!(out, "{name} {} {} {v}", nd(r, "-"), nd(r, "+"));
+            }
             Kind::Npn => {
                 npn_models = true;
                 let _ = writeln!(out, "{r} {} {} {} QNPN", nd(r, "C"), nd(r, "B"), nd(r, "E"));

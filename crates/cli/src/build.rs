@@ -17,6 +17,7 @@ fn basic_kind(t: &str) -> Option<Kind> {
         "D" | "DIODE" => Kind::Diode,
         "LED" => Kind::Led,
         "V" | "VSOURCE" => Kind::VSource,
+        "I" | "ISOURCE" => Kind::ISource,
         "NPN" => Kind::Npn,
         s if s.starts_with("HEADER") => Kind::Header(s["HEADER".len()..].parse().ok().filter(|n| (1..=40).contains(n))?),
         _ => return None,

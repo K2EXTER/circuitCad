@@ -196,10 +196,12 @@ fn field(ui: &mut egui::Ui, label: &str, text: &mut String, tip: &str) -> bool {
     changed
 }
 
-/// Draw the form; returns true when anything changed.
-pub fn show(ui: &mut egui::Ui, f: &mut SourceForm) -> bool {
+/// Draw the form; returns true when anything changed. `current`: the form of a current source (amperes instead of volts).
+pub fn show(ui: &mut egui::Ui, f: &mut SourceForm, current: bool) -> bool {
     let mut changed = false;
-    ui.label(i18n::tr("電源の種類"));
+    // the words that differ between a voltage and a current source
+    let pick = |v: &'static str, a: &'static str| if current { i18n::tr(a) } else { i18n::tr(v) };
+    ui.label(pick("電源の種類", "電流の種類"));
     ui.horizontal_wrapped(|ui| {
         let before = f.kind;
         ui.selectable_value(&mut f.kind, WaveKind::Dc, i18n::tr("直流")).on_hover_text(i18n::tr("一定の電圧。電池や電源ライン (5V など) に使います"));
@@ -216,11 +218,20 @@ pub fn show(ui: &mut egui::Ui, f: &mut SourceForm) -> bool {
     });
     match f.kind {
         WaveKind::Dc => {
-            changed |= field(ui, i18n::tr("電圧 [V]"), &mut f.dc, i18n::tr("一定の電圧。例: 5, 3.3, 12"));
+            if current {
+                changed |= field(ui, i18n::tr("電流 [A]"), &mut f.dc, i18n::tr("一定の電流。正の値で + のピンから回路へ流れ出します。例: 10m, 100u, -1m"));
+            } else {
+                changed |= field(ui, i18n::tr("電圧 [V]"), &mut f.dc, i18n::tr("一定の電圧。例: 5, 3.3, 12"));
+            }
         }
         WaveKind::Sin => {
-            changed |= field(ui, i18n::tr("オフセット [V]"), &mut f.sin[0], i18n::tr("波の中心の電圧 (直流分)。0 なら 0V を中心に振れます"));
-            changed |= field(ui, i18n::tr("振幅 [V]"), &mut f.sin[1], i18n::tr("中心から山までの高さ。1 なら −1V〜+1V で振れます (山から谷までは 2V)"));
+            if current {
+                changed |= field(ui, i18n::tr("オフセット [A]"), &mut f.sin[0], i18n::tr("波の中心の電流 (直流分)"));
+                changed |= field(ui, i18n::tr("振幅 [A]"), &mut f.sin[1], i18n::tr("中心から山までの電流"));
+            } else {
+                changed |= field(ui, i18n::tr("オフセット [V]"), &mut f.sin[0], i18n::tr("波の中心の電圧 (直流分)。0 なら 0V を中心に振れます"));
+                changed |= field(ui, i18n::tr("振幅 [V]"), &mut f.sin[1], i18n::tr("中心から山までの高さ。1 なら −1V〜+1V で振れます (山から谷までは 2V)"));
+            }
             changed |= field(ui, i18n::tr("周波数 [Hz]"), &mut f.sin[2], i18n::tr("1 秒あたりの波の数。例: 50, 1k, 100k"));
             ui.collapsing(i18n::tr("詳細 (遅延・減衰・位相)"), |ui| {
                 changed |= field(ui, i18n::tr("遅延 [s]"), &mut f.sin[3], i18n::tr("この時間まで波を始めません"));
@@ -229,8 +240,13 @@ pub fn show(ui: &mut egui::Ui, f: &mut SourceForm) -> bool {
             });
         }
         WaveKind::Pulse => {
-            changed |= field(ui, i18n::tr("低い値 [V]"), &mut f.pulse[0], i18n::tr("パルスが出ていない間の電圧"));
-            changed |= field(ui, i18n::tr("高い値 [V]"), &mut f.pulse[1], i18n::tr("パルスの間の電圧"));
+            if current {
+                changed |= field(ui, i18n::tr("低い値 [A]"), &mut f.pulse[0], i18n::tr("パルスが出ていない間の電流。負荷の急変なら、ふだんの負荷電流"));
+                changed |= field(ui, i18n::tr("高い値 [A]"), &mut f.pulse[1], i18n::tr("パルスの間の電流。負荷の急変なら、増やしたときの負荷電流"));
+            } else {
+                changed |= field(ui, i18n::tr("低い値 [V]"), &mut f.pulse[0], i18n::tr("パルスが出ていない間の電圧"));
+                changed |= field(ui, i18n::tr("高い値 [V]"), &mut f.pulse[1], i18n::tr("パルスの間の電圧"));
+            }
             changed |= field(ui, i18n::tr("幅 [s]"), &mut f.pulse[5], i18n::tr("高い値でいる時間。空欄だとずっと高いままです"));
             changed |= field(ui, i18n::tr("周期 [s]"), &mut f.pulse[6], i18n::tr("繰り返しの間隔。空欄だと 1 回だけです"));
             ui.collapsing(i18n::tr("詳細 (遅延・立上り・立下り)"), |ui| {

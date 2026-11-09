@@ -263,6 +263,18 @@ fn build(s: &Schematic, fault: Option<&PinFaultSpec>, wiring: &[WiringR], coupli
                 let (p, n) = (node_of(&mut c, r, "+"), node_of(&mut c, r, "-"));
                 c.add(Element::VSource { name: r.into(), p, n, wave: src.wave, ac: src.ac });
             }
+            Kind::ISource => {
+                let src = match parse_source_full(&comp.value) {
+                    Ok(w) => w,
+                    Err(m) => {
+                        errors.push(err(r, format!("電流源の値「{}」: {m}", comp.value)));
+                        continue;
+                    }
+                };
+                // a positive value pushes current out of + into the circuit: it runs through the source from - to +
+                let (from, to) = (node_of(&mut c, r, "-"), node_of(&mut c, r, "+"));
+                c.add(Element::ISource { name: r.into(), from, to, wave: src.wave, ac: src.ac });
+            }
             Kind::Diode | Kind::Led => {
                 let (a, k) = (node_of(&mut c, r, "A"), node_of(&mut c, r, "K"));
                 // same parameters as the generic models written by the SPICE export

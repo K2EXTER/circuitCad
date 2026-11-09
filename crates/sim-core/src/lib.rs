@@ -78,7 +78,7 @@ pub use heat_tran::{heat_tran, thermal_nodes_from_schematic, HeatTran, HeatTranP
 pub use selfheat::{default_theta, heaters_from_schematic, self_heat, HeatedPart, Heater, SelfHeat};
 pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{auto_tstep, format_time, transient, transient_with, Signal, TimingKind, TimingReport, TimingViolation, TranResult, TranSettings};
-pub use stepmetrics::{settling_times, step_metrics, Settling, StepMetrics};
+pub use stepmetrics::{load_step, settling_times, step_metrics, LoadStep, Settling, StepMetrics};
 pub use power::{efficiency, mean_power};
 pub use spec::{compare_measured, compare_measured_in, compare_readings, split_readings, ReadingsCompare, evaluate as evaluate_spec, evaluate_worst as evaluate_worst_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};
 pub use spectrum::{estimate_frequency, spectrum, stats, thd, Harmonic, Spectrum, Stats, Thd};
@@ -141,6 +141,8 @@ mod tests_noise;
 mod tests_stepmetrics;
 #[cfg(test)]
 mod tests_tran;
+#[cfg(test)]
+mod tests_isource;
 #[cfg(test)]
 mod tests_variation;
 #[cfg(test)]

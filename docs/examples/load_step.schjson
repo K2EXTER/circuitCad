@@ -1,0 +1,333 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        0,
+        0
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "9"
+    },
+    {
+      "custom": null,
+      "footprint": "R_1206",
+      "kind": "Resistor",
+      "pos": [
+        14,
+        -8
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "150"
+    },
+    {
+      "custom": {
+        "name": "1N4733A",
+        "pins": [
+          {
+            "name": "K",
+            "number": "K",
+            "side": "right"
+          },
+          {
+            "name": "A",
+            "number": "A",
+            "side": "left"
+          }
+        ],
+        "prefix": "D",
+        "ratings": {
+          "i_max": 0.178,
+          "p_max": 1.0,
+          "rows": [
+            {
+              "condition": "IZT = 49mA",
+              "name": "ツェナー電圧",
+              "value": "5.1V ±5%"
+            },
+            {
+              "condition": "IZT = 49mA",
+              "name": "ツェナーインピーダンス",
+              "value": "7Ω (最大)"
+            }
+          ]
+        },
+        "sim": {
+          "element": "D",
+          "kind": "model",
+          "limits": [
+            "降伏電圧つきのダイオードのモデルです。電流を増やしたときのツェナー電圧の変化 (ツェナーインピーダンス) は簡易な式で、実物とずれます。",
+            "ツェナー電圧は温度で変わらない値です。実物は温度で変わります。",
+            "接合容量と逆回復時間は扱いません。許容損失 (W) を超えても壊れません。"
+          ],
+          "name": "1N4733A",
+          "params": {},
+          "pins": [
+            "A",
+            "K"
+          ],
+          "text": ".model 1N4733A D(IS=50f N=1 RS=6.5 BV=5.1 IBV=49m)"
+        }
+      },
+      "footprint": "D_DO-41_P10.16",
+      "kind": "Custom",
+      "pos": [
+        28,
+        2
+      ],
+      "refdes": "D1",
+      "rot": 1,
+      "value": "1N4733A"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        42,
+        2
+      ],
+      "refdes": "R2",
+      "rot": 1,
+      "value": "1k"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "ISource",
+      "pos": [
+        76,
+        2
+      ],
+      "refdes": "I1",
+      "rot": 2,
+      "sim_only": true,
+      "value": "PULSE(0 10m 1m 10u 10u 2m 4m)"
+    },
+    {
+      "custom": null,
+      "footprint": "C_0805",
+      "kind": "Capacitor",
+      "pos": [
+        52,
+        2
+      ],
+      "refdes": "C1",
+      "rot": 1,
+      "value": "10u"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        0,
+        -5
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        0,
+        5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        9,
+        -8
+      ],
+      "text": "VIN"
+    },
+    {
+      "pos": [
+        19,
+        -8
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        28,
+        9
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        28,
+        -5
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        42,
+        -3
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        42,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        52,
+        -3
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        52,
+        7
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        76,
+        -3
+      ],
+      "text": "VOUT"
+    },
+    {
+      "pos": [
+        76,
+        7
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": [
+    {
+      "a": [
+        0,
+        -2
+      ],
+      "b": [
+        0,
+        -5
+      ]
+    },
+    {
+      "a": [
+        0,
+        2
+      ],
+      "b": [
+        0,
+        5
+      ]
+    },
+    {
+      "a": [
+        12,
+        -8
+      ],
+      "b": [
+        9,
+        -8
+      ]
+    },
+    {
+      "a": [
+        16,
+        -8
+      ],
+      "b": [
+        19,
+        -8
+      ]
+    },
+    {
+      "a": [
+        28,
+        6
+      ],
+      "b": [
+        28,
+        9
+      ]
+    },
+    {
+      "a": [
+        28,
+        -2
+      ],
+      "b": [
+        28,
+        -5
+      ]
+    },
+    {
+      "a": [
+        42,
+        0
+      ],
+      "b": [
+        42,
+        -3
+      ]
+    },
+    {
+      "a": [
+        42,
+        4
+      ],
+      "b": [
+        42,
+        7
+      ]
+    },
+    {
+      "a": [
+        52,
+        0
+      ],
+      "b": [
+        52,
+        -3
+      ]
+    },
+    {
+      "a": [
+        52,
+        4
+      ],
+      "b": [
+        52,
+        7
+      ]
+    },
+    {
+      "a": [
+        76,
+        0
+      ],
+      "b": [
+        76,
+        -3
+      ]
+    },
+    {
+      "a": [
+        76,
+        4
+      ],
+      "b": [
+        76,
+        7
+      ]
+    }
+  ]
+}

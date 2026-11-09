@@ -100,6 +100,7 @@ fn basic_kind(p: &AscPart) -> Option<Kind> {
         "cap" | "polcap" => Some(Kind::Capacitor),
         "ind" | "ind2" => Some(Kind::Inductor),
         "voltage" | "battery" => Some(Kind::VSource),
+        "current" => Some(Kind::ISource),
         _ => None,
     }
 }
@@ -111,6 +112,9 @@ fn basic_pin(kind: Kind, pin: &str) -> Option<&'static str> {
         (Kind::Resistor | Kind::Capacitor | Kind::Inductor, "B") => Some("2"),
         (Kind::VSource, "+") => Some("+"),
         (Kind::VSource, "-") => Some("-"),
+        // SPICE's current runs into + and out of - (LTspice's arrow points to -); ours flows out of +
+        (Kind::ISource, "+") => Some("-"),
+        (Kind::ISource, "-") => Some("+"),
         (Kind::Diode | Kind::Led, "+") => Some("A"),
         (Kind::Diode | Kind::Led, "-") => Some("K"),
         (Kind::Npn, "C" | "B" | "E") => Some(match pin {
@@ -211,10 +215,6 @@ pub fn import(a: &AscSch, lib: &[PartDef]) -> Imported {
                             None => Pick::Drawn,
                         }
                     }
-                    "current" => {
-                        skipped.push(format!("{} (電流源)", p.inst));
-                        continue;
-                    }
                     "e" | "e2" | "f" | "g" | "g2" | "h" | "bv" | "bi" | "bi2" => {
                         skipped.push(format!("{} (式や制御で動く電源 {})", p.inst, p.base_symbol()));
                         continue;
@@ -255,6 +255,7 @@ pub fn import(a: &AscSch, lib: &[PartDef]) -> Imported {
                 }
             }
             Pick::Basic(Kind::Resistor) => c.value = normalise_value(&plain_value(p.attr("Value"), &prm)),
+            Pick::Basic(Kind::ISource) => c.value = source_value(p, &prm),
             Pick::Basic(Kind::VSource) => {
                 c.value = source_value(p, &prm);
                 if p.attr("SpiceLine").to_ascii_lowercase().contains("rser") {
@@ -466,9 +467,34 @@ TEXT 64 280 Left 2 !.tran 5m\\n.param C=100\u{b5}
         assert_eq!(c("Q1").kind, Kind::Custom, "2N3904 from the library");
         assert_eq!(c("Q2").kind, Kind::Npn, "an unknown model: the basic NPN, with a note");
         assert!(imp.notes.iter().any(|n| n.contains("MYPART")), "{:?}", imp.notes);
-        assert!(imp.notes.iter().any(|n| n.contains("I1")), "the current source is listed as not taken: {:?}", imp.notes);
+        assert_eq!(c("I1").kind, Kind::ISource, "a current source comes in as one");
         // every pin of Q1 found its library pin
         assert!(!imp.notes.iter().any(|n| n.starts_with("Q1: ピン")), "{:?}", imp.notes);
+    }
+
+    #[test]
+    fn an_ltspice_current_source_pushes_the_same_way_here() {
+        // LTspice's arrow points to its - pin: the current leaves there, into "out" (1 mA into 1k: +1 V in LTspice)
+        let t = "Version 4
+SHEET 1 880 680
+WIRE 64 192 64 224
+WIRE 160 224 64 224
+FLAG 64 112 0
+FLAG 160 304 0
+FLAG 64 224 out
+SYMBOL current 64 112 R0
+SYMATTR InstName I1
+SYMATTR Value 1m
+SYMBOL res 144 208 R0
+SYMATTR InstName R1
+SYMATTR Value 1k
+";
+        let imp = import(&parse_asc(t, &|_| None).unwrap(), &[]);
+        let i1 = imp.sch.components.iter().find(|c| c.refdes == "I1").unwrap();
+        assert_eq!((i1.kind, i1.value.as_str(), i1.sim_only), (Kind::ISource, "1m", true));
+        let nets = sch_core::extract(&imp.sch);
+        let out: Vec<String> = nets.iter().find(|n| n.name == "out").unwrap().pins.iter().map(|p| format!("{}.{}", p.refdes, p.pin)).collect();
+        assert!(out.contains(&"I1.+".to_string()), "ours pushes out of + into out: {out:?}");
     }
 
     #[test]

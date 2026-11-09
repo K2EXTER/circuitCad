@@ -62,6 +62,15 @@ pub(super) fn symbol(kind: Kind) -> Vec<Sh> {
             L(0., -0.85, 0., -0.35),
             L(-0.25, 0.6, 0.25, 0.6),
         ],
+        // a circle with an arrow pointing to pin +: the way the current leaves the source
+        Kind::ISource => vec![
+            L(0., -2., 0., -1.2),
+            L(0., 1.2, 0., 2.),
+            C(0., 0., 1.2),
+            L(0., 0.7, 0., -0.7),
+            L(0., -0.7, -0.3, -0.3),
+            L(0., -0.7, 0.3, -0.3),
+        ],
         Kind::Npn => vec![
             C(0.5, 0., 1.7),
             L(-2., 0., -0.5, 0.),
@@ -158,7 +167,7 @@ pub(super) fn source_symbol(value: &str) -> Vec<Sh> {
 /// Local bounding box (xmin, xmax, ymin, ymax).
 pub(super) fn extents(kind: Kind) -> (f32, f32, f32, f32) {
     match kind {
-        Kind::VSource => (-1.4, 1.4, -2., 2.),
+        Kind::VSource | Kind::ISource => (-1.4, 1.4, -2., 2.),
         Kind::Npn => (-2., 2., -2., 2.),
         Kind::Header(n) => (0., 2., -1., 2. * n as f32 - 1.),
         Kind::Custom => (-2., 2., -2., 2.),

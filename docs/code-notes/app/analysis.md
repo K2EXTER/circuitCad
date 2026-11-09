@@ -50,3 +50,10 @@
 - `--select R1` は、`.ccproj` を開いたときも回路図の部品を選ぶ(画面の確認用)。
 - 確認: `tests/flow.rs` の `a_pick_in_one_editor_is_linked_to_the_others`、`schematic/linked.rs` のテスト、`mixed_signal` で R7 を選んで基板に枠が出ること(目で)。未確認: 回路図の側の見た目(枠・線)、3D での部品の強調の見え方。
 - 未対応: 複数選択、パッドのピン単位の連動、基板で選んだネットが回路図のシートをまたぐ(階層)ときの飛び先。
+
+## 電流源と負荷の急変(2026-11-09)
+- 部品の種類 `Kind::ISource`(`sch-core`)。ピンは電圧源と同じ `+`(上)・`-`(下)で、**正の値で `+` から回路へ流れ出す**(電池と同じ向き。記号は `+` を向いた矢印)。SPICE の `I n1 n2` は n2 から流れ出すので、`spice.rs` は `I1 (-の節点) (+の節点) 値`、`from_schematic.rs` は `Element::ISource { from: -, to: + }`。値は電圧源と同じ書き方(直流・SIN・PULSE・PWL・AC)。置くと `sim_only`(基板・部品表に出ない)、フットプリントは空。テスト `sim-core/tests_isource.rs`。
+- ERC(`netlist.rs`): ピンのネットにほかの部品がない(行き先がない)・ほかの電流源だけ(直列)はエラー、+ と − が同じネットは警告。
+- 画面: 部品パネルの「電流源」、値の欄は電源と同じフォーム(`source_form::show(.., current)` で単位を [A] に)、値の例(`properties.rs`)、ヒント。用語集には入れていない(用語集の語はレッスンで使うものに限るテストがある)。CLI は `add I`。
+- 取り込み: LTspice の `current`、KiCad の `IDC`/`ISIN`/`IPULSE` を電流源にする。どちらも SPICE の向きなので、ピンを入れ替える(LTspice・KiCad の + → こちらの −)。
+- 過渡解析の波形の左「負荷の急変 (落ち込みと戻り)」: 選んだ電圧の信号(3 つまで)について、表示範囲で `sim_core::load_step` を読み、変わる前・いちばん離れた所(差と %)・落ち着いた先(変わる前との差 = ロードレギュレーション)・戻るまでを表にする。1 回の変化だけが入るよう拡大して使う。サンプル `load_step.schjson`(ツェナー 5.1 V に 0→10 mA の PULSE、C1 10 µ。落ち込み約 77 mV、テスト `the_load_step_sample_dips_by_the_zeners_resistance`)。

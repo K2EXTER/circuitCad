@@ -364,6 +364,41 @@ fn erc_all(s: &Schematic) -> Vec<Problem> {
         }
     }
 
+    // a current source must have somewhere for its current to go: an ideal one drives any voltage it takes, so with nothing (or
+    // only another current source) on a pin the circuit has no answer
+    for c in s.components.iter().filter(|c| c.kind == Kind::ISource) {
+        let mut names: Vec<&str> = vec![];
+        for (pin, _) in c.pins() {
+            let Some(ni) = net_index(&c.refdes, &pin) else { continue };
+            names.push(nets[ni].name.as_str());
+            let others: Vec<&str> = nets[ni].pins.iter().filter(|p| p.refdes != c.refdes).map(|p| p.refdes.as_str()).collect();
+            let only_sources = !others.is_empty() && others.iter().all(|r| comp(r).is_some_and(|x| x.kind == Kind::ISource));
+            if others.is_empty() {
+                out.push(Problem::new(
+                    Error,
+                    format!("電流源 {} の{}側に、電流の行き先がありません", c.refdes, pin),
+                    Some(c.pos),
+                    "理想の電流源は、決めた電流をどんな電圧を出してでも流そうとします。行き先がないと電圧が無限大になり、計算できません。電流源の両側を、抵抗や回路につないでください",
+                ));
+            } else if only_sources {
+                out.push(Problem::new(
+                    Error,
+                    format!("電流源 {} が、ほかの電流源 ({}) と直列になっています", c.refdes, others.join(", ")),
+                    Some(c.pos),
+                    "電流源を直列にすると、電流が2つの値に決められて食い違い、計算できません。1つにするか、間に抵抗などをつないで逃げ道を作ってください",
+                ));
+            }
+        }
+        if names.len() == 2 && names[0] == names[1] {
+            out.push(Problem::new(
+                Warning,
+                format!("電流源 {} の+と−が同じ配線につながっています", c.refdes),
+                Some(c.pos),
+                "電流が電流源の中だけを回るので、回路には何も流れません。つなぎ間違いでないか確かめましょう",
+            ));
+        }
+    }
+
     // two different power names on one net (e.g. GND shorted to VCC)
     let mut cn = connectivity(s);
     let mut group_names: BTreeMap<usize, Vec<String>> = BTreeMap::new();

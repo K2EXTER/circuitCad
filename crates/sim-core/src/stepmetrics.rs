@@ -122,3 +122,76 @@ pub fn settling_times(t: &[f64], v: &[f64], from: f64, tolerances: &[f64]) -> Re
     let beyond = if step > 0.0 { vv.iter().cloned().fold(f64::NEG_INFINITY, f64::max) - final_value } else { final_value - vv.iter().cloned().fold(f64::INFINITY, f64::min) };
     Ok(Settling { initial, final_value, overshoot_pct: (beyond / step.abs() * 100.0).max(0.0), times })
 }
+
+/// What a supply does when its load changes at once (a current source stepping from one current to another): how far the voltage
+/// moves away, where it settles, and how long it takes to get there.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LoadStep {
+    /// The voltage before the change (mean of the first twentieth of the window).
+    pub before: f64,
+    /// The voltage it settles at after the change (mean of the last tenth of the window).
+    pub after: f64,
+    /// The value farthest from `before`, and when.
+    pub extreme: f64,
+    pub extreme_at: f64,
+    /// When the voltage first moved.
+    pub start: f64,
+    /// Time from `start` until it stays within a tenth of its largest distance from `after` (None: not within the window).
+    pub recovery: Option<f64>,
+}
+
+impl LoadStep {
+    /// The largest dip (negative) or bump, from the value before.
+    pub fn excursion(&self) -> f64 {
+        self.extreme - self.before
+    }
+}
+
+/// Reads a load change inside the window [w0, w1] of a waveform. The window should hold one change (zoom to it): the value at its
+/// start is "before", at its end "after".
+pub fn load_step(t: &[f64], v: &[f64], w0: f64, w1: f64) -> Result<LoadStep, String> {
+    let idx: Vec<usize> = (0..t.len().min(v.len())).filter(|&i| t[i] >= w0 && t[i] <= w1).collect();
+    if idx.len() < 10 {
+        return Err("表示している範囲の点が少なすぎます (広げてください)".into());
+    }
+    let mean = |s: &[usize]| s.iter().map(|&i| v[i]).sum::<f64>() / s.len() as f64;
+    let before = mean(&idx[..(idx.len() / 20).max(1)]);
+    let after = mean(&idx[idx.len() - (idx.len() / 10).max(1)..]);
+    let (&far, _) = idx.iter().map(|i| (i, (v[*i] - before).abs())).max_by(|a, b| a.1.total_cmp(&b.1)).unwrap();
+    let size = (v[far] - before).abs();
+    if size < 1e-6_f64.max(1e-4 * before.abs()) {
+        return Err("この範囲では電圧がほとんど動いていません (負荷が変わる所を表示してください)".into());
+    }
+    // the first move: a twentieth of the largest one
+    let start = idx.iter().find(|&&i| (v[i] - before).abs() > 0.05 * size).map_or(t[idx[0]], |&i| t[i]);
+    let band = 0.1 * idx.iter().filter(|&&i| t[i] >= start).map(|&i| (v[i] - after).abs()).fold(0.0, f64::max);
+    let last_out = idx.iter().rev().find(|&&i| (v[i] - after).abs() > band).map(|&i| t[i]);
+    let end_in = idx.iter().rev().take((idx.len() / 20).max(2)).all(|&i| (v[i] - after).abs() <= band);
+    let recovery = match last_out {
+        Some(tl) if end_in => Some((tl - start).max(0.0)),
+        None => Some(0.0),
+        _ => None,
+    };
+    Ok(LoadStep { before, after, extreme: v[far], extreme_at: t[far], start, recovery })
+}
+
+#[cfg(test)]
+mod load_step_tests {
+    use super::*;
+
+    #[test]
+    fn a_dip_and_its_recovery_are_read() {
+        // 3.3 V; at 1 ms it dips by 100 mV and comes back to 3.29 V with a 50 µs time constant
+        let t: Vec<f64> = (0..3000).map(|i| i as f64 * 1e-6).collect();
+        let v: Vec<f64> = t.iter().map(|&x| if x < 1e-3 { 3.3 } else { 3.29 - 0.09 * (-(x - 1e-3) / 50e-6).exp() }).collect();
+        let s = load_step(&t, &v, 0.0, 3e-3).unwrap();
+        assert!((s.before - 3.3).abs() < 1e-9 && (s.after - 3.29).abs() < 1e-6);
+        assert!((s.excursion() + 0.1).abs() < 1e-3, "{}", s.excursion());
+        assert!((s.start - 1e-3).abs() < 2e-6);
+        // within a tenth of the 90 mV distance after ln(10) time constants: 115 µs
+        let r = s.recovery.unwrap();
+        assert!((r - 115e-6).abs() < 5e-6, "{r}");
+        // nothing moves in the first millisecond
+        assert!(load_step(&t, &v, 0.0, 0.9e-3).is_err());
+    }
+}

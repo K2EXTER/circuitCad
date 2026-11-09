@@ -463,7 +463,7 @@ fn net_is_fed(flat: &Schematic, ties: &[Tie], group: &[Option<usize>], nets: &[(
                 continue;
             }
             match kind_of(&p.refdes) {
-                Some(Kind::VSource | Kind::Header(_) | Kind::Power | Kind::Ground | Kind::Custom) => return true,
+                Some(Kind::VSource | Kind::ISource | Kind::Header(_) | Kind::Power | Kind::Ground | Kind::Custom) => return true,
                 Some(Kind::Resistor | Kind::Inductor) => {
                     let other = if p.pin == "1" { "2" } else { "1" };
                     if let Some(h) = group_of_pin(&p.refdes, other)

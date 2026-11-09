@@ -389,6 +389,54 @@ impl SchEditor {
                                 ui.small(i18n::tr("下の一覧で信号を選んでください"));
                             }
                         });
+                        egui::CollapsingHeader::new(i18n::tr("負荷の急変 (落ち込みと戻り)")).show(ui, |ui| {
+                            ui.small(i18n::tr("電流源を PULSE にして、負荷を急に変えたとき用。変わる所 (1 回分) だけが入るように拡大してから読みます"));
+                            let mut rows = vec![];
+                            let mut failed = vec![];
+                            for name in order.iter().filter(|n| selected.contains(**n)).take(3) {
+                                let Some(sg) = res.signal(name).filter(|s| s.unit == "V") else { continue };
+                                match sim_core::load_step(&res.time, &sg.values, st.x.0, st.x.1) {
+                                    Ok(m) => rows.push((name.to_string(), m)),
+                                    Err(why) => failed.push(format!("{name}: {}", i18n::tr_dyn(&why))),
+                                }
+                            }
+                            // a supply that does not move is not worth a line when another signal has the figures
+                            if rows.is_empty() {
+                                for f in &failed {
+                                    ui.small(f);
+                                }
+                            }
+                            if !rows.is_empty() {
+                                egui::Grid::new("load_step_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                    let pct = |d: f64, base: f64| if base.abs() > 1e-12 { format!(" ({:+.2}%)", d / base.abs() * 100.0) } else { String::new() };
+                                    ui.label("");
+                                    for (name, _) in &rows {
+                                        ui.strong(name);
+                                    }
+                                    ui.end_row();
+                                    ui.label(i18n::tr("変わる前")).on_hover_text(i18n::tr("表示している範囲の最初の電圧 (はじめの 1/20 の平均)"));
+                                    for (_, m) in &rows {
+                                        ui.label(eng(m.before, "V"));
+                                    }
+                                    ui.end_row();
+                                    ui.label(i18n::tr("いちばん離れた所")).on_hover_text(i18n::tr("負荷が変わった直後に、変わる前の電圧からいちばん離れた量。マイナスなら落ち込み、プラスなら跳ね上がりです。出力のコンデンサを大きくするか、ESR の小さいものにすると小さくなります"));
+                                    for (_, m) in &rows {
+                                        ui.label(format!("{}{}", eng(m.excursion(), "V"), pct(m.excursion(), m.before)));
+                                    }
+                                    ui.end_row();
+                                    ui.label(i18n::tr("落ち着いた先")).on_hover_text(i18n::tr("表示している範囲の最後の電圧 (おわりの 1/10 の平均) と、変わる前との差。負荷で電圧がどれだけ動くか (ロードレギュレーション) です"));
+                                    for (_, m) in &rows {
+                                        ui.label(format!("{}{}", eng(m.after, "V"), pct(m.after - m.before, m.before)));
+                                    }
+                                    ui.end_row();
+                                    ui.label(i18n::tr("戻るまで")).on_hover_text(i18n::tr("電圧が動き始めてから、落ち着いた先との差が、いちばん離れた量の 1/10 以内に収まって、そのままになるまでの時間です。範囲の終わりまでに収まらないときは「—」です"));
+                                    for (_, m) in &rows {
+                                        ui.label(m.recovery.map_or_else(|| "—".to_string(), |t| eng(t, "s")));
+                                    }
+                                    ui.end_row();
+                                });
+                            }
+                        });
                         egui::CollapsingHeader::new(i18n::tr("電力と効率")).default_open(power.iter().any(|p| !p.is_empty())).show(ui, |ui| power_ui::power_ui(ui, res, &order, st.x, power));
                         egui::ScrollArea::vertical().show(ui, |ui| {
                             for name in &order {

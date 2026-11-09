@@ -21,7 +21,7 @@ gspice` にあるときだけ実行され、無ければ何もせず通る)。�
 - フットプリントは、同じ名前か `_NNNNMetric` を外した名前(`R_0805_2012Metric`→`R_0805`)がこのソフトにあれば付ける。なければ案内に出す。DNP は `sim_only` にする。
 - 参照名が `?` や重複のものは新しい名前にして案内に出す。
 - 検証: 自作の分圧回路 `docs/examples/kicad-divider.kicad_sch`(9 V→4.5 V。`ccad` でも通る)と、実物 `ECL-OR.kicad_sch`(ネットごとの部品が KiCad と一致)。
-- 未対応: 上の3つ以外の電源(EXP・PWL・電流源など)、極性つきコンデンサの極性の記号(`C_Polarized`・`CP` は普通のコンデンサになり、案内に「ピン1が+」と出る)、`Spice_Model` 欄、子シート(第1段階の案内)。
+- 未対応: 上の3つ以外の電源(EXP・PWL など。電流源は IDC・ISIN・IPULSE を 2026-11-09 から取り込む)、極性つきコンデンサの極性の記号(`C_Polarized`・`CP` は普通のコンデンサになり、案内に「ピン1が+」と出る)、`Spice_Model` 欄、子シート(第1段階の案内)。
 
 
 ## ltspice.rs / ltspice_import.rs / ltspice_expr.rs — LTspice の回路図 (`.asc`) の取り込み(2026-11-09、候補 J17)
@@ -31,6 +31,6 @@ gspice` にあるときだけ実行され、無ければ何もせず通る)。�
 - 記号の向き(`place`): `R90` は (x, y)→(−y, x)、`M` は回したあと左右反転(`M90` は (y, x))。LTspice 付属の例(Educational の 82 個)で、基本の部品のピン 2654 本のうち、どこにもつながらないのは 9 本(わざと開けたもの)まで確かめた(テスト `ltspices_own_examples_have_their_pins_on_wires`。LTspice が入っていないと何もしない)。
 - 記号のピン: `.asy` を、`.asc` と同じフォルダ → `ltspice_symbol_dirs()`(`%LOCALAPPDATA%\LTspice\lib\sym`、`Documents\LTspiceXVII` など)の順に探す。名前が `OpAmps\LT1001` でも `LT1001` だけでも見つかるよう、下のフォルダまで索引を作る(`symbol_index`、LTspice と同じ)。基本の記号(res・cap・ind・diode・zener・schottky・led・voltage・current・npn・pnp・nmos・pmos)は内蔵(`builtin_symbol`)なので、LTspice がなくても読める。
 - 値(`ltspice_import.rs`): `µ`→`u`、`""`→空、`{式}` は `.param`/`.params`(後ろで決まる値も使えるよう、決まらなくなるまで繰り返す。`.step param` は最初の値)から計算して数にする(`ltspice_expr.rs`: SPICE の接尾辞、`+ - * / ** ^`、`pi`、`sqrt` などの関数、`mc(x,tol)` は x、`4k7` は 4.7k)。電源は `SINE(...)`→`SIN(...)`(7 つ目の周期数は捨てる)、`AC 1` だけなら `0 AC 1`、`Value2` を後ろに足す。コンデンサの `Rser`/`Lser`/`IC` は `ESR=`/`ESL=`/`IC=`、コイルの `Rser` は `DCR=`。コイルに `Rser` が無ければ `DCR=1m`(LTspice の既定。これが無いと、電源とコイルのループが解けない)。定格(`V=` `Irms=` など)は捨て、それ以外の未対応の設定は案内に出す。
-- 部品の決め方: res/cap/ind/voltage は基本の部品。それ以外は、値か記号の名前がライブラリの部品名と同じならその部品(ピンは名前で突き合わせ、ダイオードの `+`/`-` は A/K)。無ければ diode 類→基本のダイオード、led→LED、npn→基本の NPN、pnp・nmos・pmos は 2N3906・2N7000・AO3401A で代用(案内)。電流源と式・制御の電源(e・g・f・h・bv・bi)は取り込まず案内。それ以外は `.asy` のピンから記号を作る(`kicad::to_part`、モデルなし)。同じ案内は部品をまとめて 1 行にする。
+- 部品の決め方: res/cap/ind/voltage は基本の部品。それ以外は、値か記号の名前がライブラリの部品名と同じならその部品(ピンは名前で突き合わせ、ダイオードの `+`/`-` は A/K)。無ければ diode 類→基本のダイオード、led→LED、npn→基本の NPN、pnp・nmos・pmos は 2N3906・2N7000・AO3401A で代用(案内)。式・制御の電源(e・g・f・h・bv・bi)は取り込まず案内。電流源(current)は `Kind::ISource` に(ピンを入れ替える。向きは `app/analysis.md` の「電流源と負荷の急変」)。それ以外は `.asy` のピンから記号を作る(`kicad::to_part`、モデルなし)。同じ案内は部品をまとめて 1 行にする。
 - 解析の指示(`analyses`): `.tran Tstop` / `.tran Tstep Tstop [Tstart [dTmax]] [uic]`(刻みは dTmax か Tstep、0 なら自動)と `.ac dec|oct|lin N f0 f1`(oct は ×3.32、lin は 50 点/デケード)を画面の欄に入れる。`.model`・`.lib`・`.include`・`K` などは案内に出して使わない。
 - 検証: 付属の Educational 82 個のうち 76 個が取り込んで `dc` まで通る(通らないのは、音声ファイルの電源・非線形のコア・パルス発生器の記号・プローブ専用の電源・GND が IC の中にしかないもの)。全 4385 個が落ちずに読めることを `every_ltspice_example_reads_without_a_panic`(`--ignored`、約 1 分)で確かめた。サンプル `docs/examples/ltspice-rc.asc`(RC ローパス、`.param R=1.5k`、`.ac`)は画面のテスト `an_ltspice_sheet_opens_with_its_analysis_and_simulates` で -3dB点 1.06 kHz まで確かめる。

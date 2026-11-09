@@ -13,14 +13,14 @@ Commands (one per line, '#' starts a comment; every answer is one JSON line)
   new                                   empty schematic
   open FILE.schjson / save FILE.schjson
   parts [WORDS]                         search the part library (name, category, description)
-  part NAME                             pins (number + name) of a library part or a basic type (R C L D LED V NPN)
+  part NAME                             pins (number + name) of a library part or a basic type (R C L D LED V I NPN)
   part import FILE [name=NAME] [subckt=SUB] [pins=A,B,..] [map=1,2,..] [package=PART]
                                         make a library part from a maker's SPICE .subckt (a plain-text file you downloaded):
                                         pins = the symbol's pin names in the subcircuit's node order, map = their pin numbers,
                                         package = a library part whose footprint is borrowed (default TL072, SOIC-8). Encrypted models are refused.
   lib [reload]                          the library folder and the number of parts; 'lib reload' reads it again (after part import or editing a file)
   add TYPE [VALUE] [as=REF] [rot=0..3] [at=X,Y]
-        TYPE: R C L D LED V NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
+        TYPE: R C L D LED V I NPN HEADER2 HEADER4 ... or a library part name (see 'parts')
   value REF VALUE                       change the value (a value with spaces, like PULSE(0 5 1m 1u), needs no quotes)
   nc REF.PIN [REF.PIN ...] [remove=1]    pins left unconnected on purpose (an unused output, a pin the data sheet says to leave open): ERC does not ask about them; no pins = the list
   pinnames REF NAME1,NAME2,...          the names of the pins of a pin header (F+,F-,SA,SB,GND): written beside its symbol and, with `board pinlabels`, on the silk (`-` clears)

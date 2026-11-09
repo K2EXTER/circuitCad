@@ -9,7 +9,7 @@
 - `tran.rs` 過渡(刻みは自動調整) / `ac.rs` / `noise.rs` / `dcsweep.rs` / `spectrum.rs` FFT・統計 / `paramsweep.rs` パラメータスイープ / `montecarlo.rs` ばらつき解析 / `temperature.rs` 温度
 - `from_schematic.rs` 部品→素子の変換 (新しい部品種別はここ) / `waveform.rs` 電源波形 / `value.rs` SPICE数値 / `spice_in.rs` ライブラリ部品の `.model`/`.subckt` 読込
 - `options.rs` 計算精度 `SimOptions` / `par.rs` 独立な計算を全コアで並列(`par_map`。ばらつき解析・パラメータスイープ・故障・CLI の `sens`) / `diagnose.rs` 失敗時の原因と直し方
-- `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標・整定時間(`settling_times`。CLI の `tran settle=`) / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
+- `measure.rs` 波形の自動測定・安定余裕 / `stepmetrics.rs` ステップ応答の指標・整定時間(`settling_times`。CLI の `tran settle=`)・負荷の急変(`load_step`) / `power.rs` 電力と効率 / `spec.rs` スペック(合否の表)
 - `psrr.rs` 電源除去比(1つの電源だけを揺らす回路と、除去比のまとめ。画面は「電源除去比 (PSRR)」、CLI `psrr`)
 - `sensitivity.rs` 感度(部品を1つずつ ±1% 動かして効く順に。画面は「温度とばらつき」の「感度を計算」)
 - `worstcase.rs` 最悪ケース解析(全部品を許容差の端に置いた角を実際に解く。CLI `worst`、画面はばらつき解析の窓の「最悪ケース」。スペックの合否には `SpecKind::*Worst`)

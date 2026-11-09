@@ -20,7 +20,6 @@ LTspice の回路図 (.asc) ではないようです (先頭に「Version」の�
 {}: 電源の内部抵抗 (Rser) は入れていません。要るなら、抵抗を直列に足してください。	{}: the source's internal resistance (Rser) was left out. Add a resistor in series if it matters.
 {}: ピン {} は対応するピンがなく、つなぎませんでした。	{}: pin {} has no matching pin and was not connected.
 取り込めない部品がありました: {}。このソフトの部品で置き換えてください。	Some parts could not be imported: {}. Replace them with parts of this program.
-{} (電流源)	{} (current source)
 {} (式や制御で動く電源 {})	{} (source driven by an expression or another signal, {})
 グラウンド (LTspice の「0」の印) がありません。シミュレーションするには、0 V の基準にするネットを GND にしてください。	There is no ground (LTspice's "0" flag). To simulate, name the 0 V reference net GND.
 {} は、掃引する値の最初の 1 つで取り込みました。値を振って比べるには「パラメータスイープ」を使います。	{} was imported at the first of its swept values. Use "Parameter sweep" to step values and compare.
@@ -30,3 +29,42 @@ LTspice から取り込み	imported from LTspice
 # crates/app/src/help.rs
 「ファイル → LTspice の回路図を開く…」	"File → Open LTspice schematic…"
 LTspice の回路図 (.asc) を取り込みます。並べ直しとネットの名前は KiCad と同じです。抵抗・コンデンサ・コイル・電圧源 (直流・SINE・PULSE・AC) と、ライブラリにある型番のダイオード・トランジスタ・IC はそのままシミュレーションできます。.param の値と中かっこで囲んだ式は計算して入れ、.tran と .ac は解析の欄に入ります。記号は .asc と同じフォルダか、パソコンに入っている LTspice の部品から探します	Imports an LTspice schematic (.asc). The parts are laid out again and connected by net names, as for KiCad. Resistors, capacitors, coils, voltage sources (DC, SINE, PULSE, AC), and diodes, transistors and ICs whose type is in the library simulate as they are. .param values and expressions in curly brackets are worked out, and .tran and .ac go into the analysis boxes. Symbols are looked for next to the .asc and in LTspice's parts on this computer
+# current source (sch-core, sim-core, app)
+電流源	Current source
+電流源 {} の{}側に、電流の行き先がありません	Current source {}: its {} side has nowhere for the current to go
+理想の電流源は、決めた電流をどんな電圧を出してでも流そうとします。行き先がないと電圧が無限大になり、計算できません。電流源の両側を、抵抗や回路につないでください	An ideal current source drives its current at whatever voltage it takes. With nowhere to go, that voltage is infinite and cannot be computed. Connect both sides of the current source to a resistor or to the circuit
+電流源 {} が、ほかの電流源 ({}) と直列になっています	Current source {} is in series with another current source ({})
+電流源を直列にすると、電流が2つの値に決められて食い違い、計算できません。1つにするか、間に抵抗などをつないで逃げ道を作ってください	In series, the current is set to two values that disagree, and it cannot be computed. Use one source, or give the current another path with a resistor in between
+電流源 {} の+と−が同じ配線につながっています	Current source {} has + and − on the same wire
+電流が電流源の中だけを回るので、回路には何も流れません。つなぎ間違いでないか確かめましょう	The current only goes round inside the source, so nothing flows in the circuit. Check the wiring
+電流源の値「{}」: {m}	Current source value "{}": {m}
+表示している範囲の点が少なすぎます (広げてください)	Too few points in the range shown (widen it)
+この範囲では電圧がほとんど動いていません (負荷が変わる所を表示してください)	The voltage hardly moves in this range (show the moment the load changes)
+電流の種類	Current type
+電流 [A]	Current [A]
+一定の電流。正の値で + のピンから回路へ流れ出します。例: 10m, 100u, -1m	A constant current. A positive value flows out of the + pin into the circuit. e.g. 10m, 100u, -1m
+オフセット [A]	Offset [A]
+波の中心の電流 (直流分)	The current at the centre of the wave (the DC part)
+振幅 [A]	Amplitude [A]
+中心から山までの電流	The current from the centre to a peak
+低い値 [A]	Low value [A]
+パルスが出ていない間の電流。負荷の急変なら、ふだんの負荷電流	The current between pulses. For a load step, the usual load current
+高い値 [A]	High value [A]
+パルスの間の電流。負荷の急変なら、増やしたときの負荷電流	The current during a pulse. For a load step, the load current when it is raised
+電流源の値 (正の値で + のピンから回路へ流れ出します)。例:\n10m … 直流 10mA\nPULSE(10m 100m 1m 1u 1u 2m 4m) … 負荷の急変 (10mA と 100mA を 2ms ずつ)\nSIN(1m 0.5m 1k) … 交流 (中心 振幅 周波数)\n0 AC 1 … AC解析の入力にする (インピーダンスを測るなど)	The current source's value (a positive value flows out of the + pin into the circuit). e.g.\n10m … DC 10mA\nPULSE(10m 100m 1m 1u 1u 2m 4m) … a load step (10mA and 100mA, 2ms each)\nSIN(1m 0.5m 1k) … AC (centre, amplitude, frequency)\n0 AC 1 … the input of the AC analysis (to measure an impedance, for example)
+電流源: 決めた電流を流します (シミュレーション専用で、基板には載りません)。負荷の急変の試験や、バイアス電流・光で流れる電流の代わりに使います。矢印の向きに流れ出します	Current source: drives a set current (simulation only; it is not put on the board). Use it to step a load, or in place of a bias current or a current made by light. The current flows out in the direction of the arrow
+電流源は、矢印の向き (+ のピン) から決めた電流を流し出します。PULSE にすると、負荷が急に増えたときの電源の電圧の落ち込みを過渡解析で見られます。電流の行き先 (抵抗や回路) がないと計算できません	A current source drives its set current out in the direction of the arrow (the + pin). Make it a PULSE to see in the transient analysis how far a supply drops when its load jumps. It cannot be computed without somewhere for the current to go (a resistor or the circuit)
+負荷の急変 (落ち込みと戻り)	Load step (dip and recovery)
+電流源を PULSE にして、負荷を急に変えたとき用。変わる所 (1 回分) だけが入るように拡大してから読みます	For a load changed at once by a current source set to PULSE. Zoom so that only one change is in view, then read
+変わる前	Before
+表示している範囲の最初の電圧 (はじめの 1/20 の平均)	The voltage at the start of the range shown (the mean of its first twentieth)
+いちばん離れた所	Largest excursion
+負荷が変わった直後に、変わる前の電圧からいちばん離れた量。マイナスなら落ち込み、プラスなら跳ね上がりです。出力のコンデンサを大きくするか、ESR の小さいものにすると小さくなります	How far the voltage moves from where it was right after the load changes. Negative is a dip, positive a jump. A larger output capacitor, or one with a lower ESR, makes it smaller
+落ち着いた先	Settles at
+表示している範囲の最後の電圧 (おわりの 1/10 の平均) と、変わる前との差。負荷で電圧がどれだけ動くか (ロードレギュレーション) です	The voltage at the end of the range shown (the mean of its last tenth) and how far it is from before: how much the load moves the voltage (load regulation)
+戻るまで	Recovery
+電圧が動き始めてから、落ち着いた先との差が、いちばん離れた量の 1/10 以内に収まって、そのままになるまでの時間です。範囲の終わりまでに収まらないときは「—」です	The time from when the voltage starts to move until it stays within a tenth of its largest distance from where it settles. "—" when that does not happen before the end of the range
+負荷の急変 (電流源で負荷を増やす)	Load step (raising the load with a current source)
+ツェナーで 5.1V を作る回路に、電流源 I1 (負荷) とコンデンサ C1 を足したもの。I1 は 1ms で 0 → 10mA に増え、2ms 後に戻ります。「過渡解析を実行」して、波形の左の「負荷の急変 (落ち込みと戻り)」を開くと、電圧がどれだけ下がるか (約 77mV、ツェナーの内部抵抗の分) と、戻るまでの時間が出ます。C1 を 100u にすると、ゆっくり下がるようになりますが、落ち着く先は同じです	A zener making 5.1V, with a current source I1 (the load) and a capacitor C1 added. I1 rises from 0 to 10mA at 1ms and drops back 2ms later. "Run transient analysis" and open "Load step (dip and recovery)" left of the waveform: it shows how far the voltage drops (about 77mV, from the zener's internal resistance) and how long it takes to settle. With C1 at 100u it drops more slowly, but settles at the same voltage
+負荷が急に変わったときの電圧	The voltage when the load changes at once
+電流源 (部品の一覧の「電流源」) の値を PULSE にして出力につなぎ、過渡解析します。波形の左の「負荷の急変 (落ち込みと戻り)」に、落ち込み・落ち着いた先・戻るまでの時間が出ます	Connect a current source ("Current source" in the parts list) set to PULSE to the output and run the transient analysis. "Load step (dip and recovery)" left of the waveform shows the dip, where it settles and how long it takes

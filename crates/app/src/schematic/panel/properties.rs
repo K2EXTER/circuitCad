@@ -136,7 +136,7 @@ impl SchEditor {
                         }
                     }
                 }
-                if c.kind == Kind::VSource {
+                if matches!(c.kind, Kind::VSource | Kind::ISource) {
                     // read the form again when the text changed or another source was selected
                     let stale = self.src_form.as_ref().is_none_or(|(k, t, _)| *k != i || *t != c.value);
                     if stale {
@@ -144,7 +144,7 @@ impl SchEditor {
                     }
                     if let Some((_, text, form)) = self.src_form.as_mut() {
                         ui.separator();
-                        if crate::source_form::show(ui, form) {
+                        if crate::source_form::show(ui, form, c.kind == Kind::ISource) {
                             match form.to_text() {
                                 Ok(t) => {
                                     c.value = t.clone();
@@ -295,6 +295,11 @@ PULSE(0 5 100u 1u 1u 400u 1m) … 方形波 (低 高 遅延 立上り 立下り 
 PWL(0 0 1m 5) … 折れ線 (時間 電圧 の組)
 5 AC 1 … AC解析の入力にする
 NOISE(0.05 1Meg) … ノイズ (実効値 最高周波数)。5 + NOISE(0.05 1Meg) + SIN(0 0.02 100k) のように + でつなげます (+ の前後は空白)",
+        Kind::ISource => "電流源の値 (正の値で + のピンから回路へ流れ出します)。例:
+10m … 直流 10mA
+PULSE(10m 100m 1m 1u 1u 2m 4m) … 負荷の急変 (10mA と 100mA を 2ms ずつ)
+SIN(1m 0.5m 1k) … 交流 (中心 振幅 周波数)
+0 AC 1 … AC解析の入力にする (インピーダンスを測るなど)",
         _ => "部品の値。単位つきの数字は 10k, 100n, 4.7u のように書けます",
     }
 }
