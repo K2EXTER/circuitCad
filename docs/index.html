@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>circuitCad — 学びながら、基板の発注まで</title>
-<meta name="description" content="回路図・SPICEシミュレーション・基板設計・Gerber出力を1本にまとめた、初学者向けの日本語の回路CAD。無料・AGPL-3.0。">
+<meta name="description" content="回路図・SPICEシミュレーション・基板設計・Gerber出力を1本にまとめた、初学者向けの回路CAD。日本語と英語の画面、レッスンつき。無料・AGPL-3.0。">
 <meta property="og:title" content="circuitCad — 学びながら、基板の発注まで">
-<meta property="og:description" content="回路図 → シミュレーション → 基板 → 発注データを1本のソフトで。日本語・無料・ソース公開。">
+<meta property="og:description" content="回路図 → シミュレーション → 基板 → 発注データを1本のソフトで。レッスンつき・日本語/英語・無料・ソース公開。">
 <meta property="og:image" content="https://k2exter.github.io/circuitCad/images/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
@@ -30,6 +30,7 @@ img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;di
 .hero{margin:32px auto 0}
 section{padding:40px 0;border-top:1px solid var(--line)}
 h2{font-size:24px;margin:0 0 20px}
+.intro{color:var(--sub);margin:-8px 0 20px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
 .card h3{margin:0 0 6px;font-size:17px}
@@ -37,10 +38,24 @@ h2{font-size:24px;margin:0 0 20px}
 .flow{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;font-weight:700}
 .flow span{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 16px}
 .flow i{color:var(--sub);font-style:normal}
+.spot{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center;margin:0 0 40px}
+.spot:last-child{margin-bottom:0}
+.spot:nth-child(even) .pic{order:2}
+.spot h3{font-size:20px;margin:0 0 10px}
+.spot p{margin:0 0 10px}
+.spot ul{margin:0;padding-left:1.2em;color:var(--sub);font-size:15px}
+@media (max-width:720px){.spot{grid-template-columns:1fr;gap:14px}.spot:nth-child(even) .pic{order:0}}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:0 0 10px}
+summary{cursor:pointer;padding:12px 18px;font-weight:700;list-style-position:outside}
+summary small{font-weight:400;color:var(--sub);margin-left:8px}
+details ul{margin:0;padding:0 18px 14px 2.4em;font-size:15px}
+details li{margin:2px 0}
+.tag{display:inline-block;font-size:12px;border:1px solid var(--accent);color:var(--accent);border-radius:999px;padding:0 8px;margin-left:6px;vertical-align:2px}
 figure{margin:0}
 figcaption{font-size:14px;color:var(--sub);margin-top:8px}
 .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
 ol{padding-left:1.4em}
+code{font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px}
 .warn{background:var(--card);border-left:4px solid var(--accent);padding:14px 18px;border-radius:6px}
 footer{padding:32px 0 56px;text-align:center;color:var(--sub);font-size:14px;border-top:1px solid var(--line)}
 a{color:var(--accent)}
@@ -51,12 +66,12 @@ a{color:var(--accent)}
 
 <header>
   <h1>回路図を描いて、動かして、<br>基板にして、発注データまで。</h1>
-  <p class="lead">circuitCad は、回路図・SPICEシミュレーション・基板設計・Gerber出力を1本にまとめた、<strong>初学者向けの日本語の回路CAD</strong>です。「学ぶ → 実験する → 基板を発注する」を、ソフトを乗り換えずにつなげます。</p>
+  <p class="lead">circuitCad は、回路図・SPICEシミュレーション・基板設計・Gerber出力を1本にまとめた、<strong>初学者向けの回路CAD</strong>です。「学ぶ → 実験する → 基板を発注する」を、ソフトを乗り換えずにつなげます。画面は日本語と英語に対応しています。</p>
   <div class="btns">
-    <a class="btn main" href="https://github.com/K2EXTER/circuitCad/releases/latest">⬇ Windows 版をダウンロード</a>
+    <a class="btn main" href="https://github.com/K2EXTER/circuitCad/releases/latest">⬇ ダウンロード (Windows / Linux)</a>
     <a class="btn sub" href="https://github.com/K2EXTER/circuitCad">ソースコード (GitHub)</a>
   </div>
-  <p class="note">アルファ版・インストール不要。zip を展開して circuitCad.exe を起動するだけです。<br>署名がないため、Windows の SmartScreen が警告を出すことがあります。「詳細情報 → 実行」で起動できます。</p>
+  <p class="note">アルファ版・無料・インストール不要。zip を展開して circuitCad.exe を起動するだけです。<br>署名がないため、Windows の SmartScreen が警告を出すことがあります。「詳細情報 → 実行」で起動できます。</p>
   <img class="hero" src="images/demo-live.gif" alt="回路図を描き、シミュレーション、基板の自動配線、DRC、3D表示まで操作する約75秒の録画" width="960">
 </header>
 
@@ -78,13 +93,210 @@ a{color:var(--accent)}
 <section>
   <h2>初学者のための作り</h2>
   <div class="grid">
-    <div class="card"><h3>日本語で迷わない</h3><p>画面もメッセージも日本語。ボタンにポインタを置くと説明が出て、配線ミスや定格オーバーは「原因と直し方」つきで知らせます。</p></div>
+    <div class="card"><h3>迷わない画面</h3><p>ボタンにポインタを置くと説明が出て、配線ミスや定格オーバーは「原因と直し方」つきで知らせます。日本語と英語を切り替えられます。</p></div>
     <div class="card"><h3>学びながら進める</h3><p>学習パス7本、手順つきレッスン51本、基板のレッスン8本、判定つきの「作ってみよう」10本。結果を予想する問いも出ます。</p></div>
     <div class="card"><h3>壊して学べる</h3><p>部品やピンを断線・ショートさせて、影響をシミュレーションで比べられます。基板に故障を仕込んで直す練習もできます。</p></div>
     <div class="card"><h3>見ながら理解する</h3><p>電圧は配線の色、電流は矢印で、回路図の上にそのまま重ねて表示。AC・過渡・ノイズ・位相余裕などの解析も備えています。</p></div>
     <div class="card"><h3>発注まで行ける</h3><p>自動配線・DRC・3D表示から、JLCPCB / PCBWay / OSH Park のルールに合わせた発注前チェックと Gerber 出力まで。</p></div>
-    <div class="card"><h3>部品とサンプル付き</h3><p>140部品以上と100本以上のサンプル回路を同梱。KiCad のシンボル・フットプリントも取り込めます。</p></div>
+    <div class="card"><h3>部品とサンプル付き</h3><p>140部品以上と100本以上のサンプル回路を同梱。KiCad のシンボル・フットプリント・回路図も取り込めます。</p></div>
   </div>
+</section>
+
+<section>
+  <h2>特長の紹介</h2>
+
+  <div class="spot">
+    <div class="pic"><img src="images/spot/schematic-dc.png" alt="直列レギュレータの回路図。配線が電圧で色分けされ、電流の矢印と値が重なっている" loading="lazy"></div>
+    <div>
+      <h3>結果が、回路図の上に出る</h3>
+      <p>解析を実行すると、電圧は配線の色と数字で、電流は矢印で、描いた回路図にそのまま重なります。別の窓のグラフと見比べる必要がありません。</p>
+      <ul>
+        <li>部品の値をスライダーで動かすと、「自動で再計算」で結果がすぐ変わる</li>
+        <li>抵抗や IC の発熱・LED の電流など、定格を超えそうな所を警告</li>
+        <li>結果は ngspice と比べて確かめています (<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">精度のページ</a>)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="images/spot/lesson.png" alt="レッスンの窓。手順の前に「R2 だけを 30k にすると MID の電圧はどうなるか」と予測を聞いている" loading="lazy"></div>
+    <div>
+      <h3>予想してから、確かめる</h3>
+      <p>レッスンは、手順を読む前に「どうなると思うか」を聞きます。予想してから解析すると、当たっても外れても、なぜそうなるかが残ります。</p>
+      <ul>
+        <li>オームの法則から、安定化電源・Arduino 互換ボード・スイッチング負荷・電池・信号まで、学習パス7本</li>
+        <li>各レッスンに「実物との違い (モデルの限界)」と「実機で確かめよう」(12V 以下の実験) つき</li>
+        <li>「作ってみよう」は目標だけを示し、自分で作った回路をシミュレーションで判定</li>
+        <li>用語集 (読み・別名で引ける) と、レッスンの用語からの呼び出し</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="images/spot/requirements-table.png" alt="設計の要件の表。ネットの役割ごとに線幅・間隔・電流と理由が並んでいる" loading="lazy"></div>
+    <div>
+      <h3>「こう作りたい」を表に書くと、基板で点検される</h3>
+      <p>回路図に、ネットの役割 (大電流・スイッチング・アナログ信号など)、線幅と電流、近くに置く部品、離す部品、配線の道筋で測る値を、理由と一緒に書いておけます。</p>
+      <ul>
+        <li>基板に取り込むと、ネットクラス・自動配置・自動配線・点検に使われる</li>
+        <li>行ごとの結果 (満たした / まだ) が、回路図と基板の両方に出る</li>
+        <li>承知した例外も、理由つきで残せる</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="images/spot/order.png" alt="発注の準備の窓。発注先の選択と、発注前のチェックの項目が並んでいる" loading="lazy"></div>
+    <div>
+      <h3>発注の前に、もう一度確かめる</h3>
+      <p>「発注の準備」は、発注先を選んで、その店のルールで基板を見直し、製造データを書き出すところまでを順に案内します。</p>
+      <ul>
+        <li>JLCPCB / PCBWay / OSH Park のルールに合わせた点検 (線幅・間隔・穴・シルク・マスク)</li>
+        <li>基板の外の部品、未配線、電流に対して細い配線、サーマルビアの不足などを、直し方つきで指摘</li>
+        <li>出来上がりのプレビュー、Gerber・ドリル・BOM・部品位置の書き出し、注文の手順</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="images/spot/view3d.png" alt="基板の3D表示。部品が載った緑の基板を斜めから見ている" loading="lazy"></div>
+    <div>
+      <h3>3D で見て、ケースに収まるか確かめる</h3>
+      <p>部品の高さとはんだマスクの色まで、出来上がりを立体で確かめられます。ケースの高さを入れると、入らない部品が赤くなります。</p>
+      <ul>
+        <li>基板の外形・穴・部品の箱を DXF で書き出し、ケースの DXF から外形と穴を読み込み</li>
+        <li>メーカーの STEP ファイルを部品の形として取り込み</li>
+        <li>回路図・基板・3D で、選んだ部品とネットが連動して光る</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>機能の一覧</h2>
+  <p class="intro">分野ごとにまとめています。見出しを押すと開きます。</p>
+
+  <details open>
+    <summary>回路図<small>描く・点検する</small></summary>
+    <ul>
+      <li>部品の配置と配線 (部品を動かすと配線が付いてくる)、Undo / Redo、コピーと貼り付け</li>
+      <li>複数のシート、<strong>階層設計</strong> (同じ回路を記号にして何回も使う)、バス (<code>D[0..7]</code>)</li>
+      <li><strong>ERC</strong> (配線ミスの点検)。指摘には原因と直し方がつき、意図した未接続には NC の印。描きかけの範囲は点検から外せる</li>
+      <li>スニペット (選んだ部分を保存して再利用)、クイック追加 (名前で探して置く)</li>
+      <li>図枠 (タイトル・版・日付・作者・メモ)、SVG と PDF への書き出し</li>
+      <li>電源は値に応じて、直流 / 交流 (正弦波) / パルスの記号で描き分け</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>シミュレーション<small>解析の種類</small></summary>
+    <ul>
+      <li>DC 動作点、過渡 (波形の曲がり具合で時間刻みを自動で細かく)、AC (ボード線図)、DC スイープ</li>
+      <li>ノイズ、極と零、ループゲイン (位相余裕・ゲイン余裕)、ネットから見たインピーダンス、ひずみ率 (THD)・スペクトル</li>
+      <li>部品の自己発熱と、温度の時間変化</li>
+      <li>デジタル回路 (ゲート・フリップフロップ・カウンタ・シフトレジスタ。伝搬遅延とセットアップ / ホールドの点検)</li>
+      <li>コンデンサの直流バイアス (動作電圧で減る容量)、ESR / ESL、電池の内部抵抗と放電</li>
+      <li>メーカーの SPICE モデル (一部の書き方) と、ngspice 向けのネットリストの書き出し</li>
+      <li>シミュレーションの前提 (モデルが仮定していること) を一覧で表示</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>実験・波形・故障<small>確かめる・壊してみる</small></summary>
+    <ul>
+      <li>部品値のスライダーと「自動で再計算」、温度の影響</li>
+      <li>部品の誤差のばらつき (モンテカルロ) と最悪ケース、効いている部品の順位</li>
+      <li>部品の値を振るパラメータスイープ (波形やカットオフを重ねて比べる)</li>
+      <li><strong>故障シミュレーション</strong>: 部品やピンの断線・ショート・逆向き・値の変化と、壊れが広がっていく様子</li>
+      <li>波形の測定カーソル、ステップ応答の指標 (立ち上がり・行き過ぎ・整定時間)、電源の効率</li>
+      <li>定格のチェック (発熱・電流・電圧の余裕) と、スペック表 (目標と結果、実測の欄)</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>学習<small>レッスン・チャレンジ・用語集</small></summary>
+    <ul>
+      <li>学習パス7本 (安定化電源・Arduino 互換ボード・Mega 互換ボード・基板の作法・スイッチング負荷・電池で動く機器・信号)。進み具合が残る</li>
+      <li>手順つきレッスン51本 (部品を1つずつ知る「素顔」のレッスンを含む)、予想を聞く問い</li>
+      <li>基板のレッスン8本 (配線の電圧降下、発注前の直し、差動ペア、故障を探して直す練習など)</li>
+      <li>「作ってみよう」10本: 目標だけを示し、作った回路をシミュレーションで判定。ヒントと答えの回路つき</li>
+      <li><strong>値の決め方</strong>: LED の抵抗・分圧・フィルタ・レギュレータ・トランジスタや MOSFET のスイッチ・降圧 / 昇圧・オペアンプなどを、計算の手順・注意点・壊れ方つきで</li>
+      <li>用語集・索引、操作ガイド (F1)、実機で組み立てて測る手順と、測った値とシミュレーションの比べ方</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>基板: 配置と配線<small>取り込みから配線まで</small></summary>
+    <ul>
+      <li>回路図から取り込み、回路図との差分の表示、ピンの入れ替えを回路図へ戻す</li>
+      <li><strong>自動配置</strong> (つながりの強い部品をまとめる、IC のまわりにバイパスコンデンサと水晶を寄せる、ロックした部品はそのまま)、整列、部品番号の振り直し</li>
+      <li><strong>自動配線</strong>、押しのけ配線、45° / 直角 / 自由の曲げ方、パッドへの垂直な出入り</li>
+      <li>差動ペア、長さ合わせ (蛇行)、配線後に近くの部品を動かして引き直す</li>
+      <li>2 / 4 / 6 / 8 層 (内層に配線とベタ)、ネットクラス (線幅・間隔・ビア・使う層)</li>
+      <li>基板のスニペット (部品を配線・ビアごと別の基板へ)</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>基板: 銅・仕上げ・シルク<small>形を整える</small></summary>
+    <ul>
+      <li>ベタ (銅箔ゾーン): クリアランス、サーマルリリーフ、孤立した銅の除去、優先順位、図形の編集</li>
+      <li>GND ベタを一押しで、ビアの縫い付け (重なりに並べる / 縁に沿って柵にする)、サーマルビア</li>
+      <li>配線の仕上げ: 角の丸め、太さの段差のなだらか化、涙型、パッドの首、分かれ目の補正</li>
+      <li>禁止領域 (配線・ビア・ベタ・部品を層ごとに)</li>
+      <li>シルクの文字・部品番号の大きさと向き・線の太さを、発注先の下限を守って手で直す。部品番号は重なりをよけて配置</li>
+      <li>テストポイント、フィデューシャル、寸法線、距離を測る道具</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>基板: 点検<small>DRC と、電気の目で見る点検</small></summary>
+    <ul>
+      <li>DRC (間隔・線幅・穴・基板端・ショート・未配線・ベタのかけら・鋭角・シルク)、<strong>作業しながらの点検</strong> (別のスレッドで、違反の印を画面に)</li>
+      <li>配線の太さを電流から点検、配線の電圧降下 (結果をシミュレーションに戻せる)</li>
+      <li>IC の電源ピンのバイパスコンデンサ、サーマルビア、配線のインピーダンスの目安</li>
+      <li>ネットの一覧 (クラス・層ごとの長さ・遠回り・ビア・線幅)、設計の要件の行ごとの結果</li>
+      <li>修理の練習: 動く基板に故障を1つ仕込み、症状から探して直す</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>発注・製造データ<small>注文まで</small></summary>
+    <ul>
+      <li>発注先 (JLCPCB / PCBWay / OSH Park) のルールに合わせる、発注前チェック</li>
+      <li>出来上がりのプレビュー、Gerber・Excellon ドリル・BOM・部品位置 (CPL) の書き出しと、注文の手順</li>
+      <li>部品ごとの店の型番 (DigiKey・秋月・LCSC) と、購入リスト</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>ファイル・ほかのソフト<small>取り込みと書き出し</small></summary>
+    <ul>
+      <li>KiCad: シンボル (<code>.kicad_sym</code>・旧形式 <code>.lib</code>)、フットプリント (<code>.kicad_mod</code>)、<strong>回路図 (<code>.kicad_sch</code>) を開く</strong></li>
+      <li>Ultra Librarian・SnapEDA の zip (シンボル・フットプリント・STEP を自動で拾う)</li>
+      <li>部品作成フォーム: データシート (PDF) の窓で、語の検索・見出し・表からピンの取り込み・図面の数字を寸法の欄へ</li>
+      <li>DXF (書き出しと、ケースの図面からの読み込み)、基板の SVG、回路図の SVG / PDF、SPICE ネットリスト</li>
+      <li>自動保存と、落ちたあとの復旧</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>画面なしで使う <code>ccad</code><small>スクリプト・AI・自動化</small></summary>
+    <ul>
+      <li>1行1コマンドのスクリプトで、回路を作る・ERC・解析・基板・製造データの書き出しまで実行</li>
+      <li>答えは1行1個の JSON。<strong>MCP サーバー</strong>にもなるので、AI エージェントが回路を組んで確かめられる</li>
+      <li>使い方は <a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/cli.md">docs/cli.md</a></li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>画面と言語<small>使いやすさ</small></summary>
+    <ul>
+      <li><strong>日本語と英語</strong>の画面 (「設定」→「Language / 言語」)。メニュー・説明・レッスン・用語集まで切り替わる<span class="tag">alpha.11 から</span></li>
+      <li>ボタンと入力欄のホバー説明、画面下のヒントと豆知識、ツールのアイコン表示</li>
+      <li>Windows 版と Linux 版 (Linux は WSL2 で確かめたのみ)</li>
+    </ul>
+  </details>
 </section>
 
 <section>
@@ -93,11 +305,11 @@ a{color:var(--accent)}
     <figure><img src="images/schematic-dc.png" alt="直列レギュレータの回路図に電圧と電流を重ねた画面" loading="lazy"><figcaption>回路図の上に電圧(色)と電流(矢印)を重ねて表示</figcaption></figure>
     <figure><img src="images/waveform.png" alt="過渡解析の波形" loading="lazy"><figcaption>波形の測定カーソルとステップ応答の指標</figcaption></figure>
     <figure><img src="images/board.png" alt="基板エディタ" loading="lazy"><figcaption>基板の配置・配線・DRC</figcaption></figure>
-    <figure><img src="images/view3d.png" alt="基板の3D表示" loading="lazy"><figcaption>3D表示で出来上がりを確かめる</figcaption></figure>
     <figure><img src="images/bode.png" alt="ボード線図" loading="lazy"><figcaption>AC解析のボード線図</figcaption></figure>
     <figure><img src="images/mixed-signal-waveform.png" alt="総合デモの過渡解析。555の出力を割ったカウンタの波形" loading="lazy"><figcaption>総合デモ(部品41個)の過渡解析。基板つきで同梱</figcaption></figure>
     <figure><img src="images/requirements-board.png" alt="近くに置く組の枠と離す距離の線が出た基板エディタ" loading="lazy"><figcaption>「設計の要件」を基板に取り込んで点検</figcaption></figure>
-    <figure><img src="images/order.png" alt="発注前チェックの画面" loading="lazy"><figcaption>発注先のルールに合わせた発注前チェック</figcaption></figure>
+    <figure><img src="images/en/lesson.png" alt="英語の画面のレッスン。予測の問いが出ている" loading="lazy"><figcaption>英語の画面 (レッスンと予測の問い)</figcaption></figure>
+    <figure><img src="images/guide.png" alt="操作ガイドの窓" loading="lazy"><figcaption>操作ガイド (F1)</figcaption></figure>
   </div>
 </section>
 
@@ -106,19 +318,14 @@ a{color:var(--accent)}
   <ol>
     <li><a href="https://github.com/K2EXTER/circuitCad/releases/latest">リリースページ</a>から zip をダウンロードして展開し、circuitCad.exe を起動します。</li>
     <li>起動時のカードの「最初のレッスンを始める」を押します。最初はオームの法則で、手順どおりに押すとシミュレーション結果が回路図に重なって出ます。</li>
-    <li>慣れたら「学ぶ → 学習パス」で、安定化電源づくりに進みます。</li>
+    <li>慣れたら「学ぶ → 学習パス」で、安定化電源づくりに進みます。できあがった回路を先に見たいときは「ファイル → サンプル回路を開く」から。</li>
   </ol>
-</section>
-
-<section>
-  <h2>AIから使える</h2>
-  <p>画面なしの操作窓口 <code>ccad</code> は、1行1コマンドのスクリプトで回路作成・ERC・解析・基板・製造データを実行し、答えをJSONで返します。MCPサーバーにもなるので、AIエージェントが回路を組んで検証できます。使い方は <a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/cli.md">docs/cli.md</a>。</p>
 </section>
 
 <section>
   <h2>いまの状態</h2>
   <div class="warn">
-    <strong>アルファ版です。</strong>動作確認は Windows のみで、基板の発注の実績はまだありません。シミュレーションは ngspice と結果を比べて確かめていますが、実物との一致は未確認です(<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">精度のページ</a>)。発注の前には、必ずご自身で確認してください。
+    <strong>アルファ版です。</strong>動作確認は Windows が中心で (Linux は WSL2 で確かめたのみ、macOS 版はまだありません)、基板の発注の実績はまだありません。シミュレーションは ngspice と結果を比べて確かめていますが、実物との一致は未確認です(<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">精度のページ</a>)。英語の画面は AI の助けで訳したもので、言い回しのおかしな所が残っているかもしれません。発注の前には、必ずご自身で確認してください。
   </div>
 </section>
 
@@ -128,6 +335,7 @@ a{color:var(--accent)}
     <li><a href="https://zenn.dev/k2exter/articles/d54c59e62156c3">Claude Codeで1週間・約5万行: 初学者向けの回路CAD「circuitCad」をRustで作った記録 (Zenn)</a></li>
     <li><a href="https://github.com/K2EXTER/circuitCad#readme">README (機能の詳細)</a></li>
     <li><a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/beginner-walkthrough.md">はじめてのウォークスルー</a></li>
+    <li><a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/competitor-comparison.md">ほかの電気 CAD との機能の比較</a></li>
   </ul>
 </section>
 
