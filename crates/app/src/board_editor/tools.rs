@@ -331,8 +331,11 @@ impl BoardEditor {
                 self.selected = self.hit_test(p);
                 if let Some(Item::Label(i)) = self.selected
                     && let Some(r) = self.board.texts.get(i).map(|t| t.refdes.clone()) {
-                        self.status = format!("{r} のシルク文字: ドラッグで動かせます。Delete で、元の位置に戻ります");
+                        self.status = format!("{r} のシルク文字: ドラッグで動かせます。R で回転、Delete で元の位置に戻ります。大きさは選択パネルで変えます");
                     }
+                if let Some(Item::Text(_)) = self.selected {
+                    self.status = "シルクの文字: ドラッグで動かせます。R で回転、Delete で消します。内容・大きさは選択パネルで変えます".into();
+                }
             }
             Tool::Track if self.trunk_mode => self.trunk_click(p),
             Tool::Track => match self.pending.take() {
@@ -344,11 +347,27 @@ impl BoardEditor {
                 }
             },
             Tool::Measure => self.measure_click(p),
+            Tool::Text => {
+                self.checkpoint();
+                let height = 1.0f64.max(self.board.rules.min_silk_text);
+                match pcb_core::silkedit::add_text(&mut self.board, "TEXT", p, height, 0, self.side) {
+                    Ok(i) => {
+                        self.selected = Some(Item::Text(i));
+                        self.multi.clear();
+                        self.status = "文字を置きました。選択パネルで内容・大きさ・向きを変えられます (ドラッグで動かせます。R で回転、Delete で消します)".into();
+                    }
+                    Err(e) => {
+                        self.undo.pop();
+                        self.status = e;
+                    }
+                }
+            }
             Tool::Silk => match self.pending.take() {
                 None => self.pending = Some(p),
                 Some(a) => {
                     self.checkpoint();
-                    self.board.silk.push(SilkLine { side: self.side.outer(), a, b: p, width: 0.15, refdes: String::new() });
+                    let width = self.silk_width.max(self.board.rules.min_silk_width);
+                    self.board.silk.push(SilkLine { side: self.side.outer(), a, b: p, width, refdes: String::new() });
                     self.pending = Some(p);
                 }
             },

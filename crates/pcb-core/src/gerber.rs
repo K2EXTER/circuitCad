@@ -235,7 +235,7 @@ pub fn silk(board: &Board, side: Side) -> String {
         g.line(l.a, l.b, l.width);
     }
     for t in board.texts.iter().filter(|t| t.side == side) {
-        let w = (t.height * 0.15).max(0.12);
+        let w = t.stroke_width(board.rules.min_silk_width);
         for [a, b] in t.strokes() {
             g.line(Point::new(t.pos.x + a.x, t.pos.y + a.y), Point::new(t.pos.x + b.x, t.pos.y + b.y), w);
         }

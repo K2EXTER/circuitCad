@@ -469,7 +469,7 @@ impl BoardEditor {
                 }
             }
             painter.add(egui::Shape::mesh(mesh));
-            if let Some(Item::Label(i)) = self.selected
+            if let Some(Item::Label(i) | Item::Text(i)) = self.selected
                 && let Some(t) = self.board.texts.get(i)
                 && self.side_visible(t.side)
                 && (self.vis.parts || t.refdes.is_empty())

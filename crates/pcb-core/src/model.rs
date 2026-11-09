@@ -235,6 +235,12 @@ impl SilkText {
         if self.rot % 2 == 1 { (self.height, w) } else { (w, self.height) }
     }
 
+    /// How thick the strokes of the text are printed (mm): 0.15 of the height, never thinner than 0.12 mm nor than `min` (the
+    /// fab's thinnest silk line, `Rules::min_silk_width`).
+    pub fn stroke_width(&self, min: f64) -> f64 {
+        (self.height * 0.15).max(0.12).max(min)
+    }
+
     /// The strokes of the text, turned and (on the bottom) mirrored, relative to `pos`.
     pub fn strokes(&self) -> Vec<[Point; 2]> {
         let rot = |p: Point| crate::parts::rotate(p, self.rot);
@@ -609,6 +615,10 @@ pub struct Rules {
     pub min_annular_ring: f64,
     pub mask_expansion: f64,
     pub outline_width: f64,
+    /// The thinnest silk line the fab prints (mm): silk lines, and the strokes of texts, are never drawn thinner.
+    pub min_silk_width: f64,
+    /// The smallest silk text the fab prints legibly (mm, the height of the letters).
+    pub min_silk_text: f64,
 }
 
 impl Default for Rules {
@@ -622,6 +632,8 @@ impl Default for Rules {
             min_annular_ring: 0.13,
             mask_expansion: 0.05,
             outline_width: 0.1,
+            min_silk_width: crate::drc::MIN_SILK_WIDTH,
+            min_silk_text: crate::drc::MIN_SILK_TEXT_HEIGHT,
         }
     }
 }
@@ -710,6 +722,9 @@ pub struct Board {
     /// The text follows its part and keeps the offset; an entry is removed when the text is put back.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub label_offsets: std::collections::BTreeMap<String, Point>,
+    /// Parts whose silkscreen designator is not printed (the user hid it: no room, or the board is for a case).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden_labels: Vec<String>,
     /// Dimensions kept on the board (a drawing layer: the editor, the DXF and the SVG show them; the Gerber files do not).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dimensions: Vec<crate::dimension::Dimension>,
@@ -806,6 +821,7 @@ impl Board {
             part_sheets: Default::default(),
             pin_map: Default::default(),
             label_offsets: Default::default(),
+            hidden_labels: vec![],
             dimensions: vec![],
             keepouts: vec![],
             rules: Rules::default(),

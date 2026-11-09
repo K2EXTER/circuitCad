@@ -1,6 +1,6 @@
 use super::*;
 
-/// Smallest silk line width and text height most fabs print legibly (mm).
+/// Smallest silk line width and text height most fabs print legibly (mm): the defaults of `Rules::min_silk_width` / `min_silk_text`.
 pub const MIN_SILK_WIDTH: f64 = 0.15;
 pub const MIN_SILK_TEXT_HEIGHT: f64 = 0.8;
 
@@ -10,8 +10,8 @@ pub const MIN_SILK_TEXT_HEIGHT: f64 = 0.8;
 pub fn silk_checks(board: &Board) -> Vec<Violation> {
     let mut out = vec![];
     for l in &board.silk {
-        if l.width + 1e-9 < MIN_SILK_WIDTH {
-            out.push(v(format!("シルクの線の太さ {:.2}mm が細すぎます (印刷できるのは {:.2}mm 以上が目安)。太くしましょう", l.width, MIN_SILK_WIDTH), l.a));
+        if l.width + 1e-9 < board.rules.min_silk_width {
+            out.push(v(format!("シルクの線の太さ {:.2}mm が細すぎます (発注先が印刷できるのは {:.2}mm 以上)。太くしましょう", l.width, board.rules.min_silk_width), l.a));
         }
         let line = Geo::Cap { a: l.a, b: l.b, r: l.width / 2.0 };
         for p in &board.pads {
@@ -26,8 +26,8 @@ pub fn silk_checks(board: &Board) -> Vec<Violation> {
         }
     }
     for t in &board.texts {
-        if t.height + 1e-9 < MIN_SILK_TEXT_HEIGHT {
-            out.push(v(format!("シルクの文字「{}」の高さ {:.2}mm が小さすぎて読めません ({:.1}mm 以上が目安)", t.text, t.height, MIN_SILK_TEXT_HEIGHT), t.pos));
+        if t.height + 1e-9 < board.rules.min_silk_text {
+            out.push(v(format!("シルクの文字「{}」の高さ {:.2}mm が小さすぎて読めません (発注先の目安は {:.1}mm 以上)", t.text, t.height, board.rules.min_silk_text), t.pos));
         }
     }
     out

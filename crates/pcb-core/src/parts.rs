@@ -42,8 +42,9 @@ impl Board {
         };
         self.pads.retain(|p| p.refdes != part.refdes);
         self.silk.retain(|s| s.refdes != part.refdes);
-        // a designator the user turned stays turned when the part is placed again
+        // a designator the user turned (or made bigger) stays so when the part is placed again
         let label_rot = self.texts.iter().find(|t| t.refdes == part.refdes).map_or(0, |t| t.rot);
+        let label_height = self.texts.iter().find(|t| t.refdes == part.refdes).map_or(1.0, |t| t.height);
         self.texts.retain(|t| t.refdes != part.refdes);
 
         let mut new_holes: Vec<Hole> = vec![];
@@ -152,10 +153,12 @@ impl Board {
 
         // designator above the part, centred (plus the offset the user gave it)
         let off = self.label_offsets.get(&part.refdes).copied().unwrap_or_default();
-        let mut label = SilkText { side: part.side, pos: Point::default(), height: 1.0, text: part.refdes.clone(), refdes: part.refdes.clone(), rot: label_rot };
+        let mut label = SilkText { side: part.side, pos: Point::default(), height: label_height, text: part.refdes.clone(), refdes: part.refdes.clone(), rot: label_rot };
         let half_h = label.size().1 / 2.0;
         label.pos = Point::new((x0 + x1) / 2.0 + off.x, y1 + m + 0.2 + half_h + off.y);
-        self.texts.push(label);
+        if !self.hidden_labels.contains(&part.refdes) {
+            self.texts.push(label);
+        }
 
         if !old_pads.is_empty() {
             self.follow_pads(&part.refdes, &old_pads);

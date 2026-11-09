@@ -41,7 +41,7 @@ cargo run -p app              # 起動 (引数で .schjson / .pcbjson / .ccproj 
 - 配線: `autoroute.rs` `shove.rs` `ratsnest.rs` `reroute.rs` `merge.rs` `breakout.rs` `bridge.rs` `trunk.rs` `slot.rs` `padentry.rs` `meander.rs` `smooth.rs` `quality.rs`
 - 3D・ケース: `body.rs` `model3d.rs` `step.rs` `mesh.rs` `case.rs` `dxf.rs` `dxf_in.rs` `dimension.rs`(寸法線) / 絵と図: `svg.rs` `picture.rs`
 - 出力: `fab.rs`(発注前チェック)`export.rs` `gerber.rs` `excellon.rs` `assembly.rs` `shops.rs` `gerber_view.rs`
-- 修理の練習 `breakage.rs`、文字 `labels.rs` `strokefont.rs`
+- 修理の練習 `breakage.rs`、文字 `labels.rs`(部品番号をよける。7 か所+力)`strokefont.rs` `silkedit.rs`(シルクの文字・部品番号・線を手で直す。発注先の下限を守る)
 
 ## app (`crates/app/src`) — 詳細: `docs/code-notes/app.md`(目次。ファイル一覧は `app/files.md`)
 | ファイル | 内容 |

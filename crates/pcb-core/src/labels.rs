@@ -186,6 +186,196 @@ pub fn avoid_overlaps(board: &mut Board) -> LabelReport {
     report
 }
 
+/// How the designators sit, for comparing ways of placing them: how many touch something (`touching`, see `touches`) and the sum of what
+/// they touch (`score`), the mean gap between a designator and the box of its part (`mean_gap`, mm), and how many stand more than
+/// `FAR_GAP` from their part (`far`: one cannot tell which part they name).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LabelScore {
+    pub touching: usize,
+    pub score: u32,
+    pub mean_gap: f64,
+    pub far: usize,
+}
+
+/// A designator further than this from the box of its part (mm) is hard to tie to it.
+pub const FAR_GAP: f64 = 2.0;
+
+/// The gap between a box and the body box `lo`-`hi` (0 when they touch or overlap).
+fn gap_to_body(r: Rect, lo: Point, hi: Point) -> f64 {
+    let dx = (lo.x - (r.c.x + r.hw)).max((r.c.x - r.hw) - hi.x).max(0.0);
+    let dy = (lo.y - (r.c.y + r.hh)).max((r.c.y - r.hh) - hi.y).max(0.0);
+    dx.hypot(dy)
+}
+
+fn text_rect(t: &SilkText) -> Rect {
+    Rect { c: t.pos, hw: t.size().0 / 2.0, hh: t.size().1 / 2.0 }
+}
+
+/// See `LabelScore`.
+pub fn label_score(board: &Board) -> LabelScore {
+    let others: Vec<(String, Rect)> = board.texts.iter().filter(|t| !t.refdes.is_empty()).map(|t| (t.refdes.clone(), text_rect(t))).collect();
+    let (top, bottom) = (obstacles(board, Side::Top), obstacles(board, Side::Bottom));
+    let mut s = LabelScore::default();
+    let mut gaps = 0.0;
+    let mut n = 0;
+    // (the names of pins written by `pinlabels` are not designators: they only count as texts to keep clear of)
+    for t in board.texts.iter().filter(|t| !t.refdes.is_empty() && !t.refdes.contains('#')) {
+        let ob = if t.side == Side::Bottom { &bottom } else { &top };
+        let r = text_rect(t);
+        let k = touches(board, ob, r, &t.refdes, &others);
+        s.score += k;
+        s.touching += (k > 0) as usize;
+        if let Some((lo, hi)) = body_box(board, &t.refdes) {
+            let g = gap_to_body(r, lo, hi);
+            gaps += g;
+            n += 1;
+            s.far += (g > FAR_GAP) as usize;
+        }
+    }
+    s.mean_gap = if n > 0 { gaps / n as f64 } else { 0.0 };
+    s
+}
+
+/// The push that takes box `r` off box `o` (grown by `m`) along the axis it overlaps less, or nothing.
+fn push_off_box(r: Rect, o: Rect, m: f64) -> Option<Point> {
+    let (dx, dy) = (r.c.x - o.c.x, r.c.y - o.c.y);
+    let ox = r.hw + o.hw + m - dx.abs();
+    let oy = r.hh + o.hh + m - dy.abs();
+    if ox <= 0.0 || oy <= 0.0 {
+        return None;
+    }
+    Some(if ox < oy { Point::new(if dx >= 0.0 { ox } else { -ox }, 0.0) } else { Point::new(0.0, if dy >= 0.0 { oy } else { -oy }) })
+}
+
+/// The push that takes box `r` off the segment `a`-`b` of half width `w` (plus `m`), away from its nearest point, or nothing.
+fn push_off_segment(r: Rect, a: Point, b: Point, w: f64, m: f64) -> Option<Point> {
+    let (vx, vy) = (b.x - a.x, b.y - a.y);
+    let len2 = vx * vx + vy * vy;
+    let t = if len2 > 1e-12 { (((r.c.x - a.x) * vx + (r.c.y - a.y) * vy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let q = Point::new(a.x + t * vx, a.y + t * vy);
+    let (mut nx, mut ny) = (r.c.x - q.x, r.c.y - q.y);
+    let d = nx.hypot(ny);
+    if d > 1e-9 {
+        (nx, ny) = (nx / d, ny / d);
+    } else if len2 > 1e-12 {
+        let l = len2.sqrt();
+        (nx, ny) = (-vy / l, vx / l);
+    } else {
+        (nx, ny) = (0.0, 1.0);
+    }
+    let need = w + m + nx.abs() * r.hw + ny.abs() * r.hh;
+    (d < need).then(|| Point::new(nx * (need - d), ny * (need - d)))
+}
+
+/// Designators off the copper by forces: each designator that touches something (and that the user did not place) is pushed off the pads,
+/// vias, holes, tracks, the outlines of other parts and the other designators, kept on the board, and pulled back to its part; after the
+/// steps a designator keeps its new spot only when it touches less there. `all`: every designator not placed by hand moves, not only those
+/// that touch something (the others still push).
+pub fn relax_labels(board: &mut Board, all: bool) -> LabelReport {
+    const STEPS: usize = 150;
+    const MARGIN: f64 = 0.15;
+    const HOME: f64 = 0.04;
+    const MAX_STEP: f64 = 0.25;
+    let mut report = LabelReport::default();
+    let idx: Vec<usize> = board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty()).map(|(i, _)| i).collect();
+    if idx.is_empty() {
+        return report;
+    }
+    let (top, bottom) = (obstacles(board, Side::Top), obstacles(board, Side::Bottom));
+    let ob_of = |t: &SilkText| if t.side == Side::Bottom { &bottom } else { &top };
+    let others0: Vec<(String, Rect)> = idx.iter().map(|&i| (board.texts[i].refdes.clone(), text_rect(&board.texts[i]))).collect();
+    let start: Vec<u32> = idx.iter().map(|&i| touches(board, ob_of(&board.texts[i]), text_rect(&board.texts[i]), &board.texts[i].refdes, &others0)).collect();
+    // (a pin name of `pinlabels` stays by its pin)
+    let moving: Vec<bool> = idx.iter().zip(&start).map(|(&i, &s)| !board.texts[i].refdes.contains('#') && !board.label_offsets.contains_key(&board.texts[i].refdes) && (all || s > 0)).collect();
+    if !moving.iter().any(|&m| m) {
+        return report;
+    }
+    let bodies: Vec<Option<(Point, Point)>> = idx.iter().map(|&i| body_box(board, &board.texts[i].refdes)).collect();
+    let edge = board.bounds();
+    let mut pos: Vec<Point> = idx.iter().map(|&i| board.texts[i].pos).collect();
+    let home = pos.clone();
+    let half: Vec<(f64, f64)> = idx.iter().map(|&i| (board.texts[i].size().0 / 2.0, board.texts[i].size().1 / 2.0)).collect();
+    let rect = |pos: &[Point], k: usize| Rect { c: pos[k], hw: half[k].0, hh: half[k].1 };
+    for _ in 0..STEPS {
+        let mut push = vec![Point::default(); idx.len()];
+        for k in (0..idx.len()).filter(|&k| moving[k]) {
+            let t = &board.texts[idx[k]];
+            let ob = ob_of(t);
+            let r = rect(&pos, k);
+            let mut f = Point::new(HOME * (home[k].x - pos[k].x), HOME * (home[k].y - pos[k].y));
+            let mut add = |p: Option<Point>, w: f64| {
+                if let Some(p) = p {
+                    f = Point::new(f.x + w * p.x, f.y + w * p.y);
+                }
+            };
+            for b in &ob.boxes {
+                add(push_off_box(r, *b, MARGIN), 1.0);
+            }
+            for (a, b, w) in &ob.tracks {
+                add(push_off_segment(r, *a, *b, *w, MARGIN), 1.0);
+            }
+            for (name, a, b) in &ob.silk {
+                if name != &t.refdes {
+                    add(push_off_segment(r, *a, *b, 0.0, MARGIN), 0.5);
+                }
+            }
+            for j in (0..idx.len()).filter(|&j| j != k && board.texts[idx[j]].side == t.side) {
+                // (two that both move share the push)
+                add(push_off_box(r, rect(&pos, j), 0.25), if moving[j] { 0.5 } else { 1.0 });
+            }
+            // kept on the board
+            if let Some((lo, hi)) = edge {
+                let m = 0.3;
+                f.x += (lo.x + m - (r.c.x - r.hw)).max(0.0) - ((r.c.x + r.hw) - (hi.x - m)).max(0.0);
+                f.y += (lo.y + m - (r.c.y - r.hh)).max(0.0) - ((r.c.y + r.hh) - (hi.y - m)).max(0.0);
+            }
+            // pulled back when it strays from its part
+            if let Some((lo, hi)) = bodies[k] {
+                let g = gap_to_body(r, lo, hi);
+                if g > 1.0 {
+                    let c = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+                    let d = (c.x - r.c.x).hypot(c.y - r.c.y).max(1e-9);
+                    f = Point::new(f.x + 0.3 * (g - 1.0) * (c.x - r.c.x) / d, f.y + 0.3 * (g - 1.0) * (c.y - r.c.y) / d);
+                }
+            }
+            push[k] = f;
+        }
+        for k in 0..idx.len() {
+            let (fx, fy) = (push[k].x * 0.5, push[k].y * 0.5);
+            let l = fx.hypot(fy);
+            let s = if l > MAX_STEP { MAX_STEP / l } else { 1.0 };
+            pos[k] = Point::new(pos[k].x + fx * s, pos[k].y + fy * s);
+        }
+    }
+    // a designator keeps the new spot only when it touches less there (the others where they ended)
+    let snapped: Vec<Point> = pos.iter().map(|p| Point::new((p.x * 20.0).round() / 20.0, (p.y * 20.0).round() / 20.0)).collect();
+    let mut kept = snapped.clone();
+    for k in (0..idx.len()).filter(|&k| moving[k]) {
+        kept[k] = home[k];
+    }
+    for k in (0..idx.len()).filter(|&k| moving[k]) {
+        let t = &board.texts[idx[k]];
+        let others: Vec<(String, Rect)> = (0..idx.len()).map(|j| (board.texts[idx[j]].refdes.clone(), rect(&kept, j))).collect();
+        let new = touches(board, ob_of(t), rect(&snapped, k), &t.refdes, &others);
+        if new < start[k] {
+            kept[k] = snapped[k];
+        }
+    }
+    for k in (0..idx.len()).filter(|&k| moving[k]) {
+        let i = idx[k];
+        let refdes = board.texts[i].refdes.clone();
+        if kept[k] != home[k] {
+            let d = Point::new(kept[k].x - home[k].x, kept[k].y - home[k].y);
+            board.texts[i].pos = kept[k];
+            board.label_offsets.insert(refdes.clone(), d);
+            report.moved += 1;
+        }
+    }
+    let others: Vec<(String, Rect)> = idx.iter().map(|&i| (board.texts[i].refdes.clone(), text_rect(&board.texts[i]))).collect();
+    report.still_touching = idx.iter().filter(|&&i| touches(board, ob_of(&board.texts[i]), text_rect(&board.texts[i]), &board.texts[i].refdes, &others) > 0).count();
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

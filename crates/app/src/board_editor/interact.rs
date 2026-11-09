@@ -141,6 +141,22 @@ impl BoardEditor {
                 && resp.dragged_by(egui::PointerButton::Primary) {
                     self.board.move_label(&r, Point::new(w.x - grab.x, w.y - grab.y));
                 }
+            // a free text: the same, freely
+            if resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && !ctrl && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none() && self.drag_label.is_none()
+                && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
+                && let w0 = self.to_world(rect, o)
+                && let Some(Item::Text(i)) = self.hit_test(w0)
+                && let Some(t) = self.board.texts.get(i) {
+                    self.drag_text = Some((i, Point::new(w0.x - t.pos.x, w0.y - t.pos.y)));
+                    self.selected = Some(Item::Text(i));
+                    self.multi.clear();
+                    self.checkpoint();
+                }
+            if let Some((i, grab)) = self.drag_text
+                && resp.dragged_by(egui::PointerButton::Primary)
+                && let Some(t) = self.board.texts.get_mut(i) {
+                    t.pos = Point::new(w.x - grab.x, w.y - grab.y);
+                }
             if self.track_drag_on && !ctrl && resp.drag_started_by(egui::PointerButton::Primary) && self.tool == Tool::Select && self.gdrag.is_none() && self.multi.len() <= 1 && self.boxsel.is_none()
                 // the pointer has already moved a few pixels when the drag is recognised: look where it was pressed
                 && let Some(o) = resp.ctx.input(|i| i.pointer.press_origin())
@@ -176,6 +192,7 @@ impl BoardEditor {
             self.finish_track_drag();
             self.drag_part = None;
             self.drag_label = None;
+            self.drag_text = None;
             self.gdrag = None;
         }
         // while a shape is drawn, the right click opens a menu (line / arc / ..., the last corner back, close, cancel), like a drafting program

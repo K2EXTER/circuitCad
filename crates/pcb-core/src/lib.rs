@@ -30,6 +30,7 @@ pub mod impedance;
 pub mod keepout;
 pub mod irdrop;
 pub mod labels;
+pub mod silkedit;
 pub mod meander;
 pub mod merge;
 pub mod mesh;

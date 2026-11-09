@@ -50,6 +50,8 @@ pub enum Icon {
     EyeOff,
     Lock,
     Unlock,
+    /// A capital T (a text on the silkscreen).
+    Text,
 }
 
 /// Draw `icon` inside `r` (a square) with `c`.
@@ -74,6 +76,11 @@ pub fn paint(p: &egui::Painter, r: Rect, icon: Icon, c: Color32) {
             for x in [0.2, 0.35] {
                 p.line_segment([q(x, 0.7), q(x + 0.1, 0.9)], Stroke::new(1.2, c));
             }
+        }
+        Icon::Text => {
+            p.line_segment([q(0.15, 0.18), q(0.85, 0.18)], s);
+            p.line_segment([q(0.5, 0.18), q(0.5, 0.85)], s);
+            p.line_segment([q(0.38, 0.85), q(0.62, 0.85)], s);
         }
         Icon::Label => {
             let pts = vec![q(0.1, 0.25), q(0.65, 0.25), q(0.92, 0.5), q(0.65, 0.75), q(0.1, 0.75)];

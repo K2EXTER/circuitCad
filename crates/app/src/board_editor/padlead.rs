@@ -255,7 +255,11 @@ impl BoardEditor {
     /// The "文字をよける" button: part designators off the copper.
     pub(super) fn avoid_label_overlaps_button(&mut self) {
         let mut trial = self.board.clone();
-        let r = pcb_core::labels::avoid_overlaps(&mut trial);
+        // the spots round each part first, then the forces for those still touching (they push off what they touch, into the gaps the
+        // spots miss): on the shipped samples 60 -> 47 designators left touching
+        let a = pcb_core::labels::avoid_overlaps(&mut trial);
+        let b = pcb_core::labels::relax_labels(&mut trial, false);
+        let r = pcb_core::labels::LabelReport { moved: a.moved + b.moved, still_touching: b.still_touching };
         if r.moved == 0 {
             self.status = if r.still_touching == 0 { "部品番号の文字は、どれも配線やパッドに重なっていません".into() } else { format!("部品番号の文字 {} 個が重なっていますが、よけられる空きがありません (文字を手でドラッグして動かせます)", r.still_touching) };
             return;

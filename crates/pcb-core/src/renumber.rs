@@ -86,6 +86,7 @@ impl Board {
         self.silk.iter_mut().for_each(|s| r(&mut s.refdes));
         self.texts.iter_mut().for_each(|t| r(&mut t.refdes));
         self.locked_parts.iter_mut().for_each(r);
+        self.hidden_labels.iter_mut().for_each(r);
         rename_keys(&mut self.part_shops, &map);
         rename_keys(&mut self.part_sheets, &map);
         rename_keys(&mut self.pin_map, &map);

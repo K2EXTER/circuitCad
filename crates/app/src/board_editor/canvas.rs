@@ -188,6 +188,11 @@ impl BoardEditor {
                     self.checkpoint();
                     self.board.turn_label(&r);
                 }
+            } else if let Some(Item::Text(i)) = self.selected {
+                if self.board.texts.get(i).is_some() {
+                    self.checkpoint();
+                    self.board.texts[i].rot = (self.board.texts[i].rot + 1) % 4;
+                }
             } else if !self.multi.is_empty() {
                 self.checkpoint();
                 let items = self.multi.clone();

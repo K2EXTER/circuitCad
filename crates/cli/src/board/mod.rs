@@ -14,6 +14,7 @@ mod copper;
 mod checks;
 mod practice;
 mod output;
+mod silk;
 
 const DEFAULT_SIZE: (f64, f64) = (60.0, 40.0);
 
@@ -60,6 +61,9 @@ impl Session {
             "health" => self.board_health(rest),
             "reveal" => self.board_reveal(rest),
             "labels" => self.board_labels(rest),
+            "text" => self.board_text(rest),
+            "label" => self.board_label(rest),
+            "silkline" => self.board_silkline(rest),
             "thermal" => self.board_thermal(rest),
             "improve" => self.board_improve(rest),
             "route" => self.board_route(rest),

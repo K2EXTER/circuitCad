@@ -135,6 +135,17 @@ impl BoardEditor {
         self.selected = (i < self.board.tracks.len()).then_some(Item::Track(i));
     }
 
+    /// Pick a silkscreen text (for screenshots): `text:N` a free text, `label:R1` a part's designator, `silk:N` a silk line, `R1` a part.
+    pub fn select_named(&mut self, what: &str) {
+        let index = |n: &str| n.parse::<usize>().ok();
+        self.selected = match what.split_once(':') {
+            Some(("text", n)) => index(n).filter(|&i| pcb_core::silkedit::is_free_text(&self.board, i)).map(Item::Text),
+            Some(("silk", n)) => index(n).filter(|&i| i < self.board.silk.len()).map(Item::Silk),
+            Some(("label", r)) => self.board.texts.iter().position(|t| t.refdes == r).map(Item::Label),
+            _ => self.board.parts.iter().position(|p| p.refdes == what).map(Item::Part),
+        };
+    }
+
     /// Turn all the finish off or back on (for screenshots).
     pub fn set_finish(&mut self, on: bool) {
         let f = &mut self.board.finish;

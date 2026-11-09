@@ -20,6 +20,9 @@ pub struct FabPreset {
     pub edge_clearance: f64,
     pub min_drill: f64,
     pub min_annular_ring: f64,
+    /// The thinnest silk line and the smallest silk text the fab prints (mm; text: the height of the letters).
+    pub min_silk_width: f64,
+    pub min_silk_text: f64,
     /// The size (mm, either way round) up to which the cheapest price tier applies; `None` when the price does not step with it.
     pub cheap_size: Option<(f64, f64)>,
     /// Suggested defaults when drawing (track width, via diameter, via drill).
@@ -43,6 +46,8 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.3,
         min_drill: 0.3,
         min_annular_ring: 0.13,
+        min_silk_width: 0.15,
+        min_silk_text: 0.8,
         cheap_size: None,
         track_width: 0.25,
         via_diameter: 0.6,
@@ -60,6 +65,8 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.3,
         min_drill: 0.3,
         min_annular_ring: 0.15,
+        min_silk_width: 0.15,
+        min_silk_text: 1.0,
         cheap_size: Some((100.0, 100.0)),
         track_width: 0.25,
         via_diameter: 0.6,
@@ -86,6 +93,8 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.3,
         min_drill: 0.3,
         min_annular_ring: 0.15,
+        min_silk_width: 0.15,
+        min_silk_text: 0.8,
         cheap_size: Some((100.0, 100.0)),
         track_width: 0.25,
         via_diameter: 0.6,
@@ -111,6 +120,8 @@ pub const PRESETS: &[FabPreset] = &[
         edge_clearance: 0.381,
         min_drill: 0.254,
         min_annular_ring: 0.127,
+        min_silk_width: 0.127,
+        min_silk_text: 0.8,
         cheap_size: None,
         track_width: 0.25,
         via_diameter: 0.6,
@@ -137,6 +148,8 @@ impl FabPreset {
         rules.edge_clearance = self.edge_clearance;
         rules.min_drill = self.min_drill;
         rules.min_annular_ring = self.min_annular_ring;
+        rules.min_silk_width = self.min_silk_width;
+        rules.min_silk_text = self.min_silk_text;
     }
 
     /// True when `rules` are at least as strict as this fab's minimums.
@@ -147,6 +160,8 @@ impl FabPreset {
             && rules.edge_clearance + eps >= self.edge_clearance
             && rules.min_drill + eps >= self.min_drill
             && rules.min_annular_ring + eps >= self.min_annular_ring
+            && rules.min_silk_width + eps >= self.min_silk_width
+            && rules.min_silk_text + eps >= self.min_silk_text
     }
 }
 

@@ -37,10 +37,17 @@ impl BoardEditor {
             }
         }
         // a part's designator on the silkscreen (above the tracks: a track under the text is still reachable from beside it)
-        for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty() && self.vis.parts && self.side_visible(t.side)) {
+        for (i, t) in self.board.texts.iter().enumerate().filter(|(_, t)| !t.refdes.is_empty() && !t.refdes.contains('#') && self.vis.parts && self.side_visible(t.side)) {
             let (w, h) = t.size();
             if pick.silk && self.vis.silk && side_ok(t.side) && (p.x - t.pos.x).abs() <= w / 2.0 + tol && (p.y - t.pos.y).abs() <= h / 2.0 + tol {
                 return Some(Item::Label(i));
+            }
+        }
+        // a free text (and a pin name)
+        for (i, t) in self.board.texts.iter().enumerate().filter(|(i, t)| pcb_core::silkedit::is_free_text(&self.board, *i) && self.side_visible(t.side)) {
+            let (w, h) = t.size();
+            if pick.silk && self.vis.silk && side_ok(t.side) && (p.x - t.pos.x).abs() <= w / 2.0 + tol && (p.y - t.pos.y).abs() <= h / 2.0 + tol {
+                return Some(Item::Text(i));
             }
         }
         for (i, t) in self.board.tracks.iter().enumerate().filter(|(_, t)| self.side_visible(t.side)) {
@@ -170,6 +177,12 @@ impl BoardEditor {
                 out.push(Item::Silk(i));
             }
         }
+        for (i, t) in self.board.texts.iter().enumerate().filter(|(i, t)| pcb_core::silkedit::is_free_text(&self.board, *i) && self.vis.silk && self.side_visible(t.side)) {
+            let (w, h) = t.size();
+            if rect_hit(t.pos, w, h) {
+                out.push(Item::Text(i));
+            }
+        }
         for (i, z) in self.board.zones.iter().enumerate().filter(|(_, z)| self.vis.zones && self.side_visible(z.side)) {
             let outline = z.outline();
             let n = outline.len();
@@ -195,7 +208,7 @@ impl BoardEditor {
         let side = match *it {
             Item::Track(i) => self.board.tracks.get(i).map(|t| t.side),
             Item::Silk(i) => self.board.silk.get(i).map(|l| l.side),
-            Item::Label(i) => self.board.texts.get(i).map(|t| t.side),
+            Item::Label(i) | Item::Text(i) => self.board.texts.get(i).map(|t| t.side),
             Item::Zone(i) => self.board.zones.get(i).map(|z| z.side),
             Item::Pad(i) => self.board.pads.get(i).filter(|p| p.drill.is_none()).map(|p| p.side),
             Item::Part(i) => self.board.parts.get(i).filter(|p| !self.board.pads.iter().any(|q| q.refdes == p.refdes && q.drill.is_some())).map(|p| p.side),
@@ -220,6 +233,7 @@ impl BoardEditor {
             Item::Silk(i) => self.vis.silk && self.board.silk.get(i).is_none_or(|s| self.side_visible(s.side)),
             Item::Label(i) => self.vis.silk && self.board.texts.get(i).is_none_or(|t| self.side_visible(t.side) && (self.vis.parts || t.refdes.is_empty())),
             Item::Zone(i) => self.vis.zones && self.board.zones.get(i).is_none_or(|z| self.side_visible(z.side)),
+            Item::Text(i) => self.vis.silk && self.board.texts.get(i).is_none_or(|t| self.side_visible(t.side)),
             _ => true,
         }
     }
@@ -232,7 +246,7 @@ impl BoardEditor {
             }
             Item::Track(i) if i < self.board.tracks.len() => vec![self.board.tracks[i].a, self.board.tracks[i].b],
             Item::Silk(i) if i < self.board.silk.len() => vec![self.board.silk[i].a, self.board.silk[i].b],
-            Item::Label(i) if i < self.board.texts.len() => vec![self.board.texts[i].pos],
+            Item::Label(i) | Item::Text(i) if i < self.board.texts.len() => vec![self.board.texts[i].pos],
             Item::Pad(i) if i < self.board.pads.len() => vec![self.board.pads[i].pos],
             Item::Via(i) if i < self.board.vias.len() => vec![self.board.vias[i].pos],
             Item::Hole(i) if i < self.board.holes.len() => vec![self.board.holes[i].pos],
@@ -259,6 +273,11 @@ impl BoardEditor {
                 Item::Silk(i) => {
                     if let (Some(o), Some(t)) = (g.orig.silk.get(i), self.board.silk.get_mut(i)) {
                         (t.a, t.b) = (mv(o.a), mv(o.b));
+                    }
+                }
+                Item::Text(i) => {
+                    if let (Some(o), Some(t)) = (g.orig.texts.get(i), self.board.texts.get_mut(i)) {
+                        t.pos = mv(o.pos);
                     }
                 }
                 Item::Pad(i) => {
@@ -342,6 +361,11 @@ impl BoardEditor {
                     let Some(t) = self.board.silk.get_mut(i).filter(|t| t.refdes.is_empty()) else { continue };
                     (t.a, t.b) = (turn(t.a), turn(t.b));
                 }
+                Item::Text(i) => {
+                    let Some(t) = self.board.texts.get_mut(i) else { continue };
+                    t.pos = turn(t.pos);
+                    t.rot = (t.rot + 1) % 4;
+                }
                 Item::Pad(i) => {
                     let Some(t) = self.board.pads.get_mut(i).filter(|t| t.refdes.is_empty()) else { continue };
                     t.pos = turn(t.pos);
@@ -389,7 +413,7 @@ impl BoardEditor {
     pub(super) fn delete_multi(&mut self) {
         let items = std::mem::take(&mut self.multi);
         let had_parts = items.iter().any(|i| matches!(i, Item::Part(_)));
-        let mut idx: [Vec<usize>; 6] = Default::default();
+        let mut idx: [Vec<usize>; 7] = Default::default();
         for it in &items {
             match *it {
                 Item::Track(i) => idx[0].push(i),
@@ -398,6 +422,7 @@ impl BoardEditor {
                 Item::Hole(i) => idx[3].push(i),
                 Item::Silk(i) => idx[4].push(i),
                 Item::Zone(i) => idx[5].push(i),
+                Item::Text(i) => idx[6].push(i),
                 Item::Part(_) | Item::Label(_) => {}
             }
         }
@@ -413,6 +438,7 @@ impl BoardEditor {
             for &i in &idx[3] { if i < self.board.holes.len() { self.board.holes.remove(i); } }
             for &i in &idx[4] { if i < self.board.silk.len() { self.board.silk.remove(i); } }
             for &i in &idx[5] { if i < self.board.zones.len() { self.board.zones.remove(i); } }
+            for &i in &idx[6] { if i < self.board.texts.len() { self.board.texts.remove(i); } }
         }
         self.selected = None;
         self.status = match (n, had_parts) {
@@ -443,8 +469,10 @@ impl BoardEditor {
             Item::Hole(i) => drop(self.board.holes.remove(i)),
             Item::Silk(i) => drop(self.board.silk.remove(i)),
             Item::Zone(i) => drop(self.board.zones.remove(i)),
+            Item::Text(i) => drop(pcb_core::silkedit::remove_text(&mut self.board, i)),
             Item::Part(_) | Item::Label(_) => {}
         }
         self.selected = None;
+        self.text_edit = None;
     }
 }

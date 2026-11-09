@@ -26,6 +26,8 @@ pub enum Tool {
     Keepout,
     /// Measure the distance between two points (nothing is changed on the board).
     Measure,
+    /// Put a free text on the silkscreen (a board name, a version, a note).
+    Text,
 }
 
 use crate::icons::Icon;
@@ -42,7 +44,8 @@ fn tool_tip(t: Tool) -> &'static str {
         Tool::PadTh => "穴付き (スルーホール) の単独パッドを置きます",
         Tool::PadSmd => "表面実装の単独パッドを置きます",
         Tool::Hole => "ネジ止め用の取付穴を置きます",
-        Tool::Silk => "部品名や目印などの白い印刷 (シルク) の線を引きます",
+        Tool::Silk => "部品名や目印などの白い印刷 (シルク) の線を引きます。太さは、引いた線を選ぶと変えられます (次に引く線もその太さになります)",
+        Tool::Text => "シルク (白い印刷) に、自由な文字 (基板名・版数・注意書きなど) を置きます。クリックした所に置き、内容・大きさ・向き・面は選択パネルで変えます。英数字と一部の記号が使えます (日本語は印刷できません)",
         Tool::Measure => "2点の間の距離を測ります。1回目のクリックで始点、2回目で終点。パッド・ビアの中心や配線の端に吸い付きます。測ったあと Enter で寸法線として基板に残せます (H は横の長さだけ・V は縦だけ。DXF と SVG の図に出ます)。残さなければ基板は変わりません (Esc で消します)",
     }
 }
@@ -66,13 +69,14 @@ const TOOLS: &[(Tool, &str, crate::icons::Icon)] = &[
     (Tool::Measure, "距離を測る", Icon::Ruler),
     // (last: the number keys of the tools before it stay as they were)
     (Tool::Keepout, "禁止領域", Icon::Keepout),
+    (Tool::Text, "シルクの文字", Icon::Text),
 ];
 
 /// The tools as the panel shows them: groups of joined bars, each tool with a short label (the full name is in `TOOLS`).
 const TOOL_GROUPS: &[(&str, &[(Tool, &str)])] = &[
     ("基本", &[(Tool::Select, "選択"), (Tool::Track, "配線"), (Tool::Via, "ビア"), (Tool::Measure, "測る")]),
     ("銅・穴", &[(Tool::Zone, "ゾーン"), (Tool::Keepout, "禁止"), (Tool::PadTh, "穴付き"), (Tool::PadSmd, "SMD"), (Tool::Hole, "取付穴")]),
-    ("外形・文字", &[(Tool::OutlineRect, "矩形"), (Tool::OutlinePoly, "多角形"), (Tool::Silk, "シルク")]),
+    ("外形・文字", &[(Tool::OutlineRect, "矩形"), (Tool::OutlinePoly, "多角形"), (Tool::Silk, "シルク"), (Tool::Text, "文字")]),
 ];
 
 /// What a click adds while a polygon is drawn (the board outline, a pour, a hole of a pour): like a drafting program, lines and arcs
@@ -111,6 +115,8 @@ enum Item {
     Zone(usize),
     /// A part's silkscreen designator: index into `Board::texts` (only texts with a reference designator).
     Label(usize),
+    /// A silkscreen text of no part (or a pin name of 「ピン名をシルクへ」): index into `Board::texts` (see `silkedit::is_free_text`).
+    Text(usize),
 }
 
 /// Rubber-band selection in progress.
@@ -196,7 +202,7 @@ impl Pickable {
             Item::Track(_) => self.tracks,
             Item::Via(_) => self.vias,
             Item::Pad(_) | Item::Hole(_) => self.pads,
-            Item::Silk(_) | Item::Label(_) => self.silk,
+            Item::Silk(_) | Item::Label(_) | Item::Text(_) => self.silk,
             Item::Zone(_) => self.zones,
         }
     }
@@ -325,6 +331,12 @@ pub struct BoardEditor {
     drag_part: Option<(String, Point)>,
     /// A designator text being dragged: its part and where the pointer grabbed it (from the text's centre).
     drag_label: Option<(String, Point)>,
+    /// A free text being dragged: its index and where the pointer grabbed it.
+    drag_text: Option<(usize, Point)>,
+    /// The width of the next silk line (mm; the last one set on a line).
+    silk_width: f64,
+    /// The text being typed for the selected free text (index, text): kept while it is not one the font prints, with the reason.
+    text_edit: Option<(usize, String, Option<String>)>,
     /// The wire tool in its trunk mode ("幹で引く"): two pads of a net side by side, then a place to go to.
     trunk_mode: bool,
     /// In trunk mode: the pads picked so far (up to two).
@@ -545,6 +557,9 @@ impl Default for BoardEditor {
             gdrag: None,
             drag_part: None,
             drag_label: None,
+            drag_text: None,
+            silk_width: 0.15,
+            text_edit: None,
             trunk_mode: false,
             trunk_pads: vec![],
             trunk_note: None,

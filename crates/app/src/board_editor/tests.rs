@@ -3585,3 +3585,37 @@ fn the_repair_lesson_breaks_a_good_board_and_ends_when_the_checks_agree_again() 
     assert!(!e.repair.as_ref().unwrap().fixed);
     assert!(pcb_core::breakage::health(&e.board).total() > 0);
 }
+
+#[test]
+fn the_text_tool_puts_a_free_text_that_is_picked_moved_turned_and_deleted() {
+    let mut e = BoardEditor::default();
+    e.tool = Tool::Text;
+    e.click(p(10.0, 10.0));
+    let i = e.board.texts.len() - 1;
+    assert_eq!(e.selected, Some(Item::Text(i)));
+    assert_eq!((e.board.texts[i].text.as_str(), e.board.texts[i].refdes.as_str()), ("TEXT", ""));
+    assert!(e.board.texts[i].height >= e.board.rules.min_silk_text);
+    // picked by a click on it, and not as a designator
+    e.tool = Tool::Select;
+    e.selected = None;
+    assert_eq!(e.hit_test(p(10.0, 10.0)), Some(Item::Text(i)));
+    // a box round it takes it too; a group move moves it
+    e.multi = vec![Item::Text(i)];
+    assert_eq!(e.rotate_group(&[Item::Text(i)]), 1);
+    assert_eq!(e.board.texts[i].rot, 1);
+    // Delete takes it away, and undo brings it back
+    e.delete(Item::Text(i));
+    assert!(e.board.texts.is_empty());
+    e.undo();
+    assert_eq!(e.board.texts.len(), 1);
+}
+
+#[test]
+fn a_silk_line_is_drawn_with_the_width_last_set_and_never_thinner_than_the_fab_prints() {
+    let mut e = BoardEditor::default();
+    e.silk_width = 0.05;
+    e.tool = Tool::Silk;
+    e.click(p(1.0, 1.0));
+    e.click(p(9.0, 1.0));
+    assert_eq!(e.board.silk.last().unwrap().width, e.board.rules.min_silk_width);
+}

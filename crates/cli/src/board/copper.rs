@@ -401,12 +401,30 @@ impl Session {
         Ok(obj(json!({"filled": filled})))
     }
 
-    pub(super) fn board_labels(&mut self, _rest: &[String]) -> Res {
-        // the part designators off the copper (the app's 「文字を配線からよける」): the ones that touch a track, a pad, a via, a hole or
-        // another text go to the clearest spot around their part; what was placed by hand stays
+    pub(super) fn board_labels(&mut self, rest: &[String]) -> Res {
+        // board labels [method=both|spots|force|none]: the part designators off the copper (the app's 「文字を配線からよける」): the ones
+        // that touch a track, a pad, a via, a hole or another text go to the clearest spot around their part (`spots`: the spots above,
+        // below and beside; `force`: pushed off what they touch and pulled back to their part; `both`: the spots, then the forces for
+        // those still touching, the default; `none`: only the score); what was placed by hand stays. The answer has the score before and after
+        // (`touching`, `score`, `mean_gap` mm, `far`: further than 2 mm from their part)
+        let (_, kv) = options(rest);
+        let method = opt(&kv, "method").unwrap_or("both").to_string();
         let board = self.board_mut()?;
-        let r = pcb_core::labels::avoid_overlaps(board);
-        Ok(obj(json!({"moved": r.moved, "still_touching": r.still_touching})))
+        let before = pcb_core::labels::label_score(board);
+        let r = match method.as_str() {
+            "spots" => pcb_core::labels::avoid_overlaps(board),
+            "force" => pcb_core::labels::relax_labels(board, false),
+            "both" => {
+                let a = pcb_core::labels::avoid_overlaps(board);
+                let b = pcb_core::labels::relax_labels(board, false);
+                pcb_core::labels::LabelReport { moved: a.moved + b.moved, still_touching: b.still_touching }
+            }
+            "none" => pcb_core::labels::LabelReport::default(),
+            m => return Err(format!("board labels method={m}: spots / force / both / none")),
+        };
+        let after = pcb_core::labels::label_score(board);
+        let score = |s: pcb_core::labels::LabelScore| json!({"touching": s.touching, "score": s.score, "mean_gap": (s.mean_gap * 100.0).round() / 100.0, "far": s.far});
+        Ok(obj(json!({"moved": r.moved, "still_touching": r.still_touching, "before": score(before), "after": score(after)})))
     }
 
     pub(super) fn board_thermal(&mut self, _rest: &[String]) -> Res {

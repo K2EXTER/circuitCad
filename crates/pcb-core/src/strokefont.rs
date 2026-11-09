@@ -66,6 +66,11 @@ fn glyph(c: char) -> Glyph {
     }
 }
 
+/// Does the font draw `c` (any other character is drawn as a question mark)? Letters, digits, the space and the symbols listed in `glyph`.
+pub fn supported(c: char) -> bool {
+    c == '?' || !std::ptr::eq(glyph(c).as_ptr(), glyph('\u{1}').as_ptr())
+}
+
 /// Width of `text` for a given character height.
 pub fn text_width(text: &str, height: f64) -> f64 {
     let n = text.chars().count() as f64;

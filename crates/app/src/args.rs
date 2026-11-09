@@ -1,7 +1,7 @@
 use super::*;
 
 /// Command line: `circuitCad [file.schjson | file.pcbjson | file.ccproj] [--dc] [--ac f0 f1 ppd] [--sweep src start stop step] [--param part from to count node [tran]] [--fault part kind [tran|ac node|chain] | scan] [--mc node [ac]] [--noise out in|- tempC] [--z net ref|- remove,list|- [f0 f1 ppd]] [--loop part [net|- [f0 f1 ppd]]] [--tran stop step [--spectrum]] [--post-layout [--schematic]]
-/// [--drc] [--round R] [--finish] [--select-track N] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
+/// [--drc] [--round R] [--finish] [--select-track N] [--select-board text:N|label:R1|silk:N|R1] [--3d] [--order] [--guide [schematic|waveform|board|3d]] [--learn [path id]] [--lesson <id>] [--board-lesson 0..7 [--repair seed]] [--select <refdes>] [--new-part] [--form-step file.step] [--form-pdf file.pdf [--form-find text] [--form-pick field]] [--challenge <id> [0|1] [--judge]] [--export dir] [--screenshot file.png] [--svg file.svg] [--pdf file.pdf]`. Mostly useful for scripts and for checking a build.
 pub(super) fn apply_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--lesson")
         && let Some(id) = args.get(i + 1)
@@ -324,6 +324,11 @@ fn apply_board_args(app: &mut App, args: &[String]) {
     if let Some(i) = args.iter().position(|a| a == "--select-track")
         && let Some(n) = args.get(i + 1).and_then(|n| n.parse::<usize>().ok()) {
             app.board_ed.select_track(n);
+        }
+    // --select-board text:N | label:R1 | silk:N | R1: something on the board picked (its settings in the panel)
+    if let Some(i) = args.iter().position(|a| a == "--select-board")
+        && let Some(w) = args.get(i + 1) {
+            app.board_ed.select_named(w);
         }
     if let Some(i) = args.iter().position(|a| a == "--view")
         && let (Some(x), Some(y), Some(z)) = (args.get(i + 1).and_then(|v| v.parse::<f32>().ok()), args.get(i + 2).and_then(|v| v.parse::<f32>().ok()), args.get(i + 3).and_then(|v| v.parse::<f32>().ok()))

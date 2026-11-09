@@ -688,6 +688,13 @@ impl BoardEditor {
                 if ui.button(if side == Side::Bottom { "表面に移す (B)" } else { "裏面に移す (B)" }).on_hover_text("部品を反対の面に付け替えます。裏面の部品は左右が反転します (B キーでも)").clicked() {
                     self.flip_selected_part();
                 }
+                let mut show = !self.board.hidden_labels.contains(&r);
+                if ui.checkbox(&mut show, "部品番号を印刷する").on_hover_text("この部品の部品番号 (R1 など) をシルクに印刷します。部品が密集して置き場がないときは外せます (組み立てるときは、部品表と位置のファイルで場所が分かります)").changed() {
+                    self.checkpoint();
+                    if let Err(e) = pcb_core::silkedit::set_label(&mut self.board, &r, None, None, Some(!show)) {
+                        self.status = e;
+                    }
+                }
             }
             Item::Hole(i) if i < self.board.holes.len() => {
                 ui.label(format!("取付穴 φ{:.2} mm", self.board.holes[i].drill));
@@ -696,9 +703,123 @@ impl BoardEditor {
                 let r = self.board.texts[i].refdes.clone();
                 ui.label(format!("{r} のシルク文字 (部品番号)"));
                 ui.small("ドラッグで、好きな所へ動かせます。部品を動かすと、文字も付いてきます");
-                let moved = self.board.label_offsets.contains_key(&r);
-                if ui.add_enabled(moved, egui::Button::new("元の位置に戻す (Delete)")).on_hover_text("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません").clicked() {
-                    self.delete(sel);
+                let min = self.board.rules.min_silk_text;
+                let mut h = self.board.texts[i].height;
+                let resp = ui
+                    .add(egui::DragValue::new(&mut h).speed(0.05).range(min..=pcb_core::silkedit::MAX_TEXT_HEIGHT).prefix("文字の高さ ").suffix(" mm"))
+                    .on_hover_text(format!("部品番号の文字の高さ。発注先が読めるように印刷できる {min:.2} mm より小さくはできません (下限は、発注の窓で選ぶ発注先で変わります)"));
+                if resp.drag_started() || resp.gained_focus() {
+                    self.checkpoint();
+                }
+                let mut result: Option<Result<String, String>> = None;
+                if resp.changed() {
+                    result = Some(pcb_core::silkedit::set_label(&mut self.board, &r, Some(h), None, None).map(|_| String::new()));
+                }
+                let (mut turn, mut all, mut hide) = (false, false, false);
+                ui.horizontal(|ui| {
+                    turn = ui.button("回す (R)").on_hover_text("文字を 90° 回します (R キーでも)").clicked();
+                    all = ui.button("全部この高さに").on_hover_text("基板のすべての部品番号の文字を、この高さにそろえます").clicked();
+                });
+                ui.horizontal(|ui| {
+                    hide = ui.button("印刷しない").on_hover_text("この部品番号をシルクに印刷しません (部品が密集して置き場がないとき)。部品を選ぶと「部品番号を印刷する」で戻せます").clicked();
+                    let moved = self.board.label_offsets.contains_key(&r);
+                    if ui.add_enabled(moved, egui::Button::new("元の位置に戻す (Delete)")).on_hover_text("動かした文字を、自動で決まる位置 (部品の上) に戻します (Delete キーでも)。文字そのものは消えません").clicked() {
+                        self.delete(sel);
+                    }
+                });
+                if turn {
+                    self.checkpoint();
+                    self.board.turn_label(&r);
+                }
+                if all {
+                    self.checkpoint();
+                    result = Some(pcb_core::silkedit::set_all_labels(&mut self.board, h).map(|n| format!("部品番号 {n} 個の文字を、高さ {h:.2} mm にそろえました")));
+                }
+                if hide {
+                    self.checkpoint();
+                    result = Some(pcb_core::silkedit::set_label(&mut self.board, &r, None, None, Some(true)).map(|_| format!("{r} の部品番号を、印刷しないようにしました (部品を選ぶと戻せます)")));
+                }
+                match result {
+                    Some(Ok(s)) if !s.is_empty() => self.status = s,
+                    Some(Err(e)) => self.status = e,
+                    _ => {}
+                }
+                // the part was placed again: its text is at another index now (or gone, when hidden)
+                self.selected = match self.board.texts.iter().position(|t| t.refdes == r) {
+                    Some(k) => Some(Item::Label(k)),
+                    None => self.board.parts.iter().position(|p| p.refdes == r).map(Item::Part),
+                };
+            }
+            Item::Text(i) if i < self.board.texts.len() => {
+                let pin = self.board.texts[i].refdes.contains('#');
+                ui.label(if pin { "シルクの文字 (ピン名)" } else { "シルクの文字" });
+                // what is typed stays in the box while the font cannot print it; the board gets only a text it prints
+                if self.text_edit.as_ref().is_none_or(|e| e.0 != i) {
+                    self.text_edit = Some((i, self.board.texts[i].text.clone(), None));
+                }
+                let (_, mut buf, mut err) = self.text_edit.clone().unwrap();
+                let resp = ui
+                    .add(egui::TextEdit::singleline(&mut buf).desired_width(160.0).hint_text("例: MY BOARD V1.0"))
+                    .on_hover_text("印刷する文字。英字 (小文字は大文字で印刷)・数字・空白と、. , - + / : # % ( ) などの記号が使えます。日本語は印刷できません");
+                if resp.gained_focus() {
+                    self.checkpoint();
+                }
+                if resp.changed() {
+                    let c = pcb_core::silkedit::TextChange { text: Some(buf.clone()), ..Default::default() };
+                    err = pcb_core::silkedit::set_text(&mut self.board, i, &c).err();
+                }
+                if let Some(e) = &err {
+                    ui.colored_label(crate::theme::ERROR, e);
+                }
+                self.text_edit = Some((i, buf, err));
+                let min = self.board.rules.min_silk_text;
+                let mut h = self.board.texts[i].height;
+                let resp = ui
+                    .add(egui::DragValue::new(&mut h).speed(0.05).range(min..=pcb_core::silkedit::MAX_TEXT_HEIGHT).prefix("文字の高さ ").suffix(" mm"))
+                    .on_hover_text(format!("文字の高さ。発注先が読めるように印刷できる {min:.2} mm より小さくはできません (下限は、発注の窓で選ぶ発注先で変わります)"));
+                if resp.drag_started() || resp.gained_focus() {
+                    self.checkpoint();
+                }
+                if resp.changed() {
+                    let c = pcb_core::silkedit::TextChange { height: Some(h), ..Default::default() };
+                    if let Err(e) = pcb_core::silkedit::set_text(&mut self.board, i, &c) {
+                        self.status = e;
+                    }
+                }
+                let side = self.board.texts[i].side;
+                let (mut turn, mut flip) = (false, false);
+                ui.horizontal(|ui| {
+                    turn = ui.button("回す (R)").on_hover_text("文字を 90° 回します (R キーでも)").clicked();
+                    flip = ui
+                        .button(if side == Side::Bottom { "表面に移す" } else { "裏面に移す" })
+                        .on_hover_text("文字を反対の面のシルクに移します。裏面の文字は、裏から見て読めるように左右が反転して印刷されます")
+                        .clicked();
+                });
+                if turn || flip {
+                    self.checkpoint();
+                    let t = &mut self.board.texts[i];
+                    if turn {
+                        t.rot = (t.rot + 1) % 4;
+                    }
+                    if flip {
+                        t.side = if side == Side::Bottom { Side::Top } else { Side::Bottom };
+                    }
+                }
+            }
+            Item::Silk(i) if i < self.board.silk.len() => {
+                let min = self.board.rules.min_silk_width;
+                let mut w = self.board.silk[i].width;
+                let resp = ui
+                    .add(egui::DragValue::new(&mut w).speed(0.01).range(min..=pcb_core::silkedit::MAX_LINE_WIDTH).prefix("線幅 ").suffix(" mm"))
+                    .on_hover_text(format!("シルクの線の太さ。発注先が印刷できる {min:.3} mm より細くはできません (下限は、発注の窓で選ぶ発注先で変わります)。次に引く線も、この太さになります"));
+                if resp.drag_started() || resp.gained_focus() {
+                    self.checkpoint();
+                }
+                if resp.changed() {
+                    match pcb_core::silkedit::set_line_width(&mut self.board, i, w) {
+                        Ok(()) => self.silk_width = w,
+                        Err(e) => self.status = e,
+                    }
                 }
             }
             _ => {}
