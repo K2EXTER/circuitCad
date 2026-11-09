@@ -10,7 +10,7 @@
 use crate::model::*;
 
 /// The marker of the silk texts made here.
-fn marker(refdes: &str) -> String {
+pub(crate) fn marker(refdes: &str) -> String {
     format!("{refdes}#pin")
 }
 

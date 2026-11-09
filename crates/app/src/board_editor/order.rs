@@ -176,6 +176,7 @@ impl BoardEditor {
         let mut export_now = false;
         let mut make_preview = false;
         let mut repaint = false;
+        let mut redraw_silk = false;
         egui::Window::new(i18n::tr("発注の準備")).open(&mut open).default_pos(crate::widgets::beside_panel()).default_width(520.0).default_height(640.0).vscroll(true).show(ctx, |ui| {
             ui.label(i18n::tr("基板を発注する前の確認です。上から順に見ていきましょう。"));
             ui.separator();
@@ -241,6 +242,11 @@ impl BoardEditor {
                     ui.indent(("detail", &c.title), |ui| {
                         // the explanation is the part to read: normal size, not the small print
                         ui.label(i18n::tr_dyn(&c.detail));
+                        if c.title.starts_with(fab::STALE_SILK_TITLE)
+                            && ui.button(i18n::tr("部品のシルクを作り直す")).on_hover_text(i18n::tr("印の欠けた部品のシルク (外形と向きの印) を、いまのフットプリントの形で描き直します。部品の位置と配線は変わりません")).clicked()
+                        {
+                            redraw_silk = true;
+                        }
                     });
                 }
             }
@@ -319,6 +325,13 @@ impl BoardEditor {
             ui.separator();
             self.shopping_list(ui);
         });
+        if redraw_silk {
+            self.checkpoint();
+            let stale = self.board.stale_part_silk();
+            let n = self.board.refresh_part_silk(&stale);
+            self.status = format!("{n} 個の部品のシルクを作り直しました: {}", stale.join(", "));
+            run = true;
+        }
         if run {
             self.run_checks();
         }

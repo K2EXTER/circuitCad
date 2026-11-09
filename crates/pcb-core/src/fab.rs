@@ -213,6 +213,9 @@ pub fn schematic_sync_check(summary: &str, blocking: bool) -> Check {
     )
 }
 
+/// The start of the title of the check for part silk drawn by an older version (the app shows its fix button under it).
+pub const STALE_SILK_TITLE: &str = "シルクの印が今の部品の形より少ない部品があります";
+
 /// Everything a beginner should look at before sending the files.
 pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     let mut out = vec![];
@@ -345,6 +348,21 @@ pub fn preflight(board: &Board, fab: Option<&FabPreset>) -> Vec<Check> {
     let silk = drc::silk_checks(board);
     if let Some(first) = silk.first() {
         out.push(check(Level::Warn, format!("シルク (白い印刷) に気になる所が {} 件あります", silk.len()), format!("例: {}", first.message), Some(first.at)).with_also(silk.iter().map(|x| x.at)));
+    }
+    // part outlines drawn by an older version: a polarity mark the footprint has now can be missing
+    let stale = board.stale_part_silk();
+    if !stale.is_empty() {
+        let at: Vec<Point> = stale.iter().filter_map(|r| board.parts.iter().find(|p| &p.refdes == r)).map(|p| p.pos).collect();
+        let names: Vec<&str> = stale.iter().take(8).map(String::as_str).collect();
+        out.push(
+            check(
+                Level::Warn,
+                format!("{STALE_SILK_TITLE}: {}{}", names.join(", "), if stale.len() > 8 { " ほか" } else { "" }),
+                "古い版で置いた部品は、ダイオードのカソードの帯やタンタルコンデンサの + のような、向きを示す印が欠けていることがあります。印がないと、はんだ付けで向きを間違えやすくなります。「部品のシルクを作り直す」(ccad では board silkline refresh) で、いまのフットプリントの形に描き直せます。部品の位置と配線は変わりません",
+                at.first().copied(),
+            )
+            .with_also(at),
+        );
     }
 
     // solder mask strips between pads

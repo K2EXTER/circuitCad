@@ -143,7 +143,14 @@ impl Session {
                 let list: Vec<Value> = board.silk.iter().enumerate().filter(|(_, l)| l.refdes.is_empty()).map(|(i, l)| json!({"index": i, "a": [l.a.x, l.a.y], "b": [l.b.x, l.b.y], "width": l.width})).collect();
                 Ok(obj(json!({"lines": list, "min_width": board.rules.min_silk_width})))
             }
-            o => Err(format!("board silkline {o}: add / width / list")),
+            "refresh" => {
+                // the parts' own outlines drawn again from their footprints: the ones drawn by an older version (a missing polarity
+                // mark), or every part with all=1
+                let which: Vec<String> = if opt(&kv, "all") == Some("1") { board.parts.iter().map(|p| p.refdes.clone()).collect() } else { board.stale_part_silk() };
+                let n = board.refresh_part_silk(&which);
+                Ok(obj(json!({"redrawn": n, "parts": which})))
+            }
+            o => Err(format!("board silkline {o}: add / width / list / refresh")),
         }
     }
 }

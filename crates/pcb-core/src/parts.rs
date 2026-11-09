@@ -40,6 +40,10 @@ impl Board {
             Some(old) if old.footprint != part.footprint => self.pads.iter().filter(|p| p.refdes == part.refdes).cloned().collect(),
             _ => vec![],
         };
+        // the pin names on the silk (`board pinlabels`) go with the part, keeping their place next to their pads
+        if let Some(old) = self.parts.iter().find(|p| p.refdes == part.refdes).cloned() {
+            self.carry_pin_labels(&old, &part);
+        }
         self.pads.retain(|p| p.refdes != part.refdes);
         self.silk.retain(|s| s.refdes != part.refdes);
         // a designator the user turned (or made bigger) stays so when the part is placed again
@@ -170,6 +174,26 @@ impl Board {
         Ok(())
     }
 
+    /// Move the pin-name texts of a part (marked "REF#pin") from where the part was (`old`) to where it goes (`new`), as if they
+    /// were drawn on the part: the same place relative to its pads, the other side of the board when it is turned over. The
+    /// letters are not turned with it, so they stay upright.
+    fn carry_pin_labels(&mut self, old: &Part, new: &Part) {
+        if old.pos == new.pos && old.rot % 4 == new.rot % 4 && old.side == new.side {
+            return;
+        }
+        let marker = crate::pinlabels::marker(&old.refdes);
+        let mirror = |p: Point, side: Side| if side == Side::Bottom { Point::new(-p.x, p.y) } else { p };
+        for t in self.texts.iter_mut().filter(|t| t.refdes == marker) {
+            let rel = Point::new(t.pos.x - old.pos.x, t.pos.y - old.pos.y);
+            let local = mirror(rotate(rel, (4 - old.rot % 4) % 4), old.side);
+            let r = rotate(mirror(local, new.side), new.rot);
+            t.pos = Point::new(new.pos.x + r.x, new.pos.y + r.y);
+            if old.side != new.side {
+                t.side = new.side;
+            }
+        }
+    }
+
     /// After a part got another footprint: move the end of every track that sat on one of its old pads to the centre of the
     /// new pad of the same pin (the nearest one when a pin has several). Returns how many track ends moved.
     fn follow_pads(&mut self, refdes: &str, old_pads: &[Pad]) -> usize {
@@ -230,12 +254,35 @@ impl Board {
         true
     }
 
+    /// The parts whose outline on the silk has fewer lines than their footprint draws now: parts placed (or last moved) by an older
+    /// version, from before a mark was added to the footprint (the cathode bar of a diode, the + of a tantalum capacitor). The silk
+    /// of a part is kept in the board file as it was drawn, so a newer version does not add the mark by itself.
+    pub fn stale_part_silk(&self) -> Vec<String> {
+        let mut fresh = self.clone();
+        let count = |b: &Board, r: &str| b.silk.iter().filter(|s| s.refdes == r).count();
+        let mut out = vec![];
+        for p in &self.parts {
+            if fresh.set_part(p.clone()).is_ok() && count(&fresh, &p.refdes) > count(self, &p.refdes) {
+                out.push(p.refdes.clone());
+            }
+        }
+        out
+    }
+
+    /// Draw the silk of these parts again from their footprints, where they are (nothing moves; a silk line width changed by hand
+    /// goes back to the footprint's). Returns how many parts were redrawn.
+    pub fn refresh_part_silk(&mut self, refdes: &[String]) -> usize {
+        let parts: Vec<Part> = self.parts.iter().filter(|p| refdes.contains(&p.refdes)).cloned().collect();
+        parts.into_iter().filter(|p| self.set_part(p.clone()).is_ok()).count()
+    }
+
     pub fn remove_part(&mut self, refdes: &str) {
         self.label_offsets.remove(refdes);
         self.parts.retain(|p| p.refdes != refdes);
         self.pads.retain(|p| p.refdes != refdes);
         self.silk.retain(|s| s.refdes != refdes);
-        self.texts.retain(|t| t.refdes != refdes);
+        let pins = crate::pinlabels::marker(refdes);
+        self.texts.retain(|t| t.refdes != refdes && t.refdes != pins);
         self.holes.retain(|h| h.refdes != refdes);
     }
 
@@ -260,6 +307,69 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pin_names_on_the_silk_go_with_a_moved_turned_or_flipped_connector() {
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.set_part(Part { refdes: "J1".into(), value: "Conn".into(), footprint: "PinHeader_1x2".into(), pos: Point::new(10.0, 10.0), rot: 0, side: Side::Top })
+            .unwrap();
+        let names = vec![("J1".to_string(), vec!["5V".to_string(), "GND".to_string()])];
+        assert_eq!(crate::pinlabels::write_pin_labels(&mut b, &names, 0.8), 2);
+        // each name keeps its distance from its own pad, whatever the part does
+        let gaps = |b: &Board| -> Vec<(String, f64)> {
+            let pin_of = |name: &str| if name == "5V" { "1" } else { "2" };
+            let mut v: Vec<(String, f64)> = b
+                .texts
+                .iter()
+                .filter(|t| t.refdes == "J1#pin")
+                .map(|t| {
+                    let pad = b.pads.iter().find(|p| p.refdes == "J1" && p.pin == pin_of(&t.text)).unwrap();
+                    let nearest = b.pads.iter().filter(|p| p.refdes == "J1").min_by(|x, y| x.pos.dist(t.pos).total_cmp(&y.pos.dist(t.pos))).unwrap();
+                    assert_eq!(nearest.pin, pad.pin, "{} is next to pin {}, not its own pin {}", t.text, nearest.pin, pad.pin);
+                    (t.text.clone(), (pad.pos.dist(t.pos) * 1e6).round() / 1e6)
+                })
+                .collect();
+            v.sort_by(|x, y| x.0.cmp(&y.0));
+            v
+        };
+        let before = gaps(&b);
+        assert_eq!(before.len(), 2);
+        b.place_part("J1", Point::new(30.0, 25.0), 0);
+        assert_eq!(gaps(&b), before, "moved");
+        b.place_part("J1", Point::new(30.0, 25.0), 3);
+        assert_eq!(gaps(&b), before, "turned");
+        assert!(b.flip_part("J1"));
+        assert_eq!(gaps(&b), before, "turned over");
+        assert!(b.texts.iter().filter(|t| t.refdes == "J1#pin").all(|t| t.side == Side::Bottom), "the names go to the bottom silk too");
+        b.remove_part("J1");
+        assert!(b.texts.iter().all(|t| t.refdes != "J1#pin"), "and go away with the part");
+    }
+
+    #[test]
+    fn silk_drawn_by_an_older_version_is_found_and_drawn_again() {
+        let mut b = Board::new("t", 60.0, 40.0);
+        b.set_part(Part { refdes: "D1".into(), value: "1N4148W".into(), footprint: "D_SOD-123".into(), pos: Point::new(20.0, 20.0), rot: 2, side: Side::Top })
+            .unwrap();
+        b.set_part(Part { refdes: "C2".into(), value: "22u".into(), footprint: "CT_3528-21".into(), pos: Point::new(40.0, 20.0), rot: 0, side: Side::Top }).unwrap();
+        b.set_part(Part { refdes: "R1".into(), value: "1k".into(), footprint: "R_0805".into(), pos: Point::new(30.0, 30.0), rot: 0, side: Side::Top }).unwrap();
+        assert!(b.stale_part_silk().is_empty(), "freshly placed parts are up to date");
+        let full = b.silk.len();
+        // what an older version left: the diode without its cathode bar, the tantalum without its + (a plain box)
+        b.silk.retain(|s| !(s.refdes == "D1" && s.width > 0.2));
+        b.silk.retain(|s| s.refdes != "C2");
+        for (a, c) in [((38.0, 18.5), (42.0, 18.5)), ((42.0, 18.5), (42.0, 21.5)), ((42.0, 21.5), (38.0, 21.5)), ((38.0, 21.5), (38.0, 18.5))] {
+            b.silk.push(SilkLine { side: Side::Top, a: Point::new(a.0, a.1), b: Point::new(c.0, c.1), width: 0.15, refdes: "C2".into() });
+        }
+        assert_eq!(b.stale_part_silk(), vec!["D1".to_string(), "C2".to_string()]);
+        let warn = crate::fab::preflight(&b, None).into_iter().find(|c| c.title.starts_with(crate::fab::STALE_SILK_TITLE));
+        assert!(warn.is_some_and(|c| c.level == crate::fab::Level::Warn && c.title.contains("D1, C2")));
+        let parts_before = b.parts.clone();
+        assert_eq!(b.refresh_part_silk(&b.stale_part_silk()), 2);
+        assert!(b.stale_part_silk().is_empty());
+        assert_eq!(b.silk.len(), full, "the marks are back");
+        let places = |ps: &[Part]| ps.iter().map(|p| (p.refdes.clone(), p.pos, p.rot)).collect::<Vec<_>>();
+        assert_eq!(places(&b.parts), places(&parts_before), "nothing moved");
+    }
 
     #[test]
     fn a_track_end_follows_its_pad_when_the_footprint_changes() {

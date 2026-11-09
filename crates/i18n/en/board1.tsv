@@ -483,3 +483,6 @@ CSV をコピー	Copy CSV
 線幅を {w:.2} mm にしました	Set width to {w:.2} mm
 ネット {net} の線幅: {v:.2} mm ({} 本)	Net {net} width: {v:.2} mm ({} tracks)
 基板で、別のネットの配線やパッドをクリックすると、そのネットの設定に切り替わります。何もない所をクリックすると閉じます	Click another net's track or pad on the board to switch to that net's settings. Click empty space to close
+部品のシルクを作り直す	Redraw part silk
+印の欠けた部品のシルク (外形と向きの印) を、いまのフットプリントの形で描き直します。部品の位置と配線は変わりません	Draws the silk (outline and polarity marks) of the parts with missing marks again from the current footprints. Part positions and tracks do not change.
+{n} 個の部品のシルクを作り直しました: {}	Redrew the silk of {n} parts: {}
