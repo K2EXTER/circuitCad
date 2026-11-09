@@ -29,7 +29,7 @@ impl PartForm {
             }
             for i in &issues {
                 // an "error" here only means "cannot be saved yet": a blank form starts with some, so it is worded as a to-do
-                let (c, mark) = if i.error { (crate::theme::ERROR, "保存前に直す") } else { (crate::theme::WARN, "注意") };
+                let (c, mark) = if i.error { (crate::theme::ERROR, i18n::tr("保存前に直す")) } else { (crate::theme::WARN, i18n::tr("注意")) };
                 ui.colored_label(c, format!("{mark}: {}", i18n::tr_dyn(&i.message)));
             }
         });

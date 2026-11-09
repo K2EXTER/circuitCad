@@ -13,7 +13,7 @@ impl SchEditor {
         let mut back = false;
         let mut close = false;
         egui::Window::new(i18n::trf!("作ってみよう: {}", ch.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
-            ui.label(ch.goal);
+            ui.label(i18n::tr(ch.goal));
             ui.horizontal(|ui| {
                 ui.label(i18n::tr("むずかしさ"));
                 if ui.selectable_label(level == 0, i18n::tr("配線だけ")).on_hover_text(i18n::tr("部品は置いてあります。線でつなぐ練習です (やり直すと、最初の状態に戻ります)")).clicked() && level != 0 {
@@ -36,11 +36,11 @@ impl SchEditor {
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, mark);
-                    ui.label(egui::RichText::new(&r.label).strong());
+                    ui.label(egui::RichText::new(i18n::tr_dyn(&r.label)).strong());
                 });
                 if !r.detail.is_empty() {
                     ui.indent(("challenge_detail", &r.label), |ui| {
-                        ui.label(egui::RichText::new(&r.detail).color(if r.ok == Some(false) { Color32::from_rgb(230, 150, 120) } else { Color32::from_gray(170) }));
+                        ui.label(egui::RichText::new(i18n::tr_dyn(&r.detail)).color(if r.ok == Some(false) { Color32::from_rgb(230, 150, 120) } else { Color32::from_gray(170) }));
                     });
                 }
             }

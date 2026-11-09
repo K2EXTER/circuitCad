@@ -733,7 +733,7 @@ impl BoardEditor {
         let mut close = false;
         let mut word: Option<&'static str> = None;
         egui::Window::new(i18n::trf!("レッスン: {}", title_of(which))).default_width(360.0).anchor(egui::Align2::LEFT_BOTTOM, Vec2::new(crate::PANEL_WIDTH + 14.0, -56.0)).show(ctx, |ui| {
-            ui.label(goal_of(which));
+            ui.label(i18n::tr(goal_of(which)));
             ui.small(i18n::trf!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             ui.separator();
             for (k, step) in steps.iter().enumerate() {
@@ -746,11 +746,11 @@ impl BoardEditor {
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, mark);
-                    ui.label(egui::RichText::new(step.title).strong().color(if Some(k) == cur { color } else { ui.visuals().text_color() }));
+                    ui.label(egui::RichText::new(i18n::tr(step.title)).strong().color(if Some(k) == cur { color } else { ui.visuals().text_color() }));
                 });
                 if Some(k) == cur {
                     ui.indent(("board_lesson_detail", k), |ui| {
-                        ui.label(step.detail);
+                        ui.label(i18n::tr(step.detail));
                     });
                 }
             }
@@ -767,7 +767,7 @@ impl BoardEditor {
                 }
                 ui.horizontal_wrapped(|ui| {
                     for term in words {
-                        if ui.small_button(term.name).on_hover_text(term.short).clicked() {
+                        if ui.small_button(i18n::tr(term.name)).on_hover_text(i18n::tr(term.short)).clicked() {
                             word = Some(term.name);
                         }
                     }

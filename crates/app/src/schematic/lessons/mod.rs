@@ -362,7 +362,7 @@ impl SchEditor {
         // the repair lesson says what was wrong once the learner has mended it
         let cause = self.debug_cause().filter(|_| lesson.id == "debug_circuit" && done.get(1) == Some(&true));
         egui::Window::new(i18n::trf!("レッスン: {}", lesson.title)).default_width(440.0).anchor(Align2::RIGHT_TOP, Vec2::new(-8.0, 40.0)).show(ctx, |ui| {
-            ui.label(lesson.goal);
+            ui.label(i18n::tr(lesson.goal));
             ui.small(i18n::trf!("進み具合: {} / {}", done.iter().filter(|d| **d).count(), done.len()));
             // the explanation: read before the first step, folded once the learner is working, open again when the lesson is finished
             egui::CollapsingHeader::new(i18n::tr("くわしい説明 (先に読むと、手順が分かりやすくなります)"))
@@ -370,7 +370,7 @@ impl SchEditor {
                 .default_open(cur.is_none() || done.iter().all(|d| !d))
                 .show(ui, |ui| {
                     egui::ScrollArea::vertical().id_salt(("summary_scroll", idx)).max_height(230.0).show(ui, |ui| {
-                        for paragraph in paragraphs(lesson.summary) {
+                        for paragraph in paragraphs(i18n::tr(lesson.summary)) {
                             ui.label(paragraph);
                             ui.add_space(3.0);
                         }
@@ -387,7 +387,7 @@ impl SchEditor {
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, mark);
-                    ui.label(egui::RichText::new(step.title).strong().color(if Some(k) == cur { color } else { ui.visuals().text_color() }));
+                    ui.label(egui::RichText::new(i18n::tr(step.title)).strong().color(if Some(k) == cur { color } else { ui.visuals().text_color() }));
                 });
                 let prediction = predict::for_step(lesson.id, k);
                 if Some(k) == cur {
@@ -396,9 +396,9 @@ impl SchEditor {
                         if let Some(p) = prediction.filter(|_| predicted[k].is_none()) {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
                                 ui.label(egui::RichText::new(i18n::tr("予測してみよう")).strong().color(crate::theme::WARN));
-                                ui.label(p.question);
+                                ui.label(i18n::tr(p.question));
                                 for (o, (label, _)) in p.options.iter().enumerate() {
-                                    if ui.button(*label).on_hover_text(i18n::tr("やる前に、結果を予測します。当たっても外れても、やったあとに、理由が出ます")).clicked() {
+                                    if ui.button(i18n::tr(label)).on_hover_text(i18n::tr("やる前に、結果を予測します。当たっても外れても、やったあとに、理由が出ます")).clicked() {
                                         pick = Some((k, o));
                                     }
                                 }
@@ -407,9 +407,9 @@ impl SchEditor {
                                 }
                             });
                         } else {
-                            ui.label(step.detail);
+                            ui.label(i18n::tr(step.detail));
                             if let (Some(p), Some(o)) = (prediction, predicted[k].filter(|o| *o != NO_GUESS)) {
-                                ui.small(i18n::trf!("あなたの予測: 「{}」。手順のとおりにやって、確かめましょう", p.options[o].0));
+                                ui.small(i18n::trf!("あなたの予測: 「{}」。手順のとおりにやって、確かめましょう", i18n::tr(p.options[o].0)));
                             }
                         }
                     });
@@ -419,9 +419,9 @@ impl SchEditor {
                         if v.right {
                             ui.colored_label(crate::theme::OK, i18n::trf!("✔ 予測が当たりました。実際は {} でした", p.show(v.actual)));
                         } else {
-                            ui.colored_label(crate::theme::WARN, i18n::trf!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", p.options[v.chosen].0, p.show(v.actual)));
+                            ui.colored_label(crate::theme::WARN, i18n::trf!("✘ 予測とは違いました (あなたの予測: 「{}」)。実際は {} でした", i18n::tr(p.options[v.chosen].0), p.show(v.actual)));
                         }
-                        ui.small(p.explain);
+                        ui.small(i18n::tr(p.explain));
                     });
                 }
             }
@@ -433,7 +433,7 @@ impl SchEditor {
                 }
                 ui.horizontal_wrapped(|ui| {
                     for term in words {
-                        if ui.small_button(term.name).on_hover_text(term.short).clicked() {
+                        if ui.small_button(i18n::tr(term.name)).on_hover_text(i18n::tr(term.short)).clicked() {
                             word = Some(term.name);
                         }
                     }
@@ -443,14 +443,14 @@ impl SchEditor {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(crate::theme::WARN, i18n::tr("ヒント"));
-                    ui.label(text);
+                    ui.label(i18n::tr_dyn(text));
                 });
             }
             if let Some(cause) = cause {
                 ui.add_space(2.0);
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(crate::theme::OK, i18n::tr("仕込まれていた故障"));
-                    ui.label(cause);
+                    ui.label(i18n::tr_dyn(&cause));
                 });
             }
             ui.separator();
@@ -463,7 +463,7 @@ impl SchEditor {
                     for l in lesson.limits {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(i18n::tr("・"));
-                            ui.label(*l);
+                            ui.label(i18n::tr(l));
                         });
                     }
                 });
@@ -481,7 +481,7 @@ impl SchEditor {
                     for l in lesson.real {
                         ui.horizontal_wrapped(|ui| {
                             ui.label(i18n::tr("・"));
-                            ui.label(*l);
+                            ui.label(i18n::tr(l));
                         });
                     }
                 });

@@ -116,7 +116,7 @@ DC電圧 (最悪ケース)	DC voltage (worst case)
 {range} (最大が{hi_note})	{range} (max is {hi_note})
 {range} (最小が{lo_note}、最大が{hi_note})	{range} (min is {lo_note}, max is {hi_note})
 部品の誤差: 抵抗は ±1〜5%、ツェナーや基準電圧は ±5% ほど、7805 は ±4% ほどあります (データシートの範囲を見ます)	Part tolerances: resistors are ±1 to 5%, zeners and voltage references about ±5%, a 7805 about ±4% (see the datasheet ranges)
-測り方: テスタの精度 (±0.5〜1% + 数桁)、テスタ棒の接触、基準 (GND) の取り方を確かめます	Measuring: check the meter accuracy (±0.5 to 1% + a few digits), the probe contact and how you connect the reference (GND)
+測り方: テスタの精度 (±0.5〜1% + 数桁)、テスタ棒の接触、基準 (GND) の取り方を確かめます	How to measure: check the meter accuracy (±0.5 to 1% + a few digits), the probe contact and how you connect the reference (GND)
 電源側: 電池や AC アダプタは、負荷をつなぐと電圧が下がります。つないだ状態で入力電圧も測ります	Supply side: batteries and AC adapters drop in voltage under load. Measure the input voltage with the load connected, too
 配線: ブレッドボードの接触抵抗や、細い配線の電圧降下で、数十 mV 変わります	Wiring: breadboard contact resistance and voltage drop in thin wires can change things by tens of mV
 テスタの電流レンジは、中で電圧が落ちます。そのぶん電流が小さく測れます (抵抗の電圧と抵抗値から計算し直すと確かめられます)	A meter's current range drops some voltage inside, so the current reads smaller (you can check by recalculating from a resistor's voltage and value)

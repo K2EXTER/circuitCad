@@ -414,13 +414,13 @@ impl eframe::App for App {
                     let mut open_path: Option<&str> = None;
                     let mut lesson_button = |ui: &mut egui::Ui, i: usize| {
                         let mark = if self.progress.is_done(ids[i]) { "✔ " } else { "　 " };
-                        if ui.button(format!("{mark}{}", titles[i])).clicked() {
+                        if ui.button(format!("{mark}{}", i18n::tr(titles[i]))).clicked() {
                             start = Some(i);
                             ui.close();
                         }
                     };
                     for path in learn::PATHS {
-                        ui.menu_button(path.title, |ui| {
+                        ui.menu_button(i18n::tr(path.title), |ui| {
                             if ui.button(i18n::tr("🗺 学習の地図 (樹形図) を開く…")).on_hover_text(i18n::tr("このパスの、レッスンの関係を樹形図で見ます (学習パスの窓が開きます)")).clicked() {
                                 open_path = Some(path.id);
                                 ui.close();
@@ -432,7 +432,7 @@ impl eframe::App for App {
                                     continue;
                                 }
                                 let done = lessons.iter().filter(|&&i| self.progress.is_done(ids[i])).count();
-                                ui.menu_button(format!("{} ({done}/{})", stage.name, lessons.len()), |ui| {
+                                ui.menu_button(format!("{} ({done}/{})", i18n::tr(stage.name), lessons.len()), |ui| {
                                     for &i in &lessons {
                                         lesson_button(ui, i);
                                     }
@@ -474,42 +474,42 @@ impl eframe::App for App {
                     ui.separator();
                     ui.menu_button(i18n::tr("基板のレッスン"), |ui| {
                         let board_mark = if self.progress.is_done("board") { "✔ " } else { "　 " };
-                        if ui.button(format!("{board_mark}{}", board_editor::lesson::TITLE)).on_hover_text(i18n::tr("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します")).clicked() {
+                        if ui.button(format!("{board_mark}{}", i18n::tr(board_editor::lesson::TITLE))).on_hover_text(i18n::tr("回路図から基板パターンを作り、発注用データを書き出すところまでの流れを体験します")).clicked() {
                             self.start_board_lesson(0);
                             ui.close();
                         }
                         let copper_mark = if self.progress.is_done(board_editor::lesson::COPPER_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{copper_mark}{}", board_editor::lesson::COPPER_TITLE)).on_hover_text(i18n::tr("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します")).clicked() {
+                        if ui.button(format!("{copper_mark}{}", i18n::tr(board_editor::lesson::COPPER_TITLE))).on_hover_text(i18n::tr("細い配線で電圧が落ちるのをシミュレーションで見て、電流から必要な太さを決めて直します")).clicked() {
                             self.start_board_lesson(1);
                             ui.close();
                         }
                         let fix_mark = if self.progress.is_done(board_editor::lesson::FIX_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{fix_mark}{}", board_editor::lesson::FIX_TITLE)).on_hover_text(i18n::tr("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)")).clicked() {
+                        if ui.button(format!("{fix_mark}{}", i18n::tr(board_editor::lesson::FIX_TITLE))).on_hover_text(i18n::tr("わざと間違いのある基板を、発注前チェックの表示を頼りに直します (チャレンジ)")).clicked() {
                             self.start_board_lesson(2);
                             ui.close();
                         }
                         let arduino_mark = if self.progress.is_done(board_editor::lesson::ARDUINO_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{arduino_mark}{}", board_editor::lesson::ARDUINO_TITLE)).on_hover_text(i18n::tr("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します")).clicked() {
+                        if ui.button(format!("{arduino_mark}{}", i18n::tr(board_editor::lesson::ARDUINO_TITLE))).on_hover_text(i18n::tr("マイコンの基板で、水晶とバイパスコンデンサを正しい場所へ寄せ、通らない配線の直し方も練習します")).clicked() {
                             self.start_board_lesson(3);
                             ui.close();
                         }
                         let usb_mark = if self.progress.is_done(board_editor::lesson::USB_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{usb_mark}{}", board_editor::lesson::USB_TITLE)).on_hover_text(i18n::tr("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します")).clicked() {
+                        if ui.button(format!("{usb_mark}{}", i18n::tr(board_editor::lesson::USB_TITLE))).on_hover_text(i18n::tr("USB の D+ / D- を、差動ペアとして、並べて同じ長さで配線します")).clicked() {
                             self.start_board_lesson(4);
                             ui.close();
                         }
                         let pairs_mark = if self.progress.is_done(board_editor::lesson::PAIRS_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{pairs_mark}{}", board_editor::lesson::PAIRS_TITLE)).on_hover_text(i18n::tr("2 組の差動ペアを同じ長さにそろえます。蛇行は 2 本をいっしょに曲げるので、間隔が保たれます")).clicked() {
+                        if ui.button(format!("{pairs_mark}{}", i18n::tr(board_editor::lesson::PAIRS_TITLE))).on_hover_text(i18n::tr("2 組の差動ペアを同じ長さにそろえます。蛇行は 2 本をいっしょに曲げるので、間隔が保たれます")).clicked() {
                             self.start_board_lesson(6);
                             ui.close();
                         }
                         let repair_mark = if self.progress.is_done(board_editor::lesson::REPAIR_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{repair_mark}{}", board_editor::lesson::REPAIR_TITLE)).on_hover_text(i18n::tr("ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します。何度でも、別の故障で練習できます")).clicked() {
+                        if ui.button(format!("{repair_mark}{}", i18n::tr(board_editor::lesson::REPAIR_TITLE))).on_hover_text(i18n::tr("ちゃんと動く基板に、故障を 1 つ仕込みます。症状から原因を探して、点検の道具で確かめ、直します。何度でも、別の故障で練習できます")).clicked() {
                             self.start_board_lesson(7);
                             ui.close();
                         }
                         let mega_mark = if self.progress.is_done(board_editor::lesson::MEGA_ID) { "✔ " } else { "　 " };
-                        if ui.button(format!("{mega_mark}{}", board_editor::lesson::MEGA_TITLE)).on_hover_text(i18n::tr("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます")).clicked() {
+                        if ui.button(format!("{mega_mark}{}", i18n::tr(board_editor::lesson::MEGA_TITLE))).on_hover_text(i18n::tr("自動配線が通せなかった 18 本の線が残った Arduino Mega 互換の基板を、手で仕上げます")).clicked() {
                             self.start_board_lesson(5);
                             ui.close();
                         }

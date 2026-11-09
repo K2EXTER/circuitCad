@@ -1,0 +1,281 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/board_editor/livepath.rs
+銅箔どうし	
+# crates/app/src/board_editor/netclass.rs
+board_sec_層構	
+# crates/app/src/board_editor/panel.rs
+board_sec_仕上	
+board_sec_作業	
+# crates/app/src/board_editor/requirements.rs
+個	
+# crates/app/src/board_editor/shoving.rs
+ネット短絡:	
+# crates/app/src/part_form/chip.rs
+ユーザー	
+# crates/app/src/part_form/padtable.rs
+横	
+脚	
+穴	
+# crates/app/src/schematic/quick.rs
+resistor r 抵抗 ohm オーム	
+capacitor c condenser コンデンサ キャパシタ	
+inductor l coil コイル インダクタ	
+diode d ダイオード	
+led light 発光 ダイオード	
+source supply battery power v 電源 電池 信号	
+npn transistor bjt q トランジスタ	
+header connector pin コネクタ ヘッダ ピン	
+ground gnd 0v アース グランド	
+vcc vdd 3v3 5v rail 電源ネット	
+# crates/app/src/schematic/challenge/arduino.rs
+ATmega328P (U1) を使った、最小の Arduino 互換ボードの回路図を描きます。パソコンとは、シリアル変換のヘッダ J1 (1 = GND、3 = 5V、4 = TXD、5 = RXD、6 = DTR) でつなぎます。条件: (1) 電源 5V (V1 と J1 の 3 番) を、マイコンの VCC (4・6 番) と AVCC (18 番) に、GND (V1 の −、J1 の 1 番) を、マイコンの GND (3・5・21 番) につなぐ。(2) 16MHz の水晶 Y1 を XTAL1 (7 番) と XTAL2 (8 番) の間に入れ、両端と GND の間に 22pF 前後のコンデンサをつける。(3) リセット (29 番) を 10kΩ 前後で電源に引き、J1 の DTR (6 番) から 100nF 前後のコンデンサでつなぐ。(4) 電源 (VCC と GND の間) に、バイパスコンデンサ 0.1µF 前後を 2 個、AREF (20 番) と GND の間にも 1 個つける。(5) 13 番ピン (PB5、17 番) に、1kΩ 前後の抵抗と LED (D1) を直列にして GND へ。(6) J1 の TXD (4 番) をマイコンの RXD (PD0、30 番)、J1 の RXD (5 番) をマイコンの TXD (PD1、31 番) へ (交差)。つなぎ方は、線を引いても、同じ名前のラベルをつけても構いません	Draw the schematic of a minimal Arduino-compatible board using an ATmega328P (U1). It connects to the PC through the USB-serial adapter header J1 (1 = GND, 3 = 5V, 4 = TXD, 5 = RXD, 6 = DTR). Conditions: (1) Connect the 5V supply (V1 and J1 pin 3) to the MCU's VCC (pins 4 and 6) and AVCC (pin 18), and GND (V1 −, J1 pin 1) to the MCU's GND (pins 3, 5 and 21). (2) Put a 16MHz crystal Y1 between XTAL1 (pin 7) and XTAL2 (pin 8), with a capacitor of about 22pF from each end to GND. (3) Pull the reset (pin 29) up to the supply with about 10kΩ, and connect it to J1's DTR (pin 6) through a capacitor of about 100nF. (4) Add two bypass capacitors of about 0.1µF across the supply (between VCC and GND), and one more between AREF (pin 20) and GND. (5) From pin 13 (PB5, pin 17), connect a resistor of about 1kΩ and an LED (D1) in series to GND. (6) Connect J1's TXD (pin 4) to the MCU's RXD (PD0, pin 30), and J1's RXD (pin 5) to the MCU's TXD (PD1, pin 31) (crossed). You can connect them with wires or with labels of the same name
+ネットに名前をつけて、ラベルでつなぐと、線を引くより楽です。ラベルツールで、つなぎたいピンに同じ名前 (5V、GND、XTAL1 など) をつけます。同じ名前のところは、線がなくてもつながります。	Naming nets and connecting them with labels is easier than drawing wires. With the Label tool, give the pins you want to connect the same name (5V, GND, XTAL1, and so on). Points with the same name are connected even without a wire.
+まず電源から: マイコンの VCC (4・6 番) と AVCC (18 番) を 5V に、GND (3・5・21 番) を GND につなぎます。バイパスコンデンサ (100n) を、VCC と GND の間に 2 個 (電源ピンのそば)、AREF (20 番) と GND の間に 1 個。「電源のバイパスコンデンサ」のレッスンを思い出しましょう。	Start with the power: connect the MCU's VCC (pins 4 and 6) and AVCC (pin 18) to 5V, and GND (pins 3, 5 and 21) to GND. Put two bypass capacitors (100n) between VCC and GND (near the power pins), and one between AREF (pin 20) and GND. Remember the "Supply bypass capacitors" lesson.
+クロックとリセット: 水晶 Y1 の 1 番を XTAL1 (7 番) に、3 番を XTAL2 (8 番) につなぎ、7 番と GND、8 番と GND の間に 22p のコンデンサをそれぞれ入れます (水晶の 2・4 番はケースで、GND につなぎます)。リセット (29 番) は、10k の抵抗で 5V に引き、100n のコンデンサを通して J1 の 6 番 (DTR) につなぎます。「リセット回路」のレッスンのとおりです。	Clock and reset: connect pin 1 of crystal Y1 to XTAL1 (pin 7) and pin 3 to XTAL2 (pin 8), and put a 22p capacitor between pin 7 and GND and between pin 8 and GND (pins 2 and 4 of the crystal are the case; connect them to GND). Pull the reset (pin 29) up to 5V with a 10k resistor, and connect it to J1 pin 6 (DTR) through a 100n capacitor. Just as in the "Reset circuit" lesson.
+LED とシリアル: 13 番ピン (PB5、マイコンの 17 番) → 抵抗 1k → LED のアノード、LED のカソードは GND。J1 の 4 番 (TXD) を 30 番 (RXD) に、J1 の 5 番 (RXD) を 31 番 (TXD) へ。送信と受信は交差させます。答えの回路は「答えの回路を見る」で見られます (使わないピンは、そのまま空けて構いません)。	LED and serial: pin 13 (PB5, MCU pin 17) → 1k resistor → LED anode, LED cathode to GND. Connect J1 pin 4 (TXD) to pin 30 (RXD), and J1 pin 5 (RXD) to pin 31 (TXD). Transmit and receive are crossed. You can see the answer with "Show answer circuit" (unused pins can be left open).
+電源 5V が、マイコンの VCC (4・6 番) と AVCC (18 番) につながっている	The 5V supply is connected to the MCU's VCC (pins 4 and 6) and AVCC (pin 18)
+V1 の + と J1 の 3 番 (5V) が、マイコンの VCC 2 本と AVCC に届いているか確かめます。AVCC (18 番) を忘れやすいところです	Check that V1 + and J1 pin 3 (5V) reach both VCC pins and AVCC of the MCU. AVCC (pin 18) is easy to forget
+GND が、マイコンの GND (3・5・21 番) と J1 の 1 番につながっている	GND is connected to the MCU's GND (pins 3, 5 and 21) and J1 pin 1
+GND のピンは 3 本あります。1 本でも浮いていると、マイコンは安定して動きません	There are 3 GND pins. If even one is floating, the MCU will not run reliably
+水晶 Y1 の両端が、マイコンの XTAL1 (7 番) と XTAL2 (8 番) につながっている	Both ends of crystal Y1 are connected to the MCU's XTAL1 (pin 7) and XTAL2 (pin 8)
+水晶の 1 番を XTAL1 (7 番)、3 番を XTAL2 (8 番) につなぎます。水晶を置いていないときは、ライブラリの XTAL_16MHz_3225 を置きます	Connect crystal pin 1 to XTAL1 (pin 7) and pin 3 to XTAL2 (pin 8). If you have no crystal placed yet, place XTAL_16MHz_3225 from the library
+水晶の両端と GND の間に、22pF 前後のコンデンサがある	There is a capacitor of about 22pF between each end of the crystal and GND
+XTAL1 (7 番) と GND の間	Between XTAL1 (pin 7) and GND
+XTAL2 (8 番) と GND の間	Between XTAL2 (pin 8) and GND
+負荷容量は、水晶のデータシートの値 (CL) から決めます。16MHz の水晶には、22pF が定番です。「水晶とクロック」のレッスンを見直しましょう	The load capacitors are chosen from the value (CL) in the crystal's datasheet. 22pF is the usual choice for a 16MHz crystal. Review the "Crystals and the clock" lesson
+リセット (29 番) が、10kΩ 前後で電源に引かれている	The reset (pin 29) is pulled up to the supply with about 10kΩ
+リセット (29 番) と VCC (4 番) の間	Between the reset (pin 29) and VCC (pin 4)
+プルアップが無いと、リセットピンが浮いて、勝手にリセットされます。10k が定番です	Without a pull-up, the reset pin floats and the MCU resets by itself. 10k is the usual value
+DTR (J1 の 6 番) から、100nF 前後のコンデンサでリセットにつながっている	DTR (J1 pin 6) is connected to the reset through a capacitor of about 100nF
+J1 の 6 番 (DTR) とリセット (29 番) の間	Between J1 pin 6 (DTR) and the reset (pin 29)
+DTR を直接つなぐと、リセットが Low のままになります。コンデンサを通して、変化だけを伝えます (「リセット回路」のレッスン)	If DTR is connected directly, the reset stays Low. A capacitor passes only the changes (the "Reset circuit" lesson)
+バイパスコンデンサ (0.1µF 前後) が、電源と GND の間に 2 個、AREF と GND の間に 1 個ある	There are two bypass capacitors (about 0.1µF) between the supply and GND, and one between AREF and GND
+VCC (4 番) と GND の間	Between VCC (pin 4) and GND
+AREF (20 番) と GND の間	Between AREF (pin 20) and GND
+電源のコンデンサは、VCC と AVCC のそれぞれのそばに 1 個 (あわせて 2 個)、AREF にも 1 個です。0.1µF = 100n を使います	Supply capacitors: one near each of VCC and AVCC (two in total), and one more on AREF. Use 0.1µF = 100n
+13 番ピン (PB5、17 番) に、1kΩ 前後の抵抗がつながっている	A resistor of about 1kΩ is connected to pin 13 (PB5, pin 17)
+17 番ピンと LED のアノードの間	Between pin 17 and the LED anode
+ピンから LED に直接つなぐと、電流が大きすぎます。「ピンで LED を光らせる」のレッスンのとおり、抵抗を直列に入れます	Connecting an LED straight to a pin draws too much current. Put a resistor in series, as in the "Lighting an LED from a pin" lesson
+LED のカソードが GND につながっている	The LED cathode is connected to GND
+LED は、アノード (+) がピン側、カソード (縞のある側) が GND 側です	The LED's anode (+) goes to the pin side, and its cathode (the striped side) to the GND side
+シリアルの TXD と RXD が交差してつながっている (J1 の 4 番 ↔ 30 番、5 番 ↔ 31 番)	The serial TXD and RXD are crossed (J1 pin 4 ↔ pin 30, pin 5 ↔ pin 31)
+変換の TXD (送信) は、マイコンの RXD (受信、30 番) へ。変換の RXD は、マイコンの TXD (31 番) へ。同じ名前どうしをつなぐのは、まちがいです	The adapter's TXD (transmit) goes to the MCU's RXD (receive, pin 30), and the adapter's RXD to the MCU's TXD (pin 31). Connecting same names together is a mistake
+# crates/app/src/schematic/challenge/basic.rs
+ツェナーで 5V を作る	Make 5V with a Zener
+9V の電源から、約 5V (4.7〜5.6V) を作ります。使うのは、抵抗とツェナーダイオードだけです。出力には、負荷として 1kΩ から 330Ω をつなぐので、重い負荷でも電圧が崩れず、入力が 8〜10V に変わっても 5V 付近を保ち、部品が定格を超えない (いちばん厳しいのは 9V で負荷 330Ω のとき) ように、直列の抵抗の値を決めてください。出力のネット (抵抗とツェナーの間の点) には、ラベルツールで「VOUT」という名前を付けます	Make about 5V (4.7–5.6V) from a 9V supply, using only a resistor and a Zener diode. The output will drive a load of 1kΩ to 330Ω, so choose the series resistor so that the voltage holds even under the heavy load, stays near 5V when the input changes between 8 and 10V, and no part goes over its rating (the hardest case is 9V with a 330Ω load). Name the output net (the point between the resistor and the Zener) "VOUT" with the Label tool
+回路の形: 電源の + → 抵抗 → 出力 (VOUT)。出力と GND の間に、ツェナーを入れます。ツェナーは、ふつうのダイオードと逆向き (カソード = 縞のある側を出力側、アノードを GND 側) です。	Circuit shape: supply + → resistor → output (VOUT). Put the Zener between the output and GND. The Zener goes the opposite way from a normal diode (cathode = striped side to the output, anode to GND).
+抵抗の値は、「学ぶ → 値の決め方」の「ツェナーダイオードで電圧を一定にする」で求められます。入力 9V、ツェナー電圧 5.1V、負荷の電流の最大 (5.1V ÷ 330Ω ≒ 15mA)、ツェナーに残す電流 5mA くらいで計算します。ツェナーは、ライブラリの 1N4733A (5.1V) を使います。	You can find the resistor value with "Fixed voltage with a Zener diode" under "Learn → How to choose values". Calculate with an input of 9V, a Zener voltage of 5.1V, the maximum load current (5.1V ÷ 330Ω ≒ 15mA), and about 5mA left for the Zener. Use the 1N4733A (5.1V) Zener from the library.
+答えの目安: 抵抗は 150Ω 前後 (130〜200Ω)。小さすぎると抵抗が熱で定格を超え (電力 = (9V − 5.1V)² ÷ R が、0805 のチップ抵抗の目安 0.125W 以下 → R ≧ 125Ω)、大きすぎると負荷 330Ω でツェナーに電流が残りません (R ≦ 220Ω)。「答えの回路を見る」で、できあがりを見られます。	Expected answer: a resistor of about 150Ω (130–200Ω). Too small and the resistor overheats past its rating (power = (9V − 5.1V)² ÷ R must stay below about 0.125W for an 0805 chip resistor → R ≧ 125Ω); too large and no current is left for the Zener with a 330Ω load (R ≦ 220Ω). You can see the finished circuit with "Show answer circuit".
+負荷 1kΩ で、出力が 4.7〜5.6V	With a 1kΩ load, the output is 4.7–5.6V
+出力が {v} V で、電源の電圧に近いままです。ツェナーに電流が流れていません。ツェナーが GND につながっているか、向き (カソード = 縞を出力側) を確かめてください	The output is {v} V, still close to the supply voltage. No current is flowing in the Zener. Check that the Zener is connected to GND and that it faces the right way (cathode = stripe on the output side)
+出力が {v} V しかありません。ツェナーが、ふつうのダイオードの向き (順方向) になっていませんか。カソード (縞のある側) を出力側、アノードを GND 側にします	The output is only {v} V. Is the Zener facing the normal diode direction (forward)? Put the cathode (striped side) on the output side and the anode on the GND side
+出力が {v} V で、低すぎます。直列の抵抗が大きすぎて、ツェナーに電流が残っていないか、ツェナーの電圧が 5.1V でない部品です	The output is {v} V, too low. Either the series resistor is too large and no current is left for the Zener, or the Zener is not a 5.1V part
+出力が {v} V で、高すぎます。ツェナーの電圧が 5.1V より高い部品ではありませんか	The output is {v} V, too high. Is the Zener a part with a voltage higher than 5.1V?
+負荷 330Ω でも、出力が 4.7V 以上	Even with a 330Ω load, the output is 4.7V or more
+負荷 330Ω では出力が {v} V に落ちます。直列の抵抗を小さくして、負荷が取る電流 (5.1V ÷ 330Ω ≒ 15mA) に加えて、ツェナーに数 mA が残るようにします。目安: 抵抗 ≦ (9V − 5.1V) ÷ (15mA + 数 mA) ≒ 200Ω 前後	With a 330Ω load, the output drops to {v} V. Make the series resistor smaller so that, besides the load current (5.1V ÷ 330Ω ≒ 15mA), a few mA are left for the Zener. Rule of thumb: resistor ≦ (9V − 5.1V) ÷ (15mA + a few mA) ≒ about 200Ω
+入力が 8〜10V に変わっても、出力が保たれる	The output holds when the input changes between 8 and 10V
+入力が低いとツェナーに電流が残らず (抵抗が大きすぎる)、入力が高いと電流が増えすぎて電圧が上がります (抵抗が小さすぎる)	When the input is low, no current is left for the Zener (resistor too large); when the input is high, the current grows too much and the voltage rises (resistor too small)
+部品が定格を超えない	No part goes over its rating
+分圧で 3.3V を作る	Make 3.3V with a voltage divider
+5V の電源から、抵抗 2 本で 3.3V (3.2〜3.4V) を作ります。出力に 100kΩ の負荷 (マイコンの入力など) をつないでも 3.1〜3.5V を保ち、電源から流れる電流が 5mA 以下 (むだに流しすぎない) になるように、2 本の抵抗の値を決めてください。出力 (2 本の抵抗の間の点) には、ラベルツールで「VOUT」という名前を付けます	Make 3.3V (3.2–3.4V) from a 5V supply with two resistors. Choose the two resistor values so that the output stays at 3.1–3.5V even with a 100kΩ load (such as an MCU input) connected, and the current from the supply is 5mA or less (no wasted current). Name the output (the point between the two resistors) "VOUT" with the Label tool
+回路の形: 電源の + → R1 → 出力 (VOUT) → R2 → GND。出力電圧 = 電源 × R2 ÷ (R1 + R2) です。	Circuit shape: supply + → R1 → output (VOUT) → R2 → GND. Output voltage = supply × R2 ÷ (R1 + R2).
+3.3V ÷ 5V = 0.66 なので、R1 : R2 は、約 1 : 2 (R2 が R1 の約 2 倍) です。「学ぶ → 値の決め方」の「分圧」でも求められます。抵抗の値が大きいほど電流は小さいですが、大きすぎると、出力につないだ負荷の影響で電圧が下がります。小さすぎると電流が流れすぎます。	3.3V ÷ 5V = 0.66, so R1 : R2 is about 1 : 2 (R2 about twice R1). You can also find it with "Voltage divider" under "Learn → How to choose values". Larger resistors mean less current, but if they are too large, the load on the output pulls the voltage down. If they are too small, too much current flows.
+答えの目安: R1 = 5.1kΩ、R2 = 10kΩ (出力 3.31V)。R2 は、負荷 (100kΩ) の 1/10 以下にしておくと、負荷の影響が小さくなります。合計 1kΩ〜50kΩ くらいが、使いやすい範囲です。	Expected answer: R1 = 5.1kΩ, R2 = 10kΩ (output 3.31V). Keeping R2 at 1/10 of the load (100kΩ) or less makes the load's effect small. A total of about 1kΩ to 50kΩ is a handy range.
+無負荷で、出力が 3.2〜3.4V	With no load, the output is 3.2–3.4V
+出力が {v} V で、低すぎます。出力電圧 = 5V × R2 ÷ (R1 + R2) です。R2 を大きく (または R1 を小さく) します	The output is {v} V, too low. Output voltage = 5V × R2 ÷ (R1 + R2). Make R2 larger (or R1 smaller)
+出力が {v} V で、高すぎます。出力電圧 = 5V × R2 ÷ (R1 + R2) です。R2 を小さく (または R1 を大きく) します	The output is {v} V, too high. Output voltage = 5V × R2 ÷ (R1 + R2). Make R2 smaller (or R1 larger)
+100kΩ の負荷をつないでも、出力が 3.1〜3.5V	Even with a 100kΩ load, the output is 3.1–3.5V
+100kΩ の負荷をつなぐと、出力が {v} V に下がります。負荷が R2 と並列になるので、R2 が負荷に比べて大きいと影響が出ます。R1・R2 を小さくします (R2 は負荷の 1/10 以下が目安)	With a 100kΩ load connected, the output drops to {v} V. The load is in parallel with R2, so if R2 is large compared with the load, it matters. Make R1 and R2 smaller (rule of thumb: R2 at most 1/10 of the load)
+電源から流れる電流が 5mA 以下	The current from the supply is 5mA or less
+電源から {mA} mA 流れています。抵抗が小さすぎて、電流がむだに流れ、発熱します。R1・R2 を大きくします	{mA} mA flows from the supply. The resistors are too small, so current is wasted and turns into heat. Make R1 and R2 larger
+LED を約 10mA で光らせる	Light an LED at about 10mA
+5V の電源で、LED を約 10mA (7〜13mA) で光らせます。LED は、電流を自分では制限できないので、直列の抵抗の値を決めてください (LED の順方向電圧は約 2V)。LED が定格を超えない (20mA 以下) ことも、判定されます	Light an LED at about 10mA (7–13mA) from a 5V supply. An LED cannot limit its own current, so choose the series resistor value (the LED's forward voltage is about 2V). The check also makes sure the LED stays within its rating (20mA or less)
+回路の形: 電源の + → 抵抗 → LED のアノード、LED のカソード → GND。LED は向きがあります (三角の向きが、電流の流れる向き)。	Circuit shape: supply + → resistor → LED anode, LED cathode → GND. The LED has a direction (the triangle points the way the current flows).
+抵抗の値は、「学ぶ → 値の決め方」の「LEDの電流制限抵抗」で求められます。抵抗 = (電源電圧 − LED の電圧) ÷ 電流 = (5V − 2V) ÷ 10mA です。	You can find the resistor value with "LED current-limiting resistor" under "Learn → How to choose values". Resistor = (supply voltage − LED voltage) ÷ current = (5V − 2V) ÷ 10mA.
+答えの目安: 300Ω 前後 (E24 なら 330Ω)。LED の電圧は電流で少し変わるので、判定は 7〜13mA を合格にしています。	Expected answer: about 300Ω (330Ω in E24). The LED voltage changes a little with current, so the check accepts 7–13mA.
+LED の電流が 7〜13mA	The LED current is 7–13mA
+LED に電流が流れていません ({mA} mA)。LED の向き (アノードを電源側、カソードを GND 側) と、GND につながっているかを確かめてください	No current flows in the LED ({mA} mA). Check the LED direction (anode to the supply side, cathode to the GND side) and that it is connected to GND
+LED の電流が {mA} mA で、少なすぎます。抵抗が大きすぎます。小さくすると、電流が増えます	The LED current is {mA} mA, too little. The resistor is too large. Make it smaller to increase the current
+LED の電流が {mA} mA で、多すぎます。抵抗が小さすぎます。大きくすると、電流が減ります	The LED current is {mA} mA, too much. The resistor is too small. Make it larger to reduce the current
+部品が定格を超えない (LED は 20mA 以下)	No part goes over its rating (LED 20mA or less)
+カットオフ 1kHz のローパスフィルタ	Low-pass filter with a 1kHz cutoff
+抵抗とコンデンサで、約 1kHz から高い周波数を弱めるフィルタを作ります。1kHz で約 −3dB (−2〜−4dB)、100Hz ではほとんど下がらず (−1dB 以上)、10kHz では十分に下がる (−15dB 以下) ように、R と C の値を決めてください。入力の電源は、AC 解析用の「AC 1」が入っています。出力 (抵抗とコンデンサの間の点) には、ラベルツールで「VOUT」という名前を付けます	Make a filter with a resistor and a capacitor that weakens frequencies above about 1kHz. Choose R and C so that the gain is about −3dB (−2 to −4dB) at 1kHz, barely drops at 100Hz (−1dB or more), and drops enough at 10kHz (−15dB or less). The input source is already set to "AC 1" for AC analysis. Name the output (the point between the resistor and the capacitor) "VOUT" with the Label tool
+回路の形: 入力 (電源の +) → 抵抗 → 出力 (VOUT) → コンデンサ → GND。出力は、抵抗とコンデンサの間の点です。	Circuit shape: input (supply +) → resistor → output (VOUT) → capacitor → GND. The output is the point between the resistor and the capacitor.
+カットオフ周波数 fc = 1 ÷ (2π × R × C) です。「学ぶ → 値の決め方」の「RCフィルタの抵抗」で、コンデンサ (例: 100n) から抵抗を求められます。fc で出力は約 −3dB (約 0.7 倍) になります。	Cutoff frequency fc = 1 ÷ (2π × R × C). With "RC filter resistor" under "Learn → How to choose values", you can find the resistor from the capacitor (e.g. 100n). At fc the output is about −3dB (about 0.7 times).
+答えの目安: R = 1.6kΩ と C = 100nF (fc ≒ 1.0kHz)、または R = 1kΩ と C = 159nF。R と C の積が同じなら、どの組み合わせでも合格です。判定は、fc が約 0.8〜1.3kHz の範囲を合格にしています。	Expected answer: R = 1.6kΩ and C = 100nF (fc ≒ 1.0kHz), or R = 1kΩ and C = 159nF. Any combination passes as long as the product of R and C is the same. The check accepts fc in the range of about 0.8–1.3kHz.
+1kHz で、約 −3dB (−2〜−4dB)	About −3dB (−2 to −4dB) at 1kHz
+1kHz のゲインが {v} dB で、下がりすぎです。カットオフ周波数が 1kHz より低い (R × C が大きすぎる) ので、R か C を小さくします	The gain at 1kHz is {v} dB, too low. The cutoff frequency is below 1kHz (R × C is too large), so make R or C smaller
+1kHz のゲインが {v} dB で、あまり下がっていません。カットオフ周波数が 1kHz より高い (R × C が小さすぎる) ので、R か C を大きくします	The gain at 1kHz is {v} dB, not dropping much. The cutoff frequency is above 1kHz (R × C is too small), so make R or C larger
+100Hz で、ほとんど下がらない (−1dB 以上)	Barely drops at 100Hz (−1dB or more)
+100Hz のゲインが {v} dB で、低い周波数まで下がっています。カットオフ周波数が低すぎます	The gain at 100Hz is {v} dB; it drops even at low frequencies. The cutoff frequency is too low
+10kHz で、十分に下がる (−15dB 以下)	Drops enough at 10kHz (−15dB or less)
+10kHz のゲインが {v} dB で、高い周波数が十分に下がっていません。カットオフ周波数が高すぎます	The gain at 10kHz is {v} dB; high frequencies are not reduced enough. The cutoff frequency is too high
+ツェナーとトランジスタで、重い負荷でも保つ 4.4V	A 4.4V supply that holds under heavy load, with a Zener and a transistor
+9V の電源から、ツェナーとトランジスタ (エミッタフォロワ) で約 4.4V (4.2〜4.6V) を作ります。負荷が 220Ω でも、重い 47Ω でも電圧が崩れず、部品が定格を超えない (負荷 100Ω のとき) ようにします。ツェナーが作った電圧を、トランジスタのベースで受け、エミッタを出力にします。出力のネットには、ラベルツールで「VOUT」という名前を付けます	Make about 4.4V (4.2–4.6V) from a 9V supply with a Zener and a transistor (emitter follower). The voltage must hold with a 220Ω load and with a heavy 47Ω load, and no part may go over its rating (with a 100Ω load). The transistor's base takes the voltage made by the Zener, and the emitter is the output. Name the output net "VOUT" with the Label tool
+回路の形: 電源の + → 抵抗 → ツェナー (カソード側) = トランジスタのベース。ツェナーのアノード → GND。トランジスタのコレクタ → 電源の +、エミッタ → 出力 (VOUT)。	Circuit shape: supply + → resistor → Zener (cathode side) = transistor base. Zener anode → GND. Transistor collector → supply +, emitter → output (VOUT).
+ツェナーの電圧 (5.1V) から、ベース・エミッタ間の約 0.7V を引いた、約 4.4V が出力になります。ベース側の抵抗は、ツェナーに数 mA 流す値 (300Ω 前後) にします。トランジスタは、ライブラリの 2N3904 を使います。	The output is the Zener voltage (5.1V) minus about 0.7V between base and emitter: about 4.4V. Choose the base-side resistor so a few mA flow through the Zener (about 300Ω). Use the 2N3904 transistor from the library.
+答えの目安: 抵抗 330Ω、ツェナー 1N4733A、トランジスタ 2N3904。ピンは、データシートで確かめます (2N3904 は、平らな面を手前にして、左から E・B・C)。「答えの回路を見る」で、できあがりを見られます。	Expected answer: resistor 330Ω, Zener 1N4733A, transistor 2N3904. Check the pins in the datasheet (2N3904: flat side facing you, E, B, C from the left). You can see the finished circuit with "Show answer circuit".
+負荷 220Ω で、出力が 4.2〜4.6V	With a 220Ω load, the output is 4.2–4.6V
+出力が {v} V しかありません。トランジスタのつなぎ方 (コレクタが電源、ベースがツェナー、エミッタが出力) とピンの並びを確かめてください	The output is only {v} V. Check how the transistor is connected (collector to the supply, base to the Zener, emitter to the output) and the pin order
+出力が {v} V で、低すぎます。ツェナーの電圧が 5.1V になっていないか (ベース側の抵抗が大きすぎないか) 確かめてください	The output is {v} V, too low. Check that the Zener voltage is 5.1V (that the base-side resistor is not too large)
+出力が {v} V で、高すぎます。ベースの電圧より 0.7V 低くなるはずです。つなぎ方を確かめてください	The output is {v} V, too high. It should be 0.7V below the base voltage. Check the connections
+負荷 47Ω でも、出力が 4.2〜4.6V	Even with a 47Ω load, the output is 4.2–4.6V
+負荷 47Ω では出力が {v} V に落ちます。ツェナーに電流が残っていません。ベース側の抵抗を小さくして、ツェナーに流れる電流を増やします	With a 47Ω load, the output drops to {v} V. No current is left for the Zener. Make the base-side resistor smaller to increase the current through the Zener
+ゲイン −10 の反転増幅回路	Inverting amplifier with a gain of −10
+オペアンプ (LM358) で、入力を −10 倍にして出力する反転増幅回路を作ります。入力が 0.1V のとき出力が約 −1.0V (−1.05〜−0.95V)、0.2V のとき約 −2.0V (−2.1〜−1.9V) になるように、2 本の抵抗の値を決めてください。電源 (+5V と −5V) の 2 つは置いてあります。電源の + を VCC、− を VEE につなぎます。出力には、ラベルツールで「VOUT」という名前を付けます	Build an inverting amplifier with an op-amp (LM358) that multiplies the input by −10. Choose the two resistor values so that the output is about −1.0V (−1.05 to −0.95V) for a 0.1V input and about −2.0V (−2.1 to −1.9V) for 0.2V. The two supplies (+5V and −5V) are already placed. Connect the supply + to VCC and − to VEE. Name the output "VOUT" with the Label tool
+回路の形: 入力 → R1 → オペアンプの反転入力 (−)。出力 → R2 → 反転入力 (−)。非反転入力 (+) は GND。電源は、オペアンプの V+ に +5V、V− に −5V (電源 V3 の + を GND、− を V− へ)。	Circuit shape: input → R1 → op-amp inverting input (−). Output → R2 → inverting input (−). Non-inverting input (+) to GND. Power: +5V to the op-amp's V+ and −5V to V− (supply V3: + to GND, − to V−).
+ゲイン = −R2 ÷ R1 です。−10 倍にするには、R2 = R1 の 10 倍にします (例: R1 = 1kΩ、R2 = 10kΩ)。抵抗は、1kΩ〜1MΩ くらいが使いやすい範囲です。	Gain = −R2 ÷ R1. For −10, make R2 10 times R1 (e.g. R1 = 1kΩ, R2 = 10kΩ). About 1kΩ to 1MΩ is a handy range for the resistors.
+答えの目安: R1 = 1kΩ、R2 = 10kΩ。入力は、抵抗 R1 を通して、反転入力 (−) に入れます。「答えの回路を見る」で、できあがりを見られます。	Expected answer: R1 = 1kΩ, R2 = 10kΩ. Feed the input through R1 into the inverting input (−). You can see the finished circuit with "Show answer circuit".
+入力 0.1V のとき、出力が約 −1.0V	With a 0.1V input, the output is about −1.0V
+出力が {v} V で、プラスです。反転増幅は、出力の向きが逆 (マイナス) になります。入力を、抵抗を通して、反転入力 (−) に入れ、非反転入力 (+) を GND につなぎます	The output is {v} V, positive. An inverting amplifier flips the output (negative). Feed the input through a resistor into the inverting input (−), and connect the non-inverting input (+) to GND
+出力が {v} V で、電源いっぱいに張り付いています。帰還がかかっていません。出力から反転入力 (−) へ、抵抗 R2 でつなぎます。電源 (VCC・VEE) が正しくつながっているかも確かめます	The output is {v} V, stuck at the supply limit. There is no feedback. Connect the output to the inverting input (−) through resistor R2. Also check that the supplies (VCC, VEE) are connected correctly
+出力が {v} V で、ほとんど動きません。入力が反転入力につながっているか、電源 (VCC・VEE) がつながっているかを確かめます	The output is {v} V and barely moves. Check that the input is connected to the inverting input and that the supplies (VCC, VEE) are connected
+出力が {v} V で、ゲインが −10 倍より大きいです。ゲイン = −R2 ÷ R1 なので、R2 を小さく (または R1 を大きく) します	The output is {v} V; the gain is larger than −10. Gain = −R2 ÷ R1, so make R2 smaller (or R1 larger)
+出力が {v} V で、ゲインが −10 倍より小さいです。ゲイン = −R2 ÷ R1 なので、R2 を大きく (または R1 を小さく) します	The output is {v} V; the gain is smaller than −10. Gain = −R2 ÷ R1, so make R2 larger (or R1 smaller)
+入力 0.2V のとき、出力が約 −2.0V	With a 0.2V input, the output is about −2.0V
+入力 0.2V で出力が {v} V です。ゲインが大きすぎます	With a 0.2V input, the output is {v} V. The gain is too large
+入力 0.2V で出力が {v} V です。ゲインが小さすぎます	With a 0.2V input, the output is {v} V. The gain is too small
+# crates/app/src/schematic/challenge/judge.rs
+ ヒント: {h}	 Hint: {h}
+{} の {} 番ピン	{} pin {}
+{} が、どこにもつながっていません	{} is not connected to anything
+{} が、{} とつながっていません	{} is not connected to {}
+{}: {} か {} が、どこにもつながっていません	{}: {} or {} is not connected to anything
+{}: {} と {} が、同じネットになっています (間に部品を入れるには、つなぎません)	{}: {} and {} are on the same net (to put a part between them, don't connect them)
+{}: {} の値 {} が、目安の範囲 ({} 〜 {}) から外れています	{}: the value of {} ({}) is outside the expected range ({} to {})
+{}: {} 個必要ですが、{} 個しか見つかりません	{}: {} needed, but only {} found
+配線ミスの点検 (ERC) にエラーがない	No errors in the wiring check (ERC)
+出力のネットに「{net}」のラベルがある	The output net has a "{net}" label
+{m} (「作図」タブの ERC の一覧で、場所を確かめられます)	{m} (you can find where in the ERC list on the "Draw" tab)
+出力 (部品の間の点) に、ラベルツールで「{net}」という名前を付けてください。判定は、このネットを測ります	Name the output (the point between the parts) "{net}" with the Label tool. The check measures this net
+「{net}」のラベルを付けてから判定します	Add the "{net}" label first, then check
+出力 {v:.2} V	Output {v:.2} V
+前の項目を直してから判定します	Fix the item above first, then check
+{net} というネットが見つかりません	No net named {net} found
+回路を解けませんでした: {e}	Could not solve the circuit: {e}
+{a}V のとき {x:.2} V、{b}V のとき {y:.2} V	{x:.2} V at {a}V, {y:.2} V at {b}V
+{a}V のとき {x:.2} V、{b}V のとき {y:.2} V と、動きすぎです。{hint}	{x:.2} V at {a}V, {y:.2} V at {b}V: it moves too much. {hint}
+入力を変えて解けませんでした	Could not solve with the changed input
+電流 {:.1} mA	Current {:.1} mA
+電流を測れませんでした (その部品が回路にあるか、回路が解けるかを確かめてください)	Could not measure the current (check that the part is in the circuit and that the circuit can be solved)
+{freq:.0}Hz で {g:.1} dB	{g:.1} dB at {freq:.0}Hz
+周波数特性を計算できませんでした (入力の電源が「AC 1」か、VOUT のラベルがあるかを確かめてください)	Could not compute the frequency response (check that the input source is "AC 1" and that there is a VOUT label)
+{n} 個あります	There are {n}
+{n} 個しかありません。{hint}	Only {n}. {hint}
+負荷 {l}Ω のとき、	With a {l}Ω load: 
+{cond}いちばん厳しい条件でも、定格の範囲です	{cond}within the ratings even in the worst case
+のとき、いちばん	
+{cond}{}。抵抗を大きくする (または、定格の大きい部品にする) と直ります	{cond}{}. Use a larger resistor (or a part with a higher rating) to fix this
+# crates/app/src/schematic/challenge/mod.rs
+「{}」を始めました。回路を作って、「判定する」を押してください	Started "{}". Build the circuit, then press "Check"
+判定: すべて合格です	Verdict: all passed
+判定: 直すところがあります (✖ の項目を見てください)	Verdict: some things need fixing (see the ✖ items)
+# crates/app/src/schematic/challenge/power.rs
+ツェナー・オペアンプ・トランジスタで、自作の 5V 電源	A homemade 5V supply with a Zener, an op-amp and a transistor
+9V の電源から、基準電圧 (ツェナー 3.3V)・オペアンプ (LM358)・パストランジスタ (2N3904)・出力を分ける 2 本の抵抗で、約 5V (4.8〜5.2V) を作ります。負荷が 100Ω でも 47Ω でも、入力が 8V から 12V に変わっても、出力が保たれ、部品が定格を超えない (いちばん厳しいのは 9V で負荷 47Ω のとき) ようにします。ツェナーに電流を流す抵抗 R1 (1kΩ) は、置いてあります。出力のネットには、ラベルツールで「VOUT」という名前を付けます	Make about 5V (4.8–5.2V) from a 9V supply with a reference (3.3V Zener), an op-amp (LM358), a pass transistor (2N3904) and two resistors that divide the output. The output must hold with a 100Ω or 47Ω load and with the input changing from 8V to 12V, and no part may go over its rating (the hardest case is 9V with a 47Ω load). The resistor R1 (1kΩ) that feeds the Zener is already placed. Name the output net "VOUT" with the Label tool
+回路の形: 電源の + → R1 → ツェナー (カソード側) = 基準電圧。ツェナーのアノードは GND。基準電圧は、オペアンプの + 入力 (3 番ピン) へ。トランジスタは、コレクタを電源 (+)、ベースをオペアンプの出力 (1 番ピン)、エミッタを出力 (VOUT) に。出力を R3 と R4 で分けて、中点をオペアンプの − 入力 (2 番ピン) へ。オペアンプの電源は、8 番ピンを電源 (+)、4 番ピンを GND に。	Circuit shape: supply + → R1 → Zener (cathode side) = reference voltage. Zener anode to GND. The reference goes to the op-amp's + input (pin 3). Transistor: collector to the supply (+), base to the op-amp output (pin 1), emitter to the output (VOUT). Divide the output with R3 and R4 and send the midpoint to the op-amp's − input (pin 2). Op-amp power: pin 8 to the supply (+), pin 4 to GND.
+出力 = 基準 × (1 + R3 ÷ R4) です。3.3V を 5V にするので、R3 ÷ R4 ≒ 0.52。R4 を 10kΩ にすると、R3 は約 5.2kΩ (E24 で 5.1kΩ)。「学ぶ → 値の決め方」の「ツェナーダイオードで電圧を一定にする」で、基準の電流も確かめられます。ツェナーは、ライブラリの 1N4728A (3.3V) です。	Output = reference × (1 + R3 ÷ R4). To turn 3.3V into 5V, R3 ÷ R4 ≒ 0.52. With R4 = 10kΩ, R3 is about 5.2kΩ (5.1kΩ in E24). You can also check the reference current with "Fixed voltage with a Zener diode" under "Learn → How to choose values". The Zener is the 1N4728A (3.3V) from the library.
+答えの目安: R3 = 5.1kΩ、R4 = 10kΩ (出力 4.97V)。ツェナーの電圧が個体差で ±5% 動くので、判定は 4.8〜5.2V にしています。「答えの回路を見る」で、できあがりを見られます。出力が 3.3V のままなら、− 入力を出力に直接つないでいませんか (分ける抵抗が要ります)。	Expected answer: R3 = 5.1kΩ, R4 = 10kΩ (output 4.97V). The Zener voltage varies by ±5% from part to part, so the check accepts 4.8–5.2V. You can see the finished circuit with "Show answer circuit". If the output stays at 3.3V, did you connect the − input straight to the output? (You need the dividing resistors.)
+負荷 100Ω で、出力が 4.8〜5.2V	With a 100Ω load, the output is 4.8–5.2V
+出力が {v} V しかありません。トランジスタ (コレクタ = 電源、ベース = オペアンプの出力、エミッタ = 出力) と、オペアンプの電源 (8 番 = 電源、4 番 = GND) のつなぎ方を確かめてください	The output is only {v} V. Check how the transistor (collector = supply, base = op-amp output, emitter = output) and the op-amp power (pin 8 = supply, pin 4 = GND) are connected
+出力が {v} V で、低すぎます。オペアンプの + 入力に基準電圧 (ツェナー) が入っているか、− 入力が出力の分圧につながっているかを確かめます	The output is {v} V, too low. Check that the reference voltage (Zener) goes into the op-amp's + input and that the − input is connected to the output divider
+出力が {v} V で、基準電圧に近い値です。− 入力を出力に直接つないでいませんか。出力を R3 と R4 で分けて、その中点を − 入力につなぎます。出力 = 基準 × (1 + R3 ÷ R4) です	The output is {v} V, close to the reference voltage. Did you connect the − input straight to the output? Divide the output with R3 and R4 and connect the midpoint to the − input. Output = reference × (1 + R3 ÷ R4)
+出力が {v} V で、5V より低いです。出力 = 基準 × (1 + R3 ÷ R4) なので、R3 を大きく (または R4 を小さく) します	The output is {v} V, below 5V. Output = reference × (1 + R3 ÷ R4), so make R3 larger (or R4 smaller)
+出力が {v} V で、5V より高いです。出力 = 基準 × (1 + R3 ÷ R4) なので、R3 を小さく (または R4 を大きく) します	The output is {v} V, above 5V. Output = reference × (1 + R3 ÷ R4), so make R3 smaller (or R4 larger)
+負荷 47Ω でも、出力が 4.8〜5.2V	Even with a 47Ω load, the output is 4.8–5.2V
+負荷 47Ω では、出力が {v} V に落ちます。トランジスタのベースに、オペアンプが電流を流せていません。トランジスタの接続を確かめてください	With a 47Ω load, the output drops to {v} V. The op-amp cannot drive current into the transistor's base. Check the transistor's connections
+入力が 8〜12V に変わっても、出力が保たれる	The output holds when the input changes between 8 and 12V
+入力が低いと、オペアンプとトランジスタの余裕 (入力より約 2V 低い電圧までしか出せません) が足りなくなります。基準電圧が入力で動いていないかも確かめます (R1 が小さすぎ・大きすぎないか)	When the input is low, the op-amp and transistor run out of headroom (they can only output up to about 2V below the input). Also check that the reference voltage does not move with the input (R1 not too small or too large)
+三端子レギュレータ 7805 で 5V 電源	5V supply with a 7805 3-terminal regulator
+12V の電源から、三端子レギュレータ LM7805 で 5V (4.8〜5.2V) を作ります。入力と出力に、データシートどおりのコンデンサをつけます。負荷が 100Ω でも 22Ω でも、入力が 8V から 15V に変わっても出力が保たれ、部品が定格を超えない (いちばん厳しいのは 12V で負荷 22Ω のとき) ようにします。出力のネットには、ラベルツールで「VOUT」という名前を付けます	Make 5V (4.8–5.2V) from a 12V supply with an LM7805 3-terminal regulator. Add the capacitors on the input and output as the datasheet says. The output must hold with a 100Ω or 22Ω load and with the input changing from 8V to 15V, and no part may go over its rating (the hardest case is 12V with a 22Ω load). Name the output net "VOUT" with the Label tool
+回路の形: 電源の + → 7805 の IN (1 番ピン)。7805 の GND (2 番ピン) は GND へ。OUT (3 番ピン) が出力 (VOUT)。IN と GND の間、OUT と GND の間に、コンデンサをつけます。	Circuit shape: supply + → 7805 IN (pin 1). 7805 GND (pin 2) to GND. OUT (pin 3) is the output (VOUT). Add capacitors between IN and GND and between OUT and GND.
+コンデンサは、データシートの推奨どおり、入力側に 0.33µF (330n)、出力側に 0.1µF (100n) です。電源の電圧は 12V で、7805 は入力が約 7V 以上あれば 5V を出します。	As the datasheet recommends, use 0.33µF (330n) on the input side and 0.1µF (100n) on the output side. The supply is 12V; the 7805 puts out 5V as long as its input is about 7V or more.
+答えの目安: LM7805、330n、100n。「答えの回路を見る」で、できあがりを見られます。コンデンサは、判定ではシミュレーションに影響しませんが、実物では発振を防ぐために必要です。個数 (2 個以上) を調べます。	Expected answer: LM7805, 330n, 100n. You can see the finished circuit with "Show answer circuit". The capacitors don't affect the simulation in the check, but on real hardware they are needed to prevent oscillation. The check counts them (2 or more).
+出力が {v} V しかありません。7805 のつなぎ方 (1 = IN、2 = GND、3 = OUT) を確かめてください。IN は電源の +、GND は GND です	The output is only {v} V. Check how the 7805 is connected (1 = IN, 2 = GND, 3 = OUT). IN goes to the supply +, GND to GND
+出力が {v} V で、低すぎます。7805 の入力が足りないのかもしれません。つなぎ方を確かめてください	The output is {v} V, too low. The 7805 may not be getting enough input. Check the connections
+出力が {v} V で、高すぎます。レギュレータが LM7805 (5V) になっていますか	The output is {v} V, too high. Is the regulator an LM7805 (5V)?
+負荷 22Ω (約 230mA) でも、出力が 4.8〜5.2V	Even with a 22Ω load (about 230mA), the output is 4.8–5.2V
+重い負荷では、出力が {v} V に落ちます。つなぎ方を確かめてください	Under heavy load, the output drops to {v} V. Check the connections
+入力が 8〜15V に変わっても、出力が保たれる	The output holds when the input changes between 8 and 15V
+7805 は、入力が約 7V より低いと安定化できません (ドロップアウト)。入力の途中にダイオードなどを入れて、電圧を下げていませんか	The 7805 cannot regulate when its input is below about 7V (dropout). Did you put a diode or something else in the input path that lowers the voltage?
+コンデンサが 2 個以上ある (入力側と出力側)	There are 2 or more capacitors (input side and output side)
+7805 の入力と GND の間 (330n)、出力と GND の間 (100n) に、コンデンサをつけます	Add capacitors between the 7805's input and GND (330n) and between its output and GND (100n)
+安定化電源を自分で設計する (最終課題)	Design your own regulated supply (final challenge)
+12V の電池やACアダプタ (9〜12V でも動くこと) から、5V (4.8〜5.2V) を取り出す電源の回路を、自分で設計します。使える部品: 三端子レギュレータ LM7805、ショットキーダイオード 1N5819、コンデンサ。条件: (1) 負荷 100Ω でも、重い 22Ω (約 230mA) でも、出力が 4.8〜5.2V。(2) 入力が 9V でも 12V でも、5V が保たれる。(3) 電源を逆向きにつないでも、出力に逆向きの電圧が出ない (−12V にしても出力が 0V 付近)。(4) レギュレータの入力と出力に、コンデンサをつける。(5) どの部品も、定格を超えない (いちばん厳しいのは 12V・負荷 22Ω のとき)。出力のネットには、ラベルツールで「VOUT」という名前を付けます	Design, on your own, a supply circuit that takes 5V (4.8–5.2V) from a 12V battery or AC adapter (it must also work from 9 to 12V). Parts you can use: LM7805 3-terminal regulator, 1N5819 Schottky diode, capacitors. Conditions: (1) The output is 4.8–5.2V with a 100Ω load and with a heavy 22Ω load (about 230mA). (2) 5V holds whether the input is 9V or 12V. (3) If the supply is connected backwards, no reverse voltage appears at the output (output near 0V even at −12V). (4) Add capacitors on the regulator's input and output. (5) No part goes over its rating (the hardest case is 12V with a 22Ω load). Name the output net "VOUT" with the Label tool
+回路の形: 電源の + → ダイオード → レギュレータの IN。レギュレータの GND は GND へ。OUT が出力 (VOUT)。レギュレータの IN と GND の間、OUT と GND の間に、コンデンサをつけます。	Circuit shape: supply + → diode → regulator IN. Regulator GND to GND. OUT is the output (VOUT). Add capacitors between the regulator's IN and GND and between OUT and GND.
+ダイオードは、逆向きの電流を止めるために、電源とレギュレータの間に直列に入れます。向きは、アノードが電源側、カソード (縞のある側) がレギュレータ側です。ダイオードの電圧降下 (約 0.3V) があっても、入力が 9V なら、7805 のドロップアウト (約 2V) に足ります (9 − 0.3 − 5 = 3.7V の余裕)。	The diode goes in series between the supply and the regulator to block reverse current. Direction: anode on the supply side, cathode (striped side) on the regulator side. Even with the diode's voltage drop (about 0.3V), a 9V input is enough for the 7805's dropout (about 2V) (9 − 0.3 − 5 = 3.7V of headroom).
+コンデンサは、データシートのとおり、入力側に 0.33µF (330n)、出力側に 0.1µF (100n) です。7805 のピンは、1 = IN、2 = GND、3 = OUT です。「学ぶ → 値の決め方」の「3端子レギュレータ (78xx) まわり」と「熱 (温度と放熱板)」で、確かめられます。	As the datasheet says, use 0.33µF (330n) on the input side and 0.1µF (100n) on the output side. The 7805 pins are 1 = IN, 2 = GND, 3 = OUT. You can check with "3-terminal regulator (78xx) basics" and "Heat (temperature and heatsink)" under "Learn → How to choose values".
+答えの目安: 1N5819 (ダイオード)、LM7805、330n と 100n。「答えの回路を見る」で、できあがりを見られます。実際の回路では、さらに、電源の入口にヒューズを入れます (レッスン 21)。ヒューズは、シミュレーションで判定できないので、「値の決め方」の「ヒューズの選び方」で、定格を決めてみましょう。	Expected answer: 1N5819 (diode), LM7805, 330n and 100n. You can see the finished circuit with "Show answer circuit". In a real circuit, you would also put a fuse at the power input (lesson 21). A fuse can't be checked by simulation, so try choosing its rating with "Choosing a fuse" under "How to choose values".
+12V・負荷 100Ω で、出力が 4.8〜5.2V	At 12V with a 100Ω load, the output is 4.8–5.2V
+出力が {v} V しかありません。電源 → ダイオード → レギュレータの IN と、レギュレータの GND・OUT のつなぎ方 (7805 は 1 = IN、2 = GND、3 = OUT) を確かめてください。ダイオードの向き (アノードが電源側) も確かめます	The output is only {v} V. Check the connections supply → diode → regulator IN, and the regulator's GND and OUT (7805: 1 = IN, 2 = GND, 3 = OUT). Also check the diode direction (anode on the supply side)
+出力が {v} V で、低すぎます。レギュレータの入力が足りないのかもしれません。つなぎ方を確かめてください	The output is {v} V, too low. The regulator may not be getting enough input. Check the connections
+出力が {v} V で、高すぎます。レギュレータが、7805 (5V) になっていますか	The output is {v} V, too high. Is the regulator a 7805 (5V)?
+重い負荷では、出力が {v} V に落ちます。この電流を流せる部品か (7805 は 1A まで)、ダイオードが細すぎないか確かめてください	Under heavy load, the output drops to {v} V. Check that the parts can carry this current (the 7805 handles up to 1A) and that the diode is not too small
+入力が 9〜12V に変わっても、出力が保たれる	The output holds when the input changes between 9 and 12V
+入力が低すぎて、レギュレータのドロップアウト (約 2V の余裕) を満たしていないかもしれません。ダイオードを何本も直列にしていませんか	The input may be too low to meet the regulator's dropout (about 2V of headroom). Did you put several diodes in series?
+電源を逆向きにつないでも (−12V)、出力に逆向きの電圧が出ない	Even with the supply connected backwards (−12V), no reverse voltage appears at the output
+電源を逆にすると、出力に {v} V が出て、つないだ回路を壊します。電源とレギュレータのあいだに、逆向きの電流を止めるダイオードを入れます (アノードが電源側、カソードがレギュレータ側)	With the supply reversed, {v} V appears at the output and would damage the connected circuit. Put a diode between the supply and the regulator to block reverse current (anode on the supply side, cathode on the regulator side)
+レギュレータの入力と GND の間、出力と GND の間に、コンデンサをつけます (発振を防ぎ、負荷が変わったときの電圧の乱れを抑えます)	Add capacitors between the regulator's input and GND and between its output and GND (they prevent oscillation and reduce voltage dips when the load changes)
+# crates/app/src/schematic/challenge/window.rs
+作ってみよう: {}	Build it yourself: {}
+配線だけ	Wiring only
+部品は置いてあります。線でつなぐ練習です (やり直すと、最初の状態に戻ります)	The parts are already placed. Practice connecting them with wires (starting over returns to the initial state)
+部品も置く	Place parts too
+電源だけが置いてあります。部品を選んで置き、配線し、値も決めます (やり直すと、最初の状態に戻ります)	Only the supply is placed. Pick and place the parts, wire them, and choose the values (starting over returns to the initial state)
+作り終えたら、「判定する」を押してください。回路を実際にシミュレーションして、次の項目を調べます	When you're done, press "Check". The circuit is actually simulated to test the items below
+できました!	Done!
+自分で作った回路が、判定のすべての条件を満たしています。値や部品を変えても通るか (答えは 1 つではありません)、条件のぎりぎりを探してみましょう	The circuit you built meets every condition of the check. Try other values or parts to see if it still passes (there is more than one answer), and look for the edges of the conditions
+ヒント {}	Hint {}
+判定する	Check
+いまの回路をシミュレーションして、目標を満たしているか調べます。何度でも押せます	Simulate the current circuit and see whether it meets the goals. You can press it as often as you like
+ヒントを見る ({hints} / {})	Show hint ({hints} / {})
+行き詰まったら、少しずつヒントを出します。最後のヒントは、答えの目安です	If you get stuck, hints are revealed a little at a time. The last hint is the expected answer
+答えの回路を見る	Show answer circuit
+できあがりの回路を、いまの回路と入れ替えます (Ctrl+Z で戻せます)。答えは 1 つではありません。判定を通れば、別の値や形でも正解です	Replace the current circuit with the finished one (Ctrl+Z undoes it). There is more than one answer: if it passes the check, other values or shapes are correct too
+レッスンに戻る	Back to the lesson
+このチャレンジをやめて、レッスンの手順に戻ります	Leave this challenge and go back to the lesson steps
+チャレンジの窓	Challenge window
+# crates/app/src/schematic/lessons/analog.rs
+13. PNP のハイサイドスイッチ (電源側で負荷を入り切りする)	13. PNP high-side switch (switching a load on the supply side)
+PNP トランジスタで、電源側 (ハイサイド) から負荷を入り切りします。NPN と逆に、入力を Low にするとオンになることと、ベース抵抗の大きさがオンの深さを決めることを見ます	Use a PNP transistor to switch a load on and off from the supply side (high side). See that, unlike NPN, it turns on when the input is Low, and that the base resistor sets how fully it turns on
+NPN は負荷と GND の間 (ローサイド) に置き、ベースを High にするとオンになります。PNP は電源と負荷の間 (ハイサイド) に置き、ベースをエミッタ (電源) より約 0.7V 低くするとオンになります。つまり入力が Low でオン、High でオフと、向きが逆です。負荷の片方が GND につながったまま入り切りできるのが利点です。オンのときに流せる電流は、ベース電流 × hFE が上限です。ベース抵抗が大きすぎると、ベース電流が足りず、オンになりきれません。R2 (プルアップ) は、入力が浮いているときに確実にオフにするための抵抗です。	An NPN sits between the load and GND (low side) and turns on when its base is High. A PNP sits between the supply and the load (high side) and turns on when its base is about 0.7V below the emitter (the supply). So it is the other way round: on when the input is Low, off when High. The advantage is that one side of the load can stay connected to GND while it is switched. The current it can carry when on is limited to base current × hFE. If the base resistor is too large, the base current is too small and it cannot turn fully on. R2 (pull-up) makes sure it is off when the input is floating.
+2N3906 は、電流増幅率 hFE=180 などを持つ簡単なモデルです。実物の hFE は個体差が大きく、電流や温度で変わります。スイッチを確実にオンにするには、データシートの小さめの hFE で、ベース電流を 5 倍ほど多めに流します。	The 2N3906 is a simple model with a current gain of hFE=180 and so on. A real hFE varies a lot from part to part and changes with current and temperature. To turn a switch fully on, use the smaller hFE from the datasheet and give about 5 times more base current.
+扱わないもの: 蓄積時間によるオフの遅れ、温度変化。PNP は NPN より遅く、同じ大きさなら電流も少なめです。	Not covered: the turn-off delay from storage time, and temperature changes. A PNP is slower than an NPN and carries a bit less current for the same size.
+入力は 5V 振幅の信号とし、マイコンの電源が電源 (VCC) より低いときの問題は扱っていません。入力の High が VCC に届かないと、PNP が完全にはオフになりません。そのときは NPN との 2 段にします。	The input is a 5V signal; the problem of an MCU running from a lower voltage than the supply (VCC) is not covered. If the input's High doesn't reach VCC, the PNP doesn't turn fully off. In that case, use two stages with an NPN.
+過渡解析で、入力が Low のときだけ出力が出るのを見る	With transient analysis, see the output only while the input is Low
+「過渡解析を実行」を押し、IN と OUT を選びます。IN が 5V (High) のあいだ OUT は 0V (負荷はオフ)。IN が 0V (Low) になると、OUT が約 4.9V に上がります (負荷に電流が流れる)。NPN と入力の向きが逆です。電源側で入り切りするので、OUT は電源から Vce の分 (0.1V ほど) しか下がりません。	Press "Run transient analysis" and select IN and OUT. While IN is 5V (High), OUT is 0V (load off). When IN goes to 0V (Low), OUT rises to about 4.9V (current flows in the load). The input direction is the opposite of NPN. Because it switches on the supply side, OUT drops from the supply only by Vce (about 0.1V).
+R1 を 47k にして、DC動作点を見る	Set R1 to 47k and look at the DC operating point
+R1 を 4.7k から 47k にして「DC動作点を解析」(DC では IN は 0V の Low)。ベース電流が約 23µA に減り、流せる電流は × hFE (180) で約 4mA が上限になるので、OUT は約 0.9V までしか上がりません。トランジスタが「半分だけオン」で、Vce が大きく (熱くも) なります。スイッチには、オンのときにしっかり飽和する、小さいベース抵抗を選びます。	Change R1 from 4.7k to 47k and press "Run DC operating point" (in DC, IN is 0V, Low). The base current drops to about 23µA, and the current it can carry is limited to × hFE (180) ≈ 4mA, so OUT only rises to about 0.9V. The transistor is "only half on", and Vce is large (and it gets hot). For a switch, choose a small base resistor so it saturates fully when on.
+R1 を 4.7k に戻し、負荷 R2 を 47 にして解析する	Set R1 back to 4.7k, set the load R2 to 47 and analyze
+R1 を 4.7k に戻し、R2 (負荷) を 220 から 47 にして「DC動作点を解析」。電流が約 100mA に増え、OUT は約 4.9V のままです (ベース電流が十分あるので)。解析パネルに ⚠ が出ます: R3 (1206 の抵抗) は、消費電力が形の目安を超えます。トランジスタの電流が足りていても、負荷側の部品が定格を超えることがあります。	Set R1 back to 4.7k, change R2 (load) from 220 to 47 and press "Run DC operating point". The current rises to about 100mA and OUT stays at about 4.9V (there is enough base current). A ⚠ appears in the analysis panel: R3 (a 1206 resistor) dissipates more than its size can handle. Even when the transistor has enough current, parts on the load side can go over their ratings.
+14. オペアンプの反転増幅 (仮想接地とゲイン)	14. Op-amp inverting amplifier (virtual ground and gain)
+反転増幅回路で、ゲインが −Rf ÷ Rin で決まること、出力の向きが逆になること、反転入力が仮想的に 0V になること (仮想接地) を見ます	With an inverting amplifier, see that the gain is set by −Rf ÷ Rin, that the output is flipped, and that the inverting input stays at a virtual 0V (virtual ground)
+反転増幅は、入力を Rin (R1) 経由で反転入力 (−) に入れ、出力から Rf (R2) で戻す回路です。非反転入力 (+) は GND につなぎます。オペアンプは、反転入力を非反転入力 (0V) と同じ電圧に保とうとして出力を動かします。だから反転入力は常にほぼ 0V (仮想接地) で、Rin を流れる電流 = 入力 ÷ Rin が、そのまま Rf に流れます。出力 = −(Rf ÷ Rin) × 入力。この回路は 10k ÷ 1k = −10 倍 (20dB、位相は 180°)。非反転増幅との違いは、ゲインを 1 より小さくでき (Rf < Rin)、入力インピーダンスが Rin で決まる点です。	An inverting amplifier feeds the input through Rin (R1) into the inverting input (−) and feeds back from the output through Rf (R2). The non-inverting input (+) goes to GND. The op-amp moves its output to keep the inverting input at the same voltage as the non-inverting input (0V). So the inverting input is always almost 0V (virtual ground), and the current through Rin = input ÷ Rin flows on through Rf. Output = −(Rf ÷ Rin) × input. This circuit is 10k ÷ 1k = −10 times (20dB, phase 180°). Unlike the non-inverting amplifier, the gain can be less than 1 (Rf < Rin), and the input impedance is set by Rin.
+LM358 は、利得帯域幅積 (約 1MHz)・出力の振れ幅を含む動作モデルです。電源は理想の ±5V です。	The LM358 is a behavioral model including the gain-bandwidth product (about 1MHz) and output swing. The supplies are ideal ±5V.
+扱わないもの: 入力のバイアス電流・オフセット電圧の影響 (大きな抵抗を使うと、出力に直流のずれが出ます)、スルーレート、温度ドリフト。実機は電源ピンの近くに 0.1µF を置きます。	Not covered: input bias current and offset voltage (with large resistors, the output gets a DC offset), slew rate, temperature drift. On real hardware, put 0.1µF near the power pins.
+ゲインを大きくしすぎる (Rin を小さくする) と、出力が電源に届いて頭打ちになり、仮想接地も保てなくなります (反転入力が 0V からずれます)。	If you make the gain too large (Rin too small), the output reaches the supply and flattens out, and virtual ground can no longer be kept (the inverting input moves away from 0V).
+過渡解析で、反転と仮想接地を見る	With transient analysis, see the inversion and virtual ground
+「過渡解析を実行」を押し、IN と OUT と N (反転入力) を選びます。入力は振幅 0.1V の 1kHz 正弦波。OUT は逆向きで振幅 1V (−10 倍) です。N は、入力が ±0.1V に振れても、ほぼ 0V のまま (±1mV くらい) です。これが仮想接地です。	Press "Run transient analysis" and select IN, OUT and N (inverting input). The input is a 1kHz sine wave with an amplitude of 0.1V. OUT is flipped with an amplitude of 1V (−10 times). N stays almost at 0V (about ±1mV) even though the input swings ±0.1V. This is virtual ground.
+AC解析で、ゲインと位相を見る	With AC analysis, see the gain and phase
+「AC解析を実行」を押します。低い周波数でゲインは約 20dB (10 倍)、位相は 180° (反転) です。非反転増幅 (レッスン8) では位相は 0° でした。帯域は 1MHz ÷ (1 + 10) ≒ 90kHz あたりから下がり始めます。	Press "Run AC analysis". At low frequencies the gain is about 20dB (10 times) and the phase is 180° (inverted). In the non-inverting amplifier (lesson 8) the phase was 0°. The gain starts to fall from around 1MHz ÷ (1 + 10) ≒ 90kHz.
+R1 を 100 にして、頭打ちを見る	Set R1 to 100 and see the output flatten out
+R1 (Rin) を 1k から 100 にしてゲインを −100 倍にし、「過渡解析を実行」。出力は ±10V になるはずですが、電源の範囲に届き、マイナス側は約 −5V、プラス側は約 +3.5V で頭打ちになります (クリップ)。N を見ると、波形が削れている間は 0V から約 0.1V ずれます。オペアンプが出力を動かせなくなって、仮想接地が保てないからです。	Change R1 (Rin) from 1k to 100 to make the gain −100, and press "Run transient analysis". The output should be ±10V, but it hits the supply range and flattens out at about −5V on the negative side and about +3.5V on the positive side (clipping). Looking at N, it moves away from 0V by about 0.1V while the waveform is clipped. The op-amp can no longer move its output, so virtual ground cannot be kept.
+15. ダイオードの特性 (流れ始める電圧)	15. Diode characteristics (the voltage where current starts)
+ダイオードは、約 0.7V (シリコン) や約 0.3V (ショットキー) を超えると急に電流を流し、そのあとは電圧がほとんど増えないことを、グラフで見ます	On a graph, see that a diode suddenly conducts above about 0.7V (silicon) or about 0.3V (Schottky), and that after that its voltage barely increases
+ダイオードは、電流を一方向 (アノード → カソード) にだけ流す部品です。順方向の電圧が小さいうちはほとんど流れず、シリコンは約 0.6〜0.7V を超えたあたりから急に流れ始めます。流れ始めると、電流が 10 倍になっても、電圧は 0.1V ほどしか上がりません (電圧は電流の「対数」で増えます)。だから、電流を制限する抵抗がないと、電流が際限なく増えて壊れます (LED に抵抗が必要な理由)。ショットキーダイオードは、流れ始める電圧が約 0.3V と低く、電源での損失が小さい部品です。温度が上がると、順方向の電圧は下がります (1℃ あたり約 1.5〜3mV)。	A diode lets current flow in only one direction (anode → cathode). While the forward voltage is small, almost nothing flows; silicon starts to conduct suddenly above about 0.6–0.7V. Once it conducts, even 10 times more current raises the voltage by only about 0.1V (the voltage grows with the "logarithm" of the current). That is why, without a resistor to limit the current, the current grows without limit and the diode is destroyed (the reason an LED needs a resistor). A Schottky diode starts to conduct at a lower voltage, about 0.3V, so it wastes less power in supplies. As temperature rises, the forward voltage falls (about 1.5–3mV per 1℃).
+ダイオードは、飽和電流・直列抵抗・降伏電圧を持つ簡単なモデルです。実物の個体差 (同じ型番でも ±0.1V くらい) は、含みません。	The diode is a simple model with saturation current, series resistance and breakdown voltage. Part-to-part variation of real diodes (about ±0.1V even for the same part number) is not included.
+扱わないもの: 逆回復時間 (スイッチングの遅れ)、接合容量、逆向きの漏れ電流の温度変化。電源の整流 (50Hz) では問題になりませんが、高い周波数では効いてきます。	Not covered: reverse recovery time (switching delay), junction capacitance, and how reverse leakage current changes with temperature. They don't matter for mains rectification (50Hz), but they do at high frequencies.
+グラフの横軸は、ダイオードの電圧ではなく、電源 V1 の電圧です。直列の抵抗 (100Ω) にも電圧がかかるため、ダイオードの電圧は、V(A1) / V(A2) を選んで読みます。	The graph's horizontal axis is the voltage of supply V1, not the diode voltage. The series resistor (100Ω) also takes some voltage, so read the diode voltage by selecting V(A1) / V(A2).
+まずデータシートを見よう: 1N4007 と 1N5819 のデータシートを開き、「絶対最大定格」の逆耐圧 (VRRM) と平均順電流 (IF)、「電気的特性」の順方向電圧 (Vf) を探します。この回路のシミュレーション (0.72V と 0.30V) と比べてみましょう。	Check the datasheet first: open the 1N4007 and 1N5819 datasheets, and find the reverse voltage (VRRM) and average forward current (IF) under "Absolute maximum ratings", and the forward voltage (Vf) under "Electrical characteristics". Compare them with this circuit's simulation (0.72V and 0.30V).
+用意するもの: ダイオード 1N4007 (シリコン) と 1N5819 (ショットキー)、抵抗 150Ω (1/4W) を 2 本、ブレッドボード、テスタ、直流 3V 前後の電源 (単3電池 2 本など)。	You will need: diodes 1N4007 (silicon) and 1N5819 (Schottky), two 150Ω (1/4W) resistors, a breadboard, a multimeter, and a DC supply of about 3V (such as two AA batteries).
+配線: 回路図どおりに、電源 (+) → 抵抗 → ダイオードのアノード、ダイオードのカソード → 電源 (−)。ダイオードの縞のある側がカソードです。向きを逆にすると、電流は流れません。	Wiring: as in the schematic, supply (+) → resistor → diode anode, diode cathode → supply (−). The striped side of the diode is the cathode. If it is reversed, no current flows.
+測り方: ダイオードの両端の電圧 (アノードと GND の間) を、テスタの直流電圧レンジで測ります。電流は、抵抗の両端の電圧 ÷ 150Ω で求められます。	How to measure: measure the voltage across the diode (between the anode and GND) on the multimeter's DC voltage range. The current is the voltage across the resistor ÷ 150Ω.
+期待される値: 3V で、シリコンは約 0.7V、ショットキーは約 0.3V です (シミュレーションは 0.72V と 0.30V)。個体差と温度で、±0.1V くらいずれます。	Expected values: at 3V, about 0.7V for silicon and about 0.3V for Schottky (the simulation gives 0.72V and 0.30V). They vary by about ±0.1V with the part and temperature.
+やってみよう: テスタに「ダイオード」のレンジがあれば、各ダイオードの順方向電圧を直接測れます (測る電流が小さいので、少し低めに出ます)。ダイオードをドライヤーの弱い温風で少し温めると、電圧が少し下がります。	Try it: if your multimeter has a "diode" range, you can measure each diode's forward voltage directly (the test current is small, so it reads a bit lower). Warm a diode slightly with a hair dryer on low, and the voltage drops a little.
+安全: 3V 以下 (電池 2 本) で行います。電流が 30mA を超えないよう、抵抗を 100Ω より小さくしないでください。	Safety: work at 3V or less (two batteries). So the current doesn't exceed 30mA, don't make the resistor smaller than 100Ω.
+DCスイープで、ダイオードの電圧が頭打ちになるのを見る	With a DC sweep, see the diode voltage level off
+「DCスイープを実行」(電源 V1 を 0〜3V) を押し、V(A1) と V(A2) を選びます。V1 を上げていくと、A1・A2 も最初は上がりますが、ショットキー (A2) は約 0.3V、シリコン (A1) は約 0.7V のあたりで頭打ちになります (3V のとき A1 ≒ 0.72V、A2 ≒ 0.30V)。I(D1) と I(D2) を選ぶと、同じところから電流が急に増えるのが見えます。	Press "Run DC sweep" (supply V1 from 0 to 3V) and select V(A1) and V(A2). As V1 rises, A1 and A2 rise at first, but they level off at about 0.3V for the Schottky (A2) and about 0.7V for silicon (A1) (at 3V, A1 ≒ 0.72V, A2 ≒ 0.30V). Select I(D1) and I(D2) to see the current rise sharply from the same points.
+温度で、順方向の電圧がどう動くか見る	See how the forward voltage moves with temperature
+「温度とばらつき」の「温度スイープを実行」を押します。温度が上がると、ダイオードの電圧が下がります (0℃ → 75℃ で、シリコンは約 0.76V → 0.64V、ショットキーは約 0.38V → 0.16V)。ショットキーのほうが、温度の影響を強く受けます。	Press "Run temperature sweep" under "Temperature and variation". As the temperature rises, the diode voltage falls (from 0℃ to 75℃: silicon about 0.76V → 0.64V, Schottky about 0.38V → 0.16V). The Schottky is more strongly affected by temperature.
+R1 を 1.5k にして、電流が 10 倍違っても電圧がほとんど変わらないことを見る	Set R1 to 1.5k and see that the voltage barely changes even with 10 times less current
+R1 を 150 から 1.5k にして「DC動作点を解析」。D1 の電流は約 15mA から約 1.6mA に減りますが、A1 の電圧は 0.72V から 0.63V へ、0.1V ほどしか変わりません。電圧は、電流の「対数」で増えるので、電流が 10 倍変わっても、少ししか動きません。	Change R1 from 150 to 1.5k and press "Run DC operating point". The D1 current drops from about 15mA to about 1.6mA, but the A1 voltage changes only by about 0.1V, from 0.72V to 0.63V. The voltage grows with the "logarithm" of the current, so even a 10-times change in current moves it only a little.

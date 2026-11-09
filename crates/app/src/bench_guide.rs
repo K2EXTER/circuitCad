@@ -169,20 +169,20 @@ impl BenchGuide {
         let mut open = true;
         let mut finished = None;
         let at = egui::pos2((ctx.content_rect().right() - 600.0).max(0.0), 40.0);
-        egui::Window::new(g.title).open(&mut open).default_pos(at).default_pos(crate::widgets::beside_panel()).default_width(580.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
+        egui::Window::new(i18n::tr(g.title)).open(&mut open).default_pos(at).default_pos(crate::widgets::beside_panel()).default_width(580.0).default_height(700.0).vscroll(true).show(ctx, |ui| {
             ui.label(spaced(g.intro));
             ui.add_space(4.0);
-            ui.colored_label(WARN, g.safety);
+            ui.colored_label(WARN, i18n::tr(g.safety));
             let ticked = self.ticks.iter().filter(|(id, _, _)| *id == g.id).count();
             ui.add(egui::ProgressBar::new(ticked as f32 / total.max(1) as f32).text(i18n::trf!("チェック {ticked} / {total}")));
             ui.separator();
             for (ti, task) in g.tasks.iter().enumerate() {
-                ui.strong(task.title);
+                ui.strong(i18n::tr(task.title));
                 ui.label(spaced(task.detail).color(NOTE));
                 for (ci, check) in task.checks.iter().enumerate() {
                     let key = (g.id, ti, ci);
                     let mut on = self.ticks.contains(&key);
-                    if ui.checkbox(&mut on, *check).on_hover_text(i18n::tr("やり終えたら、チェックを入れます。全部入れると、学習パスのこの項目が完了になります")).changed() {
+                    if ui.checkbox(&mut on, i18n::tr(check)).on_hover_text(i18n::tr("やり終えたら、チェックを入れます。全部入れると、学習パスのこの項目が完了になります")).changed() {
                         if on {
                             self.ticks.insert(key);
                         } else {
@@ -195,7 +195,7 @@ impl BenchGuide {
             ui.separator();
             egui::CollapsingHeader::new(i18n::tr("うまくいかないとき")).show(ui, |ui| {
                 for (what, look) in g.trouble {
-                    ui.label(egui::RichText::new(*what).strong());
+                    ui.label(egui::RichText::new(i18n::tr(what)).strong());
                     ui.indent(("bench_trouble", *what), |ui| {
                         ui.label(spaced(look).color(NOTE));
                     });

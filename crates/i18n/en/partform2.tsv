@@ -88,7 +88,7 @@ p.{} の表を読みました ({} 行 × {} 列)	Read the table on p.{} ({} rows
 赤い項目を直すと、保存できます	Fix the red items to be able to save
 ✔ 問題は見つかりません	✔ No problems found
 保存前に直す	Fix before saving
-注意	Warnings
+注意	Caution
 保存して上書き	Save and overwrite
 「{}」をこの内容で書き換えます。すでに回路図に置いた部品は、そのままです (新しく置く部品から変わります)。名前を変えて押すと、別の部品として追加します。エラーが残っていると押せません	Overwrites "{}" with this content. Parts already placed in the schematic stay as they are (new placements use the change). If you change the name and press this, it is added as a separate part. Cannot be pressed while errors remain
 保存してライブラリに追加	Save and add to library

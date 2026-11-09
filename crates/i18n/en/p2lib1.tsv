@@ -127,7 +127,7 @@ DCR は銅の温度係数 (1℃ あたり約 0.4%) で、温度とともに増�
 温度入力あり。	With temperature input.
 CHRG/STDBY は充電中/満充電で Low。	CHRG/STDBY go Low while charging / when full.
 データシートの数字から作ったテンプレートのモデルです。外から見た動きだけを再現します。充電の3段階 (プリチャージ・定電流・定電圧) と状態表示が動きます。	A template model made from datasheet numbers. It only reproduces how it looks from outside. The three charge stages (precharge, constant current, constant voltage) and the status outputs work.
-扱わないもの: 損失、リップル、熱による制限、充電タイマ、再充電のしきい値。電流が終了電流を下回ると状態表示が「満充電」になりますが、充電そのものは止まらず、電圧が下がれば自然に電流が増えます。	Not modeled: losses, ripple, thermal limiting, the charge timer, the recharge threshold. When the current falls below the termination current the status shows "Full", but charging itself does not stop; if the voltage drops, the current rises again on its own.
+扱わないもの: 損失、リップル、熱による制限、充電タイマ、再充電のしきい値。電流が終了電流を下回ると状態表示が「満充電」になりますが、充電そのものは止まらず、電圧が下がれば自然に電流が増えます。	Not covered: losses, ripple, thermal limiting, the charge timer, the recharge threshold. When the current falls below the termination current the status shows "Full", but charging itself does not stop; if the voltage drops, the current rises again on its own.
 電池は、小さなコンデンサで代用してください (値に IC=3.2 と書くと、その電圧から始まります)。	Use a small capacitor in place of the battery (write IC=3.2 in its value to start from that voltage).
 入力電流は出力電流と同じです (リニア式は、電圧差が熱になります)。熱による電流の低下は扱いません。	The input current equals the output current (in a linear charger, the voltage difference becomes heat). Current reduction from heat is not modeled.
 降圧のスイッチングは「LX の平均の電圧」に置き換えてあります。入力電流は、出力の電力 ÷ 効率 (90%) ÷ 入力電圧です。	The buck switching is replaced by "the average voltage at LX". The input current is output power ÷ efficiency (90%) ÷ input voltage.
