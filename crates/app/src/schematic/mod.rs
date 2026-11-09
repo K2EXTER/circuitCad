@@ -515,7 +515,17 @@ fn eng(v: f64, unit: &str) -> String {
     } else {
         (1e12, "p")
     };
-    format!("{:.3} {prefix}{unit}", v * scale)
+    // four significant digits, so a column of values reads the same width (12.00 V, 1.948 V, 330.0 mV)
+    if a == 0.0 {
+        return format!("0 {unit}");
+    }
+    let s = v * scale;
+    let decimals = match s.abs() {
+        x if x >= 100.0 => 1,
+        x if x >= 10.0 => 2,
+        _ => 3,
+    };
+    format!("{s:.decimals$} {prefix}{unit}")
 }
 
 /// One-line explanation of a basic part, shown when hovering the palette.

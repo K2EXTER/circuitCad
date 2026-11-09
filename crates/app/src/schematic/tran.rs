@@ -149,8 +149,10 @@ impl SchEditor {
                         !tail.is_empty() && hi - lo < 0.02 * scale + 1e-3
                     });
                 if flat {
+                    // one short line; the reasoning sits behind the (?)
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(i18n::tr("波形が後半ほとんど動いていません。回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。")).size(12.0));
+                        ui.colored_label(crate::theme::WARN, i18n::tr("▲ 後半ほとんど動いていません"));
+                        crate::icons::help(ui, "回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。");
                         if ui.button(i18n::tr("終了時間を10倍にして計算し直す")).on_hover_text(i18n::tr("終了時間の欄を10倍にして、もう一度過渡解析を実行します")).clicked() {
                             longer = true;
                         }
@@ -190,19 +192,25 @@ impl SchEditor {
                 ui.horizontal_top(|ui| {
                     let order: Vec<&str> = res.signals.iter().filter(|s| shown_signal(&s.name)).map(|s| s.name.as_str()).collect();
                     ui.vertical(|ui| {
-                        // wide enough for a column per signal (the table scrolled sideways and hid the last one)
+                        // wide enough for a column per signal (the table scrolled sideways and hid the last one) and for the
+                        // four figure tabs on one line
                         let columns = order.iter().filter(|n| selected.contains(**n)).take(6).count();
-                        ui.set_width((100.0 + 80.0 * columns as f32).clamp(250.0, 520.0));
-                        ui.horizontal(|ui| {
-                            if ui.button(i18n::tr("選択をクリア")).clicked() {
-                                selected.clear();
-                            }
-                            if ui.button(i18n::tr("回路図で選ぶ")).on_hover_text(i18n::tr("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)")).clicked() {
-                                start_probe = true;
-                            }
-                        });
-                        ui.horizontal(|ui| {
-                            if ui.button(i18n::tr("いまの波形を残す")).on_hover_text(i18n::tr("選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます")).clicked() {
+                        ui.set_width((100.0 + 80.0 * columns as f32).clamp(440.0, 580.0));
+                        // the column scrolls as one, so the signal list is never cut off below the panel
+                        egui::ScrollArea::vertical().id_salt("tran_left").auto_shrink([false, false]).show(ui, |ui| {
+                        let bar = crate::widgets::segment_row(ui, &[("回路図で選ぶ", true), ("選択をクリア", !selected.is_empty()), (if ghost.is_some() { "前の波形を消す" } else { "いまの波形を残す" }, true)]);
+                        if bar[0].clicked() {
+                            start_probe = true;
+                        }
+                        bar[0].clone().on_hover_text(i18n::tr("押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (Shift+ピンでも可) = その部品の電流の波形が追加されます。何か所でも続けて選べます (Esc か右クリックで終了)"));
+                        if bar[1].clicked() {
+                            selected.clear();
+                        }
+                        bar[1].clone().on_hover_text(i18n::tr("選んだ信号を、すべて外します"));
+                        if bar[2].clicked() {
+                            if ghost.is_some() {
+                                *ghost = None;
+                            } else {
                                 let sigs = order
                                     .iter()
                                     .filter(|n| selected.contains(**n))
@@ -211,16 +219,52 @@ impl SchEditor {
                                     .collect();
                                 *ghost = Some(Ghost { x: res.time.clone(), sigs });
                             }
-                            if ghost.is_some() && ui.button(i18n::tr("消す")).on_hover_text(i18n::tr("残してある「前」の波形を消します")).clicked() {
-                                *ghost = None;
+                        }
+                        bar[2].clone().on_hover_text(i18n::tr("選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます"));
+                        // the signals to show, side by side so a short list takes a line or two (it used to sit at the bottom and
+                        // was cut off by the panel's edge)
+                        ui.horizontal_wrapped(|ui| {
+                            for name in &order {
+                                let mut on = selected.contains(*name);
+                                let color = order
+                                    .iter()
+                                    .filter(|n| selected.contains(**n))
+                                    .position(|n| n == name)
+                                    .map(|i| PALETTE[i % PALETTE.len()]);
+                                let text = match color {
+                                    Some(c) if on => egui::RichText::new(*name).color(c),
+                                    _ => egui::RichText::new(*name),
+                                };
+                                if ui.checkbox(&mut on, text).changed() {
+                                    if on {
+                                        selected.insert(name.to_string());
+                                    } else {
+                                        selected.remove(*name);
+                                    }
+                                }
                             }
                         });
-                        {
-                            let volts: Vec<&str> = order.iter().copied().filter(|n| res.signal(n).is_some_and(|s| s.unit == "V")).collect();
-                            let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
-                            let sim = |name: &str| res.signal(name).map(|sg| (res.time.clone(), sg.values.clone()));
-                            bench_data::bench_controls(ui, bench, bench_ui, false, &volts, &shown, &sim);
+                        // which table to show: the basic figures or one of the detailed ones, one at a time (they used to be a table
+                        // and four folds stacked under it, which pushed everything below off the panel)
+                        let metric_id = egui::Id::new("tran_metric");
+                        let mut metric: usize = ui.data_mut(|d| *d.get_persisted_mut_or_insert_with(metric_id, || if power.iter().any(|p| !p.is_empty()) { 4 } else { 0 }));
+                        ui.add_space(crate::theme::SPACE_S);
+                        let tabs = crate::widgets::segment_bar(ui, &[("基本", true), ("ひずみ率", true), ("ステップ応答", true), ("負荷の急変", true), ("電力と効率", true)], Some(metric));
+                        let tips = [
+                            "平均・実効値・最小・最大・周波数など、表示している範囲の基本の値",
+                            "ひずみ率 (THD): 正弦波がどれだけゆがんだか",
+                            "ステップ応答の指標: 0 から一定の値に落ち着く波形の、立ち上がり・行き過ぎ・整定の時間",
+                            "負荷の急変 (落ち込みと戻り): 負荷を急に変えたときの電圧の落ち込みと、戻るまでの時間",
+                            "電力と効率: 入力と出力の平均電力と効率、損失",
+                        ];
+                        for (k, (tab, tip)) in tabs.into_iter().zip(tips).enumerate() {
+                            if tab.clicked() {
+                                metric = k;
+                            }
+                            tab.on_hover_text(i18n::tr(tip));
                         }
+                        ui.data_mut(|d| d.insert_persisted(metric_id, metric));
+                        ui.add_space(crate::theme::SPACE_S);
                         // mean and AC RMS (= noise / ripple amplitude) over the visible window
                         let (w0, w1) = if *spectrum {
                             (parse_value(spec_t0).unwrap_or(0.0), parse_value(spec_t1).unwrap_or(f64::MAX))
@@ -238,9 +282,12 @@ impl SchEditor {
                                 Some((name.to_string(), sg.unit, sx, wave_measure(&res.time, &sg.values, w0, w1)))
                             })
                             .collect();
-                        if !stats.is_empty() {
+                        if metric == 0 && stats.is_empty() {
+                            ui.small(i18n::tr("上の一覧で信号を選んでください"));
+                        }
+                        if metric == 0 && !stats.is_empty() {
                             egui::ScrollArea::horizontal().id_salt("wave_stats").show(ui, |ui| {
-                                egui::Grid::new("wave_stats_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                egui::Grid::new("wave_stats_grid").striped(true).spacing([16.0, 2.0]).show(ui, |ui| {
                                     ui.label("");
                                     for (name, ..) in &stats {
                                         ui.strong(name);
@@ -249,12 +296,16 @@ impl SchEditor {
                                     let dash = || "—".to_string();
                                     type Stat<'a> = (String, &'a str, sim_core::Stats, Option<sim_core::WaveMeasure>);
                                     type Column<'a> = (&'a str, &'a str, Box<dyn Fn(&Stat<'_>) -> String + 'a>);
+                                    // a ripple or swing a million times smaller than the signal is the solver's rounding, not the
+                                    // circuit: show it as 0 (a steady 12 V read "AC実効値 0.04441pV")
+                                    let size = |s: &Stat<'_>| s.3.as_ref().map_or(0.0, |m| m.min.abs().max(m.max.abs())).max(s.2.mean.abs());
+                                    let small = |x: f64, s: &Stat<'_>| eng(if x.abs() <= size(s) * 1e-6 { 0.0 } else { x }, s.1);
                                     let rows: [Column; 8] = [
-                                        ("平均", "表示範囲の平均値です", Box::new(|s| format!("{}{}", plot::axis_label(s.2.mean, s.2.mean.abs() / 1000.0), s.1))),
-                                        ("AC実効値", "平均を引いた交流分の実効値 (ノイズ・リップルの大きさ)", Box::new(|s| format!("{}{}", plot::axis_label(s.2.rms_ac, s.2.rms_ac.abs() / 1000.0), s.1))),
+                                        ("平均", "表示範囲の平均値です", Box::new(|s| eng(s.2.mean, s.1))),
+                                        ("AC実効値", "平均を引いた交流分の実効値 (ノイズ・リップルの大きさ)", Box::new(move |s| small(s.2.rms_ac, s))),
                                         ("最小", "表示中の範囲での最小値です。ズームすると、見ている部分だけの値になります", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.min, s.1)))),
                                         ("最大", "表示中の範囲での最大値です。ズームすると、見ている部分だけの値になります", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.max, s.1)))),
-                                        ("振幅 (p-p)", "最大と最小の差です", Box::new(|s| s.3.as_ref().map_or_else(dash, |m| eng(m.pp, s.1)))),
+                                        ("振幅 (p-p)", "最大と最小の差です", Box::new(move |s| s.3.as_ref().map_or_else(dash, |m| small(m.pp, s)))),
                                         ("周波数", "中間の高さを下から上へ横切る間隔から求めています。2周期以上が範囲に入っているときだけ出ます", Box::new(|s| s.3.as_ref().and_then(|m| m.freq).map_or_else(dash, |f| eng(f, "Hz")))),
                                         ("周期", "周波数の逆数です", Box::new(|s| s.3.as_ref().and_then(|m| m.freq).map_or_else(dash, |f| eng(1.0 / f, "s")))),
                                         ("デューティ比", "1周期のうち、中間の高さより上にいる時間の割合です", Box::new(|s| s.3.as_ref().and_then(|m| m.duty).map_or_else(dash, |d| format!("{:.1} %", d * 100.0)))),
@@ -274,7 +325,8 @@ impl SchEditor {
                                 });
                             });
                         }
-                        egui::CollapsingHeader::new(i18n::tr("ひずみ率 (THD)")).show(ui, |ui| {
+                        if metric == 1 {
+                        ui.vertical(|ui| {
                             ui.horizontal(|ui| {
                                 ui.label(i18n::tr("基本周波数"));
                                 ui.add(egui::TextEdit::singleline(thd_f0).hint_text(i18n::tr("自動")).desired_width(60.0)).on_hover_text(i18n::tr("入力の正弦波の周波数 (例 1k)。空欄なら波形から自動で見つけます。範囲は、ちょうど整数周期ぶんに切って計算します"));
@@ -294,7 +346,7 @@ impl SchEditor {
                                     }
                                 }
                                 if !results.is_empty() {
-                                    egui::Grid::new("thd_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                    egui::Grid::new("thd_grid").striped(true).spacing([16.0, 2.0]).show(ui, |ui| {
                                         ui.label("");
                                         for (name, _) in &results {
                                             ui.strong(name);
@@ -325,7 +377,9 @@ impl SchEditor {
                                 }
                             }
                         });
-                        egui::CollapsingHeader::new(i18n::tr("ステップ応答の指標")).show(ui, |ui| {
+                        }
+                        if metric == 2 {
+                        ui.vertical(|ui| {
                             ui.small(i18n::tr("0 から始まって一定の値に落ち着く波形用 (電源が 0V→5V に切り替わるなど)"));
                             // one column per signal, one row per figure (same layout as the table above)
                             let mut metrics = vec![];
@@ -345,7 +399,7 @@ impl SchEditor {
                                 }
                             }
                             if !metrics.is_empty() {
-                                egui::Grid::new("step_metrics_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                egui::Grid::new("step_metrics_grid").striped(true).spacing([16.0, 2.0]).show(ui, |ui| {
                                     let dash = || "—".to_string();
                                     ui.label("");
                                     for (name, _) in &metrics {
@@ -386,10 +440,12 @@ impl SchEditor {
                                 ui.small(why);
                             }
                             if !order.iter().any(|n| selected.contains(*n)) {
-                                ui.small(i18n::tr("下の一覧で信号を選んでください"));
+                                ui.small(i18n::tr("上の一覧で信号を選んでください"));
                             }
                         });
-                        egui::CollapsingHeader::new(i18n::tr("負荷の急変 (落ち込みと戻り)")).show(ui, |ui| {
+                        }
+                        if metric == 3 {
+                        ui.vertical(|ui| {
                             ui.small(i18n::tr("電流源を PULSE にして、負荷を急に変えたとき用。変わる所 (1 回分) だけが入るように拡大してから読みます"));
                             let mut rows = vec![];
                             let mut failed = vec![];
@@ -407,7 +463,7 @@ impl SchEditor {
                                 }
                             }
                             if !rows.is_empty() {
-                                egui::Grid::new("load_step_grid").striped(true).spacing([10.0, 2.0]).show(ui, |ui| {
+                                egui::Grid::new("load_step_grid").striped(true).spacing([16.0, 2.0]).show(ui, |ui| {
                                     let pct = |d: f64, base: f64| if base.abs() > 1e-12 { format!(" ({:+.2}%)", d / base.abs() * 100.0) } else { String::new() };
                                     ui.label("");
                                     for (name, _) in &rows {
@@ -437,27 +493,17 @@ impl SchEditor {
                                 });
                             }
                         });
-                        egui::CollapsingHeader::new(i18n::tr("電力と効率")).default_open(power.iter().any(|p| !p.is_empty())).show(ui, |ui| power_ui::power_ui(ui, res, &order, st.x, power));
-                        egui::ScrollArea::vertical().show(ui, |ui| {
-                            for name in &order {
-                                let mut on = selected.contains(*name);
-                                let color = order
-                                    .iter()
-                                    .filter(|n| selected.contains(**n))
-                                    .position(|n| n == name)
-                                    .map(|i| PALETTE[i % PALETTE.len()]);
-                                let text = match color {
-                                    Some(c) if on => egui::RichText::new(*name).color(c),
-                                    _ => egui::RichText::new(*name),
-                                };
-                                if ui.checkbox(&mut on, text).changed() {
-                                    if on {
-                                        selected.insert(name.to_string());
-                                    } else {
-                                        selected.remove(*name);
-                                    }
-                                }
-                            }
+                        }
+                        if metric == 4 {
+                            power_ui::power_ui(ui, res, &order, st.x, power);
+                        }
+                        // measured readings on top: used less often than the figures, so it comes last
+                        {
+                            let volts: Vec<&str> = order.iter().copied().filter(|n| res.signal(n).is_some_and(|s| s.unit == "V")).collect();
+                            let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
+                            let sim = |name: &str| res.signal(name).map(|sg| (res.time.clone(), sg.values.clone()));
+                            bench_data::bench_controls(ui, bench, bench_ui, false, &volts, &shown, &sim);
+                        }
                         });
                     });
                     let (rect, _) = ui.allocate_exact_size(ui.available_size(), Sense::hover());

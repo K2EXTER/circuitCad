@@ -106,7 +106,7 @@ C1 を 1u にして「過渡解析を実行」。周期が 1/10 になり、波�
 基板の配線にも、わずかなインダクタンスと容量があり、速い信号ではそれがリンギングの原因になります。この回路には含まれません。	Board tracks also have a little inductance and capacitance, which cause ringing with fast signals. They are not included in this circuit.
 電源は、立ち上がりの形が決まった理想の電源です。	The supply is an ideal source with a fixed rising edge shape.
 過渡解析を実行して、行き過ぎを見る	Run the transient analysis and see the overshoot
-「過渡解析を実行」を押し、C1 の電圧 (C1 のつなぎ目の信号) を選びます。電源が 0V→5V になった直後、5V を超えて揺れながら落ち着きます。左の「ステップ応答の指標」を開くと、行き過ぎが約 35% と出ます。	Press "Run transient analysis" and choose the voltage on C1 (the signal at C1's connection). Right after the supply goes 0V→5V, it goes above 5V and settles while ringing. Open "Step response figures" on the left and it shows about 35% overshoot.
+「過渡解析を実行」を押し、C1 の電圧 (C1 のつなぎ目の信号) を選びます。電源が 0V→5V になった直後、5V を超えて揺れながら落ち着きます。波形の左の「ステップ応答」タブを押すと、行き過ぎが約 35% と出ます。	Press "Run transient analysis" and choose the voltage on C1 (the signal at C1's connection). Right after the supply goes 0V→5V, it goes above 5V and settles while ringing. Press the "Step response" tab left of the waveform and it shows about 35% overshoot.
 R1 を 100 にして、もう一度解析する	Set R1 to 100 and run the analysis again
 R1 を 20 から 100 にして「過渡解析を実行」。揺れがなくなり、行き過ぎが 0% になります。抵抗が振動のエネルギーを熱にして逃がす (ダンピング) ためです。代わりに立ち上がりは遅くなります。	Change R1 from 20 to 100 and "Run transient analysis". The ringing disappears and the overshoot becomes 0%. The resistor turns the oscillation energy into heat and gets rid of it (damping). In exchange, the rise becomes slower.
 部品の誤差で行き過ぎがどれだけずれるか見る	See how far part tolerance shifts the overshoot

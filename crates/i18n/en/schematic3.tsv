@@ -74,7 +74,7 @@ AC実効値	AC RMS
 整定	Settling
 10% に達してから ±2% に収まるまでの時間	Time from reaching 10% until it stays within ±2%
 波形が動き始めてから、最終値との差がこの幅 (ステップの大きさに対する割合) に収まって、そのままになるまでの時間です。精密な測定では、この時間だけ待ってから読みます。解析の終わりまでに収まらないときは「—」です	Time from when the waveform starts moving until its difference from the final value stays within this band (as a fraction of the step size). For precise measurements, wait this long before reading. Shows "—" if it doesn't settle by the end of the analysis
-下の一覧で信号を選んでください	Pick a signal in the list below
+上の一覧で信号を選んでください	Pick a signal in the list above
 電力と効率	Power and efficiency
 解析範囲を数値で入力してください	Enter the range as numbers
 左の一覧から信号を選んでください (範囲が不正な場合も表示されません)	Pick a signal from the list on the left (nothing is shown if the range is invalid)
@@ -484,3 +484,14 @@ DC動作点が解けていないので、必要な定格を出せません	The D
 ✖ この部品は、2 倍の余裕を満たしていません (いずれかの最大定格が足りない、または不明です)	✖ This part doesn't meet the 2x margin (some max rating is too low or unknown)
 この部品の定格が分からないので、判定できません。データシートで、上の条件を満たすか確かめてください	This part's ratings are unknown, so it can't be judged. Check in the datasheet that it meets the conditions above
 同じ種類で、条件を満たすライブラリ部品	Library parts of the same type that meet the conditions
+▲ 後半ほとんど動いていません	▲ Hardly moves in the second half
+ひずみ率	Distortion
+ひずみ率 (THD): 正弦波がどれだけゆがんだか	Distortion (THD): how far a sine wave is bent out of shape
+ステップ応答の指標: 0 から一定の値に落ち着く波形の、立ち上がり・行き過ぎ・整定の時間	Step response figures: rise, overshoot and settling time of a waveform that goes from 0 to a steady value
+前の波形を消す	Clear kept waveform
+回路が落ち着いたのかもしれませんが、点滅や充放電が見たいときは、終了時間が短すぎる (動きが始まる前に終わっている) ことがあります。	The circuit may simply have settled, but if you want to see blinking or charging, the stop time may be too short (it ends before anything starts to move).
+平均・実効値・最小・最大・周波数など、表示している範囲の基本の値	The basic figures over the range shown: mean, RMS, min, max, frequency and so on
+負荷の急変	Load step
+負荷の急変 (落ち込みと戻り): 負荷を急に変えたときの電圧の落ち込みと、戻るまでの時間	Load step (dip and recovery): how far the voltage dips when the load changes suddenly, and how long it takes to come back
+選んでいる波形のコピーを、うすい色で残します。部品の値を変えて計算し直すと、変える前 (うすい線) と後 (こい線) を重ねて比べられます。残した後は、もう一度押すと消えます	Keeps a copy of the selected waveform in a faint color. Change a part value and recalculate to compare before (faint line) and after (bold line). Press again to clear it
+電力と効率: 入力と出力の平均電力と効率、損失	Power and efficiency: average input and output power, efficiency and loss

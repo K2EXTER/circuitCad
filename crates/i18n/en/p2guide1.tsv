@@ -106,7 +106,7 @@ DCスイープ。電源を少しずつ変えて、出力を見ます	DC sweep. C
 押してから回路図をクリックします。ピンや配線 = その点の電圧、部品の本体 (または Shift+ピン) = その部品の電流を追加します。Esc か右クリックで終わります	Press it, then click on the schematic. A pin or wire adds the voltage at that point; a part body (or Shift+pin) adds that part's current. Esc or right click ends it
 電力と効率 (過渡解析)	Power and efficiency (transient analysis)
 使い方	How to use
-左パネルの「電力と効率」を開き、入力 (電源) と出力 (負荷) の電圧と電流の信号を選びます。表示中の時間範囲での平均電力、効率、損失 (熱になる分) が出ます	Open "Power and efficiency" in the left panel and choose the voltage and current signals of the input (supply) and output (load). It shows the average power, efficiency and loss (what becomes heat) over the time range shown
+波形の左の「電力と効率」タブを押し、入力 (電源) と出力 (負荷) の電圧と電流の信号を選びます。表示中の時間範囲での平均電力、効率、損失 (熱になる分) が出ます	Press the "Power and efficiency" tab left of the waveform and choose the voltage and current signals of the input (supply) and output (load). It shows the average power, efficiency and loss (what becomes heat) over the time range shown
 コツ	Tip
 起動直後を含むと値がぶれるので、ズームして落ち着いた範囲だけを表示してから見ます。電流の向きは気にしなくて大丈夫です	Including the start-up makes the values jump around, so zoom in to show only a settled range before reading them. You don't need to worry about the current direction
 変える前と比べる	Compare with before the change
@@ -318,7 +318,7 @@ NE555 の点滅回路	NE555 blinker
 電源ラインのインピーダンス (バイパスコンデンサの効き)	Supply line impedance (how bypass capacitors help)
 ケーブルの先の電源ラインに、電解・10µF・100nF のコンデンサをつけた回路。「解析」タブの「インピーダンス」で、ネットに RAIL と入れて実行すると、谷 (コンデンサがよく効く周波数) と山 (電圧が揺れやすい周波数) が出ます	A supply line at the end of a cable, with electrolytic, 10µF and 100nF capacitors. In "Impedance" in the "Analysis" tab, enter RAIL as the net and run it to see valleys (frequencies where the capacitors work well) and peaks (frequencies where the voltage shakes easily)
 アンプのひずみ (出力が頭打ちになる)	Amplifier distortion (output clipping)
-オペアンプの増幅回路 (ゲイン 11) に 0.4V の正弦波を入れると、出力が電源の範囲を超えて頭が削られます。「過渡解析を実行」→ 波形で「ひずみ率 (THD)」を開くと約 16% と出ます。V1 を 0.1V にすると、ほぼ 0% になります	Feed a 0.4V sine wave into an op-amp amplifier (gain 11) and the output goes beyond the supply range and gets its tops clipped. "Run transient analysis" → open "Distortion (THD)" in the waveform view and it shows about 16%. Set V1 to 0.1V and it is almost 0%
+オペアンプの増幅回路 (ゲイン 11) に 0.4V の正弦波を入れると、出力が電源の範囲を超えて頭が削られます。「過渡解析を実行」→ 波形の左の「ひずみ率」タブを押すと約 16% と出ます。V1 を 0.1V にすると、ほぼ 0% になります	Feed a 0.4V sine wave into an op-amp amplifier (gain 11) and the output goes beyond the supply range and gets its tops clipped. "Run transient analysis" → press the "Distortion" tab left of the waveform and it shows about 16%. Set V1 to 0.1V and it is almost 0%
 極と零 (共振する LC フィルタ)	Poles and zeros (resonant LC filter)
 10Ω・1mH・1µF のローパス。「解析」タブの「極と零」で、出力に OUT・入力に IN と入れて実行すると、5.03 kHz に一対の複素数の極 (Q = 3.16) が出て、当てはめの曲線が回路の応答に重なります。抵抗を 10Ω から 100Ω にすると、極が実数の2つに分かれて山が消えます	A 10Ω, 1mH, 1µF low-pass. In "Poles and zeros" in the "Analysis" tab, enter OUT as the output and IN as the input and run it: a pair of complex poles appears at 5.03 kHz (Q = 3.16), and the fitted curve overlays the circuit's response. Change the resistor from 10Ω to 100Ω and the poles split into 2 real ones and the peak disappears
 帰還の安定性 (出力にコンデンサをつけた電源)	Feedback stability (supply with a capacitor on the output)
