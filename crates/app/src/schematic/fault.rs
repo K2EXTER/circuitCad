@@ -335,18 +335,18 @@ impl SchEditor {
                     match r {
                         FaultWave::Tran(r) => {
                             let (h_name, f_name) = (format!("V({}) 正常", r.node), format!("V({}) {}", r.node, r.label));
-                            let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.healthy_time, v: &r.healthy }];
+                            let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.healthy_time, v: &r.healthy, dots: false }];
                             if let Ok((t, v)) = &r.faulted {
-                                traces.push(Trace { name: &f_name, color: PALETTE[0], t, v });
+                                traces.push(Trace { name: &f_name, color: PALETTE[0], t, v, dots: false });
                             }
                             let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
                             plot::draw_group(ui, rect, egui::Id::new("fault_plot"), &traces, st, 0, &style, true);
                         }
                         FaultWave::Ac(r) => {
                             let (h_name, f_name) = (format!("V({}) 正常", r.node), format!("V({}) {}", r.node, r.label));
-                            let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.freq, v: &r.healthy_db }];
+                            let mut traces = vec![Trace { name: &h_name, color: Color32::from_gray(225), t: &r.freq, v: &r.healthy_db, dots: false }];
                             if let Ok(v) = &r.faulted_db {
-                                traces.push(Trace { name: &f_name, color: PALETTE[0], t: &r.freq, v });
+                                traces.push(Trace { name: &f_name, color: PALETTE[0], t: &r.freq, v, dots: false });
                             }
                             let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
                             plot::draw_group(ui, rect, egui::Id::new("fault_plot_ac"), &traces, st, 0, &style, true);

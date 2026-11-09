@@ -259,6 +259,21 @@ pub struct MeasuredCompare {
     pub level: Agreement,
     /// Things to check, most likely first.
     pub hints: Vec<&'static str>,
+    /// The range the part tolerances allow (worst case), when it was given.
+    pub tolerance: Option<(f64, f64)>,
+    /// Whether the measurement lies inside `tolerance` (None without a range).
+    pub inside_tolerance: Option<bool>,
+}
+
+/// Several bench readings of the same spec (one per built board), each compared with the simulation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReadingsCompare {
+    pub each: Vec<MeasuredCompare>,
+    pub mean: f64,
+    pub min: f64,
+    pub max: f64,
+    /// The worst agreement among the readings.
+    pub level: Agreement,
 }
 
 /// (close, some) limits of |measured - simulated|: a fraction of the simulated value, but never less than a floor
@@ -321,18 +336,66 @@ fn hints_for(kind: SpecKind, level: Agreement, measured_is_more: bool) -> Vec<&'
 
 /// Compares a bench measurement with the simulated value of the same spec.
 pub fn compare_measured(kind: SpecKind, sim: f64, measured: f64) -> MeasuredCompare {
+    compare_measured_in(kind, sim, measured, None)
+}
+
+/// Like `compare_measured`, with the range the part tolerances allow (`tolerance` = worst-case min and max). The range only widens
+/// what counts as agreeing: the miss is measured from the nearest end of the range instead of from the nominal value, so a
+/// reading inside it is `Close`, and a range that is narrower than the meter's allowance (an IC whose spread the model does not
+/// vary) changes nothing.
+pub fn compare_measured_in(kind: SpecKind, sim: f64, measured: f64, tolerance: Option<(f64, f64)>) -> MeasuredCompare {
     let diff = measured - sim;
     let rel = (sim != 0.0).then(|| diff / sim.abs());
+    let tolerance = tolerance.map(|(a, b)| (a.min(b).min(sim), a.max(b).max(sim)));
+    let miss = match tolerance {
+        Some((lo, _)) if measured < lo => lo - measured,
+        Some((_, hi)) if measured > hi => measured - hi,
+        Some(_) => 0.0,
+        None => diff.abs(),
+    };
     let ((cr, cf), (sr, sf)) = allowance(kind);
     let limit = |frac: f64, floor: f64| (frac * sim.abs()).max(floor);
-    let level = if diff.abs() <= limit(cr, cf) {
+    let level = if miss.min(diff.abs()) <= limit(cr, cf) {
         Agreement::Close
-    } else if diff.abs() <= limit(sr, sf) {
+    } else if miss <= limit(sr, sf) {
         Agreement::Some
     } else {
         Agreement::Far
     };
-    MeasuredCompare { diff, rel, level, hints: hints_for(kind, level, diff > 0.0) }
+    let inside_tolerance = tolerance.map(|(lo, hi)| (lo..=hi).contains(&measured));
+    let mut hints = hints_for(kind, level, diff > 0.0);
+    if inside_tolerance == Some(false) && level != Agreement::Close {
+        hints.insert(0, "部品の許容差を全部端に置いても届かない差です。許容差では説明できないので、部品の値・つなぎ方・測り方・モデルを疑います");
+    }
+    MeasuredCompare { diff, rel, level, hints, tolerance, inside_tolerance }
+}
+
+/// Splits a typed bench reading into its numbers: one per board, separated by `,` `、` `;` or `/` ("3.29, 3.31").
+/// `parse` reads one number ("50m", "1k"). `None` when any part cannot be read; an empty text gives no readings.
+pub fn split_readings(text: &str, parse: impl Fn(&str) -> Option<f64>) -> Option<Vec<f64>> {
+    text.split([',', '、', ';', '/', '，'])
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(parse)
+        .collect()
+}
+
+/// Compares several readings of one spec (boards A, B, C ...) with the simulation and the tolerance range.
+pub fn compare_readings(kind: SpecKind, sim: f64, readings: &[f64], tolerance: Option<(f64, f64)>) -> Option<ReadingsCompare> {
+    if readings.is_empty() {
+        return None;
+    }
+    let each: Vec<MeasuredCompare> = readings.iter().map(|&m| compare_measured_in(kind, sim, m, tolerance)).collect();
+    let rank = |a: Agreement| match a {
+        Agreement::Close => 0,
+        Agreement::Some => 1,
+        Agreement::Far => 2,
+    };
+    let level = each.iter().map(|c| c.level).max_by_key(|&a| rank(a)).unwrap_or(Agreement::Close);
+    let mean = readings.iter().sum::<f64>() / readings.len() as f64;
+    let min = readings.iter().copied().fold(f64::INFINITY, f64::min);
+    let max = readings.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    Some(ReadingsCompare { each, mean, min, max, level })
 }
 
 #[cfg(test)]
@@ -363,6 +426,40 @@ mod measured_tests {
         assert_eq!(compare_measured(SpecKind::AcCutoff, 1000.0, 1250.0).level, Agreement::Some);
         assert_eq!(compare_measured(SpecKind::AcGainAt, -20.0, -22.5).level, Agreement::Some);
         assert_eq!(compare_measured(SpecKind::PhaseMargin, 60.0, 40.0).level, Agreement::Far);
+    }
+
+    #[test]
+    fn the_tolerance_range_only_widens_what_agrees() {
+        // RC filter: 699 Hz nominal, the parts allow 629..784 Hz
+        let tol = Some((629.0, 784.0));
+        let c = compare_measured_in(SpecKind::AcCutoff, 699.0, 780.0, tol);
+        assert_eq!(c.level, Agreement::Close, "inside the range: {c:?}");
+        assert_eq!(c.inside_tolerance, Some(true));
+        assert_eq!(compare_measured(SpecKind::AcCutoff, 699.0, 780.0).level, Agreement::Some, "without the range it is a visible miss");
+        // 950 Hz: 166 Hz past the end (> 10 % of 699) but < 30 % -> Some; the first hint says the tolerances cannot explain it
+        let c = compare_measured_in(SpecKind::AcCutoff, 699.0, 950.0, tol);
+        assert_eq!(c.level, Agreement::Some);
+        assert_eq!(c.inside_tolerance, Some(false));
+        assert!(c.hints[0].contains("許容差"), "{:?}", c.hints);
+        // a range of almost nothing (the regulator's spread is not modelled) changes nothing
+        let narrow = Some((3.29889, 3.29891));
+        for m in [3.30, 3.25, 3.0] {
+            assert_eq!(compare_measured_in(SpecKind::DcVoltage, 3.2989, m, narrow).level, compare_measured(SpecKind::DcVoltage, 3.2989, m).level, "{m}");
+        }
+    }
+
+    #[test]
+    fn several_boards_are_read_and_the_worst_one_decides() {
+        let parse = |s: &str| s.parse::<f64>().ok();
+        assert_eq!(split_readings("3.29, 3.31、3.30", parse), Some(vec![3.29, 3.31, 3.30]));
+        assert_eq!(split_readings("3.29 / ", parse), Some(vec![3.29]));
+        assert_eq!(split_readings("3.29, x", parse), None);
+        assert_eq!(split_readings("  ", parse), Some(vec![]));
+        let r = compare_readings(SpecKind::DcVoltage, 5.0, &[4.95, 5.02, 4.0], None).unwrap();
+        assert_eq!(r.level, Agreement::Far);
+        assert_eq!(r.each.len(), 3);
+        assert!((r.mean - 13.97 / 3.0).abs() < 1e-12 && r.min == 4.0 && r.max == 5.02);
+        assert!(compare_readings(SpecKind::DcVoltage, 5.0, &[], None).is_none());
     }
 
     #[test]

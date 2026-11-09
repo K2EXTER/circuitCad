@@ -1,0 +1,70 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# crates/app/src/schematic/bench_data.rs
+数字の行が見つかりません。1行に「時間, 電圧」や「周波数 dB」のように、2つ以上の数字を並べてください	No rows of numbers found. Put two or more numbers on each line, such as "time, voltage" or "frequency dB"
+周波数と dB の 2 列が要ります	Two columns are needed: frequency and dB
+周波数・入力の振幅・出力の振幅の 3 列が要ります	Three columns are needed: frequency, input amplitude and output amplitude
+{} Hz の行: 振幅は正の数で書いてください	Row at {} Hz: write the amplitudes as positive numbers
+周波数は正の数で書いてください	Write the frequencies as positive numbers
+{} 列目がありません (この表は {} 列です)	There is no column {} (this table has {} columns)
+点が 2 つ以上要ります	At least two points are needed
+実測を重ねる	Overlay measurements
+実測を重ねる ({})	Overlay measurements ({})
+測った点を、ボード線図の上に点で重ねます。1行に「周波数 dB」(位相を足してもよい) か、「周波数 入力の振幅 出力の振幅」を書きます	Draws measured points as dots over the Bode plot. Write "frequency dB" on each line (a phase may follow), or "frequency input-amplitude output-amplitude"
+オシロスコープの CSV を、波形の上に重ねます。1列目が時間、値の列は下で選びます。見出しの行は読み飛ばします	Draws an oscilloscope's CSV over the waveforms. The first column is time; pick the value column below. Header lines are skipped
+比べる信号	Compare with
+実測を、どのシミュレーションの信号と比べるか。色がその信号にそろい、差が下に出ます	Which simulated signal the measurement is compared with. It takes that signal's colour, and the differences are listed below
+例 基板A	e.g. Board A
+周波数・dB	Frequency, dB
+例: 1k -4.5 (位相を足すなら 1k -4.5 -48)	e.g. 1k -4.5 (with the phase: 1k -4.5 -48)
+周波数・入力・出力	Frequency, input, output
+例: 1k 1.02 0.61 (入力と出力の振幅。Vpp どうし、実効値どうしのように単位をそろえます)。dB は 20×log10(出力/入力) で計算します	e.g. 1k 1.02 0.61 (input and output amplitudes, in the same unit: both Vpp or both RMS). dB is worked out as 20×log10(output/input)
+値の列	Value column
+値を読む列。2 なら CH1、3 なら CH2 のように、CSV の並びに合わせます	The column to read the values from: 2 for CH1, 3 for CH2 and so on, following the layout of the CSV
+列目
+「{}」を重ねました ({} 点)	Overlaid "{}" ({} points)
+貼った表を重ねる	Overlay the pasted table
+上の欄に貼った数字の表を、実測として重ねます	Overlays the table of numbers pasted in the box above as a measurement
+実測{}	Measurement {}
+CSV を読む…	Read a CSV…
+オシロスコープなどが書き出した CSV ファイルを読んで重ねます	Reads a CSV file written by an oscilloscope or similar and overlays it
+この実測を消します	Removes this measurement
+  {} がいまの結果にありません	  {} is not in the current result
+  -3dB点: 実測 {} / シミュレーション {} ({:+.1}%)	  -3dB point: measured {} / simulated {} ({:+.1}%)
+実測の -3dB点は、いちばん低い周波数の点から 3dB 下がる所を、点のあいだでつないで求めます。点が粗いと少しずれます	The measured -3dB point is where the gain falls 3dB below the lowest-frequency point, found by joining the points. Sparse points shift it a little
+  -3dB点: シミュレーション {} (実測の点は、まだそこを横切っていません)	  -3dB point: simulated {} (the measured points do not reach it yet)
+シミュ	Sim
+差	Diff
+実測 − シミュレーション (dB)。±1 dB 以内は緑、±3 dB 以内は黄	Measured − simulated (dB). Green within ±1 dB, yellow within ±3 dB
+シミュレーションの周波数範囲の外です	Outside the simulated frequency range
+  時間のずらし	  Time shift
+実測の時間に足す量 (秒)。オシロのトリガーの位置は、シミュレーションの 0 秒と違うので、ここで合わせます	Added to the measured time (seconds). The scope's trigger point is not the simulation's 0 s, so line them up here
+立ち上がりを合わせる	Line up the edges
+実測とシミュレーションの最初の変化 (振れ幅の真ん中を横切る所) が同じ時刻になるように、時間をずらします	Shifts the time so that the first change of the measurement and of the simulation (where each crosses the middle of its swing) fall at the same moment
+  変化の 10→90%: 実測 {} / シミュレーション {} ({:+.1}%)	  Edge 10→90%: measured {} / simulated {} ({:+.1}%)
+それぞれの波形の最初の変化 (立ち上がりか立ち下がり) で、振れ幅の 10% から 90% までの時間です。振れ幅の下と上は、雑音のとがりを除くため、値の小さいほうから 1% と大きいほうから 1% の所に取ります	The time from 10% to 90% of the swing on each waveform's first change (rising or falling). To leave out noise spikes, the bottom and top of the swing are taken 1% in from the smallest and from the largest values
+  変化の 10→90%: 実測 {}	  Edge 10→90%: measured {}
+# crates/app/src/schematic/spec_table.rs
+抵抗 ±{}%・コンデンサ ±{}%	resistors ±{}%, capacitors ±{}%
+実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。何枚か組んだときは、カンマで区切って並べます (3.29, 3.31)。シミュレーションの値と比べて、差と、考えられる理由が出ます	The value you measured on the real circuit (a meter or scope reading, written like 4.93 or 50m). For several boards, list them separated by commas (3.29, 3.31). It is compared with the simulated value, with the difference and likely reasons
+  実測の数字を読めません (4.93、50m、1k のように書きます。何枚かはカンマで区切ります)	  Cannot read the measured number (write it like 4.93, 50m or 1k; separate several with commas)
+  実測 {} 個: 平均 {} (最小 {} 〜 最大 {}) / シミュレーション {}	  {} readings: mean {} (min {} to max {}) / simulated {}
+  部品の許容差 ({}) では、この値はほとんど動きません	  The part tolerances ({}) hardly move this value
+抵抗・コンデンサ・コイルを全部端に置いても、この値は変わりません。値を決めているのは IC やダイオードで、その個体差はモデルに入っていません。データシートの最小〜最大と比べます (スペックの範囲の欄)	Putting every resistor, capacitor and coil at the end of its tolerance does not change this value. It is set by an IC or a diode, whose part-to-part spread is not in the model. Compare it with the datasheet's min to max (the range boxes of the spec)
+内側 (部品のばらつきで説明できる)	inside (the part spread explains it)
+外側	outside
+内側は {} / {} 個	{} of {} inside
+  部品の許容差 ({}) の範囲 {} 〜 {}: {}	  Range of the part tolerances ({}) {} to {}: {}
+「温度とばらつき」の欄の許容差で、抵抗・コンデンサ・コイルを全部端に置いた最悪ケースの範囲です。IC やダイオードの個体差は入っていません	The worst-case range with every resistor, capacitor and coil at the end of the tolerance set in "Temperature and variation". The spread of ICs and diodes is not included
+# crates/sim-core/src/spec.rs
+部品の許容差を全部端に置いても届かない差です。許容差では説明できないので、部品の値・つなぎ方・測り方・モデルを疑います	A difference larger than every part at the end of its tolerance can make. Tolerances cannot explain it: suspect the part values, the wiring, the way of measuring, or the model
+# crates/app/src/help.rs
+実測と比べる	Compare with measurements
+「実測を重ねる」	"Overlay measurements"
+作った回路で測った値を、波形の上に重ねます。過渡解析にはオシロスコープの CSV (1列目が時間)、AC解析には「周波数 dB」の点を貼ります。「比べる信号」の色で描かれ、差が一覧に出ます。回路図と一緒に保存されます	Draws what you measured on the built circuit over the waveforms: an oscilloscope's CSV (first column = time) for the transient analysis, and "frequency dB" points for the AC analysis. It is drawn in the colour of the signal it is compared with, and the differences are listed. It is saved with the schematic
+「立ち上がりを合わせる」	"Line up the edges"
+オシロのトリガーの時刻は、シミュレーションの 0 秒と違います。最初の変化が同じ時刻になるように、実測の時間をずらします	The scope's trigger time is not the simulation's 0 s. This shifts the measured time so that the first change happens at the same moment
+スペック表の「実測」	"Measured" in the spec table
+テスタで読んだ値を入れると、シミュレーションとの差が出ます。何枚か組んだときは「3.29, 3.31」のようにカンマで区切ります。部品の許容差 (「温度とばらつき」の欄) の範囲に入っていれば、部品のばらつきで説明できる差です	Type in a meter reading to see how far it is from the simulation. For several boards, separate the readings with commas, like "3.29, 3.31". A reading inside the range of the part tolerances (set in "Temperature and variation") is a difference the part spread can explain
+# crates/app/src/samples.rs
+実測と比べる (RC ローパス)	Compare with measurements (RC low-pass)
+上の RC ローパスに、作った基板で測った値の例を入れたもの (値は説明のために作った例です)。「AC解析を実行」すると測った点がボード線図に重なり、「過渡解析を実行」するとオシロの波形が重なります (波形の左の「実測を重ねる」)。「解析」タブのスペック表には、2 枚分の -3dB点の実測が入っています	The RC low-pass above, with example readings from a built board (made-up values, for illustration). "Run AC analysis" draws the measured points over the Bode plot, and "Run transient analysis" draws a scope recording over the waveform ("Overlay measurements", left of the waveform). The spec table in the "Analysis" tab holds the measured -3dB point of two boards

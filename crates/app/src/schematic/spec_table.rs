@@ -1,7 +1,7 @@
 //! "スペック (合否)" section: targets for the design, checked against the analyses on screen.
 
 use super::*;
-use sim_core::{compare_measured, evaluate_spec, evaluate_worst_spec, measure_spec, Agreement, Spec, SpecEval, SpecInputs, SpecKind};
+use sim_core::{compare_measured_in, compare_readings, split_readings, evaluate_spec, evaluate_worst_spec, measure_spec, Agreement, Spec, SpecEval, SpecInputs, SpecKind};
 
 /// One row of the table: the spec plus the text boxes it is typed in (kept so typing is not overwritten).
 pub(super) struct SpecRow {
@@ -63,6 +63,19 @@ impl SpecItem {
         let kind = text("kind");
         SpecKind::from_key(&kind)?;
         Some(SpecItem { kind, target: text("target"), lo: text("lo"), hi: text("hi"), at: text("at"), measured: text("measured") })
+    }
+}
+
+/// Which worst case gives the tolerance range of a row's bench reading: the worst-case kind and the node it runs on.
+/// DC voltages and -3 dB points have one (`V(F1)` is node `F1`); the other kinds have none.
+fn tolerance_query(kind: SpecKind, target: &str) -> Option<(SpecKind, String)> {
+    let t = target.trim();
+    let inner = t.strip_prefix("V(").or_else(|| t.strip_prefix("v(")).and_then(|x| x.strip_suffix(')')).unwrap_or(t);
+    let node = (!inner.is_empty() && !inner.contains(',')).then(|| inner.to_string())?;
+    match kind {
+        SpecKind::DcVoltage | SpecKind::DcVoltageWorst => Some((SpecKind::DcVoltageWorst, node)),
+        SpecKind::AcCutoff | SpecKind::AcCutoffWorst => Some((SpecKind::AcCutoffWorst, node)),
+        _ => None,
     }
 }
 
@@ -159,7 +172,7 @@ impl SchEditor {
         let inputs = SpecInputs { dc, tran, ac };
         self.specs
             .iter()
-            .filter(|r| parse_value(&r.measured).is_some())
+            .filter(|r| split_readings(&r.measured, parse_value).is_some_and(|v| !v.is_empty()))
             .filter(|r| {
                 let mut spec = r.spec.clone();
                 spec.at = parse_value(&r.at).unwrap_or(0.0);
@@ -213,6 +226,23 @@ impl SchEditor {
         // the worst-case rows are judged on the circuit itself (not on a result on screen); the others on the results
         let worst_rows: Vec<(usize, SpecKind, String)> = self.specs.iter().enumerate().filter(|(_, r)| r.spec.kind.is_worst()).map(|(i, r)| (i, r.spec.kind, r.spec.target.clone())).collect();
         let worst_results: Vec<(usize, Result<sim_core::WorstCase, String>)> = worst_rows.into_iter().map(|(i, k, t)| (i, self.worst_for_spec(k, &t))).collect();
+        // the range the part tolerances allow, for the rows that have a bench reading to compare (worst case, cached)
+        let tol_wanted: Vec<(usize, SpecKind, String)> = self
+            .specs
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| !r.measured.trim().is_empty())
+            .filter_map(|(i, r)| tolerance_query(r.spec.kind, &r.spec.target).map(|(k, n)| (i, k, n)))
+            .collect();
+        let mut tol_ranges: Vec<Option<(f64, f64)>> = vec![None; self.specs.len()];
+        for (i, k, n) in tol_wanted {
+            tol_ranges[i] = match worst_results.iter().find(|(j, _)| *j == i) {
+                Some((_, Ok(w))) => Some((w.min, w.max)),
+                Some((_, Err(_))) => None,
+                None => self.worst_for_spec(k, &n).ok().map(|w| (w.min, w.max)),
+            };
+        }
+        let tol_label = i18n::trf!("抵抗 ±{}%・コンデンサ ±{}%", self.mc_tol_r.trim(), self.mc_tol_c.trim());
         // names to pick from, taken from the results that are on screen
         let dc = self.dc.as_ref().and_then(|v| v.outcome.as_ref().ok());
         let tran = self.tran.as_ref().and_then(|v| v.outcome.as_ref().ok());
@@ -324,29 +354,61 @@ impl SchEditor {
             ui.horizontal(|ui| {
                 ui.add_space(14.0);
                 ui.label(i18n::tr("実測"));
-                ui.add(egui::TextEdit::singleline(&mut row.measured).desired_width(64.0).hint_text(i18n::tr("例 4.93")))
-                    .on_hover_text(i18n::tr("実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。シミュレーションの値と比べて、差と、考えられる理由が出ます"));
+                ui.add(egui::TextEdit::singleline(&mut row.measured).desired_width(150.0).hint_text(i18n::tr("例 4.93")))
+                    .on_hover_text(i18n::tr("実際に作って測った値 (テスタやオシロの読み。4.93 や 50m のように書きます)。何枚か組んだときは、カンマで区切って並べます (3.29, 3.31)。シミュレーションの値と比べて、差と、考えられる理由が出ます"));
                 ui.label(row.spec.kind.unit());
             });
             if !row.measured.trim().is_empty() {
-                match (parse_value(&row.measured), ev.value) {
+                match (split_readings(&row.measured, parse_value), ev.value) {
                     (None, _) => {
-                        ui.small(egui::RichText::new(i18n::tr("  実測の数字を読めません (4.93、50m、1k のように書きます)")).color(FAIL));
+                        ui.small(egui::RichText::new(i18n::tr("  実測の数字を読めません (4.93、50m、1k のように書きます。何枚かはカンマで区切ります)")).color(FAIL));
                     }
                     (Some(_), None) => {
                         ui.small(egui::RichText::new(i18n::tr("  シミュレーションの値が出ると、比べられます (解析を実行してください)")).color(Color32::from_gray(150)));
                     }
-                    (Some(m), Some(sim)) => {
-                        let c = compare_measured(row.spec.kind, sim, m);
+                    (Some(ms), Some(sim)) => {
+                        // a range of almost nothing: the value is set by parts the model does not vary (an IC, a diode), so
+                        // it says nothing about the tolerances and is left out of the comparison
+                        let narrow = tol_ranges[i].is_some_and(|(lo, hi)| (hi - lo).abs() <= 0.002 * sim.abs().max(1e-12));
+                        let tol = tol_ranges[i].filter(|_| !narrow);
+                        let Some(r) = compare_readings(row.spec.kind, sim, &ms, tol) else { continue };
                         let unit = row.spec.kind.unit();
-                        let (what, col) = match c.level {
+                        let (what, col) = match r.level {
                             Agreement::Close => ("よく合っています", PASS),
                             Agreement::Some => ("少し差があります", Color32::from_rgb(230, 170, 40)),
                             Agreement::Far => ("大きく違います", FAIL),
                         };
-                        let pct = c.rel.map(|r| format!(" ({:+.1}%)", r * 100.0)).unwrap_or_default();
+                        let c = if ms.len() == 1 { r.each[0].clone() } else { compare_measured_in(row.spec.kind, sim, r.mean, tol) };
+                        let pct = c.rel.map(|x| format!(" ({:+.1}%)", x * 100.0)).unwrap_or_default();
                         ui.label(egui::RichText::new(format!("  {what}{pct}")).color(col).strong());
-                        ui.small(i18n::trf!("  実測 {} / シミュレーション {} / 差 {}", eng(m, unit), eng(sim, unit), eng(c.diff, unit)));
+                        if ms.len() == 1 {
+                            ui.small(i18n::trf!("  実測 {} / シミュレーション {} / 差 {}", eng(ms[0], unit), eng(sim, unit), eng(c.diff, unit)));
+                        } else {
+                            ui.small(i18n::trf!("  実測 {} 個: 平均 {} (最小 {} 〜 最大 {}) / シミュレーション {}", ms.len(), eng(r.mean, unit), eng(r.min, unit), eng(r.max, unit), eng(sim, unit)));
+                            let marks: Vec<String> = ms
+                                .iter()
+                                .zip(&r.each)
+                                .zip('A'..)
+                                .map(|((m, e), name)| format!("{name} {} {}", eng(*m, unit), match e.level { Agreement::Close => "✓", Agreement::Some => "△", Agreement::Far => "×" }))
+                                .collect();
+                            ui.small(format!("  {}", marks.join("   ")));
+                        }
+                        if narrow {
+                            ui.small(i18n::trf!("  部品の許容差 ({}) では、この値はほとんど動きません", tol_label))
+                                .on_hover_text(i18n::tr("抵抗・コンデンサ・コイルを全部端に置いても、この値は変わりません。値を決めているのは IC やダイオードで、その個体差はモデルに入っていません。データシートの最小〜最大と比べます (スペックの範囲の欄)"));
+                        } else if let Some((lo, hi)) = r.each[0].tolerance {
+                            let inside = r.each.iter().filter(|e| e.inside_tolerance == Some(true)).count();
+                            let verdict = if inside == ms.len() {
+                                i18n::tr("内側 (部品のばらつきで説明できる)").to_string()
+                            } else if ms.len() == 1 {
+                                i18n::tr("外側").to_string()
+                            } else {
+                                i18n::trf!("内側は {} / {} 個", inside, ms.len())
+                            };
+                            ui.small(i18n::trf!("  部品の許容差 ({}) の範囲 {} 〜 {}: {}", tol_label, eng(lo, unit), eng(hi, unit), verdict))
+                                .on_hover_text(i18n::tr("「温度とばらつき」の欄の許容差で、抵抗・コンデンサ・コイルを全部端に置いた最悪ケースの範囲です。IC やダイオードの個体差は入っていません"));
+                        }
+                        let c = r.each.iter().find(|e| e.level == r.level).cloned().unwrap_or(c);
                         if !c.hints.is_empty() {
                             egui::CollapsingHeader::new(i18n::tr("差の理由の手がかり")).id_salt(("spec_why", i)).show(ui, |ui| {
                                 for h in &c.hints {

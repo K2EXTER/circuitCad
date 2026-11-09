@@ -48,6 +48,7 @@ impl SchEditor {
 
     pub(super) fn ac_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.ac.as_mut() else { return };
+        let (bench, bench_ui) = (&mut self.bench.ac, &mut self.bench_ui);
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
@@ -96,6 +97,9 @@ impl SchEditor {
                                 *ghost = None;
                             }
                         });
+                        let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
+                        let sim = |name: &str| res.signal(name).map(|sg| (res.freq.clone(), sg.db()));
+                        bench_data::bench_controls(ui, bench, bench_ui, true, &order, &shown, &sim);
                         // -3dB point: one column per signal
                         let corner: Vec<(String, String)> = order
                             .iter()
@@ -222,14 +226,23 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let mut mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db }).collect();
-                    let mut phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: ph }).collect();
+                    let mut mag: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, db, _))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: db, dots: false }).collect();
+                    let mut phase: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, _, ph))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v: ph, dots: false }).collect();
                     // kept "before" curves go first, so they are painted behind the live ones
                     if let Some(gh) = ghost.as_ref() {
                         for gs in gh.sigs.iter().rev() {
                             let Some(k) = chosen.iter().position(|(n, _, _)| *n == gs.base) else { continue };
-                            let tr = Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v };
+                            let tr = Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v, dots: false };
                             if gs.group == 0 { mag.insert(0, tr) } else { phase.insert(0, tr) }
+                        }
+                    }
+                    // bench points on top, in the colour of the signal they are compared with
+                    let shown: Vec<&str> = chosen.iter().map(|(n, _, _)| *n).collect();
+                    for c in bench.iter() {
+                        let color = bench_data::bench_color(&shown, &c.signal);
+                        mag.push(Trace { name: &c.name, color, t: &c.x, v: &c.y, dots: true });
+                        if !c.phase.is_empty() {
+                            phase.push(Trace { name: &c.name, color, t: &c.x, v: &c.phase, dots: true });
                         }
                     }
                     let h = rect.height() / 2.0;

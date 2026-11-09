@@ -21,6 +21,7 @@ pub const SAMPLES: &[Sample] = &[
     sample!("電源と負荷を2枚のシートに分ける", "上の「12V から 5V」と同じ回路を、電源のシートと負荷のシートに分けたもの。シートが違っても、同じ名前のネットラベル (5V) は同じ配線です。上のタブで切り替え、「DC動作点を解析」で1枚のときと同じ答えを確かめます", "two_sheets"),
     sample!("同じ回路を3回使う (階層: RC を3段重ねる)", "RC ローパスの「ステージ」を別のシートに1つだけ描き、3つの記号 (CH1〜CH3) で使い回します。「RCステージ」のタブを開くと中身 (R と C、入口と出口のポート) が見えます。「解析」タブの「AC解析を実行」で、3段重ねた特性が出ます (1段より急に落ちます)。シートの中を直すと、3つ全部に効きます", "hierarchy_rc_stages"),
     sample!("RC ローパスフィルタ", "抵抗とコンデンサで高い周波数を通しにくくする回路。「AC解析を実行」で、ボード線図が出ます", "rc_lowpass"),
+    sample!("実測と比べる (RC ローパス)", "上の RC ローパスに、作った基板で測った値の例を入れたもの (値は説明のために作った例です)。「AC解析を実行」すると測った点がボード線図に重なり、「過渡解析を実行」するとオシロの波形が重なります (波形の左の「実測を重ねる」)。「解析」タブのスペック表には、2 枚分の -3dB点の実測が入っています", "rc_lowpass_measured"),
     sample!("RLC のパルス応答", "パルスを入れると波形が振動して落ち着く回路。「過渡解析を実行」で、波形が出ます", "rlc_pulse"),
     sample!("ツェナーで電圧を一定にする", "もっとも簡単な安定化。入力を変えても出力があまり動きません", "zener_regulator"),
     sample!("ブリッジ整流 (交流を直流にする)", "ダイオード 4 個と平滑コンデンサ。「過渡解析を実行」で、リップルが見えます", "bridge_rectifier"),
@@ -71,6 +72,23 @@ mod tests {
         assert!(!ed.sch.components.is_empty());
         assert!(ed.status.contains(SAMPLES[1].title), "{}", ed.status);
         assert!(!ed.open_sample("broken", "{ not json"));
+    }
+
+    #[test]
+    fn the_measured_sample_brings_its_spec_table_and_recordings_and_is_clean() {
+        let s = SAMPLES.iter().find(|s| s.json.contains("\"bench\"")).expect("a sample with bench recordings");
+        let mut ed = crate::schematic::SchEditor::default();
+        assert!(ed.open_sample(s.title, s.json));
+        assert_eq!(ed.spec_items().len(), 1);
+        assert_eq!(ed.spec_items()[0].measured, "944, 1.01k");
+        let b = ed.bench_data();
+        assert_eq!((b.ac.len(), b.tran.len()), (1, 1));
+        assert!(b.tran[0].x.len() > 300 && b.tran[0].shift == 1e-3);
+        assert!(!ed.dirty(), "opening a sample is not a change");
+        // the readings agree with the simulated -3 dB point (1.0 kHz) as a 6 % miss that a ±10 % capacitor explains
+        let readings = sim_core::split_readings(&ed.spec_items()[0].measured, sim_core::parse_value).unwrap();
+        let r = sim_core::compare_readings(sim_core::SpecKind::AcCutoff, 1001.0, &readings, Some((910.0, 1112.0))).unwrap();
+        assert_eq!(r.level, sim_core::Agreement::Close);
     }
 }
 

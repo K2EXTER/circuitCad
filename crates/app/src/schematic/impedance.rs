@@ -162,8 +162,8 @@ impl SchEditor {
                     let bottom = Rect::from_min_size(Pos2::new(rect.left(), rect.top() + h), Vec2::new(rect.width(), h - 2.0));
                     let ms = Style { unit: " dBΩ", x_unit: "Hz", x_name: "f", plain_y: true };
                     let ps = Style { unit: "°", x_unit: "Hz", x_name: "f", plain_y: true };
-                    plot::draw_group(ui, top, egui::Id::new("z_mag"), &[Trace { name: "|Z|", color: PALETTE[0], t: &res.freq, v: &db }], st, 0, &ms, false);
-                    plot::draw_group(ui, bottom, egui::Id::new("z_phase"), &[Trace { name: "位相", color: PALETTE[0], t: &res.freq, v: &ph }], st, 1, &ps, true);
+                    plot::draw_group(ui, top, egui::Id::new("z_mag"), &[Trace { name: "|Z|", color: PALETTE[0], t: &res.freq, v: &db, dots: false }], st, 0, &ms, false);
+                    plot::draw_group(ui, bottom, egui::Id::new("z_phase"), &[Trace { name: "位相", color: PALETTE[0], t: &res.freq, v: &ph, dots: false }], st, 1, &ps, true);
                 });
             }
         }

@@ -300,6 +300,11 @@ pub struct SchEditor {
     worst_spec_cache: Vec<(String, Result<sim_core::WorstCase, String>)>,
     /// The spec table as last saved or opened (a changed table counts as an unsaved change).
     saved_specs: Vec<spec_table::SpecItem>,
+    /// Bench recordings drawn over the transient / AC plots (saved with the sheet).
+    bench: bench_data::BenchData,
+    saved_bench: bench_data::BenchData,
+    /// The "実測を重ねる" box: the pasted text and its settings.
+    bench_ui: bench_data::BenchUi,
     fault_kind: usize,
     fault_view: Option<fault::FaultView>,
     fault_scan: Vec<fault::ScanRow>,
@@ -631,6 +636,9 @@ impl Default for SchEditor {
             specs: vec![],
             worst_spec_cache: vec![],
             saved_specs: vec![],
+            bench: Default::default(),
+            saved_bench: Default::default(),
+            bench_ui: Default::default(),
             fault_kind: 0,
             fault_view: None,
             fault_scan: vec![],
@@ -715,6 +723,7 @@ mod quick;
 #[cfg(test)]
 pub use challenge::challenge_exists;
 pub use spec_table::{take_specs, with_specs, SpecItem};
+pub use bench_data::{take_bench, with_bench, BenchData};
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
 pub use lessons::{lesson_ids, lesson_texts, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
@@ -758,6 +767,7 @@ mod selfheat;
 mod selfheat_tran;
 mod fault;
 mod spec_table;
+mod bench_data;
 mod power_ui;
 mod requirements;
 mod wizard;

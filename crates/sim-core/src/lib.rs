@@ -76,7 +76,7 @@ pub use temperature::{temp_sweep, T_NOM_C};
 pub use tran::{auto_tstep, format_time, transient, transient_with, Signal, TimingKind, TimingReport, TimingViolation, TranResult, TranSettings};
 pub use stepmetrics::{settling_times, step_metrics, Settling, StepMetrics};
 pub use power::{efficiency, mean_power};
-pub use spec::{compare_measured, evaluate as evaluate_spec, evaluate_worst as evaluate_worst_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};
+pub use spec::{compare_measured, compare_measured_in, compare_readings, split_readings, ReadingsCompare, evaluate as evaluate_spec, evaluate_worst as evaluate_worst_spec, in_range, measure as measure_spec, Agreement, Inputs as SpecInputs, MeasuredCompare, Spec, SpecEval, SpecKind};
 pub use spectrum::{estimate_frequency, spectrum, stats, thd, Harmonic, Spectrum, Stats, Thd};
 pub use value::{format_value, parse_part_value, parse_value};
 pub use waveform::{parse_source, parse_source_full, Source, Waveform};

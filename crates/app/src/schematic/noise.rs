@@ -237,7 +237,7 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から項目を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v }).collect();
+                    let traces: Vec<Trace> = chosen.iter().enumerate().map(|(k, (n, v))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &res.freq, v, dots: false }).collect();
                     let sty = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
                     plot::draw_group(ui, rect, egui::Id::new("noise_density"), &traces, st, 0, &sty, true);
                 });

@@ -8,6 +8,8 @@ pub struct Trace<'a> {
     pub color: Color32,
     pub t: &'a [f64],
     pub v: &'a [f64],
+    /// Draw each point as a dot joined by a thin line (a few measured points) instead of a plain curve.
+    pub dots: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -409,10 +411,19 @@ pub fn draw_group(
     for tr in traces {
         let a = tr.t.partition_point(|&t| t < x0).saturating_sub(1);
         let b = (tr.t.partition_point(|&t| t <= x1) + 1).min(tr.t.len());
-        if b <= a + 1 {
+        if b <= a + usize::from(!tr.dots) {
             continue;
         }
         let stroke = Stroke::new(1.5, tr.color);
+        if tr.dots {
+            let pts: Vec<Pos2> = (a..b).map(|i| Pos2::new(sx(tr.t[i]), sy(tr.v[i]))).collect();
+            clip.add(egui::Shape::dashed_line(&pts, Stroke::new(1.0, tr.color), 4.0, 3.0));
+            for p in pts {
+                clip.circle_filled(p, 4.0, tr.color);
+                clip.circle_stroke(p, 4.0, Stroke::new(1.0, Color32::from_gray(20)));
+            }
+            continue;
+        }
         let n = b - a;
         if n as f32 <= pa.width() * 2.0 {
             let pts: Vec<Pos2> = (a..b).map(|i| Pos2::new(sx(tr.t[i]), sy(tr.v[i]))).collect();
@@ -564,7 +575,7 @@ mod tests {
     #[test]
     fn cursor_report_gives_differences_and_period() {
         let (t, v) = ([0.0, 1e-3, 2e-3], [0.0, 1.0, 3.0]);
-        let tr = [Trace { name: "V(out)", color: Color32::WHITE, t: &t, v: &v }];
+        let tr = [Trace { name: "V(out)", color: Color32::WHITE, t: &t, v: &v, dots: false }];
         let style = Style { unit: "V", x_unit: "s", x_name: "t", plain_y: false };
         assert!(cursor_report(&tr, &[None, None], &style, false).is_empty());
         let r = cursor_report(&tr, &[Some(0.0), Some(2e-3)], &style, false);

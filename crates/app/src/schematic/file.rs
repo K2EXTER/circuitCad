@@ -38,6 +38,7 @@ impl SchEditor {
         }
         let mut value = serde_json::to_value(&self.sch).ok()?;
         with_specs(&mut value, &self.spec_items());
+        with_bench(&mut value, &self.bench);
         serde_json::to_string(&value).ok()
     }
 
@@ -55,6 +56,7 @@ impl SchEditor {
     fn sheet_json(&self) -> Result<String, serde_json::Error> {
         let mut value = serde_json::to_value(&self.sch)?;
         with_specs(&mut value, &self.spec_items());
+        with_bench(&mut value, &self.bench);
         serde_json::to_string_pretty(&value)
     }
 
@@ -92,16 +94,18 @@ impl SchEditor {
     }
 
     pub fn load_path(&mut self, p: PathBuf) {
-        let read = |p: &PathBuf| -> Result<(Schematic, Vec<SpecItem>), String> {
+        let read = |p: &PathBuf| -> Result<(Schematic, Vec<SpecItem>, BenchData), String> {
             let text = std::fs::read_to_string(p).map_err(|e| e.to_string())?;
             let mut value: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
             let specs = take_specs(&mut value);
-            Ok((serde_json::from_value(value).map_err(|e| e.to_string())?, specs))
+            let bench = take_bench(&mut value);
+            Ok((serde_json::from_value(value).map_err(|e| e.to_string())?, specs, bench))
         };
         match read(&p) {
-            Ok((s, specs)) => {
+            Ok((s, specs, bench)) => {
                 self.adopt(s, Some(p.clone()));
                 self.set_spec_items(&specs);
+                self.set_bench(bench);
                 self.status = format!("開きました: {}", p.display());
             }
             Err(e) => self.status = format!("読み込み失敗: {e}"),
@@ -121,6 +125,8 @@ impl SchEditor {
         self.problems.clear();
         self.specs.clear();
         self.saved_specs.clear();
+        self.bench = Default::default();
+        self.saved_bench = Default::default();
         self.dc = None;
         self.fit_pending = true;
     }

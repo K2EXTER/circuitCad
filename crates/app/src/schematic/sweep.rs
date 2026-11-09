@@ -137,11 +137,11 @@ impl SchEditor {
                         ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, i18n::tr("左の一覧から信号を選んでください"), FontId::proportional(14.0), Color32::from_gray(150));
                         return;
                     }
-                    let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();
+                    let mut volts: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "V").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values, dots: false }).collect();
                     if *show_diag && !temp && !volts.is_empty() {
-                        volts.push(Trace { name: "出力=入力", color: Color32::from_gray(120), t: &res.x, v: &res.x });
+                        volts.push(Trace { name: "出力=入力", color: Color32::from_gray(120), t: &res.x, v: &res.x, dots: false });
                     }
-                    let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values }).collect();
+                    let amps: Vec<Trace> = chosen.iter().filter(|(_, s)| s.unit == "A").map(|(k, s)| Trace { name: &s.name, color: PALETTE[*k % PALETTE.len()], t: &res.x, v: &s.values, dots: false }).collect();
                     let x_unit = if temp { "℃" } else { "V" };
                     let vs = Style { unit: "V", x_unit, x_name: &res.source, plain_y: false };
                     let is = Style { unit: "A", x_unit, x_name: &res.source, plain_y: false };

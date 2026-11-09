@@ -102,6 +102,7 @@ impl SchEditor {
     /// Transient waveforms.
     pub(super) fn tran_wave_panel(&mut self, ui: &mut egui::Ui) {
         let Some(view) = self.tran.as_mut() else { return };
+        let (bench, bench_ui) = (&mut self.bench.tran, &mut self.bench_ui);
         let mut close = false;
         let mut start_probe = false;
         let mut open_help = false;
@@ -214,6 +215,12 @@ impl SchEditor {
                                 *ghost = None;
                             }
                         });
+                        {
+                            let volts: Vec<&str> = order.iter().copied().filter(|n| res.signal(n).is_some_and(|s| s.unit == "V")).collect();
+                            let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
+                            let sim = |name: &str| res.signal(name).map(|sg| (res.time.clone(), sg.values.clone()));
+                            bench_data::bench_controls(ui, bench, bench_ui, false, &volts, &shown, &sim);
+                        }
                         // mean and AC RMS (= noise / ripple amplitude) over the visible window
                         let (w0, w1) = if *spectrum {
                             (parse_value(spec_t0).unwrap_or(0.0), parse_value(spec_t1).unwrap_or(f64::MAX))
@@ -432,7 +439,7 @@ impl SchEditor {
                             .iter()
                             .zip(&dbs)
                             .enumerate()
-                            .map(|(k, ((n, sp), db))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &sp.freq, v: db })
+                            .map(|(k, ((n, sp), db))| Trace { name: n, color: PALETTE[k % PALETTE.len()], t: &sp.freq, v: db, dots: false })
                             .collect();
                         let style = Style { unit: " dB", x_unit: "Hz", x_name: "f", plain_y: true };
                         plot::draw_group(ui, rect, egui::Id::new("spectrum"), &traces, sp_state, 0, &style, true);
@@ -447,7 +454,7 @@ impl SchEditor {
                         }
                         if let Some(sg) = res.signal(name) {
                             let g = if sg.unit == "V" { 0 } else { 1 };
-                            groups[g].push(Trace { name: &sg.name, color: PALETTE[k % PALETTE.len()], t: &res.time, v: &sg.values });
+                            groups[g].push(Trace { name: &sg.name, color: PALETTE[k % PALETTE.len()], t: &res.time, v: &sg.values, dots: false });
                             k += 1;
                         }
                     }
@@ -456,9 +463,15 @@ impl SchEditor {
                         for gs in gh.sigs.iter().rev() {
                             let Some(k) = order.iter().filter(|n| selected.contains(**n)).position(|n| *n == gs.base) else { continue };
                             if !groups[gs.group].is_empty() {
-                                groups[gs.group].insert(0, Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v });
+                                groups[gs.group].insert(0, Trace { name: &gs.name, color: plot::ghost_color(PALETTE[k % PALETTE.len()]), t: &gh.x, v: &gs.v, dots: false });
                             }
                         }
+                    }
+                    // bench recordings over the voltages, in the colour of the signal they are compared with
+                    let shown: Vec<&str> = order.iter().copied().filter(|n| selected.contains(*n)).collect();
+                    let shifted: Vec<Vec<f64>> = bench.iter().map(|c| c.shifted_x()).collect();
+                    for (c, x) in bench.iter().zip(&shifted) {
+                        groups[0].push(Trace { name: &c.name, color: bench_data::bench_color(&shown, &c.signal), t: x, v: &c.y, dots: c.x.len() <= 60 });
                     }
                     let used: Vec<usize> = (0..2).filter(|g| !groups[*g].is_empty()).collect();
                     if used.is_empty() {
