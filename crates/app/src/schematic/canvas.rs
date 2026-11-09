@@ -103,6 +103,9 @@ impl SchEditor {
 
     pub(super) fn handle_keys(&mut self, ui: &egui::Ui) {
         let typing = ui.ctx().egui_wants_keyboard_input();
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.stop_repair_probe();
+        }
         if self.noise_pick && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.noise_pick = false;
             self.z_pick = false;

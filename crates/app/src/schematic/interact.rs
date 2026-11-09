@@ -135,7 +135,12 @@ impl SchEditor {
     }
 
     pub(super) fn handle_clicks(&mut self, ui: &egui::Ui, resp: &egui::Response, g: (f32, f32), snapped: Pt) {
-        if self.noise_pick {
+        if self.repair_probing() {
+            // the virtual meter: a click measures the built board at that net
+            if resp.clicked_by(egui::PointerButton::Primary) {
+                self.repair_probe(snapped);
+            }
+        } else if self.noise_pick {
             if resp.clicked_by(egui::PointerButton::Primary) {
                 let shift = ui.input(|i| i.modifiers.shift);
                 self.pick_noise_node(g, snapped, shift);
@@ -198,6 +203,9 @@ impl SchEditor {
             }
         }
         if resp.clicked_by(egui::PointerButton::Secondary) {
+            if self.stop_repair_probe() {
+                return;
+            }
             if self.noise_pick {
                 self.noise_pick = false;
                 self.z_pick = false;

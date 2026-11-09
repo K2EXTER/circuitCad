@@ -51,7 +51,36 @@ pub(super) const I_POLES: Item = lesson("poles", "極と零 (RLC の共振を式
 pub(super) const I_NOISE: Item = lesson("noise", "ノイズ解析 (増幅回路の雑音はどこから来る)", "抵抗の熱雑音とトランジスタのショット雑音を、部品ごとに分けて見る。信号源の抵抗を小さくすると減る", None);
 pub(super) const I_PHASE_MARGIN: Item = lesson("phase_margin", "位相余裕 (容量の負荷でオペアンプが不安定になる)", "ゲインが 0dB になる周波数で、180° に対する余裕。出力の容量負荷が、余裕を食う", None);
 
-pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH, SIGNAL_PATH, PARTS_PATH];
+pub const PATHS: &[LearningPath] = &[POWER_PATH, ARDUINO_PATH, MEGA_PATH, BOARD_PATH, SWITCH_PATH, BATTERY_PATH, SIGNAL_PATH, PARTS_PATH, REPAIR_PATH];
+
+pub(super) const REPAIR_PATH: LearningPath = LearningPath {
+    id: "repair",
+    title: "動かない回路を直そう (修理の道)",
+    goal: "作った回路が動かないとき、テスターで測って原因を突き止めます。回路図は正しい設計のまま、どこかが壊れた「基板」を、測った電圧とシミュレーションの値を比べて直します。故障は始めるたびに変わるので、何度でも練習できます",
+    stages: &[
+        Stage {
+            name: "1. 測り方",
+            about: "テスターの当て方と、「正しいはずの値」と「測った値」を比べる考え方です",
+            items: &[Item { requires: Some(&["divider"]), ..lesson("repair_divider", "テスターの当て方 (分圧回路)", "部品 3 つの回路で、出力がおかしい原因を、測って当てる。もう 1 点を測ると見分けられる", Some("分圧回路をブレッドボードに組み、抵抗を 1 本抜いて、各点の電圧がどう変わるかをテスターで測ります")) }],
+        },
+        Stage {
+            name: "2. 電源とスイッチを直す",
+            about: "入口から出口へ順に測る。オンのはずのトランジスタの、どこで電流が止まっているかを探す",
+            items: &[
+                Item { requires: Some(&["zener", "repair_divider"]), ..lesson("repair_zener", "ツェナーの電源", "入口 VIN から出口 VOUT へ順に測る。出力が 0V になる故障は 2 つあり、もう 1 点で見分ける", None) },
+                Item { requires: Some(&["bjt_switch", "repair_divider"]), ..lesson("repair_led", "トランジスタで点ける LED", "コレクタとベースを測って、トランジスタ・LED・抵抗・はんだ付けのどれかを見分ける", Some("LED が点かないとき、ベースとコレクタの電圧を測り、トランジスタがオンになっているかを確かめます")) },
+            ],
+        },
+        Stage {
+            name: "3. 帰還のある回路と、基板",
+            about: "1 か所が壊れるとループ全体が狂う回路と、基板そのものの故障",
+            items: &[
+                Item { requires: Some(&["series_regulator", "repair_zener"]), ..lesson("repair_regulator", "帰還のある電源 (直列レギュレータ)", "基準・帰還・出力の「約束」のどれが破れているかで、ループの中の故障を絞る", None) },
+                Item { requires: Some(&["board_fix", "repair_zener"]), ..I_BOARD_REPAIR },
+            ],
+        },
+    ],
+};
 
 pub(super) const POWER_PATH: LearningPath = LearningPath {
     id: "power_supply",

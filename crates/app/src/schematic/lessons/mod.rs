@@ -59,6 +59,7 @@ mod micro;
 mod models;
 mod parts;
 mod predict;
+mod repair;
 mod signals;
 mod supply;
 
@@ -122,6 +123,10 @@ const LESSONS: &[Lesson] = &[
     signals::PHASE_MARGIN,
     signals::NOISE,
     debug::DEBUG,
+    repair::REPAIR_DIVIDER,
+    repair::REPAIR_ZENER,
+    repair::REPAIR_LED,
+    repair::REPAIR_REGULATOR,
     parts::INTRO_OHM,
     parts::INTRO_READ,
     parts::RESISTOR,
@@ -431,6 +436,10 @@ impl SchEditor {
                     });
                 }
             }
+            // the repair practice's meter and answer (the "修理の道" lessons)
+            if self.repair.is_some() {
+                self.repair_ui(ui);
+            }
             // the words of the lesson: a click opens the glossary on that word
             egui::CollapsingHeader::new(i18n::tr("このレッスンの用語 (押すと用語集が開きます)")).id_salt(("words", idx)).default_open(false).show(ui, |ui| {
                 let words = crate::glossary::terms_in(&lesson_text(lesson));
@@ -526,6 +535,7 @@ impl SchEditor {
             self.start_lesson(idx);
         } else if close {
             self.lesson = None;
+            self.repair = None;
         }
     }
 }

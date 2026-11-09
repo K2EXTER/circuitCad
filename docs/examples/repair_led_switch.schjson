@@ -1,0 +1,157 @@
+{
+  "components": [
+    {
+      "custom": null,
+      "footprint": "PinHeader_1x2_PM",
+      "kind": "VSource",
+      "pos": [
+        8,
+        10
+      ],
+      "refdes": "V1",
+      "rot": 0,
+      "value": "5"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        18,
+        8
+      ],
+      "refdes": "R1",
+      "rot": 0,
+      "value": "10k"
+    },
+    {
+      "custom": null,
+      "footprint": "SOT-23",
+      "kind": "Npn",
+      "pos": [
+        30,
+        10
+      ],
+      "refdes": "Q1",
+      "rot": 0,
+      "value": "2N3904"
+    },
+    {
+      "custom": null,
+      "footprint": "R_0805",
+      "kind": "Resistor",
+      "pos": [
+        10,
+        20
+      ],
+      "refdes": "R2",
+      "rot": 0,
+      "value": "330"
+    },
+    {
+      "custom": null,
+      "footprint": "LED_0805",
+      "kind": "Led",
+      "pos": [
+        22,
+        20
+      ],
+      "refdes": "D1",
+      "rot": 0,
+      "value": "LED"
+    },
+    {
+      "custom": null,
+      "footprint": "",
+      "kind": "Ground",
+      "pos": [
+        32,
+        20
+      ],
+      "refdes": "#PWR01",
+      "rot": 0,
+      "value": "GND"
+    }
+  ],
+  "labels": [
+    {
+      "pos": [
+        8,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        16,
+        8
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        8,
+        20
+      ],
+      "text": "VCC"
+    },
+    {
+      "pos": [
+        20,
+        8
+      ],
+      "text": "BASE"
+    },
+    {
+      "pos": [
+        28,
+        10
+      ],
+      "text": "BASE"
+    },
+    {
+      "pos": [
+        12,
+        20
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        20,
+        20
+      ],
+      "text": "LEDA"
+    },
+    {
+      "pos": [
+        24,
+        20
+      ],
+      "text": "COL"
+    },
+    {
+      "pos": [
+        32,
+        8
+      ],
+      "text": "COL"
+    },
+    {
+      "pos": [
+        8,
+        12
+      ],
+      "text": "GND"
+    },
+    {
+      "pos": [
+        32,
+        12
+      ],
+      "text": "GND"
+    }
+  ],
+  "layout_version": 1,
+  "wires": []
+}

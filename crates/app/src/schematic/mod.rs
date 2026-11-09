@@ -319,6 +319,8 @@ pub struct SchEditor {
     scan_rare: bool,
     /// "症状から原因を探す": the readings and the solved faults.
     diag: troubleshoot::DiagState,
+    /// Repair practice with the virtual meter (the "修理の道" lessons): the hidden fault and the readings.
+    repair: Option<repair_practice::RepairPractice>,
     /// The "break every part" scan while it runs on its own thread.
     scan_run: Option<fault::ScanRun>,
     fault_chain: Option<Result<sim_core::ChainReport, Vec<String>>>,
@@ -664,6 +666,7 @@ impl Default for SchEditor {
             fault_scan: vec![],
             scan_rare: false,
             diag: Default::default(),
+            repair: None,
             scan_run: None,
             fault_chain: None,
             sweep_src: String::new(),
@@ -768,6 +771,7 @@ mod sensitivity;
 mod tolerance;
 mod psrr;
 mod troubleshoot;
+mod repair_practice;
 mod tran;
 mod dc;
 mod library;

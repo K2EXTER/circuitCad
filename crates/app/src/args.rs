@@ -7,6 +7,11 @@ pub(super) fn apply_args(app: &mut App, args: &[String]) {
         && let Some(id) = args.get(i + 1)
         && let Some(n) = schematic::lesson_ids().iter().position(|l| l == id) {
             app.sch.start_lesson(n);
+            // `--lesson repair_zener --probe VOUT,VIN`: readings of the virtual meter (the repair lessons)
+            if let Some(j) = args.iter().position(|a| a == "--probe")
+                && let Some(nets) = args.get(j + 1) {
+                    app.sch.probe_nets(nets);
+                }
             // `--lesson <id> --dc`: the first analysis is done already (to see the second step of a lesson)
             if args.iter().any(|a| a == "--dc") {
                 app.sch.analyze_dc();

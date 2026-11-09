@@ -1,0 +1,68 @@
+# 日本語<TAB>English. 説明は docs/code-notes/i18n.md
+# the repair path (schematic/repair_practice.rs, lessons/repair.rs, learn/paths.rs)
+正解: {} の {}。あなたは {} 回測りました。故障診断の順なら {} 回 ({})	Right: {} {}. You measured {} times. The troubleshooting order takes {} ({})
+違います。その故障なら {n} は {} になるはずですが、測った値は {} です	Not that. With that fault {n} would read {}, but you measured {}
+違います。いままで測った点では、その故障とも合いますが、ほかの点が合いません。まだ測っていない点を測ってみましょう	Not that. It fits the points measured so far, but not the others. Measure a point you have not measured yet
+修理の練習を始められません: {e}	Cannot start the repair practice: {e}
+この回路には、出力に表れる故障がありません	No fault of this circuit shows at its output
+修理の練習: テスターを当てる点 (配線かピン) をクリックすると、その点の電圧を測ります	Repair practice: click where to put the meter (a wire or a pin) to measure the voltage there
+配線かピンの上をクリックすると、そこを測ります	Click on a wire or a pin to measure there
+テスター: {net} は {}	Meter: {net} reads {}
+{net} は測れません	{net} cannot be measured
+テスター	Meter
+測っています (クリックで測る)	Measuring (click to measure)
+テスターを当てる	Use the meter
+オンのあいだ、回路図の配線かピンをクリックすると、作った基板のその点の電圧 (GND から) を測ります。回路図は正しい設計のままで、壊れているのは基板のほうです	While on, a click on a wire or pin of the schematic measures the voltage (from GND) of the built board at that point. The schematic stays the correct design; the board is what is broken
+測った回数: {}	Measured: {} times
+まず、{} を測ってみましょう	First, measure {}
+原因	Cause
+これが原因	This is the cause
+選んだ部品と壊れ方を答えます。外れても、続けて測れます	Answers with the part and the way it is broken. If it is wrong, you can keep measuring
+いま測った値から、次に測るとよい点を教えます (使った回数は記録されます)	Tells you the point worth measuring next, from what you have measured (the count is kept)
+まず、症状の出ている {} を測ります	First, measure {}, where the trouble shows
+次は {} を測ると、候補がよく絞れます	Next, measuring {} narrows the candidates well
+測った値で、もう答えを選べます。値が正しい回路 (DC動作点) と違う所の近くの部品を疑います	The readings are enough to choose an answer. Suspect the parts near where the readings differ from the correct circuit (the DC operating point)
+テスターを外しました	Meter put away
+故障は 1 つだけで、DC (落ち着いたあと) の電圧だけで見分けます。実物では、2 つ同時に壊れていることや、温めると症状が変わる接触不良もあります。	There is only one fault, told apart by the DC voltages (after things settle). Real circuits can have two faults at once, or a bad contact whose symptom changes as it warms up.
+テスターの読みは、壊れた回路のシミュレーションの値に、小さなばらつき (±0.3% + 2mV) を足したものです。実物のテスターは、当てる場所 (ピンの根元か、配線の途中か) や、テスター自身の誤差でも読みが変わります。	A reading is the faulty circuit's simulated value with a small spread added (±0.3% + 2mV). A real meter also reads differently depending on where it touches (the root of a pin or the middle of a wire) and on its own error.
+壊れ方は、断線・ショート・値の桁違い・ピンの浮き (はんだ付けの不良) を、部品の壊れやすさの目安で選んでいます。実物では、半分だけ切れかかった抵抗や、熱で一時的に動かなくなる IC のような、中途半端な壊れ方もあります。	The faults are opens, shorts, values a decade off and lifted pins (bad solder joints), chosen by how easily each part fails. Real parts can also fail halfway, like a resistor that is about to open or an IC that stops while it is hot.
+実物を測るときは、黒いリード (COM) を回路の GND に当てたまま、赤いリードで 1 点ずつ当てます。電源を入れた状態で測るので、ピンどうしをリードでショートさせないよう注意します。	On a real circuit, keep the black lead (COM) on the circuit's GND and touch one point at a time with the red lead. The power is on while you measure, so take care not to short two pins with the lead.
+症状の出ている点を、テスターで測る	Measure where the trouble shows, with the meter
+正しい回路の電圧を見て、比べる	Look at the correct circuit's voltages and compare
+「DC動作点を解析」を押すと、回路図 (正しい設計) の各点の電圧が出ます。テスターで測った基板の値と比べて、食い違いが始まる所を探します。修理の基本は「正しいはずの値」と「測った値」の比較です。	Press "Run DC operating point" to see the voltage at every point of the schematic (the correct design). Compare them with the board's readings and find where they start to differ. Repair is, at heart, comparing "what it should be" with "what it measures".
+原因を見つけて答える	Find the cause and answer
+電源から出力へ、食い違う点の前後を測って、場所を絞ります。見当がついたら、レッスンの窓の「原因」で部品と壊れ方を選び、「これが原因」を押します。外れても続けられます。迷ったら「ヒント」で、次に測るとよい点が分かります。	Measure before and after the point where they differ, from the supply towards the output, to narrow down the place. Once you have an idea, pick the part and the way it is broken under "Cause" in the lesson window and press "This is the cause". A wrong answer lets you go on. If you are stuck, "Hint" tells you the point worth measuring next.
+レッスンの窓の「テスターを当てる」がオンのまま、回路図の MID の配線をクリックします。正しい分圧なら 2.5V のはずです。	With "Use the meter" on in the lesson window, click the MID wire of the schematic. A correct divider reads 2.5V there.
+回路図の VOUT の配線をクリックして測ります。正しく動いていれば 5.1V 前後のはずです。	Click the VOUT wire of the schematic to measure it. A working circuit reads about 5.1V.
+LED が点きません。回路図の COL (トランジスタのコレクタ) の配線をクリックして測ります。トランジスタがオンなら、ほぼ 0V のはずです。	The LED does not light. Click the COL wire (the transistor's collector) of the schematic to measure it. With the transistor on, it reads almost 0V.
+回路図の VOUT の配線をクリックして測ります。正しく動いていれば 5V 前後のはずです。	Click the VOUT wire of the schematic to measure it. A working circuit reads about 5V.
+修理 1. テスターの当て方 (分圧回路)	Repair 1. Using the meter (voltage divider)
+作った分圧回路の出力がおかしい。テスターで測って、どの部品がどう壊れているかを当てます	The output of a divider you built is wrong. Measure with the meter and find which part is broken, and how
+修理は、見当をつけて部品を替えることではなく、測って場所を絞ることです。テスターの黒いリードを GND に当てたまま、赤いリードで 1 点ずつ電圧を測ります。\n\n回路図は正しい設計のままです。壊れているのは、それを作った「基板」のほうで、どこが壊れているかは見えません。テスターで測った値と、回路図をシミュレーションした「正しい値」を比べて、食い違いが始まる所を探します。\n\n分圧回路は部品が 3 つだけです。出力 MID が 0V なら「上の抵抗が切れている」か「電源が来ていない」、電源の電圧と同じなら「下の抵抗が切れている」。どちらかを見分けるには、もう 1 点 (VIN) を測ります。	Repair is not guessing and swapping parts; it is measuring to narrow down the place. Keep the meter's black lead on GND and measure one point at a time with the red lead.\n\nThe schematic stays the correct design. What is broken is the "board" built from it, and you cannot see where. Compare the meter's readings with the "correct values" from simulating the schematic, and find where they start to differ.\n\nA divider has only three parts. If the output MID reads 0V, either "the upper resistor is open" or "no supply arrives"; if it reads the supply voltage, "the lower resistor is open". To tell which, measure one more point (VIN).
+修理 2. ツェナーの電源	Repair 2. A zener supply
+ツェナーで 5.1V を作るはずの電源が、正しい電圧を出さない。測って原因を当てます	A supply that should make 5.1V with a zener does not give the right voltage. Measure and find the cause
+電源の修理は、電源の入口 (VIN) から出口 (VOUT) へ、順に測るのが基本です。入口が正しくて出口がおかしければ、その間の部品 (直列の抵抗 R1、ツェナー D1、負荷 R2) のどれかです。\n\n出力が 0V に近いなら、電流が届いていない (R1 が切れている) か、出力が GND に落ちている (ツェナーのショート)。出力が 5.1V より高いなら、ツェナーが働いていない (切れている) ことを疑います。\n\nツェナーのショートと R1 の断線は、どちらも出力が 0V になり、VOUT だけでは見分けられません。R1 の両端を測ると分かります。	Repairing a supply means measuring in order, from its input (VIN) to its output (VOUT). If the input is right and the output is wrong, it is one of the parts in between (the series resistor R1, the zener D1, the load R2).\n\nIf the output is near 0V, either no current arrives (R1 is open) or the output is pulled to GND (the zener is shorted). If the output is above 5.1V, suspect a zener that does not work (open).\n\nA shorted zener and an open R1 both give 0V at the output, and VOUT alone cannot tell them apart. Measuring both ends of R1 does.
+修理 3. トランジスタで点ける LED	Repair 3. An LED switched by a transistor
+トランジスタでオンにしているはずの LED が点かない。測って原因を当てます	An LED that a transistor should turn on does not light. Measure and find the cause
+トランジスタのスイッチは、ベース (BASE) に電流を流すと、コレクタ (COL) から電流を引き込み、LED が点きます。オンのとき、ベースは約 0.7V、コレクタはほぼ 0V です。\n\nLED が点かないとき、まずコレクタを測ります。5V 近くなら、トランジスタがオンになっていない (ベースに電流が来ていない、トランジスタが壊れている)。ほぼ 0V なのに点かないなら、LED や、LED の上の抵抗の側を疑います。\n\nトランジスタは、ピンのはんだ付けの不良 (ピンが浮いている) もよく起きます。ピンが浮いたときの電圧も考えてみましょう。	A transistor switch draws current in at its collector (COL) when current flows into its base (BASE), and the LED lights. When on, the base is at about 0.7V and the collector at almost 0V.\n\nWhen the LED does not light, measure the collector first. Near 5V means the transistor is not on (no current into the base, or a broken transistor). Almost 0V and still no light points to the LED, or the resistor above it.\n\nTransistors often have bad solder joints (a lifted pin). Think about the voltages with a pin lifted, too.
+修理 4. 帰還のある電源 (直列レギュレータ)	Repair 4. A supply with feedback (series regulator)
+オペアンプとトランジスタで 5V を作る電源が、正しい電圧を出さない。帰還のループの中から原因を絞ります	A supply that makes 5V with an op-amp and a transistor does not give the right voltage. Narrow the cause down within the feedback loop
+帰還のある回路は、1 か所が壊れると、ループ全体の電圧がそろって狂います。どこを測っても値がおかしく見えるので、「どこから狂い始めるか」ではなく、「ループのどこで約束が破れているか」を見ます。\n\nこの電源の約束は 3 つです。基準電圧 VREF はツェナーの電圧 (約 3.3V)、帰還 FB は VREF と等しい (オペアンプが等しくしようとする)、出力 VOUT は FB を分圧の比で戻した値。VREF が正しいのに FB が違うなら、オペアンプかトランジスタ (DRIVE) の側。VREF が違えば、基準電圧の側です。\n\nオペアンプやトランジスタのピンの浮き (はんだ付けの不良) も候補に入ります。	In a circuit with feedback, one broken place throws off the voltages all round the loop. Everything you measure looks wrong, so look not for "where it starts to go wrong" but for "where in the loop a promise is broken".\n\nThis supply makes three promises. The reference VREF is the zener's voltage (about 3.3V); the feedback FB equals VREF (the op-amp makes them equal); the output VOUT is FB scaled back up by the divider. If VREF is right but FB is not, the fault is on the op-amp or transistor side (DRIVE). If VREF is wrong, it is on the reference side.\n\nLifted pins of the op-amp or the transistor (bad solder joints) are candidates too.
+動かない回路を直そう (修理の道)	Fixing circuits that do not work (the repair path)
+作った回路が動かないとき、テスターで測って原因を突き止めます。回路図は正しい設計のまま、どこかが壊れた「基板」を、測った電圧とシミュレーションの値を比べて直します。故障は始めるたびに変わるので、何度でも練習できます	When a circuit you built does not work, find the cause by measuring with a meter. The schematic stays the correct design; you mend a "board" with something broken, by comparing measured voltages with the simulation. The fault changes every time you start, so you can practise as often as you like
+1. 測り方	1. How to measure
+テスターの当て方と、「正しいはずの値」と「測った値」を比べる考え方です	How to use the meter, and the idea of comparing "what it should be" with "what it measures"
+テスターの当て方 (分圧回路)	Using the meter (voltage divider)
+部品 3 つの回路で、出力がおかしい原因を、測って当てる。もう 1 点を測ると見分けられる	Find why the output of a three-part circuit is wrong, by measuring. One more point tells the causes apart
+分圧回路をブレッドボードに組み、抵抗を 1 本抜いて、各点の電圧がどう変わるかをテスターで測ります	Build a divider on a breadboard, take one resistor out, and measure with the meter how the voltage at each point changes
+2. 電源とスイッチを直す	2. Fixing a supply and a switch
+入口から出口へ順に測る。オンのはずのトランジスタの、どこで電流が止まっているかを探す	Measure in order from input to output. Find where the current stops in a transistor that should be on
+ツェナーの電源	A zener supply
+入口 VIN から出口 VOUT へ順に測る。出力が 0V になる故障は 2 つあり、もう 1 点で見分ける	Measure in order from the input VIN to the output VOUT. Two faults give 0V at the output; one more point tells them apart
+トランジスタで点ける LED	An LED switched by a transistor
+コレクタとベースを測って、トランジスタ・LED・抵抗・はんだ付けのどれかを見分ける	Measure the collector and the base to tell the transistor, the LED, a resistor and a solder joint apart
+LED が点かないとき、ベースとコレクタの電圧を測り、トランジスタがオンになっているかを確かめます	When an LED does not light, measure the base and collector voltages and check whether the transistor is on
+3. 帰還のある回路と、基板	3. Circuits with feedback, and the board
+1 か所が壊れるとループ全体が狂う回路と、基板そのものの故障	Circuits where one broken place throws off the whole loop, and faults of the board itself
+帰還のある電源 (直列レギュレータ)	A supply with feedback (series regulator)
+基準・帰還・出力の「約束」のどれが破れているかで、ループの中の故障を絞る	Narrow a fault inside the loop down by which "promise" (reference, feedback, output) is broken

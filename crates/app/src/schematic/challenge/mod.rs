@@ -147,6 +147,7 @@ impl SchEditor {
         self.reset_history();
         self.fit_pending = true;
         self.lesson = None;
+        self.repair = None;
         self.panel_tab = PanelTab::Draw;
         self.challenge = Some(ActiveChallenge { id: ch.id, level, results: vec![], hints: 0, passed: false });
         self.status = format!("「{}」を始めました。回路を作って、「判定する」を押してください", ch.title);
