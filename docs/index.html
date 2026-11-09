@@ -11,6 +11,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="icon" type="image/png" href="favicon.png">
+<link rel="alternate" hreflang="ja" href="https://k2exter.github.io/circuitCad/">
+<link rel="alternate" hreflang="en" href="https://k2exter.github.io/circuitCad/en/">
 <meta property="og:type" content="website">
 <style>
 :root{--bg:#fff;--fg:#1c2330;--sub:#5a6577;--line:#dde2ea;--card:#f5f7fa;--accent:#0b6e4f;--accent-fg:#fff}
@@ -18,7 +20,12 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.75 "Hiragino Sans","BIZ UDPGothic","Yu Gothic UI","Meiryo",system-ui,sans-serif}
 .wrap{max-width:960px;margin:0 auto;padding:0 16px}
-header{padding:56px 0 32px;text-align:center}
+.lang{text-align:right;font-size:14px;padding-top:12px}
+header{padding:40px 0 32px;text-align:center}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:720px){.two{grid-template-columns:1fr}}
+.two ul{margin:0;padding-left:1.2em;font-size:15px}
+.two li{margin:4px 0}
 h1{font-size:clamp(28px,5vw,44px);line-height:1.3;margin:0 0 16px}
 .lead{color:var(--sub);max-width:640px;margin:0 auto 28px}
 .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
@@ -63,6 +70,8 @@ a{color:var(--accent)}
 </head>
 <body>
 <div class="wrap">
+
+<div class="lang"><a href="en/">English</a> | <strong>日本語</strong></div>
 
 <header>
   <h1>回路図を描いて、動かして、<br>基板にして、発注データまで。</h1>
@@ -323,10 +332,45 @@ a{color:var(--accent)}
 </section>
 
 <section>
-  <h2>いまの状態</h2>
+  <h2>既知の課題</h2>
   <div class="warn">
-    <strong>アルファ版です。</strong>動作確認は Windows が中心で (Linux は WSL2 で確かめたのみ、macOS 版はまだありません)、基板の発注の実績はまだありません。シミュレーションは ngspice と結果を比べて確かめていますが、実物との一致は未確認です(<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">精度のページ</a>)。英語の画面は AI の助けで訳したもので、言い回しのおかしな所が残っているかもしれません。発注の前には、必ずご自身で確認してください。
+    <strong>アルファ版です。</strong>発注の前には、必ずご自身で確認してください。安全にかかわる設計 (医療・車載・高電圧・リチウム電池の充電器など) の根拠には使わないでください。
   </div>
+  <ul>
+    <li><strong>動作環境:</strong> 確認は Windows 10 / 11 が中心です。Linux 版は WSL2 (Ubuntu、GPU なし) で確かめただけで、macOS 版はまだありません (CI でビルドとテストは通っていますが、起動した人はいません)。</li>
+    <li><strong>このソフトで作った基板を、まだ発注したことがありません。</strong> Gerber・ドリル・発注前チェックは、実際の発注では未検証です。</li>
+    <li><strong>シミュレーションのモデルは単純化しています。</strong> 同梱のサンプルでは ngspice と合っていますが、実物との一致はまだ測っていません (<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">精度のページ</a>)。メーカーの SPICE モデルは一部の書き方しか読めません。</li>
+    <li><strong>英語の画面は新しく</strong>、AI の助けで日本語から訳したものです。言い回しのおかしな所や、日本語のまま出る文が残っているかもしれません。</li>
+    <li><strong>成熟したソフトと比べて足りないもの:</strong> 記号は四角い箱 (記号・フットプリントを絵で描く編集画面がない)、STEP の書き出し、KiCad の基板・EAGLE・LTspice の読み込み、面付け、明るい画面、ショートカットの変更。</li>
+    <li>1人と AI で作っているので、返事や修正に時間がかかることがあります。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>今後の展望</h2>
+  <p class="intro">だいたいこの順に進めます。初学者のつまずきを減らすものが先です。</p>
+  <div class="two">
+    <div>
+      <h3>次に</h3>
+      <ul>
+        <li><strong>評価基板:</strong> 小さな基板 (LDO・RC フィルタ・ダイオード) を作って測り、シミュレーションと比べて、モデルがどこまで合うかを示す</li>
+        <li>3D の部品を実物の形に近づける。ケースの設計の続き (ねじ柱・コネクタの穴あけ位置)</li>
+        <li>店の型番を、店のページで確かめながら増やす</li>
+        <li>使ってみて困ったことの修正 (報告をお待ちしています)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>その先</h3>
+      <ul>
+        <li>基板の STEP 書き出し、そのあと複数の基板をつなぐ設計</li>
+        <li>デジタル波形の表示 (バスのまとめ表示)、タイミングの点検の続き</li>
+        <li>LTspice の <code>.asc</code> の読み込み、記号を絵で描く編集画面</li>
+        <li>部品の型番 (MPN)・実装しない (DNP) の欄、製造用の図面、部品表に在庫と値段</li>
+        <li>明るい画面、ショートカットの変更</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">候補の一覧は <a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/candidates.md">docs/candidates.md</a> にあります。要望や不具合は <a href="https://github.com/K2EXTER/circuitCad/issues">Issues</a> へどうぞ。</p>
 </section>
 
 <section>
@@ -341,7 +385,7 @@ a{color:var(--accent)}
 
 <footer>
   circuitCad — AGPL-3.0-or-later ・ 無料でソースが読めます<br>
-  <a href="https://github.com/K2EXTER/circuitCad">GitHub</a> ・ <a href="https://github.com/K2EXTER/circuitCad/releases">リリース</a> ・ <a href="https://github.com/K2EXTER/circuitCad/blob/main/README.en.md">English</a> ・ <a href="https://github.com/K2EXTER/circuitCad/issues">質問・不具合</a>
+  <a href="https://github.com/K2EXTER/circuitCad">GitHub</a> ・ <a href="https://github.com/K2EXTER/circuitCad/releases">リリース</a> ・ <a href="en/">English</a> ・ <a href="https://github.com/K2EXTER/circuitCad/issues">質問・不具合</a>
 </footer>
 
 </div>

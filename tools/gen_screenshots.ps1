@@ -35,6 +35,8 @@ $shots = [ordered]@{
     "order"                  = @("$ex\mixed_signal.ccproj", "--order")
     "guide"                  = @("--guide")
     "lesson"                 = @("--lesson", "divider", "--dc")
+    "analysis-panel"         = @("$ex\series_regulator.schjson", "--dc", "--analyze")
+    "requirements-buck"      = @("$ex\buck_converter.schjson", "--requirements")
     "mixed-signal-schematic" = @("$ex\mixed_signal.schjson")
     "mixed-signal-waveform"  = @("$ex\mixed_signal.schjson", "--tran", "8m", "10u", "--signals", "CLK,Q1,Q2,FILT")
 }

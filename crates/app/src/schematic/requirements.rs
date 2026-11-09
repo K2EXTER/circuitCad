@@ -19,14 +19,14 @@ fn list(text: &str) -> Vec<String> {
 fn text_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current: &str, width: f32, hover: &str) -> Option<String> {
     let t = buf.entry(key).or_insert_with(|| current.to_string());
     // add_sized: a grid column would otherwise shrink the box to what the first frame left over
-    let r = ui.add_sized([width, 20.0], egui::TextEdit::singleline(t)).on_hover_text(hover);
+    let r = ui.add_sized([width, 20.0], egui::TextEdit::singleline(t)).on_hover_text(i18n::tr_dyn(hover));
     r.changed().then(|| t.clone())
 }
 
 /// The reason of a row: a longer sentence, so a box of two lines that wraps.
 fn reason_cell(ui: &mut egui::Ui, buf: &mut Buffers, key: (u8, usize, u8), current: &str, width: f32, hover: &str) -> Option<String> {
     let t = buf.entry(key).or_insert_with(|| current.to_string());
-    let r = ui.add_sized([width, 62.0], egui::TextEdit::multiline(t).desired_rows(3).hint_text(i18n::tr("なぜ? (理由を一言)"))).on_hover_text(hover);
+    let r = ui.add_sized([width, 62.0], egui::TextEdit::multiline(t).desired_rows(3).hint_text(i18n::tr("なぜ? (理由を一言)"))).on_hover_text(i18n::tr_dyn(hover));
     r.changed().then(|| t.clone())
 }
 
@@ -189,7 +189,7 @@ impl SchEditor {
                 let mut remove = None;
                 egui::Grid::new("req_net_grid").num_columns(8).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "ネット (, 区切り)", "役割", "線幅", "間隔", "電流", "理由", ""] {
-                        ui.strong(h);
+                        ui.strong(i18n::tr(h));
                     }
                     ui.end_row();
                     for (k, r) in spec.net_rules.iter_mut().enumerate() {
@@ -203,9 +203,9 @@ impl SchEditor {
                         }
                         let now = Role::parse(&r.role).unwrap_or(Role::None);
                         let mut pick = now;
-                        egui::ComboBox::from_id_salt(("req_role", k)).selected_text(now.label()).show_ui(ui, |ui| {
+                        egui::ComboBox::from_id_salt(("req_role", k)).selected_text(i18n::tr_dyn(&now.label())).show_ui(ui, |ui| {
                             for role in [Role::None, Role::Power, Role::Switching, Role::Sense, Role::Analog, Role::Logic] {
-                                ui.selectable_value(&mut pick, role, role.label());
+                                ui.selectable_value(&mut pick, role, i18n::tr_dyn(&role.label()));
                             }
                         })
                         .response
@@ -247,7 +247,7 @@ impl SchEditor {
 ・細い配線の上限: 線幅が行の線幅より細いトラックの合計 (mm)。細い引き出しが長くなりすぎるのを防ぐ。0 なら上限なし"));
                     egui::Grid::new("req_props_grid").num_columns(7).spacing([10.0, 4.0]).striped(true).show(ui, |ui| {
                         for h in ["行", "配線の順番 (小さいほど先)", "ビア", "使う層 (, 区切り)", "長さの上限", "ビアの上限", "細い配線の上限"] {
-                            ui.strong(h);
+                            ui.strong(i18n::tr(h));
                         }
                         ui.end_row();
                         for (k, r) in spec.net_rules.iter_mut().enumerate() {
@@ -258,7 +258,7 @@ impl SchEditor {
                                 None => format!("役割のとおり ({by_role})"),
                                 Some(o) => o.to_string(),
                             };
-                            egui::ComboBox::from_id_salt(("prop_order", k)).selected_text(shown).width(150.0).show_ui(ui, |ui| {
+                            egui::ComboBox::from_id_salt(("prop_order", k)).selected_text(i18n::tr_dyn(&shown)).width(150.0).show_ui(ui, |ui| {
                                 if ui.selectable_label(r.order.is_none(), i18n::trf!("役割のとおり ({by_role})")).clicked() {
                                     r.order = None;
                                     changed = true;
@@ -275,9 +275,9 @@ impl SchEditor {
                                 "allow" => "使ってよい",
                                 _ => if role == Role::Sense { "役割のとおり (使わない)" } else { "役割のとおり (使ってよい)" },
                             };
-                            egui::ComboBox::from_id_salt(("prop_vias", k)).selected_text(via_text).width(190.0).show_ui(ui, |ui| {
+                            egui::ComboBox::from_id_salt(("prop_vias", k)).selected_text(i18n::tr(via_text)).width(190.0).show_ui(ui, |ui| {
                                 for (key, label) in [("", "役割のとおり"), ("none", "使わない"), ("allow", "使ってよい")] {
-                                    if ui.selectable_label(r.vias == key, label).clicked() {
+                                    if ui.selectable_label(r.vias == key, i18n::tr(label)).clicked() {
                                         r.vias = key.to_string();
                                         changed = true;
                                     }
@@ -344,7 +344,7 @@ impl SchEditor {
                 let mut remove = None;
                 egui::Grid::new("req_group_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "部品 (, 区切り)", "上限", "理由", ""] {
-                        ui.strong(h);
+                        ui.strong(i18n::tr(h));
                     }
                     ui.end_row();
                     for (k, g) in spec.groups.iter_mut().enumerate() {
@@ -402,7 +402,7 @@ impl SchEditor {
                 let mut remove = None;
                 egui::Grid::new("req_bypass_grid").num_columns(4).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["IC", "コンデンサ (, 区切り)", "理由", ""] {
-                        ui.strong(h);
+                        ui.strong(i18n::tr(h));
                     }
                     ui.end_row();
                     for (k, b) in spec.bypass.iter_mut().enumerate() {
@@ -454,7 +454,7 @@ impl SchEditor {
                 let mut remove = None;
                 egui::Grid::new("req_apart_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "A (, 区切り)", "B (, 区切り)", "下限", "理由", ""] {
-                        ui.strong(h);
+                        ui.strong(i18n::tr(h));
                     }
                     ui.end_row();
                     for (k, a) in spec.apart.iter_mut().enumerate() {
@@ -503,7 +503,7 @@ impl SchEditor {
                 let mut remove = None;
                 egui::Grid::new("req_measures_grid").num_columns(6).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["名前", "測るもの", "パッド・ネット (, 区切り)", "上限 / 下限", "理由", ""] {
-                        ui.strong(h);
+                        ui.strong(i18n::tr(h));
                     }
                     ui.end_row();
                     for (k, m) in spec.measures.iter_mut().enumerate() {
@@ -512,9 +512,9 @@ impl SchEditor {
                             changed = true;
                         }
                         let label = MEASURES.iter().find(|(key, ..)| *key == m.what).map_or("(選ぶ)", |(_, l, ..)| *l);
-                        egui::ComboBox::from_id_salt(("measure_what", k)).selected_text(label).width(150.0).show_ui(ui, |ui| {
+                        egui::ComboBox::from_id_salt(("measure_what", k)).selected_text(i18n::tr(label)).width(150.0).show_ui(ui, |ui| {
                             for (key, l, unit, need) in MEASURES {
-                                if ui.selectable_label(m.what == *key, format!("{l} ({unit})")).on_hover_text(i18n::trf!("パッドが {need} 個要ります")).clicked() {
+                                if ui.selectable_label(m.what == *key, format!("{} ({unit})", i18n::tr(l))).on_hover_text(i18n::trf!("パッドが {need} 個要ります")).clicked() {
                                     m.what = (*key).to_string();
                                     changed = true;
                                 }
@@ -597,14 +597,14 @@ impl SchEditor {
                 let mut remove = None;
                 egui::Grid::new("req_waivers_grid").num_columns(5).spacing([6.0, 4.0]).striped(true).show(ui, |ui| {
                     for h in ["種類", "行の名前", "コンデンサ", "理由", ""] {
-                        ui.strong(h);
+                        ui.strong(i18n::tr(h));
                     }
                     ui.end_row();
                     for (k, w) in spec.waivers.iter_mut().enumerate() {
                         let label = WAIVER_KINDS.iter().find(|(key, _)| *key == w.kind).map_or("(選ぶ)", |(_, l)| *l);
-                        egui::ComboBox::from_id_salt(("waiver_kind", k)).selected_text(label).width(90.0).show_ui(ui, |ui| {
+                        egui::ComboBox::from_id_salt(("waiver_kind", k)).selected_text(i18n::tr(label)).width(90.0).show_ui(ui, |ui| {
                             for (key, l) in WAIVER_KINDS {
-                                if ui.selectable_label(w.kind == *key, *l).on_hover_text(i18n::tr("どの種類の指摘を承知するか")).clicked() {
+                                if ui.selectable_label(w.kind == *key, i18n::tr(l)).on_hover_text(i18n::tr("どの種類の指摘を承知するか")).clicked() {
                                     w.kind = (*key).to_string();
                                     changed = true;
                                 }

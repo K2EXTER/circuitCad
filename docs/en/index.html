@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>circuitCad — learn electronics, all the way to a board order</title>
+<meta name="description" content="A free, open-source circuit CAD for learners: schematic, SPICE-style simulation (DC to loop gain, noise and Monte Carlo), PCB layout and Gerber export in one app, with lessons. English and Japanese UI. AGPL-3.0.">
+<meta property="og:title" content="circuitCad — learn electronics, all the way to a board order">
+<meta property="og:description" content="Schematic → simulation → PCB → fabrication files in one app, with lessons that ask you to predict before you simulate. Free and open source.">
+<meta property="og:image" content="https://k2exter.github.io/circuitCad/images/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../logo.svg">
+<link rel="icon" type="image/png" href="../favicon.png">
+<link rel="alternate" hreflang="ja" href="https://k2exter.github.io/circuitCad/">
+<link rel="alternate" hreflang="en" href="https://k2exter.github.io/circuitCad/en/">
+<meta property="og:type" content="website">
+<style>
+:root{--bg:#fff;--fg:#1c2330;--sub:#5a6577;--line:#dde2ea;--card:#f5f7fa;--accent:#0b6e4f;--accent-fg:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#10151c;--fg:#e6ebf2;--sub:#98a3b5;--line:#27303d;--card:#18202a;--accent:#3ecf9a;--accent-fg:#06281d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 "Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}
+.lang{text-align:right;font-size:14px;padding-top:12px}
+header{padding:40px 0 32px;text-align:center}
+h1{font-size:clamp(28px,5vw,44px);line-height:1.25;margin:0 0 16px}
+.lead{color:var(--sub);max-width:660px;margin:0 auto 28px}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;padding:12px 22px;border-radius:8px;text-decoration:none;font-weight:700;border:1px solid var(--accent)}
+.btn.main{background:var(--accent);color:var(--accent-fg)}
+.btn.sub{color:var(--accent)}
+.note{font-size:14px;color:var(--sub);margin-top:14px}
+img{max-width:100%;height:auto;border:1px solid var(--line);border-radius:8px;display:block}
+.hero{margin:32px auto 0}
+section{padding:40px 0;border-top:1px solid var(--line)}
+h2{font-size:24px;margin:0 0 20px}
+.intro{color:var(--sub);margin:-8px 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--sub);font-size:15px}
+.flow{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;font-weight:700}
+.flow span{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 16px}
+.flow i{color:var(--sub);font-style:normal}
+.spot{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center;margin:0 0 40px}
+.spot:last-child{margin-bottom:0}
+.spot:nth-child(even) .pic{order:2}
+.spot h3{font-size:20px;margin:0 0 10px}
+.spot p{margin:0 0 10px}
+.spot ul{margin:0;padding-left:1.2em;color:var(--sub);font-size:15px}
+@media (max-width:720px){.spot{grid-template-columns:1fr;gap:14px}.spot:nth-child(even) .pic{order:0}}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-size:14px;color:var(--sub);font-weight:600}
+td:first-child{font-weight:700;white-space:nowrap}
+@media (max-width:720px){td:first-child{white-space:normal}}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:0 0 10px}
+summary{cursor:pointer;padding:12px 18px;font-weight:700}
+summary small{font-weight:400;color:var(--sub);margin-left:8px}
+details ul{margin:0;padding:0 18px 14px 2.4em;font-size:15px}
+details li{margin:2px 0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:720px){.two{grid-template-columns:1fr}}
+.two ul{margin:0;padding-left:1.2em;font-size:15px}
+.two li{margin:4px 0}
+figure{margin:0}
+figcaption{font-size:14px;color:var(--sub);margin-top:8px}
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+ol{padding-left:1.4em}
+code{font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.warn{background:var(--card);border-left:4px solid var(--accent);padding:14px 18px;border-radius:6px}
+footer{padding:32px 0 56px;text-align:center;color:var(--sub);font-size:14px;border-top:1px solid var(--line)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="lang"><strong>English</strong> | <a href="../">日本語</a></div>
+
+<header>
+  <h1>Draw a circuit, run it,<br>turn it into a board, and order it.</h1>
+  <p class="lead">circuitCad puts schematic capture, SPICE-style simulation, PCB layout and Gerber export into <strong>one free app for people learning electronics</strong>. Go from "learning a circuit" to "trying it out" to "ordering a real board" without switching tools.</p>
+  <div class="btns">
+    <a class="btn main" href="https://github.com/K2EXTER/circuitCad/releases/latest">⬇ Download (Windows / Linux)</a>
+    <a class="btn sub" href="https://github.com/K2EXTER/circuitCad">Source code (GitHub)</a>
+  </div>
+  <p class="note">Alpha, free, no installer: unzip and run circuitCad.exe. Switch to English with <strong>Settings → Language / 言語 → English</strong> (from v0.1.0-alpha.11).<br>The executable is not signed, so Windows SmartScreen may warn you: choose "More info" then "Run anyway".</p>
+  <img class="hero" src="../images/en/schematic-dc.png" alt="A series regulator schematic with node voltages as wire colours and branch currents as arrows" width="960">
+</header>
+
+<section>
+  <h2>Who it is for</h2>
+  <ul>
+    <li>People new to electronics who find KiCad or LTspice hard to get into</li>
+    <li>People who want to <strong>see a circuit run</strong>, not only draw it</li>
+    <li>People who want to know <strong>why</strong> a value was chosen, with the calculation shown step by step</li>
+    <li>People who want to take their own design <strong>all the way to a board order</strong></li>
+  </ul>
+</section>
+
+<section>
+  <h2>One app, end to end</h2>
+  <div class="flow"><span>Schematic</span><i>→</i><span>Simulation</span><i>→</i><span>PCB</span><i>→</i><span>Gerber · BOM</span></div>
+</section>
+
+<section>
+  <h2>Made for learners</h2>
+  <div class="grid">
+    <div class="card"><h3>Explains itself</h3><p>Every button and field has hover help. Wiring mistakes and rating problems come with the cause and how to fix it. F1 opens the operation guide.</p></div>
+    <div class="card"><h3>Learn as you go</h3><p>7 learning paths, 51 step-by-step lessons, 8 board lessons and 10 "Build it yourself" challenges that check your circuit. Lessons ask you to predict first.</p></div>
+    <div class="card"><h3>Learn by breaking things</h3><p>Open, short or reverse parts and pins and compare the results. Repair a board with a fault put in on purpose.</p></div>
+    <div class="card"><h3>See it, then understand it</h3><p>Voltages as wire colours and currents as arrows, right on the schematic. Analyses from DC to loop gain, noise and Monte Carlo.</p></div>
+    <div class="card"><h3>All the way to an order</h3><p>Autoroute, DRC and a 3D view, then a pre-order check against JLCPCB / PCBWay / OSH Park rules and Gerber export.</p></div>
+    <div class="card"><h3>Parts and samples included</h3><p>More than 140 parts and 100 sample circuits. KiCad symbols, footprints and schematics can be imported.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Highlights</h2>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/schematic-dc.png" alt="Schematic with wires coloured by voltage, and current arrows and values" loading="lazy"></div>
+    <div>
+      <h3>Results appear on the schematic</h3>
+      <p>Run an analysis and the voltages show up as wire colours and numbers, the currents as arrows, on the circuit you drew. No need to match a separate graph to the drawing.</p>
+      <ul>
+        <li>Drag a part's value slider with "Auto recalculate" on and the result follows at once</li>
+        <li>Warnings when a resistor or IC runs too hot, or an LED gets too much current</li>
+        <li>Results are cross-checked against ngspice (<a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/accuracy.md">accuracy page</a>, Japanese)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/analysis-panel.png" alt="The Analysis tab listing DC operating point, transient, AC, DC sweep, parameter sweep, loop gain, poles and zeros, noise, impedance, temperature and variation, spec table, self-heating, model assumptions and fault simulation" loading="lazy"></div>
+    <div>
+      <h3>Every analysis in one panel</h3>
+      <p>From the DC operating point to loop gain, noise, Monte Carlo and fault simulation: each analysis is a section of the Analysis tab, with its settings next to its Run button. The full list is <a href="#analyses">below</a>.</p>
+      <ul>
+        <li>"Model assumptions" lists what the simulation takes for granted</li>
+        <li>A spec table turns results into pass / fail, with a column for values measured on real hardware</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/lesson.png" alt="Lesson window asking: if you change only R2 to 30k, what happens to the MID voltage?" loading="lazy"></div>
+    <div>
+      <h3>Predict first, then check</h3>
+      <p>Before showing a step, a lesson asks what you think will happen. Whether you guess right or wrong, simulating right after your guess makes the reason stick.</p>
+      <ul>
+        <li>7 learning paths: from Ohm's law to a regulated power supply, an Arduino-compatible board, switching loads, battery-powered devices and signals</li>
+        <li>Every lesson says how the model differs from real parts, and suggests a bench experiment at 12 V or less</li>
+        <li>"Build it yourself" gives only the goal and judges your own circuit by simulation</li>
+        <li>A glossary, opened from the words used in each lesson</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/order.png" alt="The Prepare order window: choose a fab, pre-order checks with explanations" loading="lazy"></div>
+    <div>
+      <h3>Check once more before you order</h3>
+      <p>"Prepare order" walks you through choosing a fab, checking the board against its rules and writing the fabrication files.</p>
+      <ul>
+        <li>Rules of JLCPCB / PCBWay / OSH Park: track width, clearance, holes, silkscreen, solder mask</li>
+        <li>Parts off the board, unrouted nets, tracks too thin for their current, missing thermal vias, each with how to fix it</li>
+        <li>A preview of the finished board, Gerber, drill, BOM and placement files, and the ordering steps</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="spot">
+    <div class="pic"><img src="../images/en/spot/view3d.png" alt="3D view of an assembled board" loading="lazy"></div>
+    <div>
+      <h3>See it in 3D, and check it fits the case</h3>
+      <p>Check part heights and the finished look in 3D. Enter the case height and parts that do not fit turn red.</p>
+      <ul>
+        <li>Board outline, holes and part boxes as DXF, and outline and holes read back from the case's DXF</li>
+        <li>Makers' STEP files as part shapes</li>
+        <li>A part or net picked in the schematic, the board or the 3D view lights up in the other two</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="analyses">
+  <h2>Analyses</h2>
+  <p class="intro">What each analysis is for. All of them run inside the app; ngspice is not needed.</p>
+  <table>
+    <tr><th>Analysis</th><th>What it tells you</th></tr>
+    <tr><td>DC operating point</td><td>Every node voltage and branch current, drawn on the schematic. Set the circuit temperature.</td></tr>
+    <tr><td>Transient</td><td>Waveforms over time. The time step adapts to how sharply the waveform bends. Measurement cursors, step-response figures (rise time, overshoot, settling into ±1 % down to ±0.003 %), power and efficiency.</td></tr>
+    <tr><td>Spectrum / THD</td><td>The frequency content of a waveform (FFT) and its total harmonic distortion.</td></tr>
+    <tr><td>AC (Bode plot)</td><td>Gain and phase against frequency, with the −3 dB point.</td></tr>
+    <tr><td>DC sweep</td><td>Output against a swept input voltage (transfer curves, thresholds).</td></tr>
+    <tr><td>Parameter sweep</td><td>Steps one part value and overlays the results, to compare cut-offs or waveforms.</td></tr>
+    <tr><td>Loop gain</td><td>Feedback stability: phase margin and gain margin.</td></tr>
+    <tr><td>Poles and zeros</td><td>The transfer function's poles and zeros, for filters and control loops.</td></tr>
+    <tr><td>Noise</td><td>Output and input-referred noise, and which parts contribute most.</td></tr>
+    <tr><td>Impedance</td><td>The impedance seen from a net against frequency (a supply rail, an input).</td></tr>
+    <tr><td>Temperature and variation</td><td>Temperature effects, Monte Carlo spread from part tolerances, worst case, and the parts that matter most.</td></tr>
+    <tr><td>Spec table</td><td>Targets with pass / fail, and a column for values measured on the bench.</td></tr>
+    <tr><td>Self-heating</td><td>How hot each part gets, and how its temperature rises over time.</td></tr>
+    <tr><td>Fault simulation</td><td>Open, short, reverse or change a part or pin, and follow how far the damage spreads.</td></tr>
+    <tr><td>Digital</td><td>Gates, flip-flops, counters and shift registers with propagation delay and setup / hold checks, alongside the analog circuit.</td></tr>
+    <tr><td>Rating check</td><td>After an analysis: power, current and voltage against each part's ratings.</td></tr>
+  </table>
+  <p class="note">Also: capacitor DC bias (capacitance lost at the working voltage), ESR / ESL, battery internal resistance and discharge, a part-value calculator that shows its steps and caveats, and SPICE netlist export for ngspice.</p>
+</section>
+
+<section>
+  <h2>All features</h2>
+  <p class="intro">Grouped by area. Click a heading to open it.</p>
+
+  <details open>
+    <summary>Schematic<small>draw and check</small></summary>
+    <ul>
+      <li>Place and wire parts (wires follow a part you drag), undo / redo, copy and paste</li>
+      <li>Multiple sheets, <strong>hierarchical design</strong> (use one sheet as a symbol many times), buses (<code>D[0..7]</code>)</li>
+      <li><strong>ERC</strong> with the cause and fix for each finding, NC marks for pins left open on purpose, areas marked as unfinished</li>
+      <li>Snippets (save a selection and reuse it), quick add (find a part by name)</li>
+      <li>Title block, SVG and PDF export</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>Learning<small>lessons, challenges, glossary</small></summary>
+    <ul>
+      <li>7 learning paths (regulated supply, Arduino-compatible board, Mega-compatible board, board craft, switching loads, battery-powered devices, signals); your progress is kept</li>
+      <li>51 step-by-step lessons, including an "up close" lesson for each kind of part; prediction questions</li>
+      <li>8 board lessons (voltage drop in tracks, fixing a board before ordering, differential pairs, finding and repairing a fault)</li>
+      <li>10 "Build it yourself" challenges with hints and an answer circuit</li>
+      <li>A value calculator: LED resistor, divider, filters, regulators, transistor and MOSFET switches, buck / boost, op-amp gain, with steps, caveats and failure modes</li>
+      <li>Glossary, operation guide (F1), and a guide for building the circuit and comparing your measurements with the simulation</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>PCB: placement and routing<small>from import to tracks</small></summary>
+    <ul>
+      <li>Import from the schematic, show what differs from it, send pin swaps back to it</li>
+      <li><strong>Autoplace</strong> (groups connected parts, puts bypass capacitors and crystals by their IC, leaves locked parts in place), align, renumber parts by position</li>
+      <li><strong>Autoroute</strong>, push-and-shove routing, 45° / 90° / free bends, straight entry into pads</li>
+      <li>Differential pairs, length matching (meanders), nudging nearby parts to make room after routing</li>
+      <li>2 / 4 / 6 / 8 copper layers, net classes (width, clearance, vias, layers)</li>
+      <li>Board snippets (copy parts with their tracks and vias to another board)</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>PCB: copper, finishing, silkscreen<small>shape the board</small></summary>
+    <ul>
+      <li>Copper pours with clearances, thermal reliefs, island removal and priorities</li>
+      <li>GND pour in one click, stitching vias (over the pour overlap or as a fence along the edge), thermal vias</li>
+      <li>Track finishing: rounded corners, smooth width steps, teardrops, pad necks</li>
+      <li>Keep-out areas (tracks, vias, pours, parts; per layer)</li>
+      <li>Hand-edit silkscreen text, designator size and rotation and line width within the fab's limits; designators placed clear of each other</li>
+      <li>Test points, fiducials, dimension lines and a measuring tool</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>PCB: checks<small>DRC and electrical checks</small></summary>
+    <ul>
+      <li>DRC (clearance, width, holes, board edge, shorts, unrouted, pour slivers, acute angles, silkscreen) and a <strong>live check while you work</strong></li>
+      <li>Track width from the current, voltage drop along tracks (fed back into the simulation)</li>
+      <li>Bypass capacitors at IC supply pins, thermal vias, trace impedance estimates</li>
+      <li>Net table (class, length per layer, detour, vias, widths) and a design-requirements table checked row by row</li>
+      <li>Repair practice: a working board gets one fault; find it from the symptoms and fix it</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>Ordering and files<small>fabrication and other tools</small></summary>
+    <ul>
+      <li>Fab rules (JLCPCB / PCBWay / OSH Park), pre-order check, preview, Gerber, Excellon drill, BOM and placement (CPL)</li>
+      <li>Shop part numbers per part (DigiKey, Akizuki, LCSC) and a shopping list</li>
+      <li>KiCad symbols (<code>.kicad_sym</code>, legacy <code>.lib</code>), footprints (<code>.kicad_mod</code>) and <strong>schematics (<code>.kicad_sch</code>)</strong></li>
+      <li>Ultra Librarian / SnapEDA zips; a datasheet (PDF) window in the part form: search, headings, pins from a table, dimensions by clicking the drawing</li>
+      <li>DXF out and in (for the case), board SVG, schematic SVG / PDF, SPICE netlist; autosave and crash recovery</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary>Headless use: <code>ccad</code><small>scripts, AI agents, automation</small></summary>
+    <ul>
+      <li>One command per line: build a circuit by part and pin names, ERC, analyses, boards and fabrication files</li>
+      <li>Every answer is a JSON object. It is also an <strong>MCP server</strong>, so an AI agent can build a circuit and check it</li>
+      <li>See <a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/cli.md">docs/cli.md</a> (Japanese)</li>
+    </ul>
+  </details>
+</section>
+
+<section>
+  <h2>Screenshots</h2>
+  <div class="shots">
+    <figure><img src="../images/en/waveform.png" alt="Transient waveform of a 555 oscillator with measurements" loading="lazy"><figcaption>Transient waveforms and measurements</figcaption></figure>
+    <figure><img src="../images/en/bode.png" alt="AC analysis Bode plot" loading="lazy"><figcaption>AC analysis (Bode plot)</figcaption></figure>
+    <figure><img src="../images/en/board.png" alt="PCB editor with a 41-part hand-routed board" loading="lazy"><figcaption>PCB editor: a 41-part board, routed by hand</figcaption></figure>
+    <figure><img src="../images/en/guide.png" alt="The operation guide window" loading="lazy"><figcaption>Operation guide (F1)</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2>Try it in three steps</h2>
+  <ol>
+    <li>Download the zip from the <a href="https://github.com/K2EXTER/circuitCad/releases/latest">releases page</a>, unzip it and run circuitCad.exe. Choose <strong>Settings → Language / 言語 → English</strong>.</li>
+    <li>Open <strong>Learn → Learning path</strong> and start the first lesson (Ohm's law). Follow the steps and the results appear on the schematic.</li>
+    <li>Or open a finished circuit with <strong>File → Open sample circuit</strong>, then press <strong>Run DC operating point</strong> in the Analysis tab.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Known issues</h2>
+  <div class="warn">
+    <strong>This is an alpha.</strong> Please check everything yourself before you order a board, and do not use it for safety-critical designs (medical, automotive, high voltage, lithium-cell chargers and so on).
+  </div>
+  <ul>
+    <li><strong>Platforms:</strong> tested mainly on Windows 10 / 11. The Linux zip was only checked on WSL2 (Ubuntu, no GPU). There is no macOS build yet (it builds and passes the tests in CI, but nobody has run the app).</li>
+    <li><strong>No board made with circuitCad has been manufactured yet.</strong> The Gerber, drill and pre-order checks are unproven in practice.</li>
+    <li><strong>Simplified models.</strong> Results agree with ngspice on the bundled examples, but agreement with real hardware has not been measured yet. Makers' SPICE models load only partly (some syntax, many XSPICE devices are not supported).</li>
+    <li><strong>The English text is new</strong> and was translated with AI help from the Japanese original; some wording may be awkward, and a few messages may still appear in Japanese. Most documentation (docs/, the code notes) is in Japanese.</li>
+    <li><strong>Gaps compared with mature tools:</strong> symbols are drawn as boxes (no graphical symbol or footprint editor), no STEP export, no KiCad board (<code>.kicad_pcb</code>), EAGLE or LTspice import, no panelization, dark theme only, shortcuts cannot be changed.</li>
+    <li>It is developed by one person with an AI assistant, so replies and fixes can be slow.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Roadmap</h2>
+  <p class="intro">What comes next, roughly in this order. Learners' stumbling points come first.</p>
+  <div class="two">
+    <div>
+      <h3>Next</h3>
+      <ul>
+        <li><strong>An evaluation board:</strong> build and measure a small board (LDO, RC filter, diodes) and compare the readings with the simulation, to show where the models hold</li>
+        <li>3D parts closer to the real ones; case design: screw posts and connector cut-outs</li>
+        <li>More shop part numbers, checked on the shops' pages</li>
+        <li>Fixes from real use: anything you report</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Later</h3>
+      <ul>
+        <li>STEP export of the board, then multi-board designs</li>
+        <li>A digital waveform view (buses), more timing checks</li>
+        <li>LTspice <code>.asc</code> import, a graphical symbol editor</li>
+        <li>Part MPN / DNP fields, manufacturing drawings, stock and prices in the BOM</li>
+        <li>A light theme and custom shortcuts</li>
+      </ul>
+    </div>
+  </div>
+  <p class="note">The full list (Japanese) is in <a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/candidates.md">docs/candidates.md</a>, and a feature comparison with KiCad, EasyEDA, Altium and Quadcept in <a href="https://github.com/K2EXTER/circuitCad/blob/main/docs/competitor-comparison.md">docs/competitor-comparison.md</a>. Suggestions and bug reports are welcome in <a href="https://github.com/K2EXTER/circuitCad/issues">Issues</a>, in English.</p>
+</section>
+
+<section>
+  <h2>How it was built</h2>
+  <p>Almost all of the code was written by Claude (via Claude Code); the maintainer has no programming background, operates the app, checks the tests and decides what to build. The English UI text was also translated by Claude from the Japanese original. The story, in Japanese, is on <a href="https://zenn.dev/k2exter/articles/d54c59e62156c3">Zenn</a>.</p>
+</section>
+
+<footer>
+  circuitCad — AGPL-3.0-or-later · free and open source<br>
+  <a href="https://github.com/K2EXTER/circuitCad">GitHub</a> · <a href="https://github.com/K2EXTER/circuitCad/releases">Releases</a> · <a href="https://github.com/K2EXTER/circuitCad/blob/main/README.en.md">README</a> · <a href="https://github.com/K2EXTER/circuitCad/issues">Questions and bugs</a> · <a href="../">日本語</a>
+</footer>
+
+</div>
+</body>
+</html>
