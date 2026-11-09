@@ -1,31 +1,41 @@
-name: 不具合の報告
-description: 動かない、おかしな結果が出る、落ちる
+name: 不具合の報告 / Bug report
+description: 動かない、おかしな結果が出る、落ちる / Something does not work, gives a wrong result or crashes
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        見つけてくれてありがとうございます。分かる範囲で構いません。
+        見つけてくれてありがとうございます。分かる範囲で構いません。日本語でも英語でも大丈夫です。
         シミュレーションの数値がおかしいときは、`docs/accuracy.md` に既知の差があります。
+
+        Thank you for reporting. Write as much as you know, in English or Japanese.
+        Known differences in simulation results are listed in `docs/accuracy.md` (Japanese).
   - type: textarea
     id: what
     attributes:
-      label: 何が起きましたか
-      description: 期待した動きと、実際の動きを書いてください。
+      label: 何が起きましたか / What happened?
+      description: 期待した動きと、実際の動きを書いてください。 / What you expected, and what happened instead.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: 再現の手順
-      description: 開いたファイル (サンプル名など) と、押したボタンの順番。回路ファイル (.schjson / .pcbjson) を貼れると助かります。
+      label: 再現の手順 / Steps to reproduce
+      description: 開いたファイル (サンプル名など) と、押したボタンの順番。回路ファイル (.schjson / .pcbjson) を貼れると助かります。 / The file you opened (e.g. a sample's name) and the buttons you pressed, in order. Attaching the .schjson / .pcbjson file helps a lot.
   - type: input
     id: version
     attributes:
-      label: バージョン
-      description: 例 v0.1.0-alpha.9 (ダウンロードしたリリース名)
+      label: バージョン / Version
+      description: 例 v0.1.0-alpha.11 (ダウンロードしたリリース名) / e.g. v0.1.0-alpha.11 (the release you downloaded)
   - type: input
     id: os
     attributes:
       label: OS
-      description: 例 Windows 11
+      description: 例 Windows 11 / e.g. Windows 11
+  - type: dropdown
+    id: lang
+    attributes:
+      label: 画面の言語 / UI language
+      options:
+        - 日本語 / Japanese
+        - 英語 / English

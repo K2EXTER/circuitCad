@@ -1,0 +1,33 @@
+name: 画面が分かりにくい / Confusing screen
+description: 迷った、見つからなかった、言葉や説明が分かりにくかった / You got lost, could not find something, or the wording was unclear
+labels: ["ui"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        画面 (UI) は、いちばん力を入れて直している所です。分かりにくかった所を教えてください。小さなことでも助かります。
+        The user interface is the area we are improving most actively. Please tell us what confused you; small things help too.
+  - type: textarea
+    id: where
+    attributes:
+      label: どの画面ですか / Which screen?
+      description: 例 回路図の左のパネル、基板の配線ツール、部品作成フォーム。画面の写真があると助かります。 / e.g. the schematic's left panel, the board's routing tool, the part form. A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 何をしようとして、どこで迷いましたか / What were you trying to do, and where did you get stuck?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: こうなっていれば分かった、という案 (あれば) / What would have made it clear? (optional)
+  - type: dropdown
+    id: lang
+    attributes:
+      label: 画面の言語 / UI language
+      options:
+        - 日本語 / Japanese
+        - 英語 / English

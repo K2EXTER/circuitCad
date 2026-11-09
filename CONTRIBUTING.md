@@ -1,4 +1,17 @@
-# 貢献のしかた
+# Contributing / 貢献のしかた
+
+**English summary.** Bug reports, ideas, documentation fixes, new parts and code changes are all welcome, in English or Japanese.
+- **Issues:** use the templates (bug report, confusing screen, feature request). Screenshots and the circuit file (`.schjson` / `.pcbjson`) help a lot. Reports on confusing screens or wording are especially welcome: the user interface is the area we are improving most actively.
+- **English wording:** the English UI was translated with AI help. Fixes go in `crates/i18n/en/*.tsv` (one `Japanese<TAB>English` line per text; see `docs/code-notes/i18n.md`).
+- **Before a pull request:** `cargo test --workspace` and `cargo clippy --workspace --all-targets` must pass (CI runs the same). Keep refactoring and new features in separate commits.
+- **Parts:** the format is in `docs/part-format.md`. Do not copy vendor SPICE models or datasheet text and figures; build approximate models yourself and mark them as approximate.
+- **License:** `AGPL-3.0-or-later`. By opening a pull request you offer your change under the same license.
+
+The code map is in `CLAUDE.md`, and most design notes are in Japanese (`docs/code-notes/`).
+
+---
+
+## 日本語
 
 バグ報告、提案、ドキュメントの修正、部品の追加、コードの変更、どれも歓迎します。
 

@@ -1,16 +1,16 @@
-name: 要望・感想
-description: こんな機能がほしい、ここが分かりにくかった
+name: 要望・感想 / Feature request or feedback
+description: こんな機能がほしい、こう使いたい / A feature you want, or how you would like to use it
 labels: ["enhancement"]
 body:
   - type: textarea
     id: what
     attributes:
-      label: どんなことをしたいですか
-      description: 機能の案より、やりたいこと (困っていること) を書いてもらえると助かります。
+      label: どんなことをしたいですか / What do you want to do?
+      description: 機能の案より、やりたいこと (困っていること) を書いてもらえると助かります。 / The problem you want to solve helps more than a proposed feature.
     validations:
       required: true
   - type: textarea
     id: context
     attributes:
-      label: 補足
-      description: いま使っている他のソフトとの比較や、初学者として引っかかった点など。
+      label: 補足 / Anything else
+      description: いま使っている他のソフトとの比較や、初学者として引っかかった点など。 / Comparisons with other tools you use, or things that tripped you up as a learner.

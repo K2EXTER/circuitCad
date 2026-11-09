@@ -1,7 +1,7 @@
 """Generate the circuitCad logo files from one geometry description.
 
 Usage: python tools/gen_icon.py
-Writes: docs/logo.svg, docs/favicon.png, docs/images/og.png,
+Writes: docs/logo.svg, docs/favicon.png, docs/images/og.png, docs/images/en/og.png,
         crates/app/assets/icon.png (window icon), crates/app/assets/icon.ico (exe icon)
 
 The logo is two C's: a round one (schematic / simulation) and a square trace
@@ -93,7 +93,7 @@ def out(*p):
     return path
 
 
-def og():
+def og(lang="ja"):
     W, H = 1200, 630
     img = Image.new("RGB", (W, H), (245, 247, 250))
     img.paste(render(300), (110, 165), render(300))
@@ -101,8 +101,12 @@ def og():
     font = os.path.join(ROOT, "crates", "app", "assets", "fonts", "BIZUDGothic-Regular.ttf")
     big, mid = ImageFont.truetype(font, 92), ImageFont.truetype(font, 38)
     d.text((470, 205), "circuitCad", font=big, fill=DARK)
-    d.text((474, 330), "回路図から、基板の発注データまで。", font=mid, fill=(28, 35, 48))
-    d.text((474, 390), "学びながら使える、日本語の回路CAD", font=mid, fill=(90, 101, 119))
+    if lang == "en":
+        lines = ("From schematic to board order.", "A circuit CAD you learn with.")
+    else:
+        lines = ("回路図から、基板の発注データまで。", "学びながら使える、日本語の回路CAD")
+    d.text((474, 330), lines[0], font=mid, fill=(28, 35, 48))
+    d.text((474, 390), lines[1], font=mid, fill=(90, 101, 119))
     return img
 
 
@@ -111,6 +115,7 @@ if __name__ == "__main__":
         f.write(svg())
     render(64).save(out("docs", "favicon.png"))
     og().save(out("docs", "images", "og.png"))
+    og("en").save(out("docs", "images", "en", "og.png"))
     render(256).save(out("crates", "app", "assets", "icon.png"))
     render(256).save(out("crates", "app", "assets", "icon.ico"), sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
     print("done")
