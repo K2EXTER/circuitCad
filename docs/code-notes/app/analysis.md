@@ -15,6 +15,7 @@
 解析タブの「電源除去比 (PSRR)」。揺らす電源(`psrr_source`、空なら最初の直流電源)と見る点(`psrr_out`)を選び、AC解析の欄の周波数で `run_psrr`。結果は AC のビューアー(`AcView.psrr_run`。自動で再計算すると `run_psrr` をやり直す)に、全ノードの信号として入り、見る点だけを選ぶ。除去比の数字(いちばん低い周波数・いちばん悪い所・100 Hz… の値と「揺れは 1/1k 倍」)は `AcView.notes` に入れて、グラフの上に警告とは別に出す。回路に IC(部品番号が U の、中に素子を持つ部品)があれば、モデルの除去比は実物よりよい、という注意を警告に足す。-3dB点の表は出さない。起動引数 `--psrr 電源|- ノード`。サンプル `psrr_filter.schjson`。テストは `psrr.rs`(ツェナーの例で、どこかのノードが揺れを減らす・見る点が空なら失敗)。
 
 ## 許容差の保存(schematic/tolerance.rs、2026-11-09)
+- 2026-11-10: 名前を `SheetSettings` に変え、過渡(終了・刻み・ゼロ状態から)と AC(開始・終了・点/デケード)の設定も入れた。ファイルでは、許容差は今までどおり `"tolerances"`、解析の設定は `"analysis"`(`tran_stop` `tran_step` `tran_uic` `ac_start` `ac_stop` `ac_ppd`)。それぞれ既定のままなら書かない。サンプル `motor_driver`(100ms)・`load_step`(3ms)・`psrr_filter`(AC 1Hz から)に入れた。開くたびに既定に戻る(ファイルが持つ)ので、取り込み(KiCad・LTspice)は `adopt` のあとで `.tran`/`.ac` を入れる。テスト `the_samples_open_with_the_analysis_they_need`。CLI の `open`/`save` も `"analysis"` を書き戻す。
 「温度とばらつき」の許容差の欄(`mc_tol_r/c/l/v`)を、シートの JSON の `"tolerances"`(`{"r","c","l","v"}` の文字列)に保存する。既定(5/10/10/0)のままなら書かない(古いファイルは変わらない)。書き込みと読み出しは `with_tolerances`/`take_tolerances` で、スペック表・実測と同じ場所(`file.rs` の保存・自動保存・読み込み、`project.rs`、`files.rs`、`lessons/mod.rs` の `load_sample`)を通る。`adopt` で既定に戻す(ファイルが自分の許容差を持つ)。変えると未保存の変更になる(`saved_tol` と比べる)。ばらつき・最悪ケース・スペック表の許容差の範囲がこの値で決まるので、1% の抵抗で作る回路は開くたびに入れ直さなくてよい。
 
 ## 熱の結合の保存(2026-10-31)

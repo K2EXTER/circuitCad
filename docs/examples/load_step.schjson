@@ -329,5 +329,13 @@
         7
       ]
     }
-  ]
+  ],
+  "analysis": {
+    "tran_stop": "3m",
+    "tran_step": "2u",
+    "tran_uic": false,
+    "ac_start": "10",
+    "ac_stop": "1Meg",
+    "ac_ppd": "20"
+  }
 }

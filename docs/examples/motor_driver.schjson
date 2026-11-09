@@ -387,5 +387,13 @@
     }
   ],
   "layout_version": 1,
-  "wires": []
+  "wires": [],
+  "analysis": {
+    "tran_stop": "100m",
+    "tran_step": "50u",
+    "tran_uic": false,
+    "ac_start": "10",
+    "ac_stop": "1Meg",
+    "ac_ppd": "20"
+  }
 }

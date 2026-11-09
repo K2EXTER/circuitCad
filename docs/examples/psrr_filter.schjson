@@ -246,5 +246,13 @@
       "text": "GND"
     }
   ],
-  "layout_version": 1
+  "layout_version": 1,
+  "analysis": {
+    "tran_stop": "10m",
+    "tran_step": "",
+    "tran_uic": false,
+    "ac_start": "1",
+    "ac_stop": "1Meg",
+    "ac_ppd": "20"
+  }
 }

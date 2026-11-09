@@ -309,7 +309,7 @@ pub struct SchEditor {
     bench: bench_data::BenchData,
     saved_bench: bench_data::BenchData,
     /// The tolerance boxes as last saved or opened (they are saved with the sheet).
-    saved_tol: tolerance::Tolerances,
+    saved_tol: tolerance::SheetSettings,
     /// The "実測を重ねる" box: the pasted text and its settings.
     bench_ui: bench_data::BenchUi,
     fault_kind: usize,
@@ -748,7 +748,7 @@ mod quick;
 pub use challenge::challenge_exists;
 pub use spec_table::{take_specs, with_specs, SpecItem};
 pub use bench_data::{take_bench, with_bench, BenchData};
-pub use tolerance::{take_tolerances, with_tolerances, Tolerances};
+pub use tolerance::{take_settings, with_settings, SheetSettings};
 pub use challenge::{challenge_of_lesson, progress_key as challenge_progress_key};
 pub use lessons::{lesson_ids, lesson_texts, lesson_titles};
 use symbols::{boxes_overlap, comp_extents, extents, rot_f, sheet_box, sym_extents, OVERLAP_MSG};
