@@ -1272,3 +1272,39 @@ fn loop_cap_load_sample_has_a_small_phase_margin_and_the_plain_regulator_a_large
     let small = margin("loop_cap_load.schjson");
     assert!((5.0..20.0).contains(&small), "{small}");
 }
+
+/// The DC overlay writes one voltage per piece of wiring: in the regulator sample each wire used to carry its value at both
+/// ends and the ground loop showed "0 V" four times; now 12 V, 5 V and the LED's anode show once each and ground not at all.
+#[test]
+fn dc_overlay_writes_one_voltage_per_piece_of_wiring() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "regulator_led.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.run_dc();
+    let dc = e.dc.as_ref().unwrap();
+    let mut shown: Vec<String> = dc.marks.iter().map(|(_, v)| eng(*v, "V")).collect();
+    shown.sort();
+    assert_eq!(shown, ["1.948 V", "12.00 V", "5.000 V"], "{shown:?}");
+    assert!(dc.pin_v.len() > dc.marks.len(), "pin voltages are kept for probing and wire colours");
+}
+
+/// With the board's copper resistance in the simulation, the overlay still shows every pin that reads differently: the drop
+/// along a trace keeps its own value on the same wire, and a ground pin lifted off 0 V by its trace (ground bounce) is shown.
+#[test]
+fn dc_overlay_keeps_the_drop_along_the_copper() {
+    let sch = example_schematics().into_iter().find(|(n, _)| n == "divider_tolerance.schjson").unwrap().1;
+    let mut e = SchEditor::default();
+    e.sch = sch;
+    e.run_dc();
+    let gnd_pin = ["1", "2"].into_iter().find(|p| e.pin_voltage("R2", p).is_some_and(|v| v.abs() < 1e-9)).unwrap();
+    let wire = |refdes: &str, pin: &str, ohm: f64| sim_core::WiringR { refdes: refdes.into(), pin: pin.into(), ohm, henry: 0.0, farad: 0.0 };
+    e.wiring = vec![wire("R1", "2", 1000.0), wire("R2", gnd_pin, 1000.0)];
+    e.run_dc();
+    let dc = e.dc.as_ref().unwrap();
+    let pin_pt = |refdes: &str, pin: &str| e.sch.components.iter().find(|c| c.refdes == refdes).unwrap().pins().into_iter().find(|(n, _)| *n == pin).unwrap().1;
+    let marked = |pt| dc.marks.iter().any(|(p, _)| *p == pt);
+    assert!(marked(pin_pt("R1", "2")), "the pin behind the trace keeps its own value: {:?}", dc.marks);
+    let lifted = e.pin_voltage("R2", gnd_pin).unwrap();
+    assert!(lifted.abs() > 1e-3, "{lifted}");
+    assert!(marked(pin_pt("R2", gnd_pin)), "a ground pin lifted by its trace is shown: {:?}", dc.marks);
+}

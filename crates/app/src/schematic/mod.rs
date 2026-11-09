@@ -470,8 +470,11 @@ struct TranView {
 struct DcView {
     outcome: Result<DcResult, Vec<String>>,
     signature: String,
-    /// Voltage at every pin position.
+    /// Voltage at every pin position (the sheet shows `marks`; this is read by the tests' `pin_voltage`).
+    #[cfg_attr(not(test), allow(dead_code))]
     pin_v: Vec<(Pt, f64)>,
+    /// The voltages written on the sheet: one per piece of wiring, ground left out (`dc.rs voltage_marks`).
+    marks: Vec<(Pt, f64)>,
     /// Voltage of each wire's net (same order as `Schematic::wires`).
     wire_v: Vec<Option<f64>>,
     /// Range of the node voltages, for colouring.

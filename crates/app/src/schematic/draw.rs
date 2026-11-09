@@ -191,12 +191,7 @@ impl SchEditor {
         if self.show_v
             && let Some(dc) = self.dc.as_ref().filter(|d| d.signature == self.signature_cached()) {
                 let f = FontId::proportional((self.zoom * 0.5).clamp(9.0, 14.0));
-                let mut seen: Vec<Pt> = vec![];
-                for (pt, v) in &dc.pin_v {
-                    if seen.contains(pt) {
-                        continue;
-                    }
-                    seen.push(*pt);
+                for (pt, v) in &dc.marks {
                     let galley = painter.layout_no_wrap(eng(*v, "V"), f.clone(), Color32::from_rgb(10, 60, 200));
                     // a pin that has a net label on it or at the end of a short level wire: the voltage goes beside the label
                     // (after its name, or before its dot), not on top of it

@@ -100,15 +100,21 @@ impl SchEditor {
     /// The overlay data (pin voltages, wire colours) for a DC result; `fault` names the broken part when the result is a what-if.
     pub(super) fn dc_view(&self, outcome: Result<DcResult, Vec<String>>, fault: Option<String>) -> DcView {
         let mut pin_v = vec![];
+        // the points that are ground (no voltage label: a ground is 0 V by definition)
+        let mut ground_pts = vec![];
         if let Ok(res) = &outcome {
             for net in extract(&self.sch) {
                 let Some(v) = res.voltage(&net.name) else { continue };
+                let ground = net.name == "GND" || net.name == "0";
                 for p in &net.pins {
                     // with the board's copper resistance in front of the pin, show the voltage that reaches the pin
                     let v = res.voltage(&format!("{}.{}.wire", p.refdes, p.pin)).unwrap_or(v);
                     if let Some(c) = self.sch.components.iter().find(|c| c.refdes == p.refdes)
                         && let Some((_, pt)) = c.pins().into_iter().find(|(n, _)| *n == p.pin) {
                             pin_v.push((pt, v));
+                            if ground {
+                                ground_pts.push(pt);
+                            }
                         }
                 }
             }
@@ -117,9 +123,13 @@ impl SchEditor {
                 let name = if c.kind == Kind::Ground { "GND".to_string() } else { c.value.clone() };
                 if let Some(v) = res.voltage(&name) {
                     pin_v.push((c.pins()[0].1, v));
+                    if c.kind == Kind::Ground || name == "GND" {
+                        ground_pts.push(c.pins()[0].1);
+                    }
                 }
             }
         }
+        let marks = self.voltage_marks(&pin_v, &ground_pts);
         let mut wire_v = vec![None; self.sch.wires.len()];
         let mut v_range = (0.0f64, 0.0f64);
         if let Ok(res) = &outcome {
@@ -138,7 +148,73 @@ impl SchEditor {
             v_range = (vs.clone().fold(0.0, f64::min), vs.fold(0.0, f64::max));
         }
         let ratings = outcome.as_ref().map(|r| sim_core::check_ratings(&self.with_library_ratings(), r)).unwrap_or_default();
-        DcView { outcome, signature: self.signature(), pin_v, wire_v, v_range, fault, ratings }
+        DcView { outcome, signature: self.signature(), pin_v, marks, wire_v, v_range, fault, ratings }
+    }
+
+    /// Where the voltages are written on the sheet: one per piece of drawn wiring (the pins and wires that touch each other),
+    /// not one per pin, so a wire does not carry the same "5.000 V" at both ends. A net split by net labels into pieces keeps a
+    /// value on each piece; pins on one piece that read differently (copper resistance in front of them) all keep theirs.
+    /// Ground at exactly 0 V is left out (a ground pin raised by copper resistance is shown). The point chosen is a power symbol, then a net label, then the topmost (then leftmost) pin.
+    fn voltage_marks(&self, pin_v: &[(Pt, f64)], ground_pts: &[Pt]) -> Vec<(Pt, f64)> {
+        // union-find over pins and wire ends; a point on the inside of a wire (a T junction) joins that wire
+        let mut pts: Vec<Pt> = pin_v.iter().map(|(p, _)| *p).collect();
+        for w in &self.sch.wires {
+            pts.extend([w.a, w.b]);
+        }
+        pts.sort();
+        pts.dedup();
+        let idx = |p: Pt| pts.binary_search(&p).ok();
+        let mut parent: Vec<usize> = (0..pts.len()).collect();
+        fn root(parent: &mut [usize], mut i: usize) -> usize {
+            while parent[i] != i {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            i
+        }
+        let join = |parent: &mut Vec<usize>, a: usize, b: usize| {
+            let (ra, rb) = (root(parent, a), root(parent, b));
+            parent[ra] = rb;
+        };
+        let on_wire = |p: Pt, a: Pt, b: Pt| {
+            let cross = (b.0 - a.0) as i64 * (p.1 - a.1) as i64 - (b.1 - a.1) as i64 * (p.0 - a.0) as i64;
+            cross == 0 && p.0 >= a.0.min(b.0) && p.0 <= a.0.max(b.0) && p.1 >= a.1.min(b.1) && p.1 <= a.1.max(b.1)
+        };
+        for w in &self.sch.wires {
+            let (Some(a), Some(b)) = (idx(w.a), idx(w.b)) else { continue };
+            join(&mut parent, a, b);
+            for (k, p) in pts.iter().enumerate() {
+                if on_wire(*p, w.a, w.b) {
+                    join(&mut parent, k, a);
+                }
+            }
+        }
+        let rank = |p: Pt| {
+            if self.sch.components.iter().any(|c| c.kind == Kind::Power && c.pos == p) {
+                0
+            } else if self.sch.labels.iter().any(|l| l.pos == p) {
+                1
+            } else {
+                2
+            }
+        };
+        // a ground pin is left out only while it really is at 0 V: behind the board's copper resistance it rises (ground bounce),
+        // and that is exactly what the user is looking for
+        let mut order: Vec<&(Pt, f64)> = pin_v.iter().filter(|(p, v)| !(ground_pts.contains(p) && v.abs() < 1e-9)).collect();
+        order.sort_by_key(|(p, _)| (rank(*p), p.1, p.0));
+        let mut marks: Vec<(Pt, f64)> = vec![];
+        let mut taken: Vec<(usize, String)> = vec![];
+        for (p, v) in order {
+            let Some(i) = idx(*p) else { continue };
+            let piece = root(&mut parent, i);
+            let text = eng(*v, "V");
+            if taken.iter().any(|(r, t)| *r == piece && *t == text) || marks.iter().any(|(q, _)| q == p) {
+                continue;
+            }
+            taken.push((piece, text));
+            marks.push((*p, *v));
+        }
+        marks
     }
 
     /// The sheet with data sheet ratings filled in from the library for placed parts that were saved without
